@@ -1,0 +1,31 @@
+{
+  "retrieved": "2026-09-07",
+  "tag": "v8.4.142",
+  "commit": "2c5d376eee77b3d2217db609ce7b85837c1b191e",
+  "files": {
+    "exporter.py": {
+      "url": "https://raw.githubusercontent.com/ultralytics/ultralytics/v8.4.142/ultralytics/engine/exporter.py",
+      "sha256": "01510dc124ef3ebc60f310a3bc1b11ede149dd3c859dd7f9441babb561963fae"
+    },
+    "head.py": {
+      "url": "https://raw.githubusercontent.com/ultralytics/ultralytics/v8.4.142/ultralytics/nn/modules/head.py",
+      "sha256": "fd14ac4fe568e2bcdde1e50ff0a519c84646b6ccd7fb3d667db1227c12c51eda"
+    },
+    "nms.py": {
+      "url": "https://raw.githubusercontent.com/ultralytics/ultralytics/v8.4.142/ultralytics/utils/nms.py",
+      "sha256": "8162e70fc11f31e108f2b6ce56ee88873482b33ec249886fc104cf9c83a71952"
+    },
+    "augment.py": {
+      "url": "https://raw.githubusercontent.com/ultralytics/ultralytics/v8.4.142/ultralytics/data/augment.py",
+      "sha256": "83e653664fa459beb66b9f245d90ca50ea25bc3c83caabfa9fab541d4abcb4b3"
+    },
+    "ops.py": {
+      "url": "https://raw.githubusercontent.com/ultralytics/ultralytics/v8.4.142/ultralytics/utils/ops.py",
+      "sha256": "1a8034386c970fb779ef18f7117083dede6d138d4dbc5f66ed5db76624d36158"
+    },
+    "LICENSE": {
+      "url": "https://raw.githubusercontent.com/ultralytics/ultralytics/v8.4.142/LICENSE",
+      "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
+    }
+  }
+}

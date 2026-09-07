@@ -1,0 +1,30 @@
+{
+  "retrieved_at": "2026-09-07",
+  "source": "Official website CDN document body",
+  "files": [
+    {
+      "file": "1_USB_Camera_Node.md",
+      "url": "https://cdn-resource.spacemit.com/software/SDK/ros/docs-ros/zh/k1/06_Robot_development/6.2_ROS2_API/6.2.1_Camera_System/1_USB_Camera_Node.md",
+      "github_url": "https://github.com/spacemit-com/docs-ros/blob/main/zh/k1/06_Robot_development/6.2_ROS2_API/6.2.1_Camera_System/1_USB_Camera_Node.md",
+      "bytes": 8652,
+      "sha256": "a5e25b49616f2e08f2f14ee6f0aa66c475de6332f94e125deb0c1bc96f4528ca",
+      "site_update_time": "2026-06-22 18:34:19"
+    },
+    {
+      "file": "1_Using_LiDAR.md",
+      "url": "https://cdn-resource.spacemit.com/software/SDK/ros/docs-ros/zh/k1/06_Robot_development/6.2_ROS2_API/6.2.4_Sensor_System/1_Using_LiDAR.md",
+      "github_url": "https://github.com/spacemit-com/docs-ros/blob/main/zh/k1/06_Robot_development/6.2_ROS2_API/6.2.4_Sensor_System/1_Using_LiDAR.md",
+      "bytes": 1021,
+      "sha256": "93b6a83b5c0c58871f3f666211024870ffec6e6063af1325c7bfd4a66c0cb5f9",
+      "site_update_time": "2026-06-22 18:34:35"
+    },
+    {
+      "file": "2_CMP10A_IMU.md",
+      "url": "https://cdn-resource.spacemit.com/software/SDK/ros/docs-ros/zh/k1/06_Robot_development/6.2_ROS2_API/6.2.4_Sensor_System/2_CMP10A_IMU.md",
+      "github_url": "https://github.com/spacemit-com/docs-ros/blob/main/zh/k1/06_Robot_development/6.2_ROS2_API/6.2.4_Sensor_System/2_CMP10A_IMU.md",
+      "bytes": 1543,
+      "sha256": "b5947b2a58f1fb82d2d247c8693e548aba391e09dcfe8ad384501c5b2ea274a4",
+      "site_update_time": "2026-06-22 18:34:36"
+    }
+  ]
+}

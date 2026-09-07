@@ -1,0 +1,219 @@
+{
+  "status": "passed",
+  "reference": "OpenCV 4.14.0 INTER_LINEAR uint8",
+  "numpy_version": "2.5.3",
+  "seed": 260907,
+  "case_count": 26,
+  "max_uint8_difference": 1,
+  "scope": "Fixed PNG fixtures only; not universal bitwise or model-accuracy equivalence.",
+  "cases": [
+    {
+      "width": 320,
+      "height": 320,
+      "fixture": "random",
+      "max_uint8_difference": 0,
+      "mean_uint8_difference": 0.0,
+      "differing_channel_values": 0
+    },
+    {
+      "width": 320,
+      "height": 320,
+      "fixture": "pattern",
+      "max_uint8_difference": 0,
+      "mean_uint8_difference": 0.0,
+      "differing_channel_values": 0
+    },
+    {
+      "width": 640,
+      "height": 480,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.2813671875,
+      "differing_channel_values": 86436
+    },
+    {
+      "width": 640,
+      "height": 480,
+      "fixture": "pattern",
+      "max_uint8_difference": 0,
+      "mean_uint8_difference": 0.0,
+      "differing_channel_values": 0
+    },
+    {
+      "width": 641,
+      "height": 480,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.2060546875,
+      "differing_channel_values": 63300
+    },
+    {
+      "width": 641,
+      "height": 480,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.0046875,
+      "differing_channel_values": 1440
+    },
+    {
+      "width": 480,
+      "height": 641,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.19825846354166668,
+      "differing_channel_values": 60905
+    },
+    {
+      "width": 480,
+      "height": 641,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.0109375,
+      "differing_channel_values": 3360
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "fixture": "random",
+      "max_uint8_difference": 0,
+      "mean_uint8_difference": 0.0,
+      "differing_channel_values": 0
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "fixture": "pattern",
+      "max_uint8_difference": 0,
+      "mean_uint8_difference": 0.0,
+      "differing_channel_values": 0
+    },
+    {
+      "width": 321,
+      "height": 319,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.2213671875,
+      "differing_channel_values": 68004
+    },
+    {
+      "width": 321,
+      "height": 319,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.12458984375,
+      "differing_channel_values": 38274
+    },
+    {
+      "width": 319,
+      "height": 321,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.221181640625,
+      "differing_channel_values": 67947
+    },
+    {
+      "width": 319,
+      "height": 321,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.10940755208333333,
+      "differing_channel_values": 33610
+    },
+    {
+      "width": 32,
+      "height": 17,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.06790364583333333,
+      "differing_channel_values": 20860
+    },
+    {
+      "width": 32,
+      "height": 17,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.042083333333333334,
+      "differing_channel_values": 12928
+    },
+    {
+      "width": 7,
+      "height": 11,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.08074869791666667,
+      "differing_channel_values": 24806
+    },
+    {
+      "width": 7,
+      "height": 11,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.06895182291666667,
+      "differing_channel_values": 21182
+    },
+    {
+      "width": 1,
+      "height": 2,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.025,
+      "differing_channel_values": 7680
+    },
+    {
+      "width": 1,
+      "height": 2,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.004166666666666667,
+      "differing_channel_values": 1280
+    },
+    {
+      "width": 1280,
+      "height": 642,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.06277669270833333,
+      "differing_channel_values": 19285
+    },
+    {
+      "width": 1280,
+      "height": 642,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.3541666666666667,
+      "differing_channel_values": 108800
+    },
+    {
+      "width": 1280,
+      "height": 646,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.063544921875,
+      "differing_channel_values": 19521
+    },
+    {
+      "width": 1280,
+      "height": 646,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.353125,
+      "differing_channel_values": 108480
+    },
+    {
+      "width": 1023,
+      "height": 777,
+      "fixture": "random",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.09640299479166667,
+      "differing_channel_values": 29615
+    },
+    {
+      "width": 1023,
+      "height": 777,
+      "fixture": "pattern",
+      "max_uint8_difference": 1,
+      "mean_uint8_difference": 0.09259765625,
+      "differing_channel_values": 28446
+    }
+  ]
+}

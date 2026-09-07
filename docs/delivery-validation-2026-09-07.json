@@ -1,0 +1,16 @@
+[
+  {
+    "package": "XT-STCAR-Rust-riscv64-core.tar.gz",
+    "size_bytes": 1349792,
+    "sha256": "9a6f889522dd286d9d4f2292011398ab42f0db9a04fc88be00a618e783b5e753",
+    "file_count": 15,
+    "verified": true
+  },
+  {
+    "package": "XT-STCAR-Rust-YOLO26n-riscv64.tar.gz",
+    "size_bytes": 9994556,
+    "sha256": "bf042bcb453d7e8770372a615b6320daa3b8c54f1f47ae08533ed8408968cf70",
+    "file_count": 19,
+    "verified": true
+  }
+]

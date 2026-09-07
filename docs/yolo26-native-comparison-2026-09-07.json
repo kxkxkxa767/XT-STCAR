@@ -1,0 +1,15 @@
+{
+  "count": 5,
+  "class_ids": [
+    0,
+    0,
+    5,
+    0,
+    0
+  ],
+  "max_box_abs_error": 0.0,
+  "max_confidence_abs_error": 0.0,
+  "native_backend": "rust-onnxruntime",
+  "reference_backend": "python-onnxruntime-reference",
+  "scope": "Identical Rust preprocessing, native ORT C API versus explicit Python ORT CPU worker on Mac"
+}

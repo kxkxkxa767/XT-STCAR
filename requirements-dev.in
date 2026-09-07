@@ -1,0 +1,6 @@
+# Mac/Windows 主机离线开发；不是车端 ROS 依赖清单。
+numpy>=1.26,<3
+opencv-python-headless>=4.10,<5
+PyYAML
+pyserial
+pytest

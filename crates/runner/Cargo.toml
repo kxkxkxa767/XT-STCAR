@@ -1,0 +1,22 @@
+[package]
+name = "xt-stcar-robot-runner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "xt-stcar-robot"
+path = "src/main.rs"
+
+[dependencies]
+xt-stcar = { path = "../app" }
+xt-stcar-vision = { path = "../vision" }
+xt-stcar-robot-core = { path = "../robot-core" }
+serde.workspace = true
+serde_json.workspace = true
+image.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

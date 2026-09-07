@@ -1,0 +1,17 @@
+{"at":0,"event":{"type":"heartbeat"}}
+{"at":0,"event":{"type":"deadman","pressed":true}}
+{"at":0,"event":{"type":"sensor","sample":{"type":"imu","captured_at":0,"frame_id":"sim_imu","acceleration_mps2":{"x":0.0,"y":0.0,"z":9.81},"angular_velocity_radps":{"x":0.0,"y":0.0,"z":0.0},"orientation_xyzw":{"x":0.0,"y":0.0,"z":0.0,"w":1.0}}}}
+{"at":0,"event":{"type":"sensor","sample":{"type":"lidar","captured_at":0,"frame_id":"sim_lidar","angle_min_rad":-0.1,"angle_increment_rad":0.1,"range_min_m":0.1,"range_max_m":10.0,"ranges_m":[2.0,null,2.5]}}}
+{"at":0,"event":{"type":"sensor","sample":{"type":"odometry","captured_at":0,"frame_id":"sim_odom","child_frame_id":"sim_body","position_m":{"x":0.0,"y":0.0,"z":0.0},"orientation_xyzw":{"x":0.0,"y":0.0,"z":0.0,"w":1.0},"linear_velocity_mps":{"x":0.0,"y":0.0,"z":0.0},"angular_velocity_radps":{"x":0.0,"y":0.0,"z":0.0}}}}
+{"at":1,"event":{"type":"arm"}}
+{"at":2,"event":{"type":"motion","intent":{"speed_mps":0.1,"curvature_per_m":0.0}}}
+{"at":3,"event":{"type":"start"}}
+{"at":50,"event":{"type":"tick"}}
+{"at":152,"event":{"type":"heartbeat"}}
+{"at":153,"event":{"type":"motion","intent":{"speed_mps":0.1,"curvature_per_m":0.0}}}
+{"at":154,"event":{"type":"deadman","pressed":false}}
+{"at":155,"event":{"type":"reset_fault"}}
+{"at":156,"event":{"type":"emergency_stop"}}
+{"at":157,"event":{"type":"disarm"}}
+{"at":158,"event":{"type":"reset_fault"}}
+{"at":159,"event":{"type":"tick"}}

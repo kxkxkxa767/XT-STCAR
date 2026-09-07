@@ -1,0 +1,112 @@
+{
+  "date": "2026-09-07",
+  "scope": "Mac standard ONNX Runtime CPU reference; no vehicle execution or performance claim",
+  "model_sha256": "c52d204571c6df9f1132dedd7aab3e87336434589b055b9fa4026d117f1d4045",
+  "image": "/Users/yuhaojin/Documents/XT-STCAR/.venv-model/lib/python3.12/site-packages/ultralytics/assets/bus.jpg",
+  "image_source": "Ultralytics 8.4.142 package assets/bus.jpg",
+  "image_sha256": "c02019c4979c191eb739ddd944445ef408dad5679acab6fd520ef9d434bfbc63",
+  "original_size_wh": [
+    810,
+    1080
+  ],
+  "letterbox": {
+    "orig_shape": [
+      1080,
+      810
+    ],
+    "new_shape": [
+      320,
+      320
+    ],
+    "ratio": [
+      0.2962962962962963,
+      0.2962962962962963
+    ],
+    "new_unpad": [
+      240,
+      320
+    ],
+    "top": 0,
+    "bottom": 0,
+    "left": 40,
+    "right": 40
+  },
+  "input_f32le": "/Users/yuhaojin/Documents/XT-STCAR/tmp/yolo26-reference/bus-cv.f32le",
+  "input_sha256": "aaa0f5aa8cf60c6bc219a83f0a836d85e4cf8426946a4d0a34ffe2c56bb8b4c2",
+  "output": "/Users/yuhaojin/Documents/XT-STCAR/tmp/yolo26-reference/bus-ort.json",
+  "shape": [
+    1,
+    300,
+    6
+  ],
+  "threshold_rule": "score > 0.25",
+  "detections_count": 5,
+  "detections": [
+    {
+      "box_xyxy_input": [
+        55.78112030029297,
+        117.20686340332031,
+        109.85922241210938,
+        267.731689453125
+      ],
+      "score": 0.8880674242973328,
+      "class_id": 0,
+      "class_name": "person"
+    },
+    {
+      "box_xyxy_input": [
+        103.91840362548828,
+        117.70120239257812,
+        142.88864135742188,
+        255.39845275878906
+      ],
+      "score": 0.850164532661438,
+      "class_id": 0,
+      "class_name": "person"
+    },
+    {
+      "box_xyxy_input": [
+        46.84288024902344,
+        67.07498931884766,
+        278.07183837890625,
+        223.81080627441406
+      ],
+      "score": 0.7576658725738525,
+      "class_id": 5,
+      "class_name": "bus"
+    },
+    {
+      "box_xyxy_input": [
+        237.5205078125,
+        118.28862762451172,
+        281.6144104003906,
+        259.11016845703125
+      ],
+      "score": 0.5093525648117065,
+      "class_id": 0,
+      "class_name": "person"
+    },
+    {
+      "box_xyxy_input": [
+        40.49474334716797,
+        169.7047576904297,
+        63.07669448852539,
+        260.0260925292969
+      ],
+      "score": 0.38550400733947754,
+      "class_id": 0,
+      "class_name": "person"
+    }
+  ],
+  "pytorch_one_to_one_same_tensor": {
+    "high_confidence_count_equal": true,
+    "high_confidence_classes_equal": true,
+    "max_box_abs_error_pixels": 4.57763671875e-05,
+    "max_score_abs_error": 1.5497207641601562e-06,
+    "all_300_rows_class_equal": true,
+    "all_values_max_abs_error": 0.0003662109375,
+    "box_atol": 0.01,
+    "score_atol": 0.0001
+  },
+  "cold_reference_worker_inprocess_seconds": 0.07980249999673106
+}

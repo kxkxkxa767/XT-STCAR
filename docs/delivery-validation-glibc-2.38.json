@@ -1,0 +1,170 @@
+[
+  {
+    "archive": "/Users/yuhaojin/Documents/Codex/2026-09-07/users-yuhaojin-documents-xt-stcar-agent/outputs/XT-STCAR-Rust-riscv64-core-glibc-2.38.tar.gz",
+    "sha256": "dd6005403e583e10bcff5e81a5c1fbe50496362d127d1214c2e4874f2575656f",
+    "size_bytes": 1349568,
+    "file_count": 15,
+    "manifest": {
+      "schema_version": 1,
+      "project": "XT-STCAR",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "created_at_utc": "2026-09-07T12:35:31.683573+00:00",
+      "model_included": false,
+      "vehicle_execution_verified": false,
+      "runtime_requirements": {
+        "default_inference": "Rust native ONNX Runtime C API, loaded dynamically",
+        "riscv_onnxruntime_library_included": false,
+        "riscv_onnxruntime_required_for_inference": true,
+        "vendor_runtime_compatibility_verified": false,
+        "python_reference_backend": "explicit --backend python-reference only",
+        "offline_replay_and_self_check_require_onnxruntime": false
+      },
+      "files": {
+        "bin/xt-stcar": {
+          "sha256": "0592ea68f687d8cd3a9609ace273e7722670e9d32d7074cd145e600cb4d303ff",
+          "size_bytes": 1213880
+        },
+        "bin/xt-stcar-robot": {
+          "sha256": "49d1f6ebc0d5e15398e59aabad097a1e058bbc81c136d0b3b3a736e8a7336205",
+          "size_bytes": 1284872
+        },
+        "build.json": {
+          "sha256": "6f52659a78ac344a1fe814bca3360dc09a94f119615cb84a1071fbff2573228c",
+          "size_bytes": 3558
+        },
+        "config/robot-sim.json": {
+          "sha256": "4e95fb040098663cc559a0a95792d0d5b5a78fa71ab426831b4edcc9d6fc064a",
+          "size_bytes": 456
+        },
+        "config/yolo26n.json": {
+          "sha256": "19bf9a4180dc6e902b4e5f336e06bed1ca7b51f1046156f5b99ee1ac74d5028d",
+          "size_bytes": 357
+        },
+        "docs/机器人模块.md": {
+          "sha256": "740173a28d7bd0e5628bd99f98a4d701d34c303d0112d692941740357ebd111d",
+          "size_bytes": 7419
+        },
+        "docs/部署包使用说明.md": {
+          "sha256": "5669843fa6c1627706039ae4238efaeb2eacef3f6b950774cc6ab120074103a1",
+          "size_bytes": 5229
+        },
+        "elf.json": {
+          "sha256": "53edd59c8c8d4f2714ef5251f1f39c7d2ed3fbc489dbe36b58c30060ea9a3a7d",
+          "size_bytes": 13246
+        },
+        "examples/robot-sim.jsonl": {
+          "sha256": "20898e15d7acf02008f59b147b8e898ad42bb250c6b0e7476ff0a8dd928bb477",
+          "size_bytes": 1432
+        },
+        "robot-elf.json": {
+          "sha256": "e28f15d33b0a4639f3f0ec0970ef854e4ad662e02fe6bfdcd0bbfc25e4198424",
+          "size_bytes": 8634
+        },
+        "scripts/check-vehicle.sh": {
+          "sha256": "c1de44855101477eb373ad8b3ae4fc98cfe09b02fb7345c7d03a1cacf83ddfc4",
+          "size_bytes": 794
+        },
+        "scripts/onnx_worker.py": {
+          "sha256": "af0aa6cb512b677354f1712f066a632bcb3ab1ddb0dbcf214ec767784f40b84b",
+          "size_bytes": 4095
+        },
+        "scripts/validate_yolo26.py": {
+          "sha256": "8671cb16e827d53dd2f178db3f225cc89d00a5a84f455196948592d8b6baa02e",
+          "size_bytes": 7489
+        }
+      }
+    }
+  },
+  {
+    "archive": "/Users/yuhaojin/Documents/Codex/2026-09-07/users-yuhaojin-documents-xt-stcar-agent/outputs/XT-STCAR-Rust-YOLO26n-riscv64-glibc-2.38.tar.gz",
+    "sha256": "57a956e57aed4b2bb8c2fcdc3f2e0bf0dee3b836ac906ea42befe0aa27a4f0cd",
+    "size_bytes": 9994218,
+    "file_count": 19,
+    "manifest": {
+      "schema_version": 1,
+      "project": "XT-STCAR",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "created_at_utc": "2026-09-07T12:35:32.116436+00:00",
+      "model_included": true,
+      "vehicle_execution_verified": false,
+      "runtime_requirements": {
+        "default_inference": "Rust native ONNX Runtime C API, loaded dynamically",
+        "riscv_onnxruntime_library_included": false,
+        "riscv_onnxruntime_required_for_inference": true,
+        "vendor_runtime_compatibility_verified": false,
+        "python_reference_backend": "explicit --backend python-reference only",
+        "offline_replay_and_self_check_require_onnxruntime": false
+      },
+      "files": {
+        "bin/xt-stcar": {
+          "sha256": "0592ea68f687d8cd3a9609ace273e7722670e9d32d7074cd145e600cb4d303ff",
+          "size_bytes": 1213880
+        },
+        "bin/xt-stcar-robot": {
+          "sha256": "49d1f6ebc0d5e15398e59aabad097a1e058bbc81c136d0b3b3a736e8a7336205",
+          "size_bytes": 1284872
+        },
+        "build.json": {
+          "sha256": "6f52659a78ac344a1fe814bca3360dc09a94f119615cb84a1071fbff2573228c",
+          "size_bytes": 3558
+        },
+        "config/robot-sim.json": {
+          "sha256": "4e95fb040098663cc559a0a95792d0d5b5a78fa71ab426831b4edcc9d6fc064a",
+          "size_bytes": 456
+        },
+        "config/yolo26n.json": {
+          "sha256": "19bf9a4180dc6e902b4e5f336e06bed1ca7b51f1046156f5b99ee1ac74d5028d",
+          "size_bytes": 357
+        },
+        "docs/机器人模块.md": {
+          "sha256": "740173a28d7bd0e5628bd99f98a4d701d34c303d0112d692941740357ebd111d",
+          "size_bytes": 7419
+        },
+        "docs/部署包使用说明.md": {
+          "sha256": "5669843fa6c1627706039ae4238efaeb2eacef3f6b950774cc6ab120074103a1",
+          "size_bytes": 5229
+        },
+        "elf.json": {
+          "sha256": "53edd59c8c8d4f2714ef5251f1f39c7d2ed3fbc489dbe36b58c30060ea9a3a7d",
+          "size_bytes": 13246
+        },
+        "examples/robot-sim.jsonl": {
+          "sha256": "20898e15d7acf02008f59b147b8e898ad42bb250c6b0e7476ff0a8dd928bb477",
+          "size_bytes": 1432
+        },
+        "licenses/Ultralytics-LICENSE": {
+          "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+          "size_bytes": 34523
+        },
+        "model-validation.json": {
+          "sha256": "629c32c4787c8b68d61ba6f18b096ae7faeb7172ed3b02a1c1730da31fe8add8",
+          "size_bytes": 4273
+        },
+        "models/yolo26n.onnx": {
+          "sha256": "c52d204571c6df9f1132dedd7aab3e87336434589b055b9fa4026d117f1d4045",
+          "size_bytes": 9767942
+        },
+        "models/yolo26n.provenance.json": {
+          "sha256": "472a14834c11a55374436a3eb69667992aed29cced17b92394303f580b3ad7ed",
+          "size_bytes": 5019
+        },
+        "robot-elf.json": {
+          "sha256": "e28f15d33b0a4639f3f0ec0970ef854e4ad662e02fe6bfdcd0bbfc25e4198424",
+          "size_bytes": 8634
+        },
+        "scripts/check-vehicle.sh": {
+          "sha256": "c1de44855101477eb373ad8b3ae4fc98cfe09b02fb7345c7d03a1cacf83ddfc4",
+          "size_bytes": 794
+        },
+        "scripts/onnx_worker.py": {
+          "sha256": "af0aa6cb512b677354f1712f066a632bcb3ab1ddb0dbcf214ec767784f40b84b",
+          "size_bytes": 4095
+        },
+        "scripts/validate_yolo26.py": {
+          "sha256": "8671cb16e827d53dd2f178db3f225cc89d00a5a84f455196948592d8b6baa02e",
+          "size_bytes": 7489
+        }
+      }
+    }
+  }
+]

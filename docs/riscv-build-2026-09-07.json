@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "built_at_utc": "2026-09-07T11:32:39.592838+00:00",
+  "target": "riscv64gc-unknown-linux-gnu.2.27",
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+  "zig": "0.15.2",
+  "cargo_zigbuild": "0.23.4",
+  "checks": [
+    "cargo fmt --all --check",
+    "cargo test --workspace --locked",
+    "cargo clippy --workspace --all-targets --locked -- -D warnings",
+    "ELF ABI/GLIBC inspection"
+  ],
+  "binary_sha256": "0c854f7e8e5e7633e077c1b088a5192c8925dfd8964e829ff8d62a77aaa510e9",
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "0c854f7e8e5e7633e077c1b088a5192c8925dfd8964e829ff8d62a77aaa510e9",
+      "path": "target/riscv64gc-unknown-linux-gnu/release/xt-stcar",
+      "elf_report": "xt-stcar.elf.json"
+    },
+    "xt-stcar-robot": {
+      "sha256": "9f26da684293e7f492075583290854ea7d28302abd15e3ded70067238b5f997b",
+      "path": "target/riscv64gc-unknown-linux-gnu/release/xt-stcar-robot",
+      "elf_report": "xt-stcar-robot.elf.json"
+    }
+  },
+  "source_sha256": {
+    "Cargo.lock": "8f1e199c504f5c562e6a98c5a0317333cc9ab0912cdc384dbc55493eb87232be",
+    "Cargo.toml": "616d975ce3ee5b2a5d04b8686acabed7b568208418f86fbd9d89f8b22314f09d",
+    "crates/app/Cargo.toml": "14eb90e411c190e8dfca45a088f4830bc004fe950109f2314af6d52add53ca8a",
+    "crates/app/src/backend.rs": "ca828b35ac8beba7913bd1e7d2cb33fdce412a7627c18c416f2a6e8679d6f6a0",
+    "crates/app/src/lib.rs": "be2b20d4701aef8011ee77e4f3bb3166475e3e66b21aeccbfa4ece10236c97db",
+    "crates/app/src/main.rs": "7fa0090e3fbc813bca328386f5ab1dbebee0c4cb58580b9a53cb2e982e1e2d0c",
+    "crates/app/src/ort_backend.rs": "3b0d39199d2c1380b7e03b9fe0f3278302d2a6d402fd0dfc4e24cdd7e670e924",
+    "crates/app/tests/cli.rs": "81bc59c46ea9b8cdb6acb68e4c552c462a564eb391fd771c5489074f006097c1",
+    "crates/app/tests/native_runtime.rs": "dbc57d2b89e481e43098a901d07d784ad8e715930f2a419c162a7d07b896122a",
+    "crates/robot-core/Cargo.toml": "9c1dc2cb7c417ed470e0bca043cd0cf92aeaec0b542db46bf6cd8ba53a693453",
+    "crates/robot-core/src/lib.rs": "1fd8d7b87235b39d37168b14880c48c521f683c9ac5bbb099eaf8a5f6c1242b2",
+    "crates/robot-core/src/safety.rs": "c55f41aa24206afa3de693c32f510afcb1461ccf6f88852f709f55cdf2d8dc46",
+    "crates/robot-core/src/sensors.rs": "c1223cabd744bc1af5b111a185a7fd93036ae8cc076d69f2a674ddb9fd1af4a3",
+    "crates/robot-core/tests/safety.rs": "f87b2abd4f184268f3683c238c1a01c52d3b87a88cfb8fe8e1a10620cebce762",
+    "crates/runner/Cargo.toml": "36c04d0d01077033120991632d8b478f71a26837796e11ed1856de4a45975863",
+    "crates/runner/src/input.rs": "625554550fea77709aa9d2699b20a8d9452c7a87f4ec60bd689534f94ff96914",
+    "crates/runner/src/lib.rs": "9c7f633a3003fc201982aa8d9c00cd257b84366218cffa4e07b1e2389d1759d3",
+    "crates/runner/src/main.rs": "bab48e0b2608f6a9f89863b94d94adec322d95b316bb9d5100f4c4ebeabba39a",
+    "crates/runner/src/vision.rs": "c935002ce293359bd88c4107e68c7bffe4758f53ba174ef9a176eea203a76707",
+    "crates/runner/tests/replay.rs": "750e1b6167015eb30ecf2ffecb5ba78f6a5fd2201c31adf1f6dffb4d1571b99f",
+    "crates/vision/Cargo.toml": "3a1469e99fb1a772d9b702f00f390b0c5cf26e16761867720e89c1e912ef7678",
+    "crates/vision/src/lib.rs": "7eb1d665581c003b5d9049a87348b0d2bfbe86bf81b19bfb93651de7b46f9ccd",
+    "rust-toolchain.toml": "2a166ee9a1b3f44e76e96928d0004c6e4bf133f18e928914aa4287219bf5886e"
+  },
+  "vehicle_execution_verified": false,
+  "onnxruntime_library_included": false,
+  "inference_runtime": "Requires a separately verified RISC-V standard ONNX Runtime C API dynamic library"
+}

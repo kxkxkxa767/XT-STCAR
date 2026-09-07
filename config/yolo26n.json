@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "model_family": "yolo26n",
+  "task": "detect",
+  "input_name": "images",
+  "output_name": "output0",
+  "input_width": 320,
+  "input_height": 320,
+  "input_layout": "NCHW_RGB_0_1",
+  "input_dtype": "float32",
+  "output_layout": "B_N_XYXY_SCORE_CLASS",
+  "max_detections": 300,
+  "class_count": 80,
+  "confidence_threshold": 0.25
+}

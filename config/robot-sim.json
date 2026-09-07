@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "simulation_only": true,
+  "max_speed_mps": 0.2,
+  "max_abs_curvature_per_m": 0.5,
+  "heartbeat_timeout_ms": 500,
+  "deadman_timeout_ms": 200,
+  "command_timeout_ms": 150,
+  "sensor_timeout_ms": 250,
+  "required_sensors": ["imu", "lidar", "odometry"],
+  "frames": {
+    "imu_frame": "sim_imu",
+    "lidar_frame": "sim_lidar",
+    "odometry_frame": "sim_odom",
+    "body_frame": "sim_body",
+    "vision_frame": "sim_camera"
+  }
+}

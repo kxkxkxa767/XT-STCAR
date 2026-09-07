@@ -1,0 +1,166 @@
+{
+  "retrieved_at": "2026-09-07",
+  "repository": "https://github.com/spacemit-com/docs-events",
+  "commit": "641614ae96465851f0e27f24ae96948aeb0ff333",
+  "files": [
+    {
+      "file": "01_Muse_Pi_Pro教学资料.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/01_Muse_Pi_Pro%E6%95%99%E5%AD%A6%E8%B5%84%E6%96%99.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/01_Muse_Pi_Pro%E6%95%99%E5%AD%A6%E8%B5%84%E6%96%99.md",
+      "bytes": 11333,
+      "sha256": "4ecb5c1de3d7c03683efadef3eac0e347e03c595adf98307a3694a1e4eb0cfee",
+      "git_blob_sha1": "9361572ca8f440f65c5ac0d1de1add59cfd46585",
+      "git_blob_verified": true
+    },
+    {
+      "file": "02_ROS2使用说明.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/02_ROS2%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/02_ROS2%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.md",
+      "bytes": 13359,
+      "sha256": "00dd309d9f0ed1aab7ce896525362d6dea206da0d8ef002a66420aba0ac7296a",
+      "git_blob_sha1": "7af597c48ffde29b388788a219769f2fa318c31c",
+      "git_blob_verified": true
+    },
+    {
+      "file": "03_gpiozero使用说明.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/03_gpiozero%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/03_gpiozero%E4%BD%BF%E7%94%A8%E8%AF%B4%E6%98%8E.md",
+      "bytes": 5681,
+      "sha256": "3386a005a3a0d38a3d48e28a416949648bf92bfb297522b123c5fbd9648b0531",
+      "git_blob_sha1": "c20fbcaebf71e9f562ab74b90550c145e06ae09a",
+      "git_blob_verified": true
+    },
+    {
+      "file": "04_外设模块参考说明.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/04_%E5%A4%96%E8%AE%BE%E6%A8%A1%E5%9D%97%E5%8F%82%E8%80%83%E8%AF%B4%E6%98%8E.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/04_%E5%A4%96%E8%AE%BE%E6%A8%A1%E5%9D%97%E5%8F%82%E8%80%83%E8%AF%B4%E6%98%8E.md",
+      "bytes": 12616,
+      "sha256": "05ddfb516c900332b986e74e38fcc2e113e3a9c7cf082745ef929f2c6e68afe6",
+      "git_blob_sha1": "db4525aa90736dc8693327333208d776bf1df014",
+      "git_blob_verified": true
+    },
+    {
+      "file": "05_SpacemiT AI SDK.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/05_SpacemiT%20AI%20SDK.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/05_SpacemiT%20AI%20SDK.md",
+      "bytes": 14039,
+      "sha256": "3824b75f529f3ad3cbe19a201cc6c38a9e9884e1e628fc5173daab530ee8b26d",
+      "git_blob_sha1": "47d973ede3c456e2a3cabffaca955fb3e0bcde86",
+      "git_blob_verified": true
+    },
+    {
+      "file": "06_AI基础模块参考说明.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/06_AI%E5%9F%BA%E7%A1%80%E6%A8%A1%E5%9D%97%E5%8F%82%E8%80%83%E8%AF%B4%E6%98%8E.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/06_AI%E5%9F%BA%E7%A1%80%E6%A8%A1%E5%9D%97%E5%8F%82%E8%80%83%E8%AF%B4%E6%98%8E.md",
+      "bytes": 10459,
+      "sha256": "8802e7d12ee92b3f93417b642e807bea886ff0ef891160eda0ac1c193befde3c",
+      "git_blob_sha1": "d392669d4c87133e19d064b4a2a6ad874716f2b2",
+      "git_blob_verified": true
+    },
+    {
+      "file": "07_综合应用案例目录.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/07_%E7%BB%BC%E5%90%88%E5%BA%94%E7%94%A8%E6%A1%88%E4%BE%8B%E7%9B%AE%E5%BD%95.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/07_%E7%BB%BC%E5%90%88%E5%BA%94%E7%94%A8%E6%A1%88%E4%BE%8B%E7%9B%AE%E5%BD%95.md",
+      "bytes": 6684,
+      "sha256": "42fe889cc4a33775bed40dbad14c63b946cabba3e6ded75506a0706031bf4124",
+      "git_blob_sha1": "19f781d83871758a10971f757aac94cc85d11b35",
+      "git_blob_verified": true
+    },
+    {
+      "file": "08_案例1—AI聊天机器人.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/08_%E6%A1%88%E4%BE%8B1%E2%80%94AI%E8%81%8A%E5%A4%A9%E6%9C%BA%E5%99%A8%E4%BA%BA.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/08_%E6%A1%88%E4%BE%8B1%E2%80%94AI%E8%81%8A%E5%A4%A9%E6%9C%BA%E5%99%A8%E4%BA%BA.md",
+      "bytes": 1867,
+      "sha256": "95fbab523137c9d5cb03afe9db4e4a181e3624ad79201fbbda9039491f3a85fd",
+      "git_blob_sha1": "81ed039f7c8a6ed311c6ede2dc35b211861bdb9e",
+      "git_blob_verified": true
+    },
+    {
+      "file": "09_案例2—人脸识别应用.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/09_%E6%A1%88%E4%BE%8B2%E2%80%94%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E5%BA%94%E7%94%A8.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/09_%E6%A1%88%E4%BE%8B2%E2%80%94%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E5%BA%94%E7%94%A8.md",
+      "bytes": 1484,
+      "sha256": "0e2bc740e87faac642ac44fa58809ed18a1154c6889565aedade2a037ed6c2df",
+      "git_blob_sha1": "3b8b2b5291f1bb85ab82e8ce659479a8f223262c",
+      "git_blob_verified": true
+    },
+    {
+      "file": "10_案例3—语音控制电机.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/10_%E6%A1%88%E4%BE%8B3%E2%80%94%E8%AF%AD%E9%9F%B3%E6%8E%A7%E5%88%B6%E7%94%B5%E6%9C%BA.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/10_%E6%A1%88%E4%BE%8B3%E2%80%94%E8%AF%AD%E9%9F%B3%E6%8E%A7%E5%88%B6%E7%94%B5%E6%9C%BA.md",
+      "bytes": 1432,
+      "sha256": "1e0f1c4853e6bb538f6abbff9d6efd60e3deb459c3e08b7067dd80e054176c7a",
+      "git_blob_sha1": "449e0897a46049e2d7494090bef766013655e2b0",
+      "git_blob_verified": true
+    },
+    {
+      "file": "11_案例4—数字识别系统.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/11_%E6%A1%88%E4%BE%8B4%E2%80%94%E6%95%B0%E5%AD%97%E8%AF%86%E5%88%AB%E7%B3%BB%E7%BB%9F.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/11_%E6%A1%88%E4%BE%8B4%E2%80%94%E6%95%B0%E5%AD%97%E8%AF%86%E5%88%AB%E7%B3%BB%E7%BB%9F.md",
+      "bytes": 1683,
+      "sha256": "f9b438639c2aaa7d89f4e312a177cb4bf94a111278dac1480d8e52212118b4a0",
+      "git_blob_sha1": "89f101b468f07127a3085567553c4a21bacd70e3",
+      "git_blob_verified": true
+    },
+    {
+      "file": "12_案例5—IMU惯导模块使用.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/12_%E6%A1%88%E4%BE%8B5%E2%80%94IMU%E6%83%AF%E5%AF%BC%E6%A8%A1%E5%9D%97%E4%BD%BF%E7%94%A8.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/12_%E6%A1%88%E4%BE%8B5%E2%80%94IMU%E6%83%AF%E5%AF%BC%E6%A8%A1%E5%9D%97%E4%BD%BF%E7%94%A8.md",
+      "bytes": 1516,
+      "sha256": "a6681faa18e1a084557ff94c88ed916a751e569eacd88c5a9f53cd582b61dec6",
+      "git_blob_sha1": "bc292662b90afcd1cb520418fc0928eeb17689ce",
+      "git_blob_verified": true
+    },
+    {
+      "file": "13_案例6—驱动开发和使用.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/13_%E6%A1%88%E4%BE%8B6%E2%80%94%E9%A9%B1%E5%8A%A8%E5%BC%80%E5%8F%91%E5%92%8C%E4%BD%BF%E7%94%A8.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/13_%E6%A1%88%E4%BE%8B6%E2%80%94%E9%A9%B1%E5%8A%A8%E5%BC%80%E5%8F%91%E5%92%8C%E4%BD%BF%E7%94%A8.md",
+      "bytes": 16667,
+      "sha256": "679b179b7ffdf34d54092709883253e98add61a1f257efd226792be65c119fd9",
+      "git_blob_sha1": "7d7583824f983a688c147519c289dbd13cfd9a43",
+      "git_blob_verified": true
+    },
+    {
+      "file": "14_案例7—基于EtherCAT控制电机.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/14_%E6%A1%88%E4%BE%8B7%E2%80%94%E5%9F%BA%E4%BA%8EEtherCAT%E6%8E%A7%E5%88%B6%E7%94%B5%E6%9C%BA.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/14_%E6%A1%88%E4%BE%8B7%E2%80%94%E5%9F%BA%E4%BA%8EEtherCAT%E6%8E%A7%E5%88%B6%E7%94%B5%E6%9C%BA.md",
+      "bytes": 9878,
+      "sha256": "fd1f22456da2fd461519d49c25445b89fc9833784fa436ea5d51f983df05a0a2",
+      "git_blob_sha1": "94736e2dfa4f54e10f7014ddd46d1e09c79875c7",
+      "git_blob_verified": true
+    },
+    {
+      "file": "15_常见问题解答.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/15_%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/15_%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94.md",
+      "bytes": 10025,
+      "sha256": "3fa11e59bba1e33f5b09fef27bf73d8ad13abc3b266f67b8a04a510f7852f8fb",
+      "git_blob_sha1": "a9b563529fa292425417eb5f9d3241b6b8440273",
+      "git_blob_verified": true
+    },
+    {
+      "file": "index.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/docs-events/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/index.md",
+      "github_url": "https://github.com/spacemit-com/docs-events/blob/641614ae96465851f0e27f24ae96948aeb0ff333/zh/%E7%AB%9E%E8%B5%9B%E6%95%99%E7%A8%8B/01_Bianbu_%E4%BD%BF%E7%94%A8%E6%96%87%E6%A1%A3%E5%8F%8A%E6%A1%88%E4%BE%8B%E9%9B%86/index.md",
+      "bytes": 1066,
+      "sha256": "3d6c60ff8d0ae0c042f47ae472b7904528937e88594598171b4f3c7e959e44df",
+      "git_blob_sha1": "0ef7f3984fde7e53a37264a9fa9522c58df233d3",
+      "git_blob_verified": true
+    }
+  ],
+  "community_page": {
+    "file": "13_社区页面原文.md",
+    "url": "https://cdn-resource.spacemit.com/competition/docs-events/zh/竞赛教程/01_Bianbu_使用文档及案例集/13_案例6—驱动开发和使用.md",
+    "sha256": "197844725f1f9369840496c608501948f885e9667465bf3d96e320ef4a9c3045",
+    "bytes": 17601,
+    "site_update_time": "2026-06-08 18:08:05",
+    "note": "官网CDN展示正文，与GitHub原文格式、图片URL处理不同；各自保留原字节。"
+  },
+  "license": {
+    "status": "not_declared_in_repository_tree",
+    "checked_commit": "641614ae96465851f0e27f24ae96948aeb0ff333",
+    "tree_complete": true,
+    "note": "此提交完整Git树未发现LICENSE/COPYING/NOTICE文件。不能套用其他仓库许可。仅作本工程参考存档，未并入软件发布包。"
+  },
+  "scope": "完整15篇正文与目录；未递归下载文内视频、图片、大型SDK/模型/系统镜像；未执行任何教程命令。"
+}

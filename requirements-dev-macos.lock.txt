@@ -1,0 +1,11 @@
+# Verified on macOS arm64 / Python 3.12.14, 2026-09-07.
+# Host development only; do not use for the RISC-V ROS runtime.
+iniconfig==2.3.0
+numpy==2.5.3
+opencv-python-headless==4.14.0.94
+packaging==26.3
+pluggy==1.6.0
+Pygments==2.21.0
+pyserial==3.5
+pytest==9.1.1
+PyYAML==6.0.3

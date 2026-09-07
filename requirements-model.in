@@ -1,0 +1,9 @@
+# Mac reference export/inference environment; use its lock file for reproduction.
+# Do not install or copy these host wheels into the RISC-V vendor environment.
+ultralytics==8.4.142
+torch==2.14.0
+torchvision==0.29.0
+onnx==1.22.0
+onnxruntime==1.29.0
+opencv-python==4.14.0.94
+pytest==9.1.1

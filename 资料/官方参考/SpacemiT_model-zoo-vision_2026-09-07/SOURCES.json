@@ -1,0 +1,74 @@
+{
+  "retrieved_at": "2026-09-07",
+  "repository": "https://github.com/spacemit-com/model-zoo-vision",
+  "commit": "e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42",
+  "files": [
+    {
+      "file": "README.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/README.md",
+      "bytes": 27631,
+      "sha256": "2b9a0815f9e3b627764d04308179744009c91fc4526f9cc6b31ae1cc7f72c17f"
+    },
+    {
+      "file": "LICENSE",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/LICENSE",
+      "bytes": 11368,
+      "sha256": "8043f5bd14695151ca875f8623312d6d5b6328e5422a401a3aaa3d069b5a9e01"
+    },
+    {
+      "file": "CMakeLists.txt",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/CMakeLists.txt",
+      "bytes": 16975,
+      "sha256": "f7169ab97eefb6d15d07995385a6406810cc1d59419727ec36dc0e7459f821f2"
+    },
+    {
+      "file": "include/vision_service.h",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/include/vision_service.h",
+      "bytes": 15579,
+      "sha256": "263b29e37d65a7e961a5adb213417b6075fd63f1ef0650f296dd8d259b98fb2b"
+    },
+    {
+      "file": "examples/yolo26/README.md",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/examples/yolo26/README.md",
+      "bytes": 1035,
+      "sha256": "dc26a23791763807cf727ccb1b2d6719955ee77443d6a67c32b45d64ed69aee0"
+    },
+    {
+      "file": "examples/yolo26/config/yolo26.yaml",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/examples/yolo26/config/yolo26.yaml",
+      "bytes": 530,
+      "sha256": "0b552bc19655dd040bafd98071dfe398c2700c06ebf0ae38c648095f77780368"
+    },
+    {
+      "file": "examples/yolo26/scripts/download_models.sh",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/examples/yolo26/scripts/download_models.sh",
+      "bytes": 761,
+      "sha256": "17bfb170de27e543e6735b168f983f05529c0dca68414d9ef772a636f1cedb41"
+    },
+    {
+      "file": "src/deploy/yolo26/cpp/yolo26_detector.cpp",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/src/deploy/yolo26/cpp/yolo26_detector.cpp",
+      "bytes": 9593,
+      "sha256": "cce6d6a375bbdaa2c7af88c17b2aec13c24e061004cfb70141288770fdead5fa"
+    },
+    {
+      "file": "src/deploy/yolo26/cpp/yolo26_detector.h",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/src/deploy/yolo26/cpp/yolo26_detector.h",
+      "bytes": 1867,
+      "sha256": "1db9abae857b157bfcc29f2c8fd1399b9a83a4a027b5793f81d425360f32fb8f"
+    },
+    {
+      "file": "src/core/cpp/vision_model_base.h",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/src/core/cpp/vision_model_base.h",
+      "bytes": 8070,
+      "sha256": "c8fd0ec0a04ede2e1e6a483886e3120c64aaf38694fa9f5356322c44cd645157"
+    },
+    {
+      "file": "src/core/cpp/vision_model_base.cpp",
+      "url": "https://raw.githubusercontent.com/spacemit-com/model-zoo-vision/e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42/src/core/cpp/vision_model_base.cpp",
+      "bytes": 14357,
+      "sha256": "ff603f4bc08ff3ab3f4150da400b47f37c45623439796586e3bff74f43ea8185"
+    }
+  ],
+  "scope": "只读归档README、构建入口、许可证、公开接口及YOLO26/原生ORT初始化相关源码，未下载模型或目标运行库，未编译执行。"
+}
