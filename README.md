@@ -23,7 +23,8 @@ Python 保留用于离线模型导出、校验和参考对照；默认运行时�
 | 状态机与底盘接口 | `crates/robot-core/src/safety.rs`：启用流程、急停锁存、deadman、超时、限值，MotionSink/RecordingSink |
 | 总调度与日志 | `crates/runner` → `xt-stcar-robot`：传感器/控制/真实图像推理混合回放，完整 JSONL 与结束 Stop |
 
-真实设备驱动、ROS 接口、标定、定位融合、路径规划与避障策略尚未实现。
+已新增厂商底盘帧编码/映射预览及 IMU 流解析，见 [厂商协议 Rust 适配](docs/厂商协议Rust适配.md)。
+真实设备连接、ROS 接口、标定、定位融合、路径规划与避障策略尚未实现。
 现有模块不会编造串口帧、舵机角或轮速映射；硬件适配需要厂家资料。
 详细数据与状态约定见 [机器人模块](docs/机器人模块.md)。
 

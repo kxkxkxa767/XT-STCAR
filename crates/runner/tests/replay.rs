@@ -178,3 +178,99 @@ fn frame_stream_requires_native_runtime_and_monotonic_sequence() {
     assert!(!result.status.success());
     assert_eq!(fs::read(image).unwrap(), original);
 }
+
+#[test]
+fn raw_imu_corruption_does_not_refresh_safety_watchdog() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let result = Command::new(env!("CARGO_BIN_EXE_xt-stcar-robot"))
+        .current_dir(&root)
+        .args([
+            "replay",
+            "--events",
+            "examples/robot-imu-replay.jsonl",
+            "--config",
+            "config/robot-imu-replay.json",
+            "--imu-config",
+            "config/imu-replay.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let logs = records(&result.stdout);
+    assert_eq!(logs.last().unwrap()["imu_samples"], 1);
+    assert_eq!(logs[0]["imu_decode"]["samples"], json!([]));
+    assert_eq!(logs[1]["imu_decode"]["samples"][0]["captured_at"], 0);
+    assert_eq!(logs[6]["step"]["state"], "running");
+    assert_eq!(logs[7]["imu_decode"]["checksum_errors"], 1);
+    assert_eq!(logs[8]["step"]["state"], "fault");
+    assert_eq!(logs[8]["step"]["output"]["command"]["type"], "stop");
+    assert_eq!(logs.last().unwrap()["final_state"], "fault");
+}
+
+#[test]
+fn raw_imu_requires_explicit_config_and_protects_it_from_output() {
+    let fixture = Fixture::new("{\"at\":0,\"event\":{\"type\":\"imu_bytes\",\"bytes\":[85]}}\n");
+    assert!(!fixture.command().output().unwrap().status.success());
+    let config = fixture.temp.path().join("imu.json");
+    fs::write(&config, include_str!("../../../config/imu-replay.json")).unwrap();
+    let original = fs::read(&config).unwrap();
+    let result = fixture
+        .command()
+        .arg("--imu-config")
+        .arg(&config)
+        .arg("--output")
+        .arg(&config)
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert_eq!(fs::read(&config).unwrap(), original);
+    let mut invalid: Value = serde_json::from_slice(&original).unwrap();
+    invalid["frame_id"] = json!("IMU_link");
+    fs::write(&config, serde_json::to_vec(&invalid).unwrap()).unwrap();
+    let result = fixture
+        .command()
+        .arg("--imu-config")
+        .arg(&config)
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("frame differs"));
+}
+
+#[test]
+fn chassis_preview_is_explicit_and_never_writes_to_hardware() {
+    let result = Command::new(env!("CARGO_BIN_EXE_xt-stcar-robot"))
+        .args([
+            "chassis-preview",
+            "--profile",
+            "teleop_pwm_degrees",
+            "--linear",
+            "1500",
+            "--angular",
+            "90",
+        ])
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    let output: Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(output["hex"], "AA DC 05 DC 05 C2 55");
+    assert_eq!(output["physical_output_enabled"], false);
+    let result = Command::new(env!("CARGO_BIN_EXE_xt-stcar-robot"))
+        .args([
+            "chassis-preview",
+            "--profile",
+            "navigation1300",
+            "--linear",
+            "NaN",
+            "--angular",
+            "0",
+        ])
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(result.stdout.is_empty());
+}

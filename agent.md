@@ -54,16 +54,14 @@
    - 机器人真实图像混合回放：19 输入事件、2 帧、20 运动记录（4 Drive / 16 Stop），
      每帧 5 框、重复结果一致、最终 Disarmed；坏图像触发急停。
      Drive 是记录值，所有输出 physical_output_enabled=false，模拟时间不是实时控制。
-5. **两个主工程程序已正式交叉链接**，不是只有旧独立 smoke：
+5. **两个主工程程序已按厂商协议修正重新交叉链接**：
    - `target/riscv64gc-unknown-linux-gnu/release/xt-stcar`：1,213,880 字节，SHA256
      `0592ea68f687d8cd3a9609ace273e7722670e9d32d7074cd145e600cb4d303ff`。
-   - 同目录 `xt-stcar-robot`：1,284,872 字节，SHA256
-     `49d1f6ebc0d5e15398e59aabad097a1e058bbc81c136d0b3b3a736e8a7336205`。
-   - 两者均为 ELF64 LE RISC-V / RVC / LP64D / PIE，加载器 `/lib/ld-linux-riscv64-lp64d.so.1`，
-     DT_NEEDED 仅 libc.so.6，最大 glibc 引用 GLIBC_2.34。
-     用户后续明确要求升级 2.38，已按 `riscv64gc-unknown-linux-gnu.2.38` 强制重新链接，检查上限 2.38。
-     当前证据见 [GLIBC 2.38 升级记录](docs/GLIBC-2.38升级记录.md)，未修改车端 libc。
-     `.build.json` 记录 23 个 Rust 源/清单/锁文件哈希与两 binary 哈希；每个程序有独立 `.elf.json`。
+   - 同目录 `xt-stcar-robot`：1,359,504 字节，SHA256
+     `a85281f669c12c8a86088b16c6a87831202cb534096e36e208588b5b2f5c261a`。
+   - 两者 ELF64 LE RISC-V / RVC / LP64D / PIE，加载器 `/lib/ld-linux-riscv64-lp64d.so.1`，
+     DT_NEEDED 仅 libc.so.6，最大 GLIBC 引用 2.34，构建目标 `.2.38`。
+   - 最新证据见 [厂商协议修正验证记录](docs/厂商协议修正验证记录.md)；27 个 Rust 源/清单/锁文件哈希，两个程序各有独立 ELF 报告。
 6. 构建/打包/上传脚本已写好，`scripts/build-riscv.sh` 一次检查并构建两程序。
    `scripts/package.sh` 输出 core 包，显式 `--model models/yolo26n.onnx` 才包含模型/provenance/许可。
    产物在 `dist/`，不含主机环境、Mac dylib、工具链或缓存。上传默认 dry-run、显式新 IP/账号/目录，
@@ -78,8 +76,8 @@
   ORT/EP 需要 GLIBC 2.38，EP 另需 GLIBCXX 3.4.32 / CXXABI 1.3.15。
   未安装/打包厂商库，未集成 EP 初始化，未验证本工程模型算子与目标推理。
 - 没有真实相机/雷达/IMU/底盘驱动、ROS 节点、定位融合、路径规划或避障算法。
-  传感器与底盘模块当前是完整离线语义/安全策略/输出记录实现，不是厂商协议适配。
-  必须取得厂家协议、消息定义、坐标/单位/时钟与标定数据后才补具体硬件连接。
+  已实现厂商底盘编码/映射预览、IMU 增量解析及安全回放；真实串口、ROS 与物理标定尚未接入。
+  需要核对实际设备、MCU 接收/反馈/watchdog、坐标/单位/时钟与标定数据后补硬件连接。
 - 未接新车，未在目标机或模拟器运行，未部署、未控制电机。Windows/WSL 仍仅为指南。
   单图 smoke、回放规则和 ELF 验证不能代替车端精度、视频帧率、物理停车或实时性验证。
 
@@ -108,6 +106,24 @@
 - 18 项交付/ELF 回归通过，覆盖 2.38 边界放行、2.39 超限拒绝、旧构建目标拒绝与包内 target 一致性。
 - build / manifest 固定 `.2.38`，真实最高符号引用为 2.34；二者分别描述构建目标与实际引用。
 - 本次仍暂不接车，未升级任何车端系统库。
+
+### 用户提供的整车资料（2026-09-07 后续）
+
+- 新资料在 `/Users/yuhaojin/Documents/进迭时空无人车（2026）学习资料`，用户明确不要看视频，已遵守。
+- 关键证据来自 `4.出厂源码/racecar.zip`；外部解压目录缺子目录，查源码应使用完整包。所选文本在 `work/factory-2026/archive/`。
+- 已补齐底盘 7 字节发送格式、38400 8N1、IMU 115200 解析、N10 雷达配置；教程明确无编码器，参考 RF2O/Cartographer 里程计。
+- 上方“仍缺厂家协议”应更新为：协议已有源码依据，Rust 硬件适配尚未实现；仍需实车校准、MCU 接收/超时/反馈和系统库验收。
+- 普通与 one 底盘节点的转向系数 1300/1200 不同；遥控 Twist 采用 PWM/角度语义。不要混用或直接映射现有物理 MotionIntent。
+- 镜像文件标 Bianbu 2.2，未展开 rootfs 或刷机，不因此改动已通过的 GLIBC 2.38 本地构建。
+- 完整发现与限制见 [无人车2026资料核对](docs/无人车2026资料核对.md)。此轮只读源码并更新文档，未执行厂商程序或控制车辆。
+
+### 厂商协议 Rust 修正（最新）
+
+- `robot-core::protocol` 新增底盘编码器、显式 factory profile、处理短写/中断与失败锁存的通用 PacketWriter，以及有校验/分包/过期保护的 IMU 解码器；没有真实端口打开入口。
+- `xt-stcar-robot chassis-preview` 输出帧预览；回放新增 imu_bytes + 必填 --imu-config，禁止混用直接 IMU，frame 明确核对。
+- 三类 IMU 分量齐全且新鲜才发布；无样本/坏校验只产生 Tick，不刷新 Controller 的传感器时间，EOF 仍停。
+- 不复制旧偏移；config/imu-replay.json 为显式零偏合成配置，不是实车校准。FactoryProfile 不接受物理 MotionIntent。
+- 51 项常规 Rust 测试、18 项交付测试、fmt/clippy、GLIBC 2.38 交叉链接与两个新包通过。详细 [协议适配说明](docs/厂商协议Rust适配.md)。
 
 ### 锁定 YOLO26n 规则与后续入口
 

@@ -7,8 +7,12 @@ use xt_stcar_robot_runner::{ReplayOptions, replay, vision::VisionOptions};
 const HELP: &str = "XT-STCAR Rust robot module runner (offline recording only)
 
 Usage:
+  xt-stcar-robot chassis-preview --profile PROFILE --linear VALUE --angular VALUE
+  PROFILE: navigation1300 | navigation_one1200 | teleop_pwm_degrees
+  Reference PWM preview only; values retain factory topic conventions.
   xt-stcar-robot replay --events FILE [--config FILE] [--output FILE]
                       [--model ONNX --runtime-lib LIB --vision-config FILE]
+                      [--imu-config FILE]
 
 Defaults: --config config/robot-sim.json, --vision-config config/yolo26n.json.
 Input is strict JSONL with monotonic boot-relative millisecond timestamps.
@@ -88,6 +92,51 @@ fn distinct_output(output: &Path, inputs: &[&Path]) -> Result<()> {
     Ok(())
 }
 
+fn chassis_preview(rest: Vec<OsString>) -> Result<()> {
+    use xt_stcar_robot_core::protocol::chassis::FactoryProfile;
+    let mut args = rest.into_iter();
+    let mut values = BTreeMap::new();
+    while let Some(key) = args.next() {
+        let key = key.into_string().map_err(|_| "option must be UTF-8")?;
+        if !["--profile", "--linear", "--angular"].contains(&key.as_str()) {
+            return Err(format!("unknown preview option {key}"));
+        }
+        let value = args
+            .next()
+            .ok_or("missing preview value")?
+            .into_string()
+            .map_err(|_| "preview value must be UTF-8")?;
+        if values.insert(key, value).is_some() {
+            return Err("duplicate preview option".into());
+        }
+    }
+    let profile = values.get("--profile").ok_or("--profile is required")?;
+    let mapping = match profile.as_str() {
+        "navigation1300" => FactoryProfile::Navigation1300,
+        "navigation_one1200" => FactoryProfile::NavigationOne1200,
+        "teleop_pwm_degrees" => FactoryProfile::TeleopPwmDegrees,
+        _ => return Err("unknown factory profile".into()),
+    };
+    let number = |key| -> Result<f64> {
+        values
+            .get(key)
+            .ok_or_else(|| format!("{key} is required"))?
+            .parse()
+            .map_err(|_| format!("{key} must be numeric"))
+    };
+    let packet = mapping
+        .preview(number("--linear")?, number("--angular")?)
+        .map_err(|e| e.to_string())?
+        .encode();
+    println!(
+        "{}",
+        serde_json::json!({"kind":"chassis_preview", "profile":profile,
+        "physical_output_enabled":false, "vehicle_calibration_verified":false,
+        "bytes":packet, "hex":packet.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ")})
+    );
+    Ok(())
+}
+
 fn run() -> Result<()> {
     let mut arguments = std::env::args_os().skip(1);
     let Some(command) = arguments.next() else {
@@ -98,6 +147,9 @@ fn run() -> Result<()> {
     if command == "--help" || command == "-h" || (rest.len() == 1 && rest[0] == "--help") {
         print!("{HELP}");
         return Ok(());
+    }
+    if command == "chassis-preview" {
+        return chassis_preview(rest);
     }
     if command != "replay" {
         return Err("expected replay; see --help".into());
@@ -113,6 +165,7 @@ fn run() -> Result<()> {
             "--model",
             "--runtime-lib",
             "--vision-config",
+            "--imu-config",
         ]
         .contains(&key.as_str())
         {
@@ -133,6 +186,7 @@ fn run() -> Result<()> {
         .remove("--config")
         .unwrap_or_else(|| "config/robot-sim.json".into());
     let output = options.remove("--output");
+    let imu_config = options.remove("--imu-config");
     let model = options.remove("--model");
     let runtime = options.remove("--runtime-lib");
     let spec = options.remove("--vision-config");
@@ -151,6 +205,9 @@ fn run() -> Result<()> {
     };
     if let Some(path) = &output {
         let mut sources = vec![config.as_path(), events.as_path()];
+        if let Some(path) = &imu_config {
+            sources.push(path.as_path());
+        }
         let provenance;
         if let Some(vision) = &vision {
             provenance = vision.model.with_extension("provenance.json");
@@ -181,6 +238,7 @@ fn run() -> Result<()> {
         config,
         events,
         vision,
+        imu_config,
     };
     // Buffer output until a valid replay finishes or records a terminal stop.
     // Invalid config/events or a missing runtime never truncate an existing log.

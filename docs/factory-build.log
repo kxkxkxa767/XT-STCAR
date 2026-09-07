@@ -1,0 +1,1230 @@
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+   Compiling xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.56s
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar-a54c9d6f164c6d47)
+
+running 3 tests
+test ort_backend::tests::deadline_does_not_cancel_a_completed_operation ... ok
+test ort_backend::tests::provenance_binds_digest_and_rejects_non_end_to_end_or_raw_heads ... ok
+test ort_backend::tests::deadline_requests_cancellation_and_rejects_late_results ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/xt_stcar-e599caf9e8797a3f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli.rs (target/debug/deps/cli-4756c9dfcd3631f4)
+
+running 11 tests
+test preprocess_writes_little_endian_rgb_chw_and_plain_transform ... ok
+test native_is_the_default_and_python_requires_explicit_reference_selection ... ok
+test output_collisions_do_not_overwrite_inputs ... ok
+test replay_maps_coordinates_and_filters_equal_threshold ... ok
+test output_hard_links_are_replaced_without_modifying_the_input_inode ... ok
+test self_check_explicitly_reports_synthetic_data ... ok
+test reference_worker_receives_separate_literal_arguments_and_reports_diagnostics ... ok
+test malformed_cli_config_image_and_tensor_fail_explicitly ... ok
+test invalid_timeouts_and_missing_interpreter_fail ... ok
+test failed_worker_cannot_supply_a_successful_tensor ... ok
+test timeout_kills_and_reaps_worker_and_cleans_temporary_files ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+     Running tests/native_runtime.rs (target/debug/deps/native_runtime-40053cc0bdb19e1c)
+
+running 1 test
+test native_session_is_reused_and_deadlines_cancel_model_loading ... ignored, requires an explicit real ONNX model, validator provenance, and standard ORT C library
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_robot_core-e5f28341960b69e1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/protocol.rs (target/debug/deps/protocol-7745ad55939a137f)
+
+running 6 tests
+test factory_golden_packet_and_profiles_do_not_share_units ... ok
+test calibration_and_frame_are_explicit ... ok
+test partial_writes_and_interrupts_complete_packet_but_error_latches ... ok
+test stale_partial_frames_skew_and_backward_time_are_rejected ... ok
+test noise_checksum_and_missing_components_never_refresh_a_sample ... ok
+test every_split_and_concatenation_preserves_units_and_orientation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safety.rs (target/debug/deps/safety-2dcd62b8f0293591)
+
+running 12 tests
+test arming_and_starting_require_explicit_readiness ... ok
+test config_is_explicit_finite_and_simulation_only ... ok
+test missing_required_sensor_prevents_arm ... ok
+test estop_latches_until_release_and_explicit_reset ... ok
+test late_command_cannot_erase_its_own_expiry ... ok
+test deadman_release_stops_immediately ... ok
+test backward_event_time_faults_without_backward_output_time ... ok
+test sample_replay_is_deterministic_and_offline ... ok
+test timeout_boundary_and_late_heartbeat_cannot_restore_motion ... ok
+test sensor_frames_stamps_and_geometry_are_validated ... ok
+test each_keepalive_expires_and_late_input_remains_stopped ... ok
+test invalid_or_excessive_motion_is_rejected_instead_of_clamped ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_robot_runner-b858fbdc279fd885)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/xt_stcar_robot-a5e03eeed22103d9)
+
+running 1 test
+test tests::an_incomplete_or_unstopped_log_is_not_publishable_on_error ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/replay.rs (target/debug/deps/replay-d8853c3d601674ca)
+
+running 9 tests
+test successful_replay_records_motion_and_always_stops_at_eof ... ok
+test raw_imu_corruption_does_not_refresh_safety_watchdog ... ok
+test timeout_is_a_recorded_fault_and_never_recovered_by_late_heartbeat ... ok
+test hard_linked_output_never_truncates_source_events ... ok
+test chassis_preview_is_explicit_and_never_writes_to_hardware ... ok
+test invalid_config_and_output_input_collision_are_rejected ... ok
+test raw_imu_requires_explicit_config_and_protects_it_from_output ... ok
+test frame_stream_requires_native_runtime_and_monotonic_sequence ... ok
+test malformed_or_regressing_input_cannot_truncate_existing_logs ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_vision-2717b6d4ab67ba46)
+
+running 9 tests
+test tests::odd_padding_and_invalid_dimensions ... ok
+test tests::reject_wrong_layout_malformed_output_and_transform ... ok
+test tests::ties_to_even_and_asymmetric_padding ... ok
+test tests::reject_invalid_scores_and_confident_boxes ... ok
+test tests::clip_boxes_and_drop_padding_only ... ok
+test tests::unletterbox_threshold_and_no_extra_nms ... ok
+test tests::confidence_is_strictly_greater_than_threshold ... ok
+test tests::resize_uses_half_pixel_sampling_and_rgb_planes ... ok
+test tests::letterbox_rgb_normalization_and_padding ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests xt_stcar
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xt_stcar_robot_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xt_stcar_robot_runner
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xt_stcar_vision
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+    Checking xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+warning: linker stderr: ignoring deprecated linker optimization setting '1'
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `xt-stcar` (bin "xt-stcar") generated 1 warning
+   Compiling xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+warning: `xt-stcar-robot-runner` (bin "xt-stcar-robot") generated 1 warning (1 duplicate)
+    Finished `release` profile [optimized] target(s) in 4.83s
+{
+  "elf_class": 64,
+  "endianness": "little",
+  "machine": 243,
+  "architecture": "riscv64",
+  "elf_type": 3,
+  "entry": 347848,
+  "flags": 5,
+  "rvc": true,
+  "abi": "lp64d",
+  "pie": true,
+  "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+  "needed": [
+    "libc.so.6"
+  ],
+  "rpath": [],
+  "glibc_versions": [
+    "GLIBC_2.27",
+    "GLIBC_2.28",
+    "GLIBC_2.29",
+    "GLIBC_2.30",
+    "GLIBC_2.32",
+    "GLIBC_2.33",
+    "GLIBC_2.34"
+  ],
+  "maximum_glibc": "2.34",
+  "versioned_undefined_symbols": [
+    {
+      "symbol": "__cxa_thread_atexit_impl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__errno_location",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__libc_start_main",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "__xpg_strerror_r",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "_exit",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "abort",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "bcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "calloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "chdir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "chroot",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "clock_gettime",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "clock_nanosleep",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "close",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "closedir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dirfd",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dl_iterate_phdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dladdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlclose",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlerror",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlopen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlsym",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dup",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dup2",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "environ",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "execvp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fcntl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fdopendir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fflush",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fork",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "free",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fstat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "fwrite",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getauxval",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getcwd",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getenv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getpid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getrandom",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "gettid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "symbol": "gnu_get_libc_version",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "ioctl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "kill",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "linkat",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "lseek64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "lstat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "malloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcpy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memmove",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mkdir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mmap64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mprotect",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "munmap",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "open64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "openat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pause",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pipe2",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "poll",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_memalign",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_addchdir_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.29"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_adddup2",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_setflags",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_setpgroup",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_setsigdefault",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_getguardsize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_getstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_setstacksize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_detach",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_getattr_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "symbol": "pthread_join",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_delete",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_rdlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_unlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_wrlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_self",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_setname_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_setspecific",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "read",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readdir64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realpath",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "recv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "recvmsg",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sched_yield",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sendmsg",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setgid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setgroups",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setpgid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setsid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setuid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaction",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaddset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaltstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigemptyset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "signal",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "snprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "socketpair",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "stat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "statx",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "symbol": "stderr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "strlen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "syscall",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sysconf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "unlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "unlinkat",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "waitid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "waitpid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "write",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "writev",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    }
+  ],
+  "schema_version": 1,
+  "glibc_baseline": "2.38",
+  "file": "xt-stcar",
+  "sha256": "0592ea68f687d8cd3a9609ace273e7722670e9d32d7074cd145e600cb4d303ff",
+  "size_bytes": 1213880,
+  "passed": true,
+  "errors": []
+}
+{
+  "elf_class": 64,
+  "endianness": "little",
+  "machine": 243,
+  "architecture": "riscv64",
+  "elf_type": 3,
+  "entry": 381552,
+  "flags": 5,
+  "rvc": true,
+  "abi": "lp64d",
+  "pie": true,
+  "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+  "needed": [
+    "libm.so.6",
+    "libc.so.6"
+  ],
+  "rpath": [],
+  "glibc_versions": [
+    "GLIBC_2.27",
+    "GLIBC_2.28",
+    "GLIBC_2.30",
+    "GLIBC_2.32",
+    "GLIBC_2.33",
+    "GLIBC_2.34"
+  ],
+  "maximum_glibc": "2.34",
+  "versioned_undefined_symbols": [
+    {
+      "symbol": "__cxa_thread_atexit_impl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__errno_location",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__libc_start_main",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "__xpg_strerror_r",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "abort",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "bcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "calloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "clock_gettime",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "close",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dl_iterate_phdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dladdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlclose",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlerror",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlopen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlsym",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dup",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fcntl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fflush",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "free",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fstat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "fwrite",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getauxval",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getcwd",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getenv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getrandom",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "gettid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "symbol": "linkat",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "lseek64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "malloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcpy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memmove",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mmap64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mprotect",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "munmap",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "open64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pause",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "poll",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_memalign",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_getguardsize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_getstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_setstacksize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_detach",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_getattr_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "symbol": "pthread_join",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_delete",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_rdlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_unlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_wrlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_self",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_setname_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_setspecific",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "read",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realpath",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sched_yield",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaction",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaltstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "signal",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "snprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "stat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "statx",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "symbol": "stderr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "strlen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "syscall",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sysconf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "unlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "write",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "writev",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "cos",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sin",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    }
+  ],
+  "schema_version": 1,
+  "glibc_baseline": "2.38",
+  "file": "xt-stcar-robot",
+  "sha256": "a85281f669c12c8a86088b16c6a87831202cb534096e36e208588b5b2f5c261a",
+  "size_bytes": 1359504,
+  "passed": true,
+  "errors": []
+}
+Build evidence: /Users/yuhaojin/Documents/XT-STCAR/target/riscv64gc-unknown-linux-gnu/release/xt-stcar.build.json

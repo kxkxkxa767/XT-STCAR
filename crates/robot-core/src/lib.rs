@@ -5,3 +5,5 @@ mod sensors;
 
 pub use safety::*;
 pub use sensors::*;
+
+pub mod protocol;

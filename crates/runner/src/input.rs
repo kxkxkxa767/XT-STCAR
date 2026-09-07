@@ -25,7 +25,21 @@ pub enum FrameEvent {
     },
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimedImuBytes {
+    pub at: Timestamp,
+    pub event: ImuBytesEvent,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ImuBytesEvent {
+    ImuBytes { bytes: Vec<u8> },
+}
+
 pub enum ReplayEvent {
+    ImuBytes(TimedImuBytes),
     Core(TimedEvent),
     Frame(TimedFrame),
 }
@@ -64,6 +78,7 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
             Some("deadman") => &["type", "pressed"],
             Some("motion") => &["type", "intent"],
             Some("sensor") => &["type", "sample"],
+            Some("imu_bytes") => &["type", "bytes"],
             Some("vision_frame") => &["type", "path", "sequence", "frame_id"],
             _ => {
                 return Err(format!(
@@ -110,6 +125,15 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
             }
             let at = frame.at.0;
             (ReplayEvent::Frame(frame), at)
+        } else if value["event"]["type"] == "imu_bytes" {
+            let chunk: TimedImuBytes =
+                serde_json::from_str(&line).map_err(|e| format!("IMU line {}: {e}", index + 1))?;
+            let ImuBytesEvent::ImuBytes { bytes } = &chunk.event;
+            if bytes.is_empty() || bytes.len() > 4096 {
+                return Err("IMU chunk must contain 1..4096 bytes".into());
+            }
+            let at = chunk.at.0;
+            (ReplayEvent::ImuBytes(chunk), at)
         } else {
             let core: TimedEvent = serde_json::from_str(&line)
                 .map_err(|e| format!("event line {}: {e}", index + 1))?;

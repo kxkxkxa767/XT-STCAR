@@ -3,11 +3,13 @@
 pub mod input;
 pub mod vision;
 
+use input::ImuBytesEvent;
 use input::{FrameEvent, ReplayEvent, Result, read_events};
 use serde::Serialize;
 use std::io::Write;
 use std::path::PathBuf;
 use vision::{VisionOptions, VisionPipeline};
+use xt_stcar_robot_core::protocol::imu::{ImuConfig, ImuDecoder};
 use xt_stcar_robot_core::{
     Controller, Event, FrameId, MotionOutput, MotionSink, RecordingSink, SafetyConfig,
     SensorSample, State, TimedEvent, Timestamp, VisionSample,
@@ -17,6 +19,7 @@ pub struct ReplayOptions {
     pub config: PathBuf,
     pub events: PathBuf,
     pub vision: Option<VisionOptions>,
+    pub imu_config: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
@@ -26,6 +29,7 @@ pub struct RunSummary {
     pub physical_output_enabled: bool,
     pub input_events: usize,
     pub vision_frames: usize,
+    pub imu_samples: usize,
     pub motion_records: usize,
     pub drive_records: usize,
     pub stop_records: usize,
@@ -59,6 +63,41 @@ pub fn replay(options: ReplayOptions, writer: &mut impl Write) -> Result<RunSumm
             "model/runtime options supplied but the event stream has no vision_frame".into(),
         );
     }
+    let has_imu = events.iter().any(|e| matches!(e, ReplayEvent::ImuBytes(_)));
+    if has_imu != options.imu_config.is_some() {
+        return Err(
+            "imu_bytes input requires --imu-config, and the option requires imu_bytes input".into(),
+        );
+    }
+    if has_imu
+        && events.iter().any(|e| {
+            matches!(
+                e,
+                ReplayEvent::Core(TimedEvent {
+                    event: Event::Sensor {
+                        sample: SensorSample::Imu(_)
+                    },
+                    ..
+                })
+            )
+        })
+    {
+        return Err("cannot mix raw and decoded IMU sources in one replay".into());
+    }
+    let mut imu = options
+        .imu_config
+        .as_ref()
+        .map(|path| {
+            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+            let spec: ImuConfig = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+            if spec.frame_id != config.frames.imu_frame {
+                return Err(
+                    "IMU frame differs from robot config; explicit transform required".into(),
+                );
+            }
+            ImuDecoder::new(spec).map_err(|e| e.to_string())
+        })
+        .transpose()?;
     let mut controller = Controller::new(config).map_err(|e| e.to_string())?;
     // Initialize and validate the real model before producing any control records.
     let mut pipeline = options
@@ -68,9 +107,49 @@ pub fn replay(options: ReplayOptions, writer: &mut impl Write) -> Result<RunSumm
         .transpose()?;
     let mut sink = RecordingSink::default();
     let mut vision_frames = 0;
+    let mut imu_samples = 0;
     let mut last_at = Timestamp(0);
     for event in events {
+        if let ReplayEvent::ImuBytes(chunk) = event {
+            last_at = chunk.at;
+            let ImuBytesEvent::ImuBytes { bytes } = chunk.event;
+            let batch = imu
+                .as_mut()
+                .ok_or("missing IMU decoder")?
+                .feed(&bytes, chunk.at)
+                .map_err(|e| e.to_string())?;
+            imu_samples += batch.samples.len();
+            // An incomplete/invalid packet is a Tick, never a refreshed sensor.
+            let sensor_events: Vec<Event> = if batch.samples.is_empty() {
+                vec![Event::Tick]
+            } else {
+                batch
+                    .samples
+                    .iter()
+                    .cloned()
+                    .map(|sample| Event::Sensor {
+                        sample: SensorSample::Imu(sample),
+                    })
+                    .collect()
+            };
+            for sensor_event in sensor_events {
+                let report = controller.handle(TimedEvent {
+                    at: chunk.at,
+                    event: sensor_event,
+                });
+                sink.emit(&report.output).map_err(|e| e.to_string())?;
+                json_line(
+                    writer,
+                    &serde_json::json!({
+                        "kind": "step", "mode": "replay", "physical_output_enabled": false,
+                        "step": report, "imu_decode": batch,
+                    }),
+                )?;
+            }
+            continue;
+        }
         let (timed, perception) = match event {
+            ReplayEvent::ImuBytes(_) => unreachable!("handled above"),
             ReplayEvent::Core(event) => (event, None),
             ReplayEvent::Frame(frame) => {
                 let FrameEvent::VisionFrame {
@@ -153,6 +232,7 @@ pub fn replay(options: ReplayOptions, writer: &mut impl Write) -> Result<RunSumm
         physical_output_enabled: false,
         input_events,
         vision_frames,
+        imu_samples,
         motion_records: sink.records().len(),
         drive_records,
         stop_records: sink.records().len() - drive_records,

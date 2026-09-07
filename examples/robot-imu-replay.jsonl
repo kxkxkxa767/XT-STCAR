@@ -1,0 +1,9 @@
+{"at": 0, "event": {"type": "imu_bytes", "bytes": [85, 81, 0, 0, 0]}}
+{"at": 5, "event": {"type": "imu_bytes", "bytes": [0, 0, 8, 0, 0, 174, 85, 82, 0, 0, 0, 0, 0, 0, 0, 0, 167, 85, 83, 0, 0, 0, 0, 0, 0, 0, 0, 168]}}
+{"at": 5, "event": {"type": "heartbeat"}}
+{"at": 5, "event": {"type": "deadman", "pressed": true}}
+{"at": 5, "event": {"type": "arm"}}
+{"at": 5, "event": {"type": "motion", "intent": {"speed_mps": 0.1, "curvature_per_m": 0.0}}}
+{"at": 5, "event": {"type": "start"}}
+{"at": 40, "event": {"type": "imu_bytes", "bytes": [85, 81, 0, 0, 0, 0, 0, 0, 0, 0, 167]}}
+{"at": 80, "event": {"type": "tick"}}

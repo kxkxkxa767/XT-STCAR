@@ -1,0 +1,1325 @@
+{
+  "source_root": "/Users/yuhaojin/Documents/进迭时空无人车（2026）学习资料",
+  "archive": "4.出厂源码/racecar.zip",
+  "archive_sha256": "9bde1aef4721ffbc11e2fc904c118bb3c9d9272871cb71c75775d46700d0169f",
+  "video_content_read": false,
+  "scope": "目录盘点、压缩包目录、关键整车源码与部分 Word 正文；未声称逐文件读完平台文档、数据集或全部教案。",
+  "selected_text_sources": [
+    {
+      "path": "racecar/car.sh",
+      "sha256": "e87e4f0552abec838154e487dd9748bf12bfdf808d993e888e1af929ae72915a"
+    },
+    {
+      "path": "racecar/cartographer.sh",
+      "sha256": "ef9095a4171ce65b3744b04dd41ed29be27b44f3e116df47ed3b5492f568ef43"
+    },
+    {
+      "path": "racecar/explorer.sh",
+      "sha256": "11f6d7d99a59e28f356f3650470261c2e79be9ed8bddd0480c731d30d962f344"
+    },
+    {
+      "path": "racecar/explorer_multi.sh",
+      "sha256": "33c627ff8ca9b7cb5cd9e54a11d4a8eb8e3ea1d0e34687f1292cb6d656e86701"
+    },
+    {
+      "path": "racecar/gmapping.sh",
+      "sha256": "1e93eccc47948e6bf4e2f291da54c225a5a192b6d4ade4f28a61e24b0099816b"
+    },
+    {
+      "path": "racecar/nav.sh",
+      "sha256": "bf62ed7e17a6054d623a25899a09009ac4c91ab01180ad83951f83ea57d382ed"
+    },
+    {
+      "path": "racecar/nav_one.sh",
+      "sha256": "364bb0ff95959ad64566611ce321a8fdc3bf417c1267b6ff866324cd06969c3b"
+    },
+    {
+      "path": "racecar/RedandGreen/detect.py",
+      "sha256": "a25be109571de38755832350af6ab79d7a6a77afe08d5d3d7bb3de351d525fd0"
+    },
+    {
+      "path": "racecar/RF2O_CONFIGURATION_REPORT.md",
+      "sha256": "041410293dae5ada89c3081d83191700bcb5ef10ef5f0a42032387050a795198"
+    },
+    {
+      "path": "racecar/RVIZ2_VISUALIZATION_AND_TEST_REPORT.md",
+      "sha256": "0347be97644a9b2948c1a07aa66e1fa2a0f12e226a1c5d160fa1743eee3b5b36"
+    },
+    {
+      "path": "racecar/rviz_docker.sh",
+      "sha256": "49ec96b61c683c2ffcfd53ca3b76c3e416be394d2cf497c33bd8a266e64cc78e"
+    },
+    {
+      "path": "racecar/save.sh",
+      "sha256": "5b5426f2c21a6f4418eb3da4d3fb205bdb0a8f7ff8800877eef69077d7044c70"
+    },
+    {
+      "path": "racecar/src/imu_get/CMakeLists.txt",
+      "sha256": "93a97b6fbb816397c36d3105811e60acfc7db16f702b5d3e1776ef4d2485e592"
+    },
+    {
+      "path": "racecar/src/imu_get/launch/imu_get.launch.py",
+      "sha256": "37163fa985aaf6e06fc079a396d83b39d318ab07ceb50c6e37019acbc83efbc5"
+    },
+    {
+      "path": "racecar/src/imu_get/package.xml",
+      "sha256": "984c025c238d5a1d9e3265aff65908ad0699f9c2cf484c9eebab7bc88c6916a1"
+    },
+    {
+      "path": "racecar/src/imu_get/src/publisher_imu.cpp",
+      "sha256": "daeee4e59dba27962d1dfcaf9c311468be87a36e0d77cbc1acbccd1ae82f23e8"
+    },
+    {
+      "path": "racecar/src/imu_get/src/sub_imu.cpp",
+      "sha256": "fde2670d31238bd1ac43a6b9d2be372bd465e44089127b976f76ed77454bd6f5"
+    },
+    {
+      "path": "racecar/src/imu_get/src/transform.hpp",
+      "sha256": "35172ecc5af0751d139d633500f03d492fae8380967cb7a9480298a5f3a2fa59"
+    },
+    {
+      "path": "racecar/src/lidar_tracking/CMakeLists.txt",
+      "sha256": "ba74bd3897865f8051ecc80790ba12d8dde5caeec55659024bb56ec23fbd19dd"
+    },
+    {
+      "path": "racecar/src/lidar_tracking/config/params.yaml",
+      "sha256": "451ffd4fee28a51f0d004ae69fdda052752ae938856fefa18987f3b65d90e6a8"
+    },
+    {
+      "path": "racecar/src/lidar_tracking/include/control.hpp",
+      "sha256": "811805e2998d7c91a42d176f1f4b36b19922ea0fa40a368804e71efae2950598"
+    },
+    {
+      "path": "racecar/src/lidar_tracking/launch/lidar_tracking.launch.py",
+      "sha256": "851b9f1b710f7f27660ff5b568efa32f4738d6bcc80cd6fc88515fdef2febce8"
+    },
+    {
+      "path": "racecar/src/lidar_tracking/package.xml",
+      "sha256": "398edbe1d71c62ae52c5a465534c47bd2dba729beeaf3a7fc0c30ee58a3035e3"
+    },
+    {
+      "path": "racecar/src/lidar_tracking/src/lidar_tracking.cpp",
+      "sha256": "97560276caab8721baa42c1e3eff2082b62b96b2db2d25a5aba4166dc003b3ec"
+    },
+    {
+      "path": "racecar/src/nav2_waypoint_cycle/nav2_waypoint_cycle/waypoint_cycle.py",
+      "sha256": "072afed260b8a5922db917a00d6bf3ae53348ff76bfcbb8ab44ed800324363d9"
+    },
+    {
+      "path": "racecar/src/nav2_waypoint_cycle/nav2_waypoint_cycle/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "racecar/src/nav2_waypoint_cycle/package.xml",
+      "sha256": "0164dc531348ee2405a68b6a470ce247427f1121cfba9bd4a401694ed3a8109e"
+    },
+    {
+      "path": "racecar/src/nav2_waypoint_cycle/setup.py",
+      "sha256": "8456d4335fabe10066c124c1d8365b3ffaba7c993d5ec0051f9a30fc0328f380"
+    },
+    {
+      "path": "racecar/src/nav2_waypoint_cycle/test/test_copyright.py",
+      "sha256": "ea71bbbc6247b5c14d176ed09f39ee274d563cc9b2ec355828ea451ceff31757"
+    },
+    {
+      "path": "racecar/src/nav2_waypoint_cycle/test/test_flake8.py",
+      "sha256": "37a813a0507f0ce51a2d0b57312d2cc078a0307a3ca85580ea801b0d2f9755d2"
+    },
+    {
+      "path": "racecar/src/nav2_waypoint_cycle/test/test_pep257.py",
+      "sha256": "e8b88d49ee296987b1b40069f81019b5fa09b1aa1bfee9a1faae45bb5cf53eda"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/carmenwrapper/carmenwrapper.cpp",
+      "sha256": "49922b1cbadf3be46ce0f86cd7dea8115c1a8878afc31dd76f23a396876baf78"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/carmenwrapper/carmenwrapper.h",
+      "sha256": "19732c7a9e6042714355b25616de7bae86343ddbdf9e39bdfe43c128bf699356"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/CMakeLists.txt",
+      "sha256": "ba2bcdffd498798aef6833f04ffe073cbc9763d628a60a7e659fb585bced0fd6"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gfs-carmen/gfs-carmen.cpp",
+      "sha256": "604591a6350a5ae76c8ec13df14e7cbb998f535a4f860a99f4de715df007342a"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/grid/graphmap.cpp",
+      "sha256": "4e21ef67137904a01e312ad19de584c6ea78dfbd447dd9ffd4ff969852350261"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/grid/map_test.cpp",
+      "sha256": "94d5fe923bc61dbcf016dcf8a7c53f0d06be0fed4dc77b12564cf33449be6d4a"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/CMakeLists.txt",
+      "sha256": "ab7908cf3898c101b8adb6f0da358648963b1c75b7a2820a6feb1e72a8d99225"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gfs2log.cpp",
+      "sha256": "5e0f0d8e8e511769c45137faf111e513fa5f185357bcf2552c99245e2df7c67b"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gfs2neff.cpp",
+      "sha256": "d69c67f3e5f19f8ee48eb31a1e71539f54bc538e4b6379d000ce5215a48be46d"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gfs2rec.cpp",
+      "sha256": "2b4ee6a69c010e642f04bac42d1d35e913a252bde1d5a70d685218787f98baf9"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gfs2stat.cpp",
+      "sha256": "8826cd39c573a3315a0276b4dbe9f4f5a1a6ea59b7773a6490d555c2d4310897"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gfs2stream.cpp",
+      "sha256": "b2c3e6bc3f76a15047f09b03f2812c1a1c7bbe5eacbffcabbf572612b87db45e"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gfsreader.cpp",
+      "sha256": "930dbbc534b07f7fde269d0d44dfe776011b982a7465af3203e8ac48d5a8463e"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gfsreader.h",
+      "sha256": "b19d00622962aa0d462ee411ba42df7694957edc2c5fc85eca0b48b6219d166c"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gridslamprocessor.cpp",
+      "sha256": "9231512369e14a8ce5d987e9f0b144d4236ecc67d864dba7f164ba0063cf266b"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/gridslamprocessor_tree.cpp",
+      "sha256": "2f50ece7d3f852f4b79fdb8fba7de2b52851e52a286739bf9fb34e25105d765e"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gridfastslam/motionmodel.cpp",
+      "sha256": "9eb5b54940d42c4028a8271468bd1139b6f9e6b7f404e85df4a3660e377998a8"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/CMakeLists.txt",
+      "sha256": "39c56980b87b538fe0e0de16afe4116dee4e3d08049c51bd2f0216838cb78e73"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/gfs2img.cpp",
+      "sha256": "77bd7aa5191da7eb202176c3217796962bffc09525f21aca57d37e8a8e89c472"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/gfs_logplayer.cpp",
+      "sha256": "e70c0429fcb69ef6c99897a73fb0a158b5265aeb4b0fcbfdf51977a83d650228"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/gfs_nogui.cpp",
+      "sha256": "17fe133962e918ed8fc740bd6408408f4f99b83698ab2faf891f57f433482d0a"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/gfs_simplegui.cpp",
+      "sha256": "64b6b5d2206e779d30ee3e84e588121ba5aa1d94f95deca15f55891bc2a12d11"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/gsp_thread.cpp",
+      "sha256": "02360f993d1a832859ac3a4587f30cc26ab0a4c563eae16ce29fcefab08097aa"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/gsp_thread.h",
+      "sha256": "5781ca294bdd9a3bd6ac8d5ab8957089513ed6556776a0c5ee96803e96b2305f"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qgraphpainter.cpp",
+      "sha256": "ef7f95265183ff77ef31c8a39041129c6d5f76fccd9d78246d6f8b929bac7d2e"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qgraphpainter.h",
+      "sha256": "3ce5cc6a4671c2bc25d65c1743d8758ffbb183e91a2ae05e130f90a6f615e563"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qmappainter.cpp",
+      "sha256": "d2bc63697d0aca66e5661fd78064034be9c0d902949506cb8aab136b37d7e40d"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qmappainter.h",
+      "sha256": "939d2dca3aa9edfe394fb05ab453bdb02fa635d9d721b2a61d1e6ec7a42def9e"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qnavigatorwidget.cpp",
+      "sha256": "db03ab820d0e38b605ffefa5a78ec8b5d9d03d6f11ee41b85b8fc77a8418f036"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qnavigatorwidget.h",
+      "sha256": "5ba2b7af8da6e1f4331960943595a29fa7e053e4cac46923a8ab7ce8e9097faa"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qparticleviewer.cpp",
+      "sha256": "519c7016c8a21ac41e710ec1f482cccb615387ecda8301bd4736e608f4cb58ff"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qparticleviewer.h",
+      "sha256": "e501678fb29ee6404605326e0e6c99ecd1757cc8d554ff77980a527e5fc1a1ae"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qpixmapdumper.cpp",
+      "sha256": "2aa92e082da449c008948d213e8a06eac432073bf8fbbeb4a49f866a1afd3646"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qpixmapdumper.h",
+      "sha256": "233e82e503d43aba65b76694698046796ad0c0efac15f8681d5b325583a63ac5"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qslamandnavwidget.cpp",
+      "sha256": "cbcf17e124473dac1028d72c087f1ea5b531689f15f843600d605f7fd00ed989"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/gui/qslamandnavwidget.h",
+      "sha256": "61717d15ee2b07de4eeb06f751f13802307e4c3dc40b8be65cd4cfd180ae4582"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/grid/accessstate.h",
+      "sha256": "ecca2a03cdf7b75c0a79ae778d9a78837151d21255d2440c48568790c456f243"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/grid/array2d.h",
+      "sha256": "51074f4e443f4513ed05e0a1e1472e69f2ac765d5bb1a5a8a6ad3adb52e6c79a"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/grid/harray2d.h",
+      "sha256": "bc11f7185cc74548cfdb5193b8ab6679909baf9615256e000a480d134d26c172"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/grid/map.h",
+      "sha256": "909ced60072352fd5ebabdf37c4886f996f83146e78ef55fb84cb1d06d96c1ed"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/gridfastslam/gridslamprocessor.h",
+      "sha256": "0fce9b70c3d296fd5f706891cea1e06ec03c0f26d0df3153027d0f8fe0e80a14"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/gridfastslam/motionmodel.h",
+      "sha256": "729ea60f48fdec14df4521070d1168f2073fc5c0bc47a35eb9f51418124b04a3"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/particlefilter/particlefilter.h",
+      "sha256": "02deeb32be1ee7e69ebd00a360fb7a088a1f6212006805b656eb234792510bf0"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/scanmatcher/icp.h",
+      "sha256": "603473ea601d1038d900778de83e7a2b39af73327d741724842e6b32b718231f"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/scanmatcher/scanmatcher.h",
+      "sha256": "f7ed31aedc9525a180e2c6c93074f7f4374a5440f2102ff5d04a9dfebbe57657"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/scanmatcher/smmap.h",
+      "sha256": "95319b2e514487ab544e865eeeef51db3a333629604160712dde5fe961f62a45"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/sensor/sensor_base/sensor.h",
+      "sha256": "7fb509eae23c5d020d891d026b8347dad5a456e657341a0bef77cce280d5fa77"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/sensor/sensor_base/sensorreading.h",
+      "sha256": "53dcea2fda00fb8e3a74f60238994c358732145d835ca7282074a51633fc74cc"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/sensor/sensor_odometry/odometryreading.h",
+      "sha256": "374f5a1ca028ffe78782c0aa861c16864e301deb652e789459f953373750dc38"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/sensor/sensor_odometry/odometrysensor.h",
+      "sha256": "bbc60f2b952982a27a9a7ce92e8b70dfd8bc05a250be70fd41c6d94d5bb9398f"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/sensor/sensor_range/rangereading.h",
+      "sha256": "b3f16df89103450d2bd2a8a041f8dd6ab61958c54a76063d8342aa3e906c79cc"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/sensor/sensor_range/rangesensor.h",
+      "sha256": "67537286257df51b725ae07c6785f1216bdf67493dcd4da45f5303c9d7d9aa6d"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/utils/autoptr.h",
+      "sha256": "c7085275552d58e51ef6641dc36d795c492d3ee9d5ab381c01c16a79c3206cb0"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/utils/commandline.h",
+      "sha256": "b04c5cc973f33f820b1f5911551e17df656763d6ed3dec21f712a8585a854fad"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/utils/gvalues.h",
+      "sha256": "40a7b9598669686c57dea843ea0f08716a847b335a570a65e763d4faa4d2ad1a"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/utils/macro_params.h",
+      "sha256": "ef1a55a6c6263021a3575dd5c99fb86bdfdc275234a4468516494341c461a280"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/utils/point.h",
+      "sha256": "ca6859cc038d19822091c41b27f4a169bffe6fd5c80f402a54f8e58f377e0bfb"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/include/gmapping/utils/stat.h",
+      "sha256": "b05b693f43bc95c12e2333707cea24021092555650a177326aca1da12bf0708e"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/package.xml",
+      "sha256": "63dd2f3225d7a689fd8d372ac2440f0807d437f97de5c0ffc4abe9506b8b40df"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/particlefilter/particlefilter.cpp",
+      "sha256": "7a8d9f45f875a10497bf170af42ab2a084ee24add455bc5c3d349ddcf9f78ab4"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/particlefilter/particlefilter_test.cpp",
+      "sha256": "f4b993e29d428bf03296553edda6b95c896a151a26cb4e8b2286f160d09a239e"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/particlefilter/pf.h",
+      "sha256": "7abdff52c38869c7270e8df55a0dccae5291d02fa3904df7dfa3d3963e0a9cb5"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/particlefilter/range_bearing.cpp",
+      "sha256": "71470a8b7f11a8a4da91289e9d9d751fbac6ea90037b40ec1da4fc2fcc0008a2"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/README",
+      "sha256": "b84a22e02d5ad141a630108e14bc67885daaf8f343c943d2ef8109224d6c3288"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/CMakeLists.txt",
+      "sha256": "0fd98de8d4dfc71da40cd37bc9368ba7848fc7f7291ef466abd466d1062bea96"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/eig3.cpp",
+      "sha256": "a73c8e0a98853cc9f7a1e8cbd60b7a6efe418cd7eb4c38b3d2a103bc530a0cfc"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/eig3.h",
+      "sha256": "dd0c8c41f3fec45f606ea9be8b6da54de3a3eba0c1762c786e8bc34877927cb4"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/gridlinetraversal.h",
+      "sha256": "0a5d7c5f4959ea1711f07dba2fef2c9b35f6f2f7bf1b041ed9476980bb44c306"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/icptest.cpp",
+      "sha256": "7c2df31a576853381edfd7c4a14e784e8c1ed689dc583c6853f05e71a9555549"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/lumiles.h",
+      "sha256": "aa65ae6f2eb54565852d1dd010293787227ea8dd8bb96f197c69aef32d260389"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/scanmatcher.cpp",
+      "sha256": "9b3fb1eba6e87d389cbec1f1bf1011595de0137171afa462ca5bdd2e9708c16a"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/scanmatcher.new.cpp",
+      "sha256": "9bc5f20e4bfba68b9ee98302c113b2ec55ff6739a793183a842011db6ef9571c"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/scanmatcherprocessor.cpp",
+      "sha256": "47c2c51a595754c98166b5858f4463f1f69268608c85ff945755124c44ce7ba7"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/scanmatcherprocessor.h",
+      "sha256": "d8063c2ff048db00d47ab1a1903e34c712d25b5a0cb9129f10e819045bcd19c7"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/scanmatch_test.cpp",
+      "sha256": "6c48ad39cbdec6f7d6d38cda8f658485eaeb320de1a387a443b578ec32698031"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/scanmatcher/smmap.cpp",
+      "sha256": "15270b581d5272895d7b792875ec222048211cf4fd538fd33e01bd07c63d46b9"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/CMakeLists.txt",
+      "sha256": "c977b940b73d6599011f8582ed7ddac50855f99d4d63f8b78e9765dae6fefd98"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_base/CMakeLists.txt",
+      "sha256": "0b145935deefc91c2ba55a6b846cdcc7343d763fc623ce8bf5676157970c3a8d"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_base/sensor.cpp",
+      "sha256": "7c9d642df72af78bcc7e1c048275dc5206f4db70ed978fa29df11c60747b647d"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_base/sensoreading.h",
+      "sha256": "962c62a8219068b3cbf7f40e09cb5cfab876638520f3f03d251646df3210152b"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_base/sensorreading.cpp",
+      "sha256": "519f25f5338359c42786fcd39ab8fe82e9f776c0f3ee196699d64e2e6ee4a1db"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_odometry/CMakeLists.txt",
+      "sha256": "f3b073ac2c271d946384630f68335f9d5681d04f631541a42afce79fec333a84"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_odometry/odometryreading.cpp",
+      "sha256": "c13a3d813e8c495445724e2ccbf547768a8990c14125c782f4584f48850f13d5"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_odometry/odometrysensor.cpp",
+      "sha256": "5f140f44fe1a6582f13e4eb878dccc17963ee25bca2f327511054787adc52e11"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_range/CMakeLists.txt",
+      "sha256": "b156e96aeb5ae9a7e19e8c4b5d2370668d9cfd6a67498cd301ba835ba4924725"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_range/rangereading.cpp",
+      "sha256": "80680f64269eb457b76e750ab2b5f88c62ec53251729e66095936b5d9398e415"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/sensor/sensor_range/rangesensor.cpp",
+      "sha256": "85c700a8cbdd738fee7b395f9d5ea49cbd6bf4ff0718773f2507946fd6e479eb"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/autoptr_test.cpp",
+      "sha256": "993f12ec2fff316c62217cd3dcd7707bef9a5752697778e8bb10825b5c9f3142"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/CMakeLists.txt",
+      "sha256": "2cecd834fc3f7627657254923bbae77b114e8e3a5ea8accb15dafc0e59dac253"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/datasmoother.h",
+      "sha256": "3fd0c1cbd456533cf1d7893d1386cc55067a339b68dab4bc5e4d9fc1396ee5ab"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/dmatrix.h",
+      "sha256": "da72da46395dbaeb7b5c5ee152ed6aeeacb510ac8d629dfe46da0a15f92fc06a"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/movement.cpp",
+      "sha256": "a26c13be2a1dfa7b62c60b3a34178d1ff1f360948aad09c5581211ec075d5dcb"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/movement.h",
+      "sha256": "cd7407ac53cb2ae47d90cf5a6d30998ef9106b8e2885dc642d3384d2bcdc0837"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/optimizer.h",
+      "sha256": "9e168ee80768fee7cce3ef8f61c80b34a65cdeb636cc879755636d6920783623"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/orientedboundingbox.h",
+      "sha256": "6a682bdcfba2d2f15da06af53743f6ccda3649659c242c697f8b7e3b2c9a0468"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/printmemusage.cpp",
+      "sha256": "8f09c3d86c7a1b3df96f3c457983032542f7c938df9d68cfc91e421659842ea0"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/printmemusage.h",
+      "sha256": "c7db46df92c28f885edf6deb88251eecfe48c1adc936cc96928855d5a8515981"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/printpgm.h",
+      "sha256": "9ffe5be6c5b948e353b7f653a87f3ff7b32739f05b346e13805d0c6a8649dcd4"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/stat.cpp",
+      "sha256": "7dda994e7e473e20d542f75fee068c79c05f73706c422414379243cc819d0cc5"
+    },
+    {
+      "path": "racecar/src/openslam_gmapping/utils/stat_test.cpp",
+      "sha256": "4bc74b39ac912e662160fb7e73d91990125c0682e8efe2a787ed2fb924c90904"
+    },
+    {
+      "path": "racecar/src/racecar/behavior_trees/navigate_through_poses_no_recovery.xml",
+      "sha256": "e63596f0cbb919060e0a0710cf91fb498d0165d0b5bc6b5e6907bc681d7dc041"
+    },
+    {
+      "path": "racecar/src/racecar/behavior_trees/navigate_to_pose_no_replanning.xml",
+      "sha256": "2b5af52a8759f4dade8a504ffa46cfb7ae01afe14d73c75f4b6760e657df62bd"
+    },
+    {
+      "path": "racecar/src/racecar/CMakeLists.txt",
+      "sha256": "d22f3b97ddbc692a804af0c08cbded1a5837874abe4094ba02ebe4cf61618c25"
+    },
+    {
+      "path": "racecar/src/racecar/config/camera/camera_info.yaml",
+      "sha256": "c142cd2f6305b369d365dabbeadf4b1ab14c8749f228e1666340212d3f3c1cb1"
+    },
+    {
+      "path": "racecar/src/racecar/config/camera/params_1.yaml",
+      "sha256": "f6294c1602c8bc75c10abf8cbcf4d691ecad919c15b681bff30c0205a655f5dc"
+    },
+    {
+      "path": "racecar/src/racecar/config/camera/params_2.yaml",
+      "sha256": "7caa3881d62ba3076c53f5049ec2f2fc21d7459d063ae04ff23cf4872e5cc949"
+    },
+    {
+      "path": "racecar/src/racecar/config/cartographer/racecar_2d.lua",
+      "sha256": "03e9e0d34aedf3958d8b9b961c5c773e232851e33d218a3803ae3f80d7306f60"
+    },
+    {
+      "path": "racecar/src/racecar/config/cartographer/racecar_odometry_2d.lua",
+      "sha256": "f2d5acf1c4d0cd08fe384eb4e0ed436961df1a9aacf63ccc74799830d1fe16f2"
+    },
+    {
+      "path": "racecar/src/racecar/config/dwb.yaml",
+      "sha256": "22fd31c7d13f6945e5a4632b261c22fc4fe90f0dfb4f6a9a8bfb7fa108ee5eae"
+    },
+    {
+      "path": "racecar/src/racecar/config/ekf.yaml",
+      "sha256": "72688bac4f7626236f727d2c574f2ef54ea93d5ddb5070fd733843302581ffe6"
+    },
+    {
+      "path": "racecar/src/racecar/config/ekf_carto.yaml",
+      "sha256": "8698b166312f2b80078dc93271f6403e66d249bb463da37aba7c13cba160bd0e"
+    },
+    {
+      "path": "racecar/src/racecar/config/ekf_yuanshi.yaml",
+      "sha256": "72688bac4f7626236f727d2c574f2ef54ea93d5ddb5070fd733843302581ffe6"
+    },
+    {
+      "path": "racecar/src/racecar/config/laser_box/x4_laser_filter.yaml",
+      "sha256": "9594f00fdf9f8a5184dd015f14aca697ff3e04a6d0c78dade47a415452391b3f"
+    },
+    {
+      "path": "racecar/src/racecar/config/nav_carto.yaml",
+      "sha256": "5c9521392499613588f16366e7a5749b719b4652d03a831842d00734f798b1af"
+    },
+    {
+      "path": "racecar/src/racecar/config/nav_mppi.yaml",
+      "sha256": "82b482e57aedebec3c0e784a00c97e35cddf389696125177160e9f580e1490a0"
+    },
+    {
+      "path": "racecar/src/racecar/config/nav_Smac.yaml",
+      "sha256": "0285fba9f9faf78652c95c096e65b9bf5f62f0d60fc1e3819fcddf0ee0f43c9f"
+    },
+    {
+      "path": "racecar/src/racecar/config/nav_ThetaStar.yaml",
+      "sha256": "44128d5efd4bcba39107d201c9bee9c0c41d4dd744f3f6e292e00c95529809a5"
+    },
+    {
+      "path": "racecar/src/racecar/launch/bringup_launch.py",
+      "sha256": "396e684dc0661f2a36cde0b511985c5b039ff5d3dae83c38bfbd5e4952d489eb"
+    },
+    {
+      "path": "racecar/src/racecar/launch/camer.launch.py",
+      "sha256": "d991b6a9573a1c348eef1510b6a1ec6f48e0db4202475225e4b5781c3d059f5d"
+    },
+    {
+      "path": "racecar/src/racecar/launch/cartographer.launch.py",
+      "sha256": "d784e9f2e98f20bd1930ae101d6d09bb662f729ceff79ca921a89e0d16e7427f"
+    },
+    {
+      "path": "racecar/src/racecar/launch/cartographer_odometry.launch.py",
+      "sha256": "3d24e8d74d1757270a2440cc82da4a40aa5f4acde24bda79d3a6ff76c5efb640"
+    },
+    {
+      "path": "racecar/src/racecar/launch/ekf.launch.py",
+      "sha256": "ac9166122edf869fa29681356d006aa308de48e38b4f67b3e9bdaf7efed7ce93"
+    },
+    {
+      "path": "racecar/src/racecar/launch/navigation_no_smoother.launch.py",
+      "sha256": "d1f102072937b0eaf247f4213e505a0a879e3ad21ce004b803ac78b0494fa945"
+    },
+    {
+      "path": "racecar/src/racecar/launch/Run_car.launch.py",
+      "sha256": "d41dd1759c2080ef0976c45e443659bd7a3be5dae0e2abb4bd25340f14098c08"
+    },
+    {
+      "path": "racecar/src/racecar/launch/Run_cartographer_mapping.launch.py",
+      "sha256": "4e13cf5d94428d2536d629a85eff1060096834e6b78c7b4321bc088cdb5094d7"
+    },
+    {
+      "path": "racecar/src/racecar/launch/Run_car_one.launch.py",
+      "sha256": "e58a33cace6ace9a0485818d089eaea055307822f45d564941a4ef7f68a70c41"
+    },
+    {
+      "path": "racecar/src/racecar/launch/Run_explorer.launch.py",
+      "sha256": "383f1384f2fdb5cf040209b7a520364a2b07a727f3adb636b61da18192eac122"
+    },
+    {
+      "path": "racecar/src/racecar/launch/Run_nav.launch.py",
+      "sha256": "186c3fc774b19ae67a1cc5f2dd65a85f7e19c8f20e410a80cb815393456a9c28"
+    },
+    {
+      "path": "racecar/src/racecar/launch/Run_nav_carto.launch.py",
+      "sha256": "a77646155c52972b4edb485deb4051a8294966e8cc32f697a460e13ea776ecad"
+    },
+    {
+      "path": "racecar/src/racecar/launch/xunxian.launch.py",
+      "sha256": "e5a085c9d315b477e7b0dff932cdf1a918881fd0c2a06fd95f90676117b1fcfc"
+    },
+    {
+      "path": "racecar/src/racecar/map/ai_map.yaml",
+      "sha256": "44fd874be19ba86add3081a9741af48cc4b4d5ef516fd999cd89bb916da47aef"
+    },
+    {
+      "path": "racecar/src/racecar/map/test_map.yaml",
+      "sha256": "814bdee36eac9442e3b89260f6d77e9bb1f029aa887f96dd44a5be7a46afa5d5"
+    },
+    {
+      "path": "racecar/src/racecar/maps/ceshi1.yaml",
+      "sha256": "4d25ba620be45c03c7d63454c770628c887513bd4a409352b62ef11c2ac408c6"
+    },
+    {
+      "path": "racecar/src/racecar/package.xml",
+      "sha256": "f55d17920cf6aa3a6ccf8cf8a8dde4d85efe25f530da1cb37b302d40504a7214"
+    },
+    {
+      "path": "racecar/src/racecar/racecar/module_to_import.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "racecar/src/racecar/racecar/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/camera_view.py",
+      "sha256": "e5e30468a0b35713549d1fb404feb0ece503be0dde004da34040e7407b4f7209"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/cartographer_odom_bridge.py",
+      "sha256": "de41972aa36e78d4390f48324d19534f2781a798f3b428cba1c91519deeea3fe"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/color_object_tracker.py",
+      "sha256": "5f382b3890398083fbe3ac18741a741f1ba5d8f584db5c5cbce5c362d43a43c6"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/dataset/dataset.yaml",
+      "sha256": "d66dfde63811000e252e1f5b207055c3d6243654b7349a055094190d85c2230c"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/detct.py",
+      "sha256": "7cab0bfdec6cf5d52f558d347b87935950cf7330142c81257d8c135f5bfa1ba1"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/dual_color_line_follower.py",
+      "sha256": "0159031418eb44d87f3e2fd51c94a046de7354724cac7fcc70e90a2d32836076"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/get.py",
+      "sha256": "32102836ed9d1177b857a4366fb65c9c1e133f55a5a20583868fa74be43bac11"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/go.py",
+      "sha256": "b562a5990481cc125b8afae45b460b3f3124f371e9cf5ce022197f04eed1a70d"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/go_one.py",
+      "sha256": "b1c085a0fe45f7525e100d1b6bc1690b48e8a34766b439991a37b2a32902a0e2"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/racecar_teleop.py",
+      "sha256": "3c825f5fab13c31bb7fd4ce4b37ef94d91183a5a08906b870e0c6ffea75c313d"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/record_dataset_video.py",
+      "sha256": "84ac6277d1e75988432eea83cefd8a8bc5317f2a0fff1ca58d88dbb45234a9ab"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/single_color_line_follower.py",
+      "sha256": "1dd6b162bf62eee3aed849d112e9127dfdab3158b72854a6defb3d425140418d"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/traffic_light_detector.py",
+      "sha256": "6f1143f18ff9226b906f9c38ab33652eca9e734a9d111a34d4774a2f046c7658"
+    },
+    {
+      "path": "racecar/src/racecar/scripts/video_to_dataset_images.py",
+      "sha256": "ec56173d44a172fc2422cc3ba9c4c03f381144114234c29b44d73ddaa1616859"
+    },
+    {
+      "path": "racecar/src/racecar/src/car_controller_new copy 2.cpp",
+      "sha256": "9e27e3839a88a217e2a82bdd6743f464e3b7345f5b6cb9b9dfdfbd5996e08e71"
+    },
+    {
+      "path": "racecar/src/racecar/src/car_controller_new copy.cpp",
+      "sha256": "301a7f6b67c309c3c15f0ac082c0e8a8e83785127a7093f3782395287195cbb9"
+    },
+    {
+      "path": "racecar/src/racecar/src/car_controller_new.cpp",
+      "sha256": "bdcaac8eaf067e663079f19ad320fce98423f70b0da1355db8c2f73f349b08ae"
+    },
+    {
+      "path": "racecar/src/racecar/src/car_control_all.cpp",
+      "sha256": "3835fbde26c188bf4e0eb2dc26ce3caecfa3e8f45b0b699781288bdafdae7439"
+    },
+    {
+      "path": "racecar/src/racecar/src/laser_2d_new.cpp",
+      "sha256": "5c0a0c08dce35f3eeed73a9c43361599a6606b46ece7052ae715ffc212b43cb0"
+    },
+    {
+      "path": "racecar/src/racecar/src/my_car_control_new.cpp",
+      "sha256": "855ac16472b6f1ccc49666ecd4b1f3fec2d32c35afb11ed8c3aa64abb1949ef2"
+    },
+    {
+      "path": "racecar/src/racecar/src/scan_node.cpp",
+      "sha256": "b905352b6bf2d00ad38e741db24512692f559bf67466240a6bfdd414601c4dd5"
+    },
+    {
+      "path": "racecar/src/racecar_driver/CMakeLists.txt",
+      "sha256": "97f0b14a47551d8756aaaaf4efda9d7d7aad42bc0e9aaef3b87a6a23c964b2e0"
+    },
+    {
+      "path": "racecar/src/racecar_driver/include/racecar_driver.h",
+      "sha256": "2eeb21d4f0893e8a7508a4d0ee441f80445283769ec972810b1fe31cc8bf7258"
+    },
+    {
+      "path": "racecar/src/racecar_driver/package.xml",
+      "sha256": "22fb2af9000f06e3a7e752b3fd910c8bb728fa7ef449fdbcd00408aceee8d8fa"
+    },
+    {
+      "path": "racecar/src/racecar_driver/README",
+      "sha256": "59c8aef045d1143568f2f7ca4fcfdb362ce463a332aee982b4403e3468798a6c"
+    },
+    {
+      "path": "racecar/src/racecar_driver/src/art_racecar_driver.cpp",
+      "sha256": "97548516228ef49a49628e773a220bc0f1edcd1348d323bbc02ad333a176d011"
+    },
+    {
+      "path": "racecar/src/racecar_driver/src/racecar_driver_node.cpp",
+      "sha256": "33c8f948517c88f7b10344b9205ed3604e2ca8f0d515b56d0d4130a1bb1fdea9"
+    },
+    {
+      "path": "racecar/src/racecar_driver/src/racecar_driver_node_one.cpp",
+      "sha256": "1725b3d309822a6626d679eb02af135ece3b3b966ead3f429d35214a8b3986c7"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/CMakeLists.txt",
+      "sha256": "8f54ad484d655d25afcf6cd9ae8575146eff05f45320cf80efd53e3955b3c362"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/include/rf2o_laser_odometry/CLaserOdometry2D.hpp",
+      "sha256": "474d3e2fcc28d84f35be0ff45b1f853bcaaae47b2f55d2034944ee2e12f6cc87"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/include/rf2o_laser_odometry/CLaserOdometry2DNode.hpp",
+      "sha256": "d27234853fc9f24d1f56340ef220c2492231e8b5bffd644341c3a37a5e5231ce"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/launch/rf2o_laser_odometry.launch.py",
+      "sha256": "e0605a87fcdc1b78c3c48574235447559edf800f96e05ea3045fa18e160fe97e"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/LICENSE",
+      "sha256": "589ed823e9a84c56feb95ac58e7cf384626b9cbf4fda2a907bc36e103de1bad2"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/package.xml",
+      "sha256": "cf1cd38d584d35ea07523fc4f33eee2260df82f9596ba6a2b275f0c459b61f25"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/README.md",
+      "sha256": "374e7e5e0dd9196bc29d26f98497a534edc94345d1c09f664f04a36b4af48fdc"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/src/CLaserOdometry2D.cpp",
+      "sha256": "2e1e5b151851be825e8711c80ab331c09c06511d5a541d63e784f80224b08b94"
+    },
+    {
+      "path": "racecar/src/rf2o_laser_odometry/src/CLaserOdometry2DNode.cpp",
+      "sha256": "a1710c1b8ce28b3ef3ab766320fae8385782270a182857ee24df7114ffc9912c"
+    },
+    {
+      "path": "racecar/src/serial-foxy/CMakeLists.txt",
+      "sha256": "3cd90fe42920b44bbccdf825952d7dc3ebf026f56773bca96c5e5070a27ba9f1"
+    },
+    {
+      "path": "racecar/src/serial-foxy/include/serial/impl/unix.h",
+      "sha256": "b5fb6fe5dc66aa262c4fcd602c677938bf9a65ddc2010c7b022c7aade1f36bc6"
+    },
+    {
+      "path": "racecar/src/serial-foxy/include/serial/impl/win.h",
+      "sha256": "416e11faeaae7df28f47e801a58cb1d9ac78d7413a43cb70830a2d1271a889fc"
+    },
+    {
+      "path": "racecar/src/serial-foxy/include/serial/serial.h",
+      "sha256": "f4dcb008056f41fbb80357da817959e8cf5e2f6d04fb79a416b4fedd68a8a0d7"
+    },
+    {
+      "path": "racecar/src/serial-foxy/include/serial/v8stdint.h",
+      "sha256": "d1155ad61ee6583c90ce3abb174239fbb677627e8220fb8518c8d5e4d3d16e5d"
+    },
+    {
+      "path": "racecar/src/serial-foxy/package.xml",
+      "sha256": "eef1acc58214550f77f795c56dcf5b4247ca63d3a9489f7a06a698e0d5c8defa"
+    },
+    {
+      "path": "racecar/src/serial-foxy/README.md",
+      "sha256": "a424071474041bb7c322999401bdeb08a7858c5bb4e212c8d007d997feef9fef"
+    },
+    {
+      "path": "racecar/src/slam_gmapping/CMakeLists.txt",
+      "sha256": "a82de31521cf0646d03f75355face8a34cb36bd04ce2323393bab92d7eda520e"
+    },
+    {
+      "path": "racecar/src/slam_gmapping/include/slam_gmapping/slam_gmapping.h",
+      "sha256": "2c9805c3e8b7db531d2a6b6cbe132d3e8fc4ec42257716b6625d63d9fd403165"
+    },
+    {
+      "path": "racecar/src/slam_gmapping/launch/slam_gmapping.launch.py",
+      "sha256": "83229c40eb0ac1ad0583811c2f9c7deefadc9d7b9ef2f4e844e34401e65214a0"
+    },
+    {
+      "path": "racecar/src/slam_gmapping/package.xml",
+      "sha256": "fdcde38213138ca5e474d555324b73e833f59851ca1ed9c47ec0689f0478fa75"
+    },
+    {
+      "path": "racecar/src/slam_gmapping/src/slam_gmapping.cpp",
+      "sha256": "d95f440fef29089df3c137731ad04c4774564f9a8bf2efd46ef58341e0768f3e"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/CMakeLists.txt",
+      "sha256": "5becfa7ca1c3f6d106537e5fcbd03297de083340b71c883c3928ff0cf6b52c6c"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ldlidar_driver/cmd_interface_linux.cpp",
+      "sha256": "9e5e7261e88ecd088769b570fd128562d27972089dc1e17feea716690ad105ab"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ldlidar_driver/include/cmd_interface_linux.h",
+      "sha256": "ee802f804a57da71bec76ad1577287a5ba00c4d2352eeb8804ee54c21c1d8c0b"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ldlidar_driver/include/lipkg.h",
+      "sha256": "792325aaaeb1d397c1f3a90826d0f944c413da34d57498b9ead3c5ec002ac3f0"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ldlidar_driver/include/pointdata.h",
+      "sha256": "d5db73c8501d112f9d4cc9474e2ea5511990265e1e75caae3bf1afedc5a68b81"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ldlidar_driver/include/tofbf.h",
+      "sha256": "08a13f36c0ccc44e995f09354d91a037dd26e75a666a0435db5208cc1b7859a1"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ldlidar_driver/lipkg.cpp",
+      "sha256": "ba3eb8c8c952cb0e93e429143004512e97af77ee5cb9ec6902dd4a94eb3efe1f"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ldlidar_driver/tofbf.cpp",
+      "sha256": "0a70a03393a634383e3599265ad6a08242d76bd744eb766ef897aed9d77d769d"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/include/ros2_api.h",
+      "sha256": "b7d8772692b5aaac8cc19ed57d0ccd068960d5f4389e2a60584619f4f46b7957"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/launch/ld06.launch.py",
+      "sha256": "8e15c805ac570fa30c3f994e34032c7319b916e708080663f432d4eb7f45cbf5"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/launch/ld19.launch.py",
+      "sha256": "fa00107649b7b5caea0a23aba5494113dd81711ee6ea6fc5db764f452a96b5b8"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/launch/viewer_ld06.launch.py",
+      "sha256": "d9e4fa03a96c0326c3e39f004313cc31ec20a392258fcc1ae6fdee7c22c380fd"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/launch/viewer_ld19.launch.py",
+      "sha256": "ab950f906cd652ad4008d135f9d69c06e1657d7f7240707fa3fd18415b90eb0d"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/LICENSE",
+      "sha256": "9a73e53bf9966dfe69c0f8723d7db4b06ff8e81cfa2ea39b9d89f86565282950"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/package.xml",
+      "sha256": "0d7b3ec5d0036eb81858b2f2f8ae77136c3cf0806f2291eaf3799fdc2ada615f"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/README.md",
+      "sha256": "4b0361bbc4eddd1acea1e1f8c1bf003888fe55e039e368f570977d61662ebbb8"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/scripts/create_udev_rules.sh",
+      "sha256": "eed88ca0aa27188d32ec5e04972dc6c38895fd07f5b7fb0a78c7bde7c0b429d9"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/scripts/delete_udev_rules.sh",
+      "sha256": "301cd24ee18ba24c35f6ab80422dce21ab1da2215b88667c4f308bb94ec32ada"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/scripts/ldlidar.rules",
+      "sha256": "605b8f5a6f1f7038c31e31ba4a7551b5842414a11fa49fa0803333ed4affa116"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/src/demo.cpp",
+      "sha256": "6d4559d6a94a47968934c0d5ee5909f6dcd7cbecfe9048916b676071bad054dc"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar06/ws_deploy.sh",
+      "sha256": "75ce140902eaa831583c22cf36264531c6be7241c7344aa426bee5cb81a954c6"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/CMakeLists.txt",
+      "sha256": "d02adcfd32e5dc496605f8ccae80567355dc4858b29b0d34a4c5a735f2f79968"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/cmd_interface_linux.cpp",
+      "sha256": "923a90f64d14f89763c6bfa63c10a0d33b5f012f850499ebefca0fd62cada813"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/include/cmd_interface_linux.h",
+      "sha256": "f152e420636ae1b03e848cd1eaf9fc5d9c624ac6c91480d21ca9c6b39c5e653a"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/include/lipkg.h",
+      "sha256": "bfb4a0bd3512e0870b7dbe29bde3d3f206c3182b3bcc591878eaef6289a19b7a"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/include/pointdata.h",
+      "sha256": "90c4b22d1262e52e4cdf31661b022671e15a74b3afcbdc08267c3b65a2dd1328"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/include/slbf.h",
+      "sha256": "8b0f3e7721f9b16513830a796073aa72c27cf3bf70beda202270a67cc98f3321"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/include/transform.h",
+      "sha256": "02e64d99f25565553e86fbfa6e676912f8af63e535014ab694bdf38acf0d13c6"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/lipkg.cpp",
+      "sha256": "bc3dedfd66ada55bbfe3ea6fbb6df0617a447ed2eabe60556fe859b1b9177cb5"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/slbf.cpp",
+      "sha256": "307627b90dd4dbb6d5b56035bf54a1c9443bf108f713a92b7131d2fbd169bbe9"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ldlidar_driver/transform.cpp",
+      "sha256": "17faa445d33d72e5c3ce406f8b2ff56abda20360e2de48b1d7dce8a1d96117ce"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/include/ros2_api.h",
+      "sha256": "b7d8772692b5aaac8cc19ed57d0ccd068960d5f4389e2a60584619f4f46b7957"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/launch/ld14.launch.py",
+      "sha256": "d3c3f13f4d61c7b9473ec1736061f1e8de6b8066957f9f06fc7aecc8a37e8f3a"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/launch/viewer_ld14.launch.py",
+      "sha256": "db4522673043cd06dbcfe744a3dd6518e0572b4592a710da9d52de1560598486"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/LICENSE",
+      "sha256": "9a73e53bf9966dfe69c0f8723d7db4b06ff8e81cfa2ea39b9d89f86565282950"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/package.xml",
+      "sha256": "28612cb04c0db6e16246beb17972331a80055c1b2a1f638f77ade7375703f56d"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/README.md",
+      "sha256": "e64b7c6435d96b19dc17d7303a450d418830824bfa3b008f4807db66d1b55d77"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/scripts/create_udev_rules.sh",
+      "sha256": "eed88ca0aa27188d32ec5e04972dc6c38895fd07f5b7fb0a78c7bde7c0b429d9"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/scripts/delete_udev_rules.sh",
+      "sha256": "301cd24ee18ba24c35f6ab80422dce21ab1da2215b88667c4f308bb94ec32ada"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/scripts/ldlidar.rules",
+      "sha256": "605b8f5a6f1f7038c31e31ba4a7551b5842414a11fa49fa0803333ed4affa116"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LDlidar/ldlidar14/src/demo.cpp",
+      "sha256": "c40921830c05a3892965c77f029f649b4cfc3468fb85a73d7ae1ddec625b27f1"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/CMakeLists.txt",
+      "sha256": "844b3aab9f0030e726f6d50dbed3c927a6af915fb7d685202119573c5477b8bd"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/include/lslidar_driver/input.h",
+      "sha256": "0587415c778f78b98e88729d3159e25aa0f4f3e8d858c4dc7ae05483d8d8cabf"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/include/lslidar_driver/lsiosr.h",
+      "sha256": "c167ae426a9c03a7cfda759a34010e024502f5f05c94f42fbdb863c702e5eb83"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/include/lslidar_driver/lslidar_driver.h",
+      "sha256": "675600847591bd4a9b517b06bf4626564b0b841ceef6ca3f6fa9316f50c3a2f4"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lslidar_double_launch.py",
+      "sha256": "e7c3a19045cbfcc6084f50ef5d0204304675e10e17597cb15c3dadc4f811ff8e"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsm10p_net_launch.py",
+      "sha256": "5733f81342bb8599312225a46cddad2959c2e2b874c0012477f4f9dfc32bd632"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsm10p_uart_launch.py",
+      "sha256": "04769d70d00556cf6f039f66a5e5c32f4b9a4632f834207736f3ad9888ac8025"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsm10_net_launch.py",
+      "sha256": "584331e0edf285636ab78b1cf09d232c1a3bc209fe77a48e6bde971282f3cfa8"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsm10_uart_launch.py",
+      "sha256": "eedcac87b827b8be87adcd6161c31d4756b8fdb0a10dc83dd0d78e0b7f1aebfc"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsn10p_launch.py",
+      "sha256": "f4f8a3dcbcb2d59c4bf776b7f492038a20791df15b6bb25ccf54ba9333f74a88"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsn10p_net_launch.py",
+      "sha256": "766e79d734230bfebfc56abd2b7ad6f0d424fbabf0968a46014f7a0dd673fcdc"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsn10_launch.py",
+      "sha256": "9c8152d7ef9f62c17f265f32950911a9732b08f476d9a3321dbd3d399f61a027"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/lsn10_net_launch.py",
+      "sha256": "228c922571b03c052093d34e0ab2f289a3f4d43fe27087f6678c768e6edd520c"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/launch/viewer_scan_launch.py",
+      "sha256": "e35b14c5b5f08249aeda134befc7e4e92fd516059e4e25831821aca8533d0be3"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/package.xml",
+      "sha256": "b6a3bbb99e118a076f41eddb68c0e39879812c34a0b72c60d1fb3311797d8b12"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_net_ros2/lsm10p_net.yaml",
+      "sha256": "76295afe0581833819fd8053cce15ca9198f65c5739a789c8c25078db9249064"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_net_ros2/lsm10_net.yaml",
+      "sha256": "c55fb6fcce4d5d0150b4f51868007c8afcfa05b6827410278a03e731bb3de28a"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_net_ros2/lsn10p_net.yaml",
+      "sha256": "ca8c7c2dacb87ab16aa74a930a4af523f65d62be1d956c84867dc5ed5c416f95"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_net_ros2/lsn10_net.yaml",
+      "sha256": "83ae68a361707d67f32414c7efa23cc29956923fa3ad55c6ec8144ef645288d0"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_uart_ros2/lsm10.yaml",
+      "sha256": "85a373dfc815404860d0a66c7d516fd8e9f234518413fefee5de470b56a1f470"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_uart_ros2/lsm10_p.yaml",
+      "sha256": "b2f520ce2cc1319dfd3e2eec514f960ab1c85539d29a521bcb4738a3d169f18d"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_uart_ros2/lsn10.yaml",
+      "sha256": "661f5f52fb4bac8bc741882b8dc5bfb31f3331330448d6be2af17590f0e2e1dd"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/params/lidar_uart_ros2/lsn10p.yaml",
+      "sha256": "3b48a4d316408aed975ef55631504eea2b6da37a5bbdbc6cee2beea1d894555b"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_driver/src/lsiosr.cpp",
+      "sha256": "5fd3672ee0460758f077b0c9849d946569d10d9ae1a3489c1d18b25423910370"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_msgs/CMakeLists.txt",
+      "sha256": "fea53820806f78e41da47699db25a252dda15884be2ebf1b9708ae618769948e"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/lslidar_msgs/package.xml",
+      "sha256": "bc857fe9eac97eb06092f440f9fdda214222c343a9ed648ee959662632d62267"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/README.md",
+      "sha256": "11f87a57fb4129465c21ae45b424628bda2dfb36b62f6da1c99aeea0b6ebccd2"
+    },
+    {
+      "path": "racecar/src/wheeltec_lidar_ros2/LSlidar/version.txt",
+      "sha256": "381a8fe2fab958fca800c58cc6230408b099457a692f228042b5e6caa39bbde3"
+    },
+    {
+      "path": "racecar/test_explorer.md",
+      "sha256": "6087bdc97a1fc46dc35e269e18fdb5cb21819bdd19490869a57825079a3be6bc"
+    }
+  ],
+  "docx_text_index": [
+    {
+      "path": "1.操作教程与视频/图像处理-yolo环境的配置/实验五_图像处理-yolo环境的配置.docx",
+      "text": "00.txt",
+      "chars": 5016
+    },
+    {
+      "path": "1.操作教程与视频/图像处理-yolo环境的配置/教案五_图像处理-yolo环境的配置.docx",
+      "text": "01.txt",
+      "chars": 2197
+    },
+    {
+      "path": "1.操作教程与视频/图像处理-数据集制作/实验六_图像处理-数据集制作.docx",
+      "text": "02.txt",
+      "chars": 4521
+    },
+    {
+      "path": "1.操作教程与视频/图像处理-数据集制作/教案六_图像处理-数据集制作.docx",
+      "text": "03.txt",
+      "chars": 2139
+    },
+    {
+      "path": "1.操作教程与视频/图像处理-红绿灯模型训练/实验七_图像处理-红绿灯模型训练.docx",
+      "text": "04.txt",
+      "chars": 4383
+    },
+    {
+      "path": "1.操作教程与视频/图像处理-红绿灯模型训练/教案七_图像处理-红绿灯模型训练.docx",
+      "text": "05.txt",
+      "chars": 2374
+    },
+    {
+      "path": "1.操作教程与视频/循单线案例/实验二_循单线案例.docx",
+      "text": "06.txt",
+      "chars": 4506
+    },
+    {
+      "path": "1.操作教程与视频/循单线案例/教案二_循单线案例.docx",
+      "text": "07.txt",
+      "chars": 1637
+    },
+    {
+      "path": "1.操作教程与视频/循双线案例/实验三_循双线案例.docx",
+      "text": "08.txt",
+      "chars": 46273
+    },
+    {
+      "path": "1.操作教程与视频/循双线案例/教案三_循双线案例.docx",
+      "text": "09.txt",
+      "chars": 43146
+    },
+    {
+      "path": "1.操作教程与视频/系统镜像烧录教程/镜像烧录实验教程.docx",
+      "text": "10.txt",
+      "chars": 1734
+    },
+    {
+      "path": "1.操作教程与视频/系统镜像烧录教程/镜像烧录教案.docx",
+      "text": "11.txt",
+      "chars": 1436
+    },
+    {
+      "path": "1.操作教程与视频/红绿灯识别-opencv实现/实验四_红绿灯识别-opencv实现.docx",
+      "text": "12.txt",
+      "chars": 20058
+    },
+    {
+      "path": "1.操作教程与视频/红绿灯识别-opencv实现/教案四_红绿灯识别-opencv实现.docx",
+      "text": "13.txt",
+      "chars": 18447
+    },
+    {
+      "path": "1.操作教程与视频/红绿灯识别-yolo实现/实验八_红绿灯识别-yolo实现.docx",
+      "text": "14.txt",
+      "chars": 27278
+    },
+    {
+      "path": "1.操作教程与视频/红绿灯识别-yolo实现/教案八_红绿灯识别-yolo实现.docx",
+      "text": "15.txt",
+      "chars": 24663
+    },
+    {
+      "path": "1.操作教程与视频/视觉追踪/实验一_视觉追踪.docx",
+      "text": "16.txt",
+      "chars": 2403
+    },
+    {
+      "path": "1.操作教程与视频/视觉追踪/教案一_视觉追踪.docx",
+      "text": "17.txt",
+      "chars": 1524
+    },
+    {
+      "path": "3.实验案例/实验三十 RPC规划算法/实验文档.docx",
+      "text": "18.txt",
+      "chars": 2977
+    },
+    {
+      "path": "3.实验案例/实验三十 RPC规划算法/教案.docx",
+      "text": "19.txt",
+      "chars": 3152
+    },
+    {
+      "path": "3.实验案例/实验二十一 单点导航实现及调参思路/实验文档.docx",
+      "text": "20.txt",
+      "chars": 1974
+    },
+    {
+      "path": "3.实验案例/实验二十一 单点导航实现及调参思路/教案.docx",
+      "text": "21.txt",
+      "chars": 2234
+    },
+    {
+      "path": "3.实验案例/实验二十三 串口绑定与数据可视化/实验.docx",
+      "text": "22.txt",
+      "chars": 2605
+    },
+    {
+      "path": "3.实验案例/实验二十三 串口绑定与数据可视化/教案.docx",
+      "text": "23.txt",
+      "chars": 1742
+    },
+    {
+      "path": "3.实验案例/实验二十九 局部规划算法切换/实验文档.docx",
+      "text": "24.txt",
+      "chars": 4854
+    },
+    {
+      "path": "3.实验案例/实验二十九 局部规划算法切换/教案.docx",
+      "text": "25.txt",
+      "chars": 5043
+    },
+    {
+      "path": "3.实验案例/实验二十二 多点导航实现及调参思路/实验文档.docx",
+      "text": "26.txt",
+      "chars": 327
+    },
+    {
+      "path": "3.实验案例/实验二十二 多点导航实现及调参思路/教案.docx",
+      "text": "27.txt",
+      "chars": 502
+    },
+    {
+      "path": "3.实验案例/实验二十八 全局路径规划算法切换/实验文档.docx",
+      "text": "28.txt",
+      "chars": 3024
+    },
+    {
+      "path": "3.实验案例/实验二十八 全局路径规划算法切换/教案.docx",
+      "text": "29.txt",
+      "chars": 3186
+    },
+    {
+      "path": "3.实验案例/实验二十六 建图算法讲解与切换/实验.docx",
+      "text": "30.txt",
+      "chars": 3481
+    },
+    {
+      "path": "3.实验案例/实验二十六 建图算法讲解与切换/教案.docx",
+      "text": "31.txt",
+      "chars": 2524
+    },
+    {
+      "path": "5.出厂镜像/系统镜像烧录教程/镜像烧录实验教程.docx",
+      "text": "32.txt",
+      "chars": 1734
+    },
+    {
+      "path": "5.出厂镜像/系统镜像烧录教程/镜像烧录教案.docx",
+      "text": "33.txt",
+      "chars": 1436
+    }
+  ]
+}

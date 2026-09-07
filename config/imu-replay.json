@@ -1,0 +1,7 @@
+{
+  "frame_id": "sim_imu",
+  "acceleration_bias_mps2": {"x": 0.0, "y": 0.0, "z": 0.0},
+  "gyro_bias_radps": {"x": 0.0, "y": 0.0, "z": 0.0},
+  "max_component_age_ms": 100,
+  "max_component_skew_ms": 20
+}
