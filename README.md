@@ -11,6 +11,7 @@ Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，�
 用户当前明确“暂不接车”：本轮没有连接车辆、操作电机、升级车端 GLIBC 或读取视频。
 串口在 Mac 的伪终端上验证；运动输出只记录和预览。
 最新验证见 [Rust 模块完善记录](docs/Rust模块完善验证记录-2026-09-08.md)，交接完整状态见 [agent.md](agent.md)。
+日常直接在 `main` 开发和推送；修改前检查并拉取远端更新，提交信息简述本次改动，详见 [上传规范](上传规范.md)。
 
 ## 代码结构：模块在哪、负责什么
 
@@ -31,6 +32,7 @@ XT-STCAR/
 ├── Cargo.toml/lock      Rust workspace、依赖与精确版本锁
 ├── rust-toolchain.toml  Rust 1.97.1 工具链选择
 ├── AGENTS.md            开发约定的加载入口
+├── 上传规范.md           main 直接开发、修改前同步与提交推送流程
 └── agent.md             完整交接快照与长期约定
 ```
 
