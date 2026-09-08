@@ -10,7 +10,8 @@
 
 - Rust 为主、Mac 交叉编译、Muse Pi Pro / RISC-V Linux、YOLO26n Detect；各模块程序写好。
 - 最新要求：根据官方整车资料继续完善，能用 Rust 的地方用 Rust；写完更新本文件和 README，
-  README 必须说明代码结构、每个模块位置和职责。本轮均已落实，具体目录表以 README 为准。
+  README 必须说明代码结构、每个模块位置和职责。之后要求总体审查架构与实现，并阅读根目录赛项三规则初稿。
+  结构说明、规则对照及审查修复已补齐；尚未实现的自主运行能力见下文，不能写成已完成比赛程序。
 - **暂不接车**。本轮未 SSH/部署/打开真实设备/控制电机/刷系统或固件，也未在 RISC-V 目标或模拟器执行。
   新增串口实际读写测试只使用 Mac 创建的 PTY，不要将它写成实车验证。
 - 用户指定 GLIBC **2.38**。只修改本地交叉构建的目标基线，不安装或覆盖车端 libc。
@@ -27,12 +28,12 @@
 | 模块 | 已实现 |
 |---|---|
 | `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码 |
-| `crates/app` → `xt-stcar` | self-check/preprocess/replay/infer；原生 ORT C API 动态加载、模型来源及元数据验证、常驻 Session；Python 参考后端须显式选择 |
+| `crates/app` → `xt-stcar` | self-check/preprocess/replay/infer；原生 ORT C API 动态加载、模型来源及元数据验证、常驻 Session；Python 参考后端须显式选择；file_io 提供两套 CLI 共用文件边界 |
 | `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表 |
 | `crates/device-io` | 安全 rustix 串口配置、独占、8N1、关闭软硬件流控、读回检查、nonblocking poll 与整体包截止时间、故障锁存、Drop 尝试恢复 |
 | `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器增量解析、可选标定 PWM 预览、传感器采集计划/执行、完整日志原子替换 |
 
-#### 本轮新增与修正
+#### 已完成的 Rust 模块（前轮扩展）
 
 1. **N10 Rust 解析**：`robot-core/src/protocol/n10.rs`。依据出厂 `.cc`，固定 58 字节、16 槽、
    大端角度/距离、uint8 强度、前 57 字节累加模 256。支持分包、粘包、坏帧重同步、有限缓存与过期保护。
@@ -61,6 +62,22 @@
 使用说明：[N10 协议依据](docs/N10协议依据.md)、[底盘标定](docs/底盘标定映射.md)、
 [Rust 串口采集](docs/Rust串口采集.md)、[原有底盘/IMU 协议](docs/厂商协议Rust适配.md)。
 
+#### 本轮总体审查修复
+
+审查开始前 fetch 确认 `6c7de79` 与 origin/main 一致、工作区干净；用户随后放入规则 PDF，保留原件但不暂存。
+完整结论、回归证据与当前产物见 [总体架构审查](docs/总体架构审查-2026-09-08.md)。
+
+- `app/src/file_io.rs` 统一静态输入非阻塞打开/fstat/实际读取量；runner 重新导出旧 API，删除重复实现。
+  app 图像尺寸与解码复用同一文件句柄，配置/输出张量/provenance ≤1MiB、ONNX ≤64MiB；Python 独立工具同样有界。
+- 视觉输出和 Python worker 拒绝覆盖 FIFO 等非普通目标；预处理两个输出先共同预检。
+  显式/PATH 中的 Python 解释器纳入输入保护，保留虚拟环境符号链接；PATH 未设置时裸命令须改用显式路径。
+- 雷达派生角跨度/末束角度也须有限；溢出进入锁存 Fault/Stop，不被后续正常样本清除。
+- ELF 版本核验绑定动态加载映射，检查所有 verneed 要求，新增 `version_requirements`；不能用 section 表伪装低 GLIBC。
+  ELF 输入非阻塞且实际 ≤64MiB；报告拒绝输入别名和非普通目标，通过后原子保存，失败保留原报告。
+- 交付测试取消对未跟踪 `tmp/` 目录的依赖，新克隆未构建时正确 skip。
+
+目前 crate 分层无环，可继续使用；这不意味着已经完成实时调度、感知到导航控制或实车停车验收。
+
 ### 构建、模型与验证证据
 
 - 本机 Rust/Cargo **1.97.1**，rustfmt/clippy/RISC-V std 已安装；`rust-toolchain.toml` 和 `Cargo.lock` 锁定，
@@ -69,9 +86,9 @@
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
   加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。当前最高 GLIBC 引用 2.34，符合构建基线 2.38。
   新 robot 程序额外需要 `libm.so.6`，不能继续声称两个程序都只依赖 libc。
-- **最新测试数量、二进制尺寸/SHA、包名与校验结果统一见 [2026-09-08 验证记录](docs/Rust模块完善验证记录-2026-09-08.md)**。
-  对应 `docs/rust-expansion-{build.log,riscv-build.json,riscv-elf.json,robot-elf.json,delivery-validation.json}`
-  保存本轮证据；旧 2026-09-07 和 `factory-*`、`glibc-*` 记录是历史，不是当前二进制。
+- **最新测试数量、二进制尺寸/SHA、包名与校验结果统一见 [总体架构审查](docs/总体架构审查-2026-09-08.md)**。
+  对应 `docs/architecture-*` 保存本轮构建、测试、真实 Mac 模型及部署包证据。
+  `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；
   打包白名单已包含 N10、标定、串口配置和说明。Git 不提交这些产物。
   上传脚本默认 dry-run，只允许明确的新车账号/IP/独立 release 目录；本阶段不执行车端上传。
@@ -90,6 +107,11 @@
 
 ### 官方资料与协议依据
 
+- 根目录用户提供的《赛项三-RISC-V_轻量无人车赛比赛规则（初稿）》已完整读取 10 页并逐页查看渲染。
+  封面日期 2026 年 8 月，SHA256 `24dfa87d60142be349eb4e7e862e09b1ec0c4e3771010e9471d2c850144eb7d6`。
+  [规则与工程差距](docs/赛项三规则与工程差距.md) 按页列要求与歧义；PDF 原件留本机，未读视频/网盘/提交材料。
+  Rust 未禁、ROS2 未明文强制；ROS1 与 bag 工具明确禁用，范围需最终规则澄清，不引入它们作为比赛依赖。
+  斑马线前停足3秒、按图绕两锥桶、绿灯才放行且四轮在灯前指定区域停车、终点四轮入区；技术案例占20分。
 - 已完整读取 Bianbu 案例 1–15 的文字正文及关键源码，见 [案例核对](docs/Bianbu案例1-15核对与Rust兼容性.md)。
   它们是 Muse Pi Pro 平台参考；TOF/云台/GPIO 舵机/EtherCAT 案例不是本车底盘协议。
 - 整车资料关键来源 `4.出厂源码/racecar.zip`，4990 成员，SHA256
@@ -106,6 +128,10 @@
 
 ### 尚未完成与后续入口
 
+- 赛项任务状态机、斑马线识别/距离、红绿状态与去抖、终点/车体足迹判定尚缺。
+  已实际核对当前80类模型：就赛项相关目标而言仅有通用 `9: traffic light`，`22: zebra` 是动物，没有锥桶/斑马线/红/绿类别。
+  正常比赛等待应与安全 Fault 分层；停3秒须结合实际停止反馈，不能从发出中性命令就认定物理已停。
+  当前 Motion 来自离线事件，视觉结果只记录和生成摘要；后续先实现独立实时调度与感知决策，再接导航闭环。
 - **官方 RISC-V ORT/EP 2.0.6 仅静态核验**：资料在 `work/spacemit-runtime-followup/`，见
   [原生库核验](docs/SpacemiT原生运行库核验.md)。头文件 API24、导出 OrtGetApiBase；tag 代码支持 API22，
   但发布 manifest 提交不同，尚未执行发布库 GetApi(22)，未测试模型或 EP 初始化。

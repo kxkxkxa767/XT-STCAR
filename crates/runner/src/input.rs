@@ -1,51 +1,15 @@
 //! File-backed camera and strict event input; wire decoding uses explicit profiles.
 use image::{ImageReader, RgbImage};
-use rustix::fs::{FileType, Mode, OFlags, fstat, open};
 use serde::Deserialize;
-use std::fs::File;
-use std::io::{BufReader, Read, Seek};
+use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 use xt_stcar_robot_core::{TimedEvent, Timestamp};
 
 pub type Result<T> = std::result::Result<T, String>;
-pub const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
+// Both CLIs use the same bounded static-file policy. Keep this re-export for
+// callers that already use the runner input API.
+pub use xt_stcar::file_io::{MAX_CONFIG_BYTES, open_regular_file, read_regular_file};
 const MAX_EVENT_BYTES: u64 = 64 * 1024 * 1024;
-
-/// Open a static input without waiting for a FIFO peer, then validate the actual
-/// descriptor. A pathname check alone would race with replacement before open.
-pub fn open_regular_file(path: &Path) -> Result<File> {
-    let fd = open(
-        path,
-        OFlags::RDONLY | OFlags::NONBLOCK | OFlags::CLOEXEC | OFlags::NOCTTY,
-        Mode::empty(),
-    )
-    .map_err(|e| format!("open {}: {e}", path.display()))?;
-    let metadata = fstat(&fd).map_err(|e| format!("stat {}: {e}", path.display()))?;
-    if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
-        return Err(format!("input {} must be a regular file", path.display()));
-    }
-    Ok(File::from(fd))
-}
-
-/// Bound bytes actually read, including when a regular input grows after stat.
-pub fn read_regular_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>> {
-    let file = open_regular_file(path)?;
-    let too_large = || format!("input {} exceeds {max_bytes} bytes", path.display());
-    if file.metadata().map_err(|e| e.to_string())?.len() > max_bytes {
-        return Err(too_large());
-    }
-    let limit = max_bytes
-        .checked_add(1)
-        .ok_or("input byte limit overflow")?;
-    let mut bytes = Vec::new();
-    file.take(limit)
-        .read_to_end(&mut bytes)
-        .map_err(|e| format!("read {}: {e}", path.display()))?;
-    if bytes.len() as u64 > max_bytes {
-        return Err(too_large());
-    }
-    Ok(bytes)
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

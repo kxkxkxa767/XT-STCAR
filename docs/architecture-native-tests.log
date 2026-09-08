@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/native_runtime.rs (target/debug/deps/native_runtime-ba19448ed667540a)
+
+running 1 test
+test native_session_is_reused_and_deadlines_cancel_model_loading ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s

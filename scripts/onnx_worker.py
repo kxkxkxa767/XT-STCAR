@@ -11,10 +11,11 @@ import argparse
 import json
 import os
 from pathlib import Path
+import stat
 import sys
 import tempfile
 
-from validate_yolo26 import ContractError, load_and_validate_model, load_spec
+from validate_yolo26 import ContractError, load_and_validate_model, load_spec, read_regular_file
 
 
 def read_input(path: Path, spec: dict):
@@ -22,7 +23,7 @@ def read_input(path: Path, spec: dict):
 
     shape = (1, 3, spec["input_height"], spec["input_width"])
     expected = int(np.prod(shape)) * 4
-    data = path.read_bytes()
+    data = read_regular_file(path, expected)
     if len(data) != expected:
         raise ContractError(f"input must contain exactly {expected} bytes of little-endian float32, got {len(data)}")
     tensor = np.frombuffer(data, dtype="<f4").reshape(shape)
@@ -50,7 +51,17 @@ def encode_output(output, spec: dict) -> dict:
     return {"shape": list(output.shape), "values": output.reshape(-1).tolist()}
 
 
+def validate_output_path(path: Path) -> None:
+    try:
+        metadata = path.stat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ContractError(f"output {path} must be a regular file")
+
+
 def write_output(path: Path, payload: dict) -> None:
+    validate_output_path(path)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, prefix=".onnx-output-", delete=False) as stream:
@@ -64,6 +75,7 @@ def write_output(path: Path, payload: dict) -> None:
 
 
 def run(model_path: Path, spec_path: Path, input_path: Path, output_path: Path) -> None:
+    validate_output_path(output_path)
     spec = load_spec(spec_path)
     model, report = load_and_validate_model(model_path, spec)
     tensor = read_input(input_path, spec)

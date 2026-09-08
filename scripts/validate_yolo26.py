@@ -8,7 +8,9 @@ import ast
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
+import stat
 import sys
 
 ULTRALYTICS_VERSION = "8.4.142"
@@ -32,6 +34,22 @@ class ContractError(ValueError):
     """A model, tensor or configuration does not satisfy the supported contract."""
 
 
+def read_regular_file(path: str | Path, max_bytes: int) -> bytes:
+    """Bound actual bytes and reject FIFO/device input before a blocking read."""
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOCTTY", 0)
+    fd = os.open(path, flags)
+    with os.fdopen(fd, "rb") as stream:
+        metadata = os.fstat(stream.fileno())
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ContractError(f"input {path} must be a regular file")
+        if metadata.st_size > max_bytes:
+            raise ContractError(f"input {path} exceeds {max_bytes} bytes")
+        data = stream.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ContractError(f"input {path} exceeds {max_bytes} bytes")
+    return data
+
+
 def _unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -42,7 +60,7 @@ def _unique_object(pairs):
 
 
 def load_spec(path: str | Path) -> dict:
-    spec = json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=_unique_object)
+    spec = json.loads(read_regular_file(path, 1024 * 1024).decode("utf-8"), object_pairs_hook=_unique_object)
     if not isinstance(spec, dict):
         raise ContractError("spec must be a JSON object")
     unknown = set(spec) - (set(SPEC_FIXED) | {"confidence_threshold"})
@@ -152,7 +170,7 @@ def load_and_validate_model(path: str | Path, spec: dict):
     path = Path(path)
     # This initial baseline is a self-contained ONNX file. External weights must
     # receive an explicit packaging/provenance design before they are supported.
-    data = path.read_bytes()
+    data = read_regular_file(path, 64 * 1024 * 1024)
     model = onnx.load_model_from_string(data)
     messages = [model]
     while messages:

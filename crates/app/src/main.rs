@@ -2,12 +2,14 @@ use image::{ImageReader, Rgb, RgbImage};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, BufReader, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use xt_stcar::NativeOrtBackend;
 use xt_stcar::backend::{PythonReferenceBackend, read_output, write_atomic, write_f32le};
+use xt_stcar::file_io::{
+    MAX_CONFIG_BYTES, open_regular_file, read_regular_file, validate_output_file,
+};
 use xt_stcar_vision::{
     Detection, InferenceBackend, Letterbox, ModelSpec, OutputTensor, Result, decode, preprocess,
 };
@@ -27,6 +29,7 @@ Usage:
 Defaults: --backend native-ort, --config config/yolo26n.json, --python python3,
           --worker scripts/onnx_worker.py, --timeout-secs 30 (0 < seconds <= 3600).
 Paths are relative to the current directory. PNG and JPEG input are supported.
+If PATH is unset, Python reference mode requires an explicit --python path.
 preprocess writes contiguous little-endian float32 NCHW and a Letterbox JSON file.
 replay reads {\"shape\":[1,N,6],\"values\":[...]} tensor JSON; it performs no inference.
 self-check uses a synthetic image and synthetic detections; it performs no inference.
@@ -121,24 +124,17 @@ fn write_json<T: Serialize>(path: Option<&Path>, value: &T) -> Result<()> {
 }
 
 fn load_spec(path: &Path) -> Result<ModelSpec> {
-    let file = File::open(path).map_err(|e| format!("open config {}: {e}", path.display()))?;
-    let spec: ModelSpec = serde_json::from_reader(file)
+    let bytes = read_regular_file(path, MAX_CONFIG_BYTES)?;
+    let spec: ModelSpec = serde_json::from_slice(&bytes)
         .map_err(|e| format!("parse config {}: {e}", path.display()))?;
     spec.validate()?;
     Ok(spec)
 }
 
 fn load_image(path: &Path) -> Result<RgbImage> {
-    let mut reader = ImageReader::open(path)
-        .map_err(|e| format!("open image {}: {e}", path.display()))?
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(512 * 1024 * 1024);
-    reader.limits(limits);
-    // Check area before decoding, including unusually long one-pixel images.
-    let (width, height) = ImageReader::open(path)
-        .map_err(|e| e.to_string())?
+    let mut file = open_regular_file(path)?;
+    // Both passes use the same verified descriptor, even if the path changes.
+    let (width, height) = ImageReader::new(BufReader::new(&mut file))
         .with_guessed_format()
         .map_err(|e| e.to_string())?
         .into_dimensions()
@@ -146,10 +142,50 @@ fn load_image(path: &Path) -> Result<RgbImage> {
     if width == 0 || height == 0 || u64::from(width) * u64::from(height) > 64_000_000 {
         return Err("source dimensions must be positive and at most 64 megapixels".into());
     }
+    file.rewind().map_err(|e| e.to_string())?;
+    let mut reader = ImageReader::new(BufReader::new(file))
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(512 * 1024 * 1024);
+    reader.limits(limits);
     reader
         .decode()
         .map(|image| image.to_rgb8())
         .map_err(|e| format!("decode image {}: {e}", path.display()))
+}
+
+// Resolve PATH commands before launch so the protected interpreter is also the
+// executable we actually start. Unresolved commands retain the normal spawn error.
+fn resolve_interpreter(program: PathBuf) -> Result<PathBuf> {
+    let explicit = program.is_absolute() || program.components().count() > 1;
+    let candidates = if explicit {
+        vec![program.clone()]
+    } else {
+        let search = std::env::var_os("PATH").ok_or(
+            "PATH is unset; supply --python with an explicit absolute or directory-containing path",
+        )?;
+        std::env::split_paths(&search)
+            .map(|directory| directory.join(&program))
+            .collect()
+    };
+    Ok(candidates
+        .into_iter()
+        .find_map(|candidate| {
+            if !candidate.is_file()
+                || rustix::fs::access(&candidate, rustix::fs::Access::EXEC_OK).is_err()
+            {
+                return None;
+            }
+            // Preserve the selected symlink: resolving a virtualenv's python to its
+            // base interpreter would change Python's environment discovery.
+            if candidate.is_absolute() {
+                Some(candidate)
+            } else {
+                std::env::current_dir().ok().map(|cwd| cwd.join(candidate))
+            }
+        })
+        .unwrap_or(program))
 }
 
 fn ensure_distinct(paths: &[&Path]) -> Result<()> {
@@ -249,7 +285,9 @@ fn run() -> Result<()> {
                 timeout,
             },
             Some("python-reference") => BackendConfig::Python(PythonReferenceBackend {
-                python: options.take("--python").unwrap_or_else(|| "python3".into()),
+                python: resolve_interpreter(
+                    options.take("--python").unwrap_or_else(|| "python3".into()),
+                )?,
                 worker: options
                     .take("--worker")
                     .unwrap_or_else(|| "scripts/onnx_worker.py".into()),
@@ -274,6 +312,9 @@ fn run() -> Result<()> {
             BackendConfig::Python(backend) => {
                 paths.push(&backend.worker);
                 paths.push(&backend.model);
+                if backend.python.is_absolute() || backend.python.components().count() > 1 {
+                    paths.push(&backend.python);
+                }
             }
             BackendConfig::Native {
                 model,
@@ -286,6 +327,12 @@ fn run() -> Result<()> {
         }
     }
     ensure_distinct(&paths)?;
+    for path in [&output, &transform_path].into_iter().flatten() {
+        validate_output_file(path)?;
+    }
+    if command == "preprocess" {
+        validate_output_file(tensor_path.as_deref().ok_or("missing tensor path")?)?;
+    }
     let spec = load_spec(&config)?;
     let started = Instant::now();
     let image = match image_path {

@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "scope": "Mac bus.jpg CLI native versus explicit venv Python reference; no vehicle",
+  "detections_equal": true,
+  "detection_count": 5,
+  "backends": [
+    "rust-onnxruntime",
+    "python-reference"
+  ],
+  "python_interpreter": "/Users/yuhaojin/Documents/XT-STCAR/.venv-model/bin/python",
+  "input_model_sha256": "c52d204571c6df9f1132dedd7aab3e87336434589b055b9fa4026d117f1d4045",
+  "host_binary_sha256": "b7d495cea95a2e69072a07cc334dba5c949fe6a30ccc8f681d26a1d6ada9e042"
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -14,9 +15,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from onnx_worker import encode_output, read_input  # noqa: E402
+from onnx_worker import encode_output, read_input, write_output  # noqa: E402
 from export_yolo26 import export  # noqa: E402
-from validate_yolo26 import ContractError, load_and_validate_model, load_spec, validate_model  # noqa: E402
+from validate_yolo26 import ContractError, load_and_validate_model, load_spec, validate_model, read_regular_file  # noqa: E402
 
 
 @pytest.fixture
@@ -157,6 +158,65 @@ def test_reads_little_endian_input(tmp_path, spec):
     values = np.linspace(0, 1, 3 * 320 * 320, dtype=np.float32).reshape(1, 3, 320, 320)
     path.write_bytes(values.astype("<f4").tobytes())
     np.testing.assert_array_equal(read_input(path, spec), values)
+
+
+def test_static_reader_accepts_exact_limit_and_rejects_oversize(tmp_path):
+    path = tmp_path / "input.bin"
+    path.write_bytes(b"1234")
+    assert read_regular_file(path, 4) == b"1234"
+    with pytest.raises(ContractError, match="exceeds 3 bytes"):
+        read_regular_file(path, 3)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX FIFO regression")
+def test_worker_output_does_not_replace_a_fifo(tmp_path):
+    path = tmp_path / "output.fifo"
+    os.mkfifo(path, 0o600)
+    with pytest.raises(ContractError, match="regular file"):
+        write_output(path, {"shape": [1, 300, 6], "values": []})
+    assert path.is_fifo()
+    assert not list(tmp_path.glob(".onnx-output-*"))
+
+
+@pytest.mark.parametrize("kind", ["spec", "model", "input"])
+def test_reference_static_inputs_reject_oversize_before_parsing(tmp_path, spec, kind):
+    limit = {"spec": 1024 * 1024, "model": 64 * 1024 * 1024, "input": 3 * 320 * 320 * 4}[kind]
+    path = tmp_path / "oversize.bin"
+    with path.open("wb") as stream:
+        stream.truncate(limit + 1)
+    with pytest.raises(ContractError, match=f"exceeds {limit} bytes"):
+        if kind == "spec":
+            load_spec(path)
+        elif kind == "model":
+            load_and_validate_model(path, spec)
+        else:
+            read_input(path, spec)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX FIFO regression")
+@pytest.mark.parametrize("kind", ["spec", "model", "input"])
+def test_reference_fifo_inputs_fail_without_waiting_for_a_writer(tmp_path, kind):
+    path = tmp_path / "input.fifo"
+    os.mkfifo(path, 0o600)
+    # Run with an outer timeout so a future regression cannot hang the suite.
+    probe = """import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from validate_yolo26 import ContractError, load_spec, load_and_validate_model
+from onnx_worker import read_input
+spec = load_spec(sys.argv[2])
+try:
+    if sys.argv[4] == 'spec': load_spec(sys.argv[3])
+    elif sys.argv[4] == 'model': load_and_validate_model(sys.argv[3], spec)
+    else: read_input(Path(sys.argv[3]), spec)
+except ContractError as error:
+    assert 'regular file' in str(error), str(error)
+else: raise AssertionError('FIFO accepted')
+"""
+    result = subprocess.run([sys.executable, "-c", probe, str(ROOT / "scripts"),
+                             str(ROOT / "config/yolo26n.json"), str(path), kind],
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
 
 
 def test_rejects_wrong_byte_count(tmp_path, spec):

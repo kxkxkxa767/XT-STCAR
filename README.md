@@ -10,7 +10,8 @@ Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，�
 
 用户当前明确“暂不接车”：本轮没有连接车辆、操作电机、升级车端 GLIBC 或读取视频。
 串口在 Mac 的伪终端上验证；运动输出只记录和预览。
-最新验证见 [Rust 模块完善记录](docs/Rust模块完善验证记录-2026-09-08.md)，交接完整状态见 [agent.md](agent.md)。
+最新验证与修复见 [总体架构审查](docs/总体架构审查-2026-09-08.md)，交接完整状态见 [agent.md](agent.md)。
+已完整核对用户提供的 10 页比赛规则初稿，见 [赛项三规则与工程差距](docs/赛项三规则与工程差距.md)。
 日常直接在 `main` 开发和推送；修改前检查并拉取远端更新，提交信息简述本次改动，详见 [上传规范](上传规范.md)。
 
 ## 代码结构：模块在哪、负责什么
@@ -42,6 +43,7 @@ XT-STCAR/
 | [`crates/app/src/main.rs`](crates/app/src/main.rs) | `xt-stcar` 命令入口：`self-check`、`preprocess`、`replay`、`infer`，参数与输出文件保护 |
 | [`crates/app/src/ort_backend.rs`](crates/app/src/ort_backend.rs) | `NativeOrtBackend`：动态加载 ORT C 库、模型 SHA/provenance/实际张量元数据验证、常驻 Session 和超时取消 |
 | [`crates/app/src/backend.rs`](crates/app/src/backend.rs) | 显式 Python 参考后端、张量文件交换、子进程超时清理与原子输出工具 |
+| [`crates/app/src/file_io.rs`](crates/app/src/file_io.rs) | 两套 CLI 共用的静态文件边界：非阻塞打开后检查普通文件、限制实际读取量、拒绝非普通输出目标 |
 | [`crates/app/src/lib.rs`](crates/app/src/lib.rs) | 导出可复用的推理后端，供总调度调用 |
 | [`crates/robot-core/src/sensors.rs`](crates/robot-core/src/sensors.rs) | IMU、雷达、里程计、视觉摘要及 frame/单位/时间/有限数值校验；里程计类型本身不计算里程计 |
 | [`crates/robot-core/src/safety.rs`](crates/robot-core/src/safety.rs) | Disarmed/Armed/Running/Fault、急停锁存、deadman、心跳/指令/传感器超时、物理速度和曲率限值；`RecordingSink` 仅记录输出 |
@@ -57,7 +59,7 @@ XT-STCAR/
 | [`crates/runner/src/lib.rs`](crates/runner/src/lib.rs) | 串联输入→解码/推理→安全控制器→可选 PWM 预览→JSONL；EOF Stop、推理/映射失败急停；完整解码批次每块只记一次 |
 | [`crates/runner/src/capture.rs`](crates/runner/src/capture.rs) | 有时间/字节/记录上限的 IMU 或 N10 采集，使用统一 `Instant` 时钟，空闲和结束写 Tick；不发送设备命令 |
 
-数据流为：文件回放 → 传感器/视觉模块 → 安全状态机 → 运动记录 → 可选底盘 PWM 预览。
+数据流为：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
 独立串口采集先生成可回放的原始字节文件；采集没有 Arm/Start/Motion 事件。
 目前没有把采集与电机发送接成实时闭环。
 
@@ -141,14 +143,15 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `tests/test_yolo26_tools.py` | Python 导出/输出契约回归 |
 | `tests/measure_yolo26_reference.py`、`tests/verify_robot_reference.py` | 真实模型与机器人图像回放参考对照 |
 | `scripts/export_yolo26.py`、`validate_yolo26.py`、`verify_preprocess.py` | 模型导出、静态校验及预处理对照 |
-| `scripts/onnx_worker.py` | 仅供显式 Python 参考后端的常驻推理工作进程 |
+| `scripts/onnx_worker.py` | 仅供显式 Python 参考后端的一次性推理工作进程；配置、模型和张量受实际读取量限制 |
 | `scripts/build-riscv.sh`、`inspect_elf.py` | fmt/test/clippy、两程序交叉构建、独立 ELF/GLIBC 报告和源码哈希 |
 | `scripts/delivery.py`、`package.sh`、`upload.sh` | 白名单打包与哈希核验；上传默认 dry-run，显式新账号/IP/release 目录 |
 | `scripts/check-vehicle.sh` | 车端系统/设备/服务的只读检查脚本，不启动驱动或运动 |
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的 ISA/ABI/加载器/GLIBC。
+构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的架构/ABI/加载器/GLIBC。
+ELF 检查核对动态加载表与 section 映射及版本需求，不验证所有机器指令或代替目标机运行。
 交付包不含工具链、虚拟环境、Mac dylib 或缓存；带模型包另带 provenance 与模型许可。
 源码仓库也排除模型、厂商大包、镜像、`target/`、`dist/`、`work/` 和缓存。
 
@@ -157,6 +160,11 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 已完成上述 Rust 模块及离线集成，不等于无人驾驶系统已实车验收。
 还需要真实相机采集、N10 全圈组帧、多传感器统一时钟、TF/物理标定、激光里程计/定位融合、
 路径规划、避障、ROS 2 接口与 MCU 反馈/watchdog；厂商教程明确没有轮编码器，不能假造轮速里程计。
+
+比赛初稿没有禁止 Rust，也没有明文强制 ROS2，但明确禁止 ROS1 和 bag 工具。
+比赛要求斑马线前停足 3 秒、按路线绕两锥桶、等绿灯放行、四轮全入终点区。
+就赛项相关目标而言，当前 80 类模型仅含通用 `traffic light`，缺斑马线、锥桶和灯色识别；`zebra` 是动物。
+赛项任务状态机、实时调度与导航控制仍须实现，当前回放中的 Motion 指令由输入给定，YOLO 结果尚未驱动自主决策。
 
 车端真实推理需核实 RISC-V 标准 ORT C 库。官方 SpacemiT ORT/EP 2.0.6 已静态核验，仍未测试目标
 `GetApi(22)`、模型算子或 EP 初始化。候选库要求 GLIBC 2.38，EP 另要求 GLIBCXX 3.4.32 / CXXABI 1.3.15。

@@ -1,4 +1,7 @@
 //! File-based reference backend; no native inference or vendor ABI is linked.
+use crate::file_io::{
+    MAX_CONFIG_BYTES, MAX_MODEL_BYTES, open_regular_file, read_regular_file, validate_output_file,
+};
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -20,6 +23,7 @@ pub fn write_atomic(
     path: &Path,
     write: impl FnOnce(&mut File) -> std::io::Result<()>,
 ) -> Result<()> {
+    validate_output_file(path)?;
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -49,16 +53,13 @@ pub fn write_f32le(path: &Path, input: &InputTensor) -> Result<()> {
 
 pub fn read_output(path: &Path) -> Result<OutputTensor> {
     // The supported output has at most 1,800 scalar values. Bound malformed files.
-    let file = File::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
-    if file.metadata().map_err(|e| e.to_string())?.len() > 1_048_576 {
-        return Err("output tensor JSON exceeds 1 MiB".into());
-    }
-    serde_json::from_reader(file).map_err(|e| format!("parse {}: {e}", path.display()))
+    let bytes = read_regular_file(path, MAX_CONFIG_BYTES)?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("parse {}: {e}", path.display()))
 }
 
 fn diagnostics(path: &Path) -> String {
     let mut bytes = Vec::new();
-    if let Ok(file) = File::open(path) {
+    if let Ok(file) = open_regular_file(path) {
         let _ = file.take(8192).read_to_end(&mut bytes);
     }
     String::from_utf8_lossy(&bytes).trim().to_owned()
@@ -84,6 +85,11 @@ impl InferenceBackend for PythonReferenceBackend {
         if !self.model.is_file() || !self.worker.is_file() {
             return Err("model and worker must be existing files".into());
         }
+        let model = open_regular_file(&self.model)?;
+        if model.metadata().map_err(|e| e.to_string())?.len() > MAX_MODEL_BYTES {
+            return Err("reference ONNX model exceeds 64 MiB".into());
+        }
+        drop(model);
         let temp = tempfile::Builder::new()
             .prefix("xt-stcar-infer-")
             .tempdir()

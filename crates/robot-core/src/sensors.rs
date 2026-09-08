@@ -200,9 +200,15 @@ impl SensorSample {
                     && v.orientation_xyzw.valid()
             }
             Self::Lidar(v) => {
+                // Finite fields alone do not imply finite beam geometry: either
+                // multiplying the increment or adding the origin can overflow.
+                // Saturation keeps the empty-input rejection free of len - 1 underflow.
+                let span_rad = v.angle_increment_rad * v.ranges_m.len().saturating_sub(1) as f64;
                 v.angle_min_rad.is_finite()
                     && v.angle_increment_rad.is_finite()
                     && v.angle_increment_rad != 0.0
+                    && span_rad.is_finite()
+                    && (v.angle_min_rad + span_rad).is_finite()
                     && v.range_min_m.is_finite()
                     && v.range_max_m.is_finite()
                     && v.range_min_m >= 0.0

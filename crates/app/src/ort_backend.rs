@@ -1,12 +1,12 @@
 //! Standard ONNX Runtime C API through ort's runtime loader; no target library is linked.
 //! A trusted validator sidecar binds graph checks to the exact ONNX bytes. It is
 //! a provenance record, not a digital signature or proof of vendor compatibility.
+use crate::file_io::{MAX_CONFIG_BYTES, MAX_MODEL_BYTES, read_regular_file};
 use ort::session::{RunOptions, Session};
 use ort::value::{TensorElementType, TensorRef, ValueType};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, mpsc};
 use std::thread;
@@ -226,23 +226,11 @@ impl NativeOrtBackend {
         if timeout.is_zero() {
             return Err("native ORT timeout must be positive".into());
         }
-        if fs::metadata(model_path)
-            .map_err(|e| format!("model {}: {e}", model_path.display()))?
-            .len()
-            > 64 * 1024 * 1024
-        {
-            return Err("baseline ONNX model exceeds 64 MiB".into());
-        }
-        if fs::metadata(provenance_path)
-            .map_err(|e| format!("provenance {}: {e}", provenance_path.display()))?
-            .len()
-            > 1024 * 1024
-        {
-            return Err("provenance JSON exceeds 1 MiB".into());
-        }
-        let model = fs::read(model_path).map_err(|e| format!("read model: {e}"))?;
+        let model = read_regular_file(model_path, MAX_MODEL_BYTES)
+            .map_err(|e| format!("read model: {e}"))?;
         let record: Provenance = serde_json::from_slice(
-            &fs::read(provenance_path).map_err(|e| format!("read provenance: {e}"))?,
+            &read_regular_file(provenance_path, MAX_CONFIG_BYTES)
+                .map_err(|e| format!("read provenance: {e}"))?,
         )
         .map_err(|e| format!("parse provenance: {e}"))?;
         validate_provenance(&record, &model)?;

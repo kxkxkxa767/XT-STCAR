@@ -529,6 +529,7 @@ version = "0.1.0"
 dependencies = [
  "image",
  "ort",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",
