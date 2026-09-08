@@ -1,0 +1,721 @@
+XT-STCAR：Mac 与 Muse Pi Pro 车端命令手册
+维护日期：2026-09-08
+适用工程：/Users/yuhaojin/Documents/XT-STCAR
+
+本文件是操作用法，不表示这些命令已经在车端执行。当前暂不接车。
+Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和最新验证记录为准。
+车端的设备身份、系统版本、推理运行库、标定、实际停车距离和速度都仍需实测。
+
+使用约定
+  [Mac] 在开发机终端执行，通常先进入工程根目录。
+  [车端] 以后取得新车连接信息、登录新车后执行；不是在 Mac 执行。
+  每组命令都说明用途、替换项和预期结果。不要整篇一次粘贴执行。
+  路径含空格或中文时保留双引号。反斜杠表示命令在下一行继续。
+  “替换为...”和示例账号、IP、文件名均需按实际情况修改。
+  192.0.2.10 仅为文档示例 IP，不是已知车辆地址；不沿用旧车账号或地址。
+  本工程没有可执行的底盘带动力发送入口。回放、仿真与 PWM 预览不会控制电机。
+  serial-capture --execute 是单个传感器的串口读取入口，不发送设备命令。
+  Mac 工作目录是完整源码仓库，使用 cargo、scripts/build-riscv.sh、打包和上传脚本。
+  车端工作目录是单次解包的 release，使用 bin/xt-stcar 和 bin/xt-stcar-robot。
+  部署包没有完整 Cargo 源码，不在 release 里运行 cargo build、git pull 或 Mac 工具链。
+
+一、Mac：进入工程与检查环境
+
+1.1 进入项目
+[Mac；用途] 确认当前路径，使用项目锁定的 Rust，而非改变全局默认工具链。
+[替换项] 本机无需替换；队友使用自己的真实工程目录。
+
+  cd /Users/yuhaojin/Documents/XT-STCAR
+  pwd
+  uname -m
+  sw_vers
+  rustc --version
+  cargo --version
+  rustup show active-toolchain
+  rustup target list --installed
+
+[预期] 本机 uname 为 arm64，Rust/Cargo 为 1.97.1；已装目标含
+  riscv64gc-unknown-linux-gnu。Mac 主机目标为 aarch64-apple-darwin。
+  Mac 的 Mach-O ARM64、旧 ARM64 Linux 与新车 RISC-V Linux 二进制不能互换。
+  Mac 不运行 GLIBC；GLIBC 2.38 是 Linux 目标的交叉链接基线。
+
+1.2 检查工程内交叉编译工具
+[Mac；用途] 核对已有工具，不重复安装。
+[替换项] 无，均相对工程根目录。
+
+  toolchains/zig-aarch64-macos-0.15.2/zig version
+  toolchains/cargo-zigbuild-0.23.4/cargo-zigbuild --version
+  cat rust-toolchain.toml
+
+[预期] Zig 0.15.2、cargo-zigbuild 0.23.4；缺文件时先恢复项目环境，
+  不从另一架构复制可执行工具，也不把工具链上传给车端。
+
+1.3 Python 仅用于模型工具和交付脚本
+[Mac；用途] 检查已有独立环境。Rust 默认推理不需要激活 Python 环境。
+[替换项] 无。
+
+  .venv/bin/python --version
+  .venv-model/bin/python --version
+  .venv-model/bin/python -m pip check
+
+[预期] 模型环境依赖检查通过。.venv 与 .venv-model 分开，不混装。
+  后文明确使用 .venv-model/bin/python，无需 source，也不修改系统 Python。
+
+二、Mac：日常检查、构建与 GLIBC 2.38
+
+2.1 本机质量检查
+[Mac；用途] 格式、完整 workspace 测试、静态检查、本机两程序构建。
+[替换项] 无。
+
+  cargo fmt --all --check
+  cargo test --workspace --locked
+  cargo clippy --workspace --all-targets --locked -- -D warnings
+  cargo build --workspace --locked
+  target/debug/xt-stcar --help
+  target/debug/xt-stcar-robot --help
+
+[预期] 检查退出码 0；两个程序帮助与下面用法一致。
+  fmt 检查失败时，可执行 cargo fmt --all 格式化，再审阅修改。
+  --locked 保持 Cargo.lock；只有依赖已缓存时才附加 --offline。
+  部分真实模型测试需显式准备模型/运行库，普通测试不等于真实相机或实车测试。
+
+2.2 单模块检查
+[Mac；用途] 修改局部后先验证相关模块，完整交付前仍执行整套检查。
+[替换项] -p 后换成实际修改的 crate；测试名须为实际文件名。
+
+  cargo test --locked -p xt-stcar-robot-core --test mission
+  cargo test --locked -p xt-stcar-robot-runner --test telemetry
+  cargo test --locked -p xt-stcar-device-io
+
+[预期] 各自测试通过。device-io 的 PTY 测试使用主机伪终端，不打开真实车辆设备。
+
+2.3 RISC-V release 交叉构建
+[Mac；用途] 用工程脚本执行 fmt/test/clippy、交叉链接及两个 ELF 核验。
+[替换项] 无；依赖未缓存时去掉 --offline，允许 Cargo 获取锁定依赖。
+
+  scripts/build-riscv.sh --help
+  scripts/build-riscv.sh --offline
+
+[预期] 目标 riscv64gc-unknown-linux-gnu.2.38；产物位于：
+  target/riscv64gc-unknown-linux-gnu/release/xt-stcar
+  target/riscv64gc-unknown-linux-gnu/release/xt-stcar-robot
+  同目录 *.elf.json 和 xt-stcar.build.json 记录 ABI、依赖、源码及二进制哈希。
+  这里没有升级、安装或覆盖车端 libc。实际最大 GLIBC 引用看当前 ELF 报告，
+  不把“允许上限 2.38”当作“所有二进制恰好需要 2.38”。
+
+2.4 复核交叉产物
+[Mac；用途] 静态检查架构、动态加载器、GLIBC 上限和哈希。
+[替换项] 无。inspect_elf.py 不执行目标程序。
+
+  file target/riscv64gc-unknown-linux-gnu/release/xt-stcar
+  file target/riscv64gc-unknown-linux-gnu/release/xt-stcar-robot
+  python3 scripts/inspect_elf.py target/riscv64gc-unknown-linux-gnu/release/xt-stcar
+  python3 scripts/inspect_elf.py target/riscv64gc-unknown-linux-gnu/release/xt-stcar-robot
+  shasum -a 256 target/riscv64gc-unknown-linux-gnu/release/xt-stcar
+  shasum -a 256 target/riscv64gc-unknown-linux-gnu/release/xt-stcar-robot
+
+[预期] ELF64、RISC-V、RVC/LP64D、PIE，加载器
+  /lib/ld-linux-riscv64-lp64d.so.1；检查 JSON 中 passed 为 true。
+  needed 列表与 maximum_glibc 是当前结果；还须在新车核对对应依赖。
+  Mac 使用 shasum -a 256；车端 Linux 通常使用 sha256sum。
+
+三、Mac：视觉自检、预处理、张量回放与真实模型
+
+以下命令使用本机构建的 target/debug 程序；也可用
+  cargo run --locked --bin xt-stcar -- 后接相同参数。
+
+3.1 无模型自检
+[Mac；用途] 用合成图片/检测张量验证 Rust 视觉处理链。
+[替换项] 无。
+
+  target/debug/xt-stcar self-check --config config/yolo26n.json
+
+[预期] JSON 自检报告；不加载 ONNX Runtime、不执行真实模型、不打开相机。
+
+3.2 预处理实际图片
+[Mac；用途] PNG/JPEG 转为 letterbox 后的 FP32 NCHW 输入及坐标变换文件。
+[替换项] IMAGE 改为已存在图片绝对路径；输出名选新的诊断文件。
+
+  mkdir -p work/commands
+  IMAGE='/替换为实际路径/image.png'
+  target/debug/xt-stcar preprocess --image "$IMAGE" \
+    --tensor work/commands/input.f32 --transform work/commands/letterbox.json \
+    --config config/yolo26n.json
+
+[预期] 两个文件：小端连续 float32 张量与 letterbox JSON。
+  此 input.f32 是模型输入，不是下一项 replay 要求的检测输出 JSON。
+
+3.3 已保存的模型输出张量回放
+[Mac；用途] 单独检查 YOLO 后处理，不执行推理。
+[替换项] IMAGE 同上；OUTPUT_TENSOR 指向真实输出 JSON，结构为
+  {"shape":[1,N,6],"values":[...]}，每行是 x1,y1,x2,y2,score,class_id；
+  当前锁定 YOLO26n 的 N=300，具体契约以 config/yolo26n.json 为准。
+
+  OUTPUT_TENSOR='/替换为实际路径/detection-output.json'
+  target/debug/xt-stcar replay --image "$IMAGE" --tensor "$OUTPUT_TENSOR" \
+    --config config/yolo26n.json --output work/commands/tensor-replay.json
+
+[预期] 检测框、类别、置信度等 JSON；不接受上项的二进制 input.f32。
+
+3.4 Rust 原生 YOLO26n 推理
+[Mac；用途] 实际读取图片、ONNX 和 Mac ORT C 库执行推理。
+[替换项] IMAGE；模型、provenance 与当前锁定接口应匹配。
+
+  target/debug/xt-stcar infer --image "$IMAGE" \
+    --model models/yolo26n.onnx \
+    --runtime-lib toolchains/onnxruntime-macos-arm64-1.29.0/lib/libonnxruntime.1.29.0.dylib \
+    --config config/yolo26n.json --timeout-secs 30 \
+    --output work/commands/detections.json
+
+[预期] JSON 检测结果；模型旁自动读取 models/yolo26n.provenance.json。
+  这是 Mac 推理结果，不能证明 RISC-V ORT/厂商 EP 或车端帧率。
+  --timeout-secs 的原生超时请求协作取消，不能视作硬实时抢占。
+
+3.5 可选 Python 参考对照及模型静态校验
+[Mac；用途] 仅供离线对照，不改变默认 Rust 后端。
+[替换项] IMAGE；使用已经存在的模型环境。
+
+  target/debug/xt-stcar infer --backend python-reference --image "$IMAGE" \
+    --model models/yolo26n.onnx --python .venv-model/bin/python \
+    --config config/yolo26n.json --output work/commands/reference.json
+  .venv-model/bin/python scripts/validate_yolo26.py \
+    --model models/yolo26n.onnx --spec config/yolo26n.json
+
+[预期] 参考检测 JSON、模型校验 JSON。模型导出属于另外一次明确操作，
+  如需重导出先读 docs/YOLO26接口.md，并用
+  .venv-model/bin/python scripts/export_yolo26.py --help 查看参数，
+  保留原权重、原 ONNX 及来源记录；不要为普通运行重复导出或混装依赖。
+
+四、Mac：安全状态机回放、协议与 PWM 预览
+
+4.1 旧格式事件回放
+[Mac；用途] 验证安全状态机、超时、急停及协议解析。
+[替换项] 无；输出路径可选新名字。这里的输入带 event 字段，可含人工 Motion。
+
+  target/debug/xt-stcar-robot replay --events examples/robot-sim.jsonl \
+    --config config/robot-sim.json --output work/commands/robot-replay.jsonl
+  target/debug/xt-stcar-robot replay --events examples/robot-imu-replay.jsonl \
+    --config config/robot-imu-replay.json --imu-config config/imu-replay.json \
+    --output work/commands/imu-replay.jsonl
+  target/debug/xt-stcar-robot replay --events examples/robot-n10-replay.jsonl \
+    --config config/robot-n10-replay.json --n10-config config/n10-replay.json \
+    --chassis-calibration config/chassis-calibration-sim.json \
+    --output work/commands/n10-replay.jsonl
+
+[预期] step + summary JSONL，physical_output_enabled=false，结束有 Stop。
+  IMU/N10 合成样例故意包含过期/坏数据，末尾 Fault 可以是预期结果。
+  replay 原入口不会自主生成比赛路线；视觉输入事件可配
+  --model、--runtime-lib、--vision-config，三者用法见程序帮助。
+  单个 N10 packet 的 16 束局部样本，不等于 autonomy 所需全圈扫描。
+
+4.2 厂商话题语义的 7 字节帧预览
+[Mac；用途] 检查编码，不打开底盘串口。
+[替换项] 无；仅示例，不是标定值。
+
+  target/debug/xt-stcar-robot chassis-preview \
+    --profile teleop_pwm_degrees --linear 1500 --angular 90
+
+[预期] 中性 PWM 与编码字节 JSON。还支持 navigation1300 和
+  navigation_one1200，但其 linear/angular 沿用厂商原话题约定。
+  不把 1200/1300 系数当作 m/s 到 PWM 的实车标定。
+  物理速度/曲率预览用 replay --chassis-calibration；表外值拒绝外推，
+  映射错误保留 Stop/急停诊断并非零退出；预览没有物理输出。
+
+4.3 串口采集计划
+[Mac；用途] 离线查看预计打开的设备、波特率、时长和字节限额。
+[替换项] 无，厂商路径仅为参考；不要在 Mac 对这些参考路径加 --execute。
+
+  target/debug/xt-stcar-robot serial-capture \
+    --config config/serial-n10-capture.json --output work/commands/n10-capture.jsonl
+  target/debug/xt-stcar-robot serial-capture \
+    --config config/serial-imu-capture.json --output work/commands/imu-capture.jsonl
+
+[预期] 计划 JSON；没有 --execute 时不打开设备，也不生成所列采集文件。
+  已有配置参考：N10 /dev/laser 230400、WIT IMU /dev/imu 115200；
+  真实设备必须以后按身份核实，不能把 /dev/car 作为传感器采集口。
+
+五、Mac：自主比赛离线闭环、道路识别和传感器快照回放
+
+5.1 配置类型与入口
+  config/competition-sim.json：SimulationConfig，含场景、理想车辆模型、
+    autonomy、road、telemetry，供 autonomy-sim。
+  config/competition-controller-sim.json：AutonomyConfig，只含控制器配置，
+    供 autonomy-replay，不能拿完整 competition-sim.json 代替。
+  config/road-perception-sim.json：RoadConfig，供 road-detect。
+  config/scan-assembly-sim.json：Rust N10 全圈组帧库的配置参考。
+  config/laser-localization-sim.json：Rust 激光定位库的配置参考。
+  后两项目前没有独立 CLI 子命令，不编造 scan-assemble/localize 命令。
+  示例 simulation_only/unverified 均不是实车标定。
+
+5.2 查看并另存程序内置仿真配置
+[Mac；用途] 获取与本程序版本一致的完整 SimulationConfig。
+[替换项] 输出名选择新文件，不覆盖已人工标定或修改的配置。
+
+  target/debug/xt-stcar-robot autonomy-example
+  target/debug/xt-stcar-robot autonomy-example > work/commands/competition-example.json
+
+[预期] 完整 JSON。后面的重定向是 shell 写文件，会覆盖同名文件，
+  所以只写新的 work 诊断文件；不重定向到 config/ 或任何输入文件。
+
+5.3 运行闭环仿真
+[Mac；用途] 合成 RGB、光线投射雷达和理想位姿反馈，自动生成任务与导航命令。
+[替换项] 无。离线模拟时钟不按真实墙钟等待。
+
+  target/debug/xt-stcar-robot autonomy-sim --config config/competition-sim.json
+  target/debug/xt-stcar-robot autonomy-sim --config config/competition-sim.json \
+    --output work/commands/competition-run.jsonl
+
+[预期] 无 --output 时默认 stdout 只显示 summary；指定文件时默认保留
+  阶段变化、故障、terminal 和 summary。正常样例应观察到斑马线停足 3 秒、
+  绕锥桶、灯区停车/绿灯确认、终点位置及航向满足后完成。
+  实际结果以 completed、fault、final_actual_speed_mps、braking_ticks 等字段为准。
+  故障退出码非零，并保存 terminal Stop；Stop 命令与制动后的模拟速度分开记录。
+  理想位姿不代表真实激光定位精度，合成路面不代表实拍识别性能。
+
+5.4 显式调试 trace
+[Mac；用途] 定位任务/导航问题，按内存预算保留更详细的步进记录。
+[替换项] 输出名可换；不支持虚构的 --trace-bytes CLI 参数。
+
+  target/debug/xt-stcar-robot autonomy-sim --config config/competition-sim.json \
+    --trace --output work/commands/competition-trace.jsonl
+
+[预期] 详细记录加末尾结果。SimulationConfig.telemetry.max_trace_bytes
+  默认 1048576（1 MiB），允许 1..8388608（8 MiB），仅约束可选 trace。
+  超限增加 dropped_trace_records，不停止控制、不降低感知或控制频率。
+  阶段/故障另有有限保留空间；异常计 logging_errors，不改变控制命令。
+  terminal/summary 在结束时另外追加；离线 runner 集中写出，无每 tick fsync。
+  进程异常退出前的纯内存日志可能尚未写出。必要实验数据按实际需要保留。
+  eMMC 以正常运行和比赛为先：不为节写降低采样，不改 mount，不清理系统盘。
+
+5.5 单张道路图片识别
+[Mac；用途] Rust 斑马线几何、颜色灯和锥桶候选诊断。
+[替换项] IMAGE 必须是本地 PNG/JPEG。地面矩阵与 ROI 示例不是本车相机标定。
+
+  target/debug/xt-stcar-robot road-detect --config config/road-perception-sim.json \
+    --image "$IMAGE" --output work/commands/road-cues.json
+
+[预期] 单图 road_image_diagnostic JSON；无模型时使用显式灯 ROI。
+  识别不确定应为 unknown，不把未检测到红色直接解释为绿灯。
+  此命令不采集实时相机、不执行导航、不输出电机控制。
+
+5.6 单图道路识别结合真实 YOLO 灯候选
+[Mac；用途] Rust 原生 ORT 产生 class 9 灯候选，再由道路模块识别颜色/地面线索。
+[替换项] IMAGE；显式传入模型和对应 Mac 动态库，两者必须同时给出。
+
+  target/debug/xt-stcar-robot road-detect --config config/road-perception-sim.json \
+    --image "$IMAGE" --model models/yolo26n.onnx \
+    --runtime-lib toolchains/onnxruntime-macos-arm64-1.29.0/lib/libonnxruntime.1.29.0.dylib \
+    --vision-config config/yolo26n.json --output work/commands/road-yolo.json
+
+[预期] native_yolo_enabled=true 的单图诊断；模型 provenance 校验通过。
+  YOLO26n 当前 80 类中的 9 是 traffic light，22 是动物 zebra；没有将
+  斑马线、锥桶或红绿状态伪装成既有模型类别。道路规则/颜色识别独立实现。
+  road-detect 不接受 --trace 或 --events。
+
+5.7 强类型传感器快照回放
+[Mac；用途] 将已经同步的测量快照交给同一自主控制器，由任务和导航生成命令。
+[替换项] SNAPSHOTS 为已准备的严格 JSONL，不使用 robot-sim.jsonl 或串口原始日志。
+
+  SNAPSHOTS='/替换为实际路径/sensor-snapshots.jsonl'
+  target/debug/xt-stcar-robot autonomy-replay \
+    --config config/competition-controller-sim.json --events "$SNAPSHOTS" \
+    --output work/commands/snapshot-run.jsonl
+  target/debug/xt-stcar-robot autonomy-replay \
+    --config config/competition-controller-sim.json --events "$SNAPSHOTS" \
+    --trace --output work/commands/snapshot-trace.jsonl
+
+[预期] snapshot_summary，含 processed_snapshots、completed、fault 和日志计数。
+  每行顶层必须为 at、pose、scan、road；不接受手工 Motion 字段。
+  pose 是 PoseEstimate（位姿、实测速度/角速度、质量、frame、capture 时间）；
+  scan 是 LidarSample（完整配置束数、范围、角度、capture 时间、雷达 frame）；
+  road 是 RoadFrame（observation、图像宽高）；observation 使用车体坐标。
+  at 使用同一启动纪元毫秒且严格递增，测量时间、年龄、frame 与配置一致。
+  当前激光障碍投影要求 scan.captured_at 与 pose.captured_at 完全相同；
+  斑马线几何锁定和视觉锥桶投影也要求 road.observation.captured_at 与位姿同刻。
+  不同 capture 时刻须先正确关联/插值位姿，不能只改时间戳伪造同步。
+  文件≤64 MiB、单行≤1 MiB、最多10000条；雷达≤1440束、视觉锥桶≤256个。
+  过期、乱序、质量不可信或任务未完成就结束，会有 Fault/终端 Stop 和非零退出。
+  默认 stdout 只显示 summary；--output 保存必要记录；--trace 额外保留有界调试。
+  两次 serial-capture 有不同纪元，不能简单拼接成同步快照。
+  Rust 组帧/定位是库能力；目前本 CLI 不把原始串口流自动变成真实闭环。
+  JSONL 是开发诊断格式，不声称最终比赛允许录制/回放；初稿禁用 ROS1/bag，
+  其范围仍需按最终规则确认。本工程命令不引入 ROS1、ros2 bag 或人工遥控。
+
+六、Mac：打包、核验与未来上传
+
+6.1 创建部署包
+[Mac；用途] 以白名单打包当前已验证的两个 RISC-V 程序和运行配置。
+[替换项] 无。先完成第 2.3 节构建；源码变化后必须重新构建。
+
+  scripts/package.sh --help
+  scripts/package.sh
+  scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
+
+[预期] dist/ 下分别出现 core 和 with-model 包，并带同名 .sha256；
+  文件名含版本时间/哈希，以脚本实际输出为准。包已存在时不覆盖。
+  core 不含模型；模型仅在明确 --model 的 with-model 交付包里携带。
+  两种包均不包含 .venv、.venv-model、工具链、Mac dylib、缓存、完整厂商资料。
+  厂商 RISC-V ONNX Runtime/EP 库当前仍需单独核实，不由这个包自动提供。
+
+6.2 检查待上传包
+[Mac；用途] 核验压缩包/manifest/载荷哈希与内容，尚不连接车端。
+[替换项] ARCHIVE 改成 dist/ 中本次实际包路径。
+
+  ARCHIVE='dist/替换为实际包名.tar.gz'
+  python3 scripts/delivery.py verify "$ARCHIVE"
+  shasum -a 256 "$ARCHIVE"
+  tar -tzf "$ARCHIVE"
+
+[预期] verify 成功、包 SHA 与 .sha256 相同；内容是 bin/config/examples/scripts/docs
+  及 manifest、SHA256SUMS、构建证据等。不要手工把环境目录加入包。
+
+6.3 未来连接参数与上传预演
+[Mac；用途] 只核验包和参数、显示传输计划。当前仍不执行车辆连接。
+[替换项] 以下四项都按新车填写；release 是此前不存在的新目录名。
+
+  VEHICLE_IP='192.0.2.10'
+  VEHICLE_USER='vehicle'
+  VEHICLE_PORT='22'
+  VEHICLE_RELEASE="/home/${VEHICLE_USER}/xt-stcar/releases/first-check-REPLACE"
+  scripts/upload.sh --help
+  scripts/upload.sh --archive "$ARCHIVE" --host "$VEHICLE_IP" \
+    --user "$VEHICLE_USER" --port "$VEHICLE_PORT" --remote-dir "$VEHICLE_RELEASE"
+
+[预期] dry_run=true、extract_or_run=false，不执行 SSH/SCP。
+  --host 必须为显式 IP，不能用 DNS 名或 SSH 别名；--user 必须为非 root。
+  路径固定为 /home/账号/xt-stcar/releases/新名称；新名称只用字母、数字、_、-，
+  开头为字母或数字。脚本拒绝覆盖已存在 release。
+
+6.4 新车准备好后的首次 SSH 与实际传输
+[Mac；用途] 未来明确接车后登录核对身份，再将已核验包传到独立目录。
+[替换项] 先替换第 6.3 节参数，向现场或厂商核实 SSH 主机密钥指纹。
+
+  ssh -p "$VEHICLE_PORT" "${VEHICLE_USER}@${VEHICLE_IP}"
+
+[预期] 登录新车终端。首次提示的主机密钥必须与已核实指纹一致。
+  在车端执行后面的只读检查，使用 exit 返回 Mac；不要在车端运行上传脚本。
+  上传脚本需要已核实 known_hosts、已准备的非交互认证及车端 python3。
+  它使用 BatchMode=yes、StrictHostKeyChecking=yes，不会提示输入 SSH 密码。
+
+[Mac；用途] 明确传输，参数与 dry-run 保持一致，仅增加 --execute。
+[替换项] 无额外替换；本条以后接车时才执行。
+
+  scripts/upload.sh --archive "$ARCHIVE" --host "$VEHICLE_IP" \
+    --user "$VEHICLE_USER" --port "$VEHICLE_PORT" --remote-dir "$VEHICLE_RELEASE" --execute
+
+[预期] 新建独立 release、上传 bundle.tar.gz、远端 SHA256 核对成功。
+  不解压、不安装、不运行程序、不修改服务。失败可能留下不完整新目录；
+  检查原因后改用新 release 名重试，不通过删除或覆盖旧目录来掩盖失败。
+
+七、车端：系统、存储、设备与出厂环境只读检查
+
+以下各项只在以后登录新车后执行。工具不存在时记录“不可用”，不据此盲目安装。
+本节未使用 sudo、服务启停、刷写、分区、格式化或系统升级命令。
+
+7.1 平台和内存
+[车端；用途] 核实实际系统、ISA、GLIBC、内存与网络地址。
+[替换项] 无。
+
+  uname -a
+  uname -m
+  cat /etc/os-release
+  lscpu
+  getconf GNU_LIBC_VERSION
+  command -v ldd readelf file python3
+  python3 --version
+  free -h
+  ip -br addr
+
+[预期] 目标架构应为 riscv64；GLIBC/系统/内存以现场输出为准。
+  Ubuntu/Bianbu 版本标签不等于所有动态库版本。这里不会把系统升级到 2.38。
+
+7.2 磁盘、eMMC 和空间
+[车端；用途] 确认根文件系统来自哪个设备，识别真实整盘及占用，不猜 mmcblk0。
+[替换项] RELEASE 改为此次实际部署目录。
+
+  lsblk -o NAME,PATH,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL
+  lsblk -d -o NAME,PATH,SIZE,MODEL,TRAN
+  findmnt -no SOURCE,FSTYPE,OPTIONS /
+  df -hT
+  RELEASE='/home/替换为账号/xt-stcar/releases/替换为本次名称'
+  du -sh "$RELEASE"
+
+[预期] 看到整盘、分区、挂载点和剩余空间。MODEL/TRAN 为空并不等于故障。
+  根分区可能来自 SD/eMMC/其他盘，必须结合输出核对。
+  若某 lsblk 列在当前系统不存在，先 lsblk --help，再使用已有列。
+
+[车端；用途] 在识别整盘后读取其已有 sysfs 身份字段。
+[替换项] BLOCK_NAME 填上一步确认的整盘 NAME，不填 /dev/ 前缀，不填分区号。
+
+  BLOCK_NAME='替换为已核实整盘名'
+  ls -ld "/sys/class/block/$BLOCK_NAME"
+  ls "/sys/class/block/$BLOCK_NAME/device"
+  for field in type name manfid oemid serial date; do
+    attribute="/sys/class/block/$BLOCK_NAME/device/$field"
+    if [ -r "$attribute" ]; then
+      printf '%s: ' "$field"
+      cat "$attribute"
+    fi
+  done
+
+[预期] 只显示内核实际提供且可读的字段。不凭设备编号或单个字段断言 eMMC 5.1
+  或剩余寿命百分比；版本和寿命信息需对应实物型号/厂商资料。
+  本手册不读取视频、不执行写盘压力测试，不调整挂载策略或清理磁盘。
+
+7.3 USB 和稳定设备路径
+[车端；用途] 核实相机、雷达和 IMU 的设备身份，不打开数据流。
+[替换项] SENSOR_TTY 填实际 by-id/by-path 链接；不要沿用示例 /dev/laser 的身份结论。
+
+  lsusb
+  ls -l /dev/serial/by-id/ /dev/serial/by-path/
+  ls -l /dev/v4l/by-id/ /dev/v4l/by-path/
+  SENSOR_TTY='/dev/serial/by-id/替换为实际传感器链接'
+  readlink -f "$SENSOR_TTY"
+  udevadm info --query=property --name="$SENSOR_TTY"
+  fuser -v "$SENSOR_TTY"
+
+[预期] USB 厂商/产品、序列号或物理路径、最终 tty 节点及占用进程。
+  某目录不存在说明该绑定方式未提供，不直接猜 ttyUSB0 或 video0。
+  fuser 无输出只表示当前权限可见范围内未找到占用，不保证所有驱动已停。
+  不使用 fuser -k；也不打开底盘 /dev/car 试发数据。
+  readlink -f、udevadm、lsblk、fuser 是这里的 Linux 用法，不照搬到 Mac。
+
+7.4 出厂服务和 ROS 版本
+[车端；用途] 只读服务状态/配置和已有 ROS 安装，不启动节点、发布消息或录 bag。
+[替换项] VENDOR_SERVICE 根据第一条输出填写真实服务名，不猜固定名字。
+
+  systemctl --type=service --state=running --no-pager
+  systemctl list-unit-files --type=service --no-pager
+  VENDOR_SERVICE='替换为实际厂商服务.service'
+  systemctl status "$VENDOR_SERVICE" --no-pager
+  systemctl cat "$VENDOR_SERVICE"
+  printenv ROS_DISTRO ROS_VERSION ROS_DOMAIN_ID
+  ls -ld /opt/ros /opt/bros
+  ls /opt/ros /opt/bros
+  command -v ros2 colcon
+  dpkg-query -W 'ros-*-ros-base'
+
+[预期] 记录启动命令、占用设备、安装目录和可见发行版信息。
+  环境变量未设置不代表未安装；dpkg-query 不适用于非 Debian 包管理系统。
+  不根据 Ubuntu 24.04 自动改用 Jazzy，不 source 未审阅的厂商启动脚本，
+  不执行 launch、topic pub、service start/stop 或 bag 命令。
+
+八、车端：独立解包与 ELF/运行库核验
+
+8.1 在新 release 中核验并解包
+[车端；用途] 手工检查已上传的本工程归档，保持厂商工作目录独立。
+[替换项] RELEASE 填上传脚本输出的新目录；EXPECTED_SHA 填 Mac 核实的包 SHA256。
+
+  RELEASE='/home/替换为账号/xt-stcar/releases/替换为本次名称'
+  cd "$RELEASE"
+  pwd
+  EXPECTED_SHA='替换为Mac记录的64位十六进制SHA256'
+  printf '%s  bundle.tar.gz\n' "$EXPECTED_SHA" | sha256sum -c -
+  tar -tzf bundle.tar.gz
+
+[预期] bundle.tar.gz: OK；归档成员是预期的相对路径。
+  确认目录仅有此次上传包、归档已由本工程 verify 验证后，再解压：
+
+  tar -xzf bundle.tar.gz --keep-old-files
+  sha256sum -c SHA256SUMS
+
+[预期] 每个载荷 OK。--keep-old-files 是 Linux GNU tar 选项，遇已存在载荷即失败，
+  避免覆盖之前展开的版本；不要在出厂目录执行，也不要忽略校验失败。
+
+8.2 程序静态兼容性
+[车端；用途] 核对可信自建包的架构、加载器、依赖、GLIBC 版本需求。
+[替换项] 无；readelf/ldd 存在时再运行。
+
+  file bin/xt-stcar bin/xt-stcar-robot
+  ls -l /lib/ld-linux-riscv64-lp64d.so.1
+  getconf GNU_LIBC_VERSION
+  readelf -h bin/xt-stcar-robot
+  readelf -l bin/xt-stcar-robot
+  readelf -d bin/xt-stcar-robot
+  readelf --version-info bin/xt-stcar-robot
+  ldd bin/xt-stcar
+  ldd bin/xt-stcar-robot
+
+[预期] RISC-V 64 位/LP64D，加载器存在，依赖没有 not found。
+  ldd 仅用于本工程已核验的可信程序/库；未知下载文件先静态审查。
+  ELF/ldd 成功不等于推理或停车已验收。报 GLIBC_2.xx not found 时记录实际输出，
+  不替换 /lib/libc.so.6、不复制 Mac dylib，也不把其他 CPU 的库软链接冒充目标库。
+
+8.3 可选 RISC-V ONNX Runtime C 库
+[车端；用途] 推理前核实另外取得的可信 RISC-V 标准 ORT 动态库。
+[替换项] ORT_LIB 和 ORT_DIR 改为已经核实的真实 .so 及其依赖目录。
+
+  ORT_LIB='/替换为已核实RISC-V库路径/libonnxruntime.so'
+  ORT_DIR='/替换为已核实RISC-V运行库目录'
+  file "$ORT_LIB"
+  readelf -h "$ORT_LIB"
+  readelf -d "$ORT_LIB"
+  readelf --version-info "$ORT_LIB"
+  readelf --dyn-syms --wide "$ORT_LIB"
+  ldd "$ORT_LIB"
+
+[预期] 架构为 RISC-V、依赖齐全，动态符号表有 OrtGetApiBase。
+  本工程要求标准 C API22；导出存在不能证明 GetApi(22) 和本模型实际可用。
+  官方 SpacemiT 2.0.6 候选 ORT/EP 静态证据要求 GLIBC 2.38，
+  EP 另要求 GLIBCXX 3.4.32 / CXXABI 1.3.15，目标执行仍需验证。
+  LD_LIBRARY_PATH 只在下一节单次推理命令前设置，不全局 export，不替换系统 libc。
+
+九、车端：可运行的离线程序与未来传感器读取
+
+9.1 无硬件、无模型检查
+[车端；用途] 在 ABI/载荷校验通过后验证 RISC-V 程序本身能运行。
+[替换项] 无，工作目录保持本次 release。
+
+  bash scripts/check-vehicle.sh
+  bin/xt-stcar --help
+  bin/xt-stcar self-check --config config/yolo26n.json
+  bin/xt-stcar-robot --help
+  bin/xt-stcar-robot replay --events examples/robot-sim.jsonl --config config/robot-sim.json
+  bin/xt-stcar-robot autonomy-sim --config config/competition-sim.json
+
+[预期] 只读环境记录、帮助、自检和离线仿真结果；不打开硬件。
+  自检/仿真成功是目标程序运行证据，不能当作实际相机、雷达或车身停车验证。
+  如需保存，使用独立目录并显式 --output，例如：
+
+  mkdir -p run
+  bin/xt-stcar-robot autonomy-sim --config config/competition-sim.json \
+    --output run/competition-offline.jsonl
+
+9.2 车端离线图片推理
+[车端；用途] 在模型与目标 ORT 核验通过后，对磁盘图片验证实际推理。
+[替换项] IMAGE 为车端图片路径；ORT_LIB/ORT_DIR 按第 8.3 节设置；需 with-model 包。
+
+  IMAGE='/替换为车端实际路径/image.png'
+  LD_LIBRARY_PATH="$ORT_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    bin/xt-stcar infer --image "$IMAGE" --model models/yolo26n.onnx \
+    --runtime-lib "$ORT_LIB" --config config/yolo26n.json --output run/target-detections.json
+  LD_LIBRARY_PATH="$ORT_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    bin/xt-stcar-robot road-detect --config config/road-perception-sim.json \
+    --image "$IMAGE" --model models/yolo26n.onnx --runtime-lib "$ORT_LIB" \
+    --vision-config config/yolo26n.json --output run/target-road.json
+
+[预期] 实际目标推理 JSON，或明确动态库/API/模型错误。每条环境变量赋值仅作用于
+  后面的一次命令。run 目录须先创建；图片不是实时相机源。
+
+9.3 准备并预览本车 N10 采集配置
+[车端；用途] 将已确认的传感器身份写入独立配置，再只看采集计划。
+[替换项] 下面 device 替换为已核实的 N10 by-id/by-path 链接；选新的配置文件名。
+
+cat > run/serial-n10-local.json <<'JSON'
+{"device":"/dev/serial/by-id/REPLACE_WITH_VERIFIED_N10","protocol":"n10","duration_ms":1000,"read_timeout_ms":10,"max_bytes":65536}
+JSON
+  bin/xt-stcar-robot serial-capture --config run/serial-n10-local.json \
+    --output run/n10-read.jsonl
+
+[预期] 计划显示 N10、230400、明确设备和采集限额，不打开串口。
+  WIT IMU 对应 protocol 为 imu_wit11，自动使用 115200；另外创建 IMU 配置，
+  不把协议名和实际设备混配。本命令不自动停止占用端口的厂商服务。
+
+9.4 以后实际只读传感器采集
+[车端；用途] 在现场核实传感器身份、协议、端口占用和厂家服务后，明确读取 N10。
+[替换项] 使用上项已核实的配置；输出名选择新文件。
+
+  bin/xt-stcar-robot serial-capture --config run/serial-n10-local.json \
+    --output run/n10-read.jsonl --execute
+
+[预期] 读取达到时长/字节/记录限制后结束，JSONL 包含原始数据、Tick 和摘要。
+  --execute 会配置/打开 tty，但不调用设备写命令；独占或权限失败会报错。
+  默认参考上限不是实车测量参数。配置受时长≤60s、字节≤512KiB等资源边界约束。
+  故障不覆盖已有采集日志；采集数据没有 Arm/Start/Motion，不能直接用于驱动车辆。
+  串口读取成功不代表已完成全圈覆盖、定位、TF、物理标定或闭环控制验收。
+
+十、Mac：源码 main 分支同步与 GitHub 上传
+
+本节是用户约定的源码同步用法，与第六节车端部署分开。
+远端应为 https://github.com/kxkxkxa767/XT-STCAR.git。
+不上传模型、.venv、工具链、target、dist、缓存、镜像、大型厂商资料、密钥密码。
+模型只在明确选择的 with-model 车辆部署包中携带，不进 GitHub 源码仓库。
+
+10.1 每次修改前检查远端
+[Mac；用途] 直接在 main 开发，先核对本地工作与云端更新。
+[替换项] 无。
+
+  cd /Users/yuhaojin/Documents/XT-STCAR
+  git status --short
+  git branch --show-current
+  git remote -v
+  git fetch origin
+  git log --oneline HEAD..origin/main
+  git rev-list --left-right --count HEAD...origin/main
+
+[预期] 分支 main、远端正确；最后两个数字是本地独有、远端独有提交数。
+  0 0 表示一致；仅远端有更新且本地改动已妥善保存时，先执行：
+
+  git pull --ff-only origin main
+
+  拉取后阅读对方修改再动文件。fetch/pull 失败不能视作“云端没有更新”。
+  本地已有未提交内容先核对归属，不用 reset/clean/覆盖文件来获得干净状态。
+
+10.2 检查、精确暂存、提交
+[Mac；用途] 完成相关验证后，只提交本次实际改动。
+[替换项] 路径和提交说明改为本次内容；不直接 git add . 包含无关文件。
+
+  git diff
+  git add -- '替换为本次文件路径'
+  git diff --cached --check
+  git diff --cached --stat
+  git diff --cached
+  git commit -m "替换为具体改动说明"
+
+[预期] 提交只含本次源码、配置、文档、锁文件及必要验证记录。
+  说明举例：“补充比赛状态机航向约束与回归测试”；不要只写 update。
+
+10.3 推送前再次同步
+[Mac；用途] 处理开发期间队友新提交，不新建功能分支/PR，不强推。
+[替换项] 无。
+
+  git fetch origin
+  git rev-list --left-right --count HEAD...origin/main
+
+  若远端独有为 0：
+  git push origin main
+
+  若两边都有新提交，仅将本地尚未推送的提交重放：
+  git rebase origin/main
+
+  有冲突先核对双方内容，编辑后：
+  git add -- '替换为已解决冲突的文件路径'
+  git rebase --continue
+
+  完成后重新验证受影响内容，再执行：
+  git push origin main
+
+[预期] 正常快进推送；禁止 --force 和 --force-with-lease。
+  不重写已发布提交，不通过单方面保留某一版本覆盖队友成果。
+
+10.4 核对上传结果
+[Mac；用途] 确认本地和 GitHub 的 main 提交一致。
+[替换项] 无。
+
+  git status --short
+  git rev-parse HEAD
+  git ls-remote --heads origin main
+
+[预期] 本次文件已提交；本地与远端提交哈希一致。忽略目录中的本机构建产物仍留本地。
+
+十一、结果判断与资料入口
+
+  命令成功后可单独执行 echo $? 查看上一条退出码；0 为成功，非零先看 stderr。
+  别在另一条命令之后再读取 $? 并误认为还是原命令结果。
+  离线任务故障应记录具体 fault 与 terminal Stop；看不到物理输出是当前设计边界。
+  未知灯色、旧帧、定位失效、扫描缺失等应停车/锁存，不能靠重试绕过安全状态。
+  模拟记录中的速度、距离、制动和完成仅对声明的合成场景有效。
+  正式接车仍需真实传感器接入、共同采样时钟、TF、路面与底盘标定、运行库验收、
+  MCU 反馈/watchdog 和现场停车验证；当前没有一条“启动自动驾驶电机”的命令。
+
+  agent.md：完整交接和长期约定。
+  README.md：代码结构、模块与当前入口。
+  上传规范.md：main 修改前同步、提交与推送。
+  资料/环境.md：Mac、Windows 与车端环境来源；早期验证数字以最新记录为准。
+  docs/部署包使用说明.md：打包、上传、载荷与依赖边界。
+  docs/Rust串口采集.md：传感器采集配置与限制。
+  docs/Rust比赛自主闭环.md：任务、导航、感知 worker、仿真及日志设计边界。
+  docs/底盘标定映射.md：物理单位映射和未经验证的示例表。
+  docs/赛项三规则与工程差距.md：初稿规则、资料证据与实车缺口。
+
+手册中的车端 SSH、设备访问和安装命令均未执行；源码 Git 上传状态以 agent.md 和本次交付记录为准。

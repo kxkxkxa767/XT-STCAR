@@ -33,6 +33,10 @@ BASE_FILES = {
     "config/chassis-calibration-sim.json", "config/serial-imu-capture.json", "config/serial-n10-capture.json",
     "docs/N10协议依据.md", "docs/底盘标定映射.md", "docs/Rust串口采集.md",
     "config/imu-replay.json", "config/robot-imu-replay.json", "examples/robot-imu-replay.jsonl", "docs/厂商协议Rust适配.md",
+    "config/competition-sim.json", "config/competition-controller-sim.json", "config/road-perception-sim.json",
+    "config/scan-assembly-sim.json", "config/laser-localization-sim.json", "docs/Rust比赛自主闭环.md",
+    "Mac与车端命令手册.txt",
+    "docs/competition-validation.json", "docs/competition-simulation-summary.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

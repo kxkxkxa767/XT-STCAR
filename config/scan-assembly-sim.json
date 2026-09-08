@@ -1,0 +1,9 @@
+{
+  "frame_id": "sim_laser",
+  "bins": 360,
+  "min_coverage_fraction": 0.95,
+  "min_valid_fraction": 0.95,
+  "max_missing_arc_rad": 0.12,
+  "max_revolution_ms": 200,
+  "max_packet_gap_ms": 20
+}

@@ -5,12 +5,13 @@ Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，�
 [github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)。
 
 目前有 **5 个 Rust crate、2 个可执行程序**。视觉预处理/后处理、原生推理调用、传感器协议、
-串口传输、状态机、底盘标定映射和回放调度均由 Rust 实现。Python 用于离线模型导出、校验与参考对照；
+串口传输、比赛状态机、道路识别、激光里程计、路径规划、底盘标定映射和调度均由 Rust 实现。Python 用于离线模型导出、校验与参考对照；
 默认推理由 Rust 直接调用 ONNX Runtime C API，不启动 Python 进程，推理引擎仍是上游原生库。
 
 用户当前明确“暂不接车”：本轮没有连接车辆、操作电机、升级车端 GLIBC 或读取视频。
 串口在 Mac 的伪终端上验证；运动输出只记录和预览。
-最新验证与修复见 [总体架构审查](docs/总体架构审查-2026-09-08.md)，交接完整状态见 [agent.md](agent.md)。
+新增比赛模块与验证边界见 [Rust 比赛自主闭环](docs/Rust比赛自主闭环.md)，完整命令见 [Mac与车端命令手册.txt](Mac与车端命令手册.txt)。
+前轮 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保留作历史，交接状态见 [agent.md](agent.md)。
 已完整核对用户提供的 10 页比赛规则初稿，见 [赛项三规则与工程差距](docs/赛项三规则与工程差距.md)。
 日常直接在 `main` 开发和推送；修改前检查并拉取远端更新，提交信息简述本次改动，详见 [上传规范](上传规范.md)。
 
@@ -21,9 +22,9 @@ XT-STCAR/
 ├── crates/
 │   ├── vision/          视觉数学与模型契约库
 │   ├── app/             xt-stcar：视觉 CLI、原生/参考推理后端
-│   ├── robot-core/      传感器类型、安全状态机、厂商协议和标定表
+│   ├── robot-core/      任务/安全、扫描/定位/导航、厂商协议和标定表
 │   ├── device-io/       有截止时间的串口配置与传输库
-│   └── runner/          xt-stcar-robot：回放、采集、预览与日志
+│   └── runner/          xt-stcar-robot：自主模拟、感知/规划线程、采集与回放
 ├── config/              显式配置；车辆相关示例均未经实车标定
 ├── examples/            合成 JSONL 回放输入
 ├── scripts/             模型工具、构建、ELF 检查、打包和上传
@@ -34,6 +35,7 @@ XT-STCAR/
 ├── rust-toolchain.toml  Rust 1.97.1 工具链选择
 ├── AGENTS.md            开发约定的加载入口
 ├── 上传规范.md           main 直接开发、修改前同步与提交推送流程
+├── Mac与车端命令手册.txt   按执行机器分类的命令、参数与使用步骤
 └── agent.md             完整交接快照与长期约定
 ```
 
@@ -58,8 +60,22 @@ XT-STCAR/
 | [`crates/runner/src/vision.rs`](crates/runner/src/vision.rs) | 图像读取、预处理与复用同一 ORT Session；将检测结果交给调度 |
 | [`crates/runner/src/lib.rs`](crates/runner/src/lib.rs) | 串联输入→解码/推理→安全控制器→可选 PWM 预览→JSONL；EOF Stop、推理/映射失败急停；完整解码批次每块只记一次 |
 | [`crates/runner/src/capture.rs`](crates/runner/src/capture.rs) | 有时间/字节/记录上限的 IMU 或 N10 采集，使用统一 `Instant` 时钟，空闲和结束写 Tick；不发送设备命令 |
+| [`crates/vision/src/road.rs`](crates/vision/src/road.rs) | 白条几何、HSV 灯色、红蓝锥桶及相机地面投影；普通 YOLO `zebra` 不用于斑马线 |
+| [`crates/robot-core/src/autonomy.rs`](crates/robot-core/src/autonomy.rs) | 米制坐标、位姿质量、车体足迹和道路观察的共享类型 |
+| [`crates/robot-core/src/mission.rs`](crates/robot-core/src/mission.rs) | 斑马线实际停止计时、锥桶顺序、灯前全车停车/绿灯确认、终点与故障锁存 |
+| [`crates/robot-core/src/scan.rs`](crates/robot-core/src/scan.rs) | N10 整圈组帧、覆盖/盲区/时间检查；不同于旧局部包回放 |
+| [`crates/robot-core/src/localization.rs`](crates/robot-core/src/localization.rs) | 有界 ICP 激光里程计；退化/跳变/过期门控，不假造编码器 |
+| [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 带车体和转弯约束的路径搜索、跟踪、障碍/制动检查及停车朝向 |
+| [`crates/runner/src/laser_pose.rs`](crates/runner/src/laser_pose.rs) | 整圈检查、雷达到车体外参与 ICP 桥接，保留源时刻 |
+| [`crates/runner/src/perception.rs`](crates/runner/src/perception.rs) | 同图 RGB + 常驻原生 YOLO + RoadDetector；后台感知只留最新待处理帧 |
+| [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 位姿/雷达/道路观察校验 → 任务 → 导航 → 安全控制器 |
+| [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立周期轮询和源时间命令看门狗 |
+| [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿反馈与有加减速车辆模型的合成闭环，掉线注入和碰撞检查 |
+| [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
+| [`crates/runner/src/telemetry.rs`](crates/runner/src/telemetry.rs) | 有界内存事件日志；调试预算耗尽不影响比赛控制 |
 
-数据流为：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
+原有诊断流为：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
+新增自主流为：RGB/雷达/位姿 → 道路识别 → 比赛任务 → 路径规划/跟踪 → 安全控制 → 车辆模型 → 下一帧反馈。
 独立串口采集先生成可回放的原始字节文件；采集没有 Arm/Start/Motion 事件。
 目前没有把采集与电机发送接成实时闭环。
 
@@ -68,6 +84,10 @@ XT-STCAR/
 | 位置 | 用途 |
 |---|---|
 | `config/yolo26n.json` | 模型尺寸、输出契约、检测阈值 |
+| `config/competition-sim.json` | RGB + 雷达 + 车辆反馈的完整比赛模拟场景 |
+| `config/competition-controller-sim.json` | 同步传感器快照回放控制器，非旧事件回放配置 |
+| `config/road-perception-sim.json` | 道路视觉、灯 ROI、未标定的地面投影示例 |
+| `config/scan-assembly-sim.json` / `config/laser-localization-sim.json` | 整圈覆盖和 ICP 库接口参数；没有独立设备 CLI |
 | `config/robot-sim.json` + `examples/robot-sim.jsonl` | 多传感器、安全状态机、超时和急停的合成回放 |
 | `config/imu-replay.json` + `config/robot-imu-replay.json` + `examples/robot-imu-replay.jsonl` | 显式零偏、frame、分量年龄，以及坏 IMU 帧不刷新状态的样例 |
 | `config/n10-replay.json` + `config/robot-n10-replay.json` + `examples/robot-n10-replay.jsonl` | N10 合成分片、坏校验与雷达超时样例；有效包仅 16 束局部数据 |
@@ -81,6 +101,7 @@ XT-STCAR/
 在仓库根目录执行。以下命令不需要模型或设备：
 
 ```bash
+cargo run --locked --offline --bin xt-stcar-robot -- autonomy-sim --config config/competition-sim.json
 cargo run --locked --bin xt-stcar -- self-check
 cargo run --locked --bin xt-stcar-robot -- replay --events examples/robot-sim.jsonl
 cargo run --locked --bin xt-stcar-robot -- replay \
@@ -91,7 +112,8 @@ cargo run --locked --bin xt-stcar-robot -- replay \
   --n10-config config/n10-replay.json --chassis-calibration config/chassis-calibration-sim.json
 ```
 
-回放输出 step + summary JSONL，可加 `--output work/replay.jsonl`。每条运动记录标明
+自主模拟默认 stdout 只输出摘要，`--output work/competition-run.jsonl` 保存阶段/故障/终态；`--trace` 开启有界调试细节。
+原有回放输出 step + summary JSONL，可加 `--output work/replay.jsonl`。每条运动记录标明
 `physical_output_enabled=false`。映射失败记录完整 `chassis_error`/Stop 后非零退出；正常流结束也记录 Stop。
 IMU/N10 样例故意触发超时，最终 Fault 是预期行为。回放时间为模拟时钟，不代表实时控制时延。
 
@@ -150,6 +172,8 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
+本轮191项Rust常规测试、1项原生ORT测试、48项模型/34项交付测试通过；完整合成比赛完成，
+详情见 [验证汇总](docs/competition-validation.json)。
 构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的架构/ABI/加载器/GLIBC。
 ELF 检查核对动态加载表与 section 映射及版本需求，不验证所有机器指令或代替目标机运行。
 交付包不含工具链、虚拟环境、Mac dylib 或缓存；带模型包另带 provenance 与模型许可。
@@ -157,14 +181,18 @@ ELF 检查核对动态加载表与 section 映射及版本需求，不验证所�
 
 ## 已完成与待接车工作
 
-已完成上述 Rust 模块及离线集成，不等于无人驾驶系统已实车验收。
-还需要真实相机采集、N10 全圈组帧、多传感器统一时钟、TF/物理标定、激光里程计/定位融合、
-路径规划、避障、ROS 2 接口与 MCU 反馈/watchdog；厂商教程明确没有轮编码器，不能假造轮速里程计。
+已完成上述 Rust 算法、线程接口和离线集成，不等于无人驾驶系统已实车验收。
+比赛状态机、斑马线/灯色/锥桶视觉、全圈组帧、ICP、导航与模拟闭环已有代码；
+还需要真实相机采集、共同时间轴/扫描去畸变、TF/初始定位、物理标定、定位融合、
+必要的 ROS 2 接口及 MCU 反馈/watchdog。没有物理 MotionSink，也没有实时带动力 CLI。
+厂商教程明确没有轮编码器；模拟反馈不能被写成实测轮速或定位精度。
 
 比赛初稿没有禁止 Rust，也没有明文强制 ROS2，但明确禁止 ROS1 和 bag 工具。
-比赛要求斑马线前停足 3 秒、按路线绕两锥桶、等绿灯放行、四轮全入终点区。
-就赛项相关目标而言，当前 80 类模型仅含通用 `traffic light`，缺斑马线、锥桶和灯色识别；`zebra` 是动物。
-赛项任务状态机、实时调度与导航控制仍须实现，当前回放中的 Motion 指令由输入给定，YOLO 结果尚未驱动自主决策。
+普通 80 类 YOLO 仍只提供通用交通灯框，Rust 道路算法补充斑马线、灯色和锥桶候选；尚需真实数据标定和测量。
+
+eMMC 5.1 策略以正常运行/比赛为先：计算与队列在内存，默认只在结束后保存阶段、故障和摘要，
+不逐帧落盘、不每 tick 同步刷盘。需要诊断时可显式 trace/采集；日志预算不降低感知频率、不触发控制 Fault。
+不会为了省擦写去修改车端系统或牺牲比赛性能。
 
 车端真实推理需核实 RISC-V 标准 ORT C 库。官方 SpacemiT ORT/EP 2.0.6 已静态核验，仍未测试目标
 `GetApi(22)`、模型算子或 EP 初始化。候选库要求 GLIBC 2.38，EP 另要求 GLIBCXX 3.4.32 / CXXABI 1.3.15。

@@ -6,4 +6,9 @@ mod sensors;
 pub use safety::*;
 pub use sensors::*;
 
+pub mod autonomy;
+pub mod localization;
+pub mod mission;
+pub mod navigation;
 pub mod protocol;
+pub mod scan;

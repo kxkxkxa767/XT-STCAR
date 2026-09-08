@@ -1,7 +1,14 @@
 //! Offline robot orchestration: validated replay, persistent vision, safety and logs.
 //! All motion output is recorded locally; there is no physical actuator sink.
+pub mod autonomy;
+pub mod autonomy_replay;
 pub mod capture;
+pub mod control_runtime;
 pub mod input;
+pub mod laser_pose;
+pub mod perception;
+pub mod simulation;
+pub mod telemetry;
 pub mod vision;
 
 use input::{FrameEvent, ReplayEvent, Result, read_events};

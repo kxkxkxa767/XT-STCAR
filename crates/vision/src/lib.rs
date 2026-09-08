@@ -1,4 +1,5 @@
 //! YOLO26 Detect one-to-one interface. No actuator or ROS dependencies.
+pub mod road;
 use image::RgbImage;
 use serde::{Deserialize, Serialize};
 

@@ -8,6 +8,12 @@ use xt_stcar_robot_runner::{ReplayOptions, replay, vision::VisionOptions};
 const HELP: &str = "XT-STCAR Rust robot module runner (offline recording only)
 
 Usage:
+  xt-stcar-robot autonomy-example
+  xt-stcar-robot autonomy-sim --config FILE [--output FILE] [--trace]
+  xt-stcar-robot autonomy-replay --config FILE --events FILE [--output FILE] [--trace]
+  xt-stcar-robot road-detect --config FILE --image FILE [--output FILE]
+                    [--model ONNX --runtime-lib LIB --vision-config FILE]
+  Closed-loop simulation uses synthetic RGB/range/pose feedback, never hardware.
   xt-stcar-robot serial-capture --config FILE --output FILE [--execute]
   Sensor capture defaults to a plan; --execute opens the explicitly selected tty.
   xt-stcar-robot chassis-preview --profile PROFILE --linear VALUE --angular VALUE
@@ -17,13 +23,16 @@ Usage:
                       [--model ONNX --runtime-lib LIB --vision-config FILE]
                       [--imu-config FILE] [--n10-config FILE] [--chassis-calibration FILE]
 
-Defaults: --config config/robot-sim.json, --vision-config config/yolo26n.json.
-Input is strict JSONL with monotonic boot-relative millisecond timestamps.
+Replay default: --config config/robot-sim.json. Vision default: config/yolo26n.json.
+Autonomy commands require explicit --config; input timestamps are monotonic session milliseconds.
+Replay input is strict event JSONL; autonomy-replay instead takes typed sensor snapshots.
 Sensor/control events are validated by robot-core; vision_frame events load image
 files relative to the event manifest and use a persistent Rust ONNX Runtime session.
---model and --runtime-lib must be supplied together and only for vision_frame input.
+--model and --runtime-lib must be supplied together for vision_frame replay or road-detect.
 Model provenance is loaded from the model's sibling .provenance.json file.
-Output is step + summary JSONL; without --output it is written to stdout.
+Replay output is step + summary JSONL; without --output it is written to stdout.
+Autonomy stdout defaults to summary only; --output saves sparse event/terminal logs.
+--trace enables bounded debug detail; a full trace budget never stops control.
 Motion output is RecordingSink only. Replay/preview use no physical devices.
 Explicit serial-capture --execute reads a sensor tty; it sends no device commands.
 Simulation timing and motion limits are examples, not vehicle calibration.
@@ -219,6 +228,22 @@ fn run() -> Result<()> {
     if command == "serial-capture" {
         return serial_capture(rest);
     }
+    if command == "autonomy-example" {
+        if !rest.is_empty() {
+            return Err("autonomy-example takes no arguments".into());
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &xt_stcar_robot_runner::simulation::SimulationConfig::example()
+            )
+            .map_err(|e| e.to_string())?
+        );
+        return Ok(());
+    }
+    if command == "autonomy-sim" || command == "autonomy-replay" || command == "road-detect" {
+        return autonomy_command(command.to_str().ok_or("command must be UTF-8")?, rest);
+    }
     if command == "chassis-preview" {
         return chassis_preview(rest);
     }
@@ -352,6 +377,158 @@ fn run() -> Result<()> {
         }
     }
     result.map(|_| ())
+}
+
+fn autonomy_command(command: &str, rest: Vec<OsString>) -> Result<()> {
+    let mut args = rest.into_iter();
+    let mut options = BTreeMap::new();
+    let mut trace = false;
+    while let Some(key) = args.next() {
+        let key = key.into_string().map_err(|_| "option must be UTF-8")?;
+        if key == "--trace" {
+            if trace {
+                return Err("duplicate --trace".into());
+            }
+            trace = true;
+            continue;
+        }
+        if ![
+            "--config",
+            "--output",
+            "--image",
+            "--events",
+            "--model",
+            "--runtime-lib",
+            "--vision-config",
+        ]
+        .contains(&key.as_str())
+        {
+            return Err(format!("unknown autonomy option {key}"));
+        }
+        let value = args.next().ok_or("missing autonomy option value")?;
+        if value.is_empty() || value.to_string_lossy().starts_with("--") {
+            return Err("missing autonomy option value".into());
+        }
+        if options.insert(key, PathBuf::from(value)).is_some() {
+            return Err("duplicate autonomy option".into());
+        }
+    }
+    let config_path = options.remove("--config").ok_or("--config is required")?;
+    let output = options.remove("--output");
+    let image = options.remove("--image");
+    let events = options.remove("--events");
+    let vision = match (
+        options.remove("--model"),
+        options.remove("--runtime-lib"),
+        options.remove("--vision-config"),
+    ) {
+        (Some(model), Some(runtime_lib), spec) if command == "road-detect" => Some(VisionOptions {
+            model,
+            runtime_lib,
+            spec: spec.unwrap_or_else(|| "config/yolo26n.json".into()),
+        }),
+        (None, None, None) => None,
+        _ => return Err(
+            "road-detect accepts --model and --runtime-lib together; --vision-config requires both"
+                .into(),
+        ),
+    };
+    let mut inputs = vec![config_path.as_path()];
+    if let Some(image) = &image {
+        inputs.push(image.as_path());
+    }
+    if let Some(events) = &events {
+        inputs.push(events.as_path());
+    }
+    let provenance;
+    if let Some(vision) = &vision {
+        provenance = vision.model.with_extension("provenance.json");
+        inputs.extend([
+            vision.model.as_path(),
+            vision.runtime_lib.as_path(),
+            vision.spec.as_path(),
+            provenance.as_path(),
+        ]);
+    }
+    if let Some(path) = &output {
+        distinct_output(path, &inputs)?;
+    }
+    let config = read_regular_file(&config_path, MAX_CONFIG_BYTES)?;
+    let mut buffer = LogBuffer::default();
+    let failure = if command == "autonomy-sim" {
+        if image.is_some() || events.is_some() {
+            return Err("autonomy-sim generates its own synthetic sensor data".into());
+        }
+        let mut config: xt_stcar_robot_runner::simulation::SimulationConfig =
+            serde_json::from_slice(&config).map_err(|e| e.to_string())?;
+        if trace {
+            config.telemetry.mode = xt_stcar_robot_runner::telemetry::TelemetryMode::Trace;
+        }
+        let summary = xt_stcar_robot_runner::simulation::simulate(&config, &mut buffer)?;
+        summary.fault
+    } else if command == "autonomy-replay" {
+        if image.is_some() {
+            return Err("autonomy-replay takes typed sensor snapshots".into());
+        }
+        let events = events.ok_or("autonomy-replay requires --events")?;
+        let config: xt_stcar_robot_runner::autonomy::AutonomyConfig =
+            serde_json::from_slice(&config).map_err(|e| e.to_string())?;
+        let snapshots = xt_stcar_robot_runner::autonomy_replay::read_snapshots(&events)?;
+        let mut telemetry = xt_stcar_robot_runner::telemetry::TelemetryConfig::default();
+        if trace {
+            telemetry.mode = xt_stcar_robot_runner::telemetry::TelemetryMode::Trace;
+        }
+        xt_stcar_robot_runner::autonomy_replay::replay_snapshots(
+            config,
+            &snapshots,
+            telemetry,
+            &mut buffer,
+        )?
+        .fault
+    } else {
+        if trace || events.is_some() {
+            return Err("road-detect does not accept --trace or --events".into());
+        }
+        let image_path = image.ok_or("road-detect requires --image")?;
+        let config: xt_stcar_vision::road::RoadConfig =
+            serde_json::from_slice(&config).map_err(|e| e.to_string())?;
+        let mut detector =
+            xt_stcar_robot_runner::perception::RoadPipeline::new(config, vision.as_ref())?;
+        let rgb = xt_stcar_robot_runner::input::load_frame(&image_path)?;
+        let road = detector.process(
+            &rgb,
+            xt_stcar_robot_core::Timestamp(0),
+            xt_stcar_robot_core::FrameId("body".into()),
+        )?;
+        serde_json::to_writer_pretty(&mut buffer,&serde_json::json!({"kind":"road_image_diagnostic","physical_output_enabled":false,
+            "timestamp_scope":"single image diagnostic only","native_yolo_enabled":vision.is_some(),"road":road})).map_err(|e|e.to_string())?;
+        buffer.write_all(b"\n").map_err(|e| e.to_string())?;
+        None
+    };
+    if let Some(path) = output {
+        xt_stcar::backend::write_atomic(&path, |file| file.write_all(&buffer.0))?;
+    } else {
+        let bytes = if command != "road-detect" && !trace {
+            buffer
+                .0
+                .split_inclusive(|b| *b == b'\n')
+                .next_back()
+                .unwrap_or(&buffer.0)
+        } else {
+            &buffer.0
+        };
+        io::stdout()
+            .lock()
+            .write_all(bytes)
+            .map_err(|e| e.to_string())?;
+    }
+    if let Some(error) = failure {
+        Err(format!(
+            "autonomy stopped; terminal stop was recorded: {error}"
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn main() -> std::process::ExitCode {

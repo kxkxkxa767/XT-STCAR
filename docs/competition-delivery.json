@@ -1,0 +1,26 @@
+{
+  "target": "riscv64gc-unknown-linux-gnu.2.38",
+  "packages": [
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-core-20260908T023525767555Z-ec385c9e19f1.tar.gz",
+      "sha256": "b0aaea4f2cccc3688028ff7defe95a90c74384341080ae9055f0612b01d2ad10",
+      "size_bytes": 1680851,
+      "file_count": 37,
+      "codex_output": "/Users/yuhaojin/Documents/Codex/2026-09-07/users-yuhaojin-documents-xt-stcar-agent/outputs/XT-STCAR-competition-core-2026-09-08.tar.gz",
+      "copied_archive_reverified": true,
+      "vehicle_uploaded": false
+    },
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-with-model-20260908T023526180985Z-ec385c9e19f1.tar.gz",
+      "sha256": "4926b7fcbac86a07816fe3d004707a3b5fa01b6d27bf1621c09df56618bd75c7",
+      "size_bytes": 10325227,
+      "file_count": 41,
+      "codex_output": "/Users/yuhaojin/Documents/Codex/2026-09-07/users-yuhaojin-documents-xt-stcar-agent/outputs/XT-STCAR-competition-model-2026-09-08.tar.gz",
+      "copied_archive_reverified": true,
+      "vehicle_uploaded": false
+    }
+  ],
+  "toolchain_environment_included": false,
+  "riscv_ort_library_included": false,
+  "source_git_upload": "main; artifact archives remain local"
+}

@@ -1,0 +1,32 @@
+{
+  "kind": "simulation_summary",
+  "physical_output_enabled": false,
+  "scene": "synthetic RGB, raycast laser and bounded Ackermann plant",
+  "pose_source": "ideal simulated pose feedback; no encoder/localization accuracy claim",
+  "completed": true,
+  "elapsed_ms": 55300,
+  "ticks": 554,
+  "distance_m": 10.87075558548394,
+  "minimum_cone_clearance_m": 0.301214521244462,
+  "crosswalk_hold_ms": 3000,
+  "green_observed_ms": 300,
+  "phases": [
+    "approach_crosswalk",
+    "crosswalk_stop",
+    "cones",
+    "approach_light",
+    "wait_green",
+    "finish",
+    "completed"
+  ],
+  "final_pose": {
+    "x_m": 6.399669829780121,
+    "y_m": 2.4989827587623497,
+    "yaw_rad": 0.03188783303253162
+  },
+  "final_actual_speed_mps": 0.0,
+  "braking_ticks": 0,
+  "dropped_trace_records": 0,
+  "logging_errors": 0,
+  "fault": null
+}

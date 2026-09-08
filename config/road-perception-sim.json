@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "simulation_only": true,
+  "calibration_status": "unverified",
+  "max_work_width": 320,
+  "max_work_height": 240,
+  "max_components": 2048,
+  "max_candidates": 128,
+  "ground_roi": [
+    0.05,
+    0.35,
+    0.95,
+    0.98
+  ],
+  "light_rois": [
+    [
+      0.82,
+      0.02,
+      0.96,
+      0.25
+    ]
+  ],
+  "homography": {
+    "matrix": [
+      [
+        0.0,
+        -5.0,
+        5.0
+      ],
+      [
+        -4.0,
+        0.0,
+        2.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "max_forward_m": 6.0,
+    "max_abs_lateral_m": 3.0,
+    "min_denominator": 1e-06
+  },
+  "light": {
+    "min_saturation": 0.45,
+    "min_value": 0.35,
+    "red_hue_range": [
+      340.0,
+      20.0
+    ],
+    "yellow_hue_range": [
+      35.0,
+      75.0
+    ],
+    "green_hue_range": [
+      80.0,
+      170.0
+    ],
+    "min_pixels": 4,
+    "min_roi_fraction": 0.01,
+    "min_blob_fill": 0.4,
+    "min_aspect": 0.4,
+    "max_aspect": 2.5,
+    "max_white_fraction": 0.7,
+    "yolo_confidence": 0.25,
+    "max_rois": 8
+  },
+  "crosswalk": {
+    "min_value": 0.75,
+    "max_saturation": 0.2,
+    "min_pixels": 8,
+    "min_stripes": 4,
+    "stripe_axis": "either",
+    "angle_tolerance_deg": 20.0,
+    "min_aspect": 1.35,
+    "min_blob_fill": 0.65,
+    "min_overlap": 0.65,
+    "max_width_ratio": 1.8,
+    "max_length_ratio": 1.8,
+    "min_gap_ratio": 0.25,
+    "max_gap_ratio": 3.0,
+    "max_spacing_variation": 0.35,
+    "min_lateral_span_m": 0.5,
+    "min_depth_m": 0.08,
+    "max_depth_m": 2.5
+  },
+  "cone": {
+    "min_saturation": 0.5,
+    "min_value": 0.3,
+    "red_hue_range": [
+      340.0,
+      20.0
+    ],
+    "blue_hue_range": [
+      190.0,
+      255.0
+    ],
+    "min_pixels": 10,
+    "min_height_fraction": 0.03,
+    "min_height_width_ratio": 1.0,
+    "max_height_width_ratio": 5.0,
+    "min_fill": 0.25,
+    "min_taper_ratio": 1.15,
+    "merge_distance_m": 0.15,
+    "max_cones": 32
+  }
+}

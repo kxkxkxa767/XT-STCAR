@@ -1,0 +1,72 @@
+{
+  "date": "2026-09-08",
+  "scope": "Mac host tests, native ORT and static RISC-V cross-build; no vehicle or target execution",
+  "rust_workspace": {
+    "passed": 191,
+    "failed": 0,
+    "ignored_native_opt_in": 1
+  },
+  "native_opt_in_passed": 1,
+  "python_model_tests_passed": 48,
+  "python_delivery_tests_passed": 34,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "physical_output_enabled": false,
+  "vehicle_execution_verified": false,
+  "new_road_native_image_scope": "Pipeline integration only; uncalibrated bus.jpg scene yields one cone candidate, crosswalk absent, light unknown; no race perception accuracy claim",
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "5807ce4b7d6f1387d35cc74727344d2ca5f0a47f48804cd7c39250d21c223ead",
+      "size_bytes": 1850224,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "simulation": {
+    "kind": "simulation_summary",
+    "physical_output_enabled": false,
+    "scene": "synthetic RGB, raycast laser and bounded Ackermann plant",
+    "pose_source": "ideal simulated pose feedback; no encoder/localization accuracy claim",
+    "completed": true,
+    "elapsed_ms": 55300,
+    "ticks": 554,
+    "distance_m": 10.87075558548394,
+    "minimum_cone_clearance_m": 0.301214521244462,
+    "crosswalk_hold_ms": 3000,
+    "green_observed_ms": 300,
+    "phases": [
+      "approach_crosswalk",
+      "crosswalk_stop",
+      "cones",
+      "approach_light",
+      "wait_green",
+      "finish",
+      "completed"
+    ],
+    "final_pose": {
+      "x_m": 6.399669829780121,
+      "y_m": 2.4989827587623497,
+      "yaw_rad": 0.03188783303253162
+    },
+    "final_actual_speed_mps": 0.0,
+    "braking_ticks": 0,
+    "dropped_trace_records": 0,
+    "logging_errors": 0,
+    "fault": null
+  },
+  "default_simulation_log_bytes": 24375
+}

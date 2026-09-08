@@ -1,0 +1,23 @@
+{
+  "kind": "road_image_diagnostic",
+  "native_yolo_enabled": true,
+  "physical_output_enabled": false,
+  "road": {
+    "image_height_px": 1080,
+    "image_width_px": 810,
+    "observation": {
+      "captured_at": 0,
+      "cones_body_m": [
+        {
+          "x_m": 2.4375,
+          "y_m": -1.7444444444444445
+        }
+      ],
+      "crosswalk": null,
+      "frame_id": "body",
+      "light": "unknown",
+      "light_confidence": 0.0
+    }
+  },
+  "timestamp_scope": "single image diagnostic only"
+}

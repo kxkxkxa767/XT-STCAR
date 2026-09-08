@@ -11,7 +11,10 @@
 - Rust 为主、Mac 交叉编译、Muse Pi Pro / RISC-V Linux、YOLO26n Detect；各模块程序写好。
 - 最新要求：根据官方整车资料继续完善，能用 Rust 的地方用 Rust；写完更新本文件和 README，
   README 必须说明代码结构、每个模块位置和职责。之后要求总体审查架构与实现，并阅读根目录赛项三规则初稿。
-  结构说明、规则对照及审查修复已补齐；尚未实现的自主运行能力见下文，不能写成已完成比赛程序。
+  最新追加：比赛任务状态机、斑马线与灯色、导航绕障闭环先写完，实车到后再验证；已增加 Rust 模块与合成闭环。
+  根目录 `Mac与车端命令手册.txt` 记录 Mac 和车端的命令/用途/参数/执行位置。不能把模拟完成写成已实车参赛。
+- 用户说明车上使用 eMMC 5.1：以正常运行和比赛为优先，仅减少不必要落盘；不要降感知/控制频率，
+  不因可选日志额度触发控制故障，不改系统挂载/swap/journald。必要诊断照常保存，硬件寿命不压过比赛性能。
 - **暂不接车**。本轮未 SSH/部署/打开真实设备/控制电机/刷系统或固件，也未在 RISC-V 目标或模拟器执行。
   新增串口实际读写测试只使用 Mac 创建的 PTY，不要将它写成实车验证。
 - 用户指定 GLIBC **2.38**。只修改本地交叉构建的目标基线，不安装或覆盖车端 libc。
@@ -27,11 +30,44 @@
 
 | 模块 | 已实现 |
 |---|---|
-| `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码 |
+| `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码；road.rs 斑马线/灯色/锥桶及地面投影 |
 | `crates/app` → `xt-stcar` | self-check/preprocess/replay/infer；原生 ORT C API 动态加载、模型来源及元数据验证、常驻 Session；Python 参考后端须显式选择；file_io 提供两套 CLI 共用文件边界 |
-| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表 |
+| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表；比赛任务、整圈扫描、ICP、车模型导航 |
 | `crates/device-io` | 安全 rustix 串口配置、独占、8N1、关闭软硬件流控、读回检查、nonblocking poll 与整体包截止时间、故障锁存、Drop 尝试恢复 |
-| `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器增量解析、可选标定 PWM 预览、传感器采集计划/执行、完整日志原子替换 |
+| `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器增量解析、可选标定 PWM 预览、传感器采集计划/执行；自主模拟/快照回放、背景感知/规划与独立看门狗、有界内存日志及结束原子提交 |
+
+#### 最新比赛扩展（2026-09-08）
+
+本次修改前 fetch 确认 `d245174` 与 origin/main 一致；用户规则 PDF 未修改/未暂存。
+完整说明：[Rust比赛自主闭环](docs/Rust比赛自主闭环.md)，日常命令：[Mac与车端命令手册.txt](Mac与车端命令手册.txt)。
+
+- `robot-core/autonomy.rs`（均在 `src/` 下）提供米制坐标、足迹、位姿质量、道路观察共享结构；
+  `mission.rs` 实现 Idle→ApproachCrosswalk→CrosswalkStop→Cones→ApproachLight→WaitGreen→Finish→Completed/Fault。
+  连续新鲜反馈确认停稳才累计3秒；灯前全部足迹/朝向/停止与绿灯新帧去抖；终点全车进区；普通停>10秒失败。
+  正常比赛 Stop 与锁存安全 Fault 分开，移动/未知灯色/旧帧不能偷偷完成任务。
+- `vision/src/road.rs`：Rust HSV/连通域、白条几何、红蓝锥桶脚点、ROI 灯色和地面投影。
+  当前80类 YOLO不含斑马线/锥桶/灯色，`zebra`仍为动物；不更换原权重，YOLO9类只辅助圈定交通灯。
+- `robot-core/src/scan.rs` 整圈组帧与覆盖/连续盲区检查；`localization.rs` 有界 ICP，无编码器/全局SLAM声明。
+  `runner/src/laser_pose.rs` 检查整圈后按显式TF生成车体点云，输出保留扫描源时戳；掉圈超时需显式已知位姿reset。
+- `robot-core/src/navigation.rs` 用膨胀网格连通检查、带转弯和转向速率约束的搜索、跟踪及保守停车可达圆盘检查，覆盖转向回中期间的中间曲率。
+  修复全局车模型允许穿网格角而局部正确拒绝导致反复停住的问题；全局/局部均拒绝切障碍角。
+  灯前和终点带目标朝向，不允许靠原地旋转伪装阿克曼调头。搜索预算有界但不保证目标CPU最坏时延。
+- `runner/src/autonomy.rs` 串联同步Pose/Scan/Road→Mission→Navigation→Safety。
+  扫描与用于其世界投影的位姿必须同采集时刻，斑马线锁定/视觉锥桶投影同样要求图像与位姿采集时戳一致；
+  不能用freshness/skew代替关联。重复帧不能改内容；故障锁存，输出仍只有检查后的值/记录。
+- `runner/src/perception.rs` 常驻原生ORT和同图RGB复用，PerceptionWorker只保留最新待处理图像；
+  `control_runtime.rs` AutonomyWorker将规划放后台，独立周期调用poll获取命令。
+  lease由源快照/最旧传感器时刻决定，先检查旧期限后接纳结果；晚到Drive不能恢复Fault。
+  必须使用ControlPoll.command，latest仅诊断，不能旁路；Drop不无限join卡住的原生线程，也不能无限重建线程。
+- `runner/src/simulation.rs` 真实执行合成RGB识别、360束测距、任务/导航与有加减速运动学反馈；
+  不是手写Motion回放。模拟Pose明确为理想反馈，不冒充ICP实测。运行中视觉错误进入Fault并保存终态；
+  Fault/超时后继续模拟制动直至速度0并检查碰撞，不从中途Err直接绕过停车分支；Stop目标速度/曲率均0，按速率回中。
+- `runner/src/autonomy_replay.rs` 单调SensorSnapshot{at,pose,scan,road}诊断输入，拒绝Motion与旧event格式；EOF强制Stop。
+  `telemetry.rs` 默认transitions，结束才落盘；trace默认1MiB、上限8MiB、重要事件独立保留，满额只丢调试记录，
+  logging_errors/dropped_trace_records可查，不让可选日志影响控制。默认不存逐帧图像/点云/张量。
+- 新CLI：autonomy-example、autonomy-sim、autonomy-replay、road-detect。
+  新配置：competition-sim、competition-controller-sim、road-perception-sim、scan-assembly-sim、laser-localization-sim（均config/*.json）。
+  最后两份供库接口，不能当成已有设备CLI参数。全部为合成值，禁止把simulation_only/unverified改标签就当实车已标定。
 
 #### 已完成的 Rust 模块（前轮扩展）
 
@@ -39,7 +75,7 @@
    大端角度/距离、uint8 强度、前 57 字节累加模 256。支持分包、粘包、坏帧重同步、有限缓存与过期保护。
    保留无效槽位，修正厂商按有效点数计算插值分母的角度偏移。
    `packet_sample()` 只生成 **16 束局部样本**，全未知或零跨度返回 None。
-   局部包新鲜不代表全圈覆盖、前方无障碍或已完成避障；没有全圈拼接或 ROS 发布。
+   局部包新鲜不代表全圈覆盖或前方无障碍。当前新 `scan.rs` 另行整圈拼接，旧replay仍为局部包；没有 ROS 发布。
 2. `replay --n10-config` 接入 `n10_bytes`，禁止与直接 lidar 输入混用；frame 必须一致。
    没有有效样本只推进 Tick；保存首字节接收时间，坏帧不刷新传感器时间。
    新合成样例实测 t80 触发 lidar 超时 Fault/Stop，11 运动记录、3 Drive/8 Stop、1 包/1 样本。
@@ -62,7 +98,7 @@
 使用说明：[N10 协议依据](docs/N10协议依据.md)、[底盘标定](docs/底盘标定映射.md)、
 [Rust 串口采集](docs/Rust串口采集.md)、[原有底盘/IMU 协议](docs/厂商协议Rust适配.md)。
 
-#### 本轮总体审查修复
+#### 前轮总体审查修复
 
 审查开始前 fetch 确认 `6c7de79` 与 origin/main 一致、工作区干净；用户随后放入规则 PDF，保留原件但不暂存。
 完整结论、回归证据与当前产物见 [总体架构审查](docs/总体架构审查-2026-09-08.md)。
@@ -76,9 +112,14 @@
   ELF 输入非阻塞且实际 ≤64MiB；报告拒绝输入别名和非普通目标，通过后原子保存，失败保留原报告。
 - 交付测试取消对未跟踪 `tmp/` 目录的依赖，新克隆未构建时正确 skip。
 
-目前 crate 分层无环，可继续使用；这不意味着已经完成实时调度、感知到导航控制或实车停车验收。
+crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖。历史审查不覆盖全部新模块，新模块证据单列。
 
 ### 构建、模型与验证证据
+
+- 最新比赛扩展：Rust常规191通过、原生ORT opt-in 1通过、Python模型48/交付34通过；fmt/all-targets clippy通过。
+  两程序RISC-V交叉链接通过。最终合成场景55.3s/554tick、最小锥桶间隙0.301m、斑马线3000ms/绿灯300ms、终点速度0。
+  默认日志24,375字节、无丢弃/错误；这些是合成结果，不是实车性能。
+  详见 `docs/competition-validation.json`、`competition-simulation-summary.json` 及对应日志。
 
 - 本机 Rust/Cargo **1.97.1**，rustfmt/clippy/RISC-V std 已安装；`rust-toolchain.toml` 和 `Cargo.lock` 锁定，
   不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
@@ -86,11 +127,11 @@
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
   加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。当前最高 GLIBC 引用 2.34，符合构建基线 2.38。
   新 robot 程序额外需要 `libm.so.6`，不能继续声称两个程序都只依赖 libc。
-- **最新测试数量、二进制尺寸/SHA、包名与校验结果统一见 [总体架构审查](docs/总体架构审查-2026-09-08.md)**。
-  对应 `docs/architecture-*` 保存本轮构建、测试、真实 Mac 模型及部署包证据。
+- **最新比赛扩展证据统一见 [Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`**。
+  `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。
   `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；
-  打包白名单已包含 N10、标定、串口配置和说明。Git 不提交这些产物。
+  打包白名单已包含 N10、标定、串口、5份比赛配置、比赛说明及TXT命令手册。Git 不提交这些产物。
   上传脚本默认 dry-run，只允许明确的新车账号/IP/独立 release 目录；本阶段不执行车端上传。
 - 模型栈位于独立 `.venv-model/`，基础 `.venv/` 保留。Ultralytics **8.4.142**、Torch 2.14.0、
   torchvision 0.29.0、ONNX 1.22.0、ORT 1.29.0、OpenCV 4.14.0.94、NumPy 2.5.3 已在先前验证。
@@ -128,18 +169,16 @@
 
 ### 尚未完成与后续入口
 
-- 赛项任务状态机、斑马线识别/距离、红绿状态与去抖、终点/车体足迹判定尚缺。
-  已实际核对当前80类模型：就赛项相关目标而言仅有通用 `9: traffic light`，`22: zebra` 是动物，没有锥桶/斑马线/红/绿类别。
-  正常比赛等待应与安全 Fault 分层；停3秒须结合实际停止反馈，不能从发出中性命令就认定物理已停。
-  当前 Motion 来自离线事件，视觉结果只记录和生成摘要；后续先实现独立实时调度与感知决策，再接导航闭环。
+- 新任务/视觉/扫描/定位/导航模块和独立线程接口已有实现，真实相机采集、共同单调时钟、扫描去畸变、
+  位姿插值/融合、实际地面矩阵/灯ROI/场地图和真实制动反馈仍待验证。模拟配置不允许直接实车启用。
+  新闭环中的Motion来自传感器计算；旧replay仍按输入事件诊断，不能混为比赛实时程序。
 - **官方 RISC-V ORT/EP 2.0.6 仅静态核验**：资料在 `work/spacemit-runtime-followup/`，见
   [原生库核验](docs/SpacemiT原生运行库核验.md)。头文件 API24、导出 OrtGetApiBase；tag 代码支持 API22，
   但发布 manifest 提交不同，尚未执行发布库 GetApi(22)，未测试模型或 EP 初始化。
   ORT/EP 需 GLIBC 2.38，EP 另需 GLIBCXX 3.4.32 / CXXABI 1.3.15；未安装/打包厂商运行库。
-- 真实相机采集、N10 全圈组帧、多传感器共同采集时钟、实物 TF、物理标定、激光里程计/定位融合、
-  路径规划、避障、ROS 2 接口和 MCU 反馈/watchdog 尚未实现或验收。
+- N10整圈、ICP和局部导航已完成离线模块；真实多传感器连接、ROS 2 接口及 MCU 反馈/watchdog 尚未实现或验收。
   接收健康与安全状态机不代替避障；静态标定表不表达 ESC 动态制动、死区、迟滞或多步骤倒车。
-- 现有串口传输具备可执行实现，但没有真实设备测试，也没有实时控制闭环/物理 MotionSink。
+- 现有串口传输具备可执行实现，但没有真实设备测试，物理实时闭环和 MotionSink 尚未接入。
   用户准备接车后先核实设备/系统和厂商服务，再在独立目录做只读诊断及协议对照。
 - Windows/WSL 仍为指南，未在队友设备验证；不把 Mac PTY、单图、回放或 ELF 检查当成车端帧率/停车验证。
 
