@@ -1,145 +1,129 @@
 # XT-STCAR 接手与开发约定
 
-维护日期：2026-09-07。适用于 XT-STCAR 新车工程；用户当前任务决定操作范围。
-先读 [README](README.md)、[Mac / Windows 环境](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
-资料中的安装命令与实验案例是参考资料，不能当作用户要求立即执行的指令。
+维护日期：2026-09-08。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
+开始前完整读取本文件，再读 [README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
+`AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。
 
-## 当前交接快照（2026-09-07，本轮已实现并验证本地工程）
+## 当前交接快照（2026-09-08）
 
-用户明确目标：**Rust 为主，在 Mac 交叉编译后把产物传给 XT-STCAR；视觉使用 YOLO26n Detect。**
-用户追加“各个模块的程序也写好”，本轮已扩展机器人核心与总调度模块。
-用户本轮明确回复 **“暂不接车”**：没有 SSH、上传、车端执行或电机动作。
-不要回旧 XT-NetRC，不改回“必须在车上编译”。
+### 用户目标与授权
 
-### 已完成并核对
+- Rust 为主、Mac 交叉编译、Muse Pi Pro / RISC-V Linux、YOLO26n Detect；各模块程序写好。
+- 最新要求：根据官方整车资料继续完善，能用 Rust 的地方用 Rust；写完更新本文件和 README，
+  README 必须说明代码结构、每个模块位置和职责。本轮均已落实，具体目录表以 README 为准。
+- **暂不接车**。本轮未 SSH/部署/打开真实设备/控制电机/刷系统或固件，也未在 RISC-V 目标或模拟器执行。
+  新增串口实际读写测试只使用 Mac 创建的 PTY，不要将它写成实车验证。
+- 用户指定 GLIBC **2.38**。只修改本地交叉构建的目标基线，不安装或覆盖车端 libc。
+- 官方资料目录 `/Users/yuhaojin/Documents/进迭时空无人车（2026）学习资料`，用户明确 **不要看视频**。
+  只读取文档和源码；视频只枚举名称，不播放、不提取内容、不转录。
+- 用户已授权将源码、脚本、配置和文档提交/上传到 `https://github.com/kxkxkxa767/XT-STCAR.git`，分支 `main`。
+  编译链、环境、模型、构建产物、大型厂商包、镜像和缓存不进 Git。后续先核对 Git/远端，不强推共享分支。
+- STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-1. 工程已初始化 Git，用户指定远端 `https://github.com/kxkxkxa767/XT-STCAR.git`，主分支 `main`。
-   用户授权上传源码/脚本/配置/文档，排除编译链和环境；依照 `.gitignore` 同时排除模型/构建产物/缓存。
-   远端初始核验为空，旧工程清理无需重做。Mac 基础 `.venv/` 保留。
-   Rust/Cargo 精确命名 **1.97.1**、rustfmt、clippy、RISC-V 标准库已完整安装；没有改全局默认工具链。
-   项目 Zig **0.15.2**、cargo-zigbuild **0.23.4** 保留原路径。`Cargo.lock` 已生成；
-   workspace `rust-version` 为实测 1.97.1，不再声称旧初稿 1.85 可用。
-2. **四个 Rust crate 已实现**：
-   - `crates/vision`：配置、RGB/letterbox/NCHW、模型输出检查、严格 `score > threshold`、坐标还原/裁剪。
-   - `crates/app`：`xt-stcar` CLI 与可复用 `NativeOrtBackend` 库。
-     命令有 self-check / preprocess / replay / infer；默认 infer 是 **Rust 原生 ORT C API**。
-     `ort=2.0.0-rc.13` 仅用 std/load-dynamic/api-22，交叉构建不链接或下载目标原生推理库。
-     校验 model SHA、provenance、实际 metadata/名称/dtype/shape；常驻 Session，ORT 协作取消。
-     Python worker 仅作为显式 `--backend python-reference` 参考入口，使用唯一临时目录与超时 kill/wait。
-   - `crates/robot-core`：IMU/雷达/里程计/视觉强类型语义校验，Disarmed/Armed/Running/Fault，
-     急停锁存、deadman、心跳/命令/传感器超时、时间/frame/限值检查，MotionSink/RecordingSink。
-     内部意图为 speed_mps + curvature_per_m，没有编造舵机、差速、串口或 ROS 协议。
-   - `crates/runner`：`xt-stcar-robot`，严格 JSONL 传感器/控制/图像事件回放、真实常驻 ORT 推理、
-     安全策略与日志串联。结束记录 Stop，坏图像记录急停并失败退出。输出仅为离线记录。
-     两 CLI 对用户输出采用同目录临时文件原子替换，保护路径/硬链接输入与已有完整日志。
-3. **真实模型已导出并执行**：独立 `.venv-model/` 有 Ultralytics 8.4.142、Torch 2.14.0、
-   torchvision 0.29.0、ONNX 1.22.0、ORT 1.29.0、OpenCV 4.14.0.94、NumPy 2.5.3；
-   pip check 通过，50 个依赖锁在 `requirements-model-macos.lock.txt`，未混装原 `.venv/`。
-   - 官方 `models/yolo26n.pt` SHA256 为
-     `9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef`，与 GitHub asset digest 相符。
-   - 当前 `models/yolo26n.onnx` SHA256 为
-     `c52d204571c6df9f1132dedd7aab3e87336434589b055b9fa4026d117f1d4045`；
-     有同 stem `.provenance.json`。445 节点、0 NMS；静态 FP32 `[1,3,320,320]` → `[1,300,6]`。
-   - 原生 Mac ORT C 库在
-     `toolchains/onnxruntime-macos-arm64-1.29.0/lib/libonnxruntime.1.29.0.dylib`，附 LICENSE，
-     SHA256 `8ab8982e8fc0a3d5121bf95404dba7a15d70b7df49a8bab1ba481ff961d93dc8`。
-     该路径实际推理成功，仅 Mac ARM64 使用，不进 RISC-V 包。
-4. **验证已通过**：
-   - 精确工具链全 workspace fmt、42 项常规 Rust 测试、clippy `-D warnings`。
-     1 项真实 native opt-in 测试已另外执行；默认全套会把它标为 ignored，不把 ignored 算通过。
-   - 56 项 Python 测试及 15 个 subtests；shell 脚本语法与打包边界检查。
-   - 26 例 Rust/OpenCV PNG 对照：几何元数据一致，最大通道差 1 灰度级，不声称普遍逐像素相同。
-   - bus.jpg 实例 5 框（4 person / 1 bus），PyTorch/ORT 高置信框最大差约 4.58e-5 像素；
-     Rust 原生与 Python 参考对相同 Rust 输入的类别、框和分数完全一致。
-   - 机器人真实图像混合回放：19 输入事件、2 帧、20 运动记录（4 Drive / 16 Stop），
-     每帧 5 框、重复结果一致、最终 Disarmed；坏图像触发急停。
-     Drive 是记录值，所有输出 physical_output_enabled=false，模拟时间不是实时控制。
-5. **两个主工程程序已按厂商协议修正重新交叉链接**：
-   - `target/riscv64gc-unknown-linux-gnu/release/xt-stcar`：1,213,880 字节，SHA256
-     `0592ea68f687d8cd3a9609ace273e7722670e9d32d7074cd145e600cb4d303ff`。
-   - 同目录 `xt-stcar-robot`：1,359,504 字节，SHA256
-     `a85281f669c12c8a86088b16c6a87831202cb534096e36e208588b5b2f5c261a`。
-   - 两者 ELF64 LE RISC-V / RVC / LP64D / PIE，加载器 `/lib/ld-linux-riscv64-lp64d.so.1`，
-     DT_NEEDED 仅 libc.so.6，最大 GLIBC 引用 2.34，构建目标 `.2.38`。
-   - 最新证据见 [厂商协议修正验证记录](docs/厂商协议修正验证记录.md)；27 个 Rust 源/清单/锁文件哈希，两个程序各有独立 ELF 报告。
-6. 构建/打包/上传脚本已写好，`scripts/build-riscv.sh` 一次检查并构建两程序。
-   `scripts/package.sh` 输出 core 包，显式 `--model models/yolo26n.onnx` 才包含模型/provenance/许可。
-   产物在 `dist/`，不含主机环境、Mac dylib、工具链或缓存。上传默认 dry-run、显式新 IP/账号/目录，
-   `--execute` 才上传并校验哈希，不解压或运行。**本轮不执行上传。**
+### 当前代码：5 个 crate、2 个程序
 
-### 仍未完成，不能宣称已通过
+| 模块 | 已实现 |
+|---|---|
+| `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码 |
+| `crates/app` → `xt-stcar` | self-check/preprocess/replay/infer；原生 ORT C API 动态加载、模型来源及元数据验证、常驻 Session；Python 参考后端须显式选择 |
+| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表 |
+| `crates/device-io` | 安全 rustix 串口配置、独占、8N1、关闭软硬件流控、读回检查、nonblocking poll 与整体包截止时间、故障锁存、Drop 尝试恢复 |
+| `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器增量解析、可选标定 PWM 预览、传感器采集计划/执行、完整日志原子替换 |
 
-- **官方 RISC-V ORT/EP 2.0.6 已取得并静态核验，目标执行仍未验证。**
-  原始发布包及哈希/C 头/ELF 证据在 `work/spacemit-runtime-followup/`；
-  详见 [原生库核验](docs/SpacemiT原生运行库核验.md)。ORT_API_VERSION=24，导出 OrtGetApiBase；
-  tag 源码支持 API22，但包 manifest 提交不同，未运行发布库 GetApi(22)。
-  ORT/EP 需要 GLIBC 2.38，EP 另需 GLIBCXX 3.4.32 / CXXABI 1.3.15。
-  未安装/打包厂商库，未集成 EP 初始化，未验证本工程模型算子与目标推理。
-- 没有真实相机/雷达/IMU/底盘驱动、ROS 节点、定位融合、路径规划或避障算法。
-  已实现厂商底盘编码/映射预览、IMU 增量解析及安全回放；真实串口、ROS 与物理标定尚未接入。
-  需要核对实际设备、MCU 接收/反馈/watchdog、坐标/单位/时钟与标定数据后补硬件连接。
-- 未接新车，未在目标机或模拟器运行，未部署、未控制电机。Windows/WSL 仍仅为指南。
-  单图 smoke、回放规则和 ELF 验证不能代替车端精度、视频帧率、物理停车或实时性验证。
+#### 本轮新增与修正
 
-### 官方案例资料补充核对（2026-09-07）
+1. **N10 Rust 解析**：`robot-core/src/protocol/n10.rs`。依据出厂 `.cc`，固定 58 字节、16 槽、
+   大端角度/距离、uint8 强度、前 57 字节累加模 256。支持分包、粘包、坏帧重同步、有限缓存与过期保护。
+   保留无效槽位，修正厂商按有效点数计算插值分母的角度偏移。
+   `packet_sample()` 只生成 **16 束局部样本**，全未知或零跨度返回 None。
+   局部包新鲜不代表全圈覆盖、前方无障碍或已完成避障；没有全圈拼接或 ROS 发布。
+2. `replay --n10-config` 接入 `n10_bytes`，禁止与直接 lidar 输入混用；frame 必须一致。
+   没有有效样本只推进 Tick；保存首字节接收时间，坏帧不刷新传感器时间。
+   新合成样例实测 t80 触发 lidar 超时 Fault/Stop，11 运动记录、3 Drive/8 Stop、1 包/1 样本。
+3. **物理单位标定预览**：`protocol/calibrated_chassis.rs`，显式速度/曲率分段表，严格单调、
+   零锚点、PWM 包络、显式倒车策略、禁止外推。当前 schema 只接受 `simulation_only=true` 和 `unverified`。
+   `replay --chassis-calibration` 先映射再记录运动；映射失败记录锁存急停、`chassis_error` 和 Stop，CLI 非零退出。
+   示例 `.1 m/s、.2 m⁻¹ → 1530/1540 µs` 是合成表结果，不是实车参数。没有电机串口发送入口。
+4. **串口采集**：`serial-capture --config ... --output ...` 默认只输出计划，不打开设备、不写文件。
+   显式 `--execute` 才按配置读取 IMU/N10，不调用写方法。时长≤60s、字节≤512KiB、读取记录≤10000，
+   统一 Instant 纪元给 raw/idle/末尾 Tick 打戳；达到上限正常结束并在摘要写 `ended_by`。
+   捕获失败保留旧日志。不同采集文件不是同一时钟，不能直接拼成同步传感器流。
+5. 串口显式清 `IXON/IXOFF/IXANY`（仅 make_raw 在 Linux 不足），检查 VMIN/VTIME，PTY 验证原始配置恢复。
+   `device-io::write_packet_until` 为整个包共用截止时间并锁存错误；通用 `PacketWriter<Write>` 自身没有截止时间。
+6. 修正 IMU 多样本批次日志重复：完整 `imu_decode` 每块只写一次，后续 step 用 `imu_sample_index`。
+   N10 同样只写一次 `n10_decode`，后续 step 用 `n10_packet_index`。
 
-- 用户随后提供 Bianbu 案例6，并要求查看左侧 1–15 篇，询问 C++/Python 示例与 Rust 兼容性。
-  已完整核对 15 篇文字正文与关键源码，结果见 [案例核对与 Rust 兼容性](docs/Bianbu案例1-15核对与Rust兼容性.md)。
-  正文、来源及哈希已归档到 `资料/官方参考/`，未执行教程或接车。
-- 这些是 Muse Pi Pro 平台资料，未证明为 XT-STCAR 整车手册。第 04 篇单点 TOF/云台、
-  第 10 篇 GPIO 舵机和第 14 篇杰美康 EtherCAT 电机都不能套成本车雷达、转向或底盘协议。
-  已找到 UVC/V4L2、CMP10A IMU、YDLidar/RPLidar 的官方参考，实际配件仍待核实。
-- **原生推理库已有具体官方线索**：`spacemit-com/model-zoo-vision` 提交
-  `e3cb7c61174ac42ec2f6da407bc3fe6ac5067e42` 明列 `libonnxruntime.so` / `libspacemit_ep.so`
-  及 `spacemit-onnxruntime` 包；原生代码通过 `SessionOptionsSpaceMITEnvInit` 初始化厂商 EP。
-  此为第一阶段线索；后续已取得二进制并完成静态核验，见上方最新状态。
-  上游报告 K1 YOLO26n 640 INT8、引擎 2.0.6 的性能，不能替代本工程 320 FP32 实测。
-- 保持 Rust 为主：核心/协议处理由 Rust 完成，厂商 C/C++ 原生库必要时薄层桥接、ROS 驱动通过消息接入。
-  不为统一语言重写内核驱动，不把 C++ 类接口直接当 C ABI；案例阅读阶段未修改代码；后续 GLIBC 2.38 构建变更见最新升级记录。
-- 用户提出读取 STM32F103 固件帮助分析协议；当前仍暂不接车，未授权解保护/擦除/刷写。
-  已核对 ST PM0075 §2.4.1：普通 SWD/JTAG 读取受 RDP 限制，正常解除读保护会擦除主 Flash。
-  用户随后要求先不处理 MCU，继续官方文档；固件读取工作暂停，未执行任何硬件操作。
+7. 总调度静态文件非阻塞打开后 fstat 校验普通文件，拒绝 FIFO 阻塞；JSON 配置实际读取≤1MiB、
+   事件≤64MiB。图像尺寸检查与解码复用同一已验证句柄，保留解码内存/像素限制。
 
-### GLIBC 2.38 追加验证
+使用说明：[N10 协议依据](docs/N10协议依据.md)、[底盘标定](docs/底盘标定映射.md)、
+[Rust 串口采集](docs/Rust串口采集.md)、[原有底盘/IMU 协议](docs/厂商协议Rust适配.md)。
 
-- 42 项常规 Rust 测试、fmt/clippy 及两个 release 交叉链接通过；原生模型 opt-in 测试本次未重复运行。
-- 18 项交付/ELF 回归通过，覆盖 2.38 边界放行、2.39 超限拒绝、旧构建目标拒绝与包内 target 一致性。
-- build / manifest 固定 `.2.38`，真实最高符号引用为 2.34；二者分别描述构建目标与实际引用。
-- 本次仍暂不接车，未升级任何车端系统库。
+### 构建、模型与验证证据
 
-### 用户提供的整车资料（2026-09-07 后续）
+- 本机 Rust/Cargo **1.97.1**，rustfmt/clippy/RISC-V std 已安装；`rust-toolchain.toml` 和 `Cargo.lock` 锁定，
+  不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
+- 新串口依赖 rustix **1.1.4**；两个目标程序由 `scripts/build-riscv.sh --offline` 检查并构建。
+  目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
+  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。当前最高 GLIBC 引用 2.34，符合构建基线 2.38。
+  新 robot 程序额外需要 `libm.so.6`，不能继续声称两个程序都只依赖 libc。
+- **最新测试数量、二进制尺寸/SHA、包名与校验结果统一见 [2026-09-08 验证记录](docs/Rust模块完善验证记录-2026-09-08.md)**。
+  对应 `docs/rust-expansion-{build.log,riscv-build.json,riscv-elf.json,robot-elf.json,delivery-validation.json}`
+  保存本轮证据；旧 2026-09-07 和 `factory-*`、`glibc-*` 记录是历史，不是当前二进制。
+- 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；
+  打包白名单已包含 N10、标定、串口配置和说明。Git 不提交这些产物。
+  上传脚本默认 dry-run，只允许明确的新车账号/IP/独立 release 目录；本阶段不执行车端上传。
+- 模型栈位于独立 `.venv-model/`，基础 `.venv/` 保留。Ultralytics **8.4.142**、Torch 2.14.0、
+  torchvision 0.29.0、ONNX 1.22.0、ORT 1.29.0、OpenCV 4.14.0.94、NumPy 2.5.3 已在先前验证。
+  50 项依赖锁在 `requirements-model-macos.lock.txt`，不要混装两个环境。
+- 官方 `models/yolo26n.pt` SHA256：`9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef`。
+  `models/yolo26n.onnx` SHA256：`c52d204571c6df9f1132dedd7aab3e87336434589b055b9fa4026d117f1d4045`。
+  同 stem provenance 必须匹配；445 节点、0 NMS，静态 FP32 `[1,3,320,320] → [1,300,6]`。
+- Mac 原生 ORT 在 `toolchains/onnxruntime-macos-arm64-1.29.0/lib/libonnxruntime.1.29.0.dylib`，
+  SHA `8ab8982e8fc0a3d5121bf95404dba7a15d70b7df49a8bab1ba481ff961d93dc8`，仅 Mac 使用，不进目标包。
+  `ort=2.0.0-rc.13` 选择 std/load-dynamic/api-22，不在交叉构建时下载目标原生库。
+- 此前真实 Mac 模型推理已通过：bus.jpg 5 框（4 person/1 bus）、Rust/Python 同张量结果一致；
+  26 个预处理对照最大通道差 1 灰度级，机器人 19 事件/2 图像帧的混合回放通过。
+  这些历史证据在 [2026-09-07 验证](docs/验证记录-2026-09-07.md)，不能当作当前 RISC-V 实测。
 
-- 新资料在 `/Users/yuhaojin/Documents/进迭时空无人车（2026）学习资料`，用户明确不要看视频，已遵守。
-- 关键证据来自 `4.出厂源码/racecar.zip`；外部解压目录缺子目录，查源码应使用完整包。所选文本在 `work/factory-2026/archive/`。
-- 已补齐底盘 7 字节发送格式、38400 8N1、IMU 115200 解析、N10 雷达配置；教程明确无编码器，参考 RF2O/Cartographer 里程计。
-- 上方“仍缺厂家协议”应更新为：协议已有源码依据，Rust 硬件适配尚未实现；仍需实车校准、MCU 接收/超时/反馈和系统库验收。
-- 普通与 one 底盘节点的转向系数 1300/1200 不同；遥控 Twist 采用 PWM/角度语义。不要混用或直接映射现有物理 MotionIntent。
-- 镜像文件标 Bianbu 2.2，未展开 rootfs 或刷机，不因此改动已通过的 GLIBC 2.38 本地构建。
-- 完整发现与限制见 [无人车2026资料核对](docs/无人车2026资料核对.md)。此轮只读源码并更新文档，未执行厂商程序或控制车辆。
+### 官方资料与协议依据
 
-### 厂商协议 Rust 修正（最新）
+- 已完整读取 Bianbu 案例 1–15 的文字正文及关键源码，见 [案例核对](docs/Bianbu案例1-15核对与Rust兼容性.md)。
+  它们是 Muse Pi Pro 平台参考；TOF/云台/GPIO 舵机/EtherCAT 案例不是本车底盘协议。
+- 整车资料关键来源 `4.出厂源码/racecar.zip`，4990 成员，SHA256
+  `9bde1aef4721ffbc11e2fc904c118bb3c9d9272871cb71c75775d46700d0169f`。
+  外部已解压目录不完整，应查 ZIP；选择的文本在 `work/factory-2026/`，N10 `.cc` 在 `work/n10-protocol/`。
+  34 份 Word 已提取文字，10 个视频只计名称，不读取内容。源码没有提供可核验的 MCU 工程/hex。
+- 出厂底盘 `/dev/car` 38400 8N1，7 字节 `AA motorLE servoLE sum55`；普通/one 转向系数1300/1200，
+  遥控话题另用 PWM/角度语义，不混为物理速度/曲率。IMU `/dev/imu` 115200，N10 `/dev/laser` 230400。
+- 教程明确没有轮编码器，里程计参考 RF2O/Cartographer，不能假造轮速反馈。
+  相机格式/分辨率与 video 节点在不同示例中不一致；不要直接指定真实相机设备。
+  原厂关闭某些碰撞/回环检查的导航配置不应原样作为新车安全配置。
+- 镜像名标 Bianbu 2.2，只枚举目录，未展开 rootfs/安装；不因此改变 2.38 本地基线。
+  ROS 脚本优先 Humble、可退 Foxy，必须核实实际系统，不能按 Ubuntu 版本直接装 Jazzy。
 
-- `robot-core::protocol` 新增底盘编码器、显式 factory profile、处理短写/中断与失败锁存的通用 PacketWriter，以及有校验/分包/过期保护的 IMU 解码器；没有真实端口打开入口。
-- `xt-stcar-robot chassis-preview` 输出帧预览；回放新增 imu_bytes + 必填 --imu-config，禁止混用直接 IMU，frame 明确核对。
-- 三类 IMU 分量齐全且新鲜才发布；无样本/坏校验只产生 Tick，不刷新 Controller 的传感器时间，EOF 仍停。
-- 不复制旧偏移；config/imu-replay.json 为显式零偏合成配置，不是实车校准。FactoryProfile 不接受物理 MotionIntent。
-- 51 项常规 Rust 测试、18 项交付测试、fmt/clippy、GLIBC 2.38 交叉链接与两个新包通过。详细 [协议适配说明](docs/厂商协议Rust适配.md)。
+### 尚未完成与后续入口
 
-### 锁定 YOLO26n 规则与后续入口
+- **官方 RISC-V ORT/EP 2.0.6 仅静态核验**：资料在 `work/spacemit-runtime-followup/`，见
+  [原生库核验](docs/SpacemiT原生运行库核验.md)。头文件 API24、导出 OrtGetApiBase；tag 代码支持 API22，
+  但发布 manifest 提交不同，尚未执行发布库 GetApi(22)，未测试模型或 EP 初始化。
+  ORT/EP 需 GLIBC 2.38，EP 另需 GLIBCXX 3.4.32 / CXXABI 1.3.15；未安装/打包厂商运行库。
+- 真实相机采集、N10 全圈组帧、多传感器共同采集时钟、实物 TF、物理标定、激光里程计/定位融合、
+  路径规划、避障、ROS 2 接口和 MCU 反馈/watchdog 尚未实现或验收。
+  接收健康与安全状态机不代替避障；静态标定表不表达 ESC 动态制动、死区、迟滞或多步骤倒车。
+- 现有串口传输具备可执行实现，但没有真实设备测试，也没有实时控制闭环/物理 MotionSink。
+  用户准备接车后先核实设备/系统和厂商服务，再在独立目录做只读诊断及协议对照。
+- Windows/WSL 仍为指南，未在队友设备验证；不把 Mac PTY、单图、回放或 ELF 检查当成车端帧率/停车验证。
 
-- Ultralytics **8.4.142**，`nms=False` 选 one-to-one；`nms=None` 默认不能当作同样接口。
-  实际导出：FP32 `quantize=32`、static320、batch1、max_det300、opset17、simplify=False、CPU。
-- `[1,300,6]` 每行 `[x1,y1,x2,y2,score,class_id]`；严格 score > threshold，
-  不再 sigmoid/objectness/NMS。仅形状不足以证明正确，metadata 与精确模型哈希必须核对。
-- letterbox auto=False/scale_fill=False/scaleup=True/center=True，RGB、填充114，
-  ties-to-even round、记录整数 left/top 与名义 r，按 (coord-pad)/r 还原后裁剪。
-- 低置信候选反向框由阈值过滤丢弃；保留候选才检几何。worker 不抢先拒绝所有候选几何。
-  导出前检查 one-to-one 分支存在，不能用当前 end2end 选择状态代替可用性检查。
-- 源码原文与许可证在 `资料/官方参考/Ultralytics_8.4.142/`，含来源提交和逐文件哈希。
-  使用方法与证据见 README、`docs/YOLO26接口.md`、`docs/机器人模块.md`、
-  `docs/验证记录-2026-09-07.md`；环境见 `资料/环境.md`，不要重复重装已验证环境。
-- 下一步尊重用户暂不接车。可根据具体赛项继续 Rust 算法；用户准备接车后先只读核实系统/接口，
-  在独立 release 验证两程序自检与回放，再适配实际推理库、传感器、ROS 与底盘。
+### YOLO26n 固定接口
+
+- 导出 nms=False 选 one-to-one；`nms=None` 默认不是同样接口。FP32 quantize=32、static320、batch1、
+  max_det300、opset17、simplify=False、CPU。导出前确认 one-to-one 分支存在。
+- `[1,300,6]` 每行 `[x1,y1,x2,y2,score,class_id]`，严格 `score > threshold`，不重复 sigmoid/objectness/NMS。
+  必须核对 metadata 和精确哈希，形状本身不足以确认接口。低置信反向框先被阈值过滤，保留候选才检查几何。
+- letterbox auto=False/scale_fill=False/scaleup=True/center=True、RGB、填充114、ties-to-even round；
+  保存整数 left/top 和名义 r，以 `(coord-pad)/r` 还原后裁剪。
+- 原文与许可证在 `资料/官方参考/Ultralytics_8.4.142/`；详见 [YOLO26 接口](docs/YOLO26接口.md)。
 
 ## 工程与平台
 
@@ -160,7 +144,7 @@
 - 用户已明确首选 Rust：新写的核心算法、控制逻辑、状态机和协议处理优先 Rust。
   已有厂商 C++/Python 驱动与 YOLO 推理节点可复用，通过 ROS 2 接入，避免仅为统一语言重写。
   Rust ROS 接口候选为 rclrs，先在厂商系统验证消息生成、发布订阅和依赖，再锁定版本。
-  高层算法、ROS 接口与底盘协议分层；先取得厂家驱动和协议，不凭产品简介重写 MCU 固件。
+  高层算法、ROS 接口与底盘协议分层；依据已取得的厂商源码做互操作，不凭产品简介重写 MCU 固件。
 - 当前主控编译目标选用 `riscv64gc-unknown-linux-gnu`，实机兼容性仍待验证。
   `rustup target add` 只提供目标标准库，完整交叉链接还需匹配 linker、sysroot 和外部库。
   STM32 裸机目标另行核对，不把 RISC-V 主控支持推导为下位机固件已支持。

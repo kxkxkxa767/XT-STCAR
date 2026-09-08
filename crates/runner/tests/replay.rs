@@ -274,3 +274,52 @@ fn chassis_preview_is_explicit_and_never_writes_to_hardware() {
     assert!(!result.status.success());
     assert!(result.stdout.is_empty());
 }
+
+#[test]
+fn multiple_imu_samples_in_one_chunk_are_logged_once() {
+    let fixture = Fixture::new("");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    // Two synthetic zero-motion cycles in one read: six valid 11-byte frames.
+    let mut bytes = Vec::new();
+    for _ in 0..2 {
+        for kind in [0x51_u8, 0x52, 0x53] {
+            let mut frame = [0_u8; 11];
+            frame[0] = 0x55;
+            frame[1] = kind;
+            frame[10] = 0x55 + kind;
+            bytes.extend_from_slice(&frame);
+        }
+    }
+    fs::write(
+        &fixture.events,
+        json!({"at":0,"event":{"type":"imu_bytes","bytes":bytes}}).to_string(),
+    )
+    .unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_xt-stcar-robot"))
+        .args(["replay", "--events"])
+        .arg(&fixture.events)
+        .arg("--config")
+        .arg(root.join("config/robot-imu-replay.json"))
+        .arg("--imu-config")
+        .arg(root.join("config/imu-replay.json"))
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let logs = records(&result.stdout);
+    assert_eq!(logs.last().unwrap()["imu_samples"], 2);
+    assert_eq!(
+        logs.iter()
+            .filter_map(|r| r["imu_decode"]["samples"].as_array())
+            .map(Vec::len)
+            .sum::<usize>(),
+        2
+    );
+    assert_eq!(logs[0]["imu_sample_index"], 0);
+    assert_eq!(logs[1]["imu_sample_index"], 1);
+    assert!(logs[1].get("imu_decode").is_none());
+    assert_eq!(logs.last().unwrap()["motion_records"], 3);
+}

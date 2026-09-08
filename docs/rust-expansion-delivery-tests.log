@@ -1,0 +1,23 @@
+test_added_rust_source_requires_rebuild (test_delivery.DeliveryTests.test_added_rust_source_requires_rebuild) ... ok
+test_archive_build_target_must_match_even_with_valid_checksums (test_delivery.DeliveryTests.test_archive_build_target_must_match_even_with_valid_checksums) ... ok
+test_archive_checksum_is_for_compressed_archive_not_a_member (test_delivery.DeliveryTests.test_archive_checksum_is_for_compressed_archive_not_a_member) ... ok
+test_archive_content_tampering_is_rejected (test_delivery.DeliveryTests.test_archive_content_tampering_is_rejected) ... ok
+test_dry_run_never_starts_any_subprocess (test_delivery.DeliveryTests.test_dry_run_never_starts_any_subprocess) ... ok
+test_minimal_package_and_checksums (test_delivery.DeliveryTests.test_minimal_package_and_checksums) ... ok
+test_missing_connection_info_and_injection_rejected_before_network (test_delivery.DeliveryTests.test_missing_connection_info_and_injection_rejected_before_network) ... ok
+test_model_provenance_metadata_must_match_validation (test_delivery.DeliveryTests.test_model_provenance_metadata_must_match_validation) ... ok
+test_no_implicit_model_and_reject_symlink_resource (test_delivery.DeliveryTests.test_no_implicit_model_and_reject_symlink_resource) ... ok
+test_old_glibc_build_target_requires_rebuild (test_delivery.DeliveryTests.test_old_glibc_build_target_requires_rebuild) ... ok
+test_remote_creation_refuses_existing_release_and_symlink_parent (test_delivery.DeliveryTests.test_remote_creation_refuses_existing_release_and_symlink_parent) ... ok
+test_second_binary_architecture_is_independently_checked (test_delivery.DeliveryTests.test_second_binary_architecture_is_independently_checked) ... ok
+test_second_binary_requires_matching_build_evidence (test_delivery.DeliveryTests.test_second_binary_requires_matching_build_evidence) ... ok
+test_stale_source_or_binary_evidence_is_rejected (test_delivery.DeliveryTests.test_stale_source_or_binary_evidence_is_rejected) ... ok
+test_tar_path_traversal_and_symlink_are_rejected (test_delivery.DeliveryTests.test_tar_path_traversal_and_symlink_are_rejected) ... ok
+test_rejects_non_elf_and_truncated_tables (test_delivery.ElfTests.test_rejects_non_elf_and_truncated_tables) ... ok
+test_rejects_wrong_architecture_abi_and_loader (test_delivery.ElfTests.test_rejects_wrong_architecture_abi_and_loader) ... ok
+test_target_version_references_are_table_based (test_delivery.ElfTests.test_target_version_references_are_table_based) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 1.447s
+
+OK

@@ -1,0 +1,1 @@
+{"device":"/dev/laser","protocol":"n10","duration_ms":1000,"read_timeout_ms":10,"max_bytes":65536}

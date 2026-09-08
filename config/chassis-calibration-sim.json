@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "simulation_only": true,
+  "measurement_status": "unverified",
+  "motor_pwm_range": { "min_us": 1500, "max_us": 1600 },
+  "servo_pwm_range": { "min_us": 1400, "max_us": 1600 },
+  "stop_motor_us": 1500,
+  "stop_servo_us": 1500,
+  "reverse_policy": "disabled",
+  "speed_points": [
+    { "speed_mps": 0.0, "motor_us": 1500 },
+    { "speed_mps": 0.1, "motor_us": 1530 },
+    { "speed_mps": 0.2, "motor_us": 1600 }
+  ],
+  "curvature_points": [
+    { "curvature_per_m": -0.5, "servo_us": 1400 },
+    { "curvature_per_m": 0.0, "servo_us": 1500 },
+    { "curvature_per_m": 0.5, "servo_us": 1600 }
+  ]
+}

@@ -1,12 +1,51 @@
-//! File-backed camera and event input. No device or vendor protocol is assumed.
+//! File-backed camera and strict event input; wire decoding uses explicit profiles.
 use image::{ImageReader, RgbImage};
+use rustix::fs::{FileType, Mode, OFlags, fstat, open};
 use serde::Deserialize;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufReader, Read, Seek};
 use std::path::{Path, PathBuf};
 use xt_stcar_robot_core::{TimedEvent, Timestamp};
 
 pub type Result<T> = std::result::Result<T, String>;
+pub const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
+const MAX_EVENT_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Open a static input without waiting for a FIFO peer, then validate the actual
+/// descriptor. A pathname check alone would race with replacement before open.
+pub fn open_regular_file(path: &Path) -> Result<File> {
+    let fd = open(
+        path,
+        OFlags::RDONLY | OFlags::NONBLOCK | OFlags::CLOEXEC | OFlags::NOCTTY,
+        Mode::empty(),
+    )
+    .map_err(|e| format!("open {}: {e}", path.display()))?;
+    let metadata = fstat(&fd).map_err(|e| format!("stat {}: {e}", path.display()))?;
+    if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
+        return Err(format!("input {} must be a regular file", path.display()));
+    }
+    Ok(File::from(fd))
+}
+
+/// Bound bytes actually read, including when a regular input grows after stat.
+pub fn read_regular_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>> {
+    let file = open_regular_file(path)?;
+    let too_large = || format!("input {} exceeds {max_bytes} bytes", path.display());
+    if file.metadata().map_err(|e| e.to_string())?.len() > max_bytes {
+        return Err(too_large());
+    }
+    let limit = max_bytes
+        .checked_add(1)
+        .ok_or("input byte limit overflow")?;
+    let mut bytes = Vec::new();
+    file.take(limit)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("read {}: {e}", path.display()))?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(too_large());
+    }
+    Ok(bytes)
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -38,8 +77,22 @@ pub enum ImuBytesEvent {
     ImuBytes { bytes: Vec<u8> },
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimedN10Bytes {
+    pub at: Timestamp,
+    pub event: N10BytesEvent,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum N10BytesEvent {
+    N10Bytes { bytes: Vec<u8> },
+}
+
 pub enum ReplayEvent {
     ImuBytes(TimedImuBytes),
+    N10Bytes(TimedN10Bytes),
     Core(TimedEvent),
     Frame(TimedFrame),
 }
@@ -50,16 +103,13 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
     let path = path
         .canonicalize()
         .map_err(|e| format!("events {}: {e}", path.display()))?;
-    let file = File::open(&path).map_err(|e| e.to_string())?;
-    if file.metadata().map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
-        return Err("event input exceeds 64 MiB".into());
-    }
+    let bytes = read_regular_file(&path, MAX_EVENT_BYTES)?;
+    let text = std::str::from_utf8(&bytes).map_err(|e| format!("event input UTF-8: {e}"))?;
     let base = path.parent().ok_or("event file has no parent")?;
     let mut events = Vec::new();
     let mut previous_time = None;
     let mut previous_frame_sequence = None;
-    for (index, line) in BufReader::new(file).lines().enumerate() {
-        let line = line.map_err(|e| e.to_string())?;
+    for (index, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
         }
@@ -67,7 +117,7 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
             return Err(format!("event line {} exceeds input limits", index + 1));
         }
         let value: serde_json::Value =
-            serde_json::from_str(&line).map_err(|e| format!("event line {}: {e}", index + 1))?;
+            serde_json::from_str(line).map_err(|e| format!("event line {}: {e}", index + 1))?;
         // Internally tagged unit variants may ignore extra map keys despite
         // deny_unknown_fields; check the JSON envelope before deserializing.
         let allowed: &[&str] = match value["event"]["type"].as_str() {
@@ -78,7 +128,7 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
             Some("deadman") => &["type", "pressed"],
             Some("motion") => &["type", "intent"],
             Some("sensor") => &["type", "sample"],
-            Some("imu_bytes") => &["type", "bytes"],
+            Some("imu_bytes" | "n10_bytes") => &["type", "bytes"],
             Some("vision_frame") => &["type", "path", "sequence", "frame_id"],
             _ => {
                 return Err(format!(
@@ -94,8 +144,8 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
             return Err(format!("unknown event field at line {}", index + 1));
         }
         let (event, at) = if value["event"]["type"] == "vision_frame" {
-            let mut frame: TimedFrame = serde_json::from_str(&line)
-                .map_err(|e| format!("frame line {}: {e}", index + 1))?;
+            let mut frame: TimedFrame =
+                serde_json::from_str(line).map_err(|e| format!("frame line {}: {e}", index + 1))?;
             let FrameEvent::VisionFrame {
                 path,
                 sequence,
@@ -127,16 +177,25 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
             (ReplayEvent::Frame(frame), at)
         } else if value["event"]["type"] == "imu_bytes" {
             let chunk: TimedImuBytes =
-                serde_json::from_str(&line).map_err(|e| format!("IMU line {}: {e}", index + 1))?;
+                serde_json::from_str(line).map_err(|e| format!("IMU line {}: {e}", index + 1))?;
             let ImuBytesEvent::ImuBytes { bytes } = &chunk.event;
             if bytes.is_empty() || bytes.len() > 4096 {
                 return Err("IMU chunk must contain 1..4096 bytes".into());
             }
             let at = chunk.at.0;
             (ReplayEvent::ImuBytes(chunk), at)
+        } else if value["event"]["type"] == "n10_bytes" {
+            let chunk: TimedN10Bytes =
+                serde_json::from_str(line).map_err(|e| format!("N10 line {}: {e}", index + 1))?;
+            let N10BytesEvent::N10Bytes { bytes } = &chunk.event;
+            if bytes.is_empty() || bytes.len() > 4096 {
+                return Err("N10 chunk must contain 1..4096 bytes".into());
+            }
+            let at = chunk.at.0;
+            (ReplayEvent::N10Bytes(chunk), at)
         } else {
-            let core: TimedEvent = serde_json::from_str(&line)
-                .map_err(|e| format!("event line {}: {e}", index + 1))?;
+            let core: TimedEvent =
+                serde_json::from_str(line).map_err(|e| format!("event line {}: {e}", index + 1))?;
             let at = core.at.0;
             (ReplayEvent::Core(core), at)
         };
@@ -156,19 +215,21 @@ pub fn read_events(path: &Path) -> Result<Vec<ReplayEvent>> {
 }
 
 pub fn load_frame(path: &Path) -> Result<RgbImage> {
-    let reader = || {
-        ImageReader::open(path)
-            .map_err(|e| e.to_string())?
-            .with_guessed_format()
-            .map_err(|e| e.to_string())
-    };
-    let (width, height) = reader()?
+    let mut file = open_regular_file(path)?;
+    let (width, height) = ImageReader::new(BufReader::new(&mut file))
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?
         .into_dimensions()
         .map_err(|e| format!("image dimensions: {e}"))?;
     if width == 0 || height == 0 || u64::from(width) * u64::from(height) > 64_000_000 {
         return Err("camera frame must be positive and at most 64 megapixels".into());
     }
-    let mut decoder = reader()?;
+    // Reuse the checked descriptor, so pathname replacement cannot substitute
+    // a FIFO between the dimensions check and decoding.
+    file.rewind().map_err(|e| e.to_string())?;
+    let mut decoder = ImageReader::new(BufReader::new(file))
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?;
     let mut limits = image::Limits::default();
     limits.max_alloc = Some(512 * 1024 * 1024);
     decoder.limits(limits);

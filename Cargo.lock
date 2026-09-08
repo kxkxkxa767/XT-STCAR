@@ -537,6 +537,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "xt-stcar-device-io"
+version = "0.1.0"
+dependencies = [
+ "rustix",
+ "tempfile",
+]
+
+[[package]]
 name = "xt-stcar-robot-core"
 version = "0.1.0"
 dependencies = [
@@ -549,10 +557,12 @@ name = "xt-stcar-robot-runner"
 version = "0.1.0"
 dependencies = [
  "image",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",
  "xt-stcar",
+ "xt-stcar-device-io",
  "xt-stcar-robot-core",
  "xt-stcar-vision",
 ]

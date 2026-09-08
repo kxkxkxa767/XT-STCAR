@@ -29,6 +29,9 @@ BASE_FILES = {
     "bin/xt-stcar", "bin/xt-stcar-robot", "config/yolo26n.json", "scripts/onnx_worker.py", "scripts/validate_yolo26.py",
     "scripts/check-vehicle.sh", "docs/部署包使用说明.md", "build.json", "elf.json",
     "robot-elf.json", "config/robot-sim.json", "examples/robot-sim.jsonl", "docs/机器人模块.md",
+    "config/n10-replay.json", "config/robot-n10-replay.json", "examples/robot-n10-replay.jsonl",
+    "config/chassis-calibration-sim.json", "config/serial-imu-capture.json", "config/serial-n10-capture.json",
+    "docs/N10协议依据.md", "docs/底盘标定映射.md", "docs/Rust串口采集.md",
     "config/imu-replay.json", "config/robot-imu-replay.json", "examples/robot-imu-replay.jsonl", "docs/厂商协议Rust适配.md",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",

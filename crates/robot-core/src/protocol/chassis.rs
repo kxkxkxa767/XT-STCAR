@@ -1,7 +1,7 @@
 //! Factory racecar.zip / racecar_driver wire format. PWM is not a velocity unit.
 use crate::ValidationError;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
 pub struct PwmCommand {
     motor_us: u16,
     servo_us: u16,

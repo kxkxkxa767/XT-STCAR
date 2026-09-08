@@ -1,5 +1,5 @@
 //! A persistent Rust ORT session reused across file-backed camera frames.
-use crate::input::{Result, load_frame};
+use crate::input::{MAX_CONFIG_BYTES, Result, load_frame, read_regular_file};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -31,7 +31,8 @@ pub struct VisionReport {
 
 impl VisionPipeline {
     pub fn new(options: &VisionOptions) -> Result<Self> {
-        let bytes = std::fs::read(&options.spec).map_err(|e| format!("vision config: {e}"))?;
+        let bytes = read_regular_file(&options.spec, MAX_CONFIG_BYTES)
+            .map_err(|e| format!("vision config: {e}"))?;
         let spec: ModelSpec = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         spec.validate()?;
         let backend = NativeOrtBackend::new(&options.model, &options.runtime_lib, &spec)?;

@@ -10,6 +10,7 @@ name = "xt-stcar-robot"
 path = "src/main.rs"
 
 [dependencies]
+xt-stcar-device-io = { path = "../device-io" }
 xt-stcar = { path = "../app" }
 xt-stcar-vision = { path = "../vision" }
 xt-stcar-robot-core = { path = "../robot-core" }
@@ -17,6 +18,10 @@ serde.workspace = true
 serde_json.workspace = true
 image.workspace = true
 tempfile.workspace = true
+rustix = { version = "=1.1.4", features = ["fs"] }
+
+[dev-dependencies]
+rustix = { version = "=1.1.4", features = ["pty", "termios", "fs"] }
 
 [lints]
 workspace = true

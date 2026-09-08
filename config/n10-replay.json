@@ -1,0 +1,6 @@
+{
+  "frame_id": "laser_link",
+  "range_min_m": 0.02,
+  "range_max_m": 12.0,
+  "max_packet_age_ms": 50
+}

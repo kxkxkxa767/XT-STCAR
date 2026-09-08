@@ -2,17 +2,20 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use xt_stcar_robot_runner::input::{MAX_CONFIG_BYTES, read_regular_file};
 use xt_stcar_robot_runner::{ReplayOptions, replay, vision::VisionOptions};
 
 const HELP: &str = "XT-STCAR Rust robot module runner (offline recording only)
 
 Usage:
+  xt-stcar-robot serial-capture --config FILE --output FILE [--execute]
+  Sensor capture defaults to a plan; --execute opens the explicitly selected tty.
   xt-stcar-robot chassis-preview --profile PROFILE --linear VALUE --angular VALUE
   PROFILE: navigation1300 | navigation_one1200 | teleop_pwm_degrees
   Reference PWM preview only; values retain factory topic conventions.
   xt-stcar-robot replay --events FILE [--config FILE] [--output FILE]
                       [--model ONNX --runtime-lib LIB --vision-config FILE]
-                      [--imu-config FILE]
+                      [--imu-config FILE] [--n10-config FILE] [--chassis-calibration FILE]
 
 Defaults: --config config/robot-sim.json, --vision-config config/yolo26n.json.
 Input is strict JSONL with monotonic boot-relative millisecond timestamps.
@@ -21,7 +24,8 @@ files relative to the event manifest and use a persistent Rust ONNX Runtime sess
 --model and --runtime-lib must be supplied together and only for vision_frame input.
 Model provenance is loaded from the model's sibling .provenance.json file.
 Output is step + summary JSONL; without --output it is written to stdout.
-Motion output is RecordingSink only. No physical devices, ROS, or motors are used.
+Motion output is RecordingSink only. Replay/preview use no physical devices.
+Explicit serial-capture --execute reads a sensor tty; it sends no device commands.
 Simulation timing and motion limits are examples, not vehicle calibration.
 ";
 
@@ -60,12 +64,17 @@ fn ends_with_error_stop(bytes: &[u8]) -> bool {
     let Ok(record) = serde_json::from_slice::<serde_json::Value>(line) else {
         return false;
     };
-    record["terminal"] == "vision_error"
-        && record["step"]["output"]["command"]["type"] == "stop"
+    matches!(
+        record["terminal"].as_str(),
+        Some("vision_error" | "chassis_error")
+    ) && record["step"]["output"]["command"]["type"] == "stop"
         && record["physical_output_enabled"] == false
 }
 
 fn distinct_output(output: &Path, inputs: &[&Path]) -> Result<()> {
+    if output.exists() && !output.metadata().map_err(|e| e.to_string())?.is_file() {
+        return Err("output must be a regular file".into());
+    }
     let target = if output.exists() {
         output.canonicalize().map_err(|e| e.to_string())?
     } else {
@@ -137,6 +146,65 @@ fn chassis_preview(rest: Vec<OsString>) -> Result<()> {
     Ok(())
 }
 
+fn serial_capture(rest: Vec<OsString>) -> Result<()> {
+    use xt_stcar_robot_runner::capture::{CaptureConfig, capture};
+    let mut args = rest.into_iter();
+    let mut options = BTreeMap::new();
+    let mut execute = false;
+    while let Some(key) = args.next() {
+        let key = key.into_string().map_err(|_| "option must be UTF-8")?;
+        if key == "--execute" {
+            if execute {
+                return Err("duplicate --execute".into());
+            }
+            execute = true;
+            continue;
+        }
+        if !["--config", "--output"].contains(&key.as_str()) {
+            return Err(format!("unknown capture option {key}"));
+        }
+        let value = args.next().ok_or("missing capture option value")?;
+        if value.is_empty() || value.to_string_lossy().starts_with("--") {
+            return Err("missing capture value".into());
+        }
+        if options.insert(key, PathBuf::from(value)).is_some() {
+            return Err("duplicate capture option".into());
+        }
+    }
+    let config_path = options.remove("--config").ok_or("--config is required")?;
+    let path = options.remove("--output").ok_or("--output is required")?;
+    let config: CaptureConfig =
+        serde_json::from_slice(&read_regular_file(&config_path, MAX_CONFIG_BYTES)?)
+            .map_err(|e| e.to_string())?;
+    config.validate()?;
+    distinct_output(&path, &[&config_path])?;
+    if !execute {
+        println!(
+            "{}",
+            serde_json::json!({"kind":"capture_plan","open_device":false,"config":config,
+            "baud_rate":config.protocol.baud(),"format":"8N1 raw, no flow control","output":path,
+            "device_commands_sent":false,"execute_required":true})
+        );
+        return Ok(());
+    }
+    distinct_output(&path, &[&config_path, &config.device])?;
+    let mut buffer = LogBuffer::default();
+    let summary = capture(&config, &mut buffer)?;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut file = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    file.write_all(&buffer.0).map_err(|e| e.to_string())?;
+    file.flush().map_err(|e| e.to_string())?;
+    file.persist(&path).map_err(|e| e.to_string())?;
+    println!(
+        "{}",
+        serde_json::to_string(&summary).map_err(|e| e.to_string())?
+    );
+    Ok(())
+}
+
 fn run() -> Result<()> {
     let mut arguments = std::env::args_os().skip(1);
     let Some(command) = arguments.next() else {
@@ -147,6 +215,9 @@ fn run() -> Result<()> {
     if command == "--help" || command == "-h" || (rest.len() == 1 && rest[0] == "--help") {
         print!("{HELP}");
         return Ok(());
+    }
+    if command == "serial-capture" {
+        return serial_capture(rest);
     }
     if command == "chassis-preview" {
         return chassis_preview(rest);
@@ -166,6 +237,8 @@ fn run() -> Result<()> {
             "--runtime-lib",
             "--vision-config",
             "--imu-config",
+            "--n10-config",
+            "--chassis-calibration",
         ]
         .contains(&key.as_str())
         {
@@ -187,6 +260,8 @@ fn run() -> Result<()> {
         .unwrap_or_else(|| "config/robot-sim.json".into());
     let output = options.remove("--output");
     let imu_config = options.remove("--imu-config");
+    let n10_config = options.remove("--n10-config");
+    let chassis_calibration = options.remove("--chassis-calibration");
     let model = options.remove("--model");
     let runtime = options.remove("--runtime-lib");
     let spec = options.remove("--vision-config");
@@ -206,6 +281,9 @@ fn run() -> Result<()> {
     if let Some(path) = &output {
         let mut sources = vec![config.as_path(), events.as_path()];
         if let Some(path) = &imu_config {
+            sources.push(path.as_path());
+        }
+        for path in [&n10_config, &chassis_calibration].into_iter().flatten() {
             sources.push(path.as_path());
         }
         let provenance;
@@ -239,6 +317,8 @@ fn run() -> Result<()> {
         events,
         vision,
         imu_config,
+        n10_config,
+        chassis_calibration,
     };
     // Buffer output until a valid replay finishes or records a terminal stop.
     // Invalid config/events or a missing runtime never truncate an existing log.
