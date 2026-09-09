@@ -1,10 +1,10 @@
 # XT-STCAR 接手与开发约定
 
-维护日期：2026-09-08。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
+维护日期：2026-09-09。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
 开始前完整读取本文件，再读 [上传规范](上传规范.md)、[README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
 `AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。
 
-## 当前交接快照（2026-09-08）
+## 当前交接快照（2026-09-09）
 
 ### 用户目标与授权
 
@@ -26,14 +26,32 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 最新文档补充（2026-09-08）
+### 最新运动控制评估与实现（2026-09-09）
+
+- 用户要求读取分享链接、评估运动控制并同步README。已成功获取并提取[《算法比较建议》正文](https://chatgpt.com/share/6aa0bf59-c8f8-83ee-b001-13dd5945ce14)，
+  先前网络超时不再是阻塞。公开页面原始数据仅留`work/`，没有发布整个分享HTML。建议按当前源码独立核验。
+- 修改前fetch确认`7fb06c8`与origin/main一致。继续直接main提交/推送，规则PDF不修改、不暂存。
+- `robot-core/src/tracking.rs`新增`PathTracker`、`PurePursuitTracker`及实验`LqrTracker`。
+  `NavigationConfig.tracking`省略时仍PP；serde拒绝未知算法和多余字段。PP前视链/公式保持，导航既有1e-6m/s测量容差传入跟踪前统一归零/夹限。
+  LQR使用原缓存路径局部投影、三点曲率前馈及横向/航向反馈，闭式连续直线附近模型，无新依赖/轴距猜测/设备I/O。
+  低速PP回退，线性化误差域或输入不合法则导航Stop；后续候选、碰撞、停车与Safety通路共用。
+- `robot-core/examples/tracking_comparison.rs`：4条路径×PP/LQR×0/200ms假定延迟，共16组进入终点容差；
+  当前LQR权重下横向RMS反而更高，不宣称优于PP，模型未含定位噪声/制动，模拟时间不代表CPU时延。
+- `runner/examples/motion_comparison.rs`：同一整场比赛PP仍55.3s完成；LQR在绕锥桶阶段停住，27.9s普通停车超时，最终模拟速度0。
+  **LQR未通过全场验收，明确保留实验项；默认算法不替换。** 后续应诊断参考曲率/评分/路径域配合，不能改故障期限或放宽安全检查伪装通过。
+- README新增运动控制模块/单位/通路/实测边界，TXT增加两个Rust A/B命令；完整说明见[运动控制设计与对比](docs/运动控制设计与对比.md)。
+  当前没有ESKF/EKF、速度PI、真实转向反馈或电机MotionSink；先解决时间同步、去畸变、标定及反馈质量，再扩展这些模块。
+- 额外审查未找到证据充分的新制动/看门狗/PWM缺陷。侧向加速度检查约束候选目标，Stop记录的是归零目标；
+  实际过渡/回中待测，保守停车圆盘考虑中间转向但依赖实际制动能力满足配置。
+
+### 前轮文档补充（2026-09-08）
 
 - README新增“整车与硬件详细参数”：产品介绍第1页全部12项、规则初稿第10页及出厂源码通信/相机配置已对照。
   包含尺寸、CPU/GPU/内存/eMMC/供电、MCU、电调/BEC、电池、舵机、雷达/相机/IMU和零碎接口参数。
 - 型号证据分层：出厂驱动选择LSlidar N10，实物待核对；相机/IMU/舵机完整型号未提供，不把平台CMP10A等参考外设认作本车。
   电池5400mAh（产品）/5300mAh（规则）、底盘阿克曼/四轮差速表述、MCU32KB/4KB/40MHz及“最大转速40km/h”均单列来源/疑点。
 - `car_controller_new.cpp`的L=0.305、lfw=0.1675、controller_freq=30只记录为源码默认参考，不代替测量。
-  此次仅改README和交接文档；未改变代码/配置、未重新构建或重打包，既有0f3ab64构建证据继续适用。
+  该轮仅改README和交接文档，未改变代码/配置。旧0f3ab64构建证据保留历史，当前运动扩展改为下述motion-control证据。
 
 ### 当前代码：5 个 crate、2 个程序
 
@@ -41,7 +59,7 @@
 |---|---|
 | `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码；road.rs 斑马线/灯色/锥桶及地面投影 |
 | `crates/app` → `xt-stcar` | self-check/preprocess/replay/infer；原生 ORT C API 动态加载、模型来源及元数据验证、常驻 Session；Python 参考后端须显式选择；file_io 提供两套 CLI 共用文件边界 |
-| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表；比赛任务、整圈扫描、ICP、车模型导航 |
+| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表；比赛任务、整圈扫描、ICP、车模型导航、PP/实验LQR跟踪接口 |
 | `crates/device-io` | 安全 rustix 串口配置、独占、8N1、关闭软硬件流控、读回检查、nonblocking poll 与整体包截止时间、故障锁存、Drop 尝试恢复 |
 | `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器增量解析、可选标定 PWM 预览、传感器采集计划/执行；自主模拟/快照回放、背景感知/规划与独立看门狗、有界内存日志及结束原子提交 |
 
@@ -125,7 +143,13 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 
 ### 构建、模型与验证证据
 
-- 最新比赛扩展：Rust常规191通过、原生ORT opt-in 1通过、Python模型48/交付34通过；fmt/all-targets clippy通过。
+- 最新运动扩展：Rust常规209通过、跟踪example测试2通过、Python交付34通过，fmt/all-targets clippy及两个RISC-V交叉链接通过。
+  `docs/motion-control-validation.json`汇总，配套build/ELF/log/两份A/B JSON均在`docs/motion-control-*`。
+  模型和原生推理代码未改，本轮未重跑模型/ORT执行测试；不能把前轮通过项计入本轮实测。
+  robot大小1,884,168字节，SHA256 `902b350111e26b1767d343c5ec43a450fb16fe8f5c86e2603a53c5016feb6704`；
+  xt-stcar SHA仍为`ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9`，二者最高GLIBC引用仍2.34。
+  新core/模型包包含运动说明和A/B证据，大小/哈希/路径与核验见`docs/motion-control-delivery.json`，编译链/环境不进包或Git。
+- 前轮比赛扩展（历史）：Rust常规191通过、原生ORT opt-in 1通过、Python模型48/交付34通过；fmt/all-targets clippy通过。
   两程序RISC-V交叉链接通过。最终合成场景55.3s/554tick、最小锥桶间隙0.301m、斑马线3000ms/绿灯300ms、终点速度0。
   默认日志24,375字节、无丢弃/错误；这些是合成结果，不是实车性能。
   详见 `docs/competition-validation.json`、`competition-simulation-summary.json` 及对应日志。
@@ -136,7 +160,7 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
   加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。当前最高 GLIBC 引用 2.34，符合构建基线 2.38。
   新 robot 程序额外需要 `libm.so.6`，不能继续声称两个程序都只依赖 libc。
-- **最新比赛扩展证据统一见 [Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`**。
+- **当前构建证据见 `docs/motion-control-*`；[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留前轮证据。**
   `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。
   `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；

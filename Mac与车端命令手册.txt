@@ -1,5 +1,5 @@
 XT-STCAR：Mac 与 Muse Pi Pro 车端命令手册
-维护日期：2026-09-08
+维护日期：2026-09-09
 适用工程：/Users/yuhaojin/Documents/XT-STCAR
 
 本文件是操作用法，不表示这些命令已经在车端执行。当前暂不接车。
@@ -235,6 +235,21 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   真实设备必须以后按身份核实，不能把 /dev/car 作为传感器采集口。
 
 五、Mac：自主比赛离线闭环、道路识别和传感器快照回放
+
+路径跟踪 A/B（2026-09-09 新增）
+[Mac；用途] 在直线/弯道及合成转向响应下比较 Pure Pursuit 与实验 LQR。
+[替换项] 无。输出一份 JSON 到 stdout；不读写设备、不执行比赛状态机。
+
+  cargo run --release --locked --offline -p xt-stcar-robot-core --example tracking_comparison
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_comparison
+
+[预期] 两算法的横向/航向误差及失败指标；这是跟踪层合成实验，
+  不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
+  它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
+  当前参数下LQR尚未通过全场验收，默认Pure Pursuit保持不变。
+  常规完整比赛仍运行下方 autonomy-sim。
+  原有模拟配置未写 navigation.tracking 时默认 Pure Pursuit；LQR 配置
+  及模型边界见 docs/运动控制设计与对比.md。不要直接用于实车。
 
 5.1 配置类型与入口
   config/competition-sim.json：SimulationConfig，含场景、理想车辆模型、

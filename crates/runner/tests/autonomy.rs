@@ -152,6 +152,34 @@ fn control_deadline_is_independent_of_recent_sensor_values() {
 }
 
 #[test]
+fn experimental_lqr_still_passes_through_the_source_watchdog_and_fault_latch() {
+    use xt_stcar_robot_core::tracking::TrackingConfig;
+    let mut config = SimulationConfig::example();
+    config.autonomy.navigation.tracking = TrackingConfig::Lqr {
+        q_lateral: 4.0,
+        q_heading: 2.0,
+        r_curvature: 1.0,
+        min_speed_mps: 0.03,
+        max_heading_error_rad: 0.7,
+        max_lateral_error_m: 0.5,
+    };
+    let mut control = AutonomyController::new(config.autonomy.clone()).unwrap();
+    control.start().unwrap();
+    let (mut pose, scan, road) = sample(&config, 0);
+    pose.speed_mps = 0.2; // Exercise LQR above the low-speed PP fallback.
+    let first = control.tick(Timestamp(0), &pose, &scan, &road);
+    assert!(first.fault.is_none(), "{first:?}");
+    assert!(matches!(first.command, MotionOutput::Drive { .. }));
+    let stopped = control.tick(Timestamp(500), &pose, &scan, &road);
+    assert!(stopped.fault.is_some());
+    assert_eq!(stopped.command, MotionOutput::Stop);
+    let (pose, scan, road) = sample(&config, 600);
+    let latched = control.tick(Timestamp(600), &pose, &scan, &road);
+    assert!(latched.fault.is_some());
+    assert_eq!(latched.command, MotionOutput::Stop);
+}
+
+#[test]
 fn renderer_handles_a_tiny_border_light_roi_and_invalid_initial_placement() {
     let mut config = SimulationConfig::example();
     config.road.light_rois = vec![[0.0, 0.0, 0.01, 0.01]];

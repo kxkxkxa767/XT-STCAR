@@ -12,3 +12,4 @@ pub mod mission;
 pub mod navigation;
 pub mod protocol;
 pub mod scan;
+pub mod tracking;

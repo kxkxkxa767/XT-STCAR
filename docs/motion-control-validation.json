@@ -1,0 +1,75 @@
+{
+  "date": "2026-09-09",
+  "scope": "Mac host regression, synthetic tracking/competition comparison, static RISC-V cross-build. No vehicle, target execution or videos.",
+  "rust_workspace": {
+    "passed": 209,
+    "failed": 0,
+    "ignored_native_opt_in": 1
+  },
+  "tracking_example_tests_passed": 2,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "physical_output_enabled": false,
+  "vehicle_execution_verified": false,
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "experimental; did not finish full synthetic competition with documented weights",
+  "unchanged_model_native_runtime_tests": "not rerun; prior competition-validation.json is historical evidence",
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "902b350111e26b1767d343c5ec43a450fb16fe8f5c86e2603a53c5016feb6704",
+      "size_bytes": 1884168,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "tracking_comparison": {
+    "report": "motion-control-tracking-comparison.json",
+    "run_count": 16,
+    "failure_count": 0,
+    "scope": "tracking layer only; no obstacle avoidance, mission, braking or hardware validation"
+  },
+  "competition_comparison": {
+    "report": "motion-control-competition-comparison.json",
+    "runs": [
+      {
+        "tracking": {
+          "kind": "pure_pursuit"
+        },
+        "completed": true,
+        "elapsed_ms": 55300,
+        "fault": null,
+        "final_actual_speed_mps": 0.0
+      },
+      {
+        "tracking": {
+          "kind": "lqr",
+          "max_heading_error_rad": 0.7,
+          "max_lateral_error_m": 0.5,
+          "min_speed_mps": 0.03,
+          "q_heading": 2.0,
+          "q_lateral": 4.0,
+          "r_curvature": 1.0
+        },
+        "completed": false,
+        "elapsed_ms": 27900,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_actual_speed_mps": 0.0
+      }
+    ]
+  },
+  "python_delivery_tests_passed": 34
+}

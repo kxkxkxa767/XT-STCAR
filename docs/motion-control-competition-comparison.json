@@ -1,0 +1,86 @@
+{
+  "physical_output_enabled": false,
+  "runs": [
+    {
+      "error": null,
+      "summary": {
+        "braking_ticks": 0,
+        "completed": true,
+        "crosswalk_hold_ms": 3000,
+        "distance_m": 10.870755585483932,
+        "dropped_trace_records": 0,
+        "elapsed_ms": 55300,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "final_pose": {
+          "x_m": 6.399669829780125,
+          "y_m": 2.498982758762356,
+          "yaw_rad": 0.03188783303234555
+        },
+        "green_observed_ms": 300,
+        "kind": "simulation_summary",
+        "logging_errors": 0,
+        "minimum_cone_clearance_m": 0.301214521244462,
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "approach_light",
+          "wait_green",
+          "finish",
+          "completed"
+        ],
+        "physical_output_enabled": false,
+        "pose_source": "ideal simulated pose feedback; no encoder/localization accuracy claim",
+        "scene": "synthetic RGB, raycast laser and bounded Ackermann plant",
+        "ticks": 554
+      },
+      "tracking": {
+        "kind": "pure_pursuit"
+      }
+    },
+    {
+      "error": null,
+      "summary": {
+        "braking_ticks": 0,
+        "completed": false,
+        "crosswalk_hold_ms": 3000,
+        "distance_m": 3.5841702295403146,
+        "dropped_trace_records": 0,
+        "elapsed_ms": 27900,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_actual_speed_mps": 0.0,
+        "final_pose": {
+          "x_m": 3.6927957942093217,
+          "y_m": 2.9190169709678684,
+          "yaw_rad": -1.45114563578982
+        },
+        "green_observed_ms": 0,
+        "kind": "simulation_summary",
+        "logging_errors": 0,
+        "minimum_cone_clearance_m": 0.2505209013292017,
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "fault"
+        ],
+        "physical_output_enabled": false,
+        "pose_source": "ideal simulated pose feedback; no encoder/localization accuracy claim",
+        "scene": "synthetic RGB, raycast laser and bounded Ackermann plant",
+        "ticks": 280
+      },
+      "tracking": {
+        "kind": "lqr",
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5,
+        "min_speed_mps": 0.03,
+        "q_heading": 2.0,
+        "q_lateral": 4.0,
+        "r_curvature": 1.0
+      }
+    }
+  ],
+  "schema_version": 1,
+  "scope": "Identical synthetic RGB/laser/ideal-pose competition scene; no hardware or target timing measurement"
+}

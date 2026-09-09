@@ -37,6 +37,8 @@ BASE_FILES = {
     "config/scan-assembly-sim.json", "config/laser-localization-sim.json", "docs/Rust比赛自主闭环.md",
     "Mac与车端命令手册.txt",
     "docs/competition-validation.json", "docs/competition-simulation-summary.json",
+    "docs/运动控制设计与对比.md", "docs/motion-control-validation.json", "docs/motion-control-tracking-comparison.json",
+    "docs/motion-control-competition-comparison.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

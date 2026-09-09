@@ -1,0 +1,23 @@
+{
+  "date": "2026-09-09",
+  "scope": "Local package verification only; no vehicle upload or execution",
+  "vehicle_uploaded": false,
+  "packages": [
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-core-20260909T081633946477Z-ec385c9e19f1.tar.gz",
+      "sha256": "c1e85ee925e39014cefde46ddaf09541daca1be952e9b0770cf0a0683cd9f8ef",
+      "size_bytes": 1709270,
+      "file_count": 41,
+      "verified_file_count": 41,
+      "verified": true
+    },
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-with-model-20260909T081634339459Z-ec385c9e19f1.tar.gz",
+      "sha256": "5805d75e36ab532de16601d2e1cfdac0dd348deb2c60bfa974c275b03b2dda64",
+      "size_bytes": 10353603,
+      "file_count": 45,
+      "verified_file_count": 45,
+      "verified": true
+    }
+  ]
+}

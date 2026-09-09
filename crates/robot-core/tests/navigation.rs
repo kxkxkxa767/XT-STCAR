@@ -31,6 +31,34 @@ fn estimate(t: u64, pose: Pose2, speed_mps: f64) -> PoseEstimate {
 fn point(x_m: f64, y_m: f64) -> Point2 {
     Point2 { x_m, y_m }
 }
+
+#[test]
+fn old_navigation_json_preserves_pure_pursuit_and_rejects_unknown_trackers() {
+    use xt_stcar_robot_core::tracking::TrackingConfig;
+    let mut old = serde_json::to_value(config()).unwrap();
+    old.as_object_mut().unwrap().remove("tracking");
+    let decoded: NavigationConfig = serde_json::from_value(old.clone()).unwrap();
+    assert!(matches!(decoded.tracking, TrackingConfig::PurePursuit));
+    decoded.validate().unwrap();
+    old["tracking"] = serde_json::json!({"kind": "unknown"});
+    assert!(serde_json::from_value::<NavigationConfig>(old).is_err());
+}
+
+#[test]
+fn negligible_negative_speed_roundoff_preserves_the_forward_tracking_gate() {
+    let mut nav = Navigator::new(config()).unwrap();
+    let decision = nav
+        .step(
+            Timestamp(0),
+            &estimate(0, pose(1.0, 2.5), -0.000_000_1),
+            &[],
+            Timestamp(0),
+            point(3.0, 2.5),
+        )
+        .unwrap();
+    assert_eq!(decision.status, NavigationStatus::Driving);
+    assert!(decision.intent.speed_mps > 0.0);
+}
 fn pose(x_m: f64, y_m: f64) -> Pose2 {
     Pose2 {
         x_m,

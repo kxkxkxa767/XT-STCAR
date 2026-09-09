@@ -1,0 +1,572 @@
+{
+  "schema_version": 1,
+  "simulation_only": true,
+  "calibration_status": "unverified",
+  "scope": "tracking layer only; no obstacle avoidance, mission, braking or hardware validation",
+  "time_measurement": "simulated_steps * dt_s; no wall-clock timing or target CPU performance claim",
+  "assumptions": [
+    "Ideal, synchronous planar pose feedback; no localisation noise or drift.",
+    "Forward constant speed starts at 0.3 m/s; endpoint checks end the experiment without simulating braking.",
+    "Exact constant-curvature car kinematics with a bounded actual steering curvature rate; no slip or actuator identification.",
+    "Each reference is tested with zero delay and an assumed 200 ms command delay using identical tracker parameters; results do not establish a preferred tracker."
+  ],
+  "parameters": {
+    "dt_s": 0.04,
+    "constant_speed_mps": 0.3,
+    "lookahead_m": 0.55,
+    "max_curvature_per_m": 2.0,
+    "max_actual_curvature_rate_per_m_s": 4.0,
+    "max_steps_per_run": 2500,
+    "forward_progress_window_m": 0.25,
+    "end_position_tolerance_m": 0.08,
+    "end_heading_tolerance_rad": 0.2
+  },
+  "run_count": 16,
+  "failure_count": 0,
+  "results": [
+    {
+      "scenario": "straight_lateral_0.25_m",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.25,
+        "yaw_rad": 0.0
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 414,
+      "simulated_duration_s": 16.56,
+      "position_samples": 415,
+      "lateral_rms_m": 0.07082242428858894,
+      "lateral_max_abs_m": 0.25,
+      "endpoint_error_m": 0.06883517304428186,
+      "endpoint_heading_error_rad": 0.00012755292045696365,
+      "max_abs_actual_curvature_per_m": 1.9996899704570952,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 50.0,
+      "final_pose": {
+        "x_m": 4.931164827724141,
+        "y_m": -0.0000102853777214728,
+        "yaw_rad": 0.00012755292045677795
+      }
+    },
+    {
+      "scenario": "straight_lateral_0.25_m",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.25,
+        "yaw_rad": 0.0
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 412,
+      "simulated_duration_s": 16.48,
+      "position_samples": 413,
+      "lateral_rms_m": 0.10239811637566806,
+      "lateral_max_abs_m": 0.25,
+      "endpoint_error_m": 0.06883893358185789,
+      "endpoint_heading_error_rad": 0.0005390982582564874,
+      "max_abs_actual_curvature_per_m": 0.48,
+      "max_actual_curvature_rate_per_m_s": 4.0,
+      "max_requested_curvature_rate_per_m_s": 12.5,
+      "final_pose": {
+        "x_m": 4.931166434668929,
+        "y_m": -0.0008596862803149539,
+        "yaw_rad": 0.0005390982582565844
+      }
+    },
+    {
+      "scenario": "straight_lateral_0.25_m",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.25,
+        "yaw_rad": 0.0
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 415,
+      "simulated_duration_s": 16.6,
+      "position_samples": 416,
+      "lateral_rms_m": 0.07353600286395057,
+      "lateral_max_abs_m": 0.25,
+      "endpoint_error_m": 0.06511454398259883,
+      "endpoint_heading_error_rad": 0.00007142985722641271,
+      "max_abs_actual_curvature_per_m": 2.0,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 50.0,
+      "final_pose": {
+        "x_m": 4.9348854561931015,
+        "y_m": -4.783439423794422e-6,
+        "yaw_rad": 0.00007142985722631392
+      }
+    },
+    {
+      "scenario": "straight_lateral_0.25_m",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.25,
+        "yaw_rad": 0.0
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 412,
+      "simulated_duration_s": 16.48,
+      "position_samples": 413,
+      "lateral_rms_m": 0.10309079116464184,
+      "lateral_max_abs_m": 0.25,
+      "endpoint_error_m": 0.06956668964133143,
+      "endpoint_heading_error_rad": 0.00021679528914919644,
+      "max_abs_actual_curvature_per_m": 0.5,
+      "max_actual_curvature_rate_per_m_s": 4.0,
+      "max_requested_curvature_rate_per_m_s": 12.5,
+      "final_pose": {
+        "x_m": 4.930434497417862,
+        "y_m": -0.000406396540269232,
+        "yaw_rad": 0.0002167952891490256
+      }
+    },
+    {
+      "scenario": "straight_heading_0.18_rad",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.18
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 411,
+      "simulated_duration_s": 16.44,
+      "position_samples": 412,
+      "lateral_rms_m": 0.012106281785780083,
+      "lateral_max_abs_m": 0.033533445508007104,
+      "endpoint_error_m": 0.07049926300893639,
+      "endpoint_heading_error_rad": -0.00003384034221243226,
+      "max_abs_actual_curvature_per_m": 0.64,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 16.27541576598401,
+      "final_pose": {
+        "x_m": 4.929500737025723,
+        "y_m": 2.2106421132160263e-6,
+        "yaw_rad": -0.00003384034221236409
+      }
+    },
+    {
+      "scenario": "straight_heading_0.18_rad",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.18
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 411,
+      "simulated_duration_s": 16.44,
+      "position_samples": 412,
+      "lateral_rms_m": 0.026193153162357267,
+      "lateral_max_abs_m": 0.052221942162794716,
+      "endpoint_error_m": 0.07144557395309654,
+      "endpoint_heading_error_rad": -0.00014504150184713183,
+      "max_abs_actual_curvature_per_m": 0.435279136840556,
+      "max_actual_curvature_rate_per_m_s": 4.0,
+      "max_requested_curvature_rate_per_m_s": 11.022703842524301,
+      "final_pose": {
+        "x_m": 4.928554700296697,
+        "y_m": -0.00019795906805424423,
+        "yaw_rad": -0.0001450415018469185
+      }
+    },
+    {
+      "scenario": "straight_heading_0.18_rad",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.18
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 411,
+      "simulated_duration_s": 16.44,
+      "position_samples": 412,
+      "lateral_rms_m": 0.012977409533940174,
+      "lateral_max_abs_m": 0.03861778447456688,
+      "endpoint_error_m": 0.07149616381104905,
+      "endpoint_heading_error_rad": 0.00001562508728225609,
+      "max_abs_actual_curvature_per_m": 0.7315762431658777,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 16.27541576598401,
+      "final_pose": {
+        "x_m": 4.928503836200928,
+        "y_m": -1.3086808724085104e-6,
+        "yaw_rad": 0.000015625087282276855
+      }
+    },
+    {
+      "scenario": "straight_heading_0.18_rad",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.18
+      },
+      "reference_path_length_m": 5.0,
+      "reference_point_count": 101,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 411,
+      "simulated_duration_s": 16.44,
+      "position_samples": 412,
+      "lateral_rms_m": 0.026920064397831386,
+      "lateral_max_abs_m": 0.05582880417975546,
+      "endpoint_error_m": 0.07219001336569769,
+      "endpoint_heading_error_rad": -0.00010182807554759421,
+      "max_abs_actual_curvature_per_m": 0.46239170251207096,
+      "max_actual_curvature_rate_per_m_s": 4.0,
+      "max_requested_curvature_rate_per_m_s": 11.022703842524301,
+      "final_pose": {
+        "x_m": 4.927810039792495,
+        "y_m": -0.0000876069540965731,
+        "yaw_rad": -0.00010182807554781266
+      }
+    },
+    {
+      "scenario": "quarter_circle_r2.2_m_with_tangent_tail",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": -0.0009424681066454436,
+        "y_m": 0.11999629891737476,
+        "yaw_rad": 0.08785398163397518
+      },
+      "reference_path_length_m": 4.455716391032987,
+      "reference_point_count": 126,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 365,
+      "simulated_duration_s": 14.6,
+      "position_samples": 366,
+      "lateral_rms_m": 0.03917022390184604,
+      "lateral_max_abs_m": 0.12408603090263198,
+      "endpoint_error_m": 0.0551795391541278,
+      "endpoint_heading_error_rad": 0.03470756191516333,
+      "max_abs_actual_curvature_per_m": 0.8325730105260007,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 26.116115461645062,
+      "final_pose": {
+        "x_m": 2.2019910948610786,
+        "y_m": 3.1448563958149625,
+        "yaw_rad": 1.6055038887100597
+      }
+    },
+    {
+      "scenario": "quarter_circle_r2.2_m_with_tangent_tail",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": -0.0009424681066454436,
+        "y_m": 0.11999629891737476,
+        "yaw_rad": 0.08785398163397518
+      },
+      "reference_path_length_m": 4.455716391032987,
+      "reference_point_count": 126,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 360,
+      "simulated_duration_s": 14.4,
+      "position_samples": 361,
+      "lateral_rms_m": 0.06145527957725104,
+      "lateral_max_abs_m": 0.12927892761909726,
+      "endpoint_error_m": 0.05822990179721368,
+      "endpoint_heading_error_rad": -0.0005329031990850552,
+      "max_abs_actual_curvature_per_m": 0.5126838527166747,
+      "max_actual_curvature_rate_per_m_s": 4.0,
+      "max_requested_curvature_rate_per_m_s": 6.448698409079152,
+      "final_pose": {
+        "x_m": 2.1977715773097146,
+        "y_m": 3.1418127540123564,
+        "yaw_rad": 1.5702634235958117
+      }
+    },
+    {
+      "scenario": "quarter_circle_r2.2_m_with_tangent_tail",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": -0.0009424681066454436,
+        "y_m": 0.11999629891737476,
+        "yaw_rad": 0.08785398163397518
+      },
+      "reference_path_length_m": 4.455716391032987,
+      "reference_point_count": 126,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 365,
+      "simulated_duration_s": 14.6,
+      "position_samples": 366,
+      "lateral_rms_m": 0.0389524698152397,
+      "lateral_max_abs_m": 0.12643393913237863,
+      "endpoint_error_m": 0.05895265953373931,
+      "endpoint_heading_error_rad": 0.02116921399635796,
+      "max_abs_actual_curvature_per_m": 0.9900952769233803,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 26.116115461645062,
+      "final_pose": {
+        "x_m": 2.201280006319744,
+        "y_m": 3.1410612381371785,
+        "yaw_rad": 1.5919655407912545
+      }
+    },
+    {
+      "scenario": "quarter_circle_r2.2_m_with_tangent_tail",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": -0.0009424681066454436,
+        "y_m": 0.11999629891737476,
+        "yaw_rad": 0.08785398163397518
+      },
+      "reference_path_length_m": 4.455716391032987,
+      "reference_point_count": 126,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 361,
+      "simulated_duration_s": 14.44,
+      "position_samples": 362,
+      "lateral_rms_m": 0.058671791993394805,
+      "lateral_max_abs_m": 0.12838477141491694,
+      "endpoint_error_m": 0.05406159058457322,
+      "endpoint_heading_error_rad": -0.00472694071326174,
+      "max_abs_actual_curvature_per_m": 0.519659327080236,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 6.529767127604921,
+      "final_pose": {
+        "x_m": 2.1883210496673215,
+        "y_m": 3.147214986069332,
+        "yaw_rad": 1.566069386081635
+      }
+    },
+    {
+      "scenario": "s_curve_amplitude_0.55_m_length_x6_m",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": -0.0598708863070643,
+        "y_m": 0.1039974854157858,
+        "yaw_rad": 0.6023568234549806
+      },
+      "reference_path_length_m": 6.47017503516916,
+      "reference_point_count": 121,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 534,
+      "simulated_duration_s": 21.36,
+      "position_samples": 535,
+      "lateral_rms_m": 0.03468194243657347,
+      "lateral_max_abs_m": 0.1254338462699196,
+      "endpoint_error_m": 0.0717332316808883,
+      "endpoint_heading_error_rad": 0.049025380086644255,
+      "max_abs_actual_curvature_per_m": 1.28,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 33.99225932993851,
+      "final_pose": {
+        "x_m": 5.9399886112962035,
+        "y_m": -0.039297452248534516,
+        "yaw_rad": 0.5713822035416289
+      }
+    },
+    {
+      "scenario": "s_curve_amplitude_0.55_m_length_x6_m",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.0,
+      "initial_pose": {
+        "x_m": -0.0598708863070643,
+        "y_m": 0.1039974854157858,
+        "yaw_rad": 0.6023568234549806
+      },
+      "reference_path_length_m": 6.47017503516916,
+      "reference_point_count": 121,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 538,
+      "simulated_duration_s": 21.52,
+      "position_samples": 539,
+      "lateral_rms_m": 0.05252140659430439,
+      "lateral_max_abs_m": 0.1293891523801739,
+      "endpoint_error_m": 0.07813964672794228,
+      "endpoint_heading_error_rad": 0.004024084684880691,
+      "max_abs_actual_curvature_per_m": 0.6105195961716084,
+      "max_actual_curvature_rate_per_m_s": 4.0,
+      "max_requested_curvature_rate_per_m_s": 11.376732575872248,
+      "final_pose": {
+        "x_m": 5.930760207742772,
+        "y_m": -0.03621678559650893,
+        "yaw_rad": 0.5263809081398656
+      }
+    },
+    {
+      "scenario": "s_curve_amplitude_0.55_m_length_x6_m",
+      "tracker": {
+        "kind": "pure_pursuit"
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": -0.0598708863070643,
+        "y_m": 0.1039974854157858,
+        "yaw_rad": 0.6023568234549806
+      },
+      "reference_path_length_m": 6.47017503516916,
+      "reference_point_count": 121,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 534,
+      "simulated_duration_s": 21.36,
+      "position_samples": 535,
+      "lateral_rms_m": 0.0357671469092111,
+      "lateral_max_abs_m": 0.1304056550684811,
+      "endpoint_error_m": 0.07634948043393693,
+      "endpoint_heading_error_rad": 0.034649274879488434,
+      "max_abs_actual_curvature_per_m": 1.4067658046553586,
+      "max_actual_curvature_rate_per_m_s": 4.000000000000001,
+      "max_requested_curvature_rate_per_m_s": 33.99225932993851,
+      "final_pose": {
+        "x_m": 5.93549184124174,
+        "y_m": -0.04084042869695746,
+        "yaw_rad": 0.5570060983344731
+      }
+    },
+    {
+      "scenario": "s_curve_amplitude_0.55_m_length_x6_m",
+      "tracker": {
+        "kind": "lqr",
+        "q_lateral": 4.0,
+        "q_heading": 2.0,
+        "r_curvature": 1.0,
+        "min_speed_mps": 0.03,
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5
+      },
+      "assumed_steering_delay_s": 0.2,
+      "initial_pose": {
+        "x_m": -0.0598708863070643,
+        "y_m": 0.1039974854157858,
+        "yaw_rad": 0.6023568234549806
+      },
+      "reference_path_length_m": 6.47017503516916,
+      "reference_point_count": 121,
+      "reached": true,
+      "failure": null,
+      "simulated_steps": 540,
+      "simulated_duration_s": 21.6,
+      "position_samples": 541,
+      "lateral_rms_m": 0.05586076393608783,
+      "lateral_max_abs_m": 0.13380876175869302,
+      "endpoint_error_m": 0.06849547835560203,
+      "endpoint_heading_error_rad": 0.011950567705630633,
+      "max_abs_actual_curvature_per_m": 0.6273281862495332,
+      "max_actual_curvature_rate_per_m_s": 4.0,
+      "max_requested_curvature_rate_per_m_s": 11.376732575872248,
+      "final_pose": {
+        "x_m": 5.936338468100095,
+        "y_m": -0.02527528261602838,
+        "yaw_rad": 0.5343073911606153
+      }
+    }
+  ]
+}

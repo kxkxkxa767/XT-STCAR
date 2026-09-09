@@ -7,6 +7,7 @@
 //! Forward-car circle/tangent geometry: LaValle, Planning Algorithms §15.3.1:
 //! <https://lavalle.pl/planning/node821.html>
 use crate::autonomy::{Footprint, ObstacleDisc, Point2, Pose2, PoseEstimate, Rect};
+use crate::tracking::{PathTracker, TrackInput, TrackingConfig};
 use crate::{FrameId, MotionIntent, Timestamp, ValidationError};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -33,6 +34,9 @@ pub struct NavigationConfig {
     pub max_lateral_accel_mps2: f64,
     pub max_curvature_rate_per_s: f64,
     pub lookahead_m: f64,
+    /// Pure Pursuit remains the default; LQR is an explicit offline experiment.
+    #[serde(default)]
+    pub tracking: TrackingConfig,
     pub preview_horizon_s: f64,
     pub control_period_ms: u64,
     pub max_input_age_ms: u64,
@@ -61,6 +65,7 @@ impl NavigationConfig {
             max_lateral_accel_mps2: 0.4,
             max_curvature_rate_per_s: 4.0,
             lookahead_m: 0.55,
+            tracking: TrackingConfig::default(),
             preview_horizon_s: 2.0,
             control_period_ms: 50,
             max_input_age_ms: 250,
@@ -75,6 +80,7 @@ impl NavigationConfig {
         self.frame_id.validate()?;
         self.bounds.validate()?;
         self.footprint.validate()?;
+        self.tracking.validate()?;
         let positive = [
             self.grid_resolution_m,
             self.max_speed_mps,
@@ -94,13 +100,13 @@ impl NavigationConfig {
             || !(0.005..=1.0).contains(&self.clearance_m)
             || !(0.025..=1.0).contains(&self.grid_resolution_m)
             || self.max_speed_mps > 3.0
-            || self.max_curvature_per_m > 10.0
+            || !(1e-6..=10.0).contains(&self.max_curvature_per_m)
             || self.max_accel_mps2 > 10.0
             || self.max_decel_mps2 > 10.0
             || self.max_lateral_accel_mps2 > 10.0
             || self.max_curvature_rate_per_s > 50.0
             || self.preview_horizon_s > 5.0
-            || self.lookahead_m > 5.0
+            || !(1e-6..=5.0).contains(&self.lookahead_m)
             || self.goal_tolerance_m > 1.0
             || !self.goal_heading_tolerance_rad.is_finite()
             || !(0.01..=0.5).contains(&self.goal_heading_tolerance_rad)
@@ -354,17 +360,26 @@ impl Navigator {
             .windows(2)
             .map(|pair| pair[0].distance(pair[1]))
             .sum::<f64>();
-        let target = path_lookahead(&path, self.config.lookahead_m);
-        let body_target = pose.world_to_body(target);
-        let target_distance_squared = body_target.x_m.powi(2) + body_target.y_m.powi(2);
-        if target_distance_squared <= 1e-12 || body_target.x_m <= 0.0 {
-            self.route = None;
-            return Ok(self.blocked("target_requires_reverse_or_turn_in_place"));
-        }
-        let desired_curvature = (2.0 * body_target.y_m / target_distance_squared).clamp(
-            -self.config.max_curvature_per_m,
-            self.config.max_curvature_per_m,
-        );
+        // Feed the real cached route to the tracker: replacing its first point
+        // with the current pose would erase the LQR cross-track error.
+        let tracking = match self.config.tracking.track(TrackInput {
+            pose,
+            // The outer gate permits 1e-6 m/s measurement roundoff. Normalize
+            // only that accepted edge for the tracker's strictly forward model.
+            speed_mps: estimate.speed_mps.clamp(0.0, self.config.max_speed_mps),
+            path: route,
+            progress: nearest,
+            lookahead_m: self.config.lookahead_m,
+            max_curvature_per_m: self.config.max_curvature_per_m,
+        }) {
+            Ok(command) => command,
+            Err(error) => {
+                self.route = None;
+                return Ok(self.blocked(&format!("path_tracking: {error}")));
+            }
+        };
+        let target = tracking.target;
+        let desired_curvature = tracking.curvature_per_m;
         let slew = self.config.max_curvature_rate_per_s * dt;
         let low = (self.last_curvature - slew).max(-self.config.max_curvature_per_m);
         let high = (self.last_curvature + slew).min(self.config.max_curvature_per_m);
@@ -699,22 +714,6 @@ impl Navigator {
         }
         None
     }
-}
-
-fn path_lookahead(path: &[Point2], distance: f64) -> Point2 {
-    let mut remaining = distance;
-    for pair in path.windows(2) {
-        let length = pair[0].distance(pair[1]);
-        if length > remaining {
-            let ratio = remaining / length;
-            return Point2 {
-                x_m: pair[0].x_m + ratio * (pair[1].x_m - pair[0].x_m),
-                y_m: pair[0].y_m + ratio * (pair[1].y_m - pair[0].y_m),
-            };
-        }
-        remaining -= length;
-    }
-    *path.last().expect("A* path contains a goal")
 }
 
 #[derive(Clone, Copy)]

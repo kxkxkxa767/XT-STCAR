@@ -196,11 +196,14 @@ XT-STCAR/
 | [`crates/robot-core/src/scan.rs`](crates/robot-core/src/scan.rs) | N10 整圈组帧、覆盖/盲区/时间检查；不同于旧局部包回放 |
 | [`crates/robot-core/src/localization.rs`](crates/robot-core/src/localization.rs) | 有界 ICP 激光里程计；退化/跳变/过期门控，不假造编码器 |
 | [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 带车体和转弯约束的路径搜索、跟踪、障碍/制动检查及停车朝向 |
+| [`crates/robot-core/src/tracking.rs`](crates/robot-core/src/tracking.rs) | PathTracker 接口、默认 Pure Pursuit、实验性曲率前馈 + LQR；只给导航期望曲率 |
+| [`crates/robot-core/examples/tracking_comparison.rs`](crates/robot-core/examples/tracking_comparison.rs) | 直线/弯道的 Rust 跟踪 A/B 实验，输出误差与合成转向响应指标 |
 | [`crates/runner/src/laser_pose.rs`](crates/runner/src/laser_pose.rs) | 整圈检查、雷达到车体外参与 ICP 桥接，保留源时刻 |
 | [`crates/runner/src/perception.rs`](crates/runner/src/perception.rs) | 同图 RGB + 常驻原生 YOLO + RoadDetector；后台感知只留最新待处理帧 |
 | [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 位姿/雷达/道路观察校验 → 任务 → 导航 → 安全控制器 |
 | [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立周期轮询和源时间命令看门狗 |
 | [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿反馈与有加减速车辆模型的合成闭环，掉线注入和碰撞检查 |
+| [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
 | [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
 | [`crates/runner/src/telemetry.rs`](crates/runner/src/telemetry.rs) | 有界内存事件日志；调试预算耗尽不影响比赛控制 |
 
@@ -208,6 +211,39 @@ XT-STCAR/
 新增自主流为：RGB/雷达/位姿 → 道路识别 → 比赛任务 → 路径规划/跟踪 → 安全控制 → 车辆模型 → 下一帧反馈。
 独立串口采集先生成可回放的原始字节文件；采集没有 Arm/Start/Motion 事件。
 目前没有把采集与电机发送接成实时闭环。
+
+## 运动控制
+
+已对照[用户分享的算法建议](https://chatgpt.com/share/6aa0bf59-c8f8-83ee-b001-13dd5945ce14)审查代码。
+当前采用前进车辆运动学：比赛任务给目标/限速 → A* 连通与带航向/曲率的车模型路线 → PathTracker →
+候选轨迹预测、碰撞和制动检查 → 安全状态机。默认 **Pure Pursuit** 保留，新增 **曲率前馈 + LQR** 供离线比较。
+不是单个 PID 直接把图像误差变成舵机 PWM，也没有实现 MPC 求解器。
+
+`tracking.rs` 只输出期望曲率；加减速、横向加速度、曲率及其变化率、完整车体和停车可达域仍由 `navigation.rs` 检查。
+两种跟踪器均走同一安全通路。命令单位为线速度 m/s、曲率 m⁻¹，模型 `yaw_rate = speed × curvature`；
+转向正方向为左转。静态 PWM 映射在 `protocol/calibrated_chassis.rs`，不把厂商 Twist 的经验系数当成物理单位。
+
+LQR 同时使用相对真实参考路径的横向和航向误差，以相邻路径几何作曲率前馈。
+这是连续时间、固定正速度的直线附近误差模型，低速回退 PP，异常输入/超出误差域请求 Stop；
+它没有证明在弯道、执行器延迟和所有离散周期下优于 PP。旧 JSON 省略 `navigation.tracking` 时仍选 PP。
+选择方法、模型假设和逐项评估见 [运动控制设计与对比](docs/运动控制设计与对比.md)。
+
+```bash
+# Mac：依次为跟踪层实验、完整比赛对比；均无设备读写
+cargo run --release --locked --offline -p xt-stcar-robot-core --example tracking_comparison
+cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_comparison
+```
+
+本轮跟踪层16组全部进入终点容差，但当前LQR权重的横向RMS高于PP；完整比赛中PP仍55.3秒完成，
+LQR绕锥桶阶段停住并在27.9秒触发普通停车超时。因此 **LQR尚未通过全场验收，不用于替换默认算法**。
+原始结果和条件见上面的运动控制说明；模拟秒数不代表板卡计算耗时。
+
+当前激光定位是 ICP，**尚无 EKF/ESKF、速度 PI 或真实执行器闭环**。没有轮编码器，不能把低频激光速度重复读取当成高速轮速；
+后续先补传感器共同时间轴、扫描去畸变、IMU 标定/融合，再评估前馈表加限幅抗饱和 PI。
+舵机标称 `0.16～0.18 s/60°` 不直接等于前轮转向响应；轴距、转向曲率/PWM、制动能力与 MCU 断链停车仍须实测。
+Stop 是停止请求，车辆模型继续减速并逐步回中；物理 ESC 中位是否制动尚未验证。
+导航保存的是上一目标曲率，尚无真实转向反馈；侧向加速度检查约束候选 `v²|curvature|`，
+不能据此声称执行器动态过渡的实际侧向加速度已受实测保证。保守停车圆盘覆盖中间转向，但仍依赖实际制动能力达到配置假设。
 
 ## 配置与样例索引
 
@@ -302,8 +338,9 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-本轮191项Rust常规测试、1项原生ORT测试、48项模型/34项交付测试通过；完整合成比赛完成，
-详情见 [验证汇总](docs/competition-validation.json)。
+本轮209项Rust常规测试、2项跟踪基准测试、34项交付测试通过，两个RISC-V程序交叉链接通过；
+默认PP完成合成比赛，LQR的失败结果一并保留，详情见 [运动控制验证汇总](docs/motion-control-validation.json)。
+模型/原生推理模块未改，本轮不重复运行其验证；前轮1项原生ORT、48项模型测试记录见 [历史比赛验证](docs/competition-validation.json)。
 构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的架构/ABI/加载器/GLIBC。
 ELF 检查核对动态加载表与 section 映射及版本需求，不验证所有机器指令或代替目标机运行。
 交付包不含工具链、虚拟环境、Mac dylib 或缓存；带模型包另带 provenance 与模型许可。
