@@ -1,0 +1,89 @@
+{
+  "date": "2026-09-10",
+  "scope": "Mac host regression; synthetic competition; static RISC-V cross-build. No vehicle or target execution. No videos.",
+  "rust_workspace": {
+    "passed": 237,
+    "failed": 0,
+    "ignored_native_opt_in": 1
+  },
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "physical_output_enabled": false,
+  "vehicle_execution_verified": false,
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "experimental; same documented weights; synthetic completion is not hardware validation",
+  "unchanged_model_native_runtime_tests": "not rerun; historical evidence kept in competition-validation.json",
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "f5652cb05757ea135eaff714be5f5af4e2770151118c50197534356942bd6863",
+      "size_bytes": 1918960,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "before_report": "motion-v2-before.json",
+  "competition_report": "motion-v2-competition-comparison.json",
+  "build_report": "motion-v2-build.json",
+  "build_log": "motion-v2-build.log",
+  "not_implemented": [
+    "physical sensor synchronization and feedback",
+    "planner-native heading/curvature reference samples",
+    "low-speed tracking hysteresis",
+    "unified tracking-layer and competition benchmark periods"
+  ],
+  "tracking_example_tests_passed": 2,
+  "python_delivery_tests_passed": 34,
+  "competition_comparison": {
+    "report": "motion-v2-competition-comparison.json",
+    "runs": [
+      {
+        "tracking": {
+          "kind": "pure_pursuit"
+        },
+        "completed": true,
+        "elapsed_ms": 55900,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "minimum_cone_clearance_m": 0.30268163428389583,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "first_unexpected_navigation_at_ms": 14300,
+        "diagnostic_window_frames": 17
+      },
+      {
+        "tracking": {
+          "kind": "lqr",
+          "max_heading_error_rad": 0.7,
+          "max_lateral_error_m": 0.5,
+          "min_speed_mps": 0.03,
+          "q_heading": 2.0,
+          "q_lateral": 4.0,
+          "r_curvature": 1.0
+        },
+        "completed": true,
+        "elapsed_ms": 53300,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "minimum_cone_clearance_m": 0.29486821138066216,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "first_unexpected_navigation_at_ms": null,
+        "diagnostic_window_frames": 0
+      }
+    ]
+  }
+}

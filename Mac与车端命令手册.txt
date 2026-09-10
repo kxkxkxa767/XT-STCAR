@@ -246,7 +246,13 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
 [预期] 两算法的横向/航向误差及失败指标；这是跟踪层合成实验，
   不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
   它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
-  当前参数下LQR尚未通过全场验收，默认Pure Pursuit保持不变。
+  LQR仍为实验选项，默认Pure Pursuit保持不变；当前结果见
+  docs/motion-v2-competition-comparison.json，旧motion-control结果保留历史。
+  summary.first_navigation_failure 为首个非预期阻塞/故障窗口，最多8帧前文、
+  触发帧、8帧后文；null表示没有触发。先看触发帧的navigation_reason、
+  navigation.candidates及请求/选中曲率，再对照最终fault；首次阻塞可能恢复。
+  该字段在内存保留，结束随摘要写出，无需默认开启--trace。
+  目前autonomy-sim和完整比赛A/B有此窗口，autonomy-replay尚未接入。
   常规完整比赛仍运行下方 autonomy-sim。
   原有模拟配置未写 navigation.tracking 时默认 Pure Pursuit；LQR 配置
   及模型边界见 docs/运动控制设计与对比.md。不要直接用于实车。

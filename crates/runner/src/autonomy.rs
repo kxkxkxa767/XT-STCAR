@@ -297,6 +297,14 @@ impl AutonomyController {
             stopped.mission = Some(mission);
             return Ok(stopped);
         }
+        // Use the exact line checked by Mission, including the transition tick
+        // out of Cones. Only confirmed stationary green admission enters Finish.
+        let travel_boundary = matches!(
+            mission.phase,
+            MissionPhase::ApproachLight | MissionPhase::WaitGreen
+        )
+        .then(|| self.mission.light_stop_boundary());
+        self.navigation.set_travel_boundary(travel_boundary);
         let (intent, navigation, hold) = match &mission.output {
             MissionOutput::Target {
                 point,

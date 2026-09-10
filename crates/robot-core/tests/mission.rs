@@ -609,6 +609,69 @@ fn crossing_light_without_green_or_losing_green_before_clearance_stops() {
 }
 
 #[test]
+fn rotated_light_boundary_and_mission_agree_on_the_first_crossing_corner() {
+    use std::f64::consts::{FRAC_PI_2, PI};
+
+    for yaw in [0.0, 0.63, FRAC_PI_2, -FRAC_PI_2, 0.75 * PI, -PI] {
+        let mut cfg = config();
+        // A square stop region fits the same body at every tested approach yaw.
+        cfg.light_stop_region = rect(4.0, -0.5, 5.0, 0.5);
+        cfg.light_approach_yaw_rad = yaw;
+        let boundary = cfg.light_stop_boundary().unwrap();
+        let (s, c) = yaw.sin_cos();
+        // Independently compute the square's forward support and the leading
+        // corner of a body misaligned by 0.4 rad; checking just its nose or its
+        // world x-coordinate would miss some of these crossings.
+        let line_projection = 0.5 * (c.abs() + s.abs());
+        let body_yaw_error = 0.4_f64;
+        let body_projection = cfg.footprint.front_m * body_yaw_error.cos()
+            + cfg.footprint.half_width_m * body_yaw_error.sin();
+        assert!((boundary.max_projection_m() - line_projection).abs() < 1e-12);
+        for crossing in [false, true] {
+            let signed_offset = if crossing { 0.002 } else { -0.002 };
+            let along = line_projection - body_projection + signed_offset;
+            let side = 0.11;
+            let mut measured = pose(
+                0,
+                cfg.light_stop_goal.x_m + c * along - s * side,
+                cfg.light_stop_goal.y_m + s * along + c * side,
+                0.1,
+            );
+            measured.pose.yaw_rad = yaw + body_yaw_error;
+            assert_eq!(
+                boundary.contains_footprint(cfg.footprint, measured.pose, 0.0),
+                !crossing,
+                "yaw={yaw}, crossing={crossing}"
+            );
+            let mut mission = Mission::new(cfg.clone()).unwrap();
+            assert_eq!(mission.light_stop_boundary(), boundary);
+            mission.start().unwrap();
+            let mut run = Run { mission, at: 0 };
+            run.approach_light();
+            run.at += 100;
+            measured.captured_at = Timestamp(run.at);
+            let report = run.mission.update(
+                Timestamp(run.at),
+                &measured,
+                &road(run.at, LightState::Green),
+            );
+            if crossing {
+                assert_eq!(report.phase, MissionPhase::Fault, "yaw={yaw}: {report:?}");
+                assert_eq!(report.output, MissionOutput::Stop);
+                assert!(report.reason.contains("without confirmed green"));
+            } else {
+                assert_eq!(
+                    report.phase,
+                    MissionPhase::ApproachLight,
+                    "yaw={yaw}: {report:?}"
+                );
+                assert!(matches!(report.output, MissionOutput::Target { .. }));
+            }
+        }
+    }
+}
+
+#[test]
 fn fresh_samples_after_a_long_gap_cannot_claim_continuous_stopping() {
     let mut run = Run::new();
     run.arrive_crosswalk();

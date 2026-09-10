@@ -245,4 +245,155 @@ fn exhausted_debug_log_budget_does_not_change_the_control_or_braking_result() {
     assert_eq!(trace.elapsed_ms, quiet.elapsed_ms);
     assert_eq!(trace.final_actual_speed_mps, quiet.final_actual_speed_mps);
     assert_eq!(trace.braking_ticks, quiet.braking_ticks);
+    assert!(quiet.first_navigation_failure.is_some());
+    assert_eq!(
+        serde_json::to_value(&trace.first_navigation_failure).unwrap(),
+        serde_json::to_value(&quiet.first_navigation_failure).unwrap()
+    );
+}
+
+#[test]
+fn light_boundary_applies_on_transition_and_only_confirmed_new_green_releases_it() {
+    use xt_stcar_robot_core::autonomy::{CrosswalkObservation, Pose2, RoadObservation};
+    use xt_stcar_robot_core::mission::MissionOutput;
+
+    let config = SimulationConfig::example();
+    let mission = &config.autonomy.mission;
+    let boundary = mission.light_stop_boundary().unwrap();
+    let mut control = AutonomyController::new(config.autonomy.clone()).unwrap();
+    control.start().unwrap();
+    // Prescribed sensor snapshots exercise phase/command integration; this is
+    // deliberately not a plant model or an assertion of physical travel time.
+    let mut tick = |at, pose: Pose2, speed_mps, observation| {
+        let estimate = PoseEstimate {
+            captured_at: Timestamp(at),
+            frame_id: mission.world_frame.clone(),
+            pose,
+            speed_mps,
+            yaw_rate_radps: 0.0,
+            quality: 1.0,
+        };
+        let scan = synthetic_scan(&config, pose, &[], Timestamp(at));
+        let report = control.tick(
+            Timestamp(at),
+            &estimate,
+            &scan,
+            &RoadFrame {
+                observation,
+                image_width_px: 320,
+                image_height_px: 240,
+            },
+        );
+        assert!(report.fault.is_none(), "{report:?}");
+        report
+    };
+    let road = |at, light| RoadObservation {
+        captured_at: Timestamp(at),
+        frame_id: mission.body_frame.clone(),
+        crosswalk: None,
+        light,
+        light_confidence: 1.0,
+        cones_body_m: vec![],
+    };
+    let mut observed = road(0, LightState::Unknown);
+    observed.crosswalk = Some(CrosswalkObservation {
+        near_edge_m: config.crosswalk.min_x_m - config.initial_pose.x_m,
+        far_edge_m: config.crosswalk.max_x_m - config.initial_pose.x_m,
+        lateral_min_m: config.crosswalk.min_y_m - config.initial_pose.y_m,
+        lateral_max_m: config.crosswalk.max_y_m - config.initial_pose.y_m,
+        confidence: 1.0,
+    });
+    let first = tick(0, config.initial_pose, 0.1, observed);
+    let MissionOutput::Target { point, .. } = first.mission.unwrap().output else {
+        panic!("crosswalk observation must produce a stop target");
+    };
+    assert!(
+        first
+            .navigation
+            .unwrap()
+            .diagnostics
+            .travel_boundary
+            .is_none()
+    );
+    let stopped = Pose2 {
+        x_m: point.x_m,
+        y_m: point.y_m,
+        yaw_rad: 0.0,
+    };
+    for step in 0..=30 {
+        let at = 100 + step * 100;
+        let report = tick(at, stopped, 0.0, road(at, LightState::Unknown));
+        assert_eq!(
+            report.mission.unwrap().phase,
+            if step < 30 {
+                MissionPhase::CrosswalkStop
+            } else {
+                MissionPhase::Cones
+            }
+        );
+    }
+    for (index, point) in mission.cone_waypoints.iter().enumerate() {
+        let at = 3200 + index as u64 * 100;
+        let report = tick(
+            at,
+            Pose2 {
+                x_m: point.x_m,
+                y_m: point.y_m,
+                yaw_rad: 0.0,
+            },
+            0.1,
+            road(at, LightState::Green),
+        );
+        let transitioned = index + 1 == mission.cone_waypoints.len();
+        assert_eq!(
+            report.mission.unwrap().phase,
+            if transitioned {
+                MissionPhase::ApproachLight
+            } else {
+                MissionPhase::Cones
+            }
+        );
+        assert_eq!(
+            report.navigation.unwrap().diagnostics.travel_boundary,
+            transitioned.then_some(boundary),
+            "the newly reported phase must constrain this same tick"
+        );
+    }
+    let light_pose = Pose2 {
+        x_m: mission.light_stop_goal.x_m,
+        y_m: mission.light_stop_goal.y_m,
+        yaw_rad: mission.light_approach_yaw_rad,
+    };
+    // This green frame is fresh enough for sensor validation, but predates the
+    // actual stationary arrival and must neither accrue time nor release Drive.
+    let arrived = tick(3400, light_pose, 0.0, road(3300, LightState::Green));
+    assert_eq!(arrived.command, MotionOutput::Stop);
+    let arrived_mission = arrived.mission.unwrap();
+    assert_eq!(arrived_mission.phase, MissionPhase::WaitGreen);
+    assert_eq!(arrived_mission.green_elapsed_ms, 0);
+
+    for (at, captured_at, elapsed) in [(3500, 3500, 0), (3600, 3500, 0), (3700, 3700, 200)] {
+        let report = tick(at, light_pose, 0.0, road(captured_at, LightState::Green));
+        assert_eq!(report.command, MotionOutput::Stop);
+        let mission = report.mission.unwrap();
+        assert_eq!(mission.phase, MissionPhase::WaitGreen);
+        assert_eq!(mission.green_elapsed_ms, elapsed);
+    }
+    let released = tick(3800, light_pose, 0.0, road(3800, LightState::Green));
+    let released_mission = released.mission.unwrap();
+    assert_eq!(released_mission.phase, MissionPhase::Finish);
+    assert_eq!(released_mission.green_elapsed_ms, mission.min_green_ms);
+    assert!(matches!(
+        released_mission.output,
+        MissionOutput::Target { .. }
+    ));
+    assert!(
+        released
+            .navigation
+            .unwrap()
+            .diagnostics
+            .travel_boundary
+            .is_none()
+    );
+    assert!(matches!(released.command, MotionOutput::Drive { .. }));
 }

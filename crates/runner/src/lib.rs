@@ -6,6 +6,7 @@ pub mod capture;
 pub mod control_runtime;
 pub mod input;
 pub mod laser_pose;
+pub mod navigation_diagnostics;
 pub mod perception;
 pub mod simulation;
 pub mod telemetry;

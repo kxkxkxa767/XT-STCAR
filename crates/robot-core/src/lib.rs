@@ -11,5 +11,6 @@ pub mod localization;
 pub mod mission;
 pub mod navigation;
 pub mod protocol;
+pub mod reference;
 pub mod scan;
 pub mod tracking;

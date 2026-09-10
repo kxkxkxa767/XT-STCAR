@@ -6,8 +6,9 @@
 //! <https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm>
 //! Forward-car circle/tangent geometry: LaValle, Planning Algorithms §15.3.1:
 //! <https://lavalle.pl/planning/node821.html>
-use crate::autonomy::{Footprint, ObstacleDisc, Point2, Pose2, PoseEstimate, Rect};
-use crate::tracking::{PathTracker, TrackInput, TrackingConfig};
+use crate::autonomy::{Footprint, HalfPlane, ObstacleDisc, Point2, Pose2, PoseEstimate, Rect};
+use crate::reference::{PreparedReference, ReferenceCursor};
+use crate::tracking::{PathTracker, TrackInput, TrackingConfig, TrackingDiagnostics};
 use crate::{FrameId, MotionIntent, Timestamp, ValidationError};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -146,12 +147,46 @@ pub enum NavigationStatus {
     Blocked,
 }
 
+/// Fixed-size accounting, separate from path/point-cloud storage and control policy.
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct CandidateDiagnostics {
+    pub curvature_speed_limits: usize,
+    pub near_zero_speed: usize,
+    pub rollouts_evaluated: usize,
+    pub accepted: usize,
+    pub stop_reachable: usize,
+    pub grid: usize,
+    pub footprint: usize,
+    pub sample_budget: usize,
+    pub reference: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct NavigationDiagnostics {
+    pub travel_boundary: Option<HalfPlane>,
+    pub route_revision: u64,
+    pub route_progress: Option<usize>,
+    pub route_points: usize,
+    pub tracking: Option<TrackingDiagnostics>,
+    pub requested_curvature_per_m: Option<f64>,
+    pub slew_limited_curvature_per_m: Option<f64>,
+    pub selected_curvature_per_m: Option<f64>,
+    pub selected_prediction_distance_m: Option<f64>,
+    pub selected_prediction_endpoint: Option<Pose2>,
+    pub selected_cross_track_m: Option<f64>,
+    pub selected_heading_error_rad: Option<f64>,
+    pub selected_progress_m: Option<f64>,
+    pub selected_reference_cost_m: Option<f64>,
+    pub candidates: CandidateDiagnostics,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct NavigationDecision {
     pub status: NavigationStatus,
     pub intent: MotionIntent,
     pub path: Vec<Point2>,
     pub reason: Option<String>,
+    pub diagnostics: NavigationDiagnostics,
 }
 
 impl NavigationDecision {
@@ -164,14 +199,18 @@ impl NavigationDecision {
             },
             path: vec![],
             reason: Some(reason.into()),
+            diagnostics: NavigationDiagnostics::default(),
         }
     }
 }
 
 pub struct Navigator {
     config: NavigationConfig,
+    travel_boundary: Option<HalfPlane>,
     last_step: Option<Timestamp>,
     last_curvature: f64,
+    route_revision: u64,
+    diagnostics: NavigationDiagnostics,
     route: Option<(Point2, Option<f64>, Vec<Point2>, usize)>,
 }
 
@@ -180,14 +219,27 @@ impl Navigator {
         config.validate()?;
         Ok(Self {
             config,
+            travel_boundary: None,
             last_step: None,
             last_curvature: 0.0,
+            route_revision: 0,
+            diagnostics: NavigationDiagnostics::default(),
             route: None,
         })
     }
 
     pub fn config(&self) -> &NavigationConfig {
         &self.config
+    }
+
+    /// Change the allowed travel domain without inventing actuator motion.
+    /// Geometry is validated by HalfPlane's constructors. A cached route cannot
+    /// survive adding, moving, or removing a boundary, even with the same goal.
+    pub fn set_travel_boundary(&mut self, boundary: Option<HalfPlane>) {
+        if self.travel_boundary != boundary {
+            self.travel_boundary = boundary;
+            self.route = None;
+        }
     }
 
     /// Call during a task hold; no timer expiry or motion history is invented.
@@ -282,6 +334,11 @@ impl Navigator {
             ));
         }
         let period = self.config.control_period_ms as f64 / 1000.0;
+        self.diagnostics = NavigationDiagnostics {
+            travel_boundary: self.travel_boundary,
+            route_revision: self.route_revision,
+            ..NavigationDiagnostics::default()
+        };
         let dt = self
             .last_step
             .map_or(period, |at| ((now.0 - at.0) as f64 / 1000.0).min(period));
@@ -299,8 +356,26 @@ impl Navigator {
             return self.stop(now);
         }
         let pose = estimate.pose;
-        if !pose_clear(&self.config, pose, obstacles, self.config.clearance_m) {
+        if !pose_clear(&self.config, pose, obstacles, self.config.clearance_m)
+            || self.travel_boundary.is_some_and(|boundary| {
+                !boundary.contains_footprint(self.config.footprint, pose, self.config.clearance_m)
+            })
+        {
             return Ok(self.blocked("current_footprint_collision_or_boundary"));
+        }
+        // Even a near-stationary arrival must retain enough room to stop on
+        // the allowed side. Do this before Reached/goal_braking can bypass rollout.
+        let measured_speed = estimate.speed_mps.max(0.0);
+        if self.travel_boundary.is_some_and(|boundary| {
+            !boundary.contains_disc(
+                pose.point(),
+                body_radius(self.config.footprint)
+                    + self.config.clearance_m
+                    + 2.0 * measured_speed * period
+                    + measured_speed.powi(2) / (2.0 * self.config.max_decel_mps2),
+            )
+        }) {
+            return Ok(self.blocked("stop_boundary_not_reachable"));
         }
         let distance = pose.point().distance(goal);
         let heading_reached = goal_heading_rad.is_none_or(|yaw| {
@@ -319,7 +394,7 @@ impl Navigator {
             // Request the stop contract and wait for measured standstill.
             return Ok(self.blocked("goal_braking"));
         }
-        let grid = Grid::new(&self.config, obstacles);
+        let grid = Grid::with_boundary(&self.config, obstacles, self.travel_boundary);
         if self.plan_on_grid(pose.point(), goal, &grid).is_none() {
             return Ok(self.blocked("no_grid_path"));
         }
@@ -333,6 +408,10 @@ impl Navigator {
             self.route = self
                 .kinematic_path(pose, goal, goal_heading_rad, &grid)
                 .map(|path| (goal, goal_heading_rad, path, 0));
+            if self.route.is_some() {
+                self.route_revision = self.route_revision.saturating_add(1);
+                self.diagnostics.route_revision = self.route_revision;
+            }
         }
         let Some((_, _, route, progress)) = &mut self.route else {
             return Ok(self.blocked("no_forward_kinematic_path"));
@@ -354,6 +433,8 @@ impl Navigator {
             }
         }
         *progress = nearest;
+        self.diagnostics.route_progress = Some(nearest);
+        self.diagnostics.route_points = route.len();
         let mut path = vec![pose.point()];
         path.extend_from_slice(&route[(nearest + 1).min(route.len() - 1)..]);
         let remaining_distance = path
@@ -378,12 +459,23 @@ impl Navigator {
                 return Ok(self.blocked(&format!("path_tracking: {error}")));
             }
         };
-        let target = tracking.target;
+        let reference_horizon =
+            self.config.max_speed_mps * self.config.preview_horizon_s + self.config.lookahead_m;
+        let Some(reference_window) = PreparedReference::new(route, nearest, reference_horizon)
+        else {
+            return Ok(self.blocked("invalid_local_reference"));
+        };
+        let Some(current_reference) = reference_window.project(pose.point()) else {
+            return Ok(self.blocked("invalid_local_reference"));
+        };
         let desired_curvature = tracking.curvature_per_m;
+        self.diagnostics.tracking = Some(tracking.diagnostics);
+        self.diagnostics.requested_curvature_per_m = Some(desired_curvature);
         let slew = self.config.max_curvature_rate_per_s * dt;
         let low = (self.last_curvature - slew).max(-self.config.max_curvature_per_m);
         let high = (self.last_curvature + slew).min(self.config.max_curvature_per_m);
         let preferred = desired_curvature.clamp(low, high);
+        self.diagnostics.slew_limited_curvature_per_m = Some(preferred);
         let speed_upper = self
             .config
             .max_speed_mps
@@ -410,30 +502,95 @@ impl Navigator {
             };
             let nominal = speed_upper.min(turning_speed).min(goal_speed);
             if nominal + 1e-9 < speed_lower {
+                self.diagnostics.candidates.curvature_speed_limits += 1;
                 continue; // A normal candidate cannot exceed braking/turning limits.
             }
             for fraction in [1.0, 0.5] {
                 let speed = (nominal * fraction).max(speed_lower).min(nominal);
                 if speed < 1e-6 {
+                    self.diagnostics.candidates.near_zero_speed += 1;
                     continue;
                 }
-                let Some(endpoint) = rollout(
+                self.diagnostics.candidates.rollouts_evaluated += 1;
+                let prediction = match rollout(
                     &self.config,
                     pose,
-                    estimate.speed_mps.max(speed),
+                    estimate.speed_mps.max(0.0),
+                    speed,
+                    self.last_curvature,
                     curvature,
                     obstacles,
                     remaining_distance,
                     &grid,
-                ) else {
+                    goal_heading_rad.map(|goal_heading_rad| RolloutReference {
+                        cursor: reference_window.cursor_to_end(),
+                        initial_arc_m: current_reference.arc_m,
+                        goal_heading_rad,
+                    }),
+                ) {
+                    Ok(prediction) => {
+                        self.diagnostics.candidates.accepted += 1;
+                        prediction
+                    }
+                    Err(reason) => {
+                        let count = match reason {
+                            RolloutRejection::StopReachable => {
+                                &mut self.diagnostics.candidates.stop_reachable
+                            }
+                            RolloutRejection::Grid => &mut self.diagnostics.candidates.grid,
+                            RolloutRejection::Footprint => {
+                                &mut self.diagnostics.candidates.footprint
+                            }
+                            RolloutRejection::SampleBudget => {
+                                &mut self.diagnostics.candidates.sample_budget
+                            }
+                            RolloutRejection::Reference => {
+                                &mut self.diagnostics.candidates.reference
+                            }
+                        };
+                        *count += 1;
+                        continue;
+                    }
+                };
+                let Some(reference) = reference_window.project(prediction.endpoint.point()) else {
                     continue;
                 };
-                // Track the local path first; curvature preference avoids branch chatter.
-                let score = endpoint.point().distance(target)
-                    + 0.15 * (curvature - desired_curvature).abs()
-                    + 0.08 * (curvature - self.last_curvature).abs()
-                    - 0.3 * speed;
+                let progress_m = reference.arc_m - current_reference.arc_m;
+                let reference_heading =
+                    if remaining_distance - progress_m <= self.config.goal_tolerance_m {
+                        goal_heading_rad.unwrap_or(reference.heading_rad)
+                    } else {
+                        reference.heading_rad
+                    };
+                let heading_error = angle_error(prediction.endpoint.yaw_rad, reference_heading);
+                let score = if let Some(cost) = prediction.reference_cost_m {
+                    // Oriented goals need the whole approach, not just a final
+                    // point: constant-curvature previews can hide intermediate
+                    // errors across a bend. Steering preference has the scale
+                    // of one tick's lateral displacement, so it cannot dominate
+                    // the remaining path's position and heading corrections.
+                    cost + 0.5
+                        * (speed * period).powi(2)
+                        * ((curvature - desired_curvature).abs()
+                            + (curvature - self.last_curvature).abs())
+                        - 0.3 * speed
+                } else {
+                    // Point-only waypoints retain their pursuit target. Fade
+                    // steering preference near arrival as its geometric effect
+                    // falls quadratically with remaining travel distance.
+                    let approach_scale = (remaining_distance / self.config.lookahead_m).min(1.0);
+                    prediction.endpoint.point().distance(tracking.target)
+                        + 0.15 * approach_scale.powi(2) * (curvature - desired_curvature).abs()
+                        + 0.08 * approach_scale.powi(2) * (curvature - self.last_curvature).abs()
+                        - 0.3 * speed
+                };
                 if best.as_ref().is_none_or(|(old, _)| score < *old) {
+                    self.diagnostics.selected_prediction_distance_m = Some(prediction.distance_m);
+                    self.diagnostics.selected_prediction_endpoint = Some(prediction.endpoint);
+                    self.diagnostics.selected_cross_track_m = Some(reference.distance_m);
+                    self.diagnostics.selected_heading_error_rad = Some(heading_error);
+                    self.diagnostics.selected_progress_m = Some(progress_m);
+                    self.diagnostics.selected_reference_cost_m = prediction.reference_cost_m;
                     best = Some((
                         score,
                         MotionIntent {
@@ -445,12 +602,14 @@ impl Navigator {
             }
         }
         if let Some((_, intent)) = best {
+            self.diagnostics.selected_curvature_per_m = Some(intent.curvature_per_m);
             self.last_curvature = intent.curvature_per_m;
             Ok(NavigationDecision {
                 status: NavigationStatus::Driving,
                 intent,
                 path,
                 reason: None,
+                diagnostics: self.diagnostics,
             })
         } else {
             self.route = None; // changed observations require a new bounded search.
@@ -462,7 +621,9 @@ impl Navigator {
 
     fn blocked(&mut self, reason: &str) -> NavigationDecision {
         self.last_curvature = 0.0;
-        NavigationDecision::stopped(NavigationStatus::Blocked, reason)
+        let mut decision = NavigationDecision::stopped(NavigationStatus::Blocked, reason);
+        decision.diagnostics = self.diagnostics;
+        decision
     }
 
     /// Forward-only lattice search supplements 2-D A*: a short grid route may
@@ -476,6 +637,24 @@ impl Navigator {
         goal_heading_rad: Option<f64>,
         grid: &Grid,
     ) -> Option<Vec<Point2>> {
+        // Try one bounded smooth approach before quantizing into lattice bins.
+        // Small sideways corrections with the same final heading need an S,
+        // which the five steering bins can otherwise replace with a full loop.
+        if let Some(heading) = goal_heading_rad
+            && let Some((points, _, _)) = car_two_arc_connection(
+                start,
+                self.last_curvature,
+                goal,
+                heading,
+                &self.config,
+                grid,
+            )
+        {
+            let mut path = Vec::with_capacity(points.len() + 1);
+            path.push(start.point());
+            path.extend(points);
+            return Some(path);
+        }
         let mut nodes = vec![CarNode {
             pose: start,
             curvature: self.last_curvature,
@@ -511,48 +690,38 @@ impl Navigator {
             }
             let local_goal = node.pose.world_to_body(goal);
             let squared = local_goal.x_m.powi(2) + local_goal.y_m.powi(2);
-            if squared < 0.35_f64.powi(2) && local_goal.x_m > 0.0 {
-                let k = 2.0 * local_goal.y_m / squared;
-                let length = if k.abs() < 1e-9 {
-                    local_goal.x_m
-                } else {
-                    2.0 * local_goal.y_m.atan2(local_goal.x_m) / k
-                };
-                if k.abs() <= self.config.max_curvature_per_m
-                    && goal_heading_rad.is_none_or(|yaw| {
-                        angle_error(node.pose.yaw_rad + k * length, yaw).abs()
-                            <= self.config.goal_heading_tolerance_rad * 0.5
-                    })
-                    && car_arc_clear(node.pose, length, k, grid)
-                {
-                    let mut indices = vec![entry.index];
-                    while let Some(parent) = nodes[*indices.last()?].parent {
-                        indices.push(parent);
-                    }
-                    indices.reverse();
-                    let mut path = vec![start.point()];
-                    for pair in indices.windows(2) {
-                        let parent = nodes[pair[0]];
-                        let child = nodes[pair[1]];
-                        let (samples, _, _) = car_primitive(
-                            parent.pose,
-                            parent.curvature,
-                            child.curvature,
-                            length_for_primitive(grid),
-                            &self.config,
-                            grid,
-                        )?;
-                        path.extend(samples);
-                    }
-                    let count = (length / 0.025).ceil().max(1.0) as usize;
-                    for i in 1..=count {
-                        path.push(
-                            integrate(node.pose, length * i as f64 / count as f64, k).point(),
-                        );
-                    }
-                    *path.last_mut()? = goal;
-                    return Some(path);
+            if squared < 0.35_f64.powi(2)
+                && local_goal.x_m > 0.0
+                && let Some((terminal, _, _)) = car_terminal_connection(
+                    node.pose,
+                    node.curvature,
+                    goal,
+                    goal_heading_rad,
+                    &self.config,
+                    grid,
+                )
+            {
+                let mut indices = vec![entry.index];
+                while let Some(parent) = nodes[*indices.last()?].parent {
+                    indices.push(parent);
                 }
+                indices.reverse();
+                let mut path = vec![start.point()];
+                for pair in indices.windows(2) {
+                    let parent = nodes[pair[0]];
+                    let child = nodes[pair[1]];
+                    let (samples, _, _) = car_primitive(
+                        parent.pose,
+                        parent.curvature,
+                        child.curvature,
+                        length_for_primitive(grid),
+                        &self.config,
+                        grid,
+                    )?;
+                    path.extend(samples);
+                }
+                path.extend(terminal);
+                return Some(path);
             }
             for curvature in
                 [-1.0, -0.5, 0.0, 0.5, 1.0].map(|f| f * self.config.max_curvature_per_m)
@@ -624,7 +793,7 @@ impl Navigator {
         {
             return None;
         }
-        let grid = Grid::new(&self.config, obstacles);
+        let grid = Grid::with_boundary(&self.config, obstacles, self.travel_boundary);
         self.plan_on_grid(start, goal, &grid)
     }
 
@@ -747,17 +916,227 @@ fn car_key(
     Some((cell, heading, steering))
 }
 
-fn car_arc_clear(start: Pose2, length: f64, curvature: f64, grid: &Grid) -> bool {
-    let count = (length / (grid.resolution / 3.0).min(0.025))
-        .ceil()
-        .max(1.0) as usize;
-    let mut previous = start.point();
-    (0..=count).all(|i| {
-        let next = integrate(start, length * i as f64 / count as f64, curvature).point();
-        let clear = grid.transition_clear(previous, next);
-        previous = next;
-        clear
-    })
+/// A short two-part approach with three bounded variables: the two target
+/// curvatures and total length. Equal-length parts avoid another search axis.
+/// Both parts use the existing steering ramp and inflated grid transitions.
+/// This is a single initial connection attempt, not a replacement path planner.
+fn car_two_arc_connection(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+) -> Option<(Vec<Point2>, Pose2, f64)> {
+    let local = start.world_to_body(goal);
+    let distance = start.point().distance(goal);
+    // Two lookahead distances cover a near-goal approach; the absolute cap
+    // keeps even the largest valid configuration's additional work bounded.
+    if local.x_m <= 0.0 || !(1e-6..=(2.0 * config.lookahead_m).min(2.0)).contains(&distance) {
+        return None;
+    }
+    let heading_change = angle_error(goal_heading, start.yaw_rad);
+    // Small-angle geometry supplies only a seed. Acceptance below checks the
+    // actual curved endpoint, never this approximate solution.
+    let offset = 4.0 * local.y_m / distance.powi(2);
+    let mut variables = [
+        (offset - heading_change / distance)
+            .clamp(-config.max_curvature_per_m, config.max_curvature_per_m),
+        (3.0 * heading_change / distance - offset)
+            .clamp(-config.max_curvature_per_m, config.max_curvature_per_m),
+        distance,
+    ];
+    let max_length = distance * std::f64::consts::FRAC_PI_2;
+    let position_tolerance = (config.goal_tolerance_m * 0.25).min(0.0001);
+    let sample = |parameters: [f64; 3]| {
+        let (mut points, middle, middle_curvature) = car_primitive(
+            start,
+            initial_curvature,
+            parameters[0],
+            parameters[2] * 0.5,
+            config,
+            grid,
+        )?;
+        let (last, endpoint, curvature) = car_primitive(
+            middle,
+            middle_curvature,
+            parameters[1],
+            parameters[2] * 0.5,
+            config,
+            grid,
+        )?;
+        points.extend(last);
+        Some((points, endpoint, curvature))
+    };
+    for _ in 0..8 {
+        let result = sample(variables)?;
+        let error = [
+            result.1.x_m - goal.x_m,
+            result.1.y_m - goal.y_m,
+            angle_error(result.1.yaw_rad, goal_heading),
+        ];
+        if error[0].hypot(error[1]) < position_tolerance
+            && error[2].abs() <= config.goal_heading_tolerance_rad * 0.5
+        {
+            return Some(result);
+        }
+        let mut system = [[0.0; 4]; 3];
+        for column in 0..3 {
+            let (step, upper) = if column < 2 {
+                (
+                    (config.max_curvature_per_m * 0.001).min(0.001),
+                    config.max_curvature_per_m,
+                )
+            } else {
+                ((distance * 0.001).min(0.0001), max_length)
+            };
+            let delta = if variables[column] + step <= upper {
+                step
+            } else {
+                -step
+            };
+            let mut perturbed = variables;
+            perturbed[column] += delta;
+            let (_, endpoint, _) = sample(perturbed)?;
+            system[0][column] = (endpoint.x_m - result.1.x_m) / delta;
+            system[1][column] = (endpoint.y_m - result.1.y_m) / delta;
+            system[2][column] = angle_error(endpoint.yaw_rad, result.1.yaw_rad) / delta;
+        }
+        for row in 0..3 {
+            system[row][3] = error[row];
+        }
+        let change = solve_endpoint_correction(system)?;
+        for index in 0..3 {
+            variables[index] -= change[index];
+            if !variables[index].is_finite() {
+                return None;
+            }
+            variables[index] = if index < 2 {
+                variables[index].clamp(-config.max_curvature_per_m, config.max_curvature_per_m)
+            } else {
+                variables[index].clamp(distance, max_length)
+            };
+        }
+    }
+    None
+}
+
+/// Fixed 3x3 elimination with partial pivoting; a singular local model declines
+/// the shortcut and lets the bounded lattice search proceed normally.
+fn solve_endpoint_correction(mut system: [[f64; 4]; 3]) -> Option<[f64; 3]> {
+    for column in 0..3 {
+        let pivot = (column..3)
+            .max_by(|&a, &b| system[a][column].abs().total_cmp(&system[b][column].abs()))?;
+        system.swap(column, pivot);
+        let divisor = system[column][column];
+        if !divisor.is_finite() || divisor.abs() < 1e-12 {
+            return None;
+        }
+        for value in &mut system[column][column..] {
+            *value /= divisor;
+        }
+        let pivot_row = system[column];
+        for (row_index, row) in system.iter_mut().enumerate() {
+            if row_index != column {
+                let scale = row[column];
+                for (value, pivot_value) in row[column..].iter_mut().zip(&pivot_row[column..]) {
+                    *value -= scale * pivot_value;
+                }
+            }
+        }
+    }
+    let result = [system[0][3], system[1][3], system[2][3]];
+    result
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(result)
+}
+
+/// Connect a nearby goal with the same steering ramp as every lattice edge.
+/// The instantaneous circular solution is only an initial guess. A bounded
+/// two-variable endpoint correction adjusts length and target curvature, then
+/// accepts only the actual sampled endpoint, heading and collision checks.
+fn car_terminal_connection(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: Option<f64>,
+    config: &NavigationConfig,
+    grid: &Grid,
+) -> Option<(Vec<Point2>, Pose2, f64)> {
+    let local = start.world_to_body(goal);
+    let distance = start.point().distance(goal);
+    if local.x_m <= 0.0 || !(1e-9..0.35).contains(&distance) {
+        return None;
+    }
+    let circle_curvature = 2.0 * local.y_m / distance.powi(2);
+    let mut curvature =
+        circle_curvature.clamp(-config.max_curvature_per_m, config.max_curvature_per_m);
+    let mut length = if circle_curvature.abs() < 1e-9 {
+        local.x_m
+    } else {
+        2.0 * local.y_m.atan2(local.x_m) / circle_curvature
+    };
+    // A forward, nearby circular connector previously spanned less than pi
+    // radians. Keep its maximum arc/chord ratio; never search a long loop here.
+    let max_length = distance * std::f64::consts::FRAC_PI_2;
+    let position_tolerance = (config.goal_tolerance_m * 0.25).min(0.0001);
+    for _ in 0..8 {
+        let result = car_primitive(start, initial_curvature, curvature, length, config, grid)?;
+        let error_x = result.1.x_m - goal.x_m;
+        let error_y = result.1.y_m - goal.y_m;
+        if error_x.hypot(error_y) < position_tolerance {
+            return goal_heading
+                .is_none_or(|yaw| {
+                    angle_error(result.1.yaw_rad, yaw).abs()
+                        <= config.goal_heading_tolerance_rad * 0.5
+                })
+                .then_some(result);
+        }
+        // Finite differences use the same sampled ramp as the accepted route.
+        // Fixed iterations and bounded perturbations add no unbounded solver.
+        let perturb_k = (config.max_curvature_per_m * 0.001).min(0.001);
+        let delta_k = if curvature + perturb_k <= config.max_curvature_per_m {
+            perturb_k
+        } else {
+            -perturb_k
+        };
+        let perturb_s = (distance * 0.001).min(0.0001);
+        let delta_s = if length + perturb_s <= max_length {
+            perturb_s
+        } else {
+            -perturb_s
+        };
+        let (_, turn, _) = car_primitive(
+            start,
+            initial_curvature,
+            curvature + delta_k,
+            length,
+            config,
+            grid,
+        )?;
+        let (_, travel, _) = car_primitive(
+            start,
+            initial_curvature,
+            curvature,
+            length + delta_s,
+            config,
+            grid,
+        )?;
+        let dx_k = (turn.x_m - result.1.x_m) / delta_k;
+        let dy_k = (turn.y_m - result.1.y_m) / delta_k;
+        let dx_s = (travel.x_m - result.1.x_m) / delta_s;
+        let dy_s = (travel.y_m - result.1.y_m) / delta_s;
+        let determinant = dx_k * dy_s - dx_s * dy_k;
+        if !determinant.is_finite() || determinant.abs() < 1e-12 {
+            return None;
+        }
+        curvature = (curvature - (error_x * dy_s - error_y * dx_s) / determinant)
+            .clamp(-config.max_curvature_per_m, config.max_curvature_per_m);
+        length =
+            (length - (dx_k * error_y - dy_k * error_x) / determinant).clamp(distance, max_length);
+    }
+    None
 }
 
 fn car_primitive(
@@ -861,27 +1240,50 @@ pub fn integrate(pose: Pose2, distance_m: f64, curvature_per_m: f64) -> Pose2 {
     }
 }
 
-/// Includes reaction travel and a complete deceleration distance at the larger
-/// of measured and commanded speed. Sampling adds a swept-point motion bound.
+#[derive(Clone, Copy, Debug)]
+struct RolloutPrediction {
+    endpoint: Pose2,
+    distance_m: f64,
+    reference_cost_m: Option<f64>,
+}
+
+struct RolloutReference<'a> {
+    cursor: ReferenceCursor<'a>,
+    initial_arc_m: f64,
+    goal_heading_rad: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RolloutRejection {
+    StopReachable,
+    Grid,
+    Footprint,
+    SampleBudget,
+    Reference,
+}
+
+/// Predict normal candidate motion separately from the emergency stopping
+/// envelope. Slower targets change the former without shrinking the latter
+/// below the measured-speed reaction and braking requirement.
+#[allow(clippy::too_many_arguments)]
 fn rollout(
     config: &NavigationConfig,
     pose: Pose2,
-    speed: f64,
-    curvature: f64,
+    current_speed: f64,
+    target_speed: f64,
+    initial_curvature: f64,
+    target_curvature: f64,
     obstacles: &[ObstacleDisc],
     goal_distance: f64,
     grid: &Grid,
-) -> Option<Pose2> {
+    mut reference: Option<RolloutReference<'_>>,
+) -> Result<RolloutPrediction, RolloutRejection> {
     let reaction_s = config.control_period_ms as f64 / 1000.0;
-    let braking_distance = speed * reaction_s + speed * speed / (2.0 * config.max_decel_mps2);
-    let distance = (speed * config.preview_horizon_s)
-        .min(goal_distance)
-        .max(braking_distance);
+    let envelope_speed = current_speed.max(target_speed).max(0.0);
+    let braking_distance = envelope_speed * reaction_s
+        + envelope_speed * envelope_speed / (2.0 * config.max_decel_mps2);
     let step = config.grid_resolution_m.min(config.clearance_m).min(0.05) / 2.0;
-    let count = (distance / step).ceil().max(1.0) as usize;
-    if count > 1024 {
-        return None;
-    }
     // Stop targets zero speed and zero curvature; steering may return gradually.
     // Two boundary trajectories (fixed steering and instant center) do not cover
     // all intermediate paths. A center can travel at most this path length,
@@ -892,29 +1294,290 @@ fn rollout(
     if !stop_reachable_clear(
         config,
         pose,
-        braking_distance + speed * reaction_s,
+        braking_distance + envelope_speed * reaction_s,
         obstacles,
-    ) {
-        return None;
+    ) || grid.travel_boundary.is_some_and(|boundary| {
+        !boundary.contains_disc(
+            pose.point(),
+            body_radius(config.footprint)
+                + config.clearance_m
+                + braking_distance
+                + envelope_speed * reaction_s,
+        )
+    }) {
+        return Err(RolloutRejection::StopReachable);
     }
-    let ds = distance / count as f64;
-    let swept_padding =
-        config.clearance_m + ds * (1.0 + curvature.abs() * body_radius(config.footprint)) / 2.0;
-    let mut previous = pose.point();
-    for i in 0..=count {
-        let sample = integrate(pose, ds * i as f64, curvature);
+    // At most one control period and `step` meters per integration step. The
+    // total loop has a separate hard cap even for extreme valid configurations.
+    let dt_limit = reaction_s.min(step / envelope_speed.max(1e-6));
+    let mut sample = pose;
+    let mut speed = current_speed.max(0.0);
+    let mut curvature = initial_curvature;
+    let mut elapsed = 0.0;
+    let mut distance_m = 0.0;
+    let mut reference_integral = 0.0;
+    if !grid.transition_clear(sample.point(), sample.point()) {
+        return Err(RolloutRejection::Grid);
+    }
+    if !pose_clear(config, sample, obstacles, config.clearance_m)
+        || !grid.footprint_inside_boundary(config.footprint, sample, config.clearance_m)
+    {
+        return Err(RolloutRejection::Footprint);
+    }
+    for _ in 0..1024 {
+        if elapsed >= config.preview_horizon_s - 1e-12 || distance_m >= goal_distance - 1e-12 {
+            return Ok(RolloutPrediction {
+                endpoint: sample,
+                distance_m,
+                reference_cost_m: reference
+                    .as_ref()
+                    .map(|_| reference_integral / distance_m.max(1e-9)),
+            });
+        }
+        let dt = dt_limit.min(config.preview_horizon_s - elapsed);
+        let acceleration = if target_speed >= speed {
+            config.max_accel_mps2
+        } else {
+            config.max_decel_mps2
+        };
+        let (next_speed, travel) = ramp_integral(speed, target_speed, acceleration, dt);
+        let (next_curvature, curvature_integral) = ramp_integral(
+            curvature,
+            target_curvature,
+            config.max_curvature_rate_per_s,
+            dt,
+        );
+        let ds = travel.min((goal_distance - distance_m).max(0.0));
+        // Speed integration is exact for the configured piecewise linear ramp;
+        // curvature uses its time average over this short step. This remains a
+        // sampled kinematic prediction, not a measured actuator response.
+        let next = integrate(sample, ds, curvature_integral / dt);
+        let max_curvature = curvature.abs().max(next_curvature.abs());
+        // Bound a full step's body-point travel from its starting footprint,
+        // preserving a conservative swept margin while curvature changes.
+        let swept_padding =
+            config.clearance_m + ds * (1.0 + max_curvature * body_radius(config.footprint));
         // Keep local control inside the same conservative domain as A*. Without
         // this, a safe rectangle could enter a cell whose inflated start is
         // blocked on the next tick, stranding an otherwise clear vehicle.
-        if !grid.transition_clear(previous, sample.point()) {
-            return None;
+        if !grid.transition_clear(sample.point(), next.point()) {
+            return Err(RolloutRejection::Grid);
         }
-        previous = sample.point();
-        if !pose_clear(config, sample, obstacles, swept_padding) {
-            return None;
+        if !pose_clear(config, sample, obstacles, swept_padding)
+            || !pose_clear(config, next, obstacles, swept_padding)
+            || !grid.footprint_inside_boundary(config.footprint, sample, swept_padding)
+            || !grid.footprint_inside_boundary(config.footprint, next, swept_padding)
+        {
+            return Err(RolloutRejection::Footprint);
+        }
+        if let Some(reference) = &mut reference {
+            let location = reference
+                .cursor
+                .at_arc(reference.initial_arc_m + distance_m + ds)
+                .ok_or(RolloutRejection::Reference)?;
+            let heading = if distance_m + ds >= goal_distance - config.goal_tolerance_m {
+                reference.goal_heading_rad
+            } else {
+                location.heading_rad
+            };
+            reference_integral += ds
+                * (next.point().distance(location.point)
+                    + angle_error(next.yaw_rad, heading).abs() / config.max_curvature_per_m);
+            if !reference_integral.is_finite() {
+                return Err(RolloutRejection::Reference);
+            }
+        }
+        sample = next;
+        speed = next_speed;
+        curvature = next_curvature;
+        elapsed += dt;
+        distance_m += ds;
+    }
+    if elapsed >= config.preview_horizon_s - 1e-12 || distance_m >= goal_distance - 1e-12 {
+        Ok(RolloutPrediction {
+            endpoint: sample,
+            distance_m,
+            reference_cost_m: reference
+                .as_ref()
+                .map(|_| reference_integral / distance_m.max(1e-9)),
+        })
+    } else {
+        Err(RolloutRejection::SampleBudget)
+    }
+}
+
+/// End value and exact integral of a rate-limited linear transition, including
+/// the constant remainder when the target is reached partway through a step.
+fn ramp_integral(current: f64, target: f64, rate: f64, dt: f64) -> (f64, f64) {
+    let ramp_time = ((target - current).abs() / rate).min(dt);
+    let next = current + (target - current).clamp(-rate * dt, rate * dt);
+    let integral = (current + next) * 0.5 * ramp_time + target * (dt - ramp_time);
+    (next, integral)
+}
+
+#[cfg(test)]
+mod velocity_rollout_tests {
+    use super::*;
+
+    fn scene() -> (NavigationConfig, Pose2) {
+        let mut config = NavigationConfig::simulation(
+            Rect {
+                min_x_m: 0.0,
+                min_y_m: 0.0,
+                max_x_m: 20.0,
+                max_y_m: 20.0,
+            },
+            Footprint {
+                front_m: 0.22,
+                rear_m: 0.18,
+                half_width_m: 0.13,
+            },
+            FrameId("map".into()),
+        );
+        config.control_period_ms = 100;
+        let pose = Pose2 {
+            x_m: 5.0,
+            y_m: 5.0,
+            yaw_rad: 0.0,
+        };
+        (config, pose)
+    }
+
+    #[test]
+    fn full_reference_cost_exposes_mid_route_error_despite_a_matching_endpoint() {
+        let (config, pose) = scene();
+        let grid = Grid::new(&config, &[]);
+        let goal = Point2 { x_m: 5.6, y_m: 5.0 };
+        let straight = [pose.point(), goal];
+        let bowed = [pose.point(), Point2 { x_m: 5.3, y_m: 5.2 }, goal];
+        let predict = |route: &[Point2]| {
+            // Deliberately short projection window: arc sampling must still
+            // follow the real route, not treat the window edge as its endpoint.
+            let reference = PreparedReference::new(route, 0, 0.1).unwrap();
+            rollout(
+                &config,
+                pose,
+                0.3,
+                0.3,
+                0.0,
+                0.0,
+                &[],
+                0.6,
+                &grid,
+                Some(RolloutReference {
+                    cursor: reference.cursor_to_end(),
+                    initial_arc_m: 0.0,
+                    goal_heading_rad: 0.0,
+                }),
+            )
+            .unwrap()
+        };
+        let aligned = predict(&straight);
+        let missed_bend = predict(&bowed);
+        assert_eq!(aligned.endpoint, missed_bend.endpoint);
+        assert!(aligned.endpoint.point().distance(goal) < 1e-10);
+        assert!(aligned.reference_cost_m.unwrap() < 1e-10);
+        assert!(missed_bend.reference_cost_m.unwrap() > 0.1);
+    }
+
+    #[test]
+    fn slowing_candidate_predicts_its_own_distance_and_curved_endpoint() {
+        let (config, pose) = scene();
+        let grid = Grid::new(&config, &[]);
+        let fast = rollout(&config, pose, 0.3, 0.3, 0.5, 0.5, &[], 10.0, &grid, None).unwrap();
+        let slow = rollout(&config, pose, 0.3, 0.24, 0.5, 0.5, &[], 10.0, &grid, None).unwrap();
+        // Slow target is reachable after one 100 ms normal deceleration tick.
+        // Old max(current, target) prediction gave both candidates 0.6 meters.
+        assert!((fast.distance_m - 0.6).abs() < 1e-10);
+        assert!((slow.distance_m - 0.483).abs() < 1e-10);
+        assert!(fast.endpoint.point().distance(slow.endpoint.point()) > 0.11);
+        assert!(slow.endpoint.yaw_rad < fast.endpoint.yaw_rad);
+        assert!(
+            slow.endpoint
+                .point()
+                .distance(integrate(pose, 0.483, 0.5).point())
+                < 1e-10
+        );
+    }
+
+    #[test]
+    fn acceleration_starts_at_current_speed_instead_of_commanded_speed() {
+        let (mut config, pose) = scene();
+        config.preview_horizon_s = 0.5;
+        let grid = Grid::new(&config, &[]);
+        let predicted = rollout(&config, pose, 0.0, 0.3, 0.0, 0.0, &[], 10.0, &grid, None).unwrap();
+        // 0.4 m/s² from rest over 0.5 s: 0.05 m, not instantaneous 0.3 * 0.5.
+        assert!((predicted.distance_m - 0.05).abs() < 1e-10);
+        assert!((predicted.endpoint.x_m - pose.x_m - 0.05).abs() < 1e-10);
+    }
+
+    #[test]
+    fn curvature_starts_at_previous_value_and_respects_slew() {
+        let (mut config, pose) = scene();
+        config.preview_horizon_s = 0.1;
+        config.max_curvature_rate_per_s = 0.4;
+        let grid = Grid::new(&config, &[]);
+        let predicted = rollout(&config, pose, 0.3, 0.3, 0.0, 2.0, &[], 10.0, &grid, None).unwrap();
+        // Constant speed makes the yaw integral exact: 0.3 * 0.4 * t² / 2.
+        assert!((predicted.endpoint.yaw_rad - 0.0006).abs() < 1e-10);
+        assert!(predicted.endpoint.yaw_rad < integrate(pose, 0.03, 2.0).yaw_rad / 10.0);
+    }
+
+    #[test]
+    fn slower_target_and_near_goal_do_not_reduce_measured_speed_stop_envelope() {
+        let (config, pose) = scene();
+        let obstacle = ObstacleDisc {
+            center: Point2 {
+                x_m: pose.x_m - body_radius(config.footprint) - config.clearance_m - 0.12,
+                y_m: pose.y_m,
+            },
+            radius_m: 0.005,
+        };
+        let obstacles = [obstacle];
+        let grid = Grid::new(&config, &obstacles);
+        // A stop envelope incorrectly based on the lower 0.24 m/s target would
+        // accept this obstacle behind the vehicle. Measured 0.3 m/s must reject.
+        let lower_speed_distance = 2.0 * 0.24 * 0.1 + 0.24_f64.powi(2) / (2.0 * 0.6);
+        assert!(stop_reachable_clear(
+            &config,
+            pose,
+            lower_speed_distance,
+            &obstacles
+        ));
+        for target_speed in [0.3, 0.24, 0.01] {
+            assert_eq!(
+                rollout(
+                    &config,
+                    pose,
+                    0.3,
+                    target_speed,
+                    0.5,
+                    0.5,
+                    &obstacles,
+                    0.001,
+                    &grid,
+                    None,
+                )
+                .unwrap_err(),
+                RolloutRejection::StopReachable
+            );
         }
     }
-    Some(integrate(pose, distance, curvature))
+
+    #[test]
+    fn excessive_prediction_returns_bounded_sample_budget_rejection() {
+        let (mut config, pose) = scene();
+        config.clearance_m = 0.005;
+        config.max_speed_mps = 3.0;
+        config.max_decel_mps2 = 10.0;
+        config.preview_horizon_s = 5.0;
+        config.validate().unwrap();
+        let grid = Grid::new(&config, &[]);
+        assert_eq!(
+            rollout(&config, pose, 3.0, 3.0, 0.0, 0.0, &[], 10.0, &grid, None).unwrap_err(),
+            RolloutRejection::SampleBudget
+        );
+    }
 }
 
 fn stop_reachable_clear(
@@ -962,6 +1625,7 @@ fn pose_clear(
 }
 
 struct Grid {
+    travel_boundary: Option<HalfPlane>,
     width: usize,
     height: usize,
     resolution: f64,
@@ -969,6 +1633,10 @@ struct Grid {
     blocked: Vec<bool>,
 }
 impl Grid {
+    fn footprint_inside_boundary(&self, footprint: Footprint, pose: Pose2, margin: f64) -> bool {
+        self.travel_boundary
+            .is_none_or(|boundary| boundary.contains_footprint(footprint, pose, margin))
+    }
     /// Samples are spaced at most one cell apart. For a diagonal transition,
     /// require both orthogonal neighbors so neither a coarse motion primitive
     /// nor a fine rollout can jump across an occupied corner.
@@ -989,12 +1657,22 @@ impl Grid {
             || (!self.blocked[ay * self.width + bx] && !self.blocked[by * self.width + ax])
     }
 
+    #[cfg(test)]
     fn new(config: &NavigationConfig, obstacles: &[ObstacleDisc]) -> Self {
+        Self::with_boundary(config, obstacles, None)
+    }
+
+    fn with_boundary(
+        config: &NavigationConfig,
+        obstacles: &[ObstacleDisc],
+        travel_boundary: Option<HalfPlane>,
+    ) -> Self {
         let width = ((config.bounds.max_x_m - config.bounds.min_x_m) / config.grid_resolution_m)
             .ceil() as usize;
         let height = ((config.bounds.max_y_m - config.bounds.min_y_m) / config.grid_resolution_m)
             .ceil() as usize;
         let mut grid = Self {
+            travel_boundary,
             width,
             height,
             resolution: config.grid_resolution_m,
@@ -1010,7 +1688,8 @@ impl Grid {
             grid.blocked[index] = p.x_m - inflation < config.bounds.min_x_m
                 || p.y_m - inflation < config.bounds.min_y_m
                 || p.x_m + inflation > config.bounds.max_x_m
-                || p.y_m + inflation > config.bounds.max_y_m;
+                || p.y_m + inflation > config.bounds.max_y_m
+                || travel_boundary.is_some_and(|boundary| !boundary.contains_disc(p, inflation));
         }
         for obstacle in obstacles {
             let radius = obstacle.radius_m + inflation;
@@ -1065,6 +1744,186 @@ impl Grid {
     }
 }
 
+#[cfg(test)]
+mod travel_boundary_tests {
+    use super::*;
+
+    fn scene(yaw: f64) -> (NavigationConfig, Pose2, HalfPlane) {
+        let mut config = NavigationConfig::simulation(
+            Rect {
+                min_x_m: 0.0,
+                min_y_m: 0.0,
+                max_x_m: 20.0,
+                max_y_m: 20.0,
+            },
+            Footprint {
+                front_m: 0.22,
+                rear_m: 0.18,
+                half_width_m: 0.13,
+            },
+            FrameId("map".into()),
+        );
+        config.control_period_ms = 100;
+        config.max_curvature_per_m = 3.0;
+        config.preview_horizon_s = 5.0;
+        let origin = Pose2 {
+            x_m: 5.0,
+            y_m: 5.0,
+            yaw_rad: yaw,
+        };
+        let start = origin.body_to_world(Point2 {
+            x_m: -0.6,
+            y_m: 0.0,
+        });
+        let pose = Pose2 {
+            x_m: start.x_m,
+            y_m: start.y_m,
+            yaw_rad: yaw,
+        };
+        (
+            config,
+            pose,
+            HalfPlane::new(origin.point(), yaw, 0.0).unwrap(),
+        )
+    }
+
+    #[test]
+    fn rotated_boundary_rejects_a_curve_that_crosses_then_returns_to_the_allowed_side() {
+        for yaw in [
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            std::f64::consts::FRAC_PI_4,
+            -2.0,
+        ] {
+            let (config, start, boundary) = scene(yaw);
+            let open = Grid::new(&config, &[]);
+            let constrained = Grid::with_boundary(&config, &[], Some(boundary));
+            let length = std::f64::consts::PI / 2.5;
+            let (_, end, _) = car_primitive(start, 2.5, 2.5, length, &config, &open).unwrap();
+            assert!(boundary.contains_footprint(config.footprint, start, config.clearance_m));
+            assert!(boundary.contains_footprint(config.footprint, end, config.clearance_m));
+            // Both endpoints fit, but the middle of this semicircle crosses the
+            // line. The same primitive validates lattice and terminal edges.
+            assert!(car_primitive(start, 2.5, 2.5, length, &config, &constrained).is_none());
+            assert!(rollout(&config, start, 0.3, 0.3, 2.5, 2.5, &[], length, &open, None).is_ok());
+            assert!(
+                rollout(
+                    &config,
+                    start,
+                    0.3,
+                    0.3,
+                    2.5,
+                    2.5,
+                    &[],
+                    length,
+                    &constrained,
+                    None
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn lower_target_cannot_shrink_the_measured_speed_stop_circle_at_a_boundary() {
+        let (config, mut pose, _) = scene(0.0);
+        pose.x_m = 5.0;
+        let radius = body_radius(config.footprint) + config.clearance_m;
+        let boundary = HalfPlane::new(pose.point(), 0.0, radius + 0.12).unwrap();
+        let grid = Grid::with_boundary(&config, &[], Some(boundary));
+        assert!(boundary.contains_disc(
+            pose.point(),
+            radius + 2.0 * 0.24 * 0.1 + 0.24_f64.powi(2) / 1.2
+        ));
+        for target in [0.3, 0.24, 0.01] {
+            assert_eq!(
+                rollout(
+                    &config,
+                    pose,
+                    0.3,
+                    target,
+                    0.0,
+                    0.0,
+                    &[],
+                    0.001,
+                    &grid,
+                    None
+                )
+                .unwrap_err(),
+                RolloutRejection::StopReachable
+            );
+        }
+    }
+
+    #[test]
+    fn a_violating_current_footprint_cannot_be_reported_as_reached() {
+        let (config, pose, _) = scene(std::f64::consts::FRAC_PI_4);
+        let mut navigator = Navigator::new(config.clone()).unwrap();
+        navigator.set_travel_boundary(Some(
+            HalfPlane::new(pose.point(), pose.yaw_rad, 0.1).unwrap(),
+        ));
+        let estimate = PoseEstimate {
+            captured_at: Timestamp(0),
+            frame_id: config.frame_id,
+            pose,
+            speed_mps: 0.0,
+            yaw_rate_radps: 0.0,
+            quality: 1.0,
+        };
+        let decision = navigator
+            .step(Timestamp(0), &estimate, &[], Timestamp(0), pose.point())
+            .unwrap();
+        assert_eq!(decision.status, NavigationStatus::Blocked);
+        assert_eq!(
+            decision.reason.as_deref(),
+            Some("current_footprint_collision_or_boundary")
+        );
+    }
+
+    #[test]
+    fn near_stationary_arrival_cannot_bypass_the_boundary_stopping_requirement() {
+        let (mut config, pose, boundary) = scene(0.0);
+        config.max_decel_mps2 = 0.0001;
+        let estimate = PoseEstimate {
+            captured_at: Timestamp(0),
+            frame_id: config.frame_id.clone(),
+            pose,
+            speed_mps: 0.01,
+            yaw_rate_radps: 0.0,
+            quality: 1.0,
+        };
+        let mut navigator = Navigator::new(config).unwrap();
+        navigator.set_travel_boundary(Some(boundary));
+        let decision = navigator
+            .step(Timestamp(0), &estimate, &[], Timestamp(0), pose.point())
+            .unwrap();
+        assert_eq!(decision.status, NavigationStatus::Blocked);
+        assert_eq!(
+            decision.reason.as_deref(),
+            Some("stop_boundary_not_reachable")
+        );
+        assert_eq!(decision.intent.speed_mps, 0.0);
+    }
+
+    #[test]
+    fn changed_boundary_invalidates_cached_routes_without_resetting_steering() {
+        let (config, pose, boundary) = scene(0.0);
+        let goal = Point2 { x_m: 4.5, y_m: 5.0 };
+        let mut navigator = Navigator::new(config).unwrap();
+        navigator.last_curvature = 0.4;
+        navigator.route = Some((goal, None, vec![pose.point(), goal], 0));
+        navigator.set_travel_boundary(Some(boundary));
+        assert!(navigator.route.is_none());
+        assert_eq!(navigator.last_curvature, 0.4);
+        navigator.route = Some((goal, None, vec![pose.point(), goal], 0));
+        navigator.set_travel_boundary(Some(boundary));
+        assert!(navigator.route.is_some());
+        navigator.set_travel_boundary(None);
+        assert!(navigator.route.is_none());
+        assert_eq!(navigator.last_curvature, 0.4);
+    }
+}
+
 #[derive(Clone, Copy)]
 struct QueueNode {
     index: usize,
@@ -1096,6 +1955,211 @@ mod tests {
     use super::*;
 
     #[test]
+    fn small_sideways_heading_goal_gets_a_short_safe_s_instead_of_a_loop() {
+        let mut config = NavigationConfig::simulation(
+            Rect {
+                min_x_m: 0.0,
+                min_y_m: 0.0,
+                max_x_m: 7.0,
+                max_y_m: 5.0,
+            },
+            Footprint {
+                front_m: 0.22,
+                rear_m: 0.18,
+                half_width_m: 0.13,
+            },
+            FrameId("map".into()),
+        );
+        config.control_period_ms = 100;
+        config.goal_tolerance_m = 0.045;
+        // Recorded arrival at the preceding heading-constrained waypoint.
+        // The five-bin lattice previously returned a 4.228 m complete loop.
+        let start = Pose2 {
+            x_m: 5.538209091104441,
+            y_m: 2.534661640176846,
+            yaw_rad: 0.009926220914205695,
+        };
+        let goal = Point2 {
+            x_m: 6.43,
+            y_m: 2.5,
+        };
+        let grid = Grid::new(&config, &[]);
+        let navigator = Navigator::new(config.clone()).unwrap();
+        let points = navigator
+            .kinematic_path(start, goal, Some(0.0), &grid)
+            .unwrap();
+        assert_eq!(points.first(), Some(&start.point()));
+        assert!(points.last().unwrap().distance(goal) < 0.0001);
+        let mut pose = start;
+        let mut curvature = 0.0;
+        let mut length = 0.0;
+        let mut min_curvature = 0.0_f64;
+        let mut max_curvature = 0.0_f64;
+        for point in &points[1..] {
+            let dx = point.x_m - pose.x_m;
+            let dy = point.y_m - pose.y_m;
+            let yaw_change = 2.0 * angle_error(dy.atan2(dx), pose.yaw_rad);
+            let chord = dx.hypot(dy);
+            let ds = if yaw_change.abs() < 1e-9 {
+                chord
+            } else {
+                chord * yaw_change / (2.0 * (yaw_change * 0.5).sin())
+            };
+            let next_curvature = 2.0 * yaw_change / ds - curvature;
+            assert!(next_curvature.abs() <= config.max_curvature_per_m + 1e-8);
+            assert!(
+                (next_curvature - curvature).abs()
+                    <= config.max_curvature_rate_per_s / config.max_speed_mps * ds + 1e-8
+            );
+            min_curvature = min_curvature.min(next_curvature);
+            max_curvature = max_curvature.max(next_curvature);
+            curvature = next_curvature;
+            pose = Pose2 {
+                x_m: point.x_m,
+                y_m: point.y_m,
+                yaw_rad: pose.yaw_rad + yaw_change,
+            };
+            assert!(pose_clear(&config, pose, &[], config.clearance_m));
+            length += ds;
+        }
+        assert!(
+            length < 1.0,
+            "short sideways correction must not require a full loop: {length}"
+        );
+        assert!(min_curvature < -0.1 && max_curvature > 0.1);
+        assert!(angle_error(pose.yaw_rad, 0.0).abs() <= config.goal_heading_tolerance_rad * 0.5);
+
+        // A shortcut still uses the inflated obstacle grid. It cannot accept
+        // the otherwise smooth connection when an obstacle occupies its middle.
+        let obstacle = ObstacleDisc {
+            center: points[points.len() / 2],
+            radius_m: 0.05,
+        };
+        let occupied = Grid::new(&config, &[obstacle]);
+        assert!(car_two_arc_connection(start, 0.0, goal, 0.0, &config, &occupied).is_none());
+        assert!(
+            car_two_arc_connection(
+                start,
+                0.0,
+                start.body_to_world(Point2 {
+                    x_m: -0.3,
+                    y_m: 0.0
+                }),
+                0.0,
+                &config,
+                &grid
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn terminal_connection_reverses_steering_continuously_and_keeps_its_actual_endpoint() {
+        let mut config = NavigationConfig::simulation(
+            Rect {
+                min_x_m: 0.0,
+                min_y_m: 0.0,
+                max_x_m: 7.0,
+                max_y_m: 5.0,
+            },
+            Footprint {
+                front_m: 0.22,
+                rear_m: 0.18,
+                half_width_m: 0.13,
+            },
+            FrameId("map".into()),
+        );
+        config.max_curvature_rate_per_s = 8.0;
+        config.goal_tolerance_m = 0.01;
+        let grid = Grid::new(&config, &[]);
+        let start = Pose2 {
+            x_m: 3.0,
+            y_m: 2.5,
+            yaw_rad: 0.0,
+        };
+        let initial_curvature = 2.0;
+        let (_, target, _) =
+            car_primitive(start, initial_curvature, -1.5, 0.32, &config, &grid).unwrap();
+        let local = start.world_to_body(target.point());
+        let circle_k = 2.0 * local.y_m / (local.x_m.powi(2) + local.y_m.powi(2));
+        let circle_length = 2.0 * local.y_m.atan2(local.x_m) / circle_k;
+        assert!(
+            circle_k < 0.0,
+            "the old arc jumps from positive to negative steering"
+        );
+        let old_endpoint = integrate(start, circle_length, circle_k);
+        assert!(old_endpoint.point().distance(target.point()) < 1e-12);
+        let (_, ramped_old, _) = car_primitive(
+            start,
+            initial_curvature,
+            circle_k,
+            circle_length,
+            &config,
+            &grid,
+        )
+        .unwrap();
+        assert!(ramped_old.point().distance(target.point()) > config.goal_tolerance_m);
+
+        let (points, endpoint, final_curvature) = car_terminal_connection(
+            start,
+            initial_curvature,
+            target.point(),
+            Some(target.yaw_rad),
+            &config,
+            &grid,
+        )
+        .unwrap();
+        assert!(endpoint.point().distance(target.point()) < config.goal_tolerance_m * 0.25);
+        assert!(
+            angle_error(endpoint.yaw_rad, target.yaw_rad).abs()
+                <= config.goal_heading_tolerance_rad * 0.5
+        );
+        assert_eq!(points.last(), Some(&endpoint.point()));
+        assert!(final_curvature < 0.0);
+        // Recover each sampled arc's yaw and curvature from its chord. This
+        // independently checks the returned points instead of trusting an
+        // unsampled steering value or a last point overwritten with the goal.
+        let mut pose = start;
+        let mut curvature = initial_curvature;
+        for point in points {
+            let dx = point.x_m - pose.x_m;
+            let dy = point.y_m - pose.y_m;
+            let yaw_change = 2.0 * angle_error(dy.atan2(dx), pose.yaw_rad);
+            let chord = dx.hypot(dy);
+            let ds = if yaw_change.abs() < 1e-9 {
+                chord
+            } else {
+                chord * yaw_change / (2.0 * (yaw_change * 0.5).sin())
+            };
+            let next_curvature = 2.0 * yaw_change / ds - curvature;
+            assert!(
+                (next_curvature - curvature).abs()
+                    <= config.max_curvature_rate_per_s / config.max_speed_mps * ds + 1e-9
+            );
+            assert!(next_curvature.abs() <= config.max_curvature_per_m + 1e-9);
+            pose = Pose2 {
+                x_m: point.x_m,
+                y_m: point.y_m,
+                yaw_rad: pose.yaw_rad + yaw_change,
+            };
+            curvature = next_curvature;
+        }
+        assert!((curvature - final_curvature).abs() < 1e-9);
+        assert!(angle_error(pose.yaw_rad, endpoint.yaw_rad).abs() < 1e-9);
+        assert!(
+            car_terminal_connection(
+                start,
+                initial_curvature,
+                target.point(),
+                Some(target.yaw_rad + config.goal_heading_tolerance_rad),
+                &config,
+                &grid,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
     fn car_primitives_cannot_jump_an_occupied_corner_between_free_samples() {
         let config = NavigationConfig::simulation(
             Rect {
@@ -1125,7 +2189,17 @@ mod tests {
             assert!(!grid.blocked[grid.index(sample.point()).unwrap()]);
         }
         assert!(car_primitive(start, 0.0, 0.0, 0.05, &config, &grid).is_none());
-        assert!(!car_arc_clear(start, 0.05, 0.0, &grid));
+        assert!(
+            car_terminal_connection(
+                start,
+                0.0,
+                integrate(start, 0.05, 0.0).point(),
+                None,
+                &config,
+                &grid,
+            )
+            .is_none()
+        );
     }
 
     #[test]

@@ -2,6 +2,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 use xt_stcar_robot_core::autonomy::{Point2, Pose2};
 use xt_stcar_robot_core::tracking::{
     LqrTracker, MAX_PATH_POINTS, PathTracker, PurePursuitTracker, TrackInput, TrackingConfig,
+    TrackingMode,
 };
 
 fn point(x_m: f64, y_m: f64) -> Point2 {
@@ -156,6 +157,35 @@ fn lqr_lateral_and_heading_feedback_have_restoring_signs_and_gains() {
 }
 
 #[test]
+fn lqr_diagnostics_describe_the_reference_used_for_the_actual_command() {
+    // Reference lies on y=0; the PP lookahead target is beyond the projection.
+    // A nonzero pose offset must not become a fake point in the reference.
+    let path = [point(0.0, 0.0), point(1.0, 0.0), point(2.0, 0.0)];
+    let mut data = input(&path);
+    data.pose = pose(0.25, 0.1, 0.2);
+    for limit in [2.0, 0.1] {
+        data.max_curvature_per_m = limit;
+        let command = lqr().track(data).unwrap();
+        let diag = command.diagnostics;
+        assert_eq!(diag.mode, TrackingMode::Lqr);
+        near(diag.lateral_error_m.unwrap(), 0.1);
+        near(diag.heading_error_rad.unwrap(), 0.2);
+        near(diag.reference_curvature_per_m.unwrap(), 0.0);
+        near(
+            command.curvature_per_m,
+            (diag.reference_curvature_per_m.unwrap()
+                - 2.0 * diag.lateral_error_m.unwrap()
+                - 6.0_f64.sqrt() * diag.heading_error_rad.unwrap())
+            .clamp(-limit, limit),
+        );
+        assert_eq!(
+            serde_json::to_value(diag).unwrap()["mode"],
+            serde_json::json!("lqr")
+        );
+    }
+}
+
+#[test]
 fn lqr_circle_vertices_recover_curvature_and_tangent_without_pose_in_path() {
     let radius = 2.0;
     for sign in [-1.0, 1.0] {
@@ -173,7 +203,15 @@ fn lqr_circle_vertices_recover_curvature_and_tangent_without_pose_in_path() {
                 path[progress].y_m,
                 sign * progress as f64 * 0.04,
             );
-            near(lqr().track(data).unwrap().curvature_per_m, sign / radius);
+            let command = lqr().track(data).unwrap();
+            near(command.curvature_per_m, sign / radius);
+            assert_eq!(command.diagnostics.mode, TrackingMode::Lqr);
+            near(command.diagnostics.lateral_error_m.unwrap(), 0.0);
+            near(command.diagnostics.heading_error_rad.unwrap(), 0.0);
+            near(
+                command.diagnostics.reference_curvature_per_m.unwrap(),
+                sign / radius,
+            );
         }
     }
 }
@@ -253,6 +291,45 @@ fn lqr_low_speed_falls_back_to_pp_after_validation() {
         data.path = &[];
         assert!(lqr().track(data).is_err());
     }
+}
+
+#[test]
+fn pp_diagnostics_and_low_speed_fallback_do_not_require_lqr_geometry() {
+    // LQR rejects this right-angle corner. Diagnostics must not introduce the
+    // same geometry check into PP or the existing low-speed fallback.
+    let path = [point(0.0, 0.0), point(1.0, 0.0), point(1.0, 1.0)];
+    let mut data = input(&path);
+    assert!(lqr().track(data).is_err());
+    let pp = PurePursuitTracker.track(data).unwrap();
+    assert_eq!(
+        serde_json::to_value(pp.diagnostics).unwrap(),
+        serde_json::json!({
+            "mode": "pure_pursuit",
+            "lateral_error_m": null,
+            "heading_error_rad": null,
+            "reference_curvature_per_m": null,
+        })
+    );
+    for speed in [0.0, 0.019] {
+        data.speed_mps = speed;
+        assert_eq!(lqr().track(data).unwrap(), pp);
+    }
+    // The threshold remains unchanged: exactly min_speed selects LQR.
+    data.speed_mps = 0.02;
+    assert!(lqr().track(data).is_err());
+}
+
+#[test]
+fn lqr_small_error_rejection_records_the_values_that_failed() {
+    let path = [point(0.0, 0.0), point(1.0, 0.0), point(2.0, 0.0)];
+    let mut data = input(&path);
+    data.pose = pose(0.25, 0.6, 0.0);
+    let reason = lqr().track(data).unwrap_err().to_string();
+    assert!(reason.starts_with("LQR reference outside the small-error envelope"));
+    assert!(reason.contains("lateral_error_m=0.6"));
+    assert!(reason.contains("heading_error_rad=0"));
+    assert!(reason.contains("reference_curvature_per_m=0"));
+    assert!(reason.contains("max_lateral_error_m=0.5"));
 }
 
 #[test]

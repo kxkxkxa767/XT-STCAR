@@ -41,6 +41,26 @@ pub struct TrackingCommand {
     /// The common pure-pursuit lookahead target, also useful for local scoring.
     pub target: Point2,
     pub curvature_per_m: f64,
+    pub diagnostics: TrackingDiagnostics,
+}
+
+/// The algorithm that produced this command, including low-speed PP fallback.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrackingMode {
+    PurePursuit,
+    Lqr,
+}
+
+/// Values already computed for this command; diagnostics do not run extra
+/// geometry or add validation. PP does not compute a Frenet reference, so its
+/// error/reference fields are None, including when selected by LQR fallback.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct TrackingDiagnostics {
+    pub mode: TrackingMode,
+    pub lateral_error_m: Option<f64>,
+    pub heading_error_rad: Option<f64>,
+    pub reference_curvature_per_m: Option<f64>,
 }
 
 pub trait PathTracker {
@@ -200,7 +220,12 @@ impl PathTracker for LqrTracker {
             || lateral_error.abs() > self.max_lateral_error_m
             || (reference.curvature * lateral_error).abs() > 0.25
         {
-            return Err(error("LQR reference outside the small-error envelope"));
+            return Err(error(&format!(
+                "LQR reference outside the small-error envelope: lateral_error_m={lateral_error}, \
+                 heading_error_rad={heading_error}, reference_curvature_per_m={}, \
+                 max_lateral_error_m={}, max_heading_error_rad={}, max_abs_curvature_lateral=0.25",
+                reference.curvature, self.max_lateral_error_m, self.max_heading_error_rad
+            )));
         }
         let curvature = reference.curvature
             - self.lateral_gain * lateral_error
@@ -210,6 +235,12 @@ impl PathTracker for LqrTracker {
         }
         command.curvature_per_m =
             curvature.clamp(-input.max_curvature_per_m, input.max_curvature_per_m);
+        command.diagnostics = TrackingDiagnostics {
+            mode: TrackingMode::Lqr,
+            lateral_error_m: Some(lateral_error),
+            heading_error_rad: Some(heading_error),
+            reference_curvature_per_m: Some(reference.curvature),
+        };
         Ok(command)
     }
 }
@@ -270,6 +301,12 @@ fn pure_pursuit(input: TrackInput<'_>) -> Result<TrackingCommand, ValidationErro
     Ok(TrackingCommand {
         target,
         curvature_per_m: curvature.clamp(-input.max_curvature_per_m, input.max_curvature_per_m),
+        diagnostics: TrackingDiagnostics {
+            mode: TrackingMode::PurePursuit,
+            lateral_error_m: None,
+            heading_error_rad: None,
+            reference_curvature_per_m: None,
+        },
     })
 }
 

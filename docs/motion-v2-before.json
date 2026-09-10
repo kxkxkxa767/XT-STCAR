@@ -1,0 +1,278 @@
+{
+  "source_commit": "8aceeaffb177af7630ae6e512a1f5ba38ac0dec7",
+  "scope": "Unmodified original LQR simulation, captured before changes; local trace retained only in work",
+  "first_unexpected_navigation_block_at_ms": 17400,
+  "first_reason": "no_collision_free_braking_trajectory",
+  "next_reason": "no_forward_kinematic_path",
+  "window": [
+    {
+      "at_ms": 16600,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.593979746992314,
+        "y_m": 3.179416082395152,
+        "yaw_rad": -0.9298016357898198
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -2.0,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 71
+    },
+    {
+      "at_ms": 16700,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.611187639729642,
+        "y_m": 3.154847434488958,
+        "yaw_rad": -0.9898016357898198
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -2.0,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 70
+    },
+    {
+      "at_ms": 16800,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6268913329889516,
+        "y_m": 3.1292911426919185,
+        "yaw_rad": -1.0498016357898199
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -2.0,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 68
+    },
+    {
+      "at_ms": 16900,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.641034310432463,
+        "y_m": 3.1028391820570196,
+        "yaw_rad": -1.10980163578982
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -2.0,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 67
+    },
+    {
+      "at_ms": 17000,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6535656726139627,
+        "y_m": 3.075586751077857,
+        "yaw_rad": -1.16980163578982
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -2.0,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 66
+    },
+    {
+      "at_ms": 17100,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.664440320161844,
+        "y_m": 3.047631929076863,
+        "yaw_rad": -1.22980163578982
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -2.0,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 65
+    },
+    {
+      "at_ms": 17200,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.673619116088145,
+        "y_m": 3.019075323225655,
+        "yaw_rad": -1.28980163578982
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -1.96,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 64
+    },
+    {
+      "at_ms": 17300,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6810865030262208,
+        "y_m": 2.9900240090694945,
+        "yaw_rad": -1.34860163578982
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "curvature_per_m": -1.802,
+        "speed_mps": 0.3,
+        "type": "drive"
+      },
+      "navigation_status": "driving",
+      "navigation_reason": null,
+      "remaining_path_points": 62
+    },
+    {
+      "at_ms": 17400,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6869036376742974,
+        "y_m": 2.9605971203524164,
+        "yaw_rad": -1.40266163578982
+      },
+      "actual_speed_mps": 0.3,
+      "command": {
+        "type": "stop"
+      },
+      "navigation_status": "blocked",
+      "navigation_reason": "no_collision_free_braking_trajectory",
+      "remaining_path_points": 61
+    },
+    {
+      "at_ms": 17500,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6902501408309956,
+        "y_m": 2.9388540169256254,
+        "yaw_rad": -1.4335056357898202
+      },
+      "actual_speed_mps": 0.21999999999999997,
+      "command": {
+        "type": "stop"
+      },
+      "navigation_status": "blocked",
+      "navigation_reason": "no_forward_kinematic_path",
+      "remaining_path_points": 0
+    },
+    {
+      "at_ms": 17600,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6920688448334427,
+        "y_m": 2.924972766923515,
+        "yaw_rad": -1.44753363578982
+      },
+      "actual_speed_mps": 0.13999999999999996,
+      "command": {
+        "type": "stop"
+      },
+      "navigation_status": "blocked",
+      "navigation_reason": "no_forward_kinematic_path",
+      "remaining_path_points": 0
+    },
+    {
+      "at_ms": 17700,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6927957942093217,
+        "y_m": 2.9190169709678684,
+        "yaw_rad": -1.45114563578982
+      },
+      "actual_speed_mps": 0.05999999999999994,
+      "command": {
+        "type": "stop"
+      },
+      "navigation_status": "blocked",
+      "navigation_reason": "no_forward_kinematic_path",
+      "remaining_path_points": 0
+    },
+    {
+      "at_ms": 17800,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6927957942093217,
+        "y_m": 2.9190169709678684,
+        "yaw_rad": -1.45114563578982
+      },
+      "actual_speed_mps": 0.0,
+      "command": {
+        "type": "stop"
+      },
+      "navigation_status": "blocked",
+      "navigation_reason": "no_forward_kinematic_path",
+      "remaining_path_points": 0
+    },
+    {
+      "at_ms": 17900,
+      "phase": "cones",
+      "pose": {
+        "x_m": 3.6927957942093217,
+        "y_m": 2.9190169709678684,
+        "yaw_rad": -1.45114563578982
+      },
+      "actual_speed_mps": 0.0,
+      "command": {
+        "type": "stop"
+      },
+      "navigation_status": "blocked",
+      "navigation_reason": "no_forward_kinematic_path",
+      "remaining_path_points": 0
+    }
+  ],
+  "summary": {
+    "kind": "simulation_summary",
+    "physical_output_enabled": false,
+    "scene": "synthetic RGB, raycast laser and bounded Ackermann plant",
+    "pose_source": "ideal simulated pose feedback; no encoder/localization accuracy claim",
+    "completed": false,
+    "elapsed_ms": 27900,
+    "ticks": 280,
+    "distance_m": 3.5841702295403146,
+    "minimum_cone_clearance_m": 0.2505209013292017,
+    "crosswalk_hold_ms": 3000,
+    "green_observed_ms": 0,
+    "phases": [
+      "approach_crosswalk",
+      "crosswalk_stop",
+      "cones",
+      "fault"
+    ],
+    "final_pose": {
+      "x_m": 3.6927957942093217,
+      "y_m": 2.9190169709678684,
+      "yaw_rad": -1.45114563578982
+    },
+    "final_actual_speed_mps": 0.0,
+    "braking_ticks": 0,
+    "dropped_trace_records": 0,
+    "logging_errors": 0,
+    "fault": "ordinary stop exceeded 10 seconds"
+  }
+}

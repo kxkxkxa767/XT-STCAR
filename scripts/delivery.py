@@ -39,6 +39,8 @@ BASE_FILES = {
     "docs/competition-validation.json", "docs/competition-simulation-summary.json",
     "docs/运动控制设计与对比.md", "docs/motion-control-validation.json", "docs/motion-control-tracking-comparison.json",
     "docs/motion-control-competition-comparison.json",
+    "docs/导航预测与失败首因修正.md", "docs/motion-v2-validation.json",
+    "docs/motion-v2-before.json", "docs/motion-v2-competition-comparison.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

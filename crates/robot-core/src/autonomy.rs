@@ -92,6 +92,107 @@ impl Rect {
     }
 }
 
+/// Allowed side of an oriented line: projection(point) <= max_projection_m.
+/// This is a navigation domain constraint, not a synthetic sensor obstacle.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct HalfPlane {
+    origin: Point2,
+    normal: Point2,
+    max_projection_m: f64,
+}
+
+impl HalfPlane {
+    pub fn new(
+        origin: Point2,
+        forward_yaw_rad: f64,
+        max_projection_m: f64,
+    ) -> Result<Self, ValidationError> {
+        if !origin.valid() || !forward_yaw_rad.is_finite() || !max_projection_m.is_finite() {
+            return Err(ValidationError("invalid oriented travel boundary".into()));
+        }
+        let (s, c) = forward_yaw_rad.sin_cos();
+        Ok(Self {
+            origin,
+            normal: Point2 { x_m: c, y_m: s },
+            max_projection_m,
+        })
+    }
+
+    /// The forward supporting line of the rectangle, for any approach yaw.
+    pub fn at_region_front(
+        origin: Point2,
+        region: Rect,
+        forward_yaw_rad: f64,
+    ) -> Result<Self, ValidationError> {
+        region.validate()?;
+        let mut boundary = Self::new(origin, forward_yaw_rad, 0.0)?;
+        let projections = [
+            Point2 {
+                x_m: region.min_x_m,
+                y_m: region.min_y_m,
+            },
+            Point2 {
+                x_m: region.min_x_m,
+                y_m: region.max_y_m,
+            },
+            Point2 {
+                x_m: region.max_x_m,
+                y_m: region.min_y_m,
+            },
+            Point2 {
+                x_m: region.max_x_m,
+                y_m: region.max_y_m,
+            },
+        ]
+        .map(|point| boundary.projection(point));
+        if projections.iter().any(|value| !value.is_finite()) {
+            return Err(ValidationError(
+                "travel boundary projection is non-finite".into(),
+            ));
+        }
+        boundary.max_projection_m = projections.into_iter().fold(f64::NEG_INFINITY, f64::max);
+        Ok(boundary)
+    }
+
+    pub fn projection(self, point: Point2) -> f64 {
+        (point.x_m - self.origin.x_m) * self.normal.x_m
+            + (point.y_m - self.origin.y_m) * self.normal.y_m
+    }
+
+    pub fn max_projection_m(self) -> f64 {
+        self.max_projection_m
+    }
+
+    pub fn contains_disc(self, center: Point2, radius_m: f64) -> bool {
+        let front = self.projection(center) + radius_m;
+        radius_m.is_finite()
+            && radius_m >= 0.0
+            && front.is_finite()
+            && front <= self.max_projection_m
+    }
+
+    pub fn contains_footprint(self, footprint: Footprint, pose: Pose2, margin_m: f64) -> bool {
+        pose.valid()
+            && footprint
+                .corners(pose)
+                .into_iter()
+                .all(|corner| self.contains_disc(corner, margin_m))
+    }
+
+    pub fn footprint_progress(self, footprint: Footprint, pose: Pose2) -> (f64, f64) {
+        let projections = footprint
+            .corners(pose)
+            .map(|corner| self.projection(corner));
+        if projections.iter().any(|value| !value.is_finite()) {
+            return (f64::NAN, f64::NAN);
+        }
+        (
+            projections.into_iter().fold(f64::NEG_INFINITY, f64::max),
+            projections.into_iter().fold(f64::INFINITY, f64::min),
+        )
+    }
+}
+
 /// Conservative body envelope relative to pose origin (also covers the wheels).
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

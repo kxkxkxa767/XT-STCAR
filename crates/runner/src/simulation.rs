@@ -457,11 +457,13 @@ pub struct SimulationSummary {
     pub dropped_trace_records: u64,
     pub logging_errors: usize,
     pub fault: Option<String>,
+    pub first_navigation_failure: Option<crate::navigation_diagnostics::NavigationFailureWindow>,
 }
 
 pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<SimulationSummary> {
     config.validate()?;
     let mut journal = RunJournal::new(config.telemetry.clone())?;
+    let mut navigation_failure = crate::navigation_diagnostics::FirstNavigationFailure::default();
     let mut logging_errors = 0;
     let detector = RoadDetector::new(config.road.clone())?;
     let mut controller = AutonomyController::new(config.autonomy.clone())?;
@@ -557,6 +559,9 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         };
         ticks += 1;
         let mut phase_changed = false;
+        navigation_failure.observe(crate::navigation_diagnostics::NavigationFrame::from_step(
+            at, pose, speed, &step,
+        ));
         if let Some(mission) = &step.mission {
             if phases.last() != Some(&mission.phase) {
                 phases.push(mission.phase);
@@ -716,6 +721,7 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         final_actual_speed_mps: speed,
         braking_ticks,
         fault: summary_fault,
+        first_navigation_failure: navigation_failure.finish(),
         dropped_trace_records: journal.dropped_records(),
         logging_errors,
     };

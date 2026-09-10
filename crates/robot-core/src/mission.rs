@@ -1,6 +1,8 @@
 //! Observation-driven competition task policy. This module never sends motor data.
 //! Mission waiting is separate from the independent safety controller's Fault.
-use crate::autonomy::{Footprint, LightState, Point2, Pose2, PoseEstimate, Rect, RoadObservation};
+use crate::autonomy::{
+    Footprint, HalfPlane, LightState, Point2, Pose2, PoseEstimate, Rect, RoadObservation,
+};
 use crate::{FrameId, Timestamp, ValidationError};
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +44,14 @@ pub struct MissionConfig {
 }
 
 impl MissionConfig {
+    pub fn light_stop_boundary(&self) -> Result<HalfPlane, ValidationError> {
+        HalfPlane::at_region_front(
+            self.light_stop_goal,
+            self.light_stop_region,
+            self.light_approach_yaw_rad,
+        )
+    }
+
     pub fn validate(&self) -> Result<(), ValidationError> {
         self.world_frame.validate()?;
         self.body_frame.validate()?;
@@ -85,6 +95,7 @@ impl MissionConfig {
                 "light stop goal must fit the full footprint and its stop region must lie in the detection region".into(),
             ));
         }
+        self.light_stop_boundary()?;
         let finish_pose = Pose2 {
             x_m: self.finish_goal.x_m,
             y_m: self.finish_goal.y_m,
@@ -175,6 +186,7 @@ struct CrosswalkLock {
 
 pub struct Mission {
     config: MissionConfig,
+    light_boundary: HalfPlane,
     phase: MissionPhase,
     last_now: Option<Timestamp>,
     last_pose: Option<PoseEstimate>,
@@ -195,8 +207,10 @@ pub struct Mission {
 impl Mission {
     pub fn new(config: MissionConfig) -> Result<Self, ValidationError> {
         config.validate()?;
+        let light_boundary = config.light_stop_boundary()?;
         Ok(Self {
             config,
+            light_boundary,
             phase: MissionPhase::Idle,
             last_now: None,
             last_pose: None,
@@ -232,6 +246,10 @@ impl Mission {
 
     pub fn config(&self) -> &MissionConfig {
         &self.config
+    }
+
+    pub fn light_stop_boundary(&self) -> HalfPlane {
+        self.light_boundary
     }
 
     /// Uses measurement timestamps for progress; repeating a frame never accrues
@@ -658,20 +676,10 @@ impl Mission {
     }
 
     fn light_progress(&self, pose: Pose2) -> (f64, f64, f64) {
-        let (s, c) = self.config.light_approach_yaw_rad.sin_cos();
-        let direction = Point2 { x_m: c, y_m: s };
-        let values = self
-            .config
-            .footprint
-            .corners(pose)
-            .map(|p| projection(p, self.config.light_stop_goal, direction));
-        let front = values.into_iter().fold(f64::NEG_INFINITY, f64::max);
-        let rear = values.into_iter().fold(f64::INFINITY, f64::min);
-        let boundary = rect_corners(self.config.light_stop_region)
-            .into_iter()
-            .map(|p| projection(p, self.config.light_stop_goal, direction))
-            .fold(f64::NEG_INFINITY, f64::max);
-        (front, rear, boundary)
+        let (front, rear) = self
+            .light_boundary
+            .footprint_progress(self.config.footprint, pose);
+        (front, rear, self.light_boundary.max_projection_m())
     }
 
     fn reset_green(&mut self) {
