@@ -127,6 +127,7 @@ impl Run {
             MissionOutput::Target {
                 point,
                 max_speed_mps,
+                ..
             } => {
                 assert!((point.x_m - 1.2).abs() < 1e-12);
                 assert_eq!(point.y_m, 0.0);
@@ -316,7 +317,8 @@ fn crosswalk_requires_lateral_overlap_and_lock_is_not_moved_by_new_detection() {
         result.output,
         MissionOutput::Target {
             point: config().approach_goal,
-            max_speed_mps: 0.2
+            max_speed_mps: 0.2,
+            arrival: xt_stcar_robot_core::navigation::ArrivalBehavior::Stop,
         }
     );
     run.at = 100;

@@ -1,0 +1,170 @@
+{
+  "date": "2026-09-10",
+  "scope": "Offline diagnosis and intermediate synthetic regressions; no hardware, target execution or videos.",
+  "baseline_commit": "9b59125b15375e23b0b61501359ed6d78d20dd11",
+  "review_source": "https://chatgpt.com/share/6aa2a8f0-f948-83ee-ac64-11bb3213b4c2",
+  "baseline_reports": [
+    "motion-v2-validation.json",
+    "motion-v2-competition-comparison.json"
+  ],
+  "through_waypoint_block": {
+    "at_ms": 14300,
+    "waypoint_index": 0,
+    "measured_speed_mps": 0.25058550789338707,
+    "remaining_path_m": 0.07152742250334757,
+    "speed_lower_mps": 0.19058550789338707,
+    "goal_speed_cap_mps": 0.1898657779769312,
+    "goal_distance_m": 0.06603452943696703,
+    "mission_goal_tolerance_m": 0.065,
+    "candidate_intervals_rejected": 22,
+    "rollouts_evaluated": 0,
+    "next_tick_ms": 14400,
+    "next_waypoint_index": 1,
+    "recovered": true,
+    "scope": "15-second prefix diagnostic, not an entire race acceptance run"
+  },
+  "steering_counterexample": {
+    "initial_curvature_per_m": 2.0,
+    "rate_per_s": 4.0,
+    "stop_duration_s": 0.1,
+    "applied_curvature_after_stop_per_m": 1.6,
+    "old_planner_value_per_m": 0.0,
+    "requested_next_curvature_per_m": -0.4
+  },
+  "stop_distance_counterexample": {
+    "initial_speed_mps": 0.3,
+    "plant_decel_mps2": 0.8,
+    "control_period_s": 0.1,
+    "old_right_endpoint_distance_m": 0.042,
+    "exact_distance_m": 0.05625
+  },
+  "lateral_acceleration_counterexample": {
+    "initial_speed_mps": 1.0,
+    "target_speed_mps": 0.7453559924999299,
+    "initial_curvature_per_m": 0.5,
+    "target_curvature_per_m": 0.9,
+    "max_decel_mps2": 2.6,
+    "curvature_rate_per_s": 4.0,
+    "limit_mps2": 0.5,
+    "peak_mps2": 0.5301887464387464,
+    "peak_at_s": 0.0448717948717949,
+    "default_competition_envelope_mps2": 0.18
+  },
+  "development_regressions": [
+    {
+      "description": "Combined pursuit skipped a mandatory waypoint; continuation tracking subsequently separated.",
+      "runs": [
+        {
+          "tracking": "pure_pursuit",
+          "completed": false,
+          "elapsed_ms": 48400,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "phases": [
+            "approach_crosswalk",
+            "crosswalk_stop",
+            "cones",
+            "fault"
+          ],
+          "final_actual_speed_mps": 0.0,
+          "first_diagnostic_at_ms": 18100
+        },
+        {
+          "tracking": "lqr",
+          "completed": true,
+          "elapsed_ms": 53700,
+          "fault": null,
+          "phases": [
+            "approach_crosswalk",
+            "crosswalk_stop",
+            "cones",
+            "approach_light",
+            "wait_green",
+            "finish",
+            "completed"
+          ],
+          "final_actual_speed_mps": 0.0,
+          "first_diagnostic_at_ms": 22800
+        }
+      ]
+    },
+    {
+      "description": "Mandatory waypoints reached; PP terminal tracking drift stranded the oriented light approach.",
+      "runs": [
+        {
+          "tracking": "pure_pursuit",
+          "completed": false,
+          "elapsed_ms": 59700,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "phases": [
+            "approach_crosswalk",
+            "crosswalk_stop",
+            "cones",
+            "approach_light",
+            "fault"
+          ],
+          "final_actual_speed_mps": 0.0,
+          "first_diagnostic_at_ms": 18600
+        },
+        {
+          "tracking": "lqr",
+          "completed": true,
+          "elapsed_ms": 53100,
+          "fault": null,
+          "phases": [
+            "approach_crosswalk",
+            "crosswalk_stop",
+            "cones",
+            "approach_light",
+            "wait_green",
+            "finish",
+            "completed"
+          ],
+          "final_actual_speed_mps": 0.0,
+          "first_diagnostic_at_ms": 22500
+        }
+      ]
+    },
+    {
+      "description": "Next-phase speed anticipation exposed another terminal tracking regression; corner-based pose metric subsequently corrected it.",
+      "runs": [
+        {
+          "tracking": "pure_pursuit",
+          "completed": false,
+          "elapsed_ms": 66100,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "phases": [
+            "approach_crosswalk",
+            "crosswalk_stop",
+            "cones",
+            "approach_light",
+            "fault"
+          ],
+          "final_actual_speed_mps": 0.0,
+          "first_diagnostic_at_ms": 18600
+        },
+        {
+          "tracking": "lqr",
+          "completed": true,
+          "elapsed_ms": 54000,
+          "fault": null,
+          "phases": [
+            "approach_crosswalk",
+            "crosswalk_stop",
+            "cones",
+            "approach_light",
+            "wait_green",
+            "finish",
+            "completed"
+          ],
+          "final_actual_speed_mps": 0.0,
+          "first_diagnostic_at_ms": 22500
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Intermediate results are evidence from uncommitted development states, not the final source build.",
+    "A first diagnostic block may recover and is not automatically the final fault cause.",
+    "Final verification uses motion-v3-validation.json; historical evidence is retained."
+  ]
+}

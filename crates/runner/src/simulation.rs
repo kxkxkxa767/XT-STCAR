@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
 use std::io::Write;
 use xt_stcar_robot_core::autonomy::{
-    Footprint, LightState, ObstacleDisc, Point2, Pose2, PoseEstimate, Rect,
+    Footprint, HalfPlane, LightState, ObstacleDisc, Point2, Pose2, PoseEstimate, Rect,
 };
 use xt_stcar_robot_core::mission::{MissionConfig, MissionPhase};
 use xt_stcar_robot_core::navigation::NavigationConfig;
@@ -486,9 +486,20 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         .fold(12.0f64, f64::min);
     let mut ticks = 0;
     let dt = config.time_step_ms as f64 / 1000.0;
+    let dynamics = PlantDynamics {
+        acceleration_mps2: config.plant_accel_mps2,
+        braking_mps2: config.plant_brake_mps2,
+        curvature_rate_per_s: config.autonomy.navigation.max_curvature_rate_per_s,
+    };
     let mut summary_fault = None;
     let mut completed = false;
     let mut elapsed = 0;
+    let light_boundary = config
+        .autonomy
+        .mission
+        .light_stop_boundary()
+        .map_err(|e| e.to_string())?;
+    let mut active_boundary = None;
     for ms in (0..=config.max_duration_ms).step_by(config.time_step_ms as usize) {
         elapsed = ms;
         let at = Timestamp(ms);
@@ -563,6 +574,10 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             at, pose, speed, &step,
         ));
         if let Some(mission) = &step.mission {
+            // Cones can preview the light approach. Keep the same boundary as
+            // navigation during that phase, and preserve it while braking from
+            // a fault. Confirmed admission into Finish releases the constraint.
+            active_boundary = boundary_for_phase(active_boundary, mission.phase, light_boundary);
             if phases.last() != Some(&mission.phase) {
                 phases.push(mission.phase);
                 phase_changed = true;
@@ -584,53 +599,27 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         if ms >= config.max_duration_ms {
             break;
         }
-        match step.command {
-            MotionOutput::Stop => {
-                (speed, curvature) = stop_plant_step(
-                    speed,
-                    curvature,
-                    config.plant_brake_mps2,
-                    config.autonomy.navigation.max_curvature_rate_per_s,
-                    dt,
-                );
-            }
-            MotionOutput::Drive {
-                speed_mps,
-                curvature_per_m,
-            } => {
-                speed += (speed_mps - speed)
-                    .clamp(-config.plant_brake_mps2 * dt, config.plant_accel_mps2 * dt);
-                curvature += (curvature_per_m - curvature).clamp(
-                    -config.autonomy.navigation.max_curvature_rate_per_s * dt,
-                    config.autonomy.navigation.max_curvature_rate_per_s * dt,
-                );
-            }
-        }
-        let new_yaw = pose.yaw_rad + speed * curvature * dt;
-        if curvature.abs() > 1e-9 {
-            pose.x_m += (new_yaw.sin() - pose.yaw_rad.sin()) / curvature;
-            pose.y_m += (-new_yaw.cos() + pose.yaw_rad.cos()) / curvature;
-        } else {
-            pose.x_m += speed * dt * pose.yaw_rad.cos();
-            pose.y_m += speed * dt * pose.yaw_rad.sin();
-        }
-        pose.yaw_rad = (new_yaw + std::f64::consts::PI).rem_euclid(TAU) - std::f64::consts::PI;
-        elapsed = ms + config.time_step_ms;
-        distance += speed.abs() * dt;
-        for obstacle in &obstacles {
-            minimum = minimum.min(obstacle_clearance(
+        let mut plant_violation = false;
+        let plant = advance_plant(
+            PlantState {
                 pose,
-                config.autonomy.mission.footprint,
-                *obstacle,
-            ));
-        }
-        if minimum < 0.0
-            || !config
-                .autonomy
-                .mission
-                .footprint
-                .inside(pose, config.autonomy.navigation.bounds)
-        {
+                speed_mps: speed,
+                curvature_per_m: curvature,
+            },
+            &step.command,
+            dynamics,
+            dt,
+            |sample| {
+                plant_violation |=
+                    check_plant_pose(config, sample, &obstacles, active_boundary, &mut minimum);
+            },
+        );
+        pose = plant.state.pose;
+        speed = plant.state.speed_mps;
+        curvature = plant.state.curvature_per_m;
+        elapsed = ms + config.time_step_ms;
+        distance += plant.distance_m;
+        if plant_violation {
             summary_fault = Some("synthetic plant collision or boundary violation".into());
             break;
         }
@@ -644,15 +633,6 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     while speed.abs() > 1e-9 && braking_ticks < 5000 {
         braking_ticks += 1;
         elapsed += config.time_step_ms;
-        (speed, curvature) = stop_plant_step(
-            speed,
-            curvature,
-            config.plant_brake_mps2,
-            config.autonomy.navigation.max_curvature_rate_per_s,
-            dt,
-        );
-        pose = xt_stcar_robot_core::navigation::integrate(pose, speed * dt, curvature);
-        distance += speed.abs() * dt;
         let mut obstacles = config.cones.clone();
         if config.fault == SimulationFault::Blocked {
             obstacles.extend((0..26).map(|i| ObstacleDisc {
@@ -663,20 +643,26 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
                 radius_m: 0.22,
             }));
         }
-        for obstacle in obstacles {
-            minimum = minimum.min(obstacle_clearance(
+        let mut plant_violation = false;
+        let plant = advance_plant(
+            PlantState {
                 pose,
-                config.autonomy.mission.footprint,
-                obstacle,
-            ));
-        }
-        if minimum < 0.0
-            || !config
-                .autonomy
-                .mission
-                .footprint
-                .inside(pose, config.autonomy.navigation.bounds)
-        {
+                speed_mps: speed,
+                curvature_per_m: curvature,
+            },
+            &MotionOutput::Stop,
+            dynamics,
+            dt,
+            |sample| {
+                plant_violation |=
+                    check_plant_pose(config, sample, &obstacles, active_boundary, &mut minimum);
+            },
+        );
+        pose = plant.state.pose;
+        speed = plant.state.speed_mps;
+        curvature = plant.state.curvature_per_m;
+        distance += plant.distance_m;
+        if plant_violation {
             completed = false;
             summary_fault = Some("synthetic braking collision or boundary violation".into());
         }
@@ -730,41 +716,447 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     Ok(summary)
 }
 
-// Both ordinary and terminal stops use this synthetic contract: decelerate to
-// zero while steering returns to center at the configured maximum rate.
-fn stop_plant_step(
-    speed: f64,
-    curvature: f64,
-    brake_mps2: f64,
-    curvature_rate: f64,
+fn boundary_for_phase(
+    previous: Option<HalfPlane>,
+    phase: MissionPhase,
+    light_boundary: HalfPlane,
+) -> Option<HalfPlane> {
+    match phase {
+        MissionPhase::Cones | MissionPhase::ApproachLight | MissionPhase::WaitGreen => {
+            Some(light_boundary)
+        }
+        MissionPhase::Fault => previous,
+        _ => None,
+    }
+}
+
+fn check_plant_pose(
+    config: &SimulationConfig,
+    pose: Pose2,
+    obstacles: &[ObstacleDisc],
+    travel_boundary: Option<HalfPlane>,
+    minimum: &mut f64,
+) -> bool {
+    for obstacle in obstacles {
+        *minimum = minimum.min(obstacle_clearance(
+            pose,
+            config.autonomy.mission.footprint,
+            *obstacle,
+        ));
+    }
+    *minimum < 0.0
+        || travel_boundary.is_some_and(|boundary| {
+            !boundary.contains_footprint(config.autonomy.mission.footprint, pose, 0.0)
+        })
+        || !config
+            .autonomy
+            .mission
+            .footprint
+            .inside(pose, config.autonomy.navigation.bounds)
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PlantState {
+    pose: Pose2,
+    speed_mps: f64,
+    curvature_per_m: f64,
+}
+
+#[derive(Clone, Copy)]
+struct PlantDynamics {
+    acceleration_mps2: f64,
+    braking_mps2: f64,
+    curvature_rate_per_s: f64,
+}
+
+struct PlantStep {
+    state: PlantState,
+    distance_m: f64,
+}
+
+/// One synthetic command interval. Speed and curvature change continuously at
+/// the plant's rates; Stop selects zero targets and uses the same integration.
+/// The caller checks the initial pose and every <=1 ms substep, including rate
+/// saturation points. These samples do not assert measured actuator behavior or
+/// prove collision freedom between samples.
+fn advance_plant(
+    mut state: PlantState,
+    command: &MotionOutput,
+    dynamics: PlantDynamics,
     dt: f64,
-) -> (f64, f64) {
-    (
-        (speed - brake_mps2 * dt).max(0.0),
-        curvature + (-curvature).clamp(-curvature_rate * dt, curvature_rate * dt),
-    )
+    mut observe: impl FnMut(Pose2),
+) -> PlantStep {
+    let (target_speed, target_curvature) = match command {
+        MotionOutput::Stop => (0.0, 0.0),
+        MotionOutput::Drive {
+            speed_mps,
+            curvature_per_m,
+        } => (*speed_mps, *curvature_per_m),
+    };
+    // Runtime validation limits dt to 20..=100 ms, so there are at most 100
+    // uniform intervals and two extra saturation splits per uniform interval.
+    let substeps = (dt / 0.001).ceil() as usize;
+    let mut distance_m = 0.0;
+    observe(state.pose);
+    for _ in 0..substeps {
+        let mut remaining = dt / substeps as f64;
+        for _ in 0..3 {
+            if remaining <= 0.0 {
+                break;
+            }
+            let acceleration = if target_speed > state.speed_mps {
+                dynamics.acceleration_mps2
+            } else if target_speed < state.speed_mps {
+                -dynamics.braking_mps2
+            } else {
+                0.0
+            };
+            let curvature_rate = if target_curvature == state.curvature_per_m {
+                0.0
+            } else {
+                (target_curvature - state.curvature_per_m).signum() * dynamics.curvature_rate_per_s
+            };
+            let speed_time = if acceleration == 0.0 {
+                f64::INFINITY
+            } else {
+                (target_speed - state.speed_mps) / acceleration
+            };
+            let curvature_time = if curvature_rate == 0.0 {
+                f64::INFINITY
+            } else {
+                (target_curvature - state.curvature_per_m) / curvature_rate
+            };
+            let h = remaining.min(speed_time).min(curvature_time);
+            let v = state.speed_mps;
+            let k = state.curvature_per_m;
+            // On this segment v and k are linear. Integrating their product
+            // exactly retains the a*k_rate cross term, unlike multiplying
+            // endpoint values or separate time averages over the whole tick.
+            let yaw_at = |t: f64| {
+                state.pose.yaw_rad
+                    + v * k * t
+                    + (v * curvature_rate + acceleration * k) * t.powi(2) * 0.5
+                    + acceleration * curvature_rate * t.powi(3) / 3.0
+            };
+            let middle_yaw = yaw_at(h * 0.5);
+            let end_yaw = yaw_at(h);
+            let middle_speed = v + acceleration * h * 0.5;
+            let end_speed = v + acceleration * h;
+            // Simpson integration of x/y over <=1 ms; a separate fine-step
+            // RK4 reference in tests bounds the numerical position error.
+            state.pose.x_m += h / 6.0
+                * (v * state.pose.yaw_rad.cos()
+                    + 4.0 * middle_speed * middle_yaw.cos()
+                    + end_speed * end_yaw.cos());
+            state.pose.y_m += h / 6.0
+                * (v * state.pose.yaw_rad.sin()
+                    + 4.0 * middle_speed * middle_yaw.sin()
+                    + end_speed * end_yaw.sin());
+            state.pose.yaw_rad =
+                (end_yaw + std::f64::consts::PI).rem_euclid(TAU) - std::f64::consts::PI;
+            distance_m += v * h + acceleration * h.powi(2) * 0.5;
+            state.speed_mps = if h >= speed_time {
+                target_speed
+            } else {
+                end_speed
+            };
+            state.curvature_per_m = if h >= curvature_time {
+                target_curvature
+            } else {
+                k + curvature_rate * h
+            };
+            remaining -= h;
+            observe(state.pose);
+        }
+    }
+    PlantStep { state, distance_m }
 }
 
 #[cfg(test)]
 mod stop_tests {
-    use super::stop_plant_step;
+    use super::*;
+
+    fn dynamics() -> PlantDynamics {
+        PlantDynamics {
+            acceleration_mps2: 0.6,
+            braking_mps2: 0.8,
+            curvature_rate_per_s: 4.0,
+        }
+    }
 
     #[test]
     fn stop_centers_gradually_and_keeps_zero_speed_while_steering_finishes() {
         for direction in [-1.0, 1.0] {
-            let (mut speed, mut curvature) = (0.3, 2.0 * direction);
-            (speed, curvature) = stop_plant_step(speed, curvature, 0.8, 4.0, 0.1);
-            assert!((speed - 0.22).abs() < 1e-12);
-            assert!((curvature - 1.6 * direction).abs() < 1e-12);
+            let mut state = PlantState {
+                pose: Pose2::default(),
+                speed_mps: 0.3,
+                curvature_per_m: 2.0 * direction,
+            };
+            state = advance_plant(state, &MotionOutput::Stop, dynamics(), 0.1, |_| {}).state;
+            assert!((state.speed_mps - 0.22).abs() < 1e-12);
+            assert!((state.curvature_per_m - 1.6 * direction).abs() < 1e-12);
             for _ in 0..3 {
-                (speed, curvature) = stop_plant_step(speed, curvature, 0.8, 4.0, 0.1);
+                state = advance_plant(state, &MotionOutput::Stop, dynamics(), 0.1, |_| {}).state;
             }
-            assert_eq!(speed, 0.0);
-            assert!(curvature.abs() > 0.0);
+            assert_eq!(state.speed_mps, 0.0);
+            assert!(state.curvature_per_m.abs() > 0.0);
+            let stationary_pose = state.pose;
             for _ in 0..3 {
-                (speed, curvature) = stop_plant_step(speed, curvature, 0.8, 4.0, 0.1);
+                state = advance_plant(state, &MotionOutput::Stop, dynamics(), 0.1, |_| {}).state;
             }
-            assert_eq!((speed, curvature), (0.0, 0.0));
+            assert_eq!((state.speed_mps, state.curvature_per_m), (0.0, 0.0));
+            assert_eq!(state.pose, stationary_pose);
+        }
+    }
+
+    #[test]
+    fn straight_stopping_distance_matches_energy_formula_at_each_control_period() {
+        for dt in [0.02, 0.05, 0.1] {
+            let mut state = PlantState {
+                pose: Pose2::default(),
+                speed_mps: 0.3,
+                curvature_per_m: 0.0,
+            };
+            let mut distance = 0.0;
+            for _ in 0..25 {
+                let step = advance_plant(state, &MotionOutput::Stop, dynamics(), dt, |_| {});
+                state = step.state;
+                distance += step.distance_m;
+            }
+            let expected = 0.3_f64.powi(2) / (2.0 * 0.8);
+            assert!((expected - 0.05625).abs() < 1e-15);
+            assert!((distance - expected).abs() < 1e-12, "dt={dt}: {distance}");
+            assert!((state.pose.x_m - expected).abs() < 1e-12);
+            assert_eq!(state.speed_mps, 0.0);
+            assert_eq!(state.pose.y_m, 0.0);
+            assert_eq!(state.pose.yaw_rad, 0.0);
+        }
+    }
+
+    // Independent 1 us RK4 reference. It samples explicitly clamped speed and
+    // curvature functions in time rather than reusing production integration,
+    // ramp breakpoints, yaw polynomials, or navigation's integrate helper.
+    fn reference_plant(initial: PlantState, command: &MotionOutput, dt: f64) -> (Pose2, f64) {
+        let (target_v, target_k) = match command {
+            MotionOutput::Stop => (0.0, 0.0),
+            MotionOutput::Drive {
+                speed_mps,
+                curvature_per_m,
+            } => (*speed_mps, *curvature_per_m),
+        };
+        let velocity = |t: f64| {
+            if target_v >= initial.speed_mps {
+                (initial.speed_mps + 0.6 * t).min(target_v)
+            } else {
+                (initial.speed_mps - 0.8 * t).max(target_v)
+            }
+        };
+        let curvature = |t: f64| {
+            if target_k >= initial.curvature_per_m {
+                (initial.curvature_per_m + 4.0 * t).min(target_k)
+            } else {
+                (initial.curvature_per_m - 4.0 * t).max(target_k)
+            }
+        };
+        let rhs = |t: f64, value: [f64; 4]| {
+            let v = velocity(t);
+            [v * value[2].cos(), v * value[2].sin(), v * curvature(t), v]
+        };
+        let increment = |value: [f64; 4], slope: [f64; 4], h: f64| {
+            std::array::from_fn(|i| value[i] + slope[i] * h)
+        };
+        let count = (dt / 0.000_001).ceil() as usize;
+        let h = dt / count as f64;
+        let mut value = [
+            initial.pose.x_m,
+            initial.pose.y_m,
+            initial.pose.yaw_rad,
+            0.0,
+        ];
+        for i in 0..count {
+            let t = i as f64 * h;
+            let a = rhs(t, value);
+            let b = rhs(t + h * 0.5, increment(value, a, h * 0.5));
+            let c = rhs(t + h * 0.5, increment(value, b, h * 0.5));
+            let d = rhs(t + h, increment(value, c, h));
+            for j in 0..4 {
+                value[j] += h / 6.0 * (a[j] + 2.0 * b[j] + 2.0 * c[j] + d[j]);
+            }
+        }
+        (
+            Pose2 {
+                x_m: value[0],
+                y_m: value[1],
+                yaw_rad: value[2],
+            },
+            value[3],
+        )
+    }
+
+    #[test]
+    fn joint_speed_and_steering_ramps_match_independent_fine_rk4_reference() {
+        for (speed, curvature, command) in [
+            (0.3, 2.0, MotionOutput::Stop),
+            (0.3, -2.0, MotionOutput::Stop),
+            (0.04, 0.2, MotionOutput::Stop),
+            (
+                0.0,
+                -0.2,
+                MotionOutput::Drive {
+                    speed_mps: 0.04,
+                    curvature_per_m: 0.12,
+                },
+            ),
+            (
+                0.22,
+                1.6,
+                MotionOutput::Drive {
+                    speed_mps: 0.26,
+                    curvature_per_m: -0.4,
+                },
+            ),
+        ] {
+            let initial = PlantState {
+                pose: Pose2 {
+                    x_m: 1.0,
+                    y_m: 1.0,
+                    yaw_rad: 0.7,
+                },
+                speed_mps: speed,
+                curvature_per_m: curvature,
+            };
+            let (reference, distance) = reference_plant(initial, &command, 0.1);
+            let actual = advance_plant(initial, &command, dynamics(), 0.1, |_| {});
+            assert!(
+                actual.state.pose.point().distance(reference.point()) < 1e-9,
+                "{command:?}: {:?} vs {reference:?}",
+                actual.state
+            );
+            assert!((actual.state.pose.yaw_rad - reference.yaw_rad).abs() < 1e-9);
+            assert!((actual.distance_m - distance).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn intermediate_footprints_are_checked_even_when_tick_endpoints_are_clear() {
+        // A deliberately small footprint isolates a collision between control
+        // ticks; the checker must see the passage, not just the final pose.
+        let mut config = SimulationConfig::example();
+        config.autonomy.mission.footprint = Footprint {
+            front_m: 0.001,
+            rear_m: 0.001,
+            half_width_m: 0.001,
+        };
+        let initial = PlantState {
+            pose: Pose2 {
+                x_m: 1.0,
+                y_m: 1.0,
+                yaw_rad: 0.0,
+            },
+            speed_mps: 0.3,
+            curvature_per_m: 0.0,
+        };
+        let obstacle = ObstacleDisc {
+            center: Point2 {
+                x_m: 1.015,
+                y_m: 1.0,
+            },
+            radius_m: 0.001,
+        };
+        let footprint = config.autonomy.mission.footprint;
+        assert!(obstacle_clearance(initial.pose, footprint, obstacle) > 0.0);
+        let mut minimum = f64::INFINITY;
+        let mut violation = false;
+        let mut observations = 0;
+        let actual = advance_plant(
+            initial,
+            &MotionOutput::Drive {
+                speed_mps: 0.3,
+                curvature_per_m: 0.0,
+            },
+            dynamics(),
+            0.1,
+            |pose| {
+                observations += 1;
+                violation |= check_plant_pose(&config, pose, &[obstacle], None, &mut minimum);
+            },
+        );
+        assert!(obstacle_clearance(actual.state.pose, footprint, obstacle) > 0.0);
+        assert!(violation);
+        assert!(minimum < 0.0);
+        assert!(observations >= 101);
+    }
+
+    #[test]
+    fn oriented_light_boundary_checks_the_intermediate_sweep_and_fault_braking() {
+        let mut config = SimulationConfig::example();
+        config.autonomy.mission.footprint = Footprint {
+            front_m: 0.001,
+            rear_m: 0.001,
+            half_width_m: 0.001,
+        };
+        // A short synthetic U-turn has legal endpoints but crosses the line
+        // between them. Rotating the scene exercises the oriented half-plane.
+        for yaw_rad in [0.0, 1.3] {
+            let initial = PlantState {
+                pose: Pose2 {
+                    x_m: 2.0,
+                    y_m: 2.0,
+                    yaw_rad,
+                },
+                speed_mps: 3.0,
+                curvature_per_m: 10.0,
+            };
+            let boundary = HalfPlane::new(
+                initial.pose.body_to_world(Point2 {
+                    x_m: 0.05,
+                    y_m: 0.0,
+                }),
+                yaw_rad,
+                0.0,
+            )
+            .unwrap();
+            let footprint = config.autonomy.mission.footprint;
+            assert!(boundary.contains_footprint(footprint, initial.pose, 0.0));
+            let mut minimum = f64::INFINITY;
+            let mut violation = false;
+            let actual = advance_plant(
+                initial,
+                &MotionOutput::Drive {
+                    speed_mps: 3.0,
+                    curvature_per_m: 10.0,
+                },
+                dynamics(),
+                0.1,
+                |pose| {
+                    violation |= check_plant_pose(&config, pose, &[], Some(boundary), &mut minimum);
+                },
+            );
+            assert!(boundary.contains_footprint(footprint, actual.state.pose, 0.0));
+            assert!(violation, "yaw={yaw_rad}");
+            for phase in [
+                MissionPhase::Cones,
+                MissionPhase::ApproachLight,
+                MissionPhase::WaitGreen,
+            ] {
+                assert_eq!(boundary_for_phase(None, phase, boundary), Some(boundary));
+            }
+            assert_eq!(
+                boundary_for_phase(Some(boundary), MissionPhase::Fault, boundary),
+                Some(boundary)
+            );
+            assert_eq!(
+                boundary_for_phase(None, MissionPhase::Fault, boundary),
+                None
+            );
+            assert_eq!(
+                boundary_for_phase(Some(boundary), MissionPhase::Finish, boundary),
+                None
+            );
+            assert_eq!(
+                boundary_for_phase(None, MissionPhase::CrosswalkStop, boundary),
+                None
+            );
         }
     }
 }

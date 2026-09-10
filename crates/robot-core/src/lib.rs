@@ -9,6 +9,7 @@ pub use sensors::*;
 pub mod autonomy;
 pub mod localization;
 pub mod mission;
+pub mod motion_transition;
 pub mod navigation;
 pub mod protocol;
 pub mod reference;

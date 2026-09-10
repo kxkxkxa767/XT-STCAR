@@ -1,0 +1,476 @@
+{
+  "elf_class": 64,
+  "endianness": "little",
+  "machine": 243,
+  "architecture": "riscv64",
+  "elf_type": 3,
+  "entry": 491952,
+  "flags": 5,
+  "rvc": true,
+  "abi": "lp64d",
+  "pie": true,
+  "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+  "needed": [
+    "libm.so.6",
+    "libc.so.6"
+  ],
+  "rpath": [],
+  "glibc_versions": [
+    "GLIBC_2.27",
+    "GLIBC_2.28",
+    "GLIBC_2.30",
+    "GLIBC_2.32",
+    "GLIBC_2.33",
+    "GLIBC_2.34"
+  ],
+  "maximum_glibc": "2.34",
+  "version_requirements": [
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    }
+  ],
+  "versioned_undefined_symbols": [
+    {
+      "symbol": "__cxa_thread_atexit_impl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__errno_location",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__libc_start_main",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "__xpg_strerror_r",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "abort",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "bcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "calloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "clock_gettime",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "close",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dl_iterate_phdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dladdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlclose",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlerror",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlopen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlsym",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dup",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fcntl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fflush",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "free",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fstat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "fwrite",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getauxval",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getcwd",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getenv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getrandom",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "gettid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "symbol": "linkat",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "lseek64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "malloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcpy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memmove",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mmap64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mprotect",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "munmap",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "open64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pause",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "poll",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_memalign",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_getguardsize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_getstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_setstacksize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_detach",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_getattr_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "symbol": "pthread_join",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_delete",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_rdlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_unlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_wrlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_self",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_setname_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_setspecific",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "read",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realpath",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sched_yield",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaction",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaltstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "signal",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "snprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "stat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "statx",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "symbol": "stderr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "strlen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "syscall",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sysconf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "unlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "write",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "writev",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "asin",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "atan2",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "cos",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "hypot",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sin",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    }
+  ],
+  "schema_version": 1,
+  "glibc_baseline": "2.38",
+  "file": "xt-stcar-robot",
+  "sha256": "75010b8132cecd859efb1eb30c38c32e2914943f450eff9f54bcf12198c438ec",
+  "size_bytes": 1932320,
+  "passed": true,
+  "errors": []
+}

@@ -1,0 +1,2701 @@
+{
+  "physical_output_enabled": false,
+  "runs": [
+    {
+      "error": null,
+      "summary": {
+        "braking_ticks": 0,
+        "completed": true,
+        "crosswalk_hold_ms": 3000,
+        "distance_m": 11.12539225627647,
+        "dropped_trace_records": 0,
+        "elapsed_ms": 55600,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "final_pose": {
+          "x_m": 6.406299580995998,
+          "y_m": 2.5023006599168767,
+          "yaw_rad": -0.0009488528508208027
+        },
+        "first_navigation_failure": {
+          "first_at": 18600,
+          "frames": [
+            {
+              "at": 17800,
+              "command": {
+                "curvature_per_m": -0.4485128883660854,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 33,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 11,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.37990190680881086,
+                  "at": 17800,
+                  "commanded_curvature_per_m": -0.37990190680881086
+                },
+                "goal_speed_cap_mps": 1.349364347168007,
+                "remaining_distance_m": 2.2065805959569116,
+                "requested_curvature_per_m": -0.4485128883660854,
+                "route_points": 130,
+                "route_progress": 41,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.018098757761607666,
+                "selected_curvature_per_m": -0.4485128883660854,
+                "selected_heading_error_rad": 0.33611984179912113,
+                "selected_prediction_distance_m": 0.6000000000000002,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.633515437988921,
+                  "y_m": 3.3465669629488044,
+                  "yaw_rad": -0.3206937166617753
+                },
+                "selected_progress_m": 0.6008376817887705,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.4485128883660854,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.045657560154168,
+                "y_m": 3.4572740583715835,
+                "yaw_rad": -0.051762513646758546
+              }
+            },
+            {
+              "at": 17900,
+              "command": {
+                "curvature_per_m": -0.5081813836847558,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 30,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 14,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.4485128883660854,
+                  "at": 17900,
+                  "commanded_curvature_per_m": -0.4485128883660854
+                },
+                "goal_speed_cap_mps": 1.34527678446426,
+                "remaining_distance_m": 2.1762028517826235,
+                "requested_curvature_per_m": -0.5081813836847558,
+                "route_points": 130,
+                "route_progress": 42,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.0192642969025276,
+                "selected_curvature_per_m": -0.5081813836847558,
+                "selected_heading_error_rad": 0.3369968703069537,
+                "selected_prediction_distance_m": 0.6000000000000002,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.659221135886824,
+                  "y_m": 3.3266318386803815,
+                  "yaw_rad": -0.36981668815393387
+                },
+                "selected_progress_m": 0.6025234260787515,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.5081813836847558,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.075606325605064,
+                "y_m": 3.4555253501726093,
+                "yaw_rad": -0.06504137029309032
+              }
+            },
+            {
+              "at": 18000,
+              "command": {
+                "curvature_per_m": -0.5711572041334687,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 29,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 15,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.5081813836847558,
+                  "at": 18000,
+                  "commanded_curvature_per_m": -0.5081813836847558
+                },
+                "goal_speed_cap_mps": 1.3412127767787174,
+                "remaining_distance_m": 2.1456341205316805,
+                "requested_curvature_per_m": -0.5711572041334687,
+                "route_points": 130,
+                "route_progress": 43,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.02059048969777455,
+                "selected_curvature_per_m": -0.5711572041334687,
+                "selected_heading_error_rad": 0.3841146598007179,
+                "selected_prediction_distance_m": 0.6000000000000002,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.683833733213097,
+                  "y_m": 3.304850759364882,
+                  "yaw_rad": -0.42269889866016386
+                },
+                "selected_progress_m": 0.603511620254904,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.5711572041334687,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.105527147116095,
+                "y_m": 3.453351162431496,
+                "yaw_rad": -0.08015329945362737
+              }
+            },
+            {
+              "at": 18100,
+              "command": {
+                "curvature_per_m": -0.5711572041334687,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 24,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 20,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.5711572041334687,
+                  "at": 18100,
+                  "commanded_curvature_per_m": -0.5711572041334687
+                },
+                "goal_speed_cap_mps": 1.3371515507349188,
+                "remaining_distance_m": 2.1148429775480984,
+                "requested_curvature_per_m": -0.6382261917490107,
+                "route_points": 130,
+                "route_progress": 44,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.03197773415996618,
+                "selected_curvature_per_m": -0.5711572041334687,
+                "selected_heading_error_rad": 0.4169799436767203,
+                "selected_prediction_distance_m": 0.6000000000000002,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.711086620183448,
+                  "y_m": 3.292311517834264,
+                  "yaw_rad": -0.43983361478417426
+                },
+                "selected_progress_m": 0.6000012037247788,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.6382261917490107,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.135409164773712,
+                "y_m": 3.4506972763467076,
+                "yaw_rad": -0.09713929230409324
+              }
+            },
+            {
+              "at": 18200,
+              "command": {
+                "curvature_per_m": -0.7155902796756508,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 28,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 16,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.5711572041334687,
+                  "at": 18200,
+                  "commanded_curvature_per_m": -0.5711572041334687
+                },
+                "goal_speed_cap_mps": 1.3330810979465637,
+                "remaining_distance_m": 2.083825148082437,
+                "requested_curvature_per_m": -0.7155902796756508,
+                "route_points": 130,
+                "route_progress": 45,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.0224239303844737,
+                "selected_curvature_per_m": -0.7155902796756508,
+                "selected_heading_error_rad": 0.3639676664765332,
+                "selected_prediction_distance_m": 0.6000000000000002,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.728868267741626,
+                  "y_m": 3.2556201768483812,
+                  "yaw_rad": -0.5428458919843494
+                },
+                "selected_progress_m": 0.6085100948780922,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.7155902796756508,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.165241347398266,
+                "y_m": 3.4475320180344213,
+                "yaw_rad": -0.11427400842810531
+              }
+            },
+            {
+              "at": 18300,
+              "command": {
+                "curvature_per_m": -0.6755902796756508,
+                "speed_mps": 0.24,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 17,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 27,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.7155902796756508,
+                  "at": 18300,
+                  "commanded_curvature_per_m": -0.7155902796756508
+                },
+                "goal_speed_cap_mps": 1.3289842917224202,
+                "remaining_distance_m": 2.0519835184241604,
+                "requested_curvature_per_m": -0.7908735724001726,
+                "route_points": 130,
+                "route_progress": 47,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.0014220256164575098,
+                "selected_curvature_per_m": -0.6755902796756508,
+                "selected_heading_error_rad": 0.29548802080831305,
+                "selected_prediction_distance_m": 0.4830000000000003,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.654651632168863,
+                  "y_m": 3.3025494581006805,
+                  "yaw_rad": -0.46132553765257917
+                },
+                "selected_progress_m": 0.4956038403599442,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.7908735724001726,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.195009267390014,
+                "y_m": 3.4438120940947803,
+                "yaw_rad": -0.1349594325692398
+              }
+            },
+            {
+              "at": 18400,
+              "command": {
+                "curvature_per_m": -0.4755902796756508,
+                "speed_mps": 0.28,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.24,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 14,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 30,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.6755902796756508,
+                  "at": 18400,
+                  "commanded_curvature_per_m": -0.6755902796756508
+                },
+                "goal_speed_cap_mps": 1.3253558425107386,
+                "remaining_distance_m": 2.0258289692430105,
+                "requested_curvature_per_m": -0.861892046493677,
+                "route_points": 130,
+                "route_progress": 48,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.05942136721050161,
+                "selected_curvature_per_m": -0.4755902796756508,
+                "selected_heading_error_rad": 0.4874096097530516,
+                "selected_prediction_distance_m": 0.5580000000000002,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.754641760211132,
+                  "y_m": 3.282718675429448,
+                  "yaw_rad": -0.4194039487078308
+                },
+                "selected_progress_m": 0.5474509509536102,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.861892046493677,
+                "speed_lower_mps": 0.18,
+                "speed_upper_mps": 0.28,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.220987674051402,
+                "y_m": 3.440048212817877,
+                "yaw_rad": -0.15275314407738927
+              }
+            },
+            {
+              "at": 18500,
+              "command": {
+                "curvature_per_m": -0.7555902796756508,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.28,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 36,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 8,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.4755902796756508,
+                  "at": 18500,
+                  "commanded_curvature_per_m": -0.4755902796756508
+                },
+                "goal_speed_cap_mps": 1.3216519606083854,
+                "remaining_distance_m": 1.999910095513018,
+                "requested_curvature_per_m": -0.9558330140810812,
+                "route_points": 130,
+                "route_progress": 49,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.05440893385668483,
+                "selected_curvature_per_m": -0.7555902796756508,
+                "selected_heading_error_rad": 0.44001830092660876,
+                "selected_prediction_distance_m": 0.5995000000000003,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.796993328283597,
+                  "y_m": 3.209620084457921,
+                  "yaw_rad": -0.6167952575342924
+                },
+                "selected_progress_m": 0.5970652821191307,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.8755902796756508,
+                "speed_lower_mps": 0.22000000000000003,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.247312906943861,
+                "y_m": 3.4357958888319935,
+                "yaw_rad": -0.16668555153540687
+              }
+            },
+            {
+              "at": 18600,
+              "command": {
+                "type": "stop"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 44
+                },
+                "checked_continuation_distance_m": 4.1503339158197265,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.7555902796756508,
+                  "at": 18600,
+                  "commanded_curvature_per_m": -0.7555902796756508
+                },
+                "goal_speed_cap_mps": 1.317532887241997,
+                "remaining_distance_m": 1.9720910533509468,
+                "requested_curvature_per_m": -1.0527302327588794,
+                "route_points": 130,
+                "route_progress": 50,
+                "route_revision": 3,
+                "selected_cross_track_m": null,
+                "selected_curvature_per_m": null,
+                "selected_heading_error_rad": null,
+                "selected_prediction_distance_m": null,
+                "selected_prediction_endpoint": null,
+                "selected_progress_m": null,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -1.0527302327588794,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.276522387270511,
+                "y_m": 3.430610483779046,
+                "yaw_rad": -0.1862399150176377
+              }
+            },
+            {
+              "at": 18700,
+              "command": {
+                "curvature_per_m": -0.28,
+                "speed_mps": 0.2599999999999988,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.21999999999999875,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 40,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 4,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.130888065275642,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.3555902796756508,
+                  "at": 18700,
+                  "commanded_curvature_per_m": 0.0
+                },
+                "goal_speed_cap_mps": 1.313888535472672,
+                "remaining_distance_m": 2.099646721393962,
+                "requested_curvature_per_m": -0.534120338487442,
+                "route_points": 85,
+                "route_progress": 0,
+                "route_revision": 4,
+                "selected_cross_track_m": 0.025783410285980475,
+                "selected_curvature_per_m": -0.28,
+                "selected_heading_error_rad": 0.3347931819182879,
+                "selected_prediction_distance_m": 0.5179999999999976,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.800322475827329,
+                  "y_m": 3.2857273717409616,
+                  "yaw_rad": -0.3461600491920936
+                },
+                "selected_progress_m": 0.5136394736654719,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.4,
+                "speed_lower_mps": 0.15999999999999875,
+                "speed_upper_mps": 0.2599999999999988,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.302032117426347,
+                "y_m": 3.425586413061431,
+                "yaw_rad": -0.20095192895587122
+              }
+            },
+            {
+              "at": 18800,
+              "command": {
+                "curvature_per_m": -0.6042034884210494,
+                "speed_mps": 0.1999999999999988,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.2599999999999988,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 22,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 22
+                },
+                "checked_continuation_distance_m": 4.130888065275642,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.28,
+                  "at": 18800,
+                  "commanded_curvature_per_m": -0.28
+                },
+                "goal_speed_cap_mps": 1.3104734792547335,
+                "remaining_distance_m": 2.07498006539683,
+                "requested_curvature_per_m": -0.6042034884210494,
+                "route_points": 85,
+                "route_progress": 1,
+                "route_revision": 4,
+                "selected_cross_track_m": 0.02255937919926446,
+                "selected_curvature_per_m": -0.6042034884210494,
+                "selected_heading_error_rad": 0.08255242167776267,
+                "selected_prediction_distance_m": 0.4029999999999976,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.706926224651164,
+                  "y_m": 3.291554335537471,
+                  "yaw_rad": -0.4484008094326064
+                },
+                "selected_progress_m": 0.4090279689125315,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.6042034884210494,
+                "speed_lower_mps": 0.1999999999999988,
+                "speed_upper_mps": 0.2999999999999988,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.326184467146932,
+                "y_m": 3.420575824967578,
+                "yaw_rad": -0.20801842707409968
+              }
+            },
+            {
+              "at": 18900,
+              "command": {
+                "curvature_per_m": -0.659625108343286,
+                "speed_mps": 0.2399999999999988,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.1999999999999988,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.130888065275642,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.6042034884210494,
+                  "at": 18900,
+                  "commanded_curvature_per_m": -0.6042034884210494
+                },
+                "goal_speed_cap_mps": 1.3074427506451596,
+                "remaining_distance_m": 2.0527311983589636,
+                "requested_curvature_per_m": -0.659625108343286,
+                "route_points": 85,
+                "route_progress": 2,
+                "route_revision": 4,
+                "selected_cross_track_m": 0.01442946432541509,
+                "selected_curvature_per_m": -0.659625108343286,
+                "selected_heading_error_rad": 0.1974058180011573,
+                "selected_prediction_distance_m": 0.47799999999999787,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.79071969501411,
+                  "y_m": 3.241131400925823,
+                  "yaw_rad": -0.5335474131092263
+                },
+                "selected_progress_m": 0.48807065423964113,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.659625108343286,
+                "speed_lower_mps": 0.1399999999999988,
+                "speed_upper_mps": 0.2399999999999988,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.347933916840607,
+                "y_m": 3.415883335393567,
+                "yaw_rad": -0.2183297992949127
+              }
+            },
+            {
+              "at": 19000,
+              "command": {
+                "curvature_per_m": -0.7052466373341889,
+                "speed_mps": 0.2799999999999988,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.2399999999999988,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.130888065275642,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.659625108343286,
+                  "at": 19000,
+                  "commanded_curvature_per_m": -0.659625108343286
+                },
+                "goal_speed_cap_mps": 1.3043515168322815,
+                "remaining_distance_m": 2.030075092926758,
+                "requested_curvature_per_m": -0.7052466373341889,
+                "route_points": 85,
+                "route_progress": 3,
+                "route_revision": 4,
+                "selected_cross_track_m": 0.005541487807093192,
+                "selected_curvature_per_m": -0.7052466373341889,
+                "selected_heading_error_rad": 0.30428831493441777,
+                "selected_prediction_distance_m": 0.5579999999999982,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.873984462002514,
+                  "y_m": 3.179743579843288,
+                  "yaw_rad": -0.6266649161759541
+                },
+                "selected_progress_m": 0.5679703839895949,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.7052466373341889,
+                "speed_lower_mps": 0.1799999999999988,
+                "speed_upper_mps": 0.2799999999999988,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.3700253424135695,
+                "y_m": 3.41081015630754,
+                "yaw_rad": -0.2332034489105368
+              }
+            },
+            {
+              "at": 19100,
+              "command": {
+                "type": "stop"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.2799999999999988,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 22,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 22
+                },
+                "checked_continuation_distance_m": 4.130888065275642,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.7052466373341889,
+                  "at": 19100,
+                  "commanded_curvature_per_m": -0.7052466373341889
+                },
+                "goal_speed_cap_mps": 1.300685174510245,
+                "remaining_distance_m": 2.0034648671562416,
+                "requested_curvature_per_m": -0.7603451886833188,
+                "route_points": 85,
+                "route_progress": 4,
+                "route_revision": 4,
+                "selected_cross_track_m": null,
+                "selected_curvature_per_m": null,
+                "selected_heading_error_rad": null,
+                "selected_prediction_distance_m": null,
+                "selected_prediction_endpoint": null,
+                "selected_progress_m": null,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.7603451886833188,
+                "speed_lower_mps": 0.2199999999999988,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.395911085800082,
+                "y_m": 3.4044055900420416,
+                "yaw_rad": -0.25194699273151766
+              }
+            },
+            {
+              "at": 19200,
+              "command": {
+                "curvature_per_m": -0.4,
+                "speed_mps": 0.23999999999999827,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.19999999999999826,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.109123555485993,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.3052466373341889,
+                  "at": 19200,
+                  "commanded_curvature_per_m": 0.0
+                },
+                "goal_speed_cap_mps": 1.2973674112843334,
+                "remaining_distance_m": 1.826399366147011,
+                "requested_curvature_per_m": -1.657871026322457,
+                "route_points": 75,
+                "route_progress": 0,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.12098356759999841,
+                "selected_curvature_per_m": -0.4,
+                "selected_heading_error_rad": 0.5260145722096503,
+                "selected_prediction_distance_m": 0.47799999999999665,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.8658388350535695,
+                  "y_m": 3.2302630959775405,
+                  "yaw_rad": -0.4552964191180054
+                },
+                "selected_progress_m": 0.4249638441902765,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.4,
+                "speed_lower_mps": 0.13999999999999826,
+                "speed_upper_mps": 0.23999999999999827,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.419110828297691,
+                "y_m": 3.398260312100821,
+                "yaw_rad": -0.2643395786942029
+              }
+            },
+            {
+              "at": 19300,
+              "command": {
+                "curvature_per_m": -0.8,
+                "speed_mps": 0.27999999999999825,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.23999999999999827,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.109123555485993,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.4,
+                  "at": 19300,
+                  "commanded_curvature_per_m": -0.4
+                },
+                "goal_speed_cap_mps": 1.2942702281064558,
+                "remaining_distance_m": 1.8037330778965148,
+                "requested_curvature_per_m": -1.773337117580086,
+                "route_points": 75,
+                "route_progress": 1,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.13268942489277988,
+                "selected_curvature_per_m": -0.8,
+                "selected_heading_error_rad": 0.4668584829411264,
+                "selected_prediction_distance_m": 0.5579999999999967,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.92888667420222,
+                  "y_m": 3.1311450807630328,
+                  "yaw_rad": -0.7144525083865333
+                },
+                "selected_progress_m": 0.4993566430361343,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.8,
+                "speed_lower_mps": 0.17999999999999827,
+                "speed_upper_mps": 0.27999999999999825,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.440964312704306,
+                "y_m": 3.392243706331331,
+                "yaw_rad": -0.27317647340111284
+              }
+            },
+            {
+              "at": 19400,
+              "command": {
+                "curvature_per_m": -1.2000000000000002,
+                "speed_mps": 0.21999999999999825,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.27999999999999825,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 22,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 22
+                },
+                "checked_continuation_distance_m": 4.109123555485993,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.8,
+                  "at": 19400,
+                  "commanded_curvature_per_m": -0.8
+                },
+                "goal_speed_cap_mps": 1.2906569373836547,
+                "remaining_distance_m": 1.777071076197291,
+                "requested_curvature_per_m": -1.8918185274551762,
+                "route_points": 75,
+                "route_progress": 2,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.061630868505914406,
+                "selected_curvature_per_m": -1.2000000000000002,
+                "selected_heading_error_rad": 0.26550042225651405,
+                "selected_prediction_distance_m": 0.4429999999999965,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.839808520586703,
+                  "y_m": 3.1559761700478286,
+                  "yaw_rad": -0.815810569071125
+                },
+                "selected_progress_m": 0.42199902540456674,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -1.2000000000000002,
+                "speed_lower_mps": 0.21999999999999825,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": null,
+                  "lateral_error_m": null,
+                  "mode": "pure_pursuit",
+                  "reference_curvature_per_m": null
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.466589463458119,
+                "y_m": 3.3848648759141926,
+                "yaw_rad": -0.2893246215492633
+              }
+            }
+          ],
+          "trigger_index": 8
+        },
+        "green_observed_ms": 300,
+        "kind": "simulation_summary",
+        "logging_errors": 0,
+        "minimum_cone_clearance_m": 0.3032708854919852,
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "approach_light",
+          "wait_green",
+          "finish",
+          "completed"
+        ],
+        "physical_output_enabled": false,
+        "pose_source": "ideal simulated pose feedback; no encoder/localization accuracy claim",
+        "scene": "synthetic RGB, raycast laser and bounded Ackermann plant",
+        "ticks": 557
+      },
+      "tracking": {
+        "kind": "pure_pursuit"
+      }
+    },
+    {
+      "error": null,
+      "summary": {
+        "braking_ticks": 1,
+        "completed": true,
+        "crosswalk_hold_ms": 3000,
+        "distance_m": 15.790272833708618,
+        "dropped_trace_records": 0,
+        "elapsed_ms": 83900,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "final_pose": {
+          "x_m": 6.4019832118646205,
+          "y_m": 2.5000368151467804,
+          "yaw_rad": 0.0012340015246428138
+        },
+        "first_navigation_failure": {
+          "first_at": 22500,
+          "frames": [
+            {
+              "at": 21700,
+              "command": {
+                "curvature_per_m": 0.9014819334141235,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": 0.992891913068463,
+                  "at": 21700,
+                  "commanded_curvature_per_m": 0.992891913068463
+                },
+                "goal_speed_cap_mps": 0.5244421522885587,
+                "remaining_distance_m": 0.30575281425727474,
+                "requested_curvature_per_m": 0.9014819334141235,
+                "route_points": 94,
+                "route_progress": 81,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.026167312407652736,
+                "selected_curvature_per_m": 0.9014819334141235,
+                "selected_heading_error_rad": 0.2993640286384487,
+                "selected_prediction_distance_m": 0.30575281425727474,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.5134955895085875,
+                  "y_m": 1.8724185967716565,
+                  "yaw_rad": -0.16399103062449144
+                },
+                "selected_progress_m": 0.2985811542279608,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": 0.9014819334141235,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.02322883483059984,
+                  "lateral_error_m": -0.02026246013630279,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": 0.9178558057958769
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.222487017569462,
+                "y_m": 1.9630176362591665,
+                "yaw_rad": -0.43993501068221397
+              }
+            },
+            {
+              "at": 21800,
+              "command": {
+                "curvature_per_m": 0.5014819334141235,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": 0.9014819334141235,
+                  "at": 21800,
+                  "commanded_curvature_per_m": 0.9014819334141235
+                },
+                "goal_speed_cap_mps": 0.4928152963145381,
+                "remaining_distance_m": 0.2765262142763817,
+                "requested_curvature_per_m": 0.28353812253938915,
+                "route_points": 94,
+                "route_progress": 82,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.013923081456383223,
+                "selected_curvature_per_m": 0.5014819334141235,
+                "selected_heading_error_rad": 0.19545074907243043,
+                "selected_prediction_distance_m": 0.2765262142763817,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.510515407990764,
+                  "y_m": 1.8591253150851679,
+                  "yaw_rad": -0.26790431019050975
+                },
+                "selected_progress_m": 0.26909455585795217,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": 0.5014819334141235,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.03872122454321053,
+                  "lateral_error_m": -0.01935031522344166,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": 0.33968473443910424
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.249803427074546,
+                "y_m": 1.9506177007834002,
+                "yaw_rad": -0.4125772107655181
+              }
+            },
+            {
+              "at": 21900,
+              "command": {
+                "curvature_per_m": 0.10148193341412348,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": 0.5014819334141235,
+                  "at": 21900,
+                  "commanded_curvature_per_m": 0.5014819334141235
+                },
+                "goal_speed_cap_mps": 0.45924223246608736,
+                "remaining_distance_m": 0.2471058588707781,
+                "requested_curvature_per_m": -0.029209101691988676,
+                "route_points": 94,
+                "route_progress": 83,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.007600568530787759,
+                "selected_curvature_per_m": 0.10148193341412348,
+                "selected_heading_error_rad": 0.1028990868160089,
+                "selected_prediction_distance_m": 0.2471058588707781,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.507503683089079,
+                  "y_m": 1.84879391609274,
+                  "yaw_rad": -0.36045597244693095
+                },
+                "selected_progress_m": 0.23915962080226627,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": 0.10148193341412348,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.05521450742658912,
+                  "lateral_error_m": -0.017951057728976746,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": 0.07013615244431348
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.277422404310777,
+                "y_m": 1.9389062234328431,
+                "yaw_rad": -0.3915327527630952
+              }
+            },
+            {
+              "at": 22000,
+              "command": {
+                "curvature_per_m": -0.058518066585876494,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": 0.10148193341412348,
+                  "at": 22000,
+                  "commanded_curvature_per_m": 0.10148193341412348
+                },
+                "goal_speed_cap_mps": 0.42333565970650294,
+                "remaining_distance_m": 0.21262876055795052,
+                "requested_curvature_per_m": -0.1843421272900591,
+                "route_points": 94,
+                "route_progress": 85,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.003467460800730955,
+                "selected_curvature_per_m": -0.058518066585876494,
+                "selected_heading_error_rad": 0.06938414053386488,
+                "selected_prediction_distance_m": 0.21262876055795052,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.502053698102497,
+                  "y_m": 1.8472067899032896,
+                  "yaw_rad": -0.39397091872907497
+                },
+                "selected_progress_m": 0.20919207289941755,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.1843421272900591,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.06544927018210894,
+                  "lateral_error_m": -0.01611929892362608,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.05626340915359052
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.3052148602613505,
+                "y_m": 1.9276113981979262,
+                "yaw_rad": -0.38248829476067225
+              }
+            },
+            {
+              "at": 22100,
+              "command": {
+                "curvature_per_m": -0.058518066585876494,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.058518066585876494,
+                  "at": 22100,
+                  "commanded_curvature_per_m": -0.058518066585876494
+                },
+                "goal_speed_cap_mps": 0.38453751317558327,
+                "remaining_distance_m": 0.18230575158197773,
+                "requested_curvature_per_m": -0.21412155672152053,
+                "route_points": 94,
+                "route_progress": 86,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.0031919508230984902,
+                "selected_curvature_per_m": -0.058518066585876494,
+                "selected_heading_error_rad": 0.06940304239461792,
+                "selected_prediction_distance_m": 0.18230575158197773,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.501757582350803,
+                  "y_m": 1.847336120670553,
+                  "yaw_rad": -0.3939520168683222
+                },
+                "selected_progress_m": 0.17922869188787094,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.21412155672152053,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.0670248153569043,
+                  "lateral_error_m": -0.014124250630188098,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.07819346025322324
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.333046509931599,
+                "y_m": 1.9164132217540069,
+                "yaw_rad": -0.3832838367582596
+              }
+            },
+            {
+              "at": 22200,
+              "command": {
+                "curvature_per_m": -0.058518066585876494,
+                "speed_mps": 0.3,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.058518066585876494,
+                  "at": 22200,
+                  "commanded_curvature_per_m": -0.058518066585876494
+                },
+                "goal_speed_cap_mps": 0.3420127767541404,
+                "remaining_distance_m": 0.15198242627635225,
+                "requested_curvature_per_m": -0.21958823511127823,
+                "route_points": 94,
+                "route_progress": 87,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.002929510194851776,
+                "selected_curvature_per_m": -0.058518066585876494,
+                "selected_heading_error_rad": 0.06942196276636325,
+                "selected_prediction_distance_m": 0.15198242627635225,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.501459022806192,
+                  "y_m": 1.8474602232554498,
+                  "yaw_rad": -0.39393309649657693
+                },
+                "selected_progress_m": 0.14926980915430565,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.21958823511127823,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.06761186243145362,
+                  "lateral_error_m": -0.012109894328602136,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.07819346025216957
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.360859895543358,
+                "y_m": 1.9051697636708835,
+                "yaw_rad": -0.38503937875585414
+              }
+            },
+            {
+              "at": 22300,
+              "command": {
+                "curvature_per_m": -0.058518066585876494,
+                "speed_mps": 0.2944233006515896,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.3,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.058518066585876494,
+                  "at": 22300,
+                  "commanded_curvature_per_m": -0.058518066585876494
+                },
+                "goal_speed_cap_mps": 0.2944233006515896,
+                "remaining_distance_m": 0.12166211363747609,
+                "requested_curvature_per_m": -0.22510619157184852,
+                "route_points": 94,
+                "route_progress": 88,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.002682660242586325,
+                "selected_curvature_per_m": -0.058518066585876494,
+                "selected_heading_error_rad": 0.06944070684267523,
+                "selected_prediction_distance_m": 0.12166211363747609,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.501163242851675,
+                  "y_m": 1.8475831639124012,
+                  "yaw_rad": -0.3939143524202649
+                },
+                "selected_progress_m": 0.11929569411075293,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.22510619157184852,
+                "speed_lower_mps": 0.24,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.06820010057331272,
+                  "lateral_error_m": -0.010071357746330672,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.07819346025339927
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.388653499942978,
+                "y_m": 1.8938774953720607,
+                "yaw_rad": -0.3867949207534487
+              }
+            },
+            {
+              "at": 22400,
+              "command": {
+                "curvature_per_m": -0.058518066585876494,
+                "speed_mps": 0.2404418336650273,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.2944233006515896,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.18,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 4.382417345769996,
+                "continuation_checked": true,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.058518066585876494,
+                  "at": 22400,
+                  "commanded_curvature_per_m": -0.058518066585876494
+                },
+                "goal_speed_cap_mps": 0.2404418336650273,
+                "remaining_distance_m": 0.09184222819987192,
+                "requested_curvature_per_m": -0.23055246519221517,
+                "route_points": 94,
+                "route_progress": 89,
+                "route_revision": 3,
+                "selected_cross_track_m": 0.0024270919927500303,
+                "selected_curvature_per_m": -0.058518066585876494,
+                "selected_heading_error_rad": 0.06946166322370306,
+                "selected_prediction_distance_m": 0.09184222819987192,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.500832550185992,
+                  "y_m": 1.8477206083062256,
+                  "yaw_rad": -0.393893396039237
+                },
+                "selected_progress_m": 0.0898863164975347,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.23055246519221517,
+                "speed_lower_mps": 0.23442330065158962,
+                "speed_upper_mps": 0.3,
+                "tracking": {
+                  "heading_error_rad": 0.06877567627143966,
+                  "lateral_error_m": -0.008053154321243218,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.07819346025483379
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "cones",
+              "pose": {
+                "x_m": 4.41592912186543,
+                "y_m": 1.882740351834305,
+                "yaw_rad": -0.3885189664140416
+              }
+            },
+            {
+              "at": 22500,
+              "command": {
+                "type": "stop"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.2404418336650273,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 22,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.058518066585876494,
+                  "at": 22500,
+                  "commanded_curvature_per_m": -0.058518066585876494
+                },
+                "goal_speed_cap_mps": 2.2457355154181218,
+                "remaining_distance_m": 4.449846889217061,
+                "requested_curvature_per_m": -0.38674853893352024,
+                "route_points": 180,
+                "route_progress": 0,
+                "route_revision": 4,
+                "selected_cross_track_m": null,
+                "selected_curvature_per_m": null,
+                "selected_heading_error_rad": null,
+                "selected_prediction_distance_m": null,
+                "selected_prediction_endpoint": null,
+                "selected_progress_m": null,
+                "selected_reference_cost_m": null,
+                "slew_limited_curvature_per_m": -0.38674853893352024,
+                "speed_lower_mps": 0.1804418336650273,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.0020833499944664657,
+                  "lateral_error_m": 0.0,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.39185168337559323
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": "empty_speed_interval",
+              "navigation_status": "blocked",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.43985940820512,
+                "y_m": 1.8729239435449603,
+                "yaw_rad": -0.39003256152136556
+              }
+            },
+            {
+              "at": 22600,
+              "command": {
+                "curvature_per_m": -0.4,
+                "speed_mps": 0.10044183366502779,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.1604418336650278,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": 0.0,
+                  "at": 22600,
+                  "commanded_curvature_per_m": 0.0
+                },
+                "goal_speed_cap_mps": 2.242263293681623,
+                "remaining_distance_m": 4.436513561194795,
+                "requested_curvature_per_m": -0.3282304412968613,
+                "route_points": 179,
+                "route_progress": 0,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.010729070247469849,
+                "selected_curvature_per_m": -0.4,
+                "selected_heading_error_rad": 0.19605536974128634,
+                "selected_prediction_distance_m": 0.20388366733005558,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.643806961531173,
+                  "y_m": 1.7806304393840846,
+                  "yaw_rad": -0.46907844193545195
+                },
+                "selected_progress_m": 0.20219731400750335,
+                "selected_reference_cost_m": 0.017086478091633488,
+                "slew_limited_curvature_per_m": -0.3282304412968613,
+                "speed_lower_mps": 0.10044183366502779,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.002083345389757907,
+                  "lateral_error_m": 0.0,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.33333357445974793
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.458397479343426,
+                "y_m": 1.8653010041399334,
+                "yaw_rad": -0.3901338116767299
+              }
+            },
+            {
+              "at": 22700,
+              "command": {
+                "curvature_per_m": -0.8,
+                "speed_mps": 0.1404418336650278,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.10044183366502779,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.4,
+                  "at": 22700,
+                  "commanded_curvature_per_m": -0.4
+                },
+                "goal_speed_cap_mps": 2.2390570423540535,
+                "remaining_distance_m": 4.424219403331474,
+                "requested_curvature_per_m": -0.3328306627988094,
+                "route_points": 179,
+                "route_progress": 0,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.01748518686085225,
+                "selected_curvature_per_m": -0.8,
+                "selected_heading_error_rad": 0.20206806613594885,
+                "selected_prediction_distance_m": 0.2788836673300556,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.713793063924151,
+                  "y_m": 1.7268079054020062,
+                  "yaw_rad": -0.6130657455407776
+                },
+                "selected_progress_m": 0.2758792547175688,
+                "selected_reference_cost_m": 0.022805424460553315,
+                "slew_limited_curvature_per_m": -0.3328306627988094,
+                "speed_lower_mps": 0.04044183366502779,
+                "speed_upper_mps": 0.1404418336650278,
+                "tracking": {
+                  "heading_error_rad": -0.00021911087355996897,
+                  "lateral_error_m": 0.000016899088189430177,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.33333357445974793
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.469764536105934,
+                "y_m": 1.8606173196894082,
+                "yaw_rad": -0.39236764835003335
+              }
+            },
+            {
+              "at": 22800,
+              "command": {
+                "curvature_per_m": -1.2000000000000002,
+                "speed_mps": 0.18,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.1404418336650278,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -0.8,
+                  "at": 22800,
+                  "commanded_curvature_per_m": -0.8
+                },
+                "goal_speed_cap_mps": 2.2357373801556952,
+                "remaining_distance_m": 4.411508432203447,
+                "requested_curvature_per_m": -0.3240732374801602,
+                "route_points": 179,
+                "route_progress": 1,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.017400575792086224,
+                "selected_curvature_per_m": -1.2000000000000002,
+                "selected_heading_error_rad": 0.1885475658133693,
+                "selected_prediction_distance_m": 0.3580439393452683,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.772341604689445,
+                  "y_m": 1.6516426995793236,
+                  "yaw_rad": -0.826586245863351
+                },
+                "selected_progress_m": 0.3551080623087833,
+                "selected_reference_cost_m": 0.021709839650999166,
+                "slew_limited_curvature_per_m": -0.4,
+                "speed_lower_mps": 0.0804418336650278,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.003756761442330059,
+                  "lateral_error_m": -0.00002909418025845621,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.33333357445974793
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.481492469596297,
+                "y_m": 1.8557162525561164,
+                "yaw_rad": -0.4001423065180836
+              }
+            },
+            {
+              "at": 22900,
+              "command": {
+                "curvature_per_m": -1.56,
+                "speed_mps": 0.18,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.18,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -1.2000000000000002,
+                  "at": 22900,
+                  "commanded_curvature_per_m": -1.2000000000000002
+                },
+                "goal_speed_cap_mps": 2.231369202560824,
+                "remaining_distance_m": 4.394810685370189,
+                "requested_curvature_per_m": -0.2962010937861814,
+                "route_points": 179,
+                "route_progress": 2,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.0004705884268791389,
+                "selected_curvature_per_m": -1.56,
+                "selected_heading_error_rad": 0.08946537183784065,
+                "selected_prediction_distance_m": 0.35999999999999993,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.769716842830519,
+                  "y_m": 1.6215825092555445,
+                  "yaw_rad": -0.9756684398389054
+                },
+                "selected_progress_m": 0.36259478364039854,
+                "selected_reference_cost_m": 0.01309593241366482,
+                "slew_limited_curvature_per_m": -0.8000000000000002,
+                "speed_lower_mps": 0.12,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.01503377595444122,
+                  "lateral_error_m": -0.0001537003389311784,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.33333357445974793
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.496817687268403,
+                "y_m": 1.8490915910649917,
+                "yaw_rad": -0.41698443983890554
+              }
+            },
+            {
+              "at": 23000,
+              "command": {
+                "curvature_per_m": -1.6,
+                "speed_mps": 0.18,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.18,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -1.56,
+                  "at": 23000,
+                  "commanded_curvature_per_m": -1.56
+                },
+                "goal_speed_cap_mps": 2.2266532979244302,
+                "remaining_distance_m": 4.3768194207572275,
+                "requested_curvature_per_m": -0.6000228516381632,
+                "route_points": 179,
+                "route_progress": 2,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.001586975908460736,
+                "selected_curvature_per_m": -1.6,
+                "selected_heading_error_rad": 0.047021371837841386,
+                "selected_prediction_distance_m": 0.35999999999999993,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.77772916257673,
+                  "y_m": 1.604806681342326,
+                  "yaw_rad": -1.018112439838905
+                },
+                "selected_progress_m": 0.3631502527281709,
+                "selected_reference_cost_m": 0.013530849340105225,
+                "slew_limited_curvature_per_m": -1.1600000000000001,
+                "speed_lower_mps": 0.12,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.02679609075331718,
+                  "lateral_error_m": -0.0005037739150469027,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -0.6666671489151946
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.513186258323686,
+                "y_m": 1.8416047544657728,
+                "yaw_rad": -0.4421484398389044
+              }
+            },
+            {
+              "at": 23100,
+              "command": {
+                "curvature_per_m": -1.6,
+                "speed_mps": 0.18,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.18,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -1.6,
+                  "at": 23100,
+                  "commanded_curvature_per_m": -1.6
+                },
+                "goal_speed_cap_mps": 2.221926956813486,
+                "remaining_distance_m": 4.358825530193381,
+                "requested_curvature_per_m": -0.9034648447774868,
+                "route_points": 179,
+                "route_progress": 3,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.00020494309594772274,
+                "selected_curvature_per_m": -1.6,
+                "selected_heading_error_rad": 0.06822137183783905,
+                "selected_prediction_distance_m": 0.35999999999999993,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.786956915419465,
+                  "y_m": 1.5893528722250772,
+                  "yaw_rad": -1.0469124398388907
+                },
+                "selected_progress_m": 0.363155090181561,
+                "selected_reference_cost_m": 0.014055894000305387,
+                "slew_limited_curvature_per_m": -1.2000000000000002,
+                "speed_lower_mps": 0.12,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.03847713509279549,
+                  "lateral_error_m": -0.001143265422985327,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -1.0000007233649426
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.529342406830986,
+                "y_m": 1.8336702423964524,
+                "yaw_rad": -0.47091243983889
+              }
+            },
+            {
+              "at": 23200,
+              "command": {
+                "curvature_per_m": -1.6400000000000001,
+                "speed_mps": 0.18,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.18,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -1.6,
+                  "at": 23200,
+                  "commanded_curvature_per_m": -1.6
+                },
+                "goal_speed_cap_mps": 2.217187681363437,
+                "remaining_distance_m": 4.340819780127821,
+                "requested_curvature_per_m": -0.875418198496051,
+                "route_points": 179,
+                "route_progress": 4,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.001252193769215905,
+                "selected_curvature_per_m": -1.6400000000000001,
+                "selected_heading_error_rad": 0.07505737183786776,
+                "selected_prediction_distance_m": 0.35999999999999993,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.793751457511852,
+                  "y_m": 1.5720295932209878,
+                  "yaw_rad": -1.090076439838874
+                },
+                "selected_progress_m": 0.36379268380826985,
+                "selected_reference_cost_m": 0.014202003943683143,
+                "slew_limited_curvature_per_m": -1.2000000000000002,
+                "speed_lower_mps": 0.12,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.04929398753456804,
+                  "lateral_error_m": -0.0019187040110427108,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -1.0000007233649426
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.545263382978322,
+                "y_m": 1.8252738071852996,
+                "yaw_rad": -0.49971243983887437
+              }
+            },
+            {
+              "at": 23300,
+              "command": {
+                "curvature_per_m": -1.6580000000000001,
+                "speed_mps": 0.18,
+                "type": "drive"
+              },
+              "fault": null,
+              "measured_speed_mps": 0.18,
+              "navigation": {
+                "allowed_waypoint_speed_mps": 0.0,
+                "candidates": {
+                  "accepted": 44,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 44,
+                  "sample_budget": 0,
+                  "stop_reachable": 0
+                },
+                "checked_continuation_distance_m": 0.0,
+                "continuation_checked": false,
+                "execution_state": {
+                  "applied_curvature_per_m": -1.6400000000000001,
+                  "at": 23300,
+                  "commanded_curvature_per_m": -1.6400000000000001
+                },
+                "goal_speed_cap_mps": 2.2124296868927575,
+                "remaining_distance_m": 4.322780568226265,
+                "requested_curvature_per_m": -1.2005044629139483,
+                "route_points": 179,
+                "route_progress": 5,
+                "route_revision": 5,
+                "selected_cross_track_m": 0.001146713083190766,
+                "selected_curvature_per_m": -1.6580000000000001,
+                "selected_heading_error_rad": 0.08906466183784234,
+                "selected_prediction_distance_m": 0.35999999999999993,
+                "selected_prediction_endpoint": {
+                  "x_m": 4.800917654492147,
+                  "y_m": 1.5552561658964426,
+                  "yaw_rad": -1.1260691498388788
+                },
+                "selected_progress_m": 0.3640415560559858,
+                "selected_reference_cost_m": 0.014027049957441189,
+                "slew_limited_curvature_per_m": -1.2400000000000002,
+                "speed_lower_mps": 0.12,
+                "speed_upper_mps": 0.18,
+                "tracking": {
+                  "heading_error_rad": -0.051973433210261655,
+                  "lateral_error_m": -0.002760721672509474,
+                  "mode": "lqr",
+                  "reference_curvature_per_m": -1.3333342978047298
+                },
+                "travel_boundary": {
+                  "max_projection_m": 0.4500000000000002,
+                  "normal": {
+                    "x_m": 1.0,
+                    "y_m": 0.0
+                  },
+                  "origin": {
+                    "x_m": 5.55,
+                    "y_m": 2.5
+                  }
+                }
+              },
+              "navigation_reason": null,
+              "navigation_status": "driving",
+              "phase": "approach_light",
+              "pose": {
+                "x_m": 4.560933066467693,
+                "y_m": 1.816417312263465,
+                "yaw_rad": -0.5291964398388793
+              }
+            }
+          ],
+          "trigger_index": 8
+        },
+        "green_observed_ms": 300,
+        "kind": "simulation_summary",
+        "logging_errors": 0,
+        "minimum_cone_clearance_m": 0.2735281037908029,
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "approach_light",
+          "wait_green",
+          "finish",
+          "completed"
+        ],
+        "physical_output_enabled": false,
+        "pose_source": "ideal simulated pose feedback; no encoder/localization accuracy claim",
+        "scene": "synthetic RGB, raycast laser and bounded Ackermann plant",
+        "ticks": 839
+      },
+      "tracking": {
+        "kind": "lqr",
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5,
+        "min_speed_mps": 0.03,
+        "q_heading": 2.0,
+        "q_lateral": 4.0,
+        "r_curvature": 1.0
+      }
+    }
+  ],
+  "schema_version": 1,
+  "scope": "Identical synthetic RGB/laser/ideal-pose competition scene; no hardware or target timing measurement"
+}

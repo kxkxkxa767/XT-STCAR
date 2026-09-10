@@ -355,8 +355,8 @@ fn light_boundary_applies_on_transition_and_only_confirmed_new_green_releases_it
         );
         assert_eq!(
             report.navigation.unwrap().diagnostics.travel_boundary,
-            transitioned.then_some(boundary),
-            "the newly reported phase must constrain this same tick"
+            Some(boundary),
+            "cone continuations and the transition tick must retain the light boundary"
         );
     }
     let light_pose = Pose2 {

@@ -1,0 +1,96 @@
+{
+  "date": "2026-09-10",
+  "scope": "Mac host tests, synthetic RGB/laser/ideal-pose competition, static RISC-V cross-build. No vehicle/target execution; no videos.",
+  "rust_workspace": {
+    "passed": 266,
+    "failed": 0,
+    "ignored_native_opt_in": 1
+  },
+  "tracking_example_tests_passed": 2,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "physical_output_enabled": false,
+  "vehicle_execution_verified": false,
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "experimental; unchanged q/R and fallback thresholds; altered common pose-error metric is documented",
+  "unchanged_model_native_runtime_tests": "not rerun; historical model/native evidence remains separate",
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "75010b8132cecd859efb1eb30c38c32e2914943f450eff9f54bcf12198c438ec",
+      "size_bytes": 1932320,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "before_report": "motion-v3-before.json",
+  "build_report": "motion-v3-build.json",
+  "build_log": "motion-v3-build.log",
+  "competition_comparison": {
+    "report": "motion-v3-competition-comparison.json",
+    "runs": [
+      {
+        "tracking": {
+          "kind": "pure_pursuit"
+        },
+        "completed": true,
+        "elapsed_ms": 55600,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "minimum_cone_clearance_m": 0.3032708854919852,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "first_unexpected_navigation_at_ms": 18600,
+        "diagnostic_window_frames": 17
+      },
+      {
+        "tracking": {
+          "kind": "lqr",
+          "max_heading_error_rad": 0.7,
+          "max_lateral_error_m": 0.5,
+          "min_speed_mps": 0.03,
+          "q_heading": 2.0,
+          "q_lateral": 4.0,
+          "r_curvature": 1.0
+        },
+        "completed": true,
+        "elapsed_ms": 83900,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "minimum_cone_clearance_m": 0.2735281037908029,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "first_unexpected_navigation_at_ms": 22500,
+        "diagnostic_window_frames": 17
+      }
+    ]
+  },
+  "checks_added": [
+    "Adopted steering history and Stop centering, including rejected/late worker plans",
+    "Mandatory through-waypoint admission, valid continuation, cache invalidation and next-phase limit",
+    "Piecewise plant integration versus exact stopping distance and independent fine RK4",
+    "Substep body/cone/bounds/light-plane verification, including intermediate violations",
+    "Analytic lateral peak including short-preview/near-goal bypass regressions"
+  ],
+  "limitations": [
+    "Steering is a timestamped model estimate, not measured feedback",
+    "ExecutionAhead may reject delayed source snapshots; physical time association remains unimplemented",
+    "Constant candidate-curvature preview does not represent every future steering policy",
+    "Synthetic completion is not general convergence or vehicle acceptance",
+    "Source/target libraries and hardware performance still require commissioning"
+  ],
+  "python_delivery_tests_passed": 34
+}

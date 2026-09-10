@@ -6,7 +6,9 @@ use xt_stcar_robot_core::autonomy::{ObstacleDisc, Point2, Pose2, PoseEstimate, R
 use xt_stcar_robot_core::mission::{
     Mission, MissionConfig, MissionOutput, MissionPhase, MissionReport,
 };
-use xt_stcar_robot_core::navigation::{NavigationConfig, NavigationDecision, Navigator};
+use xt_stcar_robot_core::navigation::{
+    NavigationConfig, NavigationDecision, Navigator, SteeringEstimate,
+};
 use xt_stcar_robot_core::scan::{ScanConfig, validate_full_scan};
 use xt_stcar_robot_core::{
     Controller, Event, LidarSample, MotionIntent, MotionOutput, OdometrySample, Quaternion,
@@ -197,6 +199,39 @@ impl AutonomyController {
         scan: &LidarSample,
         road: &RoadFrame,
     ) -> AutonomyStep {
+        let step = self.tick_planned(at, pose, scan, road);
+        if let Err(error) = self.navigation.adopt_command(at, &step.command) {
+            return self.stop_with_fault(at, error.to_string());
+        }
+        step
+    }
+
+    /// Background planning uses the output owner's adopted-command history.
+    /// Its result may be discarded and is deliberately not acknowledged here.
+    pub fn tick_with_execution_state(
+        &mut self,
+        at: Timestamp,
+        pose: &PoseEstimate,
+        scan: &LidarSample,
+        road: &RoadFrame,
+        steering: SteeringEstimate,
+    ) -> AutonomyStep {
+        if steering.at > at {
+            return self.stop_with_fault(at, "execution estimate is ahead of snapshot".into());
+        }
+        if let Err(error) = self.navigation.set_execution_state(steering) {
+            return self.stop_with_fault(at, error.to_string());
+        }
+        self.tick_planned(at, pose, scan, road)
+    }
+
+    fn tick_planned(
+        &mut self,
+        at: Timestamp,
+        pose: &PoseEstimate,
+        scan: &LidarSample,
+        road: &RoadFrame,
+    ) -> AutonomyStep {
         if let Some(error) = self.fault.clone() {
             return self.stop_with_fault(at, error);
         }
@@ -301,7 +336,7 @@ impl AutonomyController {
         // out of Cones. Only confirmed stationary green admission enters Finish.
         let travel_boundary = matches!(
             mission.phase,
-            MissionPhase::ApproachLight | MissionPhase::WaitGreen
+            MissionPhase::Cones | MissionPhase::ApproachLight | MissionPhase::WaitGreen
         )
         .then(|| self.mission.light_stop_boundary());
         self.navigation.set_travel_boundary(travel_boundary);
@@ -309,6 +344,7 @@ impl AutonomyController {
             MissionOutput::Target {
                 point,
                 max_speed_mps,
+                arrival,
             } => {
                 let heading = match mission.phase {
                     MissionPhase::ApproachLight => Some(self.config.mission.light_approach_yaw_rad),
@@ -317,7 +353,7 @@ impl AutonomyController {
                 };
                 let decision = self
                     .navigation
-                    .step_with_goal_heading(
+                    .plan_with_arrival(
                         at,
                         pose,
                         &obstacles,
@@ -325,13 +361,14 @@ impl AutonomyController {
                         *point,
                         heading,
                         *max_speed_mps,
+                        *arrival,
                     )
                     .map_err(|e| e.to_string())?;
                 let intent = decision.intent;
                 (intent, Some(decision), intent.speed_mps == 0.0)
             }
             MissionOutput::Stop => {
-                self.navigation.stop(at).map_err(|e| e.to_string())?;
+                self.navigation.plan_stop(at).map_err(|e| e.to_string())?;
                 (
                     MotionIntent {
                         speed_mps: 0.0,

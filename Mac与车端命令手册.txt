@@ -1,5 +1,5 @@
 XT-STCAR：Mac 与 Muse Pi Pro 车端命令手册
-维护日期：2026-09-09
+维护日期：2026-09-10
 适用工程：/Users/yuhaojin/Documents/XT-STCAR
 
 本文件是操作用法，不表示这些命令已经在车端执行。当前暂不接车。
@@ -247,7 +247,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
   它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
   LQR仍为实验选项，默认Pure Pursuit保持不变；当前结果见
-  docs/motion-v2-competition-comparison.json，旧motion-control结果保留历史。
+  docs/motion-v3-competition-comparison.json；本轮最终复验PP55.6秒/LQR83.9秒完成，
+  旧motion-v2和motion-control结果保留历史，不当作当前版本验收。
   summary.first_navigation_failure 为首个非预期阻塞/故障窗口，最多8帧前文、
   触发帧、8帧后文；null表示没有触发。先看触发帧的navigation_reason、
   navigation.candidates及请求/选中曲率，再对照最终fault；首次阻塞可能恢复。
@@ -256,6 +257,47 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   常规完整比赛仍运行下方 autonomy-sim。
   原有模拟配置未写 navigation.tracking 时默认 Pure Pursuit；LQR 配置
   及模型边界见 docs/运动控制设计与对比.md。不要直接用于实车。
+
+运动执行与通过点检查（v3）
+[Mac；用途] 检查采用命令历史、连续渐变的侧向加速度峰值、通过点及车辆模型。
+[替换项] 无。以下为 Rust 主机测试，不访问车辆设备，不启动电机。
+
+  cargo test --locked --offline -p xt-stcar-robot-core --test steering_execution
+  cargo test --locked --offline -p xt-stcar-robot-core --test through_waypoints
+  cargo test --locked --offline -p xt-stcar-robot-core motion_transition::
+  cargo test --locked --offline -p xt-stcar-robot-runner --test control_runtime
+  cargo test --locked --offline -p xt-stcar-robot-runner --lib stop_tests
+
+[预期] 对应专项测试通过；整体验收还要运行完整比赛和 scripts/build-riscv.sh。
+  MotionTransition 在 crates/robot-core/src/motion_transition.rs，解析检查速度与曲率
+  同时渐变过程的 v²|曲率| 峰值；不能把单一目标值或一个采样点当作整个过渡。
+  SteeringEstimate 在 crates/robot-core/src/navigation.rs，保存已采用曲率目标和
+  模型执行曲率。Stop 目标为零，模型仍按变化率回中，不代表有实际舵机反馈。
+  必停点使用 Stop，锥桶中间点使用 PassThrough；经过检查的尾段只提供制动余量，
+  第一段仍单独跟踪/按原容差验收，不能用前视跳过必经点；next_max_speed_mps提前约束
+  下一阶段的候选目标速度，避免进入验收半径后才突然限速；不保证入区瞬间测量速度
+  必定达标，外部超速/测量偏差仍可能触发空速度区间Stop。查看 navigation.diagnostics
+  的 continuation_checked、checked_continuation_distance_m、goal_speed_cap_mps、
+  execution_state 和 candidates。新车辆模型按不超过1ms子步积分并逐子步检查碰撞/边界，
+  这不会提高磁盘日志频率，也不是1ms实车控制周期。
+  带朝向目标的缓存参考横向偏离超过目标容差一半时重新规划；整段评分比较对应四个
+  车身角的世界位置差最大值，统一以米衡量位姿误差。不能仅凭旧路径无碰撞就认为仍可到达。
+  最终复验PP55.6秒/LQR83.9秒均完成、终态速度均0，最小锥桶间隙约0.3033m/0.2735m；
+  两者斑马线停稳3000ms、绿灯确认300ms。首次可恢复阻塞在18600ms/22500ms，均17帧。
+  这些不能当实车性能；四角位姿误差改变了位置与朝向的相对影响，未改的是LQR q/R和
+  比赛门限。保持单个候选曲率的预览不能代表所有未来转向策略。
+  中途PP失败保存在docs/motion-v3-before.json，历史失败不会从报告中抹去。
+
+  Worker是Rust库接口，没有新增“启动电机”CLI：
+  同步 AutonomyController::tick 在 Safety 后采用最终命令；后台
+  tick_with_execution_state 只规划，只有输出线程 poll 的 ControlPoll.command
+  会推进采用历史。latest.command 仅诊断，不能绕过poll的故障/超时结果。
+  try_submit 返回 ExecutionAhead 表示源时刻早于最近执行状态：等待更晚的源快照，
+  不修改其原采集时戳来强行提交，也不倒推未来执行状态。该返回不续租，超时仍Stop。
+  Busy可在后续调度重试；Duplicate不重新规划、不续租；Stopped表明会话已停止。
+  排队状态只包含提交时可知历史，同一时刻随后采用的命令不会追溯更新副本；
+  持续滞后的真实输入仍须做共同时间轴/有界历史关联。详见
+  docs/运动执行与通过点修正.md。
 
 5.1 配置类型与入口
   config/competition-sim.json：SimulationConfig，含场景、理想车辆模型、
@@ -736,6 +778,10 @@ JSON
   docs/部署包使用说明.md：打包、上传、载荷与依赖边界。
   docs/Rust串口采集.md：传感器采集配置与限制。
   docs/Rust比赛自主闭环.md：任务、导航、感知 worker、仿真及日志设计边界。
+  docs/运动执行与通过点修正.md：v3执行估计、Worker时序契约、过渡峰值及通过点。
+  docs/motion-v3-validation.json：本轮Rust常规266通过/0失败、原生opt-in1忽略，
+    example2和Python交付34通过；fmt/clippy/两个RISC-V交叉链接通过。
+  docs/motion-v3-delivery.json：本地包生成/核验状态、路径和哈希；交叉链接成功不等于包已核验。
   docs/底盘标定映射.md：物理单位映射和未经验证的示例表。
   docs/赛项三规则与工程差距.md：初稿规则、资料证据与实车缺口。
 

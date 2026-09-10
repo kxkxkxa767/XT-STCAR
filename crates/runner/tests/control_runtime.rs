@@ -3,6 +3,7 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread;
 use std::time::{Duration, Instant};
 use xt_stcar_robot_core::autonomy::{LightState, Pose2, PoseEstimate, RoadObservation};
+use xt_stcar_robot_core::navigation::SteeringEstimate;
 use xt_stcar_robot_core::{
     FrameId, LidarSample, MotionOutput, OutputRecord, State, StepReport, Timestamp,
 };
@@ -428,4 +429,229 @@ fn real_worker_cannot_relax_existing_controller_deadlines() {
         )
         .is_err()
     );
+}
+
+fn turning(curvature_per_m: f64) -> MotionOutput {
+    MotionOutput::Drive {
+        speed_mps: 0.1,
+        curvature_per_m,
+    }
+}
+
+fn assert_steering(state: SteeringEstimate, at: u64, commanded: f64, applied: f64) {
+    assert_eq!(state.at, Timestamp(at));
+    assert!((state.commanded_curvature_per_m - commanded).abs() < 1e-12);
+    assert!(
+        (state.applied_curvature_per_m - applied).abs() < 1e-12,
+        "wrong applied estimate: {state:?}, expected {applied}"
+    );
+}
+
+#[test]
+fn processor_receives_only_poll_adopted_history_and_replaced_inputs_keep_bound_estimates() {
+    let (started_tx, started_rx) = channel();
+    let (release_tx, release_rx) = channel();
+    let mut worker = AutonomyWorker::spawn_with_execution_processor(
+        ControlRuntimeConfig {
+            max_command_age_ms: 1000,
+            startup_timeout_ms: 1000,
+        },
+        Timestamp(0),
+        2.0,
+        2.0,
+        move |input, steering| {
+            started_tx.send((input.at.0, steering)).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            let command = match input.at.0 {
+                10 => turning(1.5),
+                20 => turning(-1.5),
+                _ => MotionOutput::Stop,
+            };
+            Ok(step(input.at.0, command, false))
+        },
+    )
+    .unwrap();
+    assert_eq!(submit(&worker, &input(10), 10), SubmitStatus::Queued);
+    let (at, steering) = started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(at, 10);
+    assert_steering(steering, 10, 0.0, 0.0);
+    assert_eq!(submit(&worker, &input(20), 20), SubmitStatus::Queued);
+    release_tx.send(()).unwrap();
+    let (at, steering) = started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(at, 20);
+    // The first Drive has been planned and published, but poll has not adopted it.
+    assert_steering(steering, 20, 0.0, 0.0);
+    assert_eq!(wait_report(&mut worker, 20, 10).command, turning(1.5));
+    assert_steering(worker.execution_state().unwrap(), 20, 1.5, 0.0);
+    worker.poll(Timestamp(120));
+    assert_steering(worker.execution_state().unwrap(), 120, 1.5, 0.2);
+
+    let discarded = input(130);
+    assert_eq!(submit(&worker, &discarded, 130), SubmitStatus::Queued);
+    assert_eq!(submit(&worker, &input(140), 140), SubmitStatus::Replaced);
+    assert_eq!(Arc::strong_count(&discarded), 1);
+    release_tx.send(()).unwrap();
+    let (at, steering) = started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(at, 140);
+    // The second plan's opposite steering is still unadopted. This input keeps
+    // its submission-time estimate, even though the second plan now exists.
+    assert_steering(steering, 140, 1.5, 0.24);
+    assert_eq!(wait_report(&mut worker, 140, 20).command, turning(-1.5));
+    assert_steering(worker.execution_state().unwrap(), 140, -1.5, 0.24);
+    worker.poll(Timestamp(150));
+    assert_eq!(submit(&worker, &input(160), 160), SubmitStatus::Queued);
+    release_tx.send(()).unwrap();
+    let (at, steering) = started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(at, 160);
+    assert_steering(steering, 160, -1.5, 0.2);
+    release_tx.send(()).unwrap();
+}
+
+#[test]
+fn newer_execution_rejects_old_source_without_rewinding_or_renewing_duplicate_leases() {
+    let (observed_tx, observed_rx) = channel();
+    let mut worker = AutonomyWorker::spawn_with_execution_processor(
+        config(),
+        Timestamp(0),
+        2.0,
+        2.0,
+        move |input, steering| {
+            observed_tx.send((input.at.0, steering)).unwrap();
+            Ok(step(input.at.0, turning(1.0), false))
+        },
+    )
+    .unwrap();
+    let first = input(10);
+    submit(&worker, &first, 10);
+    wait_report(&mut worker, 10, 10);
+    let (_, steering) = observed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_steering(steering, 10, 0.0, 0.0);
+    worker.poll(Timestamp(30));
+    assert_eq!(
+        submit(&worker, &input(20), 30),
+        SubmitStatus::ExecutionAhead
+    );
+    assert!(observed_rx.try_recv().is_err());
+    assert_eq!(submit(&worker, &first, 31), SubmitStatus::Duplicate);
+    let aligned = input(35);
+    assert_eq!(submit(&worker, &aligned, 35), SubmitStatus::Queued);
+    let (at, steering) = observed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(at, 35);
+    assert_steering(steering, 35, 1.0, 0.05);
+    wait_report(&mut worker, 35, 35);
+    assert_eq!(submit(&worker, &aligned, 100), SubmitStatus::Duplicate);
+    assert_eq!(worker.poll(Timestamp(134)).command, turning(1.0));
+    let expired = worker.poll(Timestamp(135));
+    assert_eq!(expired.fault, Some(ControlFault::CommandExpired));
+    assert_eq!(expired.command, MotionOutput::Stop);
+    assert_steering(worker.execution_state().unwrap(), 135, 0.0, 0.25);
+    worker.poll(Timestamp(185));
+    assert_steering(worker.execution_state().unwrap(), 185, 0.0, 0.15);
+}
+
+#[test]
+fn late_drive_is_never_adopted_after_watchdog_stop_and_stop_recenters_over_time() {
+    let (started_tx, started_rx) = channel();
+    let (release_tx, release_rx) = channel();
+    let mut worker = AutonomyWorker::spawn_with_execution_processor(
+        config(),
+        Timestamp(0),
+        2.0,
+        2.0,
+        move |input, steering| {
+            started_tx.send(steering).unwrap();
+            if input.at.0 == 30 {
+                release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            Ok(step(
+                input.at.0,
+                turning(if input.at.0 == 10 { 1.5 } else { -1.5 }),
+                false,
+            ))
+        },
+    )
+    .unwrap();
+    submit(&worker, &input(10), 10);
+    assert_steering(
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+        10,
+        0.0,
+        0.0,
+    );
+    wait_report(&mut worker, 20, 10);
+    submit(&worker, &input(30), 30);
+    assert_steering(
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+        30,
+        1.5,
+        0.02,
+    );
+    let expired = worker.poll(Timestamp(110));
+    assert_eq!(expired.fault, Some(ControlFault::CommandExpired));
+    assert_eq!(expired.command, MotionOutput::Stop);
+    assert_steering(worker.execution_state().unwrap(), 110, 0.0, 0.18);
+    release_tx.send(()).unwrap();
+    let later = worker.poll(Timestamp(120));
+    assert_eq!(later.command, MotionOutput::Stop);
+    assert_eq!(later.fault, Some(ControlFault::CommandExpired));
+    assert_eq!(later.latest.unwrap().command, turning(1.5));
+    assert_steering(worker.execution_state().unwrap(), 120, 0.0, 0.16);
+    worker.poll(Timestamp(210));
+    assert_steering(worker.execution_state().unwrap(), 210, 0.0, 0.0);
+    assert_eq!(submit(&worker, &input(211), 211), SubmitStatus::Stopped);
+}
+
+#[test]
+fn invalid_adopted_curvature_and_regressing_poll_clock_cannot_corrupt_execution_state() {
+    for curvature in [1.0, 3.0] {
+        let mut worker = AutonomyWorker::spawn_with_execution_processor(
+            config(),
+            Timestamp(0),
+            2.0,
+            2.0,
+            move |input, _| Ok(step(input.at.0, turning(curvature), false)),
+        )
+        .unwrap();
+        submit(&worker, &input(10), 10);
+        if curvature <= 2.0 {
+            wait_report(&mut worker, 10, 10);
+            worker.poll(Timestamp(30));
+            let regressed = worker.poll(Timestamp(20));
+            assert_eq!(regressed.fault, Some(ControlFault::ClockRegression));
+            assert_eq!(regressed.command, MotionOutput::Stop);
+            assert_steering(worker.execution_state().unwrap(), 30, 0.0, 0.04);
+        } else {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                let result = worker.poll(Timestamp(10));
+                assert_eq!(result.command, MotionOutput::Stop);
+                if result.fault.is_some() {
+                    assert_eq!(result.fault, Some(ControlFault::InvalidResult));
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                thread::yield_now();
+            }
+            assert_steering(worker.execution_state().unwrap(), 10, 0.0, 0.0);
+        }
+    }
+    for (rate, curvature) in [
+        (0.0, 2.0),
+        (f64::NAN, 2.0),
+        (51.0, 2.0),
+        (2.0, f64::INFINITY),
+        (2.0, 0.0),
+        (2.0, 11.0),
+    ] {
+        assert!(
+            AutonomyWorker::spawn_with_execution_processor(
+                config(),
+                Timestamp(0),
+                rate,
+                curvature,
+                |input, _| Ok(step(input.at.0, MotionOutput::Stop, false)),
+            )
+            .is_err()
+        );
+    }
 }

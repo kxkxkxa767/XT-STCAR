@@ -162,7 +162,11 @@ pub enum MissionPhase {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MissionOutput {
-    Target { point: Point2, max_speed_mps: f64 },
+    Target {
+        point: Point2,
+        max_speed_mps: f64,
+        arrival: crate::navigation::ArrivalBehavior,
+    },
     Stop,
 }
 
@@ -691,6 +695,24 @@ impl Mission {
     fn target(&self, point: Point2, approach: bool) -> MissionOutput {
         MissionOutput::Target {
             point,
+            arrival: if approach {
+                crate::navigation::ArrivalBehavior::Stop
+            } else {
+                let next = self
+                    .config
+                    .cone_waypoints
+                    .get(self.waypoint_index + 1)
+                    .copied();
+                crate::navigation::ArrivalBehavior::PassThrough {
+                    next: next.unwrap_or(self.config.light_stop_goal),
+                    next_heading_rad: next.is_none().then_some(self.config.light_approach_yaw_rad),
+                    next_max_speed_mps: if next.is_none() {
+                        self.config.approach_speed_mps
+                    } else {
+                        self.config.cruise_speed_mps
+                    },
+                }
+            },
             max_speed_mps: if approach {
                 self.config.approach_speed_mps
             } else {

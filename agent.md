@@ -26,7 +26,45 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 最新导航预测、灯前约束与诊断修正（2026-09-10）
+### 最新运动执行状态、过渡峰值、通过点与模拟积分修正（2026-09-10）
+
+- 修改前 fetch 已确认 `9b59125` 与 origin/main 一致；继续按用户授权直接 main 开发/验证/提交/推送。
+  本轮已完成下述主机验证与交叉链接，提交/推送状态以 Git HEAD/origin/main 核对；不沿用 v2 的数字或哈希。
+  新说明为[运动执行与通过点修正](docs/运动执行与通过点修正.md)，当前证据统一使用 `docs/motion-v3-*`。
+- `robot-core/src/navigation.rs` 新增 `SteeringEstimate { at, commanded_curvature_per_m, applied_curvature_per_m }`。
+  估计只按已采用命令推进，`advance_to` 沿旧目标推进，`adopt` 先推进再换目标；Stop 归零目标但估计逐步回中。
+  即使字段各自有限，其差值溢出也会原子拒绝，失败不修改原估计。
+  `plan_with_arrival` / `plan_stop` 不采用规划结果；旧同步 step/stop 包装采用其返回命令。
+  `runner/src/autonomy.rs` 同步 `tick` 在最终 Safety 后采用命令，异步 `tick_with_execution_state` 只规划、不自行采用。
+- `runner/src/control_runtime.rs` 的真实 Worker 使用上述异步接口。只有输出线程 `poll` 最终的 `ControlPoll.command`
+  推进执行估计，固定大小原子槽回送给提交方；未采用、被替换或晚到的计划不会更新执行历史。
+  `try_submit` 把提交时已知状态绑定到快照，只有估计时刻不晚于源时刻才能向前推进；否则返回 `ExecutionAhead` 等待新源。
+  不倒推未来状态、不阻塞 poll、不续租旧命令；同源 Duplicate 和故障锁存保持。
+  同时刻先提交后采用的新命令不会追溯更新排队副本，持续滞后实车源仍需共同时间轴/有界历史关联；这不是测得的转向反馈。
+  专项 `control_runtime` 14 项及对应 clippy 已通过，包含在下述本轮完整验证范围中。
+- 新 Rust `robot-core/src/motion_transition.rs` 的 `MotionTransition` / `lateral_acceleration_peak` 解析检查
+  速度和曲率独立渐变时 `v²|曲率|` 的端点、分界及内部峰值，固定计算量、不分配堆内存。
+  导航检查至少覆盖完整控制周期和配置预瞄时域，不因接近目标缩短几何预测而漏检；无效数值/超限拒绝候选。
+- `ArrivalBehavior::Stop/PassThrough` 区分必停目标与锥桶通过点。续段从第一段实际末端位置/朝向/曲率连接并检查，
+  只为速度制动上限提供经过验证的余量；第一段仍单独跟踪、独立按原容差验收，前视和进度不能跳到续段跳过必经点。
+  `next_max_speed_mps` 提供下一阶段上限，进入其验收半径前提前限速，避免阶段切换后的速度上限突变。
+  它约束候选目标，不承诺入区瞬间测量速度必定达标；外部超速/测量偏差仍可触发空速度区间 Stop。
+  续段不可行则按停车处理。锥桶阶段就约束灯前续段的禁越线，停稳/绿灯/普通停车期限等规则门限未放宽。
+- `runner/src/simulation.rs` 使用不超过 1 ms 的子步、速度/曲率渐变分界、包含交叉项的航向积分与位置数值积分，
+  每个子步检查车体/障碍/边界，故障后制动沿用同一逻辑。控制/感知周期不降低，也不新增逐子步磁盘日志。
+- 新积分暴露 PP 灯前回归，额外修正两个已复现问题：带目标朝向时，缓存参考横向偏离超过 `goal_tolerance_m × 0.5`
+  便提前清路重规划，不能只因缓存无碰撞就假定末端仍可达；oriented rollout 整段评分改为对应四个车身角世界位置差的
+  最大值，使用纯米制车体位姿误差，避免提前回正后仍残留横向误差。这改变了位置与朝向的相对影响；
+  未调整的是 LQR q/R 参数及比赛门限，不能声称评分权重完全未变。恒候选曲率预览不代表所有未来策略。
+- 本轮最终复验 PP 55.6 秒、LQR 83.9 秒均完成，终态速度均为 0；最小锥桶间隙分别为
+  0.3032708854919852 m / 0.2735281037908029 m，两者斑马线停稳 3000 ms、绿灯确认 300 ms。
+  首次可恢复阻塞分别为 18600 ms / 22500 ms，均保存 17 帧。完整结果见 `docs/motion-v3-competition-comparison.json`，
+  中途 PP 失败保存在 `docs/motion-v3-before.json`，不宣称实现期间始终通过；控制周期、容差及时限未放宽。
+  测试/构建见 `docs/motion-v3-validation.json`、`motion-v3-build.json`；本地包状态和哈希以 `motion-v3-delivery.json` 为准。
+  **PP 默认不变、LQR 仍为实验项。** 暂不接车、不读视频、不执行 RISC-V 目标或真实设备，GLIBC 2.38 仅本地交叉基线。
+  本地包、模型、编译链及环境不进 Git；用户规则 PDF 不修改/不暂存，STM32 任务继续暂停。
+
+### 前轮导航预测、灯前约束与诊断修正（2026-09-10，v2 历史）
 
 - 已读取用户[第二份修改意见](https://chatgpt.com/share/6aa27143-7204-83ee-ad9a-7067ef49a1bc)，按源码和独立复现核验。
   修改前 fetch 确认 `8aceeaf` 与 origin/main 一致（0/0）；用户已授权本轮直接 main 提交/上传。
@@ -48,12 +86,12 @@
   预测误差及候选拒绝计数。`runner/src/navigation_diagnostics.rs` 在 simulation 记录首次非预期阻塞/故障前 8 帧、
   触发帧和后 8 帧，最多 17 帧，只保留紧凑内存上下文，结束进入摘要 `first_navigation_failure`。
   正常任务停车/目标制动不触发，首次异常可能恢复，不能自动当成最终故障根因。无每 tick 落盘，不降比赛控制或感知频率。
-- 当前实际结果：导航集成 11 项通过；同一完整合成比赛 PP 在 55,900 ms、LQR 在 53,300 ms 完成，二者终态速度均为 0。
+- 该轮实际结果：导航集成 11 项通过；同一完整合成比赛 PP 在 55,900 ms、LQR 在 53,300 ms 完成，二者终态速度均为 0。
   这不代表实车验收或 LQR 普遍优于 PP。修改前 LQR 在 17,400 ms 首次阻塞、27,900 ms 停车超时的复现保存在
   `docs/motion-v2-before.json`；前轮 `motion-control-*` 的通过项和失败项继续保留为历史。
-- 完整说明见[导航预测与失败首因修正](docs/导航预测与失败首因修正.md)。本轮全量测试、fmt/clippy 与两程序 RISC-V 交叉链接已通过，
+- 历史说明见[导航预测与失败首因修正](docs/导航预测与失败首因修正.md)。该轮全量测试、fmt/clippy 与两程序 RISC-V 交叉链接已通过，
   最终测试数量、ELF/源码哈希、包及验收结果分别以 `docs/motion-v2-validation.json`、`docs/motion-v2-build.json`、
-  `docs/motion-v2-delivery.json` 为准；未产生最终报告前不沿用前轮通过数或二进制哈希。
+  `docs/motion-v2-delivery.json` 为准；这些 v2 产物不是本轮 v3 二进制。
 - 当前仍暂不接车，不读视频，不执行真实设备或 RISC-V 目标；GLIBC 2.38 仅为本地交叉链接基线。
   低速切换滞回、规划器原生参考曲率采样、共同时间轴/扫描去畸变、真实速度/转向反馈及物理 MotionSink 仍待后续。
   本轮新增折线投影与弧长 cursor 不等于已经保留规划器的原始连续曲率。
@@ -83,7 +121,7 @@
 - 型号证据分层：出厂驱动选择LSlidar N10，实物待核对；相机/IMU/舵机完整型号未提供，不把平台CMP10A等参考外设认作本车。
   电池5400mAh（产品）/5300mAh（规则）、底盘阿克曼/四轮差速表述、MCU32KB/4KB/40MHz及“最大转速40km/h”均单列来源/疑点。
 - `car_controller_new.cpp`的L=0.305、lfw=0.1675、controller_freq=30只记录为源码默认参考，不代替测量。
-  该轮仅改README和交接文档，未改变代码/配置。旧0f3ab64及motion-control构建证据保留历史，当前证据使用下述motion-v2前缀。
+  该轮仅改README和交接文档，未改变代码/配置。旧0f3ab64、motion-control及motion-v2构建证据保留历史，当前证据使用下述motion-v3前缀。
 
 ### 当前代码：5 个 crate、2 个程序
 
@@ -91,9 +129,9 @@
 |---|---|
 | `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码；road.rs 斑马线/灯色/锥桶及地面投影 |
 | `crates/app` → `xt-stcar` | self-check/preprocess/replay/infer；原生 ORT C API 动态加载、模型来源及元数据验证、常驻 Session；Python 参考后端须显式选择；file_io 提供两套 CLI 共用文件边界 |
-| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表；比赛任务、灯前半平面边界、整圈扫描、ICP、渐变曲率车模型导航、局部参考/弧长采样及PP/实验LQR跟踪诊断 |
+| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表；比赛任务、Stop/PassThrough、灯前半平面、整圈扫描、ICP、执行曲率估计、解析过渡峰值、车模型导航/局部参考/PP与实验LQR |
 | `crates/device-io` | 安全 rustix 串口配置、独占、8N1、关闭软硬件流控、读回检查、nonblocking poll 与整体包截止时间、故障锁存、Drop 尝试恢复 |
-| `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器增量解析、可选标定 PWM 预览、传感器采集计划/执行；自主模拟/快照回放、背景感知/规划与独立看门狗、有界内存日志、模拟首次异常窗口及结束原子提交 |
+| `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器解析、可选标定 PWM 预览及传感器采集；自主模拟/快照回放、背景感知/规划/独立看门狗及采用状态回传、连续渐变子步车辆模型、有界内存日志/首次异常窗口与结束原子提交 |
 
 #### 前轮比赛扩展（2026-09-08）
 
@@ -175,13 +213,17 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 
 ### 构建、模型与验证证据
 
-- 当前运动修正（2026-09-10）：Rust常规237通过、跟踪example测试2通过、交付测试34通过；
+- 当前 v3 运动执行修正：Rust 常规 266 通过、0 失败、原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
+  fmt、all-targets clippy -D warnings、两个 RISC-V 交叉链接及 PP/LQR 完整场景复验通过。
+  当前汇总入口为 `docs/motion-v3-validation.json`，构建与交付为 `docs/motion-v3-build.json`、`docs/motion-v3-delivery.json`。
+  交叉链接通过不代表本地包已核验；包的状态、路径和哈希以 delivery 报告为准。不把以下历史证据算入本轮。
+- 前轮 v2 运动修正（2026-09-10，历史）：Rust常规237通过、跟踪example测试2通过、交付测试34通过；
   fmt、all-targets clippy -D warnings、两个RISC-V交叉链接通过；导航原11项及PP/LQR全场通过。
-  本轮唯一的当前汇总入口为 `docs/motion-v2-validation.json`，构建与交付分别见 `docs/motion-v2-build.json`、
-  `docs/motion-v2-delivery.json`；不把前轮数字计入本轮。
-  robot大小1,918,960字节，SHA256 `f5652cb05757ea135eaff714be5f5af4e2770151118c50197534356942bd6863`；
-  xt-stcar SHA仍为`ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9`，二者最高GLIBC引用2.34。
-  PP首个可恢复阻塞在14300ms、窗口17帧，最终仍完成；LQR本轮没有触发首因窗口。模型/原生推理未重跑。
+  历史汇总入口为 `docs/motion-v2-validation.json`，构建与交付分别见 `docs/motion-v2-build.json`、
+  `docs/motion-v2-delivery.json`；不把该轮数字计入本轮。
+  历史robot大小1,918,960字节，SHA256 `f5652cb05757ea135eaff714be5f5af4e2770151118c50197534356942bd6863`；
+  历史xt-stcar SHA为`ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9`，当时二者最高GLIBC引用2.34。
+  该轮PP首个可恢复阻塞在14300ms、窗口17帧，最终仍完成；LQR没有触发首因窗口。模型/原生推理未重跑。
 - 前轮运动扩展（2026-09-09，历史）：Rust常规209通过、跟踪example测试2通过、Python交付34通过，fmt/all-targets clippy及两个RISC-V交叉链接通过。
   `docs/motion-control-validation.json`汇总，配套build/ELF/log/两份A/B JSON均在`docs/motion-control-*`。
   该轮模型和原生推理代码未改，未重跑模型/ORT执行测试；这些通过项不能计入本轮实测。
@@ -197,9 +239,9 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
 - 新串口依赖 rustix **1.1.4**；两个目标程序由 `scripts/build-riscv.sh --offline` 检查并构建。
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
-  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。本轮最高 GLIBC 引用 2.34，具体依赖见 motion-v2 ELF 报告。
+  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v3 ELF 报告为准。
   前轮 robot 程序额外需要 `libm.so.6`，不能声称两个程序都只依赖 libc。
-- **当前构建证据使用 `docs/motion-v2-*`；`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
+- **当前构建证据使用 `docs/motion-v3-*`；`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
   `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。
   `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；

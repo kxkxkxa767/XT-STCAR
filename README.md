@@ -192,18 +192,19 @@ XT-STCAR/
 | [`crates/runner/src/capture.rs`](crates/runner/src/capture.rs) | 有时间/字节/记录上限的 IMU 或 N10 采集，使用统一 `Instant` 时钟，空闲和结束写 Tick；不发送设备命令 |
 | [`crates/vision/src/road.rs`](crates/vision/src/road.rs) | 白条几何、HSV 灯色、红蓝锥桶及相机地面投影；普通 YOLO `zebra` 不用于斑马线 |
 | [`crates/robot-core/src/autonomy.rs`](crates/robot-core/src/autonomy.rs) | 米制坐标、位姿质量、车体足迹、道路观察及有向禁越线 HalfPlane 共享类型 |
-| [`crates/robot-core/src/mission.rs`](crates/robot-core/src/mission.rs) | 斑马线实际停止计时、锥桶顺序、灯前全车停车/绿灯确认、终点与故障锁存 |
+| [`crates/robot-core/src/mission.rs`](crates/robot-core/src/mission.rs) | 斑马线实际停止计时、锥桶顺序及 Stop/PassThrough 到达策略、灯前全车停车/绿灯确认、终点与故障锁存 |
 | [`crates/robot-core/src/scan.rs`](crates/robot-core/src/scan.rs) | N10 整圈组帧、覆盖/盲区/时间检查；不同于旧局部包回放 |
 | [`crates/robot-core/src/localization.rs`](crates/robot-core/src/localization.rs) | 有界 ICP 激光里程计；退化/跳变/过期门控，不假造编码器 |
-| [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 带车体和转弯约束的路径搜索、跟踪、障碍/制动检查及停车朝向 |
+| [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 路径搜索、跟踪、障碍/制动和停车朝向；`SteeringEstimate` 区分已采用曲率目标与渐变执行估计，规划与 adopt 分离，通过点保留首段验收 |
+| [`crates/robot-core/src/motion_transition.rs`](crates/robot-core/src/motion_transition.rs) | `MotionTransition` 及速度/曲率渐变过程中 `v²|曲率|` 的解析峰值检查，固定计算量、无堆分配；不是实测侧向加速度 |
 | [`crates/robot-core/src/reference.rs`](crates/robot-core/src/reference.rs) | 每拍验证一次的局部参考窗口；投影、弧长游标、整段评分参考及候选偏差诊断，无额外路径分配 |
 | [`crates/robot-core/src/tracking.rs`](crates/robot-core/src/tracking.rs) | PathTracker 接口、默认 Pure Pursuit、实验性曲率前馈 + LQR；只给导航期望曲率 |
 | [`crates/robot-core/examples/tracking_comparison.rs`](crates/robot-core/examples/tracking_comparison.rs) | 直线/弯道的 Rust 跟踪 A/B 实验，输出误差与合成转向响应指标 |
 | [`crates/runner/src/laser_pose.rs`](crates/runner/src/laser_pose.rs) | 整圈检查、雷达到车体外参与 ICP 桥接，保留源时刻 |
 | [`crates/runner/src/perception.rs`](crates/runner/src/perception.rs) | 同图 RGB + 常驻原生 YOLO + RoadDetector；后台感知只留最新待处理帧 |
-| [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 位姿/雷达/道路观察校验 → 任务 → 导航 → 安全控制器 |
-| [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立周期轮询和源时间命令看门狗 |
-| [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿反馈与有加减速车辆模型的合成闭环，掉线注入和碰撞检查 |
+| [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 传感器 → 任务 → 导航 → Safety；同步 tick 采用最终命令，异步 tick_with_execution_state 接收输出线程的状态而不采用计划 |
+| [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立 poll 和源时间看门狗；仅最终 ControlPoll.command 推进执行估计，用固定大小状态回送后续规划 |
+| [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿合成闭环；车辆速度/曲率连续渐变，以不超过 1 ms 的子步积分并检查车体碰撞/边界，含故障后制动 |
 | [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
 | [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
 | [`crates/runner/src/navigation_diagnostics.rs`](crates/runner/src/navigation_diagnostics.rs) | 模拟首个非预期阻塞/故障的最多 17 帧内存上下文，结束随摘要输出 |
@@ -217,14 +218,17 @@ XT-STCAR/
 ## 运动控制
 
 已对照[用户分享的算法建议](https://chatgpt.com/share/6aa0bf59-c8f8-83ee-b001-13dd5945ce14)审查代码。
-本轮继续核对[修改后的意见](https://chatgpt.com/share/6aa27143-7204-83ee-ad9a-7067ef49a1bc)，
-修正说明见[导航预测与失败首因修正](docs/导航预测与失败首因修正.md)。
+继续核对[修改后的意见](https://chatgpt.com/share/6aa27143-7204-83ee-ad9a-7067ef49a1bc)，
+前轮说明见[导航预测与失败首因修正](docs/导航预测与失败首因修正.md)，
+本轮执行状态、过渡峰值、通过点和模拟积分修正见[运动执行与通过点修正](docs/运动执行与通过点修正.md)。
 当前采用前进车辆运动学：比赛任务给目标/限速 → A* 连通与带航向/曲率的车模型路线 → PathTracker →
 候选轨迹预测、碰撞和制动检查 → 安全状态机。默认 **Pure Pursuit** 保留，新增 **曲率前馈 + LQR** 供离线比较。
 不是单个 PID 直接把图像误差变成舵机 PWM，也没有实现 MPC 求解器。
 
 `tracking.rs` 只输出期望曲率；加减速、横向加速度、曲率及其变化率、完整车体和停车可达域仍由 `navigation.rs` 检查。
-正常候选分别从测量速度和上次指令曲率渐变到候选值；0.30→0.24 m/s 与保持 0.30 m/s 的预测可以不同。
+正常候选从测量速度和已采用命令对应的执行曲率估计渐变到候选值；0.30→0.24 m/s 与保持 0.30 m/s 的预测可以不同。
+`MotionTransition` 解析检查整个速度/曲率过渡的侧向加速度峰值，覆盖端点、分段切换及内部极值；
+不能只检查目标 `v²|曲率|`。近目标缩短几何预测也不能缩短这项检查的完整命令周期。
 紧急停车圆盘仍按两者较大的速度计算，不会被较低目标速度或较短终点距离缩小。
 路径末端连接检查实际积分的曲率渐变轨迹；短距离同朝向横移可尝试双段 S 形连接，失败继续有界搜索。
 两种跟踪器均走同一安全通路。命令单位为线速度 m/s、曲率 m⁻¹，模型 `yaw_rate = speed × curvature`；
@@ -241,15 +245,44 @@ cargo run --release --locked --offline -p xt-stcar-robot-core --example tracking
 cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_comparison
 ```
 
-本轮修正后，同一完整比赛中 **PP 55.9秒、LQR 53.3秒均完成，终速为零**；LQR仍为实验项，默认PP不变。
-有朝向目标按预测整段弧长累计位置/航向误差，避免只看终点而漏掉中途弯道偏差；
+本轮最终复验中 **PP 55.6 秒、LQR 83.9 秒均完成，终态速度均为零**；最小锥桶间隙分别约 0.3033 m、0.2735 m，
+两者斑马线停稳均为 3000 ms、绿灯确认均为 300 ms，详见[完整比赛对比](docs/motion-v3-competition-comparison.json)。
+首次可恢复阻塞分别在 18.6 秒、22.5 秒，均保留 17 帧窗口；中途 PP 回归失败另存[修正前证据](docs/motion-v3-before.json)。
+前轮 PP 55.9 秒、LQR 53.3 秒完成属于 `motion-v2-*` 历史结果，
+不能当作本轮连续积分模型的验收。LQR仍为实验项，默认PP不变。
+有朝向目标沿预测整段弧长累计车体位姿误差：比较预测姿态与参考姿态对应的四个车身角在世界坐标中的距离，取最大值，
+统一使用米，避免提前回正却留下横向偏差。这改变了位置与朝向在共用评分中的相对影响；
+保持不变的是 LQR 的 q/R 参数和比赛门限，不能称为所有控制权重都没变。
+缓存路径即使无碰撞也可能已无法从当前姿态到达末端，因此带朝向目标的局部横向偏离超过目标容差一半时提前重新规划。
 普通中间点保留追踪点评分，临近目标时减弱固定曲率偏好。实现、尺度与边界见新修正说明。
+保持单个候选曲率目标的预览不能代表所有未来转向策略；单场完成不证明一般收敛性或所有场景都可达。
 原有跟踪层16组和前轮“PP 55.3秒完成/LQR 27.9秒超时”保留为历史；两类基准周期不同，
 单场合成结果不能证明算法普遍优劣，模拟秒数不代表板卡计算耗时。
 
-灯前禁越线由任务和导航共用有向半平面，支持任意接近方向；进入灯前阶段同拍启用，
+灯前禁越线由任务和导航共用有向半平面，支持任意接近方向；锥桶阶段预查灯前续段时即启用，
 原有停稳和绿灯新帧确认通过后才解除。全局搜索、局部扫掠、停车圆盘与到达判断都受约束，
 避免先越线再绕回合法目标；车体外接圆和网格余量可能保守拒绝贴线姿态。
+
+比赛目标显式区分必须停车的 `Stop` 与锥桶中间点的 `PassThrough`。通过点仍按当前首段独立跟踪、
+按原目标位置验收并推进任务顺序；只有从首段实际末端位置/朝向/曲率出发、经过碰撞检查的续段才能提供制动余量。
+续段不会进入当前点的前视和进度搜索，不能通过长前视跳过必经点；续段不可行时回到停车策略。
+`PassThrough` 同时传递下一阶段的 `next_max_speed_mps`，在进入下一阶段验收半径前提前按减速能力限速，
+避免任务切换一拍内突然把速度上限从巡航值降到接近值。
+它限制候选目标，不保证进入半径瞬间的测量速度必定低于下一阶段上限；外部超速或测量偏差仍可能触发原有空速度区间 Stop。
+
+执行状态采用 `SteeringEstimate { at, commanded_curvature_per_m, applied_curvature_per_m }`。
+`advance_to` 按旧已采用目标推进估计，`adopt` 先推进再切换新目标；Stop 把目标置零，执行估计继续逐步回中。
+直接导航的 `plan_with_arrival`/`plan_stop` 只规划，由输出方采用最终命令；同步 `AutonomyController::tick`
+在 Safety 检查后采用最终结果。异步 `tick_with_execution_state` 只规划，后台丢弃的结果不能改变执行历史。
+
+使用 `AutonomyWorker` 时，输出线程须持续调用 `poll` 并使用 **`ControlPoll.command`**；`latest.command` 仅供诊断。
+poll 先检查原 lease 和锁存故障，再采用最终命令并发布固定大小估计。提交方绑定当时已知历史并推进到快照源时刻；
+源时刻早于最新执行状态时返回 `ExecutionAhead`，等待新源快照，不把未来状态回填过去。该返回不续租，旧命令仍会正常超时停车。
+同源重复不重算/不续租，晚到 Drive 不能恢复 Fault。同一源时刻先提交、后 poll 的新采用命令不会追溯写入已排队副本；
+这套契约没有消除全部异步延迟，持续滞后的实车输入仍需共同时间轴和有界历史关联。
+
+模拟车辆现在按不超过 1 ms 子步及速度/曲率到达目标的分界点积分；航向保留速度与曲率同时变化的交叉项，
+每个子步检查实际模拟足迹、锥桶和禁越线，Fault 后制动采用同一逻辑。它提高离线模型一致性，仍不证明采样间绝对无碰撞或实车响应一致。
 
 `NavigationDecision.diagnostics` 记录路径版本/进度、跟踪误差、曲率请求与实际候选、拒绝原因计数。
 模拟摘要的 `first_navigation_failure` 最多保存异常前 8 帧、触发帧、后 8 帧；先前正常任务停车不触发，
@@ -260,8 +293,8 @@ cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion
 后续先补传感器共同时间轴、扫描去畸变、IMU 标定/融合，再评估前馈表加限幅抗饱和 PI。
 舵机标称 `0.16～0.18 s/60°` 不直接等于前轮转向响应；轴距、转向曲率/PWM、制动能力与 MCU 断链停车仍须实测。
 Stop 是停止请求，车辆模型继续减速并逐步回中；物理 ESC 中位是否制动尚未验证。
-导航保存的是上一目标曲率，尚无真实转向反馈；侧向加速度检查约束候选 `v²|curvature|`，
-不能据此声称执行器动态过渡的实际侧向加速度已受实测保证。保守停车圆盘覆盖中间转向，但仍依赖实际制动能力达到配置假设。
+导航保存已采用曲率目标与模型执行估计，尚无真实转向反馈；解析过渡峰值也依赖配置的执行器模型，
+不能据此声称实际侧向加速度已受实测保证。保守停车圆盘覆盖中间转向，但仍依赖实际制动能力达到配置假设。
 
 ## 配置与样例索引
 
@@ -356,9 +389,11 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-本轮237项Rust常规测试、2项跟踪example测试、34项交付测试通过，两个RISC-V程序交叉链接通过；
-PP/LQR均完成合成比赛，详情见[最新运动验证汇总](docs/motion-v2-validation.json)。
-旧[运动控制验证](docs/motion-control-validation.json)保留前轮数据，不作为当前二进制证据。
+本轮 Rust 常规测试 **266 通过、0 失败**，1 项原生 ORT opt-in 测试按默认忽略；跟踪 example 2 项、Python 交付 34 项通过。
+fmt、all-targets clippy `-D warnings` 和两个 RISC-V 交叉链接通过，见[验证汇总](docs/motion-v3-validation.json)与[构建报告](docs/motion-v3-build.json)。
+本地包的生成/核验状态、路径和哈希以 `docs/motion-v3-delivery.json` 为准；不把交叉链接通过等同于包已核验。
+[前轮 v2 验证](docs/motion-v2-validation.json)的237项Rust常规测试、2项跟踪example测试、34项交付测试与二进制证据保留为历史。
+更早的[运动控制验证](docs/motion-control-validation.json)也保留，不作为当前二进制证据。
 模型/原生推理模块未改，本轮不重复运行其验证；前轮1项原生ORT、48项模型测试记录见 [历史比赛验证](docs/competition-validation.json)。
 构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的架构/ABI/加载器/GLIBC。
 ELF 检查核对动态加载表与 section 映射及版本需求，不验证所有机器指令或代替目标机运行。

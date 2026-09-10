@@ -6,15 +6,21 @@
 //! monotonic session clock; completion time and wall-clock time are never substituted.
 //! Drop requests stop and detaches: a hung processor can retain its active snapshot
 //! until process exit. Repeatedly spawning replacements for a hung runtime is unsafe.
+//! Steering estimates follow only the final command returned by `poll`. A submitted
+//! snapshot binds the adopted history known at submission, extrapolated to its source
+//! time; subsequent adoption at that same time cannot retroactively change the copy.
+//! This is a bounded model estimate, not measured feedback or compensation for all
+//! asynchronous delay. The output lease is checked again before every adoption.
 use crate::autonomy::{AutonomyConfig, AutonomyController, AutonomyStep, Result};
 use crate::autonomy_replay::SensorSnapshot;
 use serde::{Deserialize, Serialize};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use xt_stcar_robot_core::mission::MissionPhase;
+use xt_stcar_robot_core::navigation::SteeringEstimate;
 use xt_stcar_robot_core::{MotionOutput, State, Timestamp};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -184,12 +190,70 @@ pub enum SubmitStatus {
     Replaced,
     Duplicate,
     Busy,
+    /// The latest adopted state is newer than this snapshot. Wait for a newer
+    /// source snapshot rather than projecting future execution into its past.
+    ExecutionAhead,
     Stopped,
+}
+
+#[derive(Clone, Copy)]
+struct SteeringLimits {
+    rate: f64,
+    max_curvature: f64,
+}
+
+/// A single poll owner publishes a coherent, fixed-size estimate. All operations
+/// are sequentially consistent, so matching even versions enclose one complete
+/// write. Readers make one bounded attempt and can retry submission if busy.
+struct AtomicExecution {
+    version: AtomicU64,
+    at: AtomicU64,
+    commanded: AtomicU64,
+    applied: AtomicU64,
+}
+
+impl AtomicExecution {
+    fn new(state: SteeringEstimate) -> Self {
+        Self {
+            version: AtomicU64::new(0),
+            at: AtomicU64::new(state.at.0),
+            commanded: AtomicU64::new(state.commanded_curvature_per_m.to_bits()),
+            applied: AtomicU64::new(state.applied_curvature_per_m.to_bits()),
+        }
+    }
+
+    fn publish(&self, state: SteeringEstimate) {
+        self.version.fetch_add(1, Ordering::SeqCst);
+        self.at.store(state.at.0, Ordering::SeqCst);
+        self.commanded
+            .store(state.commanded_curvature_per_m.to_bits(), Ordering::SeqCst);
+        self.applied
+            .store(state.applied_curvature_per_m.to_bits(), Ordering::SeqCst);
+        self.version.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn read(&self) -> Option<SteeringEstimate> {
+        let version = self.version.load(Ordering::SeqCst);
+        if !version.is_multiple_of(2) {
+            return None;
+        }
+        let state = SteeringEstimate {
+            at: Timestamp(self.at.load(Ordering::SeqCst)),
+            commanded_curvature_per_m: f64::from_bits(self.commanded.load(Ordering::SeqCst)),
+            applied_curvature_per_m: f64::from_bits(self.applied.load(Ordering::SeqCst)),
+        };
+        (self.version.load(Ordering::SeqCst) == version).then_some(state)
+    }
+}
+
+struct PendingInput {
+    snapshot: Arc<SensorSnapshot>,
+    execution: Option<SteeringEstimate>,
 }
 
 #[derive(Default)]
 struct Slots {
-    pending: Option<Arc<SensorSnapshot>>,
+    pending: Option<PendingInput>,
     // This aliases active/pending storage, never a third independently owned snapshot.
     previous: Option<Arc<SensorSnapshot>>,
     latest: Option<PlannedCommand>,
@@ -198,6 +262,7 @@ struct Slots {
 
 struct Shared {
     slots: Mutex<Slots>,
+    execution: Option<AtomicExecution>,
     stopped: AtomicBool,
     fault: AtomicU8,
 }
@@ -219,6 +284,7 @@ pub struct AutonomySubmitter {
     wake: SyncSender<()>,
     epoch: Timestamp,
     max_command_age_ms: u64,
+    steering_limits: Option<SteeringLimits>,
 }
 
 impl AutonomySubmitter {
@@ -261,8 +327,32 @@ impl AutonomySubmitter {
             }
         }
         slots.last_submit_now = Some(now);
+        let execution = if let Some(limits) = self.steering_limits {
+            let Some(mut state) = self
+                .shared
+                .execution
+                .as_ref()
+                .and_then(AtomicExecution::read)
+            else {
+                return Ok(SubmitStatus::Busy);
+            };
+            if state.at > input.at {
+                return Ok(SubmitStatus::ExecutionAhead);
+            }
+            if state.advance_to(input.at, limits.rate).is_err() {
+                self.shared.fail(ControlFault::InvalidInput);
+                let _ = self.wake.try_send(());
+                return Err("control steering estimate cannot reach snapshot time".into());
+            }
+            Some(state)
+        } else {
+            None
+        };
         let previous = slots.previous.replace(Arc::clone(&input));
-        let retired = slots.pending.replace(input);
+        let retired = slots.pending.replace(PendingInput {
+            snapshot: input,
+            execution,
+        });
         let status = if retired.is_some() {
             SubmitStatus::Replaced
         } else {
@@ -279,6 +369,7 @@ pub struct AutonomyWorker {
     submitter: AutonomySubmitter,
     watchdog: ControlWatchdog,
     thread: Option<JoinHandle<()>>,
+    execution: Option<SteeringEstimate>,
 }
 
 impl AutonomyWorker {
@@ -302,14 +393,30 @@ impl AutonomyWorker {
         if runtime.max_command_age_ms > controller_deadline {
             return Err("output watchdog lease cannot exceed controller safety deadlines".into());
         }
+        let rate = config.navigation.max_curvature_rate_per_s;
+        let max_curvature = config.navigation.max_curvature_per_m;
         let mut controller = AutonomyController::new(config)?;
         controller.start()?;
-        Self::spawn_with_processor(runtime, epoch, move |input| {
-            Ok(controller.tick(input.at, &input.pose, &input.scan, &input.road))
-        })
+        Self::spawn_with_execution_processor(
+            runtime,
+            epoch,
+            rate,
+            max_curvature,
+            move |input, steering| {
+                Ok(controller.tick_with_execution_state(
+                    input.at,
+                    &input.pose,
+                    &input.scan,
+                    &input.road,
+                    steering,
+                ))
+            },
+        )
     }
 
-    /// Trusted in-process processor hook; input storage and output leases remain bounded.
+    /// Legacy trusted processor hook without a steering model. Input storage and
+    /// output leases remain bounded. Use `spawn_with_execution_processor` when
+    /// the processor needs the output owner's adopted-command history.
     pub fn spawn_with_processor<F>(
         runtime: ControlRuntimeConfig,
         epoch: Timestamp,
@@ -318,9 +425,57 @@ impl AutonomyWorker {
     where
         F: FnMut(&SensorSnapshot) -> Result<AutonomyStep> + Send + 'static,
     {
+        Self::spawn_inner(runtime, epoch, None, move |input, _| processor(input))
+    }
+
+    /// Trusted processor hook with explicit model limits. Estimates include only
+    /// poll-adopted commands known at submission; planning does not acknowledge
+    /// its own result. Values are constrained to the navigation model's bounds.
+    pub fn spawn_with_execution_processor<F>(
+        runtime: ControlRuntimeConfig,
+        epoch: Timestamp,
+        max_curvature_rate_per_s: f64,
+        max_curvature_per_m: f64,
+        mut processor: F,
+    ) -> Result<Self>
+    where
+        F: FnMut(&SensorSnapshot, SteeringEstimate) -> Result<AutonomyStep> + Send + 'static,
+    {
+        if !max_curvature_rate_per_s.is_finite()
+            || max_curvature_rate_per_s <= 0.0
+            || max_curvature_rate_per_s > 50.0
+            || !(1e-6..=10.0).contains(&max_curvature_per_m)
+        {
+            return Err("control steering model requires bounded positive limits".into());
+        }
+        let limits = SteeringLimits {
+            rate: max_curvature_rate_per_s,
+            max_curvature: max_curvature_per_m,
+        };
+        Self::spawn_inner(runtime, epoch, Some(limits), move |input, steering| {
+            processor(
+                input,
+                steering.expect("execution processor binds steering at submission"),
+            )
+        })
+    }
+
+    fn spawn_inner<F>(
+        runtime: ControlRuntimeConfig,
+        epoch: Timestamp,
+        steering_limits: Option<SteeringLimits>,
+        mut processor: F,
+    ) -> Result<Self>
+    where
+        F: FnMut(&SensorSnapshot, Option<SteeringEstimate>) -> Result<AutonomyStep>
+            + Send
+            + 'static,
+    {
         let watchdog = ControlWatchdog::new(runtime, epoch)?;
+        let execution = steering_limits.map(|_| SteeringEstimate::stationary(epoch));
         let shared = Arc::new(Shared {
             slots: Mutex::new(Slots::default()),
+            execution: execution.map(AtomicExecution::new),
             stopped: AtomicBool::new(false),
             fault: AtomicU8::new(0),
         });
@@ -341,7 +496,9 @@ impl AutonomyWorker {
                         }
                     };
                     let Some(input) = input else { continue };
-                    let step = match catch_unwind(AssertUnwindSafe(|| processor(&input))) {
+                    let step = match catch_unwind(AssertUnwindSafe(|| {
+                        processor(&input.snapshot, input.execution)
+                    })) {
                         Ok(Ok(step)) => step,
                         Ok(Err(_)) => {
                             worker_shared.fail(ControlFault::ProcessorFailed);
@@ -356,11 +513,11 @@ impl AutonomyWorker {
                         break;
                     }
                     let latest = PlannedCommand {
-                        source_at: input.at,
-                        oldest_sensor_at: oldest(&input),
+                        source_at: input.snapshot.at,
+                        oldest_sensor_at: oldest(&input.snapshot),
                         step: Arc::new(step),
                     };
-                    let fault = result_fault(&latest.step, input.at);
+                    let fault = result_fault(&latest.step, input.snapshot.at);
                     let retired = match worker_shared.slots.lock() {
                         Ok(mut slots) => {
                             let old = slots.latest.replace(latest);
@@ -394,9 +551,11 @@ impl AutonomyWorker {
                 wake,
                 epoch,
                 max_command_age_ms: runtime.max_command_age_ms,
+                steering_limits,
             },
             watchdog,
             thread: Some(thread),
+            execution,
         })
     }
 
@@ -406,6 +565,12 @@ impl AutonomyWorker {
 
     pub fn try_submit(&self, input: Arc<SensorSnapshot>, now: Timestamp) -> Result<SubmitStatus> {
         self.submitter.try_submit(input, now)
+    }
+
+    /// Output-owner model after the latest poll, never measured actuator state.
+    /// The legacy processor hook has no model and returns None.
+    pub fn execution_state(&self) -> Option<SteeringEstimate> {
+        self.execution
     }
 
     /// No waiting, navigation, model calls, disk access or large report cloning.
@@ -424,12 +589,53 @@ impl AutonomyWorker {
         {
             self.watchdog.latch(fault);
         }
-        let result = self.watchdog.poll(now, latest);
+        let mut result = self.watchdog.poll(now, latest);
+        self.acknowledge(&mut result);
         if let Some(fault) = result.fault {
             self.submitter.shared.fail(fault);
             self.stop_background();
         }
         result
+    }
+
+    fn acknowledge(&mut self, result: &mut ControlPoll) {
+        let Some(old) = self.execution else { return };
+        let limits = self
+            .submitter
+            .steering_limits
+            .expect("execution model has validated limits");
+        let mut next = old;
+        if next
+            .adopt(
+                result.at,
+                &result.command,
+                limits.rate,
+                limits.max_curvature,
+            )
+            .is_err()
+        {
+            // Never publish or return a command the model rejects. In particular,
+            // a regressing clock cannot rewind applied curvature; latch Stop at
+            // the last valid model time while preserving the original fault.
+            self.watchdog.latch(ControlFault::InvalidResult);
+            result.fault = self.watchdog.fault;
+            result.command = MotionOutput::Stop;
+            next = old;
+            next.adopt(
+                result.at.max(old.at),
+                &MotionOutput::Stop,
+                limits.rate,
+                limits.max_curvature,
+            )
+            .expect("validated model can always adopt Stop without rewinding");
+        }
+        self.execution = Some(next);
+        self.submitter
+            .shared
+            .execution
+            .as_ref()
+            .expect("execution model has a fixed-size publication slot")
+            .publish(next);
     }
 
     pub fn request_stop(&self) {
