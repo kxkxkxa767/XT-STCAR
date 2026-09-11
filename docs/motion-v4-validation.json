@@ -1,0 +1,138 @@
+{
+  "date": "2026-09-11",
+  "scope": "Mac host tests; synchronous synthetic RGB/laser/ideal-pose competition; short asynchronous empty-road and targeted model tests; static RISC-V cross-link. No vehicle, target execution, or videos.",
+  "baseline_commit": "aac74210700fab33a0b47f42aeaa22d359881ad4",
+  "rust_workspace": {
+    "passed": 294,
+    "failed": 0,
+    "ignored_native_opt_in": 1
+  },
+  "tracking_example_tests_passed": 2,
+  "python_delivery_tests_passed": 34,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "physical_output_enabled": false,
+  "vehicle_execution_verified": false,
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "experimental; q/R, fallback thresholds, competition tolerances and timing limits unchanged",
+  "model_native_runtime_tests": "Unchanged model/native modules: model unit suite and ORT execution not rerun. Optional model packaging separately checks model structure and provenance hashes.",
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "dd0c8122f02efb5764b40210fc74f77e108ef9e7eb0d9b56973216f51f98e007",
+      "size_bytes": 1956360,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "source_hashes_verified": 80,
+  "before_report": "motion-v4-before.json",
+  "build_report": "motion-v4-build.json",
+  "build_log": "motion-v4-build.log",
+  "competition_comparison": {
+    "report": "motion-v4-competition-comparison.json",
+    "runs": [
+      {
+        "completed": true,
+        "elapsed_ms": 58800,
+        "distance_m": 11.508841029059477,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "minimum_cone_clearance_m": 0.24250886066502375,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "tracking": {
+          "kind": "pure_pursuit"
+        },
+        "first_unexpected_navigation_at_ms": 18600,
+        "diagnostic_window_frames": 17,
+        "unexpected_stop_ticks": 2,
+        "unexpected_stop_episodes": 2,
+        "route_generations": 15,
+        "phase_accounting_verified": true
+      },
+      {
+        "completed": true,
+        "elapsed_ms": 70600,
+        "distance_m": 13.440314177728881,
+        "fault": null,
+        "final_actual_speed_mps": 0.0,
+        "minimum_cone_clearance_m": 0.2735281037908029,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "tracking": {
+          "kind": "lqr",
+          "max_heading_error_rad": 0.7,
+          "max_lateral_error_m": 0.5,
+          "min_speed_mps": 0.03,
+          "q_heading": 2.0,
+          "q_lateral": 4.0,
+          "r_curvature": 1.0
+        },
+        "first_unexpected_navigation_at_ms": 42200,
+        "diagnostic_window_frames": 17,
+        "unexpected_stop_ticks": 1,
+        "unexpected_stop_episodes": 1,
+        "route_generations": 12,
+        "phase_accounting_verified": true
+      }
+    ]
+  },
+  "asynchronous_validation": {
+    "runtime_integration_tests": 26,
+    "real_default_worker": {
+      "test": "crates/runner/tests/async_autonomy.rs",
+      "source_hz": 10,
+      "source_delay_ms": [
+        60,
+        80
+      ],
+      "poll_hz": 50,
+      "adopted_drive_snapshots": 13,
+      "final_capture_ms": 1200,
+      "final_delivery_ms": 1260,
+      "source_lease_expires_ms": 1450,
+      "final_plant_speed_mps": 0,
+      "plant": "Independent exact straight-line integral driven only by ControlPoll.command",
+      "scope": "Empty straight road, not a complete asynchronous competition"
+    },
+    "processor_delay_and_adoption_jitter": {
+      "source_delay_ms": 60,
+      "adoption_jitter_ms": [
+        3,
+        9
+      ]
+    },
+    "measurement_boundary": "Projection and certificate share the existing +/-1e-6 measurement allowance; original measurements unchanged; truly invalid sources latch InvalidInput; command/model speed bounds remain strict",
+    "target_cpu_timing_measured": false
+  },
+  "checks_added": [
+    "Mission-owned 0.065 m through-waypoint admission versus 0.045 m stopping tolerance, multiple control periods/braking rates, continuous cone-to-light handoff and later whole-race completion",
+    "Full-body cached-reference drift, mirrored short two-turn terminal arrival with an independent 1 ms plant and existing limits",
+    "Temporal projection versus independent fine integration and exact constant-turn/stopping cases",
+    "Stopping-margin constraint attribution and diagnostic exposure of next-period loss of room; rejected future-margin ranking retained only as failed experiment evidence",
+    "Bounded per-phase time/distance, route generations, Stop command counts and separate final braking accounting without control/log-budget coupling",
+    "Adopted-command history capacity, duplicate/same-time/revision behavior, source/planned/adoption clocks, original leases, delayed/jittered adoption, real command interval steering slew and measurement roundoff"
+  ],
+  "limits": [
+    "Steering and projected position/speed are model estimates, not measured feedback",
+    "Static full-speed admission circle is conservative and can reject narrow routes accepted synchronously; full asynchronous competition remains unverified",
+    "Terminal checks use bounded single/two-arc solver families with allocations; no general reachability or convergence guarantee, no measured target worst-case execution time",
+    "Current emergency and geometric hard checks remain; future stopping-margin sorting was rejected after a PP grid-corner deadlock",
+    "PP took 3.2 s longer and traveled 0.38345 m farther than baseline; LQR took 13.3 s less and traveled 2.34996 m less. Neither result establishes general vehicle performance",
+    "Clock/scan alignment, deskewing, dynamic obstacles, real braking/steering calibration, target libraries and hardware timing require commissioning"
+  ]
+}

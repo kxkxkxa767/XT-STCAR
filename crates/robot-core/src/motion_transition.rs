@@ -1,6 +1,125 @@
 //! Analytic limits for a forward, rate-limited kinematic motion transition.
 //! These are model predictions, not measurements of steering or braking response.
 
+use crate::autonomy::Pose2;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MotionProjection {
+    pub pose: Pose2,
+    pub speed_mps: f64,
+    pub curvature_per_m: f64,
+    pub distance_m: f64,
+}
+
+/// Project a held command through independently rate-limited speed and steering.
+/// This is a model state, never a replacement for a sensor's capture timestamp.
+/// Work is bounded by 2000 one-millisecond intervals plus ramp-arrival splits;
+/// no allocation or I/O occurs. Inputs beyond the navigation model's numerical
+/// domain, horizons over two seconds, and non-finite arithmetic are rejected.
+/// Yaw and distance are integrated analytically on each affine segment; planar
+/// position uses Simpson quadrature. This does not prove swept collision safety.
+pub fn project_motion(
+    pose: Pose2,
+    motion: MotionTransition,
+    horizon_s: f64,
+) -> Option<MotionProjection> {
+    lateral_acceleration_peak(motion, horizon_s)?;
+    if !pose.valid()
+        || [pose.x_m, pose.y_m, pose.yaw_rad]
+            .iter()
+            .any(|v| v.abs() > 1_000_000.0)
+        || !(0.0..=2.0).contains(&horizon_s)
+        || motion.initial_speed_mps.max(motion.target_speed_mps) > 3.0
+        || motion
+            .initial_curvature_per_m
+            .abs()
+            .max(motion.target_curvature_per_m.abs())
+            > 10.0
+        || motion.max_accel_mps2 > 10.0
+        || motion.max_decel_mps2 > 10.0
+        || motion.max_curvature_rate_per_s > 50.0
+    {
+        return None;
+    }
+    let mut state = MotionProjection {
+        pose,
+        speed_mps: motion.initial_speed_mps,
+        curvature_per_m: motion.initial_curvature_per_m,
+        distance_m: 0.0,
+    };
+    let count = (horizon_s / 0.001).ceil() as usize;
+    if count == 0 {
+        return Some(state);
+    }
+    for _ in 0..count {
+        let mut remaining = horizon_s / count as f64;
+        for _ in 0..3 {
+            if remaining <= 0.0 {
+                break;
+            }
+            let a = if motion.target_speed_mps > state.speed_mps {
+                motion.max_accel_mps2
+            } else if motion.target_speed_mps < state.speed_mps {
+                -motion.max_decel_mps2
+            } else {
+                0.0
+            };
+            let r = (motion.target_curvature_per_m - state.curvature_per_m).signum()
+                * motion.max_curvature_rate_per_s;
+            let r = if motion.target_curvature_per_m == state.curvature_per_m {
+                0.0
+            } else {
+                r
+            };
+            let tv = if a == 0.0 {
+                f64::INFINITY
+            } else {
+                (motion.target_speed_mps - state.speed_mps) / a
+            };
+            let tk = if r == 0.0 {
+                f64::INFINITY
+            } else {
+                (motion.target_curvature_per_m - state.curvature_per_m) / r
+            };
+            let h = remaining.min(tv).min(tk);
+            let v = state.speed_mps;
+            let k = state.curvature_per_m;
+            let yaw = |t: f64| {
+                state.pose.yaw_rad
+                    + v * k * t
+                    + (v * r + a * k) * t * t * 0.5
+                    + a * r * t * t * t / 3.0
+            };
+            let ym = yaw(h * 0.5);
+            let ye = yaw(h);
+            let vm = v + a * h * 0.5;
+            let ve = v + a * h;
+            state.pose.x_m +=
+                h / 6.0 * (v * state.pose.yaw_rad.cos() + 4.0 * vm * ym.cos() + ve * ye.cos());
+            state.pose.y_m +=
+                h / 6.0 * (v * state.pose.yaw_rad.sin() + 4.0 * vm * ym.sin() + ve * ye.sin());
+            state.pose.yaw_rad = (ye + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
+                - std::f64::consts::PI;
+            state.distance_m += v * h + a * h * h * 0.5;
+            state.speed_mps = if h >= tv { motion.target_speed_mps } else { ve };
+            state.curvature_per_m = if h >= tk {
+                motion.target_curvature_per_m
+            } else {
+                k + r * h
+            };
+            remaining -= h;
+        }
+        if remaining > 1e-12 {
+            return None;
+        }
+    }
+    (state.pose.valid()
+        && state.distance_m.is_finite()
+        && state.speed_mps.is_finite()
+        && state.curvature_per_m.is_finite())
+    .then_some(state)
+}
+
 /// Speed and curvature independently approach their targets at the given rates,
 /// then remain constant. Rates are positive magnitudes; speed must be nonnegative.
 #[derive(Clone, Copy, Debug)]
@@ -186,6 +305,92 @@ fn update_peak(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn projection_integrates_stop_distance_and_constant_curvature_exactly() {
+        let motion = MotionTransition {
+            initial_speed_mps: 0.3,
+            target_speed_mps: 0.0,
+            initial_curvature_per_m: 0.7,
+            target_curvature_per_m: 0.7,
+            max_accel_mps2: 0.4,
+            max_decel_mps2: 0.8,
+            max_curvature_rate_per_s: 4.0,
+        };
+        let projected = project_motion(Pose2::default(), motion, 0.8).unwrap();
+        let distance = 0.3_f64.powi(2) / (2.0 * 0.8);
+        let expected = crate::navigation::integrate(Pose2::default(), distance, 0.7);
+        assert!((projected.distance_m - distance).abs() < 1e-12);
+        assert!(projected.pose.point().distance(expected.point()) < 1e-10);
+        assert!((projected.pose.yaw_rad - expected.yaw_rad).abs() < 1e-10);
+        assert_eq!(projected.speed_mps, 0.0);
+        assert!(project_motion(Pose2::default(), motion, 2.001).is_none());
+        assert!(
+            project_motion(
+                Pose2 {
+                    x_m: 1e100,
+                    ..Pose2::default()
+                },
+                motion,
+                0.1
+            )
+            .is_none()
+        );
+        assert!(
+            project_motion(
+                Pose2::default(),
+                MotionTransition {
+                    target_speed_mps: f64::NAN,
+                    ..motion
+                },
+                0.1
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn projection_handles_independent_ramp_splits_against_fine_midpoint_reference() {
+        let motion = MotionTransition {
+            initial_speed_mps: 0.3,
+            target_speed_mps: 0.12,
+            initial_curvature_per_m: -0.7,
+            target_curvature_per_m: 1.2,
+            max_accel_mps2: 0.4,
+            max_decel_mps2: 0.8,
+            max_curvature_rate_per_s: 4.0,
+        };
+        let projected = project_motion(Pose2::default(), motion, 0.6).unwrap();
+        // Independent fine midpoint model, evaluated directly from time rather
+        // than from the production projection's state or saturation splits.
+        let dt = 0.6 / 60_000.0;
+        let mut expected = Pose2::default();
+        for i in 0..60_000 {
+            let t = (i as f64 + 0.5) * dt;
+            let v = (0.3 - 0.8 * t).max(0.12);
+            let k = (-0.7 + 4.0 * t).min(1.2);
+            let yaw = expected.yaw_rad + v * k * dt * 0.5;
+            expected.x_m += v * yaw.cos() * dt;
+            expected.y_m += v * yaw.sin() * dt;
+            expected.yaw_rad += v * k * dt;
+        }
+        assert!(projected.pose.point().distance(expected.point()) < 1e-8);
+        assert!((projected.pose.yaw_rad - expected.yaw_rad).abs() < 1e-8);
+        assert_eq!(projected.speed_mps, 0.12);
+        assert_eq!(projected.curvature_per_m, 1.2);
+        let stationary = project_motion(
+            Pose2::default(),
+            MotionTransition {
+                initial_speed_mps: 0.0,
+                target_speed_mps: 0.0,
+                ..motion
+            },
+            0.6,
+        )
+        .unwrap();
+        assert_eq!(stationary.pose, Pose2::default());
+        assert_eq!(stationary.curvature_per_m, 1.2);
+    }
 
     fn transition() -> MotionTransition {
         MotionTransition {

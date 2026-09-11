@@ -400,26 +400,47 @@ fn changing_surface_cloud_and_successive_turning_waypoints_remain_navigable() {
                 d.reason
             );
             assert_eq!(d.intent.speed_mps, 0.0);
-            speed = (speed - cfg.max_decel_mps2 * 0.1).max(0.0);
         } else {
             consecutive_stops = 0;
-            speed = d.intent.speed_mps;
         }
-        curvature += (d.intent.curvature_per_m - curvature).clamp(
-            -cfg.max_curvature_rate_per_s * 0.1,
-            cfg.max_curvature_rate_per_s * 0.1,
-        );
-        actual = integrate(actual, speed * 0.1, curvature);
-        assert!(cfg.footprint.inside(actual, cfg.bounds));
-        for cone in cones {
-            let p = actual.world_to_body(cone.center);
-            assert!(
-                (p.x_m - p.x_m.clamp(-cfg.footprint.rear_m, cfg.footprint.front_m)).hypot(
-                    p.y_m
-                        - p.y_m
-                            .clamp(-cfg.footprint.half_width_m, cfg.footprint.half_width_m)
-                ) > cone.radius_m + cfg.clearance_m
-            );
+        // The former endpoint-Euler plant jumped immediately to target speed
+        // and applied the final steering for the whole period. Match the
+        // declared continuous actuator rates with an independent 1 ms midpoint
+        // plant; do not call navigation::integrate or project_motion here.
+        for _ in 0..100 {
+            let dt = 0.001;
+            let acceleration = if d.intent.speed_mps >= speed {
+                cfg.max_accel_mps2
+            } else {
+                cfg.max_decel_mps2
+            };
+            let next_speed =
+                speed + (d.intent.speed_mps - speed).clamp(-acceleration * dt, acceleration * dt);
+            let next_curvature = curvature
+                + (d.intent.curvature_per_m - curvature).clamp(
+                    -cfg.max_curvature_rate_per_s * dt,
+                    cfg.max_curvature_rate_per_s * dt,
+                );
+            let midpoint_speed = (speed + next_speed) * 0.5;
+            let midpoint_curvature = (curvature + next_curvature) * 0.5;
+            let yaw_step = midpoint_speed * midpoint_curvature * dt;
+            let midpoint_yaw = actual.yaw_rad + yaw_step * 0.5;
+            actual.x_m += midpoint_speed * midpoint_yaw.cos() * dt;
+            actual.y_m += midpoint_speed * midpoint_yaw.sin() * dt;
+            actual.yaw_rad += yaw_step;
+            speed = next_speed;
+            curvature = next_curvature;
+            assert!(cfg.footprint.inside(actual, cfg.bounds));
+            for cone in cones {
+                let p = actual.world_to_body(cone.center);
+                assert!(
+                    (p.x_m - p.x_m.clamp(-cfg.footprint.rear_m, cfg.footprint.front_m)).hypot(
+                        p.y_m
+                            - p.y_m
+                                .clamp(-cfg.footprint.half_width_m, cfg.footprint.half_width_m)
+                    ) > cone.radius_m + cfg.clearance_m
+                );
+            }
         }
     }
     assert_eq!(waypoint, goals.len(), "last pose={actual:?}");
@@ -501,4 +522,44 @@ fn grid_path_cannot_cut_between_touching_occupied_corners() {
             .sum::<f64>()
             > 0.5
     );
+}
+
+#[test]
+fn terminal_reference_replans_heading_drift_before_the_center_leaves_the_path() {
+    let mut cfg = config();
+    cfg.goal_tolerance_m = 0.045;
+    let mut nav = Navigator::new(cfg).unwrap();
+    let target = point(6.0, 2.5);
+    let first = nav
+        .step_with_goal_heading(
+            Timestamp(0),
+            &estimate(0, pose(5.0, 2.5), 0.18),
+            &[],
+            Timestamp(0),
+            target,
+            Some(0.0),
+            0.18,
+        )
+        .unwrap();
+    assert_eq!(first.status, NavigationStatus::Driving);
+    // The center is still exactly on the straight cached route, but rotating
+    // the body by .1 rad puts its far corners beyond the .0225 m drift budget.
+    let drifted = Pose2 {
+        yaw_rad: 0.1,
+        ..pose(5.1, 2.5)
+    };
+    let replanned = nav
+        .step_with_goal_heading(
+            Timestamp(100),
+            &estimate(100, drifted, 0.18),
+            &[],
+            Timestamp(100),
+            target,
+            Some(0.0),
+            0.18,
+        )
+        .unwrap();
+    assert_eq!(replanned.status, NavigationStatus::Driving, "{replanned:?}");
+    assert!(replanned.diagnostics.route_revision > first.diagnostics.route_revision);
+    assert_eq!(replanned.path[0], drifted.point());
 }

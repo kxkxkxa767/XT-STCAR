@@ -1,0 +1,1722 @@
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+   Compiling xt-stcar-vision v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/vision)
+   Compiling xt-stcar v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/app)
+   Compiling xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.70s
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar-2fe1db470c107b32)
+
+running 3 tests
+test ort_backend::tests::deadline_does_not_cancel_a_completed_operation ... ok
+test ort_backend::tests::provenance_binds_digest_and_rejects_non_end_to_end_or_raw_heads ... ok
+test ort_backend::tests::deadline_requests_cancellation_and_rejects_late_results ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/xt_stcar-05513bd8924df084)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli.rs (target/debug/deps/cli-823ef28238bc25d2)
+
+running 11 tests
+test preprocess_writes_little_endian_rgb_chw_and_plain_transform ... ok
+test native_is_the_default_and_python_requires_explicit_reference_selection ... ok
+test output_collisions_do_not_overwrite_inputs ... ok
+test replay_maps_coordinates_and_filters_equal_threshold ... ok
+test self_check_explicitly_reports_synthetic_data ... ok
+test output_hard_links_are_replaced_without_modifying_the_input_inode ... ok
+test reference_worker_receives_separate_literal_arguments_and_reports_diagnostics ... ok
+test malformed_cli_config_image_and_tensor_fail_explicitly ... ok
+test invalid_timeouts_and_missing_interpreter_fail ... ok
+test failed_worker_cannot_supply_a_successful_tensor ... ok
+test timeout_kills_and_reaps_worker_and_cleans_temporary_files ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+
+     Running tests/native_runtime.rs (target/debug/deps/native_runtime-ad624e0c5a074338)
+
+running 1 test
+test native_session_is_reused_and_deadlines_cancel_model_loading ... ignored, requires an explicit real ONNX model, validator provenance, and standard ORT C library
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/static_io.rs (target/debug/deps/static_io-51c3bc34b8e309d6)
+
+running 6 tests
+test output_fifos_are_preserved_and_invalid_transform_does_not_replace_tensor ... ok
+test successful_worker_cannot_hang_output_reading_with_a_fifo_and_temp_files_are_cleaned ... ok
+test configured_static_byte_limits_reject_oversized_files_and_accept_exact_small_limit ... ok
+test all_static_cli_input_kinds_reject_fifos_before_reading_or_loading_a_runtime ... ok
+test unset_path_requires_explicit_interpreter_but_empty_path_keeps_cwd_lookup ... ok
+test explicit_and_path_interpreters_are_protected_without_breaking_default_resolution ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.17s
+
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_device_io-15f159a96a5f887d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pty.rs (target/debug/deps/pty-07babd4d1666f566)
+
+running 3 tests
+test dropped_port_releases_exclusive_and_restores_termios ... ok
+test write_timeout_latches_and_regular_files_are_not_serial_devices ... ok
+test configured_pty_roundtrips_binary_and_timeout_is_bounded ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_robot_core-e5f28341960b69e1)
+
+running 37 tests
+test motion_transition::tests::tiny_positive_rates_and_finite_large_products_do_not_require_sampling ... ok
+test motion_transition::tests::legal_endpoints_hide_an_interior_peak_in_either_turn_direction ... ok
+test motion_transition::tests::simultaneous_braking_and_steering_need_not_use_independent_maxima ... ok
+test motion_transition::tests::constants_zero_speed_and_curvature_sign_crossing_are_well_defined ... ok
+test motion_transition::tests::unequal_ramp_arrivals_keep_the_constant_tail_in_the_peak_search ... ok
+test motion_transition::tests::invalid_inputs_and_unrepresentable_arithmetic_fail_closed ... ok
+test motion_transition::tests::horizon_can_cover_a_partial_ramp_or_a_long_steering_transition ... ok
+test motion_transition::tests::projection_integrates_stop_distance_and_constant_curvature_exactly ... ok
+test navigation::tests::car_primitives_cannot_jump_an_occupied_corner_between_free_samples ... ok
+test navigation::travel_boundary_tests::changed_boundary_invalidates_cached_routes_without_resetting_steering ... ok
+test navigation::travel_boundary_tests::a_violating_current_footprint_cannot_be_reported_as_reached ... ok
+test navigation::tests::terminal_connection_reverses_steering_continuously_and_keeps_its_actual_endpoint ... ok
+test navigation::travel_boundary_tests::near_stationary_arrival_cannot_bypass_the_boundary_stopping_requirement ... ok
+test navigation::tests::small_sideways_heading_goal_gets_a_short_safe_s_instead_of_a_loop ... ok
+test navigation::transition_rollout_tests::near_goal_and_short_preview_cannot_bypass_the_full_command_lateral_peak ... ok
+test motion_transition::tests::analytic_peak_bounds_independent_dense_samples_across_transition_shapes ... ok
+test navigation::transition_rollout_tests::safe_joint_braking_and_steering_is_not_rejected_by_independent_maxima ... ok
+test navigation::tests::stop_envelope_covers_obstacle_between_straight_and_fixed_curvature_paths ... ok
+test navigation::velocity_rollout_tests::acceleration_starts_at_current_speed_instead_of_commanded_speed ... ok
+test navigation::velocity_rollout_tests::curvature_starts_at_previous_value_and_respects_slew ... ok
+test reference::tests::arc_cursor_follows_turns_past_projection_window_and_stops_at_real_endpoint ... ok
+test motion_transition::tests::projection_handles_independent_ramp_splits_against_fine_midpoint_reference ... ok
+test navigation::velocity_rollout_tests::stopping_margin_reports_obstacle_contact_and_directional_boundaries ... ok
+test reference::tests::crossing_does_not_select_a_distant_forward_branch ... ok
+test reference::tests::prepared_reference_borrows_only_the_clipped_local_window ... ok
+test reference::tests::progress_and_advance_clip_the_eligible_segments ... ok
+test reference::tests::repeated_vertices_do_not_consume_budget_or_create_nan ... ok
+test reference::tests::segment_heading_is_well_defined_across_angle_wrap ... ok
+test reference::tests::straight_projection_has_consistent_local_arc_and_distance ... ok
+test navigation::velocity_rollout_tests::full_reference_cost_exposes_mid_route_error_despite_a_matching_endpoint ... ok
+test navigation::velocity_rollout_tests::slower_target_and_near_goal_do_not_reduce_measured_speed_stop_envelope ... ok
+test navigation::travel_boundary_tests::lower_target_cannot_shrink_the_measured_speed_stop_circle_at_a_boundary ... ok
+test navigation::velocity_rollout_tests::slowing_candidate_predicts_its_own_distance_and_curved_endpoint ... ok
+test navigation::velocity_rollout_tests::excessive_prediction_returns_bounded_sample_budget_rejection ... ok
+test reference::tests::rejects_invalid_unbounded_and_unrepresentable_inputs ... ok
+test navigation::velocity_rollout_tests::future_stopping_diagnostic_exposes_acceleration_that_loses_room ... ok
+test navigation::travel_boundary_tests::rotated_boundary_rejects_a_curve_that_crosses_then_returns_to_the_allowed_side ... ok
+
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/calibrated_chassis.rs (target/debug/deps/calibrated_chassis-1f489d70d4a04654)
+
+running 8 tests
+test nonlinear_points_interpolate_in_physical_units ... ok
+test stop_and_zero_use_explicit_neutrals_without_reusing_a_previous_turn ... ok
+test out_of_table_values_and_nonfinite_commands_are_rejected_without_clipping ... ok
+test reversed_pwm_directions_are_explicit_and_accepted ... ok
+test reverse_needs_a_separate_negative_table_and_keeps_signed_curvature ... ok
+test pwm_envelopes_are_distinct_from_protocol_limits ... ok
+test config_rejects_live_claims_unknown_fields_and_implicit_defaults ... ok
+test invalid_tables_are_rejected_at_construction ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/localization.rs (target/debug/deps/localization-8e8aacae16664e77)
+
+running 7 tests
+test collinear_identical_and_many_duplicate_points_never_produce_pose ... ok
+test partial_overlap_is_measured_and_far_outliers_do_not_move_pose ... ok
+test invalid_or_regressing_input_is_rejected_without_mutating_reference ... ok
+test excessive_motion_and_unrelated_cloud_are_not_trusted ... ok
+test rejected_cloud_does_not_refresh_reference_and_gap_requires_explicit_reset ... ok
+test known_rigid_motion_has_correct_sign_world_frame_and_time ... ok
+test successive_scan_motion_composes_in_the_correct_order ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/mission.rs (target/debug/deps/mission-5698ce0a9aebfb3d)
+
+running 21 tests
+test crosswalk_requires_lateral_overlap_and_lock_is_not_moved_by_new_detection ... ok
+test crosswalk_overrun_and_missing_required_marker_fail_the_run ... ok
+test bad_time_quality_frames_and_reused_timestamp_data_fault_and_stay_latched ... ok
+test crosswalk_world_projection_rejects_a_fresh_but_unassociated_pose ... ok
+test a_repeated_crosswalk_after_release_does_not_restart_the_three_second_wait ... ok
+test fresh_samples_after_a_long_gap_cannot_claim_continuous_stopping ... ok
+test finish_heading_configuration_checks_range_tolerance_and_entire_footprint ... ok
+test complete_observation_driven_run_stops_three_seconds_and_latches_completion ... ok
+test equivalent_finish_headings_across_pi_are_accepted ... ok
+test crossing_light_without_green_or_losing_green_before_clearance_stops ... ok
+test heading_drift_while_waiting_resets_green_confirmation ... ok
+test light_only_observations_keep_the_configured_skew_allowance ... ok
+test green_needs_distinct_frames_after_actual_stop_and_any_ambiguity_resets_it ... ok
+test mission_configuration_rejects_unverified_live_claims_and_invalid_rules ... ok
+test light_and_finish_keep_a_target_when_position_is_near_but_heading_is_wrong ... ok
+test motion_resets_crosswalk_hold_and_yaw_motion_does_not_count_as_stopped ... ok
+test light_and_finish_require_the_entire_footprint_not_just_the_pose_origin ... ok
+test repeated_measurements_do_not_accrue_stop_time_and_eventually_expire ... ok
+test ordinary_stalls_fail_after_ten_seconds_but_required_waits_are_exempt ... ok
+test red_yellow_unknown_conflicting_and_low_confidence_green_never_release ... ok
+test rotated_light_boundary_and_mission_agree_on_the_first_crossing_corner ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/n10.rs (target/debug/deps/n10-2956be9d2c7511aa)
+
+running 8 tests
+test missing_out_of_range_and_zero_returns_keep_their_beam_slots ... ok
+test stale_fragments_expire_at_boundary_even_without_new_bytes ... ok
+test golden_packet_preserves_byte_order_units_intensities_and_wrap ... ok
+test unusable_packets_never_become_fresh_sensor_samples ... ok
+test configuration_is_explicit_and_strict ... ok
+test noise_bad_checksum_false_headers_and_wrong_lengths_resynchronize ... ok
+test every_fragment_boundary_and_glued_packets_keep_original_receive_times ... ok
+test invalid_calls_do_not_mutate_state_and_noise_memory_is_bounded ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/navigation.rs (target/debug/deps/navigation-45077d957f338d46)
+
+running 12 tests
+test invalid_frames_geometry_and_bounded_resources_are_rejected ... ok
+test full_footprint_and_stale_inputs_stop ... ok
+test grid_path_cannot_cut_between_touching_occupied_corners ... ok
+test old_navigation_json_preserves_pure_pursuit_and_rejects_unknown_trackers ... ok
+test position_alone_cannot_satisfy_an_explicit_goal_heading ... ok
+test temporary_limit_and_task_hold_resume_with_bounded_acceleration ... ok
+test negligible_negative_speed_roundoff_preserves_the_forward_tracking_gate ... ok
+test terminal_reference_replans_heading_drift_before_the_center_leaves_the_path ... ok
+test sealed_field_and_goal_behind_car_stop_without_rotation ... ok
+test braking_envelope_blocks_a_new_front_obstacle ... ok
+test closed_loop_drives_around_two_cones_and_stops_at_goal ... ok
+test changing_surface_cloud_and_successive_turning_waypoints_remain_navigable ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.76s
+
+     Running tests/protocol.rs (target/debug/deps/protocol-7745ad55939a137f)
+
+running 6 tests
+test factory_golden_packet_and_profiles_do_not_share_units ... ok
+test partial_writes_and_interrupts_complete_packet_but_error_latches ... ok
+test stale_partial_frames_skew_and_backward_time_are_rejected ... ok
+test calibration_and_frame_are_explicit ... ok
+test noise_checksum_and_missing_components_never_refresh_a_sample ... ok
+test every_split_and_concatenation_preserves_units_and_orientation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safety.rs (target/debug/deps/safety-2dcd62b8f0293591)
+
+running 12 tests
+test arming_and_starting_require_explicit_readiness ... ok
+test config_is_explicit_finite_and_simulation_only ... ok
+test deadman_release_stops_immediately ... ok
+test missing_required_sensor_prevents_arm ... ok
+test late_command_cannot_erase_its_own_expiry ... ok
+test backward_event_time_faults_without_backward_output_time ... ok
+test estop_latches_until_release_and_explicit_reset ... ok
+test sample_replay_is_deterministic_and_offline ... ok
+test timeout_boundary_and_late_heartbeat_cannot_restore_motion ... ok
+test each_keepalive_expires_and_late_input_remains_stopped ... ok
+test sensor_frames_stamps_and_geometry_are_validated ... ok
+test invalid_or_excessive_motion_is_rejected_instead_of_clamped ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/scan.rs (target/debug/deps/scan-f808cd74ac5bc845)
+
+running 3 tests
+test missing_sector_across_zero_is_checked_as_one_blind_arc ... ok
+test full_turn_is_emitted_only_at_boundary_with_conservative_timestamp ... ok
+test packet_loss_and_unknown_returns_never_become_a_clear_scan ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sensor_geometry.rs (target/debug/deps/sensor_geometry-c15a357df3e2a63c)
+
+running 3 tests
+test negative_n10_angles_across_zero_and_single_beams_remain_valid ... ok
+test unusable_geometry_faults_a_running_controller_and_latches_stop ... ok
+test finite_lidar_fields_cannot_hide_nonfinite_beam_geometry ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/steering_execution.rs (target/debug/deps/steering_execution-a11d54f18c8e8db7)
+
+running 7 tests
+test externally_supplied_execution_states_cannot_rewind_or_corrupt_history ... ok
+test adopted_stop_returns_steering_gradually_in_both_directions ... ok
+test invalid_adoption_or_time_does_not_partially_advance_the_estimate ... ok
+test stop_blocked_braking_and_reached_decisions_preserve_nonzero_execution_history ... ok
+test synchronous_wrappers_acknowledge_the_command_without_instant_steering_motion ... ok
+test planning_changes_no_adopted_target_and_uses_the_owners_actual_acknowledgement ... ok
+test selected_prediction_starts_from_remaining_steering_after_a_short_stop ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/terminal_approach.rs (target/debug/deps/terminal_approach-a3626b2b6636933e)
+
+running 1 test
+test short_s_arrivals_keep_their_two_turns_in_both_directions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/through_waypoints.rs (target/debug/deps/through_waypoints-5b56636c9f9359b3)
+
+running 7 tests
+test a_handoff_already_too_late_to_brake_still_stops ... ok
+test a_slower_next_phase_is_commanded_before_waypoint_admission_without_abrupt_braking ... ok
+test a_new_obstacle_revokes_the_cached_continuations_braking_allowance ... ok
+test only_a_verified_continuation_relaxes_braking_at_a_required_waypoint ... ok
+test invalid_admission_radius_does_not_advance_time_execution_or_clear_the_route ... ok
+test curved_continuation_cannot_skip_the_required_waypoints_admission_region ... ok
+test distinct_task_radius_keeps_the_continuous_speed_handoff_feasible ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/tracking.rs (target/debug/deps/tracking-e1d5e6b282a953ab)
+
+running 18 tests
+test lqr_circle_vertices_recover_curvature_and_tangent_without_pose_in_path ... ok
+test lqr_lateral_and_heading_feedback_have_restoring_signs_and_gains ... ok
+test lqr_mirror_symmetry_and_yaw_wrapping ... ok
+test lqr_projects_only_incident_segments_at_a_path_crossing ... ok
+test lqr_low_speed_falls_back_to_pp_after_validation ... ok
+test lqr_rejects_large_errors_reversals_and_corners ... ok
+test lqr_repeated_vertices_do_not_create_nan_or_hide_actual_geometry ... ok
+test lqr_configuration_and_gain_overflow_are_rejected ... ok
+test lqr_diagnostics_describe_the_reference_used_for_the_actual_command ... ok
+test lqr_small_error_rejection_records_the_values_that_failed ... ok
+test configuration_serialization_is_explicit_and_strict ... ok
+test lqr_straight_reference_zero_error_has_zero_curvature ... ok
+test pp_diagnostics_and_low_speed_fallback_do_not_require_lqr_geometry ... ok
+test pp_geometry_matches_known_left_and_right_targets ... ok
+test pp_is_rigid_transform_invariant_and_clamps_curvature ... ok
+test pp_lookahead_crosses_segments_and_uses_pose_before_remaining_route ... ok
+test pp_matches_old_formula_over_progress_pose_and_lookahead_variations ... ok
+test trackers_reject_nonfinite_unbounded_reverse_and_degenerate_inputs ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_robot_runner-a9d287bca9127b07)
+
+running 12 tests
+test phase_statistics::tests::repeated_paths_are_not_generations_and_revision_gaps_do_not_invent_lengths ... ok
+test phase_statistics::tests::phase_intervals_stop_episodes_and_final_braking_have_distinct_accounting ... ok
+test navigation_diagnostics::tests::startup_failures_and_short_runs_keep_bounded_utf8_context ... ok
+test simulation::stop_tests::intermediate_footprints_are_checked_even_when_tick_endpoints_are_clear ... ok
+test control_execution::tests::same_time_adoption_does_not_rewrite_a_previously_bound_history ... ok
+test control_execution::tests::unchanged_polls_preserve_old_anchors_and_changes_have_bounded_storage ... ok
+test simulation::stop_tests::oriented_light_boundary_checks_the_intermediate_sweep_and_fault_braking ... ok
+test simulation::stop_tests::stop_centers_gradually_and_keeps_zero_speed_while_steering_finishes ... ok
+test simulation::stop_tests::straight_stopping_distance_matches_energy_formula_at_each_control_period ... ok
+test phase_statistics::tests::history_and_reason_storage_stay_bounded_without_discarding_totals ... ok
+test navigation_diagnostics::tests::expected_stops_do_not_hide_first_unexpected_block_or_replace_it_with_timeout ... ok
+test simulation::stop_tests::joint_speed_and_steering_ramps_match_independent_fine_rk4_reference ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running unittests src/main.rs (target/debug/deps/xt_stcar_robot-61f93961d45d8d1d)
+
+running 1 test
+test tests::an_incomplete_or_unstopped_log_is_not_publishable_on_error ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/async_autonomy.rs (target/debug/deps/async_autonomy-31d80cb671804521)
+
+running 1 test
+test default_worker_drives_from_delayed_feedback_and_stops_on_original_source_expiry ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/autonomy.rs (target/debug/deps/autonomy-b065e945ccf3c67e)
+
+running 10 tests
+test renderer_handles_a_tiny_border_light_roi_and_invalid_initial_placement ... ok
+test visual_obstacles_cannot_be_projected_using_a_different_capture_pose ... ok
+test experimental_lqr_still_passes_through_the_source_watchdog_and_fault_latch ... ok
+test control_deadline_is_independent_of_recent_sensor_values ... ok
+test light_boundary_applies_on_transition_and_only_confirmed_new_green_releases_it ... ok
+test snapshot_clock_frame_coverage_and_identity_faults_are_latched ... ok
+test exhausted_debug_log_budget_does_not_change_the_control_or_braking_result ... ok
+test stale_camera_pose_or_scan_stops_and_the_plant_actually_brakes ... ok
+test perception_failure_while_moving_records_fault_and_finishes_braking ... ok
+test competition_closes_the_loop_from_rgb_and_range_feedback_without_motion_events ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.84s
+
+     Running tests/autonomy_completion.rs (target/debug/deps/autonomy_completion-719693ab8752f2d4)
+
+running 1 test
+test same_tick_safety_fault_takes_precedence_over_mission_completion ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/autonomy_io.rs (target/debug/deps/autonomy_io-c4c7a2b1b0a3ab09)
+
+running 6 tests
+test shipped_configuration_files_form_a_valid_offline_pipeline ... ok
+test full_scan_tf_and_odometry_preserve_source_time_and_reject_unknown_coverage ... ok
+test sensor_adapter_rejects_motion_fields_duplicate_times_and_nonregular_files ... ok
+test typed_sensor_replay_computes_motion_and_records_stop_at_incomplete_eof ... ok
+test road_cli_runs_rust_rgb_detection_and_protects_the_image ... ok
+test cli_fault_output_is_atomic_and_flags_cannot_overwrite_inputs ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.35s
+
+     Running tests/calibration_replay.rs (target/debug/deps/calibration_replay-8083fc31e028ae1d)
+
+running 5 tests
+test output_cannot_overwrite_its_calibration ... ok
+test physical_units_produce_only_pwm_previews_and_eof_restores_neutral ... ok
+test output_symlink_cannot_overwrite_its_calibration ... ok
+test mapping_failure_commits_a_complete_latched_stop_without_recording_drive ... ok
+test invalid_calibration_preserves_existing_output_and_input_files ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/capture.rs (target/debug/deps/capture-da0cdafce1002396)
+
+running 5 tests
+test default_plan_never_opens_missing_device_or_changes_output ... ok
+test invalid_paths_and_config_output_collision_do_not_overwrite_files ... ok
+test disconnect_after_capture_started_keeps_previous_log ... ok
+test invalid_configuration_preserves_existing_capture ... ok
+test execute_captures_binary_and_idle_ticks_on_one_monotonic_clock_without_transmitting ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+     Running tests/control_runtime.rs (target/debug/deps/control_runtime-39c6dada883c73a0)
+
+running 26 tests
+test aligned_runtime_cannot_outlive_shorter_mission_or_navigation_freshness ... ok
+test changed_duplicate_future_and_regressing_results_are_rejected ... ok
+test blocked_first_plan_expires_and_drop_does_not_join_it ... ok
+test aligned_admission_window_rejects_a_late_result_without_starting_motion ... ok
+test an_intervening_adoption_invalidates_a_queued_projection ... ok
+test commanded_steering_slew_uses_real_adoption_spacing ... ok
+test async_projection_still_latches_truly_out_of_range_measurements ... ok
+test leases_use_oldest_capture_and_late_results_cannot_revive_expired_output ... ok
+test late_drive_is_never_adopted_after_watchdog_stop_and_stop_recenters_over_time ... ok
+test ordinary_stop_resumes_but_controller_fault_is_permanent ... ok
+test asynchronous_certificate_covers_source_to_deadline_stopping_space ... ok
+test asynchronous_certificate_keeps_the_light_boundary_until_mission_release ... ok
+test admission_checks_speed_limits_at_both_ends_of_the_window ... ok
+test processor_receives_only_poll_adopted_history_and_replaced_inputs_keep_bound_estimates ... ok
+test async_projection_and_certificate_share_navigation_measurement_roundoff ... ok
+test projected_navigation_does_not_make_old_task_observations_fresh ... ok
+test real_worker_cannot_relax_existing_controller_deadlines ... ok
+test startup_timeout_and_clock_regression_latch_without_wall_clock_time ... ok
+test measurement_roundoff_does_not_expand_the_command_speed_limit ... ok
+test historical_execution_recovers_old_source_without_rewinding_or_renewing_duplicate_leases ... ok
+test slow_planning_keeps_latest_input_and_never_blocks_the_output_watchdog ... ok
+test invalid_adopted_curvature_and_regressing_poll_clock_cannot_corrupt_execution_state ... ok
+test processor_faults_latch_even_before_output_is_polled ... ok
+test duplicate_inputs_do_not_reprocess_and_invalid_source_data_latches_stop ... ok
+test delayed_sources_with_jitter_keep_driving_using_projected_states_and_original_leases ... ok
+test real_controller_session_is_started_and_runs_on_the_worker ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/fifo.rs (target/debug/deps/fifo-10e2ff2d662523a0)
+
+running 3 tests
+test checked_static_reader_accepts_exact_limit_and_frame_decoder_reuses_regular_file ... ok
+test oversized_static_inputs_are_rejected_before_json_parsing_and_keep_prior_log ... ok
+test fifo_event_and_configuration_inputs_fail_without_waiting_or_replacing_logs ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/n10_replay.rs (target/debug/deps/n10_replay-2c9defd95704aab4)
+
+running 7 tests
+test n10_frame_mismatch_is_rejected_before_creating_any_output ... ok
+test synthetic_fragmented_n10_replay_preserves_metadata_and_stops_at_exact_timeout ... ok
+test output_cannot_replace_the_n10_configuration ... ok
+test decoded_lidar_cannot_be_mixed_with_raw_n10_even_when_frames_match ... ok
+test n10_config_is_required_and_cannot_silently_apply_to_other_input ... ok
+test output_aliases_never_modify_the_n10_configuration_inode ... ok
+test malformed_n10_envelopes_preserve_existing_output ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/perception_worker.rs (target/debug/deps/perception_worker-8aa0af26c5cae316)
+
+running 6 tests
+test drop_during_blocked_processing_detaches_and_idle_drop_releases_processor ... ok
+test invalid_frames_and_regressing_captures_never_enter_the_queue ... ok
+test processor_error_is_bounded_latched_and_retains_capture_identity ... ok
+test incorrect_processor_timestamp_and_panics_are_visible_errors ... ok
+test blocked_processor_does_not_block_submission_and_only_latest_pending_frame_survives ... ok
+test real_rgb_pipeline_detects_rules_papers_and_explicit_light_without_ort ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/replay.rs (target/debug/deps/replay-5406f81f2cb6ff18)
+
+running 10 tests
+test timeout_is_a_recorded_fault_and_never_recovered_by_late_heartbeat ... ok
+test raw_imu_corruption_does_not_refresh_safety_watchdog ... ok
+test successful_replay_records_motion_and_always_stops_at_eof ... ok
+test chassis_preview_is_explicit_and_never_writes_to_hardware ... ok
+test multiple_imu_samples_in_one_chunk_are_logged_once ... ok
+test hard_linked_output_never_truncates_source_events ... ok
+test invalid_config_and_output_input_collision_are_rejected ... ok
+test raw_imu_requires_explicit_config_and_protects_it_from_output ... ok
+test frame_stream_requires_native_runtime_and_monotonic_sequence ... ok
+test malformed_or_regressing_input_cannot_truncate_existing_logs ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/telemetry.rs (target/debug/deps/telemetry-82a40cca1f3a3ba1)
+
+running 9 tests
+test output_is_one_batch_with_no_flush_and_clear_resets_a_run ... ok
+test unknown_modes_fields_and_out_of_range_budgets_are_rejected ... ok
+test serialization_failure_preserves_prior_records_and_is_not_a_trace_drop ... ok
+test failed_batch_output_keeps_the_complete_run_for_a_new_destination ... ok
+test default_and_summary_filter_optional_records_without_hiding_important_ones ... ok
+test trace_budget_drops_only_optional_records_and_keeps_important_order ... ok
+test important_record_count_exhaustion_is_explicit_and_never_evicts ... ok
+test oversized_serialization_rolls_back_and_cannot_consume_important_reserve ... ok
+test byte_reserves_include_newlines_and_remain_independent_at_the_boundary ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/through_handoff.rs (target/debug/deps/through_handoff-a7b89e6e2a9fd362)
+
+running 1 test
+test original_competition_configuration_hands_cones_to_light_without_an_empty_speed_interval ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.13s
+
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_vision-e797a05f86a8750b)
+
+running 9 tests
+test tests::odd_padding_and_invalid_dimensions ... ok
+test tests::reject_wrong_layout_malformed_output_and_transform ... ok
+test tests::unletterbox_threshold_and_no_extra_nms ... ok
+test tests::ties_to_even_and_asymmetric_padding ... ok
+test tests::clip_boxes_and_drop_padding_only ... ok
+test tests::reject_invalid_scores_and_confident_boxes ... ok
+test tests::confidence_is_strictly_greater_than_threshold ... ok
+test tests::resize_uses_half_pixel_sampling_and_rgb_planes ... ok
+test tests::letterbox_rgb_normalization_and_padding ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/road.rs (target/debug/deps/road-a8afdec23b965bf4)
+
+running 9 tests
+test invalid_rois_singular_horizons_mirrors_and_excessive_projection_are_rejected ... ok
+test extreme_images_bad_frames_and_excessive_components_fail_with_bounded_work ... ok
+test red_and_blue_cone_feet_project_to_body_and_lamp_regions_are_excluded ... ok
+test rotated_papers_obey_the_configured_orientation_tolerance ... ok
+test stripe_axis_is_explicit_and_both_pattern_directions_are_supported ... ok
+test isolated_white_blocks_parking_lines_and_irregular_gaps_are_not_crosswalks ... ok
+test yolo_class_nine_rois_take_priority_and_out_of_bounds_boxes_are_safe ... ok
+test side_by_side_rules_sized_papers_produce_metric_edges_and_survive_resizing ... ok
+test hsv_lamps_report_three_colors_conflict_darkness_and_overexposure ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+   Doc-tests xt_stcar
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xt_stcar_device_io
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xt_stcar_robot_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xt_stcar_robot_runner
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xt_stcar_vision
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+    Checking xt-stcar-vision v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/vision)
+    Checking xt-stcar v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/app)
+    Checking xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.72s
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+   Compiling xt-stcar-vision v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/vision)
+   Compiling xt-stcar v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/app)
+   Compiling xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+warning: linker stderr: ignoring deprecated linker optimization setting '1'
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `xt-stcar` (bin "xt-stcar") generated 1 warning
+warning: `xt-stcar-robot-runner` (bin "xt-stcar-robot") generated 1 warning (1 duplicate)
+    Finished `release` profile [optimized] target(s) in 11.63s
+{
+  "elf_class": 64,
+  "endianness": "little",
+  "machine": 243,
+  "architecture": "riscv64",
+  "elf_type": 3,
+  "entry": 349396,
+  "flags": 5,
+  "rvc": true,
+  "abi": "lp64d",
+  "pie": true,
+  "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+  "needed": [
+    "libc.so.6"
+  ],
+  "rpath": [],
+  "glibc_versions": [
+    "GLIBC_2.27",
+    "GLIBC_2.28",
+    "GLIBC_2.29",
+    "GLIBC_2.30",
+    "GLIBC_2.32",
+    "GLIBC_2.33",
+    "GLIBC_2.34"
+  ],
+  "maximum_glibc": "2.34",
+  "version_requirements": [
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.29"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    }
+  ],
+  "versioned_undefined_symbols": [
+    {
+      "symbol": "__cxa_thread_atexit_impl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__errno_location",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__libc_start_main",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "__xpg_strerror_r",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "_exit",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "abort",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "bcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "calloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "chdir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "chroot",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "clock_gettime",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "clock_nanosleep",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "close",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "closedir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dirfd",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dl_iterate_phdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dladdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlclose",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlerror",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlopen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlsym",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dup",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dup2",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "environ",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "execvp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fcntl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fdopendir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fflush",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fork",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "free",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fstat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "fwrite",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getauxval",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getcwd",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getenv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getpid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getrandom",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "gettid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "symbol": "gnu_get_libc_version",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "ioctl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "kill",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "linkat",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "lseek64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "lstat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "malloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcpy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memmove",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mkdir",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mmap64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mprotect",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "munmap",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "open64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "openat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pause",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pipe2",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "poll",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_memalign",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_addchdir_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.29"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_adddup2",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawn_file_actions_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_setflags",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_setpgroup",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnattr_setsigdefault",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_spawnp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_getguardsize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_getstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_setstacksize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_detach",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_getattr_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "symbol": "pthread_join",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_delete",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_rdlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_unlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_wrlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_self",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_setname_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_setspecific",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "read",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readdir64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realpath",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "recv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "recvmsg",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sched_yield",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sendmsg",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setgid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setgroups",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setpgid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setsid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "setuid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaction",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaddset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaltstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigemptyset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "signal",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "snprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "socketpair",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "stat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "statx",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "symbol": "stderr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "strlen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "syscall",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sysconf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "unlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "unlinkat",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "waitid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "waitpid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "write",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "writev",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    }
+  ],
+  "schema_version": 1,
+  "glibc_baseline": "2.38",
+  "file": "xt-stcar",
+  "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+  "size_bytes": 1217056,
+  "passed": true,
+  "errors": []
+}
+{
+  "elf_class": 64,
+  "endianness": "little",
+  "machine": 243,
+  "architecture": "riscv64",
+  "elf_type": 3,
+  "entry": 496564,
+  "flags": 5,
+  "rvc": true,
+  "abi": "lp64d",
+  "pie": true,
+  "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+  "needed": [
+    "libm.so.6",
+    "libc.so.6"
+  ],
+  "rpath": [],
+  "glibc_versions": [
+    "GLIBC_2.27",
+    "GLIBC_2.28",
+    "GLIBC_2.30",
+    "GLIBC_2.32",
+    "GLIBC_2.33",
+    "GLIBC_2.34"
+  ],
+  "maximum_glibc": "2.34",
+  "version_requirements": [
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    }
+  ],
+  "versioned_undefined_symbols": [
+    {
+      "symbol": "__cxa_thread_atexit_impl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__errno_location",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "__libc_start_main",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "__xpg_strerror_r",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "abort",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "bcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "calloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "clock_gettime",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "close",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dl_iterate_phdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "dladdr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlclose",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlerror",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlopen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dlsym",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "dup",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fcntl",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fflush",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "free",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "fstat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "fwrite",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getauxval",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getcwd",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getenv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "getrandom",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "gettid",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.30"
+    },
+    {
+      "symbol": "linkat",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "lseek64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "malloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcmp",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memcpy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memmove",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "memset",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mmap64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "mprotect",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "munmap",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "open64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pause",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "poll",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "posix_memalign",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_destroy",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_getguardsize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_getstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_attr_init",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_attr_setstacksize",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_detach",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_getattr_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.32"
+    },
+    {
+      "symbol": "pthread_join",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_create",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_key_delete",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_rdlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_unlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_rwlock_wrlock",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_self",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "pthread_setname_np",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "pthread_setspecific",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.34"
+    },
+    {
+      "symbol": "read",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "readv",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realloc",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "realpath",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sched_yield",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaction",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sigaltstack",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "signal",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "snprintf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "stat64",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.33"
+    },
+    {
+      "symbol": "statx",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.28"
+    },
+    {
+      "symbol": "stderr",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "strlen",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "syscall",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sysconf",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "unlink",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "write",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "writev",
+      "library": "libc.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "asin",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "atan2",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "cos",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "hypot",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    },
+    {
+      "symbol": "sin",
+      "library": "libm.so.6",
+      "version": "GLIBC_2.27"
+    }
+  ],
+  "schema_version": 1,
+  "glibc_baseline": "2.38",
+  "file": "xt-stcar-robot",
+  "sha256": "dd0c8122f02efb5764b40210fc74f77e108ef9e7eb0d9b56973216f51f98e007",
+  "size_bytes": 1956360,
+  "passed": true,
+  "errors": []
+}
+Build evidence: /Users/yuhaojin/Documents/XT-STCAR/target/riscv64gc-unknown-linux-gnu/release/xt-stcar.build.json

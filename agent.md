@@ -1,10 +1,10 @@
 # XT-STCAR 接手与开发约定
 
-维护日期：2026-09-10。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
+维护日期：2026-09-11。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
 开始前完整读取本文件，再读 [上传规范](上传规范.md)、[README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
 `AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。
 
-## 当前交接快照（2026-09-10）
+## 当前交接快照（2026-09-11）
 
 ### 用户目标与授权
 
@@ -26,11 +26,52 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 最新运动执行状态、过渡峰值、通过点与模拟积分修正（2026-09-10）
+### 最新任务交接、阶段统计与异步运动修正（2026-09-11）
+
+- 修改前 fetch 确认 `aac7421` 与 origin/main 一致（0/0）。用户已授权修正第四份运动控制意见，
+  继续直接 main 验证、提交、推送；最终同步状态以 Git HEAD/origin/main 核对。
+  本轮说明为[任务交接与异步运动修正](docs/任务交接与异步运动修正.md)，证据统一使用 `docs/motion-v4-*`。
+- `PassThrough.admission_radius_m` 由 Mission 传真实 `goal_tolerance_m`，修复 .065 m 任务验收与
+  .045 m 导航停车容差混用导致的提前减速过晚。新增半径/距入圈余量诊断；从较早帧连续减速，
+  已来不及满足正常减速约束仍 Stop，不能通过放宽 epsilon 修复。原 LQR 22.5 s 空速度区间已核验为真实遗漏。
+- 缓存参考偏离采用完整车体对应四角的最大位移，同时纳入位置和航向；不只查中心横向偏差。
+  保留原目标容差一半的重规划数值门限和原 Q/R。对必停定向目标，若已有单弧求解器未认证而双弧可认证，
+  新候选在原安全门通过后还需验证完整下一周期仍有短连接/严格入圈；这是有界连接族检查，不是全局可达证明。
+  每拍最多165次状态查询，每次最多单/双弧各8迭代，有短Vec分配，不重跑lattice；目标板时限未验。
+  既有变动点云测试的拍末值Euler模型改为独立1ms连续积分；关闭新guard仍复现原失败，原场景/停车/碰撞门限保留。
+- 最终完整合成比赛 PP58.8秒/11.508841m、LQR70.6秒/13.440314m均完成，终速0；
+  斑马线3000ms、绿灯确认300ms。对比aac7421，PP慢3.2秒、多走.38345m，LQR快13.3秒、少走2.34996m。
+  PP最小锥桶间隙.24251m、LQR.27353m；变化不全是改善。PP两次短Stop保留；LQR原交接空区间已消除，
+  另在42.2s有一次可恢复终端门控Stop。原始阶段/候选数据见本轮competition-comparison，不能把候选拒绝数写成停车次数。
+- `motion_transition::project_motion` 提供无堆分配、有时域/数值预算的分段车辆模型投影，
+  区分速度/转向渐变与饱和点，解析积分航向和距离；独立精细积分回归不冒充真实反馈。
+- 导航新增当前、选中候选和下一完整周期的停车余量/来源诊断。保留原硬停车包络与候选评分。
+  曾尝试按未来余量优先排序，但 PP 在 19 s 出现所有候选都切同一占用格角的回归，已撤销该排序。
+  不是新扫描让当前格变为占用；旧网格独立复算同样拒绝。详见 `docs/motion-v4-stopping-experiment.json`。
+- 新 `runner/src/phase_statistics.rs` 将阶段实际时长/距离、路径生成/长度、非预期Stop次数/命令时长和
+  固定导航/候选原因累计进 `SimulationSummary.statistics`；每阶段仅留最近16次路线事件与完整计数。
+  最后制动单列 `final_braking` 并与总时长/距离对账。无新增逐tick落盘，不降控制/感知频率。
+- 新 `runner/src/control_execution.rs` 固定128条已采用命令变化历史；同命令poll不耗槽位，
+  源时刻早于最近poll仍可查历史，历史不足返回 `HistoryUnavailable`。分段推算位姿、速度及曲率到规划时刻。
+  `PlanningContext`/`tick_with_projection` 保留源测量用于任务、Safety和世界障碍投影，导航另用模型规划状态。
+  后台证书约束采用时间窗、真实采用前提、原源期限、正常运动限幅、侧向峰值和静态停车空间；
+  `poll` 不重做搜索/不等待锁。同源不续租、原期限先验、晚到Drive不能清Fault等约定保持。
+  poll还按真实命令变化时间检查曲率slew，不能借用更长规划间隔。原始源期限受Mission/Nav/Safety最短限制。
+  投影/证书共享原导航±1e-6测量边界，归一化仅用于模型副本；真实越界仍InvalidInput，命令上限仍严格。
+  默认spawn已有空旷直路异步集成：10Hz采样、60/80ms延迟、50Hz输出，13份源快照Drive后按原期限Stop并减速到0；
+  另有固定60ms源延迟+3~9ms采用抖动、窗口过期/前提变化等专项，不把冻结模拟时钟的线程测试写成目标耗时测量。
+  证书有可能保守拒绝狭窄通道；未验证完整异步比赛，真实多传感器时钟、动态障碍与执行模型仍待车到后验证。
+- `README.md` 与 `Mac与车端命令手册.txt` 同步模块和验证入口；新构建/包以
+  `motion-v4-validation.json`、`motion-v4-build.json`、`motion-v4-delivery.json` 为准。
+  v3/v2和更早数据保留历史，不能沿用其二进制哈希或测试数量当本轮实测。
+- 当前仍暂不接车、不读视频、不执行RISC-V目标，GLIBC2.38仅本地基线。PP默认，LQR实验。
+  工具链/环境/模型/产物不入Git；原比赛PDF不修改或暂存，STM32读取任务继续暂停。
+
+### 前轮运动执行状态、过渡峰值、通过点与模拟积分修正（2026-09-10，v3历史）
 
 - 修改前 fetch 已确认 `9b59125` 与 origin/main 一致；继续按用户授权直接 main 开发/验证/提交/推送。
   本轮已完成下述主机验证与交叉链接，提交/推送状态以 Git HEAD/origin/main 核对；不沿用 v2 的数字或哈希。
-  新说明为[运动执行与通过点修正](docs/运动执行与通过点修正.md)，当前证据统一使用 `docs/motion-v3-*`。
+  该轮说明为[运动执行与通过点修正](docs/运动执行与通过点修正.md)，历史证据使用 `docs/motion-v3-*`。
 - `robot-core/src/navigation.rs` 新增 `SteeringEstimate { at, commanded_curvature_per_m, applied_curvature_per_m }`。
   估计只按已采用命令推进，`advance_to` 沿旧目标推进，`adopt` 先推进再换目标；Stop 归零目标但估计逐步回中。
   即使字段各自有限，其差值溢出也会原子拒绝，失败不修改原估计。
@@ -121,7 +162,7 @@
 - 型号证据分层：出厂驱动选择LSlidar N10，实物待核对；相机/IMU/舵机完整型号未提供，不把平台CMP10A等参考外设认作本车。
   电池5400mAh（产品）/5300mAh（规则）、底盘阿克曼/四轮差速表述、MCU32KB/4KB/40MHz及“最大转速40km/h”均单列来源/疑点。
 - `car_controller_new.cpp`的L=0.305、lfw=0.1675、controller_freq=30只记录为源码默认参考，不代替测量。
-  该轮仅改README和交接文档，未改变代码/配置。旧0f3ab64、motion-control及motion-v2构建证据保留历史，当前证据使用下述motion-v3前缀。
+  该轮仅改README和交接文档，未改变代码/配置。旧0f3ab64、motion-control及motion-v2构建证据保留历史，该轮证据使用motion-v3前缀。
 
 ### 当前代码：5 个 crate、2 个程序
 
@@ -213,9 +254,17 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 
 ### 构建、模型与验证证据
 
-- 当前 v3 运动执行修正：Rust 常规 266 通过、0 失败、原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
+- 当前 v4：Rust 常规 294 通过、0 失败，原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
+  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。当前入口为 `docs/motion-v4-validation.json`。
+  两者实际最高 GLIBC 引用 2.34，构建基线 2.38；robot 需要 libm 与 libc，xt-stcar 需要 libc。
+  构建源码哈希已核对，当前二进制哈希见 `motion-v4-build.json` 和两份 ELF 报告。
+  模型测试套件和原生 ORT 推理未重跑；打包另做模型格式、来源与包内文件校验，包状态见 `motion-v4-delivery.json`。
+  本地 core 包 54 个文件、含模型包 58 个文件均已核验；包内文档、两个 ELF 及 80 份源码哈希与最终文件一致。
+  两包仅在本地 dist，未上传或执行车辆；Git 仅同步源码、脚本、文档和验证记录。
+
+- 前轮 v3 运动执行修正（历史）：Rust 常规 266 通过、0 失败、原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
   fmt、all-targets clippy -D warnings、两个 RISC-V 交叉链接及 PP/LQR 完整场景复验通过。
-  当前汇总入口为 `docs/motion-v3-validation.json`，构建与交付为 `docs/motion-v3-build.json`、`docs/motion-v3-delivery.json`。
+  该轮汇总入口为 `docs/motion-v3-validation.json`，构建与交付为 `docs/motion-v3-build.json`、`docs/motion-v3-delivery.json`。
   交叉链接通过不代表本地包已核验；包的状态、路径和哈希以 delivery 报告为准。不把以下历史证据算入本轮。
 - 前轮 v2 运动修正（2026-09-10，历史）：Rust常规237通过、跟踪example测试2通过、交付测试34通过；
   fmt、all-targets clippy -D warnings、两个RISC-V交叉链接通过；导航原11项及PP/LQR全场通过。
@@ -239,9 +288,9 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
 - 新串口依赖 rustix **1.1.4**；两个目标程序由 `scripts/build-riscv.sh --offline` 检查并构建。
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
-  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v3 ELF 报告为准。
+  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v4 ELF 报告为准。
   前轮 robot 程序额外需要 `libm.so.6`，不能声称两个程序都只依赖 libc。
-- **当前构建证据使用 `docs/motion-v3-*`；`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
+- **当前构建证据使用 `docs/motion-v4-*`；`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
   `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。
   `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；

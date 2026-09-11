@@ -59,6 +59,7 @@ fn planned(at: u64, oldest: u64, command: MotionOutput, fault: bool) -> PlannedC
     PlannedCommand {
         source_at: Timestamp(at),
         oldest_sensor_at: Timestamp(oldest),
+        planned_at: Timestamp(at),
         step: Arc::new(step(at, command, fault)),
     }
 }
@@ -508,7 +509,7 @@ fn processor_receives_only_poll_adopted_history_and_replaced_inputs_keep_bound_e
 }
 
 #[test]
-fn newer_execution_rejects_old_source_without_rewinding_or_renewing_duplicate_leases() {
+fn historical_execution_recovers_old_source_without_rewinding_or_renewing_duplicate_leases() {
     let (observed_tx, observed_rx) = channel();
     let mut worker = AutonomyWorker::spawn_with_execution_processor(
         config(),
@@ -527,12 +528,13 @@ fn newer_execution_rejects_old_source_without_rewinding_or_renewing_duplicate_le
     let (_, steering) = observed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
     assert_steering(steering, 10, 0.0, 0.0);
     worker.poll(Timestamp(30));
-    assert_eq!(
-        submit(&worker, &input(20), 30),
-        SubmitStatus::ExecutionAhead
-    );
-    assert!(observed_rx.try_recv().is_err());
-    assert_eq!(submit(&worker, &first, 31), SubmitStatus::Duplicate);
+    let delayed = input(20);
+    assert_eq!(submit(&worker, &delayed, 30), SubmitStatus::Queued);
+    let (at, steering) = observed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(at, 20);
+    assert_steering(steering, 20, 1.0, 0.02);
+    assert_steering(worker.execution_state().unwrap(), 30, 1.0, 0.04);
+    assert_eq!(submit(&worker, &delayed, 31), SubmitStatus::Duplicate);
     let aligned = input(35);
     assert_eq!(submit(&worker, &aligned, 35), SubmitStatus::Queued);
     let (at, steering) = observed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
@@ -654,4 +656,487 @@ fn invalid_adopted_curvature_and_regressing_poll_clock_cannot_corrupt_execution_
             .is_err()
         );
     }
+}
+
+fn aligned_drive(curvature_per_m: f64) -> MotionOutput {
+    MotionOutput::Drive {
+        speed_mps: 0.02,
+        curvature_per_m,
+    }
+}
+
+fn aligned_input(at: u64) -> Arc<SensorSnapshot> {
+    let mut record = (*input(at)).clone();
+    record.pose.pose = Pose2 {
+        x_m: 1.5 + at as f64 * 0.00002,
+        y_m: 2.5,
+        yaw_rad: 0.0,
+    };
+    record.pose.speed_mps = if at == 0 { 0.0 } else { 0.02 };
+    Arc::new(record)
+}
+
+#[test]
+fn delayed_sources_with_jitter_keep_driving_using_projected_states_and_original_leases() {
+    let (seen_tx, seen_rx) = channel();
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        move |input, context| {
+            seen_tx.send((input.clone(), context.clone())).unwrap();
+            Ok(step(context.planned_at.0, aligned_drive(0.0), false))
+        },
+    )
+    .unwrap();
+    for at in [0, 20, 40] {
+        assert!(worker.poll(Timestamp(at)).fault.is_none());
+    }
+    for source in (0..=400).step_by(20) {
+        let now = source + 60;
+        let record = aligned_input(source);
+        assert_eq!(submit(&worker, &record, now), SubmitStatus::Queued);
+        let (observed, context) = seen_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!(observed.at, Timestamp(source));
+        assert_eq!(observed.pose.captured_at, Timestamp(source));
+        assert_eq!(observed.pose, record.pose);
+        assert_eq!(context.source_at, Timestamp(source));
+        assert_eq!(context.planned_at, Timestamp(now));
+        assert_eq!(context.projected_pose.captured_at, Timestamp(now));
+        if source > 0 {
+            assert!(context.projected_pose.pose.x_m > record.pose.pose.x_m);
+        }
+        // The actual output tick is deliberately not the planning timestamp.
+        let adopted_at = now + 3 + source % 7;
+        let output = wait_report(&mut worker, adopted_at, now);
+        assert_eq!(output.command, aligned_drive(0.0));
+        assert!(output.adoption_rejection.is_none());
+    }
+    // Receipt/planning time 460 must not renew the last source-400 lease.
+    assert_eq!(worker.poll(Timestamp(649)).command, aligned_drive(0.0));
+    assert_eq!(
+        worker.poll(Timestamp(650)).fault,
+        Some(ControlFault::CommandExpired)
+    );
+    assert_eq!(worker.poll(Timestamp(660)).command, MotionOutput::Stop);
+}
+
+#[test]
+fn aligned_admission_window_rejects_a_late_result_without_starting_motion() {
+    use xt_stcar_robot_runner::control_runtime::AdoptionRejection;
+    let (started_tx, started_rx) = channel();
+    let (release_tx, release_rx) = channel();
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        move |_, context| {
+            started_tx.send(()).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            Ok(step(context.planned_at.0, aligned_drive(0.0), false))
+        },
+    )
+    .unwrap();
+    assert_eq!(submit(&worker, &aligned_input(0), 60), SubmitStatus::Queued);
+    started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(worker.poll(Timestamp(161)).command, MotionOutput::Stop);
+    release_tx.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let poll = worker.poll(Timestamp(162));
+        assert_eq!(poll.command, MotionOutput::Stop);
+        assert!(poll.fault.is_none());
+        if poll.adoption_rejection == Some(AdoptionRejection::AfterWindow) {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        thread::yield_now();
+    }
+    assert_eq!(
+        worker.poll(Timestamp(250)).fault,
+        Some(ControlFault::StartupExpired)
+    );
+}
+
+#[test]
+fn an_intervening_adoption_invalidates_a_queued_projection() {
+    use xt_stcar_robot_runner::control_runtime::AdoptionRejection;
+    let (started_tx, started_rx) = channel();
+    let (release_tx, release_rx) = channel();
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        move |input, context| {
+            started_tx.send(input.at.0).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            Ok(step(
+                context.planned_at.0,
+                aligned_drive(if input.at.0 == 0 { 0.2 } else { -0.2 }),
+                false,
+            ))
+        },
+    )
+    .unwrap();
+    submit(&worker, &aligned_input(0), 60);
+    assert_eq!(started_rx.recv_timeout(Duration::from_secs(2)).unwrap(), 0);
+    submit(&worker, &aligned_input(20), 80);
+    release_tx.send(()).unwrap();
+    assert_eq!(started_rx.recv_timeout(Duration::from_secs(2)).unwrap(), 20);
+    // The second input was bound before the first command was actually adopted.
+    assert_eq!(wait_report(&mut worker, 83, 60).command, aligned_drive(0.2));
+    release_tx.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let poll = worker.poll(Timestamp(85));
+        assert_eq!(poll.command, aligned_drive(0.2));
+        assert!(poll.fault.is_none());
+        if poll.adoption_rejection == Some(AdoptionRejection::ExecutionChanged) {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        thread::yield_now();
+    }
+    // Rejection cannot extend the old source-0 command past its original lease.
+    assert_eq!(
+        worker.poll(Timestamp(250)).fault,
+        Some(ControlFault::CommandExpired)
+    );
+}
+
+#[test]
+fn asynchronous_certificate_covers_source_to_deadline_stopping_space() {
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        |_, context| Ok(step(context.planned_at.0, aligned_drive(0.0), false)),
+    )
+    .unwrap();
+    let mut close = (*aligned_input(0)).clone();
+    // The ordinary small body fits, but not the source-to-lease braking envelope.
+    close.pose.pose.x_m = 0.35;
+    submit(&worker, &Arc::new(close), 60);
+    let poll = wait_report(&mut worker, 65, 60);
+    assert_eq!(poll.command, MotionOutput::Stop);
+    assert!(poll.fault.is_none());
+}
+
+#[test]
+fn admission_checks_speed_limits_at_both_ends_of_the_window() {
+    use xt_stcar_robot_runner::control_runtime::AdoptionRejection;
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        |_, context| {
+            Ok(step(
+                context.planned_at.0,
+                MotionOutput::Drive {
+                    speed_mps: 0.24,
+                    curvature_per_m: 0.0,
+                },
+                false,
+            ))
+        },
+    )
+    .unwrap();
+    let mut record = (*aligned_input(0)).clone();
+    record.pose.speed_mps = 0.2;
+    submit(&worker, &Arc::new(record), 0);
+    // At plan time .24 is reachable from .20 in one tick, but the old Stop
+    // reduces the speed to .14 by the end of the 100 ms adoption window.
+    let poll = wait_report(&mut worker, 4, 0);
+    assert_eq!(poll.command, MotionOutput::Stop);
+    assert_eq!(
+        poll.adoption_rejection,
+        Some(AdoptionRejection::CertificateUnsafe)
+    );
+}
+
+#[test]
+fn aligned_runtime_cannot_outlive_shorter_mission_or_navigation_freshness() {
+    for which in 0..3 {
+        let mut config = SimulationConfig::example().autonomy;
+        match which {
+            0 => config.mission.max_pose_age_ms = 100,
+            1 => config.mission.max_road_age_ms = 100,
+            _ => config.navigation.max_input_age_ms = 100,
+        }
+        assert!(
+            AutonomyWorker::spawn(
+                config.clone(),
+                ControlRuntimeConfig {
+                    max_command_age_ms: 150,
+                    startup_timeout_ms: 250
+                },
+                Timestamp(0)
+            )
+            .is_err()
+        );
+        assert!(
+            AutonomyWorker::spawn_with_aligned_processor(
+                config,
+                ControlRuntimeConfig {
+                    max_command_age_ms: 150,
+                    startup_timeout_ms: 250
+                },
+                Timestamp(0),
+                |_, context| Ok(step(context.planned_at.0, MotionOutput::Stop, false))
+            )
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn projected_navigation_does_not_make_old_task_observations_fresh() {
+    use xt_stcar_robot_runner::autonomy::AutonomyController;
+    use xt_stcar_robot_runner::control_runtime::PlanningContext;
+    let simulation = SimulationConfig::example();
+    let mut config = simulation.autonomy.clone();
+    config.mission.max_road_age_ms = 50;
+    let mut controller = AutonomyController::new(config).unwrap();
+    controller.start().unwrap();
+    let mut record = (*input(0)).clone();
+    record.pose.pose = simulation.initial_pose;
+    record.pose.frame_id = simulation.autonomy.mission.world_frame.clone();
+    record.road.observation.frame_id = simulation.autonomy.mission.body_frame.clone();
+    record.scan = synthetic_scan(
+        &simulation,
+        simulation.initial_pose,
+        &simulation.cones,
+        Timestamp(0),
+    );
+    let mut projected = record.pose.clone();
+    projected.captured_at = Timestamp(60);
+    let context = PlanningContext {
+        source_at: Timestamp(0),
+        planned_at: Timestamp(60),
+        projected_pose: projected,
+        steering: SteeringEstimate::stationary(Timestamp(60)),
+        adopted_revision: 0,
+        held_speed_mps: 0.0,
+    };
+    let output = controller.tick_with_projection(
+        record.at,
+        &record.pose,
+        &record.scan,
+        &record.road,
+        &context,
+    );
+    assert_eq!(output.command, MotionOutput::Stop);
+    assert_eq!(output.safety.state, State::Fault);
+    assert!(
+        output.mission.as_ref().is_some_and(
+            |mission| mission.phase == xt_stcar_robot_core::mission::MissionPhase::Fault
+        )
+    );
+}
+
+#[test]
+fn asynchronous_certificate_keeps_the_light_boundary_until_mission_release() {
+    use xt_stcar_robot_core::mission::{MissionOutput, MissionPhase, MissionReport};
+    use xt_stcar_robot_runner::control_runtime::AdoptionRejection;
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        |_, context| {
+            let mut report = step(context.planned_at.0, aligned_drive(0.0), false);
+            report.mission = Some(MissionReport {
+                at: context.planned_at,
+                phase: MissionPhase::ApproachLight,
+                output: MissionOutput::Stop,
+                reason: "test constrained phase".into(),
+                crosswalk_stop_elapsed_ms: 0,
+                green_elapsed_ms: 0,
+                waypoint_index: 2,
+            });
+            Ok(report)
+        },
+    )
+    .unwrap();
+    let mut record = (*aligned_input(0)).clone();
+    record.pose.pose.x_m = 5.7;
+    submit(&worker, &Arc::new(record), 60);
+    let poll = wait_report(&mut worker, 65, 60);
+    assert_eq!(poll.command, MotionOutput::Stop);
+    assert_eq!(
+        poll.adoption_rejection,
+        Some(AdoptionRejection::CertificateUnsafe)
+    );
+}
+
+#[test]
+fn commanded_steering_slew_uses_real_adoption_spacing() {
+    use xt_stcar_robot_runner::control_runtime::AdoptionRejection;
+    let (ready_tx, ready_rx) = channel();
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        move |input, context| {
+            ready_tx.send(()).unwrap();
+            Ok(step(
+                context.planned_at.0,
+                aligned_drive(if input.at.0 == 0 { 0.2 } else { 0.6 }),
+                false,
+            ))
+        },
+    )
+    .unwrap();
+    submit(&worker, &aligned_input(0), 100);
+    ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(
+        wait_report(&mut worker, 190, 100).command,
+        aligned_drive(0.2)
+    );
+    submit(&worker, &aligned_input(100), 200);
+    ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let output = worker.poll(Timestamp(200));
+        assert_eq!(output.command, aligned_drive(0.2));
+        if output.adoption_rejection == Some(AdoptionRejection::CurvatureSlew) {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        thread::yield_now();
+    }
+    // Planning elapsed 100 ms; real command adoption elapsed only 10 ms.
+    // Waiting for the slew allowance cannot renew the original source-0 lease.
+    assert_eq!(
+        worker.poll(Timestamp(250)).fault,
+        Some(ControlFault::CommandExpired)
+    );
+}
+
+#[test]
+fn async_projection_and_certificate_share_navigation_measurement_roundoff() {
+    for (measured, normalized, target) in [(-1e-7, 0.0, 0.02), (0.3 + 1e-7, 0.3, 0.26)] {
+        let (seen_tx, seen_rx) = channel();
+        let command = MotionOutput::Drive {
+            speed_mps: target,
+            curvature_per_m: 0.0,
+        };
+        let expected = command.clone();
+        let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+            SimulationConfig::example().autonomy,
+            ControlRuntimeConfig {
+                max_command_age_ms: 250,
+                startup_timeout_ms: 250,
+            },
+            Timestamp(0),
+            move |input, context| {
+                seen_tx
+                    .send((input.pose.speed_mps, context.projected_pose.speed_mps))
+                    .unwrap();
+                Ok(step(context.planned_at.0, command.clone(), false))
+            },
+        )
+        .unwrap();
+        let mut record = (*aligned_input(0)).clone();
+        record.pose.speed_mps = measured;
+        submit(&worker, &Arc::new(record), 0);
+        let (source_speed, model_speed) = seen_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!(source_speed, measured);
+        assert_eq!(model_speed, normalized);
+        let output = wait_report(&mut worker, 3, 0);
+        assert_eq!(output.command, expected);
+        assert!(output.adoption_rejection.is_none());
+        assert!(output.fault.is_none());
+    }
+}
+
+#[test]
+fn async_projection_still_latches_truly_out_of_range_measurements() {
+    for measured in [-1e-4, 0.3 + 1e-4] {
+        let (seen_tx, seen_rx) = channel();
+        let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+            SimulationConfig::example().autonomy,
+            ControlRuntimeConfig {
+                max_command_age_ms: 250,
+                startup_timeout_ms: 250,
+            },
+            Timestamp(0),
+            move |_, context| {
+                seen_tx.send(()).unwrap();
+                Ok(step(context.planned_at.0, aligned_drive(0.0), false))
+            },
+        )
+        .unwrap();
+        let mut record = (*aligned_input(0)).clone();
+        record.pose.speed_mps = measured;
+        submit(&worker, &Arc::new(record), 0);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let output = worker.poll(Timestamp(1));
+            assert_eq!(output.command, MotionOutput::Stop);
+            if output.fault == Some(ControlFault::InvalidInput) {
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            thread::yield_now();
+        }
+        assert!(seen_rx.try_recv().is_err());
+        assert_eq!(
+            worker.poll(Timestamp(10)).fault,
+            Some(ControlFault::InvalidInput)
+        );
+    }
+}
+
+#[test]
+fn measurement_roundoff_does_not_expand_the_command_speed_limit() {
+    use xt_stcar_robot_runner::control_runtime::AdoptionRejection;
+    let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+        SimulationConfig::example().autonomy,
+        ControlRuntimeConfig {
+            max_command_age_ms: 250,
+            startup_timeout_ms: 250,
+        },
+        Timestamp(0),
+        |_, context| {
+            Ok(step(
+                context.planned_at.0,
+                MotionOutput::Drive {
+                    speed_mps: 0.3 + 1e-7,
+                    curvature_per_m: 0.0,
+                },
+                false,
+            ))
+        },
+    )
+    .unwrap();
+    let mut record = (*aligned_input(0)).clone();
+    record.pose.speed_mps = 0.3;
+    submit(&worker, &Arc::new(record), 0);
+    let output = wait_report(&mut worker, 3, 0);
+    assert_eq!(output.command, MotionOutput::Stop);
+    assert_eq!(
+        output.adoption_rejection,
+        Some(AdoptionRejection::CertificateUnsafe)
+    );
 }

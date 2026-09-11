@@ -704,6 +704,7 @@ impl Mission {
                     .get(self.waypoint_index + 1)
                     .copied();
                 crate::navigation::ArrivalBehavior::PassThrough {
+                    admission_radius_m: self.config.goal_tolerance_m,
                     next: next.unwrap_or(self.config.light_stop_goal),
                     next_heading_rad: next.is_none().then_some(self.config.light_approach_yaw_rad),
                     next_max_speed_mps: if next.is_none() {

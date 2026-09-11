@@ -225,6 +225,37 @@ impl AutonomyController {
         self.tick_planned(at, pose, scan, road)
     }
 
+    /// Navigation uses the explicitly predicted current model state; task admission,
+    /// obstacle projection and Safety retain the original sensor measurements.
+    pub fn tick_with_projection(
+        &mut self,
+        source_at: Timestamp,
+        pose: &PoseEstimate,
+        scan: &LidarSample,
+        road: &RoadFrame,
+        context: &crate::control_runtime::PlanningContext,
+    ) -> AutonomyStep {
+        let at = context.planned_at;
+        if context.source_at != source_at
+            || source_at > at
+            || context.projected_pose.captured_at != at
+            || context.steering.at != at
+            || context.projected_pose.frame_id != pose.frame_id
+        {
+            return self.stop_with_fault(at, "invalid motion projection times or frame".into());
+        }
+        if let Err(error) = self.navigation.set_execution_state(context.steering) {
+            return self.stop_with_fault(at, error.to_string());
+        }
+        if let Some(error) = self.fault.clone() {
+            return self.stop_with_fault(at, error);
+        }
+        match self.checked_tick(at, pose, scan, road, Some(&context.projected_pose)) {
+            Ok(report) => report,
+            Err(error) => self.stop_with_fault(at, error),
+        }
+    }
+
     fn tick_planned(
         &mut self,
         at: Timestamp,
@@ -235,7 +266,7 @@ impl AutonomyController {
         if let Some(error) = self.fault.clone() {
             return self.stop_with_fault(at, error);
         }
-        match self.checked_tick(at, pose, scan, road) {
+        match self.checked_tick(at, pose, scan, road, None) {
             Ok(report) => report,
             Err(error) => self.stop_with_fault(at, error),
         }
@@ -247,6 +278,7 @@ impl AutonomyController {
         pose: &PoseEstimate,
         scan: &LidarSample,
         road_frame: &RoadFrame,
+        projection: Option<&PoseEstimate>,
     ) -> Result<AutonomyStep> {
         if road_frame.image_width_px == 0
             || road_frame.image_height_px == 0
@@ -327,6 +359,7 @@ impl AutonomyController {
             radius_m: self.config.cone_radius_m,
         }));
         let mission = self.mission.update(at, pose, road);
+        let navigation_pose = projection.unwrap_or(pose);
         if mission.phase == MissionPhase::Fault {
             let mut stopped = self.stop_with_fault(at, mission.reason.clone());
             stopped.mission = Some(mission);
@@ -355,7 +388,7 @@ impl AutonomyController {
                     .navigation
                     .plan_with_arrival(
                         at,
-                        pose,
+                        navigation_pose,
                         &obstacles,
                         scan.captured_at.min(road.captured_at),
                         *point,

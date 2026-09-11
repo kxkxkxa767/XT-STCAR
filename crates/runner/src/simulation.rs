@@ -1,6 +1,9 @@
 //! Synthetic camera + laser + Ackermann plant feedback. No recorded motion intents.
 //! Ideal pose feedback is declared explicitly; it is not encoder or localization evidence.
 use crate::autonomy::{AutonomyConfig, AutonomyController, Result, RoadFrame};
+use crate::phase_statistics::{
+    CompetitionStatistics, CompetitionStatisticsCollector, FinalBrakingCause,
+};
 use crate::telemetry::{RunJournal, TelemetryConfig, TelemetryMode};
 use image::{Rgb, RgbImage};
 use serde::{Deserialize, Serialize};
@@ -458,12 +461,14 @@ pub struct SimulationSummary {
     pub logging_errors: usize,
     pub fault: Option<String>,
     pub first_navigation_failure: Option<crate::navigation_diagnostics::NavigationFailureWindow>,
+    pub statistics: CompetitionStatistics,
 }
 
 pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<SimulationSummary> {
     config.validate()?;
     let mut journal = RunJournal::new(config.telemetry.clone())?;
     let mut navigation_failure = crate::navigation_diagnostics::FirstNavigationFailure::default();
+    let mut statistics = CompetitionStatisticsCollector::default();
     let mut logging_errors = 0;
     let detector = RoadDetector::new(config.road.clone())?;
     let mut controller = AutonomyController::new(config.autonomy.clone())?;
@@ -569,6 +574,7 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             }
         };
         ticks += 1;
+        statistics.observe_step(&step);
         let mut phase_changed = false;
         navigation_failure.observe(crate::navigation_diagnostics::NavigationFrame::from_step(
             at, pose, speed, &step,
@@ -619,6 +625,7 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         curvature = plant.state.curvature_per_m;
         elapsed = ms + config.time_step_ms;
         distance += plant.distance_m;
+        statistics.advance_control_interval(config.time_step_ms, plant.distance_m);
         if plant_violation {
             summary_fault = Some("synthetic plant collision or boundary violation".into());
             break;
@@ -630,6 +637,11 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     // Fault output is a stop request. Continue the synthetic plant until it has
     // actually decelerated, checking the swept poses instead of equating command and stop.
     let mut braking_ticks = 0;
+    let braking_cause = if completed {
+        FinalBrakingCause::Completion
+    } else {
+        FinalBrakingCause::FaultOrScenarioEnd
+    };
     while speed.abs() > 1e-9 && braking_ticks < 5000 {
         braking_ticks += 1;
         elapsed += config.time_step_ms;
@@ -662,6 +674,12 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         speed = plant.state.speed_mps;
         curvature = plant.state.curvature_per_m;
         distance += plant.distance_m;
+        statistics.advance_final_braking(
+            Timestamp(elapsed - config.time_step_ms),
+            braking_cause,
+            config.time_step_ms,
+            plant.distance_m,
+        );
         if plant_violation {
             completed = false;
             summary_fault = Some("synthetic braking collision or boundary violation".into());
@@ -708,6 +726,7 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         braking_ticks,
         fault: summary_fault,
         first_navigation_failure: navigation_failure.finish(),
+        statistics: statistics.finish(),
         dropped_trace_records: journal.dropped_records(),
         logging_errors,
     };

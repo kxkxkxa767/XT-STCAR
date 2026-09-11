@@ -47,6 +47,7 @@ fn competition_closes_the_loop_from_rgb_and_range_feedback_without_motion_events
     assert!(summary.completed, "{summary:#?}");
     assert!(summary.fault.is_none());
     assert_eq!(summary.final_actual_speed_mps, 0.0);
+    assert_statistics_account_for_run(&summary);
     assert!(summary.minimum_cone_clearance_m > 0.0);
     assert!(summary.crosswalk_hold_ms >= 3000);
     assert!(summary.green_observed_ms >= config.autonomy.mission.min_green_ms);
@@ -101,6 +102,12 @@ fn stale_camera_pose_or_scan_stops_and_the_plant_actually_brakes() {
         assert!(summary.braking_ticks > 0, "{summary:?}");
         assert_eq!(summary.final_actual_speed_mps, 0.0);
         assert!(summary.minimum_cone_clearance_m > 0.0);
+        assert_statistics_account_for_run(&summary);
+        assert_eq!(
+            summary.statistics.final_braking.cause,
+            Some(xt_stcar_robot_runner::phase_statistics::FinalBrakingCause::FaultOrScenarioEnd)
+        );
+        assert!(summary.statistics.final_braking.distance_m > 0.0);
     }
 }
 
@@ -250,6 +257,43 @@ fn exhausted_debug_log_budget_does_not_change_the_control_or_braking_result() {
         serde_json::to_value(&trace.first_navigation_failure).unwrap(),
         serde_json::to_value(&quiet.first_navigation_failure).unwrap()
     );
+    assert_eq!(trace.statistics, quiet.statistics);
+}
+
+fn assert_statistics_account_for_run(
+    summary: &xt_stcar_robot_runner::simulation::SimulationSummary,
+) {
+    let stats = &summary.statistics;
+    assert_eq!(
+        stats
+            .phases
+            .iter()
+            .map(|phase| phase.duration_ms)
+            .sum::<u64>()
+            + stats.final_braking.duration_ms,
+        summary.elapsed_ms
+    );
+    assert!(
+        (stats
+            .phases
+            .iter()
+            .map(|phase| phase.distance_m)
+            .sum::<f64>()
+            + stats.final_braking.distance_m
+            - summary.distance_m)
+            .abs()
+            < 1e-10
+    );
+    assert_eq!(
+        stats
+            .phases
+            .iter()
+            .map(|phase| phase.control_ticks)
+            .sum::<u64>(),
+        summary.ticks as u64
+    );
+    assert_eq!(stats.final_braking.ticks, summary.braking_ticks as u64);
+    assert_eq!(stats.omitted_distance_samples, 0);
 }
 
 #[test]

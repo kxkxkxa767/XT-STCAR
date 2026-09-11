@@ -7,15 +7,22 @@
 //! Drop requests stop and detaches: a hung processor can retain its active snapshot
 //! until process exit. Repeatedly spawning replacements for a hung runtime is unsafe.
 //! Steering estimates follow only the final command returned by `poll`. A submitted
-//! snapshot binds the adopted history known at submission, extrapolated to its source
-//! time; subsequent adoption at that same time cannot retroactively change the copy.
-//! This is a bounded model estimate, not measured feedback or compensation for all
-//! asynchronous delay. The output lease is checked again before every adoption.
+//! snapshot binds a fixed-capacity history of commands actually adopted by poll.
+//! The real controller projects the source pose to submission time, preserving the
+//! original measurements for task admission, obstacle projection and Safety. A
+//! static-world stopping certificate permits adoption within one control period,
+//! provided the assumed held command has not changed. Missing history, computation
+//! beyond that window, and changed assumptions never authorize a delayed Drive.
+//! These remain model estimates: output polling must meet the configured control
+//! period, and physical feedback, moving obstacles and model errors need separate
+//! commissioning. The original sensor lease is checked before every adoption.
 use crate::autonomy::{AutonomyConfig, AutonomyController, AutonomyStep, Result};
 use crate::autonomy_replay::SensorSnapshot;
+pub use crate::control_execution::PlanningContext;
+use crate::control_execution::{AdoptionCertificate, AtomicExecution, ExecutionHistory, certify};
 use serde::{Deserialize, Serialize};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -78,6 +85,8 @@ impl ControlFault {
 pub struct PlannedCommand {
     pub source_at: Timestamp,
     pub oldest_sensor_at: Timestamp,
+    /// Model planning time, distinct from the immutable source capture time.
+    pub planned_at: Timestamp,
     pub step: Arc<AutonomyStep>,
 }
 
@@ -86,6 +95,7 @@ pub struct ControlPoll {
     pub at: Timestamp,
     pub command: MotionOutput,
     pub fault: Option<ControlFault>,
+    pub adoption_rejection: Option<AdoptionRejection>,
     /// Diagnostic only: a latched watchdog may override this report's Drive.
     pub latest: Option<Arc<AutonomyStep>>,
 }
@@ -146,13 +156,15 @@ impl ControlWatchdog {
                 MotionOutput::Stop
             },
             fault: self.fault,
+            adoption_rejection: None,
             latest: self.accepted.as_ref().map(|value| Arc::clone(&value.step)),
         }
     }
 
     fn accept(&mut self, now: Timestamp, latest: PlannedCommand) {
         if latest.source_at < self.epoch
-            || latest.source_at > now
+            || latest.source_at > latest.planned_at
+            || latest.planned_at > now
             || latest.oldest_sensor_at > latest.source_at
         {
             self.latch(ControlFault::InvalidResult);
@@ -163,7 +175,8 @@ impl ControlWatchdog {
                 || latest.oldest_sensor_at < old.oldest_sensor_at
                 || (latest.source_at == old.source_at
                     && (!Arc::ptr_eq(&latest.step, &old.step)
-                        || latest.oldest_sensor_at != old.oldest_sensor_at))
+                        || latest.oldest_sensor_at != old.oldest_sensor_at
+                        || latest.planned_at != old.planned_at))
             {
                 self.latch(ControlFault::InvalidResult);
                 return;
@@ -176,7 +189,7 @@ impl ControlWatchdog {
             self.latch(ControlFault::CommandExpired);
             return;
         }
-        if let Some(fault) = result_fault(&latest.step, latest.source_at) {
+        if let Some(fault) = result_fault(&latest.step, latest.planned_at) {
             self.latch(fault);
             return;
         }
@@ -190,9 +203,10 @@ pub enum SubmitStatus {
     Replaced,
     Duplicate,
     Busy,
-    /// The latest adopted state is newer than this snapshot. Wait for a newer
-    /// source snapshot rather than projecting future execution into its past.
+    /// Reserved for compatibility; source lookup now uses bounded history.
     ExecutionAhead,
+    /// Required source time has fallen out of the fixed adopted-command history.
+    HistoryUnavailable,
     Stopped,
 }
 
@@ -202,53 +216,28 @@ struct SteeringLimits {
     max_curvature: f64,
 }
 
-/// A single poll owner publishes a coherent, fixed-size estimate. All operations
-/// are sequentially consistent, so matching even versions enclose one complete
-/// write. Readers make one bounded attempt and can retry submission if busy.
-struct AtomicExecution {
-    version: AtomicU64,
-    at: AtomicU64,
-    commanded: AtomicU64,
-    applied: AtomicU64,
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AdoptionRejection {
+    BeforeWindow,
+    AfterWindow,
+    ExecutionChanged,
+    CurvatureSlew,
+    CertificateUnsafe,
 }
 
-impl AtomicExecution {
-    fn new(state: SteeringEstimate) -> Self {
-        Self {
-            version: AtomicU64::new(0),
-            at: AtomicU64::new(state.at.0),
-            commanded: AtomicU64::new(state.commanded_curvature_per_m.to_bits()),
-            applied: AtomicU64::new(state.applied_curvature_per_m.to_bits()),
-        }
-    }
-
-    fn publish(&self, state: SteeringEstimate) {
-        self.version.fetch_add(1, Ordering::SeqCst);
-        self.at.store(state.at.0, Ordering::SeqCst);
-        self.commanded
-            .store(state.commanded_curvature_per_m.to_bits(), Ordering::SeqCst);
-        self.applied
-            .store(state.applied_curvature_per_m.to_bits(), Ordering::SeqCst);
-        self.version.fetch_add(1, Ordering::SeqCst);
-    }
-
-    fn read(&self) -> Option<SteeringEstimate> {
-        let version = self.version.load(Ordering::SeqCst);
-        if !version.is_multiple_of(2) {
-            return None;
-        }
-        let state = SteeringEstimate {
-            at: Timestamp(self.at.load(Ordering::SeqCst)),
-            commanded_curvature_per_m: f64::from_bits(self.commanded.load(Ordering::SeqCst)),
-            applied_curvature_per_m: f64::from_bits(self.applied.load(Ordering::SeqCst)),
-        };
-        (self.version.load(Ordering::SeqCst) == version).then_some(state)
-    }
+#[derive(Clone)]
+struct WorkerPlan {
+    command: PlannedCommand,
+    certificate: Option<AdoptionCertificate>,
+    admission_rejected: bool,
 }
 
 struct PendingInput {
     snapshot: Arc<SensorSnapshot>,
     execution: Option<SteeringEstimate>,
+    history: Option<ExecutionHistory>,
+    planned_at: Timestamp,
 }
 
 #[derive(Default)]
@@ -256,7 +245,8 @@ struct Slots {
     pending: Option<PendingInput>,
     // This aliases active/pending storage, never a third independently owned snapshot.
     previous: Option<Arc<SensorSnapshot>>,
-    latest: Option<PlannedCommand>,
+    latest: Option<WorkerPlan>,
+    last_plan_at: Option<Timestamp>,
     last_submit_now: Option<Timestamp>,
 }
 
@@ -285,6 +275,7 @@ pub struct AutonomySubmitter {
     epoch: Timestamp,
     max_command_age_ms: u64,
     steering_limits: Option<SteeringLimits>,
+    aligned: bool,
 }
 
 impl AutonomySubmitter {
@@ -327,8 +318,11 @@ impl AutonomySubmitter {
             }
         }
         slots.last_submit_now = Some(now);
-        let execution = if let Some(limits) = self.steering_limits {
-            let Some(mut state) = self
+        if self.aligned && slots.last_plan_at.is_some_and(|at| now <= at) {
+            return Ok(SubmitStatus::Busy);
+        }
+        let history = if self.steering_limits.is_some() {
+            let Some(history) = self
                 .shared
                 .execution
                 .as_ref()
@@ -336,22 +330,38 @@ impl AutonomySubmitter {
             else {
                 return Ok(SubmitStatus::Busy);
             };
-            if state.at > input.at {
-                return Ok(SubmitStatus::ExecutionAhead);
+            if history.latest.steering.at > now {
+                return Ok(SubmitStatus::Busy);
             }
-            if state.advance_to(input.at, limits.rate).is_err() {
-                self.shared.fail(ControlFault::InvalidInput);
-                let _ = self.wake.try_send(());
-                return Err("control steering estimate cannot reach snapshot time".into());
-            }
+            Some(history)
+        } else {
+            None
+        };
+        let execution = if let Some(limits) = self.steering_limits {
+            let Some(state) = history.as_ref().and_then(|history| {
+                history.steering_at(
+                    if self.aligned {
+                        input.pose.captured_at
+                    } else {
+                        input.at
+                    },
+                    limits.rate,
+                )
+            }) else {
+                return Ok(SubmitStatus::HistoryUnavailable);
+            };
             Some(state)
         } else {
             None
         };
+        let planned_at = if self.aligned { now } else { input.at };
+        slots.last_plan_at = Some(planned_at);
         let previous = slots.previous.replace(Arc::clone(&input));
         let retired = slots.pending.replace(PendingInput {
             snapshot: input,
             execution,
+            history,
+            planned_at,
         });
         let status = if retired.is_some() {
             SubmitStatus::Replaced
@@ -379,6 +389,30 @@ impl AutonomyWorker {
         runtime: ControlRuntimeConfig,
         epoch: Timestamp,
     ) -> Result<Self> {
+        let mut controller = AutonomyController::new(config.clone())?;
+        controller.start()?;
+        Self::spawn_with_aligned_processor(config, runtime, epoch, move |input, context| {
+            Ok(controller.tick_with_projection(
+                input.at,
+                &input.pose,
+                &input.scan,
+                &input.road,
+                context,
+            ))
+        })
+    }
+
+    /// Trusted offline processor with a projected model state and a conservative
+    /// static-world admission certificate. Inputs retain their capture timestamps.
+    pub fn spawn_with_aligned_processor<F>(
+        config: AutonomyConfig,
+        runtime: ControlRuntimeConfig,
+        epoch: Timestamp,
+        mut processor: F,
+    ) -> Result<Self>
+    where
+        F: FnMut(&SensorSnapshot, &PlanningContext) -> Result<AutonomyStep> + Send + 'static,
+    {
         let controller_deadline = [
             config.max_tick_gap_ms,
             config.max_sensor_age_ms,
@@ -386,30 +420,31 @@ impl AutonomyWorker {
             config.safety.sensor_timeout_ms,
             config.safety.heartbeat_timeout_ms,
             config.safety.deadman_timeout_ms,
+            config.mission.max_pose_age_ms,
+            config.mission.max_road_age_ms,
+            config.navigation.max_input_age_ms,
         ]
         .into_iter()
         .min()
-        .expect("controller has fixed deadline fields");
+        .unwrap();
         if runtime.max_command_age_ms > controller_deadline {
             return Err("output watchdog lease cannot exceed controller safety deadlines".into());
         }
-        let rate = config.navigation.max_curvature_rate_per_s;
-        let max_curvature = config.navigation.max_curvature_per_m;
-        let mut controller = AutonomyController::new(config)?;
-        controller.start()?;
-        Self::spawn_with_execution_processor(
+        AutonomyController::new(config.clone())?;
+        let limits = SteeringLimits {
+            rate: config.navigation.max_curvature_rate_per_s,
+            max_curvature: config.navigation.max_curvature_per_m,
+        };
+        Self::spawn_inner(
             runtime,
             epoch,
-            rate,
-            max_curvature,
-            move |input, steering| {
-                Ok(controller.tick_with_execution_state(
-                    input.at,
-                    &input.pose,
-                    &input.scan,
-                    &input.road,
-                    steering,
-                ))
+            Some(limits),
+            Some(config),
+            move |input, _, context| {
+                processor(
+                    input,
+                    context.expect("aligned processor projects its source state"),
+                )
             },
         )
     }
@@ -425,12 +460,16 @@ impl AutonomyWorker {
     where
         F: FnMut(&SensorSnapshot) -> Result<AutonomyStep> + Send + 'static,
     {
-        Self::spawn_inner(runtime, epoch, None, move |input, _| processor(input))
+        Self::spawn_inner(runtime, epoch, None, None, move |input, _, _| {
+            processor(input)
+        })
     }
 
     /// Trusted processor hook with explicit model limits. Estimates include only
     /// poll-adopted commands known at submission; planning does not acknowledge
-    /// its own result. Values are constrained to the navigation model's bounds.
+    /// its own result. This trusted hook only recovers source-time steering; it
+    /// does not project poses or certify adoption delay. Use `spawn` or
+    /// `spawn_with_aligned_processor` for the complete aligned controller path.
     pub fn spawn_with_execution_processor<F>(
         runtime: ControlRuntimeConfig,
         epoch: Timestamp,
@@ -452,22 +491,33 @@ impl AutonomyWorker {
             rate: max_curvature_rate_per_s,
             max_curvature: max_curvature_per_m,
         };
-        Self::spawn_inner(runtime, epoch, Some(limits), move |input, steering| {
-            processor(
-                input,
-                steering.expect("execution processor binds steering at submission"),
-            )
-        })
+        Self::spawn_inner(
+            runtime,
+            epoch,
+            Some(limits),
+            None,
+            move |input, steering, _| {
+                processor(
+                    input,
+                    steering.expect("execution processor binds steering at submission"),
+                )
+            },
+        )
     }
 
     fn spawn_inner<F>(
         runtime: ControlRuntimeConfig,
         epoch: Timestamp,
         steering_limits: Option<SteeringLimits>,
+        alignment: Option<AutonomyConfig>,
         mut processor: F,
     ) -> Result<Self>
     where
-        F: FnMut(&SensorSnapshot, Option<SteeringEstimate>) -> Result<AutonomyStep>
+        F: FnMut(
+                &SensorSnapshot,
+                Option<SteeringEstimate>,
+                Option<&PlanningContext>,
+            ) -> Result<AutonomyStep>
             + Send
             + 'static,
     {
@@ -480,6 +530,7 @@ impl AutonomyWorker {
             fault: AtomicU8::new(0),
         });
         let worker_shared = Arc::clone(&shared);
+        let aligned = alignment.is_some();
         let (wake, receiver) = sync_channel(1);
         let thread = thread::Builder::new()
             .name("autonomy-planner".into())
@@ -496,8 +547,19 @@ impl AutonomyWorker {
                         }
                     };
                     let Some(input) = input else { continue };
-                    let step = match catch_unwind(AssertUnwindSafe(|| {
-                        processor(&input.snapshot, input.execution)
+                    let context = if let Some(config) = &alignment {
+                        let Some(context) = input.history.as_ref().and_then(|history| {
+                            history.project(&input.snapshot, input.planned_at, config)
+                        }) else {
+                            worker_shared.fail(ControlFault::InvalidInput);
+                            break;
+                        };
+                        Some(context)
+                    } else {
+                        None
+                    };
+                    let mut step = match catch_unwind(AssertUnwindSafe(|| {
+                        processor(&input.snapshot, input.execution, context.as_ref())
                     })) {
                         Ok(Ok(step)) => step,
                         Ok(Err(_)) => {
@@ -512,12 +574,42 @@ impl AutonomyWorker {
                     if worker_shared.stopped.load(Ordering::Acquire) {
                         break;
                     }
-                    let latest = PlannedCommand {
+                    let original_fault = result_fault(&step, input.planned_at);
+                    let drive = matches!(step.command, MotionOutput::Drive { .. });
+                    let certificate = alignment
+                        .as_ref()
+                        .zip(context.as_ref())
+                        .filter(|_| drive)
+                        .and_then(|(config, context)| {
+                            certify(
+                                config,
+                                &input.snapshot,
+                                context,
+                                &step,
+                                oldest(&input.snapshot),
+                                runtime.max_command_age_ms,
+                            )
+                        });
+                    let admission_rejected = aligned && drive && certificate.is_none();
+                    if admission_rejected {
+                        // A valid plan may be too close to an obstacle for the wider
+                        // asynchronous lease. Stop does not claim the rejected Drive ran.
+                        step.command = MotionOutput::Stop;
+                        step.safety.output.command = MotionOutput::Stop;
+                    }
+                    let command = PlannedCommand {
                         source_at: input.snapshot.at,
                         oldest_sensor_at: oldest(&input.snapshot),
+                        planned_at: input.planned_at,
                         step: Arc::new(step),
                     };
-                    let fault = result_fault(&latest.step, input.snapshot.at);
+                    let fault =
+                        original_fault.or_else(|| result_fault(&command.step, input.planned_at));
+                    let latest = WorkerPlan {
+                        command,
+                        certificate,
+                        admission_rejected,
+                    };
                     let retired = match worker_shared.slots.lock() {
                         Ok(mut slots) => {
                             let old = slots.latest.replace(latest);
@@ -552,6 +644,7 @@ impl AutonomyWorker {
                 epoch,
                 max_command_age_ms: runtime.max_command_age_ms,
                 steering_limits,
+                aligned,
             },
             watchdog,
             thread: Some(thread),
@@ -576,7 +669,7 @@ impl AutonomyWorker {
     /// No waiting, navigation, model calls, disk access or large report cloning.
     /// A busy mailbox retains the previous command only within its original lease.
     pub fn poll(&mut self, now: Timestamp) -> ControlPoll {
-        let latest = match self.submitter.shared.slots.try_lock() {
+        let mut latest = match self.submitter.shared.slots.try_lock() {
             Ok(slots) => slots.latest.clone(),
             Err(std::sync::TryLockError::WouldBlock) => None,
             Err(_) => {
@@ -589,7 +682,66 @@ impl AutonomyWorker {
         {
             self.watchdog.latch(fault);
         }
-        let mut result = self.watchdog.poll(now, latest);
+        let mut rejection = latest.as_ref().and_then(|plan| {
+            plan.admission_rejected
+                .then_some(AdoptionRejection::CertificateUnsafe)
+        });
+        if let Some(plan) = &latest
+            && let Some(certificate) = plan.certificate
+            && self
+                .watchdog
+                .accepted
+                .as_ref()
+                .is_none_or(|old| !Arc::ptr_eq(&old.step, &plan.command.step))
+        {
+            rejection = if now < certificate.from {
+                Some(AdoptionRejection::BeforeWindow)
+            } else if now > certificate.through {
+                Some(AdoptionRejection::AfterWindow)
+            } else if self
+                .submitter
+                .shared
+                .execution
+                .as_ref()
+                .is_some_and(|execution| execution.revision() != certificate.revision)
+            {
+                Some(AdoptionRejection::ExecutionChanged)
+            } else if certificate.revision > 0
+                && self
+                    .submitter
+                    .shared
+                    .execution
+                    .as_ref()
+                    .is_some_and(|execution| {
+                        let previous = execution.last_change();
+                        let MotionOutput::Drive {
+                            curvature_per_m, ..
+                        } = plan.command.step.command
+                        else {
+                            return false;
+                        };
+                        let elapsed_s =
+                            now.0.saturating_sub(previous.steering.at.0) as f64 / 1000.0;
+                        (curvature_per_m - previous.steering.commanded_curvature_per_m).abs()
+                            > self
+                                .submitter
+                                .steering_limits
+                                .expect("certificate has steering limits")
+                                .rate
+                                * elapsed_s
+                                + 1e-9
+                    })
+            {
+                Some(AdoptionRejection::CurvatureSlew)
+            } else {
+                None
+            };
+            if rejection.is_some() {
+                latest = None;
+            }
+        }
+        let mut result = self.watchdog.poll(now, latest.map(|plan| plan.command));
+        result.adoption_rejection = rejection;
         self.acknowledge(&mut result);
         if let Some(fault) = result.fault {
             self.submitter.shared.fail(fault);
@@ -635,7 +787,7 @@ impl AutonomyWorker {
             .execution
             .as_ref()
             .expect("execution model has a fixed-size publication slot")
-            .publish(next);
+            .publish(next, &result.command);
     }
 
     pub fn request_stop(&self) {

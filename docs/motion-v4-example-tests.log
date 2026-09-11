@@ -1,0 +1,9 @@
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running unittests examples/tracking_comparison.rs (target/debug/examples/tracking_comparison-ec52a03402e8a6e8)
+
+running 2 tests
+test tests::delay_and_rate_are_distinct_and_zero_delay_applies_in_current_tick ... ok
+test tests::local_progress_does_not_jump_to_a_spatially_close_later_branch ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

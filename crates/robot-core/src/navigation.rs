@@ -7,7 +7,7 @@
 //! Forward-car circle/tangent geometry: LaValle, Planning Algorithms §15.3.1:
 //! <https://lavalle.pl/planning/node821.html>
 use crate::autonomy::{Footprint, HalfPlane, ObstacleDisc, Point2, Pose2, PoseEstimate, Rect};
-use crate::motion_transition::{MotionTransition, lateral_acceleration_peak};
+use crate::motion_transition::{MotionTransition, lateral_acceleration_peak, project_motion};
 use crate::reference::{PreparedReference, ReferenceCursor};
 use crate::tracking::{PathTracker, TrackInput, TrackingConfig, TrackingDiagnostics};
 use crate::{FrameId, MotionIntent, MotionOutput, Timestamp, ValidationError};
@@ -161,6 +161,7 @@ pub struct CandidateDiagnostics {
     pub footprint: usize,
     pub sample_budget: usize,
     pub reference: usize,
+    pub terminal_unreachable: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize)]
@@ -172,6 +173,8 @@ pub struct NavigationDiagnostics {
     pub speed_upper_mps: Option<f64>,
     pub goal_speed_cap_mps: Option<f64>,
     pub allowed_waypoint_speed_mps: Option<f64>,
+    pub waypoint_admission_radius_m: Option<f64>,
+    pub waypoint_admission_distance_m: Option<f64>,
     pub remaining_distance_m: Option<f64>,
     pub checked_continuation_distance_m: Option<f64>,
     pub route_revision: u64,
@@ -187,7 +190,46 @@ pub struct NavigationDiagnostics {
     pub selected_heading_error_rad: Option<f64>,
     pub selected_progress_m: Option<f64>,
     pub selected_reference_cost_m: Option<f64>,
+    pub current_stopping_margin: Option<StoppingMargin>,
+    pub selected_stopping_margin: Option<StoppingMargin>,
+    pub selected_next_stopping_margin: Option<StoppingMargin>,
+    /// States checked against at most two terminal families (eight iterations
+    /// each). At most one current-state check plus one per surviving rollout.
+    pub terminal_connections_checked: usize,
+    /// A single-arc arrival is unavailable but a short two-part arrival exists.
+    pub terminal_continuity_enforced: bool,
     pub candidates: CandidateDiagnostics,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StoppingConstraint {
+    MinX,
+    MaxX,
+    MinY,
+    MaxY,
+    TravelBoundary,
+    /// Index in this call's world obstacle list, not a persistent sensor ID.
+    Obstacle {
+        index: usize,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct StoppingMargin {
+    pub clearance_m: f64,
+    pub constraint: StoppingConstraint,
+}
+
+impl StoppingMargin {
+    #[cfg(test)]
+    fn clear(self) -> bool {
+        self.clearance_m.is_finite()
+            && match self.constraint {
+                StoppingConstraint::Obstacle { .. } => self.clearance_m > 0.0,
+                _ => self.clearance_m >= 0.0,
+            }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -298,6 +340,9 @@ pub enum ArrivalBehavior {
         next: Point2,
         next_heading_rad: Option<f64>,
         next_max_speed_mps: f64,
+        /// The task owner's position radius for accepting this waypoint.
+        /// This is independent of the navigator's stopping-goal tolerance.
+        admission_radius_m: f64,
     },
 }
 
@@ -490,7 +535,7 @@ impl Navigator {
     ) -> Result<NavigationDecision, ValidationError> {
         if self.last_step.is_some_and(|old| now < old)
             || now < self.steering.at
-            || matches!(arrival, ArrivalBehavior::PassThrough { next, next_heading_rad, next_max_speed_mps } if !next.valid() || next == goal || next_heading_rad.is_some_and(|v| !v.is_finite()) || !next_max_speed_mps.is_finite() || next_max_speed_mps <= 0.0)
+            || matches!(arrival, ArrivalBehavior::PassThrough { next, next_heading_rad, next_max_speed_mps, admission_radius_m } if !next.valid() || next == goal || next_heading_rad.is_some_and(|v| !v.is_finite()) || !next_max_speed_mps.is_finite() || next_max_speed_mps <= 0.0 || !admission_radius_m.is_finite() || admission_radius_m <= 0.0)
             || now < estimate.captured_at
             || now < obstacles_at
             || !estimate.pose.valid()
@@ -547,6 +592,13 @@ impl Navigator {
             return self.plan_stop(now);
         }
         let pose = estimate.pose;
+        self.diagnostics.current_stopping_margin = Some(stopping_margin(
+            &self.config,
+            pose,
+            estimate.speed_mps.max(0.0),
+            obstacles,
+            self.travel_boundary,
+        ));
         if !pose_clear(&self.config, pose, obstacles, self.config.clearance_m)
             || self.travel_boundary.is_some_and(|boundary| {
                 !boundary.contains_footprint(self.config.footprint, pose, self.config.clearance_m)
@@ -569,6 +621,14 @@ impl Navigator {
             return Ok(self.blocked("stop_boundary_not_reachable"));
         }
         let distance = pose.point().distance(goal);
+        if let ArrivalBehavior::PassThrough {
+            admission_radius_m, ..
+        } = arrival
+        {
+            self.diagnostics.waypoint_admission_radius_m = Some(admission_radius_m);
+            self.diagnostics.waypoint_admission_distance_m =
+                Some((distance - admission_radius_m).max(0.0));
+        }
         let heading_reached = goal_heading_rad.is_none_or(|yaw| {
             angle_error(pose.yaw_rad, yaw).abs() <= self.config.goal_heading_tolerance_rad
         });
@@ -595,8 +655,9 @@ impl Navigator {
             return Ok(self.blocked("no_grid_path"));
         }
         // A collision-free cached terminal path may no longer be reachable
-        // after tracking drift. Replan while there is still turning room,
-        // using the same positional admission tolerance as the stop target.
+        // after tracking drift. Heading error displaces the body even when
+        // its center remains on the reference. Replan against the same metric
+        // and positional tolerance while there is still room to correct it.
         if goal_heading_rad.is_some()
             && let Some((_, _, route, progress)) = &self.route
             && let Some(window) = PreparedReference::new(
@@ -605,7 +666,15 @@ impl Navigator {
                 self.config.max_speed_mps * self.config.preview_horizon_s + self.config.lookahead_m,
             )
             && let Some(projection) = window.project(pose.point())
-            && projection.distance_m > self.config.goal_tolerance_m * 0.5
+            && footprint_pose_error(
+                self.config.footprint,
+                pose,
+                Pose2 {
+                    x_m: projection.point.x_m,
+                    y_m: projection.point.y_m,
+                    yaw_rad: projection.heading_rad,
+                },
+            ) > self.config.goal_tolerance_m * 0.5
         {
             self.route = None;
         }
@@ -753,11 +822,13 @@ impl Navigator {
         // while the normal deceleration lower bound is still above .18.
         let (goal_speed, waypoint_speed) = if self.continuation_checked
             && let ArrivalBehavior::PassThrough {
-                next_max_speed_mps, ..
+                next_max_speed_mps,
+                admission_radius_m,
+                ..
             } = arrival
         {
             let terminal = next_max_speed_mps.min(self.config.max_speed_mps);
-            let available = (distance - self.config.goal_tolerance_m).max(0.0);
+            let available = (distance - admission_radius_m).max(0.0);
             let cap = ((terminal.powi(2)
                 + 2.0 * self.config.max_decel_mps2 * available
                 + (self.config.max_decel_mps2 * period).powi(2))
@@ -775,6 +846,41 @@ impl Navigator {
         self.diagnostics.remaining_distance_m = Some(remaining_distance);
         self.diagnostics.checked_continuation_distance_m = Some(continuation_distance);
         self.diagnostics.continuation_checked = self.continuation_checked;
+        // Protect an already feasible short, oriented arrival. A held-curvature
+        // preview cannot represent both turns of an S, so its average score
+        // alone may trade away the ability to finish on the next control tick.
+        // A certified single-arc arrival retains the existing controller.
+        // Certification depends on each solver's distance/iteration budget;
+        // failure does not imply that two turns are geometrically necessary.
+        // Neither bounded solver reruns the lattice per candidate.
+        let protected_heading = goal_heading_rad.filter(|heading| {
+            if arrival != ArrivalBehavior::Stop
+                || pose.world_to_body(goal).x_m <= 0.0
+                || !(1e-6..=(2.0 * self.config.lookahead_m).min(2.0)).contains(&distance)
+            {
+                return false;
+            }
+            self.diagnostics.terminal_connections_checked += 1;
+            car_terminal_connection(
+                pose,
+                self.steering.applied_curvature_per_m,
+                goal,
+                Some(*heading),
+                &self.config,
+                &grid,
+            )
+            .is_none()
+                && car_two_arc_connection(
+                    pose,
+                    self.steering.applied_curvature_per_m,
+                    goal,
+                    *heading,
+                    &self.config,
+                    &grid,
+                )
+                .is_some()
+        });
+        self.diagnostics.terminal_continuity_enforced = protected_heading.is_some();
         let mut best: Option<(f64, MotionIntent)> = None;
         for index in 0..=self.config.curvature_samples {
             let curvature = if index == self.config.curvature_samples {
@@ -815,10 +921,7 @@ impl Navigator {
                         goal_heading_rad,
                     }),
                 ) {
-                    Ok(prediction) => {
-                        self.diagnostics.candidates.accepted += 1;
-                        prediction
-                    }
+                    Ok(prediction) => prediction,
                     Err(reason) => {
                         let count = match reason {
                             RolloutRejection::StopReachable => {
@@ -853,6 +956,44 @@ impl Navigator {
                         reference.heading_rad
                     };
                 let heading_error = angle_error(prediction.endpoint.yaw_rad, reference_heading);
+                let transition = MotionTransition {
+                    initial_speed_mps: estimate.speed_mps.max(0.0),
+                    target_speed_mps: speed,
+                    initial_curvature_per_m: self.steering.applied_curvature_per_m,
+                    target_curvature_per_m: curvature,
+                    max_accel_mps2: self.config.max_accel_mps2,
+                    max_decel_mps2: self.config.max_decel_mps2,
+                    max_curvature_rate_per_s: self.config.max_curvature_rate_per_s,
+                };
+                let mut next_projection = None;
+                if let Some(heading) = protected_heading {
+                    next_projection = project_motion(pose, transition, period);
+                    let Some(next) = next_projection else {
+                        self.diagnostics.candidates.terminal_unreachable += 1;
+                        continue;
+                    };
+                    let inside_goal = next.pose.point().distance(goal)
+                        <= self.config.goal_tolerance_m
+                        && angle_error(next.pose.yaw_rad, heading).abs()
+                            <= self.config.goal_heading_tolerance_rad;
+                    if !inside_goal {
+                        self.diagnostics.terminal_connections_checked += 1;
+                        if short_terminal_connection(
+                            next.pose,
+                            next.curvature_per_m,
+                            goal,
+                            heading,
+                            &self.config,
+                            &grid,
+                        )
+                        .is_none()
+                        {
+                            self.diagnostics.candidates.terminal_unreachable += 1;
+                            continue;
+                        }
+                    }
+                }
+                self.diagnostics.candidates.accepted += 1;
                 let score = if let Some(cost) = prediction.reference_cost_m {
                     // Oriented goals need the whole approach, not just a final
                     // point: constant-curvature previews can hide intermediate
@@ -876,13 +1017,41 @@ impl Navigator {
                             * (curvature - self.steering.commanded_curvature_per_m).abs()
                         - 0.3 * speed
                 };
-                if best.as_ref().is_none_or(|(old, _)| score < *old) {
+                if best
+                    .as_ref()
+                    .is_none_or(|(old_score, _)| score < *old_score)
+                {
+                    // Diagnostic only: predict a complete command period even
+                    // when the geometry preview stops at a nearby goal. Ranking
+                    // by this margin alone stranded the synthetic PP vehicle
+                    // before a blocked grid corner; preserve the original score
+                    // until future geometric feasibility is also accounted for.
+                    // The emergency hard gate stays unchanged.
+                    let next_margin = next_projection
+                        .or_else(|| project_motion(pose, transition, period))
+                        .map(|next| {
+                            stopping_margin(
+                                &self.config,
+                                next.pose,
+                                next.speed_mps,
+                                obstacles,
+                                self.diagnostics.travel_boundary,
+                            )
+                        });
                     self.diagnostics.selected_prediction_distance_m = Some(prediction.distance_m);
                     self.diagnostics.selected_prediction_endpoint = Some(prediction.endpoint);
                     self.diagnostics.selected_cross_track_m = Some(reference.distance_m);
                     self.diagnostics.selected_heading_error_rad = Some(heading_error);
                     self.diagnostics.selected_progress_m = Some(progress_m);
                     self.diagnostics.selected_reference_cost_m = prediction.reference_cost_m;
+                    self.diagnostics.selected_stopping_margin = Some(stopping_margin(
+                        &self.config,
+                        pose,
+                        estimate.speed_mps.max(speed),
+                        obstacles,
+                        self.diagnostics.travel_boundary,
+                    ));
+                    self.diagnostics.selected_next_stopping_margin = next_margin;
                     best = Some((
                         score,
                         MotionIntent {
@@ -1226,6 +1395,26 @@ fn car_key(
     Some((cell, heading, steering))
 }
 
+/// The existing two bounded terminal families; no additional lattice search.
+fn short_terminal_connection(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+) -> Option<(Vec<Point2>, Pose2, f64)> {
+    car_terminal_connection(
+        start,
+        initial_curvature,
+        goal,
+        Some(goal_heading),
+        config,
+        grid,
+    )
+    .or_else(|| car_two_arc_connection(start, initial_curvature, goal, goal_heading, config, grid))
+}
+
 /// A short two-part approach with three bounded variables: the two target
 /// curvatures and total length. Equal-length parts avoid another search axis.
 /// Both parts use the existing steering ramp and inflated grid transitions.
@@ -1483,6 +1672,15 @@ fn body_radius(footprint: Footprint) -> f64 {
         .front_m
         .max(footprint.rear_m)
         .hypot(footprint.half_width_m)
+}
+
+fn footprint_pose_error(footprint: Footprint, actual: Pose2, reference: Pose2) -> f64 {
+    footprint
+        .corners(actual)
+        .into_iter()
+        .zip(footprint.corners(reference))
+        .map(|(actual, reference)| actual.distance(reference))
+        .fold(0.0, f64::max)
 }
 
 fn angle_error(a: f64, b: f64) -> f64 {
@@ -1795,6 +1993,82 @@ mod velocity_rollout_tests {
     }
 
     #[test]
+    fn future_stopping_diagnostic_exposes_acceleration_that_loses_room() {
+        let (mut config, pose) = scene();
+        config.grid_resolution_m = 0.05;
+        config.bounds.max_x_m = 10.0;
+        config.bounds.max_y_m = 10.0;
+        let obstacles = [ObstacleDisc {
+            center: Point2 { x_m: 5.2, y_m: 5.4 },
+            radius_m: 0.015,
+        }];
+        let at = Timestamp(0);
+        let estimate = PoseEstimate {
+            captured_at: at,
+            frame_id: config.frame_id.clone(),
+            pose,
+            speed_mps: 0.28,
+            yaw_rate_radps: 0.0,
+            quality: 1.0,
+        };
+        let mut nav = Navigator::new(config.clone()).unwrap();
+        let decision = nav
+            .step(at, &estimate, &obstacles, at, Point2 { x_m: 7.0, y_m: 5.0 })
+            .unwrap();
+        assert_eq!(decision.status, NavigationStatus::Driving, "{decision:?}");
+        assert!(
+            decision
+                .diagnostics
+                .selected_stopping_margin
+                .unwrap()
+                .clear()
+        );
+        assert!(decision.diagnostics.selected_next_stopping_margin.is_some());
+        // The faster command passes the current complete disk, but has no
+        // stopping room one full interval later. Do not fix it by shrinking
+        // the current disk to the lower target speed.
+        assert!(stopping_margin(&config, pose, 0.3, &obstacles, None).clear());
+        let faster = project_motion(
+            pose,
+            MotionTransition {
+                initial_speed_mps: 0.28,
+                target_speed_mps: 0.3,
+                initial_curvature_per_m: 0.0,
+                target_curvature_per_m: 0.0,
+                max_accel_mps2: 0.4,
+                max_decel_mps2: 0.6,
+                max_curvature_rate_per_s: 4.0,
+            },
+            0.1,
+        )
+        .unwrap();
+        assert!(!stopping_margin(&config, faster.pose, faster.speed_mps, &obstacles, None).clear());
+    }
+
+    #[test]
+    fn stopping_margin_reports_obstacle_contact_and_directional_boundaries() {
+        let (config, pose) = scene();
+        let radius = body_radius(config.footprint) + config.clearance_m + 0.135;
+        let obstacle = ObstacleDisc {
+            center: Point2 {
+                x_m: pose.x_m + radius + 0.015,
+                y_m: pose.y_m,
+            },
+            radius_m: 0.015,
+        };
+        let margin = disc_margin(&config, pose, radius, &[obstacle], None);
+        assert_eq!(margin.constraint, StoppingConstraint::Obstacle { index: 0 });
+        assert_eq!(
+            margin.clear(),
+            stop_reachable_clear(&config, pose, 0.135, &[obstacle])
+        );
+        let edge = Pose2 { x_m: 0.2, ..pose };
+        let margin = disc_margin(&config, edge, radius, &[], None);
+        assert_eq!(margin.constraint, StoppingConstraint::MinX);
+        assert!(!margin.clear());
+    }
+
+    #[test]
     fn full_reference_cost_exposes_mid_route_error_despite_a_matching_endpoint() {
         let (config, pose) = scene();
         let grid = Grid::new(&config, &[]);
@@ -1945,6 +2219,81 @@ fn stop_reachable_clear(
         && obstacles
             .iter()
             .all(|obstacle| pose.point().distance(obstacle.center) > radius + obstacle.radius_m)
+}
+
+fn stopping_margin(
+    config: &NavigationConfig,
+    pose: Pose2,
+    speed: f64,
+    obstacles: &[ObstacleDisc],
+    boundary: Option<HalfPlane>,
+) -> StoppingMargin {
+    let period = config.control_period_ms as f64 / 1000.0;
+    let braking_distance = speed * period + speed.powi(2) / (2.0 * config.max_decel_mps2);
+    disc_margin(
+        config,
+        pose,
+        body_radius(config.footprint) + config.clearance_m + (braking_distance + speed * period),
+        obstacles,
+        boundary,
+    )
+}
+
+/// Same full stopping disk as the hard gate, retaining the numerical margin
+/// and the constraining object. Boundary contact is allowed; obstacle contact
+/// is rejected, as before. A zero-margin obstacle wins a tie with a boundary.
+fn disc_margin(
+    config: &NavigationConfig,
+    pose: Pose2,
+    radius: f64,
+    obstacles: &[ObstacleDisc],
+    boundary: Option<HalfPlane>,
+) -> StoppingMargin {
+    let mut result = StoppingMargin {
+        clearance_m: pose.x_m - radius - config.bounds.min_x_m,
+        constraint: StoppingConstraint::MinX,
+    };
+    for (clearance_m, constraint) in [
+        (
+            config.bounds.max_x_m - (pose.x_m + radius),
+            StoppingConstraint::MaxX,
+        ),
+        (
+            pose.y_m - radius - config.bounds.min_y_m,
+            StoppingConstraint::MinY,
+        ),
+        (
+            config.bounds.max_y_m - (pose.y_m + radius),
+            StoppingConstraint::MaxY,
+        ),
+    ] {
+        if clearance_m < result.clearance_m {
+            result = StoppingMargin {
+                clearance_m,
+                constraint,
+            };
+        }
+    }
+    if let Some(boundary) = boundary {
+        let clearance_m =
+            boundary.max_projection_m() - (boundary.projection(pose.point()) + radius);
+        if clearance_m < result.clearance_m {
+            result = StoppingMargin {
+                clearance_m,
+                constraint: StoppingConstraint::TravelBoundary,
+            };
+        }
+    }
+    for (index, obstacle) in obstacles.iter().enumerate() {
+        let clearance_m = pose.point().distance(obstacle.center) - (radius + obstacle.radius_m);
+        if clearance_m <= result.clearance_m {
+            result = StoppingMargin {
+                clearance_m,
+                constraint: StoppingConstraint::Obstacle { index },
+            };
+        }
+    }
+    result
 }
 
 fn pose_clear(

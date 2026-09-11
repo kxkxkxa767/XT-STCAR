@@ -196,18 +196,20 @@ XT-STCAR/
 | [`crates/robot-core/src/scan.rs`](crates/robot-core/src/scan.rs) | N10 整圈组帧、覆盖/盲区/时间检查；不同于旧局部包回放 |
 | [`crates/robot-core/src/localization.rs`](crates/robot-core/src/localization.rs) | 有界 ICP 激光里程计；退化/跳变/过期门控，不假造编码器 |
 | [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 路径搜索、跟踪、障碍/制动和停车朝向；`SteeringEstimate` 区分已采用曲率目标与渐变执行估计，规划与 adopt 分离，通过点保留首段验收 |
-| [`crates/robot-core/src/motion_transition.rs`](crates/robot-core/src/motion_transition.rs) | `MotionTransition` 及速度/曲率渐变过程中 `v²|曲率|` 的解析峰值检查，固定计算量、无堆分配；不是实测侧向加速度 |
+| [`crates/robot-core/src/motion_transition.rs`](crates/robot-core/src/motion_transition.rs) | `MotionTransition` 解析检查过渡侧向峰值，`project_motion` 按渐变模型投影位置/速度/转向；计算有界、无堆分配，不是测量反馈 |
 | [`crates/robot-core/src/reference.rs`](crates/robot-core/src/reference.rs) | 每拍验证一次的局部参考窗口；投影、弧长游标、整段评分参考及候选偏差诊断，无额外路径分配 |
 | [`crates/robot-core/src/tracking.rs`](crates/robot-core/src/tracking.rs) | PathTracker 接口、默认 Pure Pursuit、实验性曲率前馈 + LQR；只给导航期望曲率 |
 | [`crates/robot-core/examples/tracking_comparison.rs`](crates/robot-core/examples/tracking_comparison.rs) | 直线/弯道的 Rust 跟踪 A/B 实验，输出误差与合成转向响应指标 |
 | [`crates/runner/src/laser_pose.rs`](crates/runner/src/laser_pose.rs) | 整圈检查、雷达到车体外参与 ICP 桥接，保留源时刻 |
 | [`crates/runner/src/perception.rs`](crates/runner/src/perception.rs) | 同图 RGB + 常驻原生 YOLO + RoadDetector；后台感知只留最新待处理帧 |
-| [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 传感器 → 任务 → 导航 → Safety；同步 tick 采用最终命令，异步 tick_with_execution_state 接收输出线程的状态而不采用计划 |
-| [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立 poll 和源时间看门狗；仅最终 ControlPoll.command 推进执行估计，用固定大小状态回送后续规划 |
+| [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 传感器 → 任务 → 导航 → Safety；同步 tick 采用最终命令；异步 tick_with_projection 分开使用源测量和模型规划状态，不采用后台计划 |
+| [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立 poll 和源时间看门狗；仅最终 ControlPoll.command 推进执行历史；检查采用窗口、历史前提和原源期限 |
+| [`crates/runner/src/control_execution.rs`](crates/runner/src/control_execution.rs) | 固定容量已采用命令历史、源时刻查询、位姿/速度/转向分段预测、异步采用的保守停车与运动约束证书 |
 | [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿合成闭环；车辆速度/曲率连续渐变，以不超过 1 ms 的子步积分并检查车体碰撞/边界，含故障后制动 |
 | [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
 | [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
 | [`crates/runner/src/navigation_diagnostics.rs`](crates/runner/src/navigation_diagnostics.rs) | 模拟首个非预期阻塞/故障的最多 17 帧内存上下文，结束随摘要输出 |
+| [`crates/runner/src/phase_statistics.rs`](crates/runner/src/phase_statistics.rs) | 各阶段实际时长/距离、Stop 次数/命令时长、路径生成与拒绝原因的有界内存统计；最终制动单列 |
 | [`crates/runner/src/telemetry.rs`](crates/runner/src/telemetry.rs) | 有界内存事件日志；调试预算耗尽不影响比赛控制 |
 
 原有诊断流为：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
@@ -220,7 +222,8 @@ XT-STCAR/
 已对照[用户分享的算法建议](https://chatgpt.com/share/6aa0bf59-c8f8-83ee-b001-13dd5945ce14)审查代码。
 继续核对[修改后的意见](https://chatgpt.com/share/6aa27143-7204-83ee-ad9a-7067ef49a1bc)，
 前轮说明见[导航预测与失败首因修正](docs/导航预测与失败首因修正.md)，
-本轮执行状态、过渡峰值、通过点和模拟积分修正见[运动执行与通过点修正](docs/运动执行与通过点修正.md)。
+前轮执行状态、过渡峰值、通过点和模拟积分修正见[运动执行与通过点修正](docs/运动执行与通过点修正.md)。
+本轮真实任务验收半径、完整车体参考偏离、阶段统计与异步时间对齐见[任务交接与异步运动修正](docs/任务交接与异步运动修正.md)。
 当前采用前进车辆运动学：比赛任务给目标/限速 → A* 连通与带航向/曲率的车模型路线 → PathTracker →
 候选轨迹预测、碰撞和制动检查 → 安全状态机。默认 **Pure Pursuit** 保留，新增 **曲率前馈 + LQR** 供离线比较。
 不是单个 PID 直接把图像误差变成舵机 PWM，也没有实现 MPC 求解器。
@@ -245,15 +248,21 @@ cargo run --release --locked --offline -p xt-stcar-robot-core --example tracking
 cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_comparison
 ```
 
-本轮最终复验中 **PP 55.6 秒、LQR 83.9 秒均完成，终态速度均为零**；最小锥桶间隙分别约 0.3033 m、0.2735 m，
-两者斑马线停稳均为 3000 ms、绿灯确认均为 300 ms，详见[完整比赛对比](docs/motion-v3-competition-comparison.json)。
-首次可恢复阻塞分别在 18.6 秒、22.5 秒，均保留 17 帧窗口；中途 PP 回归失败另存[修正前证据](docs/motion-v3-before.json)。
-前轮 PP 55.9 秒、LQR 53.3 秒完成属于 `motion-v2-*` 历史结果，
-不能当作本轮连续积分模型的验收。LQR仍为实验项，默认PP不变。
+本轮最终合成比赛 **PP 58.8 秒、LQR 70.6 秒均完成，终态速度均为零**；最小锥桶间隙分别约 0.2425 m、0.2735 m，
+两者斑马线停稳均为 3000 ms、绿灯确认均为 300 ms，详见[完整比赛对比](docs/motion-v4-competition-comparison.json)。
+相对 `aac7421`，PP 慢 3.2 秒、多走约 0.38 m；LQR 快 13.3 秒、少走约 2.35 m，并非所有指标都改善。
+变化主要在驶向信号灯阶段：PP 27.8 秒/4.77 m，LQR 42.4 秒/7.57 m。
+PP 两次短 Stop 保留；LQR 原交接空速度区间已消除，另有一次终端可达检查触发的可恢复 Stop。
+前轮 PP 55.6 秒/LQR 83.9 秒属于 `motion-v3-*`；v2和更早结果也保留历史，不能当当前版本验收。
+本轮中间回归和撤销的排序实验见[修正过程](docs/motion-v4-before.json)及新说明，默认 PP、LQR 实验不变。
 有朝向目标沿预测整段弧长累计车体位姿误差：比较预测姿态与参考姿态对应的四个车身角在世界坐标中的距离，取最大值，
 统一使用米，避免提前回正却留下横向偏差。这改变了位置与朝向在共用评分中的相对影响；
 保持不变的是 LQR 的 q/R 参数和比赛门限，不能称为所有控制权重都没变。
-缓存路径即使无碰撞也可能已无法从当前姿态到达末端，因此带朝向目标的局部横向偏离超过目标容差一半时提前重新规划。
+缓存路径即使无碰撞也可能已无法从当前姿态到达末端；带朝向目标现在按对应车体四角的最大偏移检查，
+同时纳入位置和航向，超过原目标容差一半时提前重新规划。
+对于必须停车的定向目标，若已有有界单弧求解器未找到连接而双弧找到连接，候选额外验证完整下一周期后
+仍能接上现有短连接族或严格进入目标范围，防止恒曲率预览逐拍耗尽 S 形末端可达性。
+已被现有单弧求解器认证的接近保留原控制；该约束不代替任务停稳，不对每个候选重跑全局搜索，也不证明所有初态可达。
 普通中间点保留追踪点评分，临近目标时减弱固定曲率偏好。实现、尺度与边界见新修正说明。
 保持单个候选曲率目标的预览不能代表所有未来转向策略；单场完成不证明一般收敛性或所有场景都可达。
 原有跟踪层16组和前轮“PP 55.3秒完成/LQR 27.9秒超时”保留为历史；两类基准周期不同，
@@ -266,7 +275,8 @@ cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion
 比赛目标显式区分必须停车的 `Stop` 与锥桶中间点的 `PassThrough`。通过点仍按当前首段独立跟踪、
 按原目标位置验收并推进任务顺序；只有从首段实际末端位置/朝向/曲率出发、经过碰撞检查的续段才能提供制动余量。
 续段不会进入当前点的前视和进度搜索，不能通过长前视跳过必经点；续段不可行时回到停车策略。
-`PassThrough` 同时传递下一阶段的 `next_max_speed_mps`，在进入下一阶段验收半径前提前按减速能力限速，
+`PassThrough` 同时传递下一阶段的 `next_max_speed_mps` 和任务真实的 `admission_radius_m`；
+原配置任务验收 0.065 m 与导航停车容差 0.045 m 分别使用，在进入真实验收圈前提前按减速能力限速，
 避免任务切换一拍内突然把速度上限从巡航值降到接近值。
 它限制候选目标，不保证进入半径瞬间的测量速度必定低于下一阶段上限；外部超速或测量偏差仍可能触发原有空速度区间 Stop。
 
@@ -276,13 +286,22 @@ cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion
 在 Safety 检查后采用最终结果。异步 `tick_with_execution_state` 只规划，后台丢弃的结果不能改变执行历史。
 
 使用 `AutonomyWorker` 时，输出线程须持续调用 `poll` 并使用 **`ControlPoll.command`**；`latest.command` 仅供诊断。
-poll 先检查原 lease 和锁存故障，再采用最终命令并发布固定大小估计。提交方绑定当时已知历史并推进到快照源时刻；
-源时刻早于最新执行状态时返回 `ExecutionAhead`，等待新源快照，不把未来状态回填过去。该返回不续租，旧命令仍会正常超时停车。
-同源重复不重算/不续租，晚到 Drive 不能恢复 Fault。同一源时刻先提交、后 poll 的新采用命令不会追溯写入已排队副本；
-这套契约没有消除全部异步延迟，持续滞后的实车输入仍需共同时间轴和有界历史关联。
+poll 先检查原 lease 和锁存故障。固定容量历史只记录最终采用的命令变化，同一命令持续保持不消耗新槽位。
+提交方按历史恢复源时刻转向，再将源位姿/速度/转向分段推算到规划时刻；原测量及其 captured_at 保持不变，
+仍用于任务验收、新鲜度、Safety 和障碍世界投影。源早于最新 poll 不再自动拒收，超出保留历史则明确返回状态。
+后台生成有界采用窗和命令序号证书，覆盖原期限内运动及停车空间、窗口内正常速度与转向/侧向约束；
+poll 无需重跑规划。过晚或前提改变的计划不采用，同源重复不续租，晚到 Drive 不解除 Fault。
+圆盘证书可能保守拒绝狭窄空间；它和模型投影都不代替真实反馈、共同单调时钟或动态障碍处理。
 
 模拟车辆现在按不超过 1 ms 子步及速度/曲率到达目标的分界点积分；航向保留速度与曲率同时变化的交叉项，
 每个子步检查实际模拟足迹、锥桶和禁越线，Fault 后制动采用同一逻辑。它提高离线模型一致性，仍不证明采样间绝对无碰撞或实车响应一致。
+
+`NavigationDecision.diagnostics` 还记录当前、选中候选和下一完整周期的停车余量及限制来源。
+提前优先选择下一拍停车余量的实验引入了绕桶网格角阻塞，因此最终只保留预测诊断，沿用原候选评分；
+原有紧急停车包络、网格角和碰撞门限保持。实验失败和独立复算见[停车余量实验](docs/motion-v4-stopping-experiment.json)。
+`SimulationSummary.statistics` 由 Rust 在内存累计每阶段时长、实际路程、非预期 Stop tick/连续次数/命令时长，
+以及路径生成次数/长度和拒绝原因；结束后制动单列，每阶段仅保留最近 16 次路线事件和总数。
+路径生成包括首次和目标变化，不能一律当作重规划；Stop 命令时长也不是物理静止时长。
 
 `NavigationDecision.diagnostics` 记录路径版本/进度、跟踪误差、曲率请求与实际候选、拒绝原因计数。
 模拟摘要的 `first_navigation_failure` 最多保存异常前 8 帧、触发帧、后 8 帧；先前正常任务停车不触发，
@@ -389,12 +408,13 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-本轮 Rust 常规测试 **266 通过、0 失败**，1 项原生 ORT opt-in 测试按默认忽略；跟踪 example 2 项、Python 交付 34 项通过。
-fmt、all-targets clippy `-D warnings` 和两个 RISC-V 交叉链接通过，见[验证汇总](docs/motion-v3-validation.json)与[构建报告](docs/motion-v3-build.json)。
-本地包的生成/核验状态、路径和哈希以 `docs/motion-v3-delivery.json` 为准；不把交叉链接通过等同于包已核验。
+本轮 Rust 常规测试 **294 通过、0 失败**，1 项原生 ORT opt-in 测试按默认忽略；跟踪 example 2 项、Python 交付 34 项通过。
+fmt、all-targets clippy `-D warnings` 和两个 RISC-V 交叉链接通过，见[验证汇总](docs/motion-v4-validation.json)与[构建报告](docs/motion-v4-build.json)。
+本地包的生成/核验状态、路径和哈希以 `docs/motion-v4-delivery.json` 为准；不把交叉链接通过等同于包已核验。
 [前轮 v2 验证](docs/motion-v2-validation.json)的237项Rust常规测试、2项跟踪example测试、34项交付测试与二进制证据保留为历史。
 更早的[运动控制验证](docs/motion-control-validation.json)也保留，不作为当前二进制证据。
-模型/原生推理模块未改，本轮不重复运行其验证；前轮1项原生ORT、48项模型测试记录见 [历史比赛验证](docs/competition-validation.json)。
+模型/原生推理模块未改，本轮未重跑模型测试套件和原生 ORT 推理；打包仍校验模型格式及来源哈希。
+前轮 1 项原生 ORT、48 项模型测试记录见 [历史比赛验证](docs/competition-validation.json)。
 构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的架构/ABI/加载器/GLIBC。
 ELF 检查核对动态加载表与 section 映射及版本需求，不验证所有机器指令或代替目标机运行。
 交付包不含工具链、虚拟环境、Mac dylib 或缓存；带模型包另带 provenance 与模型许可。

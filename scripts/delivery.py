@@ -43,6 +43,9 @@ BASE_FILES = {
     "docs/motion-v2-before.json", "docs/motion-v2-competition-comparison.json",
     "docs/运动执行与通过点修正.md", "docs/motion-v3-validation.json",
     "docs/motion-v3-before.json", "docs/motion-v3-competition-comparison.json",
+    "docs/任务交接与异步运动修正.md", "docs/motion-v4-validation.json",
+    "docs/motion-v4-before.json", "docs/motion-v4-competition-comparison.json",
+    "docs/motion-v4-stopping-experiment.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

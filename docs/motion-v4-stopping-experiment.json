@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "scope": "Local synthetic intermediate experiment during motion-v4 implementation; not final acceptance or physical vehicle evidence",
+  "physical_output_enabled": false,
+  "experiment": {
+    "behavior_difference": "Among candidates passing all existing hard gates, experimentally prefer those whose modeled stopping disk remains clear one control period later; comparison uses original trajectory score ordering.",
+    "current_emergency_gate": "Unchanged: full body radius + clearance + two control periods + braking distance at max(measured speed, candidate target speed). Lower targets do not shrink this gate.",
+    "enabled_in_final_policy": false,
+    "retained": "Current, selected-command and next-period stopping-margin diagnostics only; original score ordering retained."
+  },
+  "intermediate_outcomes": {
+    "future_margin_preference_pp": {
+      "completed": false,
+      "elapsed_ms": 29400,
+      "distance_m": 4.013190812430508,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "final_actual_speed_mps": 0.0
+    },
+    "original_ordering": [
+      {
+        "tracking": "pure_pursuit",
+        "completed": false,
+        "elapsed_ms": 78900,
+        "distance_m": 13.609853142863184,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_actual_speed_mps": 0.0
+      },
+      {
+        "tracking": "lqr",
+        "completed": true,
+        "elapsed_ms": 82000,
+        "distance_m": 15.490277165346575,
+        "fault": null,
+        "final_actual_speed_mps": 0.0
+      }
+    ],
+    "interpretation": "The preference caused an earlier PP cone-stage deadlock. Original ordering still had a separate intermediate PP light-approach failure; these runs are not claimed as final passes."
+  },
+  "first_preference_failure": {
+    "at_ms": 19000,
+    "phase": "cones",
+    "pose": {
+      "x_m": 4.3492121498755925,
+      "y_m": 3.414729644386943,
+      "yaw_rad": -0.24993177314500548
+    },
+    "measured_speed_mps": 0.18000000000000002,
+    "navigation_reason": "no_collision_free_braking_trajectory",
+    "candidate_counts": {
+      "rollouts_evaluated": 44,
+      "accepted": 0,
+      "grid": 44,
+      "stop_reachable": 0,
+      "lateral_acceleration": 0
+    },
+    "current_stopping_margin_m": 0.05987386506560195,
+    "grid_rejection": "All 44 candidate rollouts first fail the diagonal-neighbor rule on cell (43,34) -> (44,33); the intervening orthogonal cell (43,33) is occupied. Both sampled endpoint cells are free.",
+    "constraining_neighbor": {
+      "cell": [
+        43,
+        33
+      ],
+      "center_m": [
+        4.35,
+        3.35
+      ],
+      "occupancy_margin_m": -0.011335003337912042,
+      "source": "synthetic laser ray 85 (zero based), second cone",
+      "laser_return_m": [
+        4.279008844055241,
+        2.9869616258905345
+      ]
+    },
+    "current_cell": {
+      "cell": [
+        43,
+        34
+      ],
+      "occupancy_margin_m": 0.0870369071834945
+    },
+    "continuation": "From 19100 ms no_forward_kinematic_path; stopped at 19300 ms; ordinary-stop timeout at 29400 ms."
+  },
+  "independent_reconstruction": {
+    "method": "Reconstruct all 360 synthetic laser returns and logged visual cone coordinates, original grid inflation, speed/curvature ramps, integration and diagonal-neighbor checks; Python arithmetic only, not a second full controller run.",
+    "at_18900_with_18900_grid": {
+      "clear": 15,
+      "corner_only_rejections": 29
+    },
+    "at_19000_with_19000_grid": {
+      "clear": 0,
+      "corner_only_rejections": 44
+    },
+    "at_19000_with_18900_grid": {
+      "clear": 0,
+      "corner_only_rejections": 44
+    },
+    "at_19000_with_18700_grid": {
+      "clear": 0,
+      "corner_only_rejections": 44
+    },
+    "excluded_explanations": [
+      "A newly occupied cell caused only by the latest scan",
+      "The current measured pose already being inside an occupied grid cell",
+      "Lateral acceleration or current emergency stopping-disk rejection"
+    ],
+    "cached_route_context": {
+      "generation_at_ms": 14400,
+      "revision": 3,
+      "nearest_segment_lateral_error_at_19000_m": 0.02368899057845295,
+      "nearest_segment_heading_error_at_19000_rad": -0.18270154801744465,
+      "interpretation": "Actual tracking moved inside the cached bend before the grid corner. Constant-target previews then all encounter the conservative corner rule. This does not prove that every possible future steering policy is infeasible, or that physical collision occurred."
+    }
+  },
+  "evidence": {
+    "local_trace": "work/motion-v4-combined-probe-pure_pursuit-trace.jsonl",
+    "local_trace_sha256": "0301a1b9f32f47428099bdaeca12912a7ce5c7afe07735eaf61fdd545aa92a57",
+    "local_reconstruction": "work/motion-v4-grid-probe.py",
+    "local_reconstruction_result": "work/motion-v4-grid-probe.json",
+    "local_ordering_comparison": "work/motion-v4-no-preference-comparison.json",
+    "full_trace_published": false
+  }
+}

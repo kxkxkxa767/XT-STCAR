@@ -42,13 +42,22 @@ impl NavigationFrame {
     }
 
     fn unexpected_stop(&self) -> bool {
-        self.fault.is_some()
-            || (self.navigation_status == Some(NavigationStatus::Blocked)
-                && !matches!(
-                    self.navigation_reason.as_deref(),
-                    Some("task_stop" | "goal_braking")
-                ))
+        is_unexpected_stop(
+            self.navigation_status,
+            self.navigation_reason.as_deref(),
+            self.fault.is_some(),
+        )
     }
+}
+
+pub(crate) fn is_unexpected_stop(
+    status: Option<NavigationStatus>,
+    reason: Option<&str>,
+    fault: bool,
+) -> bool {
+    fault
+        || (status == Some(NavigationStatus::Blocked)
+            && !matches!(reason, Some("task_stop" | "goal_braking")))
 }
 
 fn bounded(text: &Option<String>) -> Option<String> {
