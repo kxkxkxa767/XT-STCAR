@@ -1,0 +1,406 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "scope": "Mac native tests; synchronous synthetic RGB/laser/ideal-pose competition; targeted asynchronous default-worker/model tests; static RISC-V cross-link. No vehicle, target execution or videos.",
+  "baseline_commit": "f83898a050649e03f25ad51b9c18c0bb12c743b2",
+  "rust_workspace": {
+    "passed": 305,
+    "failed": 0,
+    "ignored": 2,
+    "ignored_cases": [
+      "native ONNX Runtime opt-in",
+      "certificate host timing opt-in (separately executed below)"
+    ]
+  },
+  "tracking_example_tests_passed": 2,
+  "python_delivery_tests_passed": 34,
+  "explicit_release_certificate_benchmark_passed": 1,
+  "release_default_worker_repeat": "1 existing async test re-executed, not an additional distinct test",
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "physical_output_enabled": false,
+  "vehicle_execution_verified": false,
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "experimental; Q/R, competition tolerances and timing limits unchanged",
+  "model_native_runtime_tests": "Unchanged model/native modules: model suite and ORT execution not rerun. Optional model packaging checks structure and provenance.",
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "f286246369cd068271ba6bd4c987b12a40aecade7c458ebda9c62f965c2f8b9f",
+      "size_bytes": 1975968,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "source_hashes_verified": 82,
+  "before_report": "motion-v5-before.json",
+  "original_input_window_sha256": "e843a5f02e7db86224cef57b3fb9e1f58b94cd9f9f996591587f1e7a4c8f5e04",
+  "build_report": "motion-v5-build.json",
+  "build_log": "motion-v5-build.log",
+  "example_test_log": "motion-v5-example-tests.log",
+  "delivery_test_log": "motion-v5-delivery-tests.log",
+  "competition_comparison": {
+    "report": "motion-v5-competition-comparison.json",
+    "runs": [
+      {
+        "completed": true,
+        "elapsed_ms": 58800,
+        "distance_m": 11.508841029059477,
+        "minimum_cone_clearance_m": 0.24250886066502375,
+        "final_actual_speed_mps": 0.0,
+        "fault": null,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "tracking": {
+          "kind": "pure_pursuit"
+        },
+        "unexpected_stop_ticks": 2,
+        "unexpected_stop_episodes": 2,
+        "route_generations": 15,
+        "phase_accounting_verified": true,
+        "terminal_budget_exhausted_ticks": 0,
+        "maximum_terminal_work_per_tick": {
+          "solver_attempts": 47,
+          "iterations": 305,
+          "solver_iteration_exhaustions": 33,
+          "primitive_samples": 28064,
+          "terminal_connections_checked": 45
+        },
+        "approach_light": {
+          "candidate_totals": {
+            "accepted": 11547,
+            "curvature_speed_limits": 0,
+            "footprint": 0,
+            "grid": 70,
+            "lateral_acceleration": 0,
+            "near_zero_speed": 0,
+            "reference": 0,
+            "rollouts_evaluated": 12144,
+            "sample_budget": 0,
+            "stop_reachable": 0,
+            "terminal_budget": 0,
+            "terminal_unreachable": 527
+          },
+          "control_ticks": 278,
+          "distance_m": 4.772230783032535,
+          "duration_ms": 27800,
+          "fault_ticks": 0,
+          "first_at": 25400,
+          "last_control_at": 53100,
+          "navigation_reason_ticks": [
+            {
+              "reason": "goal_braking",
+              "ticks": 2
+            }
+          ],
+          "phase": "approach_light",
+          "routes": {
+            "generations": 9,
+            "generations_without_observed_length": 0,
+            "maximum_observed_current_leg_length_m": 4.440017030397978,
+            "minimum_observed_current_leg_length_m": 0.446471294290854,
+            "observed_current_leg_length_sum_m": 24.328241361695582,
+            "observed_length_count": 9,
+            "omitted_generation_events": 0,
+            "recent_generations": [
+              {
+                "at": 25400,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 4.440017030397978,
+                "generations_since_previous_observation": 1,
+                "revision": 6
+              },
+              {
+                "at": 32000,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 3.570399625373922,
+                "generations_since_previous_observation": 1,
+                "revision": 7
+              },
+              {
+                "at": 37300,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 2.6762615043665248,
+                "generations_since_previous_observation": 1,
+                "revision": 8
+              },
+              {
+                "at": 40900,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 2.1003066552658516,
+                "generations_since_previous_observation": 1,
+                "revision": 9
+              },
+              {
+                "at": 42400,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 1.7524605560679256,
+                "generations_since_previous_observation": 1,
+                "revision": 10
+              },
+              {
+                "at": 45600,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 1.1775812318758614,
+                "generations_since_previous_observation": 1,
+                "revision": 11
+              },
+              {
+                "at": 46800,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 4.233181973899719,
+                "generations_since_previous_observation": 1,
+                "revision": 12
+              },
+              {
+                "at": 48300,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 3.931561490156946,
+                "generations_since_previous_observation": 1,
+                "revision": 13
+              },
+              {
+                "at": 50600,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 0.446471294290854,
+                "generations_since_previous_observation": 1,
+                "revision": 14
+              }
+            ]
+          },
+          "terminal_work": {
+            "budget_exhausted_ticks": 0,
+            "continued_seed_accepted": {
+              "maximum_per_tick": 0,
+              "total": 0
+            },
+            "continued_seed_attempts": {
+              "maximum_per_tick": 0,
+              "total": 0
+            },
+            "continuity_enforced_ticks": 24,
+            "domain_rejections": {
+              "maximum_per_tick": 45,
+              "total": 1074
+            },
+            "iterations": {
+              "maximum_per_tick": 305,
+              "total": 6465
+            },
+            "maximum_iteration_limit": 1024,
+            "maximum_sample_limit": 65536,
+            "maximum_solver_limit": 256,
+            "primitive_grid_rejections": {
+              "maximum_per_tick": 16,
+              "total": 21
+            },
+            "primitive_samples": {
+              "maximum_per_tick": 28064,
+              "total": 475153
+            },
+            "solver_attempts": {
+              "maximum_per_tick": 47,
+              "total": 1234
+            },
+            "solver_iteration_exhaustions": {
+              "maximum_per_tick": 33,
+              "total": 589
+            },
+            "terminal_connections_checked": {
+              "maximum_per_tick": 45,
+              "total": 1129
+            }
+          },
+          "unexpected_stop_command_ms": 0,
+          "unexpected_stop_episodes": 0,
+          "unexpected_stop_ticks": 0
+        },
+        "change_vs_baseline": {
+          "elapsed_ms": 0,
+          "distance_m": 0.0
+        }
+      },
+      {
+        "completed": true,
+        "elapsed_ms": 54300,
+        "distance_m": 10.249674629119367,
+        "minimum_cone_clearance_m": 0.2735281037908029,
+        "final_actual_speed_mps": 0.0,
+        "fault": null,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "tracking": {
+          "kind": "lqr",
+          "max_heading_error_rad": 0.7,
+          "max_lateral_error_m": 0.5,
+          "min_speed_mps": 0.03,
+          "q_heading": 2.0,
+          "q_lateral": 4.0,
+          "r_curvature": 1.0
+        },
+        "unexpected_stop_ticks": 0,
+        "unexpected_stop_episodes": 0,
+        "route_generations": 9,
+        "phase_accounting_verified": true,
+        "terminal_budget_exhausted_ticks": 0,
+        "maximum_terminal_work_per_tick": {
+          "solver_attempts": 58,
+          "iterations": 398,
+          "solver_iteration_exhaustions": 46,
+          "primitive_samples": 52748,
+          "terminal_connections_checked": 46
+        },
+        "approach_light": {
+          "candidate_totals": {
+            "accepted": 9524,
+            "curvature_speed_limits": 0,
+            "footprint": 0,
+            "grid": 0,
+            "lateral_acceleration": 0,
+            "near_zero_speed": 0,
+            "reference": 0,
+            "rollouts_evaluated": 11440,
+            "sample_budget": 0,
+            "stop_reachable": 0,
+            "terminal_budget": 0,
+            "terminal_unreachable": 1916
+          },
+          "control_ticks": 262,
+          "distance_m": 4.39062905957664,
+          "duration_ms": 26200,
+          "fault_ticks": 0,
+          "first_at": 22600,
+          "last_control_at": 48700,
+          "navigation_reason_ticks": [
+            {
+              "reason": "goal_braking",
+              "ticks": 2
+            }
+          ],
+          "phase": "approach_light",
+          "routes": {
+            "generations": 5,
+            "generations_without_observed_length": 0,
+            "maximum_observed_current_leg_length_m": 4.421198116831987,
+            "minimum_observed_current_leg_length_m": 0.8756046733749839,
+            "observed_current_leg_length_sum_m": 9.965159357366836,
+            "observed_length_count": 5,
+            "omitted_generation_events": 0,
+            "recent_generations": [
+              {
+                "at": 22600,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 4.421198116831987,
+                "generations_since_previous_observation": 1,
+                "revision": 4
+              },
+              {
+                "at": 37400,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 1.7865319052761301,
+                "generations_since_previous_observation": 1,
+                "revision": 5
+              },
+              {
+                "at": 38700,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 1.5518330829720626,
+                "generations_since_previous_observation": 1,
+                "revision": 6
+              },
+              {
+                "at": 39900,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 1.3299915789116739,
+                "generations_since_previous_observation": 1,
+                "revision": 7
+              },
+              {
+                "at": 42400,
+                "checked_continuation_length_m": null,
+                "current_leg_length_m": 0.8756046733749839,
+                "generations_since_previous_observation": 1,
+                "revision": 8
+              }
+            ]
+          },
+          "terminal_work": {
+            "budget_exhausted_ticks": 0,
+            "continued_seed_accepted": {
+              "maximum_per_tick": 3,
+              "total": 49
+            },
+            "continued_seed_attempts": {
+              "maximum_per_tick": 3,
+              "total": 49
+            },
+            "continuity_enforced_ticks": 57,
+            "domain_rejections": {
+              "maximum_per_tick": 45,
+              "total": 2547
+            },
+            "iterations": {
+              "maximum_per_tick": 398,
+              "total": 17804
+            },
+            "maximum_iteration_limit": 1024,
+            "maximum_sample_limit": 65536,
+            "maximum_solver_limit": 256,
+            "primitive_grid_rejections": {
+              "maximum_per_tick": 0,
+              "total": 0
+            },
+            "primitive_samples": {
+              "maximum_per_tick": 52748,
+              "total": 1709996
+            },
+            "solver_attempts": {
+              "maximum_per_tick": 58,
+              "total": 2677
+            },
+            "solver_iteration_exhaustions": {
+              "maximum_per_tick": 46,
+              "total": 1961
+            },
+            "terminal_connections_checked": {
+              "maximum_per_tick": 46,
+              "total": 2607
+            }
+          },
+          "unexpected_stop_command_ms": 0,
+          "unexpected_stop_episodes": 0,
+          "unexpected_stop_ticks": 0
+        },
+        "change_vs_baseline": {
+          "elapsed_ms": -16300,
+          "distance_m": -3.1906395486095143
+        }
+      }
+    ]
+  },
+  "terminal_experiments": "motion-v5-terminal-experiments.json",
+  "asynchronous_validation": "motion-v5-async-validation.json",
+  "host_timing": "motion-v5-host-profile.json",
+  "shared_review_text_read": false,
+  "limits": [
+    "Fifth shared conversation still returns a server loading error; independently verified local ZIP is the work basis, not a claim to have read the full review.",
+    "Terminal bounded-family failure and shared-budget refusal do not prove geometric impossibility. Charged primitive samples are not actual executed samples or CPU time.",
+    "Short static default-worker corridor, not a full asynchronous competition. The 0.9m width is synthetic, not an official track measurement.",
+    "Stopping certificate assumes static obstacles, correct source pose/history, no slip or actuator overshoot, and braking at least the configured deceleration.",
+    "Host whole-simulation wall time and sampled certificate maxima are not per-tick deadlines or RISC-V WCET.",
+    "Default PP retains two recoverable short Stops. Both trackers need real steering/braking calibration, time/frame alignment and target library/hardware commissioning."
+  ]
+}

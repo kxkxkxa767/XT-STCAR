@@ -826,8 +826,9 @@ fn asynchronous_certificate_covers_source_to_deadline_stopping_space() {
     )
     .unwrap();
     let mut close = (*aligned_input(0)).clone();
-    // The ordinary small body fits, but not the source-to-lease braking envelope.
-    close.pose.pose.x_m = 0.35;
+    // The body fits before the front wall, but even this low-speed command
+    // lacks clearance plus the complete source-to-lease stopping travel.
+    close.pose.pose.x_m = 6.735;
     submit(&worker, &Arc::new(close), 60);
     let poll = wait_report(&mut worker, 65, 60);
     assert_eq!(poll.command, MotionOutput::Stop);
@@ -932,6 +933,8 @@ fn projected_navigation_does_not_make_old_task_observations_fresh() {
         steering: SteeringEstimate::stationary(Timestamp(60)),
         adopted_revision: 0,
         held_speed_mps: 0.0,
+        historical_speed_bound_mps: 0.0,
+        historical_curvature_bound_per_m: 0.0,
     };
     let output = controller.tick_with_projection(
         record.at,
@@ -976,7 +979,7 @@ fn asynchronous_certificate_keeps_the_light_boundary_until_mission_release() {
     )
     .unwrap();
     let mut record = (*aligned_input(0)).clone();
-    record.pose.pose.x_m = 5.7;
+    record.pose.pose.x_m = 5.735;
     submit(&worker, &Arc::new(record), 60);
     let poll = wait_report(&mut worker, 65, 60);
     assert_eq!(poll.command, MotionOutput::Stop);

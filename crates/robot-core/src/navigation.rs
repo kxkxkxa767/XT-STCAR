@@ -12,8 +12,11 @@ use crate::reference::{PreparedReference, ReferenceCursor};
 use crate::tracking::{PathTracker, TrackInput, TrackingConfig, TrackingDiagnostics};
 use crate::{FrameId, MotionIntent, MotionOutput, Timestamp, ValidationError};
 use serde::{Deserialize, Serialize};
+mod terminal;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
+pub use terminal::TerminalWorkDiagnostics;
+use terminal::{TerminalBudget, TwoArcSeed};
 
 fn default_heading_tolerance() -> f64 {
     0.12
@@ -161,7 +164,10 @@ pub struct CandidateDiagnostics {
     pub footprint: usize,
     pub sample_budget: usize,
     pub reference: usize,
+    /// No terminal connection was certified; this does not prove geometric
+    /// impossibility. See terminal_work for solver/iteration/grid causes.
     pub terminal_unreachable: usize,
+    pub terminal_budget: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize)]
@@ -193,11 +199,12 @@ pub struct NavigationDiagnostics {
     pub current_stopping_margin: Option<StoppingMargin>,
     pub selected_stopping_margin: Option<StoppingMargin>,
     pub selected_next_stopping_margin: Option<StoppingMargin>,
-    /// States checked against at most two terminal families (eight iterations
-    /// each). At most one current-state check plus one per surviving rollout.
+    /// Current/next states queried against bounded terminal families. Recovery
+    /// may recheck a rejected next state; all solvers share terminal_work limits.
     pub terminal_connections_checked: usize,
     /// A single-arc arrival is unavailable but a short two-part arrival exists.
     pub terminal_continuity_enforced: bool,
+    pub terminal_work: TerminalWorkDiagnostics,
     pub candidates: CandidateDiagnostics,
 }
 
@@ -346,7 +353,16 @@ pub enum ArrivalBehavior {
     },
 }
 
+#[derive(Clone, Copy, Debug)]
+struct CachedTerminalSeed {
+    goal: Point2,
+    heading: f64,
+    seed: TwoArcSeed,
+}
+
 pub struct Navigator {
+    terminal_budget: TerminalBudget,
+    terminal_seed: Option<CachedTerminalSeed>,
     config: NavigationConfig,
     travel_boundary: Option<HalfPlane>,
     last_step: Option<Timestamp>,
@@ -363,6 +379,8 @@ impl Navigator {
     pub fn new(config: NavigationConfig) -> Result<Self, ValidationError> {
         config.validate()?;
         Ok(Self {
+            terminal_budget: TerminalBudget::default(),
+            terminal_seed: None,
             config,
             travel_boundary: None,
             last_step: None,
@@ -436,6 +454,7 @@ impl Navigator {
         self.steering
             .advance_to(now, self.config.max_curvature_rate_per_s)?;
         self.last_step = Some(now);
+        self.terminal_budget.reset();
         self.route = None;
         self.diagnostics = NavigationDiagnostics {
             execution_state: Some(self.steering),
@@ -579,6 +598,7 @@ impl Navigator {
             .last_step
             .map_or(period, |at| ((now.0 - at.0) as f64 / 1000.0).min(period));
         self.last_step = Some(now);
+        self.terminal_budget.reset();
         if now.0 - estimate.captured_at.0 >= self.config.max_input_age_ms
             || now.0 - obstacles_at.0 >= self.config.max_input_age_ms
             || estimate.quality < self.config.min_pose_quality
@@ -639,7 +659,7 @@ impl Navigator {
         {
             let mut decision =
                 NavigationDecision::stopped(NavigationStatus::Reached, "goal_reached");
-            decision.diagnostics = self.diagnostics;
+            decision.diagnostics = self.diagnostics_snapshot();
             return Ok(decision);
         }
         if arrival == ArrivalBehavior::Stop
@@ -723,7 +743,13 @@ impl Navigator {
             }
         }
         let Some((_, _, route, progress)) = &mut self.route else {
-            return Ok(self.blocked("no_forward_kinematic_path"));
+            return Ok(
+                self.blocked(if self.terminal_budget.snapshot().budget_exhausted {
+                    "terminal_budget_exhausted"
+                } else {
+                    "no_forward_kinematic_path"
+                }),
+            );
         };
         // Keep pursuit and scoring anchored to the current mandatory waypoint.
         // The continuation supplies braking room only; it must not let a long
@@ -853,35 +879,50 @@ impl Navigator {
         // Certification depends on each solver's distance/iteration budget;
         // failure does not imply that two turns are geometrically necessary.
         // Neither bounded solver reruns the lattice per candidate.
-        let protected_heading = goal_heading_rad.filter(|heading| {
+        let protected_connection = goal_heading_rad.and_then(|heading| {
             if arrival != ArrivalBehavior::Stop
                 || pose.world_to_body(goal).x_m <= 0.0
                 || !(1e-6..=(2.0 * self.config.lookahead_m).min(2.0)).contains(&distance)
             {
-                return false;
+                return None;
             }
             self.diagnostics.terminal_connections_checked += 1;
-            car_terminal_connection(
+            if terminal::single_arc(
                 pose,
                 self.steering.applied_curvature_per_m,
                 goal,
-                Some(*heading),
+                Some(heading),
                 &self.config,
                 &grid,
+                &self.terminal_budget,
             )
-            .is_none()
-                && car_two_arc_connection(
-                    pose,
-                    self.steering.applied_curvature_per_m,
-                    goal,
-                    *heading,
-                    &self.config,
-                    &grid,
-                )
-                .is_some()
+            .is_some()
+            {
+                return None;
+            }
+            terminal::two_arc(
+                pose,
+                self.steering.applied_curvature_per_m,
+                goal,
+                heading,
+                &self.config,
+                &grid,
+                &self.terminal_budget,
+                self.terminal_seed
+                    .filter(|hint| hint.goal == goal && hint.heading == heading)
+                    .map(|hint| hint.seed),
+            )
+            .map(|connection| (heading, connection.seed))
         });
-        self.diagnostics.terminal_continuity_enforced = protected_heading.is_some();
-        let mut best: Option<(f64, MotionIntent)> = None;
+        if self.terminal_budget.snapshot().budget_exhausted {
+            return Ok(self.blocked("terminal_budget_exhausted"));
+        }
+        self.diagnostics.terminal_continuity_enforced = protected_connection.is_some();
+        let mut best: Option<EvaluatedCandidate> = None;
+        // Store only candidates that passed every original rollout gate. A
+        // second bounded terminal solve is considered only if the original
+        // family rejects all candidates; ordinary selections remain unchanged.
+        let mut terminal_recovery = Vec::new();
         for index in 0..=self.config.curvature_samples {
             let curvature = if index == self.config.curvature_samples {
                 preferred
@@ -965,35 +1006,6 @@ impl Navigator {
                     max_decel_mps2: self.config.max_decel_mps2,
                     max_curvature_rate_per_s: self.config.max_curvature_rate_per_s,
                 };
-                let mut next_projection = None;
-                if let Some(heading) = protected_heading {
-                    next_projection = project_motion(pose, transition, period);
-                    let Some(next) = next_projection else {
-                        self.diagnostics.candidates.terminal_unreachable += 1;
-                        continue;
-                    };
-                    let inside_goal = next.pose.point().distance(goal)
-                        <= self.config.goal_tolerance_m
-                        && angle_error(next.pose.yaw_rad, heading).abs()
-                            <= self.config.goal_heading_tolerance_rad;
-                    if !inside_goal {
-                        self.diagnostics.terminal_connections_checked += 1;
-                        if short_terminal_connection(
-                            next.pose,
-                            next.curvature_per_m,
-                            goal,
-                            heading,
-                            &self.config,
-                            &grid,
-                        )
-                        .is_none()
-                        {
-                            self.diagnostics.candidates.terminal_unreachable += 1;
-                            continue;
-                        }
-                    }
-                }
-                self.diagnostics.candidates.accepted += 1;
                 let score = if let Some(cost) = prediction.reference_cost_m {
                     // Oriented goals need the whole approach, not just a final
                     // point: constant-curvature previews can hide intermediate
@@ -1017,59 +1029,179 @@ impl Navigator {
                             * (curvature - self.steering.commanded_curvature_per_m).abs()
                         - 0.3 * speed
                 };
-                if best
-                    .as_ref()
-                    .is_none_or(|(old_score, _)| score < *old_score)
-                {
-                    // Diagnostic only: predict a complete command period even
-                    // when the geometry preview stops at a nearby goal. Ranking
-                    // by this margin alone stranded the synthetic PP vehicle
-                    // before a blocked grid corner; preserve the original score
-                    // until future geometric feasibility is also accounted for.
-                    // The emergency hard gate stays unchanged.
-                    let next_margin = next_projection
-                        .or_else(|| project_motion(pose, transition, period))
-                        .map(|next| {
-                            stopping_margin(
-                                &self.config,
+                let mut next_projection = None;
+                let mut candidate_terminal_seed = None;
+                if let Some((heading, _)) = protected_connection {
+                    next_projection = project_motion(pose, transition, period);
+                    let Some(next) = next_projection else {
+                        self.diagnostics.candidates.terminal_unreachable += 1;
+                        continue;
+                    };
+                    let inside_goal = next.pose.point().distance(goal)
+                        <= self.config.goal_tolerance_m
+                        && angle_error(next.pose.yaw_rad, heading).abs()
+                            <= self.config.goal_heading_tolerance_rad;
+                    if !inside_goal {
+                        self.diagnostics.terminal_connections_checked += 1;
+                        if terminal::single_arc(
+                            next.pose,
+                            next.curvature_per_m,
+                            goal,
+                            Some(heading),
+                            &self.config,
+                            &grid,
+                            &self.terminal_budget,
+                        )
+                        .is_none()
+                        {
+                            if let Some(connection) = terminal::two_arc(
                                 next.pose,
-                                next.speed_mps,
-                                obstacles,
-                                self.diagnostics.travel_boundary,
-                            )
-                        });
-                    self.diagnostics.selected_prediction_distance_m = Some(prediction.distance_m);
-                    self.diagnostics.selected_prediction_endpoint = Some(prediction.endpoint);
-                    self.diagnostics.selected_cross_track_m = Some(reference.distance_m);
-                    self.diagnostics.selected_heading_error_rad = Some(heading_error);
-                    self.diagnostics.selected_progress_m = Some(progress_m);
-                    self.diagnostics.selected_reference_cost_m = prediction.reference_cost_m;
-                    self.diagnostics.selected_stopping_margin = Some(stopping_margin(
-                        &self.config,
-                        pose,
-                        estimate.speed_mps.max(speed),
-                        obstacles,
-                        self.diagnostics.travel_boundary,
-                    ));
-                    self.diagnostics.selected_next_stopping_margin = next_margin;
-                    best = Some((
+                                next.curvature_per_m,
+                                goal,
+                                heading,
+                                &self.config,
+                                &grid,
+                                &self.terminal_budget,
+                                None,
+                            ) {
+                                candidate_terminal_seed = Some(CachedTerminalSeed {
+                                    goal,
+                                    heading,
+                                    seed: connection.seed,
+                                });
+                            } else {
+                                if self.terminal_budget.snapshot().budget_exhausted {
+                                    self.diagnostics.candidates.terminal_budget += 1;
+                                } else {
+                                    terminal_recovery.push(EvaluatedCandidate {
+                                        score,
+                                        intent: MotionIntent {
+                                            speed_mps: speed,
+                                            curvature_per_m: curvature,
+                                        },
+                                        prediction,
+                                        reference,
+                                        heading_error,
+                                        progress_m,
+                                        transition,
+                                        next_projection,
+                                        terminal_seed: None,
+                                    });
+                                    self.diagnostics.candidates.terminal_unreachable += 1;
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                }
+                self.diagnostics.candidates.accepted += 1;
+                if best.as_ref().is_none_or(|old| score < old.score) {
+                    best = Some(EvaluatedCandidate {
                         score,
-                        MotionIntent {
+                        intent: MotionIntent {
                             speed_mps: speed,
                             curvature_per_m: curvature,
                         },
-                    ));
+                        prediction,
+                        reference,
+                        heading_error,
+                        progress_m,
+                        transition,
+                        next_projection,
+                        terminal_seed: candidate_terminal_seed,
+                    });
                 }
             }
         }
-        if let Some((_, intent)) = best {
+        if best.is_none()
+            && let Some((heading, seed)) = protected_connection
+        {
+            // Spend recovery work on actions closest to the certified first
+            // control segment before trying large departures from that segment.
+            // All original motion/collision constraints still apply. Recovery
+            // takes the first certified continuation; normal candidates retain
+            // their original score.
+            terminal_recovery.sort_by(|a, b| {
+                (a.intent.curvature_per_m - seed.first_curvature())
+                    .abs()
+                    .total_cmp(&(b.intent.curvature_per_m - seed.first_curvature()).abs())
+                    .then_with(|| a.score.total_cmp(&b.score))
+            });
+            for mut candidate in terminal_recovery {
+                if self.terminal_budget.snapshot().budget_exhausted {
+                    self.diagnostics.candidates.terminal_unreachable -= 1;
+                    self.diagnostics.candidates.terminal_budget += 1;
+                    continue;
+                }
+                let next = candidate
+                    .next_projection
+                    .expect("recovery candidates have a full-period projection");
+                let Some(remaining_seed) = seed.after_travel(next.distance_m) else {
+                    continue;
+                };
+                self.diagnostics.terminal_connections_checked += 1;
+                if let Some(connection) = terminal::continue_two_arc(
+                    next.pose,
+                    next.curvature_per_m,
+                    goal,
+                    heading,
+                    &self.config,
+                    &grid,
+                    &self.terminal_budget,
+                    remaining_seed,
+                ) {
+                    self.diagnostics.candidates.terminal_unreachable -= 1;
+                    self.diagnostics.candidates.accepted += 1;
+                    candidate.terminal_seed = Some(CachedTerminalSeed {
+                        goal,
+                        heading,
+                        seed: connection.seed,
+                    });
+                    // Recovery executes the closest certified first segment;
+                    // a held-curvature preview cannot score both future turns.
+                    best = Some(candidate);
+                    break;
+                } else if self.terminal_budget.snapshot().budget_exhausted {
+                    self.diagnostics.candidates.terminal_unreachable -= 1;
+                    self.diagnostics.candidates.terminal_budget += 1;
+                }
+            }
+        }
+        self.terminal_seed = best.as_ref().and_then(|candidate| candidate.terminal_seed);
+        if let Some(candidate) = best {
+            let intent = candidate.intent;
             self.diagnostics.selected_curvature_per_m = Some(intent.curvature_per_m);
+            self.diagnostics.selected_prediction_distance_m = Some(candidate.prediction.distance_m);
+            self.diagnostics.selected_prediction_endpoint = Some(candidate.prediction.endpoint);
+            self.diagnostics.selected_cross_track_m = Some(candidate.reference.distance_m);
+            self.diagnostics.selected_heading_error_rad = Some(candidate.heading_error);
+            self.diagnostics.selected_progress_m = Some(candidate.progress_m);
+            self.diagnostics.selected_reference_cost_m = candidate.prediction.reference_cost_m;
+            self.diagnostics.selected_stopping_margin = Some(stopping_margin(
+                &self.config,
+                pose,
+                estimate.speed_mps.max(intent.speed_mps),
+                obstacles,
+                self.travel_boundary,
+            ));
+            self.diagnostics.selected_next_stopping_margin = candidate
+                .next_projection
+                .or_else(|| project_motion(pose, candidate.transition, period))
+                .map(|next| {
+                    stopping_margin(
+                        &self.config,
+                        next.pose,
+                        next.speed_mps,
+                        obstacles,
+                        self.travel_boundary,
+                    )
+                });
             Ok(NavigationDecision {
                 status: NavigationStatus::Driving,
                 intent,
                 path,
                 reason: None,
-                diagnostics: self.diagnostics,
+                diagnostics: self.diagnostics_snapshot(),
             })
         } else {
             self.route = None; // changed observations require a new bounded search.
@@ -1077,6 +1209,8 @@ impl Navigator {
                 && self.diagnostics.candidates.curvature_speed_limits > 0
             {
                 "empty_speed_interval"
+            } else if self.terminal_budget.snapshot().budget_exhausted {
+                "terminal_budget_exhausted"
             } else {
                 "no_collision_free_braking_trajectory"
             };
@@ -1086,9 +1220,16 @@ impl Navigator {
         }
     }
 
+    fn diagnostics_snapshot(&self) -> NavigationDiagnostics {
+        NavigationDiagnostics {
+            terminal_work: self.terminal_budget.snapshot(),
+            ..self.diagnostics
+        }
+    }
+
     fn blocked(&mut self, reason: &str) -> NavigationDecision {
         let mut decision = NavigationDecision::stopped(NavigationStatus::Blocked, reason);
-        decision.diagnostics = self.diagnostics;
+        decision.diagnostics = self.diagnostics_snapshot();
         decision
     }
 
@@ -1126,13 +1267,27 @@ impl Navigator {
         // Small sideways corrections with the same final heading need an S,
         // which the five steering bins can otherwise replace with a full loop.
         if let Some(heading) = goal_heading_rad
-            && let Some((points, end_pose, end_curvature)) =
-                car_two_arc_connection(start, initial_curvature, goal, heading, &self.config, grid)
+            && let Some((points, end_pose, end_curvature)) = terminal::two_arc(
+                start,
+                initial_curvature,
+                goal,
+                heading,
+                &self.config,
+                grid,
+                &self.terminal_budget,
+                self.terminal_seed
+                    .filter(|hint| hint.goal == goal && hint.heading == heading)
+                    .map(|hint| hint.seed),
+            )
+            .map(|connection| connection.into_path())
         {
             let mut path = Vec::with_capacity(points.len() + 1);
             path.push(start.point());
             path.extend(points);
             return Some((path, end_pose, end_curvature));
+        }
+        if self.terminal_budget.snapshot().budget_exhausted {
+            return None;
         }
         let mut nodes = vec![CarNode {
             pose: start,
@@ -1157,6 +1312,11 @@ impl Navigator {
         });
         let length = (2.0 * grid.resolution).clamp(0.15, 0.4);
         while let Some(entry) = open.pop() {
+            // Every successful lattice route still needs a terminal connector.
+            // An exhausted ledger cannot certify one, so stop this search.
+            if self.terminal_budget.snapshot().budget_exhausted {
+                return None;
+            }
             let node = nodes[entry.index];
             let key = car_key(
                 node.pose,
@@ -1171,13 +1331,14 @@ impl Navigator {
             let squared = local_goal.x_m.powi(2) + local_goal.y_m.powi(2);
             if squared < 0.35_f64.powi(2)
                 && local_goal.x_m > 0.0
-                && let Some((terminal, end_pose, end_curvature)) = car_terminal_connection(
+                && let Some((terminal, end_pose, end_curvature)) = terminal::single_arc(
                     node.pose,
                     node.curvature,
                     goal,
                     goal_heading_rad,
                     &self.config,
                     grid,
+                    &self.terminal_budget,
                 )
             {
                 let mut indices = vec![entry.index];
@@ -1395,247 +1556,45 @@ fn car_key(
     Some((cell, heading, steering))
 }
 
-/// The existing two bounded terminal families; no additional lattice search.
-fn short_terminal_connection(
-    start: Pose2,
-    initial_curvature: f64,
-    goal: Point2,
-    goal_heading: f64,
-    config: &NavigationConfig,
-    grid: &Grid,
-) -> Option<(Vec<Point2>, Pose2, f64)> {
-    car_terminal_connection(
-        start,
-        initial_curvature,
-        goal,
-        Some(goal_heading),
-        config,
-        grid,
-    )
-    .or_else(|| car_two_arc_connection(start, initial_curvature, goal, goal_heading, config, grid))
-}
-
-/// A short two-part approach with three bounded variables: the two target
-/// curvatures and total length. Equal-length parts avoid another search axis.
-/// Both parts use the existing steering ramp and inflated grid transitions.
-/// This is a single initial connection attempt, not a replacement path planner.
+#[cfg(test)]
 fn car_two_arc_connection(
     start: Pose2,
-    initial_curvature: f64,
+    k: f64,
     goal: Point2,
-    goal_heading: f64,
+    heading: f64,
     config: &NavigationConfig,
     grid: &Grid,
 ) -> Option<(Vec<Point2>, Pose2, f64)> {
-    let local = start.world_to_body(goal);
-    let distance = start.point().distance(goal);
-    // Two lookahead distances cover a near-goal approach; the absolute cap
-    // keeps even the largest valid configuration's additional work bounded.
-    if local.x_m <= 0.0 || !(1e-6..=(2.0 * config.lookahead_m).min(2.0)).contains(&distance) {
-        return None;
-    }
-    let heading_change = angle_error(goal_heading, start.yaw_rad);
-    // Small-angle geometry supplies only a seed. Acceptance below checks the
-    // actual curved endpoint, never this approximate solution.
-    let offset = 4.0 * local.y_m / distance.powi(2);
-    let mut variables = [
-        (offset - heading_change / distance)
-            .clamp(-config.max_curvature_per_m, config.max_curvature_per_m),
-        (3.0 * heading_change / distance - offset)
-            .clamp(-config.max_curvature_per_m, config.max_curvature_per_m),
-        distance,
-    ];
-    let max_length = distance * std::f64::consts::FRAC_PI_2;
-    let position_tolerance = (config.goal_tolerance_m * 0.25).min(0.0001);
-    let sample = |parameters: [f64; 3]| {
-        let (mut points, middle, middle_curvature) = car_primitive(
-            start,
-            initial_curvature,
-            parameters[0],
-            parameters[2] * 0.5,
-            config,
-            grid,
-        )?;
-        let (last, endpoint, curvature) = car_primitive(
-            middle,
-            middle_curvature,
-            parameters[1],
-            parameters[2] * 0.5,
-            config,
-            grid,
-        )?;
-        points.extend(last);
-        Some((points, endpoint, curvature))
-    };
-    for _ in 0..8 {
-        let result = sample(variables)?;
-        let error = [
-            result.1.x_m - goal.x_m,
-            result.1.y_m - goal.y_m,
-            angle_error(result.1.yaw_rad, goal_heading),
-        ];
-        if error[0].hypot(error[1]) < position_tolerance
-            && error[2].abs() <= config.goal_heading_tolerance_rad * 0.5
-        {
-            return Some(result);
-        }
-        let mut system = [[0.0; 4]; 3];
-        for column in 0..3 {
-            let (step, upper) = if column < 2 {
-                (
-                    (config.max_curvature_per_m * 0.001).min(0.001),
-                    config.max_curvature_per_m,
-                )
-            } else {
-                ((distance * 0.001).min(0.0001), max_length)
-            };
-            let delta = if variables[column] + step <= upper {
-                step
-            } else {
-                -step
-            };
-            let mut perturbed = variables;
-            perturbed[column] += delta;
-            let (_, endpoint, _) = sample(perturbed)?;
-            system[0][column] = (endpoint.x_m - result.1.x_m) / delta;
-            system[1][column] = (endpoint.y_m - result.1.y_m) / delta;
-            system[2][column] = angle_error(endpoint.yaw_rad, result.1.yaw_rad) / delta;
-        }
-        for row in 0..3 {
-            system[row][3] = error[row];
-        }
-        let change = solve_endpoint_correction(system)?;
-        for index in 0..3 {
-            variables[index] -= change[index];
-            if !variables[index].is_finite() {
-                return None;
-            }
-            variables[index] = if index < 2 {
-                variables[index].clamp(-config.max_curvature_per_m, config.max_curvature_per_m)
-            } else {
-                variables[index].clamp(distance, max_length)
-            };
-        }
-    }
-    None
+    terminal::two_arc(
+        start,
+        k,
+        goal,
+        heading,
+        config,
+        grid,
+        &TerminalBudget::default(),
+        None,
+    )
+    .map(|c| c.into_path())
 }
-
-/// Fixed 3x3 elimination with partial pivoting; a singular local model declines
-/// the shortcut and lets the bounded lattice search proceed normally.
-fn solve_endpoint_correction(mut system: [[f64; 4]; 3]) -> Option<[f64; 3]> {
-    for column in 0..3 {
-        let pivot = (column..3)
-            .max_by(|&a, &b| system[a][column].abs().total_cmp(&system[b][column].abs()))?;
-        system.swap(column, pivot);
-        let divisor = system[column][column];
-        if !divisor.is_finite() || divisor.abs() < 1e-12 {
-            return None;
-        }
-        for value in &mut system[column][column..] {
-            *value /= divisor;
-        }
-        let pivot_row = system[column];
-        for (row_index, row) in system.iter_mut().enumerate() {
-            if row_index != column {
-                let scale = row[column];
-                for (value, pivot_value) in row[column..].iter_mut().zip(&pivot_row[column..]) {
-                    *value -= scale * pivot_value;
-                }
-            }
-        }
-    }
-    let result = [system[0][3], system[1][3], system[2][3]];
-    result
-        .iter()
-        .all(|value| value.is_finite())
-        .then_some(result)
-}
-
-/// Connect a nearby goal with the same steering ramp as every lattice edge.
-/// The instantaneous circular solution is only an initial guess. A bounded
-/// two-variable endpoint correction adjusts length and target curvature, then
-/// accepts only the actual sampled endpoint, heading and collision checks.
+#[cfg(test)]
 fn car_terminal_connection(
     start: Pose2,
-    initial_curvature: f64,
+    k: f64,
     goal: Point2,
-    goal_heading: Option<f64>,
+    heading: Option<f64>,
     config: &NavigationConfig,
     grid: &Grid,
 ) -> Option<(Vec<Point2>, Pose2, f64)> {
-    let local = start.world_to_body(goal);
-    let distance = start.point().distance(goal);
-    if local.x_m <= 0.0 || !(1e-9..0.35).contains(&distance) {
-        return None;
-    }
-    let circle_curvature = 2.0 * local.y_m / distance.powi(2);
-    let mut curvature =
-        circle_curvature.clamp(-config.max_curvature_per_m, config.max_curvature_per_m);
-    let mut length = if circle_curvature.abs() < 1e-9 {
-        local.x_m
-    } else {
-        2.0 * local.y_m.atan2(local.x_m) / circle_curvature
-    };
-    // A forward, nearby circular connector previously spanned less than pi
-    // radians. Keep its maximum arc/chord ratio; never search a long loop here.
-    let max_length = distance * std::f64::consts::FRAC_PI_2;
-    let position_tolerance = (config.goal_tolerance_m * 0.25).min(0.0001);
-    for _ in 0..8 {
-        let result = car_primitive(start, initial_curvature, curvature, length, config, grid)?;
-        let error_x = result.1.x_m - goal.x_m;
-        let error_y = result.1.y_m - goal.y_m;
-        if error_x.hypot(error_y) < position_tolerance {
-            return goal_heading
-                .is_none_or(|yaw| {
-                    angle_error(result.1.yaw_rad, yaw).abs()
-                        <= config.goal_heading_tolerance_rad * 0.5
-                })
-                .then_some(result);
-        }
-        // Finite differences use the same sampled ramp as the accepted route.
-        // Fixed iterations and bounded perturbations add no unbounded solver.
-        let perturb_k = (config.max_curvature_per_m * 0.001).min(0.001);
-        let delta_k = if curvature + perturb_k <= config.max_curvature_per_m {
-            perturb_k
-        } else {
-            -perturb_k
-        };
-        let perturb_s = (distance * 0.001).min(0.0001);
-        let delta_s = if length + perturb_s <= max_length {
-            perturb_s
-        } else {
-            -perturb_s
-        };
-        let (_, turn, _) = car_primitive(
-            start,
-            initial_curvature,
-            curvature + delta_k,
-            length,
-            config,
-            grid,
-        )?;
-        let (_, travel, _) = car_primitive(
-            start,
-            initial_curvature,
-            curvature,
-            length + delta_s,
-            config,
-            grid,
-        )?;
-        let dx_k = (turn.x_m - result.1.x_m) / delta_k;
-        let dy_k = (turn.y_m - result.1.y_m) / delta_k;
-        let dx_s = (travel.x_m - result.1.x_m) / delta_s;
-        let dy_s = (travel.y_m - result.1.y_m) / delta_s;
-        let determinant = dx_k * dy_s - dx_s * dy_k;
-        if !determinant.is_finite() || determinant.abs() < 1e-12 {
-            return None;
-        }
-        curvature = (curvature - (error_x * dy_s - error_y * dx_s) / determinant)
-            .clamp(-config.max_curvature_per_m, config.max_curvature_per_m);
-        length =
-            (length - (dx_k * error_y - dy_k * error_x) / determinant).clamp(distance, max_length);
-    }
-    None
+    terminal::single_arc(
+        start,
+        k,
+        goal,
+        heading,
+        config,
+        grid,
+        &TerminalBudget::default(),
+    )
 }
 
 fn car_primitive(
@@ -1746,6 +1705,19 @@ pub fn integrate(pose: Pose2, distance_m: f64, curvature_per_m: f64) -> Pose2 {
             yaw_rad: yaw,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct EvaluatedCandidate {
+    score: f64,
+    intent: MotionIntent,
+    prediction: RolloutPrediction,
+    reference: crate::reference::ReferenceProjection,
+    heading_error: f64,
+    progress_m: f64,
+    transition: MotionTransition,
+    next_projection: Option<crate::motion_transition::MotionProjection>,
+    terminal_seed: Option<CachedTerminalSeed>,
 }
 
 #[derive(Clone, Copy, Debug)]

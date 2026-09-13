@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "baseline_commit": "f83898a050649e03f25ad51b9c18c0bb12c743b2",
+  "scope": "Baseline for motion-v5: committed f83898a results and native Rust replay of three original synthetic input frames. No hardware execution.",
+  "user_reproduction_archive": {
+    "file": "XT-STCAR_f83898a_review_reproduction.zip",
+    "sha256": "1a2b2b54b2efb3c75759862123cfcfef48866e7d87d27698c6f9d27ef853784b",
+    "members": [
+      "README.md",
+      "terminal_probe.py",
+      "terminal_probe_result.json",
+      "review_calculations.json"
+    ],
+    "scope": "Geometry-only Python probe omits grid/obstacle/footprint checks; not copied over source and not published as a deployment artifact."
+  },
+  "shared_conversation": {
+    "url": "https://chatgpt.com/share/6aa6a3ce-6304-83ee-b875-2298fc1e846",
+    "read_status": "unavailable; server returns Can't load shared conversation even after network recovery",
+    "full_review_text_read": false,
+    "work_basis": "User-authorized corrections based on independently checked local reproduction archive; additional shared text requested."
+  },
+  "original_input_window": {
+    "file": "motion-v5-original-input-window.json",
+    "sha256": "e843a5f02e7db86224cef57b3fb9e1f58b94cd9f9f996591587f1e7a4c8f5e04",
+    "at_ms": [
+      42100,
+      42200,
+      42300
+    ],
+    "ranges_per_frame": 360,
+    "world_obstacles_per_frame": 360,
+    "method": "Isolated git archive of baseline with three additional in-memory diagnostic records, original simulator and source-synchronized projection. Full completion metrics and all three navigation diagnostics exactly match committed v4 report."
+  },
+  "original_competition_report": "motion-v4-competition-comparison.json",
+  "original_runs": [
+    {
+      "tracking": {
+        "kind": "pure_pursuit"
+      },
+      "completed": true,
+      "elapsed_ms": 58800,
+      "distance_m": 11.508841029059477,
+      "minimum_cone_clearance_m": 0.24250886066502375,
+      "final_actual_speed_mps": 0.0,
+      "fault": null
+    },
+    {
+      "tracking": {
+        "kind": "lqr",
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5,
+        "min_speed_mps": 0.03,
+        "q_heading": 2.0,
+        "q_lateral": 4.0,
+        "r_curvature": 1.0
+      },
+      "completed": true,
+      "elapsed_ms": 70600,
+      "distance_m": 13.440314177728881,
+      "minimum_cone_clearance_m": 0.2735281037908029,
+      "final_actual_speed_mps": 0.0,
+      "fault": null
+    }
+  ],
+  "verified_findings": [
+    "At 42200 ms all 44 rollouts pass the existing hard gates and are rejected by terminal checking; current equal-segment connector returns a solution, next-state fixed equal-segment solver exhausts eight iterations.",
+    "The Python 35:65 witness is geometric only. Multiple unequal ratios multiply total solver work; eight iterations per solve is not eight total iterations.",
+    "At 42300 ms the new route is 4.439963952213906 m versus the prior remaining route 0.9163631852233475 m: increase 3.5236007669905582 m.",
+    "LQR light-stage average speed is about 0.17865 m/s versus PP 0.17166; extra travel, not simply lower average speed, explains the larger light-stage duration.",
+    "Original async circle radius 0.47553864678361274 m assumes global speed 0.3 m/s, 250 ms source lease, 100 ms output period, 0.6 m/s2 braking and configured body/clearance. A 0.9 m synthetic corridor cannot fit the circle; laser-point walls additionally include 0.015 m point radius."
+  ]
+}

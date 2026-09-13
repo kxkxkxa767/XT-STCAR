@@ -1,0 +1,10 @@
+   Compiling xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+    Finished `release` profile [optimized] target(s) in 2.46s
+     Running unittests src/lib.rs (target/release/deps/xt_stcar_robot_runner-9f81d887f49458be)
+
+running 1 test
+async certificate only host cost: n=2000 points=360 total_ns=17724627 mean_ns=8862 max_ns=59791 (not WCET)
+async certificate only host cost: n=2000 points=2048 total_ns=38468832 mean_ns=19234 max_ns=56875 (not WCET)
+test control_execution::tests::certificate_host_cost_measurement ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.06s

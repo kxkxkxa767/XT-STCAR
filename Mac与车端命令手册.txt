@@ -247,8 +247,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
   它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
   LQR仍为实验选项，默认Pure Pursuit保持不变；当前结果见
-  docs/motion-v4-competition-comparison.json；各算法须分别看completed和fault。
-  旧motion-v3/v2和motion-control结果保留历史，不当作当前版本验收。
+  docs/motion-v5-competition-comparison.json；各算法须分别看completed和fault。
+  旧motion-v4/v3/v2和motion-control结果保留历史，不当作当前版本验收。
   summary.first_navigation_failure 为首个非预期阻塞/故障窗口，最多8帧前文、
   触发帧、8帧后文；null表示没有触发。先看触发帧的navigation_reason、
   navigation.candidates及请求/选中曲率，再对照最终fault；首次阻塞可能恢复。
@@ -258,7 +258,7 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   原有模拟配置未写 navigation.tracking 时默认 Pure Pursuit；LQR 配置
   及模型边界见 docs/运动控制设计与对比.md。不要直接用于实车。
 
-运动执行、任务验收半径与异步时间检查（v4）
+运动执行、终端接续与异步时间检查（v5）
 [Mac；用途] 检查采用命令历史、连续渐变的侧向加速度峰值、通过点及车辆模型。
 [替换项] 无。以下为 Rust 主机测试，不访问车辆设备，不启动电机。
 
@@ -287,8 +287,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   这不会提高磁盘日志频率，也不是1ms实车控制周期。
   带朝向目标的缓存参考以完整车体偏离检查，包含航向造成的角点位移；整段评分比较对应四个
   车身角的世界位置差最大值，统一以米衡量位姿误差。不能仅凭旧路径无碰撞就认为仍可到达。
-  当前完整结果和中间失败分别保存在docs/motion-v4-competition-comparison.json及
-  本轮修正说明引用的证据；不沿用v3时间和哈希。默认PP、LQR实验，比赛门限未放宽。
+  当前完整结果和中间失败分别保存在docs/motion-v5-competition-comparison.json及
+  本轮修正说明引用的证据；不沿用v4/v3时间和哈希。默认PP、LQR实验，比赛门限未放宽。
   当前/选中/下一周期停车余量分别为current_stopping_margin、selected_stopping_margin、
   selected_next_stopping_margin；constraint指出边界或本次障碍索引。未来余量只用于诊断，
   提前余量优先排序曾造成PP网格角阻塞，已撤销，不能靠缩小停车范围消除Stop。
@@ -307,9 +307,32 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   源比最近poll旧时可查询128条命令变化历史，不再一律ExecutionAhead；超出历史则
   HistoryUnavailable，不能改写捕获时戳。Busy可重试，Duplicate不重算/不续租，Stopped为停止。
   poll还检查采用窗口、真实命令变化前提和原始源期限；过晚/前提变化的Drive不直接采用。
-  证书覆盖静态停车空间及正常速度/转向/侧向约束，但可能保守拒绝狭窄空间。
+  证书用有向矩形覆盖历史最高速度/曲率、原期限后额外一拍和完整刹停；静态停车空间、
+  正常速度/转向/侧向约束均保留。0.9m合成直道回归通过，转弯狭小空间仍可能保守拒绝。
   共同时间轴、扫描关联/去畸变、实际反馈和物理执行接口仍待接车；详见
   docs/任务交接与异步运动修正.md。
+
+终端求解与主机计算时间（v5）
+[Mac；用途] 重放原短连接退化、检查共享求解额度，并测量完整模拟在本机的墙钟开销。
+
+  cargo test --locked --offline -p xt-stcar-robot-core --lib navigation::terminal
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_profile -- 3
+  cargo test --release --locked --offline -p xt-stcar-robot-runner --lib certificate_host_cost_measurement -- --ignored --nocapture
+
+[替换项] 3为每种跟踪器测量次数，可填1至20；另有1次预热。需release构建。
+[预期] motion_profile JSON报告每次wall_time_ms、completed/error及总/平均/最大墙钟。
+  完整simulate耗时含合成RGB/激光、控制、车辆积分和sink遥测，报告序列化不计入；
+  不是求解器独占时间、每tick延迟或RISC-V板卡WCET。测量时避免并行编译/重计算。
+  最后一条显式运行默认忽略的私有证书基准，分别360/2048点，记录总/平均/最大耗时。
+  常规测试忽略这项是为避免把主机调度噪声当成严格实时通过门限。
+
+  navigation.diagnostics.terminal_work记录solver_attempts、iterations、primitive_samples，
+  共享上限为256/1024/65536；primitive_samples是primitive前预扣额度，碰撞早退可少执行。
+  solver_iteration_exhaustions表示单次8迭代用尽，budget_exhausted表示整拍共享额度不足，
+  两者都不证明物理不可达。continued_seed_attempts/accepted记录重验接续初值的结果。
+  summary.statistics.phases[].terminal_work统计总数和每拍最大值；日志额度不改变控制选择。
+  当前证据见docs/motion-v5-validation.json、motion-v5-host-profile.json和
+  docs/终端连接延续与异步停车包络.md。完整异步比赛、实车制动/转向和目标耗时待车到后验证。
 
 5.1 配置类型与入口
   config/competition-sim.json：SimulationConfig，含场景、理想车辆模型、
@@ -791,9 +814,10 @@ JSON
   docs/Rust串口采集.md：传感器采集配置与限制。
   docs/Rust比赛自主闭环.md：任务、导航、感知 worker、仿真及日志设计边界。
   docs/任务交接与异步运动修正.md：v4真实验收半径、阶段统计、执行历史和异步采用证书。
-  docs/motion-v4-validation.json：本轮Rust/example/交付测试、fmt/clippy与交叉链接结果。
-  docs/motion-v4-delivery.json：本地包生成/核验状态、路径和哈希；交叉链接成功不等于包已核验。
-  docs/motion-v3-*及更早结果保留历史。
+  docs/motion-v5-validation.json：本轮Rust/example/交付测试、fmt/clippy与交叉链接结果。
+  docs/motion-v5-delivery.json：本地包生成/核验状态、路径和哈希；交叉链接成功不等于包已核验。
+  docs/终端连接延续与异步停车包络.md：v5接续策略、共享计算额度及有向停止矩形。
+  docs/motion-v4-*及更早结果保留历史。
   docs/底盘标定映射.md：物理单位映射和未经验证的示例表。
   docs/赛项三规则与工程差距.md：初稿规则、资料证据与实车缺口。
 

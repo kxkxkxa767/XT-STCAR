@@ -46,6 +46,10 @@ BASE_FILES = {
     "docs/任务交接与异步运动修正.md", "docs/motion-v4-validation.json",
     "docs/motion-v4-before.json", "docs/motion-v4-competition-comparison.json",
     "docs/motion-v4-stopping-experiment.json",
+    "docs/终端连接延续与异步停车包络.md", "docs/motion-v5-validation.json",
+    "docs/motion-v5-before.json", "docs/motion-v5-competition-comparison.json",
+    "docs/motion-v5-original-input-window.json", "docs/motion-v5-terminal-experiments.json",
+    "docs/motion-v5-host-profile.json", "docs/motion-v5-async-validation.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

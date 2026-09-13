@@ -1,10 +1,10 @@
 # XT-STCAR 接手与开发约定
 
-维护日期：2026-09-11。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
+维护日期：2026-09-13。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
 开始前完整读取本文件，再读 [上传规范](上传规范.md)、[README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
 `AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。
 
-## 当前交接快照（2026-09-11）
+## 当前交接快照（2026-09-13）
 
 ### 用户目标与授权
 
@@ -26,7 +26,48 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 最新任务交接、阶段统计与异步运动修正（2026-09-11）
+### 最新终端接续、计算额度与异步停车空间修正（2026-09-13，v5）
+
+- 用户要求根据第五份运动意见和工程根目录复现ZIP继续修正，拟定计划后直接实施。修改前网络恢复后fetch成功，
+  `f83898a050649e03f25ad51b9c18c0bb12c743b2` 与origin/main一致0/0；最终提交/推送状态以HEAD和远端核对。
+- 分享链接 `https://chatgpt.com/share/6aa6a3ce-6304-83ee-b875-2298fc1e846` 网络恢复后仍由服务器返回
+  “Can't load shared conversation”，未读到第五份完整正文。已请求新的分享/文字，本轮依据已核实本地ZIP实施，不能声称逐条读完分享。
+  `XT-STCAR_f83898a_review_reproduction.zip`只有README、Python几何探针和两个JSON，无Rust补丁/原点云/整场验证。
+  原ZIP和比赛PDF不修改、不暂存；ZIP哈希与来源见 `docs/motion-v5-before.json`。
+- 原提交隔离重放额外仅加三条内存记录，取得42.1/42.2/42.3秒完整输入与每帧360世界障碍，
+  整场和三帧导航诊断与v4逐值一致，证据 `docs/motion-v5-original-input-window.json`。
+  原42.2秒44个冷候选未被八次迭代等长双段求解认证；几何失败不能证明不可达。
+  下一拍新路线较旧剩余路线长3.523601m。ZIP35:65几何见证须经Rust完整Grid/车体/运动/灯前边界重新验证。
+- 新 `robot-core/src/navigation/terminal.rs` 提取原单/双段渐变曲率求解，缓存已认证双段的剩余段比与数值初值，
+  同目标/朝向时每次重求解并检查当前网格。原冷候选全部失败时，恢复轮按接近已认证首段曲率顺序，采用首个完整认证动作；
+  原冷候选有解时保留原评分选择。缓存不是执行凭证，不改变已采用命令状态，不跳过任何安全门。
+- 整次导航共享256次域内求解、1024次迭代、65536份预扣采样额度，单次最多8轮；lattice原节点上限另保留，
+  终端额度已耗尽则结束不能产生结果的剩余lattice搜索。已有完整认证候选可用，未认证不得因为预算放行。
+  `terminal_work.solver_iteration_exhaustions`区分单次迭代用尽；`budget_exhausted`为整拍共享额度不足。
+  `primitive_samples`为primitive前预扣额度，可能大于障碍早退时实际执行样本，非CPU操作计数。
+  `terminal_budget`表示受整拍额度限制而未继续认证的候选，不推断加额度即可行；`terminal_unreachable`是有限认证失败分类，非数学无解。
+- 中间“所有恢复候选仍按旧评分选最好”消除了42.2秒Stop却使LQR退化79.7秒/15.057722m，已撤销。
+  最终首认证接续方案：PP58.8秒/11.508841m保持；LQR54.3秒/10.249675m，比v4快16.3秒、少3.190640m。
+  LQR灯前26.2秒/4.390629m、5次路线生成、全场无非预期Stop；PP原两次短Stop保留。
+  二者终速0，斑马线3000ms、绿灯300ms、最小锥桶间隙PP.242509m/LQR.273528m；无共享终端额度耗尽。
+  中间失败与保留策略见 `motion-v5-terminal-experiments.json`，完整结果 `motion-v5-competition-comparison.json`。
+- `runner/src/control_execution.rs`异步采用证书由全向圆换为源车体系有向矩形：V/K保留源到规划的实际采用历史上界，
+  总弧长S=V*T+V²/(2b)，覆盖原lease再加一拍和完整刹停；横移min(S,KS²/2)、角点旋转min(RKS,2R)，
+  KS>=π/2时额外覆盖后向S。地图和灯前半平面查四角，激光TF和障碍圆盘半径保留，相切拒绝。
+  采用窗/命令序号/原源期限、正常速度和slew/侧向过渡检查保持；同步导航原紧急停车检查不缩小。
+- 0.9m合成直道真实默认Worker：60/80ms源延迟、3/7/9ms采用抖动、23帧连续Drive，默认任务限速.18m/s，
+  超过.17m/s并前进>.25m；最后源2200ms按2450ms原期限Stop并制动至0。另直接覆盖.30m/s直道证书和前墙拒绝。
+  该宽度不是官方赛道测量。独立.5ms积分覆盖101种采用时刻×4轨迹、历史高曲率/Stop回中、大角度后向运动及TF/旋转边界。
+  仍依赖静态障碍、无侧滑/超调和制动能力下界；完整异步比赛/实车/目标板时限未验。
+- `runner/src/phase_statistics.rs`追加终端工作总数/每拍最大值与额度拒绝，固定内存/饱和计数，不影响控制和日志策略。
+  新 `runner/examples/motion_profile.rs` 显式预热一次+重复1..20次整场simulate主机墙钟，含合成传感器、控制、车辆和sink遥测，
+  报告序列化不计入；不是单solver时间、每tick延迟或板卡WCET。基线正式测量恢复原simulation.rs字节，仅加入同一profile示例。
+- 本轮说明 [终端连接延续与异步停车包络](docs/终端连接延续与异步停车包络.md)；README模块结构/运动控制和命令TXT同步。
+  当前构建、测试、包哈希以 `motion-v5-validation.json`、`motion-v5-build.json`、`motion-v5-delivery.json` 为准；
+  v4及之前证据仅保留历史，不能沿用旧二进制哈希。GLIBC2.38仅本地交叉目标，默认PP、LQR实验，Q/R和比赛门限保持。
+  暂不接车、不读视频、不执行RISC-V目标，STM32固件任务暂停。工具链/环境/模型/产物不进Git。
+
+### 前轮任务交接、阶段统计与异步运动修正（2026-09-11，v4历史）
 
 - 修改前 fetch 确认 `aac7421` 与 origin/main 一致（0/0）。用户已授权修正第四份运动控制意见，
   继续直接 main 验证、提交、推送；最终同步状态以 Git HEAD/origin/main 核对。
@@ -254,10 +295,19 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 
 ### 构建、模型与验证证据
 
-- 当前 v4：Rust 常规 294 通过、0 失败，原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
-  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。当前入口为 `docs/motion-v4-validation.json`。
+- 当前v5：Rust常规305通过、0失败，默认忽略原生ORT与显式性能基准各1项，性能基准另跑1项通过；
+  跟踪example 2项、Python交付34项通过，fmt/all-targets clippy -D warnings/双RISC-V交叉链接通过，82份源码哈希核对。
+  app哈希 `ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9`；
+  robot哈希 `f286246369cd068271ba6bd4c987b12a40aecade7c458ebda9c62f965c2f8b9f`，1,975,968字节。
+  GLIBC基线2.38、实际最高引用2.34，动态依赖仍为app/libc，robot/libm+libc。
+  主机release整场预热1次再各3次：PP平均1.621→1.614s；LQR平均1.921→1.496s（任务变短，非每tick加速证明）。
+  证书360/2048点各2000样本，平均8.862/19.234µs、峰59.791/56.875µs；默认Worker23帧平均2.626ms、峰3.790ms。
+  都是本机采样，不是目标板WCET；资料入口为motion-v5-validation/host-profile/async-validation/build/delivery。
+
+- 历史 v4：Rust 常规 294 通过、0 失败，原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
+  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。当前入口为 `docs/motion-v5-validation.json`；v4数字仅为历史。
   两者实际最高 GLIBC 引用 2.34，构建基线 2.38；robot 需要 libm 与 libc，xt-stcar 需要 libc。
-  构建源码哈希已核对，当前二进制哈希见 `motion-v4-build.json` 和两份 ELF 报告。
+  构建源码哈希已核对，该轮二进制哈希见 `motion-v4-build.json` 和两份 ELF 报告。
   模型测试套件和原生 ORT 推理未重跑；打包另做模型格式、来源与包内文件校验，包状态见 `motion-v4-delivery.json`。
   本地 core 包 54 个文件、含模型包 58 个文件均已核验；包内文档、两个 ELF 及 80 份源码哈希与最终文件一致。
   两包仅在本地 dist，未上传或执行车辆；Git 仅同步源码、脚本、文档和验证记录。
@@ -288,9 +338,9 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
 - 新串口依赖 rustix **1.1.4**；两个目标程序由 `scripts/build-riscv.sh --offline` 检查并构建。
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
-  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v4 ELF 报告为准。
+  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v5 ELF 报告为准。
   前轮 robot 程序额外需要 `libm.so.6`，不能声称两个程序都只依赖 libc。
-- **当前构建证据使用 `docs/motion-v4-*`；`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
+- **当前构建证据使用 `docs/motion-v5-*`；`docs/motion-v4-*`、`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
   `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。
   `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；

@@ -4,7 +4,9 @@ use crate::navigation_diagnostics::is_unexpected_stop;
 use serde::Serialize;
 use std::collections::VecDeque;
 use xt_stcar_robot_core::mission::MissionPhase;
-use xt_stcar_robot_core::navigation::{CandidateDiagnostics, NavigationDecision};
+use xt_stcar_robot_core::navigation::{
+    CandidateDiagnostics, NavigationDecision, NavigationDiagnostics,
+};
 use xt_stcar_robot_core::{MotionOutput, Timestamp};
 
 pub const RECENT_ROUTE_GENERATIONS: usize = 16;
@@ -25,6 +27,7 @@ pub enum NavigationReason {
     PathTracking,
     EmptySpeedInterval,
     NoCollisionFreeBrakingTrajectory,
+    TerminalBudgetExhausted,
     Other,
 }
 
@@ -43,6 +46,7 @@ impl NavigationReason {
             "invalid_local_reference" => Self::InvalidLocalReference,
             "empty_speed_interval" => Self::EmptySpeedInterval,
             "no_collision_free_braking_trajectory" => Self::NoCollisionFreeBrakingTrajectory,
+            "terminal_budget_exhausted" => Self::TerminalBudgetExhausted,
             text if text.starts_with("path_tracking:") => Self::PathTracking,
             _ => Self::Other,
         }
@@ -68,6 +72,7 @@ pub struct CandidateTotals {
     pub sample_budget: u64,
     pub reference: u64,
     pub terminal_unreachable: u64,
+    pub terminal_budget: u64,
 }
 
 impl CandidateTotals {
@@ -86,8 +91,79 @@ impl CandidateTotals {
             footprint,
             sample_budget,
             reference,
-            terminal_unreachable
+            terminal_unreachable,
+            terminal_budget
         );
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct WorkCounter {
+    pub total: u64,
+    pub maximum_per_tick: u64,
+}
+
+impl WorkCounter {
+    fn observe(&mut self, value: usize) {
+        self.total = self.total.saturating_add(value as u64);
+        self.maximum_per_tick = self.maximum_per_tick.max(value as u64);
+    }
+}
+
+/// Fixed-size work accounting. These are operation counts, not CPU durations.
+/// Terminal work includes initial/global/lattice connections and candidate checks
+/// sharing the core's per-call ledger, rather than only rejected candidates.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct TerminalWorkStatistics {
+    pub solver_attempts: WorkCounter,
+    pub iterations: WorkCounter,
+    /// A solver consumed all eight local iterations without certification;
+    /// distinct from exhausting the shared per-tick ledger.
+    pub solver_iteration_exhaustions: WorkCounter,
+    /// Budget-charged samples: a rejected primitive may not execute its tail.
+    pub primitive_samples: WorkCounter,
+    pub continued_seed_attempts: WorkCounter,
+    pub continued_seed_accepted: WorkCounter,
+    /// Rejected only by the short solver's forward/distance applicability domain.
+    pub domain_rejections: WorkCounter,
+    /// Original grid-transition rejections after sample budget was admitted;
+    /// this does not identify a physical collision or prove geometric infeasibility.
+    pub primitive_grid_rejections: WorkCounter,
+    pub terminal_connections_checked: WorkCounter,
+    pub budget_exhausted_ticks: u64,
+    pub continuity_enforced_ticks: u64,
+    /// Largest configured ledger limits observed in this phase, not consumption.
+    pub maximum_solver_limit: usize,
+    pub maximum_iteration_limit: usize,
+    pub maximum_sample_limit: usize,
+}
+
+impl TerminalWorkStatistics {
+    fn observe(&mut self, diagnostics: &NavigationDiagnostics) {
+        let sample = diagnostics.terminal_work;
+        self.solver_attempts.observe(sample.solver_attempts);
+        self.iterations.observe(sample.iterations);
+        self.solver_iteration_exhaustions
+            .observe(sample.solver_iteration_exhaustions);
+        self.primitive_samples.observe(sample.primitive_samples);
+        self.continued_seed_attempts
+            .observe(sample.continued_seed_attempts);
+        self.continued_seed_accepted
+            .observe(sample.continued_seed_accepted);
+        self.domain_rejections.observe(sample.domain_rejections);
+        self.primitive_grid_rejections
+            .observe(sample.primitive_grid_rejections);
+        self.terminal_connections_checked
+            .observe(diagnostics.terminal_connections_checked);
+        self.budget_exhausted_ticks = self
+            .budget_exhausted_ticks
+            .saturating_add(u64::from(sample.budget_exhausted));
+        self.continuity_enforced_ticks = self
+            .continuity_enforced_ticks
+            .saturating_add(u64::from(diagnostics.terminal_continuity_enforced));
+        self.maximum_solver_limit = self.maximum_solver_limit.max(sample.solver_limit);
+        self.maximum_iteration_limit = self.maximum_iteration_limit.max(sample.iteration_limit);
+        self.maximum_sample_limit = self.maximum_sample_limit.max(sample.sample_limit);
     }
 }
 
@@ -179,6 +255,7 @@ pub struct PhaseStatistics {
     pub fault_ticks: u64,
     pub navigation_reason_ticks: Vec<ReasonCount>,
     pub candidate_totals: CandidateTotals,
+    pub terminal_work: TerminalWorkStatistics,
     pub routes: RouteStatistics,
 }
 
@@ -197,6 +274,7 @@ impl PhaseStatistics {
             fault_ticks: 0,
             navigation_reason_ticks: Vec::new(),
             candidate_totals: CandidateTotals::default(),
+            terminal_work: TerminalWorkStatistics::default(),
             routes: RouteStatistics::default(),
         }
     }
@@ -309,6 +387,7 @@ impl CompetitionStatisticsCollector {
                 stats.reason(reason);
             }
             stats.candidate_totals.add(nav.diagnostics.candidates);
+            stats.terminal_work.observe(&nav.diagnostics);
             if nav.diagnostics.route_revision > self.previous_revision {
                 let delta = nav.diagnostics.route_revision - self.previous_revision;
                 stats.routes.observe(at, nav, delta);
@@ -369,7 +448,9 @@ mod tests {
     use super::*;
     use xt_stcar_robot_core::MotionIntent;
     use xt_stcar_robot_core::autonomy::Point2;
-    use xt_stcar_robot_core::navigation::{NavigationDiagnostics, NavigationStatus};
+    use xt_stcar_robot_core::navigation::{
+        NavigationDiagnostics, NavigationStatus, TerminalWorkDiagnostics,
+    };
 
     fn decision(reason: Option<&str>, revision: u64) -> NavigationDecision {
         NavigationDecision {
@@ -491,6 +572,135 @@ mod tests {
         assert_eq!(routes.generations_without_observed_length, 1);
         assert_eq!(routes.observed_current_leg_length_sum_m, 10.0);
         assert_eq!(routes.recent_generations.len(), 2);
+    }
+
+    #[test]
+    fn terminal_work_preserves_phase_totals_peaks_and_budget_rejections() {
+        let mut c = CompetitionStatisticsCollector::default();
+        for (at, phase, work) in [
+            (0, MissionPhase::Cones, 3),
+            (100, MissionPhase::Cones, 7),
+            (200, MissionPhase::ApproachLight, 5),
+        ] {
+            let mut nav = decision(Some("terminal_budget_exhausted"), 0);
+            nav.diagnostics.terminal_work = TerminalWorkDiagnostics {
+                solver_attempts: work,
+                iterations: work * 2,
+                primitive_samples: work * 10,
+                budget_exhausted: work == 7,
+                solver_limit: 256,
+                iteration_limit: 1024,
+                sample_limit: 65_536,
+                continued_seed_attempts: work,
+                continued_seed_accepted: work - 1,
+                domain_rejections: work - 2,
+                primitive_grid_rejections: work - 3,
+                solver_iteration_exhaustions: work - 1,
+            };
+            nav.diagnostics.terminal_connections_checked = work + 1;
+            nav.diagnostics.terminal_continuity_enforced = work != 3;
+            nav.diagnostics.candidates.terminal_budget = usize::from(work == 7);
+            nav.diagnostics.candidates.terminal_unreachable = 2;
+            c.observe(
+                Timestamp(at),
+                Some(phase),
+                &MotionOutput::Stop,
+                Some(&nav),
+                false,
+            );
+        }
+        let summary = c.finish();
+        let cones = &summary.phases[0];
+        let work = &cones.terminal_work;
+        assert_eq!(
+            (
+                work.solver_attempts.total,
+                work.solver_attempts.maximum_per_tick
+            ),
+            (10, 7)
+        );
+        assert_eq!(
+            (work.iterations.total, work.iterations.maximum_per_tick),
+            (20, 14)
+        );
+        assert_eq!(
+            (
+                work.solver_iteration_exhaustions.total,
+                work.solver_iteration_exhaustions.maximum_per_tick
+            ),
+            (8, 6)
+        );
+        assert_eq!(
+            (
+                work.primitive_samples.total,
+                work.primitive_samples.maximum_per_tick
+            ),
+            (100, 70)
+        );
+        assert_eq!(
+            (
+                work.continued_seed_attempts.total,
+                work.continued_seed_accepted.total
+            ),
+            (10, 8)
+        );
+        assert_eq!(
+            (
+                work.domain_rejections.total,
+                work.domain_rejections.maximum_per_tick
+            ),
+            (6, 5)
+        );
+        assert_eq!(
+            (
+                work.primitive_grid_rejections.total,
+                work.primitive_grid_rejections.maximum_per_tick
+            ),
+            (4, 4)
+        );
+        assert_eq!(
+            (
+                work.terminal_connections_checked.total,
+                work.terminal_connections_checked.maximum_per_tick
+            ),
+            (12, 8)
+        );
+        assert_eq!(
+            (work.budget_exhausted_ticks, work.continuity_enforced_ticks),
+            (1, 1)
+        );
+        assert_eq!(
+            (
+                work.maximum_solver_limit,
+                work.maximum_iteration_limit,
+                work.maximum_sample_limit
+            ),
+            (256, 1024, 65_536)
+        );
+        assert_eq!(
+            (
+                cones.candidate_totals.terminal_budget,
+                cones.candidate_totals.terminal_unreachable
+            ),
+            (1, 4)
+        );
+        assert_eq!(
+            cones.navigation_reason_ticks[0].reason,
+            NavigationReason::TerminalBudgetExhausted
+        );
+        assert_eq!(summary.phases[1].terminal_work.solver_attempts.total, 5);
+        assert_eq!(summary.phases[1].terminal_work.budget_exhausted_ticks, 0);
+    }
+
+    #[test]
+    fn accumulated_work_saturates_without_losing_the_single_tick_peak() {
+        let mut counter = WorkCounter {
+            total: u64::MAX - 2,
+            maximum_per_tick: 4,
+        };
+        counter.observe(7);
+        assert_eq!(counter.total, u64::MAX);
+        assert_eq!(counter.maximum_per_tick, 7);
     }
 
     #[test]

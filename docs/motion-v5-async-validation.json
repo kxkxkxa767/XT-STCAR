@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "scope": "Local synthetic async admission validation; no vehicle or physical output",
+  "baseline": {
+    "async_implementation_commit": "f83898a",
+    "scope_note": "Reproduced before modifying control_execution.rs; other v5 navigation work was concurrent in the shared working tree. The real navigator emitted a positive straight intent.",
+    "entrypoint": "AutonomyWorker::spawn (real AutonomyController and Navigator)",
+    "source_ms": 0,
+    "planned_ms": 60,
+    "poll_ms": 67,
+    "source_speed_mps": 0.0,
+    "corridor_wall_y_m": [
+      2.05,
+      2.95
+    ],
+    "corridor_width_m": 0.9,
+    "laser_points": 360,
+    "laser_point_radius_m": 0.015,
+    "navigation_config_changed": false,
+    "navigation_intent": {
+      "speed_mps": 0.04000000000000001,
+      "curvature_per_m": 0.0
+    },
+    "final_command": "Stop",
+    "fault": null,
+    "adoption_rejection": "CertificateUnsafe",
+    "legacy_global_speed_circle_radius_m": 0.47553864678361274,
+    "legacy_circle_plus_laser_radius_m": 0.49053864678361275,
+    "log": "work/motion-v5-async-baseline.txt"
+  },
+  "model_envelope": {
+    "coordinates": "Rectangle aligned with the original measured source body frame; source measurements and timestamps are not rewritten",
+    "speed_bound": "V=max(normalized source measurement, all adopted speed targets since source, held target, projected speed, candidate target)",
+    "curvature_bound": "K=max(abs(source applied curvature), abs(all adopted targets since source), abs(held/applied curvature), abs(candidate target))",
+    "horizon_s": "(oldest_source_ms + original_lease_ms + navigation_control_period_ms - pose_capture_ms)/1000",
+    "distance_bound_m": "S=V*T+V^2/(2*b), b=configured max_decel_mps2; complete original lease plus one control period and full braking retained",
+    "yaw_bound_rad": "K*S",
+    "lateral_center_bound_m": "min(S,K*S^2/2)",
+    "footprint_rotation_padding_m": "min(R*K*S,2*R), R=max(front,rear).hypot(half_width)",
+    "longitudinal_center_range_m": "[0,S] when K*S < pi/2; [-S,S] otherwise",
+    "geometry_checks": [
+      "whole rectangle corners against world bounds",
+      "whole rectangle corners against active oriented light boundary",
+      "laser disc vs source-body rectangle after lidar TF",
+      "visual cone disc vs source-body rectangle"
+    ],
+    "margin": "Configured clearance remains unchanged; a scale-dependent floating arithmetic allowance is added",
+    "straight_at_0_30_mps": {
+      "lease_ms": 250,
+      "period_ms": 100,
+      "deceleration_mps2": 0.6,
+      "distance_bound_m": 0.18,
+      "body_rectangle_before_roundoff_m": {
+        "min_x": -0.22,
+        "max_x": 0.44,
+        "min_y": -0.17,
+        "max_y": 0.17
+      }
+    },
+    "work": "Existing bounded history traversal gains two maxima; background certificate remains one obstacle pass plus constant geometry/model checks; no allocations in envelope checks; poll unchanged",
+    "unchanged_guards": [
+      "original source lease",
+      "old expiry before new adoption",
+      "bounded adoption window",
+      "execution revision",
+      "actual command-change steering slew",
+      "source freshness and duplicate-source non-renewal",
+      "fault latch",
+      "normal speed window and lateral transition peak",
+      "nonblocking poll",
+      "bounded history capacity 128"
+    ]
+  },
+  "validation": {
+    "targeted_results": {
+      "control_execution": {
+        "passed": 6,
+        "ignored": 1
+      },
+      "control_runtime": {
+        "passed": 26
+      },
+      "async_autonomy": {
+        "passed": 3
+      },
+      "runner_all_targets_clippy": "passed with -D warnings",
+      "changed_files_rustfmt_and_diff_check": "passed"
+    },
+    "real_default_worker_clear": {
+      "test": "default_worker_accepts_delayed_plan_in_clear_ninety_centimeter_corridor",
+      "capture_period_ms": 100,
+      "capture_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_jitter_ms": [
+        3,
+        7,
+        9
+      ],
+      "output_base_period_ms": 20,
+      "accepted_drive_source_frames": 23,
+      "last_capture_ms": 2200,
+      "original_expiry_ms": 2450,
+      "mission_phase": "ApproachCrosswalk",
+      "unchanged_mission_approach_speed_mps": 0.18,
+      "assertions": [
+        "all 23 real-controller reports adopted Drive with no rejection or fault",
+        "speed >0.17m/s",
+        "forward displacement >0.25m",
+        "source-2200 lease expires at 2450ms",
+        "CommandExpired Stop then complete braking to 0"
+      ],
+      "plant": "Independent exact straight integral; acceleration/deceleration 0.6m/s^2 (acceleration deliberately faster than navigation 0.4m/s^2)"
+    },
+    "real_default_worker_blocked": {
+      "test": "default_worker_keeps_stopped_when_corridor_has_a_front_wall",
+      "front_wall_x_m": 0.9,
+      "source_x_m": 0.6,
+      "result": "real navigator intent speed 0, final Stop"
+    },
+    "direct_full_speed": {
+      "test": "envelope_preserves_forward_stopping_room_laser_tf_and_cone_radii",
+      "source_model_history_held_candidate_speed_mps": 0.3,
+      "curvature_per_m": 0,
+      "side_wall_body_point_m": [
+        0,
+        0.45
+      ],
+      "side_result": "accepted",
+      "front_obstacle_body_point_m": [
+        0.3,
+        0
+      ],
+      "front_result": "rejected",
+      "lidar_tf": {
+        "x_m": 0.1,
+        "y_m": -0.04,
+        "yaw_rad": 0.2
+      },
+      "cone_tests": "body y=.29 rejects radius .14; body y=.32 accepts"
+    },
+    "independent_footprint_containment": {
+      "test": "analytic_envelope_contains_independent_delayed_adoption_and_full_braking_paths",
+      "integration_step_ms": 0.5,
+      "adoption_times_ms": {
+        "first": 80,
+        "last": 180,
+        "step": 1,
+        "count": 101
+      },
+      "trajectory_classes": 4,
+      "stop_target_time_ms": 350,
+      "full_braking_and_recentring": true,
+      "maximum_test_configuration": {
+        "speed_mps": 3,
+        "curvature_per_m": 10,
+        "deceleration_mps2": 1,
+        "curvature_rate_per_s": 50
+      },
+      "notes": "Geometry-only containment across the valid configuration domain, including combinations that separate dynamic admission gates may reject; not a claim that all these trajectories are issued by the controller. Uses independent midpoint integration, not project_motion."
+    },
+    "history_and_stop": {
+      "test": "transient_history_peaks_and_stop_recentring_remain_in_the_envelope",
+      "cases": "All high targets retained from source730 to plan840 despite Stop800; source810 after Stop still retains applied curvature1.96 while commanded curvature is0"
+    },
+    "rotated_geometry": {
+      "test": "rotated_envelope_checks_world_bounds_oblique_light_line_and_disc_tangency",
+      "source_yaw_rad": 1.5707963267948966,
+      "light_approach_yaw_rad": 0.7853981633974483,
+      "coverage": [
+        "full rotated rectangle world limit",
+        "original body fits but stopping envelope violates oblique light line",
+        "exact representable disc tangency rejected"
+      ]
+    },
+    "existing_timing_regressions": [
+      "aligned_admission_window_rejects_a_late_result_without_starting_motion",
+      "an_intervening_adoption_invalidates_a_queued_projection",
+      "commanded_steering_slew_uses_real_adoption_spacing",
+      "leases_use_oldest_capture_and_late_results_cannot_revive_expired_output",
+      "late_drive_is_never_adopted_after_watchdog_stop_and_stop_recenters_over_time",
+      "admission_checks_speed_limits_at_both_ends_of_the_window",
+      "async_projection_and_certificate_share_navigation_measurement_roundoff"
+    ]
+  },
+  "limits": [
+    "Static world obstacles only; moving obstacles are not certified.",
+    "Assumes source pose/speed and frame association are valid, adopted command history is correct, no slip/reversal or speed/curvature overshoot, and braking realizes at least the configured deceleration.",
+    "Geometric path-length bound does not depend on the acceleration rate, but projected navigation state and other dynamic checks still use the configured model.",
+    "The original control-period allowance still presumes independently scheduled polling; this is not a real-time scheduling guarantee.",
+    "Rectangle can remain conservative in tight turns; core navigation has its own unchanged body/collision/braking gates.",
+    "This is short synthetic default-worker validation, not a full asynchronous race or hardware acceptance."
+  ],
+  "host_cost": {
+    "status": "final sequential host measurements after source freeze",
+    "build_profile": "release",
+    "certificate_only": [
+      {
+        "n": 2000,
+        "laser_points": 360,
+        "total_ns": 17724627,
+        "mean_ns": 8862,
+        "max_ns": 59791
+      },
+      {
+        "n": 2000,
+        "laser_points": 2048,
+        "total_ns": 38468832,
+        "mean_ns": 19234,
+        "max_ns": 56875
+      }
+    ],
+    "certificate_log": "docs/motion-v5-certificate-cost.log",
+    "default_worker_submit_to_visible": {
+      "n": 23,
+      "total_us": 60414,
+      "mean_us": 2626,
+      "max_us": 3790
+    },
+    "default_worker_log": "docs/motion-v5-async-worker-cost.log",
+    "certificate_command": "rustup run 1.97.1 cargo test --release --locked --offline -p xt-stcar-robot-runner --lib certificate_host_cost_measurement -- --ignored --nocapture",
+    "real_default_worker_command": "rustup run 1.97.1 cargo test --release --locked --offline -p xt-stcar-robot-runner --test async_autonomy default_worker_accepts_delayed_plan_in_clear_ninety_centimeter_corridor -- --nocapture",
+    "timing_scope": "certificate function timing excludes planning; submit-to-visible includes scheduling and real planning with frozen synthetic clock. Neither sampled maximum is WCET or RISC-V deadline evidence.",
+    "preliminary_samples_retained_locally": "work/motion-v5-async-certificate-cost.txt; not final measurements"
+  }
+}

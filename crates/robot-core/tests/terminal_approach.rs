@@ -146,3 +146,106 @@ fn short_s_arrivals_keep_their_two_turns_in_both_directions() {
         );
     }
 }
+
+#[test]
+fn original_lqr_42200_sensor_geometry_recovers_with_all_motion_gates_in_both_directions() {
+    use xt_stcar_robot_core::autonomy::{HalfPlane, ObstacleDisc};
+    let raw: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../docs/motion-v5-original-input-window.json"
+    ))
+    .unwrap();
+    let frame = raw["frames"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|frame| frame["at"] == 42200)
+        .unwrap();
+    for direction in [-1.0, 1.0] {
+        let mut cfg = competition_navigation();
+        cfg.tracking = serde_json::from_value(serde_json::json!({
+            "kind":"lqr", "q_lateral":4.0, "q_heading":2.0, "r_curvature":1.0,
+            "min_speed_mps":0.03, "max_heading_error_rad":0.7, "max_lateral_error_m":0.5,
+        }))
+        .unwrap();
+        let mut estimate: PoseEstimate =
+            serde_json::from_value(frame["snapshot"]["pose"].clone()).unwrap();
+        estimate.pose.y_m = 2.5 + direction * (estimate.pose.y_m - 2.5);
+        estimate.pose.yaw_rad *= direction;
+        estimate.yaw_rate_radps *= direction;
+        let mut obstacles: Vec<ObstacleDisc> =
+            serde_json::from_value(frame["world_obstacles"].clone()).unwrap();
+        assert_eq!(obstacles.len(), 360);
+        for obstacle in &mut obstacles {
+            obstacle.center.y_m = 2.5 + direction * (obstacle.center.y_m - 2.5);
+        }
+        let goal = Point2 {
+            x_m: 5.55,
+            y_m: 2.5,
+        };
+        let mut nav = Navigator::new(cfg.clone()).unwrap();
+        nav.set_travel_boundary(Some(HalfPlane::new(goal, 0.0, 0.45).unwrap()));
+        let mut execution = nav.execution_state();
+        execution.at = estimate.captured_at;
+        execution.applied_curvature_per_m =
+            direction * frame["actual_curvature_per_m"].as_f64().unwrap();
+        execution.commanded_curvature_per_m = execution.applied_curvature_per_m;
+        nav.set_execution_state(execution).unwrap();
+        // Start with a fresh route from the archived sensor geometry. The unit
+        // regression separately enumerates the exact original 44 cold queries.
+        let result = nav
+            .plan_with_arrival(
+                estimate.captured_at,
+                &estimate,
+                &obstacles,
+                estimate.captured_at,
+                goal,
+                Some(0.0),
+                0.18,
+                ArrivalBehavior::Stop,
+            )
+            .unwrap();
+        assert_eq!(result.status, NavigationStatus::Driving, "{result:?}");
+        let d = result.diagnostics;
+        assert!(d.terminal_work.continued_seed_accepted > 0);
+        assert!(result.intent.speed_mps >= estimate.speed_mps - cfg.max_decel_mps2 * 0.1 - 1e-12);
+        assert!(result.intent.speed_mps <= 0.18);
+        assert!(
+            (result.intent.curvature_per_m - execution.commanded_curvature_per_m).abs()
+                <= cfg.max_curvature_rate_per_s * 0.1 + 1e-12
+        );
+        assert!(d.terminal_work.primitive_samples <= d.terminal_work.sample_limit);
+        assert!(d.terminal_work.iterations <= d.terminal_work.iteration_limit);
+        assert!(d.terminal_work.solver_attempts <= d.terminal_work.solver_limit);
+        assert_eq!(
+            d.candidates.rollouts_evaluated, 44,
+            "recovery must not redo rollouts"
+        );
+        assert_eq!(
+            d.candidates.accepted
+                + d.candidates.terminal_unreachable
+                + d.candidates.terminal_budget,
+            44
+        );
+        assert!(d.selected_stopping_margin.unwrap().clearance_m > 0.0);
+        // A new observation occupying the goal revokes every cached hint.
+        obstacles.push(ObstacleDisc {
+            center: goal,
+            radius_m: 0.2,
+        });
+        estimate.captured_at = Timestamp(42300);
+        let blocked = nav
+            .plan_with_arrival(
+                estimate.captured_at,
+                &estimate,
+                &obstacles,
+                estimate.captured_at,
+                goal,
+                Some(0.0),
+                0.18,
+                ArrivalBehavior::Stop,
+            )
+            .unwrap();
+        assert_eq!(blocked.status, NavigationStatus::Blocked);
+        assert_eq!(blocked.intent.speed_mps, 0.0);
+    }
+}

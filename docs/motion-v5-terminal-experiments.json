@@ -1,0 +1,344 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "f83898a050649e03f25ad51b9c18c0bb12c743b2",
+  "scope": "host-only deterministic geometry and simulation; no hardware, physical motion output, video, dependency update or changes to user ZIP/PDF",
+  "baseline": {
+    "artifact": "docs/motion-v4-competition-comparison.json",
+    "metrics": {
+      "pure_pursuit": {
+        "completed": true,
+        "elapsed_ms": 58800,
+        "distance_m": 11.508841029059477,
+        "minimum_cone_clearance_m": 0.24250886066502375,
+        "final_actual_speed_mps": 0.0,
+        "unexpected_stop_ticks": 2,
+        "approach_light": {
+          "duration_ms": 27800,
+          "distance_m": 4.772230783032535,
+          "route_generations": 9,
+          "unexpected_stop_ticks": 0,
+          "terminal_work": null
+        }
+      },
+      "lqr": {
+        "completed": true,
+        "elapsed_ms": 70600,
+        "distance_m": 13.440314177728881,
+        "minimum_cone_clearance_m": 0.2735281037908029,
+        "final_actual_speed_mps": 0.0,
+        "unexpected_stop_ticks": 1,
+        "approach_light": {
+          "duration_ms": 42400,
+          "distance_m": 7.574950280595557,
+          "route_generations": 8,
+          "unexpected_stop_ticks": 1,
+          "terminal_work": null
+        }
+      }
+    },
+    "native_sensor_window": "docs/motion-v5-original-input-window.json"
+  },
+  "reproduction": {
+    "python_execution": "work/motion-v5-original/python-execution.log",
+    "rust_original_geometry": "work/motion-v5-original/rust-baseline.log",
+    "original_equal_family_candidates": 44,
+    "original_equal_family_accepted": 0,
+    "original_individual_iteration_exhaustions": 44,
+    "original_scene_world_obstacles": 360,
+    "position_tolerance_m": 0.0001,
+    "heading_tolerance_rad": 0.06,
+    "same_curvature_rate_and_grid_checks": true
+  },
+  "experiments": [
+    {
+      "variant": "Prefer continued seed for all candidate connections",
+      "accepted": false,
+      "evidence": "work/motion-v5-terminal-initial-build.log",
+      "result": "Original mirrored short S regression failed to arrive within 120 ticks, travelled 2.0961662 m; expanding the normal candidate set changed otherwise working control selection."
+    },
+    {
+      "variant": "Recovery only after every original candidate fails; score all recovered candidates with the ordinary constant-curvature score",
+      "accepted": false,
+      "evidence": "work/motion-v5-seed-score-recovery-comparison.json",
+      "metrics": {
+        "pure_pursuit": {
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "minimum_cone_clearance_m": 0.24250886066502375,
+          "final_actual_speed_mps": 0.0,
+          "unexpected_stop_ticks": 2,
+          "approach_light": {
+            "duration_ms": 27800,
+            "distance_m": 4.772230783032535,
+            "route_generations": 9,
+            "unexpected_stop_ticks": 0,
+            "terminal_work": {
+              "budget_exhausted_ticks": 0,
+              "continued_seed_accepted": {
+                "maximum_per_tick": 0,
+                "total": 0
+              },
+              "continued_seed_attempts": {
+                "maximum_per_tick": 0,
+                "total": 0
+              },
+              "continuity_enforced_ticks": 24,
+              "domain_rejections": {
+                "maximum_per_tick": 45,
+                "total": 1074
+              },
+              "iterations": {
+                "maximum_per_tick": 305,
+                "total": 6465
+              },
+              "maximum_iteration_limit": 1024,
+              "maximum_sample_limit": 65536,
+              "maximum_solver_limit": 256,
+              "primitive_grid_rejections": {
+                "maximum_per_tick": 16,
+                "total": 21
+              },
+              "primitive_samples": {
+                "maximum_per_tick": 28064,
+                "total": 475153
+              },
+              "solver_attempts": {
+                "maximum_per_tick": 47,
+                "total": 1234
+              },
+              "terminal_connections_checked": {
+                "maximum_per_tick": 45,
+                "total": 1129
+              }
+            }
+          }
+        },
+        "lqr": {
+          "completed": true,
+          "elapsed_ms": 79700,
+          "distance_m": 15.057721523545421,
+          "minimum_cone_clearance_m": 0.2735281037908029,
+          "final_actual_speed_mps": 0.0,
+          "unexpected_stop_ticks": 0,
+          "approach_light": {
+            "duration_ms": 51600,
+            "distance_m": 9.198623063556807,
+            "route_generations": 15,
+            "unexpected_stop_ticks": 0,
+            "terminal_work": {
+              "budget_exhausted_ticks": 3,
+              "continued_seed_accepted": {
+                "maximum_per_tick": 41,
+                "total": 700
+              },
+              "continued_seed_attempts": {
+                "maximum_per_tick": 45,
+                "total": 890
+              },
+              "continuity_enforced_ticks": 77,
+              "domain_rejections": {
+                "maximum_per_tick": 45,
+                "total": 3445
+              },
+              "iterations": {
+                "maximum_per_tick": 595,
+                "total": 18170
+              },
+              "maximum_iteration_limit": 1024,
+              "maximum_sample_limit": 65536,
+              "maximum_solver_limit": 256,
+              "primitive_grid_rejections": {
+                "maximum_per_tick": 2,
+                "total": 2
+              },
+              "primitive_samples": {
+                "maximum_per_tick": 65528,
+                "total": 1909072
+              },
+              "solver_attempts": {
+                "maximum_per_tick": 90,
+                "total": 4524
+              },
+              "terminal_connections_checked": {
+                "maximum_per_tick": 89,
+                "total": 4380
+              }
+            }
+          }
+        }
+      },
+      "result": "Original 42.2 s stop removed, but LQR later produced long loops and total distance/time worsened."
+    },
+    {
+      "variant": "Recovery only after every original candidate fails; order by proximity to certified first-segment curvature, recheck remaining segments, use first certified action",
+      "accepted": true,
+      "evidence": "docs/motion-v5-competition-comparison.json",
+      "metrics": {
+        "pure_pursuit": {
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "minimum_cone_clearance_m": 0.24250886066502375,
+          "final_actual_speed_mps": 0.0,
+          "unexpected_stop_ticks": 2,
+          "approach_light": {
+            "duration_ms": 27800,
+            "distance_m": 4.772230783032535,
+            "route_generations": 9,
+            "unexpected_stop_ticks": 0,
+            "terminal_work": {
+              "budget_exhausted_ticks": 0,
+              "continued_seed_accepted": {
+                "maximum_per_tick": 0,
+                "total": 0
+              },
+              "continued_seed_attempts": {
+                "maximum_per_tick": 0,
+                "total": 0
+              },
+              "continuity_enforced_ticks": 24,
+              "domain_rejections": {
+                "maximum_per_tick": 45,
+                "total": 1074
+              },
+              "iterations": {
+                "maximum_per_tick": 305,
+                "total": 6465
+              },
+              "maximum_iteration_limit": 1024,
+              "maximum_sample_limit": 65536,
+              "maximum_solver_limit": 256,
+              "primitive_grid_rejections": {
+                "maximum_per_tick": 16,
+                "total": 21
+              },
+              "primitive_samples": {
+                "maximum_per_tick": 28064,
+                "total": 475153
+              },
+              "solver_attempts": {
+                "maximum_per_tick": 47,
+                "total": 1234
+              },
+              "solver_iteration_exhaustions": {
+                "maximum_per_tick": 33,
+                "total": 589
+              },
+              "terminal_connections_checked": {
+                "maximum_per_tick": 45,
+                "total": 1129
+              }
+            }
+          }
+        },
+        "lqr": {
+          "completed": true,
+          "elapsed_ms": 54300,
+          "distance_m": 10.249674629119367,
+          "minimum_cone_clearance_m": 0.2735281037908029,
+          "final_actual_speed_mps": 0.0,
+          "unexpected_stop_ticks": 0,
+          "approach_light": {
+            "duration_ms": 26200,
+            "distance_m": 4.39062905957664,
+            "route_generations": 5,
+            "unexpected_stop_ticks": 0,
+            "terminal_work": {
+              "budget_exhausted_ticks": 0,
+              "continued_seed_accepted": {
+                "maximum_per_tick": 3,
+                "total": 49
+              },
+              "continued_seed_attempts": {
+                "maximum_per_tick": 3,
+                "total": 49
+              },
+              "continuity_enforced_ticks": 57,
+              "domain_rejections": {
+                "maximum_per_tick": 45,
+                "total": 2547
+              },
+              "iterations": {
+                "maximum_per_tick": 398,
+                "total": 17804
+              },
+              "maximum_iteration_limit": 1024,
+              "maximum_sample_limit": 65536,
+              "maximum_solver_limit": 256,
+              "primitive_grid_rejections": {
+                "maximum_per_tick": 0,
+                "total": 0
+              },
+              "primitive_samples": {
+                "maximum_per_tick": 52748,
+                "total": 1709996
+              },
+              "solver_attempts": {
+                "maximum_per_tick": 58,
+                "total": 2677
+              },
+              "solver_iteration_exhaustions": {
+                "maximum_per_tick": 46,
+                "total": 1961
+              },
+              "terminal_connections_checked": {
+                "maximum_per_tick": 46,
+                "total": 2607
+              }
+            }
+          }
+        }
+      },
+      "result": "PP output remains identical; LQR completes the short approach without original 42.2 s stop or the following full loop."
+    }
+  ],
+  "final_policy": {
+    "ordinary_candidate_order_and_score_unchanged": true,
+    "extra_curvature_or_speed_candidates": 0,
+    "redo_rollouts_for_recovery": false,
+    "fixed_split_ratio_search": false,
+    "continued_hint": "Previous certified endpoint controls and remaining segment length ratio, used only as numerical seed and fully checked against current pose/applied curvature/grid; never a reusable motion certificate.",
+    "global_terminal_budget": {
+      "solver_limit": 256,
+      "iteration_limit": 1024,
+      "sample_limit": 65536,
+      "per_solver_iteration_limit": 8,
+      "scope": "shared by initial route connector, lattice endpoint attempts, current-state certification and candidate recovery in each valid plan",
+      "sample_count_meaning": "samples reserved before executing a primitive; early grid rejection may execute fewer samples",
+      "exhaustion": "sticky; uncertified candidates rejected, an already certified best candidate remains usable; impossible-to-finish lattice search stops"
+    },
+    "limitations": [
+      "Bounded family and numerical iteration failure is not proof of geometric impossibility.",
+      "Only the complete original symmetric 42.2 s sensor scene and synthetic closed loops are verified; physical feedback and target execution timing remain unverified.",
+      "Host simulator elapsed_ms is simulated time, not CPU processing time."
+    ]
+  },
+  "tests": {
+    "native_original_scene_mirrors": "navigation::terminal::tests::original_lqr_42200_remaining_segments_restore_a_grid_checked_candidate_on_both_sides",
+    "budget_axes": "navigation::terminal::tests::every_terminal_attempt_shares_solver_iteration_and_sample_limits",
+    "end_to_end_navigation": "terminal_approach::original_lqr_42200_sensor_geometry_recovers_with_all_motion_gates_in_both_directions",
+    "prior_short_s": "terminal_approach::short_s_arrivals_keep_their_two_turns_in_both_directions",
+    "log": "work/motion-v5-terminal-final-targeted.log",
+    "clippy": "work/motion-v5-terminal-final-clippy.log"
+  },
+  "date": "2026-09-13",
+  "evidence_note": "Intermediate work/ logs remain local; this report preserves their outcomes. Final competition and independent source-input evidence are committed under docs/.",
+  "formal_final_report": "docs/motion-v5-competition-comparison.json",
+  "formal_final_work_verified": {
+    "pure_pursuit": {
+      "solver_attempts": 47,
+      "iterations": 305,
+      "solver_iteration_exhaustions": 33,
+      "primitive_samples": 28064,
+      "terminal_connections_checked": 45
+    },
+    "lqr": {
+      "solver_attempts": 58,
+      "iterations": 398,
+      "solver_iteration_exhaustions": 46,
+      "primitive_samples": 52748,
+      "terminal_connections_checked": 46
+    }
+  }
+}
