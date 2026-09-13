@@ -238,7 +238,7 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
 
 路径跟踪 A/B（2026-09-09 新增）
 [Mac；用途] 在直线/弯道及合成转向响应下比较 Pure Pursuit 与实验 LQR。
-[替换项] 无。输出一份 JSON 到 stdout；不读写设备、不执行比赛状态机。
+[替换项] 无。输出一份 JSON 到 stdout；不读写设备。第一条只测跟踪层，第二条执行完整比赛状态机。
 
   cargo run --release --locked --offline -p xt-stcar-robot-core --example tracking_comparison
   cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_comparison
@@ -247,8 +247,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
   它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
   LQR仍为实验选项，默认Pure Pursuit保持不变；当前结果见
-  docs/motion-v5-competition-comparison.json；各算法须分别看completed和fault。
-  旧motion-v4/v3/v2和motion-control结果保留历史，不当作当前版本验收。
+  docs/motion-v6-competition-comparison.json；各算法须分别看completed和fault。
+  旧motion-v5/v4/v3/v2和motion-control结果保留历史，不当作当前版本验收。
   summary.first_navigation_failure 为首个非预期阻塞/故障窗口，最多8帧前文、
   触发帧、8帧后文；null表示没有触发。先看触发帧的navigation_reason、
   navigation.candidates及请求/选中曲率，再对照最终fault；首次阻塞可能恢复。
@@ -257,6 +257,33 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   常规完整比赛仍运行下方 autonomy-sim。
   原有模拟配置未写 navigation.tracking 时默认 Pure Pursuit；LQR 配置
   及模型边界见 docs/运动控制设计与对比.md。不要直接用于实车。
+
+恢复预算、完整异步与持续时钟（v6，Mac离线）
+
+  cd /Users/yuhaojin/Documents/XT-STCAR
+  cargo test --locked --offline -p xt-stcar-robot-core --test terminal_approach
+    检查21/41/61/81档与左右镜像、新障碍拒绝旧初值、普通最佳优先和共享预算。
+  cargo test --locked --offline -p xt-stcar-robot-runner --test async_deadlines
+    真实Worker阶段挂起，逻辑时钟和输出/车辆仍推进；覆盖采用窗、原lease、替换、revision和转向变化率。
+  cargo test --locked --offline -p xt-stcar-robot-runner --test async_competition
+    完整异步框架的断流/故障停车与有界事件时序检查。
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example async_motion_comparison -- both
+    同一整场分别跑PP/LQR，默认真实源延迟60/80ms、采用偏移3/7/9ms，plant只用poll.command。
+    任一失败仍输出完整JSON，然后返回非零；当前PP完成、实验LQR停滞10秒失败，不要忽略退出码。
+    可用参数pp或lqr单独运行。功能钟等后台时暂停；模拟完成不证明目标计算满足期限。
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example async_host_clock
+    约3秒真实Mac时钟短转弯/断流观察；不等待worker来冻结时钟，保留排队/导航/证书/采用耗时。
+    短场景把斑马线放到当前不可见处以观察搜索接近时的转向，不是更改完整比赛配置。
+    默认不打开设备，末尾才输出JSON；需要保存可在命令末尾加 > work/自己的报告.json。
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_comparison
+    原同步整场仍为PP58.8s/LQR54.3s，不能与异步工况混为一谈。
+
+  完整异步example可在跟踪器参数后传入一个本地JSON时序文件。默认配置示例：
+  {"capture_period_ms":100,"output_period_ms":20,"input_delays_ms":[60,80],"adoption_delays_ms":[3,7,9],"stop_input_at_ms":null,"measure_wall_time":false}
+  显式measure_wall_time=true才读主机时钟并累计有界耗时统计，不修改source/planned/lease或控制判定规则；采样开销仍可能影响主机调度。
+  不用planned_at冒充worker实际开始时刻；排队、计算、发布到观察分别看。
+  最新入口docs/恢复预算与完整异步验证.md、motion-v6-validation.json、motion-v6-async-comparison.json。
+  参数扰动和已知LQR失败也保留；不放宽安全/期限，不切换默认算法。
 
 运动执行、终端接续与异步时间检查（v5）
 [Mac；用途] 检查采用命令历史、连续渐变的侧向加速度峰值、通过点及车辆模型。
@@ -287,7 +314,7 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   这不会提高磁盘日志频率，也不是1ms实车控制周期。
   带朝向目标的缓存参考以完整车体偏离检查，包含航向造成的角点位移；整段评分比较对应四个
   车身角的世界位置差最大值，统一以米衡量位姿误差。不能仅凭旧路径无碰撞就认为仍可到达。
-  当前完整结果和中间失败分别保存在docs/motion-v5-competition-comparison.json及
+  v5完整结果和中间失败分别保存在docs/motion-v5-competition-comparison.json及
   本轮修正说明引用的证据；不沿用v4/v3时间和哈希。默认PP、LQR实验，比赛门限未放宽。
   当前/选中/下一周期停车余量分别为current_stopping_margin、selected_stopping_margin、
   selected_next_stopping_margin；constraint指出边界或本次障碍索引。未来余量只用于诊断，
@@ -331,8 +358,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   solver_iteration_exhaustions表示单次8迭代用尽，budget_exhausted表示整拍共享额度不足，
   两者都不证明物理不可达。continued_seed_attempts/accepted记录重验接续初值的结果。
   summary.statistics.phases[].terminal_work统计总数和每拍最大值；日志额度不改变控制选择。
-  当前证据见docs/motion-v5-validation.json、motion-v5-host-profile.json和
-  docs/终端连接延续与异步停车包络.md。完整异步比赛、实车制动/转向和目标耗时待车到后验证。
+  v5历史证据见docs/motion-v5-validation.json、motion-v5-host-profile.json和
+  docs/终端连接延续与异步停车包络.md。v6已补完整异步合成验证；实车制动/转向和目标耗时待车到后验证。
 
 5.1 配置类型与入口
   config/competition-sim.json：SimulationConfig，含场景、理想车辆模型、
@@ -814,8 +841,8 @@ JSON
   docs/Rust串口采集.md：传感器采集配置与限制。
   docs/Rust比赛自主闭环.md：任务、导航、感知 worker、仿真及日志设计边界。
   docs/任务交接与异步运动修正.md：v4真实验收半径、阶段统计、执行历史和异步采用证书。
-  docs/motion-v5-validation.json：本轮Rust/example/交付测试、fmt/clippy与交叉链接结果。
-  docs/motion-v5-delivery.json：本地包生成/核验状态、路径和哈希；交叉链接成功不等于包已核验。
+  docs/motion-v6-validation.json：本轮Rust/example/交付测试、fmt/clippy与交叉链接结果。
+  docs/motion-v6-delivery.json：本地包生成/核验状态、路径和哈希；交叉链接成功不等于包已核验。
   docs/终端连接延续与异步停车包络.md：v5接续策略、共享计算额度及有向停止矩形。
   docs/motion-v4-*及更早结果保留历史。
   docs/底盘标定映射.md：物理单位映射和未经验证的示例表。

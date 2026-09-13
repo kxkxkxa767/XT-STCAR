@@ -1,0 +1,102 @@
+[
+  {
+    "command": [
+      "target/release/examples/motion_comparison"
+    ],
+    "report": "docs/motion-v6-competition-comparison.json",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "host_executable_sha256": "a111e76963b1b25806805221f54b2cf6961755a653410ce6e2b370635657c958"
+  },
+  {
+    "command": [
+      "target/release/examples/async_motion_comparison",
+      "both"
+    ],
+    "report": "docs/motion-v6-async-comparison.json",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "host_executable_sha256": "986f952deb8b242825527ba8303f131003d78c9a9426306cf38cd9e65743b85f"
+  },
+  {
+    "command": [
+      "target/release/examples/async_motion_comparison",
+      "both",
+      "work/motion-v6-review/async-timing-perturbed.json"
+    ],
+    "report": "docs/motion-v6-async-perturbed.json",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "host_executable_sha256": "986f952deb8b242825527ba8303f131003d78c9a9426306cf38cd9e65743b85f",
+    "timing_options": {
+      "capture_period_ms": 100,
+      "output_period_ms": 20,
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ],
+      "stop_input_at_ms": null,
+      "measure_wall_time": false
+    }
+  },
+  {
+    "command": [
+      "target/release/examples/async_motion_comparison",
+      "both",
+      "work/motion-v6-review/async-timing-measured.json"
+    ],
+    "report": "docs/motion-v6-async-timing.json",
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "host_executable_sha256": "986f952deb8b242825527ba8303f131003d78c9a9426306cf38cd9e65743b85f",
+    "timing_options": {
+      "capture_period_ms": 100,
+      "output_period_ms": 20,
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ],
+      "stop_input_at_ms": null,
+      "measure_wall_time": true
+    }
+  },
+  {
+    "command": [
+      "target/release/examples/async_host_clock"
+    ],
+    "report": "docs/motion-v6-host-clock.json",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "host_executable_sha256": "e3fac8901c26eebbbf2dcb1b97a47d19427823806b09d2262db0eb0397a3baba"
+  },
+  {
+    "command": [
+      "work/motion-v6-baseline-target/release/examples/motion_profile",
+      "3"
+    ],
+    "report": "work/motion-v6-host-profile-before.json",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "host_executable_sha256": "cd5aab1ba57483b044f83bb03374451131759cf9a3bf332a267ed07257e4b416"
+  },
+  {
+    "command": [
+      "target/release/examples/motion_profile",
+      "3"
+    ],
+    "report": "work/motion-v6-host-profile-after.json",
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "host_executable_sha256": "96a40a14256ebb6cd7e99fa4d8b7d5901804028ff96b03872ed8efdcf7fddb5b"
+  }
+]

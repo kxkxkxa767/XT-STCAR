@@ -1,0 +1,99 @@
+{
+  "source_at_ms": 16800,
+  "first_problem_at_ms": 16863,
+  "assumptions": "v=.3 and K=2 both observed at their configured maxima; original250ms lease +100ms period, all source timestamps equal16800ms. Recomputed same published rectangle inequalities; independent Python arithmetic, not additional Rust execution.",
+  "S_m": 0.18,
+  "body_rectangle": [
+    -0.31199391284233335,
+    0.5319939128423334,
+    -0.29439391284233335,
+    0.29439391284233335
+  ],
+  "laser_rejections": [
+    {
+      "index": 331,
+      "range": 0.6186971515794688,
+      "body_x": 0.5411247215224134,
+      "body_y": 0.2999503311047326,
+      "envelope_distance": 0.010688566370610613,
+      "radius": 0.015
+    },
+    {
+      "index": 332,
+      "range": 0.6166805061761089,
+      "body_x": 0.5444965684912201,
+      "body_y": 0.28951396097409204,
+      "envelope_distance": 0.01250265564888664,
+      "radius": 0.015
+    }
+  ],
+  "vision_cone_distances": [
+    {
+      "point": {
+        "x_m": 0.1875,
+        "y_m": -0.8687499999999999
+      },
+      "distance": 0.5743560871576665,
+      "radius": 0.14
+    },
+    {
+      "point": {
+        "x_m": 0.6666666666666661,
+        "y_m": 0.33125000000000004
+      },
+      "distance": 0.13962493252712005,
+      "radius": 0.14
+    }
+  ],
+  "budget_at_first_problem": {
+    "budget_exhausted": false,
+    "cold_budget_deferrals": 0,
+    "continued_seed_accepted": 0,
+    "continued_seed_attempts": 0,
+    "domain_rejections": 0,
+    "iteration_limit": 1024,
+    "iterations": 0,
+    "primitive_grid_rejections": 0,
+    "primitive_samples": 0,
+    "recovery_reservation_shortfalls": 0,
+    "recovery_reserved_iterations": 0,
+    "recovery_reserved_samples": 0,
+    "recovery_reserved_solvers": 0,
+    "sample_limit": 65536,
+    "solver_attempts": 0,
+    "solver_elapsed_ns": null,
+    "solver_iteration_exhaustions": 0,
+    "solver_limit": 256
+  },
+  "conclusion": "The geometric certificate rejects actual source scan discs although original navigation accepted all44 rollouts. New recovery reservation is not active; no terminal work at the first certificate rejection.",
+  "terminal_failure": {
+    "at_ms": 29463,
+    "mission_at_ms": 29460,
+    "fault": "ordinary stop exceeded 10 seconds",
+    "pose": {
+      "x_m": 3.6952934373650224,
+      "y_m": 2.887450403917976,
+      "yaw_rad": -1.4567648780391742
+    },
+    "speed_mps": 0.0,
+    "curvature_per_m": 0.0,
+    "waypoint_index": 1,
+    "previous_navigation_reason": "no_forward_kinematic_path"
+  },
+  "whole_run_budget_scope": {
+    "continuity_enforced_ticks": 0,
+    "continued_seed_attempts": 0,
+    "budget_exhausted_ticks": 1,
+    "maximum_solver_attempts": 256,
+    "note": "All approach_crosswalk/cones behavior preceding failure runs without a protected short Stop connection, so new reservation branch does not execute. One existing lattice solver cap is reached during Cones route regeneration at19260ms; subsequent no_forward_kinematic_path remains a bounded search failure, not a mathematical no-route proof."
+  },
+  "assessment": "New full asynchronous integration exposes a controller/adoption-certificate/route-recovery limitation, not the v6 cold-budget reservation. Source-body certificate is more conservative than the synchronous rollout and can reject the selected plan; stop/recentring then changes the planning state. This review establishes concrete certificate obstacle intersections and final 10s Mission stop fault, not proof that suppressing the first rejection would make the full course succeed.",
+  "bounded_followup": "Retain LQR experimental status and these actual failing inputs. Future work should first expose certificate rejection categories and test whether planning can anticipate the same adoption domain before entering the tight turn; separately inspect bounded forward-lattice recovery from the stopped pose. Preserve all original collision, timing and mission thresholds; do not tune Q/R solely for this one run.",
+  "source_locations": [
+    "crates/runner/src/control_execution.rs:322-358 rectangle bound",
+    "crates/runner/src/control_execution.rs:486-524 scan/cone intersection rejection",
+    "crates/robot-core/src/navigation.rs:882-920 Stop-only protected connection",
+    "crates/robot-core/src/navigation.rs:749-757 bounded no-forward-path failure",
+    "work/motion-v6-review/async-lqr-terminal-detail.json recent_attempts final29463ms ordinary-stop fault"
+  ]
+}

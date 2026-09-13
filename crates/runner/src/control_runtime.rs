@@ -18,6 +18,10 @@
 //! commissioning. The original sensor lease is checked before every adoption.
 use crate::autonomy::{AutonomyConfig, AutonomyController, AutonomyStep, Result};
 use crate::autonomy_replay::SensorSnapshot;
+use crate::control_diagnostics::{
+    DiagnosticState, ObservedPlan, PlanIdentity, PlanTimings, WorkerDiagnosticsOptions,
+    WorkerDiagnosticsSnapshot, WorkerStage,
+};
 pub use crate::control_execution::PlanningContext;
 use crate::control_execution::{AdoptionCertificate, AtomicExecution, ExecutionHistory, certify};
 use serde::{Deserialize, Serialize};
@@ -96,6 +100,8 @@ pub struct ControlPoll {
     pub command: MotionOutput,
     pub fault: Option<ControlFault>,
     pub adoption_rejection: Option<AdoptionRejection>,
+    /// Latest published attempt, even when it was rejected and latest stays old.
+    pub observed_plan: Option<ObservedPlan>,
     /// Diagnostic only: a latched watchdog may override this report's Drive.
     pub latest: Option<Arc<AutonomyStep>>,
 }
@@ -157,6 +163,7 @@ impl ControlWatchdog {
             },
             fault: self.fault,
             adoption_rejection: None,
+            observed_plan: None,
             latest: self.accepted.as_ref().map(|value| Arc::clone(&value.step)),
         }
     }
@@ -231,6 +238,21 @@ struct WorkerPlan {
     command: PlannedCommand,
     certificate: Option<AdoptionCertificate>,
     admission_rejected: bool,
+    timings: Option<Arc<PlanTimings>>,
+}
+
+struct ProcessedStep {
+    step: AutonomyStep,
+    navigation_duration_ns: Option<u64>,
+}
+
+impl From<AutonomyStep> for ProcessedStep {
+    fn from(step: AutonomyStep) -> Self {
+        Self {
+            step,
+            navigation_duration_ns: None,
+        }
+    }
 }
 
 struct PendingInput {
@@ -238,6 +260,7 @@ struct PendingInput {
     execution: Option<SteeringEstimate>,
     history: Option<ExecutionHistory>,
     planned_at: Timestamp,
+    timings: Option<PlanTimings>,
 }
 
 #[derive(Default)]
@@ -255,6 +278,7 @@ struct Shared {
     execution: Option<AtomicExecution>,
     stopped: AtomicBool,
     fault: AtomicU8,
+    diagnostics: DiagnosticState,
 }
 
 impl Shared {
@@ -356,12 +380,24 @@ impl AutonomySubmitter {
         };
         let planned_at = if self.aligned { now } else { input.at };
         slots.last_plan_at = Some(planned_at);
+        let replaced_pending_input = slots.pending.is_some();
+        let timings = self
+            .shared
+            .diagnostics
+            .now()
+            .map(|enqueued_host_ns| PlanTimings {
+                enqueued_host_ns,
+                replaced_pending_input,
+                ..PlanTimings::default()
+            });
+        self.shared.diagnostics.enqueue(replaced_pending_input);
         let previous = slots.previous.replace(Arc::clone(&input));
         let retired = slots.pending.replace(PendingInput {
             snapshot: input,
             execution,
             history,
             planned_at,
+            timings,
         });
         let status = if retired.is_some() {
             SubmitStatus::Replaced
@@ -389,17 +425,39 @@ impl AutonomyWorker {
         runtime: ControlRuntimeConfig,
         epoch: Timestamp,
     ) -> Result<Self> {
+        Self::spawn_with_diagnostics(config, runtime, epoch, WorkerDiagnosticsOptions::default())
+    }
+
+    /// Same real controller and certificate as spawn, with optional memory-only
+    /// observations. Explicit schedule hooks are for offline deadline injection.
+    pub fn spawn_with_diagnostics(
+        config: AutonomyConfig,
+        runtime: ControlRuntimeConfig,
+        epoch: Timestamp,
+        diagnostics: WorkerDiagnosticsOptions,
+    ) -> Result<Self> {
         let mut controller = AutonomyController::new(config.clone())?;
         controller.start()?;
-        Self::spawn_with_aligned_processor(config, runtime, epoch, move |input, context| {
-            Ok(controller.tick_with_projection(
-                input.at,
-                &input.pose,
-                &input.scan,
-                &input.road,
-                context,
-            ))
-        })
+        controller.set_timing_enabled(diagnostics.measure_wall_time);
+        Self::spawn_aligned(
+            config,
+            runtime,
+            epoch,
+            diagnostics,
+            move |input, context| {
+                let step = controller.tick_with_projection(
+                    input.at,
+                    &input.pose,
+                    &input.scan,
+                    &input.road,
+                    context,
+                );
+                Ok(ProcessedStep {
+                    step,
+                    navigation_duration_ns: controller.last_navigation_duration_ns(),
+                })
+            },
+        )
     }
 
     /// Trusted offline processor with a projected model state and a conservative
@@ -412,6 +470,25 @@ impl AutonomyWorker {
     ) -> Result<Self>
     where
         F: FnMut(&SensorSnapshot, &PlanningContext) -> Result<AutonomyStep> + Send + 'static,
+    {
+        Self::spawn_aligned(
+            config,
+            runtime,
+            epoch,
+            WorkerDiagnosticsOptions::default(),
+            move |input, context| processor(input, context).map(ProcessedStep::from),
+        )
+    }
+
+    fn spawn_aligned<F>(
+        config: AutonomyConfig,
+        runtime: ControlRuntimeConfig,
+        epoch: Timestamp,
+        diagnostics: WorkerDiagnosticsOptions,
+        mut processor: F,
+    ) -> Result<Self>
+    where
+        F: FnMut(&SensorSnapshot, &PlanningContext) -> Result<ProcessedStep> + Send + 'static,
     {
         let controller_deadline = [
             config.max_tick_gap_ms,
@@ -440,6 +517,7 @@ impl AutonomyWorker {
             epoch,
             Some(limits),
             Some(config),
+            diagnostics,
             move |input, _, context| {
                 processor(
                     input,
@@ -460,9 +538,14 @@ impl AutonomyWorker {
     where
         F: FnMut(&SensorSnapshot) -> Result<AutonomyStep> + Send + 'static,
     {
-        Self::spawn_inner(runtime, epoch, None, None, move |input, _, _| {
-            processor(input)
-        })
+        Self::spawn_inner(
+            runtime,
+            epoch,
+            None,
+            None,
+            WorkerDiagnosticsOptions::default(),
+            move |input, _, _| processor(input).map(ProcessedStep::from),
+        )
     }
 
     /// Trusted processor hook with explicit model limits. Estimates include only
@@ -496,11 +579,13 @@ impl AutonomyWorker {
             epoch,
             Some(limits),
             None,
+            WorkerDiagnosticsOptions::default(),
             move |input, steering, _| {
                 processor(
                     input,
                     steering.expect("execution processor binds steering at submission"),
                 )
+                .map(ProcessedStep::from)
             },
         )
     }
@@ -510,6 +595,7 @@ impl AutonomyWorker {
         epoch: Timestamp,
         steering_limits: Option<SteeringLimits>,
         alignment: Option<AutonomyConfig>,
+        diagnostics: WorkerDiagnosticsOptions,
         mut processor: F,
     ) -> Result<Self>
     where
@@ -517,7 +603,7 @@ impl AutonomyWorker {
                 &SensorSnapshot,
                 Option<SteeringEstimate>,
                 Option<&PlanningContext>,
-            ) -> Result<AutonomyStep>
+            ) -> Result<ProcessedStep>
             + Send
             + 'static,
     {
@@ -528,6 +614,7 @@ impl AutonomyWorker {
             execution: execution.map(AtomicExecution::new),
             stopped: AtomicBool::new(false),
             fault: AtomicU8::new(0),
+            diagnostics: DiagnosticState::new(diagnostics.measure_wall_time),
         });
         let worker_shared = Arc::clone(&shared);
         let aligned = alignment.is_some();
@@ -546,7 +633,27 @@ impl AutonomyWorker {
                             break;
                         }
                     };
-                    let Some(input) = input else { continue };
+                    let Some(mut input) = input else { continue };
+                    let identity = PlanIdentity {
+                        source_at: input.snapshot.at,
+                        oldest_sensor_at: oldest(&input.snapshot),
+                        planned_at: input.planned_at,
+                    };
+                    let stage = |stage| {
+                        if let Some(hook) = &diagnostics.schedule_hook {
+                            // Explicit test scheduling is independent of telemetry.
+                            // A callback panic never changes the control fault state.
+                            let _ = catch_unwind(AssertUnwindSafe(|| hook(stage, identity)));
+                        }
+                    };
+                    if let Some(timing) = input.timings.as_mut() {
+                        timing.dequeued_host_ns = worker_shared.diagnostics.now().unwrap_or(0);
+                        timing.queue_wait_ns = timing
+                            .dequeued_host_ns
+                            .saturating_sub(timing.enqueued_host_ns);
+                    }
+                    stage(WorkerStage::Dequeued);
+                    let projection_started = worker_shared.diagnostics.now();
                     let context = if let Some(config) = &alignment {
                         let Some(context) = input.history.as_ref().and_then(|history| {
                             history.project(&input.snapshot, input.planned_at, config)
@@ -558,7 +665,17 @@ impl AutonomyWorker {
                     } else {
                         None
                     };
-                    let mut step = match catch_unwind(AssertUnwindSafe(|| {
+                    if let Some(timing) = input.timings.as_mut() {
+                        timing.projection_started_host_ns = projection_started.unwrap_or(0);
+                        timing.projection_finished_host_ns =
+                            worker_shared.diagnostics.now().unwrap_or(0);
+                        timing.projection_duration_ns = timing
+                            .projection_finished_host_ns
+                            .saturating_sub(timing.projection_started_host_ns);
+                    }
+                    stage(WorkerStage::ProjectionFinished);
+                    let processor_started = worker_shared.diagnostics.now();
+                    let processed = match catch_unwind(AssertUnwindSafe(|| {
                         processor(&input.snapshot, input.execution, context.as_ref())
                     })) {
                         Ok(Ok(step)) => step,
@@ -571,11 +688,28 @@ impl AutonomyWorker {
                             break;
                         }
                     };
+                    if let Some(timing) = input.timings.as_mut() {
+                        timing.processor_started_host_ns = processor_started.unwrap_or(0);
+                        timing.processor_finished_host_ns =
+                            worker_shared.diagnostics.now().unwrap_or(0);
+                        timing.processor_duration_ns = timing
+                            .processor_finished_host_ns
+                            .saturating_sub(timing.processor_started_host_ns);
+                        timing.navigation_duration_ns = processed.navigation_duration_ns;
+                        timing.terminal_solver_duration_ns = processed
+                            .step
+                            .navigation
+                            .as_ref()
+                            .and_then(|nav| nav.diagnostics.terminal_work.solver_elapsed_ns);
+                    }
+                    let mut step = processed.step;
+                    stage(WorkerStage::ProcessorFinished);
                     if worker_shared.stopped.load(Ordering::Acquire) {
                         break;
                     }
                     let original_fault = result_fault(&step, input.planned_at);
                     let drive = matches!(step.command, MotionOutput::Drive { .. });
+                    let certify_started = worker_shared.diagnostics.now();
                     let certificate = alignment
                         .as_ref()
                         .zip(context.as_ref())
@@ -590,6 +724,15 @@ impl AutonomyWorker {
                                 runtime.max_command_age_ms,
                             )
                         });
+                    if let Some(timing) = input.timings.as_mut() {
+                        timing.certify_started_host_ns = certify_started.unwrap_or(0);
+                        timing.certify_finished_host_ns =
+                            worker_shared.diagnostics.now().unwrap_or(0);
+                        timing.certify_duration_ns = timing
+                            .certify_finished_host_ns
+                            .saturating_sub(timing.certify_started_host_ns);
+                    }
+                    stage(WorkerStage::CertificateFinished);
                     let admission_rejected = aligned && drive && certificate.is_none();
                     if admission_rejected {
                         // A valid plan may be too close to an obstacle for the wider
@@ -605,14 +748,26 @@ impl AutonomyWorker {
                     };
                     let fault =
                         original_fault.or_else(|| result_fault(&command.step, input.planned_at));
-                    let latest = WorkerPlan {
+                    let mut latest = WorkerPlan {
                         command,
                         certificate,
                         admission_rejected,
+                        timings: None,
                     };
+                    stage(WorkerStage::BeforePublish);
+                    if let Some(timing) = input.timings.as_mut() {
+                        timing.ready_to_publish_host_ns =
+                            worker_shared.diagnostics.now().unwrap_or(0);
+                    }
+                    latest.timings = input.timings.take().map(Arc::new);
                     let retired = match worker_shared.slots.lock() {
                         Ok(mut slots) => {
+                            if let Some(timing) = latest.timings.as_mut().and_then(Arc::get_mut) {
+                                timing.published_host_ns =
+                                    worker_shared.diagnostics.now().unwrap_or(0);
+                            }
                             let old = slots.latest.replace(latest);
+                            worker_shared.diagnostics.publish();
                             if let Some(fault) = fault {
                                 worker_shared.fail(fault);
                             }
@@ -666,6 +821,11 @@ impl AutonomyWorker {
         self.execution
     }
 
+    /// Independent saturating diagnostic counters; None when timing is disabled.
+    pub fn diagnostics(&self) -> Option<WorkerDiagnosticsSnapshot> {
+        self.submitter.shared.diagnostics.snapshot()
+    }
+
     /// No waiting, navigation, model calls, disk access or large report cloning.
     /// A busy mailbox retains the previous command only within its original lease.
     pub fn poll(&mut self, now: Timestamp) -> ControlPoll {
@@ -677,6 +837,12 @@ impl AutonomyWorker {
                 None
             }
         };
+        let observed = latest.clone();
+        let previously_accepted = self
+            .watchdog
+            .accepted
+            .as_ref()
+            .map(|old| Arc::clone(&old.step));
         if let Some(fault) =
             ControlFault::from_code(self.submitter.shared.fault.load(Ordering::Acquire))
         {
@@ -743,6 +909,33 @@ impl AutonomyWorker {
         let mut result = self.watchdog.poll(now, latest.map(|plan| plan.command));
         result.adoption_rejection = rejection;
         self.acknowledge(&mut result);
+        result.observed_plan = observed.map(|plan| {
+            let newly_adopted = result.fault.is_none()
+                && result
+                    .latest
+                    .as_ref()
+                    .is_some_and(|step| Arc::ptr_eq(step, &plan.command.step))
+                && previously_accepted
+                    .as_ref()
+                    .is_none_or(|old| !Arc::ptr_eq(old, &plan.command.step));
+            if newly_adopted {
+                self.submitter.shared.diagnostics.adopt();
+            }
+            ObservedPlan {
+                source_at: plan.command.source_at,
+                oldest_sensor_at: plan.command.oldest_sensor_at,
+                planned_at: plan.command.planned_at,
+                newly_adopted,
+                source_age_ms: now.0.saturating_sub(plan.command.oldest_sensor_at.0),
+                plan_age_ms: now.0.saturating_sub(plan.command.planned_at.0),
+                observed_host_ns: self.submitter.shared.diagnostics.now(),
+                timings: plan.timings,
+                report: plan.command.step,
+            }
+        });
+        if result.adoption_rejection.is_some() {
+            self.submitter.shared.diagnostics.reject();
+        }
         if let Some(fault) = result.fault {
             self.submitter.shared.fail(fault);
             self.stop_background();

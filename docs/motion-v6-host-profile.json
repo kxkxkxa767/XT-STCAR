@@ -1,0 +1,4491 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "b9f75c7427411c12285411efa4af793fa167b8c7",
+  "baseline_source_hashes_verified": 82,
+  "profile_source_sha256": "15f05f21178e673e505f06c67604e320774e73c78b6d8ed41f5b8753fb442bba",
+  "scope": "Prebuilt release executables; baseline then final sequentially, each PP/LQR one warmup plus 3 samples. Agent builds/tests idle. Host/system load otherwise uncontrolled. Full synchronous simulate wall time, not per-tick deadline or target WCET.",
+  "baseline": {
+    "all_completed": true,
+    "build": "release",
+    "host_arch": "aarch64",
+    "host_os": "macos",
+    "physical_output_enabled": false,
+    "profiles": [
+      {
+        "config": {
+          "autonomy": {
+            "cone_radius_m": 0.14,
+            "laser_point_radius_m": 0.015,
+            "lidar_in_body": {
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "max_sensor_age_ms": 250,
+            "max_tick_gap_ms": 250,
+            "measurement_status": "unverified",
+            "mission": {
+              "approach_goal": {
+                "x_m": 2.0,
+                "y_m": 2.5
+              },
+              "approach_speed_mps": 0.18,
+              "body_frame": "sim_body",
+              "cone_waypoints": [
+                {
+                  "x_m": 3.1,
+                  "y_m": 3.35
+                },
+                {
+                  "x_m": 4.5,
+                  "y_m": 1.85
+                }
+              ],
+              "crosswalk_hold_ms": 3000,
+              "crosswalk_region": {
+                "max_x_m": 2.5,
+                "max_y_m": 4.0,
+                "min_x_m": 1.0,
+                "min_y_m": 1.0
+              },
+              "crosswalk_stop_margin_m": 0.15,
+              "cruise_speed_mps": 0.3,
+              "finish_goal": {
+                "x_m": 6.43,
+                "y_m": 2.5
+              },
+              "finish_region": {
+                "max_x_m": 6.8,
+                "max_y_m": 3.1,
+                "min_x_m": 6.0,
+                "min_y_m": 1.9
+              },
+              "finish_yaw_rad": 0.0,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.065,
+              "light_approach_yaw_rad": 0.0,
+              "light_detection_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.5,
+                "min_x_m": 4.4,
+                "min_y_m": 1.5
+              },
+              "light_stop_goal": {
+                "x_m": 5.55,
+                "y_m": 2.5
+              },
+              "light_stop_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.1,
+                "min_x_m": 5.0,
+                "min_y_m": 1.9
+              },
+              "max_observation_skew_ms": 100,
+              "max_pose_age_ms": 250,
+              "max_pose_gap_ms": 250,
+              "max_road_age_ms": 250,
+              "max_road_gap_ms": 250,
+              "min_detection_confidence": 0.5,
+              "min_green_frames": 3,
+              "min_green_ms": 300,
+              "min_pose_quality": 0.6,
+              "schema_version": 1,
+              "simulation_only": true,
+              "stopped_speed_mps": 0.012,
+              "world_frame": "sim_world"
+            },
+            "navigation": {
+              "bounds": {
+                "max_x_m": 7.0,
+                "max_y_m": 5.0,
+                "min_x_m": 0.0,
+                "min_y_m": 0.0
+              },
+              "clearance_m": 0.04,
+              "control_period_ms": 100,
+              "curvature_samples": 21,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "frame_id": "sim_world",
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.045,
+              "grid_resolution_m": 0.1,
+              "lookahead_m": 0.55,
+              "max_accel_mps2": 0.4,
+              "max_curvature_per_m": 2.0,
+              "max_curvature_rate_per_s": 4.0,
+              "max_decel_mps2": 0.6,
+              "max_grid_cells": 40000,
+              "max_input_age_ms": 250,
+              "max_lateral_accel_mps2": 0.4,
+              "max_obstacles": 2048,
+              "max_speed_mps": 0.3,
+              "min_pose_quality": 0.4,
+              "preview_horizon_s": 2.0,
+              "tracking": {
+                "kind": "pure_pursuit"
+              }
+            },
+            "safety": {
+              "command_timeout_ms": 300,
+              "deadman_timeout_ms": 300,
+              "frames": {
+                "body_frame": "sim_body",
+                "imu_frame": "sim_imu",
+                "lidar_frame": "sim_laser",
+                "odometry_frame": "sim_world",
+                "vision_frame": "sim_camera"
+              },
+              "heartbeat_timeout_ms": 300,
+              "max_abs_curvature_per_m": 2.0,
+              "max_speed_mps": 0.3,
+              "required_sensors": [
+                "lidar",
+                "odometry",
+                "vision"
+              ],
+              "schema_version": 1,
+              "sensor_timeout_ms": 300,
+              "simulation_only": true
+            },
+            "scan": {
+              "bins": 360,
+              "frame_id": "sim_laser",
+              "max_missing_arc_rad": 0.12,
+              "max_packet_gap_ms": 20,
+              "max_revolution_ms": 200,
+              "min_coverage_fraction": 0.95,
+              "min_valid_fraction": 0.95
+            },
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "cones": [
+            {
+              "center": {
+                "x_m": 3.0,
+                "y_m": 2.5
+              },
+              "radius_m": 0.14
+            },
+            {
+              "center": {
+                "x_m": 4.25,
+                "y_m": 2.85
+              },
+              "radius_m": 0.14
+            }
+          ],
+          "crosswalk": {
+            "max_x_m": 2.097,
+            "max_y_m": 3.445,
+            "min_x_m": 1.8,
+            "min_y_m": 1.555
+          },
+          "fault": "none",
+          "fault_at_ms": 2000,
+          "initial_pose": {
+            "x_m": 0.6,
+            "y_m": 2.5,
+            "yaw_rad": 0.0
+          },
+          "light_red_duration_ms": 5000,
+          "light_trigger_x_m": 5.0,
+          "max_duration_ms": 120000,
+          "plant_accel_mps2": 0.6,
+          "plant_brake_mps2": 0.8,
+          "road": {
+            "calibration_status": "unverified",
+            "cone": {
+              "blue_hue_range": [
+                190.0,
+                255.0
+              ],
+              "max_cones": 32,
+              "max_height_width_ratio": 5.0,
+              "merge_distance_m": 0.15,
+              "min_fill": 0.25,
+              "min_height_fraction": 0.03,
+              "min_height_width_ratio": 1.0,
+              "min_pixels": 10,
+              "min_saturation": 0.5,
+              "min_taper_ratio": 1.15,
+              "min_value": 0.3,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ]
+            },
+            "crosswalk": {
+              "angle_tolerance_deg": 20.0,
+              "max_depth_m": 2.5,
+              "max_gap_ratio": 3.0,
+              "max_length_ratio": 1.8,
+              "max_saturation": 0.2,
+              "max_spacing_variation": 0.35,
+              "max_width_ratio": 1.8,
+              "min_aspect": 1.35,
+              "min_blob_fill": 0.65,
+              "min_depth_m": 0.08,
+              "min_gap_ratio": 0.25,
+              "min_lateral_span_m": 0.5,
+              "min_overlap": 0.65,
+              "min_pixels": 8,
+              "min_stripes": 4,
+              "min_value": 0.75,
+              "stripe_axis": "either"
+            },
+            "ground_roi": [
+              0.05,
+              0.35,
+              0.95,
+              0.98
+            ],
+            "homography": {
+              "matrix": [
+                [
+                  0.0,
+                  -5.0,
+                  5.0
+                ],
+                [
+                  -4.0,
+                  0.0,
+                  2.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "max_abs_lateral_m": 3.0,
+              "max_forward_m": 6.0,
+              "min_denominator": 1e-06
+            },
+            "light": {
+              "green_hue_range": [
+                80.0,
+                170.0
+              ],
+              "max_aspect": 2.5,
+              "max_rois": 8,
+              "max_white_fraction": 0.7,
+              "min_aspect": 0.4,
+              "min_blob_fill": 0.4,
+              "min_pixels": 4,
+              "min_roi_fraction": 0.01,
+              "min_saturation": 0.45,
+              "min_value": 0.35,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ],
+              "yellow_hue_range": [
+                35.0,
+                75.0
+              ],
+              "yolo_confidence": 0.25
+            },
+            "light_rois": [
+              [
+                0.82,
+                0.02,
+                0.96,
+                0.25
+              ]
+            ],
+            "max_candidates": 128,
+            "max_components": 2048,
+            "max_work_height": 240,
+            "max_work_width": 320,
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "telemetry": {
+            "max_trace_bytes": 1048576,
+            "mode": "transitions"
+          },
+          "time_step_ms": 100
+        },
+        "last_summary": {
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "statistics": {
+            "final_braking": {
+              "after_phase": null,
+              "cause": null,
+              "distance_m": 0.0,
+              "duration_ms": 0,
+              "started_at": null,
+              "ticks": 0
+            },
+            "omitted_distance_samples": 0,
+            "phases": [
+              {
+                "candidate_totals": {
+                  "accepted": 2024,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2024,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 48,
+                "distance_m": 0.7936074790971576,
+                "duration_ms": 4800,
+                "fault_ticks": 0,
+                "first_at": 0,
+                "last_control_at": 4700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_crosswalk",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.8174999999999996,
+                  "minimum_observed_current_leg_length_m": 0.8174999999999996,
+                  "observed_current_leg_length_sum_m": 0.8174999999999996,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 0,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.8174999999999996,
+                      "generations_since_previous_observation": 1,
+                      "revision": 1
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 9,
+                    "total": 9
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 30,
+                "distance_m": 0.0,
+                "duration_ms": 3000,
+                "fault_ticks": 0,
+                "first_at": 4800,
+                "last_control_at": 7700,
+                "navigation_reason_ticks": [],
+                "phase": "crosswalk_stop",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 7314,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 298,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 7744,
+                  "sample_budget": 0,
+                  "stop_reachable": 132,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 176,
+                "distance_m": 5.0602456637658335,
+                "duration_ms": 17600,
+                "fault_ticks": 0,
+                "first_at": 7800,
+                "last_control_at": 25300,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "no_collision_free_braking_trajectory",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "cones",
+                "routes": {
+                  "generations": 4,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 3.218009732693193,
+                  "minimum_observed_current_leg_length_m": 1.826399366147011,
+                  "observed_current_leg_length_sum_m": 9.084528762013543,
+                  "observed_length_count": 4,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 7800,
+                      "checked_continuation_length_m": 2.2781502746486697,
+                      "current_leg_length_m": 1.9404729417793756,
+                      "generations_since_previous_observation": 1,
+                      "revision": 2
+                    },
+                    {
+                      "at": 14400,
+                      "checked_continuation_length_m": 4.1503339158197265,
+                      "current_leg_length_m": 3.218009732693193,
+                      "generations_since_previous_observation": 1,
+                      "revision": 3
+                    },
+                    {
+                      "at": 18700,
+                      "checked_continuation_length_m": 4.130888065275642,
+                      "current_leg_length_m": 2.099646721393962,
+                      "generations_since_previous_observation": 1,
+                      "revision": 4
+                    },
+                    {
+                      "at": 19200,
+                      "checked_continuation_length_m": 4.109123555485993,
+                      "current_leg_length_m": 1.826399366147011,
+                      "generations_since_previous_observation": 1,
+                      "revision": 5
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 1,
+                    "total": 3
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 40,
+                    "total": 121
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 1385,
+                    "total": 4282
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 9,
+                    "total": 25
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 3,
+                    "total": 10
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 200,
+                "unexpected_stop_episodes": 2,
+                "unexpected_stop_ticks": 2
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 11547,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 70,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 12144,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 527
+                },
+                "control_ticks": 278,
+                "distance_m": 4.772230783032535,
+                "duration_ms": 27800,
+                "fault_ticks": 0,
+                "first_at": 25400,
+                "last_control_at": 53100,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_light",
+                "routes": {
+                  "generations": 9,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 4.440017030397978,
+                  "minimum_observed_current_leg_length_m": 0.446471294290854,
+                  "observed_current_leg_length_sum_m": 24.328241361695582,
+                  "observed_length_count": 9,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 25400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 4.440017030397978,
+                      "generations_since_previous_observation": 1,
+                      "revision": 6
+                    },
+                    {
+                      "at": 32000,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 3.570399625373922,
+                      "generations_since_previous_observation": 1,
+                      "revision": 7
+                    },
+                    {
+                      "at": 37300,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 2.6762615043665248,
+                      "generations_since_previous_observation": 1,
+                      "revision": 8
+                    },
+                    {
+                      "at": 40900,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 2.1003066552658516,
+                      "generations_since_previous_observation": 1,
+                      "revision": 9
+                    },
+                    {
+                      "at": 42400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.7524605560679256,
+                      "generations_since_previous_observation": 1,
+                      "revision": 10
+                    },
+                    {
+                      "at": 45600,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.1775812318758614,
+                      "generations_since_previous_observation": 1,
+                      "revision": 11
+                    },
+                    {
+                      "at": 46800,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 4.233181973899719,
+                      "generations_since_previous_observation": 1,
+                      "revision": 12
+                    },
+                    {
+                      "at": 48300,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 3.931561490156946,
+                      "generations_since_previous_observation": 1,
+                      "revision": 13
+                    },
+                    {
+                      "at": 50600,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.446471294290854,
+                      "generations_since_previous_observation": 1,
+                      "revision": 14
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 24,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 1074
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 305,
+                    "total": 6465
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 16,
+                    "total": 21
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 28064,
+                    "total": 475153
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 47,
+                    "total": 1234
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 33,
+                    "total": 589
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 45,
+                    "total": 1129
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 3,
+                "distance_m": 0.0,
+                "duration_ms": 300,
+                "fault_ticks": 0,
+                "first_at": 53200,
+                "last_control_at": 53400,
+                "navigation_reason_ticks": [],
+                "phase": "wait_green",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 2244,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2244,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 53,
+                "distance_m": 0.8827571031638082,
+                "duration_ms": 5300,
+                "fault_ticks": 0,
+                "first_at": 53500,
+                "last_control_at": 58700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "finish",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.9062353158128073,
+                  "minimum_observed_current_leg_length_m": 0.9062353158128073,
+                  "observed_current_leg_length_sum_m": 0.9062353158128073,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 53500,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.9062353158128073,
+                      "generations_since_previous_observation": 1,
+                      "revision": 15
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 33,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 1463
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 97,
+                    "total": 3044
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 9044,
+                    "total": 200454
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 46,
+                    "total": 1510
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 45,
+                    "total": 1503
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 1,
+                "distance_m": 0.0,
+                "duration_ms": 0,
+                "fault_ticks": 0,
+                "first_at": 58800,
+                "last_control_at": 58800,
+                "navigation_reason_ticks": [],
+                "phase": "completed",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              }
+            ]
+          }
+        },
+        "maximum_wall_time_ms": 1620.1064170000002,
+        "mean_wall_time_ms": 1606.4679723333331,
+        "minimum_wall_time_ms": 1597.85175,
+        "samples": [
+          {
+            "completed": true,
+            "control_ticks": 589,
+            "distance_m": 11.508841029059477,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 58800,
+            "wall_time_ms": 1597.85175
+          },
+          {
+            "completed": true,
+            "control_ticks": 589,
+            "distance_m": 11.508841029059477,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 58800,
+            "wall_time_ms": 1620.1064170000002
+          },
+          {
+            "completed": true,
+            "control_ticks": 589,
+            "distance_m": 11.508841029059477,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 58800,
+            "wall_time_ms": 1601.4457499999999
+          }
+        ],
+        "total_wall_time_ms": 4819.403917,
+        "warmup": {
+          "completed": true,
+          "control_ticks": 589,
+          "distance_m": 11.508841029059477,
+          "error": null,
+          "final_actual_speed_mps": 0.0,
+          "simulated_elapsed_ms": 58800,
+          "wall_time_ms": 1626.857458
+        }
+      },
+      {
+        "config": {
+          "autonomy": {
+            "cone_radius_m": 0.14,
+            "laser_point_radius_m": 0.015,
+            "lidar_in_body": {
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "max_sensor_age_ms": 250,
+            "max_tick_gap_ms": 250,
+            "measurement_status": "unverified",
+            "mission": {
+              "approach_goal": {
+                "x_m": 2.0,
+                "y_m": 2.5
+              },
+              "approach_speed_mps": 0.18,
+              "body_frame": "sim_body",
+              "cone_waypoints": [
+                {
+                  "x_m": 3.1,
+                  "y_m": 3.35
+                },
+                {
+                  "x_m": 4.5,
+                  "y_m": 1.85
+                }
+              ],
+              "crosswalk_hold_ms": 3000,
+              "crosswalk_region": {
+                "max_x_m": 2.5,
+                "max_y_m": 4.0,
+                "min_x_m": 1.0,
+                "min_y_m": 1.0
+              },
+              "crosswalk_stop_margin_m": 0.15,
+              "cruise_speed_mps": 0.3,
+              "finish_goal": {
+                "x_m": 6.43,
+                "y_m": 2.5
+              },
+              "finish_region": {
+                "max_x_m": 6.8,
+                "max_y_m": 3.1,
+                "min_x_m": 6.0,
+                "min_y_m": 1.9
+              },
+              "finish_yaw_rad": 0.0,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.065,
+              "light_approach_yaw_rad": 0.0,
+              "light_detection_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.5,
+                "min_x_m": 4.4,
+                "min_y_m": 1.5
+              },
+              "light_stop_goal": {
+                "x_m": 5.55,
+                "y_m": 2.5
+              },
+              "light_stop_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.1,
+                "min_x_m": 5.0,
+                "min_y_m": 1.9
+              },
+              "max_observation_skew_ms": 100,
+              "max_pose_age_ms": 250,
+              "max_pose_gap_ms": 250,
+              "max_road_age_ms": 250,
+              "max_road_gap_ms": 250,
+              "min_detection_confidence": 0.5,
+              "min_green_frames": 3,
+              "min_green_ms": 300,
+              "min_pose_quality": 0.6,
+              "schema_version": 1,
+              "simulation_only": true,
+              "stopped_speed_mps": 0.012,
+              "world_frame": "sim_world"
+            },
+            "navigation": {
+              "bounds": {
+                "max_x_m": 7.0,
+                "max_y_m": 5.0,
+                "min_x_m": 0.0,
+                "min_y_m": 0.0
+              },
+              "clearance_m": 0.04,
+              "control_period_ms": 100,
+              "curvature_samples": 21,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "frame_id": "sim_world",
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.045,
+              "grid_resolution_m": 0.1,
+              "lookahead_m": 0.55,
+              "max_accel_mps2": 0.4,
+              "max_curvature_per_m": 2.0,
+              "max_curvature_rate_per_s": 4.0,
+              "max_decel_mps2": 0.6,
+              "max_grid_cells": 40000,
+              "max_input_age_ms": 250,
+              "max_lateral_accel_mps2": 0.4,
+              "max_obstacles": 2048,
+              "max_speed_mps": 0.3,
+              "min_pose_quality": 0.4,
+              "preview_horizon_s": 2.0,
+              "tracking": {
+                "kind": "lqr",
+                "max_heading_error_rad": 0.7,
+                "max_lateral_error_m": 0.5,
+                "min_speed_mps": 0.03,
+                "q_heading": 2.0,
+                "q_lateral": 4.0,
+                "r_curvature": 1.0
+              }
+            },
+            "safety": {
+              "command_timeout_ms": 300,
+              "deadman_timeout_ms": 300,
+              "frames": {
+                "body_frame": "sim_body",
+                "imu_frame": "sim_imu",
+                "lidar_frame": "sim_laser",
+                "odometry_frame": "sim_world",
+                "vision_frame": "sim_camera"
+              },
+              "heartbeat_timeout_ms": 300,
+              "max_abs_curvature_per_m": 2.0,
+              "max_speed_mps": 0.3,
+              "required_sensors": [
+                "lidar",
+                "odometry",
+                "vision"
+              ],
+              "schema_version": 1,
+              "sensor_timeout_ms": 300,
+              "simulation_only": true
+            },
+            "scan": {
+              "bins": 360,
+              "frame_id": "sim_laser",
+              "max_missing_arc_rad": 0.12,
+              "max_packet_gap_ms": 20,
+              "max_revolution_ms": 200,
+              "min_coverage_fraction": 0.95,
+              "min_valid_fraction": 0.95
+            },
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "cones": [
+            {
+              "center": {
+                "x_m": 3.0,
+                "y_m": 2.5
+              },
+              "radius_m": 0.14
+            },
+            {
+              "center": {
+                "x_m": 4.25,
+                "y_m": 2.85
+              },
+              "radius_m": 0.14
+            }
+          ],
+          "crosswalk": {
+            "max_x_m": 2.097,
+            "max_y_m": 3.445,
+            "min_x_m": 1.8,
+            "min_y_m": 1.555
+          },
+          "fault": "none",
+          "fault_at_ms": 2000,
+          "initial_pose": {
+            "x_m": 0.6,
+            "y_m": 2.5,
+            "yaw_rad": 0.0
+          },
+          "light_red_duration_ms": 5000,
+          "light_trigger_x_m": 5.0,
+          "max_duration_ms": 120000,
+          "plant_accel_mps2": 0.6,
+          "plant_brake_mps2": 0.8,
+          "road": {
+            "calibration_status": "unverified",
+            "cone": {
+              "blue_hue_range": [
+                190.0,
+                255.0
+              ],
+              "max_cones": 32,
+              "max_height_width_ratio": 5.0,
+              "merge_distance_m": 0.15,
+              "min_fill": 0.25,
+              "min_height_fraction": 0.03,
+              "min_height_width_ratio": 1.0,
+              "min_pixels": 10,
+              "min_saturation": 0.5,
+              "min_taper_ratio": 1.15,
+              "min_value": 0.3,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ]
+            },
+            "crosswalk": {
+              "angle_tolerance_deg": 20.0,
+              "max_depth_m": 2.5,
+              "max_gap_ratio": 3.0,
+              "max_length_ratio": 1.8,
+              "max_saturation": 0.2,
+              "max_spacing_variation": 0.35,
+              "max_width_ratio": 1.8,
+              "min_aspect": 1.35,
+              "min_blob_fill": 0.65,
+              "min_depth_m": 0.08,
+              "min_gap_ratio": 0.25,
+              "min_lateral_span_m": 0.5,
+              "min_overlap": 0.65,
+              "min_pixels": 8,
+              "min_stripes": 4,
+              "min_value": 0.75,
+              "stripe_axis": "either"
+            },
+            "ground_roi": [
+              0.05,
+              0.35,
+              0.95,
+              0.98
+            ],
+            "homography": {
+              "matrix": [
+                [
+                  0.0,
+                  -5.0,
+                  5.0
+                ],
+                [
+                  -4.0,
+                  0.0,
+                  2.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "max_abs_lateral_m": 3.0,
+              "max_forward_m": 6.0,
+              "min_denominator": 1e-06
+            },
+            "light": {
+              "green_hue_range": [
+                80.0,
+                170.0
+              ],
+              "max_aspect": 2.5,
+              "max_rois": 8,
+              "max_white_fraction": 0.7,
+              "min_aspect": 0.4,
+              "min_blob_fill": 0.4,
+              "min_pixels": 4,
+              "min_roi_fraction": 0.01,
+              "min_saturation": 0.45,
+              "min_value": 0.35,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ],
+              "yellow_hue_range": [
+                35.0,
+                75.0
+              ],
+              "yolo_confidence": 0.25
+            },
+            "light_rois": [
+              [
+                0.82,
+                0.02,
+                0.96,
+                0.25
+              ]
+            ],
+            "max_candidates": 128,
+            "max_components": 2048,
+            "max_work_height": 240,
+            "max_work_width": 320,
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "telemetry": {
+            "max_trace_bytes": 1048576,
+            "mode": "transitions"
+          },
+          "time_step_ms": 100
+        },
+        "last_summary": {
+          "completed": true,
+          "elapsed_ms": 54300,
+          "distance_m": 10.249674629119367,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "statistics": {
+            "final_braking": {
+              "after_phase": null,
+              "cause": null,
+              "distance_m": 0.0,
+              "duration_ms": 0,
+              "started_at": null,
+              "ticks": 0
+            },
+            "omitted_distance_samples": 0,
+            "phases": [
+              {
+                "candidate_totals": {
+                  "accepted": 2024,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2024,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 48,
+                "distance_m": 0.7936074790971576,
+                "duration_ms": 4800,
+                "fault_ticks": 0,
+                "first_at": 0,
+                "last_control_at": 4700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_crosswalk",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.8174999999999996,
+                  "minimum_observed_current_leg_length_m": 0.8174999999999996,
+                  "observed_current_leg_length_sum_m": 0.8174999999999996,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 0,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.8174999999999996,
+                      "generations_since_previous_observation": 1,
+                      "revision": 1
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 9,
+                    "total": 9
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 30,
+                "distance_m": 0.0,
+                "duration_ms": 3000,
+                "fault_ticks": 0,
+                "first_at": 4800,
+                "last_control_at": 7700,
+                "navigation_reason_ticks": [],
+                "phase": "crosswalk_stop",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 6323,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 145,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 6512,
+                  "sample_budget": 0,
+                  "stop_reachable": 44,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 148,
+                "distance_m": 4.189111437964239,
+                "duration_ms": 14800,
+                "fault_ticks": 0,
+                "first_at": 7800,
+                "last_control_at": 22500,
+                "navigation_reason_ticks": [],
+                "phase": "cones",
+                "routes": {
+                  "generations": 2,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 2.321788681612139,
+                  "minimum_observed_current_leg_length_m": 1.9404729417793756,
+                  "observed_current_leg_length_sum_m": 4.262261623391515,
+                  "observed_length_count": 2,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 7800,
+                      "checked_continuation_length_m": 2.2781502746486697,
+                      "current_leg_length_m": 1.9404729417793756,
+                      "generations_since_previous_observation": 1,
+                      "revision": 2
+                    },
+                    {
+                      "at": 14500,
+                      "checked_continuation_length_m": 4.382417345769996,
+                      "current_leg_length_m": 2.321788681612139,
+                      "generations_since_previous_observation": 1,
+                      "revision": 3
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 31,
+                    "total": 38
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 1082,
+                    "total": 1253
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 5,
+                    "total": 8
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 3,
+                    "total": 3
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 9524,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 11440,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 1916
+                },
+                "control_ticks": 262,
+                "distance_m": 4.39062905957664,
+                "duration_ms": 26200,
+                "fault_ticks": 0,
+                "first_at": 22600,
+                "last_control_at": 48700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_light",
+                "routes": {
+                  "generations": 5,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 4.421198116831987,
+                  "minimum_observed_current_leg_length_m": 0.8756046733749839,
+                  "observed_current_leg_length_sum_m": 9.965159357366836,
+                  "observed_length_count": 5,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 22600,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 4.421198116831987,
+                      "generations_since_previous_observation": 1,
+                      "revision": 4
+                    },
+                    {
+                      "at": 37400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.7865319052761301,
+                      "generations_since_previous_observation": 1,
+                      "revision": 5
+                    },
+                    {
+                      "at": 38700,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.5518330829720626,
+                      "generations_since_previous_observation": 1,
+                      "revision": 6
+                    },
+                    {
+                      "at": 39900,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.3299915789116739,
+                      "generations_since_previous_observation": 1,
+                      "revision": 7
+                    },
+                    {
+                      "at": 42400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.8756046733749839,
+                      "generations_since_previous_observation": 1,
+                      "revision": 8
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 3,
+                    "total": 49
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 3,
+                    "total": 49
+                  },
+                  "continuity_enforced_ticks": 57,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 2547
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 398,
+                    "total": 17804
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 52748,
+                    "total": 1709996
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 58,
+                    "total": 2677
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 46,
+                    "total": 1961
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 46,
+                    "total": 2607
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 3,
+                "distance_m": 0.0,
+                "duration_ms": 300,
+                "fault_ticks": 0,
+                "first_at": 48800,
+                "last_control_at": 49000,
+                "navigation_reason_ticks": [],
+                "phase": "wait_green",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 2200,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2200,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 52,
+                "distance_m": 0.8763266524812617,
+                "duration_ms": 5200,
+                "fault_ticks": 0,
+                "first_at": 49100,
+                "last_control_at": 54200,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "finish",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.9037498626541632,
+                  "minimum_observed_current_leg_length_m": 0.9037498626541632,
+                  "observed_current_leg_length_sum_m": 0.9037498626541632,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 49100,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.9037498626541632,
+                      "generations_since_previous_observation": 1,
+                      "revision": 9
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 33,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 1463
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 93,
+                    "total": 3007
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 8740,
+                    "total": 197487
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 46,
+                    "total": 1506
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 45,
+                    "total": 1502
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 1,
+                "distance_m": 0.0,
+                "duration_ms": 0,
+                "fault_ticks": 0,
+                "first_at": 54300,
+                "last_control_at": 54300,
+                "navigation_reason_ticks": [],
+                "phase": "completed",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              }
+            ]
+          }
+        },
+        "maximum_wall_time_ms": 1487.462209,
+        "mean_wall_time_ms": 1480.9426946666665,
+        "minimum_wall_time_ms": 1476.41275,
+        "samples": [
+          {
+            "completed": true,
+            "control_ticks": 544,
+            "distance_m": 10.249674629119367,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 54300,
+            "wall_time_ms": 1476.41275
+          },
+          {
+            "completed": true,
+            "control_ticks": 544,
+            "distance_m": 10.249674629119367,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 54300,
+            "wall_time_ms": 1487.462209
+          },
+          {
+            "completed": true,
+            "control_ticks": 544,
+            "distance_m": 10.249674629119367,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 54300,
+            "wall_time_ms": 1478.9531249999998
+          }
+        ],
+        "total_wall_time_ms": 4442.828084,
+        "warmup": {
+          "completed": true,
+          "control_ticks": 544,
+          "distance_m": 10.249674629119367,
+          "error": null,
+          "final_actual_speed_mps": 0.0,
+          "simulated_elapsed_ms": 54300,
+          "wall_time_ms": 1473.648541
+        }
+      }
+    ],
+    "repetitions_per_tracker": 3,
+    "schema_version": 1,
+    "scope": "Host wall time for complete simulate calls, including synthetic RGB/laser generation, control, plant and sink telemetry; excludes report serialization. Not solver-only CPU time, per-tick latency, hardware timing or a worst-case deadline guarantee.",
+    "warmup_runs_per_tracker": 1
+  },
+  "final": {
+    "all_completed": true,
+    "build": "release",
+    "host_arch": "aarch64",
+    "host_os": "macos",
+    "physical_output_enabled": false,
+    "profiles": [
+      {
+        "config": {
+          "autonomy": {
+            "cone_radius_m": 0.14,
+            "laser_point_radius_m": 0.015,
+            "lidar_in_body": {
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "max_sensor_age_ms": 250,
+            "max_tick_gap_ms": 250,
+            "measurement_status": "unverified",
+            "mission": {
+              "approach_goal": {
+                "x_m": 2.0,
+                "y_m": 2.5
+              },
+              "approach_speed_mps": 0.18,
+              "body_frame": "sim_body",
+              "cone_waypoints": [
+                {
+                  "x_m": 3.1,
+                  "y_m": 3.35
+                },
+                {
+                  "x_m": 4.5,
+                  "y_m": 1.85
+                }
+              ],
+              "crosswalk_hold_ms": 3000,
+              "crosswalk_region": {
+                "max_x_m": 2.5,
+                "max_y_m": 4.0,
+                "min_x_m": 1.0,
+                "min_y_m": 1.0
+              },
+              "crosswalk_stop_margin_m": 0.15,
+              "cruise_speed_mps": 0.3,
+              "finish_goal": {
+                "x_m": 6.43,
+                "y_m": 2.5
+              },
+              "finish_region": {
+                "max_x_m": 6.8,
+                "max_y_m": 3.1,
+                "min_x_m": 6.0,
+                "min_y_m": 1.9
+              },
+              "finish_yaw_rad": 0.0,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.065,
+              "light_approach_yaw_rad": 0.0,
+              "light_detection_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.5,
+                "min_x_m": 4.4,
+                "min_y_m": 1.5
+              },
+              "light_stop_goal": {
+                "x_m": 5.55,
+                "y_m": 2.5
+              },
+              "light_stop_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.1,
+                "min_x_m": 5.0,
+                "min_y_m": 1.9
+              },
+              "max_observation_skew_ms": 100,
+              "max_pose_age_ms": 250,
+              "max_pose_gap_ms": 250,
+              "max_road_age_ms": 250,
+              "max_road_gap_ms": 250,
+              "min_detection_confidence": 0.5,
+              "min_green_frames": 3,
+              "min_green_ms": 300,
+              "min_pose_quality": 0.6,
+              "schema_version": 1,
+              "simulation_only": true,
+              "stopped_speed_mps": 0.012,
+              "world_frame": "sim_world"
+            },
+            "navigation": {
+              "bounds": {
+                "max_x_m": 7.0,
+                "max_y_m": 5.0,
+                "min_x_m": 0.0,
+                "min_y_m": 0.0
+              },
+              "clearance_m": 0.04,
+              "control_period_ms": 100,
+              "curvature_samples": 21,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "frame_id": "sim_world",
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.045,
+              "grid_resolution_m": 0.1,
+              "lookahead_m": 0.55,
+              "max_accel_mps2": 0.4,
+              "max_curvature_per_m": 2.0,
+              "max_curvature_rate_per_s": 4.0,
+              "max_decel_mps2": 0.6,
+              "max_grid_cells": 40000,
+              "max_input_age_ms": 250,
+              "max_lateral_accel_mps2": 0.4,
+              "max_obstacles": 2048,
+              "max_speed_mps": 0.3,
+              "min_pose_quality": 0.4,
+              "preview_horizon_s": 2.0,
+              "tracking": {
+                "kind": "pure_pursuit"
+              }
+            },
+            "safety": {
+              "command_timeout_ms": 300,
+              "deadman_timeout_ms": 300,
+              "frames": {
+                "body_frame": "sim_body",
+                "imu_frame": "sim_imu",
+                "lidar_frame": "sim_laser",
+                "odometry_frame": "sim_world",
+                "vision_frame": "sim_camera"
+              },
+              "heartbeat_timeout_ms": 300,
+              "max_abs_curvature_per_m": 2.0,
+              "max_speed_mps": 0.3,
+              "required_sensors": [
+                "lidar",
+                "odometry",
+                "vision"
+              ],
+              "schema_version": 1,
+              "sensor_timeout_ms": 300,
+              "simulation_only": true
+            },
+            "scan": {
+              "bins": 360,
+              "frame_id": "sim_laser",
+              "max_missing_arc_rad": 0.12,
+              "max_packet_gap_ms": 20,
+              "max_revolution_ms": 200,
+              "min_coverage_fraction": 0.95,
+              "min_valid_fraction": 0.95
+            },
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "cones": [
+            {
+              "center": {
+                "x_m": 3.0,
+                "y_m": 2.5
+              },
+              "radius_m": 0.14
+            },
+            {
+              "center": {
+                "x_m": 4.25,
+                "y_m": 2.85
+              },
+              "radius_m": 0.14
+            }
+          ],
+          "crosswalk": {
+            "max_x_m": 2.097,
+            "max_y_m": 3.445,
+            "min_x_m": 1.8,
+            "min_y_m": 1.555
+          },
+          "fault": "none",
+          "fault_at_ms": 2000,
+          "initial_pose": {
+            "x_m": 0.6,
+            "y_m": 2.5,
+            "yaw_rad": 0.0
+          },
+          "light_red_duration_ms": 5000,
+          "light_trigger_x_m": 5.0,
+          "max_duration_ms": 120000,
+          "plant_accel_mps2": 0.6,
+          "plant_brake_mps2": 0.8,
+          "road": {
+            "calibration_status": "unverified",
+            "cone": {
+              "blue_hue_range": [
+                190.0,
+                255.0
+              ],
+              "max_cones": 32,
+              "max_height_width_ratio": 5.0,
+              "merge_distance_m": 0.15,
+              "min_fill": 0.25,
+              "min_height_fraction": 0.03,
+              "min_height_width_ratio": 1.0,
+              "min_pixels": 10,
+              "min_saturation": 0.5,
+              "min_taper_ratio": 1.15,
+              "min_value": 0.3,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ]
+            },
+            "crosswalk": {
+              "angle_tolerance_deg": 20.0,
+              "max_depth_m": 2.5,
+              "max_gap_ratio": 3.0,
+              "max_length_ratio": 1.8,
+              "max_saturation": 0.2,
+              "max_spacing_variation": 0.35,
+              "max_width_ratio": 1.8,
+              "min_aspect": 1.35,
+              "min_blob_fill": 0.65,
+              "min_depth_m": 0.08,
+              "min_gap_ratio": 0.25,
+              "min_lateral_span_m": 0.5,
+              "min_overlap": 0.65,
+              "min_pixels": 8,
+              "min_stripes": 4,
+              "min_value": 0.75,
+              "stripe_axis": "either"
+            },
+            "ground_roi": [
+              0.05,
+              0.35,
+              0.95,
+              0.98
+            ],
+            "homography": {
+              "matrix": [
+                [
+                  0.0,
+                  -5.0,
+                  5.0
+                ],
+                [
+                  -4.0,
+                  0.0,
+                  2.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "max_abs_lateral_m": 3.0,
+              "max_forward_m": 6.0,
+              "min_denominator": 1e-06
+            },
+            "light": {
+              "green_hue_range": [
+                80.0,
+                170.0
+              ],
+              "max_aspect": 2.5,
+              "max_rois": 8,
+              "max_white_fraction": 0.7,
+              "min_aspect": 0.4,
+              "min_blob_fill": 0.4,
+              "min_pixels": 4,
+              "min_roi_fraction": 0.01,
+              "min_saturation": 0.45,
+              "min_value": 0.35,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ],
+              "yellow_hue_range": [
+                35.0,
+                75.0
+              ],
+              "yolo_confidence": 0.25
+            },
+            "light_rois": [
+              [
+                0.82,
+                0.02,
+                0.96,
+                0.25
+              ]
+            ],
+            "max_candidates": 128,
+            "max_components": 2048,
+            "max_work_height": 240,
+            "max_work_width": 320,
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "telemetry": {
+            "max_trace_bytes": 1048576,
+            "mode": "transitions"
+          },
+          "time_step_ms": 100
+        },
+        "last_summary": {
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "statistics": {
+            "final_braking": {
+              "after_phase": null,
+              "cause": null,
+              "distance_m": 0.0,
+              "duration_ms": 0,
+              "started_at": null,
+              "ticks": 0
+            },
+            "omitted_distance_samples": 0,
+            "phases": [
+              {
+                "candidate_totals": {
+                  "accepted": 2024,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2024,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 48,
+                "distance_m": 0.7936074790971576,
+                "duration_ms": 4800,
+                "fault_ticks": 0,
+                "first_at": 0,
+                "last_control_at": 4700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_crosswalk",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.8174999999999996,
+                  "minimum_observed_current_leg_length_m": 0.8174999999999996,
+                  "observed_current_leg_length_sum_m": 0.8174999999999996,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 0,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.8174999999999996,
+                      "generations_since_previous_observation": 1,
+                      "revision": 1
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 9,
+                    "total": 9
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 30,
+                "distance_m": 0.0,
+                "duration_ms": 3000,
+                "fault_ticks": 0,
+                "first_at": 4800,
+                "last_control_at": 7700,
+                "navigation_reason_ticks": [],
+                "phase": "crosswalk_stop",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 7314,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 298,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 7744,
+                  "sample_budget": 0,
+                  "stop_reachable": 132,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 176,
+                "distance_m": 5.0602456637658335,
+                "duration_ms": 17600,
+                "fault_ticks": 0,
+                "first_at": 7800,
+                "last_control_at": 25300,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "no_collision_free_braking_trajectory",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "cones",
+                "routes": {
+                  "generations": 4,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 3.218009732693193,
+                  "minimum_observed_current_leg_length_m": 1.826399366147011,
+                  "observed_current_leg_length_sum_m": 9.084528762013543,
+                  "observed_length_count": 4,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 7800,
+                      "checked_continuation_length_m": 2.2781502746486697,
+                      "current_leg_length_m": 1.9404729417793756,
+                      "generations_since_previous_observation": 1,
+                      "revision": 2
+                    },
+                    {
+                      "at": 14400,
+                      "checked_continuation_length_m": 4.1503339158197265,
+                      "current_leg_length_m": 3.218009732693193,
+                      "generations_since_previous_observation": 1,
+                      "revision": 3
+                    },
+                    {
+                      "at": 18700,
+                      "checked_continuation_length_m": 4.130888065275642,
+                      "current_leg_length_m": 2.099646721393962,
+                      "generations_since_previous_observation": 1,
+                      "revision": 4
+                    },
+                    {
+                      "at": 19200,
+                      "checked_continuation_length_m": 4.109123555485993,
+                      "current_leg_length_m": 1.826399366147011,
+                      "generations_since_previous_observation": 1,
+                      "revision": 5
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 1,
+                    "total": 3
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 40,
+                    "total": 121
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 1385,
+                    "total": 4282
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 9,
+                    "total": 25
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 3,
+                    "total": 10
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 200,
+                "unexpected_stop_episodes": 2,
+                "unexpected_stop_ticks": 2
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 11547,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 70,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 12144,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 527
+                },
+                "control_ticks": 278,
+                "distance_m": 4.772230783032535,
+                "duration_ms": 27800,
+                "fault_ticks": 0,
+                "first_at": 25400,
+                "last_control_at": 53100,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_light",
+                "routes": {
+                  "generations": 9,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 4.440017030397978,
+                  "minimum_observed_current_leg_length_m": 0.446471294290854,
+                  "observed_current_leg_length_sum_m": 24.328241361695582,
+                  "observed_length_count": 9,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 25400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 4.440017030397978,
+                      "generations_since_previous_observation": 1,
+                      "revision": 6
+                    },
+                    {
+                      "at": 32000,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 3.570399625373922,
+                      "generations_since_previous_observation": 1,
+                      "revision": 7
+                    },
+                    {
+                      "at": 37300,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 2.6762615043665248,
+                      "generations_since_previous_observation": 1,
+                      "revision": 8
+                    },
+                    {
+                      "at": 40900,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 2.1003066552658516,
+                      "generations_since_previous_observation": 1,
+                      "revision": 9
+                    },
+                    {
+                      "at": 42400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.7524605560679256,
+                      "generations_since_previous_observation": 1,
+                      "revision": 10
+                    },
+                    {
+                      "at": 45600,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.1775812318758614,
+                      "generations_since_previous_observation": 1,
+                      "revision": 11
+                    },
+                    {
+                      "at": 46800,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 4.233181973899719,
+                      "generations_since_previous_observation": 1,
+                      "revision": 12
+                    },
+                    {
+                      "at": 48300,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 3.931561490156946,
+                      "generations_since_previous_observation": 1,
+                      "revision": 13
+                    },
+                    {
+                      "at": 50600,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.446471294290854,
+                      "generations_since_previous_observation": 1,
+                      "revision": 14
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 24,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 1074
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 305,
+                    "total": 6465
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 16,
+                    "total": 21
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 28064,
+                    "total": 475153
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 8,
+                    "total": 192
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 1216,
+                    "total": 24352
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 1,
+                    "total": 24
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 47,
+                    "total": 1234
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 33,
+                    "total": 589
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 45,
+                    "total": 1129
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 3,
+                "distance_m": 0.0,
+                "duration_ms": 300,
+                "fault_ticks": 0,
+                "first_at": 53200,
+                "last_control_at": 53400,
+                "navigation_reason_ticks": [],
+                "phase": "wait_green",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 2244,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2244,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 53,
+                "distance_m": 0.8827571031638082,
+                "duration_ms": 5300,
+                "fault_ticks": 0,
+                "first_at": 53500,
+                "last_control_at": 58700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "finish",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.9062353158128073,
+                  "minimum_observed_current_leg_length_m": 0.9062353158128073,
+                  "observed_current_leg_length_sum_m": 0.9062353158128073,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 53500,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.9062353158128073,
+                      "generations_since_previous_observation": 1,
+                      "revision": 15
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 33,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 1463
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 97,
+                    "total": 3044
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 9044,
+                    "total": 200454
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 8,
+                    "total": 264
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 1920,
+                    "total": 47136
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 1,
+                    "total": 33
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 46,
+                    "total": 1510
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 45,
+                    "total": 1503
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 1,
+                "distance_m": 0.0,
+                "duration_ms": 0,
+                "fault_ticks": 0,
+                "first_at": 58800,
+                "last_control_at": 58800,
+                "navigation_reason_ticks": [],
+                "phase": "completed",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              }
+            ]
+          }
+        },
+        "maximum_wall_time_ms": 1621.748542,
+        "mean_wall_time_ms": 1612.4147916666668,
+        "minimum_wall_time_ms": 1607.554375,
+        "samples": [
+          {
+            "completed": true,
+            "control_ticks": 589,
+            "distance_m": 11.508841029059477,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 58800,
+            "wall_time_ms": 1607.941458
+          },
+          {
+            "completed": true,
+            "control_ticks": 589,
+            "distance_m": 11.508841029059477,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 58800,
+            "wall_time_ms": 1621.748542
+          },
+          {
+            "completed": true,
+            "control_ticks": 589,
+            "distance_m": 11.508841029059477,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 58800,
+            "wall_time_ms": 1607.554375
+          }
+        ],
+        "total_wall_time_ms": 4837.244375,
+        "warmup": {
+          "completed": true,
+          "control_ticks": 589,
+          "distance_m": 11.508841029059477,
+          "error": null,
+          "final_actual_speed_mps": 0.0,
+          "simulated_elapsed_ms": 58800,
+          "wall_time_ms": 1652.4011669999998
+        }
+      },
+      {
+        "config": {
+          "autonomy": {
+            "cone_radius_m": 0.14,
+            "laser_point_radius_m": 0.015,
+            "lidar_in_body": {
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": 0.0
+            },
+            "max_sensor_age_ms": 250,
+            "max_tick_gap_ms": 250,
+            "measurement_status": "unverified",
+            "mission": {
+              "approach_goal": {
+                "x_m": 2.0,
+                "y_m": 2.5
+              },
+              "approach_speed_mps": 0.18,
+              "body_frame": "sim_body",
+              "cone_waypoints": [
+                {
+                  "x_m": 3.1,
+                  "y_m": 3.35
+                },
+                {
+                  "x_m": 4.5,
+                  "y_m": 1.85
+                }
+              ],
+              "crosswalk_hold_ms": 3000,
+              "crosswalk_region": {
+                "max_x_m": 2.5,
+                "max_y_m": 4.0,
+                "min_x_m": 1.0,
+                "min_y_m": 1.0
+              },
+              "crosswalk_stop_margin_m": 0.15,
+              "cruise_speed_mps": 0.3,
+              "finish_goal": {
+                "x_m": 6.43,
+                "y_m": 2.5
+              },
+              "finish_region": {
+                "max_x_m": 6.8,
+                "max_y_m": 3.1,
+                "min_x_m": 6.0,
+                "min_y_m": 1.9
+              },
+              "finish_yaw_rad": 0.0,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.065,
+              "light_approach_yaw_rad": 0.0,
+              "light_detection_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.5,
+                "min_x_m": 4.4,
+                "min_y_m": 1.5
+              },
+              "light_stop_goal": {
+                "x_m": 5.55,
+                "y_m": 2.5
+              },
+              "light_stop_region": {
+                "max_x_m": 6.0,
+                "max_y_m": 3.1,
+                "min_x_m": 5.0,
+                "min_y_m": 1.9
+              },
+              "max_observation_skew_ms": 100,
+              "max_pose_age_ms": 250,
+              "max_pose_gap_ms": 250,
+              "max_road_age_ms": 250,
+              "max_road_gap_ms": 250,
+              "min_detection_confidence": 0.5,
+              "min_green_frames": 3,
+              "min_green_ms": 300,
+              "min_pose_quality": 0.6,
+              "schema_version": 1,
+              "simulation_only": true,
+              "stopped_speed_mps": 0.012,
+              "world_frame": "sim_world"
+            },
+            "navigation": {
+              "bounds": {
+                "max_x_m": 7.0,
+                "max_y_m": 5.0,
+                "min_x_m": 0.0,
+                "min_y_m": 0.0
+              },
+              "clearance_m": 0.04,
+              "control_period_ms": 100,
+              "curvature_samples": 21,
+              "footprint": {
+                "front_m": 0.22,
+                "half_width_m": 0.13,
+                "rear_m": 0.18
+              },
+              "frame_id": "sim_world",
+              "goal_heading_tolerance_rad": 0.12,
+              "goal_tolerance_m": 0.045,
+              "grid_resolution_m": 0.1,
+              "lookahead_m": 0.55,
+              "max_accel_mps2": 0.4,
+              "max_curvature_per_m": 2.0,
+              "max_curvature_rate_per_s": 4.0,
+              "max_decel_mps2": 0.6,
+              "max_grid_cells": 40000,
+              "max_input_age_ms": 250,
+              "max_lateral_accel_mps2": 0.4,
+              "max_obstacles": 2048,
+              "max_speed_mps": 0.3,
+              "min_pose_quality": 0.4,
+              "preview_horizon_s": 2.0,
+              "tracking": {
+                "kind": "lqr",
+                "max_heading_error_rad": 0.7,
+                "max_lateral_error_m": 0.5,
+                "min_speed_mps": 0.03,
+                "q_heading": 2.0,
+                "q_lateral": 4.0,
+                "r_curvature": 1.0
+              }
+            },
+            "safety": {
+              "command_timeout_ms": 300,
+              "deadman_timeout_ms": 300,
+              "frames": {
+                "body_frame": "sim_body",
+                "imu_frame": "sim_imu",
+                "lidar_frame": "sim_laser",
+                "odometry_frame": "sim_world",
+                "vision_frame": "sim_camera"
+              },
+              "heartbeat_timeout_ms": 300,
+              "max_abs_curvature_per_m": 2.0,
+              "max_speed_mps": 0.3,
+              "required_sensors": [
+                "lidar",
+                "odometry",
+                "vision"
+              ],
+              "schema_version": 1,
+              "sensor_timeout_ms": 300,
+              "simulation_only": true
+            },
+            "scan": {
+              "bins": 360,
+              "frame_id": "sim_laser",
+              "max_missing_arc_rad": 0.12,
+              "max_packet_gap_ms": 20,
+              "max_revolution_ms": 200,
+              "min_coverage_fraction": 0.95,
+              "min_valid_fraction": 0.95
+            },
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "cones": [
+            {
+              "center": {
+                "x_m": 3.0,
+                "y_m": 2.5
+              },
+              "radius_m": 0.14
+            },
+            {
+              "center": {
+                "x_m": 4.25,
+                "y_m": 2.85
+              },
+              "radius_m": 0.14
+            }
+          ],
+          "crosswalk": {
+            "max_x_m": 2.097,
+            "max_y_m": 3.445,
+            "min_x_m": 1.8,
+            "min_y_m": 1.555
+          },
+          "fault": "none",
+          "fault_at_ms": 2000,
+          "initial_pose": {
+            "x_m": 0.6,
+            "y_m": 2.5,
+            "yaw_rad": 0.0
+          },
+          "light_red_duration_ms": 5000,
+          "light_trigger_x_m": 5.0,
+          "max_duration_ms": 120000,
+          "plant_accel_mps2": 0.6,
+          "plant_brake_mps2": 0.8,
+          "road": {
+            "calibration_status": "unverified",
+            "cone": {
+              "blue_hue_range": [
+                190.0,
+                255.0
+              ],
+              "max_cones": 32,
+              "max_height_width_ratio": 5.0,
+              "merge_distance_m": 0.15,
+              "min_fill": 0.25,
+              "min_height_fraction": 0.03,
+              "min_height_width_ratio": 1.0,
+              "min_pixels": 10,
+              "min_saturation": 0.5,
+              "min_taper_ratio": 1.15,
+              "min_value": 0.3,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ]
+            },
+            "crosswalk": {
+              "angle_tolerance_deg": 20.0,
+              "max_depth_m": 2.5,
+              "max_gap_ratio": 3.0,
+              "max_length_ratio": 1.8,
+              "max_saturation": 0.2,
+              "max_spacing_variation": 0.35,
+              "max_width_ratio": 1.8,
+              "min_aspect": 1.35,
+              "min_blob_fill": 0.65,
+              "min_depth_m": 0.08,
+              "min_gap_ratio": 0.25,
+              "min_lateral_span_m": 0.5,
+              "min_overlap": 0.65,
+              "min_pixels": 8,
+              "min_stripes": 4,
+              "min_value": 0.75,
+              "stripe_axis": "either"
+            },
+            "ground_roi": [
+              0.05,
+              0.35,
+              0.95,
+              0.98
+            ],
+            "homography": {
+              "matrix": [
+                [
+                  0.0,
+                  -5.0,
+                  5.0
+                ],
+                [
+                  -4.0,
+                  0.0,
+                  2.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ],
+              "max_abs_lateral_m": 3.0,
+              "max_forward_m": 6.0,
+              "min_denominator": 1e-06
+            },
+            "light": {
+              "green_hue_range": [
+                80.0,
+                170.0
+              ],
+              "max_aspect": 2.5,
+              "max_rois": 8,
+              "max_white_fraction": 0.7,
+              "min_aspect": 0.4,
+              "min_blob_fill": 0.4,
+              "min_pixels": 4,
+              "min_roi_fraction": 0.01,
+              "min_saturation": 0.45,
+              "min_value": 0.35,
+              "red_hue_range": [
+                340.0,
+                20.0
+              ],
+              "yellow_hue_range": [
+                35.0,
+                75.0
+              ],
+              "yolo_confidence": 0.25
+            },
+            "light_rois": [
+              [
+                0.82,
+                0.02,
+                0.96,
+                0.25
+              ]
+            ],
+            "max_candidates": 128,
+            "max_components": 2048,
+            "max_work_height": 240,
+            "max_work_width": 320,
+            "schema_version": 1,
+            "simulation_only": true
+          },
+          "telemetry": {
+            "max_trace_bytes": 1048576,
+            "mode": "transitions"
+          },
+          "time_step_ms": 100
+        },
+        "last_summary": {
+          "completed": true,
+          "elapsed_ms": 54300,
+          "distance_m": 10.249674629119367,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "statistics": {
+            "final_braking": {
+              "after_phase": null,
+              "cause": null,
+              "distance_m": 0.0,
+              "duration_ms": 0,
+              "started_at": null,
+              "ticks": 0
+            },
+            "omitted_distance_samples": 0,
+            "phases": [
+              {
+                "candidate_totals": {
+                  "accepted": 2024,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2024,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 48,
+                "distance_m": 0.7936074790971576,
+                "duration_ms": 4800,
+                "fault_ticks": 0,
+                "first_at": 0,
+                "last_control_at": 4700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_crosswalk",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.8174999999999996,
+                  "minimum_observed_current_leg_length_m": 0.8174999999999996,
+                  "observed_current_leg_length_sum_m": 0.8174999999999996,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 0,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.8174999999999996,
+                      "generations_since_previous_observation": 1,
+                      "revision": 1
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 9,
+                    "total": 9
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 30,
+                "distance_m": 0.0,
+                "duration_ms": 3000,
+                "fault_ticks": 0,
+                "first_at": 4800,
+                "last_control_at": 7700,
+                "navigation_reason_ticks": [],
+                "phase": "crosswalk_stop",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 6323,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 145,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 6512,
+                  "sample_budget": 0,
+                  "stop_reachable": 44,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 148,
+                "distance_m": 4.189111437964239,
+                "duration_ms": 14800,
+                "fault_ticks": 0,
+                "first_at": 7800,
+                "last_control_at": 22500,
+                "navigation_reason_ticks": [],
+                "phase": "cones",
+                "routes": {
+                  "generations": 2,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 2.321788681612139,
+                  "minimum_observed_current_leg_length_m": 1.9404729417793756,
+                  "observed_current_leg_length_sum_m": 4.262261623391515,
+                  "observed_length_count": 2,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 7800,
+                      "checked_continuation_length_m": 2.2781502746486697,
+                      "current_leg_length_m": 1.9404729417793756,
+                      "generations_since_previous_observation": 1,
+                      "revision": 2
+                    },
+                    {
+                      "at": 14500,
+                      "checked_continuation_length_m": 4.382417345769996,
+                      "current_leg_length_m": 2.321788681612139,
+                      "generations_since_previous_observation": 1,
+                      "revision": 3
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 1,
+                    "total": 1
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 31,
+                    "total": 38
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 1082,
+                    "total": 1253
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 5,
+                    "total": 8
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 3,
+                    "total": 3
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 9524,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 11440,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 1916
+                },
+                "control_ticks": 262,
+                "distance_m": 4.39062905957664,
+                "duration_ms": 26200,
+                "fault_ticks": 0,
+                "first_at": 22600,
+                "last_control_at": 48700,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_light",
+                "routes": {
+                  "generations": 5,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 4.421198116831987,
+                  "minimum_observed_current_leg_length_m": 0.8756046733749839,
+                  "observed_current_leg_length_sum_m": 9.965159357366836,
+                  "observed_length_count": 5,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 22600,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 4.421198116831987,
+                      "generations_since_previous_observation": 1,
+                      "revision": 4
+                    },
+                    {
+                      "at": 37400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.7865319052761301,
+                      "generations_since_previous_observation": 1,
+                      "revision": 5
+                    },
+                    {
+                      "at": 38700,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.5518330829720626,
+                      "generations_since_previous_observation": 1,
+                      "revision": 6
+                    },
+                    {
+                      "at": 39900,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 1.3299915789116739,
+                      "generations_since_previous_observation": 1,
+                      "revision": 7
+                    },
+                    {
+                      "at": 42400,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.8756046733749839,
+                      "generations_since_previous_observation": 1,
+                      "revision": 8
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 3,
+                    "total": 49
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 3,
+                    "total": 49
+                  },
+                  "continuity_enforced_ticks": 57,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 2547
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 398,
+                    "total": 17804
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 52748,
+                    "total": 1709996
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 8,
+                    "total": 456
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 2304,
+                    "total": 80672
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 1,
+                    "total": 57
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 58,
+                    "total": 2677
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 46,
+                    "total": 1961
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 46,
+                    "total": 2607
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 3,
+                "distance_m": 0.0,
+                "duration_ms": 300,
+                "fault_ticks": 0,
+                "first_at": 48800,
+                "last_control_at": 49000,
+                "navigation_reason_ticks": [],
+                "phase": "wait_green",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 2200,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 2200,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 52,
+                "distance_m": 0.8763266524812617,
+                "duration_ms": 5200,
+                "fault_ticks": 0,
+                "first_at": 49100,
+                "last_control_at": 54200,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "finish",
+                "routes": {
+                  "generations": 1,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": 0.9037498626541632,
+                  "minimum_observed_current_leg_length_m": 0.9037498626541632,
+                  "observed_current_leg_length_sum_m": 0.9037498626541632,
+                  "observed_length_count": 1,
+                  "omitted_generation_events": 0,
+                  "recent_generations": [
+                    {
+                      "at": 49100,
+                      "checked_continuation_length_m": null,
+                      "current_leg_length_m": 0.9037498626541632,
+                      "generations_since_previous_observation": 1,
+                      "revision": 9
+                    }
+                  ]
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 33,
+                  "domain_rejections": {
+                    "maximum_per_tick": 45,
+                    "total": 1463
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 93,
+                    "total": 3007
+                  },
+                  "maximum_iteration_limit": 1024,
+                  "maximum_sample_limit": 65536,
+                  "maximum_solver_limit": 256,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 8740,
+                    "total": 197487
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 8,
+                    "total": 264
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 1920,
+                    "total": 47008
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 1,
+                    "total": 33
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 46,
+                    "total": 1506
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 45,
+                    "total": 1502
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              },
+              {
+                "candidate_totals": {
+                  "accepted": 0,
+                  "curvature_speed_limits": 0,
+                  "footprint": 0,
+                  "grid": 0,
+                  "lateral_acceleration": 0,
+                  "near_zero_speed": 0,
+                  "reference": 0,
+                  "rollouts_evaluated": 0,
+                  "sample_budget": 0,
+                  "stop_reachable": 0,
+                  "terminal_budget": 0,
+                  "terminal_unreachable": 0
+                },
+                "control_ticks": 1,
+                "distance_m": 0.0,
+                "duration_ms": 0,
+                "fault_ticks": 0,
+                "first_at": 54300,
+                "last_control_at": 54300,
+                "navigation_reason_ticks": [],
+                "phase": "completed",
+                "routes": {
+                  "generations": 0,
+                  "generations_without_observed_length": 0,
+                  "maximum_observed_current_leg_length_m": null,
+                  "minimum_observed_current_leg_length_m": null,
+                  "observed_current_leg_length_sum_m": 0.0,
+                  "observed_length_count": 0,
+                  "omitted_generation_events": 0,
+                  "recent_generations": []
+                },
+                "terminal_work": {
+                  "budget_exhausted_ticks": 0,
+                  "cold_budget_deferrals": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_accepted": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continued_seed_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "continuity_enforced_ticks": 0,
+                  "domain_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "maximum_iteration_limit": 0,
+                  "maximum_sample_limit": 0,
+                  "maximum_solver_limit": 0,
+                  "primitive_grid_rejections": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "primitive_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reservation_shortfalls": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_iterations": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_samples": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "recovery_reserved_solvers": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_attempts": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "solver_elapsed_ns": null,
+                  "solver_iteration_exhaustions": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  },
+                  "terminal_connections_checked": {
+                    "maximum_per_tick": 0,
+                    "total": 0
+                  }
+                },
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0,
+                "unexpected_stop_ticks": 0
+              }
+            ]
+          }
+        },
+        "maximum_wall_time_ms": 1484.427709,
+        "mean_wall_time_ms": 1480.7079166666665,
+        "minimum_wall_time_ms": 1477.933333,
+        "samples": [
+          {
+            "completed": true,
+            "control_ticks": 544,
+            "distance_m": 10.249674629119367,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 54300,
+            "wall_time_ms": 1477.933333
+          },
+          {
+            "completed": true,
+            "control_ticks": 544,
+            "distance_m": 10.249674629119367,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 54300,
+            "wall_time_ms": 1484.427709
+          },
+          {
+            "completed": true,
+            "control_ticks": 544,
+            "distance_m": 10.249674629119367,
+            "error": null,
+            "final_actual_speed_mps": 0.0,
+            "simulated_elapsed_ms": 54300,
+            "wall_time_ms": 1479.762708
+          }
+        ],
+        "total_wall_time_ms": 4442.12375,
+        "warmup": {
+          "completed": true,
+          "control_ticks": 544,
+          "distance_m": 10.249674629119367,
+          "error": null,
+          "final_actual_speed_mps": 0.0,
+          "simulated_elapsed_ms": 54300,
+          "wall_time_ms": 1478.489667
+        }
+      }
+    ],
+    "repetitions_per_tracker": 3,
+    "schema_version": 1,
+    "scope": "Host wall time for complete simulate calls, including synthetic RGB/laser generation, control, plant and sink telemetry; excludes report serialization. Not solver-only CPU time, per-tick latency, hardware timing or a worst-case deadline guarantee.",
+    "warmup_runs_per_tracker": 1
+  },
+  "comparison": [
+    {
+      "tracking": "pure_pursuit",
+      "before_mean_ms": 1606.4679723333331,
+      "after_mean_ms": 1612.4147916666668,
+      "before_maximum_ms": 1620.1064170000002,
+      "after_maximum_ms": 1621.748542,
+      "mean_change_percent": 0.3701797630422776
+    },
+    {
+      "tracking": "lqr",
+      "before_mean_ms": 1480.9426946666665,
+      "after_mean_ms": 1480.7079166666665,
+      "before_maximum_ms": 1487.462209,
+      "after_maximum_ms": 1484.427709,
+      "mean_change_percent": -0.015853280538502545
+    }
+  ]
+}

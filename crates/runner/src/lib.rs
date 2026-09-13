@@ -1,10 +1,13 @@
 //! Offline robot orchestration: validated replay, persistent vision, safety and logs.
 //! All motion output is recorded locally; there is no physical actuator sink.
+pub mod async_simulation;
 pub mod autonomy;
 pub mod autonomy_replay;
 pub mod capture;
+pub mod control_diagnostics;
 mod control_execution;
 pub mod control_runtime;
+pub mod host_clock_simulation;
 pub mod input;
 pub mod laser_pose;
 pub mod navigation_diagnostics;

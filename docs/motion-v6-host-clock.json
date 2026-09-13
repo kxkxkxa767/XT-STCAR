@@ -1,0 +1,1138 @@
+{
+  "busy_retries": 0,
+  "captures": 23,
+  "collision_or_boundary_violation": false,
+  "config": {
+    "autonomy": {
+      "cone_radius_m": 0.14,
+      "laser_point_radius_m": 0.015,
+      "lidar_in_body": {
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.0
+      },
+      "max_sensor_age_ms": 250,
+      "max_tick_gap_ms": 250,
+      "measurement_status": "unverified",
+      "mission": {
+        "approach_goal": {
+          "x_m": 2.0,
+          "y_m": 2.5
+        },
+        "approach_speed_mps": 0.18,
+        "body_frame": "sim_body",
+        "cone_waypoints": [
+          {
+            "x_m": 3.1,
+            "y_m": 3.35
+          },
+          {
+            "x_m": 4.5,
+            "y_m": 1.85
+          }
+        ],
+        "crosswalk_hold_ms": 3000,
+        "crosswalk_region": {
+          "max_x_m": 2.5,
+          "max_y_m": 4.0,
+          "min_x_m": 1.0,
+          "min_y_m": 1.0
+        },
+        "crosswalk_stop_margin_m": 0.15,
+        "cruise_speed_mps": 0.3,
+        "finish_goal": {
+          "x_m": 6.43,
+          "y_m": 2.5
+        },
+        "finish_region": {
+          "max_x_m": 6.8,
+          "max_y_m": 3.1,
+          "min_x_m": 6.0,
+          "min_y_m": 1.9
+        },
+        "finish_yaw_rad": 0.0,
+        "footprint": {
+          "front_m": 0.22,
+          "half_width_m": 0.13,
+          "rear_m": 0.18
+        },
+        "goal_heading_tolerance_rad": 0.12,
+        "goal_tolerance_m": 0.065,
+        "light_approach_yaw_rad": 0.0,
+        "light_detection_region": {
+          "max_x_m": 6.0,
+          "max_y_m": 3.5,
+          "min_x_m": 4.4,
+          "min_y_m": 1.5
+        },
+        "light_stop_goal": {
+          "x_m": 5.55,
+          "y_m": 2.5
+        },
+        "light_stop_region": {
+          "max_x_m": 6.0,
+          "max_y_m": 3.1,
+          "min_x_m": 5.0,
+          "min_y_m": 1.9
+        },
+        "max_observation_skew_ms": 100,
+        "max_pose_age_ms": 250,
+        "max_pose_gap_ms": 250,
+        "max_road_age_ms": 250,
+        "max_road_gap_ms": 250,
+        "min_detection_confidence": 0.5,
+        "min_green_frames": 3,
+        "min_green_ms": 300,
+        "min_pose_quality": 0.6,
+        "schema_version": 1,
+        "simulation_only": true,
+        "stopped_speed_mps": 0.012,
+        "world_frame": "sim_world"
+      },
+      "navigation": {
+        "bounds": {
+          "max_x_m": 7.0,
+          "max_y_m": 5.0,
+          "min_x_m": 0.0,
+          "min_y_m": 0.0
+        },
+        "clearance_m": 0.04,
+        "control_period_ms": 100,
+        "curvature_samples": 21,
+        "footprint": {
+          "front_m": 0.22,
+          "half_width_m": 0.13,
+          "rear_m": 0.18
+        },
+        "frame_id": "sim_world",
+        "goal_heading_tolerance_rad": 0.12,
+        "goal_tolerance_m": 0.045,
+        "grid_resolution_m": 0.1,
+        "lookahead_m": 0.55,
+        "max_accel_mps2": 0.4,
+        "max_curvature_per_m": 2.0,
+        "max_curvature_rate_per_s": 4.0,
+        "max_decel_mps2": 0.6,
+        "max_grid_cells": 40000,
+        "max_input_age_ms": 250,
+        "max_lateral_accel_mps2": 0.4,
+        "max_obstacles": 2048,
+        "max_speed_mps": 0.3,
+        "min_pose_quality": 0.4,
+        "preview_horizon_s": 2.0,
+        "tracking": {
+          "kind": "pure_pursuit"
+        }
+      },
+      "safety": {
+        "command_timeout_ms": 300,
+        "deadman_timeout_ms": 300,
+        "frames": {
+          "body_frame": "sim_body",
+          "imu_frame": "sim_imu",
+          "lidar_frame": "sim_laser",
+          "odometry_frame": "sim_world",
+          "vision_frame": "sim_camera"
+        },
+        "heartbeat_timeout_ms": 300,
+        "max_abs_curvature_per_m": 2.0,
+        "max_speed_mps": 0.3,
+        "required_sensors": [
+          "lidar",
+          "odometry",
+          "vision"
+        ],
+        "schema_version": 1,
+        "sensor_timeout_ms": 300,
+        "simulation_only": true
+      },
+      "scan": {
+        "bins": 360,
+        "frame_id": "sim_laser",
+        "max_missing_arc_rad": 0.12,
+        "max_packet_gap_ms": 20,
+        "max_revolution_ms": 200,
+        "min_coverage_fraction": 0.95,
+        "min_valid_fraction": 0.95
+      },
+      "schema_version": 1,
+      "simulation_only": true
+    },
+    "cones": [
+      {
+        "center": {
+          "x_m": 3.0,
+          "y_m": 2.5
+        },
+        "radius_m": 0.14
+      },
+      {
+        "center": {
+          "x_m": 4.25,
+          "y_m": 2.85
+        },
+        "radius_m": 0.14
+      }
+    ],
+    "crosswalk": {
+      "max_x_m": 5.0969999999999995,
+      "max_y_m": 3.445,
+      "min_x_m": 4.8,
+      "min_y_m": 1.555
+    },
+    "fault": "none",
+    "fault_at_ms": 2000,
+    "initial_pose": {
+      "x_m": 0.6,
+      "y_m": 2.5,
+      "yaw_rad": 0.1
+    },
+    "light_red_duration_ms": 5000,
+    "light_trigger_x_m": 5.0,
+    "max_duration_ms": 120000,
+    "plant_accel_mps2": 0.6,
+    "plant_brake_mps2": 0.8,
+    "road": {
+      "calibration_status": "unverified",
+      "cone": {
+        "blue_hue_range": [
+          190.0,
+          255.0
+        ],
+        "max_cones": 32,
+        "max_height_width_ratio": 5.0,
+        "merge_distance_m": 0.15,
+        "min_fill": 0.25,
+        "min_height_fraction": 0.03,
+        "min_height_width_ratio": 1.0,
+        "min_pixels": 10,
+        "min_saturation": 0.5,
+        "min_taper_ratio": 1.15,
+        "min_value": 0.3,
+        "red_hue_range": [
+          340.0,
+          20.0
+        ]
+      },
+      "crosswalk": {
+        "angle_tolerance_deg": 20.0,
+        "max_depth_m": 2.5,
+        "max_gap_ratio": 3.0,
+        "max_length_ratio": 1.8,
+        "max_saturation": 0.2,
+        "max_spacing_variation": 0.35,
+        "max_width_ratio": 1.8,
+        "min_aspect": 1.35,
+        "min_blob_fill": 0.65,
+        "min_depth_m": 0.08,
+        "min_gap_ratio": 0.25,
+        "min_lateral_span_m": 0.5,
+        "min_overlap": 0.65,
+        "min_pixels": 8,
+        "min_stripes": 4,
+        "min_value": 0.75,
+        "stripe_axis": "either"
+      },
+      "ground_roi": [
+        0.05,
+        0.35,
+        0.95,
+        0.98
+      ],
+      "homography": {
+        "matrix": [
+          [
+            0.0,
+            -5.0,
+            5.0
+          ],
+          [
+            -4.0,
+            0.0,
+            2.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "max_abs_lateral_m": 3.0,
+        "max_forward_m": 6.0,
+        "min_denominator": 1e-6
+      },
+      "light": {
+        "green_hue_range": [
+          80.0,
+          170.0
+        ],
+        "max_aspect": 2.5,
+        "max_rois": 8,
+        "max_white_fraction": 0.7,
+        "min_aspect": 0.4,
+        "min_blob_fill": 0.4,
+        "min_pixels": 4,
+        "min_roi_fraction": 0.01,
+        "min_saturation": 0.45,
+        "min_value": 0.35,
+        "red_hue_range": [
+          340.0,
+          20.0
+        ],
+        "yellow_hue_range": [
+          35.0,
+          75.0
+        ],
+        "yolo_confidence": 0.25
+      },
+      "light_rois": [
+        [
+          0.82,
+          0.02,
+          0.96,
+          0.25
+        ]
+      ],
+      "max_candidates": 128,
+      "max_components": 2048,
+      "max_work_height": 240,
+      "max_work_width": 320,
+      "schema_version": 1,
+      "simulation_only": true
+    },
+    "telemetry": {
+      "max_trace_bytes": 1048576,
+      "mode": "transitions"
+    },
+    "time_step_ms": 100
+  },
+  "distance_m": 0.40212573333335216,
+  "drive_polls": 119,
+  "elapsed_ms": 2687,
+  "final_command": {
+    "type": "stop"
+  },
+  "final_curvature_per_m": 0.0,
+  "final_pose": {
+    "x_m": 1.0015524213181997,
+    "y_m": 2.516719928403866,
+    "yaw_rad": -0.010846018001093416
+  },
+  "final_speed_mps": 0.0,
+  "first_fault": {
+    "at_ms": 2461,
+    "command": {
+      "type": "stop"
+    },
+    "fault": "command_expired"
+  },
+  "hooks_enabled": false,
+  "injected_source_delays_ms": [
+    60,
+    80
+  ],
+  "last_submitted_source_at": 2200,
+  "max_abs_curvature_per_m": 0.2998526396651645,
+  "max_poll_gap_ms": 21,
+  "max_speed_mps": 0.18,
+  "minimum_cone_clearance_m": 1.638511376127028,
+  "nominal_capture_period_ms": 100,
+  "nominal_output_period_ms": 20,
+  "physical_output_enabled": false,
+  "plans": [
+    {
+      "at_ms": 80,
+      "command": {
+        "curvature_per_m": -0.28152646039699936,
+        "speed_mps": 0.04000000000000001,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 60,
+      "publish_to_observation_ns": 15934625,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 0,
+      "timings": {
+        "certify_duration_ns": 11792,
+        "certify_finished_host_ns": 64366417,
+        "certify_started_host_ns": 64354625,
+        "dequeued_host_ns": 60258375,
+        "enqueued_host_ns": 60243875,
+        "navigation_duration_ns": 4008833,
+        "processor_duration_ns": 4056667,
+        "processor_finished_host_ns": 64353917,
+        "processor_started_host_ns": 60297250,
+        "projection_duration_ns": 38750,
+        "projection_finished_host_ns": 60297209,
+        "projection_started_host_ns": 60258459,
+        "published_host_ns": 64367209,
+        "queue_wait_ns": 14500,
+        "ready_to_publish_host_ns": 64366834,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 44083
+      }
+    },
+    {
+      "at_ms": 200,
+      "command": {
+        "curvature_per_m": -0.28268933157062043,
+        "speed_mps": 0.08000000000000002,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 19,
+      "planned_at": 181,
+      "publish_to_observation_ns": 14727625,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 100,
+      "timings": {
+        "certify_duration_ns": 13541,
+        "certify_finished_host_ns": 185363000,
+        "certify_started_host_ns": 185349459,
+        "dequeued_host_ns": 181185334,
+        "enqueued_host_ns": 181162875,
+        "navigation_duration_ns": 4126666,
+        "processor_duration_ns": 4155959,
+        "processor_finished_host_ns": 185348959,
+        "processor_started_host_ns": 181193000,
+        "projection_duration_ns": 7584,
+        "projection_finished_host_ns": 181192959,
+        "projection_started_host_ns": 181185375,
+        "published_host_ns": 185364625,
+        "queue_wait_ns": 22459,
+        "ready_to_publish_host_ns": 185363917,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 280,
+      "command": {
+        "curvature_per_m": -0.2840001568501304,
+        "speed_mps": 0.09639999999999986,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 19,
+      "planned_at": 261,
+      "publish_to_observation_ns": 15515875,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 200,
+      "timings": {
+        "certify_duration_ns": 12250,
+        "certify_finished_host_ns": 264553250,
+        "certify_started_host_ns": 264541000,
+        "dequeued_host_ns": 261214792,
+        "enqueued_host_ns": 261189292,
+        "navigation_duration_ns": 3290041,
+        "processor_duration_ns": 3312125,
+        "processor_finished_host_ns": 264540334,
+        "processor_started_host_ns": 261228209,
+        "projection_duration_ns": 13292,
+        "projection_finished_host_ns": 261228209,
+        "projection_started_host_ns": 261214917,
+        "published_host_ns": 264554084,
+        "queue_wait_ns": 25500,
+        "ready_to_publish_host_ns": 264553792,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 400,
+      "command": {
+        "curvature_per_m": -0.28707915137866025,
+        "speed_mps": 0.13639999999999985,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 380,
+      "publish_to_observation_ns": 16279125,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 300,
+      "timings": {
+        "certify_duration_ns": 11000,
+        "certify_finished_host_ns": 384466167,
+        "certify_started_host_ns": 384455167,
+        "dequeued_host_ns": 380537542,
+        "enqueued_host_ns": 380512667,
+        "navigation_duration_ns": 3886000,
+        "processor_duration_ns": 3910000,
+        "processor_finished_host_ns": 384454875,
+        "processor_started_host_ns": 380544875,
+        "projection_duration_ns": 7250,
+        "projection_finished_host_ns": 380544834,
+        "projection_started_host_ns": 380537584,
+        "published_host_ns": 384467292,
+        "queue_wait_ns": 24875,
+        "ready_to_publish_host_ns": 384467000,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 480,
+      "command": {
+        "curvature_per_m": -0.28914429593239604,
+        "speed_mps": 0.1523999999999997,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 460,
+      "publish_to_observation_ns": 16285875,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 400,
+      "timings": {
+        "certify_duration_ns": 11459,
+        "certify_finished_host_ns": 464701084,
+        "certify_started_host_ns": 464689625,
+        "dequeued_host_ns": 460789959,
+        "enqueued_host_ns": 460772417,
+        "navigation_duration_ns": 3874584,
+        "processor_duration_ns": 3893834,
+        "processor_finished_host_ns": 464688584,
+        "processor_started_host_ns": 460794750,
+        "projection_duration_ns": 4667,
+        "projection_finished_host_ns": 460794709,
+        "projection_started_host_ns": 460790042,
+        "published_host_ns": 464701875,
+        "queue_wait_ns": 17542,
+        "ready_to_publish_host_ns": 464701375,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 600,
+      "command": {
+        "curvature_per_m": -0.292981894240062,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 19,
+      "planned_at": 581,
+      "publish_to_observation_ns": 15430500,
+      "rejection": null,
+      "source_age_ms": 99,
+      "source_at": 501,
+      "timings": {
+        "certify_duration_ns": 12625,
+        "certify_finished_host_ns": 585018584,
+        "certify_started_host_ns": 585005959,
+        "dequeued_host_ns": 581499834,
+        "enqueued_host_ns": 581468292,
+        "navigation_duration_ns": 3455875,
+        "processor_duration_ns": 3495917,
+        "processor_finished_host_ns": 585004292,
+        "processor_started_host_ns": 581508375,
+        "projection_duration_ns": 8375,
+        "projection_finished_host_ns": 581508334,
+        "projection_started_host_ns": 581499959,
+        "published_host_ns": 585021250,
+        "queue_wait_ns": 31542,
+        "ready_to_publish_host_ns": 585020042,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 681,
+      "command": {
+        "curvature_per_m": -0.29515771699909465,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 661,
+      "publish_to_observation_ns": 16547250,
+      "rejection": null,
+      "source_age_ms": 81,
+      "source_at": 600,
+      "timings": {
+        "certify_duration_ns": 15375,
+        "certify_finished_host_ns": 664688042,
+        "certify_started_host_ns": 664672667,
+        "dequeued_host_ns": 661110209,
+        "enqueued_host_ns": 661079250,
+        "navigation_duration_ns": 3514334,
+        "processor_duration_ns": 3550834,
+        "processor_finished_host_ns": 664672084,
+        "processor_started_host_ns": 661121250,
+        "projection_duration_ns": 10833,
+        "projection_finished_host_ns": 661121167,
+        "projection_started_host_ns": 661110334,
+        "published_host_ns": 664715709,
+        "queue_wait_ns": 30959,
+        "ready_to_publish_host_ns": 664715375,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 800,
+      "command": {
+        "curvature_per_m": -0.2978639070836495,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 780,
+      "publish_to_observation_ns": 16503166,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 700,
+      "timings": {
+        "certify_duration_ns": 13292,
+        "certify_finished_host_ns": 783795042,
+        "certify_started_host_ns": 783781750,
+        "dequeued_host_ns": 780123709,
+        "enqueued_host_ns": 780090959,
+        "navigation_duration_ns": 3613709,
+        "processor_duration_ns": 3648750,
+        "processor_finished_host_ns": 783781209,
+        "processor_started_host_ns": 780132459,
+        "projection_duration_ns": 8709,
+        "projection_finished_host_ns": 780132459,
+        "projection_started_host_ns": 780123750,
+        "published_host_ns": 783796334,
+        "queue_wait_ns": 32750,
+        "ready_to_publish_host_ns": 783795959,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 880,
+      "command": {
+        "curvature_per_m": -0.29901997356596854,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 860,
+      "publish_to_observation_ns": 16432500,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 800,
+      "timings": {
+        "certify_duration_ns": 11125,
+        "certify_finished_host_ns": 864119250,
+        "certify_started_host_ns": 864108125,
+        "dequeued_host_ns": 860368334,
+        "enqueued_host_ns": 860346125,
+        "navigation_duration_ns": 3700209,
+        "processor_duration_ns": 3733750,
+        "processor_finished_host_ns": 864107875,
+        "processor_started_host_ns": 860374125,
+        "projection_duration_ns": 5709,
+        "projection_finished_host_ns": 860374084,
+        "projection_started_host_ns": 860368375,
+        "published_host_ns": 864120084,
+        "queue_wait_ns": 22209,
+        "ready_to_publish_host_ns": 864119667,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1000,
+      "command": {
+        "curvature_per_m": -0.2998526396651645,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 980,
+      "publish_to_observation_ns": 16381750,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 900,
+      "timings": {
+        "certify_duration_ns": 11083,
+        "certify_finished_host_ns": 984174042,
+        "certify_started_host_ns": 984162959,
+        "dequeued_host_ns": 980373000,
+        "enqueued_host_ns": 980347542,
+        "navigation_duration_ns": 3760792,
+        "processor_duration_ns": 3783625,
+        "processor_finished_host_ns": 984162584,
+        "processor_started_host_ns": 980378959,
+        "projection_duration_ns": 5833,
+        "projection_finished_host_ns": 980378917,
+        "projection_started_host_ns": 980373084,
+        "published_host_ns": 984175167,
+        "queue_wait_ns": 25458,
+        "ready_to_publish_host_ns": 984174875,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1080,
+      "command": {
+        "curvature_per_m": -0.2998510783513124,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 1060,
+      "publish_to_observation_ns": 16404209,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 1000,
+      "timings": {
+        "certify_duration_ns": 12709,
+        "certify_finished_host_ns": 1063987959,
+        "certify_started_host_ns": 1063975250,
+        "dequeued_host_ns": 1060200917,
+        "enqueued_host_ns": 1060182375,
+        "navigation_duration_ns": 3734333,
+        "processor_duration_ns": 3763708,
+        "processor_finished_host_ns": 1063973375,
+        "processor_started_host_ns": 1060209667,
+        "projection_duration_ns": 8625,
+        "projection_finished_host_ns": 1060209625,
+        "projection_started_host_ns": 1060201000,
+        "published_host_ns": 1064009750,
+        "queue_wait_ns": 18542,
+        "ready_to_publish_host_ns": 1063989709,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1200,
+      "command": {
+        "curvature_per_m": -0.2990629797749426,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 1180,
+      "publish_to_observation_ns": 16325708,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 1100,
+      "timings": {
+        "certify_duration_ns": 12667,
+        "certify_finished_host_ns": 1184726084,
+        "certify_started_host_ns": 1184713417,
+        "dequeued_host_ns": 1181075417,
+        "enqueued_host_ns": 1181047167,
+        "navigation_duration_ns": 3595166,
+        "processor_duration_ns": 3628958,
+        "processor_finished_host_ns": 1184712625,
+        "processor_started_host_ns": 1181083667,
+        "projection_duration_ns": 8166,
+        "projection_finished_host_ns": 1181083625,
+        "projection_started_host_ns": 1181075459,
+        "published_host_ns": 1184728667,
+        "queue_wait_ns": 28250,
+        "ready_to_publish_host_ns": 1184727625,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1281,
+      "command": {
+        "curvature_per_m": -0.2980207876277312,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 19,
+      "planned_at": 1262,
+      "publish_to_observation_ns": 15375291,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 1201,
+      "timings": {
+        "certify_duration_ns": 12042,
+        "certify_finished_host_ns": 1265865334,
+        "certify_started_host_ns": 1265853292,
+        "dequeued_host_ns": 1262228959,
+        "enqueued_host_ns": 1262201875,
+        "navigation_duration_ns": 3583500,
+        "processor_duration_ns": 3616750,
+        "processor_finished_host_ns": 1265852209,
+        "processor_started_host_ns": 1262235459,
+        "projection_duration_ns": 6000,
+        "projection_finished_host_ns": 1262235417,
+        "projection_started_host_ns": 1262229417,
+        "published_host_ns": 1265869209,
+        "queue_wait_ns": 27084,
+        "ready_to_publish_host_ns": 1265868375,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1400,
+      "command": {
+        "curvature_per_m": -0.29592918144962194,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 1380,
+      "publish_to_observation_ns": 16287000,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 1300,
+      "timings": {
+        "certify_duration_ns": 14125,
+        "certify_finished_host_ns": 1384456875,
+        "certify_started_host_ns": 1384442750,
+        "dequeued_host_ns": 1380628000,
+        "enqueued_host_ns": 1380599542,
+        "navigation_duration_ns": 3773000,
+        "processor_duration_ns": 3806708,
+        "processor_finished_host_ns": 1384441417,
+        "processor_started_host_ns": 1380634709,
+        "projection_duration_ns": 6625,
+        "projection_finished_host_ns": 1380634709,
+        "projection_started_host_ns": 1380628084,
+        "published_host_ns": 1384460250,
+        "queue_wait_ns": 28458,
+        "ready_to_publish_host_ns": 1384458959,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1480,
+      "command": {
+        "curvature_per_m": -0.29401823659236476,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 1460,
+      "publish_to_observation_ns": 16279792,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 1400,
+      "timings": {
+        "certify_duration_ns": 13167,
+        "certify_finished_host_ns": 1464243167,
+        "certify_started_host_ns": 1464230000,
+        "dequeued_host_ns": 1460496750,
+        "enqueued_host_ns": 1460470917,
+        "navigation_duration_ns": 3704834,
+        "processor_duration_ns": 3724375,
+        "processor_finished_host_ns": 1464229084,
+        "processor_started_host_ns": 1460504709,
+        "projection_duration_ns": 7833,
+        "projection_finished_host_ns": 1460504667,
+        "projection_started_host_ns": 1460496834,
+        "published_host_ns": 1464245792,
+        "queue_wait_ns": 25833,
+        "ready_to_publish_host_ns": 1464244667,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1600,
+      "command": {
+        "curvature_per_m": -0.2905949460439435,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 19,
+      "planned_at": 1581,
+      "publish_to_observation_ns": 15310125,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 1500,
+      "timings": {
+        "certify_duration_ns": 12875,
+        "certify_finished_host_ns": 1584798209,
+        "certify_started_host_ns": 1584785334,
+        "dequeued_host_ns": 1581129792,
+        "enqueued_host_ns": 1581113584,
+        "navigation_duration_ns": 3618458,
+        "processor_duration_ns": 3647458,
+        "processor_finished_host_ns": 1584784417,
+        "processor_started_host_ns": 1581136959,
+        "projection_duration_ns": 7042,
+        "projection_finished_host_ns": 1581136917,
+        "projection_started_host_ns": 1581129875,
+        "published_host_ns": 1584800792,
+        "queue_wait_ns": 16208,
+        "ready_to_publish_host_ns": 1584799917,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1680,
+      "command": {
+        "curvature_per_m": -0.28795760203217396,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 1660,
+      "publish_to_observation_ns": 16748292,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 1600,
+      "timings": {
+        "certify_duration_ns": 12958,
+        "certify_finished_host_ns": 1664174375,
+        "certify_started_host_ns": 1664161417,
+        "dequeued_host_ns": 1660736084,
+        "enqueued_host_ns": 1660716792,
+        "navigation_duration_ns": 3384084,
+        "processor_duration_ns": 3414708,
+        "processor_finished_host_ns": 1664160042,
+        "processor_started_host_ns": 1660745334,
+        "projection_duration_ns": 9041,
+        "projection_finished_host_ns": 1660745250,
+        "projection_started_host_ns": 1660736209,
+        "published_host_ns": 1664176417,
+        "queue_wait_ns": 19292,
+        "ready_to_publish_host_ns": 1664175542,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1800,
+      "command": {
+        "curvature_per_m": -0.2837975204202959,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 19,
+      "planned_at": 1781,
+      "publish_to_observation_ns": 16143125,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 1700,
+      "timings": {
+        "certify_duration_ns": 13792,
+        "certify_finished_host_ns": 1784913834,
+        "certify_started_host_ns": 1784900042,
+        "dequeued_host_ns": 1781109667,
+        "enqueued_host_ns": 1781085125,
+        "navigation_duration_ns": 3752334,
+        "processor_duration_ns": 3782458,
+        "processor_finished_host_ns": 1784899000,
+        "processor_started_host_ns": 1781116542,
+        "projection_duration_ns": 6791,
+        "projection_finished_host_ns": 1781116500,
+        "projection_started_host_ns": 1781109709,
+        "published_host_ns": 1784916375,
+        "queue_wait_ns": 24542,
+        "ready_to_publish_host_ns": 1784915584,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 1880,
+      "command": {
+        "curvature_per_m": -0.28032901532644083,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 19,
+      "planned_at": 1861,
+      "publish_to_observation_ns": 16477084,
+      "rejection": null,
+      "source_age_ms": 79,
+      "source_at": 1801,
+      "timings": {
+        "certify_duration_ns": 12375,
+        "certify_finished_host_ns": 1864545125,
+        "certify_started_host_ns": 1864532750,
+        "dequeued_host_ns": 1861110292,
+        "enqueued_host_ns": 1861094750,
+        "navigation_duration_ns": 3388958,
+        "processor_duration_ns": 3414833,
+        "processor_finished_host_ns": 1864531917,
+        "processor_started_host_ns": 1861117084,
+        "projection_duration_ns": 6667,
+        "projection_finished_host_ns": 1861117042,
+        "projection_started_host_ns": 1861110375,
+        "published_host_ns": 1864549750,
+        "queue_wait_ns": 15542,
+        "ready_to_publish_host_ns": 1864549042,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 2000,
+      "command": {
+        "curvature_per_m": -0.274895677878885,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 18,
+      "planned_at": 1982,
+      "publish_to_observation_ns": 14829458,
+      "rejection": null,
+      "source_age_ms": 99,
+      "source_at": 1901,
+      "timings": {
+        "certify_duration_ns": 12458,
+        "certify_finished_host_ns": 1985972542,
+        "certify_started_host_ns": 1985960084,
+        "dequeued_host_ns": 1982343875,
+        "enqueued_host_ns": 1982324084,
+        "navigation_duration_ns": 3573416,
+        "processor_duration_ns": 3607667,
+        "processor_finished_host_ns": 1985958959,
+        "processor_started_host_ns": 1982351292,
+        "projection_duration_ns": 7333,
+        "projection_finished_host_ns": 1982351250,
+        "projection_started_host_ns": 1982343917,
+        "published_host_ns": 1985975584,
+        "queue_wait_ns": 19791,
+        "ready_to_publish_host_ns": 1985974459,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 2080,
+      "command": {
+        "curvature_per_m": -0.27162421540896237,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 2060,
+      "publish_to_observation_ns": 16365833,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 2000,
+      "timings": {
+        "certify_duration_ns": 14042,
+        "certify_finished_host_ns": 2063929584,
+        "certify_started_host_ns": 2063915542,
+        "dequeued_host_ns": 2060369959,
+        "enqueued_host_ns": 2060346959,
+        "navigation_duration_ns": 3505167,
+        "processor_duration_ns": 3533916,
+        "processor_finished_host_ns": 2063915125,
+        "processor_started_host_ns": 2060381209,
+        "projection_duration_ns": 11083,
+        "projection_finished_host_ns": 2060381125,
+        "projection_started_host_ns": 2060370042,
+        "published_host_ns": 2063931167,
+        "queue_wait_ns": 23000,
+        "ready_to_publish_host_ns": 2063930542,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 2200,
+      "command": {
+        "curvature_per_m": -0.2653685704702818,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 2180,
+      "publish_to_observation_ns": 16207667,
+      "rejection": null,
+      "source_age_ms": 100,
+      "source_at": 2100,
+      "timings": {
+        "certify_duration_ns": 14000,
+        "certify_finished_host_ns": 2184066625,
+        "certify_started_host_ns": 2184052625,
+        "dequeued_host_ns": 2180229917,
+        "enqueued_host_ns": 2180207750,
+        "navigation_duration_ns": 3783250,
+        "processor_duration_ns": 3813667,
+        "processor_finished_host_ns": 2184051292,
+        "processor_started_host_ns": 2180237625,
+        "projection_duration_ns": 7417,
+        "projection_finished_host_ns": 2180237584,
+        "projection_started_host_ns": 2180230167,
+        "published_host_ns": 2184068375,
+        "queue_wait_ns": 22167,
+        "ready_to_publish_host_ns": 2184067792,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    },
+    {
+      "at_ms": 2280,
+      "command": {
+        "curvature_per_m": -0.2607388975298438,
+        "speed_mps": 0.18,
+        "type": "drive"
+      },
+      "newly_adopted": true,
+      "plan_age_ms": 20,
+      "planned_at": 2260,
+      "publish_to_observation_ns": 16678416,
+      "rejection": null,
+      "source_age_ms": 80,
+      "source_at": 2200,
+      "timings": {
+        "certify_duration_ns": 13042,
+        "certify_finished_host_ns": 2264329709,
+        "certify_started_host_ns": 2264316667,
+        "dequeued_host_ns": 2260989834,
+        "enqueued_host_ns": 2260971667,
+        "navigation_duration_ns": 3292541,
+        "processor_duration_ns": 3318916,
+        "processor_finished_host_ns": 2264315375,
+        "processor_started_host_ns": 2260996459,
+        "projection_duration_ns": 6083,
+        "projection_finished_host_ns": 2260996417,
+        "projection_started_host_ns": 2260990334,
+        "published_host_ns": 2264334334,
+        "queue_wait_ns": 18167,
+        "ready_to_publish_host_ns": 2264333542,
+        "replaced_pending_input": false,
+        "terminal_solver_duration_ns": 0
+      }
+    }
+  ],
+  "schema_version": 1,
+  "scope": "Single advancing Instant-clock host observation with real controller, RGB, scan and poll-driven turning plant; neither deterministic deadline proof nor target WCET.",
+  "source_stop_at_ms": 2300,
+  "submitted": 23,
+  "turning_drive_polls": 119,
+  "worker_counts": {
+    "newly_adopted_plans": 23,
+    "published_plans": 23,
+    "queued_inputs": 23,
+    "rejected_polls": 0,
+    "replaced_inputs": 0
+  }
+}

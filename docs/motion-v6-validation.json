@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "baseline_commit": "b9f75c7427411c12285411efa4af793fa167b8c7",
+  "scope": "Rust budget repair, complete real-worker functional comparison including experimental LQR failure, advancing-clock regressions, optional host observations and static dual RISC-V cross-link. No vehicle or target execution.",
+  "rust_workspace": {
+    "passed": 322,
+    "failed": 0,
+    "ignored": 2,
+    "ignored_cases": [
+      "native ONNX Runtime opt-in (not rerun)",
+      "certificate-only host benchmark opt-in (historical v5; new integrated timing measured separately)"
+    ]
+  },
+  "tracking_example_tests_passed": 2,
+  "python_delivery_tests_passed": 34,
+  "async_deadline_tests": 6,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "source_hashes_verified": 89,
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "ae3eb19f59e4b6f6efd5331eb581b86eb9ff6337add15ebb00dff0a4b0e47244",
+      "size_bytes": 1981600,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "shared_review_text_read": true,
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "experimental: completes unchanged synchronous benchmark, fails both full asynchronous schedules under unchanged safety/competition gates",
+  "model_native_tests": "Unchanged model/native modules; ORT execution and model suite not rerun. Model structure/provenance checked during optional packaging.",
+  "build_log": "motion-v6-build.log",
+  "build_report": "motion-v6-build.json",
+  "delivery_test_log": "motion-v6-delivery-tests.log",
+  "example_test_log": "motion-v6-example-tests.log",
+  "sync_comparison": "motion-v6-competition-comparison.json",
+  "sync_common_fields_identical_to_v5": true,
+  "budget_before": "motion-v6-budget-before.json",
+  "budget_after": "motion-v6-budget-after.json",
+  "async_runs": [
+    {
+      "report": "motion-v6-async-comparison.json",
+      "runs": [
+        {
+          "tracker": "pp",
+          "completed": true,
+          "elapsed_ms": 57663,
+          "distance_m": 10.882376163456195,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.3029589090471101,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 577,
+            "certificate_unsafe": 13,
+            "completed_plans": 577,
+            "curvature_slew": 1,
+            "drive_polls": 3113,
+            "execution_changed": 0,
+            "newly_adopted_plans": 577,
+            "output_polls": 3461,
+            "stop_polls": 348,
+            "submissions": 577,
+            "turning_drive_polls": 2765
+          },
+          "unassigned_startup_ms": 63,
+          "final_speed_and_curvature_zero": true
+        },
+        {
+          "tracker": "lqr",
+          "completed": false,
+          "elapsed_ms": 29463,
+          "distance_m": 3.6040523318602915,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "minimum_cone_clearance_m": 0.24528391769294244,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 0,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 295,
+            "certificate_unsafe": 3,
+            "completed_plans": 295,
+            "curvature_slew": 1,
+            "drive_polls": 922,
+            "execution_changed": 0,
+            "newly_adopted_plans": 294,
+            "output_polls": 1769,
+            "stop_polls": 847,
+            "submissions": 295,
+            "turning_drive_polls": 646
+          },
+          "unassigned_startup_ms": 63,
+          "final_speed_and_curvature_zero": true
+        }
+      ]
+    },
+    {
+      "report": "motion-v6-async-perturbed.json",
+      "runs": [
+        {
+          "tracker": "pp",
+          "completed": true,
+          "elapsed_ms": 58845,
+          "distance_m": 10.969303391029158,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.30262626261253434,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 589,
+            "certificate_unsafe": 15,
+            "completed_plans": 589,
+            "curvature_slew": 2,
+            "drive_polls": 3192,
+            "execution_changed": 0,
+            "newly_adopted_plans": 589,
+            "output_polls": 3532,
+            "stop_polls": 340,
+            "submissions": 589,
+            "turning_drive_polls": 2916
+          },
+          "unassigned_startup_ms": 45,
+          "final_speed_and_curvature_zero": true
+        },
+        {
+          "tracker": "lqr",
+          "completed": false,
+          "elapsed_ms": 28565,
+          "distance_m": 3.552986839805239,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "minimum_cone_clearance_m": 0.2503218424238536,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 0,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 286,
+            "certificate_unsafe": 2,
+            "completed_plans": 286,
+            "curvature_slew": 1,
+            "drive_polls": 871,
+            "execution_changed": 0,
+            "newly_adopted_plans": 285,
+            "output_polls": 1715,
+            "stop_polls": 844,
+            "submissions": 286,
+            "turning_drive_polls": 595
+          },
+          "unassigned_startup_ms": 45,
+          "final_speed_and_curvature_zero": true
+        }
+      ]
+    },
+    {
+      "report": "motion-v6-async-timing.json",
+      "runs": [
+        {
+          "tracker": "pp",
+          "completed": true,
+          "elapsed_ms": 57663,
+          "distance_m": 10.882376163456195,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.3029589090471101,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 577,
+            "certificate_unsafe": 13,
+            "completed_plans": 577,
+            "curvature_slew": 1,
+            "drive_polls": 3113,
+            "execution_changed": 0,
+            "newly_adopted_plans": 577,
+            "output_polls": 3461,
+            "stop_polls": 348,
+            "submissions": 577,
+            "turning_drive_polls": 2765
+          },
+          "unassigned_startup_ms": 63,
+          "final_speed_and_curvature_zero": true
+        },
+        {
+          "tracker": "lqr",
+          "completed": false,
+          "elapsed_ms": 29463,
+          "distance_m": 3.6040523318602915,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "minimum_cone_clearance_m": 0.24528391769294244,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 0,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 295,
+            "certificate_unsafe": 3,
+            "completed_plans": 295,
+            "curvature_slew": 1,
+            "drive_polls": 922,
+            "execution_changed": 0,
+            "newly_adopted_plans": 294,
+            "output_polls": 1769,
+            "stop_polls": 847,
+            "submissions": 295,
+            "turning_drive_polls": 646
+          },
+          "unassigned_startup_ms": 63,
+          "final_speed_and_curvature_zero": true
+        }
+      ]
+    }
+  ],
+  "timing_enabled_preserves_functional_outcomes": true,
+  "host_profile": [
+    {
+      "tracking": "pure_pursuit",
+      "before_mean_ms": 1606.4679723333331,
+      "after_mean_ms": 1612.4147916666668,
+      "before_maximum_ms": 1620.1064170000002,
+      "after_maximum_ms": 1621.748542,
+      "mean_change_percent": 0.3701797630422776
+    },
+    {
+      "tracking": "lqr",
+      "before_mean_ms": 1480.9426946666665,
+      "after_mean_ms": 1480.7079166666665,
+      "before_maximum_ms": 1487.462209,
+      "after_maximum_ms": 1484.427709,
+      "mean_change_percent": -0.015853280538502545
+    }
+  ],
+  "host_clock_report": "motion-v6-host-clock.json",
+  "host_clock_result": {
+    "elapsed_ms": 2687,
+    "drive_polls": 119,
+    "turning_drive_polls": 119,
+    "max_poll_gap_ms": 21,
+    "last_submitted_source_at": 2200,
+    "first_fault": {
+      "at_ms": 2461,
+      "command": {
+        "type": "stop"
+      },
+      "fault": "command_expired"
+    },
+    "final_speed_mps": 0.0,
+    "final_curvature_per_m": 0.0
+  },
+  "original_input_hashes_unchanged": {
+    "XT-STCAR_b9f75c7_review_reproduction.zip": "4cd3aa49b07b455c7841576cb827a35f786d4c20e35e199c6fb7654e86e569dd",
+    "赛项三-RISC-V_轻量无人车赛比赛规则（初稿）.pdf": "24dfa87d60142be349eb4e7e862e09b1ec0c4e3771010e9471d2c850144eb7d6"
+  },
+  "vehicle_execution_verified": false,
+  "physical_output_enabled": false,
+  "limits": [
+    "Full functional clock waits freeze logical time; separate deterministic suspended-worker tests advance poll and plant. Neither is target WCET.",
+    "Single host clock run has real scheduling jitter and millisecond timestamp quantization; sampled maxima do not prove general deadlines.",
+    "LQR complete asynchronous failure remains visible; no loosening of certificate, control weights, total budget or 10s stall rule.",
+    "Bounded terminal/lattice rejection does not prove physical impossibility or global search completeness.",
+    "Static obstacle, pose/history, no slip/overshoot and braking model assumptions require real vehicle commissioning.",
+    "PP retains recoverable Stops; single synthetic success and limited timing perturbations do not establish race readiness."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-13",
+  "scope": "Local core/model archive verification only. Optional model structure/provenance checked; no target inference, no vehicle upload/execution. Git source/docs publication is separate.",
+  "vehicle_uploaded": false,
+  "packages": [
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-core-20260913T152145906345Z-ec385c9e19f1.tar.gz",
+      "sha256": "c6bc591abbac2fbdc19d935f74db0e0d47ddc93d9361703f319378723974a564",
+      "size_bytes": 2262572,
+      "file_count": 74,
+      "verified": true,
+      "verified_file_count": 74,
+      "packaged_docs_match_current_files": true,
+      "packaged_docs_verified": 47,
+      "source_hashes_match_current_files": true,
+      "source_hashes_verified": 89,
+      "model_included": false
+    },
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-with-model-20260913T152146496740Z-ec385c9e19f1.tar.gz",
+      "sha256": "53f035ae3038a6778f64ff86c9bcf63af0bbe53bf9443e28e3473368847faaa4",
+      "size_bytes": 10906776,
+      "file_count": 78,
+      "verified": true,
+      "verified_file_count": 78,
+      "packaged_docs_match_current_files": true,
+      "packaged_docs_verified": 47,
+      "source_hashes_match_current_files": true,
+      "source_hashes_verified": 89,
+      "model_included": true
+    }
+  ]
+}

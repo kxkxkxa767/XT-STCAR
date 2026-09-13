@@ -1,0 +1,444 @@
+{
+  "base_commit": "b9f75c7427411c12285411efa4af793fa167b8c7",
+  "strategy": "Within the unchanged 256 solver / 1024 iteration / 65536 charged-sample ledger, temporarily reserve one full continued solver allowance after the current connection is certified. Cold checks reaching their ceiling are deferred, never globally poisoned; all original candidate rollouts remain single-pass. Release the reserve before the old recovery order, only when no ordinary certified best exists. Prior work remains charged. A shortfall holds the available remainder and still attempts complete certification under the total cap.",
+  "reservation_formula": {
+    "solvers": 1,
+    "iterations": 8,
+    "charged_samples": "32 * (ceil(min(distance + period*max(measured_speed,speed_upper), 2*lookahead, 2) * pi/2 / min(grid_resolution/3, .025)) + 2)",
+    "basis": "Each of eight correction iterations has one residual + three finite-difference evaluations; each evaluation samples two segments totaling at most distance*pi/2. Extra two samples cover separate rounding and floating rounding. Checked integer accounting; reservation is not added to consumed work."
+  },
+  "original_42200_matrix": [
+    {
+      "curvature_samples": 21,
+      "mirror": -1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": -0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 47,
+        "iterations": 360,
+        "primitive_samples": 51541,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 44,
+        "domain_rejections": 45,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 0,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 44,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 43,
+        "terminal_budget": 0
+      }
+    },
+    {
+      "curvature_samples": 21,
+      "mirror": 1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": 0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 47,
+        "iterations": 360,
+        "primitive_samples": 51541,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 44,
+        "domain_rejections": 45,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 0,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 44,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 43,
+        "terminal_budget": 0
+      }
+    },
+    {
+      "curvature_samples": 41,
+      "mirror": -1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": -0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 87,
+        "iterations": 475,
+        "primitive_samples": 63799,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 54,
+        "domain_rejections": 85,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 30,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 84,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 53,
+        "terminal_budget": 30
+      }
+    },
+    {
+      "curvature_samples": 41,
+      "mirror": 1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": 0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 87,
+        "iterations": 475,
+        "primitive_samples": 63799,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 54,
+        "domain_rejections": 85,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 30,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 84,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 53,
+        "terminal_budget": 30
+      }
+    },
+    {
+      "curvature_samples": 61,
+      "mirror": -1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": -0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 127,
+        "iterations": 515,
+        "primitive_samples": 63799,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 54,
+        "domain_rejections": 125,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 70,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 124,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 53,
+        "terminal_budget": 70
+      }
+    },
+    {
+      "curvature_samples": 61,
+      "mirror": 1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": 0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 127,
+        "iterations": 515,
+        "primitive_samples": 63799,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 54,
+        "domain_rejections": 125,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 70,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 124,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 54,
+        "terminal_budget": 69
+      }
+    },
+    {
+      "curvature_samples": 81,
+      "mirror": -1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": -0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 167,
+        "iterations": 555,
+        "primitive_samples": 63799,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 54,
+        "domain_rejections": 165,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 110,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 164,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 54,
+        "terminal_budget": 109
+      }
+    },
+    {
+      "curvature_samples": 81,
+      "mirror": 1,
+      "intent": {
+        "speed_mps": 0.18,
+        "curvature_per_m": 0.5975567493046594
+      },
+      "terminal_work": {
+        "solver_attempts": 167,
+        "iterations": 555,
+        "primitive_samples": 63799,
+        "budget_exhausted": false,
+        "solver_limit": 256,
+        "iteration_limit": 1024,
+        "sample_limit": 65536,
+        "continued_seed_attempts": 1,
+        "continued_seed_accepted": 1,
+        "solver_iteration_exhaustions": 54,
+        "domain_rejections": 165,
+        "primitive_grid_rejections": 0,
+        "cold_budget_deferrals": 110,
+        "recovery_reserved_solvers": 1,
+        "recovery_reserved_iterations": 8,
+        "recovery_reserved_samples": 1920,
+        "recovery_reservation_shortfalls": 0,
+        "solver_elapsed_ns": null
+      },
+      "candidates": {
+        "curvature_speed_limits": 0,
+        "lateral_acceleration": 0,
+        "near_zero_speed": 0,
+        "rollouts_evaluated": 164,
+        "accepted": 1,
+        "stop_reachable": 0,
+        "grid": 0,
+        "footprint": 0,
+        "sample_budget": 0,
+        "reference": 0,
+        "terminal_unreachable": 54,
+        "terminal_budget": 109
+      }
+    }
+  ],
+  "neighbor_frames": [
+    {
+      "at_ms": 42100,
+      "curvature_samples": 81,
+      "result": "Driving with unchanged .18 / .5975567493046594 ordinary best; cold deferrals positive, continued attempts zero."
+    },
+    {
+      "at_ms": 42300,
+      "curvature_samples": [
+        21,
+        41,
+        61,
+        81
+      ],
+      "result": "Driving, route179 points, shared solver194 / iterations604 / charged_samples18087 / grid_rejections77 unchanged; no continuity guard or reservation. Original read-only instrumentation establishes 192 lattice endpoint queries, 1623 popped entries, 3629 nodes. This is not a simultaneous lattice-and-recovery case."
+    }
+  ],
+  "tests": {
+    "core_passed": 159,
+    "core_suite_counts": [
+      42,
+      8,
+      7,
+      21,
+      8,
+      12,
+      6,
+      12,
+      3,
+      3,
+      7,
+      5,
+      7,
+      18,
+      0
+    ],
+    "terminal_integration_passed": 5,
+    "terminal_budget_unit_passed": 5,
+    "core_all_targets_clippy_warnings_denied": true,
+    "commands": [
+      "cargo test --offline -p xt-stcar-robot-core",
+      "cargo clippy --offline -p xt-stcar-robot-core --all-targets -- -D warnings",
+      "cargo run --offline --release -p xt-stcar-robot-runner --example motion_comparison"
+    ],
+    "coverage": [
+      "N21/41/61/81, both mirrors, actual 360 obstacles and all original motion gates",
+      "goal obstacle invalidates current cached hint at every count/mirror",
+      "ordinary best retained with deferred cold candidates",
+      "real neighboring lattice scene remains charged and unchanged",
+      "three resource axes and checked addition overflow",
+      "partial reservation shortfall still certifies a feasible 185-sample continuation from 200 remaining",
+      "8-iteration work bounded across .025/.05/.1/1m grids and varied segment split/curvature",
+      "optional solver timing disabled by default, enabled across resets and disabled again"
+    ]
+  },
+  "comparison": [
+    {
+      "completed": true,
+      "elapsed_ms": 58800,
+      "distance_m": 11.508841029059477,
+      "minimum_cone_clearance_m": 0.24250886066502375,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_actual_speed_mps": 0.0
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 54300,
+      "distance_m": 10.249674629119367,
+      "minimum_cone_clearance_m": 0.2735281037908029,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_actual_speed_mps": 0.0
+    }
+  ],
+  "comparison_to_v5": "Recursive comparison of all shared summary fields reports zero differences for PP and LQR; new diagnostic fields omitted from that equality check.",
+  "intermediate_regressions": [],
+  "cost_and_limits": [
+    "At42.2s N21 consumed work is unchanged. N41+ finish with63799charged samples; repeated deferred requests may still enter a solver/iteration before the sample ceiling is reached, and those entries remain counted. No uncharged second solve budget.",
+    "Reservation preserves one full attempt if prior work leaves sufficient space; it cannot guarantee a solution or reserve all recovery candidates. Low prior remaining capacity is explicitly diagnosed.",
+    "Cold candidates beyond the reserved ceiling may remain untested; any certified ordinary best is still preferred. Do not claim search completeness or zero cost.",
+    "Opt-in solver_elapsed_ns measures actual single/two implementation function wall time including fast domain failures, without wrapper double counting; None by default, no clock read.",
+    "Main source changed only in core navigation/terminal and terminal_approach; root/other agents own runner and documentation. No hardware or RISC-V execution."
+  ],
+  "source_sha256": {
+    "crates/robot-core/src/navigation.rs": "8ccbdeeea502dd8b0f8005638f5fd99da20d22b38004835f5e84c9cd4edff1b3",
+    "crates/robot-core/src/navigation/terminal.rs": "5612179e65ea360b7cd6188763cde87db0d8e268b8afc46751cadd1167f6c76b",
+    "crates/robot-core/tests/terminal_approach.rs": "7bfa1dccaa02042a43804ec3e29a1e143199db378d48da06b51186e042da9e3c"
+  },
+  "logs": [
+    "work/motion-v6-review/terminal-regression.log",
+    "work/motion-v6-review/terminal-budget-unit.log",
+    "work/motion-v6-review/core-final-tests.log",
+    "work/motion-v6-review/core-clippy.log",
+    "work/motion-v6-review/implementation-comparison.json"
+  ]
+}

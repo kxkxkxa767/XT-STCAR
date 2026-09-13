@@ -376,6 +376,12 @@ pub struct Navigator {
 }
 
 impl Navigator {
+    /// Enable optional host solver timing for diagnostics. Normal control does
+    /// not read a wall clock; this setting persists across per-plan resets.
+    pub fn set_timing_enabled(&mut self, enabled: bool) {
+        self.terminal_budget.set_timing_enabled(enabled);
+    }
+
     pub fn new(config: NavigationConfig) -> Result<Self, ValidationError> {
         config.validate()?;
         Ok(Self {
@@ -919,9 +925,17 @@ impl Navigator {
         }
         self.diagnostics.terminal_continuity_enforced = protected_connection.is_some();
         let mut best: Option<EvaluatedCandidate> = None;
+        if protected_connection.is_some() {
+            let max_next_distance = (distance
+                + period * estimate.speed_mps.max(speed_upper).max(0.0))
+            .min((2.0 * self.config.lookahead_m).min(2.0));
+            self.terminal_budget
+                .reserve_continuation(max_next_distance, &grid);
+        }
         // Store only candidates that passed every original rollout gate. A
         // second bounded terminal solve is considered only if the original
-        // family rejects all candidates; ordinary selections remain unchanged.
+        // family certifies no candidate. Cold work cannot consume the reserved
+        // continuation allowance; any ordinary certified best stays preferred.
         let mut terminal_recovery = Vec::new();
         for index in 0..=self.config.curvature_samples {
             let curvature = if index == self.config.curvature_samples {
@@ -1042,6 +1056,7 @@ impl Navigator {
                         && angle_error(next.pose.yaw_rad, heading).abs()
                             <= self.config.goal_heading_tolerance_rad;
                     if !inside_goal {
+                        self.terminal_budget.begin_cold_candidate();
                         self.diagnostics.terminal_connections_checked += 1;
                         if terminal::single_arc(
                             next.pose,
@@ -1086,8 +1101,13 @@ impl Navigator {
                                         transition,
                                         next_projection,
                                         terminal_seed: None,
+                                        terminal_deferred: self.terminal_budget.cold_deferred(),
                                     });
-                                    self.diagnostics.candidates.terminal_unreachable += 1;
+                                    if self.terminal_budget.cold_deferred() {
+                                        self.diagnostics.candidates.terminal_budget += 1;
+                                    } else {
+                                        self.diagnostics.candidates.terminal_unreachable += 1;
+                                    }
                                 }
                                 continue;
                             }
@@ -1109,10 +1129,12 @@ impl Navigator {
                         transition,
                         next_projection,
                         terminal_seed: candidate_terminal_seed,
+                        terminal_deferred: false,
                     });
                 }
             }
         }
+        self.terminal_budget.release_continuation();
         if best.is_none()
             && let Some((heading, seed)) = protected_connection
         {
@@ -1129,14 +1151,20 @@ impl Navigator {
             });
             for mut candidate in terminal_recovery {
                 if self.terminal_budget.snapshot().budget_exhausted {
-                    self.diagnostics.candidates.terminal_unreachable -= 1;
-                    self.diagnostics.candidates.terminal_budget += 1;
+                    if !candidate.terminal_deferred {
+                        self.diagnostics.candidates.terminal_unreachable -= 1;
+                        self.diagnostics.candidates.terminal_budget += 1;
+                    }
                     continue;
                 }
                 let next = candidate
                     .next_projection
                     .expect("recovery candidates have a full-period projection");
                 let Some(remaining_seed) = seed.after_travel(next.distance_m) else {
+                    if candidate.terminal_deferred {
+                        self.diagnostics.candidates.terminal_budget -= 1;
+                        self.diagnostics.candidates.terminal_unreachable += 1;
+                    }
                     continue;
                 };
                 self.diagnostics.terminal_connections_checked += 1;
@@ -1150,7 +1178,11 @@ impl Navigator {
                     &self.terminal_budget,
                     remaining_seed,
                 ) {
-                    self.diagnostics.candidates.terminal_unreachable -= 1;
+                    if candidate.terminal_deferred {
+                        self.diagnostics.candidates.terminal_budget -= 1;
+                    } else {
+                        self.diagnostics.candidates.terminal_unreachable -= 1;
+                    }
                     self.diagnostics.candidates.accepted += 1;
                     candidate.terminal_seed = Some(CachedTerminalSeed {
                         goal,
@@ -1162,8 +1194,16 @@ impl Navigator {
                     best = Some(candidate);
                     break;
                 } else if self.terminal_budget.snapshot().budget_exhausted {
-                    self.diagnostics.candidates.terminal_unreachable -= 1;
-                    self.diagnostics.candidates.terminal_budget += 1;
+                    if !candidate.terminal_deferred {
+                        self.diagnostics.candidates.terminal_unreachable -= 1;
+                        self.diagnostics.candidates.terminal_budget += 1;
+                    }
+                } else if candidate.terminal_deferred {
+                    // It was deferred in the cold round, but the complete
+                    // continued-family attempt has now rejected it without
+                    // exhausting the global allowance.
+                    self.diagnostics.candidates.terminal_budget -= 1;
+                    self.diagnostics.candidates.terminal_unreachable += 1;
                 }
             }
         }
@@ -1718,6 +1758,7 @@ struct EvaluatedCandidate {
     transition: MotionTransition,
     next_projection: Option<crate::motion_transition::MotionProjection>,
     terminal_seed: Option<CachedTerminalSeed>,
+    terminal_deferred: bool,
 }
 
 #[derive(Clone, Copy, Debug)]

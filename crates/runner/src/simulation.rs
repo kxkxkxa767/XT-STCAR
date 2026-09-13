@@ -735,7 +735,7 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     Ok(summary)
 }
 
-fn boundary_for_phase(
+pub(crate) fn boundary_for_phase(
     previous: Option<HalfPlane>,
     phase: MissionPhase,
     light_boundary: HalfPlane,
@@ -749,7 +749,7 @@ fn boundary_for_phase(
     }
 }
 
-fn check_plant_pose(
+pub(crate) fn check_plant_pose(
     config: &SimulationConfig,
     pose: Pose2,
     obstacles: &[ObstacleDisc],
@@ -775,22 +775,22 @@ fn check_plant_pose(
 }
 
 #[derive(Clone, Copy, Debug)]
-struct PlantState {
-    pose: Pose2,
-    speed_mps: f64,
-    curvature_per_m: f64,
+pub(crate) struct PlantState {
+    pub(crate) pose: Pose2,
+    pub(crate) speed_mps: f64,
+    pub(crate) curvature_per_m: f64,
 }
 
 #[derive(Clone, Copy)]
-struct PlantDynamics {
-    acceleration_mps2: f64,
-    braking_mps2: f64,
-    curvature_rate_per_s: f64,
+pub(crate) struct PlantDynamics {
+    pub(crate) acceleration_mps2: f64,
+    pub(crate) braking_mps2: f64,
+    pub(crate) curvature_rate_per_s: f64,
 }
 
-struct PlantStep {
-    state: PlantState,
-    distance_m: f64,
+pub(crate) struct PlantStep {
+    pub(crate) state: PlantState,
+    pub(crate) distance_m: f64,
 }
 
 /// One synthetic command interval. Speed and curvature change continuously at
@@ -798,7 +798,7 @@ struct PlantStep {
 /// The caller checks the initial pose and every <=1 ms substep, including rate
 /// saturation points. These samples do not assert measured actuator behavior or
 /// prove collision freedom between samples.
-fn advance_plant(
+pub(crate) fn advance_plant(
     mut state: PlantState,
     command: &MotionOutput,
     dynamics: PlantDynamics,
@@ -812,7 +812,7 @@ fn advance_plant(
             curvature_per_m,
         } => (*speed_mps, *curvature_per_m),
     };
-    // Runtime validation limits dt to 20..=100 ms, so there are at most 100
+    // Callers bound dt to at most 100 ms, so there are at most 100
     // uniform intervals and two extra saturation splits per uniform interval.
     let substeps = (dt / 0.001).ceil() as usize;
     let mut distance_m = 0.0;

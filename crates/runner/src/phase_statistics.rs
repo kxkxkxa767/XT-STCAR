@@ -110,7 +110,8 @@ impl WorkCounter {
     }
 }
 
-/// Fixed-size work accounting. These are operation counts, not CPU durations.
+/// Fixed-size work accounting. Counters are not CPU durations; the separately
+/// optional solver_elapsed_ns field records host wall time when enabled.
 /// Terminal work includes initial/global/lattice connections and candidate checks
 /// sharing the core's per-call ledger, rather than only rejected candidates.
 #[derive(Debug, Default, PartialEq, Serialize)]
@@ -120,6 +121,14 @@ pub struct TerminalWorkStatistics {
     /// A solver consumed all eight local iterations without certification;
     /// distinct from exhausting the shared per-tick ledger.
     pub solver_iteration_exhaustions: WorkCounter,
+    pub cold_budget_deferrals: WorkCounter,
+    /// Reserved capacity across ticks, not work actually performed.
+    pub recovery_reserved_solvers: WorkCounter,
+    pub recovery_reserved_iterations: WorkCounter,
+    pub recovery_reserved_samples: WorkCounter,
+    pub recovery_reservation_shortfalls: WorkCounter,
+    /// Host timing only when explicitly enabled in Navigator.
+    pub solver_elapsed_ns: Option<WorkCounter>,
     /// Budget-charged samples: a rejected primitive may not execute its tail.
     pub primitive_samples: WorkCounter,
     pub continued_seed_attempts: WorkCounter,
@@ -145,6 +154,23 @@ impl TerminalWorkStatistics {
         self.iterations.observe(sample.iterations);
         self.solver_iteration_exhaustions
             .observe(sample.solver_iteration_exhaustions);
+        self.cold_budget_deferrals
+            .observe(sample.cold_budget_deferrals);
+        self.recovery_reserved_solvers
+            .observe(sample.recovery_reserved_solvers);
+        self.recovery_reserved_iterations
+            .observe(sample.recovery_reserved_iterations);
+        self.recovery_reserved_samples
+            .observe(sample.recovery_reserved_samples);
+        self.recovery_reservation_shortfalls
+            .observe(sample.recovery_reservation_shortfalls);
+        if let Some(elapsed_ns) = sample.solver_elapsed_ns {
+            let timing = self
+                .solver_elapsed_ns
+                .get_or_insert_with(WorkCounter::default);
+            timing.total = timing.total.saturating_add(elapsed_ns);
+            timing.maximum_per_tick = timing.maximum_per_tick.max(elapsed_ns);
+        }
         self.primitive_samples.observe(sample.primitive_samples);
         self.continued_seed_attempts
             .observe(sample.continued_seed_attempts);
@@ -596,6 +622,12 @@ mod tests {
                 domain_rejections: work - 2,
                 primitive_grid_rejections: work - 3,
                 solver_iteration_exhaustions: work - 1,
+                cold_budget_deferrals: work - 2,
+                recovery_reserved_solvers: 1,
+                recovery_reserved_iterations: 8,
+                recovery_reserved_samples: 64,
+                recovery_reservation_shortfalls: usize::from(work == 7),
+                solver_elapsed_ns: Some(work as u64 * 100),
             };
             nav.diagnostics.terminal_connections_checked = work + 1;
             nav.diagnostics.terminal_continuity_enforced = work != 3;
@@ -630,6 +662,24 @@ mod tests {
             ),
             (8, 6)
         );
+        assert_eq!(
+            (
+                work.cold_budget_deferrals.total,
+                work.cold_budget_deferrals.maximum_per_tick
+            ),
+            (6, 5)
+        );
+        assert_eq!(
+            (
+                work.recovery_reserved_solvers.total,
+                work.recovery_reserved_iterations.total,
+                work.recovery_reserved_samples.total
+            ),
+            (2, 16, 128)
+        );
+        assert_eq!(work.recovery_reservation_shortfalls.total, 1);
+        let timing = work.solver_elapsed_ns.as_ref().unwrap();
+        assert_eq!((timing.total, timing.maximum_per_tick), (1000, 700));
         assert_eq!(
             (
                 work.primitive_samples.total,

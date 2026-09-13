@@ -50,6 +50,11 @@ BASE_FILES = {
     "docs/motion-v5-before.json", "docs/motion-v5-competition-comparison.json",
     "docs/motion-v5-original-input-window.json", "docs/motion-v5-terminal-experiments.json",
     "docs/motion-v5-host-profile.json", "docs/motion-v5-async-validation.json",
+    "docs/恢复预算与完整异步验证.md", "docs/motion-v6-validation.json",
+    "docs/motion-v6-before.json", "docs/motion-v6-budget-before.json", "docs/motion-v6-budget-after.json",
+    "docs/motion-v6-competition-comparison.json", "docs/motion-v6-async-comparison.json",
+    "docs/motion-v6-async-perturbed.json", "docs/motion-v6-async-failure-review.json",
+    "docs/motion-v6-async-timing.json", "docs/motion-v6-host-clock.json", "docs/motion-v6-host-profile.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

@@ -2,6 +2,7 @@
 //! The only output is a checked command value and diagnostic record, never a device write.
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use std::time::Instant;
 use xt_stcar_robot_core::autonomy::{ObstacleDisc, Point2, Pose2, PoseEstimate, RoadObservation};
 use xt_stcar_robot_core::mission::{
     Mission, MissionConfig, MissionOutput, MissionPhase, MissionReport,
@@ -98,6 +99,8 @@ pub struct AutonomyController {
     last_road: Option<Timestamp>,
     fault: Option<String>,
     started: bool,
+    timing_enabled: bool,
+    last_navigation_duration_ns: Option<u64>,
 }
 
 impl AutonomyController {
@@ -157,6 +160,8 @@ impl AutonomyController {
             last_road: None,
             fault: None,
             started: false,
+            timing_enabled: false,
+            last_navigation_duration_ns: None,
         })
     }
 
@@ -168,6 +173,17 @@ impl AutonomyController {
         self.mission.start().map_err(|e| e.to_string())?;
         self.started = true;
         Ok(())
+    }
+
+    /// Optional host timing only; source/model clocks and decisions are unchanged.
+    pub fn set_timing_enabled(&mut self, enabled: bool) {
+        self.timing_enabled = enabled;
+        self.last_navigation_duration_ns = None;
+        self.navigation.set_timing_enabled(enabled);
+    }
+
+    pub fn last_navigation_duration_ns(&self) -> Option<u64> {
+        self.last_navigation_duration_ns
     }
 
     fn event(&mut self, at: Timestamp, event: Event) -> StepReport {
@@ -235,6 +251,7 @@ impl AutonomyController {
         road: &RoadFrame,
         context: &crate::control_runtime::PlanningContext,
     ) -> AutonomyStep {
+        self.last_navigation_duration_ns = None;
         let at = context.planned_at;
         if context.source_at != source_at
             || source_at > at
@@ -263,6 +280,7 @@ impl AutonomyController {
         scan: &LidarSample,
         road: &RoadFrame,
     ) -> AutonomyStep {
+        self.last_navigation_duration_ns = None;
         if let Some(error) = self.fault.clone() {
             return self.stop_with_fault(at, error);
         }
@@ -384,24 +402,29 @@ impl AutonomyController {
                     MissionPhase::Finish => Some(self.config.mission.finish_yaw_rad),
                     _ => None,
                 };
-                let decision = self
-                    .navigation
-                    .plan_with_arrival(
-                        at,
-                        navigation_pose,
-                        &obstacles,
-                        scan.captured_at.min(road.captured_at),
-                        *point,
-                        heading,
-                        *max_speed_mps,
-                        *arrival,
-                    )
-                    .map_err(|e| e.to_string())?;
+                let started = self.timing_enabled.then(Instant::now);
+                let decision = self.navigation.plan_with_arrival(
+                    at,
+                    navigation_pose,
+                    &obstacles,
+                    scan.captured_at.min(road.captured_at),
+                    *point,
+                    heading,
+                    *max_speed_mps,
+                    *arrival,
+                );
+                self.last_navigation_duration_ns =
+                    started.map(|start| start.elapsed().as_nanos().try_into().unwrap_or(u64::MAX));
+                let decision = decision.map_err(|e| e.to_string())?;
                 let intent = decision.intent;
                 (intent, Some(decision), intent.speed_mps == 0.0)
             }
             MissionOutput::Stop => {
-                self.navigation.plan_stop(at).map_err(|e| e.to_string())?;
+                let started = self.timing_enabled.then(Instant::now);
+                let stopped = self.navigation.plan_stop(at);
+                self.last_navigation_duration_ns =
+                    started.map(|start| start.elapsed().as_nanos().try_into().unwrap_or(u64::MAX));
+                stopped.map_err(|e| e.to_string())?;
                 (
                     MotionIntent {
                         speed_mps: 0.0,

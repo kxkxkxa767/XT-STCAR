@@ -4,6 +4,7 @@ use super::{Grid, NavigationConfig, angle_error, car_primitive};
 use crate::autonomy::{Point2, Pose2};
 use serde::Serialize;
 use std::cell::Cell;
+use std::time::Instant;
 
 /// A shared ledger for every terminal solver in one navigation call, including
 /// lattice endpoint attempts and candidate checks. Lattice expansion retains
@@ -27,43 +28,157 @@ pub struct TerminalWorkDiagnostics {
     pub solver_iteration_exhaustions: usize,
     pub domain_rejections: usize,
     pub primitive_grid_rejections: usize,
+    /// Cold candidate requests deferred to preserve the continuation allowance.
+    /// This does not mean the global ledger is exhausted or geometry is impossible.
+    pub cold_budget_deferrals: usize,
+    pub recovery_reserved_solvers: usize,
+    pub recovery_reserved_iterations: usize,
+    /// Actual allowance held aside from remaining global charged-sample capacity.
+    pub recovery_reserved_samples: usize,
+    /// One if prior work left less than the worst-case continuation allowance.
+    pub recovery_reservation_shortfalls: usize,
+    /// Opt-in host wall time inside single/two-arc solvers, including fast domain
+    /// rejection; wrappers do not double count. Default None never reads a clock.
+    pub solver_elapsed_ns: Option<u64>,
 }
 
-pub(super) struct TerminalBudget(Cell<TerminalWorkDiagnostics>);
+#[derive(Clone, Copy, Debug, Default)]
+struct WorkAllowance {
+    solvers: usize,
+    iterations: usize,
+    samples: usize,
+}
+
+pub(super) struct TerminalBudget {
+    work: Cell<TerminalWorkDiagnostics>,
+    cold_ceiling: Cell<Option<WorkAllowance>>,
+    cold_deferred: Cell<bool>,
+    timing_enabled: Cell<bool>,
+}
 impl Default for TerminalBudget {
     fn default() -> Self {
-        Self(Cell::new(TerminalWorkDiagnostics {
-            solver_limit: 256,
-            iteration_limit: 1024,
-            sample_limit: 65_536,
-            ..TerminalWorkDiagnostics::default()
-        }))
+        Self {
+            work: Cell::new(TerminalWorkDiagnostics {
+                solver_limit: 256,
+                iteration_limit: 1024,
+                sample_limit: 65_536,
+                ..TerminalWorkDiagnostics::default()
+            }),
+            cold_ceiling: Cell::new(None),
+            cold_deferred: Cell::new(false),
+            timing_enabled: Cell::new(false),
+        }
     }
 }
 impl TerminalBudget {
     pub(super) fn reset(&self) {
-        self.0.set(Self::default().snapshot());
+        let mut work = Self::default().snapshot();
+        work.solver_elapsed_ns = self.timing_enabled.get().then_some(0);
+        self.work.set(work);
+        self.cold_ceiling.set(None);
+        self.cold_deferred.set(false);
+    }
+    pub(super) fn set_timing_enabled(&self, enabled: bool) {
+        self.timing_enabled.set(enabled);
     }
     pub(super) fn snapshot(&self) -> TerminalWorkDiagnostics {
-        self.0.get()
+        self.work.get()
+    }
+    fn timer(&self) -> SolverTimer<'_> {
+        SolverTimer {
+            budget: self,
+            started: self.timing_enabled.get().then(Instant::now),
+        }
+    }
+    /// Leave one complete eight-iteration continuation's worst-case work out of
+    /// the cold round. Every iteration samples the two segments four times
+    /// (one residual plus three finite differences). Total length never exceeds
+    /// distance*pi/2, including its bounded perturbation. The extra two samples
+    /// cover rounding the two segment lengths separately and floating rounding.
+    /// Prior route/lattice work stays charged; a shortfall reserves only what
+    /// remains and still permits recovery to try under the original global cap.
+    pub(super) fn reserve_continuation(&self, max_distance: f64, grid: &Grid) {
+        let segment_samples = (max_distance * std::f64::consts::FRAC_PI_2
+            / (grid.resolution / 3.0).min(0.025))
+        .ceil() as usize;
+        let samples = segment_samples
+            .checked_add(2)
+            .and_then(|n| n.checked_mul(4))
+            .and_then(|n| n.checked_mul(8))
+            .unwrap_or(usize::MAX);
+        let mut work = self.work.get();
+        let requested = WorkAllowance {
+            solvers: 1,
+            iterations: 8,
+            samples,
+        };
+        let reserved = WorkAllowance {
+            solvers: requested
+                .solvers
+                .min(work.solver_limit - work.solver_attempts),
+            iterations: requested
+                .iterations
+                .min(work.iteration_limit - work.iterations),
+            samples: requested
+                .samples
+                .min(work.sample_limit - work.primitive_samples),
+        };
+        work.recovery_reserved_solvers = reserved.solvers;
+        work.recovery_reserved_iterations = reserved.iterations;
+        work.recovery_reserved_samples = reserved.samples;
+        work.recovery_reservation_shortfalls = usize::from(
+            reserved.solvers < requested.solvers
+                || reserved.iterations < requested.iterations
+                || reserved.samples < requested.samples,
+        );
+        self.cold_ceiling.set(Some(WorkAllowance {
+            solvers: work.solver_limit - reserved.solvers,
+            iterations: work.iteration_limit - reserved.iterations,
+            samples: work.sample_limit - reserved.samples,
+        }));
+        self.work.set(work);
+    }
+    pub(super) fn begin_cold_candidate(&self) {
+        self.cold_deferred.set(false);
+    }
+    pub(super) fn cold_deferred(&self) -> bool {
+        self.cold_deferred.get()
+    }
+    pub(super) fn release_continuation(&self) {
+        self.cold_ceiling.set(None);
+        self.cold_deferred.set(false);
     }
     fn charge(&self, solvers: usize, iterations: usize, samples: usize) -> Option<()> {
-        let mut work = self.0.get();
-        if work.budget_exhausted {
+        let mut work = self.work.get();
+        if work.budget_exhausted || self.cold_deferred.get() {
             return None;
         }
-        if work.solver_attempts + solvers > work.solver_limit
-            || work.iterations + iterations > work.iteration_limit
-            || work.primitive_samples + samples > work.sample_limit
+        let next = work
+            .solver_attempts
+            .checked_add(solvers)
+            .zip(work.iterations.checked_add(iterations))
+            .zip(work.primitive_samples.checked_add(samples));
+        if let Some(ceiling) = self.cold_ceiling.get()
+            && next.is_none_or(|((s, i), p)| {
+                s > ceiling.solvers || i > ceiling.iterations || p > ceiling.samples
+            })
         {
-            work.budget_exhausted = true;
-            self.0.set(work);
+            self.cold_deferred.set(true);
+            work.cold_budget_deferrals += 1;
+            self.work.set(work);
             return None;
         }
-        work.solver_attempts += solvers;
-        work.iterations += iterations;
-        work.primitive_samples += samples;
-        self.0.set(work);
+        let Some(((solvers, iterations), samples)) = next.filter(|((s, i), p)| {
+            *s <= work.solver_limit && *i <= work.iteration_limit && *p <= work.sample_limit
+        }) else {
+            work.budget_exhausted = true;
+            self.work.set(work);
+            return None;
+        };
+        work.solver_attempts = solvers;
+        work.iterations = iterations;
+        work.primitive_samples = samples;
+        self.work.set(work);
         Some(())
     }
     fn solver(&self) -> Option<()> {
@@ -71,6 +186,22 @@ impl TerminalBudget {
     }
     fn iteration(&self) -> Option<()> {
         self.charge(0, 1, 0)
+    }
+}
+
+struct SolverTimer<'a> {
+    budget: &'a TerminalBudget,
+    started: Option<Instant>,
+}
+impl Drop for SolverTimer<'_> {
+    fn drop(&mut self) {
+        if let Some(started) = self.started {
+            let mut work = self.budget.work.get();
+            let elapsed = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            work.solver_elapsed_ns =
+                Some(work.solver_elapsed_ns.unwrap_or(0).saturating_add(elapsed));
+            self.budget.work.set(work);
+        }
     }
 }
 
@@ -161,7 +292,7 @@ pub(super) fn continue_two_arc(
 ) -> Option<TwoArcConnection> {
     let mut work = budget.snapshot();
     work.continued_seed_attempts += 1;
-    budget.0.set(work);
+    budget.work.set(work);
     let connection = solve_two_arc(
         start,
         initial_curvature,
@@ -174,7 +305,7 @@ pub(super) fn continue_two_arc(
     )?;
     let mut work = budget.snapshot();
     work.continued_seed_accepted += 1;
-    budget.0.set(work);
+    budget.work.set(work);
     Some(connection)
 }
 
@@ -203,7 +334,7 @@ fn terminal_primitive(
     if result.is_none() {
         let mut work = budget.snapshot();
         work.primitive_grid_rejections += 1;
-        budget.0.set(work);
+        budget.work.set(work);
     }
     result
 }
@@ -223,6 +354,7 @@ fn solve_two_arc(
     budget: &TerminalBudget,
     seed: Option<TwoArcSeed>,
 ) -> Option<TwoArcConnection> {
+    let _timer = budget.timer();
     let local = start.world_to_body(goal);
     let distance = start.point().distance(goal);
     // Two lookahead distances cover a near-goal approach; the absolute cap
@@ -230,7 +362,7 @@ fn solve_two_arc(
     if local.x_m <= 0.0 || !(1e-6..=(2.0 * config.lookahead_m).min(2.0)).contains(&distance) {
         let mut work = budget.snapshot();
         work.domain_rejections += 1;
-        budget.0.set(work);
+        budget.work.set(work);
         return None;
     }
     let heading_change = angle_error(goal_heading, start.yaw_rad);
@@ -335,7 +467,7 @@ fn solve_two_arc(
     }
     let mut work = budget.snapshot();
     work.solver_iteration_exhaustions += 1;
-    budget.0.set(work);
+    budget.work.set(work);
     None
 }
 
@@ -384,12 +516,13 @@ pub(super) fn single_arc(
     grid: &Grid,
     budget: &TerminalBudget,
 ) -> Option<(Vec<Point2>, Pose2, f64)> {
+    let _timer = budget.timer();
     let local = start.world_to_body(goal);
     let distance = start.point().distance(goal);
     if local.x_m <= 0.0 || !(1e-9..0.35).contains(&distance) {
         let mut work = budget.snapshot();
         work.domain_rejections += 1;
-        budget.0.set(work);
+        budget.work.set(work);
         return None;
     }
     budget.solver()?;
@@ -473,7 +606,7 @@ pub(super) fn single_arc(
     }
     let mut work = budget.snapshot();
     work.solver_iteration_exhaustions += 1;
-    budget.0.set(work);
+    budget.work.set(work);
     None
 }
 
@@ -652,7 +785,7 @@ mod tests {
                 1 => limits.iteration_limit = 1,
                 _ => limits.sample_limit = 1,
             }
-            budget.0.set(limits);
+            budget.work.set(limits);
             for _ in 0..3 {
                 let _ = two_arc(estimate.pose, k, goal, 0.0, &cfg, &grid, &budget, None);
             }
@@ -661,6 +794,158 @@ mod tests {
             assert!(used.solver_attempts <= used.solver_limit);
             assert!(used.iterations <= used.iteration_limit);
             assert!(used.primitive_samples <= used.sample_limit);
+        }
+    }
+
+    #[test]
+    fn reserved_work_is_shared_uncharged_and_restored_on_every_axis() {
+        let (cfg, _, _, _, _) = original_scene(1.0);
+        let grid = Grid::new(&cfg, &[]);
+        for axis in 0..3 {
+            let budget = TerminalBudget::default();
+            // Accounting-only prior work, not a claimed lattice/recovery scene.
+            budget.charge(11, 23, 101).unwrap();
+            budget.reserve_continuation(0.95, &grid);
+            let reserved = budget.snapshot();
+            assert_eq!(
+                reserved.primitive_samples, 101,
+                "reservation is not execution"
+            );
+            let cold = budget.cold_ceiling.get().unwrap();
+            let mut fill = [0, 0, 0];
+            fill[axis] = match axis {
+                0 => cold.solvers - reserved.solver_attempts,
+                1 => cold.iterations - reserved.iterations,
+                _ => cold.samples - reserved.primitive_samples,
+            };
+            budget.charge(fill[0], fill[1], fill[2]).unwrap();
+            let mut one = [0, 0, 0];
+            one[axis] = 1;
+            budget.begin_cold_candidate();
+            assert!(budget.charge(one[0], one[1], one[2]).is_none());
+            assert!(budget.cold_deferred());
+            assert!(!budget.snapshot().budget_exhausted);
+            assert_eq!(budget.snapshot().cold_budget_deferrals, 1);
+            // A second operation in the same deferred candidate stays cheap,
+            // and cannot silently borrow from recovery or double count it.
+            assert!(budget.charge(0, 0, 0).is_none());
+            assert_eq!(budget.snapshot().cold_budget_deferrals, 1);
+            budget.release_continuation();
+            budget
+                .charge(
+                    reserved.recovery_reserved_solvers,
+                    reserved.recovery_reserved_iterations,
+                    reserved.recovery_reserved_samples,
+                )
+                .unwrap();
+            assert!(budget.charge(one[0], one[1], one[2]).is_none());
+            assert!(budget.snapshot().budget_exhausted);
+        }
+        let budget = TerminalBudget::default();
+        budget.charge(1, 1, 1).unwrap();
+        assert!(budget.charge(usize::MAX, usize::MAX, usize::MAX).is_none());
+        assert!(budget.snapshot().budget_exhausted);
+        assert_eq!(budget.snapshot().primitive_samples, 1);
+    }
+
+    #[test]
+    fn reservation_shortfall_still_attempts_a_complete_connection_under_remaining_budget() {
+        let (cfg, estimate, obstacles, goal, k) = original_scene(1.0);
+        let grid = Grid::new(&cfg, &obstacles);
+        let seed_budget = TerminalBudget::default();
+        let current =
+            two_arc(estimate.pose, k, goal, 0.0, &cfg, &grid, &seed_budget, None).unwrap();
+        let next = project_motion(
+            estimate.pose,
+            MotionTransition {
+                initial_speed_mps: 0.18,
+                target_speed_mps: 0.18,
+                initial_curvature_per_m: k,
+                target_curvature_per_m: k + 0.12,
+                max_accel_mps2: 0.4,
+                max_decel_mps2: 0.6,
+                max_curvature_rate_per_s: 4.0,
+            },
+            0.1,
+        )
+        .unwrap();
+        // Deliberately near-full ledger checks shortfall policy. It does not
+        // assert that a real lattice consumed this amount at the source pose.
+        let budget = TerminalBudget::default();
+        budget.charge(255, 1016, 65536 - 200).unwrap();
+        budget.reserve_continuation(0.95, &grid);
+        assert_eq!(budget.snapshot().recovery_reservation_shortfalls, 1);
+        assert_eq!(budget.snapshot().recovery_reserved_samples, 200);
+        budget.begin_cold_candidate();
+        assert!(budget.solver().is_none());
+        assert!(!budget.snapshot().budget_exhausted);
+        budget.release_continuation();
+        assert!(
+            continue_two_arc(
+                next.pose,
+                next.curvature_per_m,
+                goal,
+                0.0,
+                &cfg,
+                &grid,
+                &budget,
+                current.seed.after_travel(next.distance_m).unwrap()
+            )
+            .is_some()
+        );
+        assert_eq!(budget.snapshot().primitive_samples, 65536 - 200 + 185);
+        assert!(!budget.snapshot().budget_exhausted);
+        budget.reset();
+        assert_eq!(budget.snapshot().primitive_samples, 0);
+        assert_eq!(budget.snapshot().recovery_reserved_samples, 0);
+        assert!(budget.cold_ceiling.get().is_none());
+    }
+
+    #[test]
+    fn continuation_allowance_covers_full_eight_iteration_work_at_grid_extremes() {
+        let (mut cfg, estimate, _, goal, k) = original_scene(1.0);
+        for resolution in [0.025, 0.05, 0.1, 1.0] {
+            cfg.grid_resolution_m = resolution;
+            cfg.max_grid_cells = 100000;
+            cfg.validate().unwrap();
+            let grid = Grid::new(&cfg, &[]);
+            let budget = TerminalBudget::default();
+            let seed = two_arc(estimate.pose, k, goal, 0.0, &cfg, &grid, &budget, None)
+                .unwrap()
+                .seed;
+            budget.reset();
+            let distance = estimate.pose.point().distance(goal);
+            budget.reserve_continuation(distance, &grid);
+            let allowance = budget.snapshot();
+            budget.release_continuation();
+            // Both equal and unequal splits, plus opposite initial curvature,
+            // exercise different convergence/rejection paths under one bound.
+            for fraction in [0.001, 0.35, 0.5, 0.65, 0.999] {
+                for initial_k in [-2.0, k, 2.0] {
+                    budget.reset();
+                    let _ = continue_two_arc(
+                        estimate.pose,
+                        initial_k,
+                        goal,
+                        0.0,
+                        &cfg,
+                        &grid,
+                        &budget,
+                        TwoArcSeed {
+                            first_fraction: fraction,
+                            ..seed
+                        },
+                    );
+                    let used = budget.snapshot();
+                    assert!(used.solver_attempts <= allowance.recovery_reserved_solvers);
+                    assert!(used.iterations <= allowance.recovery_reserved_iterations);
+                    assert!(
+                        used.primitive_samples <= allowance.recovery_reserved_samples,
+                        "resolution={resolution}, fraction={fraction}, used={used:?}, allowance={allowance:?}"
+                    );
+                    assert!(!used.budget_exhausted);
+                }
+            }
         }
     }
 }

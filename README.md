@@ -204,6 +204,10 @@ XT-STCAR/
 | [`crates/runner/src/perception.rs`](crates/runner/src/perception.rs) | 同图 RGB + 常驻原生 YOLO + RoadDetector；后台感知只留最新待处理帧 |
 | [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 传感器 → 任务 → 导航 → Safety；同步 tick 采用最终命令；异步 tick_with_projection 分开使用源测量和模型规划状态，不采用后台计划 |
 | [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立 poll 和源时间看门狗；仅最终 ControlPoll.command 推进执行历史；检查采用窗口、历史前提和原源期限 |
+| [`crates/runner/src/control_diagnostics.rs`](crates/runner/src/control_diagnostics.rs) | 显式开启的排队/导航/终端/证书耗时、共享最新发布报告和有界计数；默认不读取主机时钟，离线调度钩子不进入输出线程 |
+| [`crates/runner/src/async_simulation.rs`](crates/runner/src/async_simulation.rs) | 完整 RGB/雷达异步比赛，独立渐变车辆只执行 poll 最终命令；保留拒绝、恢复、失败和完整制动证据 |
+| [`crates/runner/src/host_clock_simulation.rs`](crates/runner/src/host_clock_simulation.rs) | 持续 Instant 时钟的短转弯/断流观察；计算期间输出时间继续推进，分开记录主机负载和功能结果 |
+| [`crates/runner/examples/async_motion_comparison.rs`](crates/runner/examples/async_motion_comparison.rs)、[`async_host_clock.rs`](crates/runner/examples/async_host_clock.rs) | 前者执行完整异步 PP/LQR 与可选时序配置，后者显式采集一次实际主机时钟观察；失败报告仍输出并返回非零 |
 | [`crates/runner/src/control_execution.rs`](crates/runner/src/control_execution.rs) | 固定容量已采用命令历史、源时刻查询、位姿/速度/转向分段预测、异步采用的保守停车与运动约束证书 |
 | [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿合成闭环；车辆速度/曲率连续渐变，以不超过 1 ms 的子步积分并检查车体碰撞/边界，含故障后制动 |
 | [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
@@ -226,8 +230,9 @@ XT-STCAR/
 前轮说明见[导航预测与失败首因修正](docs/导航预测与失败首因修正.md)，
 前轮执行状态、过渡峰值、通过点和模拟积分修正见[运动执行与通过点修正](docs/运动执行与通过点修正.md)。
 前轮真实任务验收半径、完整车体参考偏离、阶段统计与异步时间对齐见[任务交接与异步运动修正](docs/任务交接与异步运动修正.md)。
-最新短连接接续、共享计算额度和异步停车空间见[终端连接延续与异步停车包络](docs/终端连接延续与异步停车包络.md)。
-第五份分享正文仍未加载，本轮依据本地复现 ZIP 与独立 Rust 原场景验证实施。
+前轮短连接接续、共享计算额度和异步停车空间见[终端连接延续与异步停车包络](docs/终端连接延续与异步停车包络.md)。
+本轮已完整读取第六份分享及其中附带的上一轮正文，并核对 `XT-STCAR_b9f75c7_review_reproduction.zip`。
+最新修正、完整异步结果及已知失败见[恢复预算与完整异步验证](docs/恢复预算与完整异步验证.md)。
 当前采用前进车辆运动学：比赛任务给目标/限速 → A* 连通与带航向/曲率的车模型路线 → PathTracker →
 候选轨迹预测、碰撞和制动检查 → 安全状态机。默认 **Pure Pursuit** 保留，新增 **曲率前馈 + LQR** 供离线比较。
 不是单个 PID 直接把图像误差变成舵机 PWM，也没有实现 MPC 求解器。
@@ -254,9 +259,9 @@ cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion
 cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_profile -- 3
 ```
 
-本轮最终合成比赛 **PP 58.8 秒、LQR 54.3 秒均完成，终态速度均为零**；路程分别为11.508841米、10.249675米，
-最小锥桶间隙分别约0.2425米、0.2735米；斑马线停稳均3000ms、绿灯确认均300ms，见[完整比赛对比](docs/motion-v5-competition-comparison.json)。
-相对 `f83898a`，PP这些指标不变；LQR快16.3秒、少走3.190640米。灯前阶段从42.4秒/7.574950米变为26.2秒/4.390629米，
+本轮同步合成比赛 **PP 58.8 秒、LQR 54.3 秒均完成，终态速度均为零**；路程分别为11.508841米、10.249675米，
+最小锥桶间隙分别约0.2425米、0.2735米；斑马线停稳均3000ms、绿灯确认均300ms，见[同步完整比赛对比](docs/motion-v6-competition-comparison.json)。
+本轮与 `b9f75c7` 的同步结果逐值一致。前轮相对 `f83898a`，PP指标不变；LQR快16.3秒、少走3.190640米。灯前阶段从42.4秒/7.574950米变为26.2秒/4.390629米，
 该阶段路径生成从8次降至5次；LQR无非预期Stop，PP原有两次短Stop仍保留。
 初次扩大恢复候选后仍按旧评分选择，LQR曾退化到79.7秒/15.057722米，此方案已撤销；
 中间实验与最终选择见[实验记录](docs/motion-v5-terminal-experiments.json)。v4/v3及更早报告保留历史。
@@ -274,13 +279,22 @@ cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion
 每次导航共享最多256次域内求解、1024次迭代和65536份预扣采样额度；单个求解仍最多8次迭代，lattice节点另有原上限。
 `terminal_work` 区分全局额度耗尽、单次迭代用尽、域拒绝和网格拒绝；`primitive_samples` 为预扣额度而非实际CPU操作数。
 额度用尽不等于路径物理不可达，已有完整认证的候选可继续使用。
+本轮在原总额度内为接续保留一次完整求解机会；普通候选触及暂时上限时记为延后，不能提前锁死全局预算。
+恢复前释放预留，普通已认证最佳仍优先。原42.2秒场景在21/41/61/81档及左右镜像均Drive；
+21档仍预扣51541份样本，41档以上为63799，未提高65536上限。新障碍仍能否决缓存，前置搜索费用仍计入总账。
+细节见[修复前](docs/motion-v6-budget-before.json)与[修复后](docs/motion-v6-budget-after.json)。
 普通中间点保留追踪点评分，临近目标时减弱固定曲率偏好。实现、尺度与边界见新修正说明。
 保持单个候选曲率目标的预览不能代表所有未来转向策略；单场完成不证明一般收敛性或所有场景都可达。
 原有跟踪层16组和前轮“PP 55.3秒完成/LQR 27.9秒超时”保留为历史；两类基准周期不同，
 单场合成结果不能证明算法普遍优劣，模拟秒数不代表板卡计算耗时。
-同机release每种跟踪器预热1次、顺序测3次：整场simulate平均墙钟PP约1.621→1.614秒，LQR约1.921→1.496秒。
+前轮同机release每种跟踪器预热1次、顺序测3次：整场simulate平均墙钟PP约1.621→1.614秒，LQR约1.921→1.496秒。
 PP差异很小；LQR较短任务过程减少了总计算时间，不能推出每个导航调用更快。原始样本与范围见[主机耗时](docs/motion-v5-host-profile.json)。
-异步证书单次360/2048点平均约8.9/19.2微秒；采样峰值与真实Worker结果见[异步验证](docs/motion-v5-async-validation.json)，均非目标板WCET。
+前轮异步证书单次360/2048点平均约8.9/19.2微秒；采样峰值与真实Worker结果见[异步验证](docs/motion-v5-async-validation.json)，均非目标板WCET。
+本轮同一基线与最终代码顺序预热/各测3次，整场同步平均墙钟PP约1.606→1.612秒（+0.37%），
+LQR约1.481→1.481秒（−0.02%），未见明显总耗时变化；[原始样本](docs/motion-v6-host-profile.json)保留全部测量。
+[完整异步分段计时](docs/motion-v6-async-timing.json)明确排队、导航、终端、证书、发布和采用的范围。
+[持续主机时钟观察](docs/motion-v6-host-clock.json)中23份源输入、119次转弯Drive输出，最大poll间隔21ms；
+末源2200ms，原期限2450ms，在下一次2461ms轮询Stop，2687ms完成模型刹停/回正。该采样不证明目标WCET。
 
 灯前禁越线由任务和导航共用有向半平面，支持任意接近方向；锥桶阶段预查灯前续段时即启用，
 原有停稳和绿灯新帧确认通过后才解除。全局搜索、局部扫掠、停车圆盘与到达判断都受约束，
@@ -307,7 +321,12 @@ poll 先检查原 lease 和锁存故障。固定容量历史只记录最终采�
 poll 无需重跑规划。过晚或前提改变的计划不采用，同源重复不续租，晚到 Drive 不解除 Fault。
 异步证书现在使用源车体系中的有向矩形，包含历史最大速度/曲率、到原期限再加一拍的运动和完整制动，
 不会用新低速命令抹掉历史高速。车体角点旋转、侧向位移和大转角后的向后位移均计入，地图/灯前边界和障碍半径保持。
-0.9米合成直道的真实默认Worker已验证延迟采用、连续前进和源过期后停车；这不是官方赛道宽度或完整异步比赛证明。
+完整异步默认时序为100ms采样、60/80ms输入延迟、20ms输出及3/7/9ms采用偏移。
+同一比赛中 **PP 57.663秒完成；实验LQR在29.463秒因普通停滞超过10秒失败**，两者最终速度和曲率均为零。
+LQR经历证书拒绝、短暂恢复、路径搜索失败后持续停车；没有通过放宽证书或比赛期限使其完成。
+这段绕桶过程未启用新增的末端预算预留，详见[异步结果](docs/motion-v6-async-comparison.json)及[失败复核](docs/motion-v6-async-failure-review.json)。
+功能时钟等待后台时暂停，因此完整场景不能证明计算按时完成；连续推进时钟的专项测试和实际主机观察单独记录。
+`observed_plan.report` 包含未采用或故障报告，仅供诊断；与 `latest.command` 一样不能直接发给底盘。
 模型仍可能保守拒绝转弯狭小空间，也不代替真实反馈、共同单调时钟、扫描去畸变或动态障碍处理。
 
 模拟车辆现在按不超过 1 ms 子步及速度/曲率到达目标的分界点积分；航向保留速度与曲率同时变化的交叉项，
@@ -425,10 +444,11 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-本轮 Rust 常规测试 **305 通过、0 失败**；默认忽略原生ORT opt-in和主机性能基准各1项，后者已另行显式通过。
+本轮 Rust 常规测试 **322 通过、0 失败**；原生ORT opt-in和独立证书性能基准各1项按设计忽略。
 跟踪example 2项、Python交付34项通过；fmt、all-targets clippy `-D warnings`和两个RISC-V交叉链接通过，
-见[验证汇总](docs/motion-v5-validation.json)与[构建报告](docs/motion-v5-build.json)。82份Rust源码/清单哈希已核对，
-GLIBC构建基线2.38、实际最高引用2.34。本地包的生成/核验状态、路径和哈希见 `docs/motion-v5-delivery.json`。
+见[验证汇总](docs/motion-v6-validation.json)与[构建报告](docs/motion-v6-build.json)。89份Rust源码/清单哈希已核对，
+GLIBC构建基线2.38、实际最高引用2.34。本地包的生成/核验状态、路径和哈希见 `docs/motion-v6-delivery.json`。
+本轮另测完整异步分段耗时与持续主机时钟；LQR异步失败保留在报告中，测试通过并不表示两种算法全场均完成。
 [前轮 v2 验证](docs/motion-v2-validation.json)的237项Rust常规测试、2项跟踪example测试、34项交付测试与二进制证据保留为历史。
 更早的[运动控制验证](docs/motion-control-validation.json)也保留，不作为当前二进制证据。
 模型/原生推理模块未改，本轮未重跑模型测试套件和原生 ORT 推理；打包仍校验模型格式及来源哈希。

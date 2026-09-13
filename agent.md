@@ -26,7 +26,42 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 最新终端接续、计算额度与异步停车空间修正（2026-09-13，v5）
+### 最新恢复预算与完整异步验证（2026-09-13，v6）
+
+- 用户在第六轮复核后明确“你改吧”，已实施。修改前fetch成功，`b9f75c7427411c12285411efa4af793fa167b8c7`
+  与origin/main一致0/0；提交/推送状态始终以当前HEAD与远端核对，不把构建基线当本轮提交号。
+- 第六份 `https://chatgpt.com/share/6aa6b2fa-86bc-83ee-8424-04afe06f7d3c` 正文已完整读取；
+  通过服务器hydration同时取得上一轮正文。v5“未取得正文”仅描述当时情况，当前不再阻塞。
+  根目录 `XT-STCAR_b9f75c7_review_reproduction.zip` SHA256为
+  `4cd3aa49b07b455c7841576cb827a35f786d4c20e35e199c6fb7654e86e569dd`，仅含README/Python几何及预算复算/JSON，
+  不当成Rust补丁或完整异步验收。只在隔离work副本执行；原ZIP与规则PDF不修改、不提交。旧f83898a ZIP现已不在根目录，不恢复。
+- `navigation/terminal.rs`在既有256求解/1024迭代/65536预扣样本内，为已认证短连接接续保留一次求解机会；
+  普通候选触及暂时上限记cold deferral，不锁死全局预算。恢复前解除预留，普通已认证最佳仍优先，原rollout不重跑。
+  前置route/lattice开销已计入；不足完整预留时只保留剩余额度，仍允许完整认证成功后执行，不把不足最坏估算当物理不可达。
+  原42.2秒21/41/61/81档×镜像均Drive；21档51541样本保持，41档以上63799样本，新障碍仍拒绝旧初值。
+  42.3秒真实lattice的194求解/604迭代/18087样本保持；该帧未同时触发短连接恢复，不能混写证据。
+- 同步完整比赛PP58.8秒/11.508841米、LQR54.3秒/10.249675米，与v5共有报告字段逐值一致。
+  PP保留2次可恢复Stop；LQR权重、默认跟踪器、原期限/碰撞/容差均未调整。
+- `async_simulation.rs`新增完整RGB/雷达/同源位姿→真实AutonomyWorker→certify→poll.command→渐变转弯plant。
+  默认100ms采样、60/80ms源延迟、20ms输出、3/7/9ms采用偏移；PP57.663秒完成，LQR29.463秒失败，终态v/k均0。
+  LQR首次16.863秒证书拒绝后曾恢复，19.263秒lattice预算耗尽，19.469秒起最后停车；随后无前向路线，
+  29.463秒“ordinary stop exceeded 10 seconds”锁存Fault。不能把第一张拒绝直接当最终唯一根因。
+  此绕桶过程未启用新增短连接预留。保留失败且LQR仍实验；不放宽证书/延长10秒期限/加大全局预算来制造完成。
+  下一轮若继续此问题，先细分证书拒绝原因，核对规划与可采用停车空间，单独复现停住后的前向搜索；不直接调Q/R。
+- `control_diagnostics.rs`显式开启主机计时；排队、投影、processor、纯导航、终端求解、证书、发布/观察分开记录。
+  原逻辑source/planned/lease不受Instant影响。默认不读钟、不逐tick写盘；共享Arc保留最新发布尝试（包括未采用/故障）。
+  `observed_plan.report`与`latest.command`都只是诊断，车辆只能使用最终`ControlPoll.command`。
+  调度钩子仅离线故障注入，在worker侧/锁外执行；默认关闭，不在poll里回调。
+- 完整异步功能测试等待后台时冻结逻辑钟，不能用于deadline结论；`async_deadlines.rs`在后台阶段挂起时持续推进
+  poll和车辆，覆盖过窗、过期、latest替换、revision/曲率变化率与完整停车。`async_host_clock`另跑一次持续Instant时钟短转弯/断流，
+  使用独立短场景（斑马线尚未可见），记录真实主机poll间隔与各段耗时，不声称完整比赛实时性或目标WCET。
+- 本轮入口 [恢复预算与完整异步验证](docs/恢复预算与完整异步验证.md)，机器证据统一`docs/motion-v6-*`；
+  当前测试/构建/源哈希/包状态分别以validation/build/delivery报告为准，旧轮报告保留历史。
+  正式主机同步顺序profile：PP平均1606.468→1612.415ms，LQR1480.943→1480.708ms，未见明显总耗时变化。
+  持续Instant短场景23源/119次转弯Drive、poll最大间隔21ms，末源2200ms于2461ms轮询Stop，2687ms完全停稳回中。
+  暂不接车；未改变工具链/模型/GLIBC基线，未执行RISC-V目标。
+
+### 前轮终端接续、计算额度与异步停车空间修正（2026-09-13，v5历史）
 
 - 用户要求根据第五份运动意见和工程根目录复现ZIP继续修正，拟定计划后直接实施。修改前网络恢复后fetch成功，
   `f83898a050649e03f25ad51b9c18c0bb12c743b2` 与origin/main一致0/0；最终提交/推送状态以HEAD和远端核对。
@@ -295,7 +330,13 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 
 ### 构建、模型与验证证据
 
-- 当前v5：Rust常规305通过、0失败，默认忽略原生ORT与显式性能基准各1项，性能基准另跑1项通过；
+- 当前v6：Rust常规322通过/0失败/2忽略（原生ORT与独立证书性能样例未重跑），跟踪example2项、交付34项通过；
+  fmt、全目标clippy -D warnings、两个RISC-V交叉链接通过，89份Rust源码/清单哈希核对。
+  构建、完整同步/异步成功与失败及主机时钟观察见 `docs/motion-v6-validation.json`；
+  新增预算预留和可选内存诊断，默认PP保持。实际ELF、全部Rust源码哈希与包核验分别见v6 build/elf/delivery，
+  完整异步LQR尚未通过，不能将同步或构建通过写成实车可参赛。
+
+- 历史v5：Rust常规305通过、0失败，默认忽略原生ORT与显式性能基准各1项，性能基准另跑1项通过；
   跟踪example 2项、Python交付34项通过，fmt/all-targets clippy -D warnings/双RISC-V交叉链接通过，82份源码哈希核对。
   app哈希 `ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9`；
   robot哈希 `f286246369cd068271ba6bd4c987b12a40aecade7c458ebda9c62f965c2f8b9f`，1,975,968字节。
@@ -305,7 +346,7 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   都是本机采样，不是目标板WCET；资料入口为motion-v5-validation/host-profile/async-validation/build/delivery。
 
 - 历史 v4：Rust 常规 294 通过、0 失败，原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
-  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。当前入口为 `docs/motion-v5-validation.json`；v4数字仅为历史。
+  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。当前入口为 `docs/motion-v6-validation.json`；v4数字仅为历史。
   两者实际最高 GLIBC 引用 2.34，构建基线 2.38；robot 需要 libm 与 libc，xt-stcar 需要 libc。
   构建源码哈希已核对，该轮二进制哈希见 `motion-v4-build.json` 和两份 ELF 报告。
   模型测试套件和原生 ORT 推理未重跑；打包另做模型格式、来源与包内文件校验，包状态见 `motion-v4-delivery.json`。
@@ -338,9 +379,9 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
 - 新串口依赖 rustix **1.1.4**；两个目标程序由 `scripts/build-riscv.sh --offline` 检查并构建。
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
-  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v5 ELF 报告为准。
+  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v6 ELF 报告为准。
   前轮 robot 程序额外需要 `libm.so.6`，不能声称两个程序都只依赖 libc。
-- **当前构建证据使用 `docs/motion-v5-*`；`docs/motion-v4-*`、`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
+- **当前构建证据使用 `docs/motion-v6-*`；`docs/motion-v5-*`、`docs/motion-v4-*`、`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
   `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。
   `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "baseline_commit": "b9f75c7427411c12285411efa4af793fa167b8c7",
+  "scope": "Evidence collected before implementation; native single-frame Navigator probes plus independently executed Python geometry. No hardware or target execution.",
+  "review_source": {
+    "url": "https://chatgpt.com/share/6aa6b2fa-86bc-83ee-8424-04afe06f7d3c",
+    "latest_review_fully_read": true,
+    "latest_review_text": "message-756.txt",
+    "sha256": "f2f8eeffdb3ac6fcdac8103c291d2008d8b853d0a7d35c1ef0c21c425da1161d",
+    "prior_f83898a_review_also_read": "message-1583.txt",
+    "retrieval": "HTTPS HTML hydration decoded locally after visible page/browser loading did not expose body"
+  },
+  "original_archive": {
+    "file": "XT-STCAR_b9f75c7_review_reproduction.zip",
+    "sha256": "4cd3aa49b07b455c7841576cb827a35f786d4c20e35e199c6fb7654e86e569dd",
+    "unchanged": true
+  },
+  "original_archive_members": [
+    "README.md",
+    "prior_terminal_probe.py",
+    "budget_probe.py",
+    "budget_probe_result.json",
+    "envelope_probe.py",
+    "envelope_probe_result.json"
+  ],
+  "baseline_synchronous_report": "motion-v5-competition-comparison.json",
+  "native_budget_reproduction": "motion-v6-budget-before.json",
+  "original_input_window": {
+    "file": "motion-v5-original-input-window.json",
+    "sha256": "e843a5f02e7db86224cef57b3fb9e1f58b94cd9f9f996591587f1e7a4c8f5e04"
+  },
+  "findings": [
+    "Default 21 samples drives at original 42200ms input; 41/61/81 legal samples exhaust shared work with zero recovery attempts, in both mirror directions.",
+    "The same 41-sample candidate passes original rollout/motion/grid gates and a counterfactual early backup connection with 853 charged samples including fresh-route/current-state certification; not a production fix or elapsed CPU measurement.",
+    "42200ms does not invoke lattice; 42300ms control invokes 192 endpoint queries / 1623 popped / 3629 generated nodes. Do not attribute 42200ms starvation to nonexistent preceding lattice work.",
+    "5000 bounded-curvature paths / 5140000 sampled corners reproduce the provided envelope result with zero outside cases; this is independent sampled geometry, not physical braking or full async proof.",
+    "Existing complete race is synchronous; short real-worker tests freeze logical time while awaiting results. Full asynchronous race and advancing-clock delay coverage were missing."
+  ],
+  "implementation_scope": [
+    "Reserve recovery opportunity inside existing 256/1024/65536 terminal limits, retain ordinary candidate precedence and all motion/collision/stopping gates.",
+    "Complete synthetic race through real worker and final poll command, separately label deterministic functional and advancing-clock results.",
+    "Optional bounded in-memory phase timing and rejection identities; default no per-tick disk writes.",
+    "Keep default PP, experimental LQR Q/R, timing tolerances and GLIBC 2.38 cross baseline."
+  ]
+}
