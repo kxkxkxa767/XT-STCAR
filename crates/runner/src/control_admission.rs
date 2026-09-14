@@ -63,6 +63,9 @@ pub(crate) fn prepare(
     )
     .ok_or(invalid)?;
     let constraints = AdoptionConstraints {
+        planned_at: context.planned_at,
+        last_command_change_at: context.last_command_change_at,
+        adopted_revision: context.adopted_revision,
         source_pose: input.pose.pose,
         projected_pose: context.projected_pose.pose,
         held_speed_mps: context.held_speed_mps,
@@ -141,6 +144,7 @@ mod tests {
             projected_pose,
             steering: SteeringEstimate::stationary(Timestamp(60)),
             adopted_revision: 0,
+            last_command_change_at: None,
             held_speed_mps: 0.0,
             historical_speed_bound_mps: 0.0,
             historical_curvature_bound_per_m: 0.0,
@@ -156,13 +160,22 @@ mod tests {
         assert_eq!(valid.source_age_s, 0.06);
         assert_eq!(valid.adoption_window_s, 0.1);
         assert_eq!(valid.source_travel_time_s, 0.35);
-        for invalid_case in 0..4 {
+        for invalid_case in 0..10 {
             let mut context = context.clone();
             match invalid_case {
                 0 => context.historical_speed_bound_mps = f64::NAN,
                 1 => context.historical_curvature_bound_per_m = -0.01,
                 2 => context.source_at = Timestamp(1),
-                _ => context.held_speed_mps = f64::NAN,
+                3 => context.held_speed_mps = f64::NAN,
+                4 => context.adopted_revision = 1, // Missing real change time.
+                5 => context.last_command_change_at = Some(Timestamp(0)), // False bootstrap.
+                6 => {
+                    context.adopted_revision = 1;
+                    context.last_command_change_at = Some(Timestamp(61));
+                }
+                7 => context.held_speed_mps = 0.01, // Revision-zero command cannot be Drive.
+                8 => context.steering.applied_curvature_per_m = 0.1,
+                _ => context.historical_curvature_bound_per_m = 0.1,
             }
             assert!(matches!(
                 prepare(&config, &input, &context, Timestamp(0), 250),

@@ -13,6 +13,8 @@ use crate::reference::{PreparedReference, ReferenceCursor};
 use crate::tracking::{PathTracker, TrackInput, TrackingConfig, TrackingDiagnostics};
 use crate::{FrameId, MotionIntent, MotionOutput, Timestamp, ValidationError};
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+mod candidate_pipeline;
 mod primitive_envelope;
 mod recovery;
 mod terminal;
@@ -176,6 +178,21 @@ pub struct CandidateDiagnostics {
     pub terminal_budget: usize,
 }
 
+/// The first cache invalidation leading to this route search. Failed searches
+/// retain that cause until a route is generated; cache reuse reports no cause.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RouteRebuildReason {
+    Initial,
+    TaskHold,
+    ArrivalChanged,
+    BoundaryChanged,
+    GoalOrHeadingChanged,
+    FootprintReferenceDrift,
+    TrackingRejected,
+    NoAcceptedCandidate,
+}
+
 /// New admission/recovery fields use sparse JSON: an absent field means its
 /// Rust default (zero work, no search, or no constraint/failure). Nondefault
 /// values are serialized in full; the in-memory diagnostic is unchanged.
@@ -203,6 +220,8 @@ pub struct NavigationDiagnostics {
     pub remaining_distance_m: Option<f64>,
     pub checked_continuation_distance_m: Option<f64>,
     pub route_revision: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route_rebuild_reason: Option<RouteRebuildReason>,
     pub route_progress: Option<usize>,
     pub route_points: usize,
     pub tracking: Option<TrackingDiagnostics>,
@@ -394,6 +413,7 @@ pub struct Navigator {
     continuation_checked: bool,
     via_index: usize,
     route_revision: u64,
+    pending_route_rebuild: Option<RouteRebuildReason>,
     diagnostics: NavigationDiagnostics,
     route: Option<(Point2, Option<f64>, Vec<Point2>, usize)>,
 }
@@ -422,6 +442,7 @@ impl Navigator {
             continuation_checked: false,
             via_index: 0,
             route_revision: 0,
+            pending_route_rebuild: Some(RouteRebuildReason::Initial),
             diagnostics: NavigationDiagnostics::default(),
             route: None,
         })
@@ -473,6 +494,7 @@ impl Navigator {
     pub fn set_travel_boundary(&mut self, boundary: Option<HalfPlane>) {
         if self.travel_boundary != boundary {
             self.travel_boundary = boundary;
+            self.note_route_rebuild(RouteRebuildReason::BoundaryChanged);
             self.route = None;
             self.recovery_active = false;
         }
@@ -494,6 +516,7 @@ impl Navigator {
             .advance_to(now, self.config.max_curvature_rate_per_s)?;
         self.last_step = Some(now);
         self.terminal_budget.reset();
+        self.note_route_rebuild(RouteRebuildReason::TaskHold);
         self.route = None;
         self.recovery_active = false;
         self.diagnostics = NavigationDiagnostics {
@@ -623,6 +646,7 @@ impl Navigator {
         self.steering
             .advance_to(now, self.config.max_curvature_rate_per_s)?;
         if self.arrival != arrival {
+            self.note_route_rebuild(RouteRebuildReason::ArrivalChanged);
             self.route = None;
             self.recovery_active = false;
             self.continuation_checked = false;
@@ -721,7 +745,24 @@ impl Navigator {
                 *old_goal != goal || *old_heading != goal_heading_rad
             })
         {
+            self.note_route_rebuild(RouteRebuildReason::GoalOrHeadingChanged);
             self.recovery_active = false;
+        } else if self.route.is_some()
+            && self.pending_route_rebuild == Some(RouteRebuildReason::GoalOrHeadingChanged)
+        {
+            // A failed request for another goal leaves the old cache intact.
+            // Returning to its goal cancels that pending diagnostic; otherwise
+            // it would hide the cause of a later, unrelated cache invalidation.
+            self.pending_route_rebuild = None;
+        }
+        if self
+            .route
+            .as_ref()
+            .is_none_or(|(old_goal, old_heading, _, _)| {
+                *old_goal != goal || *old_heading != goal_heading_rad
+            })
+        {
+            self.diagnostics.route_rebuild_reason = self.pending_route_rebuild;
         }
         if self.recovery_active {
             grid.enable_recovery();
@@ -751,6 +792,7 @@ impl Navigator {
                 },
             ) > self.config.goal_tolerance_m * 0.5
         {
+            self.note_route_rebuild(RouteRebuildReason::FootprintReferenceDrift);
             self.route = None;
         }
         if self
@@ -760,6 +802,7 @@ impl Navigator {
                 *old_goal != goal || *old_heading != goal_heading_rad
             })
         {
+            self.diagnostics.route_rebuild_reason = self.pending_route_rebuild;
             self.continuation_checked = false;
             self.route = self
                 .kinematic_path_from(
@@ -796,6 +839,7 @@ impl Navigator {
             if self.route.is_some() {
                 self.route_revision = self.route_revision.saturating_add(1);
                 self.diagnostics.route_revision = self.route_revision;
+                self.pending_route_rebuild = None;
             }
         }
         self.recovery_active = grid.recovery_active();
@@ -882,6 +926,7 @@ impl Navigator {
         }) {
             Ok(command) => command,
             Err(error) => {
+                self.note_route_rebuild(RouteRebuildReason::TrackingRejected);
                 self.route = None;
                 return Ok(self.blocked(&format!("path_tracking: {error}")));
             }
@@ -898,11 +943,23 @@ impl Navigator {
         let desired_curvature = tracking.curvature_per_m;
         self.diagnostics.tracking = Some(tracking.diagnostics);
         self.diagnostics.requested_curvature_per_m = Some(desired_curvature);
-        let slew = self.config.max_curvature_rate_per_s * dt;
-        let low =
-            (self.steering.commanded_curvature_per_m - slew).max(-self.config.max_curvature_per_m);
-        let high =
-            (self.steering.commanded_curvature_per_m + slew).min(self.config.max_curvature_per_m);
+        let (low, high) = if let Some(constraints) = self.adoption_constraints {
+            if constraints.planned_at != now {
+                return Ok(self.blocked("invalid_adoption_time"));
+            }
+            constraints.curvature_interval(&self.config)
+        } else {
+            let slew = self.config.max_curvature_rate_per_s * dt;
+            (
+                (self.steering.commanded_curvature_per_m - slew)
+                    .max(-self.config.max_curvature_per_m),
+                (self.steering.commanded_curvature_per_m + slew)
+                    .min(self.config.max_curvature_per_m),
+            )
+        };
+        if !low.is_finite() || !high.is_finite() || low > high {
+            return Ok(self.blocked("empty_curvature_interval"));
+        }
         let preferred = desired_curvature.clamp(low, high);
         self.diagnostics.slew_limited_curvature_per_m = Some(preferred);
         let mut speed_upper = self
@@ -1033,45 +1090,20 @@ impl Navigator {
                     self.diagnostics.candidates.near_zero_speed += 1;
                     continue;
                 }
-                if let Some(constraints) = self.adoption_constraints {
-                    if let Err(reason) = constraints.check_command(
+                if let Some(constraints) = self.adoption_constraints
+                    && let Err(reason) = constraints.check_command(
                         &self.config,
                         speed,
                         curvature,
                         obstacles,
                         self.travel_boundary,
-                    ) {
-                        self.diagnostics.candidates.admission_current += 1;
-                        self.diagnostics
-                            .current_admission_failure
-                            .get_or_insert(reason);
-                        continue;
-                    }
-                    let (forecast, work) = constraints.check_next_with_work(
-                        &self.config,
-                        pose,
-                        speed,
-                        curvature,
-                        obstacles,
-                        self.travel_boundary,
-                    );
-                    let total = &mut self.diagnostics.admission_forecast_work;
-                    total.adoption_scenarios = total
-                        .adoption_scenarios
-                        .saturating_add(work.adoption_scenarios);
-                    total.source_checks = total.source_checks.saturating_add(work.source_checks);
-                    total.projection_calls =
-                        total.projection_calls.saturating_add(work.projection_calls);
-                    total.projection_intervals = total
-                        .projection_intervals
-                        .saturating_add(work.projection_intervals);
-                    if let Err(reason) = forecast {
-                        self.diagnostics.candidates.admission_next += 1;
-                        self.diagnostics
-                            .next_admission_failure
-                            .get_or_insert(reason);
-                        continue;
-                    }
+                    )
+                {
+                    self.diagnostics.candidates.admission_current += 1;
+                    self.diagnostics
+                        .current_admission_failure
+                        .get_or_insert(reason);
+                    continue;
                 }
                 self.diagnostics.candidates.rollouts_evaluated += 1;
                 let prediction = match rollout(
@@ -1114,6 +1146,36 @@ impl Navigator {
                         continue;
                     }
                 };
+                // The multi-source fallback forecast is pure and expensive.
+                // Run it only after the normal motion and collision gates; a
+                // survivor must still pass it before terminal work or selection.
+                if let Some(constraints) = self.adoption_constraints {
+                    let (forecast, work) = constraints.check_next_with_work(
+                        &self.config,
+                        pose,
+                        speed,
+                        curvature,
+                        obstacles,
+                        self.travel_boundary,
+                    );
+                    let total = &mut self.diagnostics.admission_forecast_work;
+                    total.adoption_scenarios = total
+                        .adoption_scenarios
+                        .saturating_add(work.adoption_scenarios);
+                    total.source_checks = total.source_checks.saturating_add(work.source_checks);
+                    total.projection_calls =
+                        total.projection_calls.saturating_add(work.projection_calls);
+                    total.projection_intervals = total
+                        .projection_intervals
+                        .saturating_add(work.projection_intervals);
+                    if let Err(reason) = forecast {
+                        self.diagnostics.candidates.admission_next += 1;
+                        self.diagnostics
+                            .next_admission_failure
+                            .get_or_insert(reason);
+                        continue;
+                    }
+                }
                 let Some(reference) = reference_window.project(prediction.endpoint.point()) else {
                     continue;
                 };
@@ -1371,6 +1433,7 @@ impl Navigator {
                 diagnostics: self.diagnostics_snapshot(),
             })
         } else {
+            self.note_route_rebuild(RouteRebuildReason::NoAcceptedCandidate);
             self.route = None; // changed observations require a new bounded search.
             let reason = if self.diagnostics.candidates.rollouts_evaluated == 0
                 && self.diagnostics.candidates.curvature_speed_limits > 0
@@ -1385,6 +1448,10 @@ impl Navigator {
             decision.path = path;
             Ok(decision)
         }
+    }
+
+    fn note_route_rebuild(&mut self, reason: RouteRebuildReason) {
+        self.pending_route_rebuild.get_or_insert(reason);
     }
 
     fn diagnostics_snapshot(&self) -> NavigationDiagnostics {

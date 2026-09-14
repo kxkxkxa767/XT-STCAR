@@ -246,8 +246,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
 [预期] 两算法的横向/航向误差及失败指标；这是跟踪层合成实验，
   不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
   它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
-  LQR仍为实验选项，默认Pure Pursuit保持不变；v7当前说明见
-  docs/采用约束与前向恢复.md；各算法须分别看completed和fault。
+  LQR仍为实验选项，默认Pure Pursuit保持不变；v8当前说明见
+  docs/采用时基与时序交叉验证.md；各算法须分别看completed和fault。
   docs/motion-v6-competition-comparison.json及motion-v5/v4/v3/v2、motion-control均保留历史，
   不当作当前源码的验收结果。
   summary.first_navigation_failure 为首个非预期阻塞/故障窗口，最多8帧前文、
@@ -259,11 +259,14 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   原有模拟配置未写 navigation.tracking 时默认 Pure Pursuit；LQR 配置
   及模型边界见 docs/运动控制设计与对比.md。不要直接用于实车。
 
-采用约束、前向恢复与完整异步验证（v7，Mac离线）
+采用时基、候选顺序与时序矩阵（v8，Mac离线）
 [Mac；用途] 检查源历史/采用约束、停稳后恢复、真实后台Worker和最终输出采用。
 [替换项] 无；这些是纯主机测试，不能用于启动电机。模块位置如下：
-  crates/robot-core/src/admission.rs：共享停车矩形、当前采用约束和有限多拍前瞻。
-  crates/runner/src/control_admission.rs：从同一源、真实采用历史和lease准备约束；无效值明确失败。
+  crates/robot-core/src/admission.rs：共享停车矩形、当前采用区间和有限多拍前瞻。
+  crates/robot-core/src/admission/slew.rs：共享真实命令变化时基，校验修订/启动状态；预测时另跟踪模型变化时刻。
+  crates/robot-core/src/navigation.rs：基础rollout通过后才做后备前瞻；route_rebuild_reason记录首个缓存失效原因。
+  crates/runner/src/control_admission.rs：从同一源、实际last-change/revision和lease准备约束；无效值明确失败。
+  crates/runner/examples/async_timing_matrix.rs：专用2×2矩阵与有界内存分叉对比；默认控制不记录这份轨迹。
   crates/runner/src/control_execution.rs：最终独立采用证书和固定容量真实命令历史。
   crates/runner/src/control_execution/diagnostics.rs：结构化证书首因、约束索引、符号余量及时间窗。
   crates/robot-core/src/navigation/recovery.rs：普通/恢复前向搜索诊断和连续几何恢复。
@@ -298,6 +301,22 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   cargo run --release --locked --offline -p xt-stcar-robot-runner --example motion_comparison
     同步与异步工况分别报告；两者均经过完整任务状态机，不能混用完成时间或计时口径。
 
+  固定2×2时序矩阵（PP/LQR共8场；无额外命令行参数）：
+
+  mkdir -p work
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example async_timing_matrix > work/async-timing-matrix.json 2> work/async-timing-matrix.stderr.log
+  echo $?
+
+  [预期] JSON中runs保留每场完整summary，single_factor_comparisons一次只改变输入延迟或采用偏移。
+    实际输出按共同模型时间比较；规划动作/路径点列/路线revision/点数/恢复按同一source_at比较。
+    点列精确不同不证明路线拓扑改变。查看all_completed、traces_complete和每场fault，失败或截断均非零退出。
+    output_trace_counts.stop_duration_ms是实际Stop命令持续时长，含启动/最终制动，不是车辆物理静止时长。
+    stop_episodes_including_startup_and_shutdown与summary中导航非预期Stop分别统计；
+    drive_during_rejection_polls表示拒绝期间仍保持旧Drive，不能把拒绝次数全算成停车。
+    每场内存上限16384次命令变化、2048份计划、每计划2048路径点，超额有omitted计数；
+    只有traces_complete=true时空差异才表示共同观察区间未见差异。结束统一写JSON，不逐拍写eMMC。
+    simulate_async_observed仅离线只读回调，观察耗时计入host wall_time_ms；功能钟等后台时仍冻结，不能当成WCET。
+
   完整异步example可在跟踪器参数后传入一个本地JSON时序文件。默认配置示例：
   {"capture_period_ms":100,"output_period_ms":20,"input_delays_ms":[60,80],"adoption_delays_ms":[3,7,9],"stop_input_at_ms":null,"measure_wall_time":false}
   显式measure_wall_time=true才读主机时钟并累计有界耗时统计，不修改source/planned/lease或控制判定规则；采样开销仍可能影响主机调度。
@@ -316,6 +335,16 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   navigation.diagnostics.forward_search分开普通与恢复的节点数、primitive尝试/首个失败和退出原因；
   no_forward_kinematic_path只表示这次有界搜索未找到，不是数学不可达。
 
+  v8时基：planned_at、last_command_change_at、adopted_revision及持有目标来自同一真实历史。
+  候选在规划窗起点（最早采用时刻）按实际last-change确定曲率区间；前置与证书同定义，poll按实际当前时刻复核。
+  同一命令重复输出不刷新时基，仅速度变化仍刷新；Stop归零目标后渐变回中，恢复使用Stop真实采用时刻。
+  只有revision=0且确无命令变化的启动状态沿用一周期起步限幅；历史缺失、未来时间、矛盾修订均明确拒绝。
+  不在poll裁剪后直接发出不同的未经认证命令，不延长原lease，不清空当前源的高速/高曲率历史。
+  轻量当前采用检查→原运动/停车/Grid/足迹rollout→多源前瞻→终端认证与评分；rollout只积分一次，原门限全部保留。
+  短路首因和工作计数可能改变，不能直接当成动作差异或CPU加速。
+  route_rebuild_reason记录初始/任务停车、arrival/边界/目标变化、车体参考偏离、跟踪拒绝和无候选等首个重建触发；
+  搜索未成功时保留原因，缓存复用时为空，不声称它是整场失败的唯一根因。
+
   前置前瞻取最早/中间/最晚3种采用时刻，下一采集相位保留当前源年龄，预测正常减速后备过程。
   每样本最多64拍/2秒、固定65个源槽；admission_forecast_work中的source_checks/projection_calls/
   projection_intervals记录实际请求的工作量。projection_intervals是预扣1ms模型区间，不是CPU指令数。
@@ -327,8 +356,21 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   普通与恢复共享原搜索/终端额度；调试计数与首因在内存保留，默认无逐tick写盘，不降比赛频率。
 
   新增导航/阶段诊断JSON省略全默认对象与None；缺失表示零工作/未搜索/无约束或失败，有值完整保留。
-  最新入口为docs/采用约束与前向恢复.md。
-  v7最终：同步PP58.8s/LQR54.3s保持；默认异步PP73.863s/LQR89.069s，扰动PP56.849s/LQR53.849s均完成。
+  最新入口为docs/采用时基与时序交叉验证.md。
+  本轮8/8完整交叉工况完成，最终证书/曲率slew采用拒绝0；原LQR一交叉工况停车超时修复。
+  固定顺序为 [60,80]×[3,7,9]、[60,80]×[5,9,11]、[40,60]×[3,7,9]、[40,60]×[5,9,11]：
+  PP 75.467/54.985/56.443/54.449秒；LQR 85.863/86.269/88.647/53.445秒。
+  早输入/早采用LQR从54.447退化到88.647秒，不能把8场通过理解为路线普遍稳定或性能全面提升。
+  同步PP58.8秒/LQR54.3秒保持。实际Stop时长包括启动/结束，不等于物理静止时长。
+  工作区364通过/2忽略、两个example各2通过、交付35通过，fmt/clippy/双RISC-V静态链接通过。
+  当前103份编译输入、GLIBC2.38基线/实际最高2.34；binary和包哈希见motion-v8-build/validation/delivery。
+  默认异步主机导航平均/最大PP6.395/59.369ms、LQR4.573/13.166ms，不是目标WCET；实际短场23源、最大poll21ms，
+  末源2200、原期限2450、2460ms Stop、2687ms模型停稳回中。暂不接车，未执行目标程序。
+  修改前7d28761隔离基线8场7完成/1失败，详见docs/motion-v8-before.json及motion-v8-baseline-matrix.json。
+  新交叉input[60,80]×adopt[5,9,11]：PP114.591s/21.435316m完成；LQR91.669s/14.627098m因普通停车超过10秒失败。
+  另一交叉input[40,60]×adopt[3,7,9]：PP87.043s/16.472032m、LQR54.447s/10.317616m均完成。
+  原默认/扰动4场逐值复现v7（比较时去掉主机墙钟字段）；离线observer的8场功能summary也逐值保持、无trace截断。
+  以下v7是历史结果，不能当作当前源码验收：同步PP58.8s/LQR54.3s保持；默认异步PP73.863s/LQR89.069s，扰动PP56.849s/LQR53.849s均完成。
   四场最终证书拒绝0，曲率slew拒绝默认每tracker5次、扰动2次；不能当成没有实际Stop。
   Rust350通过/0失败/2忽略、example2通过、交付35通过；fmt/clippy/双RISC-V链接通过。
   98份源码/清单/嵌入fixture哈希见docs/motion-v7-build.json，GLIBC基线2.38、最高实际引用2.34。
@@ -895,11 +937,14 @@ JSON
   docs/Rust串口采集.md：传感器采集配置与限制。
   docs/Rust比赛自主闭环.md：任务、导航、感知 worker、仿真及日志设计边界。
   docs/任务交接与异步运动修正.md：v4真实验收半径、阶段统计、执行历史和异步采用证书。
-  docs/采用约束与前向恢复.md：v7共享采用条件、结构化首因、前向恢复和本轮验证入口。
+  docs/采用时基与时序交叉验证.md：v8共享last-change时基、检查顺序及2×2矩阵入口。
+  docs/motion-v8-before.json：本轮分享/ZIP/探针来源、隔离修改前结果与真实失败。
+  docs/motion-v8-baseline-matrix.json：修改前完整8场及有界轨迹首次分叉。
+  docs/采用约束与前向恢复.md：v7共享采用条件、结构化首因及前向恢复设计历史。
   docs/motion-v6-validation.json：历史v6的Rust/example/交付测试、fmt/clippy与交叉链接结果。
   docs/motion-v6-delivery.json：历史v6本地包状态/路径/哈希；不能作为当前版本产物。
   docs/终端连接延续与异步停车包络.md：v5接续策略、共享计算额度及有向停止矩形。
-  docs/motion-v6-*、motion-v5-*、motion-v4-*及更早结果保留历史。
+  docs/motion-v7-*、motion-v6-*、motion-v5-*、motion-v4-*及更早结果保留历史。
   docs/底盘标定映射.md：物理单位映射和未经验证的示例表。
   docs/赛项三规则与工程差距.md：初稿规则、资料证据与实车缺口。
 

@@ -1,0 +1,1141 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6",
+  "physical_output_enabled": false,
+  "scope": "v8修改前证据；真实Rust全场基线与独立Python算术探针分开。不包含v8最终结果、RISC-V执行或实车验收。",
+  "source_review": {
+    "share_url": "https://chatgpt.com/share/6aa7e186-f7a4-83e8-8cad-c7d07e02d3e1",
+    "retrieved_full_text": true,
+    "extracted_text_file": "work/motion-v8-review/message-879.txt",
+    "extracted_text_characters": 4792,
+    "extracted_text_sha256": "55e380ebb851afb7822c5b8260683d9d0862cb6b1e2e821bc5f690dd0cddeb35",
+    "html_sha256": "f9e728396f226f452e59f43760fb77523fe9713c6af368edede0988929c9c04e",
+    "hydration_sha256": "fb05a4642e0c83b8ee7f425ec1cba3c90f9cd0367f50382fbc8c4fe283df98fe",
+    "local_zip": "XT-STCAR_7d28761_review_reproduction.zip",
+    "zip_sha256": "d130cc0096adc5cee61d89e9a8fbde74dcf1a275acc8f4901739cc2cdb5e7d04",
+    "zip_members": [
+      {
+        "path": "XT-STCAR_7d28761_review/README.md",
+        "bytes": 4163,
+        "sha256": "a6cd1ef4c33befa1288e00cff7efeabf2e9e8555ce6e8ca6a42c0607db202f04"
+      },
+      {
+        "path": "XT-STCAR_7d28761_review/review_metrics.py",
+        "bytes": 2238,
+        "sha256": "5f5dd44899d523cfacfbc11e2f18b2e338f792a91f3c69f7d53169174605183f"
+      },
+      {
+        "path": "XT-STCAR_7d28761_review/review_metrics_result.json",
+        "bytes": 1974,
+        "sha256": "9c82989d2b7f1a817d5259135146ab1646aaebf7fccf3afe33c52e5e8948115c"
+      },
+      {
+        "path": "XT-STCAR_7d28761_review/timing_probe.py",
+        "bytes": 3540,
+        "sha256": "7f4353f5979a9d824228d157dae085464aea1848ee55a126d3da129268f0e48a"
+      },
+      {
+        "path": "XT-STCAR_7d28761_review/timing_probe_result.json",
+        "bytes": 3276,
+        "sha256": "cea3b4ed2319f546480d225ad176f94573e6da493e1f191c982a7e98efb0b267"
+      }
+    ],
+    "qualification": "分享明确未运行Rust或整场，两个Python探针仅作算术与仓库数据复算。分享构造的0.40→0.72曲率不是从5次真实采用拒绝提取的完整事件。"
+  },
+  "isolation": {
+    "archive_sha256": "4b7d8fddd18c761c55157af46e2179d81a37986f4d04736cb8b0297a03dce8bd",
+    "archive_file_count": 370,
+    "archive_directory": "work/motion-v8-baseline-7d28761",
+    "rust_toolchain": "1.97.1",
+    "target": "Mac host release",
+    "build_command": "CARGO_TARGET_DIR=work/motion-v8-baseline-target cargo build --manifest-path work/motion-v8-baseline-7d28761/Cargo.toml --locked --offline --release -p xt-stcar-robot-runner --example async_motion_comparison",
+    "unmodified_example_sha256": "6cf16eb8e7355a6d6d3ac687feb4d8d3f824e1676b824355d2c1ad05401d0545",
+    "artifact_record": "work/motion-v8/baseline-provenance.json",
+    "no_dependency_installation": true
+  },
+  "python_reproductions": {
+    "runs": [
+      {
+        "script": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v8/review-reproduction/XT-STCAR_7d28761_review/timing_probe.py",
+        "exit_code": 0,
+        "result_before_sha256": "cea3b4ed2319f546480d225ad176f94573e6da493e1f191c982a7e98efb0b267",
+        "result_after_sha256": "cea3b4ed2319f546480d225ad176f94573e6da493e1f191c982a7e98efb0b267",
+        "json_matches_supplied": true
+      },
+      {
+        "script": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v8/review-reproduction/XT-STCAR_7d28761_review/review_metrics.py",
+        "exit_code": 0,
+        "result_before_sha256": "9c82989d2b7f1a817d5259135146ab1646aaebf7fccf3afe33c52e5e8948115c",
+        "result_after_sha256": "9c82989d2b7f1a817d5259135146ab1646aaebf7fccf3afe33c52e5e8948115c",
+        "json_matches_supplied": true
+      }
+    ],
+    "timing_probe": {
+      "scope": "Steering-gate arithmetic, not a full candidate or Rust worker reproduction",
+      "commit": "7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6",
+      "previous_plan_ms": 580,
+      "current_plan_ms": 660,
+      "previous_adoption_ms": 589,
+      "current_adoption_ms": 663,
+      "previous_curvature_per_m": 0.4,
+      "candidate_curvature_per_m": 0.72,
+      "requested_delta_per_m": 0.31999999999999995,
+      "planner_allowance_per_m": 0.32,
+      "admission_allowance_per_m": 0.4,
+      "poll_allowance_per_m": 0.296,
+      "planner_slew_pass": true,
+      "admission_slew_pass": true,
+      "poll_slew_pass": false,
+      "earliest_slew_eligible_ms": 669.0,
+      "qualifications": [
+        "No claim that this is one of the five recorded v7 CurvatureSlew events.",
+        "Other candidate gates, obstacles and watchdog deadlines are not run here.",
+        "On rejection poll may retain a still-valid prior Drive. Rejection is not necessarily Stop.",
+        "669ms is a necessary steering-gate threshold only; all other certificate conditions still apply."
+      ],
+      "schedule_arithmetic": [
+        {
+          "label": "default",
+          "scope": "Counterfactual boundary changes, NOT actual driving outcomes",
+          "intervals": 29,
+          "timing_mismatches": [
+            {
+              "index": 6,
+              "plan_ms": 660,
+              "adopt_ms": 663,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            },
+            {
+              "index": 12,
+              "plan_ms": 1260,
+              "adopt_ms": 1263,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            },
+            {
+              "index": 18,
+              "plan_ms": 1860,
+              "adopt_ms": 1863,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            },
+            {
+              "index": 24,
+              "plan_ms": 2460,
+              "adopt_ms": 2463,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            }
+          ]
+        },
+        {
+          "label": "perturbed",
+          "scope": "Counterfactual boundary changes, NOT actual driving outcomes",
+          "intervals": 29,
+          "timing_mismatches": [
+            {
+              "index": 6,
+              "plan_ms": 640,
+              "adopt_ms": 645,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            },
+            {
+              "index": 12,
+              "plan_ms": 1240,
+              "adopt_ms": 1245,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            },
+            {
+              "index": 18,
+              "plan_ms": 1840,
+              "adopt_ms": 1845,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            },
+            {
+              "index": 24,
+              "plan_ms": 2440,
+              "adopt_ms": 2445,
+              "plan_gap_ms": 80,
+              "adopt_gap_ms": 74,
+              "proposed_delta_per_m": 0.32,
+              "allowed_delta_per_m": 0.296
+            }
+          ]
+        }
+      ]
+    },
+    "review_metrics": {
+      "commit": "7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6",
+      "scope": "Reported data copied from motion-v7-validation.json and one report frame, plus local arithmetic",
+      "reported_runs": {
+        "default_pp": {
+          "elapsed_s": 73.863,
+          "distance_m": 14.173788762179246,
+          "certificate_unsafe": 0,
+          "curvature_slew": 5
+        },
+        "default_lqr": {
+          "elapsed_s": 89.069,
+          "distance_m": 15.807183338822272,
+          "certificate_unsafe": 0,
+          "curvature_slew": 5
+        },
+        "perturbed_pp": {
+          "elapsed_s": 56.849,
+          "distance_m": 11.124416297882487,
+          "certificate_unsafe": 0,
+          "curvature_slew": 2
+        },
+        "perturbed_lqr": {
+          "elapsed_s": 53.849,
+          "distance_m": 10.217581897714231,
+          "certificate_unsafe": 0,
+          "curvature_slew": 2
+        }
+      },
+      "calculated_differences": {
+        "pp": {
+          "default_minus_perturbed_s": 17.014000000000003,
+          "default_minus_perturbed_distance_m": 3.0493724642967592,
+          "default_time_increase_percent": 29.928406832134247
+        },
+        "lqr": {
+          "default_minus_perturbed_s": 35.220000000000006,
+          "default_minus_perturbed_distance_m": 5.589601441108041,
+          "default_time_increase_percent": 65.40511430110125
+        }
+      },
+      "reported_pp_frame": {
+        "scope": "Copied PP first-problem frame from repository motion-v7-async-comparison.json; NOT a local Rust reproduction",
+        "observed_at_ms": 19387,
+        "planned_at_ms": 19380,
+        "forecast_adoption_scenarios": 132,
+        "forecast_projection_calls": 3850,
+        "forecast_charged_intervals": 167398,
+        "forecast_source_checks": 1650,
+        "rollouts_evaluated": 44,
+        "grid_rejections": 44,
+        "accepted": 0,
+        "qualification": "Reordering pure gates can skip forecast work for these rejected candidates; no CPU saving or full behavioral equivalence measured."
+      },
+      "causality_warning": "Input-delay schedule AND adoption-offset schedule both differ. These differences do not isolate a single timing factor."
+    },
+    "repository_values_match_independent_rust_baseline": [
+      {
+        "label": "default_pp",
+        "elapsed_matches": true,
+        "distance_matches": true,
+        "certificate_unsafe_matches": true,
+        "curvature_slew_matches": true
+      },
+      {
+        "label": "default_lqr",
+        "elapsed_matches": true,
+        "distance_matches": true,
+        "certificate_unsafe_matches": true,
+        "curvature_slew_matches": true
+      },
+      {
+        "label": "perturbed_pp",
+        "elapsed_matches": true,
+        "distance_matches": true,
+        "certificate_unsafe_matches": true,
+        "curvature_slew_matches": true
+      },
+      {
+        "label": "perturbed_lqr",
+        "elapsed_matches": true,
+        "distance_matches": true,
+        "certificate_unsafe_matches": true,
+        "curvature_slew_matches": true
+      }
+    ]
+  },
+  "verified_first_pp_problem_frame": {
+    "at": 19387,
+    "source_at": 19300,
+    "admission_forecast_work": {
+      "adoption_scenarios": 132,
+      "projection_calls": 3850,
+      "projection_intervals": 167398,
+      "source_checks": 1650
+    },
+    "candidates": {
+      "accepted": 0,
+      "admission_current": 0,
+      "admission_next": 0,
+      "curvature_speed_limits": 0,
+      "footprint": 0,
+      "grid": 44,
+      "lateral_acceleration": 0,
+      "near_zero_speed": 0,
+      "reference": 0,
+      "rollouts_evaluated": 44,
+      "sample_budget": 0,
+      "stop_reachable": 0,
+      "terminal_budget": 0,
+      "terminal_unreachable": 0
+    }
+  },
+  "unmodified_baseline_matrix": {
+    "all_completed": false,
+    "completed_runs": 7,
+    "total_runs": 8,
+    "runs": [
+      {
+        "label": "cross-late-input-late-adoption",
+        "tracker": "pp",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": true,
+        "fault": null,
+        "elapsed_ms": 114591,
+        "distance_m": 21.435316121420804,
+        "minimum_cone_clearance_m": 0.3032897789207377,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 1146,
+          "certificate_unsafe": 0,
+          "completed_plans": 1146,
+          "curvature_slew": 7,
+          "drive_polls": 6593,
+          "execution_changed": 0,
+          "newly_adopted_plans": 1146,
+          "output_polls": 6876,
+          "stop_polls": 283,
+          "submissions": 1146,
+          "turning_drive_polls": 6317
+        },
+        "unexpected_stop_ticks": 4,
+        "unexpected_stop_episodes": 3,
+        "unexpected_stop_command_ms": 412,
+        "route_generations": 22,
+        "omitted_route_events": 0,
+        "recovery_attempted_ticks": 2,
+        "recovery_accepted_ticks": 2,
+        "recovery_active_ticks": 67,
+        "first_problem": {
+          "at": 19069,
+          "command": {
+            "type": "stop"
+          },
+          "adoption_rejection": null,
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "blocked",
+          "navigation_reason": "no_collision_free_braking_trajectory",
+          "source_at": 19000,
+          "control_at": 19069
+        }
+      },
+      {
+        "label": "cross-late-input-late-adoption",
+        "tracker": "lqr",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": false,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "elapsed_ms": 91669,
+        "distance_m": 14.627098301647745,
+        "minimum_cone_clearance_m": 0.2119224832872596,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 917,
+          "certificate_unsafe": 0,
+          "completed_plans": 917,
+          "curvature_slew": 10,
+          "drive_polls": 4657,
+          "execution_changed": 0,
+          "newly_adopted_plans": 916,
+          "output_polls": 5501,
+          "stop_polls": 844,
+          "submissions": 917,
+          "turning_drive_polls": 4381
+        },
+        "unexpected_stop_ticks": 107,
+        "unexpected_stop_episodes": 4,
+        "unexpected_stop_command_ms": 10653,
+        "route_generations": 16,
+        "omitted_route_events": 0,
+        "recovery_attempted_ticks": 106,
+        "recovery_accepted_ticks": 2,
+        "recovery_active_ticks": 260,
+        "first_problem": {
+          "at": 10865,
+          "command": {
+            "curvature_per_m": 0.2527827933957396,
+            "speed_mps": 0.3,
+            "type": "drive"
+          },
+          "adoption_rejection": "curvature_slew",
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "driving",
+          "navigation_reason": null,
+          "source_at": 10800,
+          "control_at": 10865
+        }
+      },
+      {
+        "label": "cross-early-input-early-adoption",
+        "tracker": "pp",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": true,
+        "fault": null,
+        "elapsed_ms": 87043,
+        "distance_m": 16.472032294330713,
+        "minimum_cone_clearance_m": 0.27639884868751474,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 871,
+          "certificate_unsafe": 0,
+          "completed_plans": 871,
+          "curvature_slew": 8,
+          "drive_polls": 4956,
+          "execution_changed": 0,
+          "newly_adopted_plans": 871,
+          "output_polls": 5224,
+          "stop_polls": 268,
+          "submissions": 871,
+          "turning_drive_polls": 4680
+        },
+        "unexpected_stop_ticks": 3,
+        "unexpected_stop_episodes": 2,
+        "unexpected_stop_command_ms": 328,
+        "route_generations": 23,
+        "omitted_route_events": 0,
+        "recovery_attempted_ticks": 0,
+        "recovery_accepted_ticks": 0,
+        "recovery_active_ticks": 0,
+        "first_problem": {
+          "at": 19243,
+          "command": {
+            "curvature_per_m": -0.6385214143279223,
+            "speed_mps": 0.19839999999999963,
+            "type": "drive"
+          },
+          "adoption_rejection": "curvature_slew",
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "driving",
+          "navigation_reason": null,
+          "source_at": 19200,
+          "control_at": 19243
+        }
+      },
+      {
+        "label": "cross-early-input-early-adoption",
+        "tracker": "lqr",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": true,
+        "fault": null,
+        "elapsed_ms": 54447,
+        "distance_m": 10.317616041272634,
+        "minimum_cone_clearance_m": 0.24726729590598495,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 545,
+          "certificate_unsafe": 0,
+          "completed_plans": 545,
+          "curvature_slew": 4,
+          "drive_polls": 2995,
+          "execution_changed": 0,
+          "newly_adopted_plans": 545,
+          "output_polls": 3268,
+          "stop_polls": 273,
+          "submissions": 545,
+          "turning_drive_polls": 2719
+        },
+        "unexpected_stop_ticks": 2,
+        "unexpected_stop_episodes": 1,
+        "unexpected_stop_command_ms": 196,
+        "route_generations": 10,
+        "omitted_route_events": 0,
+        "recovery_attempted_ticks": 0,
+        "recovery_accepted_ticks": 0,
+        "recovery_active_ticks": 0,
+        "first_problem": {
+          "at": 8443,
+          "command": {
+            "curvature_per_m": 0.32914549642692276,
+            "speed_mps": 0.2100000000000005,
+            "type": "drive"
+          },
+          "adoption_rejection": "curvature_slew",
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "driving",
+          "navigation_reason": null,
+          "source_at": 8400,
+          "control_at": 8443
+        }
+      },
+      {
+        "label": "default",
+        "tracker": "pp",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": true,
+        "fault": null,
+        "elapsed_ms": 73863,
+        "distance_m": 14.173788762179246,
+        "minimum_cone_clearance_m": 0.281114553466176,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 739,
+          "certificate_unsafe": 0,
+          "completed_plans": 739,
+          "curvature_slew": 5,
+          "drive_polls": 4159,
+          "execution_changed": 0,
+          "newly_adopted_plans": 739,
+          "output_polls": 4433,
+          "stop_polls": 274,
+          "submissions": 739,
+          "turning_drive_polls": 3842
+        },
+        "unexpected_stop_ticks": 3,
+        "unexpected_stop_episodes": 2,
+        "unexpected_stop_command_ms": 278,
+        "route_generations": 19,
+        "omitted_route_events": 0,
+        "recovery_attempted_ticks": 0,
+        "recovery_accepted_ticks": 0,
+        "recovery_active_ticks": 0,
+        "first_problem": {
+          "at": 19387,
+          "command": {
+            "type": "stop"
+          },
+          "adoption_rejection": null,
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "blocked",
+          "navigation_reason": "no_collision_free_braking_trajectory",
+          "source_at": 19300,
+          "control_at": 19387
+        }
+      },
+      {
+        "label": "default",
+        "tracker": "lqr",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": true,
+        "fault": null,
+        "elapsed_ms": 89069,
+        "distance_m": 15.807183338822272,
+        "minimum_cone_clearance_m": 0.24388625895054228,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 891,
+          "certificate_unsafe": 0,
+          "completed_plans": 891,
+          "curvature_slew": 5,
+          "drive_polls": 5054,
+          "execution_changed": 0,
+          "newly_adopted_plans": 891,
+          "output_polls": 5345,
+          "stop_polls": 291,
+          "submissions": 891,
+          "turning_drive_polls": 4778
+        },
+        "unexpected_stop_ticks": 6,
+        "unexpected_stop_episodes": 3,
+        "unexpected_stop_command_ms": 560,
+        "route_generations": 27,
+        "omitted_route_events": 2,
+        "recovery_attempted_ticks": 3,
+        "recovery_accepted_ticks": 3,
+        "recovery_active_ticks": 132,
+        "first_problem": {
+          "at": 16789,
+          "command": {
+            "type": "stop"
+          },
+          "adoption_rejection": null,
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "blocked",
+          "navigation_reason": "no_collision_free_braking_trajectory",
+          "source_at": 16700,
+          "control_at": 16789
+        }
+      },
+      {
+        "label": "perturbed",
+        "tracker": "pp",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": true,
+        "fault": null,
+        "elapsed_ms": 56849,
+        "distance_m": 11.124416297882487,
+        "minimum_cone_clearance_m": 0.3011372388223489,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 569,
+          "certificate_unsafe": 0,
+          "completed_plans": 569,
+          "curvature_slew": 2,
+          "drive_polls": 3162,
+          "execution_changed": 0,
+          "newly_adopted_plans": 569,
+          "output_polls": 3412,
+          "stop_polls": 250,
+          "submissions": 569,
+          "turning_drive_polls": 2886
+        },
+        "unexpected_stop_ticks": 2,
+        "unexpected_stop_episodes": 2,
+        "unexpected_stop_command_ms": 163,
+        "route_generations": 13,
+        "omitted_route_events": 0,
+        "recovery_attempted_ticks": 0,
+        "recovery_accepted_ticks": 0,
+        "recovery_active_ticks": 0,
+        "first_problem": {
+          "at": 19245,
+          "command": {
+            "curvature_per_m": -0.5705701504663047,
+            "speed_mps": 0.19999999999999968,
+            "type": "drive"
+          },
+          "adoption_rejection": "curvature_slew",
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "driving",
+          "navigation_reason": null,
+          "source_at": 19200,
+          "control_at": 19245
+        }
+      },
+      {
+        "label": "perturbed",
+        "tracker": "lqr",
+        "options": {
+          "capture_period_ms": 100,
+          "output_period_ms": 20,
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "stop_input_at_ms": null,
+          "measure_wall_time": false
+        },
+        "completed": true,
+        "fault": null,
+        "elapsed_ms": 53849,
+        "distance_m": 10.217581897714231,
+        "minimum_cone_clearance_m": 0.2720467711426443,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 300,
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "terminal_command": {
+          "type": "stop"
+        },
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 539,
+          "certificate_unsafe": 0,
+          "completed_plans": 539,
+          "curvature_slew": 2,
+          "drive_polls": 2954,
+          "execution_changed": 0,
+          "newly_adopted_plans": 539,
+          "output_polls": 3232,
+          "stop_polls": 278,
+          "submissions": 539,
+          "turning_drive_polls": 2678
+        },
+        "unexpected_stop_ticks": 0,
+        "unexpected_stop_episodes": 0,
+        "unexpected_stop_command_ms": 0,
+        "route_generations": 7,
+        "omitted_route_events": 0,
+        "recovery_attempted_ticks": 0,
+        "recovery_accepted_ticks": 0,
+        "recovery_active_ticks": 0,
+        "first_problem": {
+          "at": 8445,
+          "command": {
+            "curvature_per_m": 0.32914509006780995,
+            "speed_mps": 0.2076000000000004,
+            "type": "drive"
+          },
+          "adoption_rejection": "curvature_slew",
+          "runtime_fault": null,
+          "phase": "cones",
+          "navigation_status": "driving",
+          "navigation_reason": null,
+          "source_at": 8400,
+          "control_at": 8445
+        }
+      }
+    ],
+    "original_four_report_comparisons": [
+      {
+        "label": "default",
+        "tracker": "pp",
+        "repository_file": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v8-baseline-7d28761/docs/motion-v7-async-comparison.json",
+        "repository_sha256": "e857b8b1ed905d26cd22793fd84c600c845f743aa87332606c9a037a3afdb18e",
+        "all_summary_fields_except_wall_time_equal": true
+      },
+      {
+        "label": "default",
+        "tracker": "lqr",
+        "repository_file": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v8-baseline-7d28761/docs/motion-v7-async-comparison.json",
+        "repository_sha256": "e857b8b1ed905d26cd22793fd84c600c845f743aa87332606c9a037a3afdb18e",
+        "all_summary_fields_except_wall_time_equal": true
+      },
+      {
+        "label": "perturbed",
+        "tracker": "pp",
+        "repository_file": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v8-baseline-7d28761/docs/motion-v7-async-perturbed.json",
+        "repository_sha256": "c5500993a1212bce507aeba7652d60fe6b4c0c06f0f9fa29b44bb7b25151e773",
+        "all_summary_fields_except_wall_time_equal": true
+      },
+      {
+        "label": "perturbed",
+        "tracker": "lqr",
+        "repository_file": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v8-baseline-7d28761/docs/motion-v7-async-perturbed.json",
+        "repository_sha256": "c5500993a1212bce507aeba7652d60fe6b4c0c06f0f9fa29b44bb7b25151e773",
+        "all_summary_fields_except_wall_time_equal": true
+      }
+    ],
+    "stop_scope": "counts.stop_polls包括所有实际Stop轮询；unexpected_stop_*由原阶段统计记录，不等于候选拒绝或CurvatureSlew次数。",
+    "timing_scope": "逻辑时钟等待后台时冻结；elapsed_ms为模拟比赛时长，不是CPU或截止时间证据。",
+    "cross_failure": "input[60,80] × adoption[5,9,11] LQR 91669ms真实失败ordinary stop exceeded 10 seconds，终态速度/曲率0；首拒绝时仍持有Drive，不把首次拒绝自动认作最终唯一根因。"
+  },
+  "single_frame_reproduction_input": {
+    "planning_ms": 19380,
+    "observed_ms": 19387,
+    "input_artifact": "work/motion-v8/baseline-pp19380-navigation-input.json",
+    "input_sha256": "d7fed087836558ac4e72e6e385a9a7c37a3af12c91d42163c800fc19224dd4ec",
+    "worker_artifact": "work/motion-v8/baseline-pp19380-worker-plan.json",
+    "worker_sha256": "52cd5c5f2fb247a252bc35e8c3f9baa5dab5124579a3cd2d020f6cf23f86427a",
+    "scope": "隔离archive仅添加两个单时刻诊断输出；完整原场summary除wall_time_ms外逐值一致；原文件已恢复后再移植离线observer。",
+    "cached_path_points": 285,
+    "world_obstacle_count": 361,
+    "last_step_ms": 19260,
+    "via_index": 129,
+    "route_revision": 3,
+    "recovery_active": false,
+    "terminal_seed": null
+  },
+  "bounded_observer_matrix": {
+    "artifact": "docs/motion-v8-baseline-matrix.json",
+    "status": "complete_with_preserved_baseline_failure",
+    "artifact_sha256": "b4186de44107c2d45d63d8c059312842e8e234a7173c52b755b8f1526a327568",
+    "artifact_bytes": 3537405,
+    "build_exit_code": 0,
+    "matrix_exit_code": 1,
+    "all_completed": false,
+    "completed_runs": 7,
+    "total_runs": 8,
+    "traces_complete": true,
+    "all_eight_summaries_match_unmodified_baseline_except_wall_time": true,
+    "observer_files": [
+      {
+        "path": "crates/runner/src/async_simulation.rs",
+        "baseline_sha256": "b40bfefad7f7b928f038597a5f632f1a9749475059226d33255790a897ebeb44",
+        "observer_sha256": "c9427be299ce01ad485e1369064f60692de53e58470a20b3c4b1d386e38bab9c"
+      },
+      {
+        "path": "crates/runner/examples/async_timing_matrix.rs",
+        "baseline_sha256": null,
+        "observer_sha256": "28c436dd5b82ec10f84d23f93f94b502b40f69e9632d5184542b6e8cab4343d8"
+      }
+    ],
+    "observer_executable_sha256": "ebd5cbe26718278b6e4b556992856bd34639dab47c5880cf34ba586f2b1cd83d",
+    "checks": [
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 504,
+          "drive_during_rejection_polls": 5,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 739,
+          "route_search_events": [],
+          "stop_duration_ms": 4541,
+          "stop_during_rejection_polls": 0,
+          "stop_episodes_including_startup_and_shutdown": 6
+        }
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 643,
+          "drive_during_rejection_polls": 7,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 1146,
+          "route_search_events": [],
+          "stop_duration_ms": 4717,
+          "stop_during_rejection_polls": 0,
+          "stop_episodes_including_startup_and_shutdown": 7
+        }
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 548,
+          "drive_during_rejection_polls": 8,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 871,
+          "route_search_events": [],
+          "stop_duration_ms": 4447,
+          "stop_during_rejection_polls": 0,
+          "stop_episodes_including_startup_and_shutdown": 6
+        }
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 407,
+          "drive_during_rejection_polls": 1,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 569,
+          "route_search_events": [],
+          "stop_duration_ms": 4128,
+          "stop_during_rejection_polls": 1,
+          "stop_episodes_including_startup_and_shutdown": 5
+        }
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 539,
+          "drive_during_rejection_polls": 5,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 891,
+          "route_search_events": [],
+          "stop_duration_ms": 4823,
+          "stop_during_rejection_polls": 0,
+          "stop_episodes_including_startup_and_shutdown": 7
+        }
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 489,
+          "drive_during_rejection_polls": 9,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 917,
+          "route_search_events": [],
+          "stop_duration_ms": 14038,
+          "stop_during_rejection_polls": 1,
+          "stop_episodes_including_startup_and_shutdown": 6
+        }
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 285,
+          "drive_during_rejection_polls": 4,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 545,
+          "route_search_events": [],
+          "stop_duration_ms": 4513,
+          "stop_during_rejection_polls": 0,
+          "stop_episodes_including_startup_and_shutdown": 5
+        }
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "all_summary_fields_except_wall_time_equal": true,
+        "output_trace_counts": {
+          "command_changes": 264,
+          "drive_during_rejection_polls": 2,
+          "omitted_commands": 0,
+          "omitted_path_points": 0,
+          "omitted_plans": 0,
+          "plans": 539,
+          "route_search_events": [],
+          "stop_duration_ms": 4599,
+          "stop_during_rejection_polls": 0,
+          "stop_episodes_including_startup_and_shutdown": 4
+        }
+      }
+    ],
+    "comparison_scope": "实际命令按共同模型时段对齐；规划动作与路线点列按相同源时间对齐。路线点列/长度差异不是不同拓扑的证明。实际Stop时长包括启动和终止，采用拒绝时仍Drive另计。8场均无trace截断。",
+    "note": "本次采用与最终主树逐字相同的offline observer+matrix示例；370个原archive文件中仅async_simulation.rs加入wrapper及4处只读回调，另新增matrix例子，其余原文件逐字一致。全部8场summary（仅剔除wall_time_ms）与未改基线逐值一致；未重新运行无observer矩阵。",
+    "observer_source_identical_between_baseline_and_final": true,
+    "baseline_archive_audit": {
+      "archive_files_compared": 370,
+      "modified_archive_files": [
+        "crates/runner/src/async_simulation.rs"
+      ],
+      "allowed_new_source_file": "crates/runner/examples/async_timing_matrix.rs",
+      "all_other_archive_files_byte_identical": true
+    },
+    "baseline_route_rebuild_reason_available": false,
+    "baseline_route_rebuild_reason_scope": "7d28761没有新增route_rebuild_reason字段：null及空route_search_events表示旧版不可用，不表示没有路线重建。原summary.statistics.phases[].routes保留真实重建次数与最近事件。"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "scope": "v8 navigation candidate ordering, adoption time interval integration, and route rebuild diagnostics; host unit tests only",
+  "candidate_order": [
+    "current adoption check",
+    "motion/collision rollout including existing error bounds",
+    "pure multi-source fallback forecast",
+    "reference projection and scoring",
+    "per-candidate terminal certification",
+    "selection"
+  ],
+  "rollout_split": false,
+  "recorded_pp_19380": {
+    "fixture": "crates/robot-core/src/navigation/fixtures/pp19380_grid_blocked.json",
+    "fixture_bytes": 92286,
+    "fixture_sha256": "dfdd8b3b86b4e2456e515af64a63bdadd77330c5114a00308e7c27aa97d77a04",
+    "obstacles": 361,
+    "cached_route_points_including_continuation": 285,
+    "active_route_points": 130,
+    "route_progress": 52,
+    "original_and_reordered_grid_rejections": 44,
+    "original_and_reordered_accepted": 0,
+    "forecast_before": {
+      "adoption_scenarios": 132,
+      "projection_calls": 3850,
+      "projection_intervals": 167398,
+      "source_checks": 1650
+    },
+    "forecast_after": {
+      "adoption_scenarios": 0,
+      "projection_calls": 0,
+      "projection_intervals": 0,
+      "source_checks": 0
+    },
+    "time_contract_scope": "The baseline did not capture actual last command change time. This isolated ordering test supplies one synthetic period to preserve the old candidate interval; real adoption-time semantics are tested separately."
+  },
+  "open_case": {
+    "rollouts": 44,
+    "accepted": 44,
+    "forecast_adoption_scenarios": 132
+  },
+  "checks": [
+    {
+      "command": "cargo test -p xt-stcar-robot-core --lib navigation::candidate_pipeline -- --nocapture",
+      "log": "work/motion-v8/navigation-candidate-pipeline.log",
+      "passed": 6,
+      "scope": "Intermediate six new tests; final module run below includes the added cache-return diagnostic regression."
+    },
+    {
+      "command": "cargo test -p xt-stcar-robot-core --lib navigation:: -- --nocapture",
+      "log": "work/motion-v8/navigation-tests-final.log",
+      "passed": 42
+    },
+    {
+      "command": "cargo clippy -p xt-stcar-robot-core --all-targets -- -D warnings",
+      "log": "work/motion-v8/navigation-clippy-final.log",
+      "status": "passed"
+    }
+  ],
+  "route_rebuild_reason": {
+    "values": [
+      "initial",
+      "task_hold",
+      "arrival_changed",
+      "boundary_changed",
+      "goal_or_heading_changed",
+      "footprint_reference_drift",
+      "tracking_rejected",
+      "no_accepted_candidate"
+    ],
+    "semantics": "first invalidation cause is held privately over failed search retries; search attempts report it, successful generation clears pending, normal cache reuse reports None",
+    "cancelled_goal_change": "A cached -> unreachable B -> cached A clears only pending GoalOrHeadingChanged. Reusing A keeps the same route and revision; later TaskHold reports its own reason.",
+    "regression": "returning_to_cached_goal_cancels_a_failed_goal_change_diagnostic"
+  },
+  "limitations": [
+    "No CPU saving or target timing measurement from forecast request counts.",
+    "Original static clearance, search and terminal budgets, recovery error bounds, Q/R and final adoption gates were not relaxed.",
+    "Full competition matrix and build are coordinated by the parent task."
+  ]
+}

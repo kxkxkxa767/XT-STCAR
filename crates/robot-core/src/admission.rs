@@ -1,12 +1,17 @@
 //! Shared stopping geometry and prospective asynchronous command constraints.
 //! Original source/history bounds remain in force. A predicted future check is
 //! a planning constraint, not a replacement for the output owner's certificate.
+use crate::Timestamp;
 use crate::autonomy::{HalfPlane, ObstacleDisc, Point2, Pose2, Rect};
 use crate::motion_transition::{
     MotionProjection, MotionTransition, lateral_acceleration_peak, project_motion,
 };
 use crate::navigation::NavigationConfig;
 use serde::Serialize;
+
+mod slew;
+use slew::ForecastSlewClock;
+pub use slew::command_slew_allowance;
 
 /// Source-body rectangle containing travel until expiry plus reaction and full
 /// braking. Bounds follow path-length/yaw inequalities, not projected xy samples.
@@ -163,6 +168,12 @@ pub enum AdmissionRejection {
 /// from Navigator's already prepared world geometry for each check.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct AdoptionConstraints {
+    /// Earliest certified adoption time; candidate eligibility starts here.
+    pub planned_at: Timestamp,
+    /// Time of the last changed output command, including speed-only and Stop
+    /// changes. Repeated identical commands do not reset this clock.
+    pub last_command_change_at: Option<Timestamp>,
+    pub adopted_revision: u64,
     pub source_pose: Pose2,
     pub projected_pose: Pose2,
     pub held_speed_mps: f64,
@@ -216,7 +227,21 @@ impl AdoptionConstraints {
     /// historical bound. Navigator configuration itself is validated on creation.
     pub fn validate(self, nav: &NavigationConfig) -> Result<(), AdmissionRejection> {
         let period = nav.control_period_ms as f64 / 1000.0;
-        if !self.source_pose.valid()
+        if command_slew_allowance(
+            nav.max_curvature_rate_per_s,
+            self.planned_at,
+            self.last_command_change_at,
+            self.adopted_revision,
+            nav.control_period_ms,
+        )
+        .is_none()
+            || (self.adopted_revision == 0
+                && (self.held_speed_mps != 0.0
+                    || self.held_curvature_per_m != 0.0
+                    || self.projected_curvature_per_m != 0.0
+                    || self.window_end_curvature_per_m != 0.0
+                    || self.curvature_bound_per_m != 0.0))
+            || !self.source_pose.valid()
             || !self.projected_pose.valid()
             || [
                 self.speed_bound_mps,
@@ -282,6 +307,32 @@ impl AdoptionConstraints {
         (low.max(0.0), high.min(nav.max_speed_mps))
     }
 
+    /// Curvature targets already eligible at the start of the adoption window.
+    /// Actual poll still checks its own clock and the same execution revision.
+    pub fn curvature_interval(self, nav: &NavigationConfig) -> (f64, f64) {
+        if self.validate(nav).is_err() {
+            return (
+                nav.max_curvature_per_m + 1.0,
+                -nav.max_curvature_per_m - 1.0,
+            );
+        }
+        let allowance = self.curvature_allowance(nav).expect("validated slew clock");
+        (
+            (self.held_curvature_per_m - allowance).max(-nav.max_curvature_per_m),
+            (self.held_curvature_per_m + allowance).min(nav.max_curvature_per_m),
+        )
+    }
+
+    fn curvature_allowance(self, nav: &NavigationConfig) -> Option<f64> {
+        command_slew_allowance(
+            nav.max_curvature_rate_per_s,
+            self.planned_at,
+            self.last_command_change_at,
+            self.adopted_revision,
+            nav.control_period_ms,
+        )
+    }
+
     pub fn check_command(
         self,
         nav: &NavigationConfig,
@@ -298,7 +349,10 @@ impl AdoptionConstraints {
         if !curvature.is_finite()
             || curvature.abs() > nav.max_curvature_per_m
             || (curvature - self.held_curvature_per_m).abs()
-                > nav.max_curvature_rate_per_s * nav.control_period_ms as f64 / 1000.0 + 1e-9
+                > self
+                    .curvature_allowance(nav)
+                    .ok_or(AdmissionRejection::Invalid)?
+                    + 1e-9
         {
             return Err(AdmissionRejection::Curvature);
         }
@@ -370,6 +424,14 @@ impl AdoptionConstraints {
         {
             return Err(AdmissionRejection::Invalid);
         }
+        if (curvature - self.held_curvature_per_m).abs()
+            > self
+                .curvature_allowance(nav)
+                .ok_or(AdmissionRejection::Invalid)?
+                + 1e-9
+        {
+            return Err(AdmissionRejection::Curvature);
+        }
         let period = nav.control_period_ms as f64 / 1000.0;
         // One candidate interval, adoption slack, full normal braking and a
         // source-to-plan tail. Latest adoption can require repeated deceleration
@@ -435,6 +497,13 @@ impl AdoptionConstraints {
             curvature_bound: 0.0,
             pending: false,
         }; MAX_FORECAST_PLANS + 1];
+        let mut slew_clock = ForecastSlewClock::new(
+            self.planned_at,
+            self.last_command_change_at,
+            self.adopted_revision,
+            nav.control_period_ms,
+        )
+        .ok_or(AdmissionRejection::Invalid)?;
         let mut held_speed = self.held_speed_mps;
         let mut held_curvature = self.held_curvature_per_m;
         let mut pending_speed = speed;
@@ -475,6 +544,17 @@ impl AdoptionConstraints {
                 now = at;
             }
             if pending_at <= at + 1e-12 {
+                let allowance = slew_clock
+                    .allowance(nav.max_curvature_rate_per_s, at)
+                    .ok_or(AdmissionRejection::Invalid)?;
+                if (curvature - held_curvature).abs() > allowance + 1e-9 {
+                    return Err(AdmissionRejection::Curvature);
+                }
+                if pending_speed != held_speed || curvature != held_curvature {
+                    slew_clock
+                        .changed_at(at)
+                        .ok_or(AdmissionRejection::Invalid)?;
+                }
                 held_speed = pending_speed;
                 held_curvature = curvature;
                 pending_at = f64::INFINITY;
@@ -493,6 +573,14 @@ impl AdoptionConstraints {
                 source_index += 1;
             }
             if plan_at <= at + 1e-12 {
+                // Each virtual plan uses the latest actual model adoption,
+                // including a speed-only change in its braking fallback.
+                let allowance = slew_clock
+                    .allowance(nav.max_curvature_rate_per_s, plan_at)
+                    .ok_or(AdmissionRejection::Invalid)?;
+                if (curvature - held_curvature).abs() > allowance + 1e-9 {
+                    return Err(AdmissionRejection::Curvature);
+                }
                 // A valid normal-braking candidate for every state in this
                 // modeled adoption window, not an instantaneous jump to zero.
                 let end_speed = ramp(
@@ -669,6 +757,9 @@ mod tests {
     fn adoption_window_intersects_both_speed_endpoints() {
         let nav = config();
         let constraints = AdoptionConstraints {
+            planned_at: Timestamp(100),
+            last_command_change_at: Some(Timestamp(0)),
+            adopted_revision: 1,
             source_pose: Pose2 {
                 x_m: 0.0,
                 y_m: 0.0,
@@ -709,6 +800,9 @@ mod tests {
 
     fn straight_constraints() -> AdoptionConstraints {
         AdoptionConstraints {
+            planned_at: Timestamp(100),
+            last_command_change_at: Some(Timestamp(0)),
+            adopted_revision: 1,
             source_pose: Pose2 {
                 x_m: 0.0,
                 y_m: 0.0,

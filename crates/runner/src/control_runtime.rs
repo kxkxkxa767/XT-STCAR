@@ -909,16 +909,24 @@ impl AutonomyWorker {
                         else {
                             return false;
                         };
-                        let elapsed_s =
-                            now.0.saturating_sub(previous.steering.at.0) as f64 / 1000.0;
-                        (curvature_per_m - previous.steering.commanded_curvature_per_m).abs()
-                            > self
-                                .submitter
-                                .steering_limits
-                                .expect("certificate has steering limits")
-                                .rate
-                                * elapsed_s
-                                + 1e-9
+                        let rate = self
+                            .submitter
+                            .steering_limits
+                            .expect("certificate has steering limits")
+                            .rate;
+                        xt_stcar_robot_core::admission::command_slew_allowance(
+                            rate,
+                            now,
+                            Some(previous.steering.at),
+                            certificate.revision,
+                            0,
+                        )
+                        .is_none_or(|allowance| {
+                            !curvature_per_m.is_finite()
+                                || (curvature_per_m - previous.steering.commanded_curvature_per_m)
+                                    .abs()
+                                    > allowance + 1e-9
+                        })
                     })
             {
                 Some(AdoptionRejection::CurvatureSlew)

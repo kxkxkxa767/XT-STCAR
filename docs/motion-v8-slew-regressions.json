@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "kind": "motion_v8_slew_regressions",
+  "baseline_commit": "7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6",
+  "physical_output_enabled": false,
+  "scope": "曲率采用时基专项：先前53项Rust测试与后来6项真实控制器期限测试分别列示。含算术探针和局部几何fixture，不包含整场、性能、全workspace构建或交叉/目标板验证。",
+  "provenance": {
+    "source_evidence": {
+      "path": "work/motion-v8/slew-validation.json",
+      "bytes": 5905,
+      "sha256": "fe9d0a92aa7bd201a8b0d2b9cf6ace6ab784182c44eeadafe0595bd9e81d429e"
+    },
+    "reproduction": {
+      "zip": "XT-STCAR_7d28761_review_reproduction.zip",
+      "zip_sha256": "d130cc0096adc5cee61d89e9a8fbde74dcf1a275acc8f4901739cc2cdb5e7d04",
+      "original_zip_modified": false,
+      "reviewed_members": [
+        "XT-STCAR_7d28761_review/README.md",
+        "XT-STCAR_7d28761_review/timing_probe.py"
+      ],
+      "copied_probe": "work/motion-v8/timing/timing_probe.py",
+      "copied_probe_sha256": "7f4353f5979a9d824228d157dae085464aea1848ee55a126d3da129268f0e48a",
+      "command": "python3 work/motion-v8/timing/timing_probe.py",
+      "result": "work/motion-v8/timing/timing_probe_result.json",
+      "matches_supplied_result": true,
+      "qualification": "仅复算原包算术，不冒充 v7 五个实际 slew 拒绝事件，也不意味着 669ms 能通过其余采用条件。",
+      "reviewed_member_hashes": [
+        {
+          "path": "XT-STCAR_7d28761_review/README.md",
+          "bytes": 4163,
+          "sha256": "a6cd1ef4c33befa1288e00cff7efeabf2e9e8555ce6e8ca6a42c0607db202f04"
+        },
+        {
+          "path": "XT-STCAR_7d28761_review/timing_probe.py",
+          "bytes": 3540,
+          "sha256": "7f4353f5979a9d824228d157dae085464aea1848ee55a126d3da129268f0e48a"
+        }
+      ]
+    },
+    "probe_results": [
+      {
+        "path": "work/motion-v8/timing/supplied_timing_probe_result.json",
+        "bytes": 3276,
+        "sha256": "cea3b4ed2319f546480d225ad176f94573e6da493e1f191c982a7e98efb0b267"
+      },
+      {
+        "path": "work/motion-v8/timing/timing_probe_result.json",
+        "bytes": 3276,
+        "sha256": "cea3b4ed2319f546480d225ad176f94573e6da493e1f191c982a7e98efb0b267"
+      }
+    ],
+    "source_manifest_scope": "已冻结的时基实现及本文件引用的专项测试；不是完整构建源码清单。",
+    "sources": [
+      {
+        "path": "crates/robot-core/src/admission.rs",
+        "bytes": 35723,
+        "sha256": "1dfb2e1a42da5ccdc3c7dca92dc2d2a38d07c371f3c456c6fc9d51d1cda365d9"
+      },
+      {
+        "path": "crates/robot-core/src/admission/slew.rs",
+        "bytes": 5263,
+        "sha256": "a42de221c082d95cc84a384c7a1c5c596d24065778bec949eb57b34725f70e2d"
+      },
+      {
+        "path": "crates/runner/src/control_admission.rs",
+        "bytes": 8350,
+        "sha256": "51200097189728fb2d10e33499b5202fe74c7a6b283e975c5dc3137ea3b3b039"
+      },
+      {
+        "path": "crates/runner/src/control_execution.rs",
+        "bytes": 38155,
+        "sha256": "f17460aef42f46137771f35055995173d934b2ed3fb46aaf548e2804a8675eb7"
+      },
+      {
+        "path": "crates/runner/src/control_execution/diagnostics.rs",
+        "bytes": 4892,
+        "sha256": "532e474ab3330aa76f78709c3a14880569b557aba3917407dc8c2c91006e1c77"
+      },
+      {
+        "path": "crates/runner/src/control_runtime.rs",
+        "bytes": 43531,
+        "sha256": "2ecad863b72312d2f80dd896816322d210ec50a8b8e67c731db793b26050c688"
+      },
+      {
+        "path": "crates/runner/src/control_execution/diagnostic_tests.rs",
+        "bytes": 13206,
+        "sha256": "8944da5380767c5f2fbdc81fdd8db3f5a5e70ef7ce273f1683e611e5614f6b5f"
+      },
+      {
+        "path": "crates/runner/src/control_execution/slew_tests.rs",
+        "bytes": 5655,
+        "sha256": "3d5cd767e9b51814b99ad76c02cecd29e50aa4184a6e1dc11608f7d26c690807"
+      },
+      {
+        "path": "crates/runner/tests/control_runtime.rs",
+        "bytes": 45105,
+        "sha256": "b78806ab0235f0429c85cbe5506793c236fbfc310bcf048314fcd9a5c23a336b"
+      },
+      {
+        "path": "crates/runner/tests/async_deadlines.rs",
+        "bytes": 19524,
+        "sha256": "e1dfe423bba27e3837df53d473eec5e9bc89028bf835e2d187fa5006546510db"
+      }
+    ]
+  },
+  "contract": {
+    "record": "AtomicExecution 同一 seqlock snapshot 的最新 changed-command record；latest steering.at 只表示最新 poll/model 时刻。",
+    "changes_that_reset_clock": [
+      "曲率目标变化",
+      "仅速度目标变化",
+      "Stop 与 Drive 之间的变化，包括零速度零曲率 Drive"
+    ],
+    "unchanged_commands": "重复完全相同的命令不改变 revision/last_command_change_at。",
+    "candidate_and_certificate": "held curvature ± rate*(planned_at-last_command_change_at)，交绝对曲率范围；从采用窗起点即可满足 slew。",
+    "bootstrap": "仅 revision=0 + None，held speed/commanded/applied/history curvature 全零；初次允许原 control_period_ms 对应曲率变化。",
+    "output_poll": "仍按实际 now、同一 revision 的最后真实命令变化时刻独立复核；BeforeWindow/AfterWindow/ExecutionChanged/lease/fault 规则保持。",
+    "forecast": "保留当前真实 last-change 相对计划起点的秒时钟；三采用样本含半毫秒而不取整，模型每次速度或曲率目标变化更新该时钟，未来计划/采用均检查；原 source 的 history V/K 不重置。",
+    "invalid_inputs": "缺失或未来 change stamp、stamp/revision 不一致、非零 bootstrap steering、nonfinite/negative rate 与计算溢出均 fail closed。"
+  },
+  "test_groups": [
+    {
+      "name": "admission_certificate_runtime",
+      "scope": "共享slew时钟、候选采用约束、真实执行history与证书及runtime集成；不是53场运行。",
+      "tests": [
+        {
+          "command": "cargo test -p xt-stcar-robot-core --lib admission:: -- --nocapture",
+          "log": "work/motion-v8/admission-tests.log",
+          "sha256": "1f5f905b2c53df828f40b3e75711c16a345664adb89a847d96b246b2004bfdb3",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "command": "cargo test -p xt-stcar-robot-runner --lib control_execution::tests -- --nocapture",
+          "log": "work/motion-v8/certificate-tests.log",
+          "sha256": "6db8ecbb07569eed5153de91d67463ef77d33923b853919c019b7d9584713df4",
+          "passed": 16,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "command": "cargo test -p xt-stcar-robot-runner --lib control_admission::tests -- --nocapture",
+          "log": "work/motion-v8/control-admission-tests.log",
+          "sha256": "e688097f69b077a2589aba97c1efb25e1c664b0d673d186758e63418e0bc8a1c",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "command": "cargo test -p xt-stcar-robot-runner --test control_runtime -- --nocapture",
+          "log": "work/motion-v8/control-runtime-tests.log",
+          "sha256": "457fe071b1347ea4853b0b05dc78c6ebde6b8be8425f4394d379d374d7a7ee92",
+          "passed": 27,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 53,
+      "failed": 0,
+      "ignored": 1,
+      "ignored_note": "certificate_host_cost_measurement为既有显式启用的host cost测试，默认忽略，不计入通过数。"
+    },
+    {
+      "name": "real_controller_async_deadlines",
+      "scope": "真实controller/certificate/poll与独立RK4 plant的确定性逻辑时间测试。指定worker stage暂停，host握手不计注入时长；不测CPU实时期限。",
+      "command": "cargo test -p xt-stcar-robot-runner --test async_deadlines -- --nocapture",
+      "log": {
+        "path": "work/motion-v8/async-deadlines-tests.log",
+        "bytes": 874,
+        "sha256": "8cb0f48c8b9d74abc07648ae12cb2185abd6be4bf4194834ad328ceab872e12e"
+      },
+      "test_names": [
+        "disabled_timings_still_identify_publication_without_reading_optional_clock",
+        "actual_adoption_after_binding_invalidates_a_real_queued_plan_revision",
+        "old_lease_expires_before_a_fresh_real_result_is_published_and_cannot_revive",
+        "real_turning_controller_respects_actual_adoption_curvature_spacing",
+        "busy_real_processor_replaces_only_pending_inputs_without_fake_adoption",
+        "suspended_real_stages_pass_adoption_window_while_poll_and_plant_continue"
+      ],
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "counts": {
+    "targeted_passed": 53,
+    "real_controller_deadline_passed": 6,
+    "passed_total": 59,
+    "failed_total": 0,
+    "ignored_total": 1,
+    "ignored_included_in_passed": false
+  },
+  "rust_numeric_cases": [
+    {
+      "last_actual_change_ms": 589,
+      "planned_at_ms": 660,
+      "poll_at_ms": 663,
+      "held_curvature_per_m": 0.4,
+      "interval_high_per_m": 0.684,
+      "planned_allowance_per_m": 0.284,
+      "poll_allowance_per_m": 0.296,
+      "result": "真实 worker 采用共享区间上界，无采用拒绝。"
+    },
+    {
+      "last_actual_change_ms": 589,
+      "planned_at_ms": 720,
+      "poll_at_ms": 723,
+      "held_curvature_per_m": 0.4,
+      "interval_high_per_m": 0.924,
+      "planned_allowance_per_m": 0.524,
+      "poll_allowance_per_m": 0.536,
+      "result": "真实 worker 采用共享区间上界，不再被固定单周期 .4 曲率变化量截断。"
+    },
+    {
+      "last_actual_change_ms": 190,
+      "planned_at_ms": 200,
+      "held_curvature_per_m": 0.2,
+      "forced_target_per_m": 0.6,
+      "allowed_delta_per_m": 0.04,
+      "certificate_signed_margin_per_m": -0.35999999899999996,
+      "result": "强制无视候选约束的测试 processor 在 cert 处拒绝；沿原 certificate-unsafe 规则发布普通 Stop，以 source100 原期限350ms 到期。"
+    }
+  ],
+  "real_turning_controller_regression": {
+    "test": "real_turning_controller_respects_actual_adoption_curvature_spacing",
+    "source": "crates/runner/tests/async_deadlines.rs",
+    "last_actual_adoption_ms": 190,
+    "current_planned_at_ms": 200,
+    "current_poll_ms": 200,
+    "planning_interval_ms": 100,
+    "actual_command_change_interval_ms": 10,
+    "rate_per_m_per_s": 4.0,
+    "planning_and_poll_allowance_per_m": 0.04,
+    "assertions": [
+      "约束记录planned200、last_change190、revision1以及真实持有曲率；区间是held curvature±0.04。",
+      "真实原始转向请求大于区间上限，slew-limited目标落到上限，最终selected曲率、报告Drive、poll命令及execution_state一致。",
+      "候选曲率发生非零变化但不超过计划与实际采用的共同0.04上限；certificate_failure与adoption_rejection均为空，newly_adopted为true。",
+      "旧命令到期前已采用source100的新命令；该命令原lease为100+250=350ms，349ms仍Drive，350ms为CommandExpired+Stop，500ms实际速度与曲率归零。"
+    ],
+    "expectation_update_note": "首次完整测试遇到旧版“应被CurvatureSlew拒绝”断言；新契约下实际输出已合法采用。该断言已改为以上正向约束和期限检查，随后此6项套件全过。此处记录的是旧测试预期更新，不计为真实控制失败。"
+  },
+  "lqr_geometry_fixture": {
+    "test": "published_lqr_source_has_the_same_obstacle_failure_for_every_admissible_test_target",
+    "fixture": {
+      "path": "crates/runner/src/control_execution/fixtures/lqr-first-rejection.json",
+      "bytes": 15421,
+      "sha256": "fa3648be1eb7d925980b26fde6331a4f6cd44fe39f9f84d15e6b5d481d494d5e"
+    },
+    "scope": "取既有LQR失败源帧并构造从source起恒持有V=0.3、K=-2的局部历史，调用真实Rust certificate。不是全场历史重放，也不声称这些组合全由Navigator枚举。",
+    "source_and_change_at_ms": 16800,
+    "planned_at_ms": 16860,
+    "curvature_allowance_per_m": 0.24,
+    "speed_targets_mps": [
+      0.24,
+      0.27,
+      0.3
+    ],
+    "previous_curvature_targets_per_m": [
+      -2.0,
+      -1.8,
+      -1.6
+    ],
+    "current_curvature_targets_per_m": [
+      -2.0,
+      -1.9,
+      -1.8
+    ],
+    "local_combinations": 9,
+    "change_reason": "原-1.6相对持有-2变化0.4，超过该fixture真实60ms对应0.24；新组合全部先满足slew，以继续独立核验原几何拒绝。",
+    "unchanged_evidence": {
+      "history_speed_bound_mps": 0.3,
+      "history_curvature_bound_per_m": 2.0,
+      "laser_points": 360,
+      "first_rejection": "LaserObstacle",
+      "laser_index_zero_based": 331,
+      "signed_margin_m": -0.004311433629389386,
+      "margin_assertion_tolerance_m": 1e-12,
+      "source_lease_expires_at_ms": 17050,
+      "adoption_through_ms": 16960,
+      "rectangle_max_x_m": 0.5319939128423334,
+      "rectangle_max_y_m": 0.29439391284233335,
+      "source_record_unchanged": true
+    }
+  },
+  "regression_coverage": [
+    "短/长/零采用间隔、revision0 启动、None/Some 与 revision 不一致、future stamp、finite/overflow。",
+    "真实 AtomicExecution publish/project：重复 poll、仅速度变化、Stop、重复Stop、Stop->Drive(0,0)、恢复转向；历史峰值保持。",
+    "prepare/certificate 相同范围及首失败证据；原几何、激光/视觉/边界、source/time/lease 测试仍通过。",
+    "现有 queued revision 覆盖测试仍保持旧 Drive，且原旧 source lease 到期强制 Stop；certificate-unsafe 与 poll rejection 的政策分开验证。"
+  ],
+  "boundaries": [
+    "不延长 source lease、采用窗或 watchdog 期限。",
+    "不修改历史 V/K、停车几何、Q/R、物理限值、rollout模型。",
+    "预测仍是有限未来模型样本；不是全窗递归可行性证明。",
+    "无默认逐拍落盘；目标板未测。"
+  ]
+}

@@ -1,0 +1,9 @@
+   Compiling xt-stcar-robot-runner v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/runner)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s
+     Running unittests examples/async_timing_matrix.rs (target/debug/examples/async_timing_matrix-729e88aa31103bdf)
+
+running 2 tests
+test tests::stop_time_uses_held_output_and_rejected_drive_is_not_a_stop ... ok
+test tests::held_output_comparison_distinguishes_adoption_timing_and_common_horizon ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

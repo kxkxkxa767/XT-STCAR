@@ -447,27 +447,67 @@ fn real_turning_controller_respects_actual_adoption_curvature_spacing() {
     };
     h.advance_to(200);
     assert_eq!(h.submit_snapshot(source_hundred, 200), SubmitStatus::Queued);
-    let rejected = h.published(200);
-    assert_eq!(
-        rejected.adoption_rejection,
-        Some(AdoptionRejection::CurvatureSlew),
-        "{rejected:?}"
-    );
-    assert!(rejected.fault.is_none());
-    assert_eq!(rejected.command, first.command);
-    let attempted = rejected.observed_plan.unwrap();
+    let adopted = h.published(200);
+    assert!(adopted.fault.is_none(), "{adopted:?}");
+    assert!(adopted.adoption_rejection.is_none(), "{adopted:?}");
+    let attempt = adopted.observed_plan.as_ref().unwrap();
+    assert!(attempt.newly_adopted);
+    assert!(attempt.certificate_failure.is_none());
+    assert_eq!(attempt.source_at, Timestamp(100));
+    assert_eq!(attempt.oldest_sensor_at, Timestamp(100));
+    assert_eq!(attempt.planned_at, Timestamp(200));
+    assert_eq!(adopted.latest.as_ref().unwrap().at, Timestamp(200));
+    assert_eq!(adopted.command, attempt.report.command);
     let MotionOutput::Drive {
+        speed_mps: next_speed,
         curvature_per_m: next_curvature,
-        ..
-    } = attempted.report.command
+    } = adopted.command
     else {
-        panic!("real planner's candidate must pass the certificate");
+        panic!("real candidate must pass certificate and poll and actually drive: {adopted:?}");
     };
-    assert!((next_curvature - first_curvature).abs() > 4.0 * 0.010 + 1e-9);
-    assert!((next_curvature - first_curvature).abs() <= 4.0 * 0.100 + 1e-9);
+    assert!(next_speed > 0.0);
+    let diagnostics = &attempt.report.navigation.as_ref().unwrap().diagnostics;
+    let constraints = diagnostics.adoption_constraints.unwrap();
+    assert_eq!(first.at, Timestamp(190));
+    assert_eq!(constraints.last_command_change_at, Some(first.at));
+    assert_eq!(constraints.planned_at, attempt.planned_at);
+    assert_eq!(constraints.adopted_revision, 1);
+    assert_eq!(constraints.held_curvature_per_m, first_curvature);
+    let rate = h.config.autonomy.navigation.max_curvature_rate_per_s;
+    let planning_allowance = rate * (attempt.planned_at.0 - first.at.0) as f64 / 1000.0;
+    let adoption_allowance = rate * (adopted.at.0 - first.at.0) as f64 / 1000.0;
+    assert!((planning_allowance - 0.04).abs() < 1e-12);
+    assert_eq!(planning_allowance, adoption_allowance);
+    let (low, high) = constraints.curvature_interval(&h.config.autonomy.navigation);
+    assert!((low - (first_curvature - planning_allowance)).abs() < 1e-12);
+    assert!((high - (first_curvature + planning_allowance)).abs() < 1e-12);
+    // The real unconstrained request exceeds the 10ms allowance. Candidate
+    // selection limits it using the same last actual change as cert and poll,
+    // even though the two plans are 100ms apart.
+    assert!(diagnostics.requested_curvature_per_m.unwrap() > high + 1e-9);
+    assert_eq!(diagnostics.slew_limited_curvature_per_m, Some(high));
+    assert_eq!(diagnostics.selected_curvature_per_m, Some(next_curvature));
+    assert!((next_curvature - first_curvature).abs() > 0.0);
+    assert!((next_curvature - first_curvature).abs() <= planning_allowance + 1e-9);
+    assert!((next_curvature - first_curvature).abs() <= adoption_allowance + 1e-9);
+    assert_eq!(
+        h.worker
+            .execution_state()
+            .unwrap()
+            .commanded_curvature_per_m,
+        next_curvature
+    );
     assert!(h.distance_m > 0.0);
-    let expired = h.advance_to(260);
+    // This newer source was successfully adopted before the old source expired.
+    // Its lease is still source100+250=350, never plan200+250 or poll200+250.
+    let expires_at = attempt.oldest_sensor_at.0 + 250;
+    assert_eq!(expires_at, 350);
+    let before_expiry = h.advance_to(expires_at - 1);
+    assert!(before_expiry.fault.is_none());
+    assert_eq!(before_expiry.command, adopted.command);
+    let expired = h.advance_to(expires_at);
     assert_eq!(expired.fault, Some(ControlFault::CommandExpired));
+    assert_eq!(expired.command, MotionOutput::Stop);
     h.advance_to(500);
     assert_eq!(h.speed, 0.0);
     assert_eq!(h.curvature, 0.0);

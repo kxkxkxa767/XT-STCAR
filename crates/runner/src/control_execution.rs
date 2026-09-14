@@ -3,7 +3,9 @@
 use crate::autonomy::{AutonomyConfig, AutonomyStep};
 use crate::autonomy_replay::SensorSnapshot;
 use std::sync::atomic::{AtomicU64, Ordering};
-use xt_stcar_robot_core::admission::{AdoptionConstraints, StoppingEnvelope};
+use xt_stcar_robot_core::admission::{
+    AdoptionConstraints, StoppingEnvelope, command_slew_allowance,
+};
 use xt_stcar_robot_core::autonomy::{Point2, PoseEstimate};
 use xt_stcar_robot_core::mission::MissionPhase;
 use xt_stcar_robot_core::motion_transition::{
@@ -242,6 +244,11 @@ impl ExecutionHistory {
             projected_pose: pose,
             steering,
             adopted_revision: self.revision,
+            last_command_change_at: if self.revision == 0 {
+                None
+            } else {
+                Some(self.records[self.len.checked_sub(1)?].steering.at)
+            },
             held_speed_mps: self.latest.speed_target,
             // Include same-time adoption at planned_at even though it has not
             // moved the model yet. Earlier transient targets must not disappear.
@@ -262,6 +269,8 @@ pub struct PlanningContext {
     pub projected_pose: PoseEstimate,
     pub steering: SteeringEstimate,
     pub adopted_revision: u64,
+    /// Last changed command, distinct from the latest steering estimate time.
+    pub last_command_change_at: Option<Timestamp>,
     pub held_speed_mps: f64,
     /// Source measurement and every adopted target through planned_at. These
     /// bounds survive later lower targets, including Stop while still recentering.
@@ -368,7 +377,7 @@ pub(crate) fn certify(
     if !(0.0..=nav.max_speed_mps).contains(&context.held_speed_mps) {
         return Err(failure(Reason::HeldSpeedInvalid));
     }
-    if curvature_per_m.abs() > nav.max_curvature_per_m {
+    if !curvature_per_m.is_finite() || curvature_per_m.abs() > nav.max_curvature_per_m {
         return Err(failure(Reason::CommandCurvatureInvalid));
     }
     if input.scan.captured_at != input.pose.captured_at {
@@ -392,11 +401,26 @@ pub(crate) fn certify(
     )
     .ok_or_else(|| failure(Reason::ProjectionFailed))?;
     let period_s = nav.control_period_ms as f64 / 1000.0;
+    let curvature_allowance = command_slew_allowance(
+        nav.max_curvature_rate_per_s,
+        context.planned_at,
+        context.last_command_change_at,
+        context.adopted_revision,
+        nav.control_period_ms,
+    )
+    .filter(|_| {
+        context.adopted_revision != 0
+            || (context.held_speed_mps == 0.0
+                && context.steering.commanded_curvature_per_m == 0.0
+                && context.steering.applied_curvature_per_m == 0.0
+                && context.historical_curvature_bound_per_m == 0.0)
+    })
+    .ok_or_else(|| failure(Reason::CurvatureTimingInvalid))?;
     if (curvature_per_m - context.steering.commanded_curvature_per_m).abs()
-        > nav.max_curvature_rate_per_s * period_s + 1e-9
+        > curvature_allowance + 1e-9
     {
         return Err(failure(Reason::CurvatureSlew).with_margin(
-            nav.max_curvature_rate_per_s * period_s + 1e-9
+            curvature_allowance + 1e-9
                 - (curvature_per_m - context.steering.commanded_curvature_per_m).abs(),
             Unit::InverseMeters,
         ));
@@ -534,6 +558,7 @@ mod tests {
     use xt_stcar_robot_core::autonomy::Rect;
 
     include!("control_execution/diagnostic_tests.rs");
+    include!("control_execution/slew_tests.rs");
 
     #[test]
     fn unchanged_polls_preserve_old_anchors_and_changes_have_bounded_storage() {
@@ -799,6 +824,8 @@ mod tests {
         context.projected_pose.speed_mps = 0.3;
         context.historical_speed_bound_mps = 0.3;
         context.held_speed_mps = 0.3;
+        context.adopted_revision = 1;
+        context.last_command_change_at = Some(Timestamp(0));
         step.command = MotionOutput::Drive {
             speed_mps: 0.3,
             curvature_per_m: 0.0,

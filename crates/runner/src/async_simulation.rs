@@ -631,6 +631,20 @@ pub fn simulate_async(
     timing: &AsyncSimulationOptions,
     writer: &mut impl Write,
 ) -> Result<AsyncSimulationSummary> {
+    simulate_async_observed(config, timing, writer, |_, _, _, _| {})
+}
+
+/// Offline observation at each scheduled output, including final braking.
+/// The callback runs on the simulation owner, outside the worker, and cannot
+/// replace its command. It sees the model state before that output takes effect.
+/// Callback time is included in host wall time; the functional clock is frozen.
+/// Production worker/poll and the default simulation do not store this trace.
+pub fn simulate_async_observed(
+    config: &SimulationConfig,
+    timing: &AsyncSimulationOptions,
+    writer: &mut impl Write,
+    mut observe: impl FnMut(&ControlPoll, Pose2, f64, f64),
+) -> Result<AsyncSimulationSummary> {
     config.validate()?;
     timing.validate(config)?;
     let started = Instant::now();
@@ -740,6 +754,7 @@ pub fn simulate_async(
         if now.is_multiple_of(timing.output_period_ms) {
             let poll = worker.poll(Timestamp(now));
             observation.poll(&poll, plant, last_submitted.as_deref(), light_boundary);
+            observe(&poll, plant.pose, plant.speed_mps, plant.curvature_per_m);
             command = poll.command;
         }
         if let Some(input) = pending.pop_front_if(|input| input.delivery_at == now) {
@@ -764,6 +779,7 @@ pub fn simulate_async(
             match wait_published(&mut worker, &input) {
                 Ok(poll) => {
                     observation.poll(&poll, plant, Some(&input.snapshot), light_boundary);
+                    observe(&poll, plant.pose, plant.speed_mps, plant.curvature_per_m);
                     command = poll.command;
                 }
                 Err(error) => {
@@ -802,7 +818,9 @@ pub fn simulate_async(
     // Explicit scenario shutdown still goes through the worker's final Stop;
     // neither a backend Drive nor a cached report can reach final braking.
     worker.request_stop();
-    let mut terminal = worker.poll(Timestamp(now)).command;
+    let poll = worker.poll(Timestamp(now));
+    observe(&poll, plant.pose, plant.speed_mps, plant.curvature_per_m);
+    let mut terminal = poll.command;
     let cause = if observation.completed {
         FinalBrakingCause::Completion
     } else {
@@ -837,7 +855,9 @@ pub fn simulate_async(
             advanced.distance_m,
         );
         now += timing.output_period_ms;
-        terminal = worker.poll(Timestamp(now)).command;
+        let poll = worker.poll(Timestamp(now));
+        observe(&poll, plant.pose, plant.speed_mps, plant.curvature_per_m);
+        terminal = poll.command;
         if violation {
             observation.fault.get_or_insert_with(|| {
                 "synthetic async final braking collision or boundary violation".into()

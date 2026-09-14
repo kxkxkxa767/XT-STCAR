@@ -959,6 +959,7 @@ fn projected_navigation_does_not_make_old_task_observations_fresh() {
         projected_pose: projected,
         steering: SteeringEstimate::stationary(Timestamp(60)),
         adopted_revision: 0,
+        last_command_change_at: None,
         held_speed_mps: 0.0,
         historical_speed_bound_mps: 0.0,
         historical_curvature_bound_per_m: 0.0,
@@ -1048,17 +1049,33 @@ fn commanded_steering_slew_uses_real_adoption_spacing() {
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
         let output = worker.poll(Timestamp(200));
-        assert_eq!(output.command, aligned_drive(0.2));
-        if output.adoption_rejection == Some(AdoptionRejection::CurvatureSlew) {
+        if output.adoption_rejection == Some(AdoptionRejection::CertificateUnsafe) {
+            assert_eq!(output.command, MotionOutput::Stop);
+            let failure = output
+                .observed_plan
+                .as_ref()
+                .unwrap()
+                .certificate_failure
+                .as_ref()
+                .unwrap();
+            assert_eq!(
+                failure.reason,
+                xt_stcar_robot_runner::control_runtime::CertificateFailureReason::CurvatureSlew
+            );
+            assert_eq!(failure.last_command_change_at, Some(Timestamp(190)));
+            assert!((failure.signed_margin.unwrap() - (-0.36 + 1e-9)).abs() < 1e-12);
             break;
         }
+        assert_eq!(output.command, aligned_drive(0.2));
         assert!(Instant::now() < deadline);
         thread::yield_now();
     }
-    // Planning elapsed 100 ms; real command adoption elapsed only 10 ms.
-    // Waiting for the slew allowance cannot renew the original source-0 lease.
+    // Planning elapsed 100 ms; real command change elapsed only 10 ms.
+    // The independent certificate now rejects it before poll can adopt it.
+    // Certificate rejection retains the existing ordinary-Stop policy. That
+    // Stop has the rejected attempt's original source-100 lease, never a new lease.
     assert_eq!(
-        worker.poll(Timestamp(250)).fault,
+        worker.poll(Timestamp(350)).fault,
         Some(ControlFault::CommandExpired)
     );
 }
@@ -1169,4 +1186,48 @@ fn measurement_roundoff_does_not_expand_the_command_speed_limit() {
         output.adoption_rejection,
         Some(AdoptionRejection::CertificateUnsafe)
     );
+}
+
+#[test]
+fn prepared_curvature_targets_adopt_at_short_and_long_real_intervals() {
+    for (planned_at, expected_high) in [(660, 0.684), (720, 0.924)] {
+        let (seen_tx, seen_rx) = channel();
+        let mut worker = AutonomyWorker::spawn_with_aligned_processor(
+            SimulationConfig::example().autonomy,
+            ControlRuntimeConfig {
+                max_command_age_ms: 250,
+                startup_timeout_ms: 250,
+            },
+            Timestamp(500),
+            move |input, context| {
+                let curvature = if input.at.0 == 500 {
+                    0.4
+                } else {
+                    assert_eq!(context.last_command_change_at, Some(Timestamp(589)));
+                    let constraints = context.adoption_constraints.unwrap();
+                    let (_, high) = constraints
+                        .curvature_interval(&SimulationConfig::example().autonomy.navigation);
+                    seen_tx.send(high).unwrap();
+                    high
+                };
+                Ok(step(context.planned_at.0, aligned_drive(curvature), false))
+            },
+        )
+        .unwrap();
+        submit(&worker, &aligned_input(500), 580);
+        assert_eq!(
+            wait_report(&mut worker, 589, 580).command,
+            aligned_drive(0.4)
+        );
+        submit(&worker, &aligned_input(planned_at - 60), planned_at);
+        let high = seen_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert!((high - expected_high).abs() < 1e-12);
+        let accepted = wait_report(&mut worker, planned_at + 3, planned_at);
+        assert_eq!(accepted.command, aligned_drive(high));
+        assert!(accepted.adoption_rejection.is_none());
+        assert_eq!(
+            worker.poll(Timestamp(planned_at - 60 + 250)).fault,
+            Some(ControlFault::CommandExpired)
+        );
+    }
 }

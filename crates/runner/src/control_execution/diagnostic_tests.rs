@@ -37,7 +37,7 @@ fn certificate_distinguishes_invalid_source_command_and_sensor_times() {
         (5, Reason::ScanTimeMismatch),
         (6, Reason::ConeTimeMismatch),
         (7, Reason::ProjectionFailed),
-        (8, Reason::LateralTransitionInvalid),
+        (8, Reason::CommandCurvatureInvalid),
         (9, Reason::StoppingEnvelopeInvalid),
     ] {
         let mut input = input.clone();
@@ -278,8 +278,8 @@ fn published_lqr_source_has_the_same_obstacle_failure_for_every_admissible_test_
     assert_eq!(context.historical_speed_bound_mps, 0.3);
     assert_eq!(context.historical_curvature_bound_per_m, 2.0);
     for speed_mps in [0.24, 0.27, 0.3] {
-        for curvature_per_m in [-2.0, -1.8, -1.6] {
-            // These meet the certificate's .06 m/s decel and .4 per_m slew
+        for curvature_per_m in [-2.0, -1.9, -1.8] {
+            // These meet the certificate's .06 m/s decel and actual 60ms .24 per_m slew
             // bounds. This test does not claim all are Navigator candidates.
             step.command = MotionOutput::Drive {
                 speed_mps,
