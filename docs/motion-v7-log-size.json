@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "scope": "Default synchronous PP journal in memory: seven phase events, terminal Stop, one full summary. No reduction of rates, safety, first-failure window or nondefault diagnostic data. Sparse new fields imply their Rust defaults when absent.",
+  "before": {
+    "bytes": 112856,
+    "lines": 9,
+    "rows": [
+      {
+        "bytes": 5270,
+        "kind": null,
+        "navigation_bytes": 4050,
+        "phase": "approach_crosswalk",
+        "summary_fields": null
+      },
+      {
+        "bytes": 1088,
+        "kind": null,
+        "navigation_bytes": 4,
+        "phase": "crosswalk_stop",
+        "summary_fields": null
+      },
+      {
+        "bytes": 8585,
+        "kind": null,
+        "navigation_bytes": 7243,
+        "phase": "cones",
+        "summary_fields": null
+      },
+      {
+        "bytes": 13428,
+        "kind": null,
+        "navigation_bytes": 12316,
+        "phase": "approach_light",
+        "summary_fields": null
+      },
+      {
+        "bytes": 909,
+        "kind": null,
+        "navigation_bytes": 4,
+        "phase": "wait_green",
+        "summary_fields": null
+      },
+      {
+        "bytes": 6111,
+        "kind": null,
+        "navigation_bytes": 5041,
+        "phase": "finish",
+        "summary_fields": null
+      },
+      {
+        "bytes": 903,
+        "kind": null,
+        "navigation_bytes": 4,
+        "phase": "completed",
+        "summary_fields": null
+      },
+      {
+        "bytes": 97,
+        "kind": "autonomy_terminal",
+        "navigation_bytes": null,
+        "phase": null,
+        "summary_fields": null
+      },
+      {
+        "bytes": 76379,
+        "kind": "simulation_summary",
+        "navigation_bytes": null,
+        "phase": null,
+        "summary_fields": {
+          "braking_ticks": 1,
+          "completed": 4,
+          "crosswalk_hold_ms": 4,
+          "distance_m": 17,
+          "dropped_trace_records": 1,
+          "elapsed_ms": 5,
+          "fault": 4,
+          "final_actual_speed_mps": 3,
+          "final_pose": 81,
+          "first_navigation_failure": 56843,
+          "green_observed_ms": 3,
+          "kind": 20,
+          "logging_errors": 1,
+          "minimum_cone_clearance_m": 18,
+          "phases": 98,
+          "physical_output_enabled": 5,
+          "pose_source": 71,
+          "scene": 58,
+          "statistics": 18798,
+          "ticks": 3
+        }
+      }
+    ]
+  },
+  "after": {
+    "bytes": 99310,
+    "lines": 9,
+    "rows": [
+      {
+        "bytes": 5064,
+        "kind": null,
+        "navigation_bytes": 3844,
+        "phase": "approach_crosswalk",
+        "summary_fields": null
+      },
+      {
+        "bytes": 1088,
+        "kind": null,
+        "navigation_bytes": 4,
+        "phase": "crosswalk_stop",
+        "summary_fields": null
+      },
+      {
+        "bytes": 8379,
+        "kind": null,
+        "navigation_bytes": 7037,
+        "phase": "cones",
+        "summary_fields": null
+      },
+      {
+        "bytes": 13222,
+        "kind": null,
+        "navigation_bytes": 12110,
+        "phase": "approach_light",
+        "summary_fields": null
+      },
+      {
+        "bytes": 909,
+        "kind": null,
+        "navigation_bytes": 4,
+        "phase": "wait_green",
+        "summary_fields": null
+      },
+      {
+        "bytes": 5439,
+        "kind": null,
+        "navigation_bytes": 4369,
+        "phase": "finish",
+        "summary_fields": null
+      },
+      {
+        "bytes": 903,
+        "kind": null,
+        "navigation_bytes": 4,
+        "phase": "completed",
+        "summary_fields": null
+      },
+      {
+        "bytes": 97,
+        "kind": "autonomy_terminal",
+        "navigation_bytes": null,
+        "phase": null,
+        "summary_fields": null
+      },
+      {
+        "bytes": 64123,
+        "kind": "simulation_summary",
+        "navigation_bytes": null,
+        "phase": null,
+        "summary_fields": {
+          "braking_ticks": 1,
+          "completed": 4,
+          "crosswalk_hold_ms": 4,
+          "distance_m": 17,
+          "dropped_trace_records": 1,
+          "elapsed_ms": 5,
+          "fault": 4,
+          "final_actual_speed_mps": 3,
+          "final_pose": 81,
+          "first_navigation_failure": 46351,
+          "green_observed_ms": 3,
+          "kind": 20,
+          "logging_errors": 1,
+          "minimum_cone_clearance_m": 18,
+          "phases": 98,
+          "physical_output_enabled": 5,
+          "pose_source": 71,
+          "scene": 58,
+          "statistics": 17034,
+          "ticks": 3
+        }
+      }
+    ]
+  },
+  "maximum_bytes_unchanged": 100000,
+  "first_failure_frames_retained": 17,
+  "test_log": "motion-v7-log-sparse-tests.log"
+}

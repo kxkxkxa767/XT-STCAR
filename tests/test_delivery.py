@@ -427,6 +427,13 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Rust source set differs"):
             self.package()
 
+    def test_embedded_reproduction_fixture_requires_matching_build_evidence(self):
+        fixture = self.root / "crates/fixture/tests/fixtures/source.json"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text('{"source_at": 16800}\n')
+        with self.assertRaisesRegex(ValueError, "Rust source set differs"):
+            self.package()
+
     def test_second_binary_requires_matching_build_evidence(self):
         self.robot.write_bytes(self.robot.read_bytes() + b"changed\n")
         with self.assertRaisesRegex(ValueError, "missing/stale for xt-stcar-robot"):

@@ -113,6 +113,7 @@ impl AsyncCounts {
 
 #[derive(Debug, Serialize)]
 pub struct AsyncProblem {
+    pub certificate_failure: Option<crate::control_runtime::CertificateFailure>,
     pub at: Timestamp,
     pub actual_pose: Pose2,
     pub actual_speed_mps: f64,
@@ -127,6 +128,7 @@ pub struct AsyncProblem {
 
 #[derive(Debug, Serialize)]
 pub struct AsyncAttempt {
+    pub certificate_failure: Option<crate::control_runtime::CertificateFailure>,
     pub at: Timestamp,
     pub source_at: Timestamp,
     pub oldest_sensor_at: Timestamp,
@@ -194,6 +196,7 @@ struct TransitionState {
 
 #[derive(Debug, Serialize)]
 pub struct AsyncTransition {
+    pub certificate_failure: Option<crate::control_runtime::CertificateFailure>,
     pub at: Timestamp,
     pub source_at: Option<Timestamp>,
     pub planned_at: Option<Timestamp>,
@@ -375,6 +378,7 @@ impl Observation {
                 self.recent_attempts.pop_front();
             }
             self.recent_attempts.push_back(AsyncAttempt {
+                certificate_failure: plan.certificate_failure.as_deref().cloned(),
                 at: poll.at,
                 source_at: plan.source_at,
                 oldest_sensor_at: plan.oldest_sensor_at,
@@ -493,6 +497,10 @@ impl Observation {
                 self.previous_transition = Some(state.clone());
                 if self.transitions.len() < 128 {
                     self.transitions.push(AsyncTransition {
+                        certificate_failure: poll
+                            .observed_plan
+                            .as_ref()
+                            .and_then(|plan| plan.certificate_failure.as_deref().cloned()),
                         at: poll.at,
                         source_at: poll.observed_plan.as_ref().map(|plan| plan.source_at),
                         planned_at: poll.observed_plan.as_ref().map(|plan| plan.planned_at),
@@ -512,6 +520,10 @@ impl Observation {
                 || unexpected_stop);
         if first_problem {
             self.first_problem = Some(AsyncProblem {
+                certificate_failure: poll
+                    .observed_plan
+                    .as_ref()
+                    .and_then(|plan| plan.certificate_failure.as_deref().cloned()),
                 at: poll.at,
                 actual_pose: plant.pose,
                 actual_speed_mps: plant.speed_mps,
@@ -935,6 +947,7 @@ mod tests {
             fault: None,
             adoption_rejection: Some(AdoptionRejection::CurvatureSlew),
             observed_plan: Some(ObservedPlan {
+                certificate_failure: None,
                 source_at: Timestamp(0),
                 oldest_sensor_at: Timestamp(0),
                 planned_at: Timestamp(60),

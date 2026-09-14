@@ -1,0 +1,13 @@
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_robot_core-e5f28341960b69e1)
+
+running 6 tests
+test admission::tests::nonfinite_or_inconsistent_prepared_fields_are_explicitly_invalid ... ok
+test admission::tests::adoption_window_intersects_both_speed_endpoints ... ok
+test admission::tests::source_history_at_limits_makes_all_legal_candidate_envelopes_identical ... ok
+test admission::tests::capture_before_late_adoption_preserves_the_old_target_in_its_history ... ok
+test admission::tests::future_capture_phase_and_braking_budget_are_bounded ... ok
+test admission::tests::multi_source_braking_forecast_avoids_the_two_tick_wall_trap ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.00s

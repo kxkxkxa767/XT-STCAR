@@ -55,6 +55,10 @@ BASE_FILES = {
     "docs/motion-v6-competition-comparison.json", "docs/motion-v6-async-comparison.json",
     "docs/motion-v6-async-perturbed.json", "docs/motion-v6-async-failure-review.json",
     "docs/motion-v6-async-timing.json", "docs/motion-v6-host-clock.json", "docs/motion-v6-host-profile.json",
+    "docs/采用约束与前向恢复.md", "docs/motion-v7-validation.json", "docs/motion-v7-before.json",
+    "docs/motion-v7-competition-comparison.json", "docs/motion-v7-async-comparison.json",
+    "docs/motion-v7-async-perturbed.json", "docs/motion-v7-async-timing.json",
+    "docs/motion-v7-host-clock.json", "docs/motion-v7-host-profile.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}
@@ -81,7 +85,7 @@ def read_regular(path, limit=PACKAGE_LIMIT):
 
 def source_files():
     return {"Cargo.lock", "Cargo.toml", "rust-toolchain.toml", *(
-        str(path.relative_to(ROOT)) for pattern in ("crates/**/Cargo.toml", "crates/**/*.rs")
+        str(path.relative_to(ROOT)) for pattern in ("crates/**/Cargo.toml", "crates/**/*.rs", "crates/**/fixtures/*.json")
         for path in ROOT.glob(pattern)
     )}
 

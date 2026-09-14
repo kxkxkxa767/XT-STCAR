@@ -28,6 +28,7 @@ pub enum NavigationReason {
     EmptySpeedInterval,
     NoCollisionFreeBrakingTrajectory,
     TerminalBudgetExhausted,
+    ForwardNodeBudgetExhausted,
     Other,
 }
 
@@ -47,6 +48,7 @@ impl NavigationReason {
             "empty_speed_interval" => Self::EmptySpeedInterval,
             "no_collision_free_braking_trajectory" => Self::NoCollisionFreeBrakingTrajectory,
             "terminal_budget_exhausted" => Self::TerminalBudgetExhausted,
+            "forward_node_budget_exhausted" => Self::ForwardNodeBudgetExhausted,
             text if text.starts_with("path_tracking:") => Self::PathTracking,
             _ => Self::Other,
         }
@@ -61,6 +63,8 @@ pub struct ReasonCount {
 
 #[derive(Debug, Default, PartialEq, Serialize)]
 pub struct CandidateTotals {
+    pub admission_current: u64,
+    pub admission_next: u64,
     pub curvature_speed_limits: u64,
     pub lateral_acceleration: u64,
     pub near_zero_speed: u64,
@@ -81,6 +85,8 @@ impl CandidateTotals {
             ($($field:ident),+) => {$(self.$field = self.$field.saturating_add(sample.$field as u64);)+};
         }
         add!(
+            admission_current,
+            admission_next,
             curvature_speed_limits,
             lateral_acceleration,
             near_zero_speed,
@@ -94,6 +100,69 @@ impl CandidateTotals {
             terminal_unreachable,
             terminal_budget
         );
+    }
+}
+
+/// Bounded counts of both the ordinary and continuous-geometry searches.
+/// Each phase keeps totals/peaks rather than a per-expansion disk trace.
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct ForwardSearchStatistics {
+    pub admission_forecast_sources: WorkCounter,
+    pub admission_projection_intervals: WorkCounter,
+    pub allocated_nodes: WorkCounter,
+    pub expanded_nodes: WorkCounter,
+    pub primitive_attempts: WorkCounter,
+    pub primitive_rejections: WorkCounter,
+    pub recovery_attempted_ticks: u64,
+    pub recovery_accepted_ticks: u64,
+    pub recovery_active_ticks: u64,
+}
+
+impl ForwardSearchStatistics {
+    /// An absent JSON field denotes exactly this all-zero default.
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    fn observe(&mut self, diagnostics: &NavigationDiagnostics) {
+        self.admission_forecast_sources
+            .observe(diagnostics.admission_forecast_work.source_checks);
+        self.admission_projection_intervals
+            .observe(diagnostics.admission_forecast_work.projection_intervals);
+        let sample = diagnostics.forward_search;
+        self.allocated_nodes.observe(
+            sample
+                .ordinary
+                .allocated_nodes
+                .saturating_add(sample.recovery.allocated_nodes),
+        );
+        self.expanded_nodes.observe(
+            sample
+                .ordinary
+                .expanded_nodes
+                .saturating_add(sample.recovery.expanded_nodes),
+        );
+        self.primitive_attempts.observe(
+            sample
+                .ordinary
+                .primitive_attempts
+                .saturating_add(sample.recovery.primitive_attempts),
+        );
+        self.primitive_rejections.observe(
+            sample
+                .ordinary
+                .primitive_rejections
+                .saturating_add(sample.recovery.primitive_rejections),
+        );
+        self.recovery_attempted_ticks = self
+            .recovery_attempted_ticks
+            .saturating_add(u64::from(sample.recovery_attempted));
+        self.recovery_accepted_ticks = self
+            .recovery_accepted_ticks
+            .saturating_add(u64::from(sample.recovery_accepted));
+        self.recovery_active_ticks = self
+            .recovery_active_ticks
+            .saturating_add(u64::from(sample.recovery_active));
     }
 }
 
@@ -281,6 +350,8 @@ pub struct PhaseStatistics {
     pub fault_ticks: u64,
     pub navigation_reason_ticks: Vec<ReasonCount>,
     pub candidate_totals: CandidateTotals,
+    #[serde(skip_serializing_if = "ForwardSearchStatistics::is_empty")]
+    pub forward_search: ForwardSearchStatistics,
     pub terminal_work: TerminalWorkStatistics,
     pub routes: RouteStatistics,
 }
@@ -300,6 +371,7 @@ impl PhaseStatistics {
             fault_ticks: 0,
             navigation_reason_ticks: Vec::new(),
             candidate_totals: CandidateTotals::default(),
+            forward_search: ForwardSearchStatistics::default(),
             terminal_work: TerminalWorkStatistics::default(),
             routes: RouteStatistics::default(),
         }
@@ -413,6 +485,7 @@ impl CompetitionStatisticsCollector {
                 stats.reason(reason);
             }
             stats.candidate_totals.add(nav.diagnostics.candidates);
+            stats.forward_search.observe(&nav.diagnostics);
             stats.terminal_work.observe(&nav.diagnostics);
             if nav.diagnostics.route_revision > self.previous_revision {
                 let delta = nav.diagnostics.route_revision - self.previous_revision;
@@ -496,6 +569,19 @@ mod tests {
                 ..NavigationDiagnostics::default()
             },
         }
+    }
+
+    #[test]
+    fn sparse_phase_work_preserves_nonzero_recovery_statistics() {
+        let mut phase = PhaseStatistics::new(Some(MissionPhase::Cones), Timestamp(0));
+        let empty = serde_json::to_value(&phase).unwrap();
+        assert!(empty.get("forward_search").is_none());
+        phase.forward_search.recovery_attempted_ticks = 1;
+        let written = serde_json::to_value(&phase).unwrap();
+        assert_eq!(
+            written["forward_search"],
+            serde_json::to_value(&phase.forward_search).unwrap()
+        );
     }
 
     #[test]

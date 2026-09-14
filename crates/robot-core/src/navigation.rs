@@ -6,13 +6,17 @@
 //! <https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm>
 //! Forward-car circle/tangent geometry: LaValle, Planning Algorithms §15.3.1:
 //! <https://lavalle.pl/planning/node821.html>
+use crate::admission::{AdmissionForecastWork, AdmissionRejection, AdoptionConstraints};
 use crate::autonomy::{Footprint, HalfPlane, ObstacleDisc, Point2, Pose2, PoseEstimate, Rect};
 use crate::motion_transition::{MotionTransition, lateral_acceleration_peak, project_motion};
 use crate::reference::{PreparedReference, ReferenceCursor};
 use crate::tracking::{PathTracker, TrackInput, TrackingConfig, TrackingDiagnostics};
 use crate::{FrameId, MotionIntent, MotionOutput, Timestamp, ValidationError};
 use serde::{Deserialize, Serialize};
+mod primitive_envelope;
+mod recovery;
 mod terminal;
+pub use recovery::ForwardSearchDiagnostics;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 pub use terminal::TerminalWorkDiagnostics;
@@ -154,6 +158,8 @@ pub enum NavigationStatus {
 /// Fixed-size accounting, separate from path/point-cloud storage and control policy.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct CandidateDiagnostics {
+    pub admission_current: usize,
+    pub admission_next: usize,
     pub curvature_speed_limits: usize,
     pub lateral_acceleration: usize,
     pub near_zero_speed: usize,
@@ -170,8 +176,21 @@ pub struct CandidateDiagnostics {
     pub terminal_budget: usize,
 }
 
+/// New admission/recovery fields use sparse JSON: an absent field means its
+/// Rust default (zero work, no search, or no constraint/failure). Nondefault
+/// values are serialized in full; the in-memory diagnostic is unchanged.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct NavigationDiagnostics {
+    #[serde(skip_serializing_if = "AdmissionForecastWork::is_empty")]
+    pub admission_forecast_work: AdmissionForecastWork,
+    #[serde(skip_serializing_if = "ForwardSearchDiagnostics::is_empty")]
+    pub forward_search: ForwardSearchDiagnostics,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adoption_constraints: Option<AdoptionConstraints>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_admission_failure: Option<AdmissionRejection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_admission_failure: Option<AdmissionRejection>,
     pub travel_boundary: Option<HalfPlane>,
     pub execution_state: Option<SteeringEstimate>,
     pub continuation_checked: bool,
@@ -361,6 +380,10 @@ struct CachedTerminalSeed {
 }
 
 pub struct Navigator {
+    adoption_constraints: Option<AdoptionConstraints>,
+    recovery_active: bool,
+    recovery_route_error_m: f64,
+    recovery_sample_arc_bound_m: f64,
     terminal_budget: TerminalBudget,
     terminal_seed: Option<CachedTerminalSeed>,
     config: NavigationConfig,
@@ -385,6 +408,10 @@ impl Navigator {
     pub fn new(config: NavigationConfig) -> Result<Self, ValidationError> {
         config.validate()?;
         Ok(Self {
+            adoption_constraints: None,
+            recovery_active: false,
+            recovery_route_error_m: 0.0,
+            recovery_sample_arc_bound_m: 0.0,
             terminal_budget: TerminalBudget::default(),
             terminal_seed: None,
             config,
@@ -402,6 +429,11 @@ impl Navigator {
 
     pub fn config(&self) -> &NavigationConfig {
         &self.config
+    }
+
+    /// Replaced for each source snapshot; synchronous callers use None.
+    pub fn set_adoption_constraints(&mut self, constraints: Option<AdoptionConstraints>) {
+        self.adoption_constraints = constraints;
     }
 
     pub fn execution_state(&self) -> SteeringEstimate {
@@ -442,6 +474,7 @@ impl Navigator {
         if self.travel_boundary != boundary {
             self.travel_boundary = boundary;
             self.route = None;
+            self.recovery_active = false;
         }
     }
 
@@ -462,6 +495,7 @@ impl Navigator {
         self.last_step = Some(now);
         self.terminal_budget.reset();
         self.route = None;
+        self.recovery_active = false;
         self.diagnostics = NavigationDiagnostics {
             execution_state: Some(self.steering),
             travel_boundary: self.travel_boundary,
@@ -590,11 +624,13 @@ impl Navigator {
             .advance_to(now, self.config.max_curvature_rate_per_s)?;
         if self.arrival != arrival {
             self.route = None;
+            self.recovery_active = false;
             self.continuation_checked = false;
             self.arrival = arrival;
         }
         let period = self.config.control_period_ms as f64 / 1000.0;
         self.diagnostics = NavigationDiagnostics {
+            adoption_constraints: self.adoption_constraints,
             travel_boundary: self.travel_boundary,
             execution_state: Some(self.steering),
             route_revision: self.route_revision,
@@ -676,8 +712,21 @@ impl Navigator {
             // Request the stop contract and wait for measured standstill.
             return Ok(self.blocked("goal_braking"));
         }
+        let previous_route_revision = self.route_revision;
         let grid = Grid::with_boundary(&self.config, obstacles, self.travel_boundary);
-        if self.plan_on_grid(pose.point(), goal, &grid).is_none() {
+        if self
+            .route
+            .as_ref()
+            .is_some_and(|(old_goal, old_heading, _, _)| {
+                *old_goal != goal || *old_heading != goal_heading_rad
+            })
+        {
+            self.recovery_active = false;
+        }
+        if self.recovery_active {
+            grid.enable_recovery();
+        }
+        if !grid.recovery_active() && self.plan_on_grid(pose.point(), goal, &grid).is_none() {
             return Ok(self.blocked("no_grid_path"));
         }
         // A collision-free cached terminal path may no longer be reachable
@@ -727,7 +776,8 @@ impl Navigator {
                         next_heading_rad,
                         ..
                     } = arrival
-                        && self.plan_on_grid(end_pose.point(), next, &grid).is_some()
+                        && (grid.recovery_active()
+                            || self.plan_on_grid(end_pose.point(), next, &grid).is_some())
                         && let Some((continuation, _, _)) = self.kinematic_path_from(
                             end_pose,
                             end_curvature,
@@ -748,10 +798,21 @@ impl Navigator {
                 self.diagnostics.route_revision = self.route_revision;
             }
         }
+        self.recovery_active = grid.recovery_active();
+        if self.route.is_some()
+            && self.recovery_active
+            && self.route_revision != previous_route_revision
+        {
+            self.recovery_route_error_m = grid.completed_path_error().position_m;
+            self.recovery_sample_arc_bound_m = grid.sample_arc_bound_m();
+        }
+        self.diagnostics.forward_search = grid.forward_search();
         let Some((_, _, route, progress)) = &mut self.route else {
             return Ok(
                 self.blocked(if self.terminal_budget.snapshot().budget_exhausted {
                     "terminal_budget_exhausted"
+                } else if self.diagnostics.forward_search.node_budget_exhausted {
+                    "forward_node_budget_exhausted"
                 } else {
                     "no_forward_kinematic_path"
                 }),
@@ -761,10 +822,18 @@ impl Navigator {
         // The continuation supplies braking room only; it must not let a long
         // lookahead cut the waypoint or let cached progress skip its admission.
         let continuation_distance = if self.continuation_checked
-            && route[self.via_index..]
-                .windows(2)
-                .all(|pair| grid.transition_clear(pair[0], pair[1]))
-        {
+            && route[self.via_index..].windows(2).all(|pair| {
+                if self.recovery_active {
+                    grid.motion_transition_clear_with_error(
+                        pair[0],
+                        pair[1],
+                        self.recovery_sample_arc_bound_m,
+                        self.recovery_route_error_m,
+                    )
+                } else {
+                    grid.transition_clear(pair[0], pair[1])
+                }
+            }) {
             route[self.via_index..]
                 .windows(2)
                 .map(|pair| pair[0].distance(pair[1]))
@@ -836,12 +905,17 @@ impl Navigator {
             (self.steering.commanded_curvature_per_m + slew).min(self.config.max_curvature_per_m);
         let preferred = desired_curvature.clamp(low, high);
         self.diagnostics.slew_limited_curvature_per_m = Some(preferred);
-        let speed_upper = self
+        let mut speed_upper = self
             .config
             .max_speed_mps
             .min(speed_limit_mps)
             .min(estimate.speed_mps + self.config.max_accel_mps2 * dt);
-        let speed_lower = (estimate.speed_mps - self.config.max_decel_mps2 * dt).max(0.0);
+        let mut speed_lower = (estimate.speed_mps - self.config.max_decel_mps2 * dt).max(0.0);
+        if let Some(constraints) = self.adoption_constraints {
+            let (lower, upper) = constraints.speed_interval(&self.config);
+            speed_lower = speed_lower.max(lower);
+            speed_upper = speed_upper.min(upper);
+        }
         let goal_speed = (2.0
             * self.config.max_decel_mps2
             * (remaining_distance + continuation_distance - self.config.goal_tolerance_m * 0.5)
@@ -959,6 +1033,46 @@ impl Navigator {
                     self.diagnostics.candidates.near_zero_speed += 1;
                     continue;
                 }
+                if let Some(constraints) = self.adoption_constraints {
+                    if let Err(reason) = constraints.check_command(
+                        &self.config,
+                        speed,
+                        curvature,
+                        obstacles,
+                        self.travel_boundary,
+                    ) {
+                        self.diagnostics.candidates.admission_current += 1;
+                        self.diagnostics
+                            .current_admission_failure
+                            .get_or_insert(reason);
+                        continue;
+                    }
+                    let (forecast, work) = constraints.check_next_with_work(
+                        &self.config,
+                        pose,
+                        speed,
+                        curvature,
+                        obstacles,
+                        self.travel_boundary,
+                    );
+                    let total = &mut self.diagnostics.admission_forecast_work;
+                    total.adoption_scenarios = total
+                        .adoption_scenarios
+                        .saturating_add(work.adoption_scenarios);
+                    total.source_checks = total.source_checks.saturating_add(work.source_checks);
+                    total.projection_calls =
+                        total.projection_calls.saturating_add(work.projection_calls);
+                    total.projection_intervals = total
+                        .projection_intervals
+                        .saturating_add(work.projection_intervals);
+                    if let Err(reason) = forecast {
+                        self.diagnostics.candidates.admission_next += 1;
+                        self.diagnostics
+                            .next_admission_failure
+                            .get_or_insert(reason);
+                        continue;
+                    }
+                }
                 self.diagnostics.candidates.rollouts_evaluated += 1;
                 let prediction = match rollout(
                     &self.config,
@@ -1044,21 +1158,29 @@ impl Navigator {
                         - 0.3 * speed
                 };
                 let mut next_projection = None;
+                let mut next_error = primitive_envelope::ErrorBound::default();
                 let mut candidate_terminal_seed = None;
                 if let Some((heading, _)) = protected_connection {
-                    next_projection = project_motion(pose, transition, period);
+                    next_projection = if grid.recovery_active() {
+                        primitive_envelope::predict(pose, transition, period).and_then(|bounded| {
+                            next_error = next_error.advance(&bounded)?;
+                            Some(bounded.projection)
+                        })
+                    } else {
+                        project_motion(pose, transition, period)
+                    };
                     let Some(next) = next_projection else {
                         self.diagnostics.candidates.terminal_unreachable += 1;
                         continue;
                     };
-                    let inside_goal = next.pose.point().distance(goal)
+                    let inside_goal = next.pose.point().distance(goal) + next_error.position_m
                         <= self.config.goal_tolerance_m
-                        && angle_error(next.pose.yaw_rad, heading).abs()
+                        && angle_error(next.pose.yaw_rad, heading).abs() + next_error.heading_rad
                             <= self.config.goal_heading_tolerance_rad;
                     if !inside_goal {
                         self.terminal_budget.begin_cold_candidate();
                         self.diagnostics.terminal_connections_checked += 1;
-                        if terminal::single_arc(
+                        if terminal::single_arc_with_error(
                             next.pose,
                             next.curvature_per_m,
                             goal,
@@ -1066,10 +1188,11 @@ impl Navigator {
                             &self.config,
                             &grid,
                             &self.terminal_budget,
+                            next_error,
                         )
                         .is_none()
                         {
-                            if let Some(connection) = terminal::two_arc(
+                            if let Some(connection) = terminal::two_arc_with_error(
                                 next.pose,
                                 next.curvature_per_m,
                                 goal,
@@ -1078,6 +1201,7 @@ impl Navigator {
                                 &grid,
                                 &self.terminal_budget,
                                 None,
+                                next_error,
                             ) {
                                 candidate_terminal_seed = Some(CachedTerminalSeed {
                                     goal,
@@ -1100,6 +1224,7 @@ impl Navigator {
                                         progress_m,
                                         transition,
                                         next_projection,
+                                        next_error,
                                         terminal_seed: None,
                                         terminal_deferred: self.terminal_budget.cold_deferred(),
                                     });
@@ -1128,6 +1253,7 @@ impl Navigator {
                         progress_m,
                         transition,
                         next_projection,
+                        next_error,
                         terminal_seed: candidate_terminal_seed,
                         terminal_deferred: false,
                     });
@@ -1168,7 +1294,7 @@ impl Navigator {
                     continue;
                 };
                 self.diagnostics.terminal_connections_checked += 1;
-                if let Some(connection) = terminal::continue_two_arc(
+                if let Some(connection) = terminal::continue_two_arc_with_error(
                     next.pose,
                     next.curvature_per_m,
                     goal,
@@ -1177,6 +1303,7 @@ impl Navigator {
                     &grid,
                     &self.terminal_budget,
                     remaining_seed,
+                    candidate.next_error,
                 ) {
                     if candidate.terminal_deferred {
                         self.diagnostics.candidates.terminal_budget -= 1;
@@ -1307,7 +1434,7 @@ impl Navigator {
         // Small sideways corrections with the same final heading need an S,
         // which the five steering bins can otherwise replace with a full loop.
         if let Some(heading) = goal_heading_rad
-            && let Some((points, end_pose, end_curvature)) = terminal::two_arc(
+            && let Some(connection) = terminal::two_arc_with_error(
                 start,
                 initial_curvature,
                 goal,
@@ -1318,9 +1445,14 @@ impl Navigator {
                 self.terminal_seed
                     .filter(|hint| hint.goal == goal && hint.heading == heading)
                     .map(|hint| hint.seed),
+                grid.completed_path_error(),
             )
-            .map(|connection| connection.into_path())
         {
+            grid.recovery.next_leg_error.set(connection.error);
+            if !grid.recovery_active() {
+                grid.recovery.normal_path_completed.set(true);
+            }
+            let (points, end_pose, end_curvature) = connection.into_path();
             let mut path = Vec::with_capacity(points.len() + 1);
             path.push(start.point());
             path.extend(points);
@@ -1329,22 +1461,115 @@ impl Navigator {
         if self.terminal_budget.snapshot().budget_exhausted {
             return None;
         }
+        let consumed = grid.forward_search();
+        let remaining_nodes = self
+            .config
+            .max_grid_cells
+            .saturating_sub(consumed.ordinary.allocated_nodes)
+            .saturating_sub(consumed.recovery.allocated_nodes);
+        let mut work = recovery::ForwardSearchWork::default();
+        let result = self.search_kinematic_path_from(
+            start,
+            initial_curvature,
+            goal,
+            goal_heading_rad,
+            grid,
+            remaining_nodes,
+            &mut work,
+        );
+        let mut diagnostics = grid.forward_search();
+        diagnostics.node_budget_exhausted |= work.exit == recovery::ForwardSearchExit::NodeBudget;
+        if grid.recovery_active() {
+            diagnostics.recovery.accumulate(work);
+            diagnostics.recovery_attempted = true;
+            diagnostics.recovery_accepted |= result.is_some();
+            grid.recovery.diagnostics.set(diagnostics);
+            return result;
+        }
+        diagnostics.ordinary.accumulate(work);
+        grid.recovery.diagnostics.set(diagnostics);
+        if result.is_some() {
+            grid.recovery.normal_path_completed.set(true);
+        }
+        // A tight quantized exit can exhaust the complete ordinary frontier
+        // although the actual full circumscribed body has clearance. Only that
+        // bounded-search outcome enables continuous-capsule recovery; ordinary
+        // successful paths and budget exhaustion retain their old behavior.
+        if result.is_some()
+            || work.exit != recovery::ForwardSearchExit::OpenEmpty
+            || grid.recovery.normal_path_completed.get()
+        {
+            return result;
+        }
+        let consumed = grid.forward_search();
+        let remaining_nodes = self
+            .config
+            .max_grid_cells
+            .saturating_sub(consumed.ordinary.allocated_nodes)
+            .saturating_sub(consumed.recovery.allocated_nodes);
+        if remaining_nodes == 0 || self.terminal_budget.snapshot().budget_exhausted {
+            if remaining_nodes == 0 {
+                let mut diagnostics = grid.forward_search();
+                diagnostics.node_budget_exhausted = true;
+                grid.recovery.diagnostics.set(diagnostics);
+            }
+            return None;
+        }
+        grid.enable_recovery();
+        let mut recovery_work = recovery::ForwardSearchWork::default();
+        let result = self.search_kinematic_path_from(
+            start,
+            initial_curvature,
+            goal,
+            goal_heading_rad,
+            grid,
+            remaining_nodes,
+            &mut recovery_work,
+        );
+        let mut diagnostics = grid.forward_search();
+        diagnostics.node_budget_exhausted |=
+            recovery_work.exit == recovery::ForwardSearchExit::NodeBudget;
+        diagnostics.recovery.accumulate(recovery_work);
+        diagnostics.recovery_attempted = true;
+        diagnostics.recovery_accepted |= result.is_some();
+        grid.recovery.diagnostics.set(diagnostics);
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn search_kinematic_path_from(
+        &self,
+        start: Pose2,
+        initial_curvature: f64,
+        goal: Point2,
+        goal_heading_rad: Option<f64>,
+        grid: &Grid,
+        node_limit: usize,
+        work: &mut recovery::ForwardSearchWork,
+    ) -> Option<(Vec<Point2>, Pose2, f64)> {
+        if node_limit == 0 {
+            work.exit = recovery::ForwardSearchExit::NodeBudget;
+            return None;
+        }
         let mut nodes = vec![CarNode {
             pose: start,
             curvature: initial_curvature,
             parent: None,
             cost: 0.0,
+            error: grid.completed_path_error(),
         }];
+        work.allocated_nodes = 1;
         let mut best = HashMap::new();
-        best.insert(
-            car_key(
-                start,
-                initial_curvature,
-                grid,
-                self.config.max_curvature_per_m,
-            )?,
-            0usize,
-        );
+        let Some(start_key) = car_key(
+            start,
+            initial_curvature,
+            grid,
+            self.config.max_curvature_per_m,
+        ) else {
+            work.exit = recovery::ForwardSearchExit::InvalidStart;
+            return None;
+        };
+        best.insert(start_key, 0usize);
         let mut open = BinaryHeap::new();
         open.push(QueueNode {
             index: 0,
@@ -1355,6 +1580,7 @@ impl Navigator {
             // Every successful lattice route still needs a terminal connector.
             // An exhausted ledger cannot certify one, so stop this search.
             if self.terminal_budget.snapshot().budget_exhausted {
+                work.exit = recovery::ForwardSearchExit::TerminalBudget;
                 return None;
             }
             let node = nodes[entry.index];
@@ -1367,54 +1593,67 @@ impl Navigator {
             if best.get(&key) != Some(&entry.index) {
                 continue;
             }
+            work.expanded_nodes += 1;
+            // Recovery can reach the unchanged oriented arrival region with a
+            // fully certified primitive whose endpoint has passed the goal's
+            // center. Do not force another forward connector back to that
+            // center, and never replace the integrated endpoint with the goal.
+            if grid.recovery_active()
+                && goal_heading_rad.is_some_and(|heading| {
+                    node.pose.point().distance(goal) + node.error.position_m
+                        <= self.config.goal_tolerance_m
+                        && angle_error(node.pose.yaw_rad, heading).abs() + node.error.heading_rad
+                            <= self.config.goal_heading_tolerance_rad
+                })
+                && entry.index != 0
+            {
+                let (path, error) = car_path_from_nodes(&nodes, entry.index, &self.config, grid)?;
+                grid.recovery.next_leg_error.set(error);
+                work.exit = recovery::ForwardSearchExit::Found;
+                return Some((path, node.pose, node.curvature));
+            }
             let local_goal = node.pose.world_to_body(goal);
             let squared = local_goal.x_m.powi(2) + local_goal.y_m.powi(2);
             if squared < 0.35_f64.powi(2)
                 && local_goal.x_m > 0.0
-                && let Some((terminal, end_pose, end_curvature)) = terminal::single_arc(
-                    node.pose,
-                    node.curvature,
-                    goal,
-                    goal_heading_rad,
-                    &self.config,
-                    grid,
-                    &self.terminal_budget,
-                )
-            {
-                let mut indices = vec![entry.index];
-                while let Some(parent) = nodes[*indices.last()?].parent {
-                    indices.push(parent);
-                }
-                indices.reverse();
-                let mut path = vec![start.point()];
-                for pair in indices.windows(2) {
-                    let parent = nodes[pair[0]];
-                    let child = nodes[pair[1]];
-                    let (samples, _, _) = car_primitive(
-                        parent.pose,
-                        parent.curvature,
-                        child.curvature,
-                        length_for_primitive(grid),
+                && let Some((terminal, end_pose, end_curvature, error)) =
+                    terminal::single_arc_with_error(
+                        node.pose,
+                        node.curvature,
+                        goal,
+                        goal_heading_rad,
                         &self.config,
                         grid,
-                    )?;
-                    path.extend(samples);
-                }
+                        &self.terminal_budget,
+                        node.error,
+                    )
+            {
+                let (mut path, _) = car_path_from_nodes(&nodes, entry.index, &self.config, grid)?;
                 path.extend(terminal);
+                grid.recovery.next_leg_error.set(error);
+                work.exit = recovery::ForwardSearchExit::Found;
                 return Some((path, end_pose, end_curvature));
             }
             for curvature in
                 [-1.0, -0.5, 0.0, 0.5, 1.0].map(|f| f * self.config.max_curvature_per_m)
             {
-                let Some((_, next_pose, curvature)) = car_primitive(
+                work.primitive_attempts += 1;
+                let primitive = car_primitive_with_error(
                     node.pose,
                     node.curvature,
                     curvature,
                     length,
                     &self.config,
                     grid,
-                ) else {
-                    continue;
+                    node.error,
+                );
+                let (_, next_pose, curvature, error) = match primitive {
+                    Ok(primitive) => primitive,
+                    Err(failure) => {
+                        work.primitive_rejections += 1;
+                        work.first_primitive_rejection.get_or_insert(failure);
+                        continue;
+                    }
                 };
                 let Some(key) =
                     car_key(next_pose, curvature, grid, self.config.max_curvature_per_m)
@@ -1428,7 +1667,8 @@ impl Navigator {
                 {
                     continue;
                 }
-                if nodes.len() >= self.config.max_grid_cells {
+                if nodes.len() >= node_limit {
+                    work.exit = recovery::ForwardSearchExit::NodeBudget;
                     return None;
                 }
                 let index = nodes.len();
@@ -1437,7 +1677,10 @@ impl Navigator {
                     curvature,
                     parent: Some(entry.index),
                     cost,
+                    error,
                 });
+                work.generated_nodes += 1;
+                work.allocated_nodes += 1;
                 best.insert(key, index);
                 open.push(QueueNode {
                     index,
@@ -1454,6 +1697,7 @@ impl Navigator {
                 });
             }
         }
+        work.exit = recovery::ForwardSearchExit::OpenEmpty;
         None
     }
 
@@ -1571,6 +1815,39 @@ struct CarNode {
     curvature: f64,
     parent: Option<usize>,
     cost: f64,
+    error: primitive_envelope::ErrorBound,
+}
+
+fn car_path_from_nodes(
+    nodes: &[CarNode],
+    end_index: usize,
+    config: &NavigationConfig,
+    grid: &Grid,
+) -> Option<(Vec<Point2>, primitive_envelope::ErrorBound)> {
+    let mut indices = vec![end_index];
+    while let Some(parent) = nodes[*indices.last()?].parent {
+        indices.push(parent);
+    }
+    indices.reverse();
+    let mut path = vec![nodes.first()?.pose.point()];
+    let mut error = nodes.first()?.error;
+    for pair in indices.windows(2) {
+        let parent = nodes[pair[0]];
+        let child = nodes[pair[1]];
+        let (samples, _, _, end_error) = car_primitive_with_error(
+            parent.pose,
+            parent.curvature,
+            child.curvature,
+            length_for_primitive(grid),
+            config,
+            grid,
+            error,
+        )
+        .ok()?;
+        error = end_error;
+        path.extend(samples);
+    }
+    Some((path, error))
 }
 
 fn length_for_primitive(grid: &Grid) -> f64 {
@@ -1584,7 +1861,11 @@ fn car_key(
     maximum_curvature: f64,
 ) -> Option<(usize, u8, u8)> {
     let cell = grid.index(pose.point())?;
-    if grid.blocked[cell] {
+    if if grid.recovery_active() {
+        !grid.recovery.segment_clear(pose.point(), pose.point(), 0.0)
+    } else {
+        grid.blocked[cell]
+    } {
         return None;
     }
     let heading = ((pose.yaw_rad.rem_euclid(std::f64::consts::TAU) / std::f64::consts::TAU * 36.0)
@@ -1637,6 +1918,7 @@ fn car_terminal_connection(
     )
 }
 
+#[cfg(test)]
 fn car_primitive(
     start: Pose2,
     initial_curvature: f64,
@@ -1645,6 +1927,49 @@ fn car_primitive(
     config: &NavigationConfig,
     grid: &Grid,
 ) -> Option<(Vec<Point2>, Pose2, f64)> {
+    car_primitive_checked(
+        start,
+        initial_curvature,
+        target_curvature,
+        length,
+        config,
+        grid,
+    )
+    .ok()
+}
+
+#[cfg(test)]
+fn car_primitive_checked(
+    start: Pose2,
+    initial_curvature: f64,
+    target_curvature: f64,
+    length: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+) -> Result<(Vec<Point2>, Pose2, f64), recovery::PrimitiveGridFailure> {
+    car_primitive_with_error(
+        start,
+        initial_curvature,
+        target_curvature,
+        length,
+        config,
+        grid,
+        primitive_envelope::ErrorBound::default(),
+    )
+    .map(|(points, pose, curvature, _)| (points, pose, curvature))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn car_primitive_with_error(
+    start: Pose2,
+    initial_curvature: f64,
+    target_curvature: f64,
+    length: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    mut error: primitive_envelope::ErrorBound,
+) -> Result<(Vec<Point2>, Pose2, f64, primitive_envelope::ErrorBound), recovery::PrimitiveGridFailure>
+{
     let count = (length / (grid.resolution / 3.0).min(0.025))
         .ceil()
         .max(1.0) as usize;
@@ -1653,17 +1978,68 @@ fn car_primitive(
     let mut pose = start;
     let mut curvature = initial_curvature;
     let mut points = Vec::with_capacity(count);
-    for _ in 0..count {
-        let next = target_curvature.clamp(curvature - max_change, curvature + max_change);
+    for sample_index in 0..count {
         let previous = pose.point();
-        pose = integrate(pose, ds, (curvature + next) * 0.5);
-        curvature = next;
-        if !grid.transition_clear(previous, pose.point()) {
-            return None;
+        let model_failure = || recovery::PrimitiveGridFailure {
+            continuous_domain: true,
+            sample_index,
+            from_cell: grid.index(previous),
+            to_cell: None,
+            blocked_cell: None,
+        };
+        if grid.recovery_active() {
+            let projected = primitive_envelope::predict(
+                pose,
+                MotionTransition {
+                    initial_speed_mps: config.max_speed_mps,
+                    target_speed_mps: config.max_speed_mps,
+                    initial_curvature_per_m: curvature,
+                    target_curvature_per_m: target_curvature,
+                    max_accel_mps2: config.max_accel_mps2,
+                    max_decel_mps2: config.max_decel_mps2,
+                    max_curvature_rate_per_s: config.max_curvature_rate_per_s,
+                },
+                ds / config.max_speed_mps,
+            )
+            .ok_or_else(model_failure)?;
+            error = error.advance(&projected).ok_or_else(model_failure)?;
+            pose = projected.projection.pose;
+            curvature = projected.projection.curvature_per_m;
+        } else {
+            let next = target_curvature.clamp(curvature - max_change, curvature + max_change);
+            pose = integrate(pose, ds, (curvature + next) * 0.5);
+            curvature = next;
+        }
+        if !grid.motion_transition_clear_with_error(previous, pose.point(), ds, error.position_m) {
+            let first = grid.index(previous);
+            let last = grid.index(pose.point());
+            let blocked_cell = (!grid.recovery_active())
+                .then(|| {
+                    first
+                        .filter(|i| grid.blocked[*i])
+                        .or_else(|| last.filter(|i| grid.blocked[*i]))
+                        .or_else(|| {
+                            first.zip(last).and_then(|(first, last)| {
+                                let (ax, ay) = (first % grid.width, first / grid.width);
+                                let (bx, by) = (last % grid.width, last / grid.width);
+                                [ay * grid.width + bx, by * grid.width + ax]
+                                    .into_iter()
+                                    .find(|i| grid.blocked[*i])
+                            })
+                        })
+                })
+                .flatten();
+            return Err(recovery::PrimitiveGridFailure {
+                continuous_domain: grid.recovery_active(),
+                sample_index,
+                from_cell: first,
+                to_cell: last,
+                blocked_cell,
+            });
         }
         points.push(pose.point());
     }
-    Some((points, pose, curvature))
+    Ok((points, pose, curvature, error))
 }
 
 fn body_radius(footprint: Footprint) -> f64 {
@@ -1749,6 +2125,7 @@ pub fn integrate(pose: Pose2, distance_m: f64, curvature_per_m: f64) -> Pose2 {
 
 #[derive(Clone, Copy, Debug)]
 struct EvaluatedCandidate {
+    next_error: primitive_envelope::ErrorBound,
     score: f64,
     intent: MotionIntent,
     prediction: RolloutPrediction,
@@ -1856,6 +2233,7 @@ fn rollout(
     let mut elapsed = 0.0;
     let mut distance_m = 0.0;
     let mut reference_integral = 0.0;
+    let mut motion_error = primitive_envelope::ErrorBound::default();
     if !grid.transition_clear(sample.point(), sample.point()) {
         return Err(RolloutRejection::Grid);
     }
@@ -1888,19 +2266,79 @@ fn rollout(
             dt,
         );
         let ds = travel.min((goal_distance - distance_m).max(0.0));
-        // Speed integration is exact for the configured piecewise linear ramp;
-        // curvature uses its time average over this short step. This remains a
-        // sampled kinematic prediction, not a measured actuator response.
-        let next = integrate(sample, ds, curvature_integral / dt);
+        let (next, next_speed, next_curvature, ds) = if grid.recovery_active() {
+            // In recovery, the capsule needs a bound around the actual ramp,
+            // including a speed/steering target reached inside this time step.
+            // Solve the monotone speed-distance relation for a shortened tail;
+            // do not advance steering for time that the geometry did not travel.
+            let duration = if ds < travel {
+                let ramp_time = (target_speed - speed).abs() / acceleration;
+                let ramp_distance = (speed + target_speed) * ramp_time * 0.5;
+                if ds > ramp_distance {
+                    ramp_time + (ds - ramp_distance) / target_speed
+                } else {
+                    let a = if target_speed >= speed {
+                        acceleration
+                    } else {
+                        -acceleration
+                    };
+                    let end_speed = (speed * speed + 2.0 * a * ds).max(0.0).sqrt();
+                    2.0 * ds / (speed + end_speed)
+                }
+            } else {
+                dt
+            };
+            if !duration.is_finite() || duration < 0.0 {
+                return Err(RolloutRejection::SampleBudget);
+            }
+            let bounded = primitive_envelope::predict(
+                sample,
+                MotionTransition {
+                    initial_speed_mps: speed,
+                    target_speed_mps: target_speed,
+                    initial_curvature_per_m: curvature,
+                    target_curvature_per_m: target_curvature,
+                    max_accel_mps2: config.max_accel_mps2,
+                    max_decel_mps2: config.max_decel_mps2,
+                    max_curvature_rate_per_s: config.max_curvature_rate_per_s,
+                },
+                duration.min(dt),
+            )
+            .ok_or(RolloutRejection::SampleBudget)?;
+            motion_error = motion_error
+                .advance(&bounded)
+                .ok_or(RolloutRejection::SampleBudget)?;
+            (
+                bounded.projection.pose,
+                bounded.projection.speed_mps,
+                bounded.projection.curvature_per_m,
+                bounded.projection.distance_m,
+            )
+        } else {
+            // Preserve the ordinary planner's existing numerical reference.
+            (
+                integrate(sample, ds, curvature_integral / dt),
+                next_speed,
+                next_curvature,
+                ds,
+            )
+        };
         let max_curvature = curvature.abs().max(next_curvature.abs());
         // Bound a full step's body-point travel from its starting footprint,
         // preserving a conservative swept margin while curvature changes.
-        let swept_padding =
-            config.clearance_m + ds * (1.0 + max_curvature * body_radius(config.footprint));
+        let swept_padding = config.clearance_m
+            + ds * (1.0 + max_curvature * body_radius(config.footprint))
+            + motion_error.position_m
+            + body_radius(config.footprint) * motion_error.heading_rad.min(2.0);
         // Keep local control inside the same conservative domain as A*. Without
         // this, a safe rectangle could enter a cell whose inflated start is
         // blocked on the next tick, stranding an otherwise clear vehicle.
-        if !grid.transition_clear(sample.point(), next.point()) {
+        if !grid.motion_transition_clear_with_error(
+            sample.point(),
+            next.point(),
+            ds,
+            motion_error.position_m,
+        ) {
             return Err(RolloutRejection::Grid);
         }
         if !pose_clear(config, sample, obstacles, swept_padding)
@@ -2338,6 +2776,7 @@ fn pose_clear(
 }
 
 struct Grid {
+    recovery: recovery::RecoveryGrid,
     travel_boundary: Option<HalfPlane>,
     width: usize,
     height: usize,
@@ -2354,6 +2793,11 @@ impl Grid {
     /// require both orthogonal neighbors so neither a coarse motion primitive
     /// nor a fine rollout can jump across an occupied corner.
     fn transition_clear(&self, from: Point2, to: Point2) -> bool {
+        if self.recovery_active() {
+            // A straight reference segment check only. Curved primitives and
+            // actual rollout segments pass arc length to motion_transition_clear.
+            return self.recovery.segment_clear(from, to, 0.0);
+        }
         let (Some(first), Some(last)) = (self.index(from), self.index(to)) else {
             return false;
         };
@@ -2385,6 +2829,7 @@ impl Grid {
         let height = ((config.bounds.max_y_m - config.bounds.min_y_m) / config.grid_resolution_m)
             .ceil() as usize;
         let mut grid = Self {
+            recovery: recovery::RecoveryGrid::new(config, obstacles, travel_boundary),
             travel_boundary,
             width,
             height,

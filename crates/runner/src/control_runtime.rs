@@ -22,8 +22,10 @@ use crate::control_diagnostics::{
     DiagnosticState, ObservedPlan, PlanIdentity, PlanTimings, WorkerDiagnosticsOptions,
     WorkerDiagnosticsSnapshot, WorkerStage,
 };
-pub use crate::control_execution::PlanningContext;
 use crate::control_execution::{AdoptionCertificate, AtomicExecution, ExecutionHistory, certify};
+pub use crate::control_execution::{
+    CertificateFailure, CertificateFailureReason, CertificateMarginUnit, PlanningContext,
+};
 use serde::{Deserialize, Serialize};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -238,6 +240,7 @@ struct WorkerPlan {
     command: PlannedCommand,
     certificate: Option<AdoptionCertificate>,
     admission_rejected: bool,
+    certificate_failure: Option<Arc<CertificateFailure>>,
     timings: Option<Arc<PlanTimings>>,
 }
 
@@ -655,11 +658,24 @@ impl AutonomyWorker {
                     stage(WorkerStage::Dequeued);
                     let projection_started = worker_shared.diagnostics.now();
                     let context = if let Some(config) = &alignment {
-                        let Some(context) = input.history.as_ref().and_then(|history| {
+                        let Some(mut context) = input.history.as_ref().and_then(|history| {
                             history.project(&input.snapshot, input.planned_at, config)
                         }) else {
                             worker_shared.fail(ControlFault::InvalidInput);
                             break;
+                        };
+                        context.adoption_constraints = match crate::control_admission::prepare(
+                            config,
+                            &input.snapshot,
+                            &context,
+                            oldest(&input.snapshot),
+                            runtime.max_command_age_ms,
+                        ) {
+                            Ok(constraints) => Some(constraints),
+                            Err(_) => {
+                                worker_shared.fail(ControlFault::InvalidInput);
+                                break;
+                            }
                         };
                         Some(context)
                     } else {
@@ -710,11 +726,11 @@ impl AutonomyWorker {
                     let original_fault = result_fault(&step, input.planned_at);
                     let drive = matches!(step.command, MotionOutput::Drive { .. });
                     let certify_started = worker_shared.diagnostics.now();
-                    let certificate = alignment
+                    let certificate_result = alignment
                         .as_ref()
                         .zip(context.as_ref())
                         .filter(|_| drive)
-                        .and_then(|(config, context)| {
+                        .map(|(config, context)| {
                             certify(
                                 config,
                                 &input.snapshot,
@@ -723,7 +739,13 @@ impl AutonomyWorker {
                                 oldest(&input.snapshot),
                                 runtime.max_command_age_ms,
                             )
+                            .map_err(Arc::new)
                         });
+                    let (certificate, certificate_failure) = match certificate_result {
+                        Some(Ok(certificate)) => (Some(certificate), None),
+                        Some(Err(failure)) => (None, Some(failure)),
+                        None => (None, None),
+                    };
                     if let Some(timing) = input.timings.as_mut() {
                         timing.certify_started_host_ns = certify_started.unwrap_or(0);
                         timing.certify_finished_host_ns =
@@ -752,6 +774,7 @@ impl AutonomyWorker {
                         command,
                         certificate,
                         admission_rejected,
+                        certificate_failure,
                         timings: None,
                     };
                     stage(WorkerStage::BeforePublish);
@@ -930,6 +953,7 @@ impl AutonomyWorker {
                 plan_age_ms: now.0.saturating_sub(plan.command.planned_at.0),
                 observed_host_ns: self.submitter.shared.diagnostics.now(),
                 timings: plan.timings,
+                certificate_failure: plan.certificate_failure,
                 report: plan.command.step,
             }
         });

@@ -1,5 +1,6 @@
 use xt_stcar_robot_core::MotionOutput;
 use xt_stcar_robot_core::mission::MissionPhase;
+use xt_stcar_robot_core::tracking::TrackingConfig;
 use xt_stcar_robot_runner::async_simulation::{AsyncSimulationOptions, simulate_async};
 use xt_stcar_robot_runner::simulation::SimulationConfig;
 
@@ -50,7 +51,24 @@ fn functional_timing_rejects_unbounded_or_ambiguous_event_schedules() {
 
 #[test]
 fn default_pp_worker_completes_all_competition_phases_with_delayed_sensors() {
-    let config = SimulationConfig::example();
+    assert_complete_competition(SimulationConfig::example());
+}
+
+#[test]
+fn experimental_lqr_worker_completes_all_competition_phases_with_delayed_sensors() {
+    let mut config = SimulationConfig::example();
+    config.autonomy.navigation.tracking = TrackingConfig::Lqr {
+        q_lateral: 4.0,
+        q_heading: 2.0,
+        r_curvature: 1.0,
+        min_speed_mps: 0.03,
+        max_heading_error_rad: 0.7,
+        max_lateral_error_m: 0.5,
+    };
+    assert_complete_competition(config);
+}
+
+fn assert_complete_competition(config: SimulationConfig) {
     let summary = simulate_async(
         &config,
         &AsyncSimulationOptions::default(),

@@ -79,9 +79,24 @@ fn competition_closes_the_loop_from_rgb_and_range_feedback_without_motion_events
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert_eq!(rows[rows.len() - 2]["command"]["type"], "stop");
+    assert_eq!(
+        rows.last().unwrap()["first_navigation_failure"]["frames"]
+            .as_array()
+            .unwrap()
+            .len(),
+        summary
+            .first_navigation_failure
+            .as_ref()
+            .unwrap()
+            .frames
+            .len(),
+        "the size bound must retain the complete first-failure window"
+    );
     assert!(
         log.len() < 100_000,
-        "default event journal should avoid per-tick disk data"
+        "default event journal should avoid per-tick disk data: {} bytes in {} rows",
+        log.len(),
+        rows.len()
     );
 }
 

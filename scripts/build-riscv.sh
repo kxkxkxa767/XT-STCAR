@@ -44,7 +44,8 @@ root = Path(sys.argv[1])
 binary = root / "target/riscv64gc-unknown-linux-gnu/release/xt-stcar"
 binaries = {name: binary.with_name(name) for name in ("xt-stcar", "xt-stcar-robot")}
 sources = sorted({root / "Cargo.lock", root / "Cargo.toml", root / "rust-toolchain.toml",
-                  *root.glob("crates/**/Cargo.toml"), *root.glob("crates/**/*.rs")})
+                  *root.glob("crates/**/Cargo.toml"), *root.glob("crates/**/*.rs"),
+                  *root.glob("crates/**/fixtures/*.json")})
 report = {
     "schema_version": 1,
     "built_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),

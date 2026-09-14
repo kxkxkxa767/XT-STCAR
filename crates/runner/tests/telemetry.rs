@@ -250,3 +250,49 @@ fn unknown_modes_fields_and_out_of_range_budgets_are_rejected() {
         })
     );
 }
+
+#[test]
+fn sparse_navigation_journal_preserves_nondefault_work_and_failure() {
+    use xt_stcar_robot_core::admission::AdmissionRejection;
+    use xt_stcar_robot_core::navigation::NavigationDiagnostics;
+
+    // Sparse v7 fields mean exactly Default when absent. They remain present
+    // when any useful work or failure is recorded, even without a Drive output.
+    let mut diagnostics = NavigationDiagnostics::default();
+    let mut log = journal(TelemetryMode::Transitions, 1);
+    log.record(&diagnostics, true).unwrap();
+    let empty = &records(&log)[0];
+    for key in [
+        "admission_forecast_work",
+        "forward_search",
+        "adoption_constraints",
+        "current_admission_failure",
+        "next_admission_failure",
+    ] {
+        assert!(empty.get(key).is_none(), "unexpected empty field {key}");
+    }
+    diagnostics.admission_forecast_work.projection_intervals = 17;
+    diagnostics.forward_search.ordinary.generated_nodes = 3;
+    diagnostics.forward_search.recovery_attempted = true;
+    diagnostics.current_admission_failure = Some(AdmissionRejection::Invalid);
+    diagnostics.next_admission_failure = Some(AdmissionRejection::ForecastBudget);
+    log.record(&diagnostics, true).unwrap();
+    let written = &records(&log)[1];
+    assert_eq!(
+        written["admission_forecast_work"],
+        serde_json::to_value(diagnostics.admission_forecast_work).unwrap()
+    );
+    assert_eq!(
+        written["forward_search"],
+        serde_json::to_value(diagnostics.forward_search).unwrap()
+    );
+    assert_eq!(
+        written["current_admission_failure"],
+        serde_json::to_value(diagnostics.current_admission_failure).unwrap()
+    );
+    assert_eq!(
+        written["next_admission_failure"],
+        serde_json::to_value(diagnostics.next_admission_failure).unwrap()
+    );
+    assert_eq!(log.dropped_records(), 0);
+}

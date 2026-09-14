@@ -267,7 +267,7 @@ impl AutonomyController {
         if let Some(error) = self.fault.clone() {
             return self.stop_with_fault(at, error);
         }
-        match self.checked_tick(at, pose, scan, road, Some(&context.projected_pose)) {
+        match self.checked_tick(at, pose, scan, road, Some(context)) {
             Ok(report) => report,
             Err(error) => self.stop_with_fault(at, error),
         }
@@ -296,7 +296,7 @@ impl AutonomyController {
         pose: &PoseEstimate,
         scan: &LidarSample,
         road_frame: &RoadFrame,
-        projection: Option<&PoseEstimate>,
+        projection: Option<&crate::control_runtime::PlanningContext>,
     ) -> Result<AutonomyStep> {
         if road_frame.image_width_px == 0
             || road_frame.image_height_px == 0
@@ -377,7 +377,9 @@ impl AutonomyController {
             radius_m: self.config.cone_radius_m,
         }));
         let mission = self.mission.update(at, pose, road);
-        let navigation_pose = projection.unwrap_or(pose);
+        let navigation_pose = projection.map_or(pose, |context| &context.projected_pose);
+        self.navigation
+            .set_adoption_constraints(projection.and_then(|context| context.adoption_constraints));
         if mission.phase == MissionPhase::Fault {
             let mut stopped = self.stop_with_fault(at, mission.reason.clone());
             stopped.mission = Some(mission);

@@ -3,13 +3,17 @@
 use crate::autonomy::{AutonomyConfig, AutonomyStep};
 use crate::autonomy_replay::SensorSnapshot;
 use std::sync::atomic::{AtomicU64, Ordering};
-use xt_stcar_robot_core::autonomy::{Point2, PoseEstimate, Rect};
+use xt_stcar_robot_core::admission::{AdoptionConstraints, StoppingEnvelope};
+use xt_stcar_robot_core::autonomy::{Point2, PoseEstimate};
 use xt_stcar_robot_core::mission::MissionPhase;
 use xt_stcar_robot_core::motion_transition::{
     MotionTransition, lateral_acceleration_peak, project_motion,
 };
 use xt_stcar_robot_core::navigation::SteeringEstimate;
 use xt_stcar_robot_core::{MotionOutput, Timestamp};
+
+mod diagnostics;
+pub use diagnostics::{CertificateFailure, CertificateFailureReason, CertificateMarginUnit};
 
 const HISTORY_CAPACITY: usize = 128;
 
@@ -244,6 +248,7 @@ impl ExecutionHistory {
             historical_speed_bound_mps: speed_bound.max(self.latest.speed_target),
             historical_curvature_bound_per_m: curvature_bound
                 .max(self.latest.steering.commanded_curvature_per_m.abs()),
+            adoption_constraints: None,
         })
     }
 }
@@ -262,6 +267,8 @@ pub struct PlanningContext {
     /// bounds survive later lower targets, including Stop while still recentering.
     pub historical_speed_bound_mps: f64,
     pub historical_curvature_bound_per_m: f64,
+    /// Prepared by the real worker from its original runtime lease, never a new lease.
+    pub adoption_constraints: Option<AdoptionConstraints>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -297,102 +304,13 @@ fn transition(
     }
 }
 
-/// A source-body rectangle containing the entire possible stopping motion.
-/// The bound uses path length/yaw inequalities, not numerically projected xy.
-#[derive(Clone, Copy, Debug)]
-struct StoppingEnvelope {
-    body: Rect,
-}
-
-impl StoppingEnvelope {
-    fn new(
-        config: &AutonomyConfig,
-        source: &PoseEstimate,
-        speed_bound: f64,
-        curvature_bound: f64,
-        travel_time_s: f64,
-    ) -> Option<Self> {
-        let nav = &config.navigation;
-        if !(0.0..=nav.max_speed_mps).contains(&speed_bound)
-            || !(0.0..=nav.max_curvature_per_m).contains(&curvature_bound)
-            || !travel_time_s.is_finite()
-            || travel_time_s < 0.0
-        {
-            return None;
-        }
-        // A monotone ramp never exceeds its initial speed/target maximum.
-        // This bound does not depend on the acceleration rate, so a faster
-        // actuator ramp cannot escape it. Braking assumes at least max_decel.
-        let distance_m =
-            speed_bound * travel_time_s + speed_bound.powi(2) / (2.0 * nav.max_decel_mps2);
-        let yaw_bound = curvature_bound * distance_m;
-        let radius = nav
-            .footprint
-            .front_m
-            .max(nav.footprint.rear_m)
-            .hypot(nav.footprint.half_width_m);
-        // |yaw(s)| <= K*s; integrate |sin(yaw)| <= min(1,K*s).
-        let sideways = distance_m.min(0.5 * curvature_bound * distance_m.powi(2));
-        // A corner rotates by at most min(R*|yaw|,2R). This includes the
-        // intermediate curvature while Stop brings the steering back to zero.
-        let rotation = (radius * yaw_bound).min(2.0 * radius);
-        // A direction beyond +/- pi/2 can travel behind the original pose.
-        let backwards = if yaw_bound < std::f64::consts::FRAC_PI_2 {
-            0.0
-        } else {
-            distance_m
-        };
-        // Roundoff allowance for the few source/world transforms below. Source
-        // coordinates are already restricted by project_motion to +/- 1e6 m.
-        let roundoff = 128.0
-            * f64::EPSILON
-            * (1.0 + source.pose.x_m.abs() + source.pose.y_m.abs() + distance_m + radius);
-        let padding = rotation + nav.clearance_m + roundoff;
-        let body = Rect {
-            min_x_m: -nav.footprint.rear_m - backwards - padding,
-            max_x_m: nav.footprint.front_m + distance_m + padding,
-            min_y_m: -nav.footprint.half_width_m - sideways - padding,
-            max_y_m: nav.footprint.half_width_m + sideways + padding,
-        };
-        [body.min_x_m, body.max_x_m, body.min_y_m, body.max_y_m]
-            .into_iter()
-            .all(f64::is_finite)
-            .then_some(Self { body })
-    }
-
-    fn corners(self) -> [Point2; 4] {
-        [
-            Point2 {
-                x_m: self.body.min_x_m,
-                y_m: self.body.min_y_m,
-            },
-            Point2 {
-                x_m: self.body.min_x_m,
-                y_m: self.body.max_y_m,
-            },
-            Point2 {
-                x_m: self.body.max_x_m,
-                y_m: self.body.min_y_m,
-            },
-            Point2 {
-                x_m: self.body.max_x_m,
-                y_m: self.body.max_y_m,
-            },
-        ]
-    }
-
-    fn clear_of_disc(self, point: Point2, radius: f64) -> bool {
-        point.valid()
-            && (point.x_m - point.x_m.clamp(self.body.min_x_m, self.body.max_x_m))
-                .hypot(point.y_m - point.y_m.clamp(self.body.min_y_m, self.body.max_y_m))
-                > radius
-    }
-}
-
 /// Conservative static-world certificate. The source-body envelope contains all
 /// travel until the original source lease expires, one output period, and full
 /// braking, for every adoption time in the window. It preserves direction without
 /// assuming the projected pose is exact or shortening the braking distance.
+// Construct fixed-size first-failure evidence only after a check fails. The
+// worker then shares it using one Arc allocation, only for rejected plans.
+#[allow(clippy::result_large_err)]
 pub(crate) fn certify(
     config: &AutonomyConfig,
     input: &SensorSnapshot,
@@ -400,17 +318,34 @@ pub(crate) fn certify(
     step: &AutonomyStep,
     oldest_at: Timestamp,
     max_age_ms: u64,
-) -> Option<AdoptionCertificate> {
+) -> Result<AdoptionCertificate, CertificateFailure> {
+    use CertificateFailureReason as Reason;
+    use CertificateMarginUnit as Unit;
     let nav = &config.navigation;
-    let source_speed = measurement_speed(input.pose.speed_mps, nav.max_speed_mps)?;
-    let expires = oldest_at.0.checked_add(max_age_ms)?;
+    let failure = |reason| {
+        CertificateFailure::new(
+            reason,
+            input,
+            context,
+            oldest_at,
+            max_age_ms,
+            nav.control_period_ms,
+        )
+    };
+    let source_speed = measurement_speed(input.pose.speed_mps, nav.max_speed_mps)
+        .ok_or_else(|| failure(Reason::SourceSpeedInvalid))?;
+    let expires = oldest_at
+        .0
+        .checked_add(max_age_ms)
+        .ok_or_else(|| failure(Reason::LeaseOverflow))?;
     if context.planned_at.0 >= expires {
-        return None;
+        return Err(failure(Reason::PlanExpired));
     }
     let through = context
         .planned_at
         .0
-        .checked_add(nav.control_period_ms)?
+        .checked_add(nav.control_period_ms)
+        .ok_or_else(|| failure(Reason::AdoptionWindowOverflow))?
         .min(expires - 1);
     let certificate = AdoptionCertificate {
         from: context.planned_at,
@@ -422,17 +357,27 @@ pub(crate) fn certify(
         curvature_per_m,
     } = step.command
     else {
-        return Some(certificate);
+        return Ok(certificate);
     };
-    if !(0.0..=nav.max_speed_mps).contains(&speed_mps)
-        || !(0.0..=nav.max_speed_mps).contains(&context.projected_pose.speed_mps)
-        || !(0.0..=nav.max_speed_mps).contains(&context.held_speed_mps)
-        || curvature_per_m.abs() > nav.max_curvature_per_m
-        || input.scan.captured_at != input.pose.captured_at
-        || (!input.road.observation.cones_body_m.is_empty()
-            && input.road.observation.captured_at != input.pose.captured_at)
+    if !(0.0..=nav.max_speed_mps).contains(&speed_mps) {
+        return Err(failure(Reason::CommandSpeedInvalid));
+    }
+    if !(0.0..=nav.max_speed_mps).contains(&context.projected_pose.speed_mps) {
+        return Err(failure(Reason::ProjectedSpeedInvalid));
+    }
+    if !(0.0..=nav.max_speed_mps).contains(&context.held_speed_mps) {
+        return Err(failure(Reason::HeldSpeedInvalid));
+    }
+    if curvature_per_m.abs() > nav.max_curvature_per_m {
+        return Err(failure(Reason::CommandCurvatureInvalid));
+    }
+    if input.scan.captured_at != input.pose.captured_at {
+        return Err(failure(Reason::ScanTimeMismatch));
+    }
+    if !input.road.observation.cones_body_m.is_empty()
+        && input.road.observation.captured_at != input.pose.captured_at
     {
-        return None;
+        return Err(failure(Reason::ConeTimeMismatch));
     }
     let end = project_motion(
         context.projected_pose.pose,
@@ -444,12 +389,17 @@ pub(crate) fn certify(
             context.steering.commanded_curvature_per_m,
         ),
         (through - context.planned_at.0) as f64 / 1000.0,
-    )?;
+    )
+    .ok_or_else(|| failure(Reason::ProjectionFailed))?;
     let period_s = nav.control_period_ms as f64 / 1000.0;
     if (curvature_per_m - context.steering.commanded_curvature_per_m).abs()
         > nav.max_curvature_rate_per_s * period_s + 1e-9
     {
-        return None;
+        return Err(failure(Reason::CurvatureSlew).with_margin(
+            nav.max_curvature_rate_per_s * period_s + 1e-9
+                - (curvature_per_m - context.steering.commanded_curvature_per_m).abs(),
+            Unit::InverseMeters,
+        ));
     }
     // Monotone ramps lie in this rectangle. For every later time the largest
     // nonnegative speed and largest |curvature| occur at rectangle corners.
@@ -457,7 +407,13 @@ pub(crate) fn certify(
         if speed_mps < (speed - nav.max_decel_mps2 * period_s).max(0.0) - 1e-9
             || speed_mps > (speed + nav.max_accel_mps2 * period_s).min(nav.max_speed_mps) + 1e-9
         {
-            return None;
+            return Err(failure(Reason::SpeedInterval).with_margin(
+                (speed_mps - ((speed - nav.max_decel_mps2 * period_s).max(0.0) - 1e-9)).min(
+                    (speed + nav.max_accel_mps2 * period_s).min(nav.max_speed_mps) + 1e-9
+                        - speed_mps,
+                ),
+                Unit::MetersPerSecond,
+            ));
         }
         for curvature in [
             context.steering.applied_curvature_per_m,
@@ -466,9 +422,13 @@ pub(crate) fn certify(
             let peak = lateral_acceleration_peak(
                 transition(config, speed, curvature, speed_mps, curvature_per_m),
                 (expires - context.planned_at.0 + nav.control_period_ms) as f64 / 1000.0,
-            )?;
+            )
+            .ok_or_else(|| failure(Reason::LateralTransitionInvalid))?;
             if peak.lateral_accel_mps2 > nav.max_lateral_accel_mps2 + 1e-9 {
-                return None;
+                return Err(failure(Reason::LateralAcceleration).with_margin(
+                    nav.max_lateral_accel_mps2 + 1e-9 - peak.lateral_accel_mps2,
+                    Unit::MetersPerSecondSquared,
+                ));
             }
         }
     }
@@ -483,24 +443,39 @@ pub(crate) fn certify(
         .max(context.steering.applied_curvature_per_m.abs())
         .max(context.steering.commanded_curvature_per_m.abs())
         .max(curvature_per_m.abs());
+    let envelope_failure = |reason| failure(reason).with_bounds(speed_bound, curvature_bound);
     let envelope = StoppingEnvelope::new(
-        config,
-        &input.pose,
+        nav,
+        input.pose.pose,
         speed_bound,
         curvature_bound,
         expires
-            .checked_add(nav.control_period_ms)?
-            .checked_sub(input.pose.captured_at.0)? as f64
+            .checked_add(nav.control_period_ms)
+            .and_then(|end| end.checked_sub(input.pose.captured_at.0))
+            .ok_or_else(|| envelope_failure(Reason::EnvelopeTimeInvalid))? as f64
             / 1000.0,
-    )?;
+    )
+    .ok_or_else(|| envelope_failure(Reason::StoppingEnvelopeInvalid))?;
+    let geometry_failure = |reason| envelope_failure(reason).with_rectangle(envelope.body);
     let corners = envelope
         .corners()
         .map(|point| input.pose.pose.body_to_world(point));
-    if corners
-        .iter()
-        .any(|point| !point.valid() || !nav.bounds.contains(*point))
-    {
-        return None;
+    for (index, point) in corners.iter().enumerate() {
+        if !point.valid() || !nav.bounds.contains(*point) {
+            return Err(geometry_failure(Reason::MapBoundary)
+                .with_index(index)
+                .with_margin(
+                    if point.valid() {
+                        (point.x_m - nav.bounds.min_x_m)
+                            .min(nav.bounds.max_x_m - point.x_m)
+                            .min(point.y_m - nav.bounds.min_y_m)
+                            .min(nav.bounds.max_y_m - point.y_m)
+                    } else {
+                        f64::NAN
+                    },
+                    Unit::Meters,
+                ));
+        }
     }
     for (index, range) in input.scan.ranges_m.iter().enumerate() {
         if let Some(range) = range {
@@ -510,18 +485,24 @@ pub(crate) fn certify(
                 y_m: range * angle.sin(),
             });
             if !envelope.clear_of_disc(point, config.laser_point_radius_m) {
-                return None;
+                return Err(geometry_failure(Reason::LaserObstacle)
+                    .with_index(index)
+                    .with_margin(
+                        envelope.signed_disc_margin(point, config.laser_point_radius_m),
+                        Unit::Meters,
+                    ));
             }
         }
     }
-    if input
-        .road
-        .observation
-        .cones_body_m
-        .iter()
-        .any(|point| !envelope.clear_of_disc(*point, config.cone_radius_m))
-    {
-        return None;
+    for (index, point) in input.road.observation.cones_body_m.iter().enumerate() {
+        if !envelope.clear_of_disc(*point, config.cone_radius_m) {
+            return Err(geometry_failure(Reason::VisionCone)
+                .with_index(index)
+                .with_margin(
+                    envelope.signed_disc_margin(*point, config.cone_radius_m),
+                    Unit::Meters,
+                ));
+        }
     }
     if step.mission.as_ref().is_some_and(|mission| {
         matches!(
@@ -529,20 +510,30 @@ pub(crate) fn certify(
             MissionPhase::Cones | MissionPhase::ApproachLight | MissionPhase::WaitGreen
         )
     }) {
-        let boundary = config.mission.light_stop_boundary().ok()?;
-        if corners
-            .into_iter()
-            .any(|point| boundary.projection(point) > boundary.max_projection_m())
-        {
-            return None;
+        let boundary = config
+            .mission
+            .light_stop_boundary()
+            .map_err(|_| geometry_failure(Reason::LightBoundaryInvalid))?;
+        for (index, point) in corners.into_iter().enumerate() {
+            if boundary.projection(point) > boundary.max_projection_m() {
+                return Err(geometry_failure(Reason::LightBoundary)
+                    .with_index(index)
+                    .with_margin(
+                        boundary.max_projection_m() - boundary.projection(point),
+                        Unit::Meters,
+                    ));
+            }
         }
     }
-    Some(certificate)
+    Ok(certificate)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use xt_stcar_robot_core::autonomy::Rect;
+
+    include!("control_execution/diagnostic_tests.rs");
 
     #[test]
     fn unchanged_polls_preserve_old_anchors_and_changes_have_bounded_storage() {
@@ -748,7 +739,8 @@ mod tests {
                 y_m: 2.5,
                 yaw_rad: 1.2,
             };
-            let envelope = StoppingEnvelope::new(&config, &input.pose, v, k, 0.35).unwrap();
+            let envelope =
+                StoppingEnvelope::new(&config.navigation, input.pose.pose, v, k, 0.35).unwrap();
             let travel_bound = v * 0.35 + v * v / (2.0 * decel);
             if k * travel_bound >= std::f64::consts::FRAC_PI_2 {
                 assert!(envelope.body.min_x_m < -travel_bound);
@@ -836,7 +828,7 @@ mod tests {
             input.scan.angle_min_rad = laser.y_m.atan2(laser.x_m);
             input.scan.ranges_m = vec![Some(laser.x_m.hypot(laser.y_m))];
             assert_eq!(
-                certify(&config, &input, &context, &step, Timestamp(0), 250).is_some(),
+                certify(&config, &input, &context, &step, Timestamp(0), 250).is_ok(),
                 clear
             );
         }
@@ -844,7 +836,7 @@ mod tests {
         for (y, clear) in [(0.29, false), (0.32, true)] {
             input.road.observation.cones_body_m = vec![Point2 { x_m: 0.0, y_m: y }];
             assert_eq!(
-                certify(&config, &input, &context, &step, Timestamp(0), 250).is_some(),
+                certify(&config, &input, &context, &step, Timestamp(0), 250).is_ok(),
                 clear
             );
         }
@@ -866,7 +858,7 @@ mod tests {
         );
         // Rotating the source footprint rotates the envelope too; its lateral
         // margin crosses world +x even though its forward travel is world +y.
-        assert!(certify(&config, &input, &context, &step, Timestamp(0), 250).is_none());
+        assert!(certify(&config, &input, &context, &step, Timestamp(0), 250).is_err());
         config.mission.light_approach_yaw_rad = std::f64::consts::FRAC_PI_4;
         step.mission = Some(MissionReport {
             at: context.planned_at,
@@ -889,7 +881,7 @@ mod tests {
                     .contains_footprint(config.navigation.footprint, input.pose.pose, 0.0)
             );
             assert_eq!(
-                certify(&config, &input, &context, &step, Timestamp(0), 250).is_some(),
+                certify(&config, &input, &context, &step, Timestamp(0), 250).is_ok(),
                 allowed
             );
         }
@@ -942,7 +934,7 @@ mod tests {
                 let elapsed = start.elapsed();
                 total += elapsed;
                 peak = peak.max(elapsed);
-                assert!(black_box(certificate).is_some());
+                assert!(black_box(certificate).is_ok());
             }
             eprintln!(
                 "async certificate only host cost: n={n} points={points} total_ns={} mean_ns={} max_ns={} (not WCET)",

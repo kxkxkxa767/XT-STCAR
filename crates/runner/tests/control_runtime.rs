@@ -837,7 +837,7 @@ fn asynchronous_certificate_covers_source_to_deadline_stopping_space() {
 
 #[test]
 fn admission_checks_speed_limits_at_both_ends_of_the_window() {
-    use xt_stcar_robot_runner::control_runtime::AdoptionRejection;
+    use xt_stcar_robot_runner::control_runtime::{AdoptionRejection, CertificateFailureReason};
     let mut worker = AutonomyWorker::spawn_with_aligned_processor(
         SimulationConfig::example().autonomy,
         ControlRuntimeConfig {
@@ -846,6 +846,10 @@ fn admission_checks_speed_limits_at_both_ends_of_the_window() {
         },
         Timestamp(0),
         |_, context| {
+            let constraints = context
+                .adoption_constraints
+                .expect("worker prepared actual source lease");
+            assert_eq!(constraints.source_travel_time_s, 0.35);
             Ok(step(
                 context.planned_at.0,
                 MotionOutput::Drive {
@@ -868,6 +872,28 @@ fn admission_checks_speed_limits_at_both_ends_of_the_window() {
         poll.adoption_rejection,
         Some(AdoptionRejection::CertificateUnsafe)
     );
+    let failure = poll
+        .observed_plan
+        .as_ref()
+        .unwrap()
+        .certificate_failure
+        .as_ref()
+        .unwrap();
+    assert_eq!(failure.reason, CertificateFailureReason::SpeedInterval);
+    assert_eq!(failure.source_at, Timestamp(0));
+    assert_eq!(failure.planned_at, Timestamp(0));
+    assert_eq!(failure.lease_expires_at, Some(Timestamp(250)));
+    assert_eq!(failure.adoption_through, Some(Timestamp(100)));
+    assert!(failure.signed_margin.is_some_and(|margin| margin < 0.0));
+    let repeated = worker.poll(Timestamp(5));
+    let repeated_failure = repeated
+        .observed_plan
+        .as_ref()
+        .unwrap()
+        .certificate_failure
+        .as_ref()
+        .unwrap();
+    assert!(Arc::ptr_eq(failure, repeated_failure));
 }
 
 #[test]
@@ -927,6 +953,7 @@ fn projected_navigation_does_not_make_old_task_observations_fresh() {
     let mut projected = record.pose.clone();
     projected.captured_at = Timestamp(60);
     let context = PlanningContext {
+        adoption_constraints: None,
         source_at: Timestamp(0),
         planned_at: Timestamp(60),
         projected_pose: projected,

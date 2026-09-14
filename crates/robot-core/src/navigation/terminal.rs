@@ -1,6 +1,7 @@
 //! Bounded terminal geometry. A seed is a numerical hint, never permission to
 //! reuse a path: every solve checks its actual ramped samples in the new grid.
-use super::{Grid, NavigationConfig, angle_error, car_primitive};
+use super::primitive_envelope::ErrorBound;
+use super::{Grid, NavigationConfig, angle_error, car_primitive_with_error};
 use crate::autonomy::{Point2, Pose2};
 use serde::Serialize;
 use std::cell::Cell;
@@ -235,6 +236,7 @@ pub(super) struct TwoArcConnection {
     pub(super) endpoint: Pose2,
     pub(super) end_curvature: f64,
     pub(super) seed: TwoArcSeed,
+    pub(super) error: ErrorBound,
 }
 impl TwoArcConnection {
     pub(super) fn into_path(self) -> (Vec<Point2>, Pose2, f64) {
@@ -253,6 +255,31 @@ pub(super) fn two_arc(
     budget: &TerminalBudget,
     seed: Option<TwoArcSeed>,
 ) -> Option<TwoArcConnection> {
+    two_arc_with_error(
+        start,
+        initial_curvature,
+        goal,
+        goal_heading,
+        config,
+        grid,
+        budget,
+        seed,
+        ErrorBound::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn two_arc_with_error(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    seed: Option<TwoArcSeed>,
+    initial_error: ErrorBound,
+) -> Option<TwoArcConnection> {
     solve_two_arc(
         start,
         initial_curvature,
@@ -262,10 +289,11 @@ pub(super) fn two_arc(
         grid,
         budget,
         None,
+        initial_error,
     )
     .or_else(|| {
         seed.and_then(|seed| {
-            continue_two_arc(
+            continue_two_arc_with_error(
                 start,
                 initial_curvature,
                 goal,
@@ -274,12 +302,14 @@ pub(super) fn two_arc(
                 grid,
                 budget,
                 seed,
+                initial_error,
             )
         })
     })
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(super) fn continue_two_arc(
     start: Pose2,
     initial_curvature: f64,
@@ -289,6 +319,31 @@ pub(super) fn continue_two_arc(
     grid: &Grid,
     budget: &TerminalBudget,
     seed: TwoArcSeed,
+) -> Option<TwoArcConnection> {
+    continue_two_arc_with_error(
+        start,
+        initial_curvature,
+        goal,
+        goal_heading,
+        config,
+        grid,
+        budget,
+        seed,
+        ErrorBound::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn continue_two_arc_with_error(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    seed: TwoArcSeed,
+    initial_error: ErrorBound,
 ) -> Option<TwoArcConnection> {
     let mut work = budget.snapshot();
     work.continued_seed_attempts += 1;
@@ -302,6 +357,7 @@ pub(super) fn continue_two_arc(
         grid,
         budget,
         Some(seed),
+        initial_error,
     )?;
     let mut work = budget.snapshot();
     work.continued_seed_accepted += 1;
@@ -318,19 +374,22 @@ fn terminal_primitive(
     config: &NavigationConfig,
     grid: &Grid,
     budget: &TerminalBudget,
-) -> Option<(Vec<Point2>, Pose2, f64)> {
+    initial_error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
     let samples = (length / (grid.resolution / 3.0).min(0.025))
         .ceil()
         .max(1.0) as usize;
     budget.charge(0, 0, samples)?;
-    let result = car_primitive(
+    let result = car_primitive_with_error(
         start,
         initial_curvature,
         target_curvature,
         length,
         config,
         grid,
-    );
+        initial_error,
+    )
+    .ok();
     if result.is_none() {
         let mut work = budget.snapshot();
         work.primitive_grid_rejections += 1;
@@ -353,6 +412,7 @@ fn solve_two_arc(
     grid: &Grid,
     budget: &TerminalBudget,
     seed: Option<TwoArcSeed>,
+    initial_error: ErrorBound,
 ) -> Option<TwoArcConnection> {
     let _timer = budget.timer();
     let local = start.world_to_body(goal);
@@ -385,7 +445,7 @@ fn solve_two_arc(
     variables[2] = variables[2].clamp(distance, max_length);
     let position_tolerance = (config.goal_tolerance_m * 0.25).min(0.0001);
     let sample = |parameters: [f64; 3]| {
-        let (mut points, middle, middle_curvature) = terminal_primitive(
+        let (mut points, middle, middle_curvature, middle_error) = terminal_primitive(
             start,
             initial_curvature,
             parameters[0],
@@ -393,8 +453,9 @@ fn solve_two_arc(
             config,
             grid,
             budget,
+            initial_error,
         )?;
-        let (last, endpoint, curvature) = terminal_primitive(
+        let (last, endpoint, curvature, end_error) = terminal_primitive(
             middle,
             middle_curvature,
             parameters[1],
@@ -402,9 +463,10 @@ fn solve_two_arc(
             config,
             grid,
             budget,
+            middle_error,
         )?;
         points.extend(last);
-        Some((points, endpoint, curvature))
+        Some((points, endpoint, curvature, end_error))
     };
     for _ in 0..8 {
         budget.iteration()?;
@@ -414,8 +476,8 @@ fn solve_two_arc(
             result.1.y_m - goal.y_m,
             angle_error(result.1.yaw_rad, goal_heading),
         ];
-        if error[0].hypot(error[1]) < position_tolerance
-            && error[2].abs() <= config.goal_heading_tolerance_rad * 0.5
+        if error[0].hypot(error[1]) + result.3.position_m < position_tolerance
+            && error[2].abs() + result.3.heading_rad <= config.goal_heading_tolerance_rad * 0.5
         {
             return Some(TwoArcConnection {
                 points: result.0,
@@ -425,6 +487,7 @@ fn solve_two_arc(
                     variables,
                     first_fraction: fraction,
                 },
+                error: result.3,
             });
         }
         let mut system = [[0.0; 4]; 3];
@@ -444,7 +507,7 @@ fn solve_two_arc(
             };
             let mut perturbed = variables;
             perturbed[column] += delta;
-            let (_, endpoint, _) = sample(perturbed)?;
+            let (_, endpoint, _, _) = sample(perturbed)?;
             system[0][column] = (endpoint.x_m - result.1.x_m) / delta;
             system[1][column] = (endpoint.y_m - result.1.y_m) / delta;
             system[2][column] = angle_error(endpoint.yaw_rad, result.1.yaw_rad) / delta;
@@ -516,6 +579,30 @@ pub(super) fn single_arc(
     grid: &Grid,
     budget: &TerminalBudget,
 ) -> Option<(Vec<Point2>, Pose2, f64)> {
+    single_arc_with_error(
+        start,
+        initial_curvature,
+        goal,
+        goal_heading,
+        config,
+        grid,
+        budget,
+        ErrorBound::default(),
+    )
+    .map(|(points, pose, curvature, _)| (points, pose, curvature))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn single_arc_with_error(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: Option<f64>,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
     let _timer = budget.timer();
     let local = start.world_to_body(goal);
     let distance = start.point().distance(goal);
@@ -548,13 +635,14 @@ pub(super) fn single_arc(
             config,
             grid,
             budget,
+            initial_error,
         )?;
         let error_x = result.1.x_m - goal.x_m;
         let error_y = result.1.y_m - goal.y_m;
-        if error_x.hypot(error_y) < position_tolerance {
+        if error_x.hypot(error_y) + result.3.position_m < position_tolerance {
             return goal_heading
                 .is_none_or(|yaw| {
-                    angle_error(result.1.yaw_rad, yaw).abs()
+                    angle_error(result.1.yaw_rad, yaw).abs() + result.3.heading_rad
                         <= config.goal_heading_tolerance_rad * 0.5
                 })
                 .then_some(result);
@@ -573,7 +661,7 @@ pub(super) fn single_arc(
         } else {
             -perturb_s
         };
-        let (_, turn, _) = terminal_primitive(
+        let (_, turn, _, _) = terminal_primitive(
             start,
             initial_curvature,
             curvature + delta_k,
@@ -581,8 +669,9 @@ pub(super) fn single_arc(
             config,
             grid,
             budget,
+            initial_error,
         )?;
-        let (_, travel, _) = terminal_primitive(
+        let (_, travel, _, _) = terminal_primitive(
             start,
             initial_curvature,
             curvature,
@@ -590,6 +679,7 @@ pub(super) fn single_arc(
             config,
             grid,
             budget,
+            initial_error,
         )?;
         let dx_k = (turn.x_m - result.1.x_m) / delta_k;
         let dy_k = (turn.y_m - result.1.y_m) / delta_k;

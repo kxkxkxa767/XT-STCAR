@@ -6,6 +6,7 @@ mod sensors;
 pub use safety::*;
 pub use sensors::*;
 
+pub mod admission;
 pub mod autonomy;
 pub mod localization;
 pub mod mission;

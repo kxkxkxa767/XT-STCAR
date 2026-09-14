@@ -1,0 +1,8 @@
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.72s
+     Running tests/navigation.rs (target/debug/deps/navigation-45077d957f338d46)
+
+running 1 test
+test closed_loop_drives_around_two_cones_and_stops_at_goal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 1.33s

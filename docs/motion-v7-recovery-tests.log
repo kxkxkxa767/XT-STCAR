@@ -1,0 +1,95 @@
+   Compiling xt-stcar-robot-core v0.1.0 (/Users/yuhaojin/Documents/XT-STCAR/crates/robot-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.80s
+     Running unittests src/lib.rs (target/debug/deps/xt_stcar_robot_core-e5f28341960b69e1)
+
+running 8 tests
+test navigation::recovery::tests::recovery_capsule_preserves_the_minimum_forward_restart_space ... ok
+test navigation::recovery::tests::later_legs_and_fallback_cannot_replenish_the_shared_node_ledger ... ok
+test navigation::recovery::tests::recorded_stopped_input_has_no_original_first_layer_primitive ... ok
+test navigation::recovery::tests::capsules_cover_curved_interiors_and_reject_obstacle_contact ... ok
+test navigation::recovery::tests::recovery_uses_remaining_node_budget_and_current_obstacles ... ok
+light stopped fixture: route_position_error_m=0.0000018769811304575138, sample_arc_bound_m=0.025, search=ForwardSearchDiagnostics { ordinary: ForwardSearchWork { expanded_nodes: 6, generated_nodes: 5, allocated_nodes: 6, primitive_attempts: 30, primitive_rejections: 25, first_primitive_rejection: Some(PrimitiveGridFailure { continuous_domain: false, sample_index: 0, from_cell: Some(1805), to_cell: Some(1806), blocked_cell: Some(1806) }), exit: OpenEmpty }, recovery: ForwardSearchWork { expanded_nodes: 3, generated_nodes: 5, allocated_nodes: 6, primitive_attempts: 10, primitive_rejections: 5, first_primitive_rejection: Some(PrimitiveGridFailure { continuous_domain: true, sample_index: 5, from_cell: Some(1806), to_cell: Some(1807), blocked_cell: None }), exit: Found }, recovery_attempted: true, recovery_accepted: true, recovery_active: true, node_budget_exhausted: false }, terminal=TerminalWorkDiagnostics { solver_attempts: 5, iterations: 11, primitive_samples: 211, budget_exhausted: false, solver_limit: 256, iteration_limit: 1024, sample_limit: 65536, continued_seed_attempts: 0, continued_seed_accepted: 0, solver_iteration_exhaustions: 0, domain_rejections: 0, primitive_grid_rejections: 0, cold_budget_deferrals: 0, recovery_reserved_solvers: 0, recovery_reserved_iterations: 0, recovery_reserved_samples: 0, recovery_reservation_shortfalls: 0, solver_elapsed_ns: None }
+test navigation::recovery::tests::light_stop_frontier_exhaustion_recovers_within_the_same_node_limit ... ok
+original stopped fixture: route_position_error_m=0.00004234449359243977, sample_arc_bound_m=0.025, search=ForwardSearchDiagnostics { ordinary: ForwardSearchWork { expanded_nodes: 1, generated_nodes: 0, allocated_nodes: 1, primitive_attempts: 5, primitive_rejections: 5, first_primitive_rejection: Some(PrimitiveGridFailure { continuous_domain: false, sample_index: 1, from_cell: Some(1996), to_cell: Some(1997), blocked_cell: Some(1997) }), exit: OpenEmpty }, recovery: ForwardSearchWork { expanded_nodes: 66, generated_nodes: 262, allocated_nodes: 264, primitive_attempts: 320, primitive_rejections: 0, first_primitive_rejection: None, exit: Found }, recovery_attempted: true, recovery_accepted: true, recovery_active: true, node_budget_exhausted: false }, terminal=TerminalWorkDiagnostics { solver_attempts: 5, iterations: 16, primitive_samples: 399, budget_exhausted: false, solver_limit: 256, iteration_limit: 1024, sample_limit: 65536, continued_seed_attempts: 0, continued_seed_accepted: 0, solver_iteration_exhaustions: 1, domain_rejections: 1, primitive_grid_rejections: 0, cold_budget_deferrals: 0, recovery_reserved_solvers: 0, recovery_reserved_iterations: 0, recovery_reserved_samples: 0, recovery_reservation_shortfalls: 0, solver_elapsed_ns: None }
+test navigation::recovery::tests::full_recorded_context_recovers_through_continuous_body_clearance ... ok
+test navigation::recovery::tests::recovery_executes_forward_across_quantized_exit_with_original_clearance ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.43s
+
+     Running tests/calibrated_chassis.rs (target/debug/deps/calibrated_chassis-1f489d70d4a04654)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests/localization.rs (target/debug/deps/localization-8e8aacae16664e77)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/mission.rs (target/debug/deps/mission-5698ce0a9aebfb3d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+
+     Running tests/n10.rs (target/debug/deps/n10-2956be9d2c7511aa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests/navigation.rs (target/debug/deps/navigation-45077d957f338d46)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/protocol.rs (target/debug/deps/protocol-7745ad55939a137f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/safety.rs (target/debug/deps/safety-2dcd62b8f0293591)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/scan.rs (target/debug/deps/scan-f808cd74ac5bc845)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/sensor_geometry.rs (target/debug/deps/sensor_geometry-c15a357df3e2a63c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/steering_execution.rs (target/debug/deps/steering_execution-a11d54f18c8e8db7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/terminal_approach.rs (target/debug/deps/terminal_approach-a3626b2b6636933e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/through_waypoints.rs (target/debug/deps/through_waypoints-5b56636c9f9359b3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/tracking.rs (target/debug/deps/tracking-e1d5e6b282a953ab)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s

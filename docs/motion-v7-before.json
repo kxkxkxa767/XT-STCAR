@@ -1,0 +1,749 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-14T09:29:52.281861+00:00",
+  "scope": "c440 baseline provenance, independent local review, and explicitly scoped v7 certificate/recovery regressions. This evidence assembly did not rerun tests, a full course, target binaries, builds or performance measurements.",
+  "baseline": {
+    "commit": "c440abf26eb159e8ec742dfcd3663fb9d2db701b",
+    "recorded_results_are_historical": true,
+    "baseline_async_rerun_during_read_only_review": false,
+    "baseline_archive_method": "git archive --format=tar exact commit; no production tree copied",
+    "baseline_archive_sha256": "7b20f354f6ab9c80e373a87b1123c89172947f407e5adbaea846f1c3327721f0",
+    "preparation_record": {
+      "path": "work/motion-v7/baseline-provenance.json",
+      "sha256": "e5f85d6315941d4a7ad644a99dcf2f72897efb10590d4ec804cf5de5978bd946"
+    },
+    "original_async_report": {
+      "path": "docs/motion-v6-async-comparison.json",
+      "sha256": "e5d59cdc86c34965e6787312a2b377f33640aab559187bd4d64de2a4d1d291ce"
+    },
+    "original_failure_review": {
+      "path": "docs/motion-v6-async-failure-review.json",
+      "sha256": "44fe7c5c4b1bb1c447fca49dacf86c3d4b3298db7cee1d6e34875d1e647f6b27"
+    },
+    "note": "Archive preparation establishes the exact source baseline. No historical build hash, validation count or host timing is presented as a final v7 result."
+  },
+  "review_materials": {
+    "share_url": "https://chatgpt.com/share/6aa7b111-c61c-83ee-9d3d-437a65ddce42",
+    "share_body_fully_read": true,
+    "share_body": {
+      "path": "work/motion-v7-review/message-904.txt",
+      "sha256": "4d4498854b84ed9c4aea31bfc5fedd38f0cd6e50e78c459ab371582e037c40c3"
+    },
+    "retrieved_share_html_sha256": "25bae601a85e038661369dfda5737b93bdd66f78d470a891bdab5c547ffba1ed",
+    "retrieval_record": {
+      "path": "work/motion-v7-review/review-manifest.json",
+      "sha256": "7f927d825d2ee8e3b64a70c2d5413cd3cd7b019d1681c222a8ddde9610a904f5"
+    },
+    "uploaded_zip": {
+      "path": "XT-STCAR_c440abf_review_reproduction.zip",
+      "sha256": "4d22c46cdf693590cb2739ac9718aeb214d00831d0a50cc92370d614a47f3010",
+      "members": [
+        {
+          "name": "certificate_probe.py",
+          "size_bytes": 4120,
+          "sha256": "cee6dfb33f758b3605fde2a0358eb98a1dd025781e3e89b1b35d5f266edbd190"
+        },
+        {
+          "name": "certificate_probe_result.json",
+          "size_bytes": 2459,
+          "sha256": "377c1c1adc0d37aaebf09a15bec9364fc429fc5e489e44bbeab4baa46c1e4397"
+        },
+        {
+          "name": "复核说明与修改重点.md",
+          "size_bytes": 4499,
+          "sha256": "bacce035a70ed600e79cf4f245daf96bc22fd23c7abff6df5a943b097b7e8f67"
+        }
+      ],
+      "all_three_files_read": true,
+      "archive_modified": false,
+      "source_patch_supplied": false
+    },
+    "isolated_probe_script": {
+      "path": "work/motion-v7-review/certificate/certificate_probe.py",
+      "sha256": "cee6dfb33f758b3605fde2a0358eb98a1dd025781e3e89b1b35d5f266edbd190"
+    },
+    "probe_result": {
+      "path": "work/motion-v7-review/certificate/certificate_probe_result.json",
+      "sha256": "377c1c1adc0d37aaebf09a15bec9364fc429fc5e489e44bbeab4baa46c1e4397"
+    },
+    "probe_matches_supplied_json": true,
+    "read_only_scope": "Only reviewed copies were executed for Python arithmetic. The source ZIP and competition PDF were not edited. The ZIP contains no Rust patch, complete original source scan or whole-course replay."
+  },
+  "original_first_certificate_rejection": {
+    "source_at_ms": 16800,
+    "pose_at_ms": 16800,
+    "scan_at_ms": 16800,
+    "road_at_ms": 16800,
+    "planned_at_ms": 16860,
+    "observed_at_ms": 16863,
+    "original_lease_ms": 250,
+    "control_period_ms": 100,
+    "speed_bound_mps": 0.3,
+    "curvature_bound_per_m": 2.0,
+    "source_to_complete_stop_length_bound_m": 0.18,
+    "stopping_rectangle_body_m": {
+      "min_x": -0.31199391284233335,
+      "max_x": 0.5319939128423334,
+      "min_y": -0.29439391284233335,
+      "max_y": 0.29439391284233335
+    },
+    "roundoff_m": 2.327558099718548e-13,
+    "scan_count": 360,
+    "first_runtime_order_failure": {
+      "reason": "laser_obstacle",
+      "constraint_index_zero_based": 331,
+      "signed_margin_m": -0.004311433629389386
+    },
+    "independent_full_scan_rejections": [
+      {
+        "body_x": 0.5411247215224134,
+        "body_y": 0.2999503311047326,
+        "distance_m": 0.010688566370610613,
+        "radius_m": 0.015,
+        "signed_margin_m": -0.004311433629389386,
+        "rejected": true,
+        "index": 331
+      },
+      {
+        "body_x": 0.5444965684912201,
+        "body_y": 0.28951396097409204,
+        "distance_m": 0.01250265564888664,
+        "radius_m": 0.015,
+        "signed_margin_m": -0.002497344351113359,
+        "rejected": true,
+        "index": 332
+      }
+    ],
+    "independent_visual_checks": [
+      {
+        "index": 0,
+        "body_x": 0.1875,
+        "body_y": -0.8687499999999999,
+        "distance_m": 0.5743560871576665,
+        "radius_m": 0.14,
+        "signed_margin_m": 0.4343560871576665,
+        "rejected": false
+      },
+      {
+        "index": 1,
+        "body_x": 0.6666666666666661,
+        "body_y": 0.33125000000000004,
+        "distance_m": 0.13962493252712005,
+        "radius_m": 0.14,
+        "signed_margin_m": -0.0003750674728799641,
+        "rejected": true
+      }
+    ],
+    "map_corners_within_bounds": true,
+    "light_boundary_minimum_margin_m": 1.8717835784751635,
+    "geometry_recheck_record": {
+      "path": "work/motion-v7-review/certificate/certificate_source_scan_recheck.json",
+      "sha256": "c977a3d70812ed70583ee250c4212dc1478ff01637fcec1bc8f94aa50e15f14b"
+    },
+    "comparison_with_zip_probe": {
+      "maximum_rectangle_difference_m": 2.3281376826389533e-13,
+      "explanation": "The supplied probe omits the original floating-point allowance. That approximately 2.33e-13 m difference does not explain millimeter-scale negative margins."
+    },
+    "original_navigation_rollouts_evaluated": 44,
+    "original_navigation_candidates_accepted": 44,
+    "original_terminal_solver_attempts": 0,
+    "original_terminal_budget_exhausted": false,
+    "failure_reporting_limit": "Original certify returned Option and stopped at its first failing check. Laser 332 and visual index 1 are independent arithmetic findings, not three separately observed runtime rejection records. The new local Rust diagnostic test confirms first index 331.",
+    "target_probe_246_correction": {
+      "hypothetical_target_pairs": 246,
+      "all_produce_same_rectangle": true,
+      "tested_domain": "Absolute configured speed and curvature bounds only; not every pair satisfies this tick's acceleration/deceleration, curvature slew or other adoption constraints.",
+      "not_actual_candidate_count": true,
+      "not_complete_rust_certifications": true,
+      "valid_conclusion": "Historical V=.3 and K=2 already equal the configuration maxima; changing only the current candidate cannot shrink the rectangle, including for the truly legal subset.",
+      "counterfactual_limit": "Reducing the entire source-to-stop historical speed bound to .24 is not equivalent to selecting .24 now, not a replay of an earlier policy, and not grounds to discard real history."
+    }
+  },
+  "original_failure_event_chain": {
+    "origin": "Historical c440 docs/motion-v6-async-comparison.json, tracker=lqr, summary.transitions; no new baseline full-course run.",
+    "events": [
+      {
+        "observed_at_ms": 16863,
+        "source_at_ms": 16800,
+        "planned_at_ms": 16860,
+        "actual_speed_mps": 0.3,
+        "actual_curvature_per_m": -2.0,
+        "adoption_rejection": "certificate_unsafe",
+        "navigation_reason": null,
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 16987,
+        "source_at_ms": 16900,
+        "planned_at_ms": 16980,
+        "actual_speed_mps": 0.20079999999999887,
+        "actual_curvature_per_m": -1.5039999999999996,
+        "adoption_rejection": null,
+        "navigation_reason": "no_collision_free_braking_trajectory",
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 17183,
+        "source_at_ms": 17100,
+        "planned_at_ms": 17180,
+        "actual_speed_mps": 0.04399999999999965,
+        "actual_curvature_per_m": -0.7199999999999989,
+        "adoption_rejection": "certificate_unsafe",
+        "navigation_reason": null,
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 17267,
+        "source_at_ms": 17200,
+        "planned_at_ms": 17260,
+        "actual_speed_mps": 0.0,
+        "actual_curvature_per_m": -0.38399999999999856,
+        "adoption_rejection": null,
+        "navigation_reason": null,
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": false
+      },
+      {
+        "observed_at_ms": 17463,
+        "source_at_ms": 17400,
+        "planned_at_ms": 17460,
+        "actual_speed_mps": 0.07200000000000001,
+        "actual_curvature_per_m": -0.6160000000000002,
+        "adoption_rejection": "curvature_slew",
+        "navigation_reason": null,
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": false
+      },
+      {
+        "observed_at_ms": 17480,
+        "source_at_ms": 17400,
+        "planned_at_ms": 17460,
+        "actual_speed_mps": 0.07200000000000001,
+        "actual_curvature_per_m": -0.6840000000000003,
+        "adoption_rejection": null,
+        "navigation_reason": null,
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": false
+      },
+      {
+        "observed_at_ms": 19067,
+        "source_at_ms": 19000,
+        "planned_at_ms": 19060,
+        "actual_speed_mps": 0.1731125000000016,
+        "actual_curvature_per_m": -1.94238580604076,
+        "adoption_rejection": "certificate_unsafe",
+        "navigation_reason": null,
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 19189,
+        "source_at_ms": 19100,
+        "planned_at_ms": 19180,
+        "actual_speed_mps": 0.0755125000000022,
+        "actual_curvature_per_m": -1.4543858060407595,
+        "adoption_rejection": null,
+        "navigation_reason": "no_collision_free_braking_trajectory",
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 19263,
+        "source_at_ms": 19200,
+        "planned_at_ms": 19260,
+        "actual_speed_mps": 0.016312500000002225,
+        "actual_curvature_per_m": -1.1583858060407592,
+        "adoption_rejection": null,
+        "navigation_reason": "terminal_budget_exhausted",
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 19387,
+        "source_at_ms": 19300,
+        "planned_at_ms": 19380,
+        "actual_speed_mps": 0.0,
+        "actual_curvature_per_m": -0.6623858060407588,
+        "adoption_rejection": null,
+        "navigation_reason": null,
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": false
+      },
+      {
+        "observed_at_ms": 19469,
+        "source_at_ms": 19400,
+        "planned_at_ms": 19460,
+        "actual_speed_mps": 0.020000000000000004,
+        "actual_curvature_per_m": -0.4,
+        "adoption_rejection": null,
+        "navigation_reason": "no_collision_free_braking_trajectory",
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 19583,
+        "source_at_ms": 19500,
+        "planned_at_ms": 19580,
+        "actual_speed_mps": 0.0,
+        "actual_curvature_per_m": 0.0,
+        "adoption_rejection": null,
+        "navigation_reason": "no_forward_kinematic_path",
+        "phase": "cones",
+        "runtime_fault": null,
+        "stopped": true
+      },
+      {
+        "observed_at_ms": 29463,
+        "source_at_ms": 29400,
+        "planned_at_ms": 29460,
+        "actual_speed_mps": 0.0,
+        "actual_curvature_per_m": 0.0,
+        "adoption_rejection": null,
+        "navigation_reason": null,
+        "phase": "fault",
+        "runtime_fault": "controller_fault",
+        "stopped": true
+      }
+    ],
+    "terminal_fault": "ordinary stop exceeded 10 seconds",
+    "last_16_attempts": {
+      "count": 16,
+      "pre_fault_attempts": 15,
+      "source_reference": "summary.recent_attempts",
+      "finding": "The 15 pre-fault attempts have no forward route, no local tracking rollout and zero terminal solver attempts; the short-connection reservation branch is not active there."
+    },
+    "counting_note": "certificate_unsafe and curvature_slew count a new plan's first observed rejection; they are not stop episodes and must not be added to navigation stop counts.",
+    "causal_limit": "The first certificate rejection is followed by resumed Drive. It is not a continuous ten-second stop or a proof of the final sole cause; the later terminal-budget event and stationary no-forward-route state remain separate facts."
+  },
+  "original_stopped_source_independent_review": {
+    "record": {
+      "path": "work/motion-v7-review/recovery/forward_entry_probe_result.json",
+      "sha256": "cf1317935df4808a18b8ab7ad97db2350f77f176708b9602300d72c59dab9535"
+    },
+    "script": {
+      "path": "work/motion-v7-review/recovery/forward_entry_probe.py",
+      "sha256": "0048130e919f961a587071736a67cec55b01930dfdd03f6377ade8dc66e201bb"
+    },
+    "source_at_ms": 27900,
+    "planned_at_ms": 27980,
+    "observed_at_ms": 27983,
+    "world_obstacles": 362,
+    "grid_inflation_m": 0.36624932490226747,
+    "start_cell": [
+      36,
+      28
+    ],
+    "goal_cell": [
+      45,
+      18
+    ],
+    "two_dimensional_connected": true,
+    "first_layer_target_curvatures_per_m": [
+      -2.0,
+      -1.0,
+      0.0,
+      1.0,
+      2.0
+    ],
+    "all_first_layer_primitives_rejected": true,
+    "first_failure_sample_index_zero_based": 1,
+    "distance_at_first_failure_m": 0.05,
+    "blocked_cell": [
+      37,
+      28
+    ],
+    "python_scope": "Direct complete-obstacle occupancy and first-layer primitive arithmetic; not Rust A* ordering, the complete lattice, vehicle reachability or a whole course.",
+    "rust_followup": "The recorded_stopped_input_has_no_original_first_layer_primitive regression subsequently confirmed ordinary expanded=1, generated=0, attempted=5, rejected=5, exit=OpenEmpty.",
+    "interpretation": "Additional downstream node or terminal budget cannot change this first-layer geometric rejection. Quantized rejection alone does not prove that the physical forward vehicle has no route."
+  },
+  "stored_recovery_fixtures": [
+    {
+      "path": "crates/robot-core/tests/fixtures/async_lqr_stopped_source.json",
+      "sha256": "cd99478af88526fe3e20e382c6839d7adf6aeb02eed54d94849fe93b64e1b166",
+      "origin_class": "c440 baseline historical full asynchronous report",
+      "provenance": {
+        "report": "docs/motion-v6-async-comparison.json",
+        "report_sha256": "e5d59cdc86c34965e6787312a2b377f33640aab559187bd4d64de2a4d1d291ce",
+        "selector": "runs[tracker=lqr].summary.recent_attempts[0]",
+        "revision": "c440abf26eb159e8ec742dfcd3663fb9d2db701b"
+      },
+      "source_at_ms": 27900,
+      "planned_at_ms": 27980,
+      "pose": {
+        "captured_at": 27900,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 3.6952934373650224,
+          "y_m": 2.887450403917976,
+          "yaw_rad": -1.4567648780391742
+        },
+        "quality": 1.0,
+        "speed_mps": 0.0,
+        "yaw_rate_radps": 0.0
+      },
+      "execution_state": {
+        "applied_curvature_per_m": 0.0,
+        "at": 27980,
+        "commanded_curvature_per_m": 0.0
+      },
+      "mission": {
+        "at": 27980,
+        "crosswalk_stop_elapsed_ms": 3000,
+        "green_elapsed_ms": 0,
+        "output": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 5.55,
+              "y_m": 2.5
+            },
+            "next_heading_rad": 0.0,
+            "next_max_speed_mps": 0.18,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.3,
+          "point": {
+            "x_m": 4.5,
+            "y_m": 1.85
+          },
+          "type": "target"
+        },
+        "phase": "cones",
+        "reason": "following cone route",
+        "waypoint_index": 1
+      },
+      "travel_boundary": {
+        "max_projection_m": 0.4500000000000002,
+        "normal": {
+          "x_m": 1.0,
+          "y_m": 0.0
+        },
+        "origin": {
+          "x_m": 5.55,
+          "y_m": 2.5
+        }
+      },
+      "navigation_reason_in_source": "no_forward_kinematic_path",
+      "laser_range_count": 360,
+      "stored_content": "Full autonomy configuration, source snapshot, mission/arrival including continuation, navigation/execution state and light boundary. Raw scan and observation contents are retained in the fixture, not copied into this report."
+    },
+    {
+      "path": "crates/robot-core/tests/fixtures/async_lqr_light_stopped_source.json",
+      "sha256": "8c765d15bf2411cda0a94a6b4950db203a794371204f50929213c0c2d0e44bac",
+      "origin_class": "v7 first intermediate implementation; not c440 baseline",
+      "provenance": {
+        "report": "work/motion-v7/async-first.json",
+        "report_sha256": "fa117fc3575396d0b04083eb6884aefe2bff4d2d28c5a19ab6712144c6190a69",
+        "selector": "runs[tracker=lqr].summary.recent_attempts[0]",
+        "revision": "v7 first implementation before frontier recovery expansion"
+      },
+      "source_at_ms": 56500,
+      "planned_at_ms": 56580,
+      "pose": {
+        "captured_at": 56500,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 5.384439254613604,
+          "y_m": 2.464831133864115,
+          "yaw_rad": 0.2555798930878952
+        },
+        "quality": 1.0,
+        "speed_mps": 0.0,
+        "yaw_rate_radps": 0.0
+      },
+      "execution_state": {
+        "applied_curvature_per_m": 0.0,
+        "at": 56580,
+        "commanded_curvature_per_m": 0.0
+      },
+      "mission": {
+        "at": 56580,
+        "crosswalk_stop_elapsed_ms": 3000,
+        "green_elapsed_ms": 0,
+        "output": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 5.55,
+            "y_m": 2.5
+          },
+          "type": "target"
+        },
+        "phase": "approach_light",
+        "reason": "approaching light stop region",
+        "waypoint_index": 2
+      },
+      "travel_boundary": {
+        "max_projection_m": 0.4500000000000002,
+        "normal": {
+          "x_m": 1.0,
+          "y_m": 0.0
+        },
+        "origin": {
+          "x_m": 5.55,
+          "y_m": 2.5
+        }
+      },
+      "navigation_reason_in_source": "no_forward_kinematic_path",
+      "laser_range_count": 360,
+      "stored_content": "Full autonomy configuration, source snapshot, mission/arrival including continuation, navigation/execution state and light boundary. Raw scan and observation contents are retained in the fixture, not copied into this report."
+    }
+  ],
+  "local_rust_verification": {
+    "scope": "Executed during v7 implementation. These are local tests and the existing focused two-cone closed loop, not the final workspace or full competition validation.",
+    "certificate": {
+      "recorded_at_utc": "2026-09-14T08:55:35.283709+00:00",
+      "scope": "Certificate Result/first-failure diagnostics unit tests on shared stopping geometry; not full workspace, async competition or target verification.",
+      "command": "cargo test --locked --offline -p xt-stcar-robot-runner --lib control_execution::tests -- --nocapture",
+      "exit_code": 0,
+      "passed": 13,
+      "failed": 0,
+      "ignored": 1,
+      "filtered_out": 13,
+      "ignored_reason": "Existing explicit certificate host performance measurement; not requested for this subtask.",
+      "format_command": "rustfmt --edition 2024 --check crates/runner/src/control_execution.rs crates/runner/src/control_execution/diagnostics.rs crates/runner/src/control_execution/diagnostic_tests.rs",
+      "format_exit_code": 0,
+      "source_sha256_at_test": {
+        "crates/runner/src/control_execution.rs": "cd3f8c2692be139937ae4d622406735de3f1ff315dd053ad3a58635d0194f4b2",
+        "crates/runner/src/control_execution/diagnostics.rs": "d7752f7dac993f05a78160e438ce8dba8248f7bd853bf62b801e8d0eb19f1645",
+        "crates/runner/src/control_execution/diagnostic_tests.rs": "068e44cd7b861378688d66e212035a25d53d1d1a1b5bc0e7871e4570ebcfa091",
+        "crates/runner/src/control_execution/fixtures/lqr-first-rejection.json": "fa3648be1eb7d925980b26fde6331a4f6cd44fe39f9f84d15e6b5d481d494d5e"
+      },
+      "record": {
+        "path": "work/motion-v7-review/certificate/certificate-diagnostics-tests.json",
+        "sha256": "48c3010221800343b90c5c717fbe091d2cbe58f231f2257371027e7d3feab937"
+      },
+      "fixture": {
+        "path": "crates/runner/src/control_execution/fixtures/lqr-first-rejection.json",
+        "sha256": "fa3648be1eb7d925980b26fde6331a4f6cd44fe39f9f84d15e6b5d481d494d5e"
+      },
+      "fixture_provenance": {
+        "source": "docs/motion-v6-async-comparison.json",
+        "sha256": "e5d59cdc86c34965e6787312a2b377f33640aab559187bd4d64de2a4d1d291ce",
+        "tracker": "lqr",
+        "source_at_ms": 16800,
+        "planned_at_ms": 16860,
+        "observed_at_ms": 16863,
+        "scope": "Original full source snapshot/config; tests rebuild the constant adopted .3 m/s, -2 per_m source-to-plan interval, not the whole course or its earlier command history."
+      },
+      "history_limit": "The test reconstructs the constant adopted .3 m/s, -2 per_m source-to-plan interval from the full saved source/config. It does not replay the full earlier adoption history or whole course."
+    },
+    "bounded_primitive_integrator": {
+      "command": "cargo test --locked --offline -p xt-stcar-robot-core --lib navigation::primitive_envelope::tests -- --nocapture",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "exit_code": 0,
+      "record": {
+        "path": "work/motion-v7-review/certificate/primitive-envelope-tests.json",
+        "sha256": "06fb0cadfe33ea45a09868ad93acc8a9489208ee34a2e9667c613c7196f99b9f"
+      },
+      "scope": "Local .4 m saturation counterexample and mirror/new obstacle, simultaneous speed/curvature ramp against independent fine integration, and uncertainty/invalid-input checks. Not actuator validation."
+    },
+    "recovery_final_specialized": {
+      "command": "cargo test -p xt-stcar-robot-core navigation::recovery::tests -- --nocapture",
+      "command_confirmation": "Executing recovery agent confirmed the actual command; stdout/stderr are retained in the referenced log. No --locked/--offline or --lib flags are inferred.",
+      "log": {
+        "path": "docs/motion-v7-recovery-tests.log",
+        "sha256": "bdce0a5a05f98c4b5bb8dade639a53836cd9dd799ddbd046b38c44d9d86a86e9"
+      },
+      "exit_code": 0,
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "main_library_filtered_out": 51,
+      "other_test_binaries": "Invoked by Cargo with this filter; zero matching tests, not a full integration-suite pass.",
+      "test_names": [
+        "navigation::recovery::tests::recovery_capsule_preserves_the_minimum_forward_restart_space",
+        "navigation::recovery::tests::later_legs_and_fallback_cannot_replenish_the_shared_node_ledger",
+        "navigation::recovery::tests::recorded_stopped_input_has_no_original_first_layer_primitive",
+        "navigation::recovery::tests::capsules_cover_curved_interiors_and_reject_obstacle_contact",
+        "navigation::recovery::tests::recovery_uses_remaining_node_budget_and_current_obstacles",
+        "navigation::recovery::tests::light_stop_frontier_exhaustion_recovers_within_the_same_node_limit",
+        "navigation::recovery::tests::full_recorded_context_recovers_through_continuous_body_clearance",
+        "navigation::recovery::tests::recovery_executes_forward_across_quantized_exit_with_original_clearance"
+      ],
+      "source_log": "work/motion-v7/recovery-tests-reserve-only.log",
+      "archive_status_at_assembly": "Archived from the confirmed source log under this formal docs path.",
+      "implementation_stage": "Minimum-restart-reserve-only implementation; temporary standstill-only first-entry gate removed."
+    },
+    "existing_two_cone_regression": {
+      "command": "cargo test -p xt-stcar-robot-core --test navigation closed_loop_drives_around_two_cones_and_stops_at_goal -- --exact --nocapture",
+      "log": {
+        "path": "docs/motion-v7-navigation-regression.log",
+        "sha256": "4e15420fde7c83912069120cdf73889453a4bbd30cd7c997ddc31ab42a7ce7f4"
+      },
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered_out": 11,
+      "original_assertions_retained": true,
+      "scope": "One existing synchronous two-cone closed-loop test; not the full competition.",
+      "source_log": "work/motion-v7/recovery-original-reserve-only.log",
+      "archive_status_at_assembly": "Archived from the confirmed source log under this formal docs path.",
+      "intermediate_diagnostic": {
+        "log": {
+          "path": "work/motion-v7/recovery-regression-probe.log",
+          "sha256": "822d988a8425b72b0fd0be3dfd35dd18dc8c3c36d9468229f16e95074230b6ae"
+        },
+        "classification": "Temporary diagnostic probe of the v7 intermediate two-cone dead zone, not c440 baseline and not final acceptance.",
+        "probe_test_name": "navigation::recovery::tests::diagnose_original_two_cone_loop",
+        "probe_test_deleted_after_diagnosis": true,
+        "interpretation": "Step 390 is still moving at .01 m/s and has negative dynamic stopping margin. At the same position, step 395 is stationary with positive static margin but still cannot admit the smallest normal forward candidate. The probe test itself passes while recording this dead zone; its ok result is not successful goal arrival.",
+        "observations": [
+          {
+            "step": 390,
+            "speed_mps": 0.010000000000000002,
+            "reported_stopping_margin_m": -1.5923464628142536e-05,
+            "status": "Blocked",
+            "reason": "no_collision_free_braking_trajectory",
+            "rollouts_evaluated": 44,
+            "candidates_accepted": 0,
+            "stop_reachable_rejections": 44
+          },
+          {
+            "step": 395,
+            "speed_mps": 0.0,
+            "reported_stopping_margin_m": 0.0010674098687051825,
+            "status": "Blocked",
+            "reason": "no_collision_free_braking_trajectory",
+            "rollouts_evaluated": 44,
+            "candidates_accepted": 0,
+            "stop_reachable_rejections": 44
+          }
+        ],
+        "same_pose_in_both_observations": {
+          "x_m": 4.299801450339034,
+          "y_m": 2.0533939874827416,
+          "yaw_rad": 0.05814562712206225
+        }
+      },
+      "implementation_stage": "Minimum-restart-reserve-only implementation; temporary standstill-only first-entry gate removed."
+    },
+    "fixture_measurements_from_final_specialized_log": [
+      {
+        "fixture": "crates/robot-core/tests/fixtures/async_lqr_stopped_source.json",
+        "status": "Driving",
+        "ordinary": {
+          "allocated_nodes": 1,
+          "expanded_nodes": 1,
+          "generated_nodes": 0,
+          "primitive_attempts": 5,
+          "primitive_rejections": 5,
+          "exit": "OpenEmpty"
+        },
+        "recovery": {
+          "allocated_nodes": 264,
+          "expanded_nodes": 66,
+          "generated_nodes": 262,
+          "primitive_attempts": 320,
+          "primitive_rejections": 0,
+          "exit": "Found"
+        },
+        "allocated_nodes_total": 265,
+        "recovery_scope": "First leg and PassThrough continuation; both leg initial nodes are charged.",
+        "route_position_error_bound_m": 4.234449359243977e-05,
+        "sample_arc_bound_m": 0.025,
+        "terminal": {
+          "solver_attempts": 5,
+          "iterations": 16,
+          "charged_primitive_samples": 399
+        },
+        "node_budget_exhausted": false,
+        "terminal_budget_exhausted": false
+      },
+      {
+        "fixture": "crates/robot-core/tests/fixtures/async_lqr_light_stopped_source.json",
+        "status": "Driving",
+        "ordinary": {
+          "allocated_nodes": 6,
+          "expanded_nodes": 6,
+          "generated_nodes": 5,
+          "primitive_attempts": 30,
+          "primitive_rejections": 25,
+          "exit": "OpenEmpty"
+        },
+        "recovery": {
+          "allocated_nodes": 6,
+          "expanded_nodes": 3,
+          "generated_nodes": 5,
+          "primitive_attempts": 10,
+          "primitive_rejections": 5,
+          "exit": "Found"
+        },
+        "allocated_nodes_total": 12,
+        "route_position_error_bound_m": 1.8769811304575138e-06,
+        "sample_arc_bound_m": 0.025,
+        "terminal": {
+          "solver_attempts": 5,
+          "iterations": 11,
+          "charged_primitive_samples": 211
+        },
+        "node_budget_exhausted": false,
+        "terminal_budget_exhausted": false
+      }
+    ],
+    "metric_limits": "Allocated includes initial nodes; generated and expanded are different counts. Position error is the accumulated numerical model bound, not measured tracking error. Charged terminal samples are not CPU operations or all lattice work."
+  },
+  "recovery_followup_corrections": {
+    "first_entry": "The temporary speed<=1e-9 m/s first-entry gate was tested and removed. The retained implementation uses ordinary OpenEmpty recovery entry and the additional minimum-restart reserve, without requiring first-entry standstill.",
+    "minimum_restart_margin": {
+      "speed_formula": "v_restart = 0.5 * min(max_speed_mps, max_accel_mps2 * control_period_s)",
+      "distance_formula": "d_restart = 2 * control_period_s * v_restart + v_restart^2 / (2 * max_decel_mps2)",
+      "application": "Add d_restart to the continuous full-body-plus-original-clearance recovery radius; retain the original Stop gate.",
+      "counterexample_static_margin_mm_rounded": 1.06741,
+      "minimum_normal_restart_distance_mm_rounded": 1.083333,
+      "at_100ms_fixture_distance_mm_rounded": 4.333333,
+      "regression": "navigation::recovery::tests::recovery_capsule_preserves_the_minimum_forward_restart_space",
+      "limit": "This prevents the demonstrated statically clear minimum-action dead zone; it is not a proof of complete recursive feasibility.",
+      "diagnostic_source": {
+        "path": "work/motion-v7/recovery-regression-probe.log",
+        "sha256": "822d988a8425b72b0fd0be3dfd35dd18dc8c3c36d9468229f16e95074230b6ae"
+      },
+      "counterexample_static_margin_m": 0.0010674098687051825,
+      "counterexample_position_first_recorded_step": 390,
+      "stationary_margin_recorded_step": 395
+    },
+    "light_terminal_region": "Accept an actually integrated node only when its position and heading plus propagated bounds satisfy the original arrival tolerances, even if the goal center is behind it. Do not teleport the endpoint to the target.",
+    "budgets": "Ordinary/recovery/continuation share the original node allocation ledger; terminal solvers share the existing 256/1024/65536 limits. No budget or arrival tolerance was enlarged.",
+    "discarded_standstill_gate": {
+      "predicate": "current speed <= 1e-9 m/s for first OpenEmpty fallback; already active recovery continues",
+      "retained_in_final_code": false,
+      "reason": "The reserve-only implementation passes the original two-cone regression; the extra gate is not required for that repair. Full-course conclusions are left to the final reports.",
+      "local_gate_and_reserve_pass_log": {
+        "path": "work/motion-v7/recovery-original-final.log",
+        "sha256": "59c4b3e81c7806004028204268c99c575f56615789d0d3ef64fb08b3e69763e3"
+      },
+      "local_reserve_only_pass_log": {
+        "path": "work/motion-v7/recovery-original-reserve-only.log",
+        "sha256": "99f998414b1d298776cc7700d9b7ce0d2910e85420b97965987306c06aa5798b"
+      }
+    }
+  },
+  "interpretation_limits": [
+    "Shared current-source geometry does not allow clearing real historical V/K peaks, renewing a source lease, shortening the stopping envelope or relaxing obstacle/mission thresholds.",
+    "Three fixed adoption-delay samples and modeled multi-source braking are bounded prospective checks, not all-window or arbitrary-delay-sequence recursive feasibility; the independent final certificate remains necessary.",
+    "Local recovery or first-obstacle reproduction does not prove that suppressing the first historical rejection completes a full course.",
+    "The light fixture is explicitly from work/motion-v7/async-first.json; it is not attributed to c440 or presented as a final v7 course result.",
+    "No device, video, target execution, final build/delivery result or host/target performance claim is included."
+  ],
+  "final_validation_report": "docs/motion-v7-validation.json",
+  "archived_log_format": "Formal docs logs normalize trailing blank lines only; raw work logs remain unchanged."
+}

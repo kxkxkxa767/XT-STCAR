@@ -4,6 +4,7 @@ pub mod async_simulation;
 pub mod autonomy;
 pub mod autonomy_replay;
 pub mod capture;
+mod control_admission;
 pub mod control_diagnostics;
 mod control_execution;
 pub mod control_runtime;

@@ -69,6 +69,8 @@ pub struct PlanTimings {
 /// is diagnostic only; the vehicle must use ControlPoll.command exclusively.
 #[derive(Clone, Debug)]
 pub struct ObservedPlan {
+    /// First failed final-certificate condition, shared with the worker report.
+    pub certificate_failure: Option<Arc<crate::control_execution::CertificateFailure>>,
     pub source_at: Timestamp,
     pub oldest_sensor_at: Timestamp,
     pub planned_at: Timestamp,

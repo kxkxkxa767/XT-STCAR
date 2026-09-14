@@ -1,0 +1,417 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-14",
+  "baseline_commit": "c440abf26eb159e8ec742dfcd3663fb9d2db701b",
+  "scope": "Rust prospective admission, structured first-failure evidence and bounded forward recovery. Complete synthetic real-worker functional races, focused regressions, optional host measurements and static dual RISC-V cross-link. No vehicle, target execution or model inference.",
+  "rust_workspace": {
+    "passed": 350,
+    "failed": 0,
+    "ignored": 2,
+    "ignored_cases": [
+      "native ONNX Runtime opt-in",
+      "certificate-only opt-in host benchmark (whole-worker timing measured separately)"
+    ]
+  },
+  "tracking_example_tests_passed": 2,
+  "python_delivery_tests_passed": 35,
+  "async_competition_tests_passed": 5,
+  "async_deadline_tests_passed": 6,
+  "recovery_tests_passed": 8,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "source_hashes_recorded": 98,
+  "embedded_fixture_hashes_recorded": 3,
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "3b30c966de36d4a28c8054794dbf1119cc92bda7930e3c7de5ae805033a5f673",
+      "size_bytes": 2020984,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "Experimental; both recorded complete asynchronous schedules now pass, but default timing produces a longer route and does not establish general convergence or target deadlines.",
+  "shared_review_text_read": true,
+  "before_report": "motion-v7-before.json",
+  "build_report": "motion-v7-build.json",
+  "build_log": "motion-v7-build.log",
+  "example_test_log": "motion-v7-example-tests.log",
+  "delivery_test_log": "motion-v7-delivery-tests.log",
+  "functional_commands": [
+    {
+      "report": "motion-v7-competition-comparison.json",
+      "command": [
+        "/Users/yuhaojin/Documents/XT-STCAR/target/release/examples/motion_comparison"
+      ],
+      "exit_code": 0
+    },
+    {
+      "report": "motion-v7-async-comparison.json",
+      "command": [
+        "/Users/yuhaojin/Documents/XT-STCAR/target/release/examples/async_motion_comparison",
+        "both"
+      ],
+      "exit_code": 0
+    },
+    {
+      "report": "motion-v7-async-perturbed.json",
+      "command": [
+        "/Users/yuhaojin/Documents/XT-STCAR/target/release/examples/async_motion_comparison",
+        "both",
+        "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v7/async-perturbed-options.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "report": "motion-v7-async-timing.json",
+      "command": [
+        "/Users/yuhaojin/Documents/XT-STCAR/target/release/examples/async_motion_comparison",
+        "both",
+        "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v7/async-timing-options.json"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "sync_comparison": "motion-v7-competition-comparison.json",
+  "async_runs": [
+    {
+      "report": "motion-v7-async-comparison.json",
+      "runs": [
+        {
+          "completed": true,
+          "elapsed_ms": 73863,
+          "distance_m": 14.173788762179246,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.281114553466176,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 739,
+            "certificate_unsafe": 0,
+            "completed_plans": 739,
+            "curvature_slew": 5,
+            "drive_polls": 4159,
+            "execution_changed": 0,
+            "newly_adopted_plans": 739,
+            "output_polls": 4433,
+            "stop_polls": 274,
+            "submissions": 739,
+            "turning_drive_polls": 3842
+          },
+          "tracker": "pp",
+          "whole_body_in_finish_region": true,
+          "final_speed_and_curvature_zero": true,
+          "navigation_unexpected_stop_ticks": 3,
+          "navigation_unexpected_stop_episodes": 2,
+          "terminal_budget_exhausted_ticks": 0,
+          "admission_candidate_rejections": {
+            "admission_current": 0,
+            "admission_next": 0
+          },
+          "recovery_attempted_ticks": 0,
+          "recovery_active_ticks": 0
+        },
+        {
+          "completed": true,
+          "elapsed_ms": 89069,
+          "distance_m": 15.807183338822272,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.24388625895054228,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 891,
+            "certificate_unsafe": 0,
+            "completed_plans": 891,
+            "curvature_slew": 5,
+            "drive_polls": 5054,
+            "execution_changed": 0,
+            "newly_adopted_plans": 891,
+            "output_polls": 5345,
+            "stop_polls": 291,
+            "submissions": 891,
+            "turning_drive_polls": 4778
+          },
+          "tracker": "lqr",
+          "whole_body_in_finish_region": true,
+          "final_speed_and_curvature_zero": true,
+          "navigation_unexpected_stop_ticks": 6,
+          "navigation_unexpected_stop_episodes": 3,
+          "terminal_budget_exhausted_ticks": 0,
+          "admission_candidate_rejections": {
+            "admission_current": 0,
+            "admission_next": 49
+          },
+          "recovery_attempted_ticks": 3,
+          "recovery_active_ticks": 132
+        }
+      ]
+    },
+    {
+      "report": "motion-v7-async-perturbed.json",
+      "runs": [
+        {
+          "completed": true,
+          "elapsed_ms": 56849,
+          "distance_m": 11.124416297882487,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.3011372388223489,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 569,
+            "certificate_unsafe": 0,
+            "completed_plans": 569,
+            "curvature_slew": 2,
+            "drive_polls": 3162,
+            "execution_changed": 0,
+            "newly_adopted_plans": 569,
+            "output_polls": 3412,
+            "stop_polls": 250,
+            "submissions": 569,
+            "turning_drive_polls": 2886
+          },
+          "tracker": "pp",
+          "whole_body_in_finish_region": true,
+          "final_speed_and_curvature_zero": true,
+          "navigation_unexpected_stop_ticks": 2,
+          "navigation_unexpected_stop_episodes": 2,
+          "terminal_budget_exhausted_ticks": 0,
+          "admission_candidate_rejections": {
+            "admission_current": 0,
+            "admission_next": 0
+          },
+          "recovery_attempted_ticks": 0,
+          "recovery_active_ticks": 0
+        },
+        {
+          "completed": true,
+          "elapsed_ms": 53849,
+          "distance_m": 10.217581897714231,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.2720467711426443,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 539,
+            "certificate_unsafe": 0,
+            "completed_plans": 539,
+            "curvature_slew": 2,
+            "drive_polls": 2954,
+            "execution_changed": 0,
+            "newly_adopted_plans": 539,
+            "output_polls": 3232,
+            "stop_polls": 278,
+            "submissions": 539,
+            "turning_drive_polls": 2678
+          },
+          "tracker": "lqr",
+          "whole_body_in_finish_region": true,
+          "final_speed_and_curvature_zero": true,
+          "navigation_unexpected_stop_ticks": 0,
+          "navigation_unexpected_stop_episodes": 0,
+          "terminal_budget_exhausted_ticks": 0,
+          "admission_candidate_rejections": {
+            "admission_current": 22,
+            "admission_next": 44
+          },
+          "recovery_attempted_ticks": 0,
+          "recovery_active_ticks": 0
+        }
+      ]
+    },
+    {
+      "report": "motion-v7-async-timing.json",
+      "runs": [
+        {
+          "completed": true,
+          "elapsed_ms": 73863,
+          "distance_m": 14.173788762179246,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.281114553466176,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 739,
+            "certificate_unsafe": 0,
+            "completed_plans": 739,
+            "curvature_slew": 5,
+            "drive_polls": 4159,
+            "execution_changed": 0,
+            "newly_adopted_plans": 739,
+            "output_polls": 4433,
+            "stop_polls": 274,
+            "submissions": 739,
+            "turning_drive_polls": 3842
+          },
+          "tracker": "pp",
+          "whole_body_in_finish_region": true,
+          "final_speed_and_curvature_zero": true,
+          "navigation_unexpected_stop_ticks": 3,
+          "navigation_unexpected_stop_episodes": 2,
+          "terminal_budget_exhausted_ticks": 0,
+          "admission_candidate_rejections": {
+            "admission_current": 0,
+            "admission_next": 0
+          },
+          "recovery_attempted_ticks": 0,
+          "recovery_active_ticks": 0
+        },
+        {
+          "completed": true,
+          "elapsed_ms": 89069,
+          "distance_m": 15.807183338822272,
+          "fault": null,
+          "minimum_cone_clearance_m": 0.24388625895054228,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "counts": {
+            "after_window": 0,
+            "before_window": 0,
+            "captures": 891,
+            "certificate_unsafe": 0,
+            "completed_plans": 891,
+            "curvature_slew": 5,
+            "drive_polls": 5054,
+            "execution_changed": 0,
+            "newly_adopted_plans": 891,
+            "output_polls": 5345,
+            "stop_polls": 291,
+            "submissions": 891,
+            "turning_drive_polls": 4778
+          },
+          "tracker": "lqr",
+          "whole_body_in_finish_region": true,
+          "final_speed_and_curvature_zero": true,
+          "navigation_unexpected_stop_ticks": 6,
+          "navigation_unexpected_stop_episodes": 3,
+          "terminal_budget_exhausted_ticks": 0,
+          "admission_candidate_rejections": {
+            "admission_current": 0,
+            "admission_next": 49
+          },
+          "recovery_attempted_ticks": 3,
+          "recovery_active_ticks": 132
+        }
+      ]
+    }
+  ],
+  "timing_enabled_functional_fields_identical_to_default": true,
+  "timing_comparison_exclusions": [
+    "*_ns",
+    "timing_statistics",
+    "timings",
+    "wall_time_ms",
+    "measure_wall_time"
+  ],
+  "host_profile": "motion-v7-host-profile.json",
+  "host_clock": "motion-v7-host-clock.json",
+  "default_journal": "motion-v7-log-size.json",
+  "model_native_tests": "Model/native execution unchanged and not rerun; optional package creation checks model structure and provenance.",
+  "vehicle_uploaded": false,
+  "vehicle_execution_verified": false,
+  "target_execution_verified": false,
+  "delivery_report": "motion-v7-delivery.json",
+  "sync_outcome_fields_identical_to_v6": {
+    "completed": true,
+    "elapsed_ms": true,
+    "ticks": true,
+    "distance_m": true,
+    "minimum_cone_clearance_m": true,
+    "crosswalk_hold_ms": true,
+    "green_observed_ms": true,
+    "phases": true,
+    "final_pose": true,
+    "final_actual_speed_mps": true,
+    "braking_ticks": true,
+    "fault": true
+  },
+  "host_clock_observation": {
+    "captures": 23,
+    "turning_drive_polls": 119,
+    "max_poll_gap_ms": 26,
+    "last_submitted_source_at": 2201,
+    "first_fault": {
+      "at_ms": 2460,
+      "command": {
+        "type": "stop"
+      },
+      "fault": "command_expired"
+    },
+    "elapsed_ms": 2687,
+    "final_speed_mps": 0.0,
+    "final_curvature_per_m": 0.0,
+    "collision_or_boundary_violation": false,
+    "original_last_source_expiry_ms": 2451
+  },
+  "host_async_timing": [
+    {
+      "tracker": "pp",
+      "wall_time_ms": 4355.809625,
+      "stages": {
+        "processor_ns": {
+          "samples": 739,
+          "mean_ms": 4.561493799729364,
+          "maximum_ms": 11.890834
+        },
+        "navigation_ns": {
+          "samples": 739,
+          "mean_ms": 4.556878334235453,
+          "maximum_ms": 11.874875
+        },
+        "certificate_ns": {
+          "samples": 739,
+          "mean_ms": 0.003832619756427605,
+          "maximum_ms": 0.012209
+        }
+      },
+      "scope": "Means and observed maxima of recorded completed-plan stages, including non-Drive plans. Functional clock freezes during worker waits; not deadline proof."
+    },
+    {
+      "tracker": "lqr",
+      "wall_time_ms": 5476.920584,
+      "stages": {
+        "processor_ns": {
+          "samples": 891,
+          "mean_ms": 4.814047259259259,
+          "maximum_ms": 20.419459
+        },
+        "navigation_ns": {
+          "samples": 891,
+          "mean_ms": 4.809474971941639,
+          "maximum_ms": 20.413708
+        },
+        "certificate_ns": {
+          "samples": 891,
+          "mean_ms": 0.003900925925925926,
+          "maximum_ms": 0.043791
+        }
+      },
+      "scope": "Means and observed maxima of recorded completed-plan stages, including non-Drive plans. Functional clock freezes during worker waits; not deadline proof."
+    }
+  ]
+}
