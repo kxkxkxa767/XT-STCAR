@@ -1,0 +1,68 @@
+--- a/crates/robot-core/src/navigation.rs
++++ b/crates/robot-core/src/navigation.rs
+@@ -1047,31 +1047,6 @@
+                             .get_or_insert(reason);
+                         continue;
+                     }
+-                    let (forecast, work) = constraints.check_next_with_work(
+-                        &self.config,
+-                        pose,
+-                        speed,
+-                        curvature,
+-                        obstacles,
+-                        self.travel_boundary,
+-                    );
+-                    let total = &mut self.diagnostics.admission_forecast_work;
+-                    total.adoption_scenarios = total
+-                        .adoption_scenarios
+-                        .saturating_add(work.adoption_scenarios);
+-                    total.source_checks = total.source_checks.saturating_add(work.source_checks);
+-                    total.projection_calls =
+-                        total.projection_calls.saturating_add(work.projection_calls);
+-                    total.projection_intervals = total
+-                        .projection_intervals
+-                        .saturating_add(work.projection_intervals);
+-                    if let Err(reason) = forecast {
+-                        self.diagnostics.candidates.admission_next += 1;
+-                        self.diagnostics
+-                            .next_admission_failure
+-                            .get_or_insert(reason);
+-                        continue;
+-                    }
+                 }
+                 self.diagnostics.candidates.rollouts_evaluated += 1;
+                 let prediction = match rollout(
+@@ -1114,6 +1089,33 @@
+                         continue;
+                     }
+                 };
++                if let Some(constraints) = self.adoption_constraints {
++                    let (forecast, work) = constraints.check_next_with_work(
++                        &self.config,
++                        pose,
++                        speed,
++                        curvature,
++                        obstacles,
++                        self.travel_boundary,
++                    );
++                    let total = &mut self.diagnostics.admission_forecast_work;
++                    total.adoption_scenarios = total
++                        .adoption_scenarios
++                        .saturating_add(work.adoption_scenarios);
++                    total.source_checks = total.source_checks.saturating_add(work.source_checks);
++                    total.projection_calls =
++                        total.projection_calls.saturating_add(work.projection_calls);
++                    total.projection_intervals = total
++                        .projection_intervals
++                        .saturating_add(work.projection_intervals);
++                    if let Err(reason) = forecast {
++                        self.diagnostics.candidates.admission_next += 1;
++                        self.diagnostics
++                            .next_admission_failure
++                            .get_or_insert(reason);
++                        continue;
++                    }
++                }
+                 let Some(reference) = reference_window.project(prediction.endpoint.point()) else {
+                     continue;
+                 };

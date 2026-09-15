@@ -1,0 +1,1006 @@
+{
+  "schema_version": 1,
+  "scope": "本机 Rust 真实异步 worker/车辆模型的固定 LQR 消融，input [40,60] ms / adoption [3,7,9] ms；旧时基只在隔离历史版本用于归因。没有车端运行/目标实时性结论。",
+  "variants": {
+    "old": {
+      "completed": true,
+      "elapsed_ms": 54447,
+      "distance_m": 10.317616041272634,
+      "stop_duration_ms": 4513,
+      "commands": 285,
+      "plans": 545,
+      "omitted": 0,
+      "forecast_work": {
+        "adoption_scenarios": 66092,
+        "projection_calls": 1681009,
+        "projection_intervals": 72896820,
+        "source_checks": 720410
+      },
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "first_at": 40,
+          "duration_ms": 4800,
+          "distance_m": 0.7928291778714588,
+          "route_generations": 1
+        },
+        {
+          "phase": "crosswalk_stop",
+          "first_at": 4840,
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "route_generations": 0
+        },
+        {
+          "phase": "cones",
+          "first_at": 7840,
+          "duration_ms": 16126,
+          "distance_m": 4.2798416315062795,
+          "route_generations": 4
+        },
+        {
+          "phase": "approach_light",
+          "first_at": 23960,
+          "duration_ms": 24600,
+          "distance_m": 4.361516816969025,
+          "route_generations": 4
+        },
+        {
+          "phase": "wait_green",
+          "first_at": 48560,
+          "duration_ms": 478,
+          "distance_m": 0.0,
+          "route_generations": 0
+        },
+        {
+          "phase": "finish",
+          "first_at": 49040,
+          "duration_ms": 5400,
+          "distance_m": 0.8834284149163883,
+          "route_generations": 1
+        },
+        {
+          "phase": "completed",
+          "first_at": 54440,
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "route_generations": 0
+        }
+      ],
+      "route_revision_events": [
+        {
+          "source_at": 14700,
+          "planned_at": 14760,
+          "previous_source_at": 14600,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": false,
+          "old_previous_returned_length_m": 0.07272909123330719,
+          "new_returned_length_m": 2.29141231186431,
+          "delta_m": 2.2186832206310028,
+          "reason": null,
+          "revision_before": 2,
+          "revision_after": 3,
+          "pose": {
+            "x_m": 3.0706311880428885,
+            "y_m": 3.3683573533468794,
+            "yaw_rad": 0.21457139832304106
+          }
+        },
+        {
+          "source_at": 16700,
+          "planned_at": 16760,
+          "previous_source_at": 16600,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.733580911781658,
+          "new_returned_length_m": 1.7546490331438478,
+          "delta_m": 0.021068121362189718,
+          "reason": null,
+          "revision_before": 3,
+          "revision_after": 4,
+          "pose": {
+            "x_m": 3.5876718356020305,
+            "y_m": 3.1653843354968076,
+            "yaw_rad": -0.9542755808768328
+          }
+        },
+        {
+          "source_at": 16800,
+          "planned_at": 16840,
+          "previous_source_at": 16700,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.7546490331438478,
+          "new_returned_length_m": 1.7437269659629218,
+          "delta_m": -0.010922067180926032,
+          "reason": null,
+          "revision_before": 4,
+          "revision_after": 5,
+          "pose": {
+            "x_m": 3.5946389334584707,
+            "y_m": 3.1553753812658636,
+            "yaw_rad": -0.9705300854101653
+          }
+        },
+        {
+          "source_at": 23900,
+          "planned_at": 23960,
+          "previous_source_at": 23800,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": false,
+          "old_previous_returned_length_m": 0.06686777272167632,
+          "new_returned_length_m": 4.396212206986164,
+          "delta_m": 4.329344434264488,
+          "reason": null,
+          "revision_before": 5,
+          "revision_after": 6,
+          "pose": {
+            "x_m": 4.458772851588439,
+            "y_m": 1.8490818100680388,
+            "yaw_rad": -0.5018969515943272
+          }
+        },
+        {
+          "source_at": 39600,
+          "planned_at": 39640,
+          "previous_source_at": 39500,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.602745600943705,
+          "new_returned_length_m": 1.5998710246748862,
+          "delta_m": -0.002874576268818929,
+          "reason": null,
+          "revision_before": 6,
+          "revision_after": 7,
+          "pose": {
+            "x_m": 4.128531070531627,
+            "y_m": 1.8772353175744279,
+            "yaw_rad": 0.3397406343032445
+          }
+        },
+        {
+          "source_at": 40700,
+          "planned_at": 40760,
+          "previous_source_at": 40600,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.4204904628632982,
+          "new_returned_length_m": 1.3895639443334664,
+          "delta_m": -0.030926518529831748,
+          "reason": null,
+          "revision_before": 7,
+          "revision_after": 8,
+          "pose": {
+            "x_m": 4.324081678494389,
+            "y_m": 1.92998713538471,
+            "yaw_rad": 0.21393794143781886
+          }
+        },
+        {
+          "source_at": 44100,
+          "planned_at": 44160,
+          "previous_source_at": 44000,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 0.8053020885900254,
+          "new_returned_length_m": 0.7709433363924301,
+          "delta_m": -0.03435875219759532,
+          "reason": null,
+          "revision_before": 8,
+          "revision_after": 9,
+          "pose": {
+            "x_m": 4.859997704791917,
+            "y_m": 2.1933588608424586,
+            "yaw_rad": 0.6739999074556957
+          }
+        }
+      ],
+      "summary_matches_committed_v8_except_wall_time": true,
+      "source_commit": "7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6",
+      "result_file": "work/motion-v9/ablation/old.json",
+      "result_sha256": "b9bf56a9939e167bdbeab26d23a23fbb26565690346f4b76b3b3c3281953fd1c",
+      "archive_sha256": "4b7d8fddd18c761c55157af46e2179d81a37986f4d04736cb8b0297a03dce8bd",
+      "native_executable_sha256": "ed57ea57d659141efd838c9d87f61580e98a7aedece4d2255fe4a41e08342efc",
+      "modified_or_added_source_sha256": {
+        "crates/runner/src/async_simulation.rs": "c9427be299ce01ad485e1369064f60692de53e58470a20b3c4b1d386e38bab9c",
+        "crates/runner/examples/v9_ablation.rs": "fc52dc1952b5527e5cd5a1aadd7ca4438663bd305d5a27e588f6b34e8cf57355"
+      },
+      "separate_cargo_target_directory": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v9-ablation/old-target",
+      "maximum_observed_returned_path_points": 177
+    },
+    "order_only": {
+      "completed": true,
+      "elapsed_ms": 54447,
+      "distance_m": 10.317616041272634,
+      "stop_duration_ms": 4513,
+      "commands": 285,
+      "plans": 545,
+      "omitted": 0,
+      "forecast_work": {
+        "adoption_scenarios": 64505,
+        "projection_calls": 1636944,
+        "projection_intervals": 70984237,
+        "source_checks": 701525
+      },
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "first_at": 40,
+          "duration_ms": 4800,
+          "distance_m": 0.7928291778714588,
+          "route_generations": 1
+        },
+        {
+          "phase": "crosswalk_stop",
+          "first_at": 4840,
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "route_generations": 0
+        },
+        {
+          "phase": "cones",
+          "first_at": 7840,
+          "duration_ms": 16126,
+          "distance_m": 4.2798416315062795,
+          "route_generations": 4
+        },
+        {
+          "phase": "approach_light",
+          "first_at": 23960,
+          "duration_ms": 24600,
+          "distance_m": 4.361516816969025,
+          "route_generations": 4
+        },
+        {
+          "phase": "wait_green",
+          "first_at": 48560,
+          "duration_ms": 478,
+          "distance_m": 0.0,
+          "route_generations": 0
+        },
+        {
+          "phase": "finish",
+          "first_at": 49040,
+          "duration_ms": 5400,
+          "distance_m": 0.8834284149163883,
+          "route_generations": 1
+        },
+        {
+          "phase": "completed",
+          "first_at": 54440,
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "route_generations": 0
+        }
+      ],
+      "route_revision_events": [
+        {
+          "source_at": 14700,
+          "planned_at": 14760,
+          "previous_source_at": 14600,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": false,
+          "old_previous_returned_length_m": 0.07272909123330719,
+          "new_returned_length_m": 2.29141231186431,
+          "delta_m": 2.2186832206310028,
+          "reason": null,
+          "revision_before": 2,
+          "revision_after": 3,
+          "pose": {
+            "x_m": 3.0706311880428885,
+            "y_m": 3.3683573533468794,
+            "yaw_rad": 0.21457139832304106
+          }
+        },
+        {
+          "source_at": 16700,
+          "planned_at": 16760,
+          "previous_source_at": 16600,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.733580911781658,
+          "new_returned_length_m": 1.7546490331438478,
+          "delta_m": 0.021068121362189718,
+          "reason": null,
+          "revision_before": 3,
+          "revision_after": 4,
+          "pose": {
+            "x_m": 3.5876718356020305,
+            "y_m": 3.1653843354968076,
+            "yaw_rad": -0.9542755808768328
+          }
+        },
+        {
+          "source_at": 16800,
+          "planned_at": 16840,
+          "previous_source_at": 16700,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.7546490331438478,
+          "new_returned_length_m": 1.7437269659629218,
+          "delta_m": -0.010922067180926032,
+          "reason": null,
+          "revision_before": 4,
+          "revision_after": 5,
+          "pose": {
+            "x_m": 3.5946389334584707,
+            "y_m": 3.1553753812658636,
+            "yaw_rad": -0.9705300854101653
+          }
+        },
+        {
+          "source_at": 23900,
+          "planned_at": 23960,
+          "previous_source_at": 23800,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": false,
+          "old_previous_returned_length_m": 0.06686777272167632,
+          "new_returned_length_m": 4.396212206986164,
+          "delta_m": 4.329344434264488,
+          "reason": null,
+          "revision_before": 5,
+          "revision_after": 6,
+          "pose": {
+            "x_m": 4.458772851588439,
+            "y_m": 1.8490818100680388,
+            "yaw_rad": -0.5018969515943272
+          }
+        },
+        {
+          "source_at": 39600,
+          "planned_at": 39640,
+          "previous_source_at": 39500,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.602745600943705,
+          "new_returned_length_m": 1.5998710246748862,
+          "delta_m": -0.002874576268818929,
+          "reason": null,
+          "revision_before": 6,
+          "revision_after": 7,
+          "pose": {
+            "x_m": 4.128531070531627,
+            "y_m": 1.8772353175744279,
+            "yaw_rad": 0.3397406343032445
+          }
+        },
+        {
+          "source_at": 40700,
+          "planned_at": 40760,
+          "previous_source_at": 40600,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.4204904628632982,
+          "new_returned_length_m": 1.3895639443334664,
+          "delta_m": -0.030926518529831748,
+          "reason": null,
+          "revision_before": 7,
+          "revision_after": 8,
+          "pose": {
+            "x_m": 4.324081678494389,
+            "y_m": 1.92998713538471,
+            "yaw_rad": 0.21393794143781886
+          }
+        },
+        {
+          "source_at": 44100,
+          "planned_at": 44160,
+          "previous_source_at": 44000,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 0.8053020885900254,
+          "new_returned_length_m": 0.7709433363924301,
+          "delta_m": -0.03435875219759532,
+          "reason": null,
+          "revision_before": 8,
+          "revision_after": 9,
+          "pose": {
+            "x_m": 4.859997704791917,
+            "y_m": 2.1933588608424586,
+            "yaw_rad": 0.6739999074556957
+          }
+        }
+      ],
+      "source_commit": "7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6",
+      "result_file": "work/motion-v9/ablation/order_only.json",
+      "result_sha256": "be5ca9692642e57f16daa86492f66e6be60405c596bc2a5f116ca5ae92e11a5d",
+      "archive_sha256": "4b7d8fddd18c761c55157af46e2179d81a37986f4d04736cb8b0297a03dce8bd",
+      "native_executable_sha256": "98f1cb618acb7f98f142cbac9afff9d34103623103f6303b16356156f7d101fa",
+      "modified_or_added_source_sha256": {
+        "crates/robot-core/src/navigation.rs": "72046e4d04c8034118fb2e6e30a4c4cc21def47606b7f47ce8c8297817724f21",
+        "crates/runner/src/async_simulation.rs": "c9427be299ce01ad485e1369064f60692de53e58470a20b3c4b1d386e38bab9c",
+        "crates/runner/examples/v9_ablation.rs": "fc52dc1952b5527e5cd5a1aadd7ca4438663bd305d5a27e588f6b34e8cf57355"
+      },
+      "separate_cargo_target_directory": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v9-ablation/order_only-target",
+      "maximum_observed_returned_path_points": 177
+    },
+    "current": {
+      "completed": true,
+      "elapsed_ms": 88647,
+      "distance_m": 16.51555838061635,
+      "stop_duration_ms": 4513,
+      "commands": 566,
+      "plans": 887,
+      "omitted": 0,
+      "forecast_work": {
+        "adoption_scenarios": 108134,
+        "projection_calls": 2646610,
+        "projection_intervals": 114728917,
+        "source_checks": 1134239
+      },
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "first_at": 40,
+          "duration_ms": 4800,
+          "distance_m": 0.7928291778714589,
+          "route_generations": 1
+        },
+        {
+          "phase": "crosswalk_stop",
+          "first_at": 4840,
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "route_generations": 0
+        },
+        {
+          "phase": "cones",
+          "first_at": 7840,
+          "duration_ms": 15806,
+          "distance_m": 4.257091900000626,
+          "route_generations": 6
+        },
+        {
+          "phase": "approach_light",
+          "first_at": 23640,
+          "duration_ms": 59400,
+          "distance_m": 10.59040930465313,
+          "route_generations": 17
+        },
+        {
+          "phase": "wait_green",
+          "first_at": 83040,
+          "duration_ms": 320,
+          "distance_m": 0.0,
+          "route_generations": 0
+        },
+        {
+          "phase": "finish",
+          "first_at": 83360,
+          "duration_ms": 5278,
+          "distance_m": 0.8752279980811946,
+          "route_generations": 1
+        },
+        {
+          "phase": "completed",
+          "first_at": 88640,
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "route_generations": 0
+        }
+      ],
+      "route_revision_events": [
+        {
+          "source_at": 14700,
+          "planned_at": 14760,
+          "previous_source_at": 14600,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": false,
+          "old_previous_returned_length_m": 0.0730030699508806,
+          "new_returned_length_m": 2.2921637558860297,
+          "delta_m": 2.219160685935149,
+          "reason": "arrival_changed",
+          "revision_before": 2,
+          "revision_after": 3,
+          "pose": {
+            "x_m": 3.0708213607776855,
+            "y_m": 3.3688073702125783,
+            "yaw_rad": 0.21188059196221465
+          }
+        },
+        {
+          "source_at": 16700,
+          "planned_at": 16760,
+          "previous_source_at": 16600,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.7343323782580227,
+          "new_returned_length_m": 1.7639380423832325,
+          "delta_m": 0.02960566412520982,
+          "reason": "no_accepted_candidate",
+          "revision_before": 3,
+          "revision_after": 4,
+          "pose": {
+            "x_m": 3.58731841017214,
+            "y_m": 3.164447148654578,
+            "yaw_rad": -0.9567456258367324
+          }
+        },
+        {
+          "source_at": 16800,
+          "planned_at": 16840,
+          "previous_source_at": 16700,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.7639380423832325,
+          "new_returned_length_m": 1.7447526463836291,
+          "delta_m": -0.01918539599960334,
+          "reason": "no_accepted_candidate",
+          "revision_before": 4,
+          "revision_after": 5,
+          "pose": {
+            "x_m": 3.5942610337307785,
+            "y_m": 3.154421201463766,
+            "yaw_rad": -0.9729464714900637
+          }
+        },
+        {
+          "source_at": 23400,
+          "planned_at": 23440,
+          "previous_source_at": 23300,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 0.11415829999598641,
+          "new_returned_length_m": 3.2281433581907533,
+          "delta_m": 3.113985058194767,
+          "reason": "no_accepted_candidate",
+          "revision_before": 5,
+          "revision_after": 6,
+          "pose": {
+            "x_m": 4.41939624394569,
+            "y_m": 1.8781647130252284,
+            "yaw_rad": -0.5088261092760158
+          }
+        },
+        {
+          "source_at": 23500,
+          "planned_at": 23560,
+          "previous_source_at": 23400,
+          "phase": "cones",
+          "waypoint": 1,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 3.2281433581907533,
+          "new_returned_length_m": 3.2058249081206878,
+          "delta_m": -0.0223184500700655,
+          "reason": "no_accepted_candidate",
+          "revision_before": 6,
+          "revision_after": 7,
+          "pose": {
+            "x_m": 4.4400706158081515,
+            "y_m": 1.866559677138704,
+            "yaw_rad": -0.512496202630456
+          }
+        },
+        {
+          "source_at": 23600,
+          "planned_at": 23640,
+          "previous_source_at": 23500,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": false,
+          "old_previous_returned_length_m": 3.2058249081206878,
+          "new_returned_length_m": 4.389383344453532,
+          "delta_m": 1.1835584363328442,
+          "reason": "arrival_changed",
+          "revision_before": 7,
+          "revision_after": 8,
+          "pose": {
+            "x_m": 4.450018171628188,
+            "y_m": 1.8609546065240647,
+            "yaw_rad": -0.5143681786304568
+          }
+        },
+        {
+          "source_at": 38500,
+          "planned_at": 38560,
+          "previous_source_at": 38400,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.7525847984009657,
+          "new_returned_length_m": 1.7417204304408587,
+          "delta_m": -0.010864367960107035,
+          "reason": "footprint_reference_drift",
+          "revision_before": 8,
+          "revision_after": 9,
+          "pose": {
+            "x_m": 3.980252627312829,
+            "y_m": 1.8293271555380515,
+            "yaw_rad": 0.6391763840153448
+          }
+        },
+        {
+          "source_at": 40900,
+          "planned_at": 40960,
+          "previous_source_at": 40800,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.3325897776145275,
+          "new_returned_length_m": 1.299906154145589,
+          "delta_m": -0.032683623468938494,
+          "reason": "footprint_reference_drift",
+          "revision_before": 9,
+          "revision_after": 10,
+          "pose": {
+            "x_m": 4.369923214480171,
+            "y_m": 2.009890039937325,
+            "yaw_rad": 0.27843324915797396
+          }
+        },
+        {
+          "source_at": 42400,
+          "planned_at": 42440,
+          "previous_source_at": 42300,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.0489114465322518,
+          "new_returned_length_m": 1.0267773189491112,
+          "delta_m": -0.022134127583140595,
+          "reason": "footprint_reference_drift",
+          "revision_before": 10,
+          "revision_after": 11,
+          "pose": {
+            "x_m": 4.623853934410131,
+            "y_m": 2.090131854775691,
+            "yaw_rad": 0.3638391482013241
+          }
+        },
+        {
+          "source_at": 45300,
+          "planned_at": 45360,
+          "previous_source_at": 45200,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 0.5233172586260635,
+          "new_returned_length_m": 4.910317091730606,
+          "delta_m": 4.386999833104543,
+          "reason": "footprint_reference_drift",
+          "revision_before": 11,
+          "revision_after": 12,
+          "pose": {
+            "x_m": 5.0905953550461955,
+            "y_m": 2.3285097870944957,
+            "yaw_rad": 0.5217112494513643
+          }
+        },
+        {
+          "source_at": 49800,
+          "planned_at": 49840,
+          "previous_source_at": 49700,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 4.121830548811179,
+          "new_returned_length_m": 4.3081273102888735,
+          "delta_m": 0.1862967614776947,
+          "reason": "footprint_reference_drift",
+          "revision_before": 12,
+          "revision_after": 13,
+          "pose": {
+            "x_m": 5.579158484448795,
+            "y_m": 2.928900078964421,
+            "yaw_rad": 1.355785984172833
+          }
+        },
+        {
+          "source_at": 50900,
+          "planned_at": 50960,
+          "previous_source_at": 50800,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 4.128470287886576,
+          "new_returned_length_m": 3.7477998668312913,
+          "delta_m": -0.3806704210552847,
+          "reason": "footprint_reference_drift",
+          "revision_before": 13,
+          "revision_after": 14,
+          "pose": {
+            "x_m": 5.590775824488267,
+            "y_m": 3.130438258852864,
+            "yaw_rad": 1.6527667098498169
+          }
+        },
+        {
+          "source_at": 53300,
+          "planned_at": 53360,
+          "previous_source_at": 53200,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 3.3620246709684514,
+          "new_returned_length_m": 3.4758383812090177,
+          "delta_m": 0.1138137102405663,
+          "reason": "footprint_reference_drift",
+          "revision_before": 14,
+          "revision_after": 15,
+          "pose": {
+            "x_m": 5.562306660727117,
+            "y_m": 3.5374418496792037,
+            "yaw_rad": 1.653788357197575
+          }
+        },
+        {
+          "source_at": 55800,
+          "planned_at": 55840,
+          "previous_source_at": 55700,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 3.044446848296724,
+          "new_returned_length_m": 4.439922126448146,
+          "delta_m": 1.3954752781514221,
+          "reason": "footprint_reference_drift",
+          "revision_before": 15,
+          "revision_after": 16,
+          "pose": {
+            "x_m": 5.427516134692866,
+            "y_m": 3.956884216760312,
+            "yaw_rad": 2.164555143906968
+          }
+        },
+        {
+          "source_at": 59300,
+          "planned_at": 59360,
+          "previous_source_at": 59200,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 3.829268829324348,
+          "new_returned_length_m": 4.166885222398727,
+          "delta_m": 0.3376163930743785,
+          "reason": "footprint_reference_drift",
+          "revision_before": 16,
+          "revision_after": 17,
+          "pose": {
+            "x_m": 4.86947243822174,
+            "y_m": 4.16635051061247,
+            "yaw_rad": -2.9297459107983945
+          }
+        },
+        {
+          "source_at": 64600,
+          "planned_at": 64640,
+          "previous_source_at": 64500,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 3.2362282585387496,
+          "new_returned_length_m": 3.2151647997013555,
+          "delta_m": -0.021063458837394133,
+          "reason": "footprint_reference_drift",
+          "revision_before": 17,
+          "revision_after": 18,
+          "pose": {
+            "x_m": 4.063689038501651,
+            "y_m": 3.679814858287743,
+            "yaw_rad": -2.430001849266014
+          }
+        },
+        {
+          "source_at": 65900,
+          "planned_at": 65960,
+          "previous_source_at": 65800,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 3.005743650269041,
+          "new_returned_length_m": 2.9313268704672906,
+          "delta_m": -0.07441677980175054,
+          "reason": "footprint_reference_drift",
+          "revision_before": 18,
+          "revision_after": 19,
+          "pose": {
+            "x_m": 3.911281775200839,
+            "y_m": 3.50659956333777,
+            "yaw_rad": -2.1571537905822455
+          }
+        },
+        {
+          "source_at": 69200,
+          "planned_at": 69240,
+          "previous_source_at": 69100,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 2.3568119116991353,
+          "new_returned_length_m": 2.517476889644585,
+          "delta_m": 0.16066497794544965,
+          "reason": "footprint_reference_drift",
+          "revision_before": 19,
+          "revision_after": 20,
+          "pose": {
+            "x_m": 3.6710982337104654,
+            "y_m": 2.9720772584461406,
+            "yaw_rad": -1.7238711152958475
+          }
+        },
+        {
+          "source_at": 71800,
+          "planned_at": 71840,
+          "previous_source_at": 71700,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 2.064449559880065,
+          "new_returned_length_m": 2.0131156788438562,
+          "delta_m": -0.05133388103620895,
+          "reason": "footprint_reference_drift",
+          "revision_before": 20,
+          "revision_after": 21,
+          "pose": {
+            "x_m": 3.718583151387914,
+            "y_m": 2.5127314134925176,
+            "yaw_rad": -1.1605529895337245
+          }
+        },
+        {
+          "source_at": 75300,
+          "planned_at": 75360,
+          "previous_source_at": 75200,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 1.4025156647431571,
+          "new_returned_length_m": 4.701467982537174,
+          "delta_m": 3.298952317794017,
+          "reason": "footprint_reference_drift",
+          "revision_before": 21,
+          "revision_after": 22,
+          "pose": {
+            "x_m": 4.2280380983167305,
+            "y_m": 2.2062061896577325,
+            "yaw_rad": 0.02439252385370061
+          }
+        },
+        {
+          "source_at": 76700,
+          "planned_at": 76760,
+          "previous_source_at": 76600,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 4.472338356182148,
+          "new_returned_length_m": 1.1093433491598612,
+          "delta_m": -3.3629950070222874,
+          "reason": "footprint_reference_drift",
+          "revision_before": 22,
+          "revision_after": 23,
+          "pose": {
+            "x_m": 4.478747629344385,
+            "y_m": 2.2383016489407788,
+            "yaw_rad": 0.20270100443501526
+          }
+        },
+        {
+          "source_at": 80200,
+          "planned_at": 80240,
+          "previous_source_at": 80100,
+          "phase": "approach_light",
+          "waypoint": 2,
+          "same_mission_output": true,
+          "old_previous_returned_length_m": 0.4966373876771397,
+          "new_returned_length_m": 0.4803807743633422,
+          "delta_m": -0.01625661331379752,
+          "reason": "footprint_reference_drift",
+          "revision_before": 23,
+          "revision_after": 24,
+          "pose": {
+            "x_m": 5.085779427664892,
+            "y_m": 2.3894931850380274,
+            "yaw_rad": 0.30711032671033456
+          }
+        }
+      ],
+      "summary_matches_committed_v8_except_wall_time": true,
+      "source_commit": "a6236380a68431342ab9e76f468c587c9dd775f3",
+      "result_file": "work/motion-v9/ablation/current.json",
+      "result_sha256": "458fc4b8d0e9236dc7f39197cfeb8895acd6bf4973967d86b65e82f087a229c1",
+      "archive_sha256": "1509e7636ff9e0f0080b3f230633955badade898aa741ea2c2823f88f2ab36d2",
+      "native_executable_sha256": "7daad18a888255db88941e6c1e569fc7ad4b05004c91c2667459db146fc55ccf",
+      "modified_or_added_source_sha256": {
+        "crates/runner/src/async_simulation.rs": "c9427be299ce01ad485e1369064f60692de53e58470a20b3c4b1d386e38bab9c",
+        "crates/runner/examples/v9_ablation.rs": "fc52dc1952b5527e5cd5a1aadd7ca4438663bd305d5a27e588f6b34e8cf57355"
+      },
+      "separate_cargo_target_directory": "/Users/yuhaojin/Documents/XT-STCAR/work/motion-v9-ablation/current-target",
+      "maximum_observed_returned_path_points": 198
+    }
+  },
+  "order_only_invariants": {
+    "actual_command_changes_with_time_pose_speed_and_curvature_exactly_equal": true,
+    "plan_commands_exactly_equal": true,
+    "mission_reports_exactly_equal": true,
+    "returned_paths_exactly_equal": true,
+    "forecast_work_saved": {
+      "adoption_scenarios": 1587,
+      "projection_calls": 44065,
+      "projection_intervals": 1912583,
+      "source_checks": 18885
+    },
+    "projection_intervals_reduction_percent": 2.6236850935335725
+  },
+  "attribution": {
+    "conclusion": "只改变候选短路顺序未改变任何真实命令、物理状态、任务报告或返回路径，减少约2.62%的后备投影区间；a623共享时基后的轨迹变化引出了既有终端/缓存连续性敏感性。不能将后备检查排序当作6米回归根因，也不能因此回退共享时基。",
+    "first_same_source_command_difference_ms": 100,
+    "first_command_scope": "首次精确浮点差异不是有意义额外路径证据；首点/点数差异同理。",
+    "material_event_scope": "23400ms的Cones短尾变长计划在23600ms任务交接前仅短暂存在，不等于车辆实际沿3米长路行驶。首个灯前大幅增路在45300ms源/45360ms规划；同当前姿态旧缓存尾与新路见motion-v9-before.json。",
+    "route_event_length_scope": "Fixed LQR input [40,60], adopt [3,7,9], same post-poll observer across versions. Previous returned remaining path lengths are discovery only, separated by one capture period and not the exact same-current-pose old cached tail. Candidate fixtures must capture private cache before reset. Exact floating point first differences do not prove topology."
+  },
+  "reproduction": {
+    "command": ".venv/bin/python scripts/review-motion-ablation.py --output work/motion-v9-ablation-reproduction",
+    "prepare_only_command": ".venv/bin/python scripts/review-motion-ablation.py --prepare-only --output work/motion-v9-ablation-prepare",
+    "requirements": "工程根目录，原已安装的锁定Rust/Cargo和本地Cargo缓存、Git、Python3.12+；输出目录必须在work/且不存在。脚本不fetch/pull，不修改main源码，不执行RISC-V ELF。",
+    "script": "scripts/review-motion-ablation.py",
+    "script_sha256": "b478d940888ccebd936680d58c305f4017a676aa45b0c819a2db1bba182d79d1",
+    "observer_source": "scripts/review-motion-ablation/observer.rs",
+    "observer_sha256": "fc52dc1952b5527e5cd5a1aadd7ca4438663bd305d5a27e588f6b34e8cf57355",
+    "order_only_patch": "scripts/review-motion-ablation/order-only.patch",
+    "order_only_patch_sha256": "aecde158d41d1f8e64097842163bb3cc18639401c895ee2e3eee304efe0b2d94",
+    "observer_api_source": "git show a6236380a68431342ab9e76f468c587c9dd775f3:crates/runner/src/async_simulation.rs",
+    "observer_api_sha256": "c9427be299ce01ad485e1369064f60692de53e58470a20b3c4b1d386e38bab9c",
+    "procedure": "固定提交git archive解包；前后源哈希不符即失败。相同只读observer，old/order_only只移植API封装；order_only再用固定补丁移动完整forecast块，git apply --check并验证结果SHA。三个变体分开Cargo target、release --locked --offline本机构建，结束一次写JSON，记录全部编译输入哈希。",
+    "prepare_only_verified": true,
+    "full_script_execution_verified": true,
+    "verified_full_run_output_directory": "work/motion-v9-ablation-script-run",
+    "script_reruns": {
+      "old": {
+        "elapsed_ms": 54447,
+        "distance_m": 10.317616041272634,
+        "native_executable_sha256": "ac2b5f2ddbd69e00b550bcadc6e45363c1062824440368c4441483f811554441",
+        "result_sha256": "951e45086816ac3c88c674355e2899106fde2250769aa4d32db8e243ec4492aa",
+        "actual_commands_equal_first_valid_run": true,
+        "full_plans_equal_first_valid_run": true,
+        "trace_omitted": 0
+      },
+      "order_only": {
+        "elapsed_ms": 54447,
+        "distance_m": 10.317616041272634,
+        "native_executable_sha256": "af48e3db13e0e3c9e84abfd82e10aa9db38ef15b29625ebe2fd38b6f34b29db1",
+        "result_sha256": "7f02cdfa465babf3ec0df8ed2844fd9fcc2f6de05a95f18d1e1ab1a8319cd904",
+        "actual_commands_equal_first_valid_run": true,
+        "full_plans_equal_first_valid_run": true,
+        "trace_omitted": 0
+      },
+      "current": {
+        "elapsed_ms": 88647,
+        "distance_m": 16.51555838061635,
+        "native_executable_sha256": "5176a69c82945d2fb464b840075bda06ea0a225665b0d24db473a9a31bd2a3a1",
+        "result_sha256": "79fb231ca7ea879b549b3a1f9be4952087cc5272bf7aa7c68341546ca8272943",
+        "actual_commands_equal_first_valid_run": true,
+        "full_plans_equal_first_valid_run": true,
+        "trace_omitted": 0
+      }
+    }
+  },
+  "invalid_experiment_discarded": {
+    "directory": "work/motion-v9/ablation/invalid-shared-target",
+    "reason": "最初三个git archive目录共用Cargo target；归档历史mtime使order_only和current错误复用old可执行程序，三者SHA完全相同。该组证据全部弃用，以三个独立target实际重编译结果代替。",
+    "not_used_for_any_conclusion": true
+  },
+  "limits": [
+    "观察器仅在本专用例程保留至多16384命令变化及2048计划；本次均未截断。完整计划/路径保存在work，默认比赛程序不启用，不逐tick落盘。",
+    "功能时钟等待worker和callback时冻结；记录的模型行驶秒数与工作量计数不是CPU时间或目标WCET。",
+    "候选首因和工作量会随纯短路顺序变化；安全检查交集保留，未修改Q/R、门限、模型或预算。"
+  ]
+}

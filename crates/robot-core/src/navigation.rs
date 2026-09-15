@@ -15,6 +15,8 @@ use crate::{FrameId, MotionIntent, MotionOutput, Timestamp, ValidationError};
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod candidate_pipeline;
+mod continuity;
+use continuity::{CachedTerminalSeed, terminal_connection};
 mod primitive_envelope;
 mod recovery;
 mod terminal;
@@ -196,8 +198,17 @@ pub enum RouteRebuildReason {
 /// New admission/recovery fields use sparse JSON: an absent field means its
 /// Rust default (zero work, no search, or no constraint/failure). Nondefault
 /// values are serialized in full; the in-memory diagnostic is unchanged.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct RouteLengthChange {
+    pub old_remaining_distance_m: f64,
+    pub new_remaining_distance_m: f64,
+}
+
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct NavigationDiagnostics {
+    /// Present only for a same-goal footprint-drift rebuild with an available old cache.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route_length_change: Option<RouteLengthChange>,
     #[serde(skip_serializing_if = "AdmissionForecastWork::is_empty")]
     pub admission_forecast_work: AdmissionForecastWork,
     #[serde(skip_serializing_if = "ForwardSearchDiagnostics::is_empty")]
@@ -391,13 +402,6 @@ pub enum ArrivalBehavior {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
-struct CachedTerminalSeed {
-    goal: Point2,
-    heading: f64,
-    seed: TwoArcSeed,
-}
-
 pub struct Navigator {
     adoption_constraints: Option<AdoptionConstraints>,
     recovery_active: bool,
@@ -496,6 +500,7 @@ impl Navigator {
             self.travel_boundary = boundary;
             self.note_route_rebuild(RouteRebuildReason::BoundaryChanged);
             self.route = None;
+            self.terminal_seed = None;
             self.recovery_active = false;
         }
     }
@@ -518,6 +523,7 @@ impl Navigator {
         self.terminal_budget.reset();
         self.note_route_rebuild(RouteRebuildReason::TaskHold);
         self.route = None;
+        self.terminal_seed = None;
         self.recovery_active = false;
         self.diagnostics = NavigationDiagnostics {
             execution_state: Some(self.steering),
@@ -651,6 +657,7 @@ impl Navigator {
             self.recovery_active = false;
             self.continuation_checked = false;
             self.arrival = arrival;
+            self.terminal_seed = None;
         }
         let period = self.config.control_period_ms as f64 / 1000.0;
         self.diagnostics = NavigationDiagnostics {
@@ -746,6 +753,7 @@ impl Navigator {
             })
         {
             self.note_route_rebuild(RouteRebuildReason::GoalOrHeadingChanged);
+            self.terminal_seed = None;
             self.recovery_active = false;
         } else if self.route.is_some()
             && self.pending_route_rebuild == Some(RouteRebuildReason::GoalOrHeadingChanged)
@@ -770,6 +778,7 @@ impl Navigator {
         if !grid.recovery_active() && self.plan_on_grid(pose.point(), goal, &grid).is_none() {
             return Ok(self.blocked("no_grid_path"));
         }
+        let mut previous_remaining_length = None;
         // A collision-free cached terminal path may no longer be reachable
         // after tracking drift. Heading error displaces the body even when
         // its center remains on the reference. Replan against the same metric
@@ -792,6 +801,15 @@ impl Navigator {
                 },
             ) > self.config.goal_tolerance_m * 0.5
         {
+            previous_remaining_length =
+                self.route
+                    .as_ref()
+                    .and_then(|(old_goal, old_heading, route, progress)| {
+                        if *old_goal != goal || *old_heading != goal_heading_rad {
+                            return None;
+                        }
+                        continuity::remaining_length(pose, route.get(..=self.via_index)?, *progress)
+                    });
             self.note_route_rebuild(RouteRebuildReason::FootprintReferenceDrift);
             self.route = None;
         }
@@ -837,6 +855,17 @@ impl Navigator {
                     (goal, goal_heading_rad, path, 0)
                 });
             if self.route.is_some() {
+                if let Some(old_remaining_distance_m) = previous_remaining_length
+                    && let Some((_, _, route, progress)) = &self.route
+                    && let Some(new_remaining_distance_m) = route
+                        .get(..=self.via_index)
+                        .and_then(|leg| continuity::remaining_length(pose, leg, *progress))
+                {
+                    self.diagnostics.route_length_change = Some(RouteLengthChange {
+                        old_remaining_distance_m,
+                        new_remaining_distance_m,
+                    });
+                }
                 self.route_revision = self.route_revision.saturating_add(1);
                 self.diagnostics.route_revision = self.route_revision;
                 self.pending_route_rebuild = None;
@@ -1037,19 +1066,19 @@ impl Navigator {
             {
                 return None;
             }
-            terminal::two_arc(
+            terminal_connection(
+                &self.config,
+                &self.terminal_budget,
+                self.terminal_seed,
+                self.last_step,
                 pose,
                 self.steering.applied_curvature_per_m,
                 goal,
                 heading,
-                &self.config,
                 &grid,
-                &self.terminal_budget,
-                self.terminal_seed
-                    .filter(|hint| hint.goal == goal && hint.heading == heading)
-                    .map(|hint| hint.seed),
+                primitive_envelope::ErrorBound::default(),
             )
-            .map(|connection| (heading, connection.seed))
+            .map(|(connection, keep_family)| (heading, connection.seed, keep_family))
         });
         if self.terminal_budget.snapshot().budget_exhausted {
             return Ok(self.blocked("terminal_budget_exhausted"));
@@ -1222,7 +1251,7 @@ impl Navigator {
                 let mut next_projection = None;
                 let mut next_error = primitive_envelope::ErrorBound::default();
                 let mut candidate_terminal_seed = None;
-                if let Some((heading, _)) = protected_connection {
+                if let Some((heading, _, _)) = protected_connection {
                     next_projection = if grid.recovery_active() {
                         primitive_envelope::predict(pose, transition, period).and_then(|bounded| {
                             next_error = next_error.advance(&bounded)?;
@@ -1254,22 +1283,49 @@ impl Navigator {
                         )
                         .is_none()
                         {
-                            if let Some(connection) = terminal::two_arc_with_error(
-                                next.pose,
-                                next.curvature_per_m,
-                                goal,
-                                heading,
-                                &self.config,
-                                &grid,
-                                &self.terminal_budget,
-                                None,
-                                next_error,
-                            ) {
-                                candidate_terminal_seed = Some(CachedTerminalSeed {
-                                    goal,
-                                    heading,
-                                    seed: connection.seed,
-                                });
+                            if let Some(connection) = protected_connection
+                                .filter(|(_, _, used_seed)| *used_seed)
+                                .and_then(|(_, seed, _)| seed.after_travel(next.distance_m))
+                                .and_then(|seed| {
+                                    terminal::continue_two_arc_with_error(
+                                        next.pose,
+                                        next.curvature_per_m,
+                                        goal,
+                                        heading,
+                                        &self.config,
+                                        &grid,
+                                        &self.terminal_budget,
+                                        seed,
+                                        next_error,
+                                    )
+                                })
+                                .or_else(|| {
+                                    terminal::two_arc_with_error(
+                                        next.pose,
+                                        next.curvature_per_m,
+                                        goal,
+                                        heading,
+                                        &self.config,
+                                        &grid,
+                                        &self.terminal_budget,
+                                        None,
+                                        next_error,
+                                    )
+                                })
+                            {
+                                candidate_terminal_seed = now
+                                    .0
+                                    .checked_add(self.config.control_period_ms)
+                                    .map(|at| CachedTerminalSeed {
+                                        anchor_at: Timestamp(at),
+                                        anchor_pose: next.pose,
+                                        prefer_continuation: protected_connection
+                                            .is_some_and(|(_, _, keep)| keep)
+                                            && connection.used_seed,
+                                        goal,
+                                        heading,
+                                        seed: connection.seed,
+                                    });
                             } else {
                                 if self.terminal_budget.snapshot().budget_exhausted {
                                     self.diagnostics.candidates.terminal_budget += 1;
@@ -1302,7 +1358,30 @@ impl Navigator {
                     }
                 }
                 self.diagnostics.candidates.accepted += 1;
-                if best.as_ref().is_none_or(|old| score < old.score) {
+                if best.as_ref().is_none_or(|old| {
+                    // A rebased hint rescued this family only after the original
+                    // solvers failed. As in terminal recovery, prefer its certified
+                    // first segment; a held-curvature score cannot represent both
+                    // turns. Outside that family the original score is unchanged.
+                    if let Some((_, seed, true)) = protected_connection {
+                        let continued =
+                            candidate_terminal_seed.is_some_and(|s| s.prefer_continuation);
+                        let old_continued =
+                            old.terminal_seed.is_some_and(|s| s.prefer_continuation);
+                        if continued != old_continued {
+                            return continued;
+                        }
+                        if continued {
+                            let difference = (curvature - seed.first_curvature()).abs().total_cmp(
+                                &(old.intent.curvature_per_m - seed.first_curvature()).abs(),
+                            );
+                            if !difference.is_eq() {
+                                return difference.is_lt();
+                            }
+                        }
+                    }
+                    score < old.score
+                }) {
                     best = Some(EvaluatedCandidate {
                         score,
                         intent: MotionIntent {
@@ -1324,7 +1403,7 @@ impl Navigator {
         }
         self.terminal_budget.release_continuation();
         if best.is_none()
-            && let Some((heading, seed)) = protected_connection
+            && let Some((heading, seed, _)) = protected_connection
         {
             // Spend recovery work on actions closest to the certified first
             // control segment before trying large departures from that segment.
@@ -1373,11 +1452,19 @@ impl Navigator {
                         self.diagnostics.candidates.terminal_unreachable -= 1;
                     }
                     self.diagnostics.candidates.accepted += 1;
-                    candidate.terminal_seed = Some(CachedTerminalSeed {
-                        goal,
-                        heading,
-                        seed: connection.seed,
-                    });
+                    candidate.terminal_seed =
+                        now.0.checked_add(self.config.control_period_ms).map(|at| {
+                            CachedTerminalSeed {
+                                anchor_at: Timestamp(at),
+                                anchor_pose: next.pose,
+                                prefer_continuation: protected_connection
+                                    .is_some_and(|(_, _, keep)| keep)
+                                    && connection.used_seed,
+                                goal,
+                                heading,
+                                seed: connection.seed,
+                            }
+                        });
                     // Recovery executes the closest certified first segment;
                     // a held-curvature preview cannot score both future turns.
                     best = Some(candidate);
@@ -1501,17 +1588,16 @@ impl Navigator {
         // Small sideways corrections with the same final heading need an S,
         // which the five steering bins can otherwise replace with a full loop.
         if let Some(heading) = goal_heading_rad
-            && let Some(connection) = terminal::two_arc_with_error(
+            && let Some((connection, _)) = terminal_connection(
+                &self.config,
+                &self.terminal_budget,
+                self.terminal_seed,
+                self.last_step,
                 start,
                 initial_curvature,
                 goal,
                 heading,
-                &self.config,
                 grid,
-                &self.terminal_budget,
-                self.terminal_seed
-                    .filter(|hint| hint.goal == goal && hint.heading == heading)
-                    .map(|hint| hint.seed),
                 grid.completed_path_error(),
             )
         {

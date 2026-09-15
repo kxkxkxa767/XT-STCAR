@@ -167,6 +167,7 @@ pub enum AdmissionRejection {
 /// source's original lease; they never renew a command. Obstacles are borrowed
 /// from Navigator's already prepared world geometry for each check.
 #[derive(Clone, Copy, Debug, Serialize)]
+#[cfg_attr(test, derive(serde::Deserialize))]
 pub struct AdoptionConstraints {
     /// Earliest certified adoption time; candidate eligibility starts here.
     pub planned_at: Timestamp,

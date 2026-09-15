@@ -1,5 +1,7 @@
 //! Offline 2×2 timing experiment. Bounded traces are retained only in this
 //! explicit example, compared in memory, then one JSON report is emitted.
+#[path = "support/performance_gate.rs"]
+mod performance_gate;
 use serde::Serialize;
 use xt_stcar_robot_core::autonomy::{Point2, Pose2};
 use xt_stcar_robot_core::mission::MissionPhase;
@@ -36,6 +38,7 @@ struct PlanSample {
     navigation_reason: Option<String>,
     route_revision: u64,
     route_rebuild_reason: Option<String>,
+    route_length_change: Option<serde_json::Value>,
     route_points: usize,
     path_length_m: f64,
     path_start: Option<Point2>,
@@ -132,6 +135,9 @@ impl Trace {
                         .map(str::to_owned)
                 }),
             route_points: path.len(),
+            route_length_change: nav
+                .and_then(|nav| serde_json::to_value(nav.diagnostics).ok())
+                .and_then(|value| value.get("route_length_change").cloned()),
             path_length_m: path.windows(2).map(|p| p[0].distance(p[1])).sum(),
             path_start: path.first().copied(),
             path_end: path.last().copied(),
@@ -296,6 +302,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let traces_complete = comparisons
         .iter()
         .all(|c| c["comparison"]["traces_complete"] == true);
+    let performance = performance_gate::evaluate(&serde_json::to_value(&runs)?);
+    let performance_passed = performance["all_passed"] == true;
     serde_json::to_writer_pretty(
         std::io::stdout().lock(),
         &serde_json::json!({
@@ -304,12 +312,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "trace_limits":{"command_changes":MAX_COMMAND_CHANGES,"plans":MAX_PLANS,"path_points_per_plan":MAX_PATH_POINTS},
             "schedule_order":"[60,80]x[3,7,9]; [60,80]x[5,9,11]; [40,60]x[3,7,9]; [40,60]x[5,9,11]",
             "stop_scope":"Stop duration integrates the actual output state from startup through final braking. Stop episodes include startup/shutdown; navigation unexpected stops and first-observation rejection counts remain separate in summary.",
-            "all_completed":all_completed,"traces_complete":traces_complete,"runs":runs,"single_factor_comparisons":comparisons,
+            "all_completed":all_completed,"traces_complete":traces_complete,"performance_gate":performance,
+            "runs":runs,"single_factor_comparisons":comparisons,
         }),
     )?;
     println!();
-    if !all_completed || !traces_complete {
-        return Err("matrix contains a failed run or truncated comparison; inspect JSON".into());
+    if !all_completed || !traces_complete || !performance_passed {
+        return Err("matrix contains a failed run, truncated comparison or performance regression; inspect JSON".into());
     }
     Ok(())
 }

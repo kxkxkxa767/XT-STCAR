@@ -1,0 +1,4609 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-15T06:15:33.180647+00:00",
+  "baseline_commit": "a6236380a68431342ab9e76f468c587c9dd775f3",
+  "scope": "Archived native-host numerical experiments. Failed variants are retained as evidence and are not production options. Results and fixed-budget checks here are not a substitute for main-workspace final verification.",
+  "physical_output_enabled": false,
+  "production_acceptance_report": "docs/motion-v9-validation.json",
+  "performance_budget": {
+    "path": "crates/runner/examples/fixtures/motion-v9-performance-budget.json",
+    "sha256": "0b4e9e03c1c12231880bf43091cc206f56ae2f61525170582a54c7bd20e79e07",
+    "bytes": 11958
+  },
+  "pre_experiment_budget_copy": {
+    "path": "work/motion-v9/performance-budget-fixed.json",
+    "sha256": "0b4e9e03c1c12231880bf43091cc206f56ae2f61525170582a54c7bd20e79e07",
+    "bytes": 11958
+  },
+  "budget_bytes_unchanged": true,
+  "performance_evaluation_method": "Read-only evaluation of existing experiment JSON against the predeclared checked-in budget. The isolated experiment binaries did not yet embed the matrix performance-gate module. Completion and trace completeness remain separate from scalar performance.",
+  "schedule_labels": {
+    "A": {
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ]
+    },
+    "B": {
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ]
+    },
+    "C": {
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ]
+    },
+    "D": {
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ]
+    }
+  },
+  "prior_ablation_report": "docs/motion-v9-ablation.json",
+  "original_capture_result": {
+    "path": "work/motion-v9-route-investigation/original-window-run.json",
+    "sha256": "31a695009f36edb439022ab9e02eef6496832b2dc8afd1fd349329c3d091d19b",
+    "bytes": 437003
+  },
+  "variants": [
+    {
+      "variant": "retain-seed",
+      "hypothesis": "Retain the previous seed across failure without a predicted-state anchor.",
+      "disposition": "discarded_no_effect",
+      "reason": "Material LQR C detour remains identical to a623.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/nav-retain-seed.rs",
+        "sha256": "521ef5d26c5f3d867bf8cb0b555207c0017870e429a422e9c275d749f8a31d0e",
+        "bytes": 144389
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/retain-seed-run.json",
+        "sha256": "8c44f567024edecceb107c80c50bc3221bbbf18c9ebfb00858e74ad669d24c6f",
+        "bytes": 437000
+      },
+      "all_completed": true,
+      "traces_complete": null,
+      "runs": [
+        {
+          "tracker": "lqr",
+          "completed": true,
+          "elapsed_ms": 88647,
+          "distance_m": 16.51555838061635,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 59400,
+              "distance_m": 10.59040930465313,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8752279980811946,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        }
+      ],
+      "partial_total_checks": {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "elapsed_passed": false,
+        "distance_passed": false,
+        "scope": "Single material-case replay only; this result has no full output Stop trace and is not an eight-run gate."
+      },
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/retain-seed-run.log",
+          "sha256": "c6bb97b0f3301d574dc5b3960b5d2b8ed7e0ac0abe66b9155da99c04bed0c0ee",
+          "bytes": 1854494
+        }
+      ]
+    },
+    {
+      "variant": "anchor-only",
+      "hypothesis": "Store the selected candidate next-state anchor and adjust the numerical seed by later forward displacement.",
+      "disposition": "discarded_insufficient_recovery",
+      "reason": "Material LQR C still exceeds predeclared total time/distance caps.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/nav-anchor-only.rs",
+        "sha256": "5c702950d5021f42b12f6c0d806c64d21a3e2ccb4ac1fd6d9742e0de989bb516",
+        "bytes": 145660
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/anchored-run.json",
+        "sha256": "f7a01217478c2fe8f3586bf9a2d15d835d2c19bf07e00e8d4650c16106e10370",
+        "bytes": 435460
+      },
+      "all_completed": true,
+      "traces_complete": null,
+      "runs": [
+        {
+          "tracker": "lqr",
+          "completed": true,
+          "elapsed_ms": 81043,
+          "distance_m": 15.141360061700617,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 51798,
+              "distance_m": 9.21730651634816,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8741324674710188,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        }
+      ],
+      "partial_total_checks": {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "elapsed_passed": false,
+        "distance_passed": false,
+        "scope": "Single material-case replay only; this result has no full output Stop trace and is not an eight-run gate."
+      },
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/anchored-run.log",
+          "sha256": "039720e58a0d8a423ef066af982ddcf684a9d6e3bfacff6b046a266f5dbf7eb6",
+          "bytes": 1503935
+        }
+      ]
+    },
+    {
+      "variant": "anchor-all-warm",
+      "hypothesis": "Try adjusted warm continuation throughout normal protected candidate handling.",
+      "disposition": "discarded_regressions",
+      "reason": "LQR C improves, but PP A becomes longer/slower, LQR B fails after ordinary Stop exceeds 10 seconds, and synchronous LQR regresses.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/nav-anchor-all-warm.rs",
+        "sha256": "b7556d4320698577dbf75267952dc68c268c69e883d4ab7e7d69898ec6e8cf95",
+        "bytes": 146004
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/anchored-warm-matrix.json",
+        "sha256": "deb10a7f1294fac1ae3b51832d160856e513d5f67057e25d0a4ff7dca49d08ad",
+        "bytes": 3731374
+      },
+      "all_completed": false,
+      "traces_complete": true,
+      "runs": [
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 92867,
+          "distance_m": 17.267269029808617,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18280,
+              "distance_m": 5.0507071000009285,
+              "unexpected_stop_command_ms": 278
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 60796,
+              "distance_m": 10.518100912781607,
+              "unexpected_stop_command_ms": 448
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5484,
+              "distance_m": 0.9063096143890409,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4709,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "elapsed_ms",
+                "actual": 92867,
+                "maximum": 81250
+              },
+              {
+                "metric": "distance_m",
+                "actual": 17.267269029808617,
+                "maximum": 15.591167638397172
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "approach_light",
+                "actual": 60796,
+                "maximum": 46200
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54871,
+          "distance_m": 10.743348747299136,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18476,
+              "distance_m": 5.037697925248966,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22800,
+              "distance_m": 4.0366140504429495,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5286,
+              "distance_m": 0.8768906285092989,
+              "unexpected_stop_command_ms": 74
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4545,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 56443,
+          "distance_m": 11.026391568072519,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18600,
+              "distance_m": 5.082085770252175,
+              "unexpected_stop_command_ms": 328
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.274706073123907,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8767705468156366,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4447,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54449,
+          "distance_m": 10.676447532766336,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18724,
+              "distance_m": 5.044966813389796,
+              "unexpected_stop_command_ms": 74
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22282,
+              "distance_m": 3.9620848124575847,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8765711171048404,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4195,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 85863,
+          "distance_m": 15.436462142764595,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15880,
+              "distance_m": 4.279513000000636,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 56316,
+              "distance_m": 9.481714730309495,
+              "unexpected_stop_command_ms": 198
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.883083009817945,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4855,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": false,
+          "elapsed_ms": 102065,
+          "distance_m": 17.30765121211778,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 0,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15476,
+              "distance_m": 4.2468140356757536,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 78600,
+              "distance_m": 12.2686910333452,
+              "unexpected_stop_command_ms": 10396
+            }
+          ],
+          "actual_output_stop_duration_ms": 13865,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "elapsed_ms",
+                "actual": 102065,
+                "maximum": 94896
+              },
+              {
+                "metric": "stop_duration_ms",
+                "actual": 13865,
+                "maximum": 5349
+              },
+              {
+                "metric": "phase_count",
+                "actual": 4,
+                "expected": 7
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "approach_light",
+                "actual": 78600,
+                "maximum": 62837
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "wait_green",
+                "actual": null,
+                "maximum": 1280
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "finish",
+                "actual": null,
+                "maximum": 6400
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "completed",
+                "actual": null,
+                "maximum": 1000
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54249,
+          "distance_m": 10.28807927237712,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24394,
+              "distance_m": 4.327012526668485,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 724,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5482,
+              "distance_m": 0.9111456678268272,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4917,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 53445,
+          "distance_m": 10.221887662521237,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15320,
+              "distance_m": 4.215899650675626,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.33273432715612,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 600,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8804288948754027,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4357,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        }
+      ],
+      "all_predeclared_performance_checks_passed": false,
+      "synchronous_result": {
+        "path": "work/motion-v9-route-investigation/anchored-warm-sync.json",
+        "sha256": "1b96f50bc8142213d17bd9b58ffbd92dc41124baf932ce23e5767c885009bdf1",
+        "bytes": 161017
+      },
+      "synchronous_runs": [
+        {
+          "tracking": {
+            "kind": "pure_pursuit"
+          },
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 17600,
+              "distance_m": 5.0602456637658335,
+              "unexpected_stop_command_ms": 200
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 27800,
+              "distance_m": 4.772230783032535,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5300,
+              "distance_m": 0.8827571031638082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        },
+        {
+          "tracking": {
+            "kind": "lqr",
+            "max_heading_error_rad": 0.7,
+            "max_lateral_error_m": 0.5,
+            "min_speed_mps": 0.03,
+            "q_heading": 2.0,
+            "q_lateral": 4.0,
+            "r_curvature": 1.0
+          },
+          "completed": true,
+          "elapsed_ms": 79700,
+          "distance_m": 15.057721523545421,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 14800,
+              "distance_m": 4.189111437964239,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 51600,
+              "distance_m": 9.198623063556807,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5200,
+              "distance_m": 0.8763795429269646,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        }
+      ],
+      "synchronous_elapsed_distance_equal_to_v8": false,
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/anchored-warm-matrix.log",
+          "sha256": "ec34dd96e94522fd7bf4caa8e9fe2704e436537532755e6ccb3bf6ccf00dc91e",
+          "bytes": 10402277
+        },
+        {
+          "path": "work/motion-v9-route-investigation/anchored-warm-sync.log",
+          "sha256": "9295c4ba0d63fc447a3520ba68f8c1fcde514b4a8765865fed660553c520f805",
+          "bytes": 2374097
+        },
+        {
+          "path": "work/motion-v9-route-investigation/anchored-warm-run.log",
+          "sha256": "4730299bf3492b75fc189a0492d61b133786de505daf5c7bf42db9e1831a6382",
+          "bytes": 1218795
+        }
+      ]
+    },
+    {
+      "variant": "anchor-required-warm",
+      "hypothesis": "Narrow adjusted warm candidate handling to an oriented protected terminal connection.",
+      "disposition": "discarded_regressions",
+      "reason": "PP A and LQR B exceed the fixed performance gate; synchronous LQR regresses.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/nav-anchor-required-warm.rs",
+        "sha256": "6f5deb29b6916babdf33ee8cc35ed4208215c86c9e7cd15653cd8b4a850d131d",
+        "bytes": 146106
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/anchor-required-warm-matrix.json",
+        "sha256": "98bbdcb0101eb9c0b04c63b4774fa569192c4c033e74eaf326714a79d1ca758b",
+        "bytes": 3635514
+      },
+      "all_completed": true,
+      "traces_complete": true,
+      "runs": [
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 92867,
+          "distance_m": 17.26662418661582,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18280,
+              "distance_m": 5.0507071000009285,
+              "unexpected_stop_command_ms": 278
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 61002,
+              "distance_m": 10.55138170209139,
+              "unexpected_stop_command_ms": 168
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8723839818863566,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4709,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "elapsed_ms",
+                "actual": 92867,
+                "maximum": 81250
+              },
+              {
+                "metric": "distance_m",
+                "actual": 17.26662418661582,
+                "maximum": 15.591167638397172
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "approach_light",
+                "actual": 61002,
+                "maximum": 46200
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54985,
+          "distance_m": 10.749803884249326,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18476,
+              "distance_m": 5.037697925248966,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22800,
+              "distance_m": 4.042014949927315,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8779448659751082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4585,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 56443,
+          "distance_m": 11.026391568072519,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18600,
+              "distance_m": 5.082085770252175,
+              "unexpected_stop_command_ms": 328
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.274706073123907,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8767705468156366,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4447,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54449,
+          "distance_m": 10.679626657117716,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18724,
+              "distance_m": 5.044966813389796,
+              "unexpected_stop_command_ms": 74
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22282,
+              "distance_m": 3.964252761830921,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8775822920827097,
+              "unexpected_stop_command_ms": 82
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4195,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54269,
+          "distance_m": 10.33062814943215,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15880,
+              "distance_m": 4.279513000000636,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24722,
+              "distance_m": 4.367488066665776,
+              "unexpected_stop_command_ms": 196
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8914756801285023,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4739,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 114065,
+          "distance_m": 20.751544485713715,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15476,
+              "distance_m": 4.2468140356757536,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 85004,
+              "distance_m": 14.837436302239675,
+              "unexpected_stop_command_ms": 320
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8751480047003464,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4669,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "elapsed_ms",
+                "actual": 114065,
+                "maximum": 94896
+              },
+              {
+                "metric": "distance_m",
+                "actual": 20.751544485713715,
+                "maximum": 17.74139250563986
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "approach_light",
+                "actual": 85004,
+                "maximum": 62837
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54249,
+          "distance_m": 10.2893029962875,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24394,
+              "distance_m": 4.334055562195852,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 724,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5482,
+              "distance_m": 0.9053263562098794,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4917,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 53445,
+          "distance_m": 10.221895454264796,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15320,
+              "distance_m": 4.215899650675626,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.3327267262176825,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 600,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8804442875574376,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4357,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        }
+      ],
+      "all_predeclared_performance_checks_passed": false,
+      "synchronous_result": {
+        "path": "work/motion-v9-route-investigation/anchor-required-warm-sync.json",
+        "sha256": "c7e7228f3012b3b3e038cc97eb328abab75bb1b5f6fc2fbee6f4622e76fb4a42",
+        "bytes": 161293
+      },
+      "synchronous_runs": [
+        {
+          "tracking": {
+            "kind": "pure_pursuit"
+          },
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 17600,
+              "distance_m": 5.0602456637658335,
+              "unexpected_stop_command_ms": 200
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 27800,
+              "distance_m": 4.772230783032535,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5300,
+              "distance_m": 0.8827571031638082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        },
+        {
+          "tracking": {
+            "kind": "lqr",
+            "max_heading_error_rad": 0.7,
+            "max_lateral_error_m": 0.5,
+            "min_speed_mps": 0.03,
+            "q_heading": 2.0,
+            "q_lateral": 4.0,
+            "r_curvature": 1.0
+          },
+          "completed": true,
+          "elapsed_ms": 79300,
+          "distance_m": 14.991455368135107,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 14800,
+              "distance_m": 4.189111437964239,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 51200,
+              "distance_m": 9.132589830804392,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5200,
+              "distance_m": 0.8761466202690655,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        }
+      ],
+      "synchronous_elapsed_distance_equal_to_v8": false,
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/anchor-required-warm-build.log",
+          "sha256": "b012a384b2cde76b31dbc8cbe4f7db3121a9e036be8c0e25404790354e6415b3",
+          "bytes": 555
+        },
+        {
+          "path": "work/motion-v9-route-investigation/anchor-required-warm-matrix.log",
+          "sha256": "95d3e873c3a32054f24e687287f0007418852dcc648349f3cdf99144f1ae8cac",
+          "bytes": 9942909
+        },
+        {
+          "path": "work/motion-v9-route-investigation/anchor-required-warm-sync.log",
+          "sha256": "a803c6ba82def7ea3a5aa7eff6f20b124cfb41acdf48ced4c3c9ab2663c9af0f",
+          "bytes": 2417736
+        }
+      ]
+    },
+    {
+      "variant": "rebase-required-warm",
+      "hypothesis": "Limit rebasing to later-than-anchor forward displacement.",
+      "disposition": "discarded_regressions",
+      "reason": "Synchronous LQR is restored, but PP A and material LQR C still fail the fixed performance gate.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/nav-rebase-required-warm.rs",
+        "sha256": "2b0e7cf7251e9d5a0b02564f0eb51b8f63d51746e4d33f4ccf15c47361e98341",
+        "bytes": 146227
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/rebase-required-warm-matrix.json",
+        "sha256": "82ca8f6f890e5a1a9bb3389475f498bb45fb70257d160d696c8fc8a9ef49a248",
+        "bytes": 3639819
+      },
+      "all_completed": true,
+      "traces_complete": true,
+      "runs": [
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 94067,
+          "distance_m": 17.449038823402667,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18280,
+              "distance_m": 5.0507071000009285,
+              "unexpected_stop_command_ms": 278
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 62202,
+              "distance_m": 10.729970428081447,
+              "unexpected_stop_command_ms": 168
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8762098926831097,
+              "unexpected_stop_command_ms": 82
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4709,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "elapsed_ms",
+                "actual": 94067,
+                "maximum": 81250
+              },
+              {
+                "metric": "distance_m",
+                "actual": 17.449038823402667,
+                "maximum": 15.591167638397172
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "approach_light",
+                "actual": 62202,
+                "maximum": 46200
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54985,
+          "distance_m": 10.749803884249326,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18476,
+              "distance_m": 5.037697925248966,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22800,
+              "distance_m": 4.042014949927315,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8779448659751082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4585,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 56443,
+          "distance_m": 11.026391568072519,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18600,
+              "distance_m": 5.082085770252175,
+              "unexpected_stop_command_ms": 328
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.274706073123907,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8767705468156366,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4447,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54449,
+          "distance_m": 10.679626657117716,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18724,
+              "distance_m": 5.044966813389796,
+              "unexpected_stop_command_ms": 74
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22282,
+              "distance_m": 3.964252761830921,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8775822920827097,
+              "unexpected_stop_command_ms": 82
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4195,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54269,
+          "distance_m": 10.3304889061203,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15880,
+              "distance_m": 4.279513000000636,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24600,
+              "distance_m": 4.357523366604575,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5482,
+              "distance_m": 0.9013011368777694,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4657,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 86869,
+          "distance_m": 16.203595555101632,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15476,
+              "distance_m": 4.2468140356757536,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 57806,
+              "distance_m": 10.290999171358157,
+              "unexpected_stop_command_ms": 114
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8736362049697457,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4463,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 84249,
+          "distance_m": 15.09059952610672,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 54994,
+              "distance_m": 9.164946460654921,
+              "unexpected_stop_command_ms": 208
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5286,
+              "distance_m": 0.8757319875705128,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4721,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "elapsed_ms",
+                "actual": 84249,
+                "maximum": 59892
+              },
+              {
+                "metric": "distance_m",
+                "actual": 15.09059952610672,
+                "maximum": 11.3493776453999
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "approach_light",
+                "actual": 54994,
+                "maximum": 27060
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 53445,
+          "distance_m": 10.221895454264796,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15320,
+              "distance_m": 4.215899650675626,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.3327267262176825,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 600,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8804442875574376,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4357,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        }
+      ],
+      "all_predeclared_performance_checks_passed": false,
+      "synchronous_result": {
+        "path": "work/motion-v9-route-investigation/rebase-required-warm-sync.json",
+        "sha256": "385e1aa92e13c6bf1616479558ccf5cc44384dfdf31558b13d15819354bd7d31",
+        "bytes": 158002
+      },
+      "synchronous_runs": [
+        {
+          "tracking": {
+            "kind": "pure_pursuit"
+          },
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 17600,
+              "distance_m": 5.0602456637658335,
+              "unexpected_stop_command_ms": 200
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 27800,
+              "distance_m": 4.772230783032535,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5300,
+              "distance_m": 0.8827571031638082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        },
+        {
+          "tracking": {
+            "kind": "lqr",
+            "max_heading_error_rad": 0.7,
+            "max_lateral_error_m": 0.5,
+            "min_speed_mps": 0.03,
+            "q_heading": 2.0,
+            "q_lateral": 4.0,
+            "r_curvature": 1.0
+          },
+          "completed": true,
+          "elapsed_ms": 54300,
+          "distance_m": 10.249674629119367,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 14800,
+              "distance_m": 4.189111437964239,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 26200,
+              "distance_m": 4.39062905957664,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5200,
+              "distance_m": 0.8763266524812617,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        }
+      ],
+      "synchronous_elapsed_distance_equal_to_v8": true,
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/rebase-required-warm-build.log",
+          "sha256": "f56ec1a8aebb7658043b3c37e39de91d55811c7dcb3087bed64474c7912a5ac0",
+          "bytes": 555
+        },
+        {
+          "path": "work/motion-v9-route-investigation/rebase-required-warm-matrix.log",
+          "sha256": "2f16dc63d5adc29ee48c90261ce6c66b2b2cdc1642afc4f8f8c06ef153e60dc0",
+          "bytes": 10273209
+        },
+        {
+          "path": "work/motion-v9-route-investigation/rebase-required-warm-sync.log",
+          "sha256": "8aefdceeb5e42dcf71c72debe24c8ff11a7a6e851bb13e8600efc39ebba2c2ba",
+          "bytes": 1767412
+        }
+      ]
+    },
+    {
+      "variant": "fallback-anchor",
+      "hypothesis": "Preserve ordinary cold/unadjusted-warm successes; rebase only after both original attempts fail, and remember the recovered family.",
+      "disposition": "discarded_phase_and_stop_regression",
+      "reason": "All runs complete and PP/sync are restored, but LQR B actual Stop and approach-light duration exceed their fixed limits.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/nav-fallback-anchor.rs",
+        "sha256": "7c9efb4f59d2edaeb3624754b350ffafc73c61ae85e43e6ae7f96020d8078ef9",
+        "bytes": 147220
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/fallback-anchor-matrix.json",
+        "sha256": "0fc29d40e79641af3f52dc59c928ad64249ab569488bc344b8f4184673159f45",
+        "bytes": 3712296
+      },
+      "all_completed": true,
+      "traces_complete": true,
+      "runs": [
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 75467,
+          "distance_m": 14.049015678458577,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18280,
+              "distance_m": 5.0507071000009285,
+              "unexpected_stop_command_ms": 278
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 43520,
+              "distance_m": 7.3257572164201346,
+              "unexpected_stop_command_ms": 168
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8803999594001858,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4709,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54985,
+          "distance_m": 10.749803884249326,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18476,
+              "distance_m": 5.037697925248966,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22800,
+              "distance_m": 4.042014949927315,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8779448659751082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4585,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 56443,
+          "distance_m": 11.026391568072519,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18600,
+              "distance_m": 5.082085770252175,
+              "unexpected_stop_command_ms": 328
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.274706073123907,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8767705468156366,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4447,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54449,
+          "distance_m": 10.679626657117716,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18724,
+              "distance_m": 5.044966813389796,
+              "unexpected_stop_command_ms": 74
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22282,
+              "distance_m": 3.964252761830921,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8775822920827097,
+              "unexpected_stop_command_ms": 82
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4195,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54269,
+          "distance_m": 10.33062814943215,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15880,
+              "distance_m": 4.279513000000636,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24722,
+              "distance_m": 4.367488066665776,
+              "unexpected_stop_command_ms": 196
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8914756801285023,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4739,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 92465,
+          "distance_m": 13.899477520570974,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15476,
+              "distance_m": 4.2468140356757536,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 63404,
+              "distance_m": 7.984737541796332,
+              "unexpected_stop_command_ms": 3168
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8757797999999448,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 7517,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "stop_duration_ms",
+                "actual": 7517,
+                "maximum": 5349
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "approach_light",
+                "actual": 63404,
+                "maximum": 62837
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54249,
+          "distance_m": 10.2893029962875,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24394,
+              "distance_m": 4.334055562195852,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 724,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5482,
+              "distance_m": 0.9053263562098794,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4917,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 53445,
+          "distance_m": 10.221895454264796,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15320,
+              "distance_m": 4.215899650675626,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.3327267262176825,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 600,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8804442875574376,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4357,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        }
+      ],
+      "all_predeclared_performance_checks_passed": false,
+      "synchronous_result": {
+        "path": "work/motion-v9-route-investigation/fallback-anchor-sync.json",
+        "sha256": "385e1aa92e13c6bf1616479558ccf5cc44384dfdf31558b13d15819354bd7d31",
+        "bytes": 158002
+      },
+      "synchronous_runs": [
+        {
+          "tracking": {
+            "kind": "pure_pursuit"
+          },
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 17600,
+              "distance_m": 5.0602456637658335,
+              "unexpected_stop_command_ms": 200
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 27800,
+              "distance_m": 4.772230783032535,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5300,
+              "distance_m": 0.8827571031638082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        },
+        {
+          "tracking": {
+            "kind": "lqr",
+            "max_heading_error_rad": 0.7,
+            "max_lateral_error_m": 0.5,
+            "min_speed_mps": 0.03,
+            "q_heading": 2.0,
+            "q_lateral": 4.0,
+            "r_curvature": 1.0
+          },
+          "completed": true,
+          "elapsed_ms": 54300,
+          "distance_m": 10.249674629119367,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 14800,
+              "distance_m": 4.189111437964239,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 26200,
+              "distance_m": 4.39062905957664,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5200,
+              "distance_m": 0.8763266524812617,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        }
+      ],
+      "synchronous_elapsed_distance_equal_to_v8": true,
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/fallback-anchor-build.log",
+          "sha256": "b629e51df332b5d7f418a1444ee78b8ec899e9f007936c33ad8efd07ac0beebd",
+          "bytes": 858
+        },
+        {
+          "path": "work/motion-v9-route-investigation/fallback-anchor-matrix.log",
+          "sha256": "4e42a33f6e07a084de949a1251ea4205a7c94ac34d28953b3148630516e5215a",
+          "bytes": 11929357
+        },
+        {
+          "path": "work/motion-v9-route-investigation/fallback-anchor-sync.log",
+          "sha256": "270bda627d2468c1c99a6dc2ff7fce76ddec2f15c7f75f97aeb50d108e43d2cc",
+          "bytes": 1768168
+        }
+      ]
+    },
+    {
+      "variant": "preserve-family",
+      "hypothesis": "Keep an already-recovered family when the original unadjusted warm solve succeeds.",
+      "disposition": "discarded_completion_failure",
+      "reason": "LQR B still fails because ordinary Stop exceeds 10 seconds.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/nav-preserve-family.rs",
+        "sha256": "3cac09d64460c6d6240ad925445231439348ad180d942d03185992c71cf3353d",
+        "bytes": 147324
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/preserve-family-matrix.json",
+        "sha256": "04bb63056fb6b1390471cece039f95664c665e76923a71bc83fc1d2f42d80b50",
+        "bytes": 3714796
+      },
+      "all_completed": false,
+      "traces_complete": true,
+      "runs": [
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 75467,
+          "distance_m": 14.049015678458577,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18280,
+              "distance_m": 5.0507071000009285,
+              "unexpected_stop_command_ms": 278
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 43520,
+              "distance_m": 7.3257572164201346,
+              "unexpected_stop_command_ms": 168
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8803999594001858,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4709,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54985,
+          "distance_m": 10.749803884249326,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18476,
+              "distance_m": 5.037697925248966,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22800,
+              "distance_m": 4.042014949927315,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8779448659751082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4585,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 56443,
+          "distance_m": 11.026391568072519,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18600,
+              "distance_m": 5.082085770252175,
+              "unexpected_stop_command_ms": 328
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.274706073123907,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8767705468156366,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4447,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54449,
+          "distance_m": 10.679626657117716,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18724,
+              "distance_m": 5.044966813389796,
+              "unexpected_stop_command_ms": 74
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22282,
+              "distance_m": 3.964252761830921,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8775822920827097,
+              "unexpected_stop_command_ms": 82
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4195,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54269,
+          "distance_m": 10.33062814943215,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15880,
+              "distance_m": 4.279513000000636,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24722,
+              "distance_m": 4.367488066665776,
+              "unexpected_stop_command_ms": 196
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8914756801285023,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4739,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": false,
+          "elapsed_ms": 66469,
+          "distance_m": 9.972224718897795,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 0,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15476,
+              "distance_m": 4.2468140356757536,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 43004,
+              "distance_m": 4.93326454012522,
+              "unexpected_stop_command_ms": 11030
+            }
+          ],
+          "actual_output_stop_duration_ms": 14499,
+          "predeclared_performance_check": {
+            "passed": false,
+            "failures": [
+              {
+                "metric": "stop_duration_ms",
+                "actual": 14499,
+                "maximum": 5349
+              },
+              {
+                "metric": "phase_count",
+                "actual": 4,
+                "expected": 7
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "wait_green",
+                "actual": null,
+                "maximum": 1280
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "finish",
+                "actual": null,
+                "maximum": 6400
+              },
+              {
+                "metric": "phase_duration_ms",
+                "phase": "completed",
+                "actual": null,
+                "maximum": 1000
+              }
+            ]
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54249,
+          "distance_m": 10.2893029962875,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24394,
+              "distance_m": 4.334055562195852,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 724,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5482,
+              "distance_m": 0.9053263562098794,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4917,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 53445,
+          "distance_m": 10.221895454264796,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15320,
+              "distance_m": 4.215899650675626,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.3327267262176825,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 600,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8804442875574376,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4357,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        }
+      ],
+      "all_predeclared_performance_checks_passed": false,
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/preserve-family-build.log",
+          "sha256": "a5732b6e35a698ea49125a3209833507611febc3c5f7f52cfaf8560346135cd4",
+          "bytes": 858
+        },
+        {
+          "path": "work/motion-v9-route-investigation/preserve-family-matrix.log",
+          "sha256": "02996eccf1c560a97240d98a0313276e77bd9d4161cd5aabd0f2021bb695d498",
+          "bytes": 9672889
+        }
+      ]
+    },
+    {
+      "variant": "family-action",
+      "hypothesis": "Within a previously recovered certified family, prefer continued candidates then proximity to the certified first curvature, with original score as final tie-breaker.",
+      "disposition": "isolated_candidate_passed_production_verification_separate",
+      "reason": "All eight isolated runs pass completion and the fixed total/phase/Stop gate; synchronous PP/LQR equal v8. Main workspace evidence is reported separately after final integration.",
+      "retained_navigation_source": {
+        "path": "work/motion-v9-route-investigation/crates/robot-core/src/navigation.rs",
+        "sha256": "da31b6ce8be92b13153b230261418bdc4500dd1996ff270747878a62f1c0a67e",
+        "bytes": 148050
+      },
+      "result": {
+        "path": "work/motion-v9-route-investigation/family-action-matrix.json",
+        "sha256": "576c870080e3456a8a9bff6721398d0bb8a7d6eb933d7030e0b5cde41f35610a",
+        "bytes": 3594631
+      },
+      "all_completed": true,
+      "traces_complete": true,
+      "runs": [
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 75467,
+          "distance_m": 14.049015678458577,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18280,
+              "distance_m": 5.0507071000009285,
+              "unexpected_stop_command_ms": 278
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 43520,
+              "distance_m": 7.3257572164201346,
+              "unexpected_stop_command_ms": 168
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8803999594001858,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4709,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54985,
+          "distance_m": 10.749803884249326,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18476,
+              "distance_m": 5.037697925248966,
+              "unexpected_stop_command_ms": 280
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22800,
+              "distance_m": 4.042014949927315,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8779448659751082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4585,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 56443,
+          "distance_m": 11.026391568072519,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18600,
+              "distance_m": 5.082085770252175,
+              "unexpected_stop_command_ms": 328
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.274706073123907,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8767705468156366,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4447,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "pp",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 54449,
+          "distance_m": 10.679626657117716,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 18724,
+              "distance_m": 5.044966813389796,
+              "unexpected_stop_command_ms": 74
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 22282,
+              "distance_m": 3.964252761830921,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5278,
+              "distance_m": 0.8775822920827097,
+              "unexpected_stop_command_ms": 82
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4195,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54663,
+          "distance_m": 10.330779583671216,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.7921514026277879,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15880,
+              "distance_m": 4.279513000000636,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 25200,
+              "distance_m": 4.383200050396513,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8759151306365893,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4657,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            60,
+            80
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 55265,
+          "distance_m": 10.310890964738123,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4924,
+              "distance_m": 0.792146143088503,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15476,
+              "distance_m": 4.2468140356757536,
+              "unexpected_stop_command_ms": 84
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 26120,
+              "distance_m": 4.389846428927279,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 280,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5400,
+              "distance_m": 0.8820843570371233,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4349,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            3,
+            7,
+            9
+          ],
+          "completed": true,
+          "elapsed_ms": 54249,
+          "distance_m": 10.291006143657711,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928291778714589,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15806,
+              "distance_m": 4.257091900000626,
+              "unexpected_stop_command_ms": 394
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24994,
+              "distance_m": 4.362985658657541,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 320,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5286,
+              "distance_m": 0.878099407118422,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4513,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        },
+        {
+          "tracker": "lqr",
+          "input_delays_ms": [
+            40,
+            60
+          ],
+          "adoption_delays_ms": [
+            5,
+            9,
+            11
+          ],
+          "completed": true,
+          "elapsed_ms": 53445,
+          "distance_m": 10.221895454264796,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "final_actual_curvature_per_m": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7928247898045288,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 15320,
+              "distance_m": 4.215899650675626,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 24404,
+              "distance_m": 4.3327267262176825,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 600,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5276,
+              "distance_m": 0.8804442875574376,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": 4357,
+          "predeclared_performance_check": {
+            "passed": true,
+            "failures": []
+          }
+        }
+      ],
+      "all_predeclared_performance_checks_passed": true,
+      "synchronous_result": {
+        "path": "work/motion-v9-route-investigation/family-action-sync.json",
+        "sha256": "385e1aa92e13c6bf1616479558ccf5cc44384dfdf31558b13d15819354bd7d31",
+        "bytes": 158002
+      },
+      "synchronous_runs": [
+        {
+          "tracking": {
+            "kind": "pure_pursuit"
+          },
+          "completed": true,
+          "elapsed_ms": 58800,
+          "distance_m": 11.508841029059477,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 17600,
+              "distance_m": 5.0602456637658335,
+              "unexpected_stop_command_ms": 200
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 27800,
+              "distance_m": 4.772230783032535,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5300,
+              "distance_m": 0.8827571031638082,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        },
+        {
+          "tracking": {
+            "kind": "lqr",
+            "max_heading_error_rad": 0.7,
+            "max_lateral_error_m": 0.5,
+            "min_speed_mps": 0.03,
+            "q_heading": 2.0,
+            "q_lateral": 4.0,
+            "r_curvature": 1.0
+          },
+          "completed": true,
+          "elapsed_ms": 54300,
+          "distance_m": 10.249674629119367,
+          "fault": null,
+          "final_actual_speed_mps": 0.0,
+          "crosswalk_hold_ms": 3000,
+          "green_observed_ms": 300,
+          "phases": [
+            {
+              "phase": "approach_crosswalk",
+              "duration_ms": 4800,
+              "distance_m": 0.7936074790971576,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "crosswalk_stop",
+              "duration_ms": 3000,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "cones",
+              "duration_ms": 14800,
+              "distance_m": 4.189111437964239,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "approach_light",
+              "duration_ms": 26200,
+              "distance_m": 4.39062905957664,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "wait_green",
+              "duration_ms": 300,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "finish",
+              "duration_ms": 5200,
+              "distance_m": 0.8763266524812617,
+              "unexpected_stop_command_ms": 0
+            },
+            {
+              "phase": "completed",
+              "duration_ms": 0,
+              "distance_m": 0.0,
+              "unexpected_stop_command_ms": 0
+            }
+          ],
+          "actual_output_stop_duration_ms": null
+        }
+      ],
+      "synchronous_elapsed_distance_equal_to_v8": true,
+      "local_logs": [
+        {
+          "path": "work/motion-v9-route-investigation/family-action-build.log",
+          "sha256": "92feb2ab21113e547b554dabcbc0ccbba04b0192d1e47451551b94c015f1cb35",
+          "bytes": 858
+        },
+        {
+          "path": "work/motion-v9-route-investigation/family-action-matrix.log",
+          "sha256": "99fd2015f4c66f093b7d2240e05add41e19fdb6c9101f23f96478a74f33f4935",
+          "bytes": 9033671
+        },
+        {
+          "path": "work/motion-v9-route-investigation/family-action-sync.log",
+          "sha256": "270bda627d2468c1c99a6dc2ff7fce76ddec2f15c7f75f97aeb50d108e43d2cc",
+          "bytes": 1768168
+        }
+      ]
+    }
+  ],
+  "source_provenance_boundary": "SHA-256 values identify retained navigation snapshots and result/log files. These exploratory builds did not retain a complete per-run compiled-source/executable hash manifest; the snapshots are not cryptographic proof of each executed binary. Final main-workspace build provenance is recorded separately.",
+  "failure_reporting_boundary": "A parsed matrix with completed=false is retained as a failed simulation, including its actual fault and measured partial metrics. Failed compilation or interrupted shell attempts are not counted as completed simulation evidence.",
+  "unchanged_constraints": [
+    "No Q/R changes, expanded node/terminal budgets, new controller, shrunken footprint/margins, relaxed stopping/arrival/deadlines or delay-array-specific production branches.",
+    "Every warm/rebased result remains subject to the shared finite solver ledger and full current geometry/error checks.",
+    "No RISC-V target executable or real motor output was run."
+  ],
+  "local_supporting_sources": [
+    {
+      "path": "work/motion-v9-route-investigation/terminal-before-used-seed.rs",
+      "sha256": "fc23a55b64f2231e0efda60e4b68e255d0e2284558c920518d6e5146d795e7c5",
+      "bytes": 38165
+    },
+    {
+      "path": "work/motion-v9-route-investigation/crates/robot-core/src/navigation/terminal.rs",
+      "sha256": "454d8308352da3b98998670997d5a1754dae6d13c9e1ccd6b04102e8758b7faa",
+      "bytes": 38240
+    },
+    {
+      "path": "work/motion-v9-route-investigation/instrument.py",
+      "sha256": "b58cfb3ff9f645dc9f1887660320b718aaf8e3815d3ea38be849ed21425c870d",
+      "bytes": 1612
+    },
+    {
+      "path": "work/motion-v9-route-investigation/instrument-fixture.py",
+      "sha256": "382ca26ce70b79b3f164a302b1edc5ba9d363b6279d153d51ced3cfe73393da5",
+      "bytes": 4265
+    },
+    {
+      "path": "work/motion-v9-route-investigation/extract-fixture.py",
+      "sha256": "cca66caa12d4ad5116bb8317163f8ae7aced1f708762d7c760e9aa1822055768",
+      "bytes": 1667
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "date": "2026-09-15",
+  "scope": "Local core/model packages. Packager checked the final 108 compiled inputs and both ELF files, archive/manifest/SHA256SUMS; optional model structure and provenance checked. No target inference or vehicle upload/execution. Git publication is separate.",
+  "vehicle_uploaded": false,
+  "packages": [
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-core-20260915T061725779461Z-ec385c9e19f1.tar.gz",
+      "sha256": "8b4f4183b0204746489e33532f3f949a4b71a9f945fc9ad5ba3ba52b244cc77f",
+      "size_bytes": 5325619,
+      "file_count": 106,
+      "verified": true,
+      "verification": "package.sh internally ran verify_archive on the newly created archive",
+      "source_hashes_checked": 108,
+      "model_included": false,
+      "vehicle_uploaded": false
+    },
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-with-model-20260915T061726985568Z-ec385c9e19f1.tar.gz",
+      "sha256": "808f5ee564e9ba240e59ebfe30cb8f215141fe15f47122e54b1add287ede75b1",
+      "size_bytes": 13969876,
+      "file_count": 110,
+      "verified": true,
+      "verification": "package.sh internally ran verify_archive on the newly created archive",
+      "source_hashes_checked": 108,
+      "model_included": true,
+      "vehicle_uploaded": false
+    }
+  ]
+}

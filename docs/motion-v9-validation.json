@@ -1,0 +1,965 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-15",
+  "baseline_commit": "a6236380a68431342ab9e76f468c587c9dd775f3",
+  "scope": "Evidence-based terminal route continuity, fixed offline performance gate; host Rust tests and static dual RISC-V cross-link.",
+  "rust_workspace": {
+    "passed": 371,
+    "failed": 0,
+    "ignored": 2
+  },
+  "tracking_example_tests_passed": 2,
+  "timing_matrix_example_tests_passed": 5,
+  "python_delivery_tests_passed": 35,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "source_hashes_recorded": 108,
+  "embedded_fixture_hashes_recorded": 7,
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libc.so.6"
+      ],
+      "passed": true
+    },
+    "xt-stcar-robot": {
+      "sha256": "365e34dcba4d7dee93610cc97f96b4edc094370af1fe7c2570c6552fa2344c93",
+      "size_bytes": 2029552,
+      "maximum_glibc": "2.34",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "passed": true
+    }
+  },
+  "default_tracker": "pure_pursuit",
+  "lqr_status": "Experimental; offline timing cases do not establish general convergence or physical performance.",
+  "matrix": [
+    {
+      "tracker": "pp",
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ],
+      "completed": true,
+      "elapsed_ms": 75467,
+      "distance_m": 14.049015678458577,
+      "minimum_cone_clearance_m": 0.23022561751155113,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 755,
+        "certificate_unsafe": 0,
+        "completed_plans": 755,
+        "curvature_slew": 0,
+        "drive_polls": 4245,
+        "execution_changed": 0,
+        "newly_adopted_plans": 755,
+        "output_polls": 4529,
+        "stop_polls": 284,
+        "submissions": 755,
+        "turning_drive_polls": 3947
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 75467,
+      "baseline_distance_m": 14.049015678458577,
+      "elapsed_change_ms": 0,
+      "distance_change_m": 0.0,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4709,
+      "actual_output_stop_episodes_including_startup_shutdown": 8,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4924,
+          "distance_m": 0.7921514026277879,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 18280,
+          "distance_m": 5.0507071000009285,
+          "unexpected_stop_ticks": 3,
+          "unexpected_stop_episodes": 2
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 43520,
+          "distance_m": 7.3257572164201346,
+          "unexpected_stop_ticks": 2,
+          "unexpected_stop_episodes": 2
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 280,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5400,
+          "distance_m": 0.8803999594001858,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 5,
+      "recovery_active_ticks": 174,
+      "terminal_budget_exhausted_ticks": 0
+    },
+    {
+      "tracker": "pp",
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ],
+      "completed": true,
+      "elapsed_ms": 54985,
+      "distance_m": 10.749803884249326,
+      "minimum_cone_clearance_m": 0.30328330931667247,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 550,
+        "certificate_unsafe": 0,
+        "completed_plans": 550,
+        "curvature_slew": 0,
+        "drive_polls": 3024,
+        "execution_changed": 0,
+        "newly_adopted_plans": 550,
+        "output_polls": 3300,
+        "stop_polls": 276,
+        "submissions": 550,
+        "turning_drive_polls": 2743
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 54985,
+      "baseline_distance_m": 10.749803884249326,
+      "elapsed_change_ms": 0,
+      "distance_change_m": 0.0,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4585,
+      "actual_output_stop_episodes_including_startup_shutdown": 7,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4924,
+          "distance_m": 0.792146143088503,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 18476,
+          "distance_m": 5.037697925248966,
+          "unexpected_stop_ticks": 3,
+          "unexpected_stop_episodes": 3
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 22800,
+          "distance_m": 4.042014949927315,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 320,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5400,
+          "distance_m": 0.8779448659751082,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 3,
+      "recovery_active_ticks": 68,
+      "terminal_budget_exhausted_ticks": 0
+    },
+    {
+      "tracker": "pp",
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ],
+      "completed": true,
+      "elapsed_ms": 56443,
+      "distance_m": 11.026391568072519,
+      "minimum_cone_clearance_m": 0.3024437468209916,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 565,
+        "certificate_unsafe": 0,
+        "completed_plans": 565,
+        "curvature_slew": 0,
+        "drive_polls": 3120,
+        "execution_changed": 0,
+        "newly_adopted_plans": 565,
+        "output_polls": 3388,
+        "stop_polls": 268,
+        "submissions": 565,
+        "turning_drive_polls": 2839
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 56443,
+      "baseline_distance_m": 11.026391568072519,
+      "elapsed_change_ms": 0,
+      "distance_change_m": 0.0,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4447,
+      "actual_output_stop_episodes_including_startup_shutdown": 6,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4800,
+          "distance_m": 0.7928291778714589,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 18600,
+          "distance_m": 5.082085770252175,
+          "unexpected_stop_ticks": 3,
+          "unexpected_stop_episodes": 2
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 24404,
+          "distance_m": 4.274706073123907,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 320,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5276,
+          "distance_m": 0.8767705468156366,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 3,
+      "recovery_active_ticks": 0,
+      "terminal_budget_exhausted_ticks": 0
+    },
+    {
+      "tracker": "pp",
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ],
+      "completed": true,
+      "elapsed_ms": 54449,
+      "distance_m": 10.679626657117716,
+      "minimum_cone_clearance_m": 0.30102930230912117,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 545,
+        "certificate_unsafe": 0,
+        "completed_plans": 545,
+        "curvature_slew": 0,
+        "drive_polls": 3014,
+        "execution_changed": 0,
+        "newly_adopted_plans": 545,
+        "output_polls": 3268,
+        "stop_polls": 254,
+        "submissions": 545,
+        "turning_drive_polls": 2733
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 54449,
+      "baseline_distance_m": 10.679626657117716,
+      "elapsed_change_ms": 0,
+      "distance_change_m": 0.0,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4195,
+      "actual_output_stop_episodes_including_startup_shutdown": 5,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4800,
+          "distance_m": 0.7928247898045288,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 18724,
+          "distance_m": 5.044966813389796,
+          "unexpected_stop_ticks": 1,
+          "unexpected_stop_episodes": 1
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 22282,
+          "distance_m": 3.964252761830921,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 320,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5278,
+          "distance_m": 0.8775822920827097,
+          "unexpected_stop_ticks": 1,
+          "unexpected_stop_episodes": 1
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 2,
+      "recovery_active_ticks": 0,
+      "terminal_budget_exhausted_ticks": 0
+    },
+    {
+      "tracker": "lqr",
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ],
+      "completed": true,
+      "elapsed_ms": 54663,
+      "distance_m": 10.330779583671216,
+      "minimum_cone_clearance_m": 0.2524372316798304,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 547,
+        "certificate_unsafe": 0,
+        "completed_plans": 547,
+        "curvature_slew": 0,
+        "drive_polls": 3000,
+        "execution_changed": 0,
+        "newly_adopted_plans": 547,
+        "output_polls": 3281,
+        "stop_polls": 281,
+        "submissions": 547,
+        "turning_drive_polls": 2676
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 85863,
+      "baseline_distance_m": 15.994832000690353,
+      "elapsed_change_ms": -31200,
+      "distance_change_m": -5.664052417019137,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4657,
+      "actual_output_stop_episodes_including_startup_shutdown": 6,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4924,
+          "distance_m": 0.7921514026277879,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 15880,
+          "distance_m": 4.279513000000636,
+          "unexpected_stop_ticks": 4,
+          "unexpected_stop_episodes": 2
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 25200,
+          "distance_m": 4.383200050396513,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 320,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5276,
+          "distance_m": 0.8759151306365893,
+          "unexpected_stop_ticks": 1,
+          "unexpected_stop_episodes": 1
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 5,
+      "recovery_active_ticks": 0,
+      "terminal_budget_exhausted_ticks": 0
+    },
+    {
+      "tracker": "lqr",
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ],
+      "completed": true,
+      "elapsed_ms": 55265,
+      "distance_m": 10.310890964738123,
+      "minimum_cone_clearance_m": 0.27276486356179097,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 553,
+        "certificate_unsafe": 0,
+        "completed_plans": 553,
+        "curvature_slew": 0,
+        "drive_polls": 3055,
+        "execution_changed": 0,
+        "newly_adopted_plans": 553,
+        "output_polls": 3317,
+        "stop_polls": 262,
+        "submissions": 553,
+        "turning_drive_polls": 2702
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 86269,
+      "baseline_distance_m": 16.128538641490778,
+      "elapsed_change_ms": -31004,
+      "distance_change_m": -5.817647676752655,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4349,
+      "actual_output_stop_episodes_including_startup_shutdown": 5,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4924,
+          "distance_m": 0.792146143088503,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 15476,
+          "distance_m": 4.2468140356757536,
+          "unexpected_stop_ticks": 1,
+          "unexpected_stop_episodes": 1
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 26120,
+          "distance_m": 4.389846428927279,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 280,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5400,
+          "distance_m": 0.8820843570371233,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 1,
+      "recovery_active_ticks": 0,
+      "terminal_budget_exhausted_ticks": 0
+    },
+    {
+      "tracker": "lqr",
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ],
+      "completed": true,
+      "elapsed_ms": 54249,
+      "distance_m": 10.291006143657711,
+      "minimum_cone_clearance_m": 0.2486989512096543,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 543,
+        "certificate_unsafe": 0,
+        "completed_plans": 543,
+        "curvature_slew": 0,
+        "drive_polls": 2983,
+        "execution_changed": 0,
+        "newly_adopted_plans": 543,
+        "output_polls": 3256,
+        "stop_polls": 273,
+        "submissions": 543,
+        "turning_drive_polls": 2707
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 88647,
+      "baseline_distance_m": 16.51555838061635,
+      "elapsed_change_ms": -34398,
+      "distance_change_m": -6.22455223695864,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4513,
+      "actual_output_stop_episodes_including_startup_shutdown": 6,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4800,
+          "distance_m": 0.7928291778714589,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 15806,
+          "distance_m": 4.257091900000626,
+          "unexpected_stop_ticks": 4,
+          "unexpected_stop_episodes": 2
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 24994,
+          "distance_m": 4.362985658657541,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 320,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5286,
+          "distance_m": 0.878099407118422,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 4,
+      "recovery_active_ticks": 0,
+      "terminal_budget_exhausted_ticks": 0
+    },
+    {
+      "tracker": "lqr",
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ],
+      "completed": true,
+      "elapsed_ms": 53445,
+      "distance_m": 10.221895454264796,
+      "minimum_cone_clearance_m": 0.2720590616424512,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "counts": {
+        "after_window": 0,
+        "before_window": 0,
+        "captures": 535,
+        "certificate_unsafe": 0,
+        "completed_plans": 535,
+        "curvature_slew": 0,
+        "drive_polls": 2945,
+        "execution_changed": 0,
+        "newly_adopted_plans": 535,
+        "output_polls": 3208,
+        "stop_polls": 263,
+        "submissions": 535,
+        "turning_drive_polls": 2669
+      },
+      "baseline_completed": true,
+      "baseline_elapsed_ms": 53445,
+      "baseline_distance_m": 10.221895454264796,
+      "elapsed_change_ms": 0,
+      "distance_change_m": 0.0,
+      "whole_body_in_finish_region": true,
+      "final_speed_and_curvature_zero": true,
+      "actual_output_stop_duration_ms": 4357,
+      "actual_output_stop_episodes_including_startup_shutdown": 4,
+      "phases": [
+        {
+          "phase": "approach_crosswalk",
+          "duration_ms": 4800,
+          "distance_m": 0.7928247898045288,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "crosswalk_stop",
+          "duration_ms": 3000,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "cones",
+          "duration_ms": 15320,
+          "distance_m": 4.215899650675626,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "approach_light",
+          "duration_ms": 24404,
+          "distance_m": 4.3327267262176825,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "wait_green",
+          "duration_ms": 600,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "finish",
+          "duration_ms": 5276,
+          "distance_m": 0.8804442875574376,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        },
+        {
+          "phase": "completed",
+          "duration_ms": 0,
+          "distance_m": 0.0,
+          "unexpected_stop_ticks": 0,
+          "unexpected_stop_episodes": 0
+        }
+      ],
+      "navigation_unexpected_stop_ticks": 0,
+      "recovery_active_ticks": 0,
+      "terminal_budget_exhausted_ticks": 0
+    }
+  ],
+  "performance_budget_fixed_before_experiments": true,
+  "performance_budget_sha256": "0b4e9e03c1c12231880bf43091cc206f56ae2f61525170582a54c7bd20e79e07",
+  "performance_gate_passed": true,
+  "timing_enabled_functional_fields_identical_to_default": true,
+  "observer_default_functional_summary_identical_to_normal": true,
+  "sync_changes": [
+    {
+      "tracking": {
+        "kind": "pure_pursuit"
+      },
+      "baseline_elapsed_ms": 58800,
+      "elapsed_ms": 58800,
+      "baseline_distance_m": 11.508841029059477,
+      "distance_m": 11.508841029059477
+    },
+    {
+      "tracking": {
+        "kind": "lqr",
+        "max_heading_error_rad": 0.7,
+        "max_lateral_error_m": 0.5,
+        "min_speed_mps": 0.03,
+        "q_heading": 2.0,
+        "q_lateral": 4.0,
+        "r_curvature": 1.0
+      },
+      "baseline_elapsed_ms": 54300,
+      "elapsed_ms": 54300,
+      "baseline_distance_m": 10.249674629119367,
+      "distance_m": 10.249674629119367
+    }
+  ],
+  "functional_commands": [
+    {
+      "label": "timing-matrix",
+      "command": [
+        "/Users/yuhaojin/Documents/XT-STCAR/target/release/examples/async_timing_matrix"
+      ],
+      "exit_code": 0
+    },
+    {
+      "label": "competition-comparison",
+      "command": [
+        "/Users/yuhaojin/Documents/XT-STCAR/target/release/examples/motion_comparison"
+      ],
+      "exit_code": 0
+    },
+    {
+      "label": "async-comparison",
+      "command": [
+        "/Users/yuhaojin/Documents/XT-STCAR/target/release/examples/async_motion_comparison",
+        "both"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "build_report": "motion-v9-build.json",
+  "build_log": "motion-v9-build.log",
+  "host_clock": "motion-v9-host-clock.json",
+  "delivery_report": "motion-v9-delivery.json",
+  "model_native_tests": "Unchanged; model/native inference tests not rerun. Optional model packaging validates structure and provenance.",
+  "vehicle_uploaded": false,
+  "vehicle_execution_verified": false,
+  "target_execution_verified": false,
+  "host_clock_observation": {
+    "captures": 23,
+    "turning_drive_polls": 119,
+    "max_poll_gap_ms": 21,
+    "last_submitted_source_at": 2200,
+    "first_fault": {
+      "at_ms": 2460,
+      "command": {
+        "type": "stop"
+      },
+      "fault": "command_expired"
+    },
+    "elapsed_ms": 2686,
+    "final_speed_mps": 0.0,
+    "final_curvature_per_m": 0.0,
+    "collision_or_boundary_violation": false,
+    "original_last_source_expiry_ms": 2450
+  },
+  "host_async_timing": [
+    {
+      "tracker": "pp",
+      "wall_time_ms": 5705.387708,
+      "stages": {
+        "processor_ns": {
+          "samples": 755,
+          "mean_ms": 6.220218296688742,
+          "maximum_ms": 59.7125
+        },
+        "navigation_ns": {
+          "samples": 755,
+          "mean_ms": 6.216271198675496,
+          "maximum_ms": 59.705209
+        },
+        "certificate_ns": {
+          "samples": 755,
+          "mean_ms": 0.0039359059602649005,
+          "maximum_ms": 0.014792
+        }
+      },
+      "scope": "Completed-plan stages including non-Drive, logical time freezes waiting for worker; not deadline proof."
+    },
+    {
+      "tracker": "lqr",
+      "wall_time_ms": 3116.163375,
+      "stages": {
+        "processor_ns": {
+          "samples": 547,
+          "mean_ms": 4.349548857404022,
+          "maximum_ms": 11.112583
+        },
+        "navigation_ns": {
+          "samples": 547,
+          "mean_ms": 4.3456282870201095,
+          "maximum_ms": 11.098584
+        },
+        "certificate_ns": {
+          "samples": 547,
+          "mean_ms": 0.003784257769652651,
+          "maximum_ms": 0.008959
+        }
+      },
+      "scope": "Completed-plan stages including non-Drive, logical time freezes waiting for worker; not deadline proof."
+    }
+  ],
+  "continuity_regression_tests_passed": 7,
+  "route_regressions": "motion-v9-route-regressions.json",
+  "experiments": "motion-v9-experiments.json",
+  "ablation": "motion-v9-ablation.json",
+  "technical_description": "路径连续性与性能回归.md",
+  "final_main_time_distance_terminal_state_equal_to_isolated_candidate": true,
+  "pp_all_four_time_distance_unchanged_from_v8": true,
+  "sync_time_distance_unchanged_from_v8": true,
+  "independent_read_only_code_review": "No blocking issue found; scope and source hashes recorded in motion-v9-route-regressions.json.",
+  "additional_commands": [
+    {
+      "command": "target/release/examples/async_motion_comparison both work/motion-v9/timed-options.json",
+      "exit_code": 0,
+      "report": "motion-v9-async-timing.json"
+    },
+    {
+      "command": "target/release/examples/async_host_clock",
+      "exit_code": 0,
+      "report": "motion-v9-host-clock.json"
+    }
+  ],
+  "report_sources": {
+    "motion-v9-route-regressions.json": "20d216d7c60117510887b3eda7329366b64f93f63eef534cd748494e05d267bf",
+    "motion-v9-experiments.json": "66d18d395a67939aa795c1459b86cc4bb472de044e308221fb29e201667d8761",
+    "motion-v9-ablation.json": "fa60bb42cba615fd6a9efdae989a628e2ae143a3932aada242e5570f7e1c1342"
+  }
+}

@@ -1,10 +1,10 @@
 # XT-STCAR 接手与开发约定
 
-维护日期：2026-09-14。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
+维护日期：2026-09-15。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
 开始前完整读取本文件，再读 [上传规范](上传规范.md)、[README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
 `AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。
 
-## 当前交接快照（2026-09-14）
+## 当前交接快照（2026-09-15）
 
 ### 用户目标与授权
 
@@ -26,7 +26,46 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 最新采用时基与交叉时序修正（2026-09-14，v8）
+### 第九轮路径连续性修正（2026-09-15，v9）
+
+- 用户直接授权第九份分享 `https://chatgpt.com/share/6aa89fa3-3894-83e8-afe8-45451cbbc42f` 和
+  `XT-STCAR_a623638_review.zip` 修正；修改前fetch确认main/origin=`a6236380a68431342ab9e76f468c587c9dd775f3`、0/0。
+  本轮按上传规范直接main；实际提交/远端状态通过HEAD/origin核对，不把构建基线当最终提交号。
+- 4630字符正文完整读取；ZIP SHA256 `5ac964c02693734ebe2dfdd8931c61b0631a62a405054c9ca6ea4cc54ae1c718`，
+  Python算术结果与提供文件一致。外部材料不包含Rust/实车执行；原ZIP和规则PDF保留、不暂存。
+- 三版本Rust离线消融：7d原版和检查顺序-only均54.447s/10.317616m，285条实际命令和状态逐值相同，前瞻预扣区间减少2.62%；
+  v8坏LQR88.647s/16.515558m，实际Stop都4513ms。独立Cargo target避免历史mtime复用旧产物，首次无效共享target试验已剔除记录。
+  复现脚本 `scripts/review-motion-ablation.py` 固定commit/源hash/补丁，只在work隔离主机运行，不恢复旧时基到生产。
+- 原45360ms灯前同目标、同当前姿态旧剩余0.502864576→新4.910317092m，44候选接受，无节点/终端耗尽、无连续恢复。
+  原始四帧、传感源、任务、每帧128真实history、完整缓存和176候选首因在
+  `crates/robot-core/src/navigation/fixtures/lqr45360_terminal_seed_origin.json`。
+  原45040候选认证+100ms状态，而下一规划45160为+120ms，旧初值未推进导致冷/旧warm各8迭代失败。
+- Rust `navigation/continuity.rs` 缓存候选预测下一状态，原方法失败且额度剩余时按正向位移推进数值初猜，再从当前pose/k/Grid/误差完整认证。
+  提前/负向不虚构行程，无效/耗尽提示弃用；预测anchor不是实际采用时钟。恢复成功才延续该连接族，普通成功路径保持原顺序。
+  **恢复族的候选优先级有意改变**：完整原硬门通过后，先认证接续，再接近已认证首段曲率，最后原评分。
+  used_seed来自实际求解分支，不用诊断计数做控制。目标/朝向、到达策略、边界和任务停驻变化清理提示，规划不替代真实adopt。
+- 新可选 `route_length_change` 仅用于同目标、旧缓存可用且footprint drift重建成功的同姿态剩余路线比较；不据缺失判断没有绕路。
+  所有原共享时基/最终poll/lease/完整车体/边界/误差包络/Q/R/任务门保持；节点40000、终端256/1024/65536、单次8迭代保持。
+- 性能预算在试改前固定于 `crates/runner/examples/fixtures/motion-v9-performance-budget.json`，最终逐字节相同；控制器不读取预算。
+  v7/v8同工况较快成功场为参照：整场时间/距离110%，阶段+max(1000ms,10%)，实际Stop+1000ms；缺失/重复/无效指标也失败。
+  `runner/examples/support/performance_gate.rs` 仅在8场完成后验收，超限保留JSON并非零退出；不调门追成绩。
+- 最终固定顺序input[60,80]×adopt[3,7,9]/[5,9,11]、input[40,60]×adopt[3,7,9]/[5,9,11]：
+  PP75.467/54.985/56.443/54.449秒，LQR54.663/55.265/54.249/53.445秒，8/8完成且原安全与固定性能门通过；
+  PP四组时间/路程逐值保持v8，坏LQR少34.398s/6.224552m，灯前59.400→24.994s、实际Stop4513ms保持。
+  全场证书/曲率slew拒绝和终端总额度耗尽均0；原3000ms停稳/300ms绿灯/整车终点/终态v/k0保持。
+  同步PP58.8s/11.508841m、LQR54.3s/10.249675m保持；默认PP仍有174恢复活动tick，不能称任意工况收敛。
+- 最终371 Rust通过/0失败/2忽略，跟踪example2、矩阵example5、Python交付35通过；fmt/clippy/双RISC-V静态链接通过，108编译输入。
+  新7项continuity测试检查原始history一致性并重放记录投影状态的Navigator，不是独立重跑全部worker历史重建；全链路由真实worker矩阵另覆盖。
+  第二份45180 fixture是标注的数值试验，不能称a623原始数据。独立只读复核无阻塞问题，范围见route-regressions。
+- 默认异步开关计时功能字段逐值相同，导航平均/最大PP6.216/59.705ms、LQR4.346/11.099ms，功能钟等待worker时冻结，非目标WCET。
+  持续主机时钟23源/119转弯Drive，poll最大21ms；末源2200、原期限2450、2460 Stop、2686完全停稳回中，无碰撞越界。
+- 当前app SHA `ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9` /1,217,056B、需libc；
+  robot SHA `365e34dcba4d7dee93610cc97f96b4edc094370af1fe7c2570c6552fa2344c93` /2,029,552B、需libm/libc。
+  GLIBC2.38基线、实际最高2.34；当前构建/验收/本地包见 `docs/motion-v9-build.json`、`motion-v9-validation.json`、`motion-v9-delivery.json`。
+  本轮技术说明 [路径连续性与性能回归](docs/路径连续性与性能回归.md)，README/TXT已同步；模型/ORT未改、不重跑原生推理。
+  PP默认/LQR实验、暂不接车、不执行RISC-V、不读视频、正常运行优先于eMMC寿命约束保持。
+
+### 前轮采用时基与交叉时序修正（2026-09-14，v8历史）
 
 - 用户直接授权按第八轮复核修改；修改前 fetch 成功，`7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6`
   与 origin/main 一致 0/0。最终提交/推送状态以实际 HEAD 与远端为准，继续直接 main。
@@ -66,7 +105,7 @@
   默认异步导航均值/峰值PP6.395/59.369ms、LQR4.573/13.166ms，含非Drive计划；开启计时后功能字段一致。
   本轮PP有恢复，不能把局部省下预测推为整场加速；功能时钟等待worker会冻结。持续Instant短场23源/119转弯Drive、poll最大21ms，
   source2200原期限2450、2460ms Stop、2687ms停稳回中，无碰撞越界；都不是目标WCET。
-- 当前app SHA ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9 /1,217,056B、需libc；
+- 该轮app SHA ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9 /1,217,056B、需libc；
   robot SHA ed420aa4615948ced31bccfa61bb2f8081b4c8005224646edad101ba0fbd8bd6 /2,026,384B、需libm/libc，最高实际GLIBC2.34。
   最终测试/构建/包分别见motion-v8-validation/build/delivery，包只在本地dist、未上传车端。
 - 暂不接车、不读视频、不执行RISC-V目标，PP默认、LQR实验、GLIBC2.38本地交叉基线/模型/工具链保持；STM32任务仍暂停。
@@ -405,6 +444,10 @@
 crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖。历史审查不覆盖全部新模块，新模块证据单列。
 
 ### 构建、模型与验证证据
+
+- 当前v9：371 Rust/2跟踪example/5矩阵example/35 Python交付通过，2项按设计忽略；fmt/clippy/双交叉链接与ELF通过。
+  108份编译输入、GLIBC2.38基线/最高实际2.34。当前结果与本地包以 `motion-v9-validation/build/delivery` 为准；精确哈希见本轮快照。
+  8组时序性能门全部通过；原生模型推理和目标执行未验证，以下旧轮记录仅为历史。
 
 - 历史 v7：Rust常规350通过/0失败/2忽略，跟踪example2项、Python交付35项通过；fmt、all-targets clippy -D warnings、双RISC-V交叉链接通过。
   98份源码/清单/嵌入fixture记录于 `docs/motion-v7-build.json`；基线GLIBC2.38、最高实际引用2.34。

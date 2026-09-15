@@ -207,6 +207,7 @@ impl Drop for SolverTimer<'_> {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(test, derive(serde::Deserialize, serde::Serialize))]
 pub(super) struct TwoArcSeed {
     variables: [f64; 3],
     first_fraction: f64,
@@ -232,6 +233,8 @@ impl TwoArcSeed {
 }
 
 pub(super) struct TwoArcConnection {
+    /// True only when the returned connection was solved from the supplied seed.
+    pub(super) used_seed: bool,
     pub(super) points: Vec<Point2>,
     pub(super) endpoint: Pose2,
     pub(super) end_curvature: f64,
@@ -245,6 +248,7 @@ impl TwoArcConnection {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(super) fn two_arc(
     start: Pose2,
     initial_curvature: f64,
@@ -480,6 +484,7 @@ fn solve_two_arc(
             && error[2].abs() + result.3.heading_rad <= config.goal_heading_tolerance_rad * 0.5
         {
             return Some(TwoArcConnection {
+                used_seed: seed.is_some(),
                 points: result.0,
                 endpoint: result.1,
                 end_curvature: result.2,

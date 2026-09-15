@@ -64,6 +64,11 @@ BASE_FILES = {
     "docs/motion-v8-competition-comparison.json", "docs/motion-v8-async-comparison.json",
     "docs/motion-v8-async-timing.json", "docs/motion-v8-host-clock.json", "docs/motion-v8-host-profile.json",
     "docs/motion-v8-navigation-regressions.json", "docs/motion-v8-slew-regressions.json",
+    "docs/路径连续性与性能回归.md", "docs/motion-v9-before.json", "docs/motion-v9-ablation.json",
+    "docs/motion-v9-validation.json", "docs/motion-v9-timing-matrix.json",
+    "docs/motion-v9-competition-comparison.json", "docs/motion-v9-async-comparison.json",
+    "docs/motion-v9-async-timing.json", "docs/motion-v9-host-clock.json",
+    "docs/motion-v9-route-regressions.json", "docs/motion-v9-experiments.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

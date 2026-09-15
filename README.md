@@ -211,6 +211,7 @@ XT-STCAR/
 | [`crates/runner/src/control_diagnostics.rs`](crates/runner/src/control_diagnostics.rs) | 显式开启的排队/导航/终端/证书耗时、共享最新发布报告和有界计数；默认不读取主机时钟，离线调度钩子不进入输出线程 |
 | [`crates/runner/src/async_simulation.rs`](crates/runner/src/async_simulation.rs) | 完整 RGB/雷达异步比赛，独立渐变车辆只执行 poll 最终命令；`simulate_async_observed` 提供显式离线只读回调，覆盖正常输出和最终制动 |
 | [`crates/runner/examples/async_timing_matrix.rs`](crates/runner/examples/async_timing_matrix.rs) | 固定 2×2 时序、PP/LQR 共 8 场；在有界内存比较最早实际输出、同源计划和路线差异，另计实际 Stop 与拒绝期间保持 Drive |
+| [`crates/runner/examples/support/performance_gate.rs`](crates/runner/examples/support/performance_gate.rs) | 八场结束后检查预先固定的整场时间/距离、阶段时长与实际 Stop 预算；只影响离线测试退出状态，不参与车辆控制 |
 | [`crates/runner/src/host_clock_simulation.rs`](crates/runner/src/host_clock_simulation.rs) | 持续 Instant 时钟的短转弯/断流观察；计算期间输出时间继续推进，分开记录主机负载和功能结果 |
 | [`crates/runner/examples/async_motion_comparison.rs`](crates/runner/examples/async_motion_comparison.rs)、[`async_host_clock.rs`](crates/runner/examples/async_host_clock.rs) | 前者执行完整异步 PP/LQR 与可选时序配置，后者显式采集一次实际主机时钟观察；失败报告仍输出并返回非零 |
 | [`crates/runner/src/control_execution.rs`](crates/runner/src/control_execution.rs) | 固定容量已采用命令历史、源时刻查询和运动投影；最终独立检查整段采用窗口及原期限停车空间，返回证书或结构化首个失败 |
@@ -220,6 +221,7 @@ XT-STCAR/
 | [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
 | [`crates/runner/examples/motion_profile.rs`](crates/runner/examples/motion_profile.rs) | 显式预热与重复测量完整模拟墙钟时间；记录平均/最大及完成状态，不能当作板卡时限 |
 | [`crates/robot-core/src/navigation/terminal.rs`](crates/robot-core/src/navigation/terminal.rs) | 单/双段曲率渐变末端连接、接续数值初值、共享计算额度与求解失败诊断 |
+| [`crates/robot-core/src/navigation/continuity.rs`](crates/robot-core/src/navigation/continuity.rs) | 记录末端初值的预测状态，延迟后调整初猜并重新认证；保留已恢复短连接族，计算同姿态旧剩余路线诊断；fixtures 内含原始窗口及专项实验快照 |
 | [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
 | [`crates/runner/src/navigation_diagnostics.rs`](crates/runner/src/navigation_diagnostics.rs) | 模拟首个非预期阻塞/故障的最多 17 帧内存上下文，结束随摘要输出 |
 | [`crates/runner/src/phase_statistics.rs`](crates/runner/src/phase_statistics.rs) | 各阶段实际时长/距离、Stop 次数/命令时长、路径生成、拒绝原因及终端工作总数/每拍最大值的有界内存统计；最终制动单列 |
@@ -238,11 +240,12 @@ XT-STCAR/
 前轮执行状态、过渡峰值、通过点和模拟积分修正见[运动执行与通过点修正](docs/运动执行与通过点修正.md)。
 前轮真实任务验收半径、完整车体参考偏离、阶段统计与异步时间对齐见[任务交接与异步运动修正](docs/任务交接与异步运动修正.md)。
 前轮短连接接续、共享计算额度和异步停车空间见[终端连接延续与异步停车包络](docs/终端连接延续与异步停车包络.md)。
-本轮 v8 已完整读取[第八份修改意见](https://chatgpt.com/share/6aa7e186-f7a4-83e8-8cad-c7d07e02d3e1)，
-结合 `XT-STCAR_7d28761_review_reproduction.zip`，在 `7d28761` 的隔离源码上复算探针和完整时序矩阵。
-本轮说明见[采用时基与时序交叉验证](docs/采用时基与时序交叉验证.md)，修改前来源与结果见[基线证据](docs/motion-v8-before.json)。
-前轮[采用约束与前向恢复](docs/采用约束与前向恢复.md)、[恢复预算与完整异步验证](docs/恢复预算与完整异步验证.md)
-及 `motion-v7-*`、`motion-v6-*` 保留历史，不能作为 v8 二进制或最终验收结果。
+本轮 v9 已完整读取[第九份修改意见](https://chatgpt.com/share/6aa89fa3-3894-83e8-afe8-45451cbbc42f)，
+结合 `XT-STCAR_a623638_review.zip`，复现并修正了共享时基修复之后的灯前长绕路。
+说明见[路径连续性与性能回归](docs/路径连续性与性能回归.md)，来源与原始失效见[基线证据](docs/motion-v9-before.json)，
+三版本消融见[消融记录](docs/motion-v9-ablation.json)。外部ZIP仅做Python数据复核，Rust运行由本工程另行完成。
+前轮[采用时基与时序交叉验证](docs/采用时基与时序交叉验证.md)、[采用约束与前向恢复](docs/采用约束与前向恢复.md)
+及 `motion-v8-*`、`motion-v7-*` 和更早报告保留历史，当前验收以 `motion-v9-*` 为准。
 当前采用前进车辆运动学：比赛任务给目标/限速 → A* 连通与带航向/曲率的车模型路线 → PathTracker →
 候选轨迹预测、采用约束、碰撞和制动检查 → 安全状态机 → 异步最终采用证书 → 输出线程。
 同步调用保留其对应检查；默认 **Pure Pursuit** 保留，**曲率前馈 + LQR** 继续作为实验选项。
@@ -304,19 +307,20 @@ Stop 的目标曲率为零，模型继续渐变回中；恢复使用这次 Stop 
 
 | 输入延迟 ms | 采用偏移 ms | PP 时间 / 路程 | 实验 LQR 时间 / 路程 |
 | --- | --- | --- | --- |
-| [60, 80] | [3, 7, 9] | 75.467 秒 / 14.049016 米 | 85.863 秒 / 15.994832 米 |
-| [60, 80] | [5, 9, 11] | 54.985 秒 / 10.749804 米 | 86.269 秒 / 16.128539 米 |
-| [40, 60] | [3, 7, 9] | 56.443 秒 / 11.026392 米 | 88.647 秒 / 16.515558 米 |
+| [60, 80] | [3, 7, 9] | 75.467 秒 / 14.049016 米 | 54.663 秒 / 10.330780 米 |
+| [60, 80] | [5, 9, 11] | 54.985 秒 / 10.749804 米 | 55.265 秒 / 10.310891 米 |
+| [40, 60] | [3, 7, 9] | 56.443 秒 / 11.026392 米 | 54.249 秒 / 10.291006 米 |
 | [40, 60] | [5, 9, 11] | 54.449 秒 / 10.679627 米 | 53.445 秒 / 10.221895 米 |
 
-最终 **8/8 完成**，曲率变化率采用拒绝与最终证书拒绝均为0，全部保留3000 ms斑马线停稳、300 ms绿灯确认、整车终点及终态速度/曲率归零。
-原交叉工况LQR的91.669秒停车超时已改为86.269秒完成；但早输入 `[40,60]` /早采用 `[3,7,9]` 的LQR从54.447秒退化到88.647秒，
-路程10.317616→16.515558米。默认PP也从73.863秒变为75.467秒，仍有时序敏感性，不能称为全面性能改善。
+最终 **8/8 完成且全部通过试改前固定的性能门**，曲率变化率采用拒绝、最终证书拒绝和终端总预算耗尽均为0，
+全部保留3000 ms斑马线停稳、300 ms绿灯确认、整车终点及终态速度/曲率归零。
+早输入 `[40,60]` /早采用 `[3,7,9]` 的LQR从v8的88.647秒/16.515558米恢复到54.249秒/10.291006米；
+灯前阶段59.400→24.994秒，实际Stop命令仍4513ms。其他三组LQR通过同一门，PP四组时间/路程逐值保持v8。
 同步PP58.800秒/11.508841米、LQR54.300秒/10.249675米保持。
-原19380 ms阻断专项44个Grid拒绝/accepted0不变、后备前瞻工作归零；开放44候选仍执行132个采用情形。
-完整首次差异、实际Stop和重建原因见[最终矩阵](docs/motion-v8-timing-matrix.json)，范围与测试见[验证汇总](docs/motion-v8-validation.json)。
+结果说明这些固定工况的退化已修复，不能证明任意时序、传感误差或实车都收敛；PP默认工况仍有原恢复活动。
+完整首次差异、实际Stop和重建原因见[最终矩阵](docs/motion-v9-timing-matrix.json)，范围与测试见[验证汇总](docs/motion-v9-validation.json)。
 
-修改前隔离基线 `7d28761` 的 8 场中 7 场完成，新增交叉工况暴露 1 场 LQR 停滞失败：
+历史 v8 修复之前的隔离基线 `7d28761` 的 8 场中 7 场完成，新增交叉工况暴露 1 场 LQR 停滞失败：
 
 | 输入延迟 ms | 采用偏移 ms | 基线 PP | 基线实验 LQR |
 | --- | --- | --- | --- |
@@ -354,7 +358,10 @@ mkdir -p work
 cargo run --release --locked --offline -p xt-stcar-robot-runner --example async_timing_matrix > work/async-timing-matrix.json 2> work/async-timing-matrix.stderr.log
 ```
 
-任何场景失败或轨迹截断都会在保留完整 JSON 后非零退出，须同时检查 `all_completed`、`traces_complete` 和各场 `fault`。
+任何场景失败、轨迹截断或性能超限都会在保留完整 JSON 后非零退出，须同时检查 `all_completed`、`traces_complete`、`performance_gate.all_passed` 和各场 `fault`。
+性能预算在本轮修复试验前固定于 `crates/runner/examples/fixtures/motion-v9-performance-budget.json`：
+各组以v7/v8相同时序中较快的已完成场为参照，整场时间/距离上限110%，每阶段加 `max(1000ms,10%)`，实际Stop加1000ms。
+这些门仅检查模拟结果，不让控制器为达到时间目标放宽安全；具体口径见[路径连续性与性能回归](docs/路径连续性与性能回归.md)。
 等待后台计算时功能钟冻结，观察回调耗时进入主机墙钟；矩阵用于行为对比，不代替持续主机时钟或目标板截止时间测试。
 
 ```bash
@@ -379,14 +386,20 @@ v6 与 `b9f75c7` 的同步结果逐值一致。v5 相对 `f83898a`，PP指标不
 对于必须停车的定向目标，若已有有界单弧求解器未找到连接而双弧找到连接，候选额外验证完整下一周期后
 仍能接上现有短连接族或严格进入目标范围，防止恒曲率预览逐拍耗尽 S 形末端可达性。
 已被现有单弧求解器认证的接近保留原控制；该约束不代替任务停稳，不对每个候选重跑全局搜索，也不证明所有初态可达。
-`navigation/terminal.rs` 保留已经认证的双段连接数值初值和剩余段比，每次在当前状态/网格重新积分认证。
-只有原冷候选全未获认证时，才按接近已认证首段曲率的顺序尝试恢复；采用第一个通过原硬检查和完整剩余连接重验的动作。
-这保留普通候选选择，避免恢复动作又被恒曲率评分带离短连接；不是直接执行旧缓存轨迹。
+`navigation/terminal.rs` 保留已认证双段连接的数值初值和剩余段比；`navigation/continuity.rs` 还记录选中候选预测的下一状态。
+v9定位到候选为100ms后的状态求解，而下一拍实际在120ms到来：原冷启动和未推进的旧初值都用尽单次迭代，导致短连接丢失。
+当原方法均失败且仍有共享额度时，以相对预测状态的正向位移推进初猜，再从当前姿态、曲率和Grid完整重求解。
+这个位移只调整初猜，不是里程计读数或安全凭证；提前到来的拍不反向虚构行程。
+只有这样恢复成功的连接族，后续才优先重验接续；候选通过全部原硬检查后，优先选认证接续、最接近已认证首段曲率者，再按原评分比较。
+因此恢复族内候选优先级有意改变，普通成功路径仍保留原选择；原冷候选全失败后的恢复轮也继续保留。
+目标/朝向、到达策略、边界或任务停驻变化会清理提示，每次检查新障碍，不直接执行旧缓存轨迹。
+`route_length_change` 仅在同目标、原缓存可用且车体参考偏离重建成功时记录同一当前姿态的旧剩余/新路线米数；
+缺失表示不具备这一比较条件，不能据此断言没有绕路。诊断不参与控制。
 每次导航共享最多256次域内求解、1024次迭代和65536份预扣采样额度；单个求解仍最多8次迭代，lattice节点另有原上限。
 `terminal_work` 区分全局额度耗尽、单次迭代用尽、域拒绝和网格拒绝；`primitive_samples` 为预扣额度而非实际CPU操作数。
 额度用尽不等于路径物理不可达，已有完整认证的候选可继续使用。
 v6 已在原总额度内为接续保留一次完整求解机会；普通候选触及暂时上限时记为延后，不能提前锁死全局预算。
-恢复前释放预留，普通已认证最佳仍优先。原42.2秒场景在21/41/61/81档及左右镜像均Drive；
+恢复前释放预留，未激活v9接续保护的普通已认证最佳仍优先。原42.2秒场景在21/41/61/81档及左右镜像均Drive；
 21档仍预扣51541份样本，41档以上为63799，未提高65536上限。新障碍仍能否决缓存，前置搜索费用仍计入总账。
 细节见[修复前](docs/motion-v6-budget-before.json)与[修复后](docs/motion-v6-budget-after.json)。
 普通中间点保留追踪点评分，临近目标时减弱固定曲率偏好。实现、尺度与边界见新修正说明。
@@ -403,11 +416,16 @@ v6 的[持续主机时钟观察](docs/motion-v6-host-clock.json)中23份源输�
 末源2200ms，原期限2450ms，在下一次2461ms轮询Stop，2687ms完成模型刹停/回正。该采样不证明目标WCET。
 v8顺序主机profile各预热1次/测3次：同步PP平均1619.924→1632.190 ms（+0.76%），LQR1491.721→1513.593 ms（+1.47%），
 模拟时长和路程保持；小样本及外部负载未控制，不能据此下普遍性能结论，见[主机profile](docs/motion-v8-host-profile.json)。
-默认异步导航阶段平均/实测最大：PP6.395/59.369 ms，LQR4.573/13.166 ms；PP本轮进入恢复，与v7路径和工作量不同，
+历史v8默认异步导航阶段平均/实测最大：PP6.395/59.369 ms，LQR4.573/13.166 ms；PP该轮进入恢复，与v7路径和工作量不同，
 单个Grid阻断帧省去前瞻不等于整场耗时下降。计时开启前后功能字段逐值一致；包含非Drive计划且功能时钟冻结，
 不能据峰值或平均推导板卡时限，见[分段计时](docs/motion-v8-async-timing.json)。
 [持续主机时钟短场](docs/motion-v8-host-clock.json)取得23源/119转弯Drive、最大poll间隔21 ms；末源2200、原期限2450、
 2460 ms输出Stop，2687 ms完全停稳回中，无碰撞/越界。这仍不是完整比赛实时性或目标WCET验收。
+
+v9最终默认异步计时开启前后功能字段逐值一致，导航阶段平均/实测最大为PP6.216/59.705ms、LQR4.346/11.099ms，
+见[本轮分段计时](docs/motion-v9-async-timing.json)。这些包括非Drive计划，功能钟等待worker时冻结，不是目标板截止时间结论。
+[本轮持续主机时钟短场](docs/motion-v9-host-clock.json)取得23源/119转弯Drive，poll最大21ms；末源2200、原期限2450，
+2460ms输出Stop，2686ms完全停稳回中，无碰撞/越界。没有新做多样本同步profile，不沿用旧profile当本轮测量。
 
 历史 v7 顺序主机计时各预热 1 次、正式 3 次：同步整场平均墙钟 PP 1609.081→1621.487 ms（+0.77%），
 LQR 1494.640→1484.827 ms（−0.66%），模拟时长/路程保持。小样本差异不足以认定加速或退化，见[完整样本](docs/motion-v7-host-profile.json)。
@@ -558,16 +576,19 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `tests/measure_yolo26_reference.py`、`tests/verify_robot_reference.py` | 真实模型与机器人图像回放参考对照 |
 | `scripts/export_yolo26.py`、`validate_yolo26.py`、`verify_preprocess.py` | 模型导出、静态校验及预处理对照 |
 | `scripts/onnx_worker.py` | 仅供显式 Python 参考后端的一次性推理工作进程；配置、模型和张量受实际读取量限制 |
+| `scripts/review-motion-ablation.py`、`scripts/review-motion-ablation/` | 固定旧提交、检查顺序补丁和只读观察器；每个变体独立主机编译目录，复现三版本消融 |
 | `scripts/build-riscv.sh`、`inspect_elf.py` | fmt/test/clippy、两程序交叉构建、独立 ELF/GLIBC 报告和源码哈希 |
 | `scripts/delivery.py`、`package.sh`、`upload.sh` | 白名单打包与哈希核验；上传默认 dry-run，显式新账号/IP/release 目录 |
 | `scripts/check-vehicle.sh` | 车端系统/设备/服务的只读检查脚本，不启动驱动或运动 |
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-本轮v8 Rust工作区 **364通过、0失败、2项按设计忽略**；跟踪example2项、矩阵example2项、Python交付35项通过。
-fmt、all-targets clippy `-D warnings`、双RISC-V链接与ELF检查通过；[构建报告](docs/motion-v8-build.json)记录103份源码/清单/嵌入fixture，
-GLIBC基线2.38、实际最高引用2.34，robot为2,026,384字节。
-[验证汇总](docs/motion-v8-validation.json)与[本地交付报告](docs/motion-v8-delivery.json)对应当前实现；目标程序尚未在车上或模拟器执行。
+本轮v9 Rust工作区 **371通过、0失败、2项按设计忽略**；跟踪example2项、矩阵example5项、Python交付35项通过。
+fmt、all-targets clippy `-D warnings`、双RISC-V链接与ELF检查通过；[构建报告](docs/motion-v9-build.json)记录108份源码/清单/嵌入fixture，
+GLIBC基线2.38、实际最高引用2.34，robot为2,029,552字节。
+[验证汇总](docs/motion-v9-validation.json)与[本地交付报告](docs/motion-v9-delivery.json)对应当前实现；目标程序尚未在车上或模拟器执行。
+新增7项[连续性回归](docs/motion-v9-route-regressions.json)覆盖原始窗口、左右镜像、失效提示和共享额度；
+[试验记录](docs/motion-v9-experiments.json)保留被舍弃的退化方案，避免只报告成功场。
 
 历史 v7 Rust 常规测试 **350 通过、0 失败、2 项按设计忽略**；跟踪 example 2 项、Python 交付 35 项通过。
 fmt、all-targets clippy `-D warnings`、两个 RISC-V 交叉链接和 ELF 检查通过。

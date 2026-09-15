@@ -1,0 +1,841 @@
+{
+  "schema_version": 1,
+  "review": {
+    "baseline_commit": "a6236380a68431342ab9e76f468c587c9dd775f3",
+    "review_url": "https://chatgpt.com/share/6aa89fa3-3894-83e8-afe8-45451cbbc42f",
+    "review_zip_sha256": "5ac964c02693734ebe2dfdd8931c61b0631a62a405054c9ca6ea4cc54ae1c718",
+    "share_body_characters": 4630,
+    "arithmetic_results_match_provided": true,
+    "review_scope": "Python scalar checks and repository metrics; not Rust simulation or hardware validation"
+  },
+  "baseline": {
+    "production_commit": "a6236380a68431342ab9e76f468c587c9dd775f3",
+    "historical_comparison_commit": "7d28761c40f7d7e69a8ac77977f5b6710dd5a0c6",
+    "local_and_remote_main_synchronized_before_changes": true,
+    "ablation_report": "docs/motion-v9-ablation.json",
+    "raw_observer_summary_matches_committed_reports_except_wall_time": {
+      "7d28761": true,
+      "a623638": true
+    },
+    "regression": {
+      "elapsed_ms_before": 54447,
+      "elapsed_ms_current": 88647,
+      "extra_elapsed_ms": 34200,
+      "distance_m_before": 10.317616041272634,
+      "distance_m_current": 16.51555838061635,
+      "extra_distance_m": 6.197942339343717,
+      "actual_stop_duration_ms_before": 4513,
+      "actual_stop_duration_ms_current": 4513,
+      "stop_scope": "完整实际输出Stop时长，含启动/最终制动，不等于物理静止时长。"
+    },
+    "phases_before": [
+      {
+        "phase": "approach_crosswalk",
+        "first_at": 40,
+        "duration_ms": 4800,
+        "distance_m": 0.7928291778714588,
+        "route_generations": 1
+      },
+      {
+        "phase": "crosswalk_stop",
+        "first_at": 4840,
+        "duration_ms": 3000,
+        "distance_m": 0.0,
+        "route_generations": 0
+      },
+      {
+        "phase": "cones",
+        "first_at": 7840,
+        "duration_ms": 16126,
+        "distance_m": 4.2798416315062795,
+        "route_generations": 4
+      },
+      {
+        "phase": "approach_light",
+        "first_at": 23960,
+        "duration_ms": 24600,
+        "distance_m": 4.361516816969025,
+        "route_generations": 4
+      },
+      {
+        "phase": "wait_green",
+        "first_at": 48560,
+        "duration_ms": 478,
+        "distance_m": 0.0,
+        "route_generations": 0
+      },
+      {
+        "phase": "finish",
+        "first_at": 49040,
+        "duration_ms": 5400,
+        "distance_m": 0.8834284149163883,
+        "route_generations": 1
+      },
+      {
+        "phase": "completed",
+        "first_at": 54440,
+        "duration_ms": 0,
+        "distance_m": 0.0,
+        "route_generations": 0
+      }
+    ],
+    "phases_current": [
+      {
+        "phase": "approach_crosswalk",
+        "first_at": 40,
+        "duration_ms": 4800,
+        "distance_m": 0.7928291778714589,
+        "route_generations": 1
+      },
+      {
+        "phase": "crosswalk_stop",
+        "first_at": 4840,
+        "duration_ms": 3000,
+        "distance_m": 0.0,
+        "route_generations": 0
+      },
+      {
+        "phase": "cones",
+        "first_at": 7840,
+        "duration_ms": 15806,
+        "distance_m": 4.257091900000626,
+        "route_generations": 6
+      },
+      {
+        "phase": "approach_light",
+        "first_at": 23640,
+        "duration_ms": 59400,
+        "distance_m": 10.59040930465313,
+        "route_generations": 17
+      },
+      {
+        "phase": "wait_green",
+        "first_at": 83040,
+        "duration_ms": 320,
+        "distance_m": 0.0,
+        "route_generations": 0
+      },
+      {
+        "phase": "finish",
+        "first_at": 83360,
+        "duration_ms": 5278,
+        "distance_m": 0.8752279980811946,
+        "route_generations": 1
+      },
+      {
+        "phase": "completed",
+        "first_at": 88640,
+        "duration_ms": 0,
+        "distance_m": 0.0,
+        "route_generations": 0
+      }
+    ]
+  },
+  "first_material_approach_light_route_growth": {
+    "fixture_window": "work/motion-v9-route-investigation/decision-window.json",
+    "fixture_window_sha256": "ba54937eb9ed8b88a0f5be4f75e1396456d1a7587d25df5467c187e439e89fcc",
+    "source_at_ms": 45300,
+    "planned_at_ms": 45360,
+    "goal": {
+      "x_m": 5.55,
+      "y_m": 2.5
+    },
+    "goal_heading_rad": 0.0,
+    "arrival": {
+      "type": "stop"
+    },
+    "mission_phase": "approach_light",
+    "waypoint_index": 2,
+    "source_snapshot_retained": true,
+    "actual_adopted_history_records_retained": 128,
+    "actual_adopted_revision": 240,
+    "last_command_change_at_ms": 45249,
+    "planning_pose": {
+      "x_m": 5.090127214065843,
+      "y_m": 2.3282406328229497,
+      "yaw_rad": 0.5218712868824156
+    },
+    "actual_execution_curvature_per_m": -0.2963656130577457,
+    "held_target_curvature_per_m": -0.2963656130577457,
+    "speed_mps": 0.18,
+    "same_goal_before_and_after": true,
+    "old_cached_route_points": 43,
+    "old_progress_before": 21,
+    "old_nearest_progress_at_current_pose": 21,
+    "old_remaining_length_at_current_pose_m": 0.5028645756577586,
+    "new_remaining_length_at_current_pose_m": 4.910317091730606,
+    "extra_remaining_length_m": 4.407452516072848,
+    "length_method": "使用45360当前规划位姿，按原Navigator的最多1米前向最近点搜索，从同目标旧缓存progress继续；构造[current_pose]+old_route[nearest+1..=via]再累加线段。新路用同拍NavigationDecision.path。不是上一拍长度或最初完整长度；这里只测量几何长度，不能证明旧尾可被当前状态安全追踪。",
+    "route_rebuild_reason": "footprint_reference_drift",
+    "revision_before": 11,
+    "revision_after": 12,
+    "candidate_first_reasons": {
+      "accepted": 44
+    },
+    "full_candidate_first_reasons_retained": true,
+    "forward_search": {
+      "node_budget_exhausted": false,
+      "ordinary": {
+        "allocated_nodes": 6487,
+        "exit": "found",
+        "expanded_nodes": 3118,
+        "first_primitive_rejection": {
+          "blocked_cell": 1876,
+          "continuous_domain": false,
+          "from_cell": 1875,
+          "sample_index": 7,
+          "to_cell": 1876
+        },
+        "generated_nodes": 6486,
+        "primitive_attempts": 15585,
+        "primitive_rejections": 2608
+      },
+      "recovery": {
+        "allocated_nodes": 0,
+        "exit": "not_run",
+        "expanded_nodes": 0,
+        "first_primitive_rejection": null,
+        "generated_nodes": 0,
+        "primitive_attempts": 0,
+        "primitive_rejections": 0
+      },
+      "recovery_accepted": false,
+      "recovery_active": false,
+      "recovery_attempted": false
+    },
+    "terminal_work": {
+      "budget_exhausted": false,
+      "cold_budget_deferrals": 0,
+      "continued_seed_accepted": 0,
+      "continued_seed_attempts": 0,
+      "domain_rejections": 1,
+      "iteration_limit": 1024,
+      "iterations": 123,
+      "primitive_grid_rejections": 1,
+      "primitive_samples": 3711,
+      "recovery_reservation_shortfalls": 0,
+      "recovery_reserved_iterations": 0,
+      "recovery_reserved_samples": 0,
+      "recovery_reserved_solvers": 0,
+      "sample_limit": 65536,
+      "solver_attempts": 32,
+      "solver_elapsed_ns": null,
+      "solver_iteration_exhaustions": 12,
+      "solver_limit": 256
+    },
+    "conclusion": "44个本拍候选均接受、无恢复或节点/终端额度耗尽；显著增路发生在footprint参考偏离导致的重建。前序终端连接与实际时序仍需fixture定位，不能把旧缓存直接当作可执行安全凭证。",
+    "committed_full_four_frame_fixture": {
+      "path": "crates/robot-core/src/navigation/fixtures/lqr45360_terminal_seed_origin.json",
+      "sha256": "d566d70dfba01aed9193f1dd1ff86ea44ff9d146ae94f94c42893b7c23a72a18",
+      "scope": "原四帧/真实history/任务/原缓存/候选首因；补充旧decision-window，不把旧几何尾段当执行证书。"
+    },
+    "follow_up": "前序45160窗口定位和修复见 motion-v9-route-regressions.json；完整最终运行与门控见 motion-v9-validation.json。"
+  },
+  "fixed_offline_performance_budget": {
+    "schema_version": 1,
+    "fixed_at_utc": "2026-09-15T01:39:29.987259+00:00",
+    "baseline_commit": "a6236380a68431342ab9e76f468c587c9dd775f3",
+    "scope": "Offline fixed eight-run regression gate only; never read by control/planning. Fixed before v9 production experiments. Each reference is the faster successful run at identical timing from committed v7/v8 reports.",
+    "policy": {
+      "total_time_and_distance_multiplier": 1.1,
+      "phase_allowance": "reference + max(1000 ms, ceil(10% reference))",
+      "stop_allowance_ms": 1000,
+      "route_lengths": "Record same-goal old remaining and new length at rebuild; no unconditional length cap can authorize unsafe cached-route reuse."
+    },
+    "reference_reports": {
+      "docs/motion-v8-baseline-matrix.json": "b4186de44107c2d45d63d8c059312842e8e234a7173c52b755b8f1526a327568",
+      "docs/motion-v8-timing-matrix.json": "6be342cb8032f739365359b3591d037248a8df59dcb7e8f3698809c2b54ffb81"
+    },
+    "runs": [
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "reference_commit": "7d28761",
+        "reference_elapsed_ms": 73863,
+        "reference_distance_m": 14.173788762179246,
+        "maximum_elapsed_ms": 81250,
+        "maximum_distance_m": 15.591167638397172,
+        "maximum_stop_duration_ms": 5541,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4924,
+            "maximum_duration_ms": 5924
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 18280,
+            "maximum_duration_ms": 20108
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 42000,
+            "maximum_duration_ms": 46200
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 320,
+            "maximum_duration_ms": 1320
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5276,
+            "maximum_duration_ms": 6276
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "reference_commit": "a623638",
+        "reference_elapsed_ms": 54985,
+        "reference_distance_m": 10.749803884249326,
+        "maximum_elapsed_ms": 60484,
+        "maximum_distance_m": 11.82478427267426,
+        "maximum_stop_duration_ms": 5585,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4924,
+            "maximum_duration_ms": 5924
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 18476,
+            "maximum_duration_ms": 20324
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 22800,
+            "maximum_duration_ms": 25080
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 320,
+            "maximum_duration_ms": 1320
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5400,
+            "maximum_duration_ms": 6400
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "reference_commit": "a623638",
+        "reference_elapsed_ms": 56443,
+        "reference_distance_m": 11.026391568072519,
+        "maximum_elapsed_ms": 62088,
+        "maximum_distance_m": 12.129030724879772,
+        "maximum_stop_duration_ms": 5447,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4800,
+            "maximum_duration_ms": 5800
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 18600,
+            "maximum_duration_ms": 20460
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 24404,
+            "maximum_duration_ms": 26845
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 320,
+            "maximum_duration_ms": 1320
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5276,
+            "maximum_duration_ms": 6276
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "reference_commit": "a623638",
+        "reference_elapsed_ms": 54449,
+        "reference_distance_m": 10.679626657117716,
+        "maximum_elapsed_ms": 59894,
+        "maximum_distance_m": 11.747589322829489,
+        "maximum_stop_duration_ms": 5195,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4800,
+            "maximum_duration_ms": 5800
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 18724,
+            "maximum_duration_ms": 20597
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 22282,
+            "maximum_duration_ms": 24511
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 320,
+            "maximum_duration_ms": 1320
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5278,
+            "maximum_duration_ms": 6278
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "reference_commit": "a623638",
+        "reference_elapsed_ms": 85863,
+        "reference_distance_m": 15.994832000690353,
+        "maximum_elapsed_ms": 94450,
+        "maximum_distance_m": 17.59431520075939,
+        "maximum_stop_duration_ms": 5657,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4924,
+            "maximum_duration_ms": 5924
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 15880,
+            "maximum_duration_ms": 17468
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 56400,
+            "maximum_duration_ms": 62040
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 320,
+            "maximum_duration_ms": 1320
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5276,
+            "maximum_duration_ms": 6276
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "reference_commit": "a623638",
+        "reference_elapsed_ms": 86269,
+        "reference_distance_m": 16.128538641490778,
+        "maximum_elapsed_ms": 94896,
+        "maximum_distance_m": 17.74139250563986,
+        "maximum_stop_duration_ms": 5349,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4924,
+            "maximum_duration_ms": 5924
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 15476,
+            "maximum_duration_ms": 17024
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 57124,
+            "maximum_duration_ms": 62837
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 280,
+            "maximum_duration_ms": 1280
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5400,
+            "maximum_duration_ms": 6400
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "reference_commit": "7d28761",
+        "reference_elapsed_ms": 54447,
+        "reference_distance_m": 10.317616041272634,
+        "maximum_elapsed_ms": 59892,
+        "maximum_distance_m": 11.3493776453999,
+        "maximum_stop_duration_ms": 5513,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4800,
+            "maximum_duration_ms": 5800
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 16126,
+            "maximum_duration_ms": 17739
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 24600,
+            "maximum_duration_ms": 27060
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 478,
+            "maximum_duration_ms": 1478
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5400,
+            "maximum_duration_ms": 6400
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "reference_commit": "a623638",
+        "reference_elapsed_ms": 53445,
+        "reference_distance_m": 10.221895454264796,
+        "maximum_elapsed_ms": 58790,
+        "maximum_distance_m": 11.244084999691276,
+        "maximum_stop_duration_ms": 5357,
+        "phases": [
+          {
+            "phase": "approach_crosswalk",
+            "reference_duration_ms": 4800,
+            "maximum_duration_ms": 5800
+          },
+          {
+            "phase": "crosswalk_stop",
+            "reference_duration_ms": 3000,
+            "maximum_duration_ms": 4000
+          },
+          {
+            "phase": "cones",
+            "reference_duration_ms": 15320,
+            "maximum_duration_ms": 16852
+          },
+          {
+            "phase": "approach_light",
+            "reference_duration_ms": 24404,
+            "maximum_duration_ms": 26845
+          },
+          {
+            "phase": "wait_green",
+            "reference_duration_ms": 600,
+            "maximum_duration_ms": 1600
+          },
+          {
+            "phase": "finish",
+            "reference_duration_ms": 5276,
+            "maximum_duration_ms": 6276
+          },
+          {
+            "phase": "completed",
+            "reference_duration_ms": 0,
+            "maximum_duration_ms": 1000
+          }
+        ]
+      }
+    ]
+  },
+  "fixed_budget_sha256": "0b4e9e03c1c12231880bf43091cc206f56ae2f61525170582a54c7bd20e79e07",
+  "checked_in_budget": "crates/runner/examples/fixtures/motion-v9-performance-budget.json",
+  "prechange_gate_result": {
+    "scope": "Arithmetic application of fixed offline budget to committed a623638 report; Rust integration execution recorded separately.",
+    "all_passed": false,
+    "runs": [
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "tracker": "pp",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          60,
+          80
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "passed": true,
+        "failures": []
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          3,
+          7,
+          9
+        ],
+        "passed": false,
+        "failures": [
+          {
+            "metric": "elapsed_ms",
+            "actual": 88647,
+            "maximum": 59892
+          },
+          {
+            "metric": "distance_m",
+            "actual": 16.51555838061635,
+            "maximum": 11.3493776453999
+          },
+          {
+            "metric": "phase_approach_light",
+            "actual": 59400,
+            "maximum": 27060
+          }
+        ]
+      },
+      {
+        "tracker": "lqr",
+        "input_delays_ms": [
+          40,
+          60
+        ],
+        "adoption_delays_ms": [
+          5,
+          9,
+          11
+        ],
+        "passed": true,
+        "failures": []
+      }
+    ]
+  },
+  "gate_review": {
+    "performed": "2026-09-15",
+    "fixed_file_byte_identical_to_checked_in": true,
+    "all_8_reference_and_budget_formulas_independently_recomputed": true,
+    "implementation_scope": "performance_gate.rs只由async_timing_matrix在所有run结束后读取。性能all_passed不替代外层all_completed/traces_complete，任何一项失败都非零退出；没有回流到规划/输出。",
+    "finding": "未发现可复核的门控缺陷；完整同步/异步/安全/期限和最终构建另行验收。"
+  },
+  "unchanged_constraints": [
+    "PP默认、LQR实验；不调Q/R，不增加控制器。",
+    "共享实际采用时基、最终证书/poll/lease/历史保持。",
+    "完整车体/障碍净空、比赛到达/停车/灯色门限、节点/终端预算保持。",
+    "GLIBC2.38只作本地交叉基线；不接车、不读视频、不执行RISC-V目标。"
+  ]
+}
