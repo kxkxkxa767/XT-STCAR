@@ -174,7 +174,16 @@ fn sealed_field_and_goal_behind_car_stop_without_rotation() {
         .step(Timestamp(0), &e, &wall, Timestamp(0), point(6.0, 2.5))
         .unwrap();
     assert_eq!(d.status, NavigationStatus::Blocked);
-    assert_eq!(d.reason.as_deref(), Some("no_grid_path"));
+    // Grid rejection now gives the bounded continuous full-body search a
+    // chance. A truly sealed wall must still stop after that same node budget.
+    assert_eq!(d.reason.as_deref(), Some("forward_node_budget_exhausted"));
+    assert!(d.diagnostics.forward_search.grid_connectivity_rejected);
+    assert!(d.diagnostics.forward_search.node_budget_exhausted);
+    assert!(
+        d.diagnostics.forward_search.ordinary.allocated_nodes
+            + d.diagnostics.forward_search.recovery.allocated_nodes
+            <= config().max_grid_cells
+    );
     assert_eq!(d.intent.speed_mps, 0.0);
     let d = nav
         .step(Timestamp(0), &e, &[], Timestamp(0), point(0.5, 2.5))

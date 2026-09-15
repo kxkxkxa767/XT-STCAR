@@ -5,7 +5,7 @@ Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，�
 [github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)。
 
 目前有 **5 个 Rust crate、2 个可执行程序**。视觉预处理/后处理、原生推理调用、传感器协议、
-串口传输、比赛状态机、道路识别、激光里程计、路径规划、底盘标定映射和调度均由 Rust 实现。Python 用于离线模型导出、校验与参考对照；
+串口传输、比赛状态机、场地规格与布局生成、道路识别、激光里程计、路径规划、底盘标定映射和调度均由 Rust 实现。Python 用于离线模型导出、校验与参考对照；
 默认推理由 Rust 直接调用 ONNX Runtime C API，不启动 Python 进程，推理引擎仍是上游原生库。
 
 用户当前明确“暂不接车”：本轮没有连接车辆、操作电机、升级车端 GLIBC 或读取视频。
@@ -14,6 +14,20 @@ Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，�
 前轮 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保留作历史，交接状态见 [agent.md](agent.md)。
 已完整核对用户提供的 10 页比赛规则初稿，见 [赛项三规则与工程差距](docs/赛项三规则与工程差距.md)。
 日常直接在 `main` 开发和推送；修改前检查并拉取远端更新，提交信息简述本次改动，详见 [上传规范](上传规范.md)。
+
+## 按实际赛场生成任务布局
+
+已增加 Rust 场地规格模块，输入实际长宽、上下直道宽度/跨度、锥桶中心及灯前区域，就能生成发车区、搜索区、绕桶通过点和终点。
+规则初稿的外场范围为 **长 5–8 m、宽 4–6 m**，上下直道分别 **1–2 m**；各项在范围内还要检查组合是否相容。
+80 cm 发车/终点区、白条、锥桶底座、车体尺寸、控制限值和任务等待条件都不按比例缩放。
+
+这是**赛前测量后适配**：运行前编译并冻结布局。斑马线依靠实际图像前沿和同采集时刻位姿确定停车点，实时障碍继续参与避障；
+目前不具备无人巡视后自动测完整场地、识别左右锥桶身份、测出灯/终点世界坐标的能力。
+模板与逐字段测量方法、命令、限制见[赛场规格自适应](docs/赛场规格自适应.md)。旧八场时序回归仍是同一个简化布局，不是八种赛场。
+
+本轮固定九种布局的同步/异步矩阵：**PP 18/18 通过，实验性 LQR 17/18**；LQR 的 5×6 m 同步场仍在左桶阶段停滞。
+旧八场时序回归完成并通过原性能门，时间/路程保持 v9。结果及失败均见[场地矩阵](docs/field-adaptation-matrix.json)和[验证报告](docs/field-adaptation-validation.json)。
+这不等于无人测场或保证尺寸范围内任意组合都能完成，实车仍待验证。
 
 ## 整车与硬件详细参数
 
@@ -192,7 +206,11 @@ XT-STCAR/
 | [`crates/runner/src/capture.rs`](crates/runner/src/capture.rs) | 有时间/字节/记录上限的 IMU 或 N10 采集，使用统一 `Instant` 时钟，空闲和结束写 Tick；不发送设备命令 |
 | [`crates/vision/src/road.rs`](crates/vision/src/road.rs) | 白条几何、HSV 灯色、红蓝锥桶及相机地面投影；普通 YOLO `zebra` 不用于斑马线 |
 | [`crates/robot-core/src/autonomy.rs`](crates/robot-core/src/autonomy.rs) | 米制坐标、位姿质量、车体足迹、道路观察及有向禁越线 HalfPlane 共享类型 |
-| [`crates/robot-core/src/mission.rs`](crates/robot-core/src/mission.rs) | 斑马线实际停止计时、锥桶顺序及 Stop/PassThrough 到达策略、灯前全车停车/绿灯确认、终点与故障锁存 |
+| [`crates/robot-core/src/field.rs`](crates/robot-core/src/field.rs) | 米制 `FieldSpec`、规则尺寸与组合校验、固定纸条/锥桶/发车终点几何、生成绕桶顺序及直道入口朝向；不缩放车体或控制限值 |
+| [`crates/runner/src/field.rs`](crates/runner/src/field.rs) | 赛前编译 `FieldScenario` 为冻结的任务配置，校验派生坐标一致性，限制合成灯的可见区/触发区；不把模拟灯时钟交给任务 |
+| [`crates/runner/examples/field_matrix.rs`](crates/runner/examples/field_matrix.rs) | 固定九组场地/元素布局，分别运行同步和真实 worker 的 PP/LQR 闭环；保留失败，不代表连续尺寸范围保证 |
+| [`config/field-example.json`](config/field-example.json) | 合成场地规格模板；填入现场测量值后先生成布局、再编译验证 |
+| [`crates/robot-core/src/mission.rs`](crates/robot-core/src/mission.rs) | 斑马线实际停止计时、锥桶顺序、可选通过点朝向及 Stop/PassThrough 到达策略、灯前全车停车/绿灯确认、终点与故障锁存 |
 | [`crates/robot-core/src/scan.rs`](crates/robot-core/src/scan.rs) | N10 整圈组帧、覆盖/盲区/时间检查；不同于旧局部包回放 |
 | [`crates/robot-core/src/localization.rs`](crates/robot-core/src/localization.rs) | 有界 ICP 激光里程计；退化/跳变/过期门控，不假造编码器 |
 | [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 路径搜索、跟踪、障碍/制动和停车朝向；将异步采用约束传入候选筛选，分别记录普通搜索和恢复；`SteeringEstimate` 区分命令目标与渐变执行估计，规划与 adopt 分离 |
@@ -240,12 +258,12 @@ XT-STCAR/
 前轮执行状态、过渡峰值、通过点和模拟积分修正见[运动执行与通过点修正](docs/运动执行与通过点修正.md)。
 前轮真实任务验收半径、完整车体参考偏离、阶段统计与异步时间对齐见[任务交接与异步运动修正](docs/任务交接与异步运动修正.md)。
 前轮短连接接续、共享计算额度和异步停车空间见[终端连接延续与异步停车包络](docs/终端连接延续与异步停车包络.md)。
-本轮 v9 已完整读取[第九份修改意见](https://chatgpt.com/share/6aa89fa3-3894-83e8-afe8-45451cbbc42f)，
+前轮 v9 已完整读取[第九份修改意见](https://chatgpt.com/share/6aa89fa3-3894-83e8-afe8-45451cbbc42f)，
 结合 `XT-STCAR_a623638_review.zip`，复现并修正了共享时基修复之后的灯前长绕路。
 说明见[路径连续性与性能回归](docs/路径连续性与性能回归.md)，来源与原始失效见[基线证据](docs/motion-v9-before.json)，
 三版本消融见[消融记录](docs/motion-v9-ablation.json)。外部ZIP仅做Python数据复核，Rust运行由本工程另行完成。
 前轮[采用时基与时序交叉验证](docs/采用时基与时序交叉验证.md)、[采用约束与前向恢复](docs/采用约束与前向恢复.md)
-及 `motion-v8-*`、`motion-v7-*` 和更早报告保留历史，当前验收以 `motion-v9-*` 为准。
+及 `motion-v8-*`、`motion-v7-*` 和更早报告保留历史，当前场地适配验收以 `field-adaptation-*` 为准，`motion-v9-*` 保留路径连续性历史。
 当前采用前进车辆运动学：比赛任务给目标/限速 → A* 连通与带航向/曲率的车模型路线 → PathTracker →
 候选轨迹预测、采用约束、碰撞和制动检查 → 安全状态机 → 异步最终采用证书 → 输出线程。
 同步调用保留其对应检查；默认 **Pure Pursuit** 保留，**曲率前馈 + LQR** 继续作为实验选项。
@@ -422,10 +440,10 @@ v8顺序主机profile各预热1次/测3次：同步PP平均1619.924→1632.190 m
 [持续主机时钟短场](docs/motion-v8-host-clock.json)取得23源/119转弯Drive、最大poll间隔21 ms；末源2200、原期限2450、
 2460 ms输出Stop，2687 ms完全停稳回中，无碰撞/越界。这仍不是完整比赛实时性或目标WCET验收。
 
-v9最终默认异步计时开启前后功能字段逐值一致，导航阶段平均/实测最大为PP6.216/59.705ms、LQR4.346/11.099ms，
-见[本轮分段计时](docs/motion-v9-async-timing.json)。这些包括非Drive计划，功能钟等待worker时冻结，不是目标板截止时间结论。
-[本轮持续主机时钟短场](docs/motion-v9-host-clock.json)取得23源/119转弯Drive，poll最大21ms；末源2200、原期限2450，
-2460ms输出Stop，2686ms完全停稳回中，无碰撞/越界。没有新做多样本同步profile，不沿用旧profile当本轮测量。
+历史v9最终默认异步计时开启前后功能字段逐值一致，导航阶段平均/实测最大为PP6.216/59.705ms、LQR4.346/11.099ms，
+见[v9分段计时](docs/motion-v9-async-timing.json)。这些包括非Drive计划，功能钟等待worker时冻结，不是目标板截止时间结论。
+[v9持续主机时钟短场](docs/motion-v9-host-clock.json)取得23源/119转弯Drive，poll最大21ms；末源2200、原期限2450，
+2460ms输出Stop，2686ms完全停稳回中，无碰撞/越界。v9没有新做多样本同步profile，不沿用更早profile当作v9测量。
 
 历史 v7 顺序主机计时各预热 1 次、正式 3 次：同步整场平均墙钟 PP 1609.081→1621.487 ms（+0.77%），
 LQR 1494.640→1484.827 ms（−0.66%），模拟时长/路程保持。小样本差异不足以认定加速或退化，见[完整样本](docs/motion-v7-host-profile.json)。
@@ -583,12 +601,17 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
 | `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-本轮v9 Rust工作区 **371通过、0失败、2项按设计忽略**；跟踪example2项、矩阵example5项、Python交付35项通过。
-fmt、all-targets clippy `-D warnings`、双RISC-V链接与ELF检查通过；[构建报告](docs/motion-v9-build.json)记录108份源码/清单/嵌入fixture，
-GLIBC基线2.38、实际最高引用2.34，robot为2,029,552字节。
-[验证汇总](docs/motion-v9-validation.json)与[本地交付报告](docs/motion-v9-delivery.json)对应当前实现；目标程序尚未在车上或模拟器执行。
-新增7项[连续性回归](docs/motion-v9-route-regressions.json)覆盖原始窗口、左右镜像、失效提示和共享额度；
-[试验记录](docs/motion-v9-experiments.json)保留被舍弃的退化方案，避免只报告成功场。
+本轮 Rust 工作区 **409 通过、0 失败、2 项按设计忽略**；跟踪 example 2 项、旧时序矩阵 example 5 项、Python 交付 36 项及 39 个子测试通过。
+fmt、all-targets clippy `-D warnings`、双 RISC-V 链接与 ELF 检查通过；[构建报告](docs/field-adaptation-build.json)记录 **112 份**编译输入，
+GLIBC 基线 **2.38**、实际最高引用 **2.34**，robot 为 **2,090,544 字节**。
+[验证汇总](docs/field-adaptation-validation.json)区分 PP 18/18、LQR 17/18、旧八场回归及三个实际 CLI 完整运行，
+[本地交付报告](docs/field-adaptation-delivery.json)记录本地包；目标程序尚未在车上或模拟器执行。
+新场地改动还包含有限禁带整包络检查、网格误拒后的原预算连续恢复、定向通过点短连接及原到达区域后备连接。
+后备连接只在原精确解/搜索失败后使用，终点保留实际积分值，位置/朝向误差含累计误差须进入原容差一半；不把邻近位置假作目标中心。
+开发失败与 22/36、34/36 中间矩阵见[试验记录](docs/field-adaptation-experiments.json)。同步末曲率未单独观测；全部异步场末速度/曲率归零。
+
+历史 v9 为 371 Rust、2 跟踪 example、5 矩阵 example、35 Python 交付测试通过；108 份编译输入。
+[原验证](docs/motion-v9-validation.json)、[连续性回归](docs/motion-v9-route-regressions.json)和[原试验记录](docs/motion-v9-experiments.json)保留，不能作为新二进制证据。
 
 历史 v7 Rust 常规测试 **350 通过、0 失败、2 项按设计忽略**；跟踪 example 2 项、Python 交付 35 项通过。
 fmt、all-targets clippy `-D warnings`、两个 RISC-V 交叉链接和 ELF 检查通过。

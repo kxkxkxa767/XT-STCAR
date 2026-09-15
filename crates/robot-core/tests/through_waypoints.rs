@@ -369,7 +369,10 @@ fn distinct_task_radius_keeps_the_continuous_speed_handoff_feasible() {
                     assert!(target <= next_limit);
                 } else {
                     assert!(!decision.diagnostics.terminal_continuity_enforced);
-                    assert_eq!(decision.diagnostics.terminal_connections_checked, 0);
+                    // Oriented through goals now check the same short
+                    // connection as oriented stops. This straight single arc
+                    // succeeds, so two-arc continuity is still not enforced.
+                    assert_eq!(decision.diagnostics.terminal_connections_checked, 1);
                     assert_eq!(
                         decision.diagnostics.waypoint_admission_radius_m,
                         Some(radius)

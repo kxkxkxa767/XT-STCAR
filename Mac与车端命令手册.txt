@@ -246,8 +246,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
 [预期] 两算法的横向/航向误差及失败指标；这是跟踪层合成实验，
   不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
   它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
-  LQR仍为实验选项，默认Pure Pursuit保持不变；v9当前说明见
-  docs/路径连续性与性能回归.md；各算法须分别看completed和fault。
+  LQR仍为实验选项，默认Pure Pursuit保持不变；当前赛场适配见
+  docs/赛场规格自适应.md，v9历史说明见docs/路径连续性与性能回归.md；各算法须分别看completed和fault。
   docs/motion-v6-competition-comparison.json及motion-v5/v4/v3/v2、motion-control均保留历史，
   不当作当前源码的验收结果。
   summary.first_navigation_failure 为首个非预期阻塞/故障窗口，最多8帧前文、
@@ -361,14 +361,15 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   普通与恢复共享原搜索/终端额度；调试计数与首因在内存保留，默认无逐tick写盘，不降比赛频率。
 
   新增导航/阶段诊断JSON省略全默认对象与None；缺失表示零工作/未搜索/无约束或失败，有值完整保留。
-  最新入口为docs/路径连续性与性能回归.md，完整报告为docs/motion-v9-*。
-  本轮8/8交叉工况完成并通过试改前固定的性能门，最终证书/曲率slew采用拒绝和终端总预算耗尽0。
+  以下为v9历史结果，说明见docs/路径连续性与性能回归.md，报告为docs/motion-v9-*。
+  当前赛场适配结果见本手册第11节、docs/赛场规格自适应.md及docs/field-adaptation-*。
+  v9的8/8交叉工况完成并通过试改前固定的性能门，最终证书/曲率slew采用拒绝和终端总预算耗尽0。
   固定顺序为 [60,80]×[3,7,9]、[60,80]×[5,9,11]、[40,60]×[3,7,9]、[40,60]×[5,9,11]：
   PP75.467/54.985/56.443/54.449秒；LQR54.663/55.265/54.249/53.445秒。
   早输入/早采用LQR从v8的88.647s/16.515558m到54.249s/10.291006m，实际Stop4513ms保持。
   PP四组时间/路程和同步PP58.8秒/LQR54.3秒保持；不代表任意时序或实车都收敛。
   工作区371通过/2忽略、跟踪example2/矩阵example5、交付35通过，fmt/clippy/双RISC-V静态链接通过。
-  当前108份编译输入、GLIBC2.38基线/实际最高2.34；binary和包哈希见motion-v9-build/validation/delivery。
+  v9有108份编译输入、GLIBC2.38基线/实际最高2.34；历史binary和包哈希见motion-v9-build/validation/delivery。
   默认异步主机导航平均/最大PP6.216/59.705ms、LQR4.346/11.099ms，不是目标WCET；短场23源、poll最大21ms，
   末源2200、原期限2450、2460ms Stop、2686ms模型停稳回中。暂不接车，未执行目标程序。
 
@@ -940,7 +941,51 @@ JSON
 
 [预期] 本次文件已提交；本地与远端提交哈希一致。忽略目录中的本机构建产物仍留本地。
 
-十一、结果判断与资料入口
+十一、按现场尺寸生成场地配置（Mac，离线模拟）
+
+  原7×5米简化场景的8场矩阵是时序回归，并非8种尺寸。
+  新模块支持赛前填入米制实测规格，启动前编译并冻结；它不会自动巡视测场。
+  规则初稿：外围长5–8米、宽4–6米，上下直道分别1–2米；还须满足区域/锥桶/车体组合校验。
+  不缩放0.8米发车终点区、纸条、0.28米锥桶底座、车辆或控制限值。
+
+[在Mac执行] 创建输入模板（不要覆盖已有现场测量文件）：
+  cd /Users/yuhaojin/Documents/XT-STCAR
+  mkdir -p work/field
+  cargo run --locked --offline -p xt-stcar-robot-runner --bin xt-stcar-robot -- field-example > work/field/spec.json
+
+[怎么改] 编辑spec.json。字段解释见docs/赛场规格自适应.md。
+  spec内填外场长宽、上下直道宽度/跨度、左右锥桶距对应侧墙、左桶距上墙、右桶距下墙、
+  斑马线搜索区起点、灯前禁越线x和停车区长度；坐标原点在左下，+x向右、+y向上，全部米制。
+  source=measured只标注测量来源，不启用硬件或代替底盘/相机/定位标定。
+  外层crosswalk_near_x_m是合成图像真值，Mission不直接用它当停车点。
+  cone_route_radius_m是工程首选半径；实际半径会按侧墙和灯前区域空间约束生成。
+
+[查看布局] 输出JSON包含各区域、锥桶、实际选择半径、带朝向通过点、灯前和终点坐标：
+  cargo run --locked --offline -p xt-stcar-robot-runner --bin xt-stcar-robot -- field-layout --config work/field/spec.json --output work/field/layout.json
+
+[编译并跑闭环] layout.json只是布局；autonomy-sim使用下面生成的compiled.json：
+  cargo run --locked --offline -p xt-stcar-robot-runner --bin xt-stcar-robot -- field-compile --config work/field/spec.json --output work/field/compiled.json
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --bin xt-stcar-robot -- autonomy-sim --config work/field/compiled.json --output work/field/run.jsonl
+
+[预期] 非法规格拒绝；编译失败保留旧输出。不能单独篡改compiled里的任务坐标。
+  JSON重新读取允许的只是浮点末位舍入误差，厘米级修改仍拒绝。
+  修改实测规格后须重新编译并重新创建控制器；运行中不会悄悄移动目标。
+  模拟完成看completed/fault、实际停稳与绿灯确认、全车终点和结束状态，不只看进程生成了文件。
+  当前没有自动测全场、灯距离、终点世界坐标或重分左右锥桶身份的模块，仍暂不接车。
+
+[完整场地矩阵] 固定9种布局×同步/异步×PP/LQR，失败记录不会被删除：
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example field_matrix -- both all both > work/field/matrix.json
+
+[单场诊断] 可分别选择sync/async/both、场景名/all、pp/lqr/both：
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example field_matrix -- sync small_5x4 pp
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example field_matrix -- --help
+
+  任何未完成、故障或验收未满足均非零退出，仍输出JSON供定位。
+  九场覆盖有限测量组合，不保证官方连续区间内所有组合都能成功；PP默认、LQR实验。
+  异步功能钟等待worker会冻结，这不是车端实时性或WCET验证。
+  默认不增加每tick落盘；可选诊断保持有界，比赛控制不为eMMC寿命降频。
+
+十二、结果判断与资料入口
 
   命令成功后可单独执行 echo $? 查看上一条退出码；0 为成功，非零先看 stderr。
   别在另一条命令之后再读取 $? 并误认为还是原命令结果。
@@ -959,10 +1004,10 @@ JSON
   docs/Rust比赛自主闭环.md：任务、导航、感知 worker、仿真及日志设计边界。
   docs/任务交接与异步运动修正.md：v4真实验收半径、阶段统计、执行历史和异步采用证书。
   docs/采用时基与时序交叉验证.md：v8共享last-change时基、检查顺序及2×2矩阵入口。
-  docs/motion-v9-before.json：本轮分享/ZIP来源与同姿态旧剩余路线增大证据。
+  docs/motion-v9-before.json：历史v9分享/ZIP来源与同姿态旧剩余路线增大证据。
   docs/路径连续性与性能回归.md：v9数值初猜接续、固定性能门和验收边界。
   docs/motion-v9-route-regressions.json、motion-v9-experiments.json：7项专项覆盖与废弃方案。
-  docs/motion-v9-validation/build/delivery.json：当前验收、编译输入/ELF和本地包；分别是三个文件。
+  docs/motion-v9-validation/build/delivery.json：历史v9验收、编译输入/ELF和本地包；分别是三个文件。
   docs/motion-v8-before.json：历史v8分享/ZIP/探针来源与隔离旧版失败。
   docs/motion-v8-baseline-matrix.json：修改前完整8场及有界轨迹首次分叉。
   docs/采用约束与前向恢复.md：v7共享采用条件、结构化首因及前向恢复设计历史。
@@ -972,5 +1017,8 @@ JSON
   docs/motion-v8-*、motion-v7-*、motion-v6-*、motion-v5-*、motion-v4-*及更早结果保留历史。
   docs/底盘标定映射.md：物理单位映射和未经验证的示例表。
   docs/赛项三规则与工程差距.md：初稿规则、资料证据与实车缺口。
+  docs/赛场规格自适应.md：场地测量、半径/通过点生成、兼容处理与覆盖边界。
+  docs/field-adaptation-matrix.json、field-adaptation-legacy-matrix.json：新场地与旧时序的独立记录。
+  docs/field-adaptation-validation/build/delivery.json：本轮验收、交叉编译与本地包，分别为三个文件。
 
 手册中的车端 SSH、设备访问和安装命令均未执行；源码 Git 上传状态以 agent.md 和本次交付记录为准。

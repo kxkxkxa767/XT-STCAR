@@ -1,0 +1,2733 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-15",
+  "baseline_commit": "98368200f6c0eb8189c3e1d79941469c821a10b9",
+  "scope": "Development experiments on unchanged predeclared measured-layout inputs. Failures retained; these sequential trials are not isolated causal/performance ablations. Final acceptance is separate. No vehicle execution.",
+  "earliest_start_failure": {
+    "start_x_m": 0.38,
+    "elapsed_ms": 10100,
+    "distance_m": 0,
+    "reason": "no_grid_path: centered start footprint fits the start zone but its cell is conservatively blocked by rear wall; default placement moved within unchanged 0.8 m zone to x .50"
+  },
+  "predeclared_cases": [
+    {
+      "name": "small_5x4",
+      "scenario": {
+        "cone_route_radius_m": 0.7,
+        "crosswalk_near_x_m": 2.0,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.0,
+          "bottom_straight_span_m": 3.0,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.0,
+          "left_cone_from_top_m": 2.0,
+          "length_m": 5.0,
+          "light_front_x_m": 4.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 2.0,
+          "right_cone_from_right_m": 1.0,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.0,
+          "top_straight_span_m": 3.0,
+          "width_m": 4.0
+        }
+      }
+    },
+    {
+      "name": "tall_5x6",
+      "scenario": {
+        "cone_route_radius_m": 0.7,
+        "crosswalk_near_x_m": 2.0,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.2,
+          "bottom_straight_span_m": 3.0,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.0,
+          "left_cone_from_top_m": 2.5,
+          "length_m": 5.0,
+          "light_front_x_m": 4.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 3.0,
+          "right_cone_from_right_m": 1.0,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.2,
+          "top_straight_span_m": 3.0,
+          "width_m": 6.0
+        }
+      }
+    },
+    {
+      "name": "wide_8x4",
+      "scenario": {
+        "cone_route_radius_m": 0.85,
+        "crosswalk_near_x_m": 2.5,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.0,
+          "bottom_straight_span_m": 5.5,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.5,
+          "left_cone_from_top_m": 2.0,
+          "length_m": 8.0,
+          "light_front_x_m": 7.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 2.0,
+          "right_cone_from_right_m": 1.5,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.0,
+          "top_straight_span_m": 5.5,
+          "width_m": 4.0
+        }
+      }
+    },
+    {
+      "name": "large_8x6",
+      "scenario": {
+        "cone_route_radius_m": 0.85,
+        "crosswalk_near_x_m": 2.5,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.2,
+          "bottom_straight_span_m": 5.5,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.5,
+          "left_cone_from_top_m": 2.5,
+          "length_m": 8.0,
+          "light_front_x_m": 7.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 3.0,
+          "right_cone_from_right_m": 1.5,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.2,
+          "top_straight_span_m": 5.5,
+          "width_m": 6.0
+        }
+      }
+    },
+    {
+      "name": "nominal_7x5",
+      "scenario": {
+        "cone_route_radius_m": 0.85,
+        "crosswalk_near_x_m": 2.5,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.2,
+          "bottom_straight_span_m": 4.5,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.5,
+          "left_cone_from_top_m": 2.5,
+          "length_m": 7.0,
+          "light_front_x_m": 6.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 2.5,
+          "right_cone_from_right_m": 1.5,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.2,
+          "top_straight_span_m": 4.5,
+          "width_m": 5.0
+        }
+      }
+    },
+    {
+      "name": "crosswalk_earliest",
+      "scenario": {
+        "cone_route_radius_m": 0.85,
+        "crosswalk_near_x_m": 1.0,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.2,
+          "bottom_straight_span_m": 4.5,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.5,
+          "left_cone_from_top_m": 2.5,
+          "length_m": 7.0,
+          "light_front_x_m": 6.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 2.5,
+          "right_cone_from_right_m": 1.5,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.2,
+          "top_straight_span_m": 4.5,
+          "width_m": 5.0
+        }
+      }
+    },
+    {
+      "name": "crosswalk_latest",
+      "scenario": {
+        "cone_route_radius_m": 0.85,
+        "crosswalk_near_x_m": 4.203,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.2,
+          "bottom_straight_span_m": 4.5,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.5,
+          "left_cone_from_top_m": 2.5,
+          "length_m": 7.0,
+          "light_front_x_m": 6.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 2.5,
+          "right_cone_from_right_m": 1.5,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.2,
+          "top_straight_span_m": 4.5,
+          "width_m": 5.0
+        }
+      }
+    },
+    {
+      "name": "light_forward",
+      "scenario": {
+        "cone_route_radius_m": 0.85,
+        "crosswalk_near_x_m": 2.5,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.2,
+          "bottom_straight_span_m": 4.5,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.5,
+          "left_cone_from_top_m": 2.5,
+          "length_m": 7.0,
+          "light_front_x_m": 4.3,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 2.5,
+          "right_cone_from_right_m": 1.5,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.2,
+          "top_straight_span_m": 4.5,
+          "width_m": 5.0
+        }
+      }
+    },
+    {
+      "name": "cones_shifted",
+      "scenario": {
+        "cone_route_radius_m": 0.85,
+        "crosswalk_near_x_m": 2.5,
+        "light_red_duration_ms": 5000,
+        "schema_version": 1,
+        "spec": {
+          "bottom_lane_width_m": 1.2,
+          "bottom_straight_span_m": 4.5,
+          "crosswalk_search_start_m": 1.0,
+          "left_cone_from_left_m": 1.8,
+          "left_cone_from_top_m": 2.7,
+          "length_m": 7.0,
+          "light_front_x_m": 6.2,
+          "light_stop_length_m": 1.0,
+          "right_cone_from_bottom_m": 2.7,
+          "right_cone_from_right_m": 1.8,
+          "schema_version": 1,
+          "source": "simulation",
+          "top_lane_width_m": 1.2,
+          "top_straight_span_m": 4.5,
+          "width_m": 5.0
+        }
+      }
+    }
+  ],
+  "experiments": [
+    {
+      "local_log": "work/adaptive-field/nominal-v2.json",
+      "change": "Seven positional gates; start moved within fixed 0.8 m start zone. Upper entry reached diagonally and stalled against top wall.",
+      "passed_runs": 0,
+      "selected_runs": 1,
+      "runs": [
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 80700,
+            "distance_m": 17.09533973484194,
+            "final_pose": {
+              "x_m": 2.9842888806293404,
+              "y_m": 4.682799791006376,
+              "yaw_rad": 0.052195077828615766
+            },
+            "first_problem": {
+              "at": 32900,
+              "fault": null,
+              "navigation_reason": "stop_boundary_not_reachable",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/nominal-heading.json",
+      "change": "Added heading only at old upper-entry coordinate; completed but required a long turn.",
+      "passed_runs": 1,
+      "selected_runs": 1,
+      "runs": [
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 109500,
+            "distance_m": 27.099238507484696,
+            "final_pose": {
+              "x_m": 6.556036257987192,
+              "y_m": 4.400087503676783,
+              "yaw_rad": -0.0005222061542085044
+            },
+            "first_problem": {
+              "at": 32900,
+              "fault": null,
+              "navigation_reason": "stop_boundary_not_reachable",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/tangent-sync-pp.json",
+      "change": "Seven oriented gates plus longitudinal entry room; tight inter-gate routes were not protected for PassThrough.",
+      "passed_runs": 5,
+      "selected_runs": 9,
+      "runs": [
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 28700,
+            "distance_m": 3.6545861309258214,
+            "final_pose": {
+              "x_m": 3.9734002580214605,
+              "y_m": 1.3064258681252576,
+              "yaw_rad": 0.009088905053216578
+            },
+            "first_problem": {
+              "at": 18300,
+              "fault": null,
+              "navigation_reason": "no_grid_path",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 40700,
+            "distance_m": 7.24337451566551,
+            "final_pose": {
+              "x_m": 3.972959066619325,
+              "y_m": 2.299270963817386,
+              "yaw_rad": 0.044096867634925374
+            },
+            "first_problem": {
+              "at": 30300,
+              "fault": null,
+              "navigation_reason": "no_grid_path",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 42700,
+            "distance_m": 7.480185393747319,
+            "final_pose": {
+              "x_m": 7.358271005626726,
+              "y_m": 1.973248382599814,
+              "yaw_rad": 1.5598407609037803
+            },
+            "first_problem": {
+              "at": 32300,
+              "fault": null,
+              "navigation_reason": "forward_node_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 157400,
+            "distance_m": 40.44225270729558,
+            "final_pose": {
+              "x_m": 7.55614529328128,
+              "y_m": 5.398414493508015,
+              "yaw_rad": 0.001361881881264182
+            },
+            "first_problem": {
+              "at": 44300,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 162700,
+            "distance_m": 42.87435556718016,
+            "final_pose": {
+              "x_m": 6.5563337795814975,
+              "y_m": 4.395158060095649,
+              "yaw_rad": 0.0015777823726335072
+            },
+            "first_problem": {
+              "at": 36000,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 93700,
+            "distance_m": 23.71585573690284,
+            "final_pose": {
+              "x_m": 6.556226449022125,
+              "y_m": 4.400011808810827,
+              "yaw_rad": -0.0007466670643423434
+            },
+            "first_problem": {
+              "at": 32500,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 157300,
+            "distance_m": 38.095215658000114,
+            "final_pose": {
+              "x_m": 6.555755236762072,
+              "y_m": 4.4025642735312465,
+              "yaw_rad": -0.0019937583287821248
+            },
+            "first_problem": {
+              "at": 24900,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 151300,
+            "distance_m": 37.21818883097537,
+            "final_pose": {
+              "x_m": 6.5535814786030775,
+              "y_m": 4.402811180300797,
+              "yaw_rad": -0.004467441353954271
+            },
+            "first_problem": {
+              "at": 60600,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "scenario duration exhausted before completion",
+            "elapsed_ms": 180300,
+            "distance_m": 48.135495317168335,
+            "final_pose": {
+              "x_m": 4.887560956486843,
+              "y_m": 4.312741114105681,
+              "yaw_rad": 0.17119068727791786
+            },
+            "first_problem": {
+              "at": 35800,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/entry-sync-pp.json",
+      "change": "Only left exit and upper entry oriented; still missed narrow turns and had phase-dependent failures.",
+      "passed_runs": 5,
+      "selected_runs": 9,
+      "runs": [
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 28500,
+            "distance_m": 3.614594576393588,
+            "final_pose": {
+              "x_m": 3.9752422040678637,
+              "y_m": 1.2919197874804098,
+              "yaw_rad": 0.311229507032325
+            },
+            "first_problem": {
+              "at": 18100,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 30100,
+            "distance_m": 4.0755800441649805,
+            "final_pose": {
+              "x_m": 3.9813518324744326,
+              "y_m": 2.2823992185272055,
+              "yaw_rad": 0.7595006670946738
+            },
+            "first_problem": {
+              "at": 19700,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 42100,
+            "distance_m": 7.293885215207129,
+            "final_pose": {
+              "x_m": 7.339393480610475,
+              "y_m": 1.9785940315025796,
+              "yaw_rad": 1.0922904816622108
+            },
+            "first_problem": {
+              "at": 31700,
+              "fault": null,
+              "navigation_reason": "no_forward_kinematic_path",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 109600,
+            "distance_m": 26.951466017841106,
+            "final_pose": {
+              "x_m": 7.556171108747901,
+              "y_m": 5.399696197718033,
+              "yaw_rad": 0.0008614599212672935
+            },
+            "first_problem": {
+              "at": 32200,
+              "fault": null,
+              "navigation_reason": "empty_speed_interval",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 86100,
+            "distance_m": 20.55086733308857,
+            "final_pose": {
+              "x_m": 6.5560606701085575,
+              "y_m": 4.39955528561601,
+              "yaw_rad": 0.0002460560720605187
+            },
+            "first_problem": {
+              "at": 32900,
+              "fault": null,
+              "navigation_reason": "stop_boundary_not_reachable",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 143400,
+            "distance_m": 36.48302423158119,
+            "final_pose": {
+              "x_m": 5.577128934482255,
+              "y_m": 4.417689580526839,
+              "yaw_rad": -0.1277645159848757
+            },
+            "first_problem": {
+              "at": 133000,
+              "fault": null,
+              "navigation_reason": "no_forward_kinematic_path",
+              "navigation_status": "blocked",
+              "phase": "approach_light"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 90400,
+            "distance_m": 20.563460444931664,
+            "final_pose": {
+              "x_m": 6.555857032410134,
+              "y_m": 4.400253093991231,
+              "yaw_rad": -0.0001995774444676357
+            },
+            "first_problem": {
+              "at": 30800,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 85900,
+            "distance_m": 20.43560045511015,
+            "final_pose": {
+              "x_m": 6.553611511508997,
+              "y_m": 4.394565139975761,
+              "yaw_rad": 0.016695965498579213
+            },
+            "first_problem": {
+              "at": 32900,
+              "fault": null,
+              "navigation_reason": "stop_boundary_not_reachable",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 82300,
+            "distance_m": 19.693404825984558,
+            "final_pose": {
+              "x_m": 6.55629129013963,
+              "y_m": 4.400213114731563,
+              "yaw_rad": -0.00023411580237242546
+            },
+            "first_problem": {
+              "at": 30500,
+              "fault": null,
+              "navigation_reason": "stop_boundary_not_reachable",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/small-arc.json",
+      "change": "Five gates per cone and side-balanced radii, interior gates without headings; narrow turn still overshot.",
+      "passed_runs": 0,
+      "selected_runs": 1,
+      "runs": [
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 78000,
+            "distance_m": 8.70407713879789,
+            "final_pose": {
+              "x_m": 4.345143893725406,
+              "y_m": 0.3525342996987943,
+              "yaw_rad": -2.5612416578843495
+            },
+            "first_problem": {
+              "at": 18300,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/small-arc-heading.json",
+      "change": "Oriented five-gate arcs; smallest synchronous PP completed, before final corner and through protection changes.",
+      "passed_runs": 1,
+      "selected_runs": 1,
+      "runs": [
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 84900,
+            "distance_m": 18.004700668494934,
+            "final_pose": {
+              "x_m": 4.556131085099339,
+              "y_m": 3.500349179939258,
+              "yaw_rad": 9.388577517244201e-05
+            },
+            "first_problem": {
+              "at": 17800,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/arc-heading-matrix.json",
+      "change": "First full frozen 36-run matrix; 22 passed. Oriented through goals lacked existing short-connection protection; wide field reference arc met conservative red-zone corner.",
+      "passed_runs": 22,
+      "selected_runs": 36,
+      "runs": [
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 84900,
+            "distance_m": 18.004700668494934,
+            "final_pose": {
+              "x_m": 4.556131085099339,
+              "y_m": 3.500349179939258,
+              "yaw_rad": 9.388577517244201e-05
+            },
+            "first_problem": {
+              "at": 17800,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 85500,
+            "distance_m": 18.019934130103046,
+            "final_pose": {
+              "x_m": 4.5522055469688905,
+              "y_m": 3.4992531270981266,
+              "yaw_rad": 0.0011726816979638066
+            },
+            "first_problem": {
+              "at": 17800,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "small_5x4",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 127067,
+            "distance_m": 21.343524322528744,
+            "final_pose": {
+              "x_m": 4.555577304157475,
+              "y_m": 3.4986264469549466,
+              "yaw_rad": 0.003716059059257759
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.765380319679353,
+                "y_m": 1.4081754187097244,
+                "yaw_rad": 0.05597966168344071
+              },
+              "adoption_rejection": null,
+              "at": 18063,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "small_5x4",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "async scenario duration exhausted before completion",
+            "elapsed_ms": 180420,
+            "distance_m": 38.52073656936547,
+            "final_pose": {
+              "x_m": 0.6273672239843769,
+              "y_m": 2.466166519652409,
+              "yaw_rad": 0.6808704099415652
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.765380677453346,
+                "y_m": 1.4069247679882493,
+                "yaw_rad": 0.05376599228582313
+              },
+              "adoption_rejection": null,
+              "at": 18063,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 172800,
+            "distance_m": 38.984061368744726,
+            "final_pose": {
+              "x_m": 4.556063308822699,
+              "y_m": 5.399015414130888,
+              "yaw_rad": 0.0009205814036672422
+            },
+            "first_problem": {
+              "at": 19700,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "scenario duration exhausted before completion",
+            "elapsed_ms": 180300,
+            "distance_m": 34.46809285404949,
+            "final_pose": {
+              "x_m": 3.2228667213531934,
+              "y_m": 5.413094134333607,
+              "yaw_rad": 0.0035759765264131715
+            },
+            "first_problem": {
+              "at": 19700,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 85667,
+            "distance_m": 18.39457234501728,
+            "final_pose": {
+              "x_m": 4.557221094528402,
+              "y_m": 5.400341994911545,
+              "yaw_rad": -0.0017951107914151443
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.8872110385403644,
+                "y_m": 2.3801223649270757,
+                "yaw_rad": 0.1664145156693957
+              },
+              "adoption_rejection": null,
+              "at": 19987,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 85987,
+            "distance_m": 18.522208417644396,
+            "final_pose": {
+              "x_m": 4.554910185162455,
+              "y_m": 5.399961779506375,
+              "yaw_rad": 0.0006902559472035108
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.890450023804564,
+                "y_m": 2.3778646719479504,
+                "yaw_rad": 0.1411734747604716
+              },
+              "adoption_rejection": null,
+              "at": 19987,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 45100,
+            "distance_m": 8.100190230461376,
+            "final_pose": {
+              "x_m": 7.11893709223756,
+              "y_m": 2.579316079520335,
+              "yaw_rad": 2.32264099693994
+            },
+            "first_problem": {
+              "at": 34700,
+              "fault": null,
+              "navigation_reason": "no_forward_kinematic_path",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 44800,
+            "distance_m": 8.100989284227806,
+            "final_pose": {
+              "x_m": 7.1191487532094335,
+              "y_m": 2.578902411769611,
+              "yaw_rad": 2.323136775203258
+            },
+            "first_problem": {
+              "at": 34400,
+              "fault": null,
+              "navigation_reason": "no_forward_kinematic_path",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 45467,
+            "distance_m": 8.100767738344745,
+            "final_pose": {
+              "x_m": 7.123308370002155,
+              "y_m": 2.579482237691201,
+              "yaw_rad": 2.3278749209756704
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.440878619180295,
+                "y_m": 1.1393144570178038,
+                "yaw_rad": 0.03501041091999202
+              },
+              "adoption_rejection": null,
+              "at": 27787,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 45467,
+            "distance_m": 8.10083025046702,
+            "final_pose": {
+              "x_m": 7.123453975573071,
+              "y_m": 2.5795108622292813,
+              "yaw_rad": 2.3280034485979844
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.440722351615617,
+                "y_m": 1.139602511455515,
+                "yaw_rad": 0.036115041595937036
+              },
+              "adoption_rejection": null,
+              "at": 27787,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 153500,
+            "distance_m": 40.0083907256996,
+            "final_pose": {
+              "x_m": 7.556125733830487,
+              "y_m": 5.4000400626363065,
+              "yaw_rad": -0.0009204171045391618
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 162800,
+            "distance_m": 41.83413909540311,
+            "final_pose": {
+              "x_m": 7.5562875442270565,
+              "y_m": 5.399794473762336,
+              "yaw_rad": 0.0008911818886749856
+            },
+            "first_problem": {
+              "at": 115000,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 123383,
+            "distance_m": 30.764343158840177,
+            "final_pose": {
+              "x_m": 7.553942602014032,
+              "y_m": 5.3999696094233345,
+              "yaw_rad": 0.00045703883314951455
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 109789,
+            "distance_m": 26.678746243268037,
+            "final_pose": {
+              "x_m": 7.55574304384617,
+              "y_m": 5.398471744724574,
+              "yaw_rad": 0.001719456371022332
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 97900,
+            "distance_m": 23.907775458728878,
+            "final_pose": {
+              "x_m": 6.556188757339244,
+              "y_m": 4.399523428729617,
+              "yaw_rad": -8.41039353565165e-05
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 120700,
+            "distance_m": 30.64891815191975,
+            "final_pose": {
+              "x_m": 6.555902393839719,
+              "y_m": 4.400001158840209,
+              "yaw_rad": -9.393220174436223e-05
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "async scenario duration exhausted before completion",
+            "elapsed_ms": 180240,
+            "distance_m": 48.942021033467185,
+            "final_pose": {
+              "x_m": 5.486788462878366,
+              "y_m": 4.394242891389085,
+              "yaw_rad": -0.004792939164938392
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 0.5565371411212361,
+                "y_m": 1.5528831712742812,
+                "yaw_rad": -2.195834873425545
+              },
+              "adoption_rejection": null,
+              "at": 116183,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 122867,
+            "distance_m": 31.297264986897616,
+            "final_pose": {
+              "x_m": 6.558071644444079,
+              "y_m": 4.3994163804419415,
+              "yaw_rad": -0.0005467037294333288
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 83100,
+            "distance_m": 20.10310597115662,
+            "final_pose": {
+              "x_m": 6.598588671255413,
+              "y_m": 1.5955606953945285,
+              "yaw_rad": -0.9606351708420213
+            },
+            "first_problem": {
+              "at": 60300,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 176700,
+            "distance_m": 48.38124246252664,
+            "final_pose": {
+              "x_m": 6.552242090177156,
+              "y_m": 4.399252196061308,
+              "yaw_rad": -0.00029155909600797614
+            },
+            "first_problem": {
+              "at": 116600,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 127863,
+            "distance_m": 33.668999770849624,
+            "final_pose": {
+              "x_m": 6.557204081942052,
+              "y_m": 4.40140595072305,
+              "yaw_rad": -0.0021842144655557227
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 1.6262968311390826,
+                "y_m": 3.1285963211908006,
+                "yaw_rad": -0.26695149310939703
+              },
+              "adoption_rejection": null,
+              "at": 88189,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 145863,
+            "distance_m": 38.98355878842408,
+            "final_pose": {
+              "x_m": 6.557798953465203,
+              "y_m": 4.399945427979505,
+              "yaw_rad": -0.0005666418453627031
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 111700,
+            "distance_m": 27.024599757897498,
+            "final_pose": {
+              "x_m": 6.556155957102216,
+              "y_m": 4.399461118881764,
+              "yaw_rad": 0.00011381448990777088
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "scenario duration exhausted before completion",
+            "elapsed_ms": 180300,
+            "distance_m": 49.55671494952158,
+            "final_pose": {
+              "x_m": 3.2004790790117816,
+              "y_m": 4.406442305419394,
+              "yaw_rad": -0.0008517806160135422
+            },
+            "first_problem": {
+              "at": 164300,
+              "fault": null,
+              "navigation_reason": "terminal_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 164463,
+            "distance_m": 42.21522122747732,
+            "final_pose": {
+              "x_m": 6.55492903872314,
+              "y_m": 4.399037823225067,
+              "yaw_rad": 0.002190117610048059
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.562401487637167,
+                "y_m": 1.2582740763448572,
+                "yaw_rad": -1.350598369402945
+              },
+              "adoption_rejection": null,
+              "at": 55387,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "async scenario duration exhausted before completion",
+            "elapsed_ms": 180240,
+            "distance_m": 49.413541124179666,
+            "final_pose": {
+              "x_m": 3.4786779696960157,
+              "y_m": 4.352141321566842,
+              "yaw_rad": -0.23707343235785316
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.555132323503741,
+                "y_m": 1.1858449642268172,
+                "yaw_rad": -1.4944579172317434
+              },
+              "adoption_rejection": null,
+              "at": 55387,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 97700,
+            "distance_m": 23.849712891141667,
+            "final_pose": {
+              "x_m": 6.553410794722633,
+              "y_m": 4.399937347328362,
+              "yaw_rad": 0.00040731862938203633
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 119300,
+            "distance_m": 30.603601497141675,
+            "final_pose": {
+              "x_m": 6.552516977347425,
+              "y_m": 4.397441754094372,
+              "yaw_rad": 0.027323307484401926
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "async scenario duration exhausted before completion",
+            "elapsed_ms": 180240,
+            "distance_m": 48.803805366800155,
+            "final_pose": {
+              "x_m": 5.354853838836833,
+              "y_m": 4.390132559797373,
+              "yaw_rad": -0.009223656842043848
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 0.5565371411212361,
+                "y_m": 1.5528831712742812,
+                "yaw_rad": -2.195834873425545
+              },
+              "adoption_rejection": null,
+              "at": 116183,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 122669,
+            "distance_m": 31.250599380797176,
+            "final_pose": {
+              "x_m": 6.561664894450307,
+              "y_m": 4.389244081743341,
+              "yaw_rad": 0.00520613348556731
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "scenario duration exhausted before completion",
+            "elapsed_ms": 180300,
+            "distance_m": 50.13592323803905,
+            "final_pose": {
+              "x_m": 2.2403453586206874,
+              "y_m": 0.38785752585386885,
+              "yaw_rad": 0.32561437911294044
+            },
+            "first_problem": {
+              "at": 86500,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "scenario duration exhausted before completion",
+            "elapsed_ms": 180400,
+            "distance_m": 49.83074889110952,
+            "final_pose": {
+              "x_m": 1.4653345437681609,
+              "y_m": 1.4356113073344006,
+              "yaw_rad": 2.0717228106986063
+            },
+            "first_problem": {
+              "at": 78600,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 94469,
+            "distance_m": 22.95793762174656,
+            "final_pose": {
+              "x_m": 6.558846219803182,
+              "y_m": 4.401387671467231,
+              "yaw_rad": -0.0006180011347218795
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "async scenario duration exhausted before completion",
+            "elapsed_ms": 180380,
+            "distance_m": 50.37172418063634,
+            "final_pose": {
+              "x_m": 1.447464449039418,
+              "y_m": 1.4720136057309021,
+              "yaw_rad": 2.214491008520346
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.557413748368981,
+                "y_m": 1.5984456305067745,
+                "yaw_rad": -1.5166004676015665
+              },
+              "adoption_rejection": null,
+              "at": 62587,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/wide-corner.json",
+      "change": "Reference arc bounded by the unchanged inflated light-zone corner; development check, not an isolated timing ablation.",
+      "passed_runs": 1,
+      "selected_runs": 1,
+      "runs": [
+        {
+          "case": "wide_8x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 126400,
+            "distance_m": 31.452799509576174,
+            "final_pose": {
+              "x_m": 7.556101979567799,
+              "y_m": 3.499970165177544,
+              "yaw_rad": 0.0007033164946914638
+            },
+            "first_problem": {
+              "at": 34200,
+              "fault": null,
+              "navigation_reason": "stop_boundary_not_reachable",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "local_log": "work/adaptive-field/protected-matrix.json",
+      "change": "Inflated red-corner radius bound and oriented PassThrough short-connection protection. 34/36: tall synchronous LQR exhausted lattice nodes at a cone gate; large asynchronous PP stopped just outside original goal tolerance. Led to separately budgeted integrated arrival-region fallback, without changing physical arrival gates.",
+      "passed_runs": 34,
+      "selected_runs": 36,
+      "runs": [
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 74900,
+            "distance_m": 14.593952694900567,
+            "final_pose": {
+              "x_m": 4.552199690066348,
+              "y_m": 3.4994272495513585,
+              "yaw_rad": 0.0005299683826494039
+            },
+            "first_problem": {
+              "at": 17900,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "small_5x4",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 121000,
+            "distance_m": 25.244651216625506,
+            "final_pose": {
+              "x_m": 4.555937441065406,
+              "y_m": 3.4998649453183197,
+              "yaw_rad": 0.0008276122283037424
+            },
+            "first_problem": {
+              "at": 17900,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "small_5x4",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 113389,
+            "distance_m": 21.927644588115037,
+            "final_pose": {
+              "x_m": 4.555126722787276,
+              "y_m": 3.4995725206163764,
+              "yaw_rad": 0.0009806533599419076
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.8501897336379485,
+                "y_m": 1.386414027887227,
+                "yaw_rad": 0.22495732181998074
+              },
+              "adoption_rejection": null,
+              "at": 18869,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "small_5x4",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 89267,
+            "distance_m": 17.93950519668838,
+            "final_pose": {
+              "x_m": 4.558215621758994,
+              "y_m": 3.499857942175399,
+              "yaw_rad": 0.0004817651477719842
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.819205304445585,
+                "y_m": 1.3950237138494415,
+                "yaw_rad": 0.07904474030473674
+              },
+              "adoption_rejection": null,
+              "at": 18187,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 102300,
+            "distance_m": 22.41253982960805,
+            "final_pose": {
+              "x_m": 4.556299543609776,
+              "y_m": 5.397477675730478,
+              "yaw_rad": 0.002282084879477786
+            },
+            "first_problem": {
+              "at": 19600,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 53800,
+            "distance_m": 9.176980974570105,
+            "final_pose": {
+              "x_m": 1.0197337828011805,
+              "y_m": 2.8964893225748227,
+              "yaw_rad": -3.1336625989309153
+            },
+            "first_problem": {
+              "at": 19700,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 112987,
+            "distance_m": 24.9433166221898,
+            "final_pose": {
+              "x_m": 4.555187342085702,
+              "y_m": 5.3993501252086835,
+              "yaw_rad": -0.00011899496587419733
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.887163867738246,
+                "y_m": 2.3802528510676484,
+                "yaw_rad": 0.16621236444487808
+              },
+              "adoption_rejection": null,
+              "at": 19987,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "tall_5x6",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 144869,
+            "distance_m": 29.087430578341813,
+            "final_pose": {
+              "x_m": 4.555818870816121,
+              "y_m": 5.398692505636961,
+              "yaw_rad": 0.0019123449760840572
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.8515407259670176,
+                "y_m": 2.37823286914074,
+                "yaw_rad": 0.23683833138141797
+              },
+              "adoption_rejection": null,
+              "at": 19863,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 95000,
+            "distance_m": 22.544972967716713,
+            "final_pose": {
+              "x_m": 7.55278833848136,
+              "y_m": 3.5000649512009585,
+              "yaw_rad": -0.001015109018960736
+            },
+            "first_problem": {
+              "at": 34200,
+              "fault": null,
+              "navigation_reason": "stop_boundary_not_reachable",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 95700,
+            "distance_m": 22.545350603855518,
+            "final_pose": {
+              "x_m": 7.5562791099569395,
+              "y_m": 3.5000129627517556,
+              "yaw_rad": 2.1972338889675314e-05
+            },
+            "first_problem": {
+              "at": 33400,
+              "fault": null,
+              "navigation_reason": "forward_node_budget_exhausted",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 107389,
+            "distance_m": 25.857889649027914,
+            "final_pose": {
+              "x_m": 7.554900220047044,
+              "y_m": 3.4998579895425914,
+              "yaw_rad": 0.000271498352799604
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.441577906232918,
+                "y_m": 1.3300354426525174,
+                "yaw_rad": 0.0070280014468058205
+              },
+              "adoption_rejection": null,
+              "at": 27983,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "wide_8x4",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 96663,
+            "distance_m": 22.600181062516747,
+            "final_pose": {
+              "x_m": 7.557243568749829,
+              "y_m": 3.50019137773993,
+              "yaw_rad": -0.001157910045646915
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.442012076766589,
+                "y_m": 1.3318426665820513,
+                "yaw_rad": 0.015305947509156148
+              },
+              "adoption_rejection": null,
+              "at": 27983,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 111300,
+            "distance_m": 26.640417581469894,
+            "final_pose": {
+              "x_m": 7.556091897440279,
+              "y_m": 5.401070210075382,
+              "yaw_rad": -0.00016546027121888685
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 151700,
+            "distance_m": 38.542667374888985,
+            "final_pose": {
+              "x_m": 7.55216063866837,
+              "y_m": 5.4016228817103915,
+              "yaw_rad": -0.0013203571859263796
+            },
+            "first_problem": {
+              "at": 27600,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": false,
+          "error": null,
+          "metrics": {
+            "completed": false,
+            "fault": "ordinary stop exceeded 10 seconds",
+            "elapsed_ms": 102983,
+            "distance_m": 22.498155415246668,
+            "final_pose": {
+              "x_m": 6.6146524460294245,
+              "y_m": 5.384546627504915,
+              "yaw_rad": 0.013694075994426846
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.418290366253233,
+                "y_m": 5.377165180244124,
+                "yaw_rad": 0.04683229189003768
+              },
+              "adoption_rejection": null,
+              "at": 91263,
+              "navigation_reason": "no_forward_kinematic_path",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "large_8x6",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 99063,
+            "distance_m": 23.39973826690139,
+            "final_pose": {
+              "x_m": 7.5576370214899935,
+              "y_m": 5.399985103831277,
+              "yaw_rad": -0.00010398250741472381
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.113488127060762,
+                "y_m": 5.39973961146987,
+                "yaw_rad": 0.06426261195870131
+              },
+              "adoption_rejection": null,
+              "at": 72187,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 110200,
+            "distance_m": 26.681077910993626,
+            "final_pose": {
+              "x_m": 6.55220572913037,
+              "y_m": 4.4019311226255295,
+              "yaw_rad": 0.00015289186585798475
+            },
+            "first_problem": {
+              "at": 60100,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 153900,
+            "distance_m": 39.57371063031973,
+            "final_pose": {
+              "x_m": 6.5526737418153544,
+              "y_m": 4.401423122240374,
+              "yaw_rad": -0.0020439391741766677
+            },
+            "first_problem": {
+              "at": 23800,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 120589,
+            "distance_m": 30.38629956549007,
+            "final_pose": {
+              "x_m": 6.555019626921869,
+              "y_m": 4.399818862024309,
+              "yaw_rad": 0.0017378791907707303
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 0.44427838430114575,
+                "y_m": 1.3634599971715275,
+                "yaw_rad": -1.7871783679373539
+              },
+              "adoption_rejection": null,
+              "at": 75187,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "nominal_7x5",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 120467,
+            "distance_m": 29.967062438707796,
+            "final_pose": {
+              "x_m": 6.5586575227643,
+              "y_m": 4.40133413374365,
+              "yaw_rad": -0.0015326263650377037
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.11258542977905,
+                "y_m": 4.383688056686797,
+                "yaw_rad": 0.13739722157491663
+              },
+              "adoption_rejection": null,
+              "at": 98669,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 117300,
+            "distance_m": 30.22398423803052,
+            "final_pose": {
+              "x_m": 6.555999844566553,
+              "y_m": 4.399240766435007,
+              "yaw_rad": 6.387474966729201e-07
+            },
+            "first_problem": {
+              "at": 20300,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 82500,
+            "distance_m": 20.490564253900626,
+            "final_pose": {
+              "x_m": 6.555981105023308,
+              "y_m": 4.398542212337835,
+              "yaw_rad": 2.2466366762508017e-05
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 84269,
+            "distance_m": 20.434463354360297,
+            "final_pose": {
+              "x_m": 6.5579327624182975,
+              "y_m": 4.399969694476236,
+              "yaw_rad": -0.0013416299722068814
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.0975098143144426,
+                "y_m": 4.384140027866317,
+                "yaw_rad": 0.19528041396467222
+              },
+              "adoption_rejection": null,
+              "at": 62587,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "crosswalk_earliest",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 95267,
+            "distance_m": 23.60246072122213,
+            "final_pose": {
+              "x_m": 6.557672865423661,
+              "y_m": 4.401309565071927,
+              "yaw_rad": -0.0014636071803799666
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.1163915944106573,
+                "y_m": 4.388996408491137,
+                "yaw_rad": 0.1430355569969186
+              },
+              "adoption_rejection": null,
+              "at": 73789,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 103200,
+            "distance_m": 23.709933593230655,
+            "final_pose": {
+              "x_m": 6.552086915510497,
+              "y_m": 4.401629797750419,
+              "yaw_rad": -0.0010629382644697927
+            },
+            "first_problem": null
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 101600,
+            "distance_m": 23.673123268278665,
+            "final_pose": {
+              "x_m": 6.552240982215503,
+              "y_m": 4.401435610641802,
+              "yaw_rad": -1.675458425554055e-05
+            },
+            "first_problem": {
+              "at": 41800,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 114383,
+            "distance_m": 27.29720541221777,
+            "final_pose": {
+              "x_m": 6.552409576637463,
+              "y_m": 4.401276263088311,
+              "yaw_rad": 0.000245847596862081
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 6.5606198630834225,
+                "y_m": 1.1316230171066406,
+                "yaw_rad": -1.4280068354097508
+              },
+              "adoption_rejection": null,
+              "at": 45787,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "crosswalk_latest",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 138063,
+            "distance_m": 33.57352229447064,
+            "final_pose": {
+              "x_m": 6.558021013224381,
+              "y_m": 4.399948817881922,
+              "yaw_rad": 0.0008168131920336386
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 0.44388174747266756,
+                "y_m": 1.1080624709597313,
+                "yaw_rad": -1.5875500597800427
+              },
+              "adoption_rejection": null,
+              "at": 93383,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 110100,
+            "distance_m": 26.642579984710633,
+            "final_pose": {
+              "x_m": 6.553370585462593,
+              "y_m": 4.401229556335628,
+              "yaw_rad": -0.001224767230472601
+            },
+            "first_problem": {
+              "at": 60100,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 153700,
+            "distance_m": 39.52938945791269,
+            "final_pose": {
+              "x_m": 6.553528132309202,
+              "y_m": 4.402469591127175,
+              "yaw_rad": -0.0031504764878897973
+            },
+            "first_problem": {
+              "at": 23800,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 120467,
+            "distance_m": 30.357038057940642,
+            "final_pose": {
+              "x_m": 6.557756122908837,
+              "y_m": 4.389455784121219,
+              "yaw_rad": 0.008918011287540661
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 0.44427838430114575,
+                "y_m": 1.3634599971715275,
+                "yaw_rad": -1.7871783679373539
+              },
+              "adoption_rejection": null,
+              "at": 75187,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "light_forward",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 120063,
+            "distance_m": 29.921324992834816,
+            "final_pose": {
+              "x_m": 6.558614149673251,
+              "y_m": 4.4024633691557655,
+              "yaw_rad": -0.003884497167903067
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.11258542977905,
+                "y_m": 4.383688056686797,
+                "yaw_rad": 0.13739722157491663
+              },
+              "adoption_rejection": null,
+              "at": 98669,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "sync",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 118100,
+            "distance_m": 29.937433902859944,
+            "final_pose": {
+              "x_m": 6.551998657821895,
+              "y_m": 4.400219256405156,
+              "yaw_rad": -0.0008868327608184678
+            },
+            "first_problem": {
+              "at": 67400,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "sync",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 132400,
+            "distance_m": 33.42299133561054,
+            "final_pose": {
+              "x_m": 6.556292361196303,
+              "y_m": 4.399915215377693,
+              "yaw_rad": -0.0003124919476582555
+            },
+            "first_problem": {
+              "at": 47900,
+              "fault": null,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "navigation_status": "blocked",
+              "phase": "cones"
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "async",
+          "tracker": "pp",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 95267,
+            "distance_m": 23.207630617192294,
+            "final_pose": {
+              "x_m": 6.557846093695224,
+              "y_m": 4.399993991258887,
+              "yaw_rad": 0.0005340460530156577
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 3.202485072251191,
+                "y_m": 4.371039085466909,
+                "yaw_rad": 0.30679279522367287
+              },
+              "adoption_rejection": null,
+              "at": 74389,
+              "navigation_reason": "no_collision_free_braking_trajectory",
+              "runtime_fault": null
+            }
+          }
+        },
+        {
+          "case": "cones_shifted",
+          "mode": "async",
+          "tracker": "lqr",
+          "passed": true,
+          "error": null,
+          "metrics": {
+            "completed": true,
+            "fault": null,
+            "elapsed_ms": 116267,
+            "distance_m": 29.406776228022647,
+            "final_pose": {
+              "x_m": 6.557725939780633,
+              "y_m": 4.400035600199689,
+              "yaw_rad": 0.00021637271230634525
+            },
+            "first_problem": {
+              "actual_pose": {
+                "x_m": 5.26918232001887,
+                "y_m": 3.5467146756745844,
+                "yaw_rad": 3.0630862988252385
+              },
+              "adoption_rejection": null,
+              "at": 54983,
+              "navigation_reason": "empty_speed_interval",
+              "runtime_fault": null
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "cli_roundtrip_repair": {
+    "observed_before": 1.3996699141100895,
+    "decoded_before": 1.3996699141100897,
+    "difference_m": 2.220446049250313e-16,
+    "policy": "Only floating leaves allow <=8*EPSILON*max(1,|a|,|b|); structure and nonfloating values exact. No global serde feature change. Centimeter geometry tampering remains rejected."
+  }
+}

@@ -111,13 +111,19 @@ impl StoppingEnvelope {
         obstacles: &[ObstacleDisc],
         boundary: Option<HalfPlane>,
     ) -> Result<(), AdmissionRejection> {
-        for point in self.corners().map(|p| source.body_to_world(p)) {
+        let corners = self.corners().map(|p| source.body_to_world(p));
+        for point in corners {
             if !point.valid() || !bounds.contains(point) {
                 return Err(AdmissionRejection::Bounds);
             }
-            if boundary.is_some_and(|b| b.projection(point) > b.max_projection_m()) {
+            if boundary.is_some_and(|b| {
+                !b.is_laterally_limited() && b.projection(point) > b.max_projection_m()
+            }) {
                 return Err(AdmissionRejection::Boundary);
             }
+        }
+        if boundary.is_some_and(|b| b.is_laterally_limited() && !b.contains_points(&corners, 0.0)) {
+            return Err(AdmissionRejection::Boundary);
         }
         let (sin, cos) = source.yaw_rad.sin_cos();
         for (index, obstacle) in obstacles.iter().enumerate() {
@@ -699,6 +705,51 @@ mod tests {
     use super::*;
     use crate::FrameId;
     use crate::autonomy::Footprint;
+
+    #[test]
+    fn finite_boundary_checks_the_entire_stopping_envelope() {
+        let nav = config();
+        let envelope = StoppingEnvelope {
+            body: Rect {
+                min_x_m: 0.5,
+                max_x_m: 0.7,
+                min_y_m: -1.0,
+                max_y_m: 1.0,
+            },
+        };
+        let boundary = HalfPlane::new(Point2::default(), 0.0, 0.2)
+            .unwrap()
+            .with_lateral_region(Rect {
+                min_x_m: -1.0,
+                max_x_m: 1.0,
+                min_y_m: -0.4,
+                max_y_m: 0.4,
+            })
+            .unwrap();
+        assert!(
+            envelope
+                .corners()
+                .into_iter()
+                .all(|p| boundary.contains_disc(p, 0.0))
+        );
+        assert_eq!(
+            envelope.check_world(Pose2::default(), nav.bounds, &[], Some(boundary)),
+            Err(AdmissionRejection::Boundary)
+        );
+        assert!(
+            envelope
+                .check_world(
+                    Pose2 {
+                        y_m: 2.0,
+                        ..Pose2::default()
+                    },
+                    nav.bounds,
+                    &[],
+                    Some(boundary)
+                )
+                .is_ok()
+        );
+    }
 
     fn config() -> NavigationConfig {
         let mut nav = NavigationConfig::simulation(

@@ -33,10 +33,12 @@ fn config() -> MissionConfig {
         approach_goal: point(1.4, 0.0),
         crosswalk_region: rect(1.4, -0.6, 1.8, 0.6),
         cone_waypoints: vec![point(2.5, 0.3), point(3.5, 0.0)],
+        cone_waypoint_headings_rad: Vec::new(),
         light_detection_region: rect(3.0, -1.0, 5.5, 1.0),
         light_stop_region: rect(4.0, -0.15, 5.0, 0.15),
         light_stop_goal: point(4.5, 0.0),
         light_approach_yaw_rad: 0.0,
+        light_boundary_region: None,
         finish_region: rect(6.0, -0.15, 7.0, 0.15),
         finish_goal: point(6.5, 0.0),
         finish_yaw_rad: 0.0,
@@ -770,4 +772,131 @@ fn mission_configuration_rejects_unverified_live_claims_and_invalid_rules() {
     );
     mission.start().unwrap();
     assert!(mission.start().is_err());
+}
+
+#[test]
+fn finite_light_boundary_configuration_contains_stop_region_and_keeps_legacy_default() {
+    let legacy = config();
+    let json = serde_json::to_value(&legacy).unwrap();
+    assert!(json.get("light_boundary_region").is_none());
+    let decoded: MissionConfig = serde_json::from_value(json).unwrap();
+    assert!(decoded.light_boundary_region.is_none());
+    assert_eq!(
+        decoded.light_stop_boundary().unwrap(),
+        legacy.light_stop_boundary().unwrap()
+    );
+    let mut cfg = config();
+    cfg.light_boundary_region = Some(cfg.light_detection_region);
+    cfg.validate().unwrap();
+    assert!(cfg.light_stop_boundary().unwrap().is_laterally_limited());
+    cfg.light_boundary_region = Some(rect(4.0, -0.1, 5.0, 0.1));
+    assert!(cfg.validate().is_err());
+    cfg.light_boundary_region = Some(rect(4.0, f64::NAN, 5.0, 0.1));
+    assert!(cfg.validate().is_err());
+}
+
+#[test]
+fn oriented_cone_gates_require_heading_and_propagate_the_following_gate_heading() {
+    use std::f64::consts::{FRAC_PI_2, PI};
+    use xt_stcar_robot_core::navigation::ArrivalBehavior;
+
+    let mut cfg = config();
+    cfg.cone_waypoint_headings_rad = vec![Some(-PI), Some(FRAC_PI_2)];
+    let mut mission = Mission::new(cfg.clone()).unwrap();
+    mission.start().unwrap();
+    let mut run = Run { mission, at: 0 };
+    run.finish_crosswalk();
+
+    let tick_heading = |run: &mut Run, point: Point2, yaw: f64| {
+        run.at += 100;
+        let mut measured = pose(run.at, point.x_m, point.y_m, 0.1);
+        measured.pose.yaw_rad = yaw;
+        run.mission.update(
+            Timestamp(run.at),
+            &measured,
+            &road(run.at, LightState::Unknown),
+        )
+    };
+    let wrong = tick_heading(&mut run, cfg.cone_waypoints[0], 0.0);
+    assert_eq!(wrong.phase, MissionPhase::Cones);
+    assert_eq!(wrong.waypoint_index, 0);
+    let MissionOutput::Target { point, arrival, .. } = wrong.output else {
+        panic!("the unmet heading must keep the current gate as the target");
+    };
+    assert_eq!(point, cfg.cone_waypoints[0]);
+    assert_eq!(
+        arrival,
+        ArrivalBehavior::PassThrough {
+            admission_radius_m: cfg.goal_tolerance_m,
+            next: cfg.cone_waypoints[1],
+            next_heading_rad: Some(FRAC_PI_2),
+            next_max_speed_mps: cfg.cruise_speed_mps,
+        }
+    );
+
+    // +pi and -pi represent the same heading; the existing angular tolerance
+    // is used without widening it for route gates.
+    let aligned = tick_heading(&mut run, cfg.cone_waypoints[0], PI);
+    assert_eq!(aligned.phase, MissionPhase::Cones);
+    assert_eq!(aligned.waypoint_index, 1);
+    let MissionOutput::Target { arrival, .. } = aligned.output else {
+        panic!("expected the second gate");
+    };
+    assert_eq!(
+        arrival,
+        ArrivalBehavior::PassThrough {
+            admission_radius_m: cfg.goal_tolerance_m,
+            next: cfg.light_stop_goal,
+            next_heading_rad: Some(cfg.light_approach_yaw_rad),
+            next_max_speed_mps: cfg.approach_speed_mps,
+        }
+    );
+    let wrong = tick_heading(&mut run, cfg.cone_waypoints[1], 0.0);
+    assert_eq!(wrong.phase, MissionPhase::Cones);
+    assert_eq!(wrong.waypoint_index, 1);
+    let aligned = tick_heading(&mut run, cfg.cone_waypoints[1], FRAC_PI_2);
+    assert_eq!(aligned.phase, MissionPhase::ApproachLight);
+    assert_eq!(aligned.waypoint_index, 2);
+}
+
+#[test]
+fn route_heading_configuration_is_optional_bounded_and_keeps_legacy_json() {
+    use std::f64::consts::PI;
+
+    let legacy = config();
+    let json = serde_json::to_value(&legacy).unwrap();
+    assert!(json.get("cone_waypoint_headings_rad").is_none());
+    let decoded: MissionConfig = serde_json::from_value(json.clone()).unwrap();
+    assert!(decoded.cone_waypoint_headings_rad.is_empty());
+    assert_eq!(serde_json::to_value(decoded).unwrap(), json);
+    assert_eq!(legacy.cone_waypoint_heading(0), None);
+    assert_eq!(legacy.cone_waypoint_heading(usize::MAX), None);
+
+    for headings in [vec![None], vec![None, None, None]] {
+        let mut cfg = config();
+        cfg.cone_waypoint_headings_rad = headings;
+        assert!(Mission::new(cfg).is_err());
+    }
+    for yaw in [
+        f64::NAN,
+        f64::INFINITY,
+        -f64::INFINITY,
+        PI + 0.01,
+        -PI - 0.01,
+    ] {
+        let mut cfg = config();
+        cfg.cone_waypoint_headings_rad = vec![Some(yaw), None];
+        assert!(Mission::new(cfg).is_err());
+    }
+    let mut cfg = config();
+    cfg.cone_waypoint_headings_rad = vec![None, Some(PI)];
+    cfg.validate().unwrap();
+    assert_eq!(cfg.cone_waypoint_heading(0), None);
+    assert_eq!(cfg.cone_waypoint_heading(1), Some(PI));
+    let encoded = serde_json::to_value(&cfg).unwrap();
+    let decoded: MissionConfig = serde_json::from_value(encoded).unwrap();
+    assert_eq!(
+        decoded.cone_waypoint_headings_rad,
+        cfg.cone_waypoint_headings_rad
+    );
 }

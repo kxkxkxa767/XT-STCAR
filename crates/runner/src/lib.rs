@@ -8,6 +8,7 @@ mod control_admission;
 pub mod control_diagnostics;
 mod control_execution;
 pub mod control_runtime;
+pub mod field;
 pub mod host_clock_simulation;
 pub mod input;
 pub mod laser_pose;

@@ -538,8 +538,14 @@ pub(crate) fn certify(
             .mission
             .light_stop_boundary()
             .map_err(|_| geometry_failure(Reason::LightBoundaryInvalid))?;
+        if boundary.is_laterally_limited() && !boundary.contains_points(&corners, 0.0) {
+            return Err(geometry_failure(Reason::LightBoundary)
+                .with_margin(boundary.signed_points_margin(&corners, 0.0), Unit::Meters));
+        }
         for (index, point) in corners.into_iter().enumerate() {
-            if boundary.projection(point) > boundary.max_projection_m() {
+            if !boundary.is_laterally_limited()
+                && boundary.projection(point) > boundary.max_projection_m()
+            {
                 return Err(geometry_failure(Reason::LightBoundary)
                     .with_index(index)
                     .with_margin(
@@ -700,6 +706,62 @@ mod tests {
             fault: None,
         };
         (config, input, context, step)
+    }
+
+    #[test]
+    fn finite_light_boundary_certifies_the_whole_envelope_not_individual_corners() {
+        use xt_stcar_robot_core::mission::{MissionOutput, MissionReport};
+        let (mut config, mut input, mut context, mut step) = fixture();
+        config.mission.light_stop_goal = Point2 {
+            x_m: 5.75,
+            y_m: 2.5,
+        };
+        config.mission.light_stop_region = Rect {
+            min_x_m: 5.5,
+            max_x_m: 6.0,
+            min_y_m: 2.36,
+            max_y_m: 2.64,
+        };
+        config.mission.light_detection_region = Rect {
+            min_x_m: 5.0,
+            max_x_m: 6.1,
+            min_y_m: 2.0,
+            max_y_m: 3.0,
+        };
+        config.mission.light_boundary_region = Some(config.mission.light_stop_region);
+        config.mission.validate().unwrap();
+        input.pose.pose.x_m = 6.2;
+        input.scan.ranges_m = vec![Some(5.0); 360];
+        context.projected_pose.pose = input.pose.pose;
+        step.mission = Some(MissionReport {
+            at: context.planned_at,
+            phase: MissionPhase::Cones,
+            output: MissionOutput::Stop,
+            reason: "finite gate fixture".into(),
+            crosswalk_stop_elapsed_ms: 0,
+            green_elapsed_ms: 0,
+            waypoint_index: 0,
+        });
+        let boundary = config.mission.light_stop_boundary().unwrap();
+        let envelope =
+            StoppingEnvelope::new(&config.navigation, input.pose.pose, 0.04, 0.0, 0.35).unwrap();
+        let corners = envelope.corners().map(|p| input.pose.pose.body_to_world(p));
+        assert!(corners.iter().all(|&p| boundary.contains_disc(p, 0.0)));
+        assert!(!boundary.contains_points(&corners, 0.0));
+        let failure = certify(&config, &input, &context, &step, Timestamp(0), 250).unwrap_err();
+        assert_eq!(failure.reason, CertificateFailureReason::LightBoundary);
+        // The lower lane is wholly outside the finite forbidden band.
+        input.pose.pose.y_m = 1.5;
+        context.projected_pose.pose = input.pose.pose;
+        assert!(certify(&config, &input, &context, &step, Timestamp(0), 250).is_ok());
+        // The historical global boundary still forbids this same lower lane.
+        config.mission.light_boundary_region = None;
+        assert_eq!(
+            certify(&config, &input, &context, &step, Timestamp(0), 250)
+                .unwrap_err()
+                .reason,
+            CertificateFailureReason::LightBoundary
+        );
     }
 
     #[test]

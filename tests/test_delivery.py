@@ -22,6 +22,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import delivery
 import inspect_elf
 
+FIELD_RESOURCES = {
+    "config/field-example.json", "docs/赛场规格自适应.md",
+    "docs/field-adaptation-validation.json", "docs/field-adaptation-matrix.json",
+    "docs/field-adaptation-legacy-matrix.json", "docs/field-adaptation-experiments.json",
+}
+
 
 def target_fixture():
     candidates = [ROOT / "target/riscv64gc-unknown-linux-gnu/release/xt-stcar",
@@ -354,6 +360,19 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Source changed"):
             self.package()
 
+    def test_field_resources_are_required_before_creating_an_archive(self):
+        self.assertTrue(FIELD_RESOURCES <= delivery.BASE_FILES)
+        for name in sorted(FIELD_RESOURCES):
+            resource = self.root / name
+            data = resource.read_bytes()
+            resource.unlink()
+            try:
+                with self.subTest(resource=name), self.assertRaisesRegex(ValueError, "regular non-symlink"):
+                    self.package()
+                self.assertFalse((self.root / "dist").exists())
+            finally:
+                resource.write_bytes(data)
+
     def test_old_glibc_build_target_requires_rebuild(self):
         path = self.binary.with_name("xt-stcar.build.json")
         build = json.loads(path.read_text())
@@ -484,14 +503,15 @@ class DeliveryTests(unittest.TestCase):
         path = self.package()
         with tarfile.open(path, "r:gz") as original:
             members = [(item, original.extractfile(item).read()) for item in original]
-        with tarfile.open(path, "w:gz") as rewritten:
-            for item, data in members:
-                if item.name == "scripts/onnx_worker.py":
-                    data += b"changed\n"
-                    item.size = len(data)
-                rewritten.addfile(item, io.BytesIO(data))
-        with self.assertRaisesRegex(ValueError, "checksum/size mismatch"):
-            delivery.verify_archive(path)
+        for changed_name in sorted(FIELD_RESOURCES | {"scripts/onnx_worker.py"}):
+            with self.subTest(resource=changed_name):
+                with tarfile.open(path, "w:gz") as rewritten:
+                    for item, original_data in members:
+                        data = original_data + b"changed\n" if item.name == changed_name else original_data
+                        item.size = len(data)
+                        rewritten.addfile(item, io.BytesIO(data))
+                with self.assertRaisesRegex(ValueError, "checksum/size mismatch"):
+                    delivery.verify_archive(path)
 
     def args(self, **updates):
         values = {"archive": self.package(), "host": "192.0.2.10", "user": "vehicle",

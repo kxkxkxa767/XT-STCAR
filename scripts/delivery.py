@@ -69,6 +69,9 @@ BASE_FILES = {
     "docs/motion-v9-competition-comparison.json", "docs/motion-v9-async-comparison.json",
     "docs/motion-v9-async-timing.json", "docs/motion-v9-host-clock.json",
     "docs/motion-v9-route-regressions.json", "docs/motion-v9-experiments.json",
+    "config/field-example.json", "docs/赛场规格自适应.md",
+    "docs/field-adaptation-validation.json", "docs/field-adaptation-matrix.json",
+    "docs/field-adaptation-legacy-matrix.json", "docs/field-adaptation-experiments.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}

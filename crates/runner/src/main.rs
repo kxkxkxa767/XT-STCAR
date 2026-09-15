@@ -8,6 +8,9 @@ use xt_stcar_robot_runner::{ReplayOptions, replay, vision::VisionOptions};
 const HELP: &str = "XT-STCAR Rust robot module runner (offline recording only)
 
 Usage:
+  xt-stcar-robot field-example
+  xt-stcar-robot field-compile --config FILE [--output FILE]
+  xt-stcar-robot field-layout --config FILE [--output FILE]
   xt-stcar-robot autonomy-example
   xt-stcar-robot autonomy-sim --config FILE [--output FILE] [--trace]
   xt-stcar-robot autonomy-replay --config FILE --events FILE [--output FILE] [--trace]
@@ -25,6 +28,9 @@ Usage:
 
 Replay default: --config config/robot-sim.json. Vision default: config/yolo26n.json.
 Autonomy commands require explicit --config; input timestamps are monotonic session milliseconds.
+Field commands compile a measured pre-race layout; they do not survey the field automatically.
+Freeze the compiled layout before starting a run. Generated configs remain simulation_only
+and unverified; changing those labels alone does not enable a calibrated vehicle.
 Replay input is strict event JSONL; autonomy-replay instead takes typed sensor snapshots.
 Sensor/control events are validated by robot-core; vision_frame events load image
 files relative to the event manifest and use a persistent Rust ONNX Runtime session.
@@ -228,6 +234,20 @@ fn run() -> Result<()> {
     if command == "serial-capture" {
         return serial_capture(rest);
     }
+    if command == "field-example" {
+        if !rest.is_empty() {
+            return Err("field-example takes no arguments".into());
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&xt_stcar_robot_runner::field::FieldScenario::example())
+                .map_err(|e| e.to_string())?
+        );
+        return Ok(());
+    }
+    if command == "field-compile" || command == "field-layout" {
+        return field_command(command.to_str().ok_or("command must be UTF-8")?, rest);
+    }
     if command == "autonomy-example" {
         if !rest.is_empty() {
             return Err("autonomy-example takes no arguments".into());
@@ -377,6 +397,54 @@ fn run() -> Result<()> {
         }
     }
     result.map(|_| ())
+}
+
+fn field_command(command: &str, rest: Vec<OsString>) -> Result<()> {
+    use xt_stcar_robot_runner::field::FieldScenario;
+
+    let mut args = rest.into_iter();
+    let mut options = BTreeMap::new();
+    while let Some(key) = args.next() {
+        let key = key.into_string().map_err(|_| "option must be UTF-8")?;
+        if !["--config", "--output"].contains(&key.as_str()) {
+            return Err(format!("unknown field option {key}"));
+        }
+        let value = args
+            .next()
+            .ok_or_else(|| format!("missing value for {key}"))?;
+        if value.is_empty() || value.to_string_lossy().starts_with("--") {
+            return Err(format!("missing value for {key}"));
+        }
+        if options.insert(key.clone(), PathBuf::from(value)).is_some() {
+            return Err(format!("duplicate option {key}"));
+        }
+    }
+    let config_path = options.remove("--config").ok_or("--config is required")?;
+    let output = options.remove("--output");
+    if let Some(path) = &output {
+        distinct_output(path, &[&config_path])?;
+    }
+    let scenario: FieldScenario =
+        serde_json::from_slice(&read_regular_file(&config_path, MAX_CONFIG_BYTES)?)
+            .map_err(|e| format!("parse {}: {e}", config_path.display()))?;
+    let mut bytes = if command == "field-compile" {
+        serde_json::to_vec_pretty(&scenario.compile()?)
+    } else {
+        serde_json::to_vec_pretty(&scenario.layout()?)
+    }
+    .map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    // Validate and serialize completely before atomically replacing the output.
+    // This also preserves a configuration reached through a hard-link alias.
+    if let Some(path) = output {
+        xt_stcar::backend::write_atomic(&path, |file| file.write_all(&bytes))?;
+    } else {
+        io::stdout()
+            .lock()
+            .write_all(&bytes)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn autonomy_command(command: &str, rest: Vec<OsString>) -> Result<()> {

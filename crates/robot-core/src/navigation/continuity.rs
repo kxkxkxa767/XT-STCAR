@@ -478,6 +478,213 @@ mod tests {
     }
 
     #[test]
+    fn oriented_through_gate_preserves_short_connection_with_recorded_adoption_history() {
+        // The pose, steering, constraints, 128-command history and original
+        // short path are actual recorded values. Only the task is adapted from
+        // an oriented Stop to an oriented PassThrough; this is not a claim to
+        // reproduce the new complete nominal-field async run.
+        let data = fixture();
+        let event = &data["navigation"][1];
+        let config: NavigationConfig = from_value(data["config"].clone()).unwrap();
+        let constraints: AdoptionConstraints = from_value(event["constraints"].clone()).unwrap();
+        let history = &data["worker_inputs"][1]["history"];
+        let records = history["records"].as_array().unwrap();
+        assert_eq!(records.len(), 128);
+        assert_eq!(
+            history["revision"].as_u64(),
+            Some(constraints.adopted_revision)
+        );
+        assert_eq!(
+            records.last().unwrap()["steering"]["at"]
+                .as_u64()
+                .map(Timestamp),
+            constraints.last_command_change_at
+        );
+        for record in records {
+            let actual = data["actual_command_changes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|command| command["at"] == record["steering"]["at"])
+                .unwrap();
+            if record["stopped"] == true {
+                assert_eq!(actual["command"]["type"], "stop");
+            } else {
+                assert_eq!(actual["command"]["speed_mps"], record["speed_target"]);
+                assert_eq!(
+                    actual["command"]["curvature_per_m"],
+                    record["steering"]["commanded_curvature_per_m"]
+                );
+            }
+        }
+        let goal: Point2 = from_value(event["goal"].clone()).unwrap();
+        let through = ArrivalBehavior::PassThrough {
+            next: Point2 {
+                x_m: goal.x_m + 0.55,
+                y_m: goal.y_m,
+            },
+            next_heading_rad: Some(0.0),
+            next_max_speed_mps: 0.18,
+            admission_radius_m: 0.065,
+        };
+        let estimate: PoseEstimate = from_value(event["estimate"].clone()).unwrap();
+        let obstacles: Vec<ObstacleDisc> = from_value(event["obstacles"].clone()).unwrap();
+        let mut nav = Navigator::new(config.clone()).unwrap();
+        nav.arrival = through;
+        nav.set_travel_boundary(Some(boundary(&event["travel_boundary"])));
+        nav.set_execution_state(SteeringEstimate {
+            at: Timestamp(45_160),
+            applied_curvature_per_m: event["before_steering"]["applied_curvature_per_m"]
+                .as_f64()
+                .unwrap(),
+            commanded_curvature_per_m: event["before_steering"]["commanded_curvature_per_m"]
+                .as_f64()
+                .unwrap(),
+        })
+        .unwrap();
+        nav.last_step = event["before_last_step"].as_u64().map(Timestamp);
+        nav.route = from_value(event["before_route"].clone()).unwrap();
+        nav.via_index = event["before_via"].as_u64().unwrap() as usize;
+        nav.route_revision = event["before_revision"].as_u64().unwrap();
+        nav.pending_route_rebuild = None;
+        nav.terminal_seed = Some(hint(&event["before_seed"], &data["chosen_next"][0]));
+        nav.set_adoption_constraints(Some(constraints));
+        let old_execution = nav.execution_state();
+        let decision = nav
+            .plan_with_arrival(
+                Timestamp(45_160),
+                &estimate,
+                &obstacles,
+                Timestamp(event["obstacles_at"].as_u64().unwrap()),
+                goal,
+                Some(0.0),
+                0.18,
+                through,
+            )
+            .unwrap();
+        assert_eq!(decision.status, NavigationStatus::Driving, "{decision:?}");
+        assert!(decision.diagnostics.terminal_continuity_enforced);
+        assert!(
+            nav.terminal_seed
+                .is_some_and(|seed| seed.prefer_continuation)
+        );
+        assert!(
+            decision
+                .diagnostics
+                .remaining_distance_m
+                .is_some_and(|distance| distance < 1.0)
+        );
+        assert_eq!(nav.execution_state(), old_execution);
+        assert_eq!(nav.arrival, through);
+        // The supplied continuation lies beyond the unchanged light boundary.
+        // It must not be silently treated as certified through/braking room.
+        assert!(!decision.diagnostics.continuation_checked);
+        assert_eq!(
+            decision.diagnostics.checked_continuation_distance_m,
+            Some(0.0)
+        );
+        let work = decision.diagnostics.terminal_work;
+        assert!(!work.budget_exhausted);
+        assert!(
+            work.solver_attempts <= 256
+                && work.iterations <= 1024
+                && work.primitive_samples <= 65_536
+        );
+        constraints
+            .check_command(
+                &config,
+                decision.intent.speed_mps,
+                decision.intent.curvature_per_m,
+                &obstacles,
+                nav.travel_boundary,
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn oriented_through_short_s_keeps_certified_continuation_and_does_not_report_reached() {
+        let mut config: NavigationConfig = from_value(fixture()["config"].clone()).unwrap();
+        config.tracking = TrackingConfig::PurePursuit;
+        let estimate = PoseEstimate {
+            captured_at: Timestamp(1000),
+            frame_id: config.frame_id.clone(),
+            pose: Pose2 {
+                x_m: 2.0,
+                y_m: 2.0,
+                yaw_rad: 0.0,
+            },
+            speed_mps: 0.18,
+            yaw_rate_radps: 0.0,
+            quality: 1.0,
+        };
+        let through = ArrivalBehavior::PassThrough {
+            next: Point2 { x_m: 3.6, y_m: 2.1 },
+            next_heading_rad: Some(0.0),
+            next_max_speed_mps: 0.3,
+            admission_radius_m: 0.065,
+        };
+        let mut nav = Navigator::new(config).unwrap();
+        let decision = nav
+            .plan_with_arrival(
+                Timestamp(1000),
+                &estimate,
+                &[],
+                Timestamp(1000),
+                Point2 { x_m: 2.6, y_m: 2.1 },
+                Some(0.0),
+                0.3,
+                through,
+            )
+            .unwrap();
+        assert_eq!(decision.status, NavigationStatus::Driving, "{decision:?}");
+        assert!(decision.diagnostics.terminal_continuity_enforced);
+        assert!(decision.diagnostics.continuation_checked);
+        assert!(
+            decision
+                .diagnostics
+                .checked_continuation_distance_m
+                .is_some_and(|d| d > 0.8)
+        );
+        assert!(
+            decision
+                .diagnostics
+                .remaining_distance_m
+                .is_some_and(|d| d < 0.8)
+        );
+        assert_eq!(nav.arrival, through);
+        assert!(!decision.diagnostics.terminal_work.budget_exhausted);
+
+        // Even inside the navigation position radius, a through gate does not
+        // acquire Stop's goal_braking/Reached behavior. Only Mission may advance
+        // it after checking the genuine measured position and heading.
+        let mut close = estimate;
+        close.pose = Pose2 {
+            x_m: 2.6,
+            y_m: 2.1,
+            yaw_rad: 0.0,
+        };
+        let mut near_nav = Navigator::new(nav.config.clone()).unwrap();
+        let near = near_nav
+            .plan_with_arrival(
+                Timestamp(1000),
+                &close,
+                &[],
+                Timestamp(1000),
+                Point2 {
+                    x_m: 2.62,
+                    y_m: 2.1,
+                },
+                Some(0.0),
+                0.3,
+                through,
+            )
+            .unwrap();
+        assert_eq!(near.status, NavigationStatus::Driving, "{near:?}");
+        assert!(near.intent.speed_mps > 0.0);
+        assert!(near.diagnostics.continuation_checked);
+    }
+
+    #[test]
     fn same_current_pose_old_remaining_length_reproduces_material_route_growth() {
         let data = fixture();
         let e = &data["navigation"][3];

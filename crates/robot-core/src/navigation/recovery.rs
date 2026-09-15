@@ -64,6 +64,14 @@ pub struct ForwardSearchDiagnostics {
     pub recovery_accepted: bool,
     pub recovery_active: bool,
     pub node_budget_exhausted: bool,
+    /// The coarse 2-D connectivity test rejected the route before the ordinary
+    /// car lattice ran. Missing JSON is the old/default false value.
+    #[serde(skip_serializing_if = "is_false")]
+    pub grid_connectivity_rejected: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 impl ForwardSearchDiagnostics {
@@ -116,8 +124,9 @@ impl RecoveryGrid {
             return false;
         }
         let radius = self.radius + padding;
-        // Rectangle and half-plane domains are convex, so checking both
-        // endpoint disks encloses the entire capsule between them.
+        // The map rectangle and global half-plane are convex. A laterally
+        // limited boundary instead needs a common separating side for the
+        // complete capsule, because its allowed domain is non-convex.
         for point in [from, to] {
             if point.x_m - radius < self.bounds.min_x_m
                 || point.x_m + radius > self.bounds.max_x_m
@@ -125,10 +134,16 @@ impl RecoveryGrid {
                 || point.y_m + radius > self.bounds.max_y_m
                 || self
                     .boundary
-                    .is_some_and(|b| !b.contains_disc(point, radius))
+                    .is_some_and(|b| !b.is_laterally_limited() && !b.contains_disc(point, radius))
             {
                 return false;
             }
+        }
+        if self
+            .boundary
+            .is_some_and(|b| b.is_laterally_limited() && !b.contains_points(&[from, to], radius))
+        {
+            return false;
         }
         let dx = to.x_m - from.x_m;
         let dy = to.y_m - from.y_m;
@@ -220,6 +235,292 @@ impl Grid {
 mod tests {
     use super::super::*;
     use super::*;
+
+    fn coarse_side_corridor() -> (NavigationConfig, PoseEstimate, Vec<ObstacleDisc>, Point2) {
+        let mut config = NavigationConfig::simulation(
+            Rect {
+                min_x_m: 0.0,
+                min_y_m: 0.0,
+                max_x_m: 5.0,
+                max_y_m: 4.0,
+            },
+            crate::autonomy::Footprint {
+                front_m: 0.22,
+                rear_m: 0.18,
+                half_width_m: 0.13,
+            },
+            crate::FrameId("side_corridor".into()),
+        );
+        config.control_period_ms = 100;
+        config.goal_tolerance_m = 0.045;
+        let estimate = PoseEstimate {
+            captured_at: Timestamp(0),
+            frame_id: config.frame_id.clone(),
+            pose: Pose2 {
+                x_m: 4.65,
+                y_m: 1.3,
+                yaw_rad: std::f64::consts::FRAC_PI_2,
+            },
+            speed_mps: 0.0,
+            yaw_rate_radps: 0.0,
+            quality: 1.0,
+        };
+        let obstacles = vec![ObstacleDisc {
+            center: Point2 { x_m: 4.0, y_m: 2.0 },
+            radius_m: 0.14 * std::f64::consts::SQRT_2,
+        }];
+        (
+            config,
+            estimate,
+            obstacles,
+            Point2 {
+                x_m: 4.65,
+                y_m: 2.7,
+            },
+        )
+    }
+
+    #[test]
+    fn coarse_side_corridor_grid_rejection_enters_full_continuous_recovery() {
+        let (config, estimate, obstacles, goal) = coarse_side_corridor();
+        let mut nav = Navigator::new(config.clone()).unwrap();
+        let grid = Grid::with_boundary(&config, &obstacles, None);
+        assert!(
+            nav.plan_on_grid(estimate.pose.point(), goal, &grid)
+                .is_none()
+        );
+        // A full continuous body capsule passes the actual one-metre side gap;
+        // the coarse grid's two nearest columns reject obstacle/wall respectively.
+        assert!(
+            grid.recovery
+                .segment_clear(estimate.pose.point(), goal, 0.0)
+        );
+        let decision = nav
+            .plan_with_arrival(
+                Timestamp(0),
+                &estimate,
+                &obstacles,
+                Timestamp(0),
+                goal,
+                Some(std::f64::consts::FRAC_PI_2),
+                config.max_speed_mps,
+                ArrivalBehavior::Stop,
+            )
+            .unwrap();
+        assert_eq!(decision.status, NavigationStatus::Driving, "{decision:?}");
+        let work = decision.diagnostics.forward_search;
+        assert!(
+            work.grid_connectivity_rejected && work.recovery_attempted && work.recovery_accepted
+        );
+        assert_eq!(work.ordinary.allocated_nodes, 0);
+        assert!(work.recovery.allocated_nodes <= config.max_grid_cells);
+        assert!(!decision.diagnostics.terminal_work.budget_exhausted);
+        assert!(
+            decision
+                .diagnostics
+                .current_stopping_margin
+                .unwrap()
+                .clearance_m
+                >= 0.0
+        );
+    }
+
+    #[test]
+    fn grid_rejection_does_not_allow_a_true_wall_or_skip_a_boundary() {
+        let (config, estimate, mut obstacles, goal) = coarse_side_corridor();
+        obstacles.extend((0..=25).map(|i| ObstacleDisc {
+            center: Point2 {
+                x_m: f64::from(i) * 0.2,
+                y_m: 2.0,
+            },
+            radius_m: 0.12,
+        }));
+        let mut nav = Navigator::new(config.clone()).unwrap();
+        let decision = nav
+            .plan_with_arrival(
+                Timestamp(0),
+                &estimate,
+                &obstacles,
+                Timestamp(0),
+                goal,
+                Some(std::f64::consts::FRAC_PI_2),
+                config.max_speed_mps,
+                ArrivalBehavior::Stop,
+            )
+            .unwrap();
+        assert_ne!(decision.status, NavigationStatus::Driving);
+        assert_eq!(decision.intent.speed_mps, 0.0);
+        assert!(
+            decision
+                .diagnostics
+                .forward_search
+                .grid_connectivity_rejected
+        );
+        assert!(
+            decision.diagnostics.forward_search.recovery.allocated_nodes <= config.max_grid_cells
+        );
+        let boundary =
+            HalfPlane::new(estimate.pose.point(), std::f64::consts::FRAC_PI_2, 0.55).unwrap();
+        let grid = Grid::with_boundary(&config, &[], Some(boundary));
+        assert!(nav.enable_recovery_after_grid_rejection(&grid));
+        assert!(
+            !grid
+                .recovery
+                .segment_clear(estimate.pose.point(), goal, 0.0)
+        );
+    }
+
+    #[test]
+    fn grid_fallback_keeps_the_remaining_node_and_terminal_ledgers() {
+        let (config, estimate, obstacles, goal) = coarse_side_corridor();
+        let nav = Navigator::new(config.clone()).unwrap();
+        let grid = Grid::with_boundary(&config, &obstacles, None);
+        let mut work = grid.forward_search();
+        work.ordinary.allocated_nodes = config.max_grid_cells - 5;
+        grid.recovery.diagnostics.set(work);
+        assert!(nav.enable_recovery_after_grid_rejection(&grid));
+        assert!(
+            nav.kinematic_path_from(estimate.pose, 0.0, goal, None, &grid)
+                .is_none()
+        );
+        let used = grid.forward_search();
+        assert_eq!(used.ordinary.allocated_nodes, config.max_grid_cells - 5);
+        assert!(used.recovery.allocated_nodes <= 5);
+        assert!(used.node_budget_exhausted);
+        assert_eq!(used.recovery.exit, ForwardSearchExit::NodeBudget);
+        assert!(!nav.enable_recovery_after_grid_rejection(&grid));
+
+        let grid = Grid::with_boundary(&config, &obstacles, None);
+        let short_goal = estimate.pose.body_to_world(Point2 { x_m: 0.1, y_m: 0.0 });
+        // Consume the same public solver ledger as normal navigation, rather
+        // than introducing test-only limits or resetting it for the fallback.
+        for _ in 0..257 {
+            let _ = terminal::single_arc_with_error(
+                estimate.pose,
+                0.0,
+                short_goal,
+                Some(estimate.pose.yaw_rad),
+                &config,
+                &grid,
+                &nav.terminal_budget,
+                Default::default(),
+            );
+        }
+        let terminal_before = nav.terminal_budget.snapshot();
+        assert!(terminal_before.budget_exhausted);
+        assert!(!nav.enable_recovery_after_grid_rejection(&grid));
+        assert!(!grid.recovery_active());
+        let terminal_after = nav.terminal_budget.snapshot();
+        assert_eq!(
+            terminal_after.solver_attempts,
+            terminal_before.solver_attempts
+        );
+        assert_eq!(terminal_after.iterations, terminal_before.iterations);
+        assert_eq!(
+            terminal_after.primitive_samples,
+            terminal_before.primitive_samples
+        );
+    }
+
+    #[test]
+    fn changing_from_grid_cache_to_continuous_recovery_recertifies_the_route() {
+        let (config, mut estimate, _, _) = coarse_side_corridor();
+        estimate.pose = Pose2 {
+            x_m: 2.0,
+            y_m: 2.0,
+            yaw_rad: 0.0,
+        };
+        let goal = Point2 { x_m: 3.0, y_m: 2.0 };
+        let mut nav = Navigator::new(config.clone()).unwrap();
+        let first = nav
+            .plan_with_arrival(
+                Timestamp(0),
+                &estimate,
+                &[],
+                Timestamp(0),
+                goal,
+                Some(0.0),
+                config.max_speed_mps,
+                ArrivalBehavior::Stop,
+            )
+            .unwrap();
+        assert_eq!(first.status, NavigationStatus::Driving);
+        assert!(!first.diagnostics.forward_search.grid_connectivity_rejected);
+        assert!(!nav.recovery_active);
+        let obstacles = [ObstacleDisc {
+            center: Point2 {
+                x_m: 3.0,
+                y_m: 2.58,
+            },
+            radius_m: 0.14 * std::f64::consts::SQRT_2,
+        }];
+        estimate.captured_at = Timestamp(100);
+        let next = nav
+            .plan_with_arrival(
+                Timestamp(100),
+                &estimate,
+                &obstacles,
+                Timestamp(100),
+                goal,
+                Some(0.0),
+                config.max_speed_mps,
+                ArrivalBehavior::Stop,
+            )
+            .unwrap();
+        assert_eq!(next.status, NavigationStatus::Driving, "{next:?}");
+        assert_eq!(
+            next.diagnostics.route_revision,
+            first.diagnostics.route_revision + 1
+        );
+        assert_eq!(
+            next.diagnostics.route_rebuild_reason,
+            Some(RouteRebuildReason::GridConnectivityRejected)
+        );
+        assert!(next.diagnostics.forward_search.grid_connectivity_rejected);
+        assert!(nav.recovery_active);
+    }
+
+    #[test]
+    fn finite_boundary_checks_the_complete_recovery_capsule() {
+        let mut config = fixture().config;
+        config.bounds = Rect {
+            min_x_m: -10.0,
+            max_x_m: 10.0,
+            min_y_m: -10.0,
+            max_y_m: 10.0,
+        };
+        let boundary = HalfPlane::new(Point2::default(), 0.0, 0.0)
+            .unwrap()
+            .with_lateral_region(Rect {
+                min_x_m: -1.0,
+                max_x_m: 1.0,
+                min_y_m: -0.5,
+                max_y_m: 0.5,
+            })
+            .unwrap();
+        let grid = RecoveryGrid::new(&config, &[], Some(boundary));
+        let endpoints = [
+            Point2 {
+                x_m: 2.0,
+                y_m: -3.0,
+            },
+            Point2 { x_m: 2.0, y_m: 3.0 },
+        ];
+        assert!(
+            endpoints
+                .iter()
+                .all(|&p| boundary.contains_disc(p, grid.radius))
+        );
+        assert!(!grid.segment_clear(endpoints[0], endpoints[1], 0.0));
+        assert!(grid.segment_clear(
+            endpoints[0],
+            Point2 {
+                x_m: 3.0,
+                y_m: -3.0
+            },
+            0.0
+        ));
+    }
 
     struct Fixture {
         config: NavigationConfig,

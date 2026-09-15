@@ -400,6 +400,10 @@ impl AutonomyController {
                 arrival,
             } => {
                 let heading = match mission.phase {
+                    MissionPhase::Cones => self
+                        .config
+                        .mission
+                        .cone_waypoint_heading(mission.waypoint_index),
                     MissionPhase::ApproachLight => Some(self.config.mission.light_approach_yaw_rad),
                     MissionPhase::Finish => Some(self.config.mission.finish_yaw_rad),
                     _ => None,

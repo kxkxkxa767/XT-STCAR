@@ -26,7 +26,37 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 第九轮路径连续性修正（2026-09-15，v9）
+### 赛场规格自适应（2026-09-15，本轮）
+
+- 用户已授权“你来补齐自适应赛场规格的吧”；开工前 fetch 确认 main/origin 为 `98368200f6c0eb8189c3e1d79941469c821a10b9`、0/0。
+- Rust `robot-core/field.rs` 读取显式米制 FieldSpec，按规则图5外场5–8×4–6m、上下直道1–2m等检查范围与组合，生成官方右桶→左桶→上方直道拓扑。
+  0.8m发车/终点区、纸条0.105×0.297m及间距0.105m、0.28m方底锥桶（外接圆半径0.14√2）保持，不缩放车辆/控制限值。
+- `FieldPlanning` 从原导航参数取得footprint/clearance/曲率/网格尺寸；首选绕行半径按侧墙间隙和经原Grid膨胀的灯禁带角点限制。
+  输出右/左实际半径、每桶5个45°间隔切向通过点和上直道朝向0入口；参考几何不是动态可行性证明。
+- `runner/field.rs` 在启动前编译并冻结配置；CLI `field-example/field-layout/field-compile`，模板 `config/field-example.json`。
+  校验派生几何与规格一致；仅浮点叶允许8EPS×max(1,abs)的JSON读回舍入，整数/结构严格，厘米篡改拒绝。
+  measured只标来源，仍simulation_only/unverified；没有自动测全场、定位灯/终点或重分左右桶身份的实现。
+- Mission可选 `cone_waypoint_headings_rad` 默认空，保持旧配置序列化；新通过点要满足原位置+朝向容差。
+  定向PassThrough复用原Stop的有界短连接保护，仍有真实任务验收/后段认证，不强制停车或假造到达。
+- `light_boundary_region` 限定上直道禁带；整个车体/凸包/胶囊须位于同一允许半空间，不能只验各角/端点。
+  原Grid失败后可用同账连续车体恢复，旧Grid成功路径保持；切域重建真实误差路径，不沿用未认证缓存。
+- 九种输入在首次完整矩阵前冻结，不删除失败/不改尺寸追成绩；新场统一180s时限，原普通停车10s/停稳3s/绿灯300ms及40000/256/1024/65536预算保持。
+  最终36场35通过：默认PP18/18，实验LQR17/18；tall_5x6同步LQR在左桶阶段节点耗尽/普通停车超过10s，失败完整保留。
+  22/36与34/36等开发失败见 `docs/field-adaptation-experiments.json`，输入未删改。大场异步PP原灯前卡在目标6.7cm外，最终99.787s完成。
+- 旧八场时序回归已复跑，八场完成且固定性能门通过，时间/路程逐值保持v9；最终源码的受影响检查和完整构建均已通过。
+  原预算fixture字节保持。封墙测试仍Stop、验新node耗尽原因与总节点上限；定向直线through现在有1次短连接检查，原连续交接断言保留。
+- 原精确中心连接及普通/连续搜索失败后，可用同一终端账尝试真实积分端点进入原位置/朝向容差一半；包括完整累计误差/车体/边界认证。
+  不重置预算、不替换adopt、不假造到中心。节点用满后该后备不新增搜索节点，耗尽诊断保留；终端额度耗尽仍拒绝。
+  `arrival_region_attempts/accepted`仅诊断，零值旧JSON省略；大场灯前最终尝试3/接受1。独立只读复核无阻塞，范围见验证报告。
+- 本轮技术说明 `docs/赛场规格自适应.md`，正式证据前缀 `field-adaptation-*`；README/TXT已接入新模块/命令，最终409 Rust/2跟踪example/5矩阵example/36 Python交付（39子测试）通过，2项按设计忽略；fmt/clippy/双交叉链接与ELF通过。
+  112份编译输入，GLIBC2.38基线/实际最高2.34；app SHA ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9 /1,217,056B，
+  robot SHA ee6de9fc7f6337304e103c45fef9f0d937b94a0fbe5170d7b8ef8e9303011a8f /2,090,544B；分别需libc和libm/libc。
+  三种真实CLI生成/读回/整场完成：5×4 74.9s、7×5 109.2s、8×4 95.0s；与内存矩阵独立记录，不宣称全轨迹逐值相同。
+  持续主机钟23源/119转弯Drive，poll最大21ms，末源2200、2460到期Stop，终态v/k0无碰撞越界；非目标WCET。
+  本地包见 `docs/field-adaptation-delivery.json`，Git实际提交/同步状态以HEAD与origin为准。
+  暂不接车、不执行RISC-V/模拟器、不读视频，PP默认/LQR实验，GLIBC2.38本地交叉基线保持。
+
+### 第九轮路径连续性修正（2026-09-15，v9历史）
 
 - 用户直接授权第九份分享 `https://chatgpt.com/share/6aa89fa3-3894-83e8-afe8-45451cbbc42f` 和
   `XT-STCAR_a623638_review.zip` 修正；修改前fetch确认main/origin=`a6236380a68431342ab9e76f468c587c9dd775f3`、0/0。
@@ -59,9 +89,9 @@
   第二份45180 fixture是标注的数值试验，不能称a623原始数据。独立只读复核无阻塞问题，范围见route-regressions。
 - 默认异步开关计时功能字段逐值相同，导航平均/最大PP6.216/59.705ms、LQR4.346/11.099ms，功能钟等待worker时冻结，非目标WCET。
   持续主机时钟23源/119转弯Drive，poll最大21ms；末源2200、原期限2450、2460 Stop、2686完全停稳回中，无碰撞越界。
-- 当前app SHA `ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9` /1,217,056B、需libc；
+- 该轮app SHA `ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9` /1,217,056B、需libc；
   robot SHA `365e34dcba4d7dee93610cc97f96b4edc094370af1fe7c2570c6552fa2344c93` /2,029,552B、需libm/libc。
-  GLIBC2.38基线、实际最高2.34；当前构建/验收/本地包见 `docs/motion-v9-build.json`、`motion-v9-validation.json`、`motion-v9-delivery.json`。
+  GLIBC2.38基线、实际最高2.34；该轮构建/验收/本地包见 `docs/motion-v9-build.json`、`motion-v9-validation.json`、`motion-v9-delivery.json`。
   本轮技术说明 [路径连续性与性能回归](docs/路径连续性与性能回归.md)，README/TXT已同步；模型/ORT未改、不重跑原生推理。
   PP默认/LQR实验、暂不接车、不执行RISC-V、不读视频、正常运行优先于eMMC寿命约束保持。
 
@@ -445,8 +475,8 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 
 ### 构建、模型与验证证据
 
-- 当前v9：371 Rust/2跟踪example/5矩阵example/35 Python交付通过，2项按设计忽略；fmt/clippy/双交叉链接与ELF通过。
-  108份编译输入、GLIBC2.38基线/最高实际2.34。当前结果与本地包以 `motion-v9-validation/build/delivery` 为准；精确哈希见本轮快照。
+- 历史v9：371 Rust/2跟踪example/5矩阵example/35 Python交付通过，2项按设计忽略；fmt/clippy/双交叉链接与ELF通过。
+  108份编译输入、GLIBC2.38基线/最高实际2.34。该轮结果与本地包为 `motion-v9-validation/build/delivery`；当前见开头赛场规格快照。
   8组时序性能门全部通过；原生模型推理和目标执行未验证，以下旧轮记录仅为历史。
 
 - 历史 v7：Rust常规350通过/0失败/2忽略，跟踪example2项、Python交付35项通过；fmt、all-targets clippy -D warnings、双RISC-V交叉链接通过。
@@ -474,7 +504,7 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   都是本机采样，不是目标板WCET；资料入口为motion-v5-validation/host-profile/async-validation/build/delivery。
 
 - 历史 v4：Rust 常规 294 通过、0 失败，原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
-  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。当前入口为 `docs/motion-v8-validation.json`；v4数字仅为历史。
+  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。该历史阶段入口为 `docs/motion-v8-validation.json`；本轮见开头赛场规格快照。
   两者实际最高 GLIBC 引用 2.34，构建基线 2.38；robot 需要 libm 与 libc，xt-stcar 需要 libc。
   构建源码哈希已核对，该轮二进制哈希见 `motion-v4-build.json` 和两份 ELF 报告。
   模型测试套件和原生 ORT 推理未重跑；打包另做模型格式、来源与包内文件校验，包状态见 `motion-v4-delivery.json`。
@@ -507,9 +537,9 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
 - 新串口依赖 rustix **1.1.4**；两个目标程序由 `scripts/build-riscv.sh --offline` 检查并构建。
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
-  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以 motion-v8 ELF 报告为准。
+  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以本轮 field-adaptation 构建/ELF报告为准。
   前轮 robot 程序额外需要 `libm.so.6`，不能声称两个程序都只依赖 libc。
-- **当前构建证据使用 `docs/motion-v8-*`；`docs/motion-v7-*`、`docs/motion-v6-*`、`docs/motion-v5-*`、`docs/motion-v4-*`、`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
+- **当前构建证据见本轮快照；`docs/motion-v9-*`、`docs/motion-v8-*`、`docs/motion-v7-*`、`docs/motion-v6-*`、`docs/motion-v5-*`、`docs/motion-v4-*`、`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
   `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。
   `rust-expansion-*`、旧 2026-09-07、`factory-*`、`glibc-*` 记录保留为历史，不是当前二进制。
 - 主程序在 `target/riscv64gc-unknown-linux-gnu/release/`，新 core/模型包在 `dist/`；

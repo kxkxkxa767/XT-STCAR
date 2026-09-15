@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "spec": {
+    "schema_version": 1,
+    "source": "simulation",
+    "length_m": 7.0,
+    "width_m": 5.0,
+    "bottom_lane_width_m": 1.2,
+    "top_lane_width_m": 1.2,
+    "bottom_straight_span_m": 4.5,
+    "top_straight_span_m": 4.5,
+    "left_cone_from_left_m": 1.5,
+    "right_cone_from_right_m": 1.5,
+    "left_cone_from_top_m": 2.5,
+    "right_cone_from_bottom_m": 2.5,
+    "crosswalk_search_start_m": 1.0,
+    "light_front_x_m": 6.2,
+    "light_stop_length_m": 1.0
+  },
+  "cone_route_radius_m": 0.85,
+  "crosswalk_near_x_m": 2.5,
+  "light_red_duration_ms": 5000
+}

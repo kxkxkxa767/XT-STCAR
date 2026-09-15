@@ -29,6 +29,12 @@ pub struct TerminalWorkDiagnostics {
     pub solver_iteration_exhaustions: usize,
     pub domain_rejections: usize,
     pub primitive_grid_rejections: usize,
+    /// Bounded arrival-region fallback calls after the exact search failed.
+    /// Each still charges the same solver/iteration/sample ledger.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub arrival_region_attempts: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub arrival_region_accepted: usize,
     /// Cold candidate requests deferred to preserve the continuation allowance.
     /// This does not mean the global ledger is exhausted or geometry is impossible.
     pub cold_budget_deferrals: usize,
@@ -43,6 +49,10 @@ pub struct TerminalWorkDiagnostics {
     pub solver_elapsed_ns: Option<u64>,
 }
 
+fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct WorkAllowance {
     solvers: usize,
@@ -55,6 +65,21 @@ pub(super) struct TerminalBudget {
     cold_ceiling: Cell<Option<WorkAllowance>>,
     cold_deferred: Cell<bool>,
     timing_enabled: Cell<bool>,
+}
+
+#[derive(Clone, Copy)]
+enum EndpointPolicy {
+    ExactCenter,
+    ArrivalRegion,
+}
+
+impl EndpointPolicy {
+    fn position_tolerance(self, config: &NavigationConfig) -> f64 {
+        match self {
+            Self::ExactCenter => (config.goal_tolerance_m * 0.25).min(0.0001),
+            Self::ArrivalRegion => config.goal_tolerance_m * 0.5,
+        }
+    }
 }
 impl Default for TerminalBudget {
     fn default() -> Self {
@@ -294,6 +319,7 @@ pub(super) fn two_arc_with_error(
         budget,
         None,
         initial_error,
+        EndpointPolicy::ExactCenter,
     )
     .or_else(|| {
         seed.and_then(|seed| {
@@ -362,6 +388,7 @@ pub(super) fn continue_two_arc_with_error(
         budget,
         Some(seed),
         initial_error,
+        EndpointPolicy::ExactCenter,
     )?;
     let mut work = budget.snapshot();
     work.continued_seed_accepted += 1;
@@ -417,6 +444,7 @@ fn solve_two_arc(
     budget: &TerminalBudget,
     seed: Option<TwoArcSeed>,
     initial_error: ErrorBound,
+    endpoint_policy: EndpointPolicy,
 ) -> Option<TwoArcConnection> {
     let _timer = budget.timer();
     let local = start.world_to_body(goal);
@@ -447,7 +475,7 @@ fn solve_two_arc(
     );
     let max_length = distance * std::f64::consts::FRAC_PI_2;
     variables[2] = variables[2].clamp(distance, max_length);
-    let position_tolerance = (config.goal_tolerance_m * 0.25).min(0.0001);
+    let position_tolerance = endpoint_policy.position_tolerance(config);
     let sample = |parameters: [f64; 3]| {
         let (mut points, middle, middle_curvature, middle_error) = terminal_primitive(
             start,
@@ -608,6 +636,94 @@ pub(super) fn single_arc_with_error(
     budget: &TerminalBudget,
     initial_error: ErrorBound,
 ) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    solve_single_arc(
+        start,
+        initial_curvature,
+        goal,
+        goal_heading,
+        config,
+        grid,
+        budget,
+        initial_error,
+        EndpointPolicy::ExactCenter,
+    )
+}
+
+/// The exact shortcuts and bounded searches retain priority. This separate
+/// fallback accepts only the actual integrated endpoint strictly inside half
+/// the original position tolerance and within half the original heading
+/// tolerance, including the full accumulated model error. No lattice nodes or
+/// extra ledger are allocated, and the endpoint is never replaced by the goal.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn oriented_arrival_region(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    if budget.snapshot().budget_exhausted {
+        return None;
+    }
+    let mut work = budget.snapshot();
+    work.arrival_region_attempts += 1;
+    budget.work.set(work);
+    let result = solve_single_arc(
+        start,
+        initial_curvature,
+        goal,
+        Some(goal_heading),
+        config,
+        grid,
+        budget,
+        initial_error,
+        EndpointPolicy::ArrivalRegion,
+    )
+    .or_else(|| {
+        solve_two_arc(
+            start,
+            initial_curvature,
+            goal,
+            goal_heading,
+            config,
+            grid,
+            budget,
+            None,
+            initial_error,
+            EndpointPolicy::ArrivalRegion,
+        )
+        .map(|connection| {
+            (
+                connection.points,
+                connection.endpoint,
+                connection.end_curvature,
+                connection.error,
+            )
+        })
+    });
+    if result.is_some() {
+        let mut work = budget.snapshot();
+        work.arrival_region_accepted += 1;
+        budget.work.set(work);
+    }
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn solve_single_arc(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: Option<f64>,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+    endpoint_policy: EndpointPolicy,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
     let _timer = budget.timer();
     let local = start.world_to_body(goal);
     let distance = start.point().distance(goal);
@@ -629,7 +745,7 @@ pub(super) fn single_arc_with_error(
     // A forward, nearby circular connector previously spanned less than pi
     // radians. Keep its maximum arc/chord ratio; never search a long loop here.
     let max_length = distance * std::f64::consts::FRAC_PI_2;
-    let position_tolerance = (config.goal_tolerance_m * 0.25).min(0.0001);
+    let position_tolerance = endpoint_policy.position_tolerance(config);
     for _ in 0..8 {
         budget.iteration()?;
         let result = terminal_primitive(
@@ -710,6 +826,243 @@ mod tests {
     use super::*;
     use crate::autonomy::{HalfPlane, ObstacleDisc, PoseEstimate};
     use crate::motion_transition::{MotionTransition, project_motion};
+
+    fn arrival_region_scene() -> (NavigationConfig, Pose2, Point2) {
+        let raw: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../config/competition-sim.json")).unwrap();
+        let mut config: NavigationConfig =
+            serde_json::from_value(raw["autonomy"]["navigation"].clone()).unwrap();
+        config.bounds.max_x_m = 8.0;
+        config.bounds.max_y_m = 6.0;
+        // Actual stopped state from the pre-fix large_8x6 async PP result.
+        // These geometry tests use an empty scene, not a worker-input replay.
+        let start = Pose2 {
+            x_m: 6.614652446,
+            y_m: 5.384546628,
+            yaw_rad: 0.013694076,
+        };
+        (
+            config,
+            start,
+            Point2 {
+                x_m: 6.68,
+                y_m: 5.4,
+            },
+        )
+    }
+
+    #[test]
+    fn arrival_region_certifies_actual_short_endpoint_without_forcing_goal_center() {
+        let (config, mut start, goal) = arrival_region_scene();
+        for sign in [-1.0, 1.0] {
+            start.y_m = goal.y_m + sign * (5.384546628 - goal.y_m);
+            start.yaw_rad = sign * 0.013694076;
+            let boundary = HalfPlane::new(goal, 0.0, 0.52).unwrap();
+            let grid = Grid::with_boundary(&config, &[], Some(boundary));
+            for continuous in [false, true] {
+                if continuous {
+                    grid.enable_recovery();
+                }
+                let budget = TerminalBudget::default();
+                assert!(single_arc(start, 0.0, goal, Some(0.0), &config, &grid, &budget).is_none());
+                assert!(two_arc(start, 0.0, goal, 0.0, &config, &grid, &budget, None).is_none());
+                let before = budget.snapshot();
+                let (points, end, curvature, error) = oriented_arrival_region(
+                    start,
+                    0.0,
+                    goal,
+                    0.0,
+                    &config,
+                    &grid,
+                    &budget,
+                    ErrorBound::default(),
+                )
+                .unwrap();
+                assert_eq!(points.last(), Some(&end.point()));
+                assert!(end.point().distance(start.point()) > 0.04);
+                assert!(end.point().distance(goal) > 0.0001);
+                assert!(
+                    end.point().distance(goal) + error.position_m < config.goal_tolerance_m * 0.5
+                );
+                assert!(
+                    angle_error(end.yaw_rad, 0.0).abs() + error.heading_rad
+                        <= config.goal_heading_tolerance_rad * 0.5
+                );
+                assert!(curvature.abs() <= config.max_curvature_per_m);
+                let work = budget.snapshot();
+                assert_eq!(
+                    (work.arrival_region_attempts, work.arrival_region_accepted),
+                    (1, 1)
+                );
+                assert!(work.solver_attempts > before.solver_attempts);
+                assert!(work.iterations > before.iterations);
+                assert!(work.primitive_samples > before.primitive_samples);
+                assert!(!work.budget_exhausted);
+            }
+        }
+    }
+
+    #[test]
+    fn arrival_region_keeps_error_collision_boundary_and_work_constraints() {
+        let (config, start, goal) = arrival_region_scene();
+        let grid = Grid::with_boundary(&config, &[], None);
+        let budget = TerminalBudget::default();
+        assert!(
+            oriented_arrival_region(
+                start,
+                0.0,
+                goal,
+                0.0,
+                &config,
+                &grid,
+                &budget,
+                ErrorBound {
+                    position_m: config.goal_tolerance_m * 0.5,
+                    heading_rad: 0.0
+                },
+            )
+            .is_none()
+        );
+        assert_eq!(budget.snapshot().arrival_region_accepted, 0);
+        for boundary_only in [false, true] {
+            let obstacles = if boundary_only {
+                vec![]
+            } else {
+                vec![ObstacleDisc {
+                    center: goal,
+                    radius_m: 0.02,
+                }]
+            };
+            let boundary = boundary_only.then(|| HalfPlane::new(goal, 0.0, 0.01).unwrap());
+            let grid = Grid::with_boundary(&config, &obstacles, boundary);
+            grid.enable_recovery();
+            let budget = TerminalBudget::default();
+            assert!(
+                oriented_arrival_region(
+                    start,
+                    0.0,
+                    goal,
+                    0.0,
+                    &config,
+                    &grid,
+                    &budget,
+                    ErrorBound::default(),
+                )
+                .is_none()
+            );
+            assert!(budget.snapshot().primitive_grid_rejections > 0);
+        }
+        // Existing terminal work is charged first. The region helper cannot
+        // replenish this ledger, even if a region connection would be simple.
+        let budget = TerminalBudget::default();
+        budget.charge(256, 0, 0).unwrap();
+        assert!(
+            oriented_arrival_region(
+                start,
+                0.0,
+                goal,
+                0.0,
+                &config,
+                &grid,
+                &budget,
+                ErrorBound::default(),
+            )
+            .is_none()
+        );
+        let exhausted = budget.snapshot();
+        assert!(exhausted.budget_exhausted);
+        assert_eq!(exhausted.solver_attempts, 256);
+        assert_eq!(exhausted.primitive_samples, 0);
+        assert!(
+            oriented_arrival_region(
+                start,
+                0.0,
+                goal,
+                0.0,
+                &config,
+                &grid,
+                &budget,
+                ErrorBound::default(),
+            )
+            .is_none()
+        );
+        assert_eq!(
+            budget.snapshot().arrival_region_attempts,
+            exhausted.arrival_region_attempts
+        );
+    }
+
+    #[test]
+    fn arrival_region_after_node_exhaustion_uses_only_the_existing_terminal_ledger() {
+        let (config, start, goal) = arrival_region_scene();
+        for continuous in [false, true] {
+            let nav = super::super::Navigator::new(config.clone()).unwrap();
+            let grid = Grid::with_boundary(&config, &[], None);
+            if continuous {
+                grid.enable_recovery();
+            }
+            // Nodes and terminal work charged by earlier legs in this call.
+            let mut earlier = grid.forward_search();
+            earlier.ordinary.allocated_nodes = config.max_grid_cells;
+            grid.recovery.diagnostics.set(earlier);
+            nav.terminal_budget.charge(230, 900, 60_000).unwrap();
+            let (points, end, _) = nav
+                .kinematic_path_from(start, 0.0, goal, Some(0.0), &grid)
+                .unwrap();
+            assert_eq!(points.first(), Some(&start.point()));
+            assert_eq!(points.last(), Some(&end.point()));
+            assert!(
+                end.point().distance(goal) + grid.completed_path_error().position_m
+                    < config.goal_tolerance_m * 0.5
+            );
+            let search = grid.forward_search();
+            assert_eq!(
+                search.ordinary.allocated_nodes + search.recovery.allocated_nodes,
+                config.max_grid_cells
+            );
+            assert!(search.node_budget_exhausted);
+            assert_eq!(
+                if continuous {
+                    search.recovery.exit
+                } else {
+                    search.ordinary.exit
+                },
+                super::super::recovery::ForwardSearchExit::NodeBudget
+            );
+            let work = nav.terminal_budget.snapshot();
+            assert_eq!(work.arrival_region_accepted, 1);
+            assert!(work.solver_attempts > 230 && work.solver_attempts <= 256);
+            assert!(work.iterations > 900 && work.iterations <= 1024);
+            assert!(work.primitive_samples > 60_000 && work.primitive_samples <= 65_536);
+            assert!(!work.budget_exhausted);
+        }
+    }
+
+    #[test]
+    fn exact_success_and_point_only_search_failure_do_not_enter_arrival_region_fallback() {
+        let (config, start, mut goal) = arrival_region_scene();
+        let nav = super::super::Navigator::new(config.clone()).unwrap();
+        let grid = Grid::with_boundary(&config, &[], None);
+        goal.y_m = start.y_m + (goal.x_m - start.x_m) * start.yaw_rad.tan();
+        assert!(
+            nav.kinematic_path_from(start, 0.0, goal, Some(start.yaw_rad), &grid)
+                .is_some()
+        );
+        assert_eq!(nav.terminal_budget.snapshot().arrival_region_attempts, 0);
+        assert_eq!(grid.forward_search().ordinary.allocated_nodes, 0);
+
+        let nav = super::super::Navigator::new(config.clone()).unwrap();
+        let grid = Grid::with_boundary(&config, &[], None);
+        let mut earlier = grid.forward_search();
+        earlier.ordinary.allocated_nodes = config.max_grid_cells;
+        grid.recovery.diagnostics.set(earlier);
+        assert!(
+            nav.kinematic_path_from(start, 0.0, goal, None, &grid)
+                .is_none()
+        );
+        assert_eq!(nav.terminal_budget.snapshot().arrival_region_attempts, 0);
+        assert!(grid.forward_search().node_budget_exhausted);
+    }
 
     fn original_scene(
         direction: f64,

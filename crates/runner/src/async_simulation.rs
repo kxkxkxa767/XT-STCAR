@@ -705,10 +705,7 @@ pub fn simulate_async_observed(
     let mut distance = 0.0;
     let mut now = 0;
     while now <= config.max_duration_ms {
-        if light_trigger.is_none()
-            && plant.pose.x_m + config.autonomy.mission.footprint.front_m
-                >= config.light_trigger_x_m
-        {
+        if light_trigger.is_none() && crate::field::light_triggered(config, plant.pose) {
             light_trigger = Some(now);
         }
         if now.is_multiple_of(timing.capture_period_ms)

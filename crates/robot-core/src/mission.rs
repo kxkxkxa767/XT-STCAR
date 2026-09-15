@@ -17,10 +17,18 @@ pub struct MissionConfig {
     pub approach_goal: Point2,
     pub crosswalk_region: Rect,
     pub cone_waypoints: Vec<Point2>,
+    /// Optional arrival heading for each route gate. An empty vector preserves
+    /// the historical position-only gates and their serialized configuration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cone_waypoint_headings_rad: Vec<Option<f64>>,
     pub light_detection_region: Rect,
     pub light_stop_region: Rect,
     pub light_stop_goal: Point2,
     pub light_approach_yaw_rad: f64,
+    /// Optional lateral extent of the forbidden region beyond the stop line.
+    /// None keeps the historical global half-plane for existing courses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub light_boundary_region: Option<Rect>,
     pub finish_region: Rect,
     pub finish_goal: Point2,
     pub finish_yaw_rad: f64,
@@ -44,12 +52,31 @@ pub struct MissionConfig {
 }
 
 impl MissionConfig {
+    pub fn cone_waypoint_heading(&self, index: usize) -> Option<f64> {
+        self.cone_waypoint_headings_rad
+            .get(index)
+            .copied()
+            .flatten()
+    }
+
     pub fn light_stop_boundary(&self) -> Result<HalfPlane, ValidationError> {
-        HalfPlane::at_region_front(
+        let boundary = HalfPlane::at_region_front(
             self.light_stop_goal,
             self.light_stop_region,
             self.light_approach_yaw_rad,
-        )
+        )?;
+        self.light_boundary_region.map_or(Ok(boundary), |region| {
+            region.validate()?;
+            if rect_corners(self.light_stop_region)
+                .iter()
+                .any(|&p| !region.contains(p))
+            {
+                return Err(ValidationError(
+                    "light boundary region must contain the entire stop region".into(),
+                ));
+            }
+            boundary.with_lateral_region(region)
+        })
     }
 
     pub fn validate(&self) -> Result<(), ValidationError> {
@@ -75,6 +102,13 @@ impl MissionConfig {
                 .all(|yaw| yaw.is_finite() && yaw.abs() <= std::f64::consts::PI)
             || !(2..=128).contains(&self.cone_waypoints.len())
             || self.cone_waypoints.iter().any(|p| !p.valid())
+            || (!self.cone_waypoint_headings_rad.is_empty()
+                && self.cone_waypoint_headings_rad.len() != self.cone_waypoints.len())
+            || self
+                .cone_waypoint_headings_rad
+                .iter()
+                .flatten()
+                .any(|yaw| !yaw.is_finite() || yaw.abs() > std::f64::consts::PI)
             || !self.finish_region.contains(self.finish_goal)
         {
             return Err(ValidationError(
@@ -397,6 +431,10 @@ impl Mission {
                         .point()
                         .distance(self.config.cone_waypoints[self.waypoint_index])
                         <= self.config.goal_tolerance_m
+                    && self
+                        .config
+                        .cone_waypoint_heading(self.waypoint_index)
+                        .is_none_or(|heading| self.heading_matches(pose.pose.yaw_rad, heading))
                 {
                     self.waypoint_index += 1;
                 }
@@ -415,7 +453,14 @@ impl Mission {
             }
             MissionPhase::ApproachLight | MissionPhase::WaitGreen => {
                 let (front, _, boundary) = self.light_progress(pose.pose);
-                if !front.is_finite() || !boundary.is_finite() || front > boundary {
+                let crossed = if self.light_boundary.is_laterally_limited() {
+                    !self
+                        .light_boundary
+                        .contains_footprint(self.config.footprint, pose.pose, 0.0)
+                } else {
+                    front > boundary
+                };
+                if !front.is_finite() || !boundary.is_finite() || crossed {
                     return self.fault(now, "light stop line crossed without confirmed green");
                 }
                 let inside = self
@@ -706,7 +751,11 @@ impl Mission {
                 crate::navigation::ArrivalBehavior::PassThrough {
                     admission_radius_m: self.config.goal_tolerance_m,
                     next: next.unwrap_or(self.config.light_stop_goal),
-                    next_heading_rad: next.is_none().then_some(self.config.light_approach_yaw_rad),
+                    next_heading_rad: if next.is_some() {
+                        self.config.cone_waypoint_heading(self.waypoint_index + 1)
+                    } else {
+                        Some(self.config.light_approach_yaw_rad)
+                    },
                     next_max_speed_mps: if next.is_none() {
                         self.config.approach_speed_mps
                     } else {

@@ -193,6 +193,7 @@ pub enum RouteRebuildReason {
     FootprintReferenceDrift,
     TrackingRejected,
     NoAcceptedCandidate,
+    GridConnectivityRejected,
 }
 
 /// New admission/recovery fields use sparse JSON: an absent field means its
@@ -772,11 +773,30 @@ impl Navigator {
         {
             self.diagnostics.route_rebuild_reason = self.pending_route_rebuild;
         }
+        // Outside-map requests are not quantization failures. Preserve the
+        // existing early rejection and unrelated valid cache for these, also
+        // when a previous in-map attempt has activated continuous recovery.
+        if grid.index(pose.point()).is_none() || grid.index(goal).is_none() {
+            return Ok(self.blocked("no_grid_path"));
+        }
         if self.recovery_active {
             grid.enable_recovery();
         }
         if !grid.recovery_active() && self.plan_on_grid(pose.point(), goal, &grid).is_none() {
-            return Ok(self.blocked("no_grid_path"));
+            // Conservative cell inflation can close a physically clear corridor
+            // before the ordinary car lattice gets a chance to empty its open
+            // set. Reuse the existing continuous full-body recovery domain and
+            // its original shared budgets; 2-D failure is not proof of no route.
+            if !self.enable_recovery_after_grid_rejection(&grid) {
+                self.diagnostics.forward_search = grid.forward_search();
+                return Ok(self.blocked("no_grid_path"));
+            }
+            // A path certified in the old cell domain has no accumulated
+            // continuous integration error. Rebuild it in the recovery domain
+            // instead of relabelling that cached geometry as newly certified.
+            self.note_route_rebuild(RouteRebuildReason::GridConnectivityRejected);
+            self.route = None;
+            self.continuation_checked = false;
         }
         let mut previous_remaining_length = None;
         // A collision-free cached terminal path may no longer be reachable
@@ -1038,7 +1058,11 @@ impl Navigator {
         self.diagnostics.remaining_distance_m = Some(remaining_distance);
         self.diagnostics.checked_continuation_distance_m = Some(continuation_distance);
         self.diagnostics.continuation_checked = self.continuation_checked;
-        // Protect an already feasible short, oriented arrival. A held-curvature
+        // Protect an already feasible short, oriented arrival, including a
+        // heading-constrained through gate. Task admission still uses the real
+        // measured pose; this guard neither reports Reached nor requests Stop.
+        // Point-only through waypoints retain their existing branch.
+        // A held-curvature
         // preview cannot represent both turns of an S, so its average score
         // alone may trade away the ability to finish on the next control tick.
         // A certified single-arc arrival retains the existing controller.
@@ -1046,8 +1070,7 @@ impl Navigator {
         // failure does not imply that two turns are geometrically necessary.
         // Neither bounded solver reruns the lattice per candidate.
         let protected_connection = goal_heading_rad.and_then(|heading| {
-            if arrival != ArrivalBehavior::Stop
-                || pose.world_to_body(goal).x_m <= 0.0
+            if pose.world_to_body(goal).x_m <= 0.0
                 || !(1e-6..=(2.0 * self.config.lookahead_m).min(2.0)).contains(&distance)
             {
                 return None;
@@ -1604,6 +1627,10 @@ impl Navigator {
             grid.recovery.next_leg_error.set(connection.error);
             if !grid.recovery_active() {
                 grid.recovery.normal_path_completed.set(true);
+            } else if grid.forward_search().grid_connectivity_rejected {
+                let mut diagnostics = grid.forward_search();
+                diagnostics.recovery_accepted = true;
+                grid.recovery.diagnostics.set(diagnostics);
             }
             let (points, end_pose, end_curvature) = connection.into_path();
             let mut path = Vec::with_capacity(points.len() + 1);
@@ -1637,7 +1664,16 @@ impl Navigator {
             diagnostics.recovery_attempted = true;
             diagnostics.recovery_accepted |= result.is_some();
             grid.recovery.diagnostics.set(diagnostics);
-            return result;
+            return result.or_else(|| {
+                self.arrival_region_after_search(
+                    start,
+                    initial_curvature,
+                    goal,
+                    goal_heading_rad,
+                    grid,
+                    work.exit,
+                )
+            });
         }
         diagnostics.ordinary.accumulate(work);
         grid.recovery.diagnostics.set(diagnostics);
@@ -1647,12 +1683,20 @@ impl Navigator {
         // A tight quantized exit can exhaust the complete ordinary frontier
         // although the actual full circumscribed body has clearance. Only that
         // bounded-search outcome enables continuous-capsule recovery; ordinary
-        // successful paths and budget exhaustion retain their old behavior.
-        if result.is_some()
-            || work.exit != recovery::ForwardSearchExit::OpenEmpty
-            || grid.recovery.normal_path_completed.get()
-        {
+        // successful paths retain their original priority. A final arrival
+        // region solve uses only remaining terminal work, never lattice nodes.
+        if result.is_some() || grid.recovery.normal_path_completed.get() {
             return result;
+        }
+        if work.exit != recovery::ForwardSearchExit::OpenEmpty {
+            return self.arrival_region_after_search(
+                start,
+                initial_curvature,
+                goal,
+                goal_heading_rad,
+                grid,
+                work.exit,
+            );
         }
         let consumed = grid.forward_search();
         let remaining_nodes = self
@@ -1666,7 +1710,14 @@ impl Navigator {
                 diagnostics.node_budget_exhausted = true;
                 grid.recovery.diagnostics.set(diagnostics);
             }
-            return None;
+            return self.arrival_region_after_search(
+                start,
+                initial_curvature,
+                goal,
+                goal_heading_rad,
+                grid,
+                work.exit,
+            );
         }
         grid.enable_recovery();
         let mut recovery_work = recovery::ForwardSearchWork::default();
@@ -1686,7 +1737,83 @@ impl Navigator {
         diagnostics.recovery_attempted = true;
         diagnostics.recovery_accepted |= result.is_some();
         grid.recovery.diagnostics.set(diagnostics);
-        result
+        result.or_else(|| {
+            self.arrival_region_after_search(
+                start,
+                initial_curvature,
+                goal,
+                goal_heading_rad,
+                grid,
+                recovery_work.exit,
+            )
+        })
+    }
+
+    /// An oriented arrival is a region, although the preferred connectors solve
+    /// for its center. After those connectors and the applicable lattice search
+    /// fail, certify a bounded ramp into the unchanged region using the same
+    /// accumulated error, geometry and terminal ledger. Node exhaustion does
+    /// not allocate additional nodes or erase the recorded search failure.
+    #[allow(clippy::too_many_arguments)]
+    fn arrival_region_after_search(
+        &self,
+        start: Pose2,
+        initial_curvature: f64,
+        goal: Point2,
+        goal_heading_rad: Option<f64>,
+        grid: &Grid,
+        exit: recovery::ForwardSearchExit,
+    ) -> Option<(Vec<Point2>, Pose2, f64)> {
+        if !matches!(
+            exit,
+            recovery::ForwardSearchExit::OpenEmpty | recovery::ForwardSearchExit::NodeBudget
+        ) {
+            return None;
+        }
+        let (points, endpoint, curvature, error) = terminal::oriented_arrival_region(
+            start,
+            initial_curvature,
+            goal,
+            goal_heading_rad?,
+            &self.config,
+            grid,
+            &self.terminal_budget,
+            grid.completed_path_error(),
+        )?;
+        grid.recovery.next_leg_error.set(error);
+        if grid.recovery_active() {
+            let mut diagnostics = grid.forward_search();
+            diagnostics.recovery_accepted = true;
+            grid.recovery.diagnostics.set(diagnostics);
+        } else {
+            grid.recovery.normal_path_completed.set(true);
+        }
+        let mut path = Vec::with_capacity(points.len() + 1);
+        path.push(start.point());
+        path.extend(points);
+        Some((path, endpoint, curvature))
+    }
+
+    fn enable_recovery_after_grid_rejection(&self, grid: &Grid) -> bool {
+        let mut diagnostics = grid.forward_search();
+        diagnostics.grid_connectivity_rejected = true;
+        let remaining_nodes = self
+            .config
+            .max_grid_cells
+            .saturating_sub(diagnostics.ordinary.allocated_nodes)
+            .saturating_sub(diagnostics.recovery.allocated_nodes);
+        if remaining_nodes == 0 {
+            diagnostics.node_budget_exhausted = true;
+        }
+        grid.recovery.diagnostics.set(diagnostics);
+        if remaining_nodes == 0 || self.terminal_budget.snapshot().budget_exhausted {
+            return false;
+        }
+        grid.enable_recovery();
+        let mut diagnostics = grid.forward_search();
+        diagnostics.recovery_attempted = true;
+        grid.recovery.diagnostics.set(diagnostics);
+        true
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2879,8 +3006,7 @@ fn disc_margin(
         }
     }
     if let Some(boundary) = boundary {
-        let clearance_m =
-            boundary.max_projection_m() - (boundary.projection(pose.point()) + radius);
+        let clearance_m = boundary.signed_disc_margin(pose.point(), radius);
         if clearance_m < result.clearance_m {
             result = StoppingMargin {
                 clearance_m,
@@ -3058,6 +3184,31 @@ impl Grid {
 #[cfg(test)]
 mod travel_boundary_tests {
     use super::*;
+
+    #[test]
+    fn finite_boundary_stopping_margin_matches_the_disc_gate() {
+        let (config, _, global) = scene(0.0);
+        let boundary = global
+            .with_lateral_region(Rect {
+                min_x_m: 4.5,
+                max_x_m: 5.5,
+                min_y_m: 4.6,
+                max_y_m: 5.4,
+            })
+            .unwrap();
+        for y_m in [0.0, -0.8, 0.8] {
+            let pose = Pose2 {
+                x_m: 5.5,
+                y_m: 5.0 + y_m,
+                yaw_rad: 0.0,
+            };
+            let margin = disc_margin(&config, pose, 0.1, &[], Some(boundary));
+            assert_eq!(
+                margin.clearance_m >= 0.0,
+                boundary.contains_disc(pose.point(), 0.1)
+            );
+        }
+    }
 
     fn scene(yaw: f64) -> (NavigationConfig, Pose2, HalfPlane) {
         let mut config = NavigationConfig::simulation(

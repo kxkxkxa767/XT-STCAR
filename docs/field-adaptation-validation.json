@@ -1,0 +1,2600 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-15",
+  "baseline_commit": "98368200f6c0eb8189c3e1d79941469c821a10b9",
+  "scope": "Pre-race measured field compilation and original sensor/controller closed loops, host tests and static RISC-V cross-link. Default PP supported by finite 18-run field sample; experimental LQR has one retained failure.",
+  "rust_workspace": {
+    "passed": 409,
+    "failed": 0,
+    "ignored": 2
+  },
+  "tracking_example_tests_passed": 2,
+  "timing_matrix_example_tests_passed": 5,
+  "python_delivery_tests_passed": 36,
+  "python_delivery_subtests_passed": 39,
+  "rustfmt": "passed",
+  "clippy_all_targets_deny_warnings": "passed",
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "source_hashes_recorded": 112,
+  "binaries": {
+    "xt-stcar": {
+      "elf_class": 64,
+      "endianness": "little",
+      "machine": 243,
+      "architecture": "riscv64",
+      "elf_type": 3,
+      "entry": 349396,
+      "flags": 5,
+      "rvc": true,
+      "abi": "lp64d",
+      "pie": true,
+      "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+      "needed": [
+        "libc.so.6"
+      ],
+      "rpath": [],
+      "glibc_versions": [
+        "GLIBC_2.27",
+        "GLIBC_2.28",
+        "GLIBC_2.29",
+        "GLIBC_2.30",
+        "GLIBC_2.32",
+        "GLIBC_2.33",
+        "GLIBC_2.34"
+      ],
+      "maximum_glibc": "2.34",
+      "version_requirements": [
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.28"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.29"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.30"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.32"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.33"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        }
+      ],
+      "versioned_undefined_symbols": [
+        {
+          "symbol": "__cxa_thread_atexit_impl",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "__errno_location",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "__libc_start_main",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "__xpg_strerror_r",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "_exit",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "abort",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "bcmp",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "calloc",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "chdir",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "chroot",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "clock_gettime",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "clock_nanosleep",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "close",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "closedir",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "dirfd",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "dl_iterate_phdr",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "dladdr",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlclose",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlerror",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlopen",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlsym",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dup",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "dup2",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "environ",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "execvp",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fcntl",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fdopendir",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fflush",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fork",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fprintf",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "free",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fstat64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.33"
+        },
+        {
+          "symbol": "fwrite",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getauxval",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getcwd",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getenv",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getpid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getrandom",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "gettid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.30"
+        },
+        {
+          "symbol": "gnu_get_libc_version",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "ioctl",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "kill",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "linkat",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "lseek64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "lstat64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.33"
+        },
+        {
+          "symbol": "malloc",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memcmp",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memcpy",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memmove",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memset",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "mkdir",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "mmap64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "mprotect",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "munmap",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "open64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "openat64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pause",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pipe2",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "poll",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_memalign",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawn_file_actions_addchdir_np",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.29"
+        },
+        {
+          "symbol": "posix_spawn_file_actions_adddup2",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawn_file_actions_destroy",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawn_file_actions_init",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawnattr_destroy",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawnattr_init",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawnattr_setflags",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawnattr_setpgroup",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawnattr_setsigdefault",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_spawnp",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_attr_destroy",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_attr_getguardsize",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_attr_getstack",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_attr_init",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_attr_setstacksize",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_create",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_detach",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_getattr_np",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.32"
+        },
+        {
+          "symbol": "pthread_join",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_key_create",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_key_delete",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_rwlock_rdlock",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_rwlock_unlock",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_rwlock_wrlock",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_self",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_setname_np",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_setspecific",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "read",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "readdir64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "readlink",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "readv",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "realloc",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "realpath",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "recv",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "recvmsg",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sched_yield",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sendmsg",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "setgid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "setgroups",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "setpgid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "setsid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "setuid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sigaction",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sigaddset",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sigaltstack",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sigemptyset",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "signal",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "snprintf",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "socketpair",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "stat64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.33"
+        },
+        {
+          "symbol": "statx",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.28"
+        },
+        {
+          "symbol": "stderr",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "strlen",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "syscall",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sysconf",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "unlink",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "unlinkat",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "waitid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "waitpid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "write",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "writev",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        }
+      ],
+      "schema_version": 1,
+      "glibc_baseline": "2.38",
+      "file": "xt-stcar",
+      "sha256": "ec385c9e19f1e09d297cb9e86d33bb1df387081b31397a2d0ae13535d7cfdcd9",
+      "size_bytes": 1217056,
+      "passed": true,
+      "errors": []
+    },
+    "xt-stcar-robot": {
+      "elf_class": 64,
+      "endianness": "little",
+      "machine": 243,
+      "architecture": "riscv64",
+      "elf_type": 3,
+      "entry": 518464,
+      "flags": 5,
+      "rvc": true,
+      "abi": "lp64d",
+      "pie": true,
+      "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "rpath": [],
+      "glibc_versions": [
+        "GLIBC_2.27",
+        "GLIBC_2.28",
+        "GLIBC_2.30",
+        "GLIBC_2.32",
+        "GLIBC_2.33",
+        "GLIBC_2.34"
+      ],
+      "maximum_glibc": "2.34",
+      "version_requirements": [
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.28"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.30"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.32"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.33"
+        },
+        {
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "library": "libm.so.6",
+          "version": "GLIBC_2.27"
+        }
+      ],
+      "versioned_undefined_symbols": [
+        {
+          "symbol": "__cxa_thread_atexit_impl",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "__errno_location",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "__libc_start_main",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "__xpg_strerror_r",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "abort",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "bcmp",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "calloc",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "clock_gettime",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "close",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "dl_iterate_phdr",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "dladdr",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlclose",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlerror",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlopen",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dlsym",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "dup",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fcntl",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fflush",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fprintf",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "free",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "fstat64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.33"
+        },
+        {
+          "symbol": "fwrite",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getauxval",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getcwd",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getenv",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "getrandom",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "gettid",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.30"
+        },
+        {
+          "symbol": "linkat",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "lseek64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "malloc",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memcmp",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memcpy",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memmove",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "memset",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "mmap64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "mprotect",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "munmap",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "open64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pause",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "poll",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "posix_memalign",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_attr_destroy",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_attr_getguardsize",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_attr_getstack",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_attr_init",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_attr_setstacksize",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_create",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_detach",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_getattr_np",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.32"
+        },
+        {
+          "symbol": "pthread_join",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_key_create",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_key_delete",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_rwlock_rdlock",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_rwlock_unlock",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_rwlock_wrlock",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_self",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "pthread_setname_np",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "pthread_setspecific",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.34"
+        },
+        {
+          "symbol": "read",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "readlink",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "readv",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "realloc",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "realpath",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sched_yield",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sigaction",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sigaltstack",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "signal",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "snprintf",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "stat64",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.33"
+        },
+        {
+          "symbol": "statx",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.28"
+        },
+        {
+          "symbol": "stderr",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "strlen",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "syscall",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sysconf",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "unlink",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "write",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "writev",
+          "library": "libc.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "asin",
+          "library": "libm.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "atan2",
+          "library": "libm.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "cos",
+          "library": "libm.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "hypot",
+          "library": "libm.so.6",
+          "version": "GLIBC_2.27"
+        },
+        {
+          "symbol": "sin",
+          "library": "libm.so.6",
+          "version": "GLIBC_2.27"
+        }
+      ],
+      "schema_version": 1,
+      "glibc_baseline": "2.38",
+      "file": "xt-stcar-robot",
+      "sha256": "ee6de9fc7f6337304e103c45fef9f0d937b94a0fbe5170d7b8ef8e9303011a8f",
+      "size_bytes": 2090544,
+      "passed": true,
+      "errors": []
+    }
+  },
+  "field_matrix": {
+    "report": "docs/field-adaptation-matrix.json",
+    "cases": 9,
+    "runs": 36,
+    "passed": 35,
+    "all_passed": false,
+    "default_pp_passed": 18,
+    "default_pp_runs": 18,
+    "experimental_lqr_passed": 17,
+    "experimental_lqr_runs": 18,
+    "failed_runs": [
+      {
+        "case": "tall_5x6",
+        "mode": "sync",
+        "tracker": "lqr",
+        "summary": {
+          "completed": false,
+          "counts": null,
+          "crosswalk_hold_ms": 3000,
+          "distance_m": 9.176980974570105,
+          "elapsed_ms": 53800,
+          "fault": "ordinary stop exceeded 10 seconds",
+          "final_actual_curvature_per_m": null,
+          "final_actual_speed_mps": 0.0,
+          "final_pose": {
+            "x_m": 1.0197337828011805,
+            "y_m": 2.8964893225748227,
+            "yaw_rad": -3.1336625989309153
+          },
+          "first_problem": {
+            "at": 19700,
+            "fault": null,
+            "navigation_reason": "no_collision_free_braking_trajectory",
+            "navigation_status": "blocked",
+            "phase": "cones"
+          },
+          "green_observed_ms": 0,
+          "minimum_cone_clearance_m": 0.25932793570020146,
+          "phases": [
+            "approach_crosswalk",
+            "crosswalk_stop",
+            "cones",
+            "fault"
+          ],
+          "statistics": {
+            "final_braking": {
+              "after_phase": null,
+              "cause": null,
+              "distance_m": 0.0,
+              "duration_ms": 0,
+              "started_at": null,
+              "ticks": 0
+            },
+            "omitted_distance_samples": 0,
+            "phases": [
+              {
+                "arrival_region_accepted": {
+                  "maximum_per_tick": 0,
+                  "total": 0
+                },
+                "arrival_region_attempts": {
+                  "maximum_per_tick": 0,
+                  "total": 0
+                },
+                "distance_m": 1.0848195044213769,
+                "duration_ms": 6400,
+                "fault_ticks": 0,
+                "first_at": 0,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "goal_braking",
+                    "ticks": 2
+                  }
+                ],
+                "phase": "approach_crosswalk",
+                "recovery_accepted_ticks": 0,
+                "recovery_attempted_ticks": 0,
+                "route_generations": 1,
+                "terminal_budget_exhausted_ticks": 0,
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0
+              },
+              {
+                "arrival_region_accepted": {
+                  "maximum_per_tick": 0,
+                  "total": 0
+                },
+                "arrival_region_attempts": {
+                  "maximum_per_tick": 0,
+                  "total": 0
+                },
+                "distance_m": 0.0,
+                "duration_ms": 3000,
+                "fault_ticks": 0,
+                "first_at": 6400,
+                "navigation_reason_ticks": [],
+                "phase": "crosswalk_stop",
+                "recovery_accepted_ticks": 0,
+                "recovery_attempted_ticks": 0,
+                "route_generations": 0,
+                "terminal_budget_exhausted_ticks": 0,
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 0
+              },
+              {
+                "arrival_region_accepted": {
+                  "maximum_per_tick": 0,
+                  "total": 0
+                },
+                "arrival_region_attempts": {
+                  "maximum_per_tick": 1,
+                  "total": 108
+                },
+                "distance_m": 8.092161470148746,
+                "duration_ms": 44400,
+                "fault_ticks": 0,
+                "first_at": 9400,
+                "navigation_reason_ticks": [
+                  {
+                    "reason": "no_collision_free_braking_trajectory",
+                    "ticks": 2
+                  },
+                  {
+                    "reason": "forward_node_budget_exhausted",
+                    "ticks": 108
+                  }
+                ],
+                "phase": "cones",
+                "recovery_accepted_ticks": 16,
+                "recovery_attempted_ticks": 16,
+                "route_generations": 16,
+                "terminal_budget_exhausted_ticks": 0,
+                "unexpected_stop_command_ms": 11000,
+                "unexpected_stop_episodes": 4
+              },
+              {
+                "arrival_region_accepted": {
+                  "maximum_per_tick": 0,
+                  "total": 0
+                },
+                "arrival_region_attempts": {
+                  "maximum_per_tick": 0,
+                  "total": 0
+                },
+                "distance_m": 0.0,
+                "duration_ms": 0,
+                "fault_ticks": 1,
+                "first_at": 53800,
+                "navigation_reason_ticks": [],
+                "phase": "fault",
+                "recovery_accepted_ticks": 0,
+                "recovery_attempted_ticks": 0,
+                "route_generations": 0,
+                "terminal_budget_exhausted_ticks": 0,
+                "unexpected_stop_command_ms": 0,
+                "unexpected_stop_episodes": 1
+              }
+            ]
+          },
+          "terminal_command_stop": null
+        },
+        "checks": [
+          {
+            "name": "completed",
+            "passed": false
+          },
+          {
+            "name": "no_fault",
+            "passed": false
+          },
+          {
+            "name": "within_declared_duration",
+            "passed": true
+          },
+          {
+            "name": "finite_nonnegative_travel",
+            "passed": true
+          },
+          {
+            "name": "no_cone_collision",
+            "passed": true
+          },
+          {
+            "name": "crosswalk_hold_at_least_3000ms",
+            "passed": true
+          },
+          {
+            "name": "green_observed_at_least_300ms",
+            "passed": false
+          },
+          {
+            "name": "final_speed_zero",
+            "passed": true
+          },
+          {
+            "name": "full_footprint_inside_finish",
+            "passed": false
+          },
+          {
+            "name": "finish_heading_matches",
+            "passed": false
+          },
+          {
+            "name": "final_phase_completed",
+            "passed": false
+          },
+          {
+            "name": "original_task_gates",
+            "passed": true
+          }
+        ]
+      }
+    ],
+    "predeclared_inputs_unchanged": true,
+    "canonical_predeclared_cases_sha256": "e8911af9cf152c1d04a4c18ebf0ef843b5c46ccc67a7908cfb323876ad70a035",
+    "synchronous_final_curvature_and_command_observed": false,
+    "all_async_final_speed_and_curvature_zero": true
+  },
+  "legacy_matrix": {
+    "report": "docs/field-adaptation-legacy-matrix.json",
+    "runs": 8,
+    "all_completed": true,
+    "fixed_performance_gate_passed": true,
+    "budget_file_unchanged": true,
+    "budget_sha256": "0b4e9e03c1c12231880bf43091cc206f56ae2f61525170582a54c7bd20e79e07",
+    "v9_elapsed_and_distance_unchanged": true
+  },
+  "actual_cli_full_runs": [
+    {
+      "case": "small_5x4",
+      "input": "work/adaptive-field/small_5x4-cli-spec.json",
+      "compiled_config": "work/adaptive-field/small_5x4-cli-compiled.json",
+      "completed": true,
+      "elapsed_ms": 74900,
+      "distance_m": 14.59395269490072,
+      "final_pose": {
+        "x_m": 4.552199690066338,
+        "y_m": 3.4994272495513274,
+        "yaw_rad": 0.0005299683839945502
+      },
+      "final_actual_speed_mps": 0.0,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "scope": "Independent actual CLI compile/write/read/full simulation. Not asserted bit-identical to the in-memory matrix."
+    },
+    {
+      "case": "nominal_7x5",
+      "input": "work/adaptive-field/nominal_7x5-cli-spec.json",
+      "compiled_config": "work/adaptive-field/nominal_7x5-cli-compiled.json",
+      "completed": true,
+      "elapsed_ms": 109200,
+      "distance_m": 26.711991600784405,
+      "final_pose": {
+        "x_m": 6.556146791470625,
+        "y_m": 4.39969217328855,
+        "yaw_rad": 0.00016478828044697025
+      },
+      "final_actual_speed_mps": 0.0,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "scope": "Independent actual CLI compile/write/read/full simulation. Not asserted bit-identical to the in-memory matrix."
+    },
+    {
+      "case": "wide_8x4",
+      "input": "work/adaptive-field/wide_8x4-cli-spec.json",
+      "compiled_config": "work/adaptive-field/wide_8x4-cli-compiled.json",
+      "completed": true,
+      "elapsed_ms": 95000,
+      "distance_m": 22.544972967716713,
+      "final_pose": {
+        "x_m": 7.55278833848136,
+        "y_m": 3.5000649512009585,
+        "yaw_rad": -0.001015109018960736
+      },
+      "final_actual_speed_mps": 0.0,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "scope": "Independent actual CLI compile/write/read/full simulation. Not asserted bit-identical to the in-memory matrix."
+    }
+  ],
+  "host_clock_observation": {
+    "busy_retries": 0,
+    "captures": 23,
+    "collision_or_boundary_violation": false,
+    "config": {
+      "autonomy": {
+        "cone_radius_m": 0.14,
+        "laser_point_radius_m": 0.015,
+        "lidar_in_body": {
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": 0.0
+        },
+        "max_sensor_age_ms": 250,
+        "max_tick_gap_ms": 250,
+        "measurement_status": "unverified",
+        "mission": {
+          "approach_goal": {
+            "x_m": 2.0,
+            "y_m": 2.5
+          },
+          "approach_speed_mps": 0.18,
+          "body_frame": "sim_body",
+          "cone_waypoints": [
+            {
+              "x_m": 3.1,
+              "y_m": 3.35
+            },
+            {
+              "x_m": 4.5,
+              "y_m": 1.85
+            }
+          ],
+          "crosswalk_hold_ms": 3000,
+          "crosswalk_region": {
+            "max_x_m": 2.5,
+            "max_y_m": 4.0,
+            "min_x_m": 1.0,
+            "min_y_m": 1.0
+          },
+          "crosswalk_stop_margin_m": 0.15,
+          "cruise_speed_mps": 0.3,
+          "finish_goal": {
+            "x_m": 6.43,
+            "y_m": 2.5
+          },
+          "finish_region": {
+            "max_x_m": 6.8,
+            "max_y_m": 3.1,
+            "min_x_m": 6.0,
+            "min_y_m": 1.9
+          },
+          "finish_yaw_rad": 0.0,
+          "footprint": {
+            "front_m": 0.22,
+            "half_width_m": 0.13,
+            "rear_m": 0.18
+          },
+          "goal_heading_tolerance_rad": 0.12,
+          "goal_tolerance_m": 0.065,
+          "light_approach_yaw_rad": 0.0,
+          "light_detection_region": {
+            "max_x_m": 6.0,
+            "max_y_m": 3.5,
+            "min_x_m": 4.4,
+            "min_y_m": 1.5
+          },
+          "light_stop_goal": {
+            "x_m": 5.55,
+            "y_m": 2.5
+          },
+          "light_stop_region": {
+            "max_x_m": 6.0,
+            "max_y_m": 3.1,
+            "min_x_m": 5.0,
+            "min_y_m": 1.9
+          },
+          "max_observation_skew_ms": 100,
+          "max_pose_age_ms": 250,
+          "max_pose_gap_ms": 250,
+          "max_road_age_ms": 250,
+          "max_road_gap_ms": 250,
+          "min_detection_confidence": 0.5,
+          "min_green_frames": 3,
+          "min_green_ms": 300,
+          "min_pose_quality": 0.6,
+          "schema_version": 1,
+          "simulation_only": true,
+          "stopped_speed_mps": 0.012,
+          "world_frame": "sim_world"
+        },
+        "navigation": {
+          "bounds": {
+            "max_x_m": 7.0,
+            "max_y_m": 5.0,
+            "min_x_m": 0.0,
+            "min_y_m": 0.0
+          },
+          "clearance_m": 0.04,
+          "control_period_ms": 100,
+          "curvature_samples": 21,
+          "footprint": {
+            "front_m": 0.22,
+            "half_width_m": 0.13,
+            "rear_m": 0.18
+          },
+          "frame_id": "sim_world",
+          "goal_heading_tolerance_rad": 0.12,
+          "goal_tolerance_m": 0.045,
+          "grid_resolution_m": 0.1,
+          "lookahead_m": 0.55,
+          "max_accel_mps2": 0.4,
+          "max_curvature_per_m": 2.0,
+          "max_curvature_rate_per_s": 4.0,
+          "max_decel_mps2": 0.6,
+          "max_grid_cells": 40000,
+          "max_input_age_ms": 250,
+          "max_lateral_accel_mps2": 0.4,
+          "max_obstacles": 2048,
+          "max_speed_mps": 0.3,
+          "min_pose_quality": 0.4,
+          "preview_horizon_s": 2.0,
+          "tracking": {
+            "kind": "pure_pursuit"
+          }
+        },
+        "safety": {
+          "command_timeout_ms": 300,
+          "deadman_timeout_ms": 300,
+          "frames": {
+            "body_frame": "sim_body",
+            "imu_frame": "sim_imu",
+            "lidar_frame": "sim_laser",
+            "odometry_frame": "sim_world",
+            "vision_frame": "sim_camera"
+          },
+          "heartbeat_timeout_ms": 300,
+          "max_abs_curvature_per_m": 2.0,
+          "max_speed_mps": 0.3,
+          "required_sensors": [
+            "lidar",
+            "odometry",
+            "vision"
+          ],
+          "schema_version": 1,
+          "sensor_timeout_ms": 300,
+          "simulation_only": true
+        },
+        "scan": {
+          "bins": 360,
+          "frame_id": "sim_laser",
+          "max_missing_arc_rad": 0.12,
+          "max_packet_gap_ms": 20,
+          "max_revolution_ms": 200,
+          "min_coverage_fraction": 0.95,
+          "min_valid_fraction": 0.95
+        },
+        "schema_version": 1,
+        "simulation_only": true
+      },
+      "cones": [
+        {
+          "center": {
+            "x_m": 3.0,
+            "y_m": 2.5
+          },
+          "radius_m": 0.14
+        },
+        {
+          "center": {
+            "x_m": 4.25,
+            "y_m": 2.85
+          },
+          "radius_m": 0.14
+        }
+      ],
+      "crosswalk": {
+        "max_x_m": 5.0969999999999995,
+        "max_y_m": 3.445,
+        "min_x_m": 4.8,
+        "min_y_m": 1.555
+      },
+      "fault": "none",
+      "fault_at_ms": 2000,
+      "initial_pose": {
+        "x_m": 0.6,
+        "y_m": 2.5,
+        "yaw_rad": 0.1
+      },
+      "light_red_duration_ms": 5000,
+      "light_trigger_x_m": 5.0,
+      "max_duration_ms": 120000,
+      "plant_accel_mps2": 0.6,
+      "plant_brake_mps2": 0.8,
+      "road": {
+        "calibration_status": "unverified",
+        "cone": {
+          "blue_hue_range": [
+            190.0,
+            255.0
+          ],
+          "max_cones": 32,
+          "max_height_width_ratio": 5.0,
+          "merge_distance_m": 0.15,
+          "min_fill": 0.25,
+          "min_height_fraction": 0.03,
+          "min_height_width_ratio": 1.0,
+          "min_pixels": 10,
+          "min_saturation": 0.5,
+          "min_taper_ratio": 1.15,
+          "min_value": 0.3,
+          "red_hue_range": [
+            340.0,
+            20.0
+          ]
+        },
+        "crosswalk": {
+          "angle_tolerance_deg": 20.0,
+          "max_depth_m": 2.5,
+          "max_gap_ratio": 3.0,
+          "max_length_ratio": 1.8,
+          "max_saturation": 0.2,
+          "max_spacing_variation": 0.35,
+          "max_width_ratio": 1.8,
+          "min_aspect": 1.35,
+          "min_blob_fill": 0.65,
+          "min_depth_m": 0.08,
+          "min_gap_ratio": 0.25,
+          "min_lateral_span_m": 0.5,
+          "min_overlap": 0.65,
+          "min_pixels": 8,
+          "min_stripes": 4,
+          "min_value": 0.75,
+          "stripe_axis": "either"
+        },
+        "ground_roi": [
+          0.05,
+          0.35,
+          0.95,
+          0.98
+        ],
+        "homography": {
+          "matrix": [
+            [
+              0.0,
+              -5.0,
+              5.0
+            ],
+            [
+              -4.0,
+              0.0,
+              2.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "max_abs_lateral_m": 3.0,
+          "max_forward_m": 6.0,
+          "min_denominator": 1e-06
+        },
+        "light": {
+          "green_hue_range": [
+            80.0,
+            170.0
+          ],
+          "max_aspect": 2.5,
+          "max_rois": 8,
+          "max_white_fraction": 0.7,
+          "min_aspect": 0.4,
+          "min_blob_fill": 0.4,
+          "min_pixels": 4,
+          "min_roi_fraction": 0.01,
+          "min_saturation": 0.45,
+          "min_value": 0.35,
+          "red_hue_range": [
+            340.0,
+            20.0
+          ],
+          "yellow_hue_range": [
+            35.0,
+            75.0
+          ],
+          "yolo_confidence": 0.25
+        },
+        "light_rois": [
+          [
+            0.82,
+            0.02,
+            0.96,
+            0.25
+          ]
+        ],
+        "max_candidates": 128,
+        "max_components": 2048,
+        "max_work_height": 240,
+        "max_work_width": 320,
+        "schema_version": 1,
+        "simulation_only": true
+      },
+      "telemetry": {
+        "max_trace_bytes": 1048576,
+        "mode": "transitions"
+      },
+      "time_step_ms": 100
+    },
+    "distance_m": 0.4020801333333525,
+    "drive_polls": 119,
+    "elapsed_ms": 2686,
+    "final_command": {
+      "type": "stop"
+    },
+    "final_curvature_per_m": 0.0,
+    "final_pose": {
+      "x_m": 1.0015068308884636,
+      "y_m": 2.5167204533814904,
+      "yaw_rad": -0.010833147997329817
+    },
+    "final_speed_mps": 0.0,
+    "first_fault": {
+      "at_ms": 2460,
+      "command": {
+        "type": "stop"
+      },
+      "fault": "command_expired"
+    },
+    "hooks_enabled": false,
+    "injected_source_delays_ms": [
+      60,
+      80
+    ],
+    "last_submitted_source_at": 2200,
+    "max_abs_curvature_per_m": 0.29985288526113124,
+    "max_poll_gap_ms": 21,
+    "max_speed_mps": 0.18,
+    "minimum_cone_clearance_m": 1.6385570331846768,
+    "nominal_capture_period_ms": 100,
+    "nominal_output_period_ms": 20,
+    "physical_output_enabled": false,
+    "plans": [
+      {
+        "at_ms": 81,
+        "command": {
+          "curvature_per_m": -0.28152646039699936,
+          "speed_mps": 0.04000000000000001,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 21,
+        "planned_at": 60,
+        "publish_to_observation_ns": 18085416,
+        "rejection": null,
+        "source_age_ms": 81,
+        "source_at": 0,
+        "timings": {
+          "certify_duration_ns": 5208,
+          "certify_finished_host_ns": 63041000,
+          "certify_started_host_ns": 63035792,
+          "dequeued_host_ns": 60065084,
+          "enqueued_host_ns": 60060917,
+          "navigation_duration_ns": 2933959,
+          "processor_duration_ns": 2953834,
+          "processor_finished_host_ns": 63035459,
+          "processor_started_host_ns": 60081625,
+          "projection_duration_ns": 16459,
+          "projection_finished_host_ns": 60081584,
+          "projection_started_host_ns": 60065125,
+          "published_host_ns": 63041334,
+          "queue_wait_ns": 4167,
+          "ready_to_publish_host_ns": 63041167,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 17001
+        }
+      },
+      {
+        "at_ms": 201,
+        "command": {
+          "curvature_per_m": -0.28265735634230876,
+          "speed_mps": 0.08000000000000002,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 21,
+        "planned_at": 180,
+        "publish_to_observation_ns": 17807291,
+        "rejection": null,
+        "source_age_ms": 101,
+        "source_at": 100,
+        "timings": {
+          "certify_duration_ns": 5041,
+          "certify_finished_host_ns": 183409500,
+          "certify_started_host_ns": 183404459,
+          "dequeued_host_ns": 180156875,
+          "enqueued_host_ns": 180152417,
+          "navigation_duration_ns": 3233708,
+          "processor_duration_ns": 3242083,
+          "processor_finished_host_ns": 183404167,
+          "processor_started_host_ns": 180162084,
+          "projection_duration_ns": 5167,
+          "projection_finished_host_ns": 180162042,
+          "projection_started_host_ns": 180156875,
+          "published_host_ns": 183409959,
+          "queue_wait_ns": 4458,
+          "ready_to_publish_host_ns": 183409917,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 280,
+        "command": {
+          "curvature_per_m": -0.2840005269753966,
+          "speed_mps": 0.09719999999999987,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 18,
+        "planned_at": 262,
+        "publish_to_observation_ns": 14664167,
+        "rejection": null,
+        "source_age_ms": 79,
+        "source_at": 201,
+        "timings": {
+          "certify_duration_ns": 4500,
+          "certify_finished_host_ns": 265853667,
+          "certify_started_host_ns": 265849167,
+          "dequeued_host_ns": 262468375,
+          "enqueued_host_ns": 262464542,
+          "navigation_duration_ns": 3371500,
+          "processor_duration_ns": 3377041,
+          "processor_finished_host_ns": 265849125,
+          "processor_started_host_ns": 262472084,
+          "projection_duration_ns": 3584,
+          "projection_finished_host_ns": 262472084,
+          "projection_started_host_ns": 262468500,
+          "published_host_ns": 265853917,
+          "queue_wait_ns": 3833,
+          "ready_to_publish_host_ns": 265853792,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 400,
+        "command": {
+          "curvature_per_m": -0.2870980473811059,
+          "speed_mps": 0.13719999999999988,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 19,
+        "planned_at": 381,
+        "publish_to_observation_ns": 15795125,
+        "rejection": null,
+        "source_age_ms": 100,
+        "source_at": 300,
+        "timings": {
+          "certify_duration_ns": 4417,
+          "certify_finished_host_ns": 384844792,
+          "certify_started_host_ns": 384840375,
+          "dequeued_host_ns": 381050750,
+          "enqueued_host_ns": 381046584,
+          "navigation_duration_ns": 3780834,
+          "processor_duration_ns": 3785667,
+          "processor_finished_host_ns": 384840292,
+          "processor_started_host_ns": 381054625,
+          "projection_duration_ns": 3875,
+          "projection_finished_host_ns": 381054625,
+          "projection_started_host_ns": 381050750,
+          "published_host_ns": 384844959,
+          "queue_wait_ns": 4166,
+          "ready_to_publish_host_ns": 384844917,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 480,
+        "command": {
+          "curvature_per_m": -0.28915370633535686,
+          "speed_mps": 0.15279999999999974,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 20,
+        "planned_at": 460,
+        "publish_to_observation_ns": 15683667,
+        "rejection": null,
+        "source_age_ms": 80,
+        "source_at": 400,
+        "timings": {
+          "certify_duration_ns": 4625,
+          "certify_finished_host_ns": 464555834,
+          "certify_started_host_ns": 464551209,
+          "dequeued_host_ns": 460653334,
+          "enqueued_host_ns": 460649459,
+          "navigation_duration_ns": 3886042,
+          "processor_duration_ns": 3893625,
+          "processor_finished_host_ns": 464551084,
+          "processor_started_host_ns": 460657459,
+          "projection_duration_ns": 4042,
+          "projection_finished_host_ns": 460657417,
+          "projection_started_host_ns": 460653375,
+          "published_host_ns": 464558375,
+          "queue_wait_ns": 3875,
+          "ready_to_publish_host_ns": 464558250,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 600,
+        "command": {
+          "curvature_per_m": -0.2930314237465087,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 18,
+        "planned_at": 582,
+        "publish_to_observation_ns": 14035958,
+        "rejection": null,
+        "source_age_ms": 99,
+        "source_at": 501,
+        "timings": {
+          "certify_duration_ns": 4042,
+          "certify_finished_host_ns": 586472209,
+          "certify_started_host_ns": 586468167,
+          "dequeued_host_ns": 582421667,
+          "enqueued_host_ns": 582418042,
+          "navigation_duration_ns": 4038417,
+          "processor_duration_ns": 4042833,
+          "processor_finished_host_ns": 586468125,
+          "processor_started_host_ns": 582425292,
+          "projection_duration_ns": 3541,
+          "projection_finished_host_ns": 582425250,
+          "projection_started_host_ns": 582421709,
+          "published_host_ns": 586473209,
+          "queue_wait_ns": 3625,
+          "ready_to_publish_host_ns": 586472334,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 680,
+        "command": {
+          "curvature_per_m": -0.29515128623393533,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 20,
+        "planned_at": 660,
+        "publish_to_observation_ns": 15403833,
+        "rejection": null,
+        "source_age_ms": 80,
+        "source_at": 600,
+        "timings": {
+          "certify_duration_ns": 4083,
+          "certify_finished_host_ns": 664684792,
+          "certify_started_host_ns": 664680709,
+          "dequeued_host_ns": 660499584,
+          "enqueued_host_ns": 660496500,
+          "navigation_duration_ns": 4172917,
+          "processor_duration_ns": 4177833,
+          "processor_finished_host_ns": 664680667,
+          "processor_started_host_ns": 660502834,
+          "projection_duration_ns": 3209,
+          "projection_finished_host_ns": 660502834,
+          "projection_started_host_ns": 660499625,
+          "published_host_ns": 664684959,
+          "queue_wait_ns": 3084,
+          "ready_to_publish_host_ns": 664684917,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 800,
+        "command": {
+          "curvature_per_m": -0.29791234879206174,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 18,
+        "planned_at": 782,
+        "publish_to_observation_ns": 13897416,
+        "rejection": null,
+        "source_age_ms": 99,
+        "source_at": 701,
+        "timings": {
+          "certify_duration_ns": 4833,
+          "certify_finished_host_ns": 786422792,
+          "certify_started_host_ns": 786417959,
+          "dequeued_host_ns": 782248584,
+          "enqueued_host_ns": 782242834,
+          "navigation_duration_ns": 4157792,
+          "processor_duration_ns": 4165000,
+          "processor_finished_host_ns": 786417750,
+          "processor_started_host_ns": 782252750,
+          "projection_duration_ns": 4083,
+          "projection_finished_host_ns": 782252667,
+          "projection_started_host_ns": 782248584,
+          "published_host_ns": 786423459,
+          "queue_wait_ns": 5750,
+          "ready_to_publish_host_ns": 786423334,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 881,
+        "command": {
+          "curvature_per_m": -0.29902637638463936,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 21,
+        "planned_at": 860,
+        "publish_to_observation_ns": 16901667,
+        "rejection": null,
+        "source_age_ms": 81,
+        "source_at": 800,
+        "timings": {
+          "certify_duration_ns": 4083,
+          "certify_finished_host_ns": 864525625,
+          "certify_started_host_ns": 864521542,
+          "dequeued_host_ns": 860331167,
+          "enqueued_host_ns": 860327584,
+          "navigation_duration_ns": 4180416,
+          "processor_duration_ns": 4187166,
+          "processor_finished_host_ns": 864521500,
+          "processor_started_host_ns": 860334334,
+          "projection_duration_ns": 3083,
+          "projection_finished_host_ns": 860334292,
+          "projection_started_host_ns": 860331209,
+          "published_host_ns": 864526250,
+          "queue_wait_ns": 3583,
+          "ready_to_publish_host_ns": 864526167,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1001,
+        "command": {
+          "curvature_per_m": -0.29985288526113124,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 21,
+        "planned_at": 980,
+        "publish_to_observation_ns": 16730417,
+        "rejection": null,
+        "source_age_ms": 101,
+        "source_at": 900,
+        "timings": {
+          "certify_duration_ns": 5167,
+          "certify_finished_host_ns": 984662459,
+          "certify_started_host_ns": 984657292,
+          "dequeued_host_ns": 980484292,
+          "enqueued_host_ns": 980476750,
+          "navigation_duration_ns": 4161542,
+          "processor_duration_ns": 4168625,
+          "processor_finished_host_ns": 984657167,
+          "processor_started_host_ns": 980488542,
+          "projection_duration_ns": 4166,
+          "projection_finished_host_ns": 980488500,
+          "projection_started_host_ns": 980484334,
+          "published_host_ns": 984662750,
+          "queue_wait_ns": 7542,
+          "ready_to_publish_host_ns": 984662667,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1080,
+        "command": {
+          "curvature_per_m": -0.2998451594195481,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 19,
+        "planned_at": 1061,
+        "publish_to_observation_ns": 15392917,
+        "rejection": null,
+        "source_age_ms": 79,
+        "source_at": 1001,
+        "timings": {
+          "certify_duration_ns": 4542,
+          "certify_finished_host_ns": 1065597792,
+          "certify_started_host_ns": 1065593250,
+          "dequeued_host_ns": 1061402750,
+          "enqueued_host_ns": 1061398917,
+          "navigation_duration_ns": 4181000,
+          "processor_duration_ns": 4186459,
+          "processor_finished_host_ns": 1065593084,
+          "processor_started_host_ns": 1061406625,
+          "projection_duration_ns": 3792,
+          "projection_finished_host_ns": 1061406584,
+          "projection_started_host_ns": 1061402792,
+          "published_host_ns": 1065600292,
+          "queue_wait_ns": 3833,
+          "ready_to_publish_host_ns": 1065598000,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1201,
+        "command": {
+          "curvature_per_m": -0.2990545128659727,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 21,
+        "planned_at": 1180,
+        "publish_to_observation_ns": 16948750,
+        "rejection": null,
+        "source_age_ms": 101,
+        "source_at": 1100,
+        "timings": {
+          "certify_duration_ns": 4500,
+          "certify_finished_host_ns": 1184300542,
+          "certify_started_host_ns": 1184296042,
+          "dequeued_host_ns": 1180154750,
+          "enqueued_host_ns": 1180150334,
+          "navigation_duration_ns": 4130875,
+          "processor_duration_ns": 4137083,
+          "processor_finished_host_ns": 1184295917,
+          "processor_started_host_ns": 1180158834,
+          "projection_duration_ns": 4084,
+          "projection_finished_host_ns": 1180158834,
+          "projection_started_host_ns": 1180154750,
+          "published_host_ns": 1184300959,
+          "queue_wait_ns": 4416,
+          "ready_to_publish_host_ns": 1184300750,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1280,
+        "command": {
+          "curvature_per_m": -0.29802332550391264,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 19,
+        "planned_at": 1261,
+        "publish_to_observation_ns": 15397750,
+        "rejection": null,
+        "source_age_ms": 79,
+        "source_at": 1201,
+        "timings": {
+          "certify_duration_ns": 4041,
+          "certify_finished_host_ns": 1265461875,
+          "certify_started_host_ns": 1265457834,
+          "dequeued_host_ns": 1261267334,
+          "enqueued_host_ns": 1261263250,
+          "navigation_duration_ns": 4181708,
+          "processor_duration_ns": 4187167,
+          "processor_finished_host_ns": 1265457792,
+          "processor_started_host_ns": 1261270625,
+          "projection_duration_ns": 3250,
+          "projection_finished_host_ns": 1261270584,
+          "projection_started_host_ns": 1261267334,
+          "published_host_ns": 1265462042,
+          "queue_wait_ns": 4084,
+          "ready_to_publish_host_ns": 1265461959,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1401,
+        "command": {
+          "curvature_per_m": -0.2959130241034625,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 21,
+        "planned_at": 1380,
+        "publish_to_observation_ns": 16933791,
+        "rejection": null,
+        "source_age_ms": 101,
+        "source_at": 1300,
+        "timings": {
+          "certify_duration_ns": 5000,
+          "certify_finished_host_ns": 1384264459,
+          "certify_started_host_ns": 1384259459,
+          "dequeued_host_ns": 1380094084,
+          "enqueued_host_ns": 1380088709,
+          "navigation_duration_ns": 4153625,
+          "processor_duration_ns": 4161000,
+          "processor_finished_host_ns": 1384259375,
+          "processor_started_host_ns": 1380098375,
+          "projection_duration_ns": 4209,
+          "projection_finished_host_ns": 1380098334,
+          "projection_started_host_ns": 1380094125,
+          "published_host_ns": 1384264709,
+          "queue_wait_ns": 5375,
+          "ready_to_publish_host_ns": 1384264625,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1480,
+        "command": {
+          "curvature_per_m": -0.2939720718655097,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 19,
+        "planned_at": 1461,
+        "publish_to_observation_ns": 15428042,
+        "rejection": null,
+        "source_age_ms": 79,
+        "source_at": 1401,
+        "timings": {
+          "certify_duration_ns": 3959,
+          "certify_finished_host_ns": 1465308709,
+          "certify_started_host_ns": 1465304750,
+          "dequeued_host_ns": 1461144125,
+          "enqueued_host_ns": 1461140792,
+          "navigation_duration_ns": 4152667,
+          "processor_duration_ns": 4157292,
+          "processor_finished_host_ns": 1465304667,
+          "processor_started_host_ns": 1461147375,
+          "projection_duration_ns": 3209,
+          "projection_finished_host_ns": 1461147334,
+          "projection_started_host_ns": 1461144125,
+          "published_host_ns": 1465308875,
+          "queue_wait_ns": 3333,
+          "ready_to_publish_host_ns": 1465308792,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1600,
+        "command": {
+          "curvature_per_m": -0.2905712347690221,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 19,
+        "planned_at": 1581,
+        "publish_to_observation_ns": 15420375,
+        "rejection": null,
+        "source_age_ms": 100,
+        "source_at": 1500,
+        "timings": {
+          "certify_duration_ns": 3916,
+          "certify_finished_host_ns": 1585598250,
+          "certify_started_host_ns": 1585594334,
+          "dequeued_host_ns": 1581421292,
+          "enqueued_host_ns": 1581417417,
+          "navigation_duration_ns": 4164209,
+          "processor_duration_ns": 4169500,
+          "processor_finished_host_ns": 1585594292,
+          "processor_started_host_ns": 1581424792,
+          "projection_duration_ns": 3500,
+          "projection_finished_host_ns": 1581424792,
+          "projection_started_host_ns": 1581421292,
+          "published_host_ns": 1585598375,
+          "queue_wait_ns": 3875,
+          "ready_to_publish_host_ns": 1585598334,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1680,
+        "command": {
+          "curvature_per_m": -0.28793133880840416,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 20,
+        "planned_at": 1660,
+        "publish_to_observation_ns": 15408292,
+        "rejection": null,
+        "source_age_ms": 80,
+        "source_at": 1600,
+        "timings": {
+          "certify_duration_ns": 4125,
+          "certify_finished_host_ns": 1665211875,
+          "certify_started_host_ns": 1665207750,
+          "dequeued_host_ns": 1661027334,
+          "enqueued_host_ns": 1661024250,
+          "navigation_duration_ns": 4172375,
+          "processor_duration_ns": 4177084,
+          "processor_finished_host_ns": 1665207709,
+          "processor_started_host_ns": 1661030625,
+          "projection_duration_ns": 3250,
+          "projection_finished_host_ns": 1661030584,
+          "projection_started_host_ns": 1661027334,
+          "published_host_ns": 1665212000,
+          "queue_wait_ns": 3084,
+          "ready_to_publish_host_ns": 1665211959,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1800,
+        "command": {
+          "curvature_per_m": -0.2837718131843812,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 19,
+        "planned_at": 1781,
+        "publish_to_observation_ns": 15445791,
+        "rejection": null,
+        "source_age_ms": 100,
+        "source_at": 1700,
+        "timings": {
+          "certify_duration_ns": 3833,
+          "certify_finished_host_ns": 1785314417,
+          "certify_started_host_ns": 1785310584,
+          "dequeued_host_ns": 1781169750,
+          "enqueued_host_ns": 1781165125,
+          "navigation_duration_ns": 4132458,
+          "processor_duration_ns": 4137083,
+          "processor_finished_host_ns": 1785310542,
+          "processor_started_host_ns": 1781173459,
+          "projection_duration_ns": 3667,
+          "projection_finished_host_ns": 1781173417,
+          "projection_started_host_ns": 1781169750,
+          "published_host_ns": 1785314584,
+          "queue_wait_ns": 4625,
+          "ready_to_publish_host_ns": 1785314500,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 1880,
+        "command": {
+          "curvature_per_m": -0.28033807359516993,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 20,
+        "planned_at": 1860,
+        "publish_to_observation_ns": 15455292,
+        "rejection": null,
+        "source_age_ms": 80,
+        "source_at": 1800,
+        "timings": {
+          "certify_duration_ns": 3916,
+          "certify_finished_host_ns": 1864916375,
+          "certify_started_host_ns": 1864912459,
+          "dequeued_host_ns": 1860773500,
+          "enqueued_host_ns": 1860770834,
+          "navigation_duration_ns": 4131416,
+          "processor_duration_ns": 4135750,
+          "processor_finished_host_ns": 1864912417,
+          "processor_started_host_ns": 1860776667,
+          "projection_duration_ns": 3125,
+          "projection_finished_host_ns": 1860776667,
+          "projection_started_host_ns": 1860773542,
+          "published_host_ns": 1864916500,
+          "queue_wait_ns": 2666,
+          "ready_to_publish_host_ns": 1864916459,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 2000,
+        "command": {
+          "curvature_per_m": -0.2749040595519876,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 19,
+        "planned_at": 1981,
+        "publish_to_observation_ns": 15444541,
+        "rejection": null,
+        "source_age_ms": 99,
+        "source_at": 1901,
+        "timings": {
+          "certify_duration_ns": 3959,
+          "certify_finished_host_ns": 1985244334,
+          "certify_started_host_ns": 1985240375,
+          "dequeued_host_ns": 1981089667,
+          "enqueued_host_ns": 1981085875,
+          "navigation_duration_ns": 4142791,
+          "processor_duration_ns": 4147167,
+          "processor_finished_host_ns": 1985240334,
+          "processor_started_host_ns": 1981093167,
+          "projection_duration_ns": 3416,
+          "projection_finished_host_ns": 1981093125,
+          "projection_started_host_ns": 1981089709,
+          "published_host_ns": 1985244459,
+          "queue_wait_ns": 3792,
+          "ready_to_publish_host_ns": 1985244417,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 2080,
+        "command": {
+          "curvature_per_m": -0.2715888231180431,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 20,
+        "planned_at": 2060,
+        "publish_to_observation_ns": 15432584,
+        "rejection": null,
+        "source_age_ms": 80,
+        "source_at": 2000,
+        "timings": {
+          "certify_duration_ns": 3834,
+          "certify_finished_host_ns": 2064853084,
+          "certify_started_host_ns": 2064849250,
+          "dequeued_host_ns": 2060690584,
+          "enqueued_host_ns": 2060686459,
+          "navigation_duration_ns": 4150792,
+          "processor_duration_ns": 4155334,
+          "processor_finished_host_ns": 2064849209,
+          "processor_started_host_ns": 2060693875,
+          "projection_duration_ns": 3250,
+          "projection_finished_host_ns": 2060693875,
+          "projection_started_host_ns": 2060690625,
+          "published_host_ns": 2064853250,
+          "queue_wait_ns": 4125,
+          "ready_to_publish_host_ns": 2064853167,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 2200,
+        "command": {
+          "curvature_per_m": -0.26523584268154493,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 18,
+        "planned_at": 2182,
+        "publish_to_observation_ns": 13926166,
+        "rejection": null,
+        "source_age_ms": 99,
+        "source_at": 2101,
+        "timings": {
+          "certify_duration_ns": 3792,
+          "certify_finished_host_ns": 2186647292,
+          "certify_started_host_ns": 2186643500,
+          "dequeued_host_ns": 2182488625,
+          "enqueued_host_ns": 2182484750,
+          "navigation_duration_ns": 4147250,
+          "processor_duration_ns": 4151375,
+          "processor_finished_host_ns": 2186643459,
+          "processor_started_host_ns": 2182492084,
+          "projection_duration_ns": 3417,
+          "projection_finished_host_ns": 2182492042,
+          "projection_started_host_ns": 2182488625,
+          "published_host_ns": 2186647459,
+          "queue_wait_ns": 3875,
+          "ready_to_publish_host_ns": 2186647375,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      },
+      {
+        "at_ms": 2280,
+        "command": {
+          "curvature_per_m": -0.26069716249315705,
+          "speed_mps": 0.18,
+          "type": "drive"
+        },
+        "newly_adopted": true,
+        "plan_age_ms": 20,
+        "planned_at": 2260,
+        "publish_to_observation_ns": 15451375,
+        "rejection": null,
+        "source_age_ms": 80,
+        "source_at": 2200,
+        "timings": {
+          "certify_duration_ns": 3834,
+          "certify_finished_host_ns": 2264723709,
+          "certify_started_host_ns": 2264719875,
+          "dequeued_host_ns": 2260573417,
+          "enqueued_host_ns": 2260570167,
+          "navigation_duration_ns": 4139167,
+          "processor_duration_ns": 4143334,
+          "processor_finished_host_ns": 2264719834,
+          "processor_started_host_ns": 2260576500,
+          "projection_duration_ns": 3042,
+          "projection_finished_host_ns": 2260576459,
+          "projection_started_host_ns": 2260573417,
+          "published_host_ns": 2264723834,
+          "queue_wait_ns": 3250,
+          "ready_to_publish_host_ns": 2264723792,
+          "replaced_pending_input": false,
+          "terminal_solver_duration_ns": 0
+        }
+      }
+    ],
+    "schema_version": 1,
+    "scope": "Single advancing Instant-clock host observation with real controller, RGB, scan and poll-driven turning plant; neither deterministic deadline proof nor target WCET.",
+    "source_stop_at_ms": 2300,
+    "submitted": 23,
+    "turning_drive_polls": 119,
+    "worker_counts": {
+      "newly_adopted_plans": 23,
+      "published_plans": 23,
+      "queued_inputs": 23,
+      "rejected_polls": 0,
+      "replaced_inputs": 0
+    }
+  },
+  "review": {
+    "scope": "Independent read-only review of field schema/compiler/CLI, finite forbidden-region whole-envelope checks and arrival-region budget/error propagation. No blocking issue found in those scopes.",
+    "navigation_unit_tests_passed": 61,
+    "phase_statistics_unit_tests_passed": 7,
+    "remaining_limitation": "tall_5x6 synchronous experimental LQR stopped at the left-cone route after the original node cap; ordinary stop exceeded 10 s. No claim of universal continuous-range convergence."
+  },
+  "not_performed": [
+    "Vehicle connection, deployment, motor/device I/O or MCU work",
+    "RISC-V target or emulator execution",
+    "Target WCET or physical vehicle/sensor calibration",
+    "Model export or native inference rerun; model/runtime sources unchanged",
+    "Video viewing"
+  ],
+  "emmc": "No new default per-tick field/log writes; control/perception rates and competition gates unchanged."
+}

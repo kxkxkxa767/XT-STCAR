@@ -173,6 +173,9 @@ pub struct WorkCounter {
 }
 
 impl WorkCounter {
+    fn is_zero(&self) -> bool {
+        self.total == 0 && self.maximum_per_tick == 0
+    }
     fn observe(&mut self, value: usize) {
         self.total = self.total.saturating_add(value as u64);
         self.maximum_per_tick = self.maximum_per_tick.max(value as u64);
@@ -207,6 +210,10 @@ pub struct TerminalWorkStatistics {
     /// Original grid-transition rejections after sample budget was admitted;
     /// this does not identify a physical collision or prove geometric infeasibility.
     pub primitive_grid_rejections: WorkCounter,
+    #[serde(skip_serializing_if = "WorkCounter::is_zero")]
+    pub arrival_region_attempts: WorkCounter,
+    #[serde(skip_serializing_if = "WorkCounter::is_zero")]
+    pub arrival_region_accepted: WorkCounter,
     pub terminal_connections_checked: WorkCounter,
     pub budget_exhausted_ticks: u64,
     pub continuity_enforced_ticks: u64,
@@ -248,6 +255,10 @@ impl TerminalWorkStatistics {
         self.domain_rejections.observe(sample.domain_rejections);
         self.primitive_grid_rejections
             .observe(sample.primitive_grid_rejections);
+        self.arrival_region_attempts
+            .observe(sample.arrival_region_attempts);
+        self.arrival_region_accepted
+            .observe(sample.arrival_region_accepted);
         self.terminal_connections_checked
             .observe(diagnostics.terminal_connections_checked);
         self.budget_exhausted_ticks = self
@@ -707,6 +718,8 @@ mod tests {
                 continued_seed_accepted: work - 1,
                 domain_rejections: work - 2,
                 primitive_grid_rejections: work - 3,
+                arrival_region_attempts: work - 2,
+                arrival_region_accepted: work - 3,
                 solver_iteration_exhaustions: work - 1,
                 cold_budget_deferrals: work - 2,
                 recovery_reserved_solvers: 1,
@@ -796,6 +809,20 @@ mod tests {
         );
         assert_eq!(
             (
+                work.arrival_region_attempts.total,
+                work.arrival_region_attempts.maximum_per_tick
+            ),
+            (6, 5)
+        );
+        assert_eq!(
+            (
+                work.arrival_region_accepted.total,
+                work.arrival_region_accepted.maximum_per_tick
+            ),
+            (4, 4)
+        );
+        assert_eq!(
+            (
                 work.terminal_connections_checked.total,
                 work.terminal_connections_checked.maximum_per_tick
             ),
@@ -826,6 +853,16 @@ mod tests {
         );
         assert_eq!(summary.phases[1].terminal_work.solver_attempts.total, 5);
         assert_eq!(summary.phases[1].terminal_work.budget_exhausted_ticks, 0);
+    }
+
+    #[test]
+    fn unused_arrival_region_counters_remain_absent_from_legacy_json() {
+        let core = serde_json::to_value(TerminalWorkDiagnostics::default()).unwrap();
+        let phase = serde_json::to_value(TerminalWorkStatistics::default()).unwrap();
+        for value in [&core, &phase] {
+            assert!(value.get("arrival_region_attempts").is_none());
+            assert!(value.get("arrival_region_accepted").is_none());
+        }
     }
 
     #[test]

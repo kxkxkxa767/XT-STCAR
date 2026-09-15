@@ -35,6 +35,8 @@ pub enum SimulationFault {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimulationConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<crate::field::FieldScenario>,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
     pub autonomy: AutonomyConfig,
@@ -94,6 +96,7 @@ impl SimulationConfig {
                     y_m: 1.85,
                 },
             ],
+            cone_waypoint_headings_rad: Vec::new(),
             light_detection_region: Rect {
                 min_x_m: 4.4,
                 max_x_m: 6.0,
@@ -111,6 +114,7 @@ impl SimulationConfig {
                 y_m: 2.5,
             },
             light_approach_yaw_rad: 0.0,
+            light_boundary_region: None,
             finish_region: Rect {
                 min_x_m: 6.0,
                 max_x_m: 6.8,
@@ -182,6 +186,7 @@ impl SimulationConfig {
         let mut road = RoadConfig::simulation();
         road.light_rois = vec![[0.82, 0.02, 0.96, 0.25]];
         Self {
+            field: None,
             telemetry: TelemetryConfig::default(),
             autonomy,
             road,
@@ -221,6 +226,9 @@ impl SimulationConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        if let Some(field) = &self.field {
+            field.validate_compiled(self)?;
+        }
         AutonomyController::new(self.autonomy.clone())?;
         RunJournal::new(self.telemetry.clone())?;
         RoadDetector::new(self.road.clone())?;
@@ -356,6 +364,11 @@ pub fn render_camera(
         }
     }
     let (cx, cy) = (((left + right) / 2) as i32, ((top + bottom) / 2) as i32);
+    let light = if crate::field::light_visible(config, pose) {
+        light
+    } else {
+        LightState::Unknown
+    };
     let color = match light {
         LightState::Red => [240, 5, 5],
         LightState::Yellow => [240, 210, 0],
@@ -508,9 +521,7 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     for ms in (0..=config.max_duration_ms).step_by(config.time_step_ms as usize) {
         elapsed = ms;
         let at = Timestamp(ms);
-        if trigger.is_none()
-            && pose.x_m + config.autonomy.mission.footprint.front_m >= config.light_trigger_x_m
-        {
+        if trigger.is_none() && crate::field::light_triggered(config, pose) {
             trigger = Some(ms);
         }
         let light = if config.fault == SimulationFault::RedOnly
