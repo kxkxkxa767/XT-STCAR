@@ -80,20 +80,38 @@ def wait_bluez(timeout=15):
 
 
 def scan(report, label):
-    wait_bluez()
-    report[label + '_bluez_ready'] = True
-    power = run(['bluetoothctl', 'power', 'on'])
-    if 'succeeded' not in power.stdout:
-        raise RuntimeError('Bluetooth power-on did not report success: ' + power.stdout)
-    result = run(['bluetoothctl', '--timeout', '10', 'scan', 'on'], timeout=15)
-    # bluetoothctl can return zero even on failure. Require actual scan events.
-    clean = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', result.stdout)
-    devices = set(re.findall(r'\[(?:NEW|CHG)\] Device ([0-9A-Fa-f:]{17})', clean))
-    report[label] = {'scan_started': 'Discovery started' in clean,
-                     'observed_device_count': len(devices), 'exit': result.returncode}
-    if 'Discovery started' not in clean or not devices:
-        raise RuntimeError('Scan did not both start and receive a nearby device advertisement')
-    print(f'{label}: scan received {len(devices)} nearby devices', flush=True)
+    # The factory FIFO may deliver a pending off/on transition after reattach.
+    # Retry only the post-install check; every pass still needs live scan events.
+    limit = 3 if label == 'system_scan' else 1
+    attempts = report.setdefault(label + '_attempts', [])
+    for number in range(limit):
+        record = {}
+        attempts.append(record)
+        try:
+            wait_bluez()
+            report[label + '_bluez_ready'] = True
+            power = run(['bluetoothctl', 'power', 'on'], timeout=5)
+            if 'succeeded' not in power.stdout:
+                raise RuntimeError('Bluetooth power-on did not report success: ' + power.stdout)
+            result = run(['bluetoothctl', '--timeout', '10', 'scan', 'on'], timeout=15)
+            clean = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', result.stdout)
+            devices = set(re.findall(r'\[(?:NEW|CHG)\] Device ([0-9A-Fa-f:]{17})', clean))
+            record.update(scan_started='Discovery started' in clean,
+                          observed_device_count=len(devices), exit=result.returncode,
+                          stdout=result.stdout, stderr=result.stderr)
+            report[label] = {key: record[key] for key in ('scan_started', 'observed_device_count', 'exit')}
+            if not record['scan_started'] or not devices:
+                raise RuntimeError('Scan did not both start and receive a nearby device advertisement')
+            # Ensure the adapter remains present after the scan, not just before.
+            wait_bluez(timeout=5)
+            print(f'{label}: scan received {len(devices)} nearby devices', flush=True)
+            return
+        except (RuntimeError, subprocess.TimeoutExpired) as error:
+            record['error'] = str(error)
+            if number + 1 == limit:
+                raise
+            print('Controller changed during scan; waiting before bounded retry.', flush=True)
+            time.sleep(3)
 
 
 def main():
