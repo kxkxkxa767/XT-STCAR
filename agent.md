@@ -20,6 +20,7 @@
 用户授权补齐蓝牙，并要求先确认可以再装系统：已取得官方rtk_hciattach固定源码及RTL8852BS固件/配置，Mac交叉编译PIE/GLIBC2.38、车端-l/ldd通过。已部署 `~/xt-stcar-tests/20260916-bluetooth-repair/repair.py`，等待用户在SSH执行sudo；脚本临时mount namespace内验证控制器及收到扫描事件才安装三文件，安装后复测失败则回退。第一轮临时测试因Zig串口头文件B115200常量与车端GLIBC2.39不匹配失败，未安装系统；已用车端termios头文件-I覆盖重编译，无设备C探针对照通过，修正版hash为1a807e8408bd27212c7414b91072591c2168ddcd55cebf338f6afbbf150f65d8，等待用户sudo重试。尚未实际扫描成功或安装系统。见 `docs/车端蓝牙修复.md`，不能把准备完成写成修复成功。
 蓝牙后续：第二轮临时初始化已成功识别RTL8852BS、加载固件并创建hci0，但脚本未等BlueZ就绪就退出；第三轮因缺少蓝牙上电复位，芯片保持上次1.5M链路状态而H5_SYNC超时。已补BlueZ实际就绪等待及与厂商一致、校验type/name的蓝牙rfkill关闭/开启各1秒，模拟等待/中断恢复测试通过；修正版上传，等待用户第四轮sudo执行。前三轮均未安装系统，记录详见蓝牙修复文档。
 最新蓝牙第四轮：临时扫描已收到8设备；三文件系统安装后，原厂服务FIFO收0/1导致控制器停止重启，第二次扫描撞上切换而失败，脚本已回退系统文件。已把系统阶段扫描改为最多3次真实事件验证并保存错误，模拟回归通过；等待sudo重试。用户明确全权继续、要外出，不需重复确认授权，但实查sudo -n仍需密码，不能绕过认证。当前没有进行任何无人看护底盘测试。
+最新第五轮：临时扫描收到9设备，厂商服务随后收到FIFO关闭指令，3次系统验证失败并回退。已定位车端Blueman KillSwitch插件调用realtek_bt.sh hci_start/hci_stop；插件子进程阻塞FIFO并拖住applet。用户级org.blueman.general plugin-list已由[]改为["!KillSwitch"]，原值备份在车端蓝牙修复目录blueman-plugin-backup.json；结束阻塞的用户子进程、重启用户applet后，D-Bus QueryPlugins正常且不含KillSwitch，PowerManager保留。未修改厂商系统脚本，仍待sudo安装复测；此插件调整尚不能替代实际系统扫描验收。第五轮原始报告归档到本机work/vehicle-bluetooth-repair/attempt5-result.json，附近设备地址不上传。
 实际结果逐项记录到 `docs/车辆到场模块检查.md`，不得将准备或连接尝试写成验证通过。
 
 ## 新窗口接手入口（2026-09-16，上传完成后）
