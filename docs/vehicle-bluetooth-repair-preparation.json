@@ -1,0 +1,105 @@
+{
+  "date": "2026-09-16",
+  "source_repository": "https://gitee.com/spacemit-buildroot/rtk_hciattach",
+  "source_commit": "9ce1210f63cce2da2ee7a347fa7f71cfb764aa20",
+  "source_modified": false,
+  "firmware_repository": "https://gitee.com/spacemit-buildroot/buildroot-ext",
+  "firmware_commit": "8b02530330c1cd9bc1eea8f52af1d433d2195a4e",
+  "firmware_paths": [
+    "board/spacemit/k1/target_overlay/lib/firmware/rtlbt/rtl8852bs_fw",
+    "board/spacemit/k1/target_overlay/lib/firmware/rtlbt/rtl8852bs_config"
+  ],
+  "compiler": "Zig 0.15.2 clang frontend on macOS",
+  "target": "riscv64-linux-gnu.2.38",
+  "flags": [
+    "-O2",
+    "-fPIE",
+    "-pie",
+    "-Wall"
+  ],
+  "build_warning": "one unused get_unaligned_be16 function in unchanged vendor source",
+  "elf": {
+    "elf_class": 64,
+    "endianness": "little",
+    "machine": 243,
+    "architecture": "riscv64",
+    "elf_type": 3,
+    "entry": 24164,
+    "flags": 5,
+    "rvc": true,
+    "abi": "lp64d",
+    "pie": true,
+    "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+    "needed": [
+      "libc.so.6"
+    ],
+    "rpath": [],
+    "glibc_versions": [
+      "GLIBC_2.27",
+      "GLIBC_2.33",
+      "GLIBC_2.34",
+      "GLIBC_2.38"
+    ],
+    "maximum_glibc": "2.38",
+    "version_requirements": [
+      {
+        "library": "libc.so.6",
+        "version": "GLIBC_2.27"
+      },
+      {
+        "library": "libc.so.6",
+        "version": "GLIBC_2.33"
+      },
+      {
+        "library": "libc.so.6",
+        "version": "GLIBC_2.34"
+      },
+      {
+        "library": "libc.so.6",
+        "version": "GLIBC_2.38"
+      }
+    ],
+    "schema_version": 1,
+    "glibc_baseline": "2.38",
+    "file": "rtk_hciattach-riscv64",
+    "sha256": "1a807e8408bd27212c7414b91072591c2168ddcd55cebf338f6afbbf150f65d8",
+    "size_bytes": 419232,
+    "passed": true,
+    "errors": []
+  },
+  "vehicle_list_supported_protocols_exit": 0,
+  "vehicle_list_supported_protocols": [
+    "any",
+    "rtk_h4",
+    "rtk_h5"
+  ],
+  "vehicle_ldd_missing": false,
+  "system_install_completed": false,
+  "hardware_scan_validation_completed": false,
+  "pending": "user sudo retry after target-header correction",
+  "files": {
+    "rtk_hciattach-riscv64": "1a807e8408bd27212c7414b91072591c2168ddcd55cebf338f6afbbf150f65d8",
+    "firmware/rtlbt/rtl8852bs_fw": "295488bd7d494e656d4c7941ddd45abde60363f31f90015f411e6cfa409dec74",
+    "firmware/rtlbt/rtl8852bs_config": "efa8915db59c5bc30aaa23e1f264656bbf425fcaf091db0954c27752a1d8f7a0"
+  },
+  "first_attempt": {
+    "error": "Cannot set initial baud rate: EINVAL",
+    "cause": "Bundled Zig termios headers define B115200=115200; vehicle GLIBC2.39 expects encoded B115200=4098",
+    "system_install_completed": false
+  },
+  "header_overlay": "Target vehicle termios.h and bits/termios*.h, included via -I before bundled headers",
+  "header_sha256": {
+    "termios.h": "8f1d409c2d21e6c1a140443d7c17b87fc9f8d90cdd19a0b0b6032fa567222e49",
+    "bits/termios-tcflow.h": "4b859f3f7b97f2534fcd2e89e5e25ebeb91c39bd0abd75bc3d5aa812ded718e9",
+    "bits/termios-c_lflag.h": "6c550c5afe209cce3ea88b7caae7931f2e42408a74ceab56297df40718b0abf5",
+    "bits/termios-struct.h": "1e3ecaecb82ea06503e486c815fae09785e7f6529fc7dbf34fc5ddd32670afa3",
+    "bits/termios-c_iflag.h": "490c3c882c1df048d3e924586986b36abcbb6a389290f206c223d09322a73a21",
+    "bits/termios-misc.h": "04009f6c6cf4d3371cab73d1ef0a85bf09279777928956242b0180407cc51ab2",
+    "bits/termios-c_oflag.h": "3a0d7712bc87d0d908edad50eb7c0c417ec8714cc21af7970631360275026d0a",
+    "bits/termios-c_cc.h": "4414ed57966843e0114a112bc96fcca5e6109aa202cf98237e107dc05f8604ec",
+    "bits/termios-c_cflag.h": "456ece5bd574c208694df815157863ea9bcbbe630bcf6f58925ec5d83e562b84",
+    "bits/termios.h": "3d4886643c157d693a83093e819cc26db429b645f3e858830c29fe370e215da6",
+    "bits/termios-baud.h": "1d8649bed983243b0d08ff8b25972d1ff76452383dca8b795e1a02acfc8e0669"
+  },
+  "corrected_probe_vehicle_result": "B115200=4098; cfsetospeed and cfsetispeed both return 0, match native gcc build"
+}

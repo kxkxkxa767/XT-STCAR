@@ -17,6 +17,7 @@
 用户随后明确要求更新车端ONNX Runtime：已将官方SpacemiT 2.0.6（ORT1.24.2+spacemit.a1）安装到 `~/.local/opt/xt-stcar/onnxruntime/spacemit-2.0.6`，`current`指向它；`~/.local/bin/xt-stcar`为工程默认启动入口，配置 `~/.config/xt-stcar/runtime.env`。已实测API22、安装目录及启动入口两次真实图片推理、新登录PATH可见。系统原生1.18.1/Python1.18.0保留，当前sudo需密码，未修改系统包/libc、未启用EP。详情 `docs/车端ONNXRuntime升级.md`；不要把用户级安装写成系统/Python全局升级。
 用户继续要求车上能更新的都更新：已在用户审计目录重新获取并验证当前Bianbu2.2配套源全部索引（29.1MB，apt update退出0）。普通upgrade模拟为0升级/0新增/0删除/0保留；dist-upgrade模拟却删除当前linux-image-6.6.63并降级bianbu-esos0.0.10→0.0.9，未执行任何系统包事务。不得建议直接full-upgrade/dist-upgrade。系统sudo仍需密码，无需为零更新额外授权；不改源/优先级/系统索引/libc/内核。发现realtek-bt.service自9月15日开机即bring up hci failed，当前无HCI，软硬阻断均否，尚未修复。详见 `docs/车端系统更新检查.md`。
 用户随后要求验证蓝牙：BlueZ主服务运行，但无HCI控制器，实际限时扫描报No default controller available（命令退出0不代表通过）。厂商8852bs分支需要rtk_hciattach，标准程序路径和dpkg文件记录均缺失；这是明确初始化阻碍。内核HCI UART/H4/H5已注册、rfkill未阻断，不判硬件损坏。只验证，未安装工具/重启服务/配对，见 `docs/vehicle-bluetooth-validation.json`。
+用户授权补齐蓝牙，并要求先确认可以再装系统：已取得官方rtk_hciattach固定源码及RTL8852BS固件/配置，Mac交叉编译PIE/GLIBC2.38、车端-l/ldd通过。已部署 `~/xt-stcar-tests/20260916-bluetooth-repair/repair.py`，等待用户在SSH执行sudo；脚本临时mount namespace内验证控制器及收到扫描事件才安装三文件，安装后复测失败则回退。第一轮临时测试因Zig串口头文件B115200常量与车端GLIBC2.39不匹配失败，未安装系统；已用车端termios头文件-I覆盖重编译，无设备C探针对照通过，修正版hash为1a807e8408bd27212c7414b91072591c2168ddcd55cebf338f6afbbf150f65d8，等待用户sudo重试。尚未实际扫描成功或安装系统。见 `docs/车端蓝牙修复.md`，不能把准备完成写成修复成功。
 实际结果逐项记录到 `docs/车辆到场模块检查.md`，不得将准备或连接尝试写成验证通过。
 
 ## 新窗口接手入口（2026-09-16，上传完成后）
