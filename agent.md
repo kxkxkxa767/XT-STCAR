@@ -4,6 +4,60 @@
 开始前完整读取本文件，再读 [上传规范](上传规范.md)、[README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
 `AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。
 
+## 新窗口接手入口（2026-09-16，上传完成后）
+
+**本节优先于下方历史轮次和 `work/` 内旧暂停快照。请完整读完本文件再继续，不要重新从交叉编译环境安装开始。**
+
+- 工程根目录 `/Users/yuhaojin/Documents/XT-STCAR`，分支 `main`。上一轮实现与交付提交为
+  **`ab323a277ca1aa1bc195c221333a1948a24b8e35`**（`新增观测驱动任务与局部导航并归档验证`），
+  已成功推送；上传后本地 HEAD 与 GitHub `refs/heads/main` 完全一致。之后的交接文档提交不改变这个实现基线，
+  不要把上述实现提交号硬当作最新 HEAD。新窗口修改前仍先 fetch、核对并按上传规范同步。
+- 当前没有待合入的代理补丁或待上传的源码；本机 core/含模型两包也已生成并独立核验。
+  用户原件 `XT-STCAR_a623638_review.zip` 与根目录比赛规则 PDF 故意保持未跟踪，不删除、不暂存。
+  新窗口不能依赖旧窗口的子代理、变量或命令会话；以磁盘文件和 Git 为准。
+- 当前目标仍是**任务顺序固定、元素位置在线估计、持续更新短目标**。默认 PP，LQR 为实验选项；
+  保留旧 Fixed 模式作回归，不能退回用场景真值生成在线必经坐标。最新方案正文已保存在
+  `work/online-mission/new-plan.txt`，无需仅因换窗口重新获取历次分享或重读所有旧复核包。
+- **构建交付完成，在线比赛功能尚未验收。** 最终 Rust 565 通过、3 项按设计忽略；example 2/5/2、Python 37 通过，
+  fmt/clippy、双 RISC-V GLIBC 2.38 交叉链接与 ELF 检查通过，150 份编译输入已核对。旧固定目标八场 8/8 通过原性能门。
+  在线最终 19 场仅 4 个预声明缺失场景符合安全停止检查，正常整场完成 **0/15**；14 场证明两桶后缺灯区几何，
+  另三个小场在第一桶尚未通过。不能把“测试通过、上传完成”写成“比赛已经跑通”，也不能说只剩实车验证。
+
+### 下一步从哪里继续
+
+1. 先读 [在线任务说明](docs/在线元素驱动任务.md)、[验证报告](docs/online-mission-validation.json)、
+   [最终矩阵](docs/online-mission-matrix.json) 和 [交付报告](docs/online-mission-delivery.json)。
+   [开发实验](docs/online-mission-experiments.json) 保留 31 条历史/最终记录，不覆盖旧失败以追成绩。
+2. 若用户要求继续修实现，优先补齐 **小场异步 planned=33260 ms、source=33200 ms、delivery=33269 ms** 的完整首拒快照。
+   已知该帧因 `boundary_changed` 重建，恢复搜索 `open_empty`，6 节点/5 展开/25 次 primitive 尝试，
+   terminal 2 solver/2 iteration/48 samples，预算未耗尽且 rollout=0；尚未进入 Drive 的 `permits_command`。
+   提示 cap≈0.23443 高于可执行下界≈0.19341，不是 `empty_speed_interval`。
+   **缺少该时刻完整 Navigator before/cache、terminal seed 和障碍快照**，所以还不能精确重放或证明物理无解。
+   下次应在隔离工作副本捕获 33180/33260/33380 ms 的真实输入、缓存、共享终端账和各层首个拒绝原因，
+   建立重放 fixture；不要从最终位姿重造缓存，也不要拿之后 Stop 回舵的次生失败继续堆连接候选。
+3. 小场同步的新首个来源包络拒绝在 **33600 ms**：前段已连续降速，新观测线几何下假设 cap≈0.10781 可证，
+   但真实 source 速度≈0.13711，最终门仍必须使用真实/历史速度而拒绝。不能把较低目标速度当作已经实现的车速。
+   上述同步/异步定点捕获来自末轮工作副本，完整最终场结果另见正式矩阵；不得混用不同运行的时刻或源码证据。
+4. 灯区是另一问题：灯色不提供停车区域距离，官方真实停车/终点可见图案仍未确认；当前白条协议只是显式实验协议。
+   保留正几何期限与负约束，不能靠延长 TTL、猜距离、场景真值或删除停车门让整场通过。
+   小场仍需算法/几何诊断，不能把它归入灯区信息缺口。
+
+### 本机证据与复跑入口
+
+- `work/online-mission/source-speed-hint-independent-review.md`：当前来源降速提示的独立审查与首拒证据边界。
+- `work/online-mission/sixth-small-review/source-hint-sync-capture/gate-33600.json`、
+  `work/online-mission/sixth-small-review/source-hint-async-capture/hint-33260.json`：真实来源门与异步提示快照。
+- `work/online-mission/sixth-small-review/source-hint-sync-trace.jsonl`、`source-hint-async-trace.json`（同目录）：对应定点捕获的运行记录。
+- `work/online-mission/final-full-matrix.json`、`work/final-matrix-run.json`：最终原始结果及运行前后源码/二进制/输出凭证；
+  `work/online-mission/final-independent-classification.json`：各场最后非 fault 行的真实原因。
+- `work/online-mission/final-independent-review.md` 保存各次独立复核；`INTEGRATION-HANDOFF.md`（同目录）顶部已标交付完成，
+  下方的暂停、未构建、未上传内容均为历史。`work/` 被 Git 忽略，只在这台 Mac 上可用；换电脑应以仓库报告/fixture为准，缺材料须重新真实捕获。
+- 小场现状复跑：在工程根目录执行 `cargo run --release --locked --offline -p xt-stcar-robot-runner --example online_matrix -- both small_5x4`。
+  目前返回非零是如实保留失败，不能改预期将其转成通过。正式复跑/构建步骤见下方说明与命令手册。
+
+本次交接仅改文档，不重跑或替换上一轮源码、测试、二进制和交付包。继续开发时按实际改动重验；
+暂不接车、不读视频、不动 MCU/车端 libc、不执行目标程序或模拟器的边界继续生效。
+
 ## 当前交接快照（2026-09-16）
 
 ### 用户目标与授权
@@ -28,8 +82,8 @@
 
 ### 当前整合状态（2026-09-16，最新）
 
-- 用户已继续统一整合与复核；本轮源码、最终矩阵与本地交叉构建已完成整合，代码在 main。
-  提交及远端同步状态以 Git 实查为准；构建成功和本地交付不表示已推送，不替用户修改模型设置。
+- 用户已继续统一整合与复核；本轮源码、最终矩阵与本地交叉构建已完成整合，实现提交 `ab323a2` 已推送 main。
+  上传后已核对远端 HEAD；后续文档提交和最新同步状态仍以 Git 实查为准，不替用户修改模型设置。
 - 冻结源码后的最终完整矩阵：**4/19** 符合预声明检查；通过的只是 missing_markers 与 missing_cones 各同步/异步，
   正常场 **0/15 完成**。独立裁判共14场证明两桶（12个正常场、2个缺标记场），随后都在 ApproachLight
   因看见灯但缺确认的停车区几何而停止。三个小场均未通过第一桶：同步46.200s、异步43.863s、扰动异步45.045s结束。
@@ -134,7 +188,7 @@
   原车体、限速、净空、3s/300ms、普通停车10s、节点40000、终端256/1024/65536保持。
   几何TTL1800ms仍保留；新增雷达维护不能新建颜色身份或增加视觉确认，并有独立有限语义年龄。
 - README、`docs/在线元素驱动任务.md`、命令手册已同步最终入口与结果；正式 `online-mission-*` 矩阵/build/validation已归档。
-  两包及核验以包外delivery报告为准，提交和远端同步状态以Git实查为准，不能据此推断已推送。
+  两包及核验以包外delivery报告为准，实现提交 `ab323a2` 已推送并核对远端；后续状态以Git实查为准。
   本轮继续直接main、GLIBC2.38本地交叉基线、暂不接车、不读视频、不执行RISC-V/模拟器。
 
 ### 赛场规格自适应（2026-09-15，历史）
