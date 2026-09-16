@@ -25,16 +25,28 @@
 
 ### 下一步从哪里继续
 
+0. **最新诊断进展（2026-09-16，本次接手）**：已补齐下述 33180/33260/33380 ms 的真实原始输入、
+   Navigator 边界更新前/plan 前后全部缓存、terminal seed、障碍与共享账本；夹具为
+   `crates/robot-core/src/navigation/fixtures/online33260_first_rejection.json`。
+   详见 [小场异步首拒快照](docs/小场异步首拒快照.md) 和 [本次验证](docs/online-first-rejection-validation.json)。
+   两套独立源码/target 的原版与观测版均保留小场失败，439 条计划及全部功能 JSON 逐值一致（仅主机耗时不同）；
+   固定提交复采脚本又生成了逐字节相同的夹具。生产控制算法没有修改，原在线矩阵与部署包未替换。
+   33260 ms 的17次运动段拒绝均定位到有限停车线侧带：15个搜索段端点车体余量小于40mm净空，
+   两次终端尝试约42.802mm，低于原净空加起步制动预留44.333mm；即使将扫掠管半径降至0，这些候选也不能通过。
+   本轮完整 Rust 测试 **567通过、3忽略**，fmt/clippy通过；与上次交叉构建证据分开记录。
+   用户追加的7组14份实验案例已读，并直接核对出厂ZIP；见 [实验案例对照](docs/实验案例对照.md)。
+   RPP固定前视和Smac/MPPI运动学候选可供后续参考，但教程存在关闭碰撞检测、配置版本不同和默认配置文件缺失，不能照搬参数。
+   **下一步检查同约束下的局部目标/路线形状、终端初猜及候选覆盖，不再重复补抓，也不继续仅靠收紧扫掠管证明。**
+   这不是物理无解证明，不删除原净空、起步预留、source/history/lease 门。同步33600及灯区正几何缺口仍另行处理。
 1. 先读 [在线任务说明](docs/在线元素驱动任务.md)、[验证报告](docs/online-mission-validation.json)、
    [最终矩阵](docs/online-mission-matrix.json) 和 [交付报告](docs/online-mission-delivery.json)。
    [开发实验](docs/online-mission-experiments.json) 保留 31 条历史/最终记录，不覆盖旧失败以追成绩。
-2. 若用户要求继续修实现，优先补齐 **小场异步 planned=33260 ms、source=33200 ms、delivery=33269 ms** 的完整首拒快照。
+2. 原接手待办（现已由第0项完成捕获）：**小场异步 planned=33260 ms、source=33200 ms、delivery=33269 ms** 的完整首拒快照。
    已知该帧因 `boundary_changed` 重建，恢复搜索 `open_empty`，6 节点/5 展开/25 次 primitive 尝试，
    terminal 2 solver/2 iteration/48 samples，预算未耗尽且 rollout=0；尚未进入 Drive 的 `permits_command`。
    提示 cap≈0.23443 高于可执行下界≈0.19341，不是 `empty_speed_interval`。
-   **缺少该时刻完整 Navigator before/cache、terminal seed 和障碍快照**，所以还不能精确重放或证明物理无解。
-   下次应在隔离工作副本捕获 33180/33260/33380 ms 的真实输入、缓存、共享终端账和各层首个拒绝原因，
-   建立重放 fixture；不要从最终位姿重造缓存，也不要拿之后 Stop 回舵的次生失败继续堆连接候选。
+   当时缺少完整 Navigator before/cache、terminal seed 和障碍快照；本次已真实补采并建立回放 fixture，
+   仍不能证明物理无解。不要从最终位姿重造缓存，也不要拿之后 Stop 回舵的次生失败继续堆连接候选。
 3. 小场同步的新首个来源包络拒绝在 **33600 ms**：前段已连续降速，新观测线几何下假设 cap≈0.10781 可证，
    但真实 source 速度≈0.13711，最终门仍必须使用真实/历史速度而拒绝。不能把较低目标速度当作已经实现的车速。
    上述同步/异步定点捕获来自末轮工作副本，完整最终场结果另见正式矩阵；不得混用不同运行的时刻或源码证据。
@@ -55,7 +67,7 @@
 - 小场现状复跑：在工程根目录执行 `cargo run --release --locked --offline -p xt-stcar-robot-runner --example online_matrix -- both small_5x4`。
   目前返回非零是如实保留失败，不能改预期将其转成通过。正式复跑/构建步骤见下方说明与命令手册。
 
-本次交接仅改文档，不重跑或替换上一轮源码、测试、二进制和交付包。继续开发时按实际改动重验；
+上一次交接仅改文档；本次补充主机捕获脚本、真实fixture及测试，未修改生产算法或替换上一轮交付包。继续开发时按实际改动重验；
 暂不接车、不读视频、不动 MCU/车端 libc、不执行目标程序或模拟器的边界继续生效。
 
 ## 当前交接快照（2026-09-16）

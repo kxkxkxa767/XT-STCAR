@@ -53,6 +53,8 @@ RollingLocal 原到达区域和零目标曲率候选均失败后，可同账尝�
 本轮实际成功、失败和限制以 `docs/online-mission-*` 正式报告为准，旧场地矩阵不作为在线验收。
 开发记录中的 `OpenEmpty` 若发生在 rollout 之前，只能说明原约束下有界规划未找到路径；不能据此声称几何无解、节点耗尽或已经被执行门拒绝。最终在线矩阵如实保留失败，局部改善和旧八场恢复均不作为在线通过结论。
 
+2026-09-16 接手诊断已补齐小场异步 33.180 / 33.260 / 33.380 s 的真实输入和完整导航缓存，见[首拒快照](docs/小场异步首拒快照.md)。原版与隔离观测版的 439 条计划及整场功能字段一致；三帧夹具可直接回放。33.260 s 的17次拒绝定位到有限停车线侧带：当前候选的端点车体余量已不足原净空或净空加起步预留，仅缩紧扫掠管不能解决。生产算法未修改，小场仍失败；后续检查原约束下的目标、路线形状和候选覆盖，不能据此判断物理无解。
+
 ## 赛前测量后生成固定布局（保留的历史模式）
 
 已增加 Rust 场地规格模块，输入实际长宽、上下直道宽度/跨度、锥桶中心及灯前区域，就能生成发车区、搜索区、绕桶通过点和终点。
@@ -642,6 +644,7 @@ scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
 | `scripts/export_yolo26.py`、`validate_yolo26.py`、`verify_preprocess.py` | 模型导出、静态校验及预处理对照 |
 | `scripts/onnx_worker.py` | 仅供显式 Python 参考后端的一次性推理工作进程；配置、模型和张量受实际读取量限制 |
 | `scripts/review-motion-ablation.py`、`scripts/review-motion-ablation/` | 固定旧提交、检查顺序补丁和只读观察器；每个变体独立主机编译目录，复现三版本消融 |
+| `scripts/capture-online-first-rejection.py`、`scripts/capture-online-first-rejection/` | 固定提交的两份独立主机构建，补采小场异步首拒的原始输入/缓存/终端账；核对439条计划一致并保留比赛失败 |
 | `scripts/build-riscv.sh`、`inspect_elf.py` | fmt/test/clippy、两程序交叉构建、独立 ELF/GLIBC 报告和源码哈希 |
 | `scripts/delivery.py`、`package.sh`、`upload.sh` | 白名单打包与哈希核验；上传默认 dry-run，显式新账号/IP/release 目录 |
 | `scripts/check-vehicle.sh` | 车端系统/设备/服务的只读检查脚本，不启动驱动或运动 |
@@ -707,3 +710,5 @@ eMMC 5.1 策略以正常运行/比赛为先：计算与队列在内存，默认�
 进一步阅读：[机器人事件与状态机](docs/机器人模块.md)、[厂商协议适配](docs/厂商协议Rust适配.md)、
 [N10 协议依据](docs/N10协议依据.md)、[底盘标定映射](docs/底盘标定映射.md)、[YOLO26 接口](docs/YOLO26接口.md)、
 [部署包使用说明](docs/部署包使用说明.md)、[官方整车资料核对](docs/无人车2026资料核对.md)、[资料索引](资料/资料索引.md)。
+
+官方 `3.实验案例` 的14份文档与原始出厂源码对照见 [实验案例对照](docs/实验案例对照.md)：记录可借鉴的运动学候选思路、教程与ZIP配置差异，以及不能直接搬入比赛控制的参数。

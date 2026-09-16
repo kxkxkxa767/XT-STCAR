@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-16",
+  "document_directory": "3.实验案例",
+  "scope": "All 14 DOCX text/table contents; 19 distinct screenshots from five navigation experiment documents; no video content. Selected source members read directly from original ZIP.",
+  "documents": [
+    {
+      "source": "实验三十 RPC规划算法/实验文档.docx",
+      "sha256": "c2141af9a9185afaf1669070db7722c4936c48b2212e6d3389b059e0997d105c",
+      "chars": 2977
+    },
+    {
+      "source": "实验三十 RPC规划算法/教案.docx",
+      "sha256": "c3c457a6e9b2c2087ad0698541968c2bbd958f2c6d4b45874416b475bb45ade8",
+      "chars": 3152
+    },
+    {
+      "source": "实验二十一 单点导航实现及调参思路/实验文档.docx",
+      "sha256": "b12958e490dbaff281f1c602c773ddb40f0c0d8c8d30e9f06d6c658b588e0eb9",
+      "chars": 1974
+    },
+    {
+      "source": "实验二十一 单点导航实现及调参思路/教案.docx",
+      "sha256": "8717f233d5cef4c1f72772394ca1aa131dcb9dfb64e792aeb899b2133a5aa880",
+      "chars": 2234
+    },
+    {
+      "source": "实验二十三 串口绑定与数据可视化/实验.docx",
+      "sha256": "244b21a2cdba4bb4273db38a031a4305d931609d54e0bdded6cb40b5ae67c902",
+      "chars": 2605
+    },
+    {
+      "source": "实验二十三 串口绑定与数据可视化/教案.docx",
+      "sha256": "788fc6a7311221859dea9e3d381f90722d3c8f41ef56cb01b0eeff42ecc04b2b",
+      "chars": 1742
+    },
+    {
+      "source": "实验二十九 局部规划算法切换/实验文档.docx",
+      "sha256": "4214afcc2bc3f115ee88d62164aa4e806c97730b9b17979f3e08f8a7f993f597",
+      "chars": 4854
+    },
+    {
+      "source": "实验二十九 局部规划算法切换/教案.docx",
+      "sha256": "a4c353336e91e72c08938ee344bb3e90482ca3436ee28f2ad967bf129f81cee0",
+      "chars": 5043
+    },
+    {
+      "source": "实验二十二 多点导航实现及调参思路/实验文档.docx",
+      "sha256": "8d356c0362c62a77c5909f4d175d815716a55e2f8206f1da53ddc2e38dda4319",
+      "chars": 327
+    },
+    {
+      "source": "实验二十二 多点导航实现及调参思路/教案.docx",
+      "sha256": "a65ad151f4637b89a63df53d91d8adc33e83ba1ad99800dc00077fc65cbd0dcd",
+      "chars": 502
+    },
+    {
+      "source": "实验二十八 全局路径规划算法切换/实验文档.docx",
+      "sha256": "f9599b3c9b16ca64e9580e37f83bc49f5b79729166969e085b54311d8ca67d96",
+      "chars": 3024
+    },
+    {
+      "source": "实验二十八 全局路径规划算法切换/教案.docx",
+      "sha256": "03b365669a238ae64caee3c9d86387da8cd76b2b1d232fb4879b58822efbacde",
+      "chars": 3186
+    },
+    {
+      "source": "实验二十六 建图算法讲解与切换/实验.docx",
+      "sha256": "774168d6e8ae561207a5e3fbf795949edf6049fb0b3df954cfbb1f16033a075c",
+      "chars": 3481
+    },
+    {
+      "source": "实验二十六 建图算法讲解与切换/教案.docx",
+      "sha256": "e930469f8af3b11a9302419a56556db87ba8198f8a5282118d9405d217166b36",
+      "chars": 2524
+    }
+  ],
+  "factory_archive": {
+    "source": "4.出厂源码/racecar.zip",
+    "sha256": "9bde1aef4721ffbc11e2fc904c118bb3c9d9272871cb71c75775d46700d0169f",
+    "members": [
+      {
+        "member": "racecar/src/racecar/config/dwb.yaml",
+        "sha256": "22fd31c7d13f6945e5a4632b261c22fc4fe90f0dfb4f6a9a8bfb7fa108ee5eae"
+      },
+      {
+        "member": "racecar/src/racecar/config/nav_mppi.yaml",
+        "sha256": "82b482e57aedebec3c0e784a00c97e35cddf389696125177160e9f580e1490a0"
+      },
+      {
+        "member": "racecar/src/racecar/config/nav_Smac.yaml",
+        "sha256": "0285fba9f9faf78652c95c096e65b9bf5f62f0d60fc1e3819fcddf0ee0f43c9f"
+      },
+      {
+        "member": "racecar/src/racecar/launch/Run_nav.launch.py",
+        "sha256": "186c3fc774b19ae67a1cc5f2dd65a85f7e19c8f20e410a80cb815393456a9c28"
+      },
+      {
+        "member": "racecar/src/racecar/scripts/go.py",
+        "sha256": "b562a5990481cc125b8afae45b460b3f3124f371e9cf5ce022197f04eed1a70d"
+      }
+    ]
+  }
+}

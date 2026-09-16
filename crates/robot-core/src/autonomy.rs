@@ -96,6 +96,7 @@ impl Rect {
 /// With a lateral interval, only the part behind the line in that interval is
 /// forbidden. This is a navigation domain constraint, not a sensor obstacle.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[cfg_attr(test, derive(Deserialize))]
 pub struct HalfPlane {
     origin: Point2,
     normal: Point2,

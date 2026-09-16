@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod candidate_pipeline;
 mod continuity;
+#[cfg(test)]
+mod first_rejection_replay;
 use continuity::{CachedTerminalSeed, terminal_connection};
 #[cfg(test)]
 mod oriented_region_advance;
