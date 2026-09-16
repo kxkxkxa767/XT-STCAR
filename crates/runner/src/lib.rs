@@ -13,6 +13,8 @@ pub mod host_clock_simulation;
 pub mod input;
 pub mod laser_pose;
 pub mod navigation_diagnostics;
+pub mod online;
+pub mod online_simulation;
 pub mod perception;
 pub mod phase_statistics;
 pub mod simulation;

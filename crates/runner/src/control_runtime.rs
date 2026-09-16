@@ -1097,6 +1097,13 @@ fn valid_snapshot(input: &SensorSnapshot, epoch: Timestamp, now: Timestamp, max_
         && input.scan.ranges_m.capacity() <= 1440
         && road.observation.cones_body_m.len() <= 256
         && road.observation.cones_body_m.capacity() <= 256
+        && road.elements.as_ref().is_none_or(|elements| {
+            elements.captured_at == road.observation.captured_at
+                && elements.frame_id == road.observation.frame_id
+                && elements.observations.len() <= xt_stcar_robot_core::local_world::MAX_ELEMENTS
+                && elements.observations.capacity()
+                    <= xt_stcar_robot_core::local_world::MAX_ELEMENTS
+        })
         && road.image_width_px > 0
         && road.image_height_px > 0
         && u64::from(road.image_width_px) * u64::from(road.image_height_px) <= 64_000_000
@@ -1115,12 +1122,14 @@ fn changed_sample(new: &SensorSnapshot, old: &SensorSnapshot) -> bool {
         || (new.scan.captured_at == old.scan.captured_at && new.scan != old.scan)
         || (new_road.observation.captured_at == old_road.observation.captured_at
             && (new_road.observation != old_road.observation
+                || new_road.elements != old_road.elements
                 || new_road.image_width_px != old_road.image_width_px
                 || new_road.image_height_px != old_road.image_height_px))
         || (new.at == old.at
             && (new.pose != old.pose
                 || new.scan != old.scan
                 || new_road.observation != old_road.observation
+                || new_road.elements != old_road.elements
                 || new_road.image_width_px != old_road.image_width_px
                 || new_road.image_height_px != old_road.image_height_px))
 }

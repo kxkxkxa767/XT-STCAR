@@ -1,5 +1,5 @@
 XT-STCAR：Mac 与 Muse Pi Pro 车端命令手册
-维护日期：2026-09-14
+维护日期：2026-09-15
 适用工程：/Users/yuhaojin/Documents/XT-STCAR
 
 本文件是操作用法，不表示这些命令已经在车端执行。当前暂不接车。
@@ -246,8 +246,8 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
 [预期] 两算法的横向/航向误差及失败指标；这是跟踪层合成实验，
   不代表车端帧率。第二条在同一完整模拟比赛中比较两算法，并保留失败摘要；
   它正常退出不表示两算法都完成比赛，要看各自 summary.completed/fault。
-  LQR仍为实验选项，默认Pure Pursuit保持不变；当前赛场适配见
-  docs/赛场规格自适应.md，v9历史说明见docs/路径连续性与性能回归.md；各算法须分别看completed和fault。
+  LQR仍为实验选项，默认Pure Pursuit保持不变；固定布局历史见docs/赛场规格自适应.md，
+  本轮在线模式见第十二节及docs/在线元素驱动任务.md；各算法须分别看completed和fault。
   docs/motion-v6-competition-comparison.json及motion-v5/v4/v3/v2、motion-control均保留历史，
   不当作当前源码的验收结果。
   summary.first_navigation_failure 为首个非预期阻塞/故障窗口，最多8帧前文、
@@ -362,7 +362,7 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
 
   新增导航/阶段诊断JSON省略全默认对象与None；缺失表示零工作/未搜索/无约束或失败，有值完整保留。
   以下为v9历史结果，说明见docs/路径连续性与性能回归.md，报告为docs/motion-v9-*。
-  当前赛场适配结果见本手册第11节、docs/赛场规格自适应.md及docs/field-adaptation-*。
+  固定布局历史见第十一节及docs/field-adaptation-*；在线模式见第十二节和docs/online-mission-*。
   v9的8/8交叉工况完成并通过试改前固定的性能门，最终证书/曲率slew采用拒绝和终端总预算耗尽0。
   固定顺序为 [60,80]×[3,7,9]、[60,80]×[5,9,11]、[40,60]×[3,7,9]、[40,60]×[5,9,11]：
   PP75.467/54.985/56.443/54.449秒；LQR54.663/55.265/54.249/53.445秒。
@@ -571,7 +571,9 @@ Mac 已完成的测试、交叉构建和模型验证，以 README、agent.md 和
   每行顶层必须为 at、pose、scan、road；不接受手工 Motion 字段。
   pose 是 PoseEstimate（位姿、实测速度/角速度、质量、frame、capture 时间）；
   scan 是 LidarSample（完整配置束数、范围、角度、capture 时间、雷达 frame）；
-  road 是 RoadFrame（observation、图像宽高）；observation 使用车体坐标。
+  road 是 RoadFrame（observation、图像宽高，以及可选elements）；observation 使用车体坐标。
+  在线控制器要求elements存在且与pose/scan/observation同刻，元素数量与发布容量最多16；
+  旧控制器可以没有elements。元素需真实几何、来源、误差和frame，不用人工目标坐标代替。
   at 使用同一启动纪元毫秒且严格递增，测量时间、年龄、frame 与配置一致。
   当前激光障碍投影要求 scan.captured_at 与 pose.captured_at 完全相同；
   斑马线几何锁定和视觉锥桶投影也要求 road.observation.captured_at 与位姿同刻。
@@ -941,7 +943,7 @@ JSON
 
 [预期] 本次文件已提交；本地与远端提交哈希一致。忽略目录中的本机构建产物仍留本地。
 
-十一、按现场尺寸生成场地配置（Mac，离线模拟）
+十一、赛前测量后生成固定布局（Mac，保留的历史模式）
 
   原7×5米简化场景的8场矩阵是时序回归，并非8种尺寸。
   新模块支持赛前填入米制实测规格，启动前编译并冻结；它不会自动巡视测场。
@@ -971,7 +973,7 @@ JSON
   JSON重新读取允许的只是浮点末位舍入误差，厘米级修改仍拒绝。
   修改实测规格后须重新编译并重新创建控制器；运行中不会悄悄移动目标。
   模拟完成看completed/fault、实际停稳与绿灯确认、全车终点和结束状态，不只看进程生成了文件。
-  当前没有自动测全场、灯距离、终点世界坐标或重分左右锥桶身份的模块，仍暂不接车。
+  该模式不会自动测全场或运行中重新认桶；新在线模式另见下一节，真实灯前/终点标记仍未确认。
 
 [完整场地矩阵] 固定9种布局×同步/异步×PP/LQR，失败记录不会被删除：
   cargo run --release --locked --offline -p xt-stcar-robot-runner --example field_matrix -- both all both > work/field/matrix.json
@@ -985,7 +987,192 @@ JSON
   异步功能钟等待worker会冻结，这不是车端实时性或WCET验证。
   默认不增加每tick落盘；可选诊断保持有界，比赛控制不为eMMC寿命降频。
 
-十二、结果判断与资料入口
+十二、在线元素驱动任务（Mac，离线模拟）
+
+  任务顺序固定，锥桶、斑马线、停车区和终点几何由传感器观测更新。
+  FieldSpec只供模拟器摆物体、生成RGB/雷达与裁判真值；不同场地使用逐值相同的在线控制器配置。
+  截至2026-09-16，冻结源码后的最终矩阵4/19符合预定检查，正常场完成0/15，在线比赛闭环尚未验收。
+  通过项仅缺标记、缺锥桶各同步/异步安全停止；14场裁判证明两桶后仍在ApproachLight因有灯色而缺确认停车区几何停止。
+  三个小场均未通过第一桶，同步46.200秒、异步43.863秒、扰动异步45.045秒结束；不能把所有失败都归为灯区缺信息。
+  最新legacy-integration旧八场8/8完成、原性能门通过；九项关键指标、序列化输出计数和八项单因素比较与v9精确一致，
+  未声称逐命令或完整轨迹逐点相等，也不等于在线比赛验收。
+  最终Rust工作区565通过、0失败、3项按设计忽略；实际日志另记录tracking/timing/online example为2/5/2通过，Python交付37通过。
+  fmt、all-targets clippy -D warnings、双RISC-V链接及ELF检查通过，核对150份编译输入；例程/Python日志不另推断源码同一性。
+  目标基线GLIBC2.38、实际最高引用2.34；xt-stcar为1,217,056字节/libc，robot为2,376,448字节/libm+libc。
+  矩阵运行前后源码及实际命令/可执行文件/原始输出哈希已核对；本轮没有目标执行或接车。
+  两包路径、哈希与核验见包外docs/online-mission-delivery.json；Git提交和远端同步状态以实查为准。
+  旧固定布局35/36不作为在线验收，实际成功和失败见online-mission-*正式报告。
+  原PP、运动限制、完整车体、制动和异步采用检查保留；未知空间不作为空地，仍无电机输出。
+
+12.1 创建场景、编译并运行
+[Mac；用途] 生成在线场景，连续使用合成RGB/雷达/位姿反馈；不需要模型或ORT。
+[替换项] 选择新的场景/输出文件名，避免第一条重定向覆盖已有测量或实验记录。
+
+  cd /Users/yuhaojin/Documents/XT-STCAR
+  mkdir -p work/online
+  cargo run --locked --offline -p xt-stcar-robot-runner --bin xt-stcar-robot -- online-example > work/online/scenario.json
+  cargo run --locked --offline -p xt-stcar-robot-runner --bin xt-stcar-robot -- online-compile --config work/online/scenario.json --output work/online/compiled.json
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --bin xt-stcar-robot -- autonomy-sim --config work/online/compiled.json --output work/online/run.jsonl
+
+[怎么改] scene是模拟器的场地/元素真值；改它来验证元素移动，而非修改在线任务必经坐标。
+  experimental_markers_enabled显式选择实验标记。occlusions声明有限时间的视觉遮挡：
+  from_ms、through_ms是模拟毫秒区间，cones/markers选择遮挡对象；雷达中的真实物体仍保留。
+  online-compile先完成校验才提交输出；非法输入保留旧输出，不把成功编译当作成功完成比赛。
+
+[预期] summary记录completed、fault和终态；非预期失败保留日志并非零退出。
+  默认只记阶段、故障和终态，--trace才增有界调试；模拟秒数不是主板计算耗时。
+  交付文件约定：模板config/online-example.json，已编译场景config/online-sim.json。
+  config/online-controller-sim.json是纯控制器配置，只用于带road.elements的同步快照回放，
+  不直接把它传给autonomy-sim，也不把online-sim.json当作纯控制器配置。
+
+12.2 场景矩阵与失败检查
+[Mac；用途] 查看预先声明的场地/元素移动、遮挡、缺失和时序扰动场景，再运行指定项。
+[替换项] nominal可替换为cases输出的实际场景名；不是任意文件名。
+
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example online_matrix -- cases
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example online_matrix -- sync nominal
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example online_matrix -- async-trace nominal > work/online/nominal-async-trace.json
+  cargo run --release --locked --offline -p xt-stcar-robot-runner --example online_matrix -- both all > work/online/matrix.json
+
+[预期] 模式为cases/sync/async/async-trace/both，选择场景名或all；时序扰动仅跑异步。
+  看逐项expected_completion、passed、summary.completed和fault，不能只数JSON里的结果条数。
+  缺标记或缺桶场景应安全未完成，需核对故障与最终停止，不能把任意失败都算安全通过。
+  正式报告是docs/online-mission-validation.json、online-mission-matrix.json和online-mission-experiments.json。
+  保留82.8秒同步开发回放：已进入两桶后的灯前阶段，缺区域几何而Stop/故障，未完成整场。
+  保留84.383秒异步开发回放：第二桶接近形成长回环，20秒视觉语义到期后结束有限重观察并故障。
+  新入口切向Stop与浮点稳定化已实现；更早47.1秒桶搜索失败仍保留。
+  首轮2/19项符合检查，均为缺桶安全停止。移动临时目标附航向的stable-entry-small失败也保留；
+  后续改为稳定方向目标的两段horizon；通用点连接初版造成的旧八场性能退化也保留在legacy-point-timing-final。
+  第二轮3/19、第三至第五轮各4/19是历史阶段数据，各轮失败分别保留。
+  最终矩阵仍4/19且正常完成0/15，14场真实通过两桶；原始结果及源码运行凭证已归档正式报告。
+  最新legacy-integration旧八场已恢复，不能代替在线结果。
+  不删除失败或拿历史矩阵替代，不宣称在线比赛闭环已验收。
+
+  summary.online_referee只读真实场景锥桶和车辆实际积分轨迹，独立核对左右侧、顺序、半圈进度、
+  入出航向与车体碰撞。查看order_valid/trajectory_valid/both_completed/failure_reason，
+  控制器processed_cones不能充当实际通过证明；还须检查停车、绿灯、终点、实际末速度/曲率和fault。
+  裁判真值不进入控制器，以上仍是合成模拟证据。
+
+  同步recent_online_attempts最多末16项（通常至少100ms间隔，终态可提前记录）；
+  异步recent_attempts最多末16次发布尝试，包含被拒绝/故障的报告。active_track可能是失效前最后几何，
+  不能仅凭字段存在判断目标有效。显式async-trace才额外输出offline_plan_trace，最多前2048个计划时刻，
+  超出数量见omitted_trace_plans。这些有界诊断仅用于模拟，不加入控制快照、不代替ControlPoll.command。
+
+12.3 真实图像接口和实验标记边界
+  Rust库RoadPipeline::new_online(road, vision, markers)常驻处理RGB；vision=None不调用ORT。
+  process按车体前方消除地面线180度方向双义；process_with_heading可显式给预期车体方向，
+  该参数不是世界坐标或场景真值。旧new入口保持elements=None。
+  视觉桶保留颜色并经同刻雷达唯一簇关联；last_visual_at记录真视觉、last_geometry_at记录最近有效几何，
+  last_seen兼容后者。新雷达只维护已经确认的同一锥桶，须满足连续唯一簇、旧半径、同刻位姿及明确外参，
+  不创建新桶、不猜颜色、不增加视觉确认数；矛盾/分裂/歧义/短弧不确定性过大不续期。
+  track_ttl_ms=1800：无新有效几何满1.8秒失效；cone_semantic_ttl_ms=20000：无新视觉满20秒失效，
+  即使每拍有雷达也不能延长该视觉期限。20秒参考0.85m半圈以0.18m/s约14.84秒并留有限余量，
+  较慢或回环轨迹须重新观察；旧配置缺语义期限字段时重新编译场景，不能静默延长TTL。
+  几何误差保留最近视觉下限，并独立计算本次拟合/量程/位姿及短弧不确定性，不逐拍重复累加，也不缩成激光0.02m。
+  已处理StopLine/FinishMarker仍可由真实同ID观测刷新边界，processed始终为true、不能再选为新任务；
+  Cone/Crosswalk保留冻结记录，矛盾身份不会自行恢复。
+  StopLine/FinishMarker槽内真实唯一重观察可保留ID/first_seen/processed；跨过原TTL首新采集帧将
+  observations重置1，默认第二不同采集时刻的真实帧才恢复确认；该计数表示当前确认周期的独立视觉帧数。
+  invalid/歧义不能复活，未重见不刷新时间；锥桶确认规则不变。runner显式pin至多两个当前引用的区域槽，
+  防止存储身份回收；pin不延长TTL、不恢复invalid、不跳过两帧确认，过期几何仍不能作为有效tracks。
+  未保留且已回收的槽不能凭空找回原ID。
+  浮点坐标往返仅在32EPS相对尺度内保留上一表示，最多1nm位置/1e-9rad方向；米级实际约1e-14。
+  这不是测量滤波：毫米变化、误差、观测时间和真实确认数仍更新，避免纯roundoff清空导航缓存。
+  局部凸包KnownFree保留原外接圆成功路径，再用固定栈按长边自适应二分外包矩形，总计最多64次查询。
+  每个接受叶矩形须完整包含于已证空闲圆，子矩形共享同一分界；未知、无法细分或额度耗尽不能漏验放行。
+  Obstacle独立用固定容量、最多32点凸包与同源真实有限回波的欧氏距离，加原量程/位姿/年龄误差判断；
+  回波只落在覆盖圆或外包矩形多出的区域，不代表请求凸包碰撞。旧均匀覆盖只用于回归，生产已用自适应证明。
+  绕桶候选用KnownFree/Obstacle/Unknown三值筛选，有距离证据的障碍优先拒绝；未来Unknown只是假设，
+  当前目标车体和完整执行停车包络仍必须KnownFree，不能把候选被保留理解为准许Drive。
+  前方短弧尚非完整KnownFree时提前采用原approach限速0.18m/s；完整空闲才允许cruise上限0.3m/s。
+  降速不能代替当前执行空闲证明。斑马线停车目标另减完整region_error，包含位置误差及
+  hypot(区域深度,区域半宽)×航向误差，不遗漏旋转导致的边角位移。
+  切向矩形绕桶的R下界按桶半径+实际车体半宽+净空+位置误差，并检查原最大曲率；
+  前后悬仍纳入分段车体凸包及角点圆弧弓高的全扫掠证明，未缩小车体。
+  对齐时保持仍可行的已选R，必要时试安全下界内的较小R，不因视点变化无故向外跳；
+  对齐/入弧后若原R不能满足更新后的安全下界则停止。
+  绕桶完成还须实际沿出口方向越过桶中心位置误差；圆顶出口目标沿切线延伸“位置误差+2×原目标容差”，
+  保留原外侧、半圈、位置与航向条件，进度仍封顶π，不把切线延伸虚算转角。原容差数值不变。
+  出口前约5–6mm、恰在中线或仍在中心误差内，不能仅靠near目标就提前计为已处理。
+  剩余转角为零时仍按实际绕行切向证明完整车体和净空KnownFree，不直接判Unknown或自动放行；
+  原真实出口投影、半圈与到达条件全部保留。
+  接近绕桶入口若尚未对齐，使用原ArrivalBehavior::Stop在局部切向引导点满足位置/方向/停稳条件，
+  再进入短弧；已满足切向条件可直接接近，不加定时hold，不改原容差、限速、预算与已知空闲检查。
+  带明确航向的稳定观测目标允许两个局部horizon（默认1.6m）供现有Nav侧向接近和切向对齐；
+  超过该范围仍是单horizon（默认0.8m）、无终端航向的临时引导点，搜索也保持单horizon。
+  不给不断移动的临时点硬附heading。该版本整场结果见最终报告，正常场仍未完成。
+  Nav对真实26580ms worker状态的短连接漂移增加同目标到达区域重认证，仍在原共享预算记账，
+  不重置求解/采样额度；目标/方向/到达方式/边界变化不能沿用。单快照回归不代表整场完成。
+  Navigator初始化固定TargetPolicy：Fixed为默认，在线统一RollingLocal，不按场地结果开关。
+  仅RollingLocal无终端航向目标在[0.35m,min(2×lookahead,2m))内先试同账前进单弧；严格中心连接失败，
+  才可认证真实积分端点及累计误差进入原半位置容差，不吸附目标、不重置预算。Fixed保留原搜索顺序。
+  该分支覆盖49580ms滚动点快照。21380ms定向斑马线接近则在原单/双弧后备失败后，对RollingLocal
+  增加目标曲率为零的短前进候选：保留当前执行曲率，按原模型渐变积分，不直接拉直车头。
+  长度取目标的车体前向正投影、目标距离<0.35m；真实端点及累计误差仍须满足原半位置/航向容差，
+  完整车体、边界和采用条件不变；新尝试与旧失败共享原预算。最新legacy-integration旧八场已恢复，非在线整场证明。
+  对<0.35m的定向RollingLocal目标，顺序为原严格双弧→原严格单弧→原到达区域→lattice，
+  同一账本下对当前新boundary重证。实际18100/18800ms短路线变3.70/7.22m回环的问题据此修正；
+  三个邻帧原严格连接成功保持，Fixed搜索顺序不变。
+  原region及零目标曲率候选均失败后，RollingLocal可追加“保持实际已应用曲率→按原rate回中→直行”
+  三段短接。航向公式仅给段长种子，三段经原primitive积分并连续携带曲率和误差；真实终点仍须进入
+  原半位置/航向容差，总长及求解/迭代/采样同账有界。38400/38500真实帧得到短接，38300原成功和
+  Fixed三帧保持；越线、障碍、累计误差、预算与非法输入负例仍拒绝，不能把定向回归当整场通过。
+  动作连续性另在RollingLocal原strict continuation候选全失败后，从各候选完整周期预测姿态、实际曲率
+  及累计误差调用旧oriented_arrival_region，同一账本证明后续可达；不调用上面的新三段候选，
+  不直接判任务到达或adopt，原碰撞/制动/采用门保持。
+  仅RollingLocal连续recovery且有限侧带边界，原胶囊边界失败后可补整车扫掠二证：两端完整车体凸包
+  加L/2×(1+Kmax×车体外接半径)，再加原净空/重启余量、累计位置/航向误差和向外数值余量。
+  整个包络须处于同一允许半空间，不以各角分别在禁区两侧放行；世界矩形与障碍仍原完整胶囊证明，
+  Fixed、全局边界与只有位置的参考段检查不变。
+  原胶囊及一阶界都失败后，可再用实际MotionTransition做二阶完整车体时间域证明：
+  M=A+V²K+r(AK+VS+V²K²)，整个运动落在两端完整车体凸包加M×dt²/8内。V/K取initial/target上界，
+  A取原加减速度较大者、S取原转向速率；饱和处v/κ及车体点一阶导数连续，恒速/恒曲率也不减A/S。
+  primitive按同次恒规划速度ds/max_speed取dt；rollout按实际加减速缩尾求解，与predict共用duration.min(dt)，
+  不从实测低速倒推时间。端点累计位置/朝向误差、净空/重启余量和浮点外向余量全部保留，
+  world/obstacle仍原胶囊、禁带仍共同分离侧、Fixed提前退出；不增加采样或求解预算。
+  online32000_body_chord_tube.json保存32000ms及相邻四个真实输入。原strict受粗界拒绝、region成功的
+  邻帧可能改为strict优先成功，不能声称全轨迹不变；32100历史停舵状态找到短route仍不等于可执行Drive。
+  加减速、饱和顺序、减速到零、曲率穿零、真实越线和误差/非法输入有专项回归，最终整场另据实际报告填写。
+  仅RollingLocal在原停车disk证明失败时，可追加完整StoppingEnvelope证明：原两控制周期反应距离
+  加全制动距离，保留当前/候选/历史速度上界，并用原Kmax覆盖期间任意正负转向变化和完整车体，
+  不假定沿固定名义弧刹停。原rollout、误差、采用和最终来源检查继续保留，Fixed不走该后备证明。
+  实际制动力不低于配置仍需车端标定，不能把模型证明写成实车制动验收。
+  runner的OrbitSpeedHint只用于OrbitCone：实际pose加五个观测短弧参考姿态，以原Kmax和
+  感知年龄加控制周期horizon检查完整停车包络KnownFree；原upper已有证明则保持，否则最多八次二分
+  只取已证正下界，同步限制target与continuation上限。没有证明不伪造零速目标，也不改写真正较高速度。
+  六个参考姿态只作选速提示，不证明连续运动安全；实际source/history/negative/lease与执行门全部保留。
+  仅绕桶且停车线负约束尚未获绿灯释放时，Nav前还以当前原始source姿态的完整StoppingEnvelope
+  同时检查KnownFree和pending/confirmed线，沿原观测/checked时钟增加误差；原上限能证则保持，
+  否则最多八次二分取已证正速度上限，同步限制当前目标与continuation，不改线位置/时间/确认/TTL。
+  提示还要满足当拍可执行下界：同源测量或规划投影速度，按原减速度和真实tick间隔计算（最多原period），
+  再与有效adoption速度区间下界取较大值；source/planned时刻不匹配则不使用。
+  几何cap低于可执行下界时不向上凑未证速度，也不假装已减速；提示缺席后仍由独立实际执行门决定Stop。
+  permits_command/异步证书继续使用真正source、投影、已采用历史速度/曲率和全部负线，不拿假设低速替代。
+  开发async33260的OpenEmpty发生在rollout之前，没有预算耗尽或进入permits；只能说明原约束下
+  有界规划未找到路径，缺完整缓存时不能宣称几何无解或source gate直接拒绝。最终整场另据正式结果。
+  当前没有把USB相机、传感器采集与电机发送串成现场自动驾驶CLI。
+
+  官方文字未确认灯前/终点可见图案；当前单/双白横条是明确的实验协议。
+  bar_span_m只表示视觉条纹跨度；region_width_m独立声明可用子区宽度。默认灯前0.6m条对应0.8m宽子区，终点0.9m条对应0.9m宽子区，不从场地真值读取；真实场不保证存在这些标记。
+  ExperimentalMarkerConfig默认enabled=false，online-example仅在示例中显式启用。
+  检测器从RGB几何恢复远沿附近图案锚点，按声明深度还原区域近沿；不从灯色推导距离。
+  图案缺失/裁剪或区域信息过期时不能凭绿灯继续完成任务，仍须原停稳与绿灯确认。
+  已取得官方资料没有左桶出口到灯的可用距离正下界，不能按示意图比例造距离。
+  当前固定灯色ROI只能识别颜色，不能定位停车区；模拟中可比地面标记更早可见，形成信息缺口，
+  此时不能凭灯色继续猜距离，可能Stop后超时。这是第一次区域几何尚未获得的信息缺口。
+  第二个独立缺口是曾确认的地面标记在车尾清空前退出前向ROI：特定默认直行中，最后完整可见点
+  约为远沿前0.26m，清尾至少到远沿后0.18m；剩余0.44m以0.18m/s约需2.44s，计既有误差约4.89s。
+  这些只是在默认直行条件下的配置估算，不是全场不可行证明或实跑成绩；终点完整双条也可能裁剪。
+  不把里程计预测伪造为fresh，不新增stale线的正向任务获取、绿灯或清尾授权。过期StopLine负约束
+  继续按原来源时钟增加位置/方向误差；整个包络仍可在保守线前或扩大侧带之外通行，不在TTL到期时
+  突然封死整条带。需要正向地标证据的任务仍受原有限重观察与停止条件约束。
+  Completed显式要求全车清空灯区。合法确认的终点即使与灯区重叠，已到达停稳却未清尾仍Fault，
+  不提前mark_processed；部分重叠但实际清尾已获证明可以继续，标记名称不替代空间顺序证据。
+  后续可评估保持真实地标可见的局部轨迹、唯一锚点的部分条边跟踪；无此条件就需新定位测量或
+  明确可验证的局部先验，不能只写等接车实测，也不能臆造现场标记。当前不能保证在线整场完成。
+  真实现场标记、相机标定、共同采样时钟和雷达外参仍需核实，当前暂不接车。
+
+十三、结果判断与资料入口
 
   命令成功后可单独执行 echo $? 查看上一条退出码；0 为成功，非零先看 stderr。
   别在另一条命令之后再读取 $? 并误认为还是原命令结果。
@@ -1019,6 +1206,8 @@ JSON
   docs/赛项三规则与工程差距.md：初稿规则、资料证据与实车缺口。
   docs/赛场规格自适应.md：场地测量、半径/通过点生成、兼容处理与覆盖边界。
   docs/field-adaptation-matrix.json、field-adaptation-legacy-matrix.json：新场地与旧时序的独立记录。
-  docs/field-adaptation-validation/build/delivery.json：本轮验收、交叉编译与本地包，分别为三个文件。
+  docs/field-adaptation-validation/build/delivery.json：历史固定布局验收、交叉编译与本地包，分别为三个文件。
+  docs/在线元素驱动任务.md：任务拓扑、短期元素身份、局部空间、实验标记与在线入口。
+  docs/online-mission-validation.json、online-mission-matrix.json、online-mission-experiments.json：本轮在线验收、矩阵和实际开发失败；未完成前不声明整场通过。
 
 手册中的车端 SSH、设备访问和安装命令均未执行；源码 Git 上传状态以 agent.md 和本次交付记录为准。

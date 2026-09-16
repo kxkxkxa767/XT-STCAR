@@ -40,6 +40,7 @@ fn snapshot(
             ranges_m: vec![Some(12.0); config.scan.bins],
         },
         road: RoadFrame {
+            elements: None,
             observation: RoadObservation {
                 captured_at,
                 frame_id: config.mission.body_frame.clone(),

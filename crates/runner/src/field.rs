@@ -38,7 +38,8 @@ impl FieldScenario {
         if self.schema_version != 1 || !(3000..=10000).contains(&self.light_red_duration_ms) {
             return Err("invalid field scenario schema or red-light duration".into());
         }
-        self.spec
+        let layout = self
+            .spec
             .layout(FieldPlanning {
                 footprint: config.autonomy.navigation.footprint,
                 clearance_m: config.autonomy.navigation.clearance_m,
@@ -46,7 +47,29 @@ impl FieldScenario {
                 grid_resolution_m: config.autonomy.navigation.grid_resolution_m,
                 cone_route_radius_m: self.cone_route_radius_m,
             })
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        // Any crossing admitted by the search region must leave the original
+        // stop margin ahead of the initial complete footprint. Checking the
+        // renderer's actual crossing instead would hide incompatible search
+        // regions and make startup depend on undisclosed synthetic truth.
+        let initial_front_x_m = config
+            .autonomy
+            .mission
+            .footprint
+            .corners(layout.initial_pose)
+            .into_iter()
+            .map(|corner| corner.x_m)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let required_near_x_m = initial_front_x_m + config.autonomy.mission.crosswalk_stop_margin_m;
+        let earliest_near_x_m = layout.crosswalk_search_region.min_x_m;
+        if !required_near_x_m.is_finite() || earliest_near_x_m < required_near_x_m {
+            return Err(format!(
+                "earliest crosswalk near edge {earliest_near_x_m} m leaves insufficient initial \
+                 stopping margin: require at least {required_near_x_m} m, shortfall {} m",
+                required_near_x_m - earliest_near_x_m
+            ));
+        }
+        Ok(layout)
     }
 
     /// Produce a complete offline configuration. Vehicle limits and confidence,
@@ -161,6 +184,13 @@ pub(crate) fn light_triggered(config: &SimulationConfig, pose: Pose2) -> bool {
         x_m: config.autonomy.mission.footprint.front_m,
         y_m: 0.0,
     });
+    if let Some(scene) = &config.online_scene {
+        let region = scene.light_boundary_region;
+        return front.x_m >= config.light_trigger_x_m
+            && front.y_m >= region.min_y_m
+            && front.y_m <= region.max_y_m
+            && pose.yaw_rad.cos() > 0.0;
+    }
     if config.field.is_none() {
         // Preserve the legacy fixture's exact predicate, including its x-only
         // assumption; new field scenarios use their actual oriented footprint.
@@ -180,6 +210,19 @@ pub(crate) fn light_triggered(config: &SimulationConfig, pose: Pose2) -> bool {
 /// This is only a bounded visibility model for synthetic RGB, not geometric
 /// camera calibration, lamp ranging, or a ground-truth input to Mission.
 pub(crate) fn light_visible(config: &SimulationConfig, pose: Pose2) -> bool {
+    if let Some(scene) = &config.online_scene {
+        let region = scene.light_stop_region;
+        let target = Point2 {
+            x_m: region.max_x_m,
+            y_m: (region.min_y_m + region.max_y_m) / 2.0,
+        };
+        let local = pose.world_to_body(target);
+        return local.x_m >= -config.autonomy.mission.footprint.rear_m
+            && local.x_m <= config.road.homography.max_forward_m
+            && local.y_m.abs() <= region.max_y_m - region.min_y_m
+            && pose.y_m >= scene.light_boundary_region.min_y_m - 0.5
+            && pose.yaw_rad.cos() >= 0.8;
+    }
     let Some(field) = &config.field else {
         return true;
     };

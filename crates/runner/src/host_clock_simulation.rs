@@ -155,6 +155,7 @@ pub fn observe_host_clock() -> Result<Value> {
                 },
                 scan: synthetic_scan(&config, plant.pose, &config.cones, at),
                 road: RoadFrame {
+                    elements: None,
                     observation: detector.detect(
                         &camera,
                         &[],

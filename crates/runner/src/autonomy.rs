@@ -8,7 +8,7 @@ use xt_stcar_robot_core::mission::{
     Mission, MissionConfig, MissionOutput, MissionPhase, MissionReport,
 };
 use xt_stcar_robot_core::navigation::{
-    NavigationConfig, NavigationDecision, Navigator, SteeringEstimate,
+    NavigationConfig, NavigationDecision, Navigator, SteeringEstimate, TargetPolicy,
 };
 use xt_stcar_robot_core::scan::{ScanConfig, validate_full_scan};
 use xt_stcar_robot_core::{
@@ -22,6 +22,8 @@ pub type Result<T> = std::result::Result<T, String>;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RoadFrame {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elements: Option<xt_stcar_robot_core::local_world::ElementFrame>,
     pub observation: RoadObservation,
     pub image_width_px: u32,
     pub image_height_px: u32,
@@ -59,6 +61,8 @@ impl<T: Clone> Latest<T> {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AutonomyConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub online: Option<crate::online::OnlineControlConfig>,
     pub schema_version: u32,
     pub simulation_only: bool,
     pub measurement_status: String,
@@ -76,6 +80,8 @@ pub struct AutonomyConfig {
 
 #[derive(Debug, Serialize)]
 pub struct AutonomyStep {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub online: Option<xt_stcar_robot_core::online_mission::OnlineMissionReport>,
     pub kind: &'static str,
     pub mode: &'static str,
     pub physical_output_enabled: bool,
@@ -89,7 +95,8 @@ pub struct AutonomyStep {
 
 pub struct AutonomyController {
     config: AutonomyConfig,
-    mission: Mission,
+    mission: Option<Mission>,
+    online: Option<crate::online::OnlineSession>,
     navigation: Navigator,
     safety: Controller,
     last_tick: Option<Timestamp>,
@@ -145,12 +152,30 @@ impl AutonomyController {
             );
         }
         config.scan.validate().map_err(|e| e.to_string())?;
-        let mission = Mission::new(config.mission.clone()).map_err(|e| e.to_string())?;
-        let navigation = Navigator::new(config.navigation.clone()).map_err(|e| e.to_string())?;
+        let (mission, online) = if let Some(online) = &config.online {
+            (
+                None,
+                Some(crate::online::OnlineSession::new(online.clone(), &config)?),
+            )
+        } else {
+            (
+                Some(Mission::new(config.mission.clone()).map_err(|e| e.to_string())?),
+                None,
+            )
+        };
+        let target_policy = if online.is_some() {
+            TargetPolicy::RollingLocal
+        } else {
+            TargetPolicy::Fixed
+        };
+        let navigation =
+            Navigator::new_with_target_policy(config.navigation.clone(), target_policy)
+                .map_err(|e| e.to_string())?;
         let safety = Controller::new(config.safety.clone()).map_err(|e| e.to_string())?;
         Ok(Self {
             config,
             mission,
+            online,
             navigation,
             safety,
             last_tick: None,
@@ -170,7 +195,12 @@ impl AutonomyController {
         if self.started {
             return Err("autonomy is already started".into());
         }
-        self.mission.start().map_err(|e| e.to_string())?;
+        if let Some(mission) = &mut self.mission {
+            mission.start().map_err(|e| e.to_string())?;
+        }
+        if let Some(online) = &mut self.online {
+            online.start()?;
+        }
         self.started = true;
         Ok(())
     }
@@ -196,6 +226,7 @@ impl AutonomyController {
         }
         let safety = self.event(at, Event::EmergencyStop);
         AutonomyStep {
+            online: None,
             kind: "autonomy_step",
             mode: "sensor_closed_loop",
             physical_output_enabled: false,
@@ -352,6 +383,13 @@ impl AutonomyController {
                 "visual obstacle projection requires a pose at the same capture timestamp".into(),
             );
         }
+        let hint_dt_s = self.last_tick.map_or(
+            self.config.navigation.control_period_ms as f64 / 1000.0,
+            |old| {
+                ((at.0 - old.0) as f64 / 1000.0)
+                    .min(self.config.navigation.control_period_ms as f64 / 1000.0)
+            },
+        );
         self.last_tick = Some(at);
         self.last_pose = Some(pose.captured_at);
         self.last_scan = Some(scan.captured_at);
@@ -376,22 +414,47 @@ impl AutonomyController {
             center: pose.pose.body_to_world(*point),
             radius_m: self.config.cone_radius_m,
         }));
-        let mission = self.mission.update(at, pose, road);
+        let mut online_report = self
+            .online
+            .as_mut()
+            .map(|online| online.update(at, pose, scan, road_frame, self.config.lidar_in_body))
+            .transpose()?;
+        if let (Some(online), Some(report)) = (&self.online, &mut online_report) {
+            online.apply_source_stop_speed_hint(at, pose, projection, hint_dt_s, report);
+        }
+        let mission = if let Some(report) = &online_report {
+            report.mission.clone()
+        } else {
+            self.mission
+                .as_mut()
+                .expect("legacy mission")
+                .update(at, pose, road)
+        };
         let navigation_pose = projection.map_or(pose, |context| &context.projected_pose);
         self.navigation
             .set_adoption_constraints(projection.and_then(|context| context.adoption_constraints));
         if mission.phase == MissionPhase::Fault {
             let mut stopped = self.stop_with_fault(at, mission.reason.clone());
             stopped.mission = Some(mission);
+            stopped.online = online_report;
             return Ok(stopped);
         }
         // Use the exact line checked by Mission, including the transition tick
         // out of Cones. Only confirmed stationary green admission enters Finish.
-        let travel_boundary = matches!(
-            mission.phase,
-            MissionPhase::Cones | MissionPhase::ApproachLight | MissionPhase::WaitGreen
-        )
-        .then(|| self.mission.light_stop_boundary());
+        let travel_boundary = if let Some(report) = &online_report {
+            report.travel_boundary
+        } else {
+            matches!(
+                mission.phase,
+                MissionPhase::Cones | MissionPhase::ApproachLight | MissionPhase::WaitGreen
+            )
+            .then(|| {
+                self.mission
+                    .as_ref()
+                    .expect("legacy mission")
+                    .light_stop_boundary()
+            })
+        };
         self.navigation.set_travel_boundary(travel_boundary);
         let (intent, navigation, hold) = match &mission.output {
             MissionOutput::Target {
@@ -399,14 +462,20 @@ impl AutonomyController {
                 max_speed_mps,
                 arrival,
             } => {
-                let heading = match mission.phase {
-                    MissionPhase::Cones => self
-                        .config
-                        .mission
-                        .cone_waypoint_heading(mission.waypoint_index),
-                    MissionPhase::ApproachLight => Some(self.config.mission.light_approach_yaw_rad),
-                    MissionPhase::Finish => Some(self.config.mission.finish_yaw_rad),
-                    _ => None,
+                let heading = if let Some(report) = &online_report {
+                    report.goal_heading_rad
+                } else {
+                    match mission.phase {
+                        MissionPhase::Cones => self
+                            .config
+                            .mission
+                            .cone_waypoint_heading(mission.waypoint_index),
+                        MissionPhase::ApproachLight => {
+                            Some(self.config.mission.light_approach_yaw_rad)
+                        }
+                        MissionPhase::Finish => Some(self.config.mission.finish_yaw_rad),
+                        _ => None,
+                    }
                 };
                 let started = self.timing_enabled.then(Instant::now);
                 let decision = self.navigation.plan_with_arrival(
@@ -501,15 +570,34 @@ impl AutonomyController {
             self.event(at, Event::Start);
         }
         let safety = self.event(at, Event::Tick);
-        let command = if hold || safety.state != State::Running {
+        let mut command = if hold || safety.state != State::Running {
             MotionOutput::Stop
         } else {
             safety.output.command.clone()
         };
+        // Online Drive also needs known free space for its complete stopping
+        // envelope. The asynchronous owner repeats this against the source scan.
+        if let Some(online) = &self.online
+            && !online.permits_command(
+                at,
+                pose,
+                navigation_pose,
+                &command,
+                &self.config,
+                projection,
+                self.navigation.execution_state(),
+            )
+        {
+            command = MotionOutput::Stop;
+            if let Some(report) = &mut online_report {
+                report.execution_space_rejected = true;
+            }
+        }
         if safety.state == State::Fault {
             self.fault = Some("safety controller latched a fault".into());
         }
         Ok(AutonomyStep {
+            online: online_report,
             kind: "autonomy_step",
             mode: "sensor_closed_loop",
             physical_output_enabled: false,

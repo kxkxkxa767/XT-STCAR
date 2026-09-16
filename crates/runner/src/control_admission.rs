@@ -124,6 +124,7 @@ mod tests {
             pose: pose.clone(),
             scan: synthetic_scan(&simulation, simulation.initial_pose, &[], Timestamp(0)),
             road: RoadFrame {
+                elements: None,
                 observation: RoadObservation {
                     captured_at: Timestamp(0),
                     frame_id: config.mission.body_frame.clone(),

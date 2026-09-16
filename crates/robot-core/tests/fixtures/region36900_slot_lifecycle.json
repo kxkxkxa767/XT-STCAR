@@ -1,0 +1,454 @@
+{
+  "evidence": "Actual RGB-derived region frames and actual source poses selected from the complete sync crosswalk_shifted trace. This tests region storage lifecycle only; unrelated elements/whole vehicle history are not replayed. next_id is seeded to 3 to retain the recorded StopLine label. Yaw rate is unused by region projection and set to zero, rather than claimed captured.",
+  "world_config": {
+    "association_distance_m": 0.3,
+    "body_frame": "sim_body",
+    "cone_semantic_ttl_ms": 20000,
+    "contradiction_heading_rad": 0.6,
+    "heading_drift_radps": 0.02,
+    "laser_error_m": 0.02,
+    "lidar_frame": "sim_laser",
+    "max_heading_error_rad": 0.3,
+    "max_position_error_m": 0.35,
+    "min_confidence": 0.6,
+    "min_confirmations": 2,
+    "min_pose_quality": 0.6,
+    "pose_heading_error_rad": 0.01,
+    "pose_position_error_m": 0.02,
+    "position_drift_mps": 0.03,
+    "scan_ttl_ms": 300,
+    "self_footprint": {
+      "front_m": 0.22,
+      "half_width_m": 0.13,
+      "rear_m": 0.18
+    },
+    "track_ttl_ms": 1800,
+    "world_frame": "sim_world"
+  },
+  "records": [
+    {
+      "at": 26500,
+      "pose": {
+        "captured_at": 26500,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 4.351793795626084,
+          "y_m": 1.5291489093607606,
+          "yaw_rad": 0.5994527171642856
+        },
+        "speed_mps": 0.18,
+        "yaw_rate_radps": 0.0,
+        "quality": 1.0
+      },
+      "frame": {
+        "captured_at": 26500,
+        "frame_id": "sim_body",
+        "observations": [
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 1.0,
+              "lateral_half_width_m": 0.4,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.5991280264661274,
+            "heading_error_rad": 0.06047061180077884,
+            "kind": "stop_line",
+            "position_body_m": {
+              "x_m": 2.307936964697983,
+              "y_m": 1.883102970348463
+            },
+            "position_error_m": 0.08532952945000552,
+            "source": "ground_marker"
+          }
+        ]
+      }
+    },
+    {
+      "at": 26600,
+      "pose": {
+        "captured_at": 26600,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 4.366746710127499,
+          "y_m": 1.5391689119403313,
+          "yaw_rad": 0.5805262384296181
+        },
+        "speed_mps": 0.18,
+        "yaw_rate_radps": 0.0,
+        "quality": 1.0
+      },
+      "frame": {
+        "captured_at": 26600,
+        "frame_id": "sim_body",
+        "observations": [
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 1.0,
+              "lateral_half_width_m": 0.4,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.5826849823742144,
+            "heading_error_rad": 0.060470611800789525,
+            "kind": "stop_line",
+            "position_body_m": {
+              "x_m": 2.257511106886581,
+              "y_m": 1.9320617915934188
+            },
+            "position_error_m": 0.08532952945001812,
+            "source": "ground_marker"
+          }
+        ]
+      }
+    },
+    {
+      "at": 26700,
+      "pose": {
+        "captured_at": 26700,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 4.381908142941421,
+          "y_m": 1.5488702337501536,
+          "yaw_rad": 0.5567947719643218
+        },
+        "speed_mps": 0.18,
+        "yaw_rate_radps": 0.0,
+        "quality": 1.0
+      },
+      "frame": {
+        "captured_at": 26700,
+        "frame_id": "sim_body",
+        "observations": [
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 1.0,
+              "lateral_half_width_m": 0.4,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.5609776970453915,
+            "heading_error_rad": 0.06047061180077769,
+            "kind": "stop_line",
+            "position_body_m": {
+              "x_m": 2.193226702196023,
+              "y_m": 1.9862395262926484
+            },
+            "position_error_m": 0.08532952945000416,
+            "source": "ground_marker"
+          }
+        ]
+      }
+    },
+    {
+      "at": 33800,
+      "pose": {
+        "captured_at": 33800,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 6.06680814235948,
+          "y_m": 1.8754004997200948,
+          "yaw_rad": 0.7277179685574433
+        },
+        "speed_mps": 0.3,
+        "yaw_rate_radps": 0.0,
+        "quality": 1.0
+      },
+      "frame": {
+        "captured_at": 33800,
+        "frame_id": "sim_body",
+        "observations": [
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 0.8,
+              "lateral_half_width_m": 0.45,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.7279121346390793,
+            "heading_error_rad": 0.046988593063771476,
+            "kind": "finish_marker",
+            "position_body_m": {
+              "x_m": 1.7689266682015543,
+              "y_m": 1.7909172381576806
+            },
+            "position_error_m": 0.06220945083808735,
+            "source": "ground_marker"
+          }
+        ]
+      }
+    },
+    {
+      "at": 33900,
+      "pose": {
+        "captured_at": 33900,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 6.088852594002959,
+          "y_m": 1.895746234623643,
+          "yaw_rad": 0.7629745207497409
+        },
+        "speed_mps": 0.3,
+        "yaw_rate_radps": 0.0,
+        "quality": 1.0
+      },
+      "frame": {
+        "captured_at": 33900,
+        "frame_id": "sim_body",
+        "observations": [
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 0.8,
+              "lateral_half_width_m": 0.45,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.7628958235310206,
+            "heading_error_rad": 0.04698859306377212,
+            "kind": "finish_marker",
+            "position_body_m": {
+              "x_m": 1.8006464525181702,
+              "y_m": 1.727084670095889
+            },
+            "position_error_m": 0.06220945083808805,
+            "source": "ground_marker"
+          }
+        ]
+      }
+    },
+    {
+      "at": 34300,
+      "pose": {
+        "captured_at": 34300,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 6.1694307863292845,
+          "y_m": 1.9845326775847376,
+          "yaw_rad": 0.904819292443622
+        },
+        "speed_mps": 0.3,
+        "yaw_rate_radps": 0.0,
+        "quality": 1.0
+      },
+      "frame": {
+        "captured_at": 34300,
+        "frame_id": "sim_body",
+        "observations": [
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 1.0,
+              "lateral_half_width_m": 0.4,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.9066337342171309,
+            "heading_error_rad": 0.06047061180078156,
+            "kind": "stop_line",
+            "position_body_m": {
+              "x_m": 1.2909013804205114,
+              "y_m": 2.2491912503662785
+            },
+            "position_error_m": 0.08532952945000873,
+            "source": "ground_marker"
+          },
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 0.8,
+              "lateral_half_width_m": 0.45,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.904704787224615,
+            "heading_error_rad": 0.04698859306376474,
+            "kind": "finish_marker",
+            "position_body_m": {
+              "x_m": 1.906815925551025,
+              "y_m": 1.4613743633873753
+            },
+            "position_error_m": 0.06220945083808001,
+            "source": "ground_marker"
+          }
+        ]
+      }
+    },
+    {
+      "at": 34400,
+      "pose": {
+        "captured_at": 34400,
+        "frame_id": "sim_world",
+        "pose": {
+          "x_m": 6.1875420233588345,
+          "y_m": 2.0084468599777305,
+          "yaw_rad": 0.9404053267697883
+        },
+        "speed_mps": 0.3,
+        "yaw_rate_radps": 0.0,
+        "quality": 1.0
+      },
+      "frame": {
+        "captured_at": 34400,
+        "frame_id": "sim_body",
+        "observations": [
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 1.0,
+              "lateral_half_width_m": 0.4,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.9402611564946497,
+            "heading_error_rad": 0.060470611800784876,
+            "kind": "stop_line",
+            "position_body_m": {
+              "x_m": 1.3392239486289892,
+              "y_m": 2.2012258370464
+            },
+            "position_error_m": 0.08532952945001265,
+            "source": "ground_marker"
+          },
+          {
+            "color": "white",
+            "confidence": 0.9,
+            "geometry": {
+              "depth_m": 0.8,
+              "lateral_half_width_m": 0.45,
+              "shape": "line_region"
+            },
+            "heading_body_rad": -0.940136929036295,
+            "heading_error_rad": 0.04698859306376803,
+            "kind": "finish_marker",
+            "position_body_m": {
+              "x_m": 1.9290237134626347,
+              "y_m": 1.3935177967534735
+            },
+            "position_error_m": 0.06220945083808359,
+            "source": "ground_marker"
+          }
+        ]
+      }
+    }
+  ],
+  "recorded_first_denial_at": 36900,
+  "recorded_cached_line_id": 3,
+  "recorded_replacement_slots": [
+    {
+      "color": "white",
+      "confidence": 0.8208955223880603,
+      "first_seen": 0,
+      "geometry": {
+        "depth_m": 0.29166666666667496,
+        "lateral_half_width_m": 0.47499999999999454,
+        "shape": "line_region"
+      },
+      "heading_error_rad": 0.055568776990547235,
+      "heading_rad": 0.000980324841274527,
+      "id": 1,
+      "kind": "crosswalk",
+      "last_geometry_at": 14500,
+      "last_seen": 14500,
+      "last_visual_at": 14500,
+      "observations": 146,
+      "position": {
+        "x_m": 2.990348029776148,
+        "y_m": 0.5942163049559
+      },
+      "position_error_m": 0.05693948311426583,
+      "processed": true,
+      "valid": true
+    },
+    {
+      "color": "red",
+      "confidence": 0.9,
+      "first_seen": 20000,
+      "geometry": {
+        "radius_m": 0.19798989873223333,
+        "shape": "cone"
+      },
+      "heading_error_rad": 0.01,
+      "heading_rad": null,
+      "id": 2,
+      "kind": "cone",
+      "last_geometry_at": 36900,
+      "last_seen": 36900,
+      "last_visual_at": 32700,
+      "observations": 128,
+      "position": {
+        "x_m": 5.5000000000000036,
+        "y_m": 2.499999999999996
+      },
+      "position_error_m": 0.18491725481707688,
+      "processed": false,
+      "valid": true
+    },
+    {
+      "color": "white",
+      "confidence": 0.9,
+      "first_seen": 33800,
+      "geometry": {
+        "depth_m": 0.8,
+        "lateral_half_width_m": 0.45,
+        "shape": "line_region"
+      },
+      "heading_error_rad": 0.05698859306376714,
+      "heading_rad": -8.382835218423423e-05,
+      "id": 4,
+      "kind": "finish_marker",
+      "last_geometry_at": 36900,
+      "last_seen": 36900,
+      "last_visual_at": 36900,
+      "observations": 32,
+      "position": {
+        "x_m": 6.2086019096407625,
+        "y_m": 4.3921967075221415
+      },
+      "position_error_m": 0.0989535020558785,
+      "processed": false,
+      "valid": true
+    },
+    {
+      "color": "white",
+      "confidence": 0.9,
+      "first_seen": 34300,
+      "geometry": {
+        "depth_m": 1.0,
+        "lateral_half_width_m": 0.4,
+        "shape": "line_region"
+      },
+      "heading_error_rad": 0.07047061180077867,
+      "heading_rad": 0.002336747912845105,
+      "id": 5,
+      "kind": "stop_line",
+      "last_geometry_at": 36900,
+      "last_seen": 36900,
+      "last_visual_at": 36900,
+      "observations": 27,
+      "position": {
+        "x_m": 5.208699565801412,
+        "y_m": 4.38861759740492
+      },
+      "position_error_m": 0.12536754488328733,
+      "processed": false,
+      "valid": true
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ]
+}

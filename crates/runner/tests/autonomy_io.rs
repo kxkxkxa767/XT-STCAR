@@ -25,6 +25,7 @@ fn snapshot(c: &SimulationConfig, ms: u64) -> SensorSnapshot {
         },
         scan: synthetic_scan(c, c.initial_pose, &c.cones, at),
         road: RoadFrame {
+            elements: None,
             observation: RoadDetector::new(c.road.clone())
                 .unwrap()
                 .detect(&rgb, &[], at, c.autonomy.mission.body_frame.clone())

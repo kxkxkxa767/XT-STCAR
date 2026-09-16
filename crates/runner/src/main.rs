@@ -8,6 +8,8 @@ use xt_stcar_robot_runner::{ReplayOptions, replay, vision::VisionOptions};
 const HELP: &str = "XT-STCAR Rust robot module runner (offline recording only)
 
 Usage:
+  xt-stcar-robot online-example
+  xt-stcar-robot online-compile --config FILE [--output FILE]
   xt-stcar-robot field-example
   xt-stcar-robot field-compile --config FILE [--output FILE]
   xt-stcar-robot field-layout --config FILE [--output FILE]
@@ -234,6 +236,19 @@ fn run() -> Result<()> {
     if command == "serial-capture" {
         return serial_capture(rest);
     }
+    if command == "online-example" {
+        if !rest.is_empty() {
+            return Err("online-example takes no arguments".into());
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &xt_stcar_robot_runner::online_simulation::OnlineScenario::example()
+            )
+            .map_err(|e| e.to_string())?
+        );
+        return Ok(());
+    }
     if command == "field-example" {
         if !rest.is_empty() {
             return Err("field-example takes no arguments".into());
@@ -245,7 +260,7 @@ fn run() -> Result<()> {
         );
         return Ok(());
     }
-    if command == "field-compile" || command == "field-layout" {
+    if command == "field-compile" || command == "field-layout" || command == "online-compile" {
         return field_command(command.to_str().ok_or("command must be UTF-8")?, rest);
     }
     if command == "autonomy-example" {
@@ -424,13 +439,20 @@ fn field_command(command: &str, rest: Vec<OsString>) -> Result<()> {
     if let Some(path) = &output {
         distinct_output(path, &[&config_path])?;
     }
-    let scenario: FieldScenario =
-        serde_json::from_slice(&read_regular_file(&config_path, MAX_CONFIG_BYTES)?)
-            .map_err(|e| format!("parse {}: {e}", config_path.display()))?;
-    let mut bytes = if command == "field-compile" {
+    let input = read_regular_file(&config_path, MAX_CONFIG_BYTES)?;
+    let mut bytes = if command == "online-compile" {
+        let scenario: xt_stcar_robot_runner::online_simulation::OnlineScenario =
+            serde_json::from_slice(&input)
+                .map_err(|e| format!("parse {}: {e}", config_path.display()))?;
         serde_json::to_vec_pretty(&scenario.compile()?)
     } else {
-        serde_json::to_vec_pretty(&scenario.layout()?)
+        let scenario: FieldScenario = serde_json::from_slice(&input)
+            .map_err(|e| format!("parse {}: {e}", config_path.display()))?;
+        if command == "field-compile" {
+            serde_json::to_vec_pretty(&scenario.compile()?)
+        } else {
+            serde_json::to_vec_pretty(&scenario.layout()?)
+        }
     }
     .map_err(|e| e.to_string())?;
     bytes.push(b'\n');

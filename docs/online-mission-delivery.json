@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-16",
+  "verified_at_utc": "2026-09-16T01:27:31.193499+00:00",
+  "scope": "Local core/model packages for the frozen online-mission build. Source hashes, both ELF files, archive allowlist, manifest and SHA256SUMS checked. Optional model structure, model hash and provenance checked. Package integrity and host tests do not establish online race acceptance.",
+  "online_race_accepted": false,
+  "online_matrix": {
+    "runs": 19,
+    "checks_passed": 4,
+    "normal_completed": 0,
+    "normal_runs": 15,
+    "two_cones_proved_runs": 14,
+    "passed_checks": "Only missing_markers and missing_cones, each sync/async, matched predeclared safe-stop checks."
+  },
+  "cross_target": "riscv64gc-unknown-linux-gnu.2.38",
+  "source_hashes_checked": 150,
+  "evidence_sha256": {
+    "online-mission-build.json": "47688b974ad7de2693adc71524cc4e4ff9a6474a699b37c8cae06532cd281d97",
+    "online-mission-validation.json": "a2b402c05e674e558731cf3fd669668d380774d909d1e06286f22ca61190ae80",
+    "online-mission-matrix.json": "5b971ea5fbe5db35513287818208570e468c32678786bd89f1941f3c74ac8249",
+    "online-mission-experiments.json": "e0b020b6321944cc719c059aaf92449828774fe5654a5fa6f9ffcae74ecb7fd1"
+  },
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "b83012928876ff87f322c9b4bac8e51c9a338b4c56c495c1a3598e8bc32b11d5",
+      "size_bytes": 1217056,
+      "needed": [
+        "libc.so.6"
+      ],
+      "maximum_glibc": "2.34"
+    },
+    "xt-stcar-robot": {
+      "sha256": "259b419d6f9061ccb6d56b746d5c23d80a2d0a23d51bcb337e97514b0b793042",
+      "size_bytes": 2376448,
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "maximum_glibc": "2.34"
+    }
+  },
+  "vehicle_uploaded": false,
+  "vehicle_execution_verified": false,
+  "physical_output_enabled": false,
+  "onnxruntime_library_included": false,
+  "runtime_requirements": {
+    "default_inference": "Rust native ONNX Runtime C API, loaded dynamically",
+    "riscv_onnxruntime_library_included": false,
+    "riscv_onnxruntime_required_for_inference": true,
+    "vendor_runtime_compatibility_verified": false,
+    "python_reference_backend": "explicit --backend python-reference only",
+    "offline_replay_and_self_check_require_onnxruntime": false
+  },
+  "git_publication": "Separate from local package verification; determine current commit and remote synchronization from Git. This report does not attest to a push.",
+  "report_placement": "This report is outside both archives to avoid circular package hashes.",
+  "packages": [
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-core-20260916T012613851038Z-b83012928876.tar.gz",
+      "sha256": "68c729aaa73215a9906b5dee3171bbd8199a48c3979a7b633d354fa8b5f631a0",
+      "size_bytes": 6647620,
+      "file_count": 119,
+      "verified": true,
+      "verification": "package.sh internal verification followed by an independent scripts/delivery.py verify invocation (exit 0); archived final documents/configuration/reports and build.json also compared byte for byte with current files.",
+      "manifest_sha256": "af4184b6d31a1dc121707b5dc21a23390598359333fc75db074939f4aa403adc",
+      "independent_verification_log": "work/online-mission/verify-core-final.json",
+      "independent_verification_log_sha256": "84668af6295893894317a0b59823638a64a0febf30008d6a97e45882dd927b8b",
+      "source_hashes_checked": 150,
+      "deployment_allowlist_files": 117,
+      "model_included": false,
+      "vehicle_uploaded": false,
+      "vehicle_execution_verified": false
+    },
+    {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/dist/xt-stcar-riscv64-with-model-20260916T012624633921Z-b83012928876.tar.gz",
+      "sha256": "e9920c9ec826e0ed6558ab105459c18e8c16e246d3ad8bcccf74f4e520f0f9b4",
+      "size_bytes": 15291902,
+      "file_count": 123,
+      "verified": true,
+      "verification": "package.sh internal verification followed by an independent scripts/delivery.py verify invocation (exit 0); archived final documents/configuration/reports and build.json also compared byte for byte with current files.",
+      "manifest_sha256": "2298e1a0d893627b68ef02ce2b3b1506d9e78a83ec481aa479b4c462dd9f509e",
+      "independent_verification_log": "work/online-mission/verify-model-final.json",
+      "independent_verification_log_sha256": "4d326c0e0413ee8d1e0eae857e37579431569dc988679f008cefacff3bbcf837",
+      "source_hashes_checked": 150,
+      "deployment_allowlist_files": 117,
+      "model_included": true,
+      "vehicle_uploaded": false,
+      "vehicle_execution_verified": false
+    }
+  ]
+}

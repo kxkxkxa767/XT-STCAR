@@ -1,0 +1,368 @@
+{
+  "at": 45180,
+  "command": {
+    "curvature_per_m": 0.00837053294247445,
+    "speed_mps": 0.18,
+    "type": "drive"
+  },
+  "config": {
+    "cone_radius_m": 0.19798989873223333,
+    "laser_point_radius_m": 0.015,
+    "lidar_in_body": {
+      "x_m": 0.0,
+      "y_m": 0.0,
+      "yaw_rad": 0.0
+    },
+    "max_sensor_age_ms": 250,
+    "max_tick_gap_ms": 250,
+    "measurement_status": "unverified",
+    "mission": {
+      "approach_goal": {
+        "x_m": 2.0,
+        "y_m": 2.5
+      },
+      "approach_speed_mps": 0.18,
+      "body_frame": "sim_body",
+      "cone_waypoints": [
+        {
+          "x_m": 3.1,
+          "y_m": 3.35
+        },
+        {
+          "x_m": 4.5,
+          "y_m": 1.85
+        }
+      ],
+      "crosswalk_hold_ms": 3000,
+      "crosswalk_region": {
+        "max_x_m": 2.5,
+        "max_y_m": 4.0,
+        "min_x_m": 1.0,
+        "min_y_m": 1.0
+      },
+      "crosswalk_stop_margin_m": 0.15,
+      "cruise_speed_mps": 0.3,
+      "finish_goal": {
+        "x_m": 6.43,
+        "y_m": 2.5
+      },
+      "finish_region": {
+        "max_x_m": 6.8,
+        "max_y_m": 3.1,
+        "min_x_m": 6.0,
+        "min_y_m": 1.9
+      },
+      "finish_yaw_rad": 0.0,
+      "footprint": {
+        "front_m": 0.22,
+        "half_width_m": 0.13,
+        "rear_m": 0.18
+      },
+      "goal_heading_tolerance_rad": 0.12,
+      "goal_tolerance_m": 0.065,
+      "light_approach_yaw_rad": 0.0,
+      "light_detection_region": {
+        "max_x_m": 6.0,
+        "max_y_m": 3.5,
+        "min_x_m": 4.4,
+        "min_y_m": 1.5
+      },
+      "light_stop_goal": {
+        "x_m": 5.55,
+        "y_m": 2.5
+      },
+      "light_stop_region": {
+        "max_x_m": 6.0,
+        "max_y_m": 3.1,
+        "min_x_m": 5.0,
+        "min_y_m": 1.9
+      },
+      "max_observation_skew_ms": 100,
+      "max_pose_age_ms": 250,
+      "max_pose_gap_ms": 250,
+      "max_road_age_ms": 250,
+      "max_road_gap_ms": 250,
+      "min_detection_confidence": 0.5,
+      "min_green_frames": 3,
+      "min_green_ms": 300,
+      "min_pose_quality": 0.6,
+      "schema_version": 1,
+      "simulation_only": true,
+      "stopped_speed_mps": 0.012,
+      "world_frame": "sim_world"
+    },
+    "navigation": {
+      "bounds": {
+        "max_x_m": 9.0,
+        "max_y_m": 7.0,
+        "min_x_m": -1.0,
+        "min_y_m": -1.0
+      },
+      "clearance_m": 0.04,
+      "control_period_ms": 100,
+      "curvature_samples": 21,
+      "footprint": {
+        "front_m": 0.22,
+        "half_width_m": 0.13,
+        "rear_m": 0.18
+      },
+      "frame_id": "sim_world",
+      "goal_heading_tolerance_rad": 0.12,
+      "goal_tolerance_m": 0.045,
+      "grid_resolution_m": 0.1,
+      "lookahead_m": 0.55,
+      "max_accel_mps2": 0.4,
+      "max_curvature_per_m": 2.0,
+      "max_curvature_rate_per_s": 4.0,
+      "max_decel_mps2": 0.6,
+      "max_grid_cells": 40000,
+      "max_input_age_ms": 250,
+      "max_lateral_accel_mps2": 0.4,
+      "max_obstacles": 2048,
+      "max_speed_mps": 0.3,
+      "min_pose_quality": 0.4,
+      "preview_horizon_s": 2.0,
+      "tracking": {
+        "kind": "pure_pursuit"
+      }
+    },
+    "online": {
+      "cone_association": {
+        "body_frame": "sim_body",
+        "center_tolerance_m": 0.2,
+        "lidar_frame": "sim_laser",
+        "lidar_in_body": {
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": 0.0
+        },
+        "max_point_gap_m": 0.12,
+        "max_points": 128,
+        "min_points": 3,
+        "minimum_cluster_width_m": 0.035,
+        "range_error_m": 0.02
+      },
+      "mission": {
+        "approach_speed_mps": 0.18,
+        "arc_lookahead_rad": 0.7853981633974483,
+        "body_frame": "sim_body",
+        "clearance_m": 0.04,
+        "crosswalk_hold_ms": 3000,
+        "crosswalk_stop_margin_m": 0.15,
+        "cruise_speed_mps": 0.3,
+        "footprint": {
+          "front_m": 0.22,
+          "half_width_m": 0.13,
+          "rear_m": 0.18
+        },
+        "goal_heading_tolerance_rad": 0.12,
+        "goal_tolerance_m": 0.065,
+        "max_curvature_per_m": 2.0,
+        "max_observation_skew_ms": 100,
+        "max_pose_age_ms": 250,
+        "max_pose_gap_ms": 250,
+        "max_road_age_ms": 250,
+        "max_road_gap_ms": 250,
+        "max_search_distance_m": 12.0,
+        "max_search_ms": 60000,
+        "max_track_loss_ms": 2000,
+        "min_detection_confidence": 0.5,
+        "min_green_frames": 3,
+        "min_green_ms": 300,
+        "min_pose_quality": 0.6,
+        "preferred_cone_radius_m": 0.85,
+        "processed_exclusion_m": 0.6,
+        "required_cone_colors": [
+          null,
+          null
+        ],
+        "schema_version": 1,
+        "search_horizon_m": 0.8,
+        "simulation_only": true,
+        "stopped_speed_mps": 0.012,
+        "world_frame": "sim_world"
+      },
+      "world": {
+        "association_distance_m": 0.3,
+        "body_frame": "sim_body",
+        "cone_semantic_ttl_ms": 20000,
+        "contradiction_heading_rad": 0.6,
+        "heading_drift_radps": 0.02,
+        "laser_error_m": 0.02,
+        "lidar_frame": "sim_laser",
+        "max_heading_error_rad": 0.3,
+        "max_position_error_m": 0.35,
+        "min_confidence": 0.6,
+        "min_confirmations": 2,
+        "min_pose_quality": 0.6,
+        "pose_heading_error_rad": 0.01,
+        "pose_position_error_m": 0.02,
+        "position_drift_mps": 0.03,
+        "scan_ttl_ms": 300,
+        "self_footprint": {
+          "front_m": 0.22,
+          "half_width_m": 0.13,
+          "rear_m": 0.18
+        },
+        "track_ttl_ms": 1800,
+        "world_frame": "sim_world"
+      }
+    },
+    "safety": {
+      "command_timeout_ms": 300,
+      "deadman_timeout_ms": 300,
+      "frames": {
+        "body_frame": "sim_body",
+        "imu_frame": "sim_imu",
+        "lidar_frame": "sim_laser",
+        "odometry_frame": "sim_world",
+        "vision_frame": "sim_camera"
+      },
+      "heartbeat_timeout_ms": 300,
+      "max_abs_curvature_per_m": 2.0,
+      "max_speed_mps": 0.3,
+      "required_sensors": [
+        "lidar",
+        "odometry",
+        "vision"
+      ],
+      "schema_version": 1,
+      "sensor_timeout_ms": 300,
+      "simulation_only": true
+    },
+    "scan": {
+      "bins": 360,
+      "frame_id": "sim_laser",
+      "max_missing_arc_rad": 0.12,
+      "max_packet_gap_ms": 20,
+      "max_revolution_ms": 200,
+      "min_coverage_fraction": 0.95,
+      "min_valid_fraction": 0.95
+    },
+    "schema_version": 1,
+    "simulation_only": true
+  },
+  "confirmed_permitted": false,
+  "confirmed_stop_line": [
+    {
+      "color": "white",
+      "confidence": 0.9,
+      "first_seen": 34500,
+      "geometry": {
+        "depth_m": 1.0,
+        "lateral_half_width_m": 0.4,
+        "shape": "line_region"
+      },
+      "heading_error_rad": 0.10607061180078503,
+      "heading_rad": -0.004903083660795282,
+      "id": 4,
+      "kind": "stop_line",
+      "last_geometry_at": 39600,
+      "last_seen": 39600,
+      "last_visual_at": 39600,
+      "observations": 52,
+      "position": {
+        "x_m": 5.211718397212885,
+        "y_m": 4.412433166876577
+      },
+      "position_error_m": 0.17175456795918398,
+      "processed": false,
+      "valid": true
+    },
+    41380
+  ],
+  "corners": [
+    {
+      "x_m": 4.985301511407233,
+      "y_m": 3.5315329112238576
+    },
+    {
+      "x_m": 4.984451378362811,
+      "y_m": 3.190967308281061
+    },
+    {
+      "x_m": 4.414821472044502,
+      "y_m": 3.5329569655865263
+    },
+    {
+      "x_m": 4.4139713390000805,
+      "y_m": 3.1923913626437295
+    }
+  ],
+  "curvature_bound": 0.010474970231332537,
+  "known_free": true,
+  "pending_permitted": true,
+  "pending_stop_lines": [
+    null,
+    {
+      "color": "white",
+      "confidence": 0.9,
+      "first_seen": 38900,
+      "geometry": {
+        "depth_m": 1.0,
+        "lateral_half_width_m": 0.4,
+        "shape": "line_region"
+      },
+      "heading_error_rad": 0.07047061180078729,
+      "heading_rad": -0.0077021423264493905,
+      "id": 0,
+      "kind": "stop_line",
+      "last_geometry_at": 38900,
+      "last_seen": 38900,
+      "last_visual_at": 38900,
+      "observations": 1,
+      "position": {
+        "x_m": 5.880670503738443,
+        "y_m": 4.563786536073506
+      },
+      "position_error_m": 0.11937388508768702,
+      "processed": false,
+      "valid": true
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "projected": {
+    "captured_at": 45180,
+    "frame_id": "sim_world",
+    "pose": {
+      "x_m": 4.7502362648984295,
+      "y_m": 3.3618347416064793,
+      "yaw_rad": 3.1392472596270196
+    },
+    "quality": 1.0,
+    "speed_mps": 0.18,
+    "yaw_rate_radps": 0.0018854946416398564
+  },
+  "released": false,
+  "source": {
+    "captured_at": 45100,
+    "frame_id": "sim_world",
+    "pose": {
+      "x_m": 4.764636222690352,
+      "y_m": 3.3617998819225807,
+      "yaw_rad": 3.139096420055644
+    },
+    "quality": 1.0,
+    "speed_mps": 0.18,
+    "yaw_rate_radps": 0.0018854946416398564
+  },
+  "speed_bound": 0.18,
+  "steering": {
+    "applied_curvature_per_m": 0.010474970231332537,
+    "at": 45180,
+    "commanded_curvature_per_m": 0.010474970231332537
+  }
+}

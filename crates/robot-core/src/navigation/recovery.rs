@@ -2,7 +2,8 @@
 
 use super::primitive_envelope::ErrorBound;
 use super::{Grid, NavigationConfig, body_radius};
-use crate::autonomy::{HalfPlane, ObstacleDisc, Point2, Rect};
+use crate::autonomy::{Footprint, HalfPlane, ObstacleDisc, Point2, Pose2, Rect};
+use crate::motion_transition::{MotionTransition, lateral_acceleration_peak};
 use serde::Serialize;
 use std::cell::Cell;
 
@@ -90,6 +91,9 @@ pub(super) struct RecoveryGrid {
     boundary: Option<HalfPlane>,
     radius: f64,
     maximum_curvature: f64,
+    pub oriented_boundary: bool,
+    footprint: Footprint,
+    boundary_padding: f64,
 }
 
 impl RecoveryGrid {
@@ -116,6 +120,9 @@ impl RecoveryGrid {
             // cannot enter a region that forbids even that normal restart.
             radius: body_radius(config.footprint) + config.clearance_m + restart_distance,
             maximum_curvature: config.max_curvature_per_m,
+            oriented_boundary: false,
+            footprint: config.footprint,
+            boundary_padding: config.clearance_m + restart_distance,
         }
     }
 
@@ -123,6 +130,16 @@ impl RecoveryGrid {
         if !from.valid() || !to.valid() || !padding.is_finite() || padding < 0.0 {
             return false;
         }
+        self.segment_clear_domain(from, to, padding, self.boundary)
+    }
+
+    fn segment_clear_domain(
+        &self,
+        from: Point2,
+        to: Point2,
+        padding: f64,
+        boundary: Option<HalfPlane>,
+    ) -> bool {
         let radius = self.radius + padding;
         // The map rectangle and global half-plane are convex. A laterally
         // limited boundary instead needs a common separating side for the
@@ -132,15 +149,13 @@ impl RecoveryGrid {
                 || point.x_m + radius > self.bounds.max_x_m
                 || point.y_m - radius < self.bounds.min_y_m
                 || point.y_m + radius > self.bounds.max_y_m
-                || self
-                    .boundary
+                || boundary
                     .is_some_and(|b| !b.is_laterally_limited() && !b.contains_disc(point, radius))
             {
                 return false;
             }
         }
-        if self
-            .boundary
+        if boundary
             .is_some_and(|b| b.is_laterally_limited() && !b.contains_points(&[from, to], radius))
         {
             return false;
@@ -165,6 +180,72 @@ impl RecoveryGrid {
             };
             nearest.distance(obstacle.center) > radius + obstacle.radius_m
         })
+    }
+    /// A second proof for a finite forbidden band, only after its original
+    /// full-body capsule failed. World bounds and every obstacle still use
+    /// exactly that capsule. No point-only reference check uses this fallback.
+    ///
+    /// For any center arc of length L and |curvature| <= K, an intermediate
+    /// body point is within L/2 * (1 + K*r) of the corresponding point at one
+    /// endpoint (choose its nearer endpoint in arc length). Thus the convex
+    /// hull of both endpoint rectangles plus this radius covers the entire
+    /// swept body, including steering sign changes. Preserve the original
+    /// clearance/restart reserve and both accumulated integration errors.
+    fn oriented_boundary_clear(
+        &self,
+        from: Pose2,
+        to: Pose2,
+        length: f64,
+        error: ErrorBound,
+    ) -> bool {
+        let sweep_padding =
+            0.5 * length * (1.0 + self.maximum_curvature * body_radius(self.footprint));
+        self.oriented_boundary_with_padding(from, to, length, error, sweep_padding)
+    }
+
+    fn oriented_boundary_with_padding(
+        &self,
+        from: Pose2,
+        to: Pose2,
+        length: f64,
+        error: ErrorBound,
+        sweep_padding: f64,
+    ) -> bool {
+        if !self.oriented_boundary
+            || !from.valid()
+            || !to.valid()
+            || !length.is_finite()
+            || length < 0.0
+            || !sweep_padding.is_finite()
+            || sweep_padding < 0.0
+            || !error.position_m.is_finite()
+            || error.position_m < 0.0
+            || !error.heading_rad.is_finite()
+            || error.heading_rad < 0.0
+        {
+            return false;
+        }
+        let Some(boundary) = self.boundary.filter(|b| b.is_laterally_limited()) else {
+            return false;
+        };
+        let arc_padding = self.maximum_curvature * length.powi(2) / 8.0 + error.position_m;
+        if !self.segment_clear_domain(from.point(), to.point(), arc_padding, None) {
+            return false;
+        }
+        let radius = body_radius(self.footprint);
+        let padding = self.boundary_padding
+            + sweep_padding
+            + error.position_m
+            + radius * error.heading_rad.min(2.0);
+        let first = self.footprint.corners(from);
+        let last = self.footprint.corners(to);
+        let corners: [Point2; 8] =
+            std::array::from_fn(|i| if i < 4 { first[i] } else { last[i - 4] });
+        let coordinate_scale = corners.iter().fold(1.0_f64, |scale, point| {
+            scale.max(point.x_m.abs()).max(point.y_m.abs())
+        });
+        let roundoff = 128.0 * f64::EPSILON * (coordinate_scale + padding.abs() + 1.0);
+        padding.is_finite() && boundary.contains_points(&corners, (padding + roundoff).next_up())
     }
 }
 
@@ -205,6 +286,47 @@ impl Grid {
         self.motion_transition_clear_with_error(from, to, arc_length_m, 0.0)
     }
 
+    /// Original circle proof first. A rolling local, continuous-domain motion
+    /// may independently prove the finite boundary with its full swept body.
+    pub(super) fn oriented_motion_transition_clear(
+        &self,
+        from: Pose2,
+        to: Pose2,
+        length: f64,
+        error: ErrorBound,
+    ) -> bool {
+        self.motion_transition_clear_with_error(from.point(), to.point(), length, error.position_m)
+            || (self.recovery_active()
+                && self
+                    .recovery
+                    .oriented_boundary_clear(from, to, length, error))
+    }
+
+    /// Keep both original proofs first. When their boundary approximation
+    /// rejects a modeled segment, its actual speed/steering ramps and duration
+    /// can certify a tighter full-body chord tube without another sample.
+    pub(super) fn modeled_motion_transition_clear(
+        &self,
+        from: Pose2,
+        to: Pose2,
+        length: f64,
+        error: ErrorBound,
+        model: Option<(MotionTransition, f64)>,
+    ) -> bool {
+        self.oriented_motion_transition_clear(from, to, length, error)
+            || (self.recovery_active()
+                && self.recovery.oriented_boundary
+                && model.is_some_and(|(motion, duration)| {
+                    let Some(padding) =
+                        body_chord_padding(self.recovery.footprint, motion, duration)
+                    else {
+                        return false;
+                    };
+                    self.recovery
+                        .oriented_boundary_with_padding(from, to, length, error, padding)
+                }))
+    }
+
     pub(super) fn motion_transition_clear_with_error(
         &self,
         from: Point2,
@@ -229,6 +351,37 @@ impl Grid {
             self.transition_clear(from, to)
         }
     }
+}
+
+/// For body point q = p + R(theta)b, |b| <= r, theta' = v*k:
+/// |q''| <= A + V²K + r(AK + V*S + V²K²).
+/// Speed and steering saturations preserve q' continuity; the bound applies
+/// almost everywhere across their affine pieces. The vector interpolation
+/// remainder is at most sup|q''| * duration² / 8. This encloses each body point
+/// between its two endpoint corners, hence their full rectangle convex hull.
+/// The caller separately adds accumulated endpoint position/heading errors.
+/// Duration is the actual modeled interval, never arc length / measured speed.
+fn body_chord_padding(
+    footprint: Footprint,
+    motion: MotionTransition,
+    duration: f64,
+) -> Option<f64> {
+    lateral_acceleration_peak(motion, duration)?;
+    let velocity = motion.initial_speed_mps.max(motion.target_speed_mps);
+    let curvature = motion
+        .initial_curvature_per_m
+        .abs()
+        .max(motion.target_curvature_per_m.abs());
+    let acceleration = motion.max_accel_mps2.max(motion.max_decel_mps2);
+    let steering_rate = motion.max_curvature_rate_per_s;
+    let bound = acceleration
+        + velocity.powi(2) * curvature
+        + body_radius(footprint)
+            * (acceleration * curvature
+                + velocity * steering_rate
+                + velocity.powi(2) * curvature.powi(2));
+    let padding = bound * duration.powi(2) / 8.0;
+    (padding.is_finite() && padding >= 0.0).then_some(padding.next_up())
 }
 
 #[cfg(test)]
@@ -1060,3 +1213,11 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "oriented_boundary_tests.rs"]
+mod oriented_boundary_tests;
+
+#[cfg(test)]
+#[path = "modeled_boundary_tests.rs"]
+mod modeled_boundary_tests;

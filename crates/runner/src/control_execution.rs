@@ -528,16 +528,92 @@ pub(crate) fn certify(
                 ));
         }
     }
-    if step.mission.as_ref().is_some_and(|mission| {
+    let boundary = if let Some(online) = &config.online {
+        let report = step
+            .online
+            .as_ref()
+            .ok_or_else(|| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+        if step
+            .mission
+            .as_ref()
+            .is_none_or(|mission| mission.phase != report.mission.phase)
+            || input.road.elements.as_ref().is_none_or(|frame| {
+                frame.captured_at != input.pose.captured_at
+                    || frame.frame_id != online.world.body_frame
+            })
+            || ((report.mission.phase == MissionPhase::WaitGreen
+                || (report.mission.phase == MissionPhase::ApproachLight
+                    && report.active_track_id.is_some()))
+                && report.travel_boundary.is_none())
+        {
+            return Err(geometry_failure(Reason::OnlineEvidenceInvalid));
+        }
+        // Reconstruct from the immutable source scan, independently of the
+        // planner's local map. A missing ray is never implicitly free.
+        let mut observed = xt_stcar_robot_core::local_world::LocalWorld::new(online.world.clone())
+            .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+        observed
+            .update_scan(
+                context.planned_at,
+                &input.pose,
+                &input.scan,
+                config.lidar_in_body,
+            )
+            .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+        if !observed.known_free_convex_hull(context.planned_at, &corners, 0.0) {
+            return Err(geometry_failure(Reason::UnobservedSpace));
+        }
+        // A processor cannot hide a first credible stop line by passing a
+        // different perception snapshot to the planner. Restriction evidence is
+        // checked again from this immutable source; it grants no permission.
+        let associated = xt_stcar_robot_core::local_world::associate_visual_cones(
+            input.road.elements.as_ref().expect("validated elements"),
+            &input.scan,
+            &online.cone_association,
+        )
+        .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+        observed
+            .update(context.planned_at, &input.pose, &associated)
+            .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+        if !matches!(
+            report.mission.phase,
+            MissionPhase::Finish | MissionPhase::Completed
+        ) {
+            for mut track in
+                crate::online::source_stop_regions(&input.pose, &associated, &online.world)
+                    .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?
+                    .into_iter()
+                    .flatten()
+            {
+                let age_s = (context.planned_at.0 - track.last_seen.0) as f64 / 1000.0;
+                track.position_error_m += age_s * online.world.position_drift_mps;
+                track.heading_error_rad += age_s * online.world.heading_drift_radps;
+                let boundary =
+                    xt_stcar_robot_core::online_mission::observed_region_boundary(track, true)
+                        .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+                if !boundary.contains_points(&corners, 0.0) {
+                    return Err(geometry_failure(Reason::LightBoundary)
+                        .with_margin(boundary.signed_points_margin(&corners, 0.0), Unit::Meters));
+                }
+            }
+        }
+        report.travel_boundary
+    } else if step.mission.as_ref().is_some_and(|mission| {
         matches!(
             mission.phase,
             MissionPhase::Cones | MissionPhase::ApproachLight | MissionPhase::WaitGreen
         )
     }) {
-        let boundary = config
-            .mission
-            .light_stop_boundary()
-            .map_err(|_| geometry_failure(Reason::LightBoundaryInvalid))?;
+        Some(
+            config
+                .mission
+                .light_stop_boundary()
+                .map_err(|_| geometry_failure(Reason::LightBoundaryInvalid))?,
+        )
+    } else {
+        None
+    };
+    if let Some(boundary) = boundary {
         if boundary.is_laterally_limited() && !boundary.contains_points(&corners, 0.0) {
             return Err(geometry_failure(Reason::LightBoundary)
                 .with_margin(boundary.signed_points_margin(&corners, 0.0), Unit::Meters));
@@ -661,6 +737,7 @@ mod tests {
             },
             scan: synthetic_scan(&simulation, simulation.initial_pose, &[], Timestamp(0)),
             road: RoadFrame {
+                elements: None,
                 observation: RoadObservation {
                     captured_at: Timestamp(0),
                     frame_id: config.mission.body_frame.clone(),
@@ -684,6 +761,7 @@ mod tests {
             curvature_per_m: 0.0,
         };
         let step = AutonomyStep {
+            online: None,
             kind: "autonomy_step",
             mode: "certificate_test",
             physical_output_enabled: false,

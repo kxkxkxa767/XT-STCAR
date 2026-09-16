@@ -1,0 +1,94 @@
+{
+  "evidence": "Captured 31060 execution-gate cached negative track and the actual 31000 raw StopLine frame. Tests seed a retained identity from this cache (not a captured LocalWorld slot); the later 31100 frame is explicitly synthetic for confirmation policy, not claimed as original history.",
+  "config": {
+    "association_distance_m": 0.3,
+    "body_frame": "sim_body",
+    "cone_semantic_ttl_ms": 20000,
+    "contradiction_heading_rad": 0.6,
+    "heading_drift_radps": 0.02,
+    "laser_error_m": 0.02,
+    "lidar_frame": "sim_laser",
+    "max_heading_error_rad": 0.3,
+    "max_position_error_m": 0.35,
+    "min_confidence": 0.6,
+    "min_confirmations": 2,
+    "min_pose_quality": 0.6,
+    "pose_heading_error_rad": 0.01,
+    "pose_position_error_m": 0.02,
+    "position_drift_mps": 0.03,
+    "scan_ttl_ms": 300,
+    "self_footprint": {
+      "front_m": 0.22,
+      "half_width_m": 0.13,
+      "rear_m": 0.18
+    },
+    "track_ttl_ms": 1800,
+    "world_frame": "sim_world"
+  },
+  "cached": {
+    "checked_at": 19660,
+    "permit": false,
+    "track": {
+      "color": "white",
+      "confidence": 0.9,
+      "first_seen": 14900,
+      "geometry": {
+        "depth_m": 1.0,
+        "lateral_half_width_m": 0.4,
+        "shape": "line_region"
+      },
+      "heading_error_rad": 0.10567061180077694,
+      "heading_rad": -0.003203218786962836,
+      "id": 4,
+      "kind": "stop_line",
+      "last_geometry_at": 17900,
+      "last_seen": 17900,
+      "last_visual_at": 17900,
+      "observations": 31,
+      "position": {
+        "x_m": 2.5943742735588247,
+        "y_m": 3.495043610599277
+      },
+      "position_error_m": 0.1813349492469562,
+      "processed": false,
+      "valid": true
+    }
+  },
+  "at": 31060,
+  "source": {
+    "captured_at": 31000,
+    "frame_id": "sim_world",
+    "pose": {
+      "x_m": 4.661615222438002,
+      "y_m": 1.8551175446661359,
+      "yaw_rad": 1.3481447491206104
+    },
+    "quality": 1.0,
+    "speed_mps": 0.0726,
+    "yaw_rate_radps": 0.11276232000000003
+  },
+  "frame": {
+    "captured_at": 31000,
+    "frame_id": "sim_body",
+    "observations": [
+      {
+        "color": "white",
+        "confidence": 0.9,
+        "geometry": {
+          "depth_m": 1.0,
+          "lateral_half_width_m": 0.4,
+          "shape": "line_region"
+        },
+        "heading_body_rad": -1.3442424036452891,
+        "heading_error_rad": 0.0604706118007796,
+        "kind": "stop_line",
+        "position_body_m": {
+          "x_m": 1.1355525188568762,
+          "y_m": 2.3668533506825438
+        },
+        "position_error_m": 0.08532952945000644,
+        "source": "ground_marker"
+      }
+    ]
+  }
+}

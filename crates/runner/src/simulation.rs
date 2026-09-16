@@ -1,12 +1,13 @@
 //! Synthetic camera + laser + Ackermann plant feedback. No recorded motion intents.
 //! Ideal pose feedback is declared explicitly; it is not encoder or localization evidence.
-use crate::autonomy::{AutonomyConfig, AutonomyController, Result, RoadFrame};
+use crate::autonomy::{AutonomyConfig, AutonomyController, Result};
 use crate::phase_statistics::{
     CompetitionStatistics, CompetitionStatisticsCollector, FinalBrakingCause,
 };
 use crate::telemetry::{RunJournal, TelemetryConfig, TelemetryMode};
 use image::{Rgb, RgbImage};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::f64::consts::TAU;
 use std::io::Write;
 use xt_stcar_robot_core::autonomy::{
@@ -35,6 +36,8 @@ pub enum SimulationFault {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimulationConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub online_scene: Option<crate::online_simulation::OnlineScene>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub field: Option<crate::field::FieldScenario>,
     #[serde(default)]
@@ -162,6 +165,7 @@ impl SimulationConfig {
             },
         };
         let autonomy = AutonomyConfig {
+            online: None,
             schema_version: 1,
             simulation_only: true,
             measurement_status: "unverified".into(),
@@ -186,6 +190,7 @@ impl SimulationConfig {
         let mut road = RoadConfig::simulation();
         road.light_rois = vec![[0.82, 0.02, 0.96, 0.25]];
         Self {
+            online_scene: None,
             field: None,
             telemetry: TelemetryConfig::default(),
             autonomy,
@@ -226,6 +231,7 @@ impl SimulationConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        crate::online_simulation::validate_scene(self)?;
         if let Some(field) = &self.field {
             field.validate_compiled(self)?;
         }
@@ -302,6 +308,15 @@ pub fn render_camera(
     pose: Pose2,
     light: LightState,
 ) -> Result<RgbImage> {
+    render_camera_at(config, pose, light, Timestamp(0))
+}
+
+pub fn render_camera_at(
+    config: &SimulationConfig,
+    pose: Pose2,
+    light: LightState,
+    at: Timestamp,
+) -> Result<RgbImage> {
     let (width, height) = (320, 240);
     let mut image = RgbImage::from_pixel(width, height, Rgb([35, 35, 35]));
     for (x, y, pixel) in image.enumerate_pixels_mut() {
@@ -318,9 +333,44 @@ pub fn render_camera(
         {
             *pixel = Rgb([245, 245, 245]);
         }
+        if let Some(scene) = &config.online_scene
+            && scene.markers.enabled
+            && !crate::online_simulation::is_occluded(scene, at, false)
+        {
+            for pattern in &scene.markers.patterns {
+                let region = match pattern.kind {
+                    xt_stcar_robot_core::local_world::ElementKind::StopLine => {
+                        scene.light_stop_region
+                    }
+                    xt_stcar_robot_core::local_world::ElementKind::FinishMarker => {
+                        scene.finish_region
+                    }
+                    _ => continue,
+                };
+                let local =
+                    crate::online_simulation::marker_region_pose(region).world_to_body(world);
+                for index in 0..pattern.bar_count {
+                    let offset = (index as f64 - (pattern.bar_count - 1) as f64 / 2.0)
+                        * pattern.bar_spacing_m;
+                    if (local.x_m + pattern.anchor_from_far_edge_m - offset).abs()
+                        <= pattern.bar_thickness_m / 2.0
+                        && local.y_m.abs() <= pattern.bar_span_m / 2.0
+                    {
+                        *pixel = Rgb([245, 245, 245]);
+                    }
+                }
+            }
+        }
     }
     let inv = inverse(config.road.homography.matrix)?;
     for (index, cone) in config.cones.iter().enumerate() {
+        if config
+            .online_scene
+            .as_ref()
+            .is_some_and(|s| crate::online_simulation::is_occluded(s, at, true))
+        {
+            continue;
+        }
         let body = pose.world_to_body(cone.center);
         if body.x_m <= 0.0 {
             continue;
@@ -398,7 +448,7 @@ pub fn synthetic_scan(
     obstacles: &[ObstacleDisc],
     at: Timestamp,
 ) -> LidarSample {
-    let bounds = config.autonomy.navigation.bounds;
+    let bounds = crate::online_simulation::scene_bounds(config);
     let origin = pose.body_to_world(config.autonomy.lidar_in_body.point());
     let increment = -TAU / config.autonomy.scan.bins as f64;
     let ranges = (0..config.autonomy.scan.bins)
@@ -453,6 +503,55 @@ pub fn obstacle_clearance(pose: Pose2, footprint: Footprint, obstacle: ObstacleD
     dx.hypot(dy) - obstacle.radius_m
 }
 
+/// Last online decisions, independent of the event journal's record budget.
+/// No image, scan, candidate path, or complete NavigationDiagnostics is retained.
+#[derive(Debug, Serialize)]
+pub struct OnlineSimulationAttempt {
+    pub at: Timestamp,
+    pub actual_pose: Pose2,
+    pub actual_speed_mps: f64,
+    pub actual_curvature_per_m: f64,
+    pub source_pose: Option<PoseEstimate>,
+    pub road_captured_at: Option<Timestamp>,
+    pub light: Option<LightState>,
+    pub light_confidence: Option<f64>,
+    pub elements: Option<xt_stcar_robot_core::local_world::ElementFrame>,
+    pub online: Option<xt_stcar_robot_core::online_mission::OnlineMissionReport>,
+    pub command: MotionOutput,
+    pub navigation_status: Option<xt_stcar_robot_core::navigation::NavigationStatus>,
+    pub navigation_reason: Option<String>,
+    pub fault: Option<String>,
+}
+
+pub(crate) fn bounded_online_report(
+    report: &xt_stcar_robot_core::online_mission::OnlineMissionReport,
+) -> xt_stcar_robot_core::online_mission::OnlineMissionReport {
+    let mut report = report.clone();
+    report.mission.reason = report.mission.reason.chars().take(256).collect();
+    report
+}
+
+fn retain_online_attempt(
+    tail: &mut VecDeque<OnlineSimulationAttempt>,
+    mut attempt: OnlineSimulationAttempt,
+) {
+    if let Some(elements) = &mut attempt.elements {
+        elements
+            .observations
+            .truncate(xt_stcar_robot_core::local_world::MAX_ELEMENTS);
+    }
+    attempt.navigation_reason = attempt
+        .navigation_reason
+        .map(|reason| reason.chars().take(256).collect());
+    attempt.fault = attempt
+        .fault
+        .map(|reason| reason.chars().take(256).collect());
+    if tail.len() == 16 {
+        tail.pop_front();
+    }
+    tail.push_back(attempt);
+}
+
 #[derive(Debug, Serialize)]
 pub struct SimulationSummary {
     pub kind: &'static str,
@@ -469,11 +568,19 @@ pub struct SimulationSummary {
     pub phases: Vec<MissionPhase>,
     pub final_pose: Pose2,
     pub final_actual_speed_mps: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub final_actual_curvature_per_m: Option<f64>,
     pub braking_ticks: usize,
     pub dropped_trace_records: u64,
     pub logging_errors: usize,
     pub fault: Option<String>,
     pub first_navigation_failure: Option<crate::navigation_diagnostics::NavigationFailureWindow>,
+    /// Online only: final 16 samples at >=100ms intervals, plus a terminal
+    /// decision even when it arrives sooner. Written once with the summary.
+    #[serde(skip_serializing_if = "VecDeque::is_empty")]
+    pub recent_online_attempts: VecDeque<OnlineSimulationAttempt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub online_referee: Option<crate::online_simulation::OnlineRefereeSummary>,
     pub statistics: CompetitionStatistics,
 }
 
@@ -481,6 +588,12 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     config.validate()?;
     let mut journal = RunJournal::new(config.telemetry.clone())?;
     let mut navigation_failure = crate::navigation_diagnostics::FirstNavigationFailure::default();
+    let mut recent_online_attempts =
+        VecDeque::<OnlineSimulationAttempt>::with_capacity(if config.online_scene.is_some() {
+            16
+        } else {
+            0
+        });
     let mut statistics = CompetitionStatisticsCollector::default();
     let mut logging_errors = 0;
     let detector = RoadDetector::new(config.road.clone())?;
@@ -512,12 +625,9 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     let mut summary_fault = None;
     let mut completed = false;
     let mut elapsed = 0;
-    let light_boundary = config
-        .autonomy
-        .mission
-        .light_stop_boundary()
-        .map_err(|e| e.to_string())?;
+    let light_boundary = crate::online_simulation::scene_light_boundary(config)?;
     let mut active_boundary = None;
+    let mut online_referee = crate::online_simulation::OnlineReferee::for_simulation(config)?;
     for ms in (0..=config.max_duration_ms).step_by(config.time_step_ms as usize) {
         elapsed = ms;
         let at = Timestamp(ms);
@@ -552,17 +662,14 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         let fresh_scan = synthetic_scan(config, pose, &obstacles, at);
         // A runtime perception error must enter the same stop/braking path as a
         // dropped sensor. Only startup/configuration failures may return early.
-        let fresh_road = render_camera(config, pose, light).and_then(|camera| {
-            Ok(RoadFrame {
-                observation: detector.detect(
-                    &camera,
-                    &[],
-                    at,
-                    config.autonomy.mission.body_frame.clone(),
-                )?,
-                image_width_px: camera.width(),
-                image_height_px: camera.height(),
-            })
+        let fresh_road = render_camera_at(config, pose, light, at).and_then(|camera| {
+            crate::online_simulation::detect_frame(
+                config,
+                &detector,
+                &camera,
+                at,
+                config.initial_pose.yaw_rad - fresh_pose.pose.yaw_rad,
+            )
         });
         if ms < config.fault_at_ms || config.fault != SimulationFault::PoseDropout {
             previous_pose = Some(fresh_pose);
@@ -605,6 +712,42 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
                 && step.fault.is_none()
                 && step.safety.state == xt_stcar_robot_core::State::Running;
         }
+        if config.online_scene.is_some()
+            && (recent_online_attempts
+                .back()
+                .is_none_or(|old| at.0.saturating_sub(old.at.0) >= 100)
+                || step.fault.is_some()
+                || completed)
+        {
+            retain_online_attempt(
+                &mut recent_online_attempts,
+                OnlineSimulationAttempt {
+                    at,
+                    actual_pose: pose,
+                    actual_speed_mps: speed,
+                    actual_curvature_per_m: curvature,
+                    source_pose: previous_pose.clone(),
+                    road_captured_at: previous_road
+                        .as_ref()
+                        .map(|road| road.observation.captured_at),
+                    light: previous_road.as_ref().map(|road| road.observation.light),
+                    light_confidence: previous_road
+                        .as_ref()
+                        .map(|road| road.observation.light_confidence),
+                    elements: previous_road
+                        .as_ref()
+                        .and_then(|road| road.elements.clone()),
+                    online: step.online.as_ref().map(bounded_online_report),
+                    command: step.command.clone(),
+                    navigation_status: step.navigation.as_ref().map(|navigation| navigation.status),
+                    navigation_reason: step
+                        .navigation
+                        .as_ref()
+                        .and_then(|navigation| navigation.reason.clone()),
+                    fault: step.fault.clone(),
+                },
+            );
+        }
         let important = step.fault.is_some()
             || (phase_changed && config.telemetry.mode != TelemetryMode::Summary);
         if (important || config.telemetry.mode==TelemetryMode::Trace) && journal.record(&serde_json::json!({"control":step,"pose_feedback":pose,"actual_speed_mps":speed,
@@ -629,6 +772,9 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             |sample| {
                 plant_violation |=
                     check_plant_pose(config, sample, &obstacles, active_boundary, &mut minimum);
+                if let Some(referee) = &mut online_referee {
+                    referee.observe(Timestamp(ms + config.time_step_ms), sample);
+                }
             },
         );
         pose = plant.state.pose;
@@ -642,6 +788,14 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             break;
         }
     }
+    if completed
+        && let Some(error) = online_referee
+            .as_ref()
+            .and_then(|referee| referee.completion_error())
+    {
+        completed = false;
+        summary_fault = Some(error.into());
+    }
     if !completed && summary_fault.is_none() {
         summary_fault = Some("scenario duration exhausted before completion".into());
     }
@@ -653,7 +807,9 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
     } else {
         FinalBrakingCause::FaultOrScenarioEnd
     };
-    while speed.abs() > 1e-9 && braking_ticks < 5000 {
+    while (speed.abs() > 1e-9 || (config.online_scene.is_some() && curvature.abs() > 1e-9))
+        && braking_ticks < 5000
+    {
         braking_ticks += 1;
         elapsed += config.time_step_ms;
         let mut obstacles = config.cones.clone();
@@ -679,6 +835,9 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             |sample| {
                 plant_violation |=
                     check_plant_pose(config, sample, &obstacles, active_boundary, &mut minimum);
+                if let Some(referee) = &mut online_referee {
+                    referee.observe(Timestamp(elapsed), sample);
+                }
             },
         );
         pose = plant.state.pose;
@@ -706,10 +865,21 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             logging_errors += 1;
         }
     }
-    if speed.abs() > 1e-9 {
+    if speed.abs() > 1e-9 || (config.online_scene.is_some() && curvature.abs() > 1e-9) {
         completed = false;
         summary_fault =
             Some("synthetic plant failed to stop within its bounded braking rollout".into());
+    }
+    if completed && config.online_scene.is_some() {
+        let (region, yaw) = crate::online_simulation::scene_finish(config);
+        let heading = (pose.yaw_rad - yaw + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
+            - std::f64::consts::PI;
+        if !config.autonomy.mission.footprint.inside(pose, region)
+            || heading.abs() > config.autonomy.mission.goal_heading_tolerance_rad
+        {
+            completed = false;
+            summary_fault = Some("online mission declared completion outside independently checked true finish region".into());
+        }
     }
     if summary_fault.is_some() && phases.last() != Some(&MissionPhase::Fault) {
         phases.push(MissionPhase::Fault);
@@ -734,9 +904,12 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
         phases,
         final_pose: pose,
         final_actual_speed_mps: speed,
+        final_actual_curvature_per_m: config.online_scene.as_ref().map(|_| curvature),
         braking_ticks,
         fault: summary_fault,
         first_navigation_failure: navigation_failure.finish(),
+        recent_online_attempts,
+        online_referee: online_referee.as_ref().map(|referee| referee.summary()),
         statistics: statistics.finish(),
         dropped_trace_records: journal.dropped_records(),
         logging_errors,
@@ -782,7 +955,7 @@ pub(crate) fn check_plant_pose(
             .autonomy
             .mission
             .footprint
-            .inside(pose, config.autonomy.navigation.bounds)
+            .inside(pose, crate::online_simulation::scene_bounds(config))
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1188,5 +1361,85 @@ mod stop_tests {
                 None
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod online_diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn online_tail_keeps_only_last_sixteen_and_bounds_reason_text() {
+        let mut tail = VecDeque::with_capacity(16);
+        for at in 0..40 {
+            retain_online_attempt(
+                &mut tail,
+                OnlineSimulationAttempt {
+                    at: Timestamp(at * 100),
+                    actual_pose: Pose2::default(),
+                    actual_speed_mps: 0.0,
+                    actual_curvature_per_m: 0.0,
+                    source_pose: None,
+                    road_captured_at: None,
+                    light: None,
+                    light_confidence: None,
+                    elements: None,
+                    online: None,
+                    command: MotionOutput::Stop,
+                    navigation_status: None,
+                    navigation_reason: Some("原因".repeat(300)),
+                    fault: Some("fault".repeat(300)),
+                },
+            );
+        }
+        assert_eq!(tail.len(), 16);
+        assert_eq!(tail.capacity(), 16);
+        assert_eq!(tail.front().unwrap().at, Timestamp(2400));
+        assert_eq!(tail.back().unwrap().at, Timestamp(3900));
+        assert_eq!(
+            tail[0].navigation_reason.as_ref().unwrap().chars().count(),
+            256
+        );
+        assert_eq!(tail[0].fault.as_ref().unwrap().chars().count(), 256);
+    }
+
+    #[test]
+    fn online_tail_survives_full_trace_budget_and_is_absent_from_legacy_json() {
+        let mut config = crate::online_simulation::OnlineScenario::example()
+            .compile()
+            .unwrap();
+        config.max_duration_ms = 200;
+        config.telemetry.mode = TelemetryMode::Trace;
+        config.telemetry.max_trace_bytes = 1;
+        let summary = simulate(&config, &mut Vec::new()).unwrap();
+        assert!(summary.dropped_trace_records > 0);
+        assert_eq!(summary.recent_online_attempts.len(), 3);
+        assert_eq!(
+            summary.recent_online_attempts.back().unwrap().at,
+            Timestamp(200)
+        );
+        for attempt in &summary.recent_online_attempts {
+            assert!(attempt.online.is_some());
+            assert!(attempt.elements.is_some());
+            assert!(attempt.source_pose.is_some());
+            let json = serde_json::to_value(attempt).unwrap();
+            assert!(
+                json.get("path").is_none()
+                    && json.get("scan").is_none()
+                    && json.get("navigation").is_none()
+            );
+        }
+        let json = serde_json::to_value(&summary).unwrap();
+        assert_eq!(json["recent_online_attempts"].as_array().unwrap().len(), 3);
+        let mut legacy = SimulationConfig::example();
+        legacy.max_duration_ms = 100;
+        let old = simulate(&legacy, &mut Vec::new()).unwrap();
+        assert!(old.recent_online_attempts.is_empty());
+        assert!(
+            serde_json::to_value(old)
+                .unwrap()
+                .get("recent_online_attempts")
+                .is_none()
+        );
     }
 }

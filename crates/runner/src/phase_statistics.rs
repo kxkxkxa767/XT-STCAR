@@ -193,13 +193,18 @@ pub struct TerminalWorkStatistics {
     /// A solver consumed all eight local iterations without certification;
     /// distinct from exhausting the shared per-tick ledger.
     pub solver_iteration_exhaustions: WorkCounter,
+    /// Omitted only when both total and per-tick peak are zero.
+    #[serde(skip_serializing_if = "WorkCounter::is_zero")]
     pub cold_budget_deferrals: WorkCounter,
     /// Reserved capacity across ticks, not work actually performed.
     pub recovery_reserved_solvers: WorkCounter,
     pub recovery_reserved_iterations: WorkCounter,
     pub recovery_reserved_samples: WorkCounter,
+    /// Omitted only when no reservation shortfall occurred in this phase.
+    #[serde(skip_serializing_if = "WorkCounter::is_zero")]
     pub recovery_reservation_shortfalls: WorkCounter,
     /// Host timing only when explicitly enabled in Navigator.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub solver_elapsed_ns: Option<WorkCounter>,
     /// Budget-charged samples: a rejected primitive may not execute its tail.
     pub primitive_samples: WorkCounter,
@@ -863,6 +868,42 @@ mod tests {
             assert!(value.get("arrival_region_attempts").is_none());
             assert!(value.get("arrival_region_accepted").is_none());
         }
+    }
+
+    #[test]
+    fn sparse_terminal_exceptions_preserve_observed_counts_and_zero_time_measurements() {
+        let mut statistics = TerminalWorkStatistics::default();
+        let empty = serde_json::to_value(&statistics).unwrap();
+        for key in [
+            "cold_budget_deferrals",
+            "recovery_reservation_shortfalls",
+            "solver_elapsed_ns",
+        ] {
+            assert!(empty.get(key).is_none(), "{key}");
+        }
+        statistics.observe(&NavigationDiagnostics {
+            terminal_work: TerminalWorkDiagnostics {
+                cold_budget_deferrals: 2,
+                recovery_reservation_shortfalls: 1,
+                solver_elapsed_ns: Some(0),
+                ..TerminalWorkDiagnostics::default()
+            },
+            ..NavigationDiagnostics::default()
+        });
+        let observed = serde_json::to_value(&statistics).unwrap();
+        assert_eq!(observed["cold_budget_deferrals"]["total"], 2);
+        assert_eq!(observed["cold_budget_deferrals"]["maximum_per_tick"], 2);
+        assert_eq!(observed["recovery_reservation_shortfalls"]["total"], 1);
+        assert_eq!(
+            observed["recovery_reservation_shortfalls"]["maximum_per_tick"],
+            1
+        );
+        assert_eq!(observed["solver_elapsed_ns"]["total"], 0);
+        assert_eq!(observed["solver_elapsed_ns"]["maximum_per_tick"], 0);
+        assert!(
+            observed.get("solver_elapsed_ns").is_some(),
+            "observed zero is not an absent clock"
+        );
     }
 
     #[test]

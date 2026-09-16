@@ -646,7 +646,63 @@ pub(super) fn single_arc_with_error(
         budget,
         initial_error,
         EndpointPolicy::ExactCenter,
+        0.35,
     )
+}
+
+/// One direct, forward point-target connector over the existing local reference
+/// horizon. Unlike an oriented arrival it has no endpoint heading constraint.
+/// This explicit API leaves the old lattice terminal's 35 cm domain unchanged;
+/// both use the same eight corrections, integrated endpoint and shared ledger.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn short_point_arc_with_error(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    let max_distance = (2.0 * config.lookahead_m).min(2.0);
+    solve_single_arc(
+        start,
+        initial_curvature,
+        goal,
+        None,
+        config,
+        grid,
+        budget,
+        initial_error,
+        EndpointPolicy::ExactCenter,
+        max_distance,
+    )
+    .or_else(|| {
+        let mut work = budget.snapshot();
+        if work.budget_exhausted {
+            return None;
+        }
+        work.arrival_region_attempts += 1;
+        budget.work.set(work);
+        let result = solve_single_arc(
+            start,
+            initial_curvature,
+            goal,
+            None,
+            config,
+            grid,
+            budget,
+            initial_error,
+            EndpointPolicy::ArrivalRegion,
+            max_distance,
+        );
+        if result.is_some() {
+            let mut work = budget.snapshot();
+            work.arrival_region_accepted += 1;
+            budget.work.set(work);
+        }
+        result
+    })
 }
 
 /// The exact shortcuts and bounded searches retain priority. This separate
@@ -665,6 +721,59 @@ pub(super) fn oriented_arrival_region(
     budget: &TerminalBudget,
     initial_error: ErrorBound,
 ) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    solve_oriented_region(
+        start,
+        initial_curvature,
+        goal,
+        goal_heading,
+        config,
+        grid,
+        budget,
+        initial_error,
+        false,
+    )
+}
+
+/// Sensor-local oriented arrivals may have a nearby center that asks for a
+/// heading change even though advancing with zero target curvature reaches the
+/// allowed region. Keep the original solvers first and certify that additional
+/// candidate only under the same accumulated error and terminal ledger.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn rolling_oriented_arrival_region(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    solve_oriented_region(
+        start,
+        initial_curvature,
+        goal,
+        goal_heading,
+        config,
+        grid,
+        budget,
+        initial_error,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn solve_oriented_region(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+    allow_zero_target_curvature: bool,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
     if budget.snapshot().budget_exhausted {
         return None;
     }
@@ -681,6 +790,7 @@ pub(super) fn oriented_arrival_region(
         budget,
         initial_error,
         EndpointPolicy::ArrivalRegion,
+        0.35,
     )
     .or_else(|| {
         solve_two_arc(
@@ -703,6 +813,33 @@ pub(super) fn oriented_arrival_region(
                 connection.error,
             )
         })
+    })
+    .or_else(|| {
+        if !allow_zero_target_curvature {
+            return None;
+        }
+        zero_target_curvature_arrival_region(
+            start,
+            initial_curvature,
+            goal,
+            goal_heading,
+            config,
+            grid,
+            budget,
+            initial_error,
+        )
+        .or_else(|| {
+            heading_ramp_arrival_region(
+                start,
+                initial_curvature,
+                goal,
+                goal_heading,
+                config,
+                grid,
+                budget,
+                initial_error,
+            )
+        })
     });
     if result.is_some() {
         let mut work = budget.snapshot();
@@ -710,6 +847,120 @@ pub(super) fn oriented_arrival_region(
         budget.work.set(work);
     }
     result
+}
+
+/// One bounded primitive, with the actual initial curvature ramping toward
+/// zero. Its length is the positive body-frame projection of the goal; the
+/// actual integrated endpoint must satisfy both original half tolerances.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn zero_target_curvature_arrival_region(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    let _timer = budget.timer();
+    let length = start.world_to_body(goal).x_m;
+    if length <= 0.0 || !(1e-9..0.35).contains(&start.point().distance(goal)) {
+        let mut work = budget.snapshot();
+        work.domain_rejections += 1;
+        budget.work.set(work);
+        return None;
+    }
+    budget.solver()?;
+    budget.iteration()?;
+    let result = terminal_primitive(
+        start,
+        initial_curvature,
+        0.0,
+        length,
+        config,
+        grid,
+        budget,
+        initial_error,
+    )?;
+    (result.1.point().distance(goal) + result.3.position_m < config.goal_tolerance_m * 0.5
+        && angle_error(result.1.yaw_rad, goal_heading).abs() + result.3.heading_rad
+            <= config.goal_heading_tolerance_rad * 0.5)
+        .then_some(result)
+}
+
+/// Retain the actual steering briefly, center at the original slew rate, then
+/// advance straight. This is one bounded geometric candidate, not a new command
+/// or an assumption that steering centers instantly. The analytic heading split
+/// is only a seed: every segment is integrated and certified by the original
+/// primitive, and the actual endpoint must meet both original half tolerances.
+/// Used only after the existing rolling-local region candidates have failed.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn heading_ramp_arrival_region(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: f64,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    mut error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    let _timer = budget.timer();
+    let distance = start.point().distance(goal);
+    if !start.valid()
+        || !goal.valid()
+        || !goal_heading.is_finite()
+        || !initial_curvature.is_finite()
+        || !(1e-9..=config.max_curvature_per_m).contains(&initial_curvature.abs())
+        || !(1e-9..0.35).contains(&distance)
+        || start.world_to_body(goal).x_m <= 0.0
+    {
+        let mut work = budget.snapshot();
+        work.domain_rejections += 1;
+        budget.work.set(work);
+        return None;
+    }
+    let ramp_length =
+        initial_curvature.abs() * config.max_speed_mps / config.max_curvature_rate_per_s;
+    let hold_length =
+        angle_error(goal_heading, start.yaw_rad) / initial_curvature - ramp_length * 0.5;
+    let max_length = distance * std::f64::consts::FRAC_PI_2;
+    if !hold_length.is_finite()
+        || hold_length < 0.0
+        || !ramp_length.is_finite()
+        || ramp_length <= 0.0
+        || hold_length + ramp_length >= max_length
+    {
+        return None;
+    }
+    budget.solver()?;
+    budget.iteration()?;
+    let mut pose = start;
+    let mut curvature = initial_curvature;
+    let mut path = Vec::new();
+    for (length, target) in [(hold_length, initial_curvature), (ramp_length, 0.0)] {
+        if length == 0.0 {
+            continue;
+        }
+        let (points, end, end_curvature, next_error) =
+            terminal_primitive(pose, curvature, target, length, config, grid, budget, error)?;
+        path.extend(points);
+        pose = end;
+        curvature = end_curvature;
+        error = next_error;
+    }
+    let length = pose.world_to_body(goal).x_m;
+    if !length.is_finite() || length <= 0.0 || hold_length + ramp_length + length > max_length {
+        return None;
+    }
+    let (points, end, end_curvature, error) =
+        terminal_primitive(pose, curvature, 0.0, length, config, grid, budget, error)?;
+    path.extend(points);
+    (end.point().distance(goal) + error.position_m < config.goal_tolerance_m * 0.5
+        && angle_error(end.yaw_rad, goal_heading).abs() + error.heading_rad
+            <= config.goal_heading_tolerance_rad * 0.5)
+        .then_some((path, end, end_curvature, error))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -723,11 +974,12 @@ fn solve_single_arc(
     budget: &TerminalBudget,
     initial_error: ErrorBound,
     endpoint_policy: EndpointPolicy,
+    max_distance_m: f64,
 ) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
     let _timer = budget.timer();
     let local = start.world_to_body(goal);
     let distance = start.point().distance(goal);
-    if local.x_m <= 0.0 || !(1e-9..0.35).contains(&distance) {
+    if local.x_m <= 0.0 || !(1e-9..max_distance_m).contains(&distance) {
         let mut work = budget.snapshot();
         work.domain_rejections += 1;
         budget.work.set(work);

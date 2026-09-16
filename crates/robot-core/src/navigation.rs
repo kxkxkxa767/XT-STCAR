@@ -17,9 +17,20 @@ use serde::{Deserialize, Serialize};
 mod candidate_pipeline;
 mod continuity;
 use continuity::{CachedTerminalSeed, terminal_connection};
+#[cfg(test)]
+mod oriented_region_advance;
 mod primitive_envelope;
 mod recovery;
+#[cfg(test)]
+mod rolling_oriented_arrival;
+#[cfg(test)]
+mod short_arrival_repair;
+#[cfg(test)]
+mod short_point_target;
+mod stopping_envelope;
 mod terminal;
+#[cfg(test)]
+mod terminal_continuity_region;
 pub use recovery::ForwardSearchDiagnostics;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
@@ -248,6 +259,11 @@ pub struct NavigationDiagnostics {
     pub selected_reference_cost_m: Option<f64>,
     pub current_stopping_margin: Option<StoppingMargin>,
     pub selected_stopping_margin: Option<StoppingMargin>,
+    /// Present only when the selected rolling-local candidate's original
+    /// stopping disk failed, but the complete bounded-curvature envelope passed.
+    /// The existing disk margins remain visible and are not relabeled as safe.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_braking_envelope_margin: Option<StoppingMargin>,
     pub selected_next_stopping_margin: Option<StoppingMargin>,
     /// Current/next states queried against bounded terminal families. Recovery
     /// may recheck a rejected next state; all solvers share terminal_work limits.
@@ -279,7 +295,6 @@ pub struct StoppingMargin {
 }
 
 impl StoppingMargin {
-    #[cfg(test)]
     fn clear(self) -> bool {
         self.clearance_m.is_finite()
             && match self.constraint {
@@ -403,7 +418,18 @@ pub enum ArrivalBehavior {
     },
 }
 
+/// Target semantics are fixed for the lifetime of a navigator. A sensor-local
+/// rolling point may need a direct bounded connection before the lattice;
+/// established fixed-waypoint callers retain their original search ordering.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TargetPolicy {
+    #[default]
+    Fixed,
+    RollingLocal,
+}
+
 pub struct Navigator {
+    target_policy: TargetPolicy,
     adoption_constraints: Option<AdoptionConstraints>,
     recovery_active: bool,
     recovery_route_error_m: f64,
@@ -431,8 +457,16 @@ impl Navigator {
     }
 
     pub fn new(config: NavigationConfig) -> Result<Self, ValidationError> {
+        Self::new_with_target_policy(config, TargetPolicy::Fixed)
+    }
+
+    pub fn new_with_target_policy(
+        config: NavigationConfig,
+        target_policy: TargetPolicy,
+    ) -> Result<Self, ValidationError> {
         config.validate()?;
         Ok(Self {
+            target_policy,
             adoption_constraints: None,
             recovery_active: false,
             recovery_route_error_m: 0.0,
@@ -745,7 +779,8 @@ impl Navigator {
             return Ok(self.blocked("goal_braking"));
         }
         let previous_route_revision = self.route_revision;
-        let grid = Grid::with_boundary(&self.config, obstacles, self.travel_boundary);
+        let mut grid = Grid::with_boundary(&self.config, obstacles, self.travel_boundary);
+        grid.recovery.oriented_boundary = self.target_policy == TargetPolicy::RollingLocal;
         if self
             .route
             .as_ref()
@@ -843,12 +878,16 @@ impl Navigator {
             self.diagnostics.route_rebuild_reason = self.pending_route_rebuild;
             self.continuation_checked = false;
             self.route = self
-                .kinematic_path_from(
+                .kinematic_path_from_with_arrival_repair(
                     pose,
                     self.steering.applied_curvature_per_m,
                     goal,
                     goal_heading_rad,
                     &grid,
+                    previous_remaining_length.is_some_and(|length| {
+                        let local_bound = (2.0 * self.config.lookahead_m).min(2.0);
+                        length <= local_bound && distance <= local_bound
+                    }),
                 )
                 .map(|(mut path, end_pose, end_curvature)| {
                     self.via_index = path.len() - 1;
@@ -1158,7 +1197,7 @@ impl Navigator {
                     continue;
                 }
                 self.diagnostics.candidates.rollouts_evaluated += 1;
-                let prediction = match rollout(
+                let prediction = match rollout_with_stopping_policy(
                     &self.config,
                     pose,
                     estimate.speed_mps.max(0.0),
@@ -1173,6 +1212,8 @@ impl Navigator {
                         initial_arc_m: current_reference.arc_m,
                         goal_heading_rad,
                     }),
+                    self.target_policy,
+                    self.adoption_constraints.map_or(0.0, |c| c.speed_bound_mps),
                 ) {
                     Ok(prediction) => prediction,
                     Err(reason) => {
@@ -1439,7 +1480,7 @@ impl Navigator {
                     .total_cmp(&(b.intent.curvature_per_m - seed.first_curvature()).abs())
                     .then_with(|| a.score.total_cmp(&b.score))
             });
-            for mut candidate in terminal_recovery {
+            for mut candidate in terminal_recovery.iter().copied() {
                 if self.terminal_budget.snapshot().budget_exhausted {
                     if !candidate.terminal_deferred {
                         self.diagnostics.candidates.terminal_unreachable -= 1;
@@ -1505,6 +1546,39 @@ impl Navigator {
                     self.diagnostics.candidates.terminal_unreachable += 1;
                 }
             }
+            if best.is_none() && self.target_policy == TargetPolicy::RollingLocal {
+                // Exact-center continuations can all fail even though a real
+                // integrated endpoint reaches the unchanged arrival region.
+                // Only after every original candidate failed, certify that
+                // smaller region with the same ledger and projected error.
+                // This does not report task arrival or adopt the command.
+                for candidate in terminal_recovery {
+                    if self.terminal_budget.snapshot().budget_exhausted {
+                        break;
+                    }
+                    let next = candidate
+                        .next_projection
+                        .expect("recovery candidates have a full-period projection");
+                    self.diagnostics.terminal_connections_checked += 1;
+                    if terminal::oriented_arrival_region(
+                        next.pose,
+                        next.curvature_per_m,
+                        goal,
+                        heading,
+                        &self.config,
+                        &grid,
+                        &self.terminal_budget,
+                        candidate.next_error,
+                    )
+                    .is_some()
+                    {
+                        self.diagnostics.candidates.terminal_unreachable -= 1;
+                        self.diagnostics.candidates.accepted += 1;
+                        best = Some(candidate);
+                        break;
+                    }
+                }
+            }
         }
         self.terminal_seed = best.as_ref().and_then(|candidate| candidate.terminal_seed);
         if let Some(candidate) = best {
@@ -1516,6 +1590,8 @@ impl Navigator {
             self.diagnostics.selected_heading_error_rad = Some(candidate.heading_error);
             self.diagnostics.selected_progress_m = Some(candidate.progress_m);
             self.diagnostics.selected_reference_cost_m = candidate.prediction.reference_cost_m;
+            self.diagnostics.selected_braking_envelope_margin =
+                candidate.prediction.stopping_envelope_margin;
             self.diagnostics.selected_stopping_margin = Some(stopping_margin(
                 &self.config,
                 pose,
@@ -1607,6 +1683,26 @@ impl Navigator {
         goal_heading_rad: Option<f64>,
         grid: &Grid,
     ) -> Option<(Vec<Point2>, Pose2, f64)> {
+        self.kinematic_path_from_with_arrival_repair(
+            start,
+            initial_curvature,
+            goal,
+            goal_heading_rad,
+            grid,
+            false,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn kinematic_path_from_with_arrival_repair(
+        &self,
+        start: Pose2,
+        initial_curvature: f64,
+        goal: Point2,
+        goal_heading_rad: Option<f64>,
+        grid: &Grid,
+        repair_short_arrival: bool,
+    ) -> Option<(Vec<Point2>, Pose2, f64)> {
         // Try one bounded smooth approach before quantizing into lattice bins.
         // Small sideways corrections with the same final heading need an S,
         // which the five steering bins can otherwise replace with a full loop.
@@ -1640,6 +1736,80 @@ impl Navigator {
         }
         if self.terminal_budget.snapshot().budget_exhausted {
             return None;
+        }
+        // A rolling, unoriented local target can lie beyond the old lattice
+        // terminal's 35 cm domain while still admitting one short forward arc.
+        // Certify that arc before a quantized search replaces it with a loop.
+        // Existing oriented targets and the old near-terminal domain retain
+        // their original order. Failure leaves all spent work on this ledger.
+        if self.target_policy == TargetPolicy::RollingLocal
+            && goal_heading_rad.is_none()
+            && (0.35..(2.0 * self.config.lookahead_m).min(2.0))
+                .contains(&start.point().distance(goal))
+            && let Some((points, endpoint, curvature, error)) = terminal::short_point_arc_with_error(
+                start,
+                initial_curvature,
+                goal,
+                &self.config,
+                grid,
+                &self.terminal_budget,
+                grid.completed_path_error(),
+            )
+        {
+            grid.recovery.next_leg_error.set(error);
+            if grid.recovery_active() {
+                let mut diagnostics = grid.forward_search();
+                diagnostics.recovery_accepted = true;
+                grid.recovery.diagnostics.set(diagnostics);
+            } else {
+                grid.recovery.normal_path_completed.set(true);
+            }
+            let mut path = Vec::with_capacity(points.len() + 1);
+            path.push(start.point());
+            path.extend(points);
+            return Some((path, endpoint, curvature));
+        }
+        // Fixed routes retain the existing measured-drift repair condition.
+        // Online rolling targets also re-certify a nearby oriented arrival
+        // after a fresh boundary invalidates its cache. All strict connectors
+        // keep priority; the original bounded arrival region then precedes a
+        // lattice loop, using the CURRENT boundary and the SAME work ledger.
+        // The 35 cm bound is the existing terminal primitive's local domain.
+        if goal_heading_rad.is_some()
+            && (repair_short_arrival
+                || (self.target_policy == TargetPolicy::RollingLocal
+                    && (1e-9..0.35).contains(&start.point().distance(goal))))
+        {
+            if let Some((points, endpoint, curvature, error)) = terminal::single_arc_with_error(
+                start,
+                initial_curvature,
+                goal,
+                goal_heading_rad,
+                &self.config,
+                grid,
+                &self.terminal_budget,
+                grid.completed_path_error(),
+            ) {
+                grid.recovery.next_leg_error.set(error);
+                if grid.recovery_active() {
+                    let mut diagnostics = grid.forward_search();
+                    diagnostics.recovery_accepted = true;
+                    grid.recovery.diagnostics.set(diagnostics);
+                } else {
+                    grid.recovery.normal_path_completed.set(true);
+                }
+                // The strict wrapper returns its integrated samples; normal
+                // and recovery paths retain their existing domain checks.
+                let mut path = Vec::with_capacity(points.len() + 1);
+                path.push(start.point());
+                path.extend(points);
+                return Some((path, endpoint, curvature));
+            }
+            if let Some(path) =
+                self.certify_arrival_region(start, initial_curvature, goal, goal_heading_rad, grid)
+            {
+                return Some(path);
+            }
         }
         let consumed = grid.forward_search();
         let remaining_nodes = self
@@ -1770,7 +1940,23 @@ impl Navigator {
         ) {
             return None;
         }
-        let (points, endpoint, curvature, error) = terminal::oriented_arrival_region(
+        self.certify_arrival_region(start, initial_curvature, goal, goal_heading_rad, grid)
+    }
+
+    fn certify_arrival_region(
+        &self,
+        start: Pose2,
+        initial_curvature: f64,
+        goal: Point2,
+        goal_heading_rad: Option<f64>,
+        grid: &Grid,
+    ) -> Option<(Vec<Point2>, Pose2, f64)> {
+        let connect = if self.target_policy == TargetPolicy::RollingLocal {
+            terminal::rolling_oriented_arrival_region
+        } else {
+            terminal::oriented_arrival_region
+        };
+        let (points, endpoint, curvature, error) = connect(
             start,
             initial_curvature,
             goal,
@@ -1997,7 +2183,8 @@ impl Navigator {
         {
             return None;
         }
-        let grid = Grid::with_boundary(&self.config, obstacles, self.travel_boundary);
+        let mut grid = Grid::with_boundary(&self.config, obstacles, self.travel_boundary);
+        grid.recovery.oriented_boundary = self.target_policy == TargetPolicy::RollingLocal;
         self.plan_on_grid(start, goal, &grid)
     }
 
@@ -2259,6 +2446,7 @@ fn car_primitive_with_error(
     let mut curvature = initial_curvature;
     let mut points = Vec::with_capacity(count);
     for sample_index in 0..count {
+        let previous_pose = pose;
         let previous = pose.point();
         let model_failure = || recovery::PrimitiveGridFailure {
             continuous_domain: true,
@@ -2267,21 +2455,21 @@ fn car_primitive_with_error(
             to_cell: None,
             blocked_cell: None,
         };
+        let mut model = None;
         if grid.recovery_active() {
-            let projected = primitive_envelope::predict(
-                pose,
-                MotionTransition {
-                    initial_speed_mps: config.max_speed_mps,
-                    target_speed_mps: config.max_speed_mps,
-                    initial_curvature_per_m: curvature,
-                    target_curvature_per_m: target_curvature,
-                    max_accel_mps2: config.max_accel_mps2,
-                    max_decel_mps2: config.max_decel_mps2,
-                    max_curvature_rate_per_s: config.max_curvature_rate_per_s,
-                },
-                ds / config.max_speed_mps,
-            )
-            .ok_or_else(model_failure)?;
+            let motion = MotionTransition {
+                initial_speed_mps: config.max_speed_mps,
+                target_speed_mps: config.max_speed_mps,
+                initial_curvature_per_m: curvature,
+                target_curvature_per_m: target_curvature,
+                max_accel_mps2: config.max_accel_mps2,
+                max_decel_mps2: config.max_decel_mps2,
+                max_curvature_rate_per_s: config.max_curvature_rate_per_s,
+            };
+            let duration = ds / config.max_speed_mps;
+            let projected =
+                primitive_envelope::predict(pose, motion, duration).ok_or_else(model_failure)?;
+            model = Some((motion, duration));
             error = error.advance(&projected).ok_or_else(model_failure)?;
             pose = projected.projection.pose;
             curvature = projected.projection.curvature_per_m;
@@ -2290,7 +2478,7 @@ fn car_primitive_with_error(
             pose = integrate(pose, ds, (curvature + next) * 0.5);
             curvature = next;
         }
-        if !grid.motion_transition_clear_with_error(previous, pose.point(), ds, error.position_m) {
+        if !grid.modeled_motion_transition_clear(previous_pose, pose, ds, error, model) {
             let first = grid.index(previous);
             let last = grid.index(pose.point());
             let blocked_cell = (!grid.recovery_active())
@@ -2423,6 +2611,7 @@ struct RolloutPrediction {
     endpoint: Pose2,
     distance_m: f64,
     reference_cost_m: Option<f64>,
+    stopping_envelope_margin: Option<StoppingMargin>,
 }
 
 struct RolloutReference<'a> {
@@ -2446,6 +2635,7 @@ pub enum RolloutRejection {
 /// envelope. Slower targets change the former without shrinking the latter
 /// below the measured-speed reaction and braking requirement.
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 fn rollout(
     config: &NavigationConfig,
     pose: Pose2,
@@ -2456,7 +2646,38 @@ fn rollout(
     obstacles: &[ObstacleDisc],
     goal_distance: f64,
     grid: &Grid,
+    reference: Option<RolloutReference<'_>>,
+) -> Result<RolloutPrediction, RolloutRejection> {
+    rollout_with_stopping_policy(
+        config,
+        pose,
+        current_speed,
+        target_speed,
+        initial_curvature,
+        target_curvature,
+        obstacles,
+        goal_distance,
+        grid,
+        reference,
+        TargetPolicy::Fixed,
+        0.0,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rollout_with_stopping_policy(
+    config: &NavigationConfig,
+    pose: Pose2,
+    current_speed: f64,
+    target_speed: f64,
+    initial_curvature: f64,
+    target_curvature: f64,
+    obstacles: &[ObstacleDisc],
+    goal_distance: f64,
+    grid: &Grid,
     mut reference: Option<RolloutReference<'_>>,
+    target_policy: TargetPolicy,
+    historical_speed_bound_mps: f64,
 ) -> Result<RolloutPrediction, RolloutRejection> {
     let reaction_s = config.control_period_ms as f64 / 1000.0;
     // Cover the whole adopted control interval even when geometry preview ends
@@ -2488,7 +2709,7 @@ fn rollout(
     // the complete body radius bounds every intermediate footprint, including
     // one accepted tick before the reaction/deceleration interval. This assumes
     // actual braking >= configured deceleration, requiring vehicle calibration.
-    if !stop_reachable_clear(
+    let stopping_envelope_margin = if !stop_reachable_clear(
         config,
         pose,
         braking_distance + envelope_speed * reaction_s,
@@ -2502,8 +2723,25 @@ fn rollout(
                 + envelope_speed * reaction_s,
         )
     }) {
-        return Err(RolloutRejection::StopReachable);
-    }
+        if target_policy != TargetPolicy::RollingLocal
+            || !historical_speed_bound_mps.is_finite()
+            || historical_speed_bound_mps < 0.0
+        {
+            return Err(RolloutRejection::StopReachable);
+        }
+        Some(
+            stopping_envelope::certify(
+                config,
+                pose,
+                envelope_speed.max(historical_speed_bound_mps),
+                obstacles,
+                grid.travel_boundary,
+            )
+            .ok_or(RolloutRejection::StopReachable)?,
+        )
+    } else {
+        None
+    };
     // At most one control period and `step` meters per integration step. The
     // total loop has a separate hard cap even for extreme valid configurations.
     let dt_limit = reaction_s.min(step / envelope_speed.max(1e-6));
@@ -2527,6 +2765,7 @@ fn rollout(
             return Ok(RolloutPrediction {
                 endpoint: sample,
                 distance_m,
+                stopping_envelope_margin,
                 reference_cost_m: reference
                     .as_ref()
                     .map(|_| reference_integral / distance_m.max(1e-9)),
@@ -2546,6 +2785,7 @@ fn rollout(
             dt,
         );
         let ds = travel.min((goal_distance - distance_m).max(0.0));
+        let mut model = None;
         let (next, next_speed, next_curvature, ds) = if grid.recovery_active() {
             // In recovery, the capsule needs a bound around the actual ramp,
             // including a speed/steering target reached inside this time step.
@@ -2571,20 +2811,18 @@ fn rollout(
             if !duration.is_finite() || duration < 0.0 {
                 return Err(RolloutRejection::SampleBudget);
             }
-            let bounded = primitive_envelope::predict(
-                sample,
-                MotionTransition {
-                    initial_speed_mps: speed,
-                    target_speed_mps: target_speed,
-                    initial_curvature_per_m: curvature,
-                    target_curvature_per_m: target_curvature,
-                    max_accel_mps2: config.max_accel_mps2,
-                    max_decel_mps2: config.max_decel_mps2,
-                    max_curvature_rate_per_s: config.max_curvature_rate_per_s,
-                },
-                duration.min(dt),
-            )
-            .ok_or(RolloutRejection::SampleBudget)?;
+            let motion = MotionTransition {
+                initial_speed_mps: speed,
+                target_speed_mps: target_speed,
+                initial_curvature_per_m: curvature,
+                target_curvature_per_m: target_curvature,
+                max_accel_mps2: config.max_accel_mps2,
+                max_decel_mps2: config.max_decel_mps2,
+                max_curvature_rate_per_s: config.max_curvature_rate_per_s,
+            };
+            model = Some((motion, duration.min(dt)));
+            let bounded = primitive_envelope::predict(sample, motion, duration.min(dt))
+                .ok_or(RolloutRejection::SampleBudget)?;
             motion_error = motion_error
                 .advance(&bounded)
                 .ok_or(RolloutRejection::SampleBudget)?;
@@ -2613,12 +2851,7 @@ fn rollout(
         // Keep local control inside the same conservative domain as A*. Without
         // this, a safe rectangle could enter a cell whose inflated start is
         // blocked on the next tick, stranding an otherwise clear vehicle.
-        if !grid.motion_transition_clear_with_error(
-            sample.point(),
-            next.point(),
-            ds,
-            motion_error.position_m,
-        ) {
+        if !grid.modeled_motion_transition_clear(sample, next, ds, motion_error, model) {
             return Err(RolloutRejection::Grid);
         }
         if !pose_clear(config, sample, obstacles, swept_padding)
@@ -2677,6 +2910,7 @@ fn rollout(
         Ok(RolloutPrediction {
             endpoint: sample,
             distance_m,
+            stopping_envelope_margin,
             reference_cost_m: reference
                 .as_ref()
                 .map(|_| reference_integral / distance_m.max(1e-9)),
@@ -3811,3 +4045,6 @@ mod transition_rollout_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod exit_heading_arrival;

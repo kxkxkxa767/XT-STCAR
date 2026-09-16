@@ -29,6 +29,13 @@ FIELD_RESOURCES = {
 }
 
 
+ONLINE_RESOURCES = {
+    "config/online-example.json", "config/online-controller-sim.json", "config/online-sim.json",
+    "docs/在线元素驱动任务.md", "docs/online-mission-validation.json",
+    "docs/online-mission-matrix.json", "docs/online-mission-experiments.json",
+}
+
+
 def target_fixture():
     candidates = [ROOT / "target/riscv64gc-unknown-linux-gnu/release/xt-stcar",
                   ROOT / "tmp/riscv-hello/target/riscv64gc-unknown-linux-gnu/release/xt-stcar-cross-smoke"]
@@ -373,6 +380,19 @@ class DeliveryTests(unittest.TestCase):
             finally:
                 resource.write_bytes(data)
 
+    def test_online_resources_are_required_before_creating_an_archive(self):
+        self.assertTrue(ONLINE_RESOURCES <= delivery.BASE_FILES)
+        for name in sorted(ONLINE_RESOURCES):
+            resource = self.root / name
+            data = resource.read_bytes()
+            resource.unlink()
+            try:
+                with self.subTest(resource=name), self.assertRaisesRegex(ValueError, "regular non-symlink"):
+                    self.package()
+                self.assertFalse((self.root / "dist").exists())
+            finally:
+                resource.write_bytes(data)
+
     def test_old_glibc_build_target_requires_rebuild(self):
         path = self.binary.with_name("xt-stcar.build.json")
         build = json.loads(path.read_text())
@@ -503,7 +523,7 @@ class DeliveryTests(unittest.TestCase):
         path = self.package()
         with tarfile.open(path, "r:gz") as original:
             members = [(item, original.extractfile(item).read()) for item in original]
-        for changed_name in sorted(FIELD_RESOURCES | {"scripts/onnx_worker.py"}):
+        for changed_name in sorted(FIELD_RESOURCES | ONLINE_RESOURCES | {"scripts/onnx_worker.py"}):
             with self.subTest(resource=changed_name):
                 with tarfile.open(path, "w:gz") as rewritten:
                     for item, original_data in members:

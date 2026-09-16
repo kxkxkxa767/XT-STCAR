@@ -15,7 +15,9 @@ use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use xt_stcar::NativeOrtBackend;
+use xt_stcar_robot_core::local_world::MAX_ELEMENTS;
 use xt_stcar_robot_core::{FrameId, Timestamp};
+use xt_stcar_vision::ground_markers::{ExperimentalMarkerConfig, GroundMarkerDetector};
 use xt_stcar_vision::road::{RoadConfig, RoadDetector};
 use xt_stcar_vision::{InferenceBackend, ModelSpec, decode, preprocess};
 
@@ -26,6 +28,7 @@ pub const MAX_FRAME_BYTES: usize = 192_000_000;
 pub struct RoadPipeline {
     road: RoadDetector,
     vision: Option<(NativeOrtBackend, ModelSpec)>,
+    markers: Option<GroundMarkerDetector>,
 }
 
 impl RoadPipeline {
@@ -44,14 +47,45 @@ impl RoadPipeline {
                 Ok((backend, spec))
             })
             .transpose()?;
-        Ok(Self { road, vision })
+        Ok(Self {
+            road,
+            vision,
+            markers: None,
+        })
     }
 
+    /// Opt-in RGB element perception. Marker semantics remain an explicitly
+    /// declared experimental protocol; disabling markers still permits colored
+    /// cone/crosswalk observations and never invents stop/finish landmarks.
+    pub fn new_online(
+        road: RoadConfig,
+        vision: Option<&VisionOptions>,
+        markers: ExperimentalMarkerConfig,
+    ) -> Result<Self> {
+        let markers = GroundMarkerDetector::new(road.clone(), markers)?;
+        let mut pipeline = Self::new(road, vision)?;
+        pipeline.markers = Some(markers);
+        Ok(pipeline)
+    }
+
+    /// Uses body-forward solely to choose between the two visual line normals.
     pub fn process(
         &mut self,
         image: &RgbImage,
         at: Timestamp,
         frame_id: FrameId,
+    ) -> Result<RoadFrame> {
+        self.process_with_heading(image, at, frame_id, 0.)
+    }
+
+    /// Expected direction is an angle in this image's body frame, never a
+    /// surveyed position. It resolves the visual 180-degree orientation only.
+    pub fn process_with_heading(
+        &mut self,
+        image: &RgbImage,
+        at: Timestamp,
+        frame_id: FrameId,
+        expected_heading_body_rad: f64,
     ) -> Result<RoadFrame> {
         validate_image(image, MAX_FRAME_PIXELS, MAX_FRAME_BYTES)?;
         frame_id.validate().map_err(|error| error.to_string())?;
@@ -63,8 +97,31 @@ impl RoadPipeline {
             Vec::new()
         };
         // RoadDetector selects class 9 lamp ROIs and excludes them from cone cues.
-        let observation = self.road.detect(image, &detections, at, frame_id)?;
+        let observation = self.road.detect(image, &detections, at, frame_id.clone())?;
+        let elements = if let Some(markers) = &self.markers {
+            let mut frame = self.road.detect_elements(
+                image,
+                &detections,
+                at,
+                frame_id.clone(),
+                expected_heading_body_rad,
+            )?;
+            let marked =
+                markers.detect(image, &detections, at, frame_id, expected_heading_body_rad)?;
+            if frame.observations.len() + marked.observations.len() > MAX_ELEMENTS {
+                return Err("combined online perception exceeds the element limit".into());
+            }
+            // Avoid Vec growth to capacity 32 at the immutable snapshot boundary.
+            let mut combined = Vec::with_capacity(MAX_ELEMENTS);
+            combined.extend(frame.observations);
+            combined.extend(marked.observations);
+            frame.observations = combined;
+            Some(frame)
+        } else {
+            None
+        };
         Ok(RoadFrame {
+            elements,
             observation,
             image_width_px: image.width(),
             image_height_px: image.height(),
@@ -339,8 +396,19 @@ fn validate_result(mut frame: RoadFrame, job: &Job) -> Result<RoadFrame> {
         || frame.image_width_px != job.image.width()
         || frame.image_height_px != job.image.height()
         || frame.observation.cones_body_m.len() > 256
+        || frame.elements.as_ref().is_some_and(|elements| {
+            elements.captured_at != job.captured_at
+                || elements.frame_id != job.frame_id
+                || elements.observations.len() > MAX_ELEMENTS
+        })
     {
         return Err("perception processor changed frame metadata or exceeded result limits".into());
+    }
+    if let Some(elements) = &mut frame.elements {
+        elements.observations = std::mem::take(&mut elements.observations)
+            .into_boxed_slice()
+            .into_vec();
+        elements.frame_id.0.shrink_to_fit();
     }
     frame.observation.cones_body_m.shrink_to_fit();
     frame.observation.frame_id.0.shrink_to_fit();

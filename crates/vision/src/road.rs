@@ -225,19 +225,19 @@ fn hsv(rgb: [u8; 3]) -> Hsv {
 }
 
 #[derive(Clone)]
-struct Blob {
-    area: usize,
-    x0: usize,
-    y0: usize,
-    x1: usize,
-    y1: usize,
-    cx: f64,
-    cy: f64,
-    angle: f64,
-    major: f64,
-    minor: f64,
-    top_width: f64,
-    bottom_width: f64,
+pub(crate) struct Blob {
+    pub(crate) area: usize,
+    pub(crate) x0: usize,
+    pub(crate) y0: usize,
+    pub(crate) x1: usize,
+    pub(crate) y1: usize,
+    pub(crate) cx: f64,
+    pub(crate) cy: f64,
+    pub(crate) angle: f64,
+    pub(crate) major: f64,
+    pub(crate) minor: f64,
+    pub(crate) top_width: f64,
+    pub(crate) bottom_width: f64,
 }
 impl Blob {
     fn width(&self) -> f64 {
@@ -476,7 +476,7 @@ impl RoadDetector {
         &self.config
     }
 
-    fn project(&self, u: f64, v: f64) -> Result<Point2> {
+    pub(crate) fn project(&self, u: f64, v: f64) -> Result<Point2> {
         let h = &self.config.homography;
         let m = h.matrix;
         let d = m[2][0] * u + m[2][1] * v + m[2][2];
@@ -843,5 +843,203 @@ impl RoadDetector {
             }
         }
         Ok(best)
+    }
+}
+
+impl RoadDetector {
+    /// Online simulation cues retain cone color and a measured crossing heading.
+    /// This deliberately leaves `detect` and its historical output unchanged.
+    /// Ground projection assumes the visible cone foot is on the ground plane;
+    /// the local world must corroborate cones with lidar before navigation.
+    pub fn detect_elements(
+        &self,
+        image: &RgbImage,
+        detections: &[Detection],
+        at: Timestamp,
+        frame_id: FrameId,
+        expected_heading_body_rad: f64,
+    ) -> Result<xt_stcar_robot_core::local_world::ElementFrame> {
+        use xt_stcar_robot_core::local_world::{
+            ElementColor, ElementFrame, ElementGeometry, ElementKind, ElementObservation,
+            MAX_ELEMENTS, ObservationSource,
+        };
+        frame_id.validate().map_err(|e| e.to_string())?;
+        if !expected_heading_body_rad.is_finite() {
+            return Err("element heading disambiguation requires a finite body direction".into());
+        }
+        let mut observations = Vec::<ElementObservation>::new();
+        for color in [ElementColor::Red, ElementColor::Blue] {
+            let (blobs, width, height) =
+                self.element_ground_components(image, detections, color)?;
+            let c = &self.config.cone;
+            let mut candidates = 0;
+            for blob in blobs {
+                let aspect = blob.height() / blob.width();
+                if blob.area < c.min_pixels
+                    || blob.height() / (height as f64) < c.min_height_fraction
+                    || aspect < c.min_height_width_ratio
+                    || aspect > c.max_height_width_ratio
+                    || blob.fill() < c.min_fill
+                    || blob.top_width <= 0.
+                    || blob.bottom_width / blob.top_width < c.min_taper_ratio
+                    || !self.element_blob_unclipped(&blob, width, height)
+                {
+                    continue;
+                }
+                candidates += 1;
+                if candidates > self.config.max_candidates {
+                    return Err("colored cone candidate limit exceeded".into());
+                }
+                let u = blob.cx / width as f64;
+                let v = blob.y1 as f64 / height as f64;
+                let point = self.project(u, v)?;
+                // Opposite-color overlap is ambiguous, never silently recolored.
+                if let Some(old) = observations
+                    .iter_mut()
+                    .find(|old| old.position_body_m.distance(point) < c.merge_distance_m)
+                {
+                    if old.color != color {
+                        old.color = ElementColor::Unknown;
+                    }
+                    continue;
+                }
+                observations.push(ElementObservation {
+                    kind: ElementKind::Cone,
+                    color,
+                    position_body_m: point,
+                    heading_body_rad: None,
+                    // Official 0.28 m square base enclosed by a circle. This is
+                    // a geometry prior, not a measured range from cone size.
+                    geometry: ElementGeometry::Cone {
+                        radius_m: 0.14 * std::f64::consts::SQRT_2,
+                    },
+                    source: ObservationSource::GroundProjection,
+                    confidence: 0.9,
+                    position_error_m: self.element_pixel_error(u, v, width, height)? + 0.02,
+                    heading_error_rad: 0.,
+                });
+                if observations.len() > c.max_cones || observations.len() > MAX_ELEMENTS {
+                    return Err("colored cone output limit exceeded".into());
+                }
+            }
+        }
+        observations.retain(|o| o.color != ElementColor::Unknown);
+        if let Some(crosswalk) = crate::ground_markers::detect_crosswalk_element(
+            self,
+            image,
+            detections,
+            expected_heading_body_rad,
+        )? {
+            observations.push(crosswalk);
+        }
+        if observations.len() > MAX_ELEMENTS {
+            return Err("element output limit exceeded".into());
+        }
+        observations.sort_by(|a, b| {
+            a.position_body_m
+                .x_m
+                .total_cmp(&b.position_body_m.x_m)
+                .then(a.position_body_m.y_m.total_cmp(&b.position_body_m.y_m))
+        });
+        Ok(ElementFrame {
+            captured_at: at,
+            frame_id,
+            observations,
+        })
+    }
+
+    pub(crate) fn element_blob_unclipped(&self, b: &Blob, w: usize, h: usize) -> bool {
+        let [left, top, right, bottom] = self.config.ground_roi;
+        b.x0 as f64 > left * w as f64
+            && (b.x1 as f64) < right * w as f64
+            && b.y0 as f64 > top * h as f64
+            && (b.y1 as f64) < bottom * h as f64
+    }
+
+    pub(crate) fn element_pixel_error(&self, u: f64, v: f64, w: usize, h: usize) -> Result<f64> {
+        let center = self.project(u, v)?;
+        let mut error: f64 = 0.;
+        for (du, dv) in [(-0.5, -0.5), (-0.5, 0.5), (0.5, -0.5), (0.5, 0.5)] {
+            error = error.max(center.distance(self.project(u + du / w as f64, v + dv / h as f64)?));
+        }
+        Ok(error)
+    }
+
+    pub(crate) fn element_ground_components(
+        &self,
+        image: &RgbImage,
+        detections: &[Detection],
+        channel: xt_stcar_robot_core::local_world::ElementColor,
+    ) -> Result<(Vec<Blob>, usize, usize)> {
+        use xt_stcar_robot_core::local_world::ElementColor;
+        if image.width() == 0
+            || image.height() == 0
+            || u64::from(image.width()) * u64::from(image.height()) > 64_000_000
+            || detections.len() > 300
+        {
+            return Err("invalid bounded element image or detection count".into());
+        }
+        let scale = (f64::from(self.config.max_work_width) / f64::from(image.width()))
+            .min(f64::from(self.config.max_work_height) / f64::from(image.height()))
+            .min(1.);
+        let w = (f64::from(image.width()) * scale).floor() as usize;
+        let h = (f64::from(image.height()) * scale).floor() as usize;
+        if w < 2 || h < 2 {
+            return Err("element input aspect ratio is too extreme".into());
+        }
+        let mut exclusions = self.config.light_rois.clone();
+        for d in detections
+            .iter()
+            .filter(|d| d.class_id == 9 && d.confidence > self.config.light.yolo_confidence)
+        {
+            if !d.confidence.is_finite()
+                || d.confidence > 1.
+                || d.xyxy.iter().any(|v| !v.is_finite())
+                || d.xyxy[0] >= d.xyxy[2]
+                || d.xyxy[1] >= d.xyxy[3]
+            {
+                return Err("invalid traffic-light exclusion geometry".into());
+            }
+            exclusions.push([
+                f64::from(d.xyxy[0]) / f64::from(image.width()),
+                f64::from(d.xyxy[1]) / f64::from(image.height()),
+                f64::from(d.xyxy[2]) / f64::from(image.width()),
+                f64::from(d.xyxy[3]) / f64::from(image.height()),
+            ]);
+        }
+        let mut mask = Vec::with_capacity(w * h);
+        for y in 0..h {
+            for x in 0..w {
+                let u = (x as f64 + 0.5) / w as f64;
+                let v = (y as f64 + 0.5) / h as f64;
+                let sx = ((u * f64::from(image.width())).floor() as u32).min(image.width() - 1);
+                let sy = ((v * f64::from(image.height())).floor() as u32).min(image.height() - 1);
+                let p = hsv(image.get_pixel(sx, sy).0);
+                let c = &self.config.cone;
+                let colored = match channel {
+                    ElementColor::White => {
+                        p.s <= self.config.crosswalk.max_saturation
+                            && p.v >= self.config.crosswalk.min_value
+                    }
+                    ElementColor::Red => {
+                        p.s >= c.min_saturation
+                            && p.v >= c.min_value
+                            && in_hue(p.h, c.red_hue_range)
+                    }
+                    ElementColor::Blue => {
+                        p.s >= c.min_saturation
+                            && p.v >= c.min_value
+                            && in_hue(p.h, c.blue_hue_range)
+                    }
+                    ElementColor::Unknown => false,
+                };
+                mask.push(
+                    inside(self.config.ground_roi, u, v)
+                        && !exclusions.iter().any(|&r| inside(r, u, v))
+                        && colored,
+                );
+            }
+        }
+        Ok((components(mask, w, h, self.config.max_components)?, w, h))
     }
 }

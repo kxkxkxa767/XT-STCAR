@@ -125,6 +125,7 @@ impl Harness {
             },
             scan: synthetic_scan(&self.config, self.pose, &[], at),
             road: RoadFrame {
+                elements: None,
                 observation: RoadObservation {
                     captured_at: at,
                     frame_id: self.config.autonomy.mission.body_frame.clone(),

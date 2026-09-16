@@ -1,10 +1,10 @@
 # XT-STCAR 接手与开发约定
 
-维护日期：2026-09-15。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
+维护日期：2026-09-16。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
 开始前完整读取本文件，再读 [上传规范](上传规范.md)、[README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
 `AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。
 
-## 当前交接快照（2026-09-15）
+## 当前交接快照（2026-09-16）
 
 ### 用户目标与授权
 
@@ -26,7 +26,118 @@
   每次修改前检查云端更新，有更新先拉取；`git commit -m "..."` 简要说明本次具体改动。
 - STM32F103 固件读取由用户明确暂停；不恢复解保护、读取或刷写任务。不要回旧 XT-NetRC。
 
-### 赛场规格自适应（2026-09-15，本轮）
+### 当前整合状态（2026-09-16，最新）
+
+- 用户已继续统一整合与复核；本轮源码、最终矩阵与本地交叉构建已完成整合，代码在 main。
+  提交及远端同步状态以 Git 实查为准；构建成功和本地交付不表示已推送，不替用户修改模型设置。
+- 冻结源码后的最终完整矩阵：**4/19** 符合预声明检查；通过的只是 missing_markers 与 missing_cones 各同步/异步，
+  正常场 **0/15 完成**。独立裁判共14场证明两桶（12个正常场、2个缺标记场），随后都在 ApproachLight
+  因看见灯但缺确认的停车区几何而停止。三个小场均未通过第一桶：同步46.200s、异步43.863s、扰动异步45.045s结束。
+  全部19场最终都未完成比赛，故障为普通停车超过10s。**在线比赛闭环尚未验收，不能把所有失败都归为灯信息不足**。
+  11个预声明输入与运行前后源码账、真实命令、主机可执行文件、stdout/stderr哈希均已核对；各轮开发失败保留。
+- 生产新增：仅 OrbitCone 的实际姿态+5个观测短弧姿态/8步停车包络选速提示；原 source/history/负线/lease 门保持。
+  StopLine/FinishMarker 槽内身份在真实唯一重观察时可续接，过TTL首新帧重新计1、第二不同采集帧才恢复 confirmed；
+  observations表示当前确认周期的独立视觉帧数；invalid/歧义不能复活，processed保持，原TTL不延长。
+  runner显式pin至多2个当前引用的StopLine/FinishMarker槽，避免其身份被过期槽回收；pin不续期、不伪造fresh或确认。
+  未被保留且已回收的槽不能找回旧ID。锥桶规则不变。
+- RollingLocal 的 <0.35m 定向目标按原严格双弧→原严格单弧→原半容差区域→lattice，在新boundary下同账重证，实际18100/18800大圈反例已修；
+  Fixed 不改。新增 fixture `online18100_boundary_short_arrival.json`。Finish 完成显式要求原全车清灯线，重叠区域未清尾则 Fault。
+  最终workspace为565通过、0失败、3项按设计忽略；早期定向计数不再作为当前总数。
+- 新增仅RollingLocal的完整停车后备证明：原disk失败后，用StoppingEnvelope覆盖原2控制周期+全制动、历史速度上界、
+  Kmax下任意变向和完整车体；不是固定转向名义轨迹，原rollout/误差/采用门保留，Fixed不变。
+  零sweep仍按实际切向证明整车体KnownFree，不直接判Unknown或自动放行；真实出桶完成门不变。
+  第四轮出口交接反例及后续修正均保留；当前结果以最终矩阵为准，不直接套用前轮trace推断当前故障。
+- 三处追加生产修正已纳入最终构建，开发与最终矩阵分别记录：Rolling原region及zero候选全失败后可同账认证
+  “实际κ保持短段→原rate回中→直行”，三段连续传递误差、真实终点满足原half位置/航向容差。38300原成功及Fixed三帧保持，
+  38400/38500短接定向回归通过，真实越线/障碍/误差/预算/非法输入负例拒绝；不据此宣称整场完成。
+  原strict continuation动作候选全部失败后，仅Rolling从该候选完整周期预测姿态/曲率/error调用旧region证明，
+  同账保留原运动/碰撞/制动/采用门，不调用新三段候选，也不直接报告任务到达或adopt。
+  仅Rolling+recovery+有限侧带边界新增整车扫掠二证：端点车体凸包加L/2×(1+Kmax×body_radius)、原净空/重启和累计误差，
+  所有点须由同一允许半空间分离；world bounds/obstacles仍原胶囊，Fixed和point-only参考检查保持。
+- 后续增加仅该同一范围内的第三份时间域证明：原胶囊与一阶扫掠仍失败时，以实际MotionTransition给出
+  M=A+V²K+r(AK+VS+V²K²)，端点完整车体凸包加M×dt²/8覆盖全段。V/K取initial/target上界，A取原accel/decel较大者、
+  S取原slew；饱和处v/κ及车体点一阶导数连续，恒速/恒曲率也不削减A/S上界。
+  primitive的dt=同次ds/max_speed，rollout用与predict一致的实际缩尾duration.min(dt)，不除以实测低速；
+  保留endpoint位置/heading累计误差、clearance/restart、roundoff及共同分离侧，world/obstacles仍原胶囊。
+  Fixed在新界计算前退出，无额外samples/solver/node预算。真实五帧fixture为online32000_body_chord_tube.json，
+  不能把32100历史停舵状态的短route当Drive，也不宣称31700..31900原region路径与现在优先strict完全相同。
+  独立数学审查已追加final-independent-review。小场32500新鲜StopLine负向门已实查并追加当前源选速提示，
+  生产已冻结、11场真实CLI编译完成且控制器逐值相同；最终19矩阵与完整build均已完成。
+- 最新旧8证据为 `work/online-mission/legacy-integration-timing-final.json` 与 `legacy-integration-comparison.json`：
+  8/8完成且原性能门通过；九项关键指标、序列化输出计数及八项单因素比较与v9精确一致，未声称逐命令或完整轨迹逐点相等。
+- 最终Rust工作区565通过、0失败、3项按设计忽略；实际日志另记录tracking/timing/online三个example为2/5/2通过，Python交付37通过。
+  fmt、all-targets clippy -D warnings、双RISC-V交叉链接与静态ELF检查通过；150份编译输入与当前源码核对一致。
+  目标基线riscv64gc-unknown-linux-gnu.2.38，实际最高引用GLIBC2.34，RISC-V64/LP64D/RVC/PIE，加载器/lib/ld-linux-riscv64-lp64d.so.1。
+  xt-stcar为1,217,056B，SHA256 b83012928876ff87f322c9b4bac8e51c9a338b4c56c495c1a3598e8bc32b11d5，仅需libc；
+  xt-stcar-robot为2,376,448B，SHA256 259b419d6f9061ccb6d56b746d5c23d80a2d0a23d51bcb337e97514b0b793042，需libm+libc。
+  正式证据为docs/online-mission-{matrix,build,validation,experiments}.json；本地两包路径、哈希及核验见包外online-mission-delivery.json。
+  未运行RISC-V程序、未接车。测试与链接通过不代表在线比赛完成；开发版489测试/旧二进制保留为历史。
+
+### 在线元素驱动（2026-09-16，尚未通过整场验收）
+
+- 用户最新授权按分享 `https://chatgpt.com/share/6aa93bcc-f29c-83ee-996b-865058fcd348` 直接改；
+  修改前 fetch 确认 main/origin=`4dfd201db977ffa5c18c1eca9f896dade4ad7875`、0/0。
+  分享正文已完整读取，本地开发记录 `work/online-mission/new-plan.txt`：任务顺序固定、位置在线估计、
+  持续更新短目标，只执行一段再观测。不是再调 LQR 或恢复整场固定坐标。
+- 新增 Rust `local_world.rs`（有界元素身份/视觉雷达关联/空闲障碍未知）和 `online_mission.rs`（观测驱动任务）。
+  `runner/online.rs` 接入旧 Autonomy、PP、完整车体制动包络和异步最终证书；旧任务几何不进入在线目标。
+  `online_simulation.rs` 隔离场景真值，只供渲染与独立裁判；改变场景时控制器配置逐值相同。
+  CLI `online-example/online-compile`，内存感知 `RoadPipeline::new_online`；旧入口保持兼容。
+- 已确认锥桶的视觉语义与当前几何分开：`last_visual_at` 最长20s、`last_geometry_at` 无更新满1.8s失效。
+  360°雷达只维护已视觉确认的唯一圆簇身份，不新建桶、不猜颜色、不增加确认次数；同刻位姿、外参、半径及误差门保持。
+  独立拟合误差保留视觉下限，不逐帧重复累加；仅纯roundoff保留旧浮点表示，位置上限1nm，真实毫米变化仍更新。
+- `KnownFree` 已改为完整面积的自适应证明：原外接圆成功路径保留，否则用固定栈按长边二分定向外包矩形，
+  每个接受叶矩形完整包含于已证空闲圆，最多64次原空间查询；未知、障碍或额度耗尽不能放过未覆盖区域。
+  `Obstacle` 独立检查同源真实有限回波到最多32点凸包的欧氏距离，包含原量程/位姿/年龄误差；
+  覆盖圆多出的面积不制造碰撞。未来短弧Unknown只能作规划假设，当前目标和整个执行停车包络仍须KnownFree。
+- 绕桶R按实际车体半宽、桶几何误差与原曲率能力取下界，前后悬保留在分段扫掠证明；仍可行的R保持。
+  入口必要时用原Stop的位置/航向/停稳条件对齐，无新增hold；稳定带航向目标可用两个horizon（默认1.6m），
+  更远是0.8m无航向临时引导，搜索仍单horizon。未来短弧未知时先用原approach限速.18，完整空闲才允许cruise .3。
+  出口目标沿切线延伸“桶位置误差+2×原目标位置容差”，实际出口投影须越过位置误差，同时满足原半圈/外侧/near条件。
+  圆顶尚差5–6mm过中线就提前processed的缺陷已修，圆弧进度仍封顶π，未虚增角度或放宽容差。
+  剩余转角为零仍按该绕行方向的切向做完整车体和净空KnownFree证明，不能直接当Unknown，也不免去出口完成门。
+- runner的OrbitSpeedHint仅在OrbitCone用实际pose+5个当前观测短弧参考姿态检查完整StoppingEnvelope，
+  采用原Kmax及感知年龄+控制周期horizon；原upper已证则保持，否则8次二分只选已证正下界，target/continuation同步限速。
+  这不是连续采样执行证书，无证明不伪造零速目标、不改写真正较高速度；source/history/negative/lease与实际执行门全保留。
+- 仅绕桶且负线未获绿灯释放时，在Nav前对current-source姿态的完整StoppingEnvelope加pending/confirmed负线证明，
+  线误差沿原source/checked时钟增长，最多8次二分已证正速度上限，target/continuation同步限速。
+  下界用同源测量或planning投影速度按原max_decel与实际tick间隔（不超原period）计算，再与有效adoption速度区间下界取max；
+  source/planned时间须一致。几何cap低于可执行下界则不改提示，不抬高未证cap、不伪造当前低速，原actual-source/history门继续拒绝不安全Drive。
+  新fixture/tests为online_source_stop_speed_hint；无新车体/控制/TTL参数，不刷新线身份或阶段，不解除原负约束。
+  开发async33260的boundary_changed后OpenEmpty只有有限小搜索，未耗预算且rollout=0，尚未进permits；cap高于采用下界。
+  缺完整缓存只能称原约束下有界规划未找到路径，不能称几何无解/节点耗尽/source gate拒绝；同步局部改善同样未完成整场。
+- 导航三个真实快照问题已有修正和专项回归：26580ms同目标短缓存漂移在原账内优先重证，
+  49580ms滚动无航向点在[.35,min(2×lookahead,2m))内先试短单弧，严格失败后可认证半位置容差内真实端点；
+  21380ms定向斑马线接近在原单/双弧后，另认证实际初始曲率按原模型向零渐变的短前进候选，包含完整累计误差及半位置/航向容差。
+  `TargetPolicy::Fixed` 为默认，在线统一`RollingLocal`；不按场地开关，不重置预算，不伪造端点或已采用命令。
+  <0.35m定向RollingLocal目标按strict2→strict1→region→lattice同账重证新boundary，18100/18800真实大圈修正，邻帧strict成功保持。
+  仅RollingLocal原停车disk失败时可追加完整StoppingEnvelope，涵盖2周期反应+全制动、历史速度、Kmax任意变向；Fixed不改。
+  最新 `work/online-mission/legacy-integration-timing-final.json` 旧八场全部完成、原性能门通过；九项关键指标、序列化输出计数及八项单因素比较与v9精确一致。
+  初版通用点连接造成的旧八场退化保留在 `legacy-point-timing-final`，不能删除中间失败。
+- 灯色不提供地距。`vision/ground_markers.rs` 仅实现显式实验白条协议，库默认禁用，演示场景显式启用；
+  不宣称官方现场有这些标记。官方资料只给光电到灯约1m及终点80cm，未确认可见线图案。
+  规则中的随机布置没有提供左桶出口到灯的正距离下界；不能用旧 FieldSpec 布局检查冒充规则先验。
+- 两个独立观测缺口仍在：固定灯色ROI可先看到灯而无停车区距离；已确认的地面标记又可能在清尾前退出前向ROI。
+  默认直行的2.44s/计既有误差约4.89s仅为特定配置估算，不是全场不可行证明。缺几何有灯色仍Stop，不增加stale正向授权。
+  已processed的线有真实观测可刷新但不能重选；过期StopLine负约束按来源时钟继续扩张误差，完整包络仍可在线前或侧带外通过，
+  不因TTL瞬间封死整个侧带。过期证据不能支持新任务、绿灯或清尾；Crosswalk目标也减含航向项的完整region_error。
+  区域过TTL后真实唯一重观察首帧重计1、默认第二独立采集帧恢复确认；ID/first_seen/processed保留，invalid/歧义不复活。
+  任务显式pin≤2个当前引用区域只防槽回收，不延长TTL或跳过确认。终点完成显式要求light_cleared；合法区域重叠而未清尾则Fault且不mark_processed。
+- 首轮2/19、第二轮3/19、第三至第五轮各4/19仅为历史阶段矩阵。冻结源码后的最终矩阵4/19，正常完成0/15；
+  14场通过两桶但灯前缺几何，三个小场尚未通过第一桶，另两场缺桶有限搜索后安全停止。通过项仅四个预声明缺失场景。
+  独立`online_referee`检查真实轨迹/顺序/半圈，任务自报processed不能替代裁判。在线比赛闭环尚未验收，不能用旧35/36或旧八场代替。
+  82.8s同步两桶后缺几何Stop、84.383s异步第二桶回环耗尽语义期限、早期搜索/覆盖与移动carrot附heading失败均保留。
+- 停车包络速度提示已接入最终源码；565 Rust/3按设计忽略及本轮双ELF是当前构建证据，早期`development-build-1.*`的489/2仅为历史。
+  三份online配置已生成，11种真实CLI编译记录在`work/online-mission/cli-compilation-final.json`，配置、控制器一致性、源码与报告已核对。
+- 预声明11输入（含3异步时序变体）、共19同步/异步 PP 场次；包含物体移位、5×4、上下道不等宽、
+  斑马线移位、短遮挡、缺桶、缺标记。输入已在首跑前冻结，不能删除失败或改场地追成绩。
+  原车体、限速、净空、3s/300ms、普通停车10s、节点40000、终端256/1024/65536保持。
+  几何TTL1800ms仍保留；新增雷达维护不能新建颜色身份或增加视觉确认，并有独立有限语义年龄。
+- README、`docs/在线元素驱动任务.md`、命令手册已同步最终入口与结果；正式 `online-mission-*` 矩阵/build/validation已归档。
+  两包及核验以包外delivery报告为准，提交和远端同步状态以Git实查为准，不能据此推断已推送。
+  本轮继续直接main、GLIBC2.38本地交叉基线、暂不接车、不读视频、不执行RISC-V/模拟器。
+
+### 赛场规格自适应（2026-09-15，历史）
 
 - 用户已授权“你来补齐自适应赛场规格的吧”；开工前 fetch 确认 main/origin 为 `98368200f6c0eb8189c3e1d79941469c821a10b9`、0/0。
 - Rust `robot-core/field.rs` 读取显式米制 FieldSpec，按规则图5外场5–8×4–6m、上下直道1–2m等检查范围与组合，生成官方右桶→左桶→上方直道拓扑。
@@ -389,9 +500,9 @@
 
 | 模块 | 已实现 |
 |---|---|
-| `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码；road.rs 斑马线/灯色/锥桶及地面投影 |
+| `crates/vision` | 纯 Rust 模型契约、RGB/letterbox/NCHW、阈值与坐标解码；road.rs 斑马线/灯色/带色锥桶及地面投影，ground_markers.rs 显式实验地面标记 |
 | `crates/app` → `xt-stcar` | self-check/preprocess/replay/infer；原生 ORT C API 动态加载、模型来源及元数据验证、常驻 Session；Python 参考后端须显式选择；file_io 提供两套 CLI 共用文件边界 |
-| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表；比赛任务、Stop/PassThrough、灯前半平面、整圈扫描、ICP、执行曲率估计、解析过渡峰值、车模型导航/局部参考/PP与实验LQR |
+| `crates/robot-core` | 强类型传感器语义、frame/时间/单位校验、急停/deadman/超时/限值状态机、仅记录的 MotionSink；底盘/WIT IMU/N10 协议与标定表；固定及在线任务、LocalWorld有界身份/几何/面积证明、Stop/PassThrough、灯前半平面、整圈扫描、ICP、执行曲率估计、解析过渡峰值、车模型导航/局部参考/PP与实验LQR |
 | `crates/device-io` | 安全 rustix 串口配置、独占、8N1、关闭软硬件流控、读回检查、nonblocking poll 与整体包截止时间、故障锁存、Drop 尝试恢复 |
 | `crates/runner` → `xt-stcar-robot` | 严格 JSONL 回放、真实图像推理、原始传感器解析、可选标定 PWM 预览及传感器采集；自主模拟/快照回放、背景感知/规划/独立看门狗及采用状态回传、连续渐变子步车辆模型、有界内存日志/首次异常窗口与结束原子提交 |
 
@@ -476,7 +587,7 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 ### 构建、模型与验证证据
 
 - 历史v9：371 Rust/2跟踪example/5矩阵example/35 Python交付通过，2项按设计忽略；fmt/clippy/双交叉链接与ELF通过。
-  108份编译输入、GLIBC2.38基线/最高实际2.34。该轮结果与本地包为 `motion-v9-validation/build/delivery`；当前见开头赛场规格快照。
+  108份编译输入、GLIBC2.38基线/最高实际2.34。该轮结果与本地包为 `motion-v9-validation/build/delivery`；当前见开头在线元素驱动快照。
   8组时序性能门全部通过；原生模型推理和目标执行未验证，以下旧轮记录仅为历史。
 
 - 历史 v7：Rust常规350通过/0失败/2忽略，跟踪example2项、Python交付35项通过；fmt、all-targets clippy -D warnings、双RISC-V交叉链接通过。
@@ -504,7 +615,7 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   都是本机采样，不是目标板WCET；资料入口为motion-v5-validation/host-profile/async-validation/build/delivery。
 
 - 历史 v4：Rust 常规 294 通过、0 失败，原生 ORT opt-in 1 项忽略；跟踪 example 2 项、Python 交付 34 项通过。
-  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。该历史阶段入口为 `docs/motion-v8-validation.json`；本轮见开头赛场规格快照。
+  fmt、all-targets clippy -D warnings 和两个 RISC-V 交叉链接通过。该历史阶段入口为 `docs/motion-v4-validation.json`；本轮见开头在线元素驱动快照。
   两者实际最高 GLIBC 引用 2.34，构建基线 2.38；robot 需要 libm 与 libc，xt-stcar 需要 libc。
   构建源码哈希已核对，该轮二进制哈希见 `motion-v4-build.json` 和两份 ELF 报告。
   模型测试套件和原生 ORT 推理未重跑；打包另做模型格式、来源与包内文件校验，包状态见 `motion-v4-delivery.json`。
@@ -537,7 +648,7 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
   不改全局默认。Zig **0.15.2**、cargo-zigbuild **0.23.4** 在项目 `toolchains/`，无需重复安装。
 - 新串口依赖 rustix **1.1.4**；两个目标程序由 `scripts/build-riscv.sh --offline` 检查并构建。
   目标 `riscv64gc-unknown-linux-gnu.2.38`，ELF64 LE RISC-V / RVC / LP64D / PIE，
-  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以本轮 field-adaptation 构建/ELF报告为准。
+  加载器 `/lib/ld-linux-riscv64-lp64d.so.1`。v2最高 GLIBC 引用 2.34；当前实际引用和依赖以本轮 online-mission 最终构建/ELF报告为准，不复用历史哈希。
   前轮 robot 程序额外需要 `libm.so.6`，不能声称两个程序都只依赖 libc。
 - **当前构建证据见本轮快照；`docs/motion-v9-*`、`docs/motion-v8-*`、`docs/motion-v7-*`、`docs/motion-v6-*`、`docs/motion-v5-*`、`docs/motion-v4-*`、`docs/motion-v3-*`、`docs/motion-v2-*`、`docs/motion-control-*`、[Rust比赛自主闭环](docs/Rust比赛自主闭环.md) 与 `docs/competition-*`保留历史证据。**
   `docs/architecture-*` 及 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保存前轮扩展前的构建、测试和包，不能当当前版本。

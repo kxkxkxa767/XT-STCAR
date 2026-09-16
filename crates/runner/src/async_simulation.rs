@@ -1,7 +1,7 @@
 //! Complete synthetic competition through the actual asynchronous worker.
 //! Functional time advances on a fixed event schedule; waiting for host planning
 //! freezes that clock. This deliberately does not claim processor deadlines.
-use crate::autonomy::{Result, RoadFrame};
+use crate::autonomy::Result;
 use crate::autonomy_replay::SensorSnapshot;
 use crate::control_diagnostics::{PlanTimings, WorkerDiagnosticsOptions};
 use crate::control_runtime::{
@@ -14,7 +14,7 @@ use crate::phase_statistics::{
 };
 use crate::simulation::{
     PlantDynamics, PlantState, SimulationConfig, SimulationFault, advance_plant,
-    boundary_for_phase, check_plant_pose, obstacle_clearance, render_camera, synthetic_scan,
+    boundary_for_phase, check_plant_pose, obstacle_clearance, render_camera_at, synthetic_scan,
 };
 use crate::telemetry::{RunJournal, TelemetryMode};
 use serde::{Deserialize, Serialize};
@@ -128,6 +128,8 @@ pub struct AsyncProblem {
 
 #[derive(Debug, Serialize)]
 pub struct AsyncAttempt {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub online: Option<xt_stcar_robot_core::online_mission::OnlineMissionReport>,
     pub certificate_failure: Option<crate::control_runtime::CertificateFailure>,
     pub at: Timestamp,
     pub source_at: Timestamp,
@@ -231,6 +233,8 @@ pub struct AsyncSimulationSummary {
     pub last_control: Option<NavigationFrame>,
     /// The final 16 published attempts, including rejected/faulted reports.
     pub recent_attempts: VecDeque<AsyncAttempt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub online_referee: Option<crate::online_simulation::OnlineRefereeSummary>,
     pub timing_statistics: AsyncTimingStatistics,
     /// At most 128 Drive/Stop/phase/rejection/reason changes; ordinary changes
     /// of speed within Drive do not consume this event budget.
@@ -378,6 +382,11 @@ impl Observation {
                 self.recent_attempts.pop_front();
             }
             self.recent_attempts.push_back(AsyncAttempt {
+                online: plan
+                    .report
+                    .online
+                    .as_ref()
+                    .map(crate::simulation::bounded_online_report),
                 certificate_failure: plan.certificate_failure.as_deref().cloned(),
                 at: poll.at,
                 source_at: plan.source_at,
@@ -565,7 +574,7 @@ fn capture(
     obstacles: &[ObstacleDisc],
 ) -> Result<SensorSnapshot> {
     let at = Timestamp(at);
-    let camera = render_camera(config, plant.pose, light)?;
+    let camera = render_camera_at(config, plant.pose, light, at)?;
     Ok(SensorSnapshot {
         at,
         pose: PoseEstimate {
@@ -577,16 +586,13 @@ fn capture(
             quality: 1.0,
         },
         scan: synthetic_scan(config, plant.pose, obstacles, at),
-        road: RoadFrame {
-            observation: detector.detect(
-                &camera,
-                &[],
-                at,
-                config.autonomy.mission.body_frame.clone(),
-            )?,
-            image_width_px: camera.width(),
-            image_height_px: camera.height(),
-        },
+        road: crate::online_simulation::detect_frame(
+            config,
+            detector,
+            &camera,
+            at,
+            config.initial_pose.yaw_rad - plant.pose.yaw_rad,
+        )?,
     })
 }
 
@@ -683,11 +689,7 @@ pub fn simulate_async_observed(
     let mut previous: Option<Arc<SensorSnapshot>> = None;
     let mut last_submitted: Option<Arc<SensorSnapshot>> = None;
     let mut light_trigger = None;
-    let light_boundary = config
-        .autonomy
-        .mission
-        .light_stop_boundary()
-        .map_err(|e| e.to_string())?;
+    let light_boundary = crate::online_simulation::scene_light_boundary(config)?;
     let mut obstacles = config.cones.clone();
     if config.fault == SimulationFault::Blocked {
         obstacles.extend((0..26).map(|index| ObstacleDisc {
@@ -704,6 +706,7 @@ pub fn simulate_async_observed(
         .fold(12.0f64, f64::min);
     let mut distance = 0.0;
     let mut now = 0;
+    let mut online_referee = crate::online_simulation::OnlineReferee::for_simulation(config)?;
     while now <= config.max_duration_ms {
         if light_trigger.is_none() && crate::field::light_triggered(config, plant.pose) {
             light_trigger = Some(now);
@@ -797,6 +800,9 @@ pub fn simulate_async_observed(
                 observation.active_boundary,
                 &mut minimum,
             );
+            if let Some(referee) = &mut online_referee {
+                referee.observe(Timestamp(now + 1), pose);
+            }
         });
         plant = advanced.state;
         distance += advanced.distance_m;
@@ -808,6 +814,14 @@ pub fn simulate_async_observed(
             observation.fault = Some("synthetic async collision or boundary violation".into());
             break;
         }
+    }
+    if observation.completed
+        && let Some(error) = online_referee
+            .as_ref()
+            .and_then(|referee| referee.completion_error())
+    {
+        observation.completed = false;
+        observation.fault.get_or_insert_with(|| error.into());
     }
     if observation.fault.is_none() && !observation.completed {
         observation.fault = Some("async scenario duration exhausted before completion".into());
@@ -841,6 +855,9 @@ pub fn simulate_async_observed(
                     observation.active_boundary,
                     &mut minimum,
                 );
+                if let Some(referee) = &mut online_referee {
+                    referee.observe(Timestamp(now + timing.output_period_ms), pose);
+                }
             },
         );
         plant = advanced.state;
@@ -868,10 +885,11 @@ pub fn simulate_async_observed(
     }
     if observation.completed {
         let mission = &config.autonomy.mission;
-        let heading = (plant.pose.yaw_rad - mission.finish_yaw_rad + std::f64::consts::PI)
+        let (finish_region, finish_yaw) = crate::online_simulation::scene_finish(config);
+        let heading = (plant.pose.yaw_rad - finish_yaw + std::f64::consts::PI)
             .rem_euclid(std::f64::consts::TAU)
             - std::f64::consts::PI;
-        if !mission.footprint.inside(plant.pose, mission.finish_region)
+        if !mission.footprint.inside(plant.pose, finish_region)
             || heading.abs() > mission.goal_heading_tolerance_rad
         {
             observation.fault.get_or_insert_with(|| "observed completion did not retain the true final footprint/heading after braking".into());
@@ -900,6 +918,7 @@ pub fn simulate_async_observed(
         first_problem: observation.first_problem,
         last_control: observation.last_control,
         recent_attempts: observation.recent_attempts,
+        online_referee: online_referee.as_ref().map(|referee| referee.summary()),
         timing_statistics: observation.timing_statistics,
         transitions: observation.transitions,
         omitted_transitions: observation.omitted_transitions,
@@ -936,6 +955,7 @@ mod tests {
             curvature_per_m: 0.0,
         };
         let report = Arc::new(AutonomyStep {
+            online: None,
             kind: "autonomy_step",
             mode: "observation_fixture",
             physical_output_enabled: false,
@@ -1018,5 +1038,32 @@ mod tests {
         assert_eq!(attempt.adopted_at, Some(Timestamp(80)));
         assert_eq!(attempt.adopted_command, Some(drive));
         assert_eq!(attempt.publication_to_adoption_ns, Some(80));
+        assert!(
+            serde_json::to_value(attempt)
+                .unwrap()
+                .get("online")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn online_report_is_retained_in_bounded_async_attempts() {
+        let mut config = crate::online_simulation::OnlineScenario::example()
+            .compile()
+            .unwrap();
+        config.max_duration_ms = 200;
+        let summary =
+            simulate_async(&config, &AsyncSimulationOptions::default(), &mut Vec::new()).unwrap();
+        assert!(!summary.recent_attempts.is_empty());
+        assert!(summary.recent_attempts.len() <= 16);
+        for attempt in &summary.recent_attempts {
+            assert!(attempt.online.is_some(), "{attempt:?}");
+            assert!(
+                serde_json::to_value(attempt)
+                    .unwrap()
+                    .get("online")
+                    .is_some()
+            );
+        }
     }
 }

@@ -32,6 +32,7 @@ fn drive() -> MotionOutput {
 fn step(at: u64, command: MotionOutput, fault: bool) -> AutonomyStep {
     let state = if fault { State::Fault } else { State::Running };
     AutonomyStep {
+        online: None,
         kind: "autonomy_step",
         mode: "test",
         physical_output_enabled: false,
@@ -85,6 +86,7 @@ fn input(at: u64) -> Arc<SensorSnapshot> {
             ranges_m: vec![Some(5.0); 60],
         },
         road: RoadFrame {
+            elements: None,
             observation: RoadObservation {
                 captured_at: Timestamp(at),
                 frame_id: FrameId("body".into()),

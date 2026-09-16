@@ -31,6 +31,8 @@ pub enum CertificateFailureReason {
     VisionCone,
     LightBoundaryInvalid,
     LightBoundary,
+    OnlineEvidenceInvalid,
+    UnobservedSpace,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

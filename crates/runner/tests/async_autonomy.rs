@@ -56,6 +56,7 @@ impl StraightPlant {
             },
             scan: synthetic_scan(config, self.pose, &[], Timestamp(at)),
             road: RoadFrame {
+                elements: None,
                 observation: RoadObservation {
                     captured_at: Timestamp(at),
                     frame_id: config.autonomy.mission.body_frame.clone(),

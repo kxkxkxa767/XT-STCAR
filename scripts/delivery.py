@@ -72,6 +72,9 @@ BASE_FILES = {
     "config/field-example.json", "docs/赛场规格自适应.md",
     "docs/field-adaptation-validation.json", "docs/field-adaptation-matrix.json",
     "docs/field-adaptation-legacy-matrix.json", "docs/field-adaptation-experiments.json",
+    "config/online-example.json", "config/online-controller-sim.json", "config/online-sim.json",
+    "docs/在线元素驱动任务.md", "docs/online-mission-validation.json",
+    "docs/online-mission-matrix.json", "docs/online-mission-experiments.json",
 }
 MODEL_FILES = {"models/yolo26n.onnx", "model-validation.json", "models/yolo26n.provenance.json",
                "licenses/Ultralytics-LICENSE"}
