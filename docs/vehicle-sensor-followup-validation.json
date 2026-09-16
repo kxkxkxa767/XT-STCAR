@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-16",
+  "scope": "Vehicle sensor/camera followup only; no chassis commands. Production scan assembly replay ran on Mac on actual captured bytes.",
+  "lidar": {
+    "duration_ms": 10000,
+    "bytes": 163509,
+    "packets": 2815,
+    "point_slots": 45040,
+    "valid_points": 45040,
+    "range_min_m": 0.33,
+    "range_max_m": 5.311,
+    "decoder_errors": {
+      "checksum_errors": 0,
+      "angle_errors": 0,
+      "length_errors": 0,
+      "expired_packets": 0,
+      "discarded_bytes": 239
+    },
+    "scan_assembly": {
+      "execution": "native Mac, production Rust decoder and assembler",
+      "accepted_scans": 99,
+      "rejected_revolutions": 0,
+      "push_errors": [],
+      "coverage_min": 0.9916666666666667,
+      "coverage_max": 1.0,
+      "valid_fraction_min": 0.9916666666666667,
+      "revolution_duration_ms_min": 99,
+      "revolution_duration_ms_max": 106,
+      "config": {
+        "bins": 360,
+        "frame_id": "laser_link",
+        "max_missing_arc_rad": 0.12,
+        "max_packet_gap_ms": 20,
+        "max_revolution_ms": 200,
+        "min_coverage_fraction": 0.95,
+        "min_valid_fraction": 0.95
+      }
+    }
+  },
+  "camera": {
+    "640x480": {
+      "quality_trial_read_failures": 0,
+      "quality_trial_successful_frames": 125,
+      "actual_frame_shape": [
+        480,
+        640,
+        3
+      ],
+      "reported_fps": 30.0,
+      "read_only_bgr": {
+        "width": 640,
+        "height": 480,
+        "count": 120,
+        "read_failures": 0,
+        "elapsed_s": 8.051886381999793,
+        "host_received_fps": 14.905051930877391,
+        "last_shape": [
+          480,
+          640,
+          3
+        ],
+        "method": "BGR cap.read only during timing; no per-frame statistics or hashing"
+      },
+      "v4l2_reported_fps": [
+        29.88,
+        29.82,
+        29.8
+      ],
+      "v4l2_exit_code": 0
+    },
+    "1920x1080": {
+      "quality_trial_read_failures": 0,
+      "quality_trial_successful_frames": 65,
+      "actual_frame_shape": [
+        1080,
+        1920,
+        3
+      ],
+      "reported_fps": 30.0,
+      "read_only_bgr": {
+        "width": 1920,
+        "height": 1080,
+        "count": 120,
+        "read_failures": 0,
+        "elapsed_s": 12.084111572000438,
+        "host_received_fps": 9.933059474498792,
+        "last_shape": [
+          1080,
+          1920,
+          3
+        ],
+        "method": "BGR cap.read only during timing; no per-frame statistics or hashing"
+      },
+      "v4l2_reported_fps": [
+        29.76,
+        29.76,
+        29.8
+      ],
+      "v4l2_exit_code": 0
+    }
+  },
+  "limits": [
+    "No distance accuracy reference or calibrated lidar-to-body transform",
+    "Camera delivery rate differs from decoded BGR reader throughput",
+    "No camera geometry calibration or inference throughput measured in this followup",
+    "Real scan plot uses sensor coordinates, no interpolated or invented returns"
+  ],
+  "evidence_sha256": {
+    "sensor-followup/camera-1920x1080-metrics.json": "ac6da180ef6d84fb202ec325bcda6f9c60042a7f9a75e8641afcd5c84025e7ea",
+    "sensor-followup/camera-1920x1080.json": "e8f20a4e671cd0e72cdadadc7ccc11a9e3dc0bc8decc2b5f132b6b2d9938612e",
+    "sensor-followup/camera-1920x1080.png": "1791f5e8a671679abb08d94e633e7538ed9ff5539d283fe02eac1780a05652a7",
+    "sensor-followup/camera-640x480-metrics.json": "d84962dd8e420c0c2ced6438f39144bf636806633b3b77a1d3d63cf8cad33cc5",
+    "sensor-followup/camera-640x480.json": "0918be9438a3def5e34f3c87216869a28d47f37817b1d82cbec1000621e1b47f",
+    "sensor-followup/camera-640x480.png": "69b09ba0677ce0a1cc79bfe220220b980151d9c59d1d89da2cac669a4974fb44",
+    "sensor-followup/n10-capture.json": "75d28074a33af5a7070db99bdc1d8eee8514ad385c51cedbd86848c4ec0b4acf",
+    "sensor-followup/n10-config.json": "b98ff63e07e7aeb781790bd00e7ce32ddae7ea60251067ed3daf2a211d600cb4",
+    "sensor-followup/n10-decode.json": "6d0729f62ac131403ba1e2ab91193b09e637b049b676d5502de70e15b49e82f6",
+    "sensor-followup/n10-decoded.jsonl": "e4bd0c60318049eaad402a3267d0836c691779526998e43bd66ddc69b5ae11f2",
+    "sensor-followup/n10-raw.jsonl": "e92e38d0cbb156e2b8fd4c329cb66a4716c923a49db433099ebc366165dcd09c",
+    "sensor-followup/opencv-read-only-1920x1080.json": "8ae97bb693866495d482ebf6a2272d770d83737cd2793bf91c015974e9600290",
+    "sensor-followup/opencv-read-only-640x480.json": "ee41e8afac8acf234cacc54f142aea2416f909b76d50664a388f550ba0f3ad40",
+    "sensor-followup/scan-assembly.json": "48bc57b1d4e05715eee5724b6ada3c8b8952686ed558975c02d2f5d5222d4670",
+    "sensor-followup/summary.json": "1cf1bfb3587ec01dac0a5142eba43618cd1655f486ef64f08df0c5eeeebc98da",
+    "sensor-followup/v4l2-stream-1920x1080.json": "3ff06f5f1ed6ead23f9dc2fb1d10fde6eab60c9a21d3469f0f5bef2608726116",
+    "sensor-followup/v4l2-stream-640x480.json": "71edfafbc7da21a4215709bdbe7fc868889053c9b380c489726ded2f84e55176"
+  },
+  "scan_checker_source_sha256": "87d2e189cb3ed508dfcbca48a3e41a48340c86d9ee1689d30a3d741b1d114a76",
+  "scan_checker_lock_sha256": "82ea81edf02d4d4f8209babe0cad4a97c6fbda7f4a62671d2435fd2b05877f25"
+}
