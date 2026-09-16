@@ -140,7 +140,31 @@
     "steering_exit_code": 0,
     "motor_exit_code": 0,
     "neutral_cleanup_exit_code": 0,
-    "speed_angle_braking_time_calibrated": false
+    "speed_angle_braking_time_calibrated": false,
+    "direction_and_start_observations": {
+      "conditions": "wheels raised, user visual observation; motor pulses 0.5s each",
+      "steering_1450": "right",
+      "steering_1550": "left",
+      "steering_1500_intermediate_center_observed": true,
+      "motor_1520": {
+        "rotation": true,
+        "direction": "forward",
+        "stopped_after_1500": true
+      },
+      "motor_1510": {
+        "rotation": false
+      },
+      "motor_1515": {
+        "final_stationary": true,
+        "rotation_during_pulse": null
+      },
+      "motor_1519": {
+        "rotation": false
+      },
+      "exact_repeatable_threshold_verified": false,
+      "loaded_ground_threshold_verified": false,
+      "production_calibration_modified": false
+    }
   },
   "previous_online_matrix_replaced": false,
   "raw_evidence_sha256": {
@@ -193,7 +217,24 @@
     "chassis-neutral-repeat-20260916T074428Z.json": "2d28967f4088222612750cc7800fe198a9dd100b789153f47939d7493f20b577",
     "chassis-observations-20260916T075249Z.json": "47c1ebcce9fd69387ab12a6db2b8f401a16a9ec102a16c374459bc43bb159a4c",
     "chassis-steering-20260916T075136Z.json": "3c40782e5a05cccebbad5836ea384ad34084fafe76fb025c04fa07d9dc85bf41",
-    "chassis-user-observations-confirmed.json": "55dabe44b86d82206f17e64bb743527d34c70ed3176a43df66b0d8ed0bc49394"
+    "chassis-user-observations-confirmed.json": "55dabe44b86d82206f17e64bb743527d34c70ed3176a43df66b0d8ed0bc49394",
+    "steering-directions-repeat-20260916T080048Z.json": "9321c84b54618dfa363ce5b73f555eb72c9bdb1cf23f5bb882b41e6a4c1c6dd1",
+    "steering-directions-repeat-20260916T080212Z.json": "23b2f97df51194e58f1c7a40ebfda3eeb4675315feba40bf8ceebd8ab8ef47bf",
+    "steering-direction-user-confirmation.json": "35608f468d66eb0872baf5db643f4ab570b64720a4712e55254af9fd7997ac89",
+    "steering-directions-20260916T075949Z.json": "121fcdd39bdd950ce3c6d583bc92d96a1d684c1fcd6fcc806a371baf0f88b468",
+    "motor-1510-user-confirmation.json": "c6dec6c8446e9261ca6f324b3a6107b7a12ffb92edeade12398572e77a6bce30",
+    "motor-1519-user-confirmation.json": "204f8d21bb85683f9651373eb95aec8d039656106e020b6a4305793a54aa05ed",
+    "motor-1520-20260916T080319Z.json": "7a2d50775378be03513076a57b85e5e7f0a0ffec504d2c4092b9f9a2864a746e",
+    "motor-1519-20260916T080837Z.json": "5368b052a79fd4c9ac5d5e90d519346294a7fd0d192a9ec5367adbd40fbac76f",
+    "motor-1520-user-confirmation.json": "506815ba995de5e25c313957dd64856bd314eb6b6ba5bcb328d8e6030122a11e",
+    "motor-1515-user-status.json": "ea6989134f3bd516702ae4e3678ac27060b7df286d07fc9bc7da5192078e27f7",
+    "motor-1515-20260916T080658Z.json": "10782a6c278ca0a89be8a7e5eea9c0d890316b018668740cd4fbc2fd349897f6",
+    "motor-1510-20260916T080539Z.json": "1a075aacacae363a5e754c7f8bb5472e58567cfcdafa8bf4e2423e0e4103b17a",
+    "chassis-bench-directions.py": "2cc866d7775be6b530d88b1170ae4b689b41a94ba98fbabff46a45a69dfc936a",
+    "chassis-bench-mid-pwm.py": "bed384acce567e2400aa423855c08b37875bf8a1dd716393dc16976f17182050",
+    "chassis-bench-low-pwm.py": "590efb32e9b0e3d8af0dc21c40ea3a30a030447bf096076a1379559b2eacd02c",
+    "chassis-bench-1519.py": "88f284fa41c41520255a48694ea74d0af86190972d513c21d83ae7f2b8905a6f",
+    "direction-threshold-final-state.json": "18daa65d15c287431bd6f1fb1287b5c9639724098fc8515a211448a086fc1c4d"
   },
   "privacy": "Raw images, sensor logs and vehicle inventory retained locally only; hashes do not imply public raw-data availability."
 }
