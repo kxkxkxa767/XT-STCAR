@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "date": "2026-09-16",
-  "scope": "Actual vehicle CPU execution, short sensor/camera capture and neutral-only chassis diagnostics. No nonneutral propulsion/steering, no floor driving. Physical neutral state awaits user observation.",
+  "scope": "Actual vehicle CPU execution, short sensor/camera capture, and bounded wheels-raised steering/motor diagnostics. User observed steering/motor response and final stop. No floor driving or kinematic calibration.",
   "system": {
     "os": "Bianbu 2.2",
     "arch": "riscv64",
@@ -120,9 +120,27 @@
     "retry_guardian_stop_writes": 20,
     "retry_exit_code": 0,
     "neutral_parent_sigkill_guardian_stop_writes": 20,
-    "physical_stop_observed": false,
-    "nonneutral_output_sent": false,
-    "mcu_watchdog_verified": false
+    "physical_stop_observed": true,
+    "nonneutral_output_sent": true,
+    "mcu_watchdog_verified": false,
+    "physical_stop_observation_source": "user explicitly answered that wheels rotated and finally stopped",
+    "steering_response_observed": true,
+    "motor_response_observed": true,
+    "steering_us": [
+      1450,
+      1550
+    ],
+    "steering_pulse_s": 0.4,
+    "motor_us": [
+      1520,
+      1540,
+      1560
+    ],
+    "motor_pulse_s": 0.3,
+    "steering_exit_code": 0,
+    "motor_exit_code": 0,
+    "neutral_cleanup_exit_code": 0,
+    "speed_angle_braking_time_calibrated": false
   },
   "previous_online_matrix_replaced": false,
   "raw_evidence_sha256": {
@@ -168,7 +186,14 @@
     "sensor-summary.json": "4ba5bebadf91ea89eb668a4e36300984762fc5b266f65343cc3574b9854162ca",
     "static-progress.jsonl": "b2b40358e867ee3588d2c8d9dc8dce117605ec2a54e2123574c4e1d312cc3a8c",
     "static-tests.py": "3ce22fd97d80642bbfa5d4cb3fcdefc39c4fb76e7fe5a2e89766d28eb9dc2620",
-    "vehicle-source.json": "7b882f1f61549a2ce2ca04ede87bbdda251f6b7ddcb8f92c9f50c0470441e961"
+    "vehicle-source.json": "7b882f1f61549a2ce2ca04ede87bbdda251f6b7ddcb8f92c9f50c0470441e961",
+    "chassis-after-motion-state.json": "18daa65d15c287431bd6f1fb1287b5c9639724098fc8515a211448a086fc1c4d",
+    "chassis-final-neutral-20260916T075422Z.json": "9640114f83c28e96af37c1d9ffb9cd4c1128ae2796a2aa5b05725667b43670d9",
+    "chassis-motor-20260916T075249Z.json": "e6fe04e90c8dc4ab507ef82c1a2275d02d805ce9833cdca4a5f61c6bd1cef9ee",
+    "chassis-neutral-repeat-20260916T074428Z.json": "2d28967f4088222612750cc7800fe198a9dd100b789153f47939d7493f20b577",
+    "chassis-observations-20260916T075249Z.json": "47c1ebcce9fd69387ab12a6db2b8f401a16a9ec102a16c374459bc43bb159a4c",
+    "chassis-steering-20260916T075136Z.json": "3c40782e5a05cccebbad5836ea384ad34084fafe76fb025c04fa07d9dc85bf41",
+    "chassis-user-observations-confirmed.json": "55dabe44b86d82206f17e64bb743527d34c70ed3176a43df66b0d8ed0bc49394"
   },
   "privacy": "Raw images, sensor logs and vehicle inventory retained locally only; hashes do not imply public raw-data availability."
 }
