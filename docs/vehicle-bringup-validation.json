@@ -164,6 +164,27 @@
       "exact_repeatable_threshold_verified": false,
       "loaded_ground_threshold_verified": false,
       "production_calibration_modified": false
+    },
+    "long_hold_observations": {
+      "conditions": "wheels raised, servo1500, neutral before/after",
+      "motor_1519": {
+        "requested_s": 10.0,
+        "command_exit_code": 0,
+        "rotation_observed": true,
+        "pattern": "two intermittent rotations",
+        "approx_chat_reply_to_observation_s": 20,
+        "measured_actuator_latency_s": null
+      },
+      "motor_1520": {
+        "requested_s": 10.0,
+        "vehicle_command_phase_s": 10.019530651999958,
+        "command_exit_code": 0,
+        "rotation_observed": true,
+        "continuous_10s_rotation_confirmed": null,
+        "final_stop_observed_by_user": true
+      },
+      "fixed_deadband_threshold_verified": false,
+      "production_calibration_modified": false
     }
   },
   "previous_online_matrix_replaced": false,
@@ -234,7 +255,15 @@
     "chassis-bench-mid-pwm.py": "bed384acce567e2400aa423855c08b37875bf8a1dd716393dc16976f17182050",
     "chassis-bench-low-pwm.py": "590efb32e9b0e3d8af0dc21c40ea3a30a030447bf096076a1379559b2eacd02c",
     "chassis-bench-1519.py": "88f284fa41c41520255a48694ea74d0af86190972d513c21d83ae7f2b8905a6f",
-    "direction-threshold-final-state.json": "18daa65d15c287431bd6f1fb1287b5c9639724098fc8515a211448a086fc1c4d"
+    "direction-threshold-final-state.json": "18daa65d15c287431bd6f1fb1287b5c9639724098fc8515a211448a086fc1c4d",
+    "long10-after-state.json": "85101a20030d337391630b4432f4626848be07dab8b534e7b55d90461a15f5ba",
+    "motor-1519-long10-20260916T081334Z.json": "473e6644c894d400a019f63dd8699dd5e6891fdc61c372f402a92034436c9bac",
+    "motor-1520-long10-observation.json": "7eea3f0ee099f22e5b32339ef66f6fc4b5a9b1cd3e5208053904b4309674b2a5",
+    "motor-1519-long10-user-confirmation.json": "5c8d8f2ae03d2c893ee24ff3b91163c499e33ecd116bd8097836169b73b1f457",
+    "post-long10-neutral-20260916T081512Z.json": "ee49bf0dac2a43ac0e1627a783456055ce9de3d3acc0b34ba78650587324094b",
+    "motor-1520-long10-20260916T081651Z.json": "3be7104cb9bef85672ffa10ac73a9ec963deede462fa257a002e02d7753c083d",
+    "chassis-bench-1520-long10.py": "ab9e62f97045f266fbe943159f5e7df363e4708c7fe5b8d31a458a062a76d7f7",
+    "chassis-bench-1519-long10.py": "3ede7014be884dadfd58f2ca96c30997af9430063d0c58b970bddd6a66a4a307"
   },
   "privacy": "Raw images, sensor logs and vehicle inventory retained locally only; hashes do not imply public raw-data availability."
 }
