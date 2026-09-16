@@ -1,0 +1,86 @@
+{
+  "date": "2026-09-16",
+  "scope": "user-local native runtime installation and project launcher activation",
+  "package_version": "2.0.6",
+  "runtime_version": "1.24.2+spacemit.a1",
+  "api_22_available": true,
+  "installed_directory": "/home/bianbu/.local/opt/xt-stcar/onnxruntime/spacemit-2.0.6",
+  "active_link": "/home/bianbu/.local/opt/xt-stcar/onnxruntime/current",
+  "launcher": "/home/bianbu/.local/bin/xt-stcar",
+  "runtime_env": "/home/bianbu/.config/xt-stcar/runtime.env",
+  "runtime_sha256": "93bb75601d9eceb5aca192fa70c0c3e18b94a70b9f57acdc9b34c2ff426e09e3",
+  "system_runtime_sha256_before": "115cd0777b0faec418daaacd5eb7d86b5d4ac86ef4f2b5a43490267c2471bc26",
+  "system_runtime_sha256_after": "115cd0777b0faec418daaacd5eb7d86b5d4ac86ef4f2b5a43490267c2471bc26",
+  "system_python_onnxruntime_version": "1.18.0",
+  "libc_changed": false,
+  "system_package_changed": false,
+  "ep_enabled": false,
+  "dependencies": "\tlinux-vdso.so.1 (0x0000003f9d384000)\n\tlibatomic.so.1 => /lib/riscv64-linux-gnu/libatomic.so.1 (0x0000003f9bfd9000)\n\tlibstdc++.so.6 => /lib/riscv64-linux-gnu/libstdc++.so.6 (0x0000003f9bd93000)\n\tlibm.so.6 => /lib/riscv64-linux-gnu/libm.so.6 (0x0000003f9bd15000)\n\tlibgcc_s.so.1 => /lib/riscv64-linux-gnu/libgcc_s.so.1 (0x0000003f9bcf7000)\n\tlibc.so.6 => /lib/riscv64-linux-gnu/libc.so.6 (0x0000003f9bb79000)\n\t/lib/ld-linux-riscv64-lp64d.so.1 (0x0000003f9d386000)\n",
+  "pre_activation_inference_exit": 0,
+  "launcher_inference_exit": 0,
+  "inference_report": {
+    "schema_version": 1,
+    "mode": "infer",
+    "backend": "rust-onnxruntime",
+    "inference_performed": true,
+    "note": "Rust calls the standard ORT C API in process; vendor/vehicle compatibility is unverified.",
+    "elapsed_ms": 1763.369322,
+    "input_shape": [
+      1,
+      3,
+      320,
+      320
+    ],
+    "transform": {
+      "source_width": 640,
+      "source_height": 480,
+      "input_width": 320,
+      "input_height": 320,
+      "resized_width": 320,
+      "resized_height": 240,
+      "pad_left": 0,
+      "pad_top": 40,
+      "scale": 0.5
+    },
+    "detections": [
+      {
+        "class_id": 0,
+        "confidence": 0.86995363,
+        "xyxy": [
+          417.65808,
+          171.30042,
+          507.33762,
+          446.9776
+        ]
+      },
+      {
+        "class_id": 41,
+        "confidence": 0.35725343,
+        "xyxy": [
+          343.0578,
+          301.66382,
+          378.98843,
+          358.2546
+        ]
+      }
+    ],
+    "model_sha256": "c52d204571c6df9f1132dedd7aab3e87336434589b055b9fa4026d117f1d4045",
+    "runtime_info": "ORT Build Info: git-branch=HEAD, git-commit-id=9bb02204b, build type=Release"
+  },
+  "installed_files": {
+    "LICENSE": "be985efeb77899cb6233d486dbe875ef6f46bce0683e80bc2243281f848f6979",
+    "README.md": "a291b4d5c245111a7cee284670ad614461034f315e56b574ae25120d02f124b0",
+    "manifest.json": "203be0caa428f35797dd67c1d594e419d2269286e65fa973752869d057ecb97c",
+    "VERSION_NUMBER": "ac466878608d7cbd7c12ceadb12b9cb60ed8b94e1f9d90b2de60439b0bf27ef4",
+    "lib/libspacemit_ep.so.2.0.6": "dcc9503031bca22cf2b33a692f7b4c01d0fbb4a24c34f6e60c7faaddb78274ae",
+    "lib/libonnxruntime.so.1.24.2+spacemit.a1": "93bb75601d9eceb5aca192fa70c0c3e18b94a70b9f57acdc9b34c2ff426e09e3",
+    "lib/libonnxruntime_providers_shared.so": "62a3d2d9916c20bbe08358e5797c3e8c7ff11c6235728ac396d1d1f315d598de"
+  },
+  "activation_and_postcheck_wall_seconds": 4.454701226999532,
+  "timing_note": "Wall interval includes launcher inference and subsequent system Python import check; it is not inference latency. CLI elapsed_ms is separate.",
+  "fresh_login_launcher_path": "/home/bianbu/.local/bin/xt-stcar",
+  "fresh_login_help_exit": 0,
+  "installer_sha256": "1fbf8ef9f084101e6ee4c184f850da3add9816b03a9b747853edf95ab647ff4f",
+  "launcher_source_sha256": "356cb37e191a7b41af27912b2b15af1df5cc923d45aa3eb61670189e1af33066",
+  "original_binary_note": "The frozen binary report contains a historical generic compatibility disclaimer. This record establishes only the tested runtime/model/CPU path, not EP or closed-loop acceptance."
+}

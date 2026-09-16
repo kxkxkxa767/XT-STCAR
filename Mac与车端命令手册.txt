@@ -1,3 +1,11 @@
+2026-09-16车端运行库更新：
+  已安装用户级SpacemiT 2.0.6 / ORT1.24.2+spacemit.a1，系统原生1.18.1和Python1.18.0保留。
+  在车端SSH终端运行（图片改为自己的实际路径）：
+    ~/.local/bin/xt-stcar infer --image /绝对路径/图片.png
+  该入口自动选择已部署模型/配置/运行库；显式传入相同选项时以用户参数为准。
+  原Rust程序直接启动仍要求 --model 和 --runtime-lib。
+  详细安装位置与回退方法见 docs/车端ONNXRuntime升级.md。
+
 XT-STCAR：Mac 与 Muse Pi Pro 车端命令手册
 维护日期：2026-09-15
 适用工程：/Users/yuhaojin/Documents/XT-STCAR

@@ -1,5 +1,7 @@
 # SpacemiT K1 原生运行库只读核验
 
+2026-09-16更新：已完成实机验证并安装为工程用户级默认运行库，见[车端升级记录](车端ONNXRuntime升级.md)。下方为原静态核验历史。
+
 2026-09-07。仅下载与静态检查，未安装、未执行库/示例、未连接开发板、未修改主工程。完整证据保存在工程 `work/spacemit-runtime-followup/`，包括 `runtime-validation.json`、`sources.json`、`release-inventory.json`、官方发布包和 `lib*.objdump.txt`。
 
 已取得可落实的官方候选运行库。此前“尚未取得目标原生库”的资料缺口已关闭；目标系统兼容与实际推理尚未验证。
