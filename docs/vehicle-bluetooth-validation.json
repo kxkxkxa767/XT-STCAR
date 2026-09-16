@@ -1,0 +1,49 @@
+{
+  "date": "2026-09-16",
+  "record_kind": "consolidated observations from live SSH diagnostic command outputs",
+  "bluetooth_usable": false,
+  "scan_success": false,
+  "bluetooth_service_active": true,
+  "realtek_bt_service_failed": true,
+  "failure_since": "2026-09-15 18:38:35 Asia/Shanghai",
+  "rfkill_soft_blocked": false,
+  "rfkill_hard_blocked": false,
+  "hci_devices": 0,
+  "device_tree_modules_usrload": "8852bs",
+  "kernel_hci_uart_h4_registered": true,
+  "kernel_hci_uart_h5_registered": true,
+  "uart_device": "/dev/ttyS2",
+  "uart_permissions": "0660 root:dialout",
+  "current_user_in_dialout": false,
+  "initialization_program": "rtk_hciattach",
+  "program_missing_from_standard_paths": [
+    "/usr/local/sbin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/usr/bin",
+    "/sbin",
+    "/bin"
+  ],
+  "installed_package_path_search_matches": 0,
+  "standard_hciattach_present": true,
+  "standard_hciattach_treated_as_substitute": false,
+  "bluetoothctl_list": {
+    "exit": 0,
+    "stdout": ""
+  },
+  "bluetoothctl_show": {
+    "exit": 1,
+    "stdout": "No default controller available\n"
+  },
+  "bluetoothctl_scan_on_timeout_5": {
+    "exit": 0,
+    "stdout": "No default controller available\n",
+    "note": "Exit zero does not establish a successful scan; no controller exists."
+  },
+  "service_script_suppresses_attach_stderr": true,
+  "conclusion": "Required Realtek initialization helper is unavailable in the service default executable search paths. This is a concrete startup blocker; hardware health and additional issues after fixing the helper remain unverified.",
+  "system_files_changed": false,
+  "service_restart_performed": false,
+  "pairing_attempted": false,
+  "chassis_commands_sent": false
+}
