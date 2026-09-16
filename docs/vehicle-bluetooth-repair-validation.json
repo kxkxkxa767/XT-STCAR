@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "system_install_completed": true,
+  "source_hashes": {
+    "rtk_hciattach": "1a807e8408bd27212c7414b91072591c2168ddcd55cebf338f6afbbf150f65d8",
+    "firmware/rtlbt/rtl8852bs_fw": "295488bd7d494e656d4c7941ddd45abde60363f31f90015f411e6cfa409dec74",
+    "firmware/rtlbt/rtl8852bs_config": "efa8915db59c5bc30aaa23e1f264656bbf425fcaf091db0954c27752a1d8f7a0"
+  },
+  "temporary_service_deadline_seconds": 60,
+  "temporary_bluetooth_power_reset": true,
+  "temporary_controller": "hci0",
+  "temporary_scan_bluez_ready": true,
+  "temporary_scan": {
+    "scan_started": true,
+    "observed_device_count": 8,
+    "exit": 0
+  },
+  "system_controller": "hci0",
+  "system_scan_bluez_ready": true,
+  "system_scan": {
+    "scan_started": true,
+    "observed_device_count": 7,
+    "exit": 0
+  },
+  "installed_paths": [
+    "/usr/local/bin/rtk_hciattach",
+    "/lib/firmware/rtlbt/rtl8852bs_fw",
+    "/lib/firmware/rtlbt/rtl8852bs_config"
+  ],
+  "date": "2026-09-16",
+  "independent_verification": {
+    "factory_service": "active",
+    "factory_service_enabled": true,
+    "controller_powered": true,
+    "installed_sha256_matches": true
+  },
+  "blueman_disabled_plugins": [
+    "KillSwitch"
+  ],
+  "untested": [
+    "reboot persistence",
+    "pairing",
+    "audio and profile data transfer"
+  ]
+}
