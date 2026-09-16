@@ -36,6 +36,22 @@ def run(args, timeout=20, check=True):
     return result
 
 
+def reset_bluetooth():
+    state = Path('/sys/class/rfkill/rfkill0/state')
+    if Path('/sys/class/rfkill/rfkill0/type').read_text().strip() != 'bluetooth':
+        raise RuntimeError('rfkill0 identity changed')
+    if Path('/sys/class/rfkill/rfkill0/name').read_text().strip() != 'rf-pwrseq:bt-pwrseq':
+        raise RuntimeError('Unexpected Bluetooth power control')
+    # Match the factory startup sequence. Closing the HCI UART does not reset
+    # firmware or the chip's negotiated 1.5-Mbaud link back to boot defaults.
+    try:
+        state.write_text('0\n')
+        time.sleep(1)
+    finally:
+        state.write_text('1\n')
+    time.sleep(1)
+
+
 def wait_controller(timeout=25):
     until = time.monotonic() + timeout
     while time.monotonic() < until:
@@ -46,7 +62,26 @@ def wait_controller(timeout=25):
     raise RuntimeError('No Bluetooth controller appeared within 25 seconds')
 
 
+def wait_bluez(timeout=15):
+    # Kernel hci0 appears before BlueZ publishes a usable Adapter1/default
+    # controller. Wait for the userspace API actually used by power/scan.
+    until = time.monotonic() + timeout
+    last = 'controller not published'
+    while time.monotonic() < until:
+        try:
+            result = run(['bluetoothctl', 'show'], timeout=3, check=False)
+            last = (result.stdout + result.stderr).strip()
+            if result.returncode == 0 and re.search(r'Controller [0-9A-Fa-f:]{17}', result.stdout):
+                return
+        except subprocess.TimeoutExpired:
+            last = 'bluetoothctl show timed out'
+        time.sleep(0.5)
+    raise RuntimeError('BlueZ controller not ready within 15 seconds: ' + last)
+
+
 def scan(report, label):
+    wait_bluez()
+    report[label + '_bluez_ready'] = True
     power = run(['bluetoothctl', 'power', 'on'])
     if 'succeeded' not in power.stdout:
         raise RuntimeError('Bluetooth power-on did not report success: ' + power.stdout)
@@ -107,6 +142,8 @@ def main():
         print('Testing staged files in a private mount namespace; system files unchanged.', flush=True)
         # The exact production binary reads its standard firmware path, but only
         # this temporary service sees the staged directory at that path.
+        reset_bluetooth()
+        report['temporary_bluetooth_power_reset'] = True
         validation_started = True
         run(['systemd-run', '--quiet', '--collect', '--unit=' + UNIT,
              '--property=RuntimeMaxSec=60', '--property=PrivateMounts=yes',
