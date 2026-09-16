@@ -1,0 +1,92 @@
+{
+  "date": "2026-09-16",
+  "source_scope": "existing Bianbu 2.2 snapshot sources and pin priorities",
+  "index_refresh_exit": 0,
+  "system_packages_changed": false,
+  "sudo_available_without_password": false,
+  "commands": [
+    {
+      "argv": [
+        "apt-get",
+        "-c",
+        "/home/bianbu/xt-stcar-tests/20260916-system-update/audit-apt.conf",
+        "-s",
+        "dist-upgrade"
+      ],
+      "exit": 0,
+      "stdout": "NOTE: This is only a simulation!\n      apt-get needs root privileges for real execution.\n      Keep also in mind that locking is deactivated,\n      so don't depend on the relevance to the real current situation!\nReading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\nThe following packages will be REMOVED:\n  linux-image-6.6.63\nThe following packages will be DOWNGRADED:\n  bianbu-esos\n0 upgraded, 0 newly installed, 1 downgraded, 1 to remove and 0 not upgraded.\nRemv linux-image-6.6.63 [6.6.63-20250922112039]\nInst bianbu-esos [0.0.10] (0.0.9 Spacemit:noble-porting/snapshots/v2.2 [riscv64])\nConf bianbu-esos (0.0.9 Spacemit:noble-porting/snapshots/v2.2 [riscv64])\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "apt-cache",
+        "-c",
+        "/home/bianbu/xt-stcar-tests/20260916-system-update/audit-apt.conf",
+        "policy",
+        "libc6",
+        "onnxruntime",
+        "python3-opencv",
+        "bluez",
+        "linux-image-6.6.63",
+        "openssh-server"
+      ],
+      "exit": 0,
+      "stdout": "libc6:\n  Installed: 2.39-0ubuntu8bb1\n  Candidate: 2.39-0ubuntu8bb1\n  Version table:\n     2.39-0ubuntu8.3 500\n        500 https://archive.spacemit.com/bianbu noble-updates/snapshots/v2.2/main riscv64 Packages\n *** 2.39-0ubuntu8bb1 1100\n       1100 https://archive.spacemit.com/bianbu noble-porting/snapshots/v2.2/main riscv64 Packages\n        100 /var/lib/dpkg/status\n     2.39-0ubuntu8 500\n        500 https://archive.spacemit.com/bianbu noble/snapshots/v2.2/main riscv64 Packages\nonnxruntime:\n  Installed: 1.2.2\n  Candidate: 1.2.2\n  Version table:\n *** 1.2.2 1100\n       1100 https://archive.spacemit.com/bianbu noble-porting/snapshots/v2.2/main riscv64 Packages\n        100 /var/lib/dpkg/status\npython3-opencv:\n  Installed: 4.6.0+dfsg-13.1ubuntu1bb1\n  Candidate: 4.6.0+dfsg-13.1ubuntu1bb1\n  Version table:\n *** 4.6.0+dfsg-13.1ubuntu1bb1 1100\n       1100 https://archive.spacemit.com/bianbu noble-ros/universe riscv64 Packages\n        100 /var/lib/dpkg/status\n     4.6.0+dfsg-13.1ubuntu1 500\n        500 https://archive.spacemit.com/bianbu noble/snapshots/v2.2/universe riscv64 Packages\nbluez:\n  Installed: 5.72-0ubuntu5bb6\n  Candidate: 5.72-0ubuntu5bb6\n  Version table:\n *** 5.72-0ubuntu5bb6 1100\n       1100 https://archive.spacemit.com/bianbu noble-porting/snapshots/v2.2/main riscv64 Packages\n        100 /var/lib/dpkg/status\n     5.72-0ubuntu5bb4 1100\n       1100 https://archive.spacemit.com/bianbu noble-customization/snapshots/v2.2/main riscv64 Packages\n     5.72-0ubuntu5 500\n        500 https://archive.spacemit.com/bianbu noble/snapshots/v2.2/main riscv64 Packages\nlinux-image-6.6.63:\n  Installed: 6.6.63-20250922112039\n  Candidate: 6.6.63-20250922112039\n  Version table:\n *** 6.6.63-20250922112039 1100\n        100 /var/lib/dpkg/status\n     6.6.63-2.2.7.2 500\n        500 https://archive.spacemit.com/bianbu bianbu-v2.2-updates/main riscv64 Packages\n     6.6.63-2.2.0.2 1100\n       1100 https://archive.spacemit.com/bianbu noble-porting/snapshots/v2.2/main riscv64 Packages\nopenssh-server:\n  Installed: 1:9.6p1-3ubuntu13.5\n  Candidate: 1:9.6p1-3ubuntu13.5\n  Version table:\n *** 1:9.6p1-3ubuntu13.5 500\n        500 https://archive.spacemit.com/bianbu noble-updates/snapshots/v2.2/main riscv64 Packages\n        100 /var/lib/dpkg/status\n     1:9.6p1-3ubuntu13 500\n        500 https://archive.spacemit.com/bianbu noble/snapshots/v2.2/main riscv64 Packages\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "dpkg",
+        "--audit"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "apt-mark",
+        "showhold"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "systemctl",
+        "--failed",
+        "--no-pager"
+      ],
+      "exit": 0,
+      "stdout": "  UNIT               LOAD   ACTIVE SUB    DESCRIPTION\n* realtek-bt.service loaded failed failed Realtek/AIC Uart Bluetooth power service\n\nLegend: LOAD   -> Reflects whether the unit definition was properly loaded.\n        ACTIVE -> The high-level unit activation state, i.e. generalization of SUB.\n        SUB    -> The low-level unit activation state, values depend on unit type.\n\n1 loaded units listed.\n",
+      "stderr": ""
+    }
+  ],
+  "snap_installed": false,
+  "flatpak_installed": false,
+  "audit_index_files": {
+    "archive.spacemit.com_bianbu_dists_noble-porting_snapshots_v2.2_InRelease": "32e5b7f767762c753d1eedb2c05f82fd328238d91b75f78cbd55c0e80f169557",
+    "archive.spacemit.com_bianbu_dists_noble-security_snapshots_v2.2_InRelease": "fd337a815aac18af4eff1c4c0c3d43868bf8c531c07ab0fd5aab3a617fcd0dd2",
+    "archive.spacemit.com_bianbu_dists_noble-ros_InRelease": "a29deaef5abcfa55b0612dec3388f025fee3ee02de2a4dfa7cf2137af260f95b",
+    "archive.spacemit.com_bianbu_dists_bianbu-v2.2-updates_InRelease": "4c9ca7070b714423c01b3029fb24533a6a10b124c1cbbb5aa9cf156c4fec1cc6",
+    "archive.spacemit.com_bianbu_dists_noble-updates_snapshots_v2.2_InRelease": "73002fe19bd254a91eb8799c651382af998afc578d31dc9478b46f2ce4749452",
+    "archive.spacemit.com_bianbu_dists_noble-customization_snapshots_v2.2_InRelease": "59cb09d6e34d98aa4ab4422e38d2db39743516ff7f8be92680ec163bf77c4f63",
+    "archive.spacemit.com_bianbu_dists_noble_snapshots_v2.2_InRelease": "66ffc203ca886164a0059ce8973b012f9ee202df32032ee323ee908b9a178f20"
+  },
+  "index_log_sha256": "aa5c365f3728aa67c2f82d50bdfcc67ba0674d02cc4a17ece45cc0bf1c99cc30",
+  "upgrade_simulation": "NOTE: This is only a simulation!\n      apt-get needs root privileges for real execution.\n      Keep also in mind that locking is deactivated,\n      so don't depend on the relevance to the real current situation!\nReading package lists...\nBuilding dependency tree...\nReading state information...\nCalculating upgrade...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n",
+  "reboot_required_flag": false,
+  "decision": "No package transaction: normal upgrade has zero candidates; dist-upgrade simulation removes current kernel and downgrades bianbu-esos.",
+  "system_index_modified": false,
+  "index_directory_scope": "Fresh signed repository indexes stored in user-owned audit directory; original sources, pin preferences, apt hooks and system lists unchanged.",
+  "bluetooth_observation": {
+    "service": "realtek-bt.service",
+    "failed_since": "2026-09-15 18:38:35 Asia/Shanghai",
+    "message": "bring up hci failed",
+    "hci_devices_observed": 0,
+    "rfkill_soft_blocked": false,
+    "rfkill_hard_blocked": false,
+    "repair_performed": false
+  }
+}

@@ -26,6 +26,7 @@ Rust运动主程序目前仍使用记录输出，架空硬件诊断与自主闭�
 实际命令、结果和限制见 [车辆到场模块检查](docs/车辆到场模块检查.md)、[机器验证记录](docs/vehicle-bringup-validation.json)和[雷达相机追加验证](docs/vehicle-sensor-followup-validation.json)。
 8080相机预览脚本为 [camera-preview.py](scripts/camera-preview.py)，已在车端验证单帧和连续MJPEG；[后台启动与停止命令](docs/车辆到场模块检查.md#相机8080网页预览)。测试服务已停止，按需启动。
 车端现在可用 `~/.local/bin/xt-stcar infer --image /绝对路径/图片.png`，自动选择已部署模型和新运行库；[安装、使用与回退](docs/车端ONNXRuntime升级.md)。入口源码为 [vehicle-vision.sh](scripts/vehicle-vision.sh)，Rust程序和原部署包未改写。
+车端系统更新已重新检查当前配套源：普通升级0包；完整升级模拟会删除当前内核并降级系统包，未执行。[更新检查与蓝牙异常](docs/车端系统更新检查.md)。
 新增比赛模块与验证边界见 [Rust 比赛自主闭环](docs/Rust比赛自主闭环.md)，完整命令见 [Mac与车端命令手册.txt](Mac与车端命令手册.txt)。
 前轮 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保留作历史，交接状态见 [agent.md](agent.md)。
 已完整核对用户提供的 10 页比赛规则初稿，见 [赛项三规则与工程差距](docs/赛项三规则与工程差距.md)。
