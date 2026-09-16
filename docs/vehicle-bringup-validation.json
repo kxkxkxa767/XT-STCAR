@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-16",
+  "scope": "Actual vehicle CPU execution, short sensor/camera capture and neutral-only chassis diagnostics. No nonneutral propulsion/steering, no floor driving. Physical neutral state awaits user observation.",
+  "system": {
+    "os": "Bianbu 2.2",
+    "arch": "riscv64",
+    "glibc": "2.39"
+  },
+  "package_sha256": "e9920c9ec826e0ed6558ab105459c18e8c16e246d3ad8bcccf74f4e520f0f9b4",
+  "package_validation_exit_code": 0,
+  "binaries": {
+    "xt-stcar": {
+      "sha256": "b83012928876ff87f322c9b4bac8e51c9a338b4c56c495c1a3598e8bc32b11d5",
+      "size_bytes": 1217056,
+      "needed": [
+        "libc.so.6"
+      ],
+      "maximum_glibc": "2.34"
+    },
+    "xt-stcar-robot": {
+      "sha256": "259b419d6f9061ccb6d56b746d5c23d80a2d0a23d51bcb337e97514b0b793042",
+      "size_bytes": 2376448,
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "maximum_glibc": "2.34"
+    }
+  },
+  "self_check_exit_code": 0,
+  "robot_replay_exit_code": 0,
+  "sensors": {
+    "imu": {
+      "samples": 299,
+      "acceleration_norm_mean_mps2": 9.818754323846179,
+      "gyro_norm_max_radps": 0.010758643432363598,
+      "received_span_ms": 2985,
+      "checksum_errors": 0
+    },
+    "n10": {
+      "packets": 844,
+      "points": 13504,
+      "wraps": 30,
+      "min_range_m": 0.549,
+      "max_range_m": 5.197,
+      "received_span_ms": 2996,
+      "checksum_errors": 0
+    }
+  },
+  "sensor_capture": {
+    "n10": {
+      "bytes": 49145,
+      "records": 1246,
+      "elapsed_ms": 3000,
+      "ended_by": "duration_limit",
+      "device_commands_sent": false
+    },
+    "imu": {
+      "bytes": 9903,
+      "records": 601,
+      "elapsed_ms": 3000,
+      "ended_by": "duration_limit",
+      "device_commands_sent": false
+    }
+  },
+  "camera": {
+    "frames_ok": 5,
+    "shape": [
+      480,
+      640,
+      3
+    ],
+    "fps_verified": false
+  },
+  "inference": {
+    "system_runtime": "1.18.1",
+    "system_runtime_api22_supported": false,
+    "system_runtime_infer_exit_code": 2,
+    "candidate_release": "SpacemiT 2.0.6",
+    "candidate_ort": "1.24.2",
+    "candidate_archive_sha256": "bebcdfb7df6b49eefa3863afcd85a3da2aa83c3ae9252d7d856188c38a70b0e6",
+    "candidate_infer_exit_code": 0,
+    "backend": "rust-onnxruntime",
+    "model_sha256": "c52d204571c6df9f1132dedd7aab3e87336434589b055b9fa4026d117f1d4045",
+    "elapsed_ms": 1705.4861529999998,
+    "detected_class_ids": [
+      0,
+      41
+    ],
+    "ep_enabled": false,
+    "system_library_replaced": false
+  },
+  "road_perception": {
+    "command_exit_code": 0,
+    "actual_accuracy_verified": false,
+    "uncalibrated_indoor_cone_candidates": 1
+  },
+  "fixed_simulation": {
+    "initial_external_timeout_s": 90,
+    "retry_external_timeout_s": 300,
+    "retry_exit_code": 0,
+    "wall_elapsed_s": 105.64013933799993,
+    "completed": true,
+    "simulated_elapsed_ms": 75600,
+    "ticks": 757,
+    "final_actual_speed_mps": 0.0,
+    "physical_output_enabled": false,
+    "real_time_deadline_verified": false
+  },
+  "chassis": {
+    "neutral_pwm_us": [
+      1500,
+      1500
+    ],
+    "initial_parent_stop_writes": 15,
+    "initial_guardian_stop_writes": 20,
+    "initial_exit_code": 2,
+    "retry_parent_stop_writes": 20,
+    "retry_guardian_stop_writes": 20,
+    "retry_exit_code": 0,
+    "neutral_parent_sigkill_guardian_stop_writes": 20,
+    "physical_stop_observed": false,
+    "nonneutral_output_sent": false,
+    "mcu_watchdog_verified": false
+  },
+  "previous_online_matrix_replaced": false,
+  "raw_evidence_sha256": {
+    "camera-runtime.json": "5347ae72f32a53a7bed8f5db1258a7382b51feaef15b8bf3c5b0bb999fddec53",
+    "camera.png": "dd408d6d886cca88490a32234450ca4067ffbb9259c6dadcba8af152a877b646",
+    "candidate-runtime-dependencies.txt": "019339cefda955243c57d9a74c251cfac1a3829ec87f988910006c028b8b13be",
+    "chassis-bench.py": "96fb7a2f7e5c6a4f012f524a65c58bcf3f10bcd44dc815ac19b811cbfccd6cf5",
+    "chassis-neutral-retry.jsonl": "b1207f30e577f9aa665ebe52898bd055e79dc15be95c0a524c2bc1e8a7ea4e8c",
+    "chassis-neutral-watchdog.json": "51165faea003fc6f8ed308822aadd80f6714b2f1b4678ff1e090ed155dc8ba79",
+    "chassis-neutral.jsonl": "0805861cd108d8c43f4359e5a1c670f1c6cce33cd57710bca92dd973fc94ed08",
+    "final-device-state.json": "4614be4d1a0b2bb27ce8ce71fe56d8aa94299b0f198e65a469582ea2668e53cd",
+    "full-planning-retry.json": "7914a420b3b0427af3c02c2b4186ac48de439ab021e87b7a68247b80e1e3b80b",
+    "initial-inspection.json": "2ed9a1bbf6c3323fea3e99096daa7655e0c7122d9805ab43b9ed103ca7e7aca6",
+    "inspect.py": "2b533a0021f92e826aa55caf3dc29ae899d62657cd7148a36e2a9ed9917f93dc",
+    "native-candidate-runtime.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "native-candidate-runtime.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "native-existing-runtime.stderr": "f06df6e52da9ac34aeb6455e9408c9f8e6a7daa34256464a169edc4cf617288d",
+    "native-existing-runtime.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "planning-smoke-road.jsonl": "eb21c983b8807eba479171321bd2c6f85268e65af34516644a0e0bef1e0615ba",
+    "results/binary-dependencies.json": "b23c9416caf9d21efa79c2889c9eb265e50112215640a3a5d34716aa32758ef5",
+    "results/camera-runtime.json": "b5f46c32e6f3233881743f41cb92b8a15565214453e516abcb10e77b7afa3108",
+    "results/camera.png": "dd408d6d886cca88490a32234450ca4067ffbb9259c6dadcba8af152a877b646",
+    "results/fixed-planning-simulation.json": "922d0a45ddc819723b8483c12fd18257d960c7cce2cbe265221a4e24b86b5fe9",
+    "results/imu-capture-config.json": "9be0bee6207fa15eb335b2af5b69a14930cdc02d2374a6689d8b01debbffadd2",
+    "results/imu-capture.json": "5a434900b74486bf22b0ce18b9a2b969b7a7abb3d06e925fa2cf068f25f1f498",
+    "results/imu-decode.json": "2f4c56bb3327cead1b8a8054c8b138ad2fd6dcc9747aafe6da12a5ae7276bb1e",
+    "results/imu-decoded.jsonl": "dd7afb6192d6492c582db5aa0f64fd3a2f67064b258386c468af7817ad047128",
+    "results/imu-raw.jsonl": "866f15f12f3d99871bb36ba426480b2c5aa44d34ec16b7601a7efce0da98e0a7",
+    "results/n10-capture-config.json": "98cafb095140f0a17c1e62e019594e9cabfe263829edce1ca0400ba97663267e",
+    "results/n10-capture.json": "c93b6e9dca0e04f54eac403a314e179a036871d54fc35e20d6ddf8d19e206dae",
+    "results/n10-decode.json": "0409817878a6db059733bbe4068d70b9637e91f2a8a9a4cfef5d849e12b428b5",
+    "results/n10-decoded.jsonl": "8cff6bb19e94a3c5ccdc5728cfa11769c130c4094ea0aeed6b3324c69d265b0b",
+    "results/n10-raw.jsonl": "334fd1719e4865d4293c3a56e583ffa40ea5def509c4ea3520f48538efc21f55",
+    "results/native-camera-detections.json": "237b313faec434755535032bab2345250615eb7e5c495d7db00730e9c322ea98",
+    "results/package-integrity.json": "5bc861a425d2e363f80ac8f98952d0625b8b5f9ccc89bc7dbfbe42abd5ca782a",
+    "results/planning-200ms.json": "6fbe73676b8007fe6c3d62c95f1b67236256dfce9949405b22395db01246f64c",
+    "results/road-camera-output.json": "c7c5a2a430b33399599d71b7ce54c9ddb730deedb84a8af1b2d63a4259c9406a",
+    "results/road-camera.json": "5fd63d64aaf4ca50eb441a7373ff569a46dd3869f340190055d6ffa842955157",
+    "results/robot-replay.json": "85b70d0dfffe6acea6bbad46624c2bed5b8a1cc5e0bc4b872b7aa7a35432128a",
+    "results/summary.json": "5abe1df39985f654e57fc3f803b8460d7f5a33bd6a34e7ec6cfd97d5a89d2814",
+    "results/vision-self-check.json": "e31ac77a74b70a2d62cbaa1ec003eef2b2e34453de1e4d694fa94093de4b23fd",
+    "sensor-analysis.json": "9659c29267f8334cd9f60a253c606c5f935b87e599f4b2c31cb7366b67324f57",
+    "sensor-summary.json": "4ba5bebadf91ea89eb668a4e36300984762fc5b266f65343cc3574b9854162ca",
+    "static-progress.jsonl": "b2b40358e867ee3588d2c8d9dc8dce117605ec2a54e2123574c4e1d312cc3a8c",
+    "static-tests.py": "3ce22fd97d80642bbfa5d4cb3fcdefc39c4fb76e7fe5a2e89766d28eb9dc2620",
+    "vehicle-source.json": "7b882f1f61549a2ce2ca04ede87bbdda251f6b7ddcb8f92c9f50c0470441e961"
+  },
+  "privacy": "Raw images, sensor logs and vehicle inventory retained locally only; hashes do not imply public raw-data availability."
+}
