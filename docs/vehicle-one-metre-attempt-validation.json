@@ -1,0 +1,160 @@
+{
+  "date": "2026-09-17",
+  "requested_distance_m": 1.0,
+  "status": "ended by user; one-metre target overshot",
+  "physical_test_authorization": "user confirmed calibration box removed, clear route and supervision; specifically requested 1600 probe after 1550 attempt",
+  "user_final_observation": {
+    "approximate_distance_m": 1.25,
+    "obvious_deviation": false,
+    "requested_stop_and_upload": true
+  },
+  "distance_ground_truth_quality": "user approximate observation; not a recorded precise tape measurement",
+  "pulses": [
+    {
+      "motor_pwm_us": 1550,
+      "servo_pwm_us": 1500,
+      "requested_duration_s": 1.0,
+      "logged_interval_to_neutral_s": 1.0054935580001256,
+      "final_status": {
+        "mode": "motor-1550-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "guardian_stop_writes": 20,
+      "log_sha256": "24ed0738c293f1d09e388f86074713f730260728aa2116b2ce7d637ce010e316"
+    },
+    {
+      "motor_pwm_us": 1600,
+      "servo_pwm_us": 1500,
+      "requested_duration_s": 0.3,
+      "logged_interval_to_neutral_s": 0.30195752500003437,
+      "final_status": {
+        "mode": "motor-1600-03s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "guardian_stop_writes": 20,
+      "log_sha256": "69bad487c9202544caed138aa13a4bf842a10b398e311d33b3cceaa6ef3b84c5"
+    }
+  ],
+  "estimates": {
+    "step1_narrow_diagnostic": {
+      "name": "metre-step1",
+      "global": {
+        "translation_m": [
+          0.00011632469513923878,
+          -0.0001076035483454224
+        ],
+        "distance_m": 0.00015846122022678767,
+        "yaw_deg": 0.00028136435675349874,
+        "inlier_fraction_10cm": 0.9915014164305949,
+        "median_residual_m": 0.00016279862361254506,
+        "trimmed_rmse_m": 0.002033586087150521
+      },
+      "incremental": {
+        "translation_m": [
+          0.00011632469513923878,
+          -0.0001076035483454224
+        ],
+        "distance_m": 0.00015846122022678767,
+        "yaw_deg": 0.00028136435675349874,
+        "inlier_fraction_10cm": 0.9915014164305949,
+        "median_residual_m": 0.00016279862361254506,
+        "trimmed_rmse_m": 0.002033586087150521
+      },
+      "stationary_split": {
+        "translation_m": [
+          -3.835864001240023e-05,
+          7.978314272950136e-05
+        ],
+        "distance_m": 8.852533607615899e-05,
+        "yaw_deg": -0.00011632071416367954,
+        "inlier_fraction_10cm": 0.9631728045325779,
+        "median_residual_m": 9.01070941145561e-05,
+        "trimmed_rmse_m": 0.002558912810847108
+      },
+      "front_min_m": 1.853,
+      "scans": 19
+    },
+    "step2_narrow_diagnostic": {
+      "name": "metre-step2",
+      "global": {
+        "translation_m": [
+          0.07494086367667782,
+          0.03494927341405471
+        ],
+        "distance_m": 0.0826896895675438,
+        "yaw_deg": -0.33765997207310317,
+        "inlier_fraction_10cm": 0.3194444444444444,
+        "median_residual_m": 0.18111131293094773,
+        "trimmed_rmse_m": 0.21795545931177746
+      },
+      "incremental": {
+        "translation_m": [
+          0.06125631888783568,
+          0.037210712216747883
+        ],
+        "distance_m": 0.07167268452741145,
+        "yaw_deg": 0.011022056484838214,
+        "inlier_fraction_10cm": 0.3194444444444444,
+        "median_residual_m": 0.18512767243297848,
+        "trimmed_rmse_m": 0.2164134794121351
+      },
+      "stationary_split": {
+        "translation_m": [
+          0.00011144645821018211,
+          0.00047463461031479223
+        ],
+        "distance_m": 0.0004875431533272399,
+        "yaw_deg": -0.0009311100601631149,
+        "inlier_fraction_10cm": 0.9444444444444444,
+        "median_residual_m": 0.000529093464741931,
+        "trimmed_rmse_m": 0.00440150297866192
+      },
+      "front_min_m": 1.776,
+      "scans": 19
+    },
+    "step2_narrow_valid_for_distance": false,
+    "step2_wide_best": {
+      "translation_m": [
+        1.2137545125477425,
+        0.15718701278787967
+      ],
+      "distance_m": 1.2238904255362018,
+      "yaw_deg": 1.9748339884820418,
+      "inlier_fraction_10cm": 0.6444444444444445,
+      "median_residual_m": 0.04317310013840578,
+      "trimmed_rmse_m": 0.08701020116412017,
+      "seed": [
+        1.2000000000000002,
+        -0.1
+      ]
+    },
+    "wide_search_seeds": "x -0.2 through 1.3 m in 0.1 m increments; y -0.1,0,0.1 m; initial yaw zero",
+    "wide_result_use": "offline consistency check only, insufficient registration quality for precise control"
+  },
+  "production_calibration_changed": false,
+  "final_device_owners": {
+    "car": false,
+    "laser": false
+  },
+  "limitations": [
+    "Not closed-loop one-metre stopping: scans acquired only before and after pulses",
+    "Neutral 1500 sent successfully; physical braking or coast duration not measured",
+    "PWM-to-speed not calibrated; do not extrapolate a steady speed from pulse duration and final displacement",
+    "Initial narrow ICP estimate rejected due poor correspondence; wide offline estimate is not validated ground truth",
+    "No further movement without new user instruction"
+  ],
+  "raw_sha256": {
+    "metre-start.jsonl": "0639e7dbae20b55bd9ae536d758c8ca4439aefec2833d51b07637c64febcc425",
+    "metre-step1.jsonl": "d38c059cbe21882d297e3316a8e4bf00d5f33d86d7267eb858d7a67d252457c1",
+    "metre-step2.jsonl": "8f4446d63ffea31eb014f19afcaa34411c432fa8721923775480f0f0fb9fe909",
+    "metre-estimate.py": "3cd8b130d5f54e539788fe705ed709d1c7040558f03eec0e26711887c395e4f2",
+    "wide-match.py": "c9a97e332436b983d9878f8912d953134dd60e35ee4e9a6f0743e5974621676f",
+    "chassis-ground-1600.py": "e7e6dcb1e7bf1a97d214d18517d480c35b6608e91dd4376ab17fc2bcd4dcfe7d"
+  }
+}
