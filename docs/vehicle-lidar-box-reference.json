@@ -1,0 +1,53 @@
+{
+  "date": "2026-09-17",
+  "mode": "stationary single-point reference",
+  "user_confirmed": {
+    "rear_axle_center_to_near_face_m": 1.0,
+    "upper_and_lower_box_near_faces_flush": true,
+    "face_approximately_perpendicular_to_forward": true
+  },
+  "capture": {
+    "duration_ms": 2000,
+    "accepted_revolutions": 19,
+    "rejected_revolutions": 0,
+    "physical_commands_sent": false
+  },
+  "measurement": {
+    "bin": 0,
+    "angle_rad": 0.0,
+    "ranges_m": [
+      0.911,
+      0.912,
+      0.912,
+      0.911,
+      0.912,
+      0.897,
+      0.912,
+      0.911,
+      0.912,
+      0.912,
+      0.912,
+      0.912,
+      0.912,
+      0.912,
+      0.912,
+      0.912,
+      0.912,
+      0.912,
+      0.911
+    ],
+    "median_m": 0.912,
+    "min_m": 0.897,
+    "max_m": 0.912
+  },
+  "provisional_longitudinal_offset_plus_measurement_bias_m": 0.08799999999999997,
+  "production_calibration_applied": false,
+  "limitations": [
+    "No surveyed lidar-to-body yaw or sensor extrinsics",
+    "Single reference cannot separate longitudinal offset from range bias, scale, face alignment and tape measurement errors",
+    "Range repeatability is not absolute accuracy",
+    "Lower box initially not identifiable in frontal lidar; raising target produced corresponding close returns",
+    "Not a travelled-distance calibration or camera accuracy comparison"
+  ],
+  "raw_sha256": "df979a63d5e3fc94d3a61921b6142782c2c7bcbde6f80b00e0ef4bf2300168e6"
+}
