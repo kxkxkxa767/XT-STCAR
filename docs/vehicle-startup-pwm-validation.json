@@ -1,0 +1,700 @@
+{
+  "date": "2026-09-17",
+  "test": "ground startup PWM one-second ascending trial",
+  "status": "tests ended; neutral sent, final lidar stationary, no device owners",
+  "rows": [
+    {
+      "pwm_us": 1510,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0044866770000453,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1510",
+        "global": {
+          "translation_m": [
+            7.815768349662732e-05,
+            0.00039323638166512397
+          ],
+          "distance_m": 0.0004009282670935513,
+          "yaw_deg": 0.0002809492617019757,
+          "inlier_fraction_10cm": 0.9943342776203966,
+          "median_residual_m": 0.003133916512779713,
+          "trimmed_rmse_m": 0.004690114036113524
+        },
+        "incremental": {
+          "translation_m": [
+            7.815768349662732e-05,
+            0.00039323638166512397
+          ],
+          "distance_m": 0.0004009282670935513,
+          "yaw_deg": 0.0002809492617019757,
+          "inlier_fraction_10cm": 0.9943342776203966,
+          "median_residual_m": 0.003133916512779713,
+          "trimmed_rmse_m": 0.004690114036113524
+        },
+        "stationary_split": {
+          "translation_m": [
+            -3.5755572427146176e-05,
+            -0.00011333337525479456
+          ],
+          "distance_m": 0.00011883987086090668,
+          "yaw_deg": 2.1558317312125627e-05,
+          "inlier_fraction_10cm": 0.9688385269121813,
+          "median_residual_m": 0.0006180053836916493,
+          "trimmed_rmse_m": 0.001964009074990255
+        },
+        "front_min_m": 1.861,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1510-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "833b22686d378f5a846b0759d053bf3844da6eff7a1373a45e2f214c2f153005"
+    },
+    {
+      "pwm_us": 1515,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0043352940000432,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1515",
+        "global": {
+          "translation_m": [
+            0.0005176854123902032,
+            0.001171444949361993
+          ],
+          "distance_m": 0.0012807347327168641,
+          "yaw_deg": 0.0014538890201401759,
+          "inlier_fraction_10cm": 0.9915014164305949,
+          "median_residual_m": 0.004139764146848859,
+          "trimmed_rmse_m": 0.006181502113687203
+        },
+        "incremental": {
+          "translation_m": [
+            -5.26792323427068e-05,
+            1.2196817091494501e-05
+          ],
+          "distance_m": 5.407276456202567e-05,
+          "yaw_deg": -3.506479018695585e-05,
+          "inlier_fraction_10cm": 0.9971671388101983,
+          "median_residual_m": 5.48330385047931e-05,
+          "trimmed_rmse_m": 0.0005032728157830537
+        },
+        "stationary_split": {
+          "translation_m": [
+            -7.479027946782852e-05,
+            -0.0001237507302299381
+          ],
+          "distance_m": 0.00014459539804336378,
+          "yaw_deg": -2.0462648824829287e-05,
+          "inlier_fraction_10cm": 0.9830028328611898,
+          "median_residual_m": 0.00014496431856068833,
+          "trimmed_rmse_m": 0.0015915937809962571
+        },
+        "front_min_m": 1.877,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1515-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "bc32b4e114eb6b7ce57dafe2730568eae4a7803e3558336a58e8aebc9bc39ff9"
+    },
+    {
+      "pwm_us": 1520,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0043384549999814,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1520",
+        "global": {
+          "translation_m": [
+            0.0005587167149162752,
+            0.001803754477678676
+          ],
+          "distance_m": 0.0018883046849681616,
+          "yaw_deg": 0.0009252527180379861,
+          "inlier_fraction_10cm": 0.9886685552407932,
+          "median_residual_m": 0.005655447155410334,
+          "trimmed_rmse_m": 0.0062446574277592775
+        },
+        "incremental": {
+          "translation_m": [
+            -0.00012264931161976955,
+            -0.00030535820168194354
+          ],
+          "distance_m": 0.00032906911884167107,
+          "yaw_deg": 0.0002806007494652655,
+          "inlier_fraction_10cm": 0.9745042492917847,
+          "median_residual_m": 0.0011052028837870952,
+          "trimmed_rmse_m": 0.002650629831476123
+        },
+        "stationary_split": {
+          "translation_m": [
+            5.734957158619741e-05,
+            -0.00017893286405191593
+          ],
+          "distance_m": 0.00018789875784299854,
+          "yaw_deg": -7.359403581056406e-05,
+          "inlier_fraction_10cm": 0.9631728045325779,
+          "median_residual_m": 0.0001885946118989472,
+          "trimmed_rmse_m": 0.0019399640278525798
+        },
+        "front_min_m": 1.876,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1520-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "d78eae9162ee5301505c6aa3a32defbdc38fab1a592b049bc5459788482dde46"
+    },
+    {
+      "pwm_us": 1525,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0052936270000146,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1525",
+        "global": {
+          "translation_m": [
+            0.0008478566124286656,
+            0.0013198497647174485
+          ],
+          "distance_m": 0.0015687141985281183,
+          "yaw_deg": 0.001961171482163442,
+          "inlier_fraction_10cm": 0.9801699716713881,
+          "median_residual_m": 0.006549117308369678,
+          "trimmed_rmse_m": 0.006908596926675884
+        },
+        "incremental": {
+          "translation_m": [
+            -0.00010871755725672733,
+            -5.077473532331177e-05
+          ],
+          "distance_m": 0.00011998992042260113,
+          "yaw_deg": -0.00019204176624112185,
+          "inlier_fraction_10cm": 0.9943342776203966,
+          "median_residual_m": 0.0010239178149088301,
+          "trimmed_rmse_m": 0.000982025136076627
+        },
+        "stationary_split": {
+          "translation_m": [
+            -5.970754634641004e-05,
+            9.71749094690717e-05
+          ],
+          "distance_m": 0.00011405241830417705,
+          "yaw_deg": -1.9266051758543057e-05,
+          "inlier_fraction_10cm": 0.9829545454545454,
+          "median_residual_m": 0.0001143010155339829,
+          "trimmed_rmse_m": 0.0009826699492511924
+        },
+        "front_min_m": 1.875,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1525-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "3186cbefd2e678aa89cc03a09d74a0a93a7e95ee42c9ca94af50fedd0481c424"
+    },
+    {
+      "pwm_us": 1530,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0052093190000164,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1530",
+        "global": {
+          "translation_m": [
+            0.0006660250561501987,
+            0.0017167122669233918
+          ],
+          "distance_m": 0.001841382736647959,
+          "yaw_deg": 0.0022854528038437952,
+          "inlier_fraction_10cm": 0.9858356940509915,
+          "median_residual_m": 0.007629652915949487,
+          "trimmed_rmse_m": 0.007095112744366026
+        },
+        "incremental": {
+          "translation_m": [
+            2.945389171881248e-05,
+            -3.99410020346466e-05
+          ],
+          "distance_m": 4.96267607336523e-05,
+          "yaw_deg": 4.8320987612616706e-05,
+          "inlier_fraction_10cm": 0.9971671388101983,
+          "median_residual_m": 0.0009600229733897004,
+          "trimmed_rmse_m": 0.0007034777573233282
+        },
+        "stationary_split": {
+          "translation_m": [
+            5.6871595889880006e-05,
+            4.041116738836853e-05
+          ],
+          "distance_m": 6.976704715517603e-05,
+          "yaw_deg": 5.620251070193103e-05,
+          "inlier_fraction_10cm": 0.9745042492917847,
+          "median_residual_m": 0.0009302365979430989,
+          "trimmed_rmse_m": 0.0015119249302433468
+        },
+        "front_min_m": 1.874,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1530-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "4ea7ab258a3eb131b34d3aca12d5e8837401190a4873f542b44f32ef972c1be1"
+    },
+    {
+      "pwm_us": 1535,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0058523719999926,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1535",
+        "global": {
+          "translation_m": [
+            0.0010167388109018538,
+            0.0013428232030937464
+          ],
+          "distance_m": 0.0016843194365562207,
+          "yaw_deg": 0.0018545428046592898,
+          "inlier_fraction_10cm": 0.9801699716713881,
+          "median_residual_m": 0.007675402559064838,
+          "trimmed_rmse_m": 0.007411310716878551
+        },
+        "incremental": {
+          "translation_m": [
+            -4.241616256137059e-05,
+            -2.0929801974517433e-05
+          ],
+          "distance_m": 4.729891602484279e-05,
+          "yaw_deg": -3.4076762423670825e-05,
+          "inlier_fraction_10cm": 0.9745042492917847,
+          "median_residual_m": 0.0009663956262520915,
+          "trimmed_rmse_m": 0.0007074065456193373
+        },
+        "stationary_split": {
+          "translation_m": [
+            -0.00013618043360088405,
+            -0.00011150078968471802
+          ],
+          "distance_m": 0.00017600436527552524,
+          "yaw_deg": -0.00028465144845288455,
+          "inlier_fraction_10cm": 0.9801699716713881,
+          "median_residual_m": 0.0001810118618322594,
+          "trimmed_rmse_m": 0.001641165261177753
+        },
+        "front_min_m": 1.874,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1535-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "a8cbfd00c6a85f867d49e3d737d07b5b19b3906857f92cf6b94e9379c0e69ffe"
+    },
+    {
+      "pwm_us": 1540,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0050030290000223,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1540",
+        "global": {
+          "translation_m": [
+            0.0007249395565349287,
+            0.001547240433475593
+          ],
+          "distance_m": 0.001708651608611539,
+          "yaw_deg": 0.0032073861790148316,
+          "inlier_fraction_10cm": 0.9830028328611898,
+          "median_residual_m": 0.007794431605469631,
+          "trimmed_rmse_m": 0.0074392492887544485
+        },
+        "incremental": {
+          "translation_m": [
+            -5.6208644952062996e-05,
+            -1.545471084402346e-05
+          ],
+          "distance_m": 5.829459541517938e-05,
+          "yaw_deg": -5.555919325728565e-05,
+          "inlier_fraction_10cm": 0.9971671388101983,
+          "median_residual_m": 0.0010114306054294442,
+          "trimmed_rmse_m": 0.0009500703293184249
+        },
+        "stationary_split": {
+          "translation_m": [
+            3.938364216395288e-05,
+            9.561978044438453e-05
+          ],
+          "distance_m": 0.00010341283132344162,
+          "yaw_deg": -5.636486145204529e-05,
+          "inlier_fraction_10cm": 0.9745042492917847,
+          "median_residual_m": 0.00010415553601266563,
+          "trimmed_rmse_m": 0.0016853409422831636
+        },
+        "front_min_m": 1.873,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1540-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "0abdecc80c09297a65fb176213c5f8853adda8814da903068f75d9924c61ce30"
+    },
+    {
+      "pwm_us": 1545,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0056569349999904,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1545",
+        "global": {
+          "translation_m": [
+            0.0007611964810877412,
+            0.0014545920796539451
+          ],
+          "distance_m": 0.0016417241549701183,
+          "yaw_deg": 0.002927860309097607,
+          "inlier_fraction_10cm": 0.9745042492917847,
+          "median_residual_m": 0.007848807842410257,
+          "trimmed_rmse_m": 0.007463677565720543
+        },
+        "incremental": {
+          "translation_m": [
+            4.9231038539348894e-05,
+            7.041424764181835e-06
+          ],
+          "distance_m": 4.97320502128405e-05,
+          "yaw_deg": 7.260957647837291e-05,
+          "inlier_fraction_10cm": 0.9801699716713881,
+          "median_residual_m": 5.082597384256215e-05,
+          "trimmed_rmse_m": 0.00037805289337078705
+        },
+        "stationary_split": {
+          "translation_m": [
+            -0.00016826545305326232,
+            -7.786781814331234e-05
+          ],
+          "distance_m": 0.00018540943825388068,
+          "yaw_deg": -0.00018513409582319375,
+          "inlier_fraction_10cm": 0.9716713881019831,
+          "median_residual_m": 0.00032339968642146945,
+          "trimmed_rmse_m": 0.0021058592964139683
+        },
+        "front_min_m": 1.873,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1545-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "5b4200b9d4e010e46ab48af4f30e78c6a95fd67b820c8287627bbe69da829684"
+    },
+    {
+      "pwm_us": 1550,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0046725600000173,
+      "result": "no clear displacement detected by offline lidar",
+      "estimate": {
+        "name": "startup-1550",
+        "global": {
+          "translation_m": [
+            0.0006799934389168633,
+            0.00153123921783169
+          ],
+          "distance_m": 0.0016754356505684685,
+          "yaw_deg": 0.0017841714874692132,
+          "inlier_fraction_10cm": 0.9858356940509915,
+          "median_residual_m": 0.007817233845352947,
+          "trimmed_rmse_m": 0.007413495980412866
+        },
+        "incremental": {
+          "translation_m": [
+            -0.00011364405742458813,
+            -4.3765516334885816e-05
+          ],
+          "distance_m": 0.00012178009774992891,
+          "yaw_deg": -0.00016059217876078863,
+          "inlier_fraction_10cm": 0.9886685552407932,
+          "median_residual_m": 0.0009941837431961227,
+          "trimmed_rmse_m": 0.000880899484639762
+        },
+        "stationary_split": {
+          "translation_m": [
+            3.8676405994877976e-05,
+            -2.510384774946638e-05
+          ],
+          "distance_m": 4.6109300065269055e-05,
+          "yaw_deg": 6.655963303056878e-05,
+          "inlier_fraction_10cm": 0.9830028328611898,
+          "median_residual_m": 4.697802305378185e-05,
+          "trimmed_rmse_m": 0.0011587657150581498
+        },
+        "front_min_m": 1.872,
+        "scans": 19
+      },
+      "stop_status": {
+        "mode": "motor-1550-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "motion_log_sha256": "e283bd211a926c340743550a78c9561bdff32c70472f574ee1ee432dc2ab8240"
+    }
+  ],
+  "conclusion": "Lowest PWM observed to produce net displacement in this session was 1550, but its first trial showed no clear net displacement and a repeat moved. No repeatable fixed minimum PWM established; 1551 and 1552 each moved once.",
+  "maximum_speed_tested": false,
+  "production_calibration_changed": false,
+  "limitations": [
+    "No MCU acknowledgement or motor power telemetry",
+    "Offline before-after scan registration is not live collision protection",
+    "Small estimated displacements are noise-level, not millimetre-accurate ground truth",
+    "Prior 1550 movement and 1600 overshoot remain valid historical observations; do not erase them",
+    "Each moving trial contained 8 seconds of continuous lidar, analysed offline; no live distance stop applied",
+    "Capture-relative time and Python process launch timestamp were not hardware synchronized; do not infer exact braking latency",
+    "Planar scan matching can be disturbed by pitch and moving objects; no independent tape ground truth for these distances",
+    "1510 through 1545 tested once each in ascending sequence; lower PWMs not retested after movement"
+  ],
+  "user_observations": {
+    "first_1550": "slight forward pitch then returned after one second",
+    "1552": "moved; later confirmed stopped, did not notice delay",
+    "1550_repeat": "confirmed actual forward movement; final stop question not explicitly answered separately"
+  },
+  "continuous_trials": [
+    {
+      "name": "startup-1552",
+      "pwm_us": 1552,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0053863059999912,
+      "final_status": {
+        "mode": "motor-1552-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "scan_count": 79,
+      "rejected_revolutions": 0,
+      "diagnostic_invalid_scan_count": 0,
+      "final_estimate": {
+        "translation_m": [
+          0.3894986167144344,
+          0.043783391598083796
+        ],
+        "distance_m": 0.3919517289186119,
+        "yaw_deg": 0.880005713806193,
+        "inlier_fraction_10cm": 0.8575418994413407,
+        "median_residual_m": 0.01631349884310622,
+        "trimmed_rmse_m": 0.02121519865849004
+      },
+      "max_valid_diagnostic_displacement_m": 0.397120808903107,
+      "timing": {
+        "capture_launch_monotonic_s": 601.57845215,
+        "capture_exit": 0,
+        "motor_exit": 0
+      },
+      "neutral_log_relative_to_capture_process_launch_ms": 3349.6592410000403,
+      "raw_sha256": "dd6ad719f7a4cbaf1acff2661bdda1c54e5bb06f71e54b39dae63e3f0634a626",
+      "trajectory_samples": [
+        {
+          "at_ms": 1971,
+          "distance_m": 0.000985173157361098,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 2969,
+          "distance_m": 0.030742154360497594,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 3469,
+          "distance_m": 0.20019578440554064,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 3970,
+          "distance_m": 0.37152472742387554,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 4968,
+          "distance_m": 0.3917721371185038,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 7465,
+          "distance_m": 0.391454745772431,
+          "valid_diagnostic": true
+        }
+      ]
+    },
+    {
+      "name": "startup-1551",
+      "pwm_us": 1551,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0043548449999662,
+      "final_status": {
+        "mode": "motor-1551-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "scan_count": 79,
+      "rejected_revolutions": 0,
+      "diagnostic_invalid_scan_count": 2,
+      "final_estimate": {
+        "translation_m": [
+          0.3348229706789571,
+          0.033649179877679375
+        ],
+        "distance_m": 0.336509567472787,
+        "yaw_deg": -0.08185105111419706,
+        "inlier_fraction_10cm": 0.8543417366946778,
+        "median_residual_m": 0.014978400334320796,
+        "trimmed_rmse_m": 0.018992688453764343
+      },
+      "max_valid_diagnostic_displacement_m": 0.3378484969130319,
+      "timing": {
+        "capture_launch_monotonic_s": 719.055914846,
+        "capture_exit": 0,
+        "motor_exit": 0
+      },
+      "neutral_log_relative_to_capture_process_launch_ms": 3345.0433240000166,
+      "raw_sha256": "eb1fc5a0145aac538b04a5b51a59b0dd9e6a9b329c2aacfae85af49392054ff3",
+      "trajectory_samples": [
+        {
+          "at_ms": 1961,
+          "distance_m": 0.0010554687931327092,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 2959,
+          "distance_m": 0.04468896225982914,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 3457,
+          "distance_m": 0.19747207798393415,
+          "valid_diagnostic": false
+        },
+        {
+          "at_ms": 3958,
+          "distance_m": 0.3265243900355067,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 4955,
+          "distance_m": 0.33578200527525603,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 7454,
+          "distance_m": 0.33564989776181414,
+          "valid_diagnostic": true
+        }
+      ]
+    },
+    {
+      "name": "startup-1550-repeat",
+      "pwm_us": 1550,
+      "requested_duration_s": 1.0,
+      "logged_command_interval_s": 1.0064724670000942,
+      "final_status": {
+        "mode": "motor-1550-1s",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "scan_count": 79,
+      "rejected_revolutions": 0,
+      "diagnostic_invalid_scan_count": 0,
+      "final_estimate": {
+        "translation_m": [
+          0.1792784457348964,
+          0.01788840755971568
+        ],
+        "distance_m": 0.18016868826225796,
+        "yaw_deg": 0.21010824430836406,
+        "inlier_fraction_10cm": 0.9222222222222223,
+        "median_residual_m": 0.01409548191036621,
+        "trimmed_rmse_m": 0.014656289857559212
+      },
+      "max_valid_diagnostic_displacement_m": 0.18249388818505782,
+      "timing": {
+        "capture_launch_monotonic_s": 766.181730207,
+        "capture_exit": 0,
+        "motor_exit": 0
+      },
+      "neutral_log_relative_to_capture_process_launch_ms": 3357.6435050000555,
+      "raw_sha256": "11edf968bf381aedcbd28e6f9b90a10bedecdfc355dfd2ea9b24d19629e22bd7",
+      "trajectory_samples": [
+        {
+          "at_ms": 1978,
+          "distance_m": 0.00048713445227884146,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 2977,
+          "distance_m": 0.02207131290052227,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 3478,
+          "distance_m": 0.12490308485194375,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 3975,
+          "distance_m": 0.18037358747143006,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 4976,
+          "distance_m": 0.17947165022445838,
+          "valid_diagnostic": true
+        },
+        {
+          "at_ms": 7472,
+          "distance_m": 0.17996075234230482,
+          "valid_diagnostic": true
+        }
+      ]
+    }
+  ],
+  "final_device_owners": {
+    "car": false,
+    "laser": false
+  }
+}
