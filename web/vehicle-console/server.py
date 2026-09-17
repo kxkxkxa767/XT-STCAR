@@ -35,7 +35,7 @@ class Console:
         access = Path(args.access_file)
         if access.exists():
             existing = json.loads(access.read_text()).get('token')
-            if not isinstance(existing, str) or len(existing) != 43 or any(c not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-' for c in existing):
+            if not isinstance(existing, str) or not 8 <= len(existing) <= 128 or any(c not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-' for c in existing):
                 raise ValueError('invalid stored access token')
             if access.stat().st_mode & 0o077:
                 raise ValueError('access file must be private (chmod 600)')

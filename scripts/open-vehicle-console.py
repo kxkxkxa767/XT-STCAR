@@ -23,7 +23,7 @@ def read_state():
     data = json.loads(access.read_text())
     if access.stat().st_mode & 0o077:
         raise RuntimeError('access.json permissions must be 600')
-    if data.get('port') != 8081 or not re.fullmatch(r'[A-Za-z0-9_-]{43}', data.get('token', '')):
+    if data.get('port') != 8081 or not re.fullmatch(r'[A-Za-z0-9_-]{8,128}', data.get('token', '')):
         raise RuntimeError('invalid console credentials')
     req = urllib.request.Request('http://127.0.0.1:8081/api/state', headers={'X-Control-Token': data['token']})
     state = json.loads(opener.open(req, timeout=2).read())
@@ -96,7 +96,7 @@ def main():
     print('正在检查车端驾驶台…', flush=True)
     result = run(['ssh', '-S', str(selected), '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', args.host, 'python3 -'], input='CHECK_ONLY = '+repr(args.check_only)+'\n'+REMOTE, text=True, capture_output=True, timeout=25)
     data = json.loads(result.stdout)
-    if not re.fullmatch(r'[A-Za-z0-9_-]{43}', data.get('token', '')):
+    if not re.fullmatch(r'[A-Za-z0-9_-]{8,128}', data.get('token', '')):
         raise RuntimeError('车端返回了无效的访问令牌。')
     local = 'http://127.0.0.1:'+str(args.port)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
