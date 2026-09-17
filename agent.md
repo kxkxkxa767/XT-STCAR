@@ -23,6 +23,7 @@
 最新第五轮：临时扫描收到9设备，厂商服务随后收到FIFO关闭指令，3次系统验证失败并回退。已定位车端Blueman KillSwitch插件调用realtek_bt.sh hci_start/hci_stop；插件子进程阻塞FIFO并拖住applet。用户级org.blueman.general plugin-list已由[]改为["!KillSwitch"]，原值备份在车端蓝牙修复目录blueman-plugin-backup.json；结束阻塞的用户子进程、重启用户applet后，D-Bus QueryPlugins正常且不含KillSwitch，PowerManager保留。未修改厂商系统脚本，仍待sudo安装复测；此插件调整尚不能替代实际系统扫描验收。第五轮原始报告归档到本机work/vehicle-bluetooth-repair/attempt5-result.json，附近设备地址不上传。
 最终第六轮蓝牙修复完成（覆盖上面各轮待安装状态）：临时扫描收到8设备，系统安装后扫描收到7设备，repair-result.json记录system_install_completed=true。独立复核厂商realtek-bt.service为active/enabled，控制器Powered=yes，三份系统文件SHA256与已验证候选完全一致。用户级KillSwitch禁用保留、原配置已备份。未验证重启后恢复、配对或音频/数据协议，不重复执行拒绝覆盖已有文件的安装脚本；公开结果见docs/vehicle-bluetooth-repair-validation.json。
 2026-09-17固件复查完成：刷新用户级APT索引成功，发现u-boot-spacemit/opensbi-spacemit 2.2.7、spacemit-flash-dtbs 1.2.3低优先级候选。仅下载解包和依赖模拟，未安装；postinst会直接写eMMC启动分区及环境，未验证定制镜像兼容和恢复方案。VPU/GPU源内无新版，fwupd现有24小时元数据无匹配更新；未宣称所有设备最新。蓝牙仍active/Powered=yes。详见docs/车端固件更新检查.md；不能自行强制覆盖APT pin刷启动链。
+2026-09-17最新状态：用户要求暂不更新非车辆配套固件。落地1米请求下先按用户指定试1530/1540各0.3秒，两次均反馈未移动，随后明确“先暂停”。停止帧各由父进程和守护补发20次，正常退出，/dev/car与/dev/laser无占用。当前暂停所有运动测试；1米行驶、雷达位移及相机精度对比未完成，不能自动恢复。详见模块检查文档末节。
 实际结果逐项记录到 `docs/车辆到场模块检查.md`，不得将准备或连接尝试写成验证通过。
 
 ## 新窗口接手入口（2026-09-16，上传完成后）
