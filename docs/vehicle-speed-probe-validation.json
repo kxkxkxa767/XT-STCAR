@@ -153,7 +153,7 @@
         "decoded_packets": 2252,
         "rejected_revolutions": 79
       },
-      "user_observation": "用户确认前进约4–5米；尚未明确确认完全停住",
+      "user_observation": "用户确认前进约4–5米，随后确认完全停住",
       "sha256": {
         ".jsonl": "b899a76895d578a7b2ed87b0e5864b7e434440be48f2445118fab4c2db1a18c9",
         "-motion.jsonl": "c5d531a0a8e8292e03bc8167f6ff6df8ff0a64bf683c720f431a42b5aa4e83ea",
@@ -163,6 +163,110 @@
         4,
         5
       ]
+    },
+    {
+      "name": "speed-1620-03s",
+      "command_interval_s": 0.3018903570000475,
+      "motion_log": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1620-03s",
+          "vehicle_unix_s": 1789652393.3638957,
+          "vehicle_monotonic_s": 1065.511660688
+        },
+        {
+          "motor_us": 1620,
+          "servo_us": 1500,
+          "duration_s": 0.3,
+          "mode": "motor-1620-03s",
+          "vehicle_unix_s": 1789652394.3704162,
+          "vehicle_monotonic_s": 1066.518175253
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1620-03s",
+          "vehicle_unix_s": 1789652394.6723077,
+          "vehicle_monotonic_s": 1066.82006561
+        },
+        {
+          "guardian_stop_writes": 20,
+          "mode": "motor-1620-03s"
+        },
+        {
+          "mode": "motor-1620-03s",
+          "error": null,
+          "parent_stop_writes": 20,
+          "guardian_exit": 0,
+          "physical_stop_observed": false
+        }
+      ],
+      "scan_counts": {
+        "accepted_scans": 0,
+        "decoded_packets": 2252,
+        "rejected_revolutions": 79
+      },
+      "user_observation": "用户确认前进不到1米，完全停住并放回原位",
+      "sha256": {
+        ".jsonl": "fc1ceb4ff011d8375e3cda3ffc72a8e6212c8bbb82f0baec1b0fdad625ff901b",
+        "-motion.jsonl": "a533600e97079d609a6c50f35b49b867d7f7fe1f7c38e40c0e0b357b30a9504a",
+        "-capture.log": "1080d349b50d1a5544df727df09eedd3c1c0394267d13adafa607db280ae0219"
+      }
+    },
+    {
+      "name": "speed-1620-2s",
+      "command_interval_s": 2.008211975999984,
+      "motion_log": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1620-2s",
+          "vehicle_unix_s": 1789652476.7920666,
+          "vehicle_monotonic_s": 1148.939850387
+        },
+        {
+          "motor_us": 1620,
+          "servo_us": 1500,
+          "duration_s": 2.0,
+          "mode": "motor-1620-2s",
+          "vehicle_unix_s": 1789652477.7983048,
+          "vehicle_monotonic_s": 1149.946062881
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1620-2s",
+          "vehicle_unix_s": 1789652479.8065178,
+          "vehicle_monotonic_s": 1151.954274857
+        },
+        {
+          "guardian_stop_writes": 20,
+          "mode": "motor-1620-2s"
+        },
+        {
+          "mode": "motor-1620-2s",
+          "error": null,
+          "parent_stop_writes": 20,
+          "guardian_exit": 0,
+          "physical_stop_observed": false
+        }
+      ],
+      "scan_counts": {
+        "accepted_scans": 0,
+        "decoded_packets": 2252,
+        "rejected_revolutions": 79
+      },
+      "user_observation": "已回中补发停止帧；实际距离、偏转和停住状态待用户确认",
+      "sha256": {
+        ".jsonl": "d76eacd86d0087c183f6c7fe5f74664a13c3486048557a6d5a34aea17f299e09",
+        "-motion.jsonl": "28c83afd9c9e7ed3f280577d06bb15212f2d67409c6d8e7042e2d6df543af092",
+        "-capture.log": "b25909b905090f22ed61c30eaada1495a155d22c012645f1169a0b5ab3389b2f"
+      }
     }
   ],
   "limitations": [
