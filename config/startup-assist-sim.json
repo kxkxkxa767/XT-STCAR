@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "simulation_only": true,
+  "startup": {
+    "enabled": true,
+    "frame_id": "map",
+    "stop_motor_us": 1500,
+    "stop_servo_us": 1500,
+    "start_motor_us": 1510,
+    "max_motor_us": 1514,
+    "step_us": 2,
+    "step_wait_ms": 1000,
+    "max_attempt_ms": 4000,
+    "stationary_window_ms": 300,
+    "max_feedback_age_ms": 250,
+    "max_feedback_gap_ms": 200,
+    "min_stationary_samples": 3,
+    "min_motion_samples": 2,
+    "stationary_distance_m": 0.005,
+    "moving_distance_m": 0.03,
+    "stationary_speed_mps": 0.005,
+    "stationary_yaw_rate_radps": 0.02,
+    "moving_speed_mps": 0.02,
+    "max_speed_mps": 0.3,
+    "min_quality": 0.7,
+    "max_lateral_m": 0.05,
+    "max_yaw_rad": 0.12,
+    "max_start_distance_m": 0.15
+  }
+}

@@ -28,6 +28,7 @@ Rust运动主程序目前仍使用记录输出，架空硬件诊断与自主闭�
 8080相机预览脚本为 [camera-preview.py](scripts/camera-preview.py)，已在车端验证单帧和连续MJPEG；[后台启动与停止命令](docs/车辆到场模块检查.md#相机8080网页预览)。测试服务已停止，按需启动。
 车端现在可用 `~/.local/bin/xt-stcar infer --image /绝对路径/图片.png`，自动选择已部署模型和新运行库；[安装、使用与回退](docs/车端ONNXRuntime升级.md)。入口源码为 [vehicle-vision.sh](scripts/vehicle-vision.sh)，Rust程序和原部署包未改写。
 蓝牙工具及配套固件已通过临时和系统扫描验证，安装到系统目录；已停用冲突的用户级Blueman KillSwitch插件。[修复步骤与状态](docs/车端蓝牙修复.md)。
+已新增Rust自适应起步辅助：连续有效定位确认未动时限时、小步增加PWM；微动后禁止继续加档，确认起步交回速度控制，失效/超时/上限停车锁存。提供`startup-replay`离线入口，尚未接入实车自动油门。[设计与使用](docs/自适应起步辅助.md)。
 最新1秒起步测试：1510–1545每5一档未检出明显净位移；1550首轮仅前倾回位、复测前进约18厘米，1551/1552分别约34/39厘米。最低已观察起步为1550，但固定阈值和重复性未建立；最高车速未测，当前保持停车。[起步PWM记录](docs/vehicle-startup-pwm-validation.json)。
 9月17日落地测试已结束：1550起步重复性不稳定；后续用户指定1600、0.3秒，用户观察约1.25米、无明显偏移，超出1米目标。离线雷达宽范围匹配约1.22米但质量不足，不能算定距成功；当前停止追加运动。[本轮记录](docs/vehicle-one-metre-attempt-validation.json)。
 9月17日固件复查：发现U-Boot/OpenSBI 2.2.7候选，但安装会直接写启动分区，未完成车辆镜像兼容核验，未升级；视频/GPU配套源无新版。[固件检查记录](docs/车端固件更新检查.md)。
@@ -259,6 +260,8 @@ XT-STCAR/
 | [`crates/robot-core/src/safety.rs`](crates/robot-core/src/safety.rs) | Disarmed/Armed/Running/Fault、急停锁存、deadman、心跳/指令/传感器超时、物理速度和曲率限值；`RecordingSink` 仅记录输出 |
 | [`crates/robot-core/src/protocol/chassis.rs`](crates/robot-core/src/protocol/chassis.rs) | 厂商 7 字节底盘编码、三种不同话题语义的显式预览、通用短写/失败锁存适配器；经验系数不作为物理标定 |
 | [`crates/robot-core/src/protocol/calibrated_chassis.rs`](crates/robot-core/src/protocol/calibrated_chassis.rs) | 速度→电机 PWM、曲率→舵机 PWM 的显式分段表；零锚点、限值、倒车策略校验，拒绝外推；当前只接受未验证模拟配置 |
+| [`crates/robot-core/src/startup_assist.rs`](crates/robot-core/src/startup_assist.rs) | 根据新鲜扫描里程计确认静止、受限步进PWM、起步交接及故障锁存；不打开执行器 |
+| [`crates/runner/src/startup_replay.rs`](crates/runner/src/startup_replay.rs) | 自适应起步离线回放与PWM建议记录，显式标记无物理输出 |
 | [`crates/robot-core/src/protocol/imu.rs`](crates/robot-core/src/protocol/imu.rs) | WIT 11 字节增量解析、校验和、三分量组合、单位/四元数转换、坏帧与过期控制 |
 | [`crates/robot-core/src/protocol/n10.rs`](crates/robot-core/src/protocol/n10.rs) | 按厂商源码解析 N10 58 字节/16 点包、分包/粘包重同步、角度/距离/强度、保留无效点槽位；只生成局部扫描样本 |
 | [`crates/robot-core/src/lib.rs`](crates/robot-core/src/lib.rs)、[`protocol/mod.rs`](crates/robot-core/src/protocol/mod.rs) | 核心类型与协议模块的公共导出入口 |

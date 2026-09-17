@@ -1,0 +1,72 @@
+{
+  "date": "2026-09-17",
+  "scope": "Bounded startup PWM proposal state machine and offline replay; no actuator I/O",
+  "physical_output_enabled": false,
+  "vehicle_calibration_verified": false,
+  "default_enabled": false,
+  "validation": {
+    "package_regression": {
+      "packages": [
+        "xt-stcar-robot-core",
+        "xt-stcar-robot-runner"
+      ],
+      "passed": 539,
+      "failed": 0,
+      "ignored": 2,
+      "note": "Includes 16 startup unit tests; subsequently added scan-odometry integration test verified in final 17-test suite. Counts overlap, do not add."
+    },
+    "final_startup_unit_suite": {
+      "passed": 17,
+      "failed": 0
+    },
+    "startup_cli_suite": {
+      "passed": 3,
+      "failed": 0
+    },
+    "fmt": "passed",
+    "clippy_all_targets_deny_warnings": "passed",
+    "diff_check": "passed",
+    "riscv_cross_build": "passed",
+    "elf": {
+      "architecture": "riscv64",
+      "abi": "lp64d",
+      "pie": true,
+      "loader": "/lib/ld-linux-riscv64-lp64d.so.1",
+      "needed": [
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "maximum_glibc": "2.34",
+      "glibc_baseline": "2.38",
+      "sha256": "75cf0cd082b7118024babcd902d14cd0525bd970d5bd3894c8b99e08c27bc24d",
+      "size_bytes": 2447552,
+      "passed": true,
+      "errors": []
+    },
+    "vehicle_offline_replay": {
+      "status": "not_completed",
+      "reason": "SSH master broken pipe, then connection timeout / Host is down; SCP failed. No target execution verified.",
+      "deployment_verified": false
+    }
+  },
+  "source_sha256": {
+    "crates/robot-core/src/startup_assist.rs": "a9421a3887883daad3ea99512347d67ad82ce9c482cb7f4f53916df575af8ed3",
+    "crates/robot-core/tests/startup_assist.rs": "aae77d3f00dfed48c841ea68b134c2fb09c873c44cc30ab9a02aca7594079ac4",
+    "crates/runner/src/startup_replay.rs": "d49d049a75a2082d506115b23e633d768b2286d7bd42cb16d392d89bf163a3c8",
+    "crates/runner/tests/startup_cli.rs": "6fdd9119ad84fcf271e47d852a14be07ddf212f8ac623e1593d5433d2f9d17b7",
+    "config/startup-assist-sim.json": "0e4e07eb3bd05415e2b19f0eaaae848c7cf44926bb528dbb93d2d722fb5048b6",
+    "examples/startup-assist-sim.jsonl": "6e83fa5d695c0eca4368b477604b7f1a41efa27873d82771a61c8111d79d470e"
+  },
+  "local_logs_sha256": {
+    "work/startup-assist-tests.log": "32a6d3bcdaee1104feea67ad1e71fe3773f88326e9326cf8241b53b951c5cf30",
+    "work/startup-assist-unit-final.log": "42616040e7470011ba7bf3ffe45df42af5c73a9e2473ec9a34f5186fbc9a80f7",
+    "work/startup-assist-clippy-final.log": "b6211cc00ea7798a6940521c438ba7efb1232efa83c97260bdd2ba6cccdc9e75",
+    "work/startup-assist-cross.log": "146aa89d750cbca6c1a156015518ff6cb90dcaa8f87200beecd7bf833edc1010"
+  },
+  "limitations": [
+    "Simulation example parameters are not real vehicle calibration.",
+    "No production actuator integration enabled; requires measured response/stopping envelope, final execution gate and independent watchdog.",
+    "No physical motor commands issued in this development task.",
+    "Race completion and maximum vehicle speed remain unverified."
+  ]
+}

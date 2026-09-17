@@ -21,6 +21,8 @@ Usage:
   Closed-loop simulation uses synthetic RGB/range/pose feedback, never hardware.
   xt-stcar-robot serial-capture --config FILE --output FILE [--execute]
   Sensor capture defaults to a plan; --execute opens the explicitly selected tty.
+  xt-stcar-robot startup-replay --config FILE --events FILE [--output FILE]
+  Startup assistance preview only; no physical output.
   xt-stcar-robot chassis-preview --profile PROFILE --linear VALUE --angular VALUE
   PROFILE: navigation1300 | navigation_one1200 | teleop_pwm_degrees
   Reference PWM preview only; values retain factory topic conventions.
@@ -114,6 +116,38 @@ fn distinct_output(output: &Path, inputs: &[&Path]) -> Result<()> {
                 "output must not overwrite a configuration, model, runtime, or input".into(),
             );
         }
+    }
+    Ok(())
+}
+
+fn startup_replay_command(rest: Vec<OsString>) -> Result<()> {
+    let mut args = rest.into_iter();
+    let mut options = BTreeMap::new();
+    while let Some(key) = args.next() {
+        let key = key.into_string().map_err(|_| "option must be UTF-8")?;
+        if !["--config", "--events", "--output"].contains(&key.as_str()) {
+            return Err(format!("unknown startup-replay option {key}"));
+        }
+        let value = args.next().ok_or("missing startup-replay value")?;
+        if options.insert(key, PathBuf::from(value)).is_some() {
+            return Err("duplicate startup-replay option".into());
+        }
+    }
+    let config = options.remove("--config").ok_or("--config is required")?;
+    let events = options.remove("--events").ok_or("--events is required")?;
+    let output = options.remove("--output");
+    if let Some(path) = &output {
+        distinct_output(path, &[&config, &events])?;
+    }
+    let mut log = LogBuffer::default();
+    let faulted = xt_stcar_robot_runner::startup_replay::replay(&config, &events, &mut log)?;
+    if let Some(path) = output {
+        std::fs::write(path, &log.0).map_err(|e| e.to_string())?;
+    } else {
+        io::stdout().write_all(&log.0).map_err(|e| e.to_string())?;
+    }
+    if faulted {
+        return Err("startup assistance fault latched; see recorded Stop decisions".into());
     }
     Ok(())
 }
@@ -278,6 +312,9 @@ fn run() -> Result<()> {
     }
     if command == "autonomy-sim" || command == "autonomy-replay" || command == "road-detect" {
         return autonomy_command(command.to_str().ok_or("command must be UTF-8")?, rest);
+    }
+    if command == "startup-replay" {
+        return startup_replay_command(rest);
     }
     if command == "chassis-preview" {
         return chassis_preview(rest);

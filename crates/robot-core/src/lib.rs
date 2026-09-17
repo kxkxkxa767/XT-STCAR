@@ -19,3 +19,5 @@ pub mod protocol;
 pub mod reference;
 pub mod scan;
 pub mod tracking;
+
+pub mod startup_assist;

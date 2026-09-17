@@ -18,6 +18,7 @@ pub mod online_simulation;
 pub mod perception;
 pub mod phase_statistics;
 pub mod simulation;
+pub mod startup_replay;
 pub mod telemetry;
 pub mod vision;
 
