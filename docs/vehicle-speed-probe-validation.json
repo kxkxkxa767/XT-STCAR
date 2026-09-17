@@ -153,12 +153,16 @@
         "decoded_packets": 2252,
         "rejected_revolutions": 79
       },
-      "user_observation": "等待用户确认移动距离及实际停住状态",
+      "user_observation": "用户确认前进约4–5米；尚未明确确认完全停住",
       "sha256": {
         ".jsonl": "b899a76895d578a7b2ed87b0e5864b7e434440be48f2445118fab4c2db1a18c9",
         "-motion.jsonl": "c5d531a0a8e8292e03bc8167f6ff6df8ff0a64bf683c720f431a42b5aa4e83ea",
         "-capture.log": "642239f368d156d2726279916138fa148a75e08ddf5cbc6459841b241d98f968"
-      }
+      },
+      "user_distance_estimate_m": [
+        4,
+        5
+      ]
     }
   ],
   "limitations": [
@@ -166,7 +170,8 @@
     "当前生产扫描质量门拒绝全部整圈，未放宽配置，未输出距离或速度结论。",
     "初次静态捕获有效量程内回波约81.9%，存在零回波及超过12米量程的数据；不是激光硬件损坏结论。",
     "停止帧写入成功与车辆物理停住分别记录。",
-    "保留历史1600/0.3秒约1.25米观察，本轮未动不能覆盖旧结果。"
+    "保留历史1600/0.3秒约1.25米观察，本轮未动不能覆盖旧结果。",
+    "1600/2秒的4–5米为用户估计总位移，含未知滑行时间，不能除以指令时长当作稳定速度。"
   ],
   "current_state": "Neutral frames sent successfully; no automatic next action; final physical stop confirmation pending"
 }
