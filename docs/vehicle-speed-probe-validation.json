@@ -1,0 +1,172 @@
+{
+  "date": "2026-09-17",
+  "scope": "Supervised bounded ground probes; not a maximum-speed measurement",
+  "maximum_speed_measured": false,
+  "full_throttle_commanded": false,
+  "trials": [
+    {
+      "name": "speed-1550-2s",
+      "command_interval_s": 2.0088792620000504,
+      "motion_log": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1550-2s",
+          "vehicle_unix_s": 1789652042.7371144,
+          "vehicle_monotonic_s": 714.884902929
+        },
+        {
+          "motor_us": 1550,
+          "servo_us": 1500,
+          "duration_s": 2.0,
+          "mode": "motor-1550-2s",
+          "vehicle_unix_s": 1789652043.7428255,
+          "vehicle_monotonic_s": 715.890584055
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1550-2s",
+          "vehicle_unix_s": 1789652045.7517064,
+          "vehicle_monotonic_s": 717.899463317
+        },
+        {
+          "guardian_stop_writes": 20,
+          "mode": "motor-1550-2s"
+        },
+        {
+          "mode": "motor-1550-2s",
+          "error": null,
+          "parent_stop_writes": 20,
+          "guardian_exit": 0,
+          "physical_stop_observed": false
+        }
+      ],
+      "scan_counts": {
+        "accepted_scans": 0,
+        "decoded_packets": 2252,
+        "rejected_revolutions": 79
+      },
+      "user_observation": "用户确认未移动",
+      "sha256": {
+        ".jsonl": "4fbb169ceb35fe9dea53e6677ced98d6ce7e6931f42e533dcffe406e9933542b",
+        "-motion.jsonl": "9d3eac5a5719cae5a8cb4fca4cdfa95bd0d4e859a7141deb20f199f81e309c9a",
+        "-capture.log": "cf2f29eddc4244d9b2a0fbbf86135802ed42b1b2800893c50af3be96b44ed7b8"
+      }
+    },
+    {
+      "name": "speed-1600-03s",
+      "command_interval_s": 0.3016702059999261,
+      "motion_log": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1600-03s",
+          "vehicle_unix_s": 1789652100.699085,
+          "vehicle_monotonic_s": 772.846850907
+        },
+        {
+          "motor_us": 1600,
+          "servo_us": 1500,
+          "duration_s": 0.3,
+          "mode": "motor-1600-03s",
+          "vehicle_unix_s": 1789652101.7048988,
+          "vehicle_monotonic_s": 773.852657352
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1600-03s",
+          "vehicle_unix_s": 1789652102.00657,
+          "vehicle_monotonic_s": 774.154327558
+        },
+        {
+          "guardian_stop_writes": 20,
+          "mode": "motor-1600-03s"
+        },
+        {
+          "mode": "motor-1600-03s",
+          "error": null,
+          "parent_stop_writes": 20,
+          "guardian_exit": 0,
+          "physical_stop_observed": false
+        }
+      ],
+      "scan_counts": {
+        "accepted_scans": 0,
+        "decoded_packets": 2252,
+        "rejected_revolutions": 80
+      },
+      "user_observation": "用户确认未移动",
+      "sha256": {
+        ".jsonl": "582041e11e986c37b8f56cd8e02f8ea065d0f63cb97655bd304e4a9dee2f292d",
+        "-motion.jsonl": "01c736ab29a0adbd25f0b8edfcac6f72179d1749936a692bf4ddf0e5fc763246",
+        "-capture.log": "719e8813be62103ae551031a567c62fc30341bfd1b44366b3507bc64cf75f1f7"
+      }
+    },
+    {
+      "name": "speed-1600-2s",
+      "command_interval_s": 2.0104512240000076,
+      "motion_log": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1600-2s",
+          "vehicle_unix_s": 1789652239.5357723,
+          "vehicle_monotonic_s": 911.683557584
+        },
+        {
+          "motor_us": 1600,
+          "servo_us": 1500,
+          "duration_s": 2.0,
+          "mode": "motor-1600-2s",
+          "vehicle_unix_s": 1789652240.5424643,
+          "vehicle_monotonic_s": 912.690223026
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "motor-1600-2s",
+          "vehicle_unix_s": 1789652242.5529163,
+          "vehicle_monotonic_s": 914.70067425
+        },
+        {
+          "guardian_stop_writes": 20,
+          "mode": "motor-1600-2s"
+        },
+        {
+          "mode": "motor-1600-2s",
+          "error": null,
+          "parent_stop_writes": 20,
+          "guardian_exit": 0,
+          "physical_stop_observed": false
+        }
+      ],
+      "scan_counts": {
+        "accepted_scans": 0,
+        "decoded_packets": 2252,
+        "rejected_revolutions": 79
+      },
+      "user_observation": "等待用户确认移动距离及实际停住状态",
+      "sha256": {
+        ".jsonl": "b899a76895d578a7b2ed87b0e5864b7e434440be48f2445118fab4c2db1a18c9",
+        "-motion.jsonl": "c5d531a0a8e8292e03bc8167f6ff6df8ff0a64bf683c720f431a42b5aa4e83ea",
+        "-capture.log": "642239f368d156d2726279916138fa148a75e08ddf5cbc6459841b241d98f968"
+      }
+    }
+  ],
+  "limitations": [
+    "串口写入成功不代表MCU确认执行；无执行回执。",
+    "当前生产扫描质量门拒绝全部整圈，未放宽配置，未输出距离或速度结论。",
+    "初次静态捕获有效量程内回波约81.9%，存在零回波及超过12米量程的数据；不是激光硬件损坏结论。",
+    "停止帧写入成功与车辆物理停住分别记录。",
+    "保留历史1600/0.3秒约1.25米观察，本轮未动不能覆盖旧结果。"
+  ],
+  "current_state": "Neutral frames sent successfully; no automatic next action; final physical stop confirmation pending"
+}
