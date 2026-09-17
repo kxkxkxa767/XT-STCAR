@@ -261,7 +261,7 @@
         "decoded_packets": 2252,
         "rejected_revolutions": 79
       },
-      "user_observation": "已回中补发停止帧；实际距离、偏转和停住状态待用户确认",
+      "user_observation": "用户观察向左偏，认为可能初始摆放偏左，要求就到这里；距离及完全停住未明确确认。",
       "sha256": {
         ".jsonl": "d76eacd86d0087c183f6c7fe5f74664a13c3486048557a6d5a34aea17f299e09",
         "-motion.jsonl": "28c83afd9c9e7ed3f280577d06bb15212f2d67409c6d8e7042e2d6df543af092",
@@ -275,7 +275,12 @@
     "初次静态捕获有效量程内回波约81.9%，存在零回波及超过12米量程的数据；不是激光硬件损坏结论。",
     "停止帧写入成功与车辆物理停住分别记录。",
     "保留历史1600/0.3秒约1.25米观察，本轮未动不能覆盖旧结果。",
-    "1600/2秒的4–5米为用户估计总位移，含未知滑行时间，不能除以指令时长当作稳定速度。"
+    "1600/2秒的4–5米为用户估计总位移，含未知滑行时间，不能除以指令时长当作稳定速度。",
+    "1620/2秒向左偏的原因未确定，不据此改舵机中位；最高速度未测出。"
   ],
-  "current_state": "Neutral frames sent successfully; no automatic next action; final physical stop confirmation pending"
+  "current_state": "User ended motion testing. Neutral and 40 final stop frames sent successfully; no car/laser owners or active probe/capture processes. Final physical stop confirmation pending.",
+  "final_device_owners": {
+    "car": false,
+    "laser": false
+  }
 }
