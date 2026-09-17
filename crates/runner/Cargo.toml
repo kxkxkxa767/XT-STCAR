@@ -1,5 +1,6 @@
 [package]
 name = "xt-stcar-robot-runner"
+default-run = "xt-stcar-robot"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

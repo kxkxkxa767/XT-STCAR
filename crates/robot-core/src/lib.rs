@@ -21,3 +21,5 @@ pub mod scan;
 pub mod tracking;
 
 pub mod startup_assist;
+
+pub mod teleop;

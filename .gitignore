@@ -30,3 +30,9 @@ work/
 .env.*
 !.env.example
 .venv-*/
+
+# Vehicle console runtime credentials and recordings
+/access.json
+/recordings/
+/web/vehicle-console/access.json
+/web/vehicle-console/recordings/

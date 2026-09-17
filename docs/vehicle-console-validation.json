@@ -1,0 +1,115 @@
+{
+  "date": "2026-09-17",
+  "feature": "Manual keyboard teleoperation console, live camera/lidar and single image saving",
+  "user_constraints": [
+    "Hold keys continuously; no fixed two-second drive cutoff",
+    "Do not start motors during vehicle verification",
+    "Primary save actions produce single JPG/PNG images, not ZIP files"
+  ],
+  "tests": {
+    "rust_packages": [
+      "xt-stcar-robot-core",
+      "xt-stcar-robot-runner"
+    ],
+    "rust_passed": 545,
+    "rust_ignored": 2,
+    "rust_failed": 0,
+    "python_http_pty_restart_tests_passed": 8,
+    "rust_teleop_unit_tests_passed": 5,
+    "fmt": "passed",
+    "clippy_all_targets_deny_warnings": "passed",
+    "cross_compile": "riscv64gc-unknown-linux-gnu.2.38 passed",
+    "browser_ui": "Simulated unlock/arrow/release/stop and save controls exercised; real camera/lidar visibly live; final single-image file link visibly generated. Browser download event/local Downloads placement not confirmed by automation; HTTP downloads verified byte-for-byte."
+  },
+  "vehicle": {
+    "deployment": "/home/bianbu/xt-stcar-console/20260917",
+    "bind": "127.0.0.1:8081",
+    "access": "SSH local forwarding; token kept out of Git",
+    "motor_drive_commands_during_validation": 0,
+    "armed_at_final_check": false,
+    "motor_pwm_at_final_check": 1500,
+    "reverse_enabled": false,
+    "camera_live": true,
+    "lidar_live": true,
+    "recorded_jpeg_frames_first_smoke": 12,
+    "single_images": {
+      "camera": {
+        "file": "camera-20260917-223413-8b4c86.jpg",
+        "shape": [
+          480,
+          640,
+          3
+        ],
+        "bytes": 47557
+      },
+      "lidar": {
+        "file": "lidar-20260917-223413-65e976.png",
+        "shape": [
+          480,
+          640,
+          3
+        ],
+        "bytes": 23753
+      },
+      "combined": {
+        "file": "combined-20260917-223414-7093c3.png",
+        "shape": [
+          520,
+          1280,
+          3
+        ],
+        "bytes": 501118
+      }
+    },
+    "deployed_sha256": {
+      "vehicle-bridge": "343df157157323e5ad5920a1b959ff60b39b4f62b69e54e7a654759a7cc1e383",
+      "server.py": "450fb3a30433930078b24308536c54cde003a3948697897217a8007815410ade",
+      "app.js": "9971e29b6bc92c30f93c12b96493d7323f614867e12d96b7cce9ee5a36f648b6",
+      "style.css": "f5f57b68a7dba98db6da9fc10d0712186bb0229dcc00b582ea7abb8ed02face3",
+      "index.html": "1282fc68c476f93c856639fb07d7b96fb05449273271157dec857d054dc65d90"
+    },
+    "running": "Background locked service; not installed as boot service"
+  },
+  "elf": {
+    "architecture": "riscv64",
+    "abi": "lp64d",
+    "maximum_glibc": "2.34",
+    "sha256": "343df157157323e5ad5920a1b959ff60b39b4f62b69e54e7a654759a7cc1e383",
+    "size_bytes": 496032,
+    "passed": true
+  },
+  "source_sha256": {
+    "crates/robot-core/src/teleop.rs": "554437bb90f7161843468cb38c415eacaab2672d50752fab24973b5040283724",
+    "crates/runner/src/bin/vehicle-bridge.rs": "67bf3b926a9b6218eafaa3b6cba62ed17e43fc1065cd7e7d28e25ba0466271b2",
+    "web/vehicle-console/server.py": "450fb3a30433930078b24308536c54cde003a3948697897217a8007815410ade",
+    "web/vehicle-console/app.js": "9971e29b6bc92c30f93c12b96493d7323f614867e12d96b7cce9ee5a36f648b6",
+    "web/vehicle-console/index.html": "1282fc68c476f93c856639fb07d7b96fb05449273271157dec857d054dc65d90",
+    "web/vehicle-console/style.css": "f5f57b68a7dba98db6da9fc10d0712186bb0229dcc00b582ea7abb8ed02face3",
+    "web/vehicle-console/tests/test_console.py": "f5e0fc5881153832e8bb8acba47334b1f12937da13787f6069818e66c9b53c8d"
+  },
+  "log_sha256": {
+    "work/console-rust-tests.log": "936bb298e9bbea1d3cdb20061749c5e2b0c3f5cd7e1af52b1f764ffe9ebfbb73",
+    "work/console-python-tests-final.log": "d9e057e7e5e56a01b225cb149629e7c1d031c6ba122c76b464f5020587559667",
+    "work/console-clippy.log": "504b9dc94f0a077e17134bede49eda4606f0f9d0f18e16fd9aaf96446bf2580c",
+    "work/console-cross.log": "4f8cc6b692c89aa7195ce0e92ebf7c95ce8b490c67529d342605efcfb81cce37"
+  },
+  "limits": {
+    "forward_pwm_max": 1620,
+    "reverse_pwm_min_when_enabled": 1480,
+    "servo_pwm": [
+      1450,
+      1550
+    ],
+    "neutral": 1500,
+    "heartbeat_timeout_ms": 300,
+    "request_max_age_ms": 250,
+    "hold_duration": "as long as fresh held-key commands arrive",
+    "recording_max_seconds": 60
+  },
+  "limitations": [
+    "Keyboard motor actuation and reverse behavior on the actual vehicle were deliberately not exercised.",
+    "Raw lidar view does not change navigation quality gates, certify obstacle-free space, or measure velocity.",
+    "Software neutral writes cannot guarantee stop after kernel failure, bridge SIGKILL, broken serial link or MCU failure; independent physical stop remains necessary.",
+    "No hardware-synchronized camera/lidar timestamps or measured braking distance."
+  ]
+}
