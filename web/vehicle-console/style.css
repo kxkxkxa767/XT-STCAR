@@ -3,3 +3,6 @@
 details{border-top:1px solid var(--line)}summary{padding:14px 20px;color:var(--muted);font-size:12px;cursor:pointer}.camera-stage.stale img{opacity:.25;filter:grayscale(1)}.camera-stage.stale .live{color:#ffc9b3;background:#522c20;border-color:#814b33}
 
 #photo-files{padding:0 20px 15px}#photo-files a{display:block;color:var(--mint);font-size:11px;padding:5px 0;word-break:break-all}
+
+[hidden]{display:none!important}
+#access-form{margin:16px 0;max-width:640px}

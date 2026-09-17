@@ -70,6 +70,16 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(self.get('/api/state')['status']['control']['motor'],1500)
         self.drive('drive',['up']);time.sleep(.5)
         s=self.get('/api/state')['status']['control'];self.assertFalse(s['armed']);self.assertEqual(s['motor'],1500)
+    def test_timeout_releases_owner_and_allows_new_page(self):
+        self.drive('arm')
+        time.sleep(.55)
+        state=self.get('/api/state')
+        self.assertIsNone(state['owner'])
+        self.assertFalse(state['status']['control']['armed'])
+        self.drive('arm',client='new-browser-client-123456')
+        time.sleep(.05)
+        self.assertTrue(self.get('/api/state')['status']['control']['armed'])
+
     def test_single_owner_and_reverse_disabled(self):
         self.drive('arm');time.sleep(.04)
         with self.assertRaises(urllib.error.HTTPError):self.drive('drive',['up'],client='another-client-0123456')

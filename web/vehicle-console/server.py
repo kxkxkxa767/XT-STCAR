@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import secrets
+import select
 import shutil
 import signal
 import socketserver
@@ -42,6 +43,7 @@ class Console:
         self.boot = secrets.token_urlsafe(16)
         self.owner = None
         self.owner_at = 0
+        self.arm_sequence = 0
         self.stopped_tick = -1
         self.sequence = 0
         self.browser_sequence = -1
@@ -100,6 +102,9 @@ class Console:
                     if kind == 'control':
                         self.status = value
                         self.control_at = time.monotonic()
+                        control = value.get('control', {})
+                        if self.owner and not control.get('armed') and control.get('seq', -1) >= self.arm_sequence:
+                            self.halt('bridge_locked')
                     else:
                         self.scan = value
                         self.scan_at = time.monotonic()
@@ -118,7 +123,7 @@ class Console:
             with self.lock:
                 unsafe = not self.healthy() or (self.owner is not None and time.monotonic() - self.owner_at > .35)
                 armed = self.status.get('control', {}).get('armed', False)
-            if unsafe and armed:
+            if unsafe and (armed or self.owner is not None):
                 self.halt('sensor_or_browser_timeout')
 
     def emit(self, op, motor=1500, servo=1500, tick=0):
@@ -174,6 +179,7 @@ class Console:
                 self.browser_sequence = seq
                 self.owner_at = time.monotonic()
                 self.emit('arm', tick=tick)
+                self.arm_sequence = self.sequence
             elif op == 'drive':
                 if self.owner != client or seq <= self.browser_sequence:
                     self.halt('stale_or_unowned_request')
@@ -580,9 +586,17 @@ def serve(args):
             finally:
                 self.slots.release()
 
-    server = Server((args.bind, args.port), Handler)
-    server.slots = threading.BoundedSemaphore(20)
-    server.timeout = .2
+    servers = []
+    try:
+        for address in dict.fromkeys([args.bind] + ([args.lan_bind] if args.lan_bind else [])):
+            server = Server((address, args.port), Handler)
+            server.slots = threading.BoundedSemaphore(20)
+            server.timeout = .2
+            servers.append(server)
+    except Exception:
+        for server in servers:
+            server.server_close()
+        raise
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: app.stop.set())
     access = Path(args.access_file)
@@ -595,16 +609,19 @@ def serve(args):
         app.start()
         print(f'Console listening on {args.bind}:{args.port}; credentials in {access}', flush=True)
         while not app.stop.is_set():
-            server.handle_request()
+            for ready in select.select(servers, [], [], .2)[0]:
+                ready.handle_request()
     finally:
         app.close()
-        server.server_close()
+        for server in servers:
+            server.server_close()
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--bridge', required=True)
     p.add_argument('--bind', default='127.0.0.1')
+    p.add_argument('--lan-bind', help='Additional explicit private IPv4 address for LAN browsers')
     p.add_argument('--port', type=int, default=8081)
     p.add_argument('--camera', default='/dev/video20')
     p.add_argument('--output', default='./recordings')
@@ -612,9 +629,10 @@ def main():
     p.add_argument('--demo', action='store_true')
     p.add_argument('--allow-reverse', action='store_true', help='Only after supervised ESC reverse calibration')
     args = p.parse_args()
-    address = ipaddress.ip_address(args.bind)
-    if address.is_unspecified or not (address.is_private or address.is_loopback):
-        p.error('explicit private/loopback bind required')
+    for bind in [args.bind] + ([args.lan_bind] if args.lan_bind else []):
+        address = ipaddress.ip_address(bind)
+        if address.version != 4 or address.is_unspecified or address.is_multicast or not (address.is_private or address.is_loopback):
+            p.error('explicit private/loopback IPv4 bind required')
     lock = open('/tmp/xt-stcar-console-demo-' + str(args.port) + '.lock' if args.demo else '/tmp/xt-stcar-console.lock', 'a')
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     serve(args)
