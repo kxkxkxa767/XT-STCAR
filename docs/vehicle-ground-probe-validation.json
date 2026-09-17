@@ -1,0 +1,230 @@
+{
+  "method": "Offline diagnostic trimmed point-to-point ICP; lidar-origin displacement, no calibrated vehicle extrinsics or independent distance ground truth",
+  "stationary_split": {
+    "before": {
+      "translation_m": [
+        8.71706445898512e-06,
+        -0.00010820280620342515
+      ],
+      "distance_m": 0.00010855337158779584,
+      "yaw_deg": 7.223197701453913e-05,
+      "inlier_fraction_10cm": 0.9773371104815864,
+      "median_residual_m": 0.00010962907728268605,
+      "trimmed_rmse_m": 0.002448895478514903
+    },
+    "after1530": {
+      "translation_m": [
+        -1.185380363614985e-05,
+        2.5695074057141547e-05
+      ],
+      "distance_m": 2.8297517407829045e-05,
+      "yaw_deg": -3.2001587185352317e-05,
+      "inlier_fraction_10cm": 0.9745042492917847,
+      "median_residual_m": 2.8964698970634023e-05,
+      "trimmed_rmse_m": 0.0005132105401222462
+    },
+    "after1540": {
+      "translation_m": [
+        -0.00010268034235090595,
+        -2.9900415063334348e-05
+      ],
+      "distance_m": 0.00010694525480945343,
+      "yaw_deg": -0.00011167107942635107,
+      "inlier_fraction_10cm": 0.9775280898876404,
+      "median_residual_m": 0.00010848512430514521,
+      "trimmed_rmse_m": 0.0010869042138241147
+    },
+    "after1550": {
+      "translation_m": [
+        4.013554485032824e-05,
+        0.000169332522790916
+      ],
+      "distance_m": 0.00017402403637190123,
+      "yaw_deg": -9.592839814125906e-05,
+      "inlier_fraction_10cm": 0.9748603351955307,
+      "median_residual_m": 0.00017537705110532513,
+      "trimmed_rmse_m": 0.0024148744836298922
+    }
+  },
+  "successive": {
+    "before->after1530": [
+      {
+        "translation_m": [
+          0.0003473757213486683,
+          0.00011699228692226409
+        ],
+        "distance_m": 0.00036654752349703446,
+        "yaw_deg": 0.0008637191437502942,
+        "inlier_fraction_10cm": 0.9830028328611898,
+        "median_residual_m": 0.0012573216103024729,
+        "trimmed_rmse_m": 0.0031119119705112354
+      },
+      {
+        "translation_m": [
+          0.0003473757213488028,
+          0.00011699228692218852
+        ],
+        "distance_m": 0.0003665475234971378,
+        "yaw_deg": 0.0008637191437497199,
+        "inlier_fraction_10cm": 0.9830028328611898,
+        "median_residual_m": 0.0012573216103022652,
+        "trimmed_rmse_m": 0.003111911970511211
+      },
+      {
+        "translation_m": [
+          0.00034737572134855405,
+          0.00011699228692219199
+        ],
+        "distance_m": 0.00036654752349690316,
+        "yaw_deg": 0.0008637191437453033,
+        "inlier_fraction_10cm": 0.9830028328611898,
+        "median_residual_m": 0.0012573216103018228,
+        "trimmed_rmse_m": 0.003111911970511171
+      },
+      {
+        "translation_m": [
+          0.0003473757213488877,
+          0.000116992286922389
+        ],
+        "distance_m": 0.00036654752349728225,
+        "yaw_deg": 0.0008637191437497387,
+        "inlier_fraction_10cm": 0.9830028328611898,
+        "median_residual_m": 0.0012573216103042137,
+        "trimmed_rmse_m": 0.003111911970511413
+      },
+      {
+        "translation_m": [
+          0.00034737572134847377,
+          0.00011699228692215304
+        ],
+        "distance_m": 0.00036654752349681464,
+        "yaw_deg": 0.0008637191437463029,
+        "inlier_fraction_10cm": 0.9830028328611898,
+        "median_residual_m": 0.0012573216103007568,
+        "trimmed_rmse_m": 0.0031119119705110285
+      }
+    ],
+    "after1530->after1540": [
+      {
+        "translation_m": [
+          -5.4543223068556285e-05,
+          -0.00034471658125808275
+        ],
+        "distance_m": 0.0003490049921949064,
+        "yaw_deg": 3.3205983765127084e-05,
+        "inlier_fraction_10cm": 0.9438202247191011,
+        "median_residual_m": 0.001101224769672169,
+        "trimmed_rmse_m": 0.002191258198335475
+      },
+      {
+        "translation_m": [
+          0.00019334108927824864,
+          -0.00013030367622933342
+        ],
+        "distance_m": 0.0002331519351027966,
+        "yaw_deg": -6.329598885793558e-05,
+        "inlier_fraction_10cm": 0.9438202247191011,
+        "median_residual_m": 0.0010913126817868467,
+        "trimmed_rmse_m": 0.0022065949163618775
+      },
+      {
+        "translation_m": [
+          -5.454322306857689e-05,
+          -0.0003447165812582845
+        ],
+        "distance_m": 0.0003490049921951089,
+        "yaw_deg": 3.320598376726248e-05,
+        "inlier_fraction_10cm": 0.9438202247191011,
+        "median_residual_m": 0.0011012247696744863,
+        "trimmed_rmse_m": 0.0021912581983358705
+      },
+      {
+        "translation_m": [
+          -6.224958167042066e-05,
+          5.057113691874416e-05
+        ],
+        "distance_m": 8.020255798537064e-05,
+        "yaw_deg": 5.5712651786055795e-06,
+        "inlier_fraction_10cm": 0.9438202247191011,
+        "median_residual_m": 0.0010218169286312845,
+        "trimmed_rmse_m": 0.002217427131706367
+      },
+      {
+        "translation_m": [
+          -5.4543223068646694e-05,
+          -0.00034471658125823703
+        ],
+        "distance_m": 0.0003490049921950729,
+        "yaw_deg": 3.3205983765545925e-05,
+        "inlier_fraction_10cm": 0.9438202247191011,
+        "median_residual_m": 0.00110122476967307,
+        "trimmed_rmse_m": 0.002191258198335583
+      }
+    ],
+    "after1540->after1550": [
+      {
+        "translation_m": [
+          0.21061683312772034,
+          0.022416292196752965
+        ],
+        "distance_m": 0.21180637514626466,
+        "yaw_deg": 0.6223706514228113,
+        "inlier_fraction_10cm": 0.9050279329608939,
+        "median_residual_m": 0.013886292826298177,
+        "trimmed_rmse_m": 0.016302928077296937
+      },
+      {
+        "translation_m": [
+          0.2106168331277203,
+          0.022416292196753
+        ],
+        "distance_m": 0.21180637514626463,
+        "yaw_deg": 0.6223706514228097,
+        "inlier_fraction_10cm": 0.9050279329608939,
+        "median_residual_m": 0.013886292826298056,
+        "trimmed_rmse_m": 0.016302928077296962
+      },
+      {
+        "translation_m": [
+          0.21061683312772098,
+          0.022416292196752455
+        ],
+        "distance_m": 0.21180637514626527,
+        "yaw_deg": 0.6223706514228088,
+        "inlier_fraction_10cm": 0.9050279329608939,
+        "median_residual_m": 0.013886292826299405,
+        "trimmed_rmse_m": 0.01630292807729655
+      },
+      {
+        "translation_m": [
+          0.2106168331277205,
+          0.022416292196752705
+        ],
+        "distance_m": 0.2118063751462648,
+        "yaw_deg": 0.6223706514228079,
+        "inlier_fraction_10cm": 0.9050279329608939,
+        "median_residual_m": 0.013886292826298594,
+        "trimmed_rmse_m": 0.016302928077296736
+      },
+      {
+        "translation_m": [
+          0.21061683312772017,
+          0.022416292196752584
+        ],
+        "distance_m": 0.21180637514626446,
+        "yaw_deg": 0.6223706514228092,
+        "inlier_fraction_10cm": 0.9050279329608939,
+        "median_residual_m": 0.01388629282629819,
+        "trimmed_rmse_m": 0.016302928077296962
+      }
+    ]
+  },
+  "date": "2026-09-17",
+  "physical_observations": {
+    "1530_0.3s": "no movement",
+    "1540_0.3s": "no movement",
+    "1550_1s": "moved slowly without obvious turn; user confirmed stopped"
+  },
+  "one_metre_completed": false,
+  "camera_distance_comparison_completed": false
+}
