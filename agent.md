@@ -898,3 +898,5 @@ crate 分层无环；最新扩展增加 vision→robot-core 的纯类型依赖�
 - 交付时说明修改、测试、部署/上传状态和必要的下一步，使用简洁中文。
 - 本文件保存长期约定；环境信息写入 `资料/环境.md`，实测状态写入 `docs/`。
   `AGENTS.md` 仅作此文件的加载入口，维护时完整核对本文件，不留旧车型规则。
+
+2026-09-18：通用HTML已加入跨平台SSH启动步骤及复制按钮。共享启动脚本scripts/start-vehicle-console.py部署为车端~/xt-stcar-console/start-console.py，--url显示入口；复用现有服务，不自动解锁/运动。网页访问码与Linux SSH密码是两回事，均不写进HTML。

@@ -107,3 +107,5 @@ python3 web/vehicle-console/server.py --demo \
 模拟模式不打开任何物理设备；PTY测试只连接虚拟终端。部署验证按用户要求未发送任何非1500电机命令，未测试实车键盘行驶或倒车。
 
 访问码支持8–128位英文字母、数字、`-`、`_`；默认仍生成随机长码。手动更换须先停车并正常停止服务，再修改权限0600的车端access.json并重启。旧码失效后页面显示访问码输入框，重新输入即可；具体访问码不提交到Git。
+
+跨平台启动：HTML入口内含Windows PowerShell、Mac终端与安卓SSH客户端步骤及可复制命令。SSH登录后执行 `python3 ~/xt-stcar-console/start-console.py --url`，复用或启动已部署服务并显示私密入口，无自动解锁。部署该脚本时，将仓库 `scripts/start-vehicle-console.py` 复制到车端上述路径；Mac启动器共享同一份实现。
