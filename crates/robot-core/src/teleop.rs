@@ -72,7 +72,7 @@ impl Guard {
         }
         self.status.seq = req.seq;
         if req.motor > 1620
-            || req.motor < if self.reverse { 1400 } else { 1500 }
+            || req.motor < if self.reverse { 1350 } else { 1500 }
             || !(1350..=1650).contains(&req.servo)
         {
             self.stop("pwm_out_of_range");
@@ -116,9 +116,9 @@ mod tests {
     #[test]
     fn calibrated_manual_limits_are_enforced() {
         for (motor, servo, allowed) in [
-            (1400, 1350, true),
-            (1400, 1650, true),
-            (1399, 1500, false),
+            (1350, 1350, true),
+            (1350, 1650, true),
+            (1349, 1500, false),
             (1500, 1349, false),
             (1500, 1651, false),
         ] {

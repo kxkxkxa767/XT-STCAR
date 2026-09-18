@@ -44,6 +44,7 @@ class Console:
         self.owner = None
         self.owner_at = 0
         self.arm_sequence = 0
+        self.last_stop = None
         self.stopped_tick = -1
         self.sequence = 0
         self.browser_sequence = -1
@@ -104,7 +105,7 @@ class Console:
                         self.control_at = time.monotonic()
                         control = value.get('control', {})
                         if self.owner and not control.get('armed') and control.get('seq', -1) >= self.arm_sequence:
-                            self.halt('bridge_locked')
+                            self.halt('bridge_' + control.get('reason', 'locked'))
                     else:
                         self.scan = value
                         self.scan_at = time.monotonic()
@@ -123,8 +124,8 @@ class Console:
             with self.lock:
                 unsafe = not self.healthy() or (self.owner is not None and time.monotonic() - self.owner_at > .35)
                 armed = self.status.get('control', {}).get('armed', False)
-            if unsafe and (armed or self.owner is not None):
-                self.halt('sensor_or_browser_timeout')
+                if unsafe and (armed or self.owner is not None):
+                    self.halt('sensor_stale' if not self.healthy() else 'browser_timeout')
 
     def emit(self, op, motor=1500, servo=1500, tick=0):
         # Nonblocking writes: a blocked/killed bridge must never block the web watchdog.
@@ -142,6 +143,8 @@ class Console:
 
     def halt(self, reason):
         with self.lock:
+            if self.owner is not None or self.last_stop is None or reason != 'operator_stop':
+                self.last_stop = {'reason': reason, 'unix_s': time.time()}
             self.owner = None
             self.stopped_tick = self.status.get('control', {}).get('tick', -1)
             self.events.append({'unix_s': time.time(), 'stop_reason': reason})
@@ -211,7 +214,7 @@ class Console:
         with self.lock:
             if self.owner or self.status.get('control', {}).get('armed'):
                 raise ValueError('stop and lock before editing PWM')
-            ranges = {'forward': (1500, 1620), 'reverse': (1400, 1500), 'left': (1500, 1650), 'right': (1350, 1500)}
+            ranges = {'forward': (1500, 1620), 'reverse': (1350, 1500), 'left': (1500, 1650), 'right': (1350, 1500)}
             if set(data) != set(ranges):
                 raise ValueError('four PWM settings required')
             for k, (lo, hi) in ranges.items():
@@ -271,7 +274,7 @@ class Console:
                     'reverse_enabled': self.args.allow_reverse, 'healthy': self.healthy(),
                     'ages': {'camera': now - self.camera_at, 'lidar': now - self.scan_at, 'control': now - self.control_at},
                     'errors': dict(self.errors), 'recording': self.record is not None, 'saving': self.saving,
-                    'record_error': self.record_error, 'owner': self.owner,
+                    'record_error': self.record_error, 'owner': self.owner, 'last_stop': self.last_stop,
                     'files': sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]}
 
     def storage_available(self):

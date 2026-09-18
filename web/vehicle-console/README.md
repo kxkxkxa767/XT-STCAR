@@ -6,7 +6,7 @@
 
 在同一局域网中，用浏览器打开 `http://192.168.0.156:8081/`，首次输入车辆访问码；也可打开工程根目录 `打开车辆驾驶台.html`，填写地址和访问码进入。安卓使用屏幕方向按钮，电脑可使用键盘。推荐当前版本 Chrome / Edge / Safari；未在实体安卓或 Windows 设备验收。
 
-访问码在车端 `~/xt-stcar-console/access.json` 的 token 字段，由已有SSH连接读取；不写入Git。完整入口可在网址后加 `#token=访问码`，认证后浏览器移除地址中的码并存入当前标签会话。安卓可将车辆网址添加到主屏幕，Windows可收藏或创建浏览器快捷方式。打开网页需要车端服务运行，但日常访问不依赖Mac或SSH隧道。车辆IP变化时修改入口地址并更新服务 `--lan-bind`。
+访问码在车端 `~/xt-stcar-console/access.json` 的 token 字段，由已有SSH连接读取；不写入Git。完整入口可在网址后加 `#token=访问码`，认证后浏览器移除地址中的码并存入当前标签会话。安卓可将车辆网址添加到主屏幕，Windows可收藏或创建浏览器快捷方式。打开网页需要车端服务运行，已配置systemd用户服务及Linger=yes，车辆开机后自动启动，日常访问不依赖Mac或SSH隧道。车辆IP变化时修改入口地址并更新服务 `--lan-bind`。
 
 解锁前必须传感器在线。底盘锁定/心跳超时后会释放页面控制权；连续点击解锁只发一次请求。已有其他页面控制时先按“停止并锁定”，再解锁。后台不自动恢复解锁。
 
@@ -30,7 +30,7 @@ python3 scripts/open-vehicle-console.py --no-open --port 8082
 车端目录：`/home/bianbu/xt-stcar-console/20260917`。
 服务同时监听车端 `127.0.0.1:8081` 和局域网 `192.168.0.156:8081`；原Mac SSH入口仍可用。启动后默认锁定，当前网页前进PWM默认1550、上限1620，转向1350–1650、中位1500。用户按“解锁键盘控制”后才允许非中性指令。参数只能在锁定状态修改，重启恢复默认值，不写入比赛标定。
 
-2026-09-18架空测试：1450和1400各1秒用户确认反转、回1500停住；当前部署启用 `--allow-reverse`，倒车默认1450、下限1400。先松开前进回中，再按后退；前进直接切倒车的制动序列、落地倒车及停车距离未标定。舵机±150无异常，±170相比区别不大，用户指定±150为使用上限；不是测得机械硬限位。
+2026-09-18架空测试：1450和1400各1秒用户确认反转、回1500停住；当前部署启用 `--allow-reverse`，倒车默认1450、下限1350（1350是用户指定的软件范围，未实车试转）。先松开前进回中，再按后退；前进直接切倒车的制动序列、落地倒车及停车距离未标定。舵机±150无异常，±170相比区别不大，用户指定±150为使用上限；不是测得机械硬限位。
 
 车端启动（SSH终端执行；本车已完成架空倒车确认）：
 
@@ -74,7 +74,7 @@ os.kill(p,signal.SIGTERM)
 PY
 ```
 
-服务关闭会先请求中性，再关闭控制子进程输入；Rust桥在EOF时补发20帧中性。不要用kill -9结束底盘桥来代替停车。没有安装系统服务或开机自启，不改原厂ROS/串口规则；该页面运行时独占相机、雷达和底盘，其他硬件实验前先正常停服务。
+服务关闭会先请求中性，再关闭控制子进程输入；Rust桥在EOF时补发20帧中性。不要用kill -9结束底盘桥来代替停车。已安装用户服务 `xt-stcar-console.service` 并启用linger；停止请用 `systemctl --user stop xt-stcar-console.service`，否则异常退出可能被自动拉起。不改原厂ROS/串口规则；该页面运行时独占相机、雷达和底盘，其他硬件实验前先正常停服务。
 
 ## 图像和保存
 
@@ -109,3 +109,11 @@ python3 web/vehicle-console/server.py --demo \
 访问码支持8–128位英文字母、数字、`-`、`_`；默认仍生成随机长码。手动更换须先停车并正常停止服务，再修改权限0600的车端access.json并重启。旧码失效后页面显示访问码输入框，重新输入即可；具体访问码不提交到Git。
 
 跨平台启动：HTML入口内含Windows PowerShell、Mac终端与安卓SSH客户端步骤及可复制命令。SSH登录后执行 `python3 ~/xt-stcar-console/start-console.py --url`，复用或启动已部署服务并显示私密入口，无自动解锁。部署该脚本时，将仓库 `scripts/start-vehicle-console.py` 复制到车端上述路径；Mac启动器共享同一份实现。
+
+## 2026-09-18 自启动与锁定诊断
+
+部署 `scripts/run-vehicle-console-service.py` 为车端 `~/xt-stcar-console/run-service.py`，unit 位于 `~/.config/systemd/user/xt-stcar-console.service`。已执行 `systemctl --user enable --now xt-stcar-console.service` 和 `loginctl enable-linger bianbu`，无人登录也运行；每次启动仍锁定。启动时等待设备并从默认IPv4路由选择私网监听地址，IP变化时浏览器入口需相应更新。
+
+车端管理：`systemctl --user status xt-stcar-console.service` 查看状态；`journalctl --user -u xt-stcar-console.service -n 50` 查看日志；`systemctl --user restart xt-stcar-console.service` 重启；`systemctl --user disable --now xt-stcar-console.service` 关闭自启动。其它串口实验前先stop，完成后start。服务重启已验证，不等同于整车断电重启验收。
+
+修复闲置页面失焦/隐藏/关闭误发停止，以及按键事件造成并发控制请求的问题。显式停止按钮仍可从任意页面停车；控制页失焦、断连、超时、数据过期仍锁定。状态接口last_stop保留锁定原因，不能据本轮代码修复断言现场所有误锁已解决。300ms底盘心跳、250ms旧时标、传感器新鲜度门保持不变。

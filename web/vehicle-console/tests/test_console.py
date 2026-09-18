@@ -81,9 +81,9 @@ class ConsoleTests(unittest.TestCase):
         self.assertTrue(self.get('/api/state')['status']['control']['armed'])
 
     def test_calibrated_settings_limits(self):
-        valid={'forward':1550,'reverse':1400,'left':1650,'right':1350}
+        valid={'forward':1550,'reverse':1350,'left':1650,'right':1350}
         self.post('/api/settings',valid)
-        for key,value in [('reverse',1399),('left',1651),('right',1349)]:
+        for key,value in [('reverse',1349),('left',1651),('right',1349)]:
             with self.assertRaises(urllib.error.HTTPError):self.post('/api/settings',{**valid,key:value})
         self.post('/api/settings',{'forward':1550,'reverse':1450,'left':1650,'right':1350})
 

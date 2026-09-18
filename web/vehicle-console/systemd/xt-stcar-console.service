@@ -1,0 +1,16 @@
+[Unit]
+Description=XT-STCAR manual console (starts locked)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/xt-stcar-console/run-service.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+KillMode=mixed
+SendSIGKILL=no
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-18",
+  "changes": [
+    "systemd user service enabled with linger",
+    "idle viewer lifecycle no longer stops owner",
+    "single in-flight drive, coalesced latest keys, immediate explicit stop",
+    "last_stop diagnostic reason",
+    "reverse lower software limit 1350; default1450 unchanged; 1350 not physically tested"
+  ],
+  "tests": {
+    "frontend_mocked_regressions": 3,
+    "rust_teleop": 6,
+    "python_http_pty": 10
+  },
+  "limits_unchanged": [
+    "Rust heartbeat300ms",
+    "request age250ms",
+    "control loop gap150ms",
+    "sensor freshness gating"
+  ],
+  "vehicle_reboot_tested": false,
+  "physical_drive_commands_sent": false,
+  "deployment": {
+    "user_service": "active/enabled",
+    "linger": true,
+    "restart_verified_healthy_locked": true,
+    "motor": 1500,
+    "servo": 1500,
+    "mac_launcher_no_open": "passed",
+    "clippy": "passed",
+    "cross_compile": "riscv64gc-unknown-linux-gnu.2.38 passed"
+  }
+}
