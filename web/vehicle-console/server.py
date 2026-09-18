@@ -64,7 +64,7 @@ class Console:
         self.output = Path(args.output).resolve()
         self.output.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(self.output, 0o700)
-        self.settings = {'forward': 1550, 'reverse': 1480, 'left': 1550, 'right': 1450}
+        self.settings = {'forward': 1550, 'reverse': 1450, 'left': 1650, 'right': 1350}
 
     def spawn(self, mode, device):
         cmd = [self.args.bridge, mode]
@@ -211,7 +211,7 @@ class Console:
         with self.lock:
             if self.owner or self.status.get('control', {}).get('armed'):
                 raise ValueError('stop and lock before editing PWM')
-            ranges = {'forward': (1500, 1620), 'reverse': (1480, 1500), 'left': (1500, 1550), 'right': (1450, 1500)}
+            ranges = {'forward': (1500, 1620), 'reverse': (1400, 1500), 'left': (1500, 1650), 'right': (1350, 1500)}
             if set(data) != set(ranges):
                 raise ValueError('four PWM settings required')
             for k, (lo, hi) in ranges.items():

@@ -72,8 +72,8 @@ impl Guard {
         }
         self.status.seq = req.seq;
         if req.motor > 1620
-            || req.motor < if self.reverse { 1480 } else { 1500 }
-            || !(1450..=1550).contains(&req.servo)
+            || req.motor < if self.reverse { 1400 } else { 1500 }
+            || !(1350..=1650).contains(&req.servo)
         {
             self.stop("pwm_out_of_range");
             return;
@@ -112,6 +112,30 @@ mod tests {
             motor,
             servo: 1500,
         }
+    }
+    #[test]
+    fn calibrated_manual_limits_are_enforced() {
+        for (motor, servo, allowed) in [
+            (1400, 1350, true),
+            (1400, 1650, true),
+            (1399, 1500, false),
+            (1500, 1349, false),
+            (1500, 1651, false),
+        ] {
+            let mut g = Guard::new(true);
+            g.apply(req(1, 0, "arm", 1500), 0);
+            let mut command = req(2, 50, "drive", motor);
+            command.servo = servo;
+            g.apply(command, 50);
+            assert_eq!(g.status.armed, allowed);
+            if !allowed {
+                assert_eq!((g.status.motor, g.status.servo), (1500, 1500));
+            }
+        }
+        let mut g = Guard::new(false);
+        g.apply(req(1, 0, "arm", 1500), 0);
+        g.apply(req(2, 50, "drive", 1400), 50);
+        assert!(!g.status.armed);
     }
     #[test]
     fn timeout_cannot_rearm_with_drive() {

@@ -80,6 +80,13 @@ class ConsoleTests(unittest.TestCase):
         time.sleep(.05)
         self.assertTrue(self.get('/api/state')['status']['control']['armed'])
 
+    def test_calibrated_settings_limits(self):
+        valid={'forward':1550,'reverse':1400,'left':1650,'right':1350}
+        self.post('/api/settings',valid)
+        for key,value in [('reverse',1399),('left',1651),('right',1349)]:
+            with self.assertRaises(urllib.error.HTTPError):self.post('/api/settings',{**valid,key:value})
+        self.post('/api/settings',{'forward':1550,'reverse':1450,'left':1650,'right':1350})
+
     def test_single_owner_and_reverse_disabled(self):
         self.drive('arm');time.sleep(.04)
         with self.assertRaises(urllib.error.HTTPError):self.drive('drive',['up'],client='another-client-0123456')
