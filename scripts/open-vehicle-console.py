@@ -9,6 +9,7 @@ import re
 import socket
 import subprocess
 import sys
+import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,8 +117,12 @@ def main():
             if check.connect_ex(('127.0.0.1', args.port)) == 0:
                 raise RuntimeError('本机端口已被其他服务或旧隧道占用；可用 --port 8082 选择其他本机端口。')
         run(['ssh', '-S', str(selected), '-O', 'forward', '-L', '127.0.0.1:'+str(args.port)+':127.0.0.1:8081', args.host], capture_output=True, text=True, timeout=8)
-        if not same_console():
-            raise RuntimeError('隧道建立后未能核对车端会话，未打开网页。')
+        # SSH acknowledges the listener before its first forwarded connection is ready.
+        deadline = time.monotonic() + 8
+        while not same_console():
+            if time.monotonic() >= deadline:
+                raise RuntimeError('隧道已建立，但8秒内未能核对车端会话；可重新双击入口重试，或检查车端server.log。')
+            time.sleep(.2)
     print('驾驶台与隧道已就绪；未发送解锁或运动指令。', flush=True)
     if not data['healthy']:
         print('部分传感器未就绪，请查看网页提示。', flush=True)
