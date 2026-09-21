@@ -1,0 +1,62 @@
+{
+  "date": "2026-09-21",
+  "base_commit": "7fa98d23288730e56a2d82ba198f8a60250a70ef",
+  "scope": "Vision model integration and read-only shadow perception; no training, vehicle deployment, service restart or motor operation",
+  "source_advice": "https://chatgpt.com/share/6ab1253d-6b94-83ee-802d-3144198924cc",
+  "checks": {
+    "workspace_tests": {
+      "command": "cargo test --workspace --locked --offline",
+      "passed": 596,
+      "failed": 0,
+      "ignored": 3,
+      "note": "Full integration pass during implementation; final proposal filtering and class-label refinements additionally covered by focused Rust and native IPC reruns."
+    },
+    "final_vision_app_tests": {
+      "command": "cargo test -p xt-stcar-vision -p xt-stcar --locked --offline",
+      "passed": 47,
+      "failed": 0,
+      "ignored": 1
+    },
+    "python_model_and_native_ipc": {
+      "passed": 64,
+      "failed": 0,
+      "command": ".venv-model/bin/python -m pytest -q tests/test_yolo26_tools.py tests/test_vision_shadow.py"
+    },
+    "console_simulation_tests": {
+      "passed": 10,
+      "failed": 0
+    },
+    "frontend_tests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "fmt": "passed",
+    "workspace_all_targets_clippy": "passed with -D warnings",
+    "riscv_cross_link": "vision-shadow and xt-stcar-robot passed; ELF GLIBC baseline 2.38, highest actual reference 2.34"
+  },
+  "browser_checks": [
+    "Local demo console remained locked at neutral PWM",
+    "Actual official-model JPEG displayed with five detections",
+    "Source identity and stale-state diagnostics visible",
+    "Save latest detection JPG generated frame-numbered file and download link"
+  ],
+  "official_inference": "vision-shadow-official-validation.json",
+  "cross_elf": "vision-shadow-riscv-elf.json",
+  "limitations": [
+    "Custom four-class native model is a synthetic constant-output fixture, not a trained race model",
+    "Actual training delegated to teammate",
+    "Ground calibration remains simulation_only/unverified",
+    "No actual lidar or pose association in shadow mode",
+    "Vehicle camera latency, CPU load and race accuracy not validated",
+    "Existing online race completion gaps remain unchanged"
+  ],
+  "log_sha256": {
+    "vision-update-rust-tests.log": "7f72d4f46799082b87caa36e6b521a2d8055af4f9889329590587759568875eb",
+    "vision-update-final-unit-tests.log": "e8b144e37a195f43317795cbe3ec806bb21815ed24f014d4182f09d17c920831",
+    "vision-update-python-tests.log": "fb1ffe9b848e48d2b6a4688637452d6f129db6df5cd1fc6826e741a2047ddf6a",
+    "vision-update-clippy.log": "83b3891cdffcb0ed7dc7556f165f48f64ef19cc7932d4c9208342de02bb3beff",
+    "vision-update-console-tests.log": "84878f1ece6167e099cae3419b8c4acf108c2ef5e61ced6f56e2a97cd2058a1c",
+    "vision-update-frontend-tests.log": "5d4fa56148cc79dffb33c4c1c9875b11f735712ebda3d5cd8dcbd6f5ef60a9f7",
+    "vision-update-riscv-build.log": "3e92036f430efb8cf728ceb7d94db29f6e75ee4ac939f83f3c8ddc4a5e00f663"
+  }
+}

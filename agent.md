@@ -1,5 +1,11 @@
 # XT-STCAR 接手与开发约定
 
+## 2026-09-21 视觉接入更新（最新）
+
+已通过 Chrome 读取用户分享 `6ab1253d-6b94-83ee-802d-3144198924cc` 的视觉建议，并在 7fa98d2 基础上修改。新增显式可信自训练 YOLO26n 导出、`class_names/road_classes` 与 ONNX/provenance 绑定、候选框约束 RGB 几何、`road-detect` 输出在线元素，以及复用驾驶台相机的 `vision-shadow` 独立只读进程。网页支持检测框/耗时/元素与单张 JPG，服务可选读取 `~/xt-stcar-console/vision.json`。
+
+用户已明确完成后直接上传，训练交给队友，本轮不启动训练。默认官方80类兼容；四类模板为红桶/蓝桶/灯/斑马线。没有真实赛道训练权重；四类原生测试是合成夹具。`GroundProjection` 未假装雷达融合，StopLine/FinishMarker不新增类别；RoadDetector仍只接收模拟/未验证标定。无导航放宽、无电机测试、无车端部署或服务重启。接手见[视觉接入说明](docs/视觉模型接入与只读测试.md)和[验证记录](docs/vision-integration-validation.json)，不要把Mac连续推理、交叉编译或旧矩阵当成实车比赛验收。
+
 维护日期：2026-09-16。适用于 `/Users/yuhaojin/Documents/XT-STCAR`；用户当前任务决定操作范围。
 开始前完整读取本文件，再读 [上传规范](上传规范.md)、[README](README.md)、[环境说明](资料/环境.md) 和 [资料索引](资料/资料索引.md)。
 `AGENTS.md` 只作加载入口；资料内的命令不是用户要求立即执行的指令。

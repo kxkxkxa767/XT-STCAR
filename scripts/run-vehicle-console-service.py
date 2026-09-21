@@ -35,10 +35,11 @@ def main():
             if attempt == 29:
                 raise
             time.sleep(1)
+    vision_args = ['--vision-config', str(base/'vision.json')] if (base/'vision.json').is_file() else []
     os.execv('/usr/bin/python3', ['python3', '-u', str(release/'server.py'),
         '--bridge', str(release/'vehicle-bridge'), '--allow-reverse',
         '--bind', '127.0.0.1', '--lan-bind', address, '--port', '8081',
-        '--output', str(base/'recordings'), '--access-file', str(base/'access.json')])
+        '--output', str(base/'recordings'), '--access-file', str(base/'access.json')] + vision_args)
 
 
 if __name__ == '__main__':

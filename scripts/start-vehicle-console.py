@@ -41,8 +41,9 @@ except (FileNotFoundError, urllib.error.URLError):
     base.mkdir(mode=0o700, exist_ok=True)
     proc = None
     if not managed:
+        vision_args = ['--vision-config', str(base/'vision.json')] if (base/'vision.json').is_file() else []
         with (base/'server.log').open('ab') as log:
-            proc = subprocess.Popen(['python3', '-u', str(release/'server.py'), '--bridge', str(release/'vehicle-bridge'), '--allow-reverse', '--bind', '127.0.0.1', '--lan-bind', os.environ['SSH_CONNECTION'].split()[2], '--port', '8081', '--output', str(base/'recordings'), '--access-file', str(access)], stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+            proc = subprocess.Popen(['python3', '-u', str(release/'server.py'), '--bridge', str(release/'vehicle-bridge'), '--allow-reverse', '--bind', '127.0.0.1', '--lan-bind', os.environ['SSH_CONNECTION'].split()[2], '--port', '8081', '--output', str(base/'recordings'), '--access-file', str(access)] + vision_args, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
     for _ in range(40):
         if proc is not None and proc.poll() is not None:
             raise RuntimeError('console exited; inspect ~/xt-stcar-console/server.log')

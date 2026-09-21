@@ -1,6 +1,7 @@
 //! YOLO26 Detect one-to-one interface. No actuator or ROS dependencies.
 pub mod ground_markers;
 pub mod road;
+pub mod semantics;
 use image::RgbImage;
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,12 @@ pub struct ModelSpec {
     pub max_detections: usize,
     pub class_count: u32,
     pub confidence_threshold: f32,
+    /// Required for custom weights, in ONNX class-ID order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub class_names: Vec<String>,
+    /// Label -> road role. Unmapped classes never acquire road semantics.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub road_classes: std::collections::BTreeMap<String, semantics::RoadClass>,
 }
 
 impl ModelSpec {
@@ -53,6 +60,7 @@ impl ModelSpec {
         {
             return Err("confidence_threshold must be finite and in [0,1]".into());
         }
+        semantics::validate(self)?;
         Ok(())
     }
 

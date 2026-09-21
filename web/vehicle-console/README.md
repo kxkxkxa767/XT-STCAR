@@ -117,3 +117,7 @@ python3 web/vehicle-console/server.py --demo \
 车端管理：`systemctl --user status xt-stcar-console.service` 查看状态；`journalctl --user -u xt-stcar-console.service -n 50` 查看日志；`systemctl --user restart xt-stcar-console.service` 重启；`systemctl --user disable --now xt-stcar-console.service` 关闭自启动。其它串口实验前先stop，完成后start。服务重启已验证，不等同于整车断电重启验收。
 
 修复闲置页面失焦/隐藏/关闭误发停止，以及按键事件造成并发控制请求的问题。显式停止按钮仍可从任意页面停车；控制页失焦、断连、超时、数据过期仍锁定。状态接口last_stop保留锁定原因，不能据本轮代码修复断言现场所有误锁已解决。300ms底盘心跳、250ms旧时标、传感器新鲜度门保持不变。
+
+## 可选视觉模型诊断
+
+新增 `--vision-shadow BIN ROAD_CONFIG MODEL ORT_LIB MODEL_SPEC` 或 `--vision-config FILE`。默认关闭；新版服务脚本会自动读取车端 `~/xt-stcar-console/vision.json`（若存在）。相机只打开一次，JPEG交给独立无底盘输出的Rust进程，网页显示同帧检测框、元素和耗时，并保存最新检测图 JPG。未标定的米制结果只作诊断。部署须包含 `vision_shadow.py` 与目标平台 `vision-shadow`；配置、训练导出及限制见[视觉接入说明](../../docs/视觉模型接入与只读测试.md)。

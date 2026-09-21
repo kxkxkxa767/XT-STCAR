@@ -6,3 +6,5 @@ details{border-top:1px solid var(--line)}summary{padding:14px 20px;color:var(--m
 
 [hidden]{display:none!important}
 #access-form{margin:16px 0;max-width:640px}
+
+#vision-panel{margin:18px 0;padding-bottom:16px}#vision-info,#save-vision{margin-left:18px;margin-right:18px}.vision-content{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;padding:0 18px}.vision-content img{width:100%;max-height:320px;object-fit:contain}.vision-content pre{white-space:pre-wrap;overflow:auto;max-height:280px;font-size:12px}@media(max-width:720px){.vision-content{grid-template-columns:1fr}.vision-content img{max-height:240px}}

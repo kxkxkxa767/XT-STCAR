@@ -40,6 +40,12 @@ struct Provenance {
     opset: u32,
     non_max_suppression_nodes: usize,
     metadata: BTreeMap<String, String>,
+    #[serde(default)]
+    training: Option<serde_json::Value>,
+    #[serde(default)]
+    weights_sha256: Option<String>,
+    #[serde(default)]
+    export_args: Option<serde_json::Value>,
 }
 
 fn validate_spec(spec: &ModelSpec) -> Result<()> {
@@ -48,11 +54,9 @@ fn validate_spec(spec: &ModelSpec) -> Result<()> {
         || spec.input_name != "images"
         || spec.output_name != "output0"
         || spec.max_detections != 300
-        || spec.class_count != 80
     {
         return Err(
-            "native ORT requires the locked static320/80-class/300-row images->output0 contract"
-                .into(),
+            "native ORT requires the locked static320/300-row images->output0 contract".into(),
         );
     }
     Ok(())
@@ -69,7 +73,7 @@ fn validate_provenance(record: &Provenance, model: &[u8]) -> Result<()> {
         || record.task != "detect"
         || record.head != "Detect"
         || !record.end2end
-        || record.class_count != 80
+        || !(1..=1000).contains(&record.class_count)
         || record.opset != 17
         || record.non_max_suppression_nodes != 0
         || record.input.name != "images"
@@ -78,8 +82,8 @@ fn validate_provenance(record: &Provenance, model: &[u8]) -> Result<()> {
         || record.output.name != "output0"
         || record.output.dtype != "float32"
         || record.output.shape != [1, 300, 6]
-        || record.names.len() != 80
-        || (0..80).any(|id| {
+        || record.names.len() != record.class_count
+        || (0..record.class_count).any(|id| {
             record
                 .names
                 .get(&id.to_string())
@@ -106,6 +110,45 @@ fn validate_provenance(record: &Provenance, model: &[u8]) -> Result<()> {
         .is_none_or(|value| value.trim().is_empty())
     {
         return Err("provenance must retain the original ONNX names metadata".into());
+    }
+    Ok(())
+}
+
+fn validate_class_binding(record: &Provenance, spec: &ModelSpec) -> Result<()> {
+    if record.class_count != spec.class_count as usize
+        || (!spec.class_names.is_empty()
+            && spec
+                .class_names
+                .iter()
+                .enumerate()
+                .any(|(i, name)| record.names.get(&i.to_string()) != Some(name)))
+    {
+        return Err(
+            "model provenance class table differs from configured class_names/order".into(),
+        );
+    }
+    if !spec.class_names.is_empty() {
+        let training = record
+            .training
+            .as_ref()
+            .ok_or("explicit custom classes require trusted training provenance")?;
+        let digest = training["weights_sha256"].as_str().unwrap_or("");
+        let expected_export = serde_json::json!({"format":"onnx", "imgsz":320, "batch":1,
+            "dynamic":false, "nms":false, "quantize":32, "max_det":300,
+            "device":"cpu", "simplify":false, "opset":17});
+        if record.weights_sha256.as_deref() != Some(digest)
+            || record.export_args.as_ref() != Some(&expected_export)
+            || training["schema_version"] != 1
+            || training["model_family"] != "yolo26n"
+            || training["class_names"] != serde_json::json!(spec.class_names)
+            || training["dataset_version"]
+                .as_str()
+                .is_none_or(|s| s.trim().is_empty())
+            || digest.len() != 64
+            || !digest.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("custom training provenance is incomplete or inconsistent".into());
+        }
     }
     Ok(())
 }
@@ -198,6 +241,9 @@ fn validate_outlet(outlet: &ort::value::Outlet, name: &str, expected: &[i64]) ->
 }
 
 pub struct NativeOrtBackend {
+    class_count: u32,
+    class_names: Vec<String>,
+    class_labels: Vec<String>,
     session: Session,
     timeout: Duration,
     model_sha256: String,
@@ -234,6 +280,7 @@ impl NativeOrtBackend {
         )
         .map_err(|e| format!("parse provenance: {e}"))?;
         validate_provenance(&record, &model)?;
+        validate_class_binding(&record, spec)?;
         initialize_runtime(runtime_lib)?;
         let mut builder = Session::builder()
             .map_err(|e| format!("create ORT session: {e}"))?
@@ -269,11 +316,20 @@ impl NativeOrtBackend {
         }
         drop(metadata);
         Ok(Self {
+            class_count: spec.class_count,
+            class_names: spec.class_names.clone(),
+            class_labels: (0..record.class_count)
+                .map(|i| record.names[&i.to_string()].clone())
+                .collect(),
             session,
             timeout,
             model_sha256: record.sha256,
             runtime_info: ort::info().to_owned(),
         })
+    }
+
+    pub fn class_labels(&self) -> &[String] {
+        &self.class_labels
     }
 
     pub fn model_sha256(&self) -> &str {
@@ -287,6 +343,9 @@ impl NativeOrtBackend {
 impl InferenceBackend for NativeOrtBackend {
     fn infer(&mut self, input: &InputTensor, spec: &ModelSpec) -> Result<OutputTensor> {
         validate_spec(spec)?;
+        if self.class_count != spec.class_count || self.class_names != spec.class_names {
+            return Err("inference spec class table differs from the loaded model".into());
+        }
         if input.shape != spec.input_shape()
             || input.values.len() != 3 * 320 * 320
             || input
@@ -332,6 +391,9 @@ mod tests {
 
     fn provenance(model: &[u8]) -> Provenance {
         Provenance {
+            training: None,
+            weights_sha256: None,
+            export_args: None,
             validated: true,
             contract: CONTRACT.into(),
             sha256: format!("{:x}", Sha256::digest(model)),

@@ -26,7 +26,6 @@ SPEC_FIXED = {
     "input_dtype": "float32",
     "output_layout": "B_N_XYXY_SCORE_CLASS",
     "max_detections": 300,
-    "class_count": 80,
 }
 
 
@@ -63,13 +62,27 @@ def load_spec(path: str | Path) -> dict:
     spec = json.loads(read_regular_file(path, 1024 * 1024).decode("utf-8"), object_pairs_hook=_unique_object)
     if not isinstance(spec, dict):
         raise ContractError("spec must be a JSON object")
-    unknown = set(spec) - (set(SPEC_FIXED) | {"confidence_threshold"})
+    unknown = set(spec) - (set(SPEC_FIXED) | {"confidence_threshold", "class_count", "class_names", "road_classes"})
     if unknown:
         raise ContractError(f"unknown spec fields: {sorted(unknown)}")
     for key, expected in SPEC_FIXED.items():
         value = spec.get(key)
         if type(value) is not type(expected) or value != expected:
             raise ContractError(f"spec {key}: expected {expected!r}, got {value!r}")
+    count = spec.get("class_count")
+    names = spec.get("class_names", [])
+    roles = spec.get("road_classes", {})
+    if type(count) is not int or not 1 <= count <= 1000:
+        raise ContractError("invalid class_count")
+    if not isinstance(names, list) or (not names and count != 80) or (names and (
+        len(names) != count or any(not isinstance(n, str) or not n.strip() for n in names)
+        or len(set(names)) != len(names)
+    )):
+        raise ContractError("custom class_names must be unique labels in class-ID order")
+    if not isinstance(roles, dict) or any(k not in names or v not in (
+        "cone_red", "cone_blue", "traffic_light", "crosswalk"
+    ) for k, v in roles.items()) or len(set(roles.values())) != len(roles):
+        raise ContractError("road_classes must map explicit labels to unique supported roles")
     threshold = spec.get("confidence_threshold")
     if type(threshold) not in (int, float) or not math.isfinite(threshold) or not 0 <= threshold <= 1:
         raise ContractError("confidence_threshold must be finite and in [0, 1]")
@@ -129,9 +142,11 @@ def validate_model(model, spec: dict) -> dict:
         raise ContractError("ONNX end2end metadata must be True; raw/one-to-many heads are unsupported")
     names = _literal(metadata, "names")
     if not isinstance(names, dict) or set(names) != set(range(spec["class_count"])):
-        raise ContractError("ONNX names must map integer class IDs 0..79 to 80 labels")
+        raise ContractError("ONNX names must match the configured contiguous class IDs")
     if any(type(key) is not int for key in names) or any(not isinstance(v, str) or not v.strip() for v in names.values()):
         raise ContractError("ONNX names must contain integer IDs and nonempty string labels")
+    if spec.get("class_names") and [names[i] for i in range(spec["class_count"])] != spec["class_names"]:
+        raise ContractError("ONNX names differ from configured class_names (including order)")
     if len(model.graph.input) != 1 or len(model.graph.output) != 1:
         raise ContractError("expected exactly one ONNX input and one output")
     input_info = _tensor(model.graph.input[0], spec["input_name"], [1, 3, 320, 320])

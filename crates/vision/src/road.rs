@@ -327,7 +327,10 @@ fn components(mut mask: Vec<bool>, width: usize, height: usize, max: usize) -> R
     Ok(blobs)
 }
 
+use crate::semantics::{RoadClass, SemanticMap};
+
 pub struct RoadDetector {
+    semantics: SemanticMap,
     config: RoadConfig,
 }
 impl RoadDetector {
@@ -450,7 +453,10 @@ impl RoadDetector {
         if det.abs() < 1e-10 {
             return Err("singular ground homography".into());
         }
-        let detector = Self { config };
+        let detector = Self {
+            config,
+            semantics: SemanticMap::default(),
+        };
         let [left, top, right, bottom] = detector.config.ground_roi;
         let corners = [(left, top), (right, top), (left, bottom), (right, bottom)];
         let denominators = corners.map(|(u, v)| m[2][0] * u + m[2][1] * v + m[2][2]);
@@ -470,6 +476,68 @@ impl RoadDetector {
             return Err("ground homography must consistently map image up to body forward and image left to body left".into());
         }
         Ok(detector)
+    }
+
+    pub fn set_semantics(&mut self, semantics: SemanticMap) {
+        self.semantics = semantics;
+    }
+
+    // Proposals are expressed in ORIGINAL image pixels after letterbox decoding.
+    // No proposal for a configured class means no observation of that class.
+    fn proposal_confidence(
+        &self,
+        role: RoadClass,
+        detections: &[Detection],
+        image: &RgbImage,
+        u: f64,
+        v: f64,
+    ) -> Option<f64> {
+        if !self.semantics.has(role) {
+            return Some(1.);
+        }
+        detections
+            .iter()
+            .filter(|d| {
+                self.semantics.is(d.class_id, role)
+                    && d.confidence.is_finite()
+                    && d.confidence > 0.
+                    && d.confidence <= 1.
+                    && d.xyxy.iter().all(|x| x.is_finite())
+                    && d.xyxy[0] < d.xyxy[2]
+                    && d.xyxy[1] < d.xyxy[3]
+                    && u * f64::from(image.width()) >= f64::from(d.xyxy[0])
+                    && u * f64::from(image.width()) <= f64::from(d.xyxy[2])
+                    && v * f64::from(image.height()) >= f64::from(d.xyxy[1])
+                    && v * f64::from(image.height()) <= f64::from(d.xyxy[3])
+            })
+            .map(|d| f64::from(d.confidence))
+            .max_by(f64::total_cmp)
+    }
+
+    fn proposal_covers_blob(
+        &self,
+        role: RoadClass,
+        detections: &[Detection],
+        image: &RgbImage,
+        blob: &Blob,
+        size: (usize, usize),
+    ) -> bool {
+        !self.semantics.has(role)
+            || detections.iter().any(|d| {
+                let one = std::slice::from_ref(d);
+                [(blob.x0, blob.y0), (blob.x1, blob.y1)]
+                    .iter()
+                    .all(|&(x, y)| {
+                        self.proposal_confidence(
+                            role,
+                            one,
+                            image,
+                            x as f64 / size.0 as f64,
+                            y as f64 / size.1 as f64,
+                        )
+                        .is_some()
+                    })
+            })
     }
 
     pub fn config(&self) -> &RoadConfig {
@@ -538,10 +606,10 @@ impl RoadDetector {
         }
         let mut rois = Vec::new();
         let mut traffic_proposal = false;
-        for detection in detections
-            .iter()
-            .filter(|d| d.class_id == 9 && d.confidence > self.config.light.yolo_confidence)
-        {
+        for detection in detections.iter().filter(|d| {
+            self.semantics.is(d.class_id, RoadClass::TrafficLight)
+                && d.confidence > self.config.light.yolo_confidence
+        }) {
             traffic_proposal = true;
             let [x0, y0, x1, y1] = detection.xyxy;
             if !detection.confidence.is_finite()
@@ -587,12 +655,21 @@ impl RoadDetector {
                 .collect()
         };
         let c = &self.config.crosswalk;
-        let white = components(
+        let mut white = components(
             ground_mask(&|p| p.s <= c.max_saturation && p.v >= c.min_value),
             width,
             height,
             self.config.max_components,
         )?;
+        white.retain(|blob| {
+            self.proposal_covers_blob(
+                RoadClass::Crosswalk,
+                detections,
+                image,
+                blob,
+                (width, height),
+            )
+        });
         let crosswalk = self.detect_crosswalk(&white, width, height)?;
         let cone = &self.config.cone;
         let colored = components(
@@ -623,7 +700,18 @@ impl RoadDetector {
             if candidates > self.config.max_candidates {
                 return Err("cone candidate limit exceeded".into());
             }
-            let foot = self.project(blob.cx / width as f64, blob.y1 as f64 / height as f64)?;
+            let u = blob.cx / width as f64;
+            let v = blob.y1 as f64 / height as f64;
+            if self.semantics.has(RoadClass::ConeRed)
+                && self.semantics.has(RoadClass::ConeBlue)
+                && [RoadClass::ConeRed, RoadClass::ConeBlue].iter().all(|r| {
+                    self.proposal_confidence(*r, detections, image, u, v)
+                        .is_none()
+                })
+            {
+                continue;
+            }
+            let foot = self.project(u, v)?;
             if !cones_body_m
                 .iter()
                 .any(|old| old.distance(foot) < cone.merge_distance_m)
@@ -914,7 +1002,20 @@ impl RoadDetector {
                         radius_m: 0.14 * std::f64::consts::SQRT_2,
                     },
                     source: ObservationSource::GroundProjection,
-                    confidence: 0.9,
+                    confidence: 0.9
+                        * self
+                            .proposal_confidence(
+                                if color == ElementColor::Red {
+                                    RoadClass::ConeRed
+                                } else {
+                                    RoadClass::ConeBlue
+                                },
+                                detections,
+                                image,
+                                u,
+                                v,
+                            )
+                            .unwrap_or(0.),
                     position_error_m: self.element_pixel_error(u, v, width, height)? + 0.02,
                     heading_error_rad: 0.,
                 });
@@ -988,10 +1089,10 @@ impl RoadDetector {
             return Err("element input aspect ratio is too extreme".into());
         }
         let mut exclusions = self.config.light_rois.clone();
-        for d in detections
-            .iter()
-            .filter(|d| d.class_id == 9 && d.confidence > self.config.light.yolo_confidence)
-        {
+        for d in detections.iter().filter(|d| {
+            self.semantics.is(d.class_id, RoadClass::TrafficLight)
+                && d.confidence > self.config.light.yolo_confidence
+        }) {
             if !d.confidence.is_finite()
                 || d.confidence > 1.
                 || d.xyxy.iter().any(|v| !v.is_finite())
@@ -1040,6 +1141,18 @@ impl RoadDetector {
                 );
             }
         }
-        Ok((components(mask, w, h, self.config.max_components)?, w, h))
+        let role = match channel {
+            ElementColor::Red => Some(RoadClass::ConeRed),
+            ElementColor::Blue => Some(RoadClass::ConeBlue),
+            ElementColor::White => Some(RoadClass::Crosswalk),
+            ElementColor::Unknown => None,
+        };
+        let mut blobs = components(mask, w, h, self.config.max_components)?;
+        // Refine original RGB components without clipping them at proposal edges.
+        // A partly occluded/truncated base or stripe cannot be invented by a box.
+        blobs.retain(|b| {
+            role.is_none_or(|r| self.proposal_covers_blob(r, detections, image, b, (w, h)))
+        });
+        Ok((blobs, w, h))
     }
 }

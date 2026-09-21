@@ -1,5 +1,7 @@
 # XT-STCAR
 
+2026-09-21：已增加自训练 YOLO26n 的可信导出/类别映射、模型候选与 RGB 地面元素的连接，以及复用驾驶台相机的只读连续推理和检测图 JPG 保存。详见[视觉模型接入与只读测试](docs/视觉模型接入与只读测试.md)。默认仍为官方80类模型；自训练赛道权重、真实地面标定和车端部署尚未完成。
+
 Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，视觉使用 YOLO26n Detect。**
 工程目录为 `/Users/yuhaojin/Documents/XT-STCAR`，源码仓库为
 [github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)。

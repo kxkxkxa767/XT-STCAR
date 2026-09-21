@@ -341,3 +341,79 @@ fn extreme_images_bad_frames_and_excessive_components_fail_with_bounded_work() {
             .contains("component limit")
     );
 }
+
+fn custom_detector() -> RoadDetector {
+    let spec = serde_json::from_str(include_str!("../../../config/yolo26-race4.json")).unwrap();
+    let mut detector = RoadDetector::new(RoadConfig::simulation()).unwrap();
+    detector.set_semantics(xt_stcar_vision::semantics::SemanticMap::from_spec(&spec).unwrap());
+    detector
+}
+
+#[test]
+fn custom_boxes_require_real_cone_pixels_and_keep_metric_error_separate() {
+    use xt_stcar_robot_core::local_world::{ElementColor, ObservationSource};
+    let detector = custom_detector();
+    let mut image = scene(320, 240);
+    let mut boxes = vec![Detection {
+        class_id: 0,
+        confidence: 0.8,
+        xyxy: [85., 95., 155., 205.],
+    }];
+    let elements = |im: &RgbImage, ds: &[Detection]| {
+        detector
+            .detect_elements(im, ds, Timestamp(321), FrameId("body".into()), 0.)
+            .unwrap()
+    };
+    assert!(elements(&image, &boxes).observations.is_empty()); // box != geometry
+    cone(&mut image, 120., 100., 200., 25., [255, 0, 0]);
+    assert!(elements(&image, &[]).observations.is_empty()); // configured proposal required
+    let high = elements(&image, &boxes);
+    assert_eq!(high.captured_at, Timestamp(321));
+    assert_eq!(high.observations.len(), 1);
+    let high = &high.observations[0];
+    assert_eq!(high.color, ElementColor::Red);
+    assert_eq!(high.source, ObservationSource::GroundProjection);
+    assert!((high.position_body_m.x_m - (5. - 200. / 240. * 5.)).abs() < 0.04);
+    boxes[0].confidence = 0.4;
+    let low = elements(&image, &boxes);
+    assert!(low.observations[0].confidence < high.confidence);
+    assert_eq!(low.observations[0].position_error_m, high.position_error_m);
+    boxes[0].class_id = 1; // blue prediction cannot recolor red RGB
+    assert!(elements(&image, &boxes).observations.is_empty());
+    boxes[0].class_id = 0;
+    boxes[0].xyxy[3] = 180.; // clipped base cannot invent a closer foot
+    assert!(elements(&image, &boxes).observations.is_empty());
+}
+
+#[test]
+fn custom_traffic_class_and_crosswalk_proposals_do_not_invent_geometry() {
+    let detector = custom_detector();
+    let mut image = scene(320, 240);
+    circle(&mut image, 264., 36., 9., [0, 255, 0]);
+    let mut lamp = Detection {
+        class_id: 2,
+        confidence: 0.9,
+        xyxy: [224., 7., 304., 72.],
+    };
+    let observe = |im: &RgbImage, ds: &[Detection]| {
+        detector
+            .detect(im, ds, Timestamp(22), FrameId("body".into()))
+            .unwrap()
+    };
+    assert_eq!(observe(&image, &[lamp.clone()]).light, LightState::Green);
+    lamp.class_id = 9;
+    assert_eq!(observe(&image, &[lamp]).light, LightState::Unknown);
+    let boxes = [Detection {
+        class_id: 3,
+        confidence: 0.9,
+        xyxy: [50., 140., 250., 180.],
+    }];
+    assert!(observe(&image, &boxes).crosswalk.is_none());
+    let elements = |im: &RgbImage, ds: &[Detection]| {
+        detector
+            .detect_elements(im, ds, Timestamp(22), FrameId("body".into()), 0.)
+            .unwrap()
+    };
+    assert!(elements(&papers(320, 240, 8), &[]).observations.is_empty());
+    assert_eq!(elements(&papers(320, 240, 8), &boxes).observations.len(), 1);
+}

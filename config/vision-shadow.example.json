@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "binary": "/home/bianbu/xt-stcar-console/20260917/vision-shadow",
+  "road_config": "/home/bianbu/xt-stcar-vision/road-perception-sim.json",
+  "model": "/home/bianbu/xt-stcar-vision/yolo26n.onnx",
+  "runtime_lib": "/absolute/path/to/verified/riscv64/libonnxruntime.so",
+  "model_spec": "/home/bianbu/xt-stcar-vision/yolo26n.json"
+}

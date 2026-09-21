@@ -9,16 +9,19 @@ use crate::autonomy::{Result, RoadFrame};
 use crate::input::{MAX_CONFIG_BYTES, read_regular_file};
 use crate::vision::VisionOptions;
 use image::RgbImage;
+use serde::Serialize;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Instant;
 use xt_stcar::NativeOrtBackend;
 use xt_stcar_robot_core::local_world::MAX_ELEMENTS;
 use xt_stcar_robot_core::{FrameId, Timestamp};
 use xt_stcar_vision::ground_markers::{ExperimentalMarkerConfig, GroundMarkerDetector};
 use xt_stcar_vision::road::{RoadConfig, RoadDetector};
+use xt_stcar_vision::{Detection, semantics::SemanticMap};
 use xt_stcar_vision::{InferenceBackend, ModelSpec, decode, preprocess};
 
 pub const MAX_FRAME_PIXELS: u64 = 64_000_000;
@@ -29,13 +32,31 @@ pub struct RoadPipeline {
     road: RoadDetector,
     vision: Option<(NativeOrtBackend, ModelSpec)>,
     markers: Option<GroundMarkerDetector>,
+    diagnostics: PerceptionDiagnostics,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct PerceptionDiagnostics {
+    pub detections: Vec<Detection>,
+    pub class_names: Vec<String>,
+    pub preprocess_ms: f64,
+    pub inference_ms: f64,
+    pub decode_ms: f64,
+    pub geometry_ms: f64,
+    pub total_ms: f64,
+    pub simulation_only: bool,
+    pub calibration_status: String,
 }
 
 impl RoadPipeline {
+    pub fn diagnostics(&self) -> &PerceptionDiagnostics {
+        &self.diagnostics
+    }
+
     /// Constructor-only model/spec loading. With no vision model, light recognition
     /// uses the explicitly configured ROIs; an empty ROI list produces Unknown.
     pub fn new(road: RoadConfig, vision: Option<&VisionOptions>) -> Result<Self> {
-        let road = RoadDetector::new(road)?;
+        let mut road = RoadDetector::new(road)?;
         let vision = vision
             .map(|options| -> Result<_> {
                 let bytes = read_regular_file(&options.spec, MAX_CONFIG_BYTES)
@@ -47,7 +68,20 @@ impl RoadPipeline {
                 Ok((backend, spec))
             })
             .transpose()?;
+        if let Some((_, spec)) = &vision {
+            road.set_semantics(SemanticMap::from_spec(spec)?);
+        }
+        let diagnostics = PerceptionDiagnostics {
+            simulation_only: road.config().simulation_only,
+            calibration_status: road.config().calibration_status.clone(),
+            class_names: vision
+                .as_ref()
+                .map(|(backend, _)| backend.class_labels().to_vec())
+                .unwrap_or_default(),
+            ..Default::default()
+        };
         Ok(Self {
+            diagnostics,
             road,
             vision,
             markers: None,
@@ -62,8 +96,11 @@ impl RoadPipeline {
         vision: Option<&VisionOptions>,
         markers: ExperimentalMarkerConfig,
     ) -> Result<Self> {
-        let markers = GroundMarkerDetector::new(road.clone(), markers)?;
+        let mut markers = GroundMarkerDetector::new(road.clone(), markers)?;
         let mut pipeline = Self::new(road, vision)?;
+        if let Some((_, spec)) = &pipeline.vision {
+            markers.set_semantics(SemanticMap::from_spec(spec)?);
+        }
         pipeline.markers = Some(markers);
         Ok(pipeline)
     }
@@ -89,14 +126,22 @@ impl RoadPipeline {
     ) -> Result<RoadFrame> {
         validate_image(image, MAX_FRAME_PIXELS, MAX_FRAME_BYTES)?;
         frame_id.validate().map_err(|error| error.to_string())?;
+        let started = Instant::now();
         let detections = if let Some((backend, spec)) = &mut self.vision {
             let input = preprocess(image, spec)?;
+            self.diagnostics.preprocess_ms = started.elapsed().as_secs_f64() * 1000.;
+            let inference_start = Instant::now();
             let output = backend.infer(&input, spec)?;
-            decode(&output, spec, &input.transform)?
+            self.diagnostics.inference_ms = inference_start.elapsed().as_secs_f64() * 1000.;
+            let decode_start = Instant::now();
+            let detections = decode(&output, spec, &input.transform)?;
+            self.diagnostics.decode_ms = decode_start.elapsed().as_secs_f64() * 1000.;
+            detections
         } else {
             Vec::new()
         };
-        // RoadDetector selects class 9 lamp ROIs and excludes them from cone cues.
+        let geometry_start = Instant::now();
+        // Explicit model semantics select lamp ROIs and ground proposals.
         let observation = self.road.detect(image, &detections, at, frame_id.clone())?;
         let elements = if let Some(markers) = &self.markers {
             let mut frame = self.road.detect_elements(
@@ -120,6 +165,9 @@ impl RoadPipeline {
         } else {
             None
         };
+        self.diagnostics.geometry_ms = geometry_start.elapsed().as_secs_f64() * 1000.;
+        self.diagnostics.total_ms = started.elapsed().as_secs_f64() * 1000.;
+        self.diagnostics.detections = detections;
         Ok(RoadFrame {
             elements,
             observation,

@@ -48,3 +48,30 @@ async function savePhoto(kind){
 $('save-camera').onclick=()=>savePhoto('camera');
 $('save-lidar').onclick=()=>savePhoto('lidar');
 $('save-combined').onclick=()=>savePhoto('combined');
+
+// Separate, slow diagnostic polling never enters the control request chain.
+let visionSequence = -1, visionURL = null;
+async function visionPoll(){
+ try {
+  const s=await api('/api/vision'), r=s.result;
+  $('vision-status').textContent=!s.enabled?'未启用':s.error?'推理已停止':r&&r.age_ms<1500?'● 只读推理':'等待新结果';
+  if(!s.enabled){$('vision-info').textContent='未配置模型；原始相机和遥控照常使用。';}
+  else if(s.error){$('vision-info').textContent=s.error;$('vision-image').style.opacity='.4';}
+  else if(r){
+   const d=r.diagnostics,p=r.performance;
+   $('vision-info').textContent=`帧龄 ${Math.round(r.age_ms)} ms · 推理 ${d.inference_ms.toFixed(1)} ms · 预处理 ${d.preprocess_ms.toFixed(1)} ms · 几何 ${d.geometry_ms.toFixed(1)} ms · 丢弃 ${s.dropped} 帧 · P95 ${p.p95_ms===null?'预热中':p.p95_ms.toFixed(1)+' ms'} · ${d.simulation_only?'模拟标定，米制结果不可用于实车导航':d.calibration_status}`;
+   $('vision-image').style.opacity=r.age_ms<1500?'1':'.4';
+   if(r.sequence!==visionSequence){
+    visionSequence=r.sequence;
+    const bytes=Uint8Array.from(atob(r.jpeg_base64),c=>c.charCodeAt(0));
+    const imageURL=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));
+    $('vision-image').src=imageURL;if(visionURL)URL.revokeObjectURL(visionURL);visionURL=imageURL;
+    $('vision-image').hidden=false;$('save-vision').hidden=false;
+    $('vision-elements').textContent=JSON.stringify({frame:r.sequence,captured_at_ms:r.captured_at_ms,light:r.road.observation.light,elements:r.road.elements?.observations||[]},null,2);
+   }
+  }
+ }catch(_){$('vision-status').textContent='诊断连接中断';$('vision-image').style.opacity='.4';}
+ setTimeout(visionPoll,500);
+}
+$('save-vision').onclick=()=>savePhoto('vision');
+visionPoll();

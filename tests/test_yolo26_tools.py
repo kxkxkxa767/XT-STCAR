@@ -269,3 +269,35 @@ def test_worker_protocol_roundtrip(tmp_path, model):
     # The worker preserves both scores; the Rust decoder owns strict thresholding.
     assert payload["values"][:12] == [10, 20, 30, 40, 0.75, 2, 10, 20, 30, 40, 0.25, 2]
     assert "CPU reference" in result.stderr
+
+
+def test_custom_names_bind_id_order_and_keep_output_contract(model):
+    custom = load_spec(ROOT / 'config/yolo26-race4.json')
+    set_metadata(model, 'names', repr(dict(enumerate(custom['class_names']))))
+    assert validate_model(model, custom)['class_count'] == 4
+    custom['class_names'][0], custom['class_names'][1] = custom['class_names'][1], custom['class_names'][0]
+    with pytest.raises(ContractError, match='including order'):
+        validate_model(model, custom)
+
+
+@pytest.mark.parametrize('change', ['count', 'duplicate', 'missing_role', 'duplicate_role'])
+def test_rejects_inconsistent_custom_class_spec(tmp_path, change):
+    custom = load_spec(ROOT / 'config/yolo26-race4.json')
+    if change == 'count': custom['class_count'] = 5
+    if change == 'duplicate': custom['class_names'][1] = custom['class_names'][0]
+    if change == 'missing_role': custom['road_classes']['missing'] = 'cone_red'
+    if change == 'duplicate_role': custom['road_classes']['cone_blue'] = 'cone_red'
+    path = tmp_path / 'spec.json'
+    path.write_text(json.dumps(custom))
+    with pytest.raises(ContractError): load_spec(path)
+
+
+def test_custom_export_requires_explicit_trusted_hash_before_torch(tmp_path):
+    weights = tmp_path / 'best.pt'
+    weights.write_bytes(b'not trusted pickle')
+    manifest = tmp_path / 'training.json'
+    manifest.write_text(json.dumps({'schema_version': 1, 'model_family': 'yolo26n',
+        'weights_sha256': '0' * 64, 'dataset_version': 'synthetic-negative-test',
+        'class_names': ['cone_red', 'cone_blue', 'traffic_light', 'crosswalk']}))
+    with pytest.raises(ContractError, match='training manifest does not match'):
+        export(weights, ROOT / 'config/yolo26-race4.json', manifest)

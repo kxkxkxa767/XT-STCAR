@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Single-operator console. Rust owns chassis deadlines. No arm/movement on start."""
 import argparse
+import base64
 import collections
 import fcntl
 import hashlib
@@ -55,6 +56,10 @@ class Console:
         self.jpeg = None
         self.camera_at = 0
         self.camera_seq = 0
+        self.vision = None
+        if getattr(args, 'vision_shadow', None):
+            from vision_shadow import VisionShadow
+            self.vision = VisionShadow(args.vision_shadow)
         self.errors = {}
         self.events = collections.deque(maxlen=2000)
         self.record = None
@@ -84,6 +89,8 @@ class Console:
         return proc
 
     def start(self):
+        if self.vision:
+            self.vision.start()
         self.control = self.spawn('control', '/dev/car')
         self.lidar = self.spawn('lidar', '/dev/laser')
         threading.Thread(target=self.read_bridge, args=(self.control, 'control'), daemon=True).start()
@@ -244,7 +251,8 @@ class Console:
                     ok, frame = cap.read()
                     if not ok:
                         raise RuntimeError('camera read failed')
-                    now = time.monotonic()
+                    captured_at = time.monotonic()
+                    now = captured_at
                     if now - encoded < .1:
                         continue
                     ok, image = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -254,10 +262,14 @@ class Console:
                 else:
                     image = b'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#162d35"/><text x="130" y="250" font-size="32" fill="#76e7c0">DEMO / NO VEHICLE</text></svg>'
                     time.sleep(.1)
+                    captured_at = time.monotonic()
                 with self.lock:
                     self.jpeg = image
-                    self.camera_at = time.monotonic()
+                    self.camera_at = captured_at
                     self.camera_seq += 1
+                    sequence = self.camera_seq
+                if self.vision and cap is not None:
+                    self.vision.submit(image, captured_at, sequence)
                 encoded = time.monotonic()
         except Exception as error:
             with self.lock:
@@ -389,6 +401,13 @@ class Console:
         return {'file': name}
 
     def photo(self, kind):
+        if kind == 'vision':
+            state = self.vision.snapshot() if self.vision else None
+            result = state.get('result') if state else None
+            if not result or state.get('error') or result['age_ms'] >= 1500:
+                raise ValueError('vision result unavailable or stale')
+            payload = base64.b64decode(result['jpeg_base64'], validate=True)
+            return self.write_photo('vision-' + str(result['sequence']), 'jpg', payload)
         if kind not in ('camera', 'lidar', 'combined'):
             raise ValueError('unknown photo type')
         with self.lock:
@@ -433,6 +452,9 @@ class Console:
             if not ok:
                 raise ValueError('PNG encoding failed')
             payload = encoded.tobytes()
+        return self.write_photo(kind, ext, payload)
+
+    def write_photo(self, kind, ext, payload):
         name = kind+'-'+time.strftime('%Y%m%d-%H%M%S')+'-'+secrets.token_hex(3)+'.'+ext
         with self.storage_lock:
             if not self.storage_available():
@@ -445,6 +467,8 @@ class Console:
     def close(self):
         self.stop.set()
         self.halt('server_shutdown')
+        if self.vision:
+            self.vision.close()
         if hasattr(self, 'control'):
             self.control.stdin.close()  # Bridge independently observes EOF and sends neutral frames.
             try:
@@ -504,6 +528,8 @@ def serve(args):
                     return
                 if path == '/api/state':
                     self.reply(200, app.state())
+                elif path == '/api/vision':
+                    self.reply(200, app.vision.snapshot() if app.vision else {'enabled': False})
                 elif path == '/api/lidar':
                     with app.lock:
                         self.reply(200, {'scan': app.scan, 'age_s': time.monotonic() - app.scan_at})
@@ -630,8 +656,19 @@ def main():
     p.add_argument('--output', default='./recordings')
     p.add_argument('--access-file', default='./access.json')
     p.add_argument('--demo', action='store_true')
+    vision_group = p.add_mutually_exclusive_group()
+    vision_group.add_argument('--vision-config', type=Path, help='optional persistent shadow configuration JSON')
+    vision_group.add_argument('--vision-shadow', nargs=5, metavar=('BIN', 'ROAD_CONFIG', 'MODEL', 'ORT_LIB', 'MODEL_SPEC'), help='optional perception-only process; reuses camera frames, never drives')
     p.add_argument('--allow-reverse', action='store_true', help='Only after supervised ESC reverse calibration')
     args = p.parse_args()
+    if args.vision_config:
+        from vision_shadow import load_config
+        try:
+            args.vision_shadow = load_config(args.vision_config)
+        except (OSError, ValueError) as error:
+            p.error(str(error))
+    if args.demo and args.vision_shadow:
+        p.error('demo SVG camera cannot feed JPEG perception; use recorded JPEG IPC for offline tests')
     for bind in [args.bind] + ([args.lan_bind] if args.lan_bind else []):
         address = ipaddress.ip_address(bind)
         if address.version != 4 or address.is_unspecified or address.is_multicast or not (address.is_private or address.is_loopback):

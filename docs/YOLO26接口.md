@@ -33,11 +33,11 @@ cargo run --locked --bin xt-stcar -- infer --image path/to/image.png \
 
 ## 导出与模型身份
 
-首版导出脚本只接受官方 [yolo26n.pt 权重](https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26n.pt)，
+默认导出路径只接受官方 [yolo26n.pt 权重](https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26n.pt)，
 加载 PyTorch 权重前核对 SHA256：
 `9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef`。
 该值已与 GitHub Release 资产 digest 核对；仅凭文件名不能证明是 nano 模型。
-自训练权重、其他尺寸或类别数需另行建立明确的配置和可信来源后扩展，本脚本会拒绝它们。
+2026-09-21 增加显式可信训练清单和类别表，可导出同架构的自训练权重；具体流程见[视觉模型接入与只读测试](视觉模型接入与只读测试.md)。其他输入/输出尺寸仍不支持。
 
 ```python
 model.export(format="onnx", imgsz=320, batch=1, dynamic=False,
@@ -51,12 +51,12 @@ model.export(format="onnx", imgsz=320, batch=1, dynamic=False,
 | 输入语义 | RGB、连续 NCHW、除以 255，数值 `[0,1]` |
 | 输出 | `output0`，FLOAT32 `[1,300,6]` |
 | 每行 | `[x1,y1,x2,y2,score,class_id]`，输入画布像素坐标 |
-| 类别 | 80 个；class_id 为浮点存储的整数 |
+| 类别 | 默认80类；自训练数量与有序类别表显式绑定，class_id 为浮点存储的整数 |
 | 后处理 | 图内 TopK；Rust 消费端严格 `score > threshold` |
 | 不需要的运算 | 额外 sigmoid、objectness 相乘、第二次 IoU NMS |
 
 `validate_yolo26.py` 同时检查 metadata `task=detect`、`head=Detect`、`version=8.4.142`、
-`end2end=True`、80 个 `names` 整数键、单输入/输出的名称/类型/静态形状、opset 17，
+`end2end=True`、与配置类别表一致的 `names` 整数键、单输入/输出的名称/类型/静态形状、opset 17，
 以及主图、控制流子图和本地函数中没有 `NonMaxSuppression`，并执行 ONNX full checker。
 缺少元数据、FP16、动态尺寸、raw `[1,84,2100]` 等输出会被明确拒绝。
 元数据与图结构验证证明的是接口符合性；权重与 ONNX 的可信来源由 SHA256 和 provenance 文件另行记录。

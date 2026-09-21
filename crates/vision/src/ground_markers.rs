@@ -164,6 +164,10 @@ impl GroundMarkerDetector {
             config,
         })
     }
+    pub fn set_semantics(&mut self, semantics: crate::semantics::SemanticMap) {
+        // Marker geometry is its own explicit protocol, not a crosswalk proposal.
+        self.road.set_semantics(semantics.lamps_only());
+    }
     pub fn config(&self) -> &ExperimentalMarkerConfig {
         &self.config
     }

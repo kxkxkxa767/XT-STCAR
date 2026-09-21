@@ -619,8 +619,11 @@ fn autonomy_command(command: &str, rest: Vec<OsString>) -> Result<()> {
         let image_path = image.ok_or("road-detect requires --image")?;
         let config: xt_stcar_vision::road::RoadConfig =
             serde_json::from_slice(&config).map_err(|e| e.to_string())?;
-        let mut detector =
-            xt_stcar_robot_runner::perception::RoadPipeline::new(config, vision.as_ref())?;
+        let mut detector = xt_stcar_robot_runner::perception::RoadPipeline::new_online(
+            config,
+            vision.as_ref(),
+            Default::default(),
+        )?;
         let rgb = xt_stcar_robot_runner::input::load_frame(&image_path)?;
         let road = detector.process(
             &rgb,
@@ -628,7 +631,7 @@ fn autonomy_command(command: &str, rest: Vec<OsString>) -> Result<()> {
             xt_stcar_robot_core::FrameId("body".into()),
         )?;
         serde_json::to_writer_pretty(&mut buffer,&serde_json::json!({"kind":"road_image_diagnostic","physical_output_enabled":false,
-            "timestamp_scope":"single image diagnostic only","native_yolo_enabled":vision.is_some(),"road":road})).map_err(|e|e.to_string())?;
+            "timestamp_scope":"single image diagnostic only","native_yolo_enabled":vision.is_some(),"diagnostics":detector.diagnostics(),"road":road})).map_err(|e|e.to_string())?;
         buffer.write_all(b"\n").map_err(|e| e.to_string())?;
         None
     };
