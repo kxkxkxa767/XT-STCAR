@@ -1,5 +1,7 @@
 # XT-STCAR 接手与开发约定
 
+2026-09-22：用户要求将部署包及队友所需文件上传。已准备 Release `vision-console-20260922`，包含 c86cd80 核心的 RISC-V vision-shadow/vehicle-bridge、完整驾驶台、单蓝桶模板及只读加载检查脚本。发布状态以GitHub Release及附件校验结果为准；Git源码与车端部署明确分开，本轮不连车、不安装、不输出电机命令。见[部署交接](docs/视觉驾驶台部署交接.md)。
+
 ## 2026-09-21 视觉接入更新（最新）
 
 已通过 Chrome 读取用户分享 `6ab1253d-6b94-83ee-802d-3144198924cc` 的视觉建议，并在 7fa98d2 基础上修改。新增显式可信自训练 YOLO26n 导出、`class_names/road_classes` 与 ONNX/provenance 绑定、候选框约束 RGB 几何、`road-detect` 输出在线元素，以及复用驾驶台相机的 `vision-shadow` 独立只读进程。网页支持检测框/耗时/元素与单张 JPG，服务可选读取 `~/xt-stcar-console/vision.json`。

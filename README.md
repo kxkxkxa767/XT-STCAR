@@ -1,5 +1,7 @@
 # XT-STCAR
 
+车端二进制与完整驾驶台附件见 [视觉部署 Release](https://github.com/kxkxkxa767/XT-STCAR/releases/tag/vision-console-20260922)，部署及单蓝桶模型接入见[队友交接说明](docs/视觉驾驶台部署交接.md)。`git pull`只更新源码，不会自动更新小车安装目录。
+
 2026-09-21：已增加自训练 YOLO26n 的可信导出/类别映射、模型候选与 RGB 地面元素的连接，以及复用驾驶台相机的只读连续推理和检测图 JPG 保存。详见[视觉模型接入与只读测试](docs/视觉模型接入与只读测试.md)。默认仍为官方80类模型；自训练赛道权重、真实地面标定和车端部署尚未完成。
 
 Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，视觉使用 YOLO26n Detect。**
