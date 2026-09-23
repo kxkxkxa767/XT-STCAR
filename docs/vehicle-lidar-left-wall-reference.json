@@ -1,6 +1,6 @@
 {
   "date": "2026-09-23",
-  "status": "first_distance_measured_pending_second_distance",
+  "status": "coarse_reference_accepted_no_production_correction",
   "user_confirmed": {
     "left_rear_tire_outer_edge_to_wall_m": 1.0,
     "wall_alignment_pending_confirmation": false,
@@ -157,15 +157,14 @@
     "heading_max_deg": 4.590193561517687
   },
   "production_calibration_applied": false,
-  "pending_measurements": [
-    "second_stationary_parallel_wall_pose_with_direct_lidar_center_distance_about_1.65m"
-  ],
+  "pending_measurements": [],
   "limitations": [
     "Direct tape distance is 1.15m; +0.0121m fitted discrepancy at one distance does not establish a constant bias",
     "User reports parallel placement; lidar wall heading includes possible placement error and mounting yaw",
     "Display bins are rounded to 1 degree and are not navigation-validated full raw scans",
     "Line residual and across-frame repeatability are not absolute accuracy",
-    "Single distance cannot separate sensor scale, constant bias and mounting offsets"
+    "Single distance cannot separate sensor scale, constant bias and mounting offsets",
+    "Second placement heading differs by 1.31 degrees; exact parallelism and tape uncertainty are not independently verified. Two-point gain/bias fit would have no independent validation."
   ],
   "local_capture_path": "work/lidar-wall-20260923/capture.json",
   "local_capture_sha256": "5b91b51df1cb03b81d49534f3a22d81513ce7d74566179d1544bf083b1e0d17c",
@@ -177,5 +176,53 @@
     "yaw_convention": "body x forward, y left; rotation from lidar XY to body XY; provisional assuming exactly parallel placement",
     "tape_precision_m": null,
     "production_correction_applied": false
+  },
+  "second_distance": {
+    "tape_distance_m": 1.67,
+    "unique_scans": 46,
+    "fitted_distance_m": 1.6894149594929213,
+    "fitted_minus_tape_m": 0.01941495949292138,
+    "line_heading_deg": 5.802022547439501,
+    "inlier_bins": 90,
+    "available_bins": 91,
+    "rms_m": 0.0054332269683387835,
+    "span_m": 3.3795186628400966,
+    "per_frame_distance_min_max_m": [
+      1.6888282089936155,
+      1.6907497044889488
+    ],
+    "per_frame_heading_min_max_deg": [
+      5.671632345165419,
+      5.866896794850905
+    ],
+    "start_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 77,
+      "servo": 1500,
+      "tick": 2095698
+    },
+    "end_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 77,
+      "servo": 1500,
+      "tick": 2100825
+    },
+    "commands_sent": false,
+    "capture_sha256": "8089f70a8e00b33e9a0961f8d40025fb63ba566237776d108a1f23fe7630ac55"
+  },
+  "comparison": {
+    "tape_distance_change_m": 0.52,
+    "fitted_distance_change_m": 0.5273624294605048,
+    "heading_change_deg": 1.306639198469302,
+    "conclusion": "Both fitted distances exceed tape by about 1–2cm; two uncertain tape readings do not validate gain/bias correction. Heading differs by about 1.31 degrees across placements; no fixed extrinsic yaw applied."
+  },
+  "user_acceptance": {
+    "accepted_approximate_result": true,
+    "noted_manual_placement_error": true,
+    "further_sampling_requested": false
   }
 }
