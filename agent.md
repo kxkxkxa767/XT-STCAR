@@ -1,5 +1,30 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-09-23，最新标签与实车状态）
+
+**本节优先于下方旧接手入口及历史四类模板。用户本轮要求更新交接文档后新开窗口；此轮只改文档，不改模型、不部署、不启动电机。**
+
+### 用户最终确认的视觉标签顺序
+
+| 类别 ID | 标签（精确拼写） | 含义 |
+| --- | --- | --- |
+| 0 | `crosswalk` | 人行横道／斑马线 |
+| 1 | `blue_cone` | 蓝锥桶 |
+| 2 | `red_light` | 红灯 |
+| 3 | `green_light` | 绿灯 |
+
+有序类别表为 `["crosswalk", "blue_cone", "red_light", "green_light"]`。这是用户最新指定的训练/接入标签，覆盖旧示例 `cone_red / cone_blue / traffic_light / crosswalk`；新四类中没有红锥桶，红绿灯分成两个类别。训练仍由队友负责，接入时必须与实际权重的类别顺序一致，不能只改显示名冒充模型更新。
+
+### 当前实际部署与未完成部分
+
+- 2026-09-23刚通过SSH及`/api/vision`只读核实：车上仍加载**单类模型**，实际 `0: blue_cone`，内部角色映射 `blue_cone -> cone_blue`；并非上述新四类模型。车端 `~/xt-stcar-console/vision.json` 启用了独立只读 `vision-shadow`。
+- 当前模型 `/home/bianbu/xt-stcar-deploy/blue-cone-20260922/models/blue_cone.onnx`；规格文件同目录 `blue_cone-diagnostic-010.json`，320×320、置信度阈值0.1；道路配置同目录 `road-perception-sim.json`。运行时显示 `calibration_status=unverified`、`simulation_only=true`；所查一帧检测为空、人行横道为null，不能据此断言场地一直未检出。
+- `config/yolo26-race4.json` 与旧视觉文档**尚未按新四类修改**，本轮只在交接中明确新要求。后续接到模型接入任务时，先核对队友的新权重/有序类别表/模型规格，再适配 `class_names`、`road_classes` 和红绿灯分开类别的语义处理及回归测试；不要把旧 `traffic_light` 角色直接替换成两个未验证的角色名就部署。
+- 当前实物人行横道单条297×105毫米、条边净距108毫米；详见 [现场尺寸](docs/现场人行横道尺寸.md)。条数及相对车头方向未确认。规则模板间隙105毫米与本次实物不同，尚未修改模板或相机标定。
+- 驾驶台频繁锁定修复已提交并部署（`2f4db29`）：新指令时标、心跳排队、首次停因保留；7项前端及11项模拟/PTY测试通过，部署后24次只读检查健康、锁定1500。实际键盘驾驶效果尚待用户复核；不得写成实车操作验收通过。原PWM1570/1350/1650/1350和雷达粗修正−0.020米/顺时针5度保留。
+- 工程 `/Users/yuhaojin/Documents/XT-STCAR`，`main`；本次文档修改前最新已推送 `f40ac3a`（现场人行横道尺寸）。按[上传规范](上传规范.md)先fetch，以实际HEAD为准。车端驾驶台 `/home/bianbu/xt-stcar-console/20260917`，用户服务 `xt-stcar-console.service`；网页 `http://192.168.0.156:8081/`。SSH复用socket为工程下 `work/vehicle-test-ssh.sock`，接手时重新检查是否有效，不把普通SSH当作可复用连接。
+- 保留未跟踪用户原件 `XT-STCAR_a623638_review.zip`、比赛规则PDF和`新建 文本文档.txt`，不删除、不纳入本次提交。访问码只留车端私有文件，不写入Git。
+
 2026-09-23现场人行横道：用户提供单条长为A4长边、宽为A4短边一半，条边净距10.8厘米，换算297×105毫米/间隙108毫米。沿短边并排时节距213毫米；条数和相对车头方向未确认。已记录docs/现场人行横道尺寸.md；规则场地模板间隙105毫米保留原来源，不误当本次实测值；未改视觉阈值/外参或操作车辆。
 
 2026-09-23驾驶台频繁锁定修复：实车旧事件记录含13次bridge_stale_request、4次bridge_heartbeat_timeout，晚到指令反复覆盖首因。前端心跳到期即排队最新按键、单在途请求；新drive时标由最近桥时标加收样后的单调经过时间生成（样本超过250ms仍停止），不改写已发送指令，解锁先取新状态。后端保留每次解锁后的首次停因，启用TCP_NODELAY、雷达HTTP写出移至锁外。300ms心跳/250ms旧指令/Rust控制与传感器保护未变，不自动重新解锁。已部署app.js/server.py，备份~/xt-stcar-console/backup-relock-20260923-154647；保留PWM1570/1350/1650/1350及粗雷达校准。7项前端、11项模拟/PTY测试通过；本轮未发实车arm/drive，驾驶体验仍待用户刷新后复核。见docs/console-relock-validation-20260923.json。
