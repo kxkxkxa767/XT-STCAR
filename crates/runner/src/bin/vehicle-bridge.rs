@@ -1,4 +1,6 @@
 //! Console bridge. Default dry run; explicit --execute opens a selected device.
+#[path = "support/lidar_calibration.rs"]
+mod lidar_calibration;
 use std::{
     io::{self, BufRead, Read, Write},
     path::PathBuf,
@@ -40,6 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut device = None;
     let mut execute = false;
     let mut reverse = false;
+    let mut calibration_path = None;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--device" => {
@@ -47,6 +50,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--execute" => execute = true,
             "--allow-reverse" => reverse = true,
+            "--lidar-calibration" => {
+                calibration_path = Some(PathBuf::from(
+                    args.next().ok_or("missing calibration path")?,
+                ));
+            }
             _ => return Err("unknown argument".into()),
         }
     }
@@ -56,6 +64,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if execute && device.is_none() {
         return Err("--execute requires --device".into());
     }
+    if mode != "lidar" && calibration_path.is_some() {
+        return Err("lidar calibration is only accepted in lidar mode".into());
+    }
+    if mode == "lidar" && execute && calibration_path.is_none() {
+        let path = std::env::current_exe()?.with_file_name("lidar-calibration.json");
+        if path.try_exists()? {
+            calibration_path = Some(path);
+        }
+    }
+    // Reject invalid configuration before any device is opened.
+    let calibration = calibration_path
+        .map(
+            |path| -> Result<lidar_calibration::Calibration, Box<dyn std::error::Error>> {
+                let bytes = xt_stcar::file_io::read_regular_file(&path, 4096)?;
+                let calibration: lidar_calibration::Calibration = serde_json::from_slice(&bytes)?;
+                calibration.validate()?;
+                Ok(calibration)
+            },
+        )
+        .transpose()?;
     let mut port = if execute {
         Some(SerialPort::open(
             &device.unwrap(),
@@ -93,7 +121,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 seq += 1;
                                 let valid = bins.iter().filter(|r| r.is_some()).count();
                                 let coverage = seen.iter().filter(|v| **v).count();
-                                let row = serde_json::json!({"seq":seq,"at_ms":start.elapsed().as_millis(),"ranges":bins,"valid_fraction":valid as f64/360.0,"coverage":coverage as f64/360.0,"navigation_validated":false});
+                                let mut row = serde_json::json!({"seq":seq,"at_ms":start.elapsed().as_millis(),"ranges":bins,"valid_fraction":valid as f64/360.0,"coverage":coverage as f64/360.0,"navigation_validated":false});
+                                if let Some(calibration) = &calibration {
+                                    calibration.apply(&mut row)?;
+                                }
                                 if matches!(
                                     out.try_send(row),
                                     Err(mpsc::TrySendError::Disconnected(_))
@@ -126,7 +157,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let ranges: Vec<Option<f64>> = (0..360)
                     .map(|i| Some(3.0 + (i as f64 / 30.0).sin() * 0.3))
                     .collect();
-                if out.try_send(serde_json::json!({"seq":seq,"ranges":ranges,"valid_fraction":1.0,"coverage":1.0,"navigation_validated":false})).is_err(){thread::sleep(Duration::from_millis(100));}
+                let mut row = serde_json::json!({"seq":seq,"ranges":ranges,"valid_fraction":1.0,"coverage":1.0,"navigation_validated":false});
+                if let Some(calibration) = &calibration {
+                    calibration.apply(&mut row)?;
+                }
+                if out.try_send(row).is_err() {
+                    thread::sleep(Duration::from_millis(100));
+                }
                 thread::sleep(Duration::from_millis(100));
             }
         }
