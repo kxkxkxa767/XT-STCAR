@@ -80,6 +80,20 @@ class ConsoleTests(unittest.TestCase):
         time.sleep(.05)
         self.assertTrue(self.get('/api/state')['status']['control']['armed'])
 
+    def test_first_stop_cause_survives_late_requests_and_resets_on_arm(self):
+        self.drive('arm');time.sleep(.04)
+        with self.assertRaises(urllib.error.HTTPError):self.drive('drive',['invalid'])
+        first=self.get('/api/state')['last_stop']
+        self.assertEqual(first['reason'],'invalid_keys')
+        with self.assertRaises(urllib.error.HTTPError):self.drive('drive',['up'])
+        self.post('/api/control',{'op':'stop'})
+        self.assertEqual(self.get('/api/state')['last_stop'],first)
+        time.sleep(.08);self.drive('arm');time.sleep(.04)
+        self.post('/api/control',{'op':'stop'});time.sleep(.06)
+        state=self.get('/api/state')
+        self.assertEqual(state['last_stop']['reason'],'operator_stop')
+        self.assertIsNone(state['owner']);self.assertEqual(state['status']['control']['motor'],1500)
+
     def test_calibrated_settings_limits(self):
         valid={'forward':1550,'reverse':1350,'left':1650,'right':1350}
         self.post('/api/settings',valid)

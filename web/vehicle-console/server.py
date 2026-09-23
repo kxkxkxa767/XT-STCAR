@@ -15,6 +15,7 @@ import secrets
 import select
 import shutil
 import signal
+import socket
 import socketserver
 import subprocess
 import threading
@@ -46,6 +47,7 @@ class Console:
         self.owner_at = 0
         self.arm_sequence = 0
         self.last_stop = None
+        self.stop_latched = True
         self.stopped_tick = -1
         self.sequence = 0
         self.browser_sequence = -1
@@ -150,8 +152,10 @@ class Console:
 
     def halt(self, reason):
         with self.lock:
-            if self.owner is not None or self.last_stop is None or reason != 'operator_stop':
+            # Keep the first cause; late requests must not mask a watchdog stop.
+            if not self.stop_latched or self.last_stop is None:
                 self.last_stop = {'reason': reason, 'unix_s': time.time()}
+            self.stop_latched = True
             self.owner = None
             self.stopped_tick = self.status.get('control', {}).get('tick', -1)
             self.events.append({'unix_s': time.time(), 'stop_reason': reason})
@@ -185,6 +189,7 @@ class Console:
                 current_tick = self.status.get('control', {}).get('tick', -1)
                 if not 0 <= current_tick - tick < 180 or tick <= self.stopped_tick:
                     raise ValueError('stale arm request')
+                self.stop_latched = False
                 self.owner = client
                 self.browser_sequence = seq
                 self.owner_at = time.monotonic()
@@ -494,6 +499,7 @@ def serve(args):
         def setup(self):
             super().setup()
             self.connection.settimeout(3)
+            self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         def reply(self, status, body, content='application/json'):
             if not isinstance(body, bytes):
@@ -532,7 +538,8 @@ def serve(args):
                     self.reply(200, app.vision.snapshot() if app.vision else {'enabled': False})
                 elif path == '/api/lidar':
                     with app.lock:
-                        self.reply(200, {'scan': app.scan, 'age_s': time.monotonic() - app.scan_at})
+                        snapshot = {'scan': app.scan, 'age_s': time.monotonic() - app.scan_at}
+                    self.reply(200, snapshot)
                 elif path == '/camera.jpg':
                     with app.lock:
                         image, age = app.jpeg, time.monotonic() - app.camera_at

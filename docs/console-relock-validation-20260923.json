@@ -1,0 +1,86 @@
+{
+  "date": "2026-09-23",
+  "scope": "网页频繁重新解锁；只读实车诊断、部署和模拟/PTY测试，无实车arm/drive",
+  "evidence": {
+    "previous_event_counts": {
+      "bridge_stale_request": 13,
+      "bridge_heartbeat_timeout": 4,
+      "bridge_not_armed_or_invalid_request": 1,
+      "stale_or_unowned_request": 16
+    },
+    "cause": "前端重复旧tick；请求在途时周期心跳不排队；迟到drive覆盖首次停因",
+    "before_lan_state_rtt": {
+      "samples": 24,
+      "median_ms": 48.275,
+      "max_ms": 110.21
+    },
+    "after_lan_state_rtt": {
+      "samples": 24,
+      "median_ms": 41.2,
+      "max_ms": 121.86
+    },
+    "latency_caveat": "不同时间的无线网络采样，最大延迟未降低，不据此宣称网络问题消失"
+  },
+  "changes": [
+    "新drive采用桥时标加收样后单调经过时间；样本龄超过250ms仍停止，不刷新已发送指令",
+    "到期心跳合并排队最新按键、维持单在途请求、显式stop不排队",
+    "arm先获取新状态，采样期间取消不得arm",
+    "每次arm后锁存首次停因，后续晚到请求仍拒绝",
+    "TCP_NODELAY；雷达HTTP响应写出位于控制锁外"
+  ],
+  "tests": {
+    "frontend_pass": 7,
+    "python_simulation_pty_pass": 11,
+    "frontend_before_fix_failures": 2,
+    "real_motion_test": false
+  },
+  "unchanged_guards": {
+    "rust_heartbeat_ms": 300,
+    "rust_stale_request_ms": 250,
+    "rust_control_gap_ms": 150,
+    "sensor_stale_s": 1,
+    "focus_hide_stop": true,
+    "automatic_rearm": false
+  },
+  "deployment": {
+    "backup": "/home/bianbu/xt-stcar-console/backup-relock-20260923-154647",
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 2769
+    },
+    "owner": null,
+    "settings": {
+      "forward": 1570,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "calibration": {
+      "clockwise_yaw_bins": 5,
+      "range_offset_m": -0.02,
+      "schema_version": 1,
+      "status": "coarse"
+    },
+    "hashes": {
+      "app.js": "2904128f1f0079452151ae52994595e4c7ee46aff84b21703004efb76156c1b9",
+      "server.py": "99dba3c44cb446c43fa8fa6c82189072d445c25d51b8af511aa011de72bccea1"
+    },
+    "errors": {}
+  },
+  "read_only_verification": {
+    "samples": 24,
+    "all_healthy": true,
+    "all_locked_neutral": true,
+    "served_app_sha256_matches": true
+  },
+  "limitations": [
+    "需要刷新网页加载新代码；未执行实车键盘驾驶复测",
+    "无线网络超过安全期限仍会锁定停车；未放宽保护",
+    "原始采样和事件留在ignored work目录，不上传凭据或现场图像"
+  ]
+}
