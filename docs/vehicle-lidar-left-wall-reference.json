@@ -1,13 +1,16 @@
 {
   "date": "2026-09-23",
-  "status": "single_wall_reference_pending_tape_measurements",
+  "status": "first_distance_measured_pending_second_distance",
   "user_confirmed": {
     "left_rear_tire_outer_edge_to_wall_m": 1.0,
     "wall_alignment_pending_confirmation": false,
     "wall_on_left": true,
     "wall_parallel_to_vehicle": true,
     "perpendicular_clearance": true,
-    "wall_clear_at_scan_height": true
+    "wall_clear_at_scan_height": true,
+    "lidar_rotation_center_to_wall_perpendicular_m": 1.15,
+    "left_front_tire_outer_edge_to_wall_approx_m": 1.0,
+    "parallel_placement_reconfirmed": true
   },
   "capture": {
     "source": "existing_console_read_only_HTTP_GET",
@@ -155,16 +158,24 @@
   },
   "production_calibration_applied": false,
   "pending_measurements": [
-    "lidar_rotation_center_to_wall_perpendicular_m",
-    "left_front_tire_outer_edge_to_wall_perpendicular_m_with_straight_wheels"
+    "second_stationary_parallel_wall_pose_with_direct_lidar_center_distance_about_1.65m"
   ],
   "limitations": [
-    "1m refers to tire outside, not lidar origin; cannot equate range discrepancy to measurement bias",
+    "Direct tape distance is 1.15m; +0.0121m fitted discrepancy at one distance does not establish a constant bias",
     "User reports parallel placement; lidar wall heading includes possible placement error and mounting yaw",
     "Display bins are rounded to 1 degree and are not navigation-validated full raw scans",
     "Line residual and across-frame repeatability are not absolute accuracy",
     "Single distance cannot separate sensor scale, constant bias and mounting offsets"
   ],
   "local_capture_path": "work/lidar-wall-20260923/capture.json",
-  "local_capture_sha256": "5b91b51df1cb03b81d49534f3a22d81513ce7d74566179d1544bf083b1e0d17c"
+  "local_capture_sha256": "5b91b51df1cb03b81d49534f3a22d81513ce7d74566179d1544bf083b1e0d17c",
+  "reference_comparison": {
+    "tape_lidar_center_distance_m": 1.15,
+    "fitted_minus_tape_m": 0.012052530032416575,
+    "tape_lidar_center_minus_rear_tire_clearance_m": 0.15,
+    "conditional_lidar_to_body_yaw_deg": -4.495383348970199,
+    "yaw_convention": "body x forward, y left; rotation from lidar XY to body XY; provisional assuming exactly parallel placement",
+    "tape_precision_m": null,
+    "production_correction_applied": false
+  }
 }
