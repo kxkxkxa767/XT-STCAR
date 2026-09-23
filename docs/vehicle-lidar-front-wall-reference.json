@@ -1,0 +1,56 @@
+{
+  "date": "2026-09-23",
+  "reference": {
+    "wall_side": "front",
+    "front_wheel_to_wall_m": 1.0,
+    "lidar_rotation_center_to_wall_m": 1.19,
+    "precise_front_wheel_reference_point_unsurveyed": true
+  },
+  "unique_scans": 44,
+  "raw_fit": {
+    "distance_m": 1.208831988858132,
+    "error_vs_tape_m": 0.018831988858132087,
+    "normal_angle_from_front_axis_deg": 4.948153653083586,
+    "inlier_bins": 91,
+    "available_bins": 91,
+    "residual_rms_m": 0.00548759846440326,
+    "wall_width_span_m": 2.444468142561895
+  },
+  "existing_correction_fit": {
+    "distance_m": 1.1907631563094347,
+    "error_vs_tape_m": 0.0007631563094347982,
+    "normal_angle_from_front_axis_deg": 0.022038092674003817
+  },
+  "applied_calibration": {
+    "clockwise_yaw_bins": 5,
+    "range_offset_m": -0.02,
+    "schema_version": 1,
+    "status": "coarse"
+  },
+  "live_bin_mapping_verified": true,
+  "new_calibration_applied": false,
+  "commands_sent": false,
+  "start_control": {
+    "armed": false,
+    "motor": 1500,
+    "reason": "operator_stop",
+    "seq": 64,
+    "servo": 1500,
+    "tick": 895274
+  },
+  "end_control": {
+    "armed": false,
+    "motor": 1500,
+    "reason": "operator_stop",
+    "seq": 64,
+    "servo": 1500,
+    "tick": 900435
+  },
+  "capture_sha256": "478ec1adf7e2f868f6dbd202b85785928e3baf5c3819f9442ab00f25fad16f08",
+  "capture_local_path": "work/lidar-wall-20260923/capture-front-wall.json",
+  "limitations": [
+    "Front-wall check uses manual tape measurement and placement; not full-range accuracy validation",
+    "Front wheel reference is not a surveyed axle center or bumper; do not infer body translation from 19cm difference"
+  ],
+  "decision": "retain_existing_global_coarse_correction_no_additional_front_offset"
+}
