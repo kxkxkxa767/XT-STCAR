@@ -33,6 +33,8 @@ fn snapshot(config: &AutonomyConfig, stamp: u64) -> SensorSnapshot {
             ranges_m: vec![Some(5.0); config.scan.bins],
         },
         road: RoadFrame {
+            camera_captured_at: None,
+            observation_pose: None,
             observation: RoadObservation {
                 captured_at: at,
                 frame_id: config.mission.body_frame.clone(),

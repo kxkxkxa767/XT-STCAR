@@ -23,6 +23,7 @@ fn track(value: &Value) -> ElementTrack {
         first_seen: read!(first_seen),
         last_seen: read!(last_seen),
         last_visual_at: read!(last_visual_at),
+        lidar: None,
         last_geometry_at: read!(last_geometry_at),
         observations: read!(observations),
         processed: read!(processed),
@@ -68,6 +69,8 @@ fn recorded(
     let online = &value["online"];
     let active = track(&online["active_track"]);
     let report = OnlineMissionReport {
+        task_revision: 0,
+        requires_road_semantics: true,
         mission: MissionReport {
             at,
             phase: MissionPhase::Cones,

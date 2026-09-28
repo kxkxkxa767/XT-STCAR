@@ -86,6 +86,8 @@ fn input(at: u64) -> Arc<SensorSnapshot> {
             ranges_m: vec![Some(5.0); 60],
         },
         road: RoadFrame {
+            camera_captured_at: None,
+            observation_pose: None,
             elements: None,
             observation: RoadObservation {
                 captured_at: Timestamp(at),
@@ -223,6 +225,48 @@ fn changed_duplicate_future_and_regressing_results_are_rejected() {
         assert_eq!(report.fault, Some(ControlFault::InvalidResult));
         assert_eq!(report.command, MotionOutput::Stop);
     }
+}
+
+#[test]
+fn newer_timestamp_cannot_reinstall_an_older_cone_step_in_the_same_phase() {
+    use xt_stcar_robot_core::mission::{MissionOutput, MissionPhase, MissionReport};
+    use xt_stcar_robot_core::online_mission::{OnlineBehavior, OnlineMissionReport};
+    let command = |at, revision, cone| {
+        let mut planned = planned(at, at, drive(), false);
+        Arc::get_mut(&mut planned.step).unwrap().online = Some(OnlineMissionReport {
+            task_revision: revision,
+            requires_road_semantics: false,
+            mission: MissionReport {
+                at: Timestamp(at),
+                phase: MissionPhase::Cones,
+                output: MissionOutput::Stop,
+                reason: "task identity regression fixture".into(),
+                crosswalk_stop_elapsed_ms: 3000,
+                green_elapsed_ms: 0,
+                waypoint_index: cone,
+            },
+            goal_heading_rad: None,
+            travel_boundary: None,
+            behavior: OnlineBehavior::ConeEntry,
+            active_track_id: None,
+            active_track: None,
+            processed_cones: cone,
+            cone_progress_rad: 0.0,
+            search_distance_m: 0.0,
+            execution_space_rejected: false,
+        });
+        planned
+    };
+    let mut watchdog = ControlWatchdog::new(config(), Timestamp(0)).unwrap();
+    assert_eq!(
+        watchdog
+            .poll(Timestamp(10), Some(command(10, 7, 1)))
+            .command,
+        drive()
+    );
+    let late = watchdog.poll(Timestamp(20), Some(command(20, 6, 0)));
+    assert_eq!(late.fault, Some(ControlFault::InvalidResult));
+    assert_eq!(late.command, MotionOutput::Stop);
 }
 
 #[test]

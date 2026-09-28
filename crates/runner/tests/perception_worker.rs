@@ -21,6 +21,8 @@ fn image() -> Arc<RgbImage> {
 
 fn report(image: &RgbImage, at: Timestamp, frame_id: FrameId) -> RoadFrame {
     RoadFrame {
+        camera_captured_at: None,
+        observation_pose: None,
         elements: None,
         observation: RoadObservation {
             captured_at: at,

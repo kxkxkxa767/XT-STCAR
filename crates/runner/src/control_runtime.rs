@@ -28,7 +28,7 @@ pub use crate::control_execution::{
 };
 use serde::{Deserialize, Serialize};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -181,6 +181,13 @@ impl ControlWatchdog {
         }
         if let Some(old) = &self.accepted {
             if latest.source_at < old.source_at
+                || old.step.online.as_ref().is_some_and(|previous| {
+                    latest
+                        .step
+                        .online
+                        .as_ref()
+                        .is_none_or(|next| next.task_revision < previous.task_revision)
+                })
                 || latest.oldest_sensor_at < old.oldest_sensor_at
                 || (latest.source_at == old.source_at
                     && (!Arc::ptr_eq(&latest.step, &old.step)
@@ -228,6 +235,7 @@ struct SteeringLimits {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AdoptionRejection {
+    TaskChanged,
     BeforeWindow,
     AfterWindow,
     ExecutionChanged,
@@ -277,6 +285,7 @@ struct Slots {
 }
 
 struct Shared {
+    task_revision: AtomicU64,
     slots: Mutex<Slots>,
     execution: Option<AtomicExecution>,
     stopped: AtomicBool,
@@ -297,6 +306,7 @@ impl Shared {
 /// independent output thread and does not require an outer shared worker mutex.
 #[derive(Clone)]
 pub struct AutonomySubmitter {
+    independent_cones: bool,
     shared: Arc<Shared>,
     wake: SyncSender<()>,
     epoch: Timestamp,
@@ -310,7 +320,13 @@ impl AutonomySubmitter {
         if self.shared.stopped.load(Ordering::Acquire) {
             return Ok(SubmitStatus::Stopped);
         }
-        if !valid_snapshot(&input, self.epoch, now, self.max_command_age_ms) {
+        if !valid_snapshot(
+            &input,
+            self.epoch,
+            now,
+            self.max_command_age_ms,
+            self.independent_cones,
+        ) {
             self.shared.fail(ControlFault::InvalidInput);
             let _ = self.wake.try_send(());
             return Err("control snapshot has invalid times, frames or storage bounds".into());
@@ -613,6 +629,7 @@ impl AutonomyWorker {
         let watchdog = ControlWatchdog::new(runtime, epoch)?;
         let execution = steering_limits.map(|_| SteeringEstimate::stationary(epoch));
         let shared = Arc::new(Shared {
+            task_revision: AtomicU64::new(0),
             slots: Mutex::new(Slots::default()),
             execution: execution.map(AtomicExecution::new),
             stopped: AtomicBool::new(false),
@@ -621,6 +638,11 @@ impl AutonomyWorker {
         });
         let worker_shared = Arc::clone(&shared);
         let aligned = alignment.is_some();
+        let independent_cones = alignment.as_ref().is_some_and(|c| {
+            c.online
+                .as_ref()
+                .is_some_and(|o| o.world.lidar_cones.is_some())
+        });
         let (wake, receiver) = sync_channel(1);
         let thread = thread::Builder::new()
             .name("autonomy-planner".into())
@@ -639,7 +661,7 @@ impl AutonomyWorker {
                     let Some(mut input) = input else { continue };
                     let identity = PlanIdentity {
                         source_at: input.snapshot.at,
-                        oldest_sensor_at: oldest(&input.snapshot),
+                        oldest_sensor_at: oldest(&input.snapshot, !independent_cones),
                         planned_at: input.planned_at,
                     };
                     let stage = |stage| {
@@ -668,7 +690,7 @@ impl AutonomyWorker {
                             config,
                             &input.snapshot,
                             &context,
-                            oldest(&input.snapshot),
+                            oldest(&input.snapshot, !independent_cones),
                             runtime.max_command_age_ms,
                         ) {
                             Ok(constraints) => Some(constraints),
@@ -719,6 +741,32 @@ impl AutonomyWorker {
                             .and_then(|nav| nav.diagnostics.terminal_work.solver_elapsed_ns);
                     }
                     let mut step = processed.step;
+                    if let Some(report) = &step.online {
+                        let previous = worker_shared
+                            .task_revision
+                            .fetch_max(report.task_revision, Ordering::AcqRel);
+                        if report.task_revision < previous {
+                            worker_shared.fail(ControlFault::InvalidResult);
+                            break;
+                        }
+                        if previous > 0 && report.task_revision > previous {
+                            // Revoking the old task can change the held execution
+                            // while this plan is still being certified. Publish a
+                            // fresh Stop for the new task, then plan from actual
+                            // adopted history on the next input. A Drive computed
+                            // under the old task's held command is not transferable.
+                            step.command = MotionOutput::Stop;
+                            step.safety.output.command = MotionOutput::Stop;
+                        }
+                    }
+                    let source_lease = oldest(
+                        &input.snapshot,
+                        !independent_cones
+                            || step
+                                .online
+                                .as_ref()
+                                .is_none_or(|r| r.requires_road_semantics),
+                    );
                     stage(WorkerStage::ProcessorFinished);
                     if worker_shared.stopped.load(Ordering::Acquire) {
                         break;
@@ -736,7 +784,7 @@ impl AutonomyWorker {
                                 &input.snapshot,
                                 context,
                                 &step,
-                                oldest(&input.snapshot),
+                                source_lease,
                                 runtime.max_command_age_ms,
                             )
                             .map_err(Arc::new)
@@ -764,7 +812,7 @@ impl AutonomyWorker {
                     }
                     let command = PlannedCommand {
                         source_at: input.snapshot.at,
-                        oldest_sensor_at: oldest(&input.snapshot),
+                        oldest_sensor_at: source_lease,
                         planned_at: input.planned_at,
                         step: Arc::new(step),
                     };
@@ -817,6 +865,7 @@ impl AutonomyWorker {
             .map_err(|error| format!("start autonomy worker: {error}"))?;
         Ok(Self {
             submitter: AutonomySubmitter {
+                independent_cones,
                 shared,
                 wake,
                 epoch,
@@ -938,6 +987,19 @@ impl AutonomyWorker {
             }
         }
         let mut result = self.watchdog.poll(now, latest.map(|plan| plan.command));
+        if result
+            .latest
+            .as_ref()
+            .and_then(|s| s.online.as_ref())
+            .is_some_and(|r| {
+                r.task_revision < self.submitter.shared.task_revision.load(Ordering::Acquire)
+            })
+        {
+            // Keep its original expiry/watchdog history, but never issue the
+            // previous element's route while the new task plan is publishing.
+            result.command = MotionOutput::Stop;
+            rejection = Some(AdoptionRejection::TaskChanged);
+        }
         result.adoption_rejection = rejection;
         self.acknowledge(&mut result);
         result.observed_plan = observed.map(|plan| {
@@ -1041,12 +1103,17 @@ impl Drop for AutonomyWorker {
     }
 }
 
-fn oldest(input: &SensorSnapshot) -> Timestamp {
-    input
+fn oldest(input: &SensorSnapshot, require_road: bool) -> Timestamp {
+    let sensors = input
         .at
         .min(input.pose.captured_at)
         .min(input.scan.captured_at)
-        .min(input.road.observation.captured_at)
+        .min(input.road.camera_at());
+    if require_road {
+        sensors.min(input.road.observation.captured_at)
+    } else {
+        sensors
+    }
 }
 
 fn result_fault(step: &AutonomyStep, at: Timestamp) -> Option<ControlFault> {
@@ -1081,7 +1148,13 @@ fn result_fault(step: &AutonomyStep, at: Timestamp) -> Option<ControlFault> {
     None
 }
 
-fn valid_snapshot(input: &SensorSnapshot, epoch: Timestamp, now: Timestamp, max_age: u64) -> bool {
+fn valid_snapshot(
+    input: &SensorSnapshot,
+    epoch: Timestamp,
+    now: Timestamp,
+    max_age: u64,
+    independent_cones: bool,
+) -> bool {
     let road = &input.road;
     input.at >= epoch
         && input.at <= now
@@ -1089,10 +1162,17 @@ fn valid_snapshot(input: &SensorSnapshot, epoch: Timestamp, now: Timestamp, max_
             input.pose.captured_at,
             input.scan.captured_at,
             road.observation.captured_at,
+            road.camera_at(),
         ]
         .iter()
         .all(|stamp| *stamp <= input.at)
-        && now.0 - oldest(input).0 < max_age
+        && road.observation.captured_at <= road.camera_at()
+        && now.0 - oldest(input, !independent_cones).0 < max_age
+        && road.observation_pose.as_ref().is_none_or(|pose| {
+            pose.captured_at == road.observation.captured_at
+                && pose.frame_id == input.pose.frame_id
+                && pose.pose.valid()
+        })
         && input.scan.ranges_m.len() <= 1440
         && input.scan.ranges_m.capacity() <= 1440
         && road.observation.cones_body_m.len() <= 256
@@ -1116,6 +1196,7 @@ fn changed_sample(new: &SensorSnapshot, old: &SensorSnapshot) -> bool {
     let new_road = &new.road;
     let old_road = &old.road;
     new.pose.captured_at < old.pose.captured_at
+        || new_road.camera_at() < old_road.camera_at()
         || new.scan.captured_at < old.scan.captured_at
         || new_road.observation.captured_at < old_road.observation.captured_at
         || (new.pose.captured_at == old.pose.captured_at && new.pose != old.pose)
@@ -1123,10 +1204,12 @@ fn changed_sample(new: &SensorSnapshot, old: &SensorSnapshot) -> bool {
         || (new_road.observation.captured_at == old_road.observation.captured_at
             && (new_road.observation != old_road.observation
                 || new_road.elements != old_road.elements
+                || new_road.observation_pose != old_road.observation_pose
                 || new_road.image_width_px != old_road.image_width_px
                 || new_road.image_height_px != old_road.image_height_px))
         || (new.at == old.at
             && (new.pose != old.pose
+                || new_road.camera_at() != old_road.camera_at()
                 || new.scan != old.scan
                 || new_road.observation != old_road.observation
                 || new_road.elements != old_road.elements

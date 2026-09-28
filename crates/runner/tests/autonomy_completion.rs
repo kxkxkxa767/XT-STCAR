@@ -40,6 +40,8 @@ fn snapshot(
             ranges_m: vec![Some(12.0); config.scan.bins],
         },
         road: RoadFrame {
+            camera_captured_at: None,
+            observation_pose: None,
             elements: None,
             observation: RoadObservation {
                 captured_at,

@@ -25,8 +25,19 @@ pub struct OnlineControlConfig {
 }
 
 impl OnlineControlConfig {
-    /// Copies only vehicle limits and frame identities, never legacy task geometry.
+    /// New configurations follow the lidar-primary task policy. Historical
+    /// visual-first fixtures must select `visual_first_limits` explicitly.
     pub fn from_limits(config: &AutonomyConfig) -> Self {
+        Self::lidar_first(config)
+    }
+    pub fn lidar_first(config: &AutonomyConfig) -> Self {
+        let mut result = Self::visual_first_limits(config);
+        result.world.lidar_cones =
+            Some(xt_stcar_robot_core::lidar_cones::LidarConeConfig::simulation());
+        result
+    }
+    /// Copies only vehicle limits and frame identities, never legacy task geometry.
+    pub fn visual_first_limits(config: &AutonomyConfig) -> Self {
         let mut world = LocalWorldConfig::simulation(
             config.mission.body_frame.clone(),
             config.scan.frame_id.clone(),
@@ -53,6 +64,10 @@ pub(crate) struct OnlineSession {
     world: LocalWorld,
     cone_association: ConeAssociationConfig,
     last_elements: Option<ElementFrame>,
+    last_visual_pose: Option<PoseEstimate>,
+    last_range_pose: Option<PoseEstimate>,
+    max_speed_mps: f64,
+    max_yaw_rate_radps: f64,
     /// A first credible stop-region observation may restrict motion, but cannot
     /// create a task identity, confirmation or green admission. Fixed capacity.
     pending_stop_lines: [Option<ElementTrack>; MAX_ELEMENTS],
@@ -105,6 +120,11 @@ impl OnlineSession {
             world: LocalWorld::new(config.world).map_err(|e| e.to_string())?,
             cone_association: config.cone_association,
             last_elements: None,
+            last_visual_pose: None,
+            last_range_pose: None,
+            max_speed_mps: autonomy.navigation.max_speed_mps,
+            max_yaw_rate_radps: autonomy.navigation.max_speed_mps
+                * autonomy.navigation.max_curvature_per_m,
             pending_stop_lines: [None; MAX_ELEMENTS],
             confirmed_stop_line: None,
             stop_lines_released: false,
@@ -114,6 +134,10 @@ impl OnlineSession {
 
     pub(crate) fn start(&mut self) -> Result<()> {
         self.mission.start().map_err(|e| e.to_string())
+    }
+
+    pub(crate) fn road_semantics_required(&self) -> bool {
+        self.world.config().lidar_cones.is_none() || self.mission.phase() != MissionPhase::Cones
     }
 
     pub(crate) fn update(
@@ -129,7 +153,8 @@ impl OnlineSession {
             .as_ref()
             .ok_or("online control requires an explicit element frame")?;
         if elements.captured_at != road.observation.captured_at
-            || elements.captured_at != pose.captured_at
+            || (self.world.config().lidar_cones.is_none()
+                && elements.captured_at != pose.captured_at)
             || lidar_in_body != self.cone_association.lidar_in_body
         {
             return Err(
@@ -145,22 +170,78 @@ impl OnlineSession {
         {
             return Err("online raw elements changed at one timestamp or exceeded capacity".into());
         }
-        let associated = xt_stcar_robot_core::local_world::associate_visual_cones(
-            elements,
-            scan,
-            &self.cone_association,
-        )
-        .map_err(|e| e.to_string())?;
+        let source_pose = road.source_pose(pose)?;
+        if self
+            .last_visual_pose
+            .as_ref()
+            .is_some_and(|old| old.captured_at == source_pose.captured_at && old != source_pose)
+        {
+            return Err("visual capture pose changed without a new frame".into());
+        }
+        if self.world.config().lidar_cones.is_some()
+            && let Some(old) = &self.last_range_pose
+            && pose.captured_at > old.captured_at
+        {
+            let dt = (pose.captured_at.0 - old.captured_at.0) as f64 / 1000.0;
+            let yaw_delta = (pose.pose.yaw_rad - old.pose.yaw_rad + std::f64::consts::PI)
+                .rem_euclid(std::f64::consts::TAU)
+                - std::f64::consts::PI;
+            if pose.pose.point().distance(old.pose.point())
+                > self.max_speed_mps * dt + 2.0 * self.world.config().pose_position_error_m + 1e-9
+                || yaw_delta.abs()
+                    > self.max_yaw_rate_radps * dt
+                        + 2.0 * self.world.config().pose_heading_error_rad
+                        + 1e-9
+            {
+                return Err(
+                    "lidar tracking pose jumped beyond vehicle motion and pose error bounds".into(),
+                );
+            }
+        }
         self.world
             .update_scan(at, pose, scan, lidar_in_body)
             .map_err(|e| e.to_string())?;
-        self.world
-            .update(at, pose, &associated)
-            .map_err(|e| e.to_string())?;
-        self.world
-            .maintain_confirmed_cones(at, &self.cone_association)
-            .map_err(|e| e.to_string())?;
-        self.last_elements = Some(elements.clone());
+        self.last_range_pose = Some(pose.clone());
+        if self.world.config().lidar_cones.is_some() {
+            self.world
+                .update_lidar_cones(at)
+                .map_err(|e| e.to_string())?;
+        }
+        let new_visual = self
+            .last_elements
+            .as_ref()
+            .is_none_or(|old| elements.captured_at > old.captured_at);
+        let associated = if new_visual {
+            let source_pose = road.source_pose(pose)?;
+            let associated = if elements.captured_at == scan.captured_at {
+                xt_stcar_robot_core::local_world::associate_visual_cones(
+                    elements,
+                    scan,
+                    &self.cone_association,
+                )
+                .map_err(|e| e.to_string())?
+            } else {
+                // No retrospective lidar fusion without the matching scan.
+                // Regions retain their own real pose/time. Cone YOLO boxes
+                // remain diagnostics until actual same-time fusion is possible.
+                let mut regions = elements.clone();
+                regions.observations.retain(|o| o.kind != ElementKind::Cone);
+                regions
+            };
+            self.world
+                .update(at, source_pose, &associated)
+                .map_err(|e| e.to_string())?;
+            self.last_elements = Some(elements.clone());
+            self.last_visual_pose = Some(source_pose.clone());
+            Some(associated)
+        } else {
+            None
+        };
+        if self.world.config().lidar_cones.is_none() {
+            self.world
+                .maintain_confirmed_cones(at, &self.cone_association)
+                .map_err(|e| e.to_string())?;
+        }
         let mut report = self
             .mission
             .update(at, pose, &road.observation, &mut self.world);
@@ -175,7 +256,9 @@ impl OnlineSession {
             // The snapshot's errors already include age through `at`.
             self.confirmed_stop_line = Some((fresh, at));
         }
-        self.update_pending_stop_lines(at, pose, &associated, &report)?;
+        if let Some(associated) = &associated {
+            self.update_pending_stop_lines(at, road.source_pose(pose)?, associated, &report)?;
+        }
         self.orbit_speed_hint
             .apply(at, pose, &self.world, &mut report);
         Ok(report)
@@ -611,7 +694,8 @@ pub(crate) fn source_stop_regions(
             heading_error_rad,
             first_seen: frame.captured_at,
             last_seen: frame.captured_at,
-            last_visual_at: frame.captured_at,
+            last_visual_at: Some(frame.captured_at),
+            lidar: None,
             last_geometry_at: frame.captured_at,
             observations: 1,
             processed: false,
@@ -717,6 +801,7 @@ mod tests {
             first_seen: read!(first_seen),
             last_seen: read!(last_seen),
             last_visual_at: read!(last_visual_at),
+            lidar: None,
             last_geometry_at: read!(last_geometry_at),
             observations: read!(observations),
             processed: read!(processed),
@@ -818,6 +903,8 @@ mod tests {
             vec![]
         };
         let road = RoadFrame {
+            camera_captured_at: None,
+            observation_pose: None,
             observation: RoadObservation {
                 captured_at: Timestamp(at),
                 frame_id: config.mission.body_frame.clone(),
@@ -858,7 +945,7 @@ mod tests {
                 (track.id, track.color, track.observations),
                 (initial.id, ElementColor::Red, 2)
             );
-            assert_eq!(track.last_visual_at, Timestamp(100));
+            assert_eq!(track.last_visual_at, Some(Timestamp(100)));
             assert_eq!(track.last_geometry_at, Timestamp(at));
             assert!(track.position.distance(initial.position) < 1e-9);
             assert!(track.position_error_m <= session.world.config().max_position_error_m);

@@ -169,6 +169,8 @@ impl RoadPipeline {
         self.diagnostics.total_ms = started.elapsed().as_secs_f64() * 1000.;
         self.diagnostics.detections = detections;
         Ok(RoadFrame {
+            camera_captured_at: None,
+            observation_pose: None,
             elements,
             observation,
             image_width_px: image.width(),

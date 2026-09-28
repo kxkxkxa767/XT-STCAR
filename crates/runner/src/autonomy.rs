@@ -22,11 +22,38 @@ pub type Result<T> = std::result::Result<T, String>;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RoadFrame {
+    /// Real camera acquisition heartbeat, independently supplied by the capture
+    /// adapter. None preserves legacy same-frame camera/perception semantics.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_captured_at: Option<Timestamp>,
+    /// Pose associated with the semantic frame, never the current lidar pose
+    /// relabeled with an old timestamp. Required for delayed body projections.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation_pose: Option<PoseEstimate>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub elements: Option<xt_stcar_robot_core::local_world::ElementFrame>,
     pub observation: RoadObservation,
     pub image_width_px: u32,
     pub image_height_px: u32,
+}
+
+impl RoadFrame {
+    pub fn camera_at(&self) -> Timestamp {
+        self.camera_captured_at
+            .unwrap_or(self.observation.captured_at)
+    }
+    pub fn source_pose<'a>(&'a self, current: &'a PoseEstimate) -> Result<&'a PoseEstimate> {
+        let pose = self.observation_pose.as_ref().unwrap_or(current);
+        if pose.captured_at != self.observation.captured_at
+            || pose.frame_id != current.frame_id
+            || !pose.pose.valid()
+            || !pose.quality.is_finite()
+            || !(0.0..=1.0).contains(&pose.quality)
+        {
+            return Err("road projection requires a pose at the same capture timestamp as its semantic frame".into());
+        }
+        Ok(pose)
+    }
 }
 
 /// A single latest value. No unbounded queue, waiting for inference, or mutex wait.
@@ -104,6 +131,7 @@ pub struct AutonomyController {
     last_scan: Option<Timestamp>,
     previous_scan: Option<LidarSample>,
     last_road: Option<Timestamp>,
+    last_camera: Option<Timestamp>,
     fault: Option<String>,
     started: bool,
     timing_enabled: bool,
@@ -183,6 +211,7 @@ impl AutonomyController {
             last_scan: None,
             previous_scan: None,
             last_road: None,
+            last_camera: None,
             fault: None,
             started: false,
             timing_enabled: false,
@@ -337,6 +366,10 @@ impl AutonomyController {
             return Err("invalid road image dimensions".into());
         }
         let road = &road_frame.observation;
+        let road_required = self
+            .online
+            .as_ref()
+            .is_none_or(|s| s.road_semantics_required());
         if !self.started {
             return Err("autonomy must be explicitly started".into());
         }
@@ -349,7 +382,7 @@ impl AutonomyController {
         for (stamp, previous, name) in [
             (pose.captured_at, self.last_pose, "pose"),
             (scan.captured_at, self.last_scan, "laser"),
-            (road.captured_at, self.last_road, "road perception"),
+            (road_frame.camera_at(), self.last_camera, "camera"),
         ] {
             if stamp > at
                 || at.0 - stamp.0 >= self.config.max_sensor_age_ms
@@ -359,6 +392,13 @@ impl AutonomyController {
                     "{name} has a future, expired or regressing timestamp"
                 ));
             }
+        }
+        if road.captured_at > road_frame.camera_at()
+            || self.last_road.is_some_and(|old| road.captured_at < old)
+            || (road_required
+                && at.0.saturating_sub(road.captured_at.0) >= self.config.max_sensor_age_ms)
+        {
+            return Err("invalid or expired road semantics".into());
         }
         validate_full_scan(scan, &self.config.scan).map_err(|e| e.to_string())?;
         // Projection requires a pose at the scan's capture time. Live adapters must
@@ -378,11 +418,11 @@ impl AutonomyController {
         if road.cones_body_m.len() > 256 || road.cones_body_m.iter().any(|p| !p.valid()) {
             return Err("invalid or excessive visual obstacle candidates".into());
         }
-        if !road.cones_body_m.is_empty() && road.captured_at != pose.captured_at {
-            return Err(
-                "visual obstacle projection requires a pose at the same capture timestamp".into(),
-            );
-        }
+        let visual_pose = if road.cones_body_m.is_empty() {
+            pose
+        } else {
+            road_frame.source_pose(pose)?
+        };
         let hint_dt_s = self.last_tick.map_or(
             self.config.navigation.control_period_ms as f64 / 1000.0,
             |old| {
@@ -394,6 +434,7 @@ impl AutonomyController {
         self.last_pose = Some(pose.captured_at);
         self.last_scan = Some(scan.captured_at);
         self.last_road = Some(road.captured_at);
+        self.last_camera = Some(road_frame.camera_at());
         self.previous_scan = Some(scan.clone());
         // Navigation gets obstacle positions from range returns, not a simulator map.
         let mut obstacles = Vec::with_capacity(scan.ranges_m.len() + road.cones_body_m.len());
@@ -411,7 +452,7 @@ impl AutonomyController {
             }
         }
         obstacles.extend(road.cones_body_m.iter().map(|point| ObstacleDisc {
-            center: pose.pose.body_to_world(*point),
+            center: visual_pose.pose.body_to_world(*point),
             radius_m: self.config.cone_radius_m,
         }));
         let mut online_report = self
@@ -482,7 +523,13 @@ impl AutonomyController {
                     at,
                     navigation_pose,
                     &obstacles,
-                    scan.captured_at.min(road.captured_at),
+                    scan.captured_at
+                        .min(road_frame.camera_at())
+                        .min(if road_required {
+                            road.captured_at
+                        } else {
+                            scan.captured_at
+                        }),
                     *point,
                     heading,
                     *max_speed_mps,
@@ -554,7 +601,7 @@ impl AutonomyController {
             at,
             Event::Sensor {
                 sample: SensorSample::Vision(VisionSample {
-                    captured_at: road.captured_at,
+                    captured_at: road_frame.camera_at(),
                     frame_id: self.config.safety.frames.vision_frame.clone(),
                     image_width_px: road_frame.image_width_px,
                     image_height_px: road_frame.image_height_px,

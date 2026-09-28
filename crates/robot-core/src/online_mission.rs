@@ -171,6 +171,9 @@ pub enum OnlineBehavior {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct OnlineMissionReport {
+    /// Changes on each task/target transition, including cone 1 -> cone 2.
+    pub task_revision: u64,
+    pub requires_road_semantics: bool,
     pub mission: MissionReport,
     pub goal_heading_rad: Option<f64>,
     pub travel_boundary: Option<HalfPlane>,
@@ -223,6 +226,8 @@ impl Proposal {
 }
 
 pub struct OnlineMission {
+    task_revision: u64,
+    tick_requires_road: bool,
     config: OnlineMissionConfig,
     phase: MissionPhase,
     initial_heading: Option<f64>,
@@ -255,6 +260,8 @@ impl OnlineMission {
     pub fn new(config: OnlineMissionConfig) -> Result<Self, ValidationError> {
         config.validate()?;
         Ok(Self {
+            task_revision: 0,
+            tick_requires_road: true,
             config,
             phase: MissionPhase::Idle,
             initial_heading: None,
@@ -300,6 +307,7 @@ impl OnlineMission {
             return Err(ValidationError("online mission can only start once".into()));
         }
         self.phase = MissionPhase::ApproachCrosswalk;
+        self.task_revision += 1;
         Ok(())
     }
 
@@ -310,6 +318,8 @@ impl OnlineMission {
         road: &RoadObservation,
         world: &mut LocalWorld,
     ) -> OnlineMissionReport {
+        self.tick_requires_road =
+            self.phase != MissionPhase::Cones || world.config().lidar_cones.is_none();
         if matches!(self.phase, MissionPhase::Completed | MissionPhase::Fault) {
             return self.report(
                 now,
@@ -395,6 +405,24 @@ impl OnlineMission {
             MissionPhase::Completed | MissionPhase::Fault => unreachable!(),
         };
         match proposal {
+            Ok(_)
+                if !self.tick_requires_road
+                    && self.phase != MissionPhase::Cones
+                    && (now.0.saturating_sub(road.captured_at.0)
+                        >= self.config.max_road_age_ms
+                        || pose.captured_at.0.abs_diff(road.captured_at.0)
+                            > self.config.max_observation_skew_ms) =>
+            {
+                self.finish_tick(
+                    now,
+                    pose,
+                    new_pose,
+                    Proposal::stop(
+                        OnlineBehavior::Search,
+                        "next element requires fresh visual semantics",
+                    ),
+                )
+            }
             Ok(proposal) => self.finish_tick(now, pose, new_pose, proposal),
             Err(error) => self.fault(now, error),
         }
@@ -425,7 +453,7 @@ impl OnlineMission {
             return Err("crosswalk crossed before required observed stop".into());
         }
         if self.stopped(pose) && self.near(pose.pose, goal, heading) {
-            self.phase = MissionPhase::CrosswalkStop;
+            self.set_phase(MissionPhase::CrosswalkStop);
             if new_pose {
                 let since = *self.stop_since.get_or_insert(pose.captured_at);
                 self.stop_elapsed_ms = pose.captured_at.0 - since.0;
@@ -447,7 +475,7 @@ impl OnlineMission {
         }
         self.stop_since = None;
         self.stop_elapsed_ms = 0;
-        self.phase = MissionPhase::ApproachCrosswalk;
+        self.set_phase(MissionPhase::ApproachCrosswalk);
         Ok(self.local_target(
             now,
             pose.pose,
@@ -765,7 +793,7 @@ impl OnlineMission {
         }
         if self.stopped(pose) && self.near(pose.pose, goal, heading) && inside {
             if self.phase != MissionPhase::WaitGreen {
-                self.phase = MissionPhase::WaitGreen;
+                self.set_phase(MissionPhase::WaitGreen);
                 self.light_wait_since = Some(pose.captured_at);
                 self.reset_green();
             }
@@ -879,7 +907,7 @@ impl OnlineMission {
             world
                 .mark_processed(track.id)
                 .map_err(|error| error.to_string())?;
-            self.phase = MissionPhase::Completed;
+            self.set_phase(MissionPhase::Completed);
             return Ok(Proposal::stop(
                 OnlineBehavior::Completed,
                 "observed finish contains whole stationary vehicle",
@@ -908,6 +936,7 @@ impl OnlineMission {
         if self.active.is_none() {
             let track = self.select_track(now, pose, kind, world)?;
             self.active = Some(track.id);
+            self.task_revision = self.task_revision.saturating_add(1);
             self.active_geometry = Some(track);
             self.search_since = None;
             self.search_distance = 0.0;
@@ -927,7 +956,8 @@ impl OnlineMission {
             yaw_rad: heading,
             ..pose
         };
-        world
+        let lidar_first = kind == ElementKind::Cone && world.config().lidar_cones.is_some();
+        let mut candidates = world
             .tracks(now)
             .filter(|track| {
                 track.kind == kind
@@ -939,14 +969,14 @@ impl OnlineMission {
                 if kind == ElementKind::Cone {
                     let color_matches = self.config.required_cone_colors[self.cone_index.min(1)]
                         .is_none_or(|color| color == track.color);
-                    color_matches
+                    (lidar_first || color_matches)
                         && relative.x_m > self.config.goal_tolerance_m
                         // The second cone may be on either lateral side of
                         // the reverse departure direction when lane widths or
                         // cone offsets differ. Acquisition does not determine
                         // its required clockwise passing side.
                         && (self.cone_index == 1 || relative.y_m >= -track.position_error_m)
-                        && relative.y_m.abs() <= relative.x_m
+                        && (lidar_first || relative.y_m.abs() <= relative.x_m)
                         && !self.processed.iter().flatten().any(|old| {
                             old.position.distance(track.position)
                                 <= self.config.processed_exclusion_m.max(old.radius_m * 2.0)
@@ -960,21 +990,43 @@ impl OnlineMission {
                             .is_some_and(|yaw| wrap(yaw - heading).abs() <= FRAC_PI_4)
                 }
             })
-            .min_by(|a, b| {
+            .collect::<Vec<_>>();
+        let compare = |a: &ElementTrack, b: &ElementTrack| {
+            let ar = reference.world_to_body(a.position);
+            let br = reference.world_to_body(b.position);
+            if kind == ElementKind::Cone {
+                ar.y_m
+                    .atan2(ar.x_m)
+                    .abs()
+                    .total_cmp(&br.y_m.atan2(br.x_m).abs())
+                    .then_with(|| ar.x_m.total_cmp(&br.x_m))
+            } else {
+                pose.point()
+                    .distance(a.position)
+                    .total_cmp(&pose.point().distance(b.position))
+            }
+        };
+        candidates.sort_by(compare);
+        if lidar_first {
+            if candidates.len() > 2 - self.cone_index.min(1) {
+                return None;
+            }
+            if let [a, b, ..] = candidates.as_slice() {
                 let ar = reference.world_to_body(a.position);
                 let br = reference.world_to_body(b.position);
-                if kind == ElementKind::Cone {
-                    ar.y_m
-                        .atan2(ar.x_m)
-                        .abs()
-                        .total_cmp(&br.y_m.atan2(br.x_m).abs())
-                        .then_with(|| ar.x_m.total_cmp(&br.x_m))
-                } else {
-                    pose.point()
-                        .distance(a.position)
-                        .total_cmp(&pose.point().distance(b.position))
+                let error_angle = |t: &ElementTrack| {
+                    (t.position_error_m / pose.point().distance(t.position).max(t.position_error_m))
+                        .min(1.0)
+                        .asin()
+                };
+                if (ar.y_m.atan2(ar.x_m).abs() - br.y_m.atan2(br.x_m).abs()).abs()
+                    <= error_angle(a) + error_angle(b) + 7.0f64.to_radians()
+                {
+                    return None;
                 }
-            })
+            }
+        }
+        candidates.first().copied()
     }
 
     fn search(
@@ -1221,7 +1273,17 @@ impl OnlineMission {
         }
         Ok((goal, heading))
     }
+    fn set_phase(&mut self, phase: MissionPhase) {
+        if self.phase != phase {
+            self.phase = phase;
+            self.task_revision = self.task_revision.saturating_add(1);
+        }
+    }
     fn transition(&mut self, phase: MissionPhase) {
+        if self.phase == MissionPhase::Cones && phase != MissionPhase::Cones {
+            self.last_road = None; // A new lamp phase starts its own real-frame continuity.
+        }
+        self.task_revision = self.task_revision.saturating_add(1);
         self.phase = phase;
         self.active = None;
         self.active_geometry = None;
@@ -1309,6 +1371,8 @@ impl OnlineMission {
     }
     fn report(&self, at: Timestamp, proposal: Proposal) -> OnlineMissionReport {
         OnlineMissionReport {
+            task_revision: self.task_revision,
+            requires_road_semantics: self.tick_requires_road || self.phase != MissionPhase::Cones,
             mission: MissionReport {
                 at,
                 phase: self.phase,
@@ -1333,6 +1397,9 @@ impl OnlineMission {
         }
     }
     fn fault(&mut self, at: Timestamp, reason: impl Into<String>) -> OnlineMissionReport {
+        if self.phase != MissionPhase::Fault {
+            self.task_revision = self.task_revision.saturating_add(1);
+        }
         self.phase = MissionPhase::Fault;
         self.fault_reason.get_or_insert_with(|| reason.into());
         self.report(
@@ -1362,8 +1429,10 @@ impl OnlineMission {
             || pose.captured_at > now
             || road.captured_at > now
             || now.0.saturating_sub(pose.captured_at.0) >= self.config.max_pose_age_ms
-            || now.0.saturating_sub(road.captured_at.0) >= self.config.max_road_age_ms
-            || pose.captured_at.0.abs_diff(road.captured_at.0) > self.config.max_observation_skew_ms
+            || (self.tick_requires_road
+                && (now.0.saturating_sub(road.captured_at.0) >= self.config.max_road_age_ms
+                    || pose.captured_at.0.abs_diff(road.captured_at.0)
+                        > self.config.max_observation_skew_ms))
         {
             return Err("invalid, stale or mismatched online mission observation".into());
         }
@@ -1377,7 +1446,8 @@ impl OnlineMission {
         if let Some(old) = &self.last_road
             && (road.captured_at < old.captured_at
                 || (road.captured_at == old.captured_at && road != old)
-                || road.captured_at.0 - old.captured_at.0 > self.config.max_road_gap_ms)
+                || (self.tick_requires_road
+                    && road.captured_at.0 - old.captured_at.0 > self.config.max_road_gap_ms))
         {
             return Err("road timestamp/continuity invalid in online mission".into());
         }
@@ -1498,6 +1568,7 @@ fn region_error(track: ElementTrack) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    include!("online_mission_lidar_tests.rs");
     use crate::LidarSample;
     use crate::local_world::{
         ElementFrame, ElementObservation, LocalWorldConfig, ObservationSource,
@@ -2192,7 +2263,7 @@ mod tests {
                     .unwrap();
                 assert!(tracked.processed);
                 assert_eq!(tracked.last_geometry_at, Timestamp(at));
-                assert_eq!(tracked.last_visual_at, Timestamp(at));
+                assert_eq!(tracked.last_visual_at, Some(Timestamp(at)));
                 assert_eq!(tracked.observations as u64, at / 100);
                 assert_eq!(report.mission.green_elapsed_ms, 300);
                 assert_eq!(

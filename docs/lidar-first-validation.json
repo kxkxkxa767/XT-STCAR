@@ -1,0 +1,1761 @@
+{
+  "date": "2026-09-28",
+  "baseline_commit": "532f8fcf772edc70d6f49d2bf6177c47a4607c50",
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "hardware_actions": {
+    "motor_commands": false,
+    "training": false,
+    "deployment": false
+  },
+  "provided_package": {
+    "file": "XT-STCAR_lidar_first_sim_532f8fc (1).zip",
+    "sha256": "f76039c15491b3377b8bc940c4c3c67906f0ac86c4170713b3a0dac0c328cc0d",
+    "verified_manifest_entries": 66,
+    "python_result_not_native": true
+  },
+  "source_sha256": {
+    "crates/robot-core/src/lidar_cones.rs": "a84fefe3d0abe961cbdca84fa25459c098911c0d2e5c8e704b246c6cde882fa7",
+    "crates/robot-core/src/local_world.rs": "2fbfc882bccc5246ff1bc3456d0816777ff3c05c6c9004fda4d612157f9ffd97",
+    "crates/robot-core/src/online_mission.rs": "da07c7ca609e1154ed2f79fed15786e25c0e44cd3f838c93178a18d68f857683",
+    "crates/runner/src/online.rs": "643be5e92617f721c4179ce03d1609123e69d393ce5a7e99b0c72dfa18b8e289",
+    "crates/runner/src/autonomy.rs": "f16d983ed676462a2ba7ec758cd1822cb7378c9284ae89c95797fe8b472b237d",
+    "crates/runner/src/control_runtime.rs": "c204f5e3c9b6438f890e5c8055c297ed3b46351f38c787e7ec056e93c8261301",
+    "crates/runner/src/control_execution.rs": "1b1b1e2a83fad8dd5688ee51411c6f2660b383fca130f2cde44e6ec5e46f21bf",
+    "crates/runner/src/online_simulation.rs": "33dc5d2e001a52a96dc07878c0a06e5c5630de45aaef763c166d853ca509272d",
+    "crates/runner/src/simulation.rs": "7ac54c20ba6fa806cb9c4f909860607466a00cfd43112fa444007afe16cbe692",
+    "crates/runner/src/async_simulation.rs": "fde3c56292267d672f2bd174ab39ed9b4b736bd8bba3c27d4c783eab1233c33c",
+    "crates/runner/examples/lidar_matrix.rs": "d093f04f2f7ed94d001178003b9b89bc2f4cfa8258a5ed93e234c0e6039816cc"
+  },
+  "checks": {
+    "baseline_workspace": {
+      "passed": 598,
+      "failed": 0,
+      "ignored": 3,
+      "log_sha256": "4857e02d102df648130f270b8ebb25ecf6bc69e97a655881f81d021fa5fc8b71"
+    },
+    "workspace_before_diagnostic_export": {
+      "passed": 611,
+      "failed": 0,
+      "ignored": 3,
+      "log_sha256": "b695e7e4191b5244412f76e69c178e2a589a288c3da2ac7df1bcbf7aed974991"
+    },
+    "final_runner_library_after_diagnostic_export": {
+      "passed": 57,
+      "failed": 0,
+      "ignored": 1,
+      "log_sha256": "28538f85c182eeae028781e6138fa82d1aa710d9b4fee2a3902f6173b59e7fb6"
+    },
+    "task_clock_regressions": {
+      "passed": 32,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "0cdf578ac8fe281d7f0299800f0ac0d40548bba14bbe645f8a37d82de3ad09fb"
+    },
+    "fmt": "passed",
+    "clippy_all_targets_deny_warnings": "passed",
+    "final_task_clock_and_captured_window_tests": {
+      "passed": 33,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "82e40052c8f7b53f6ffd61ac1fef5ce857569f4b301ec6b869098027e279ef07"
+    }
+  },
+  "scope": [
+    "Production Rust detector/tracker/mission/Navigator/KnownFree/stopping certificate/independent referee",
+    "Continuous matrix: noiseless full raw raycasts and ideal pose; no cone visual observations",
+    "Non-cone observations: explicit simulation-only ideal semantic and metric adapter, not YOLO validation",
+    "Eight supplied noisy one-frame scans replayed: seven selected-target candidates accepted, large_8x6 target had four points and was rejected by five-point minimum; none alone confirms a track",
+    "No native/physical full-race success claim; circular section bounds remain uncalibrated"
+  ],
+  "matrix": {
+    "normal_runs": 16,
+    "delay_runs": 3,
+    "completed_runs": 0,
+    "runs_with_both_cones_completed": 4,
+    "all_final_speed_and_curvature_zero": true,
+    "all_referee_order_and_trajectory_valid": true,
+    "all_minimum_cone_clearance_positive": true,
+    "file": "work/lidar-native-final-20260928/matrix.json",
+    "sha256": "ea4d18eb7d02c23a665259f20a6ec3e13b44938ebddcdc79e84835a9033a1740",
+    "results": [
+      {
+        "name": "small_5x4",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 46200,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 4.200579782555104,
+          "y_m": 2.6430384836022927,
+          "yaw_rad": 2.786667490932918
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.34145345149740897,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 46926,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 2.839231709309324,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 23300,
+              "entry_heading_error_rad": 0.03127516515370532,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": 26600,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "orbit_cone",
+        "last_pre_fault_reason": "no_forward_kinematic_path",
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 3.030444183030988,
+              "y_m": 2.675000000000007
+            },
+            "next_heading_rad": -3.141592653589793,
+            "next_max_speed_mps": 0.11132812499999999,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.11132812499999999,
+          "point": {
+            "x_m": 3.830444183030988,
+            "y_m": 2.675000000000007
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "small_5x4",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 47463,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 4.234871418245187,
+          "y_m": 2.6374640346073197,
+          "yaw_rad": 2.7403293065503647
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.3427559212223668,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 95250,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 2.7885798241898305,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 24097,
+              "entry_heading_error_rad": 0.012791161112801763,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": 27582,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 475,
+          "certificate_unsafe": 0,
+          "completed_plans": 475,
+          "curvature_slew": 0,
+          "drive_polls": 1955,
+          "execution_changed": 0,
+          "newly_adopted_plans": 474,
+          "output_polls": 2849,
+          "stop_polls": 894,
+          "submissions": 475,
+          "task_changed": 1,
+          "turning_drive_polls": 1653
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "orbit_cone",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 3.0262244163127914,
+              "y_m": 2.675000000000008
+            },
+            "next_heading_rad": -3.141592653589793,
+            "next_max_speed_mps": 0.094921875,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.094921875,
+          "point": {
+            "x_m": 3.826224416312791,
+            "y_m": 2.675000000000008
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "tall_5x6",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 26100,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 2.3949957240894175,
+          "y_m": 1.1294655691746927,
+          "yaw_rad": 1.020414467354004
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 2.0309285007892455,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 26447,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "counterclockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": "terminal_budget_exhausted",
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 3.2000000000000046,
+            "y_m": 2.3249999999999975
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "tall_5x6",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 27383,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 2.4479342588740876,
+          "y_m": 1.2380034623777045,
+          "yaw_rad": 1.1004701159211923
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 1.9058517997800162,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 54860,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "counterclockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 274,
+          "certificate_unsafe": 0,
+          "completed_plans": 274,
+          "curvature_slew": 0,
+          "drive_polls": 780,
+          "execution_changed": 0,
+          "newly_adopted_plans": 273,
+          "output_polls": 1644,
+          "stop_polls": 864,
+          "submissions": 274,
+          "task_changed": 1,
+          "turning_drive_polls": 406
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 3.199999999999987,
+            "y_m": 2.3250000000000037
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "wide_8x4",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 51200,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 7.344122031633767,
+          "y_m": 2.097769806593097,
+          "yaw_rad": 1.6552407220117669
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5160990752056531,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 51957,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 1.6861067751387826,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 36200,
+              "entry_heading_error_rad": 0.02824665709949903,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": 37600,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "orbit_cone",
+        "last_pre_fault_reason": "forward_node_budget_exhausted",
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 6.327317722996804,
+              "y_m": 2.8499999999999943
+            },
+            "next_heading_rad": -3.141592653589793,
+            "next_max_speed_mps": 0.3,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.3,
+          "point": {
+            "x_m": 6.978150893152765,
+            "y_m": 2.7027600752584076
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "wide_8x4",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 51983,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 7.338163541413447,
+          "y_m": 2.139373747031344,
+          "yaw_rad": 1.733239645187206
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5182061711075305,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 104228,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 1.7355733077725333,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 36662,
+              "entry_heading_error_rad": 0.0037717299166502016,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": 38118,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 520,
+          "certificate_unsafe": 0,
+          "completed_plans": 520,
+          "curvature_slew": 0,
+          "drive_polls": 2248,
+          "execution_changed": 0,
+          "newly_adopted_plans": 519,
+          "output_polls": 3120,
+          "stop_polls": 872,
+          "submissions": 520,
+          "task_changed": 1,
+          "turning_drive_polls": 1706
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "orbit_cone",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 6.325395563324931,
+              "y_m": 2.849999999999995
+            },
+            "next_heading_rad": -3.141592653589793,
+            "next_max_speed_mps": 0.3,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.3,
+          "point": {
+            "x_m": 6.953940832653922,
+            "y_m": 2.718636013882871
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "large_8x6",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 137500,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 1.0146268631644797,
+          "y_m": 4.04146367441376,
+          "yaw_rad": -0.8415834292850102
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.30917487879245303,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 140053,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 1,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589809,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 37800,
+              "entry_heading_error_rad": 0.03079489668631341,
+              "exit_heading_error_rad": 0.035391192311558406,
+              "index": 0,
+              "outer_side_at": 39200,
+              "passed_at": 46700,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 7,
+        "last_pre_fault_target": {
+          "type": "stop"
+        }
+      },
+      {
+        "name": "large_8x6",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 136789,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 1.0485274290785485,
+          "y_m": 4.060160865667885,
+          "yaw_rad": -0.8553428420786169
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.3009650435424153,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 274665,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 1,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589775,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 38851,
+              "entry_heading_error_rad": 0.00205638555401233,
+              "exit_heading_error_rad": 0.06808770589575053,
+              "index": 0,
+              "outer_side_at": 40323,
+              "passed_at": 47787,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 1368,
+          "certificate_unsafe": 0,
+          "completed_plans": 1368,
+          "curvature_slew": 0,
+          "drive_polls": 7320,
+          "execution_changed": 0,
+          "newly_adopted_plans": 1367,
+          "output_polls": 8208,
+          "stop_polls": 888,
+          "submissions": 1368,
+          "task_changed": 1,
+          "turning_drive_polls": 6778
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 7,
+        "last_pre_fault_target": {
+          "type": "stop"
+        }
+      },
+      {
+        "name": "nominal_7x5",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 106500,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 5.57775451938738,
+          "y_m": 4.387027161659008,
+          "yaw_rad": 0.10312530262812025
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5147638426799486,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 108274,
+          "available_cones": 2,
+          "both_completed": true,
+          "completed_cones": 2,
+          "cones": [
+            {
+              "angular_progress_rad": 3.1415926535897833,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 31700,
+              "entry_heading_error_rad": 0.03290258204006813,
+              "exit_heading_error_rad": 0.09382363372149616,
+              "index": 0,
+              "outer_side_at": 33200,
+              "passed_at": 40600,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 3.1415926535897976,
+              "began_in_required_order": true,
+              "direction": "clockwise",
+              "entered_at": 64200,
+              "entry_heading_error_rad": 0.030717146309903853,
+              "exit_heading_error_rad": 0.035894497532510616,
+              "index": 1,
+              "outer_side_at": 65700,
+              "passed_at": 73100,
+              "passed_in_required_order": true
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "approach_light",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "approach_region",
+        "last_pre_fault_reason": "no_forward_kinematic_path",
+        "last_pre_fault_task_revision": 9,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 5.68,
+            "y_m": 4.4
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "nominal_7x5",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 127583,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 0.7854652809135995,
+          "y_m": 2.6672863453198508,
+          "yaw_rad": -1.3580066762814658
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.34339627701558634,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 256089,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 1,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589802,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 32260,
+              "entry_heading_error_rad": 0.003635145560591191,
+              "exit_heading_error_rad": 0.06895510263227633,
+              "index": 0,
+              "outer_side_at": 33731,
+              "passed_at": 41223,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 1276,
+          "certificate_unsafe": 0,
+          "completed_plans": 1276,
+          "curvature_slew": 0,
+          "drive_polls": 6784,
+          "execution_changed": 0,
+          "newly_adopted_plans": 1275,
+          "output_polls": 7656,
+          "stop_polls": 872,
+          "submissions": 1276,
+          "task_changed": 1,
+          "turning_drive_polls": 6218
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 7,
+        "last_pre_fault_target": {
+          "type": "stop"
+        }
+      },
+      {
+        "name": "unequal_bottom1_top2",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 48300,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 6.343080951185651,
+          "y_m": 3.098307749061447,
+          "yaw_rad": 1.6843903817531931
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5163383395275718,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 49006,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 1.6868774595761553,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 33300,
+              "entry_heading_error_rad": 0.027619050341275653,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": 34700,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "orbit_cone",
+        "last_pre_fault_reason": "forward_node_budget_exhausted",
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 5.3271364201062354,
+              "y_m": 3.849999999999991
+            },
+            "next_heading_rad": -3.141592653589793,
+            "next_max_speed_mps": 0.3,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.3,
+          "point": {
+            "x_m": 5.978356404429347,
+            "y_m": 3.7026202034822475
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "unequal_bottom1_top2",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 69663,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 6.3418776485256645,
+          "y_m": 3.119945114792782,
+          "yaw_rad": 1.6823703715523646
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5191952081213689,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 139681,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 1.71231722781152,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 54415,
+              "entry_heading_error_rad": 0.01310511305105333,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": 55874,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 697,
+          "certificate_unsafe": 0,
+          "completed_plans": 697,
+          "curvature_slew": 0,
+          "drive_polls": 3309,
+          "execution_changed": 0,
+          "newly_adopted_plans": 696,
+          "output_polls": 4181,
+          "stop_polls": 872,
+          "submissions": 697,
+          "task_changed": 1,
+          "turning_drive_polls": 2767
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "orbit_cone",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 5.32506070589174,
+              "y_m": 3.8500000000000045
+            },
+            "next_heading_rad": -3.141592653589793,
+            "next_max_speed_mps": 0.3,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.3,
+          "point": {
+            "x_m": 5.957423632680659,
+            "y_m": 3.7164241901731376
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "unequal_bottom2_top1",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 105300,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 5.551363413859119,
+          "y_m": 5.484557019539462,
+          "yaw_rad": 0.12893253334065902
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5157422979789634,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 106997,
+          "available_cones": 2,
+          "both_completed": true,
+          "completed_cones": 2,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589796,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 32000,
+              "entry_heading_error_rad": 0.029488197087324863,
+              "exit_heading_error_rad": 0.036037124700194045,
+              "index": 0,
+              "outer_side_at": 33400,
+              "passed_at": 40900,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 3.1415926535897936,
+              "began_in_required_order": true,
+              "direction": "clockwise",
+              "entered_at": 63000,
+              "entry_heading_error_rad": 0.03143282482464027,
+              "exit_heading_error_rad": 0.0364092246255292,
+              "index": 1,
+              "outer_side_at": 64400,
+              "passed_at": 71900,
+              "passed_in_required_order": true
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "approach_light",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "approach_region",
+        "last_pre_fault_reason": "no_forward_kinematic_path",
+        "last_pre_fault_task_revision": 9,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 5.68,
+            "y_m": 5.5
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "unequal_bottom2_top1",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 106189,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 5.562243758924187,
+          "y_m": 5.486201671503995,
+          "yaw_rad": 0.1443954481034062
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5192137251014497,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 213110,
+          "available_cones": 2,
+          "both_completed": true,
+          "completed_cones": 2,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589786,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 32465,
+              "entry_heading_error_rad": 0.002717845193295876,
+              "exit_heading_error_rad": 0.08029669524351135,
+              "index": 0,
+              "outer_side_at": 33990,
+              "passed_at": 41450,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 3.141592653589797,
+              "began_in_required_order": true,
+              "direction": "clockwise",
+              "entered_at": 63668,
+              "entry_heading_error_rad": 0.0022203192168426256,
+              "exit_heading_error_rad": 0.06281535192760623,
+              "index": 1,
+              "outer_side_at": 65191,
+              "passed_at": 72663,
+              "passed_in_required_order": true
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "approach_light"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 1062,
+          "certificate_unsafe": 0,
+          "completed_plans": 1062,
+          "curvature_slew": 0,
+          "drive_polls": 5469,
+          "execution_changed": 0,
+          "newly_adopted_plans": 1061,
+          "output_polls": 6372,
+          "stop_polls": 903,
+          "submissions": 1062,
+          "task_changed": 1,
+          "turning_drive_polls": 4934
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "approach_region",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 9,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 5.68,
+            "y_m": 5.5
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "cones_shifted",
+        "mode": "sync",
+        "completed": false,
+        "elapsed_ms": 61000,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 3.564152116359627,
+          "y_m": 2.5003496732742283,
+          "yaw_rad": -2.2145813790956104
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5162938459292186,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 61939,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 1,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589814,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 30700,
+              "entry_heading_error_rad": 0.028123280422421626,
+              "exit_heading_error_rad": 0.04013628449041473,
+              "index": 0,
+              "outer_side_at": 32100,
+              "passed_at": 39800,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "fault"
+        ],
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": "terminal_budget_exhausted",
+        "last_pre_fault_task_revision": 7,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 2.599999999999996,
+            "y_m": 1.449999999999994
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "cones_shifted",
+        "mode": "async",
+        "completed": false,
+        "elapsed_ms": 122389,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 0.9388031211237091,
+          "y_m": 3.752026549262054,
+          "yaw_rad": -2.703912211245138
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5186397242830509,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 245757,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 1,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589778,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 31382,
+              "entry_heading_error_rad": 0.006431185386013727,
+              "exit_heading_error_rad": 0.0725977961012978,
+              "index": 0,
+              "outer_side_at": 32846,
+              "passed_at": 40602,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 1224,
+          "certificate_unsafe": 0,
+          "completed_plans": 1224,
+          "curvature_slew": 0,
+          "drive_polls": 6330,
+          "execution_changed": 0,
+          "newly_adopted_plans": 1223,
+          "output_polls": 7344,
+          "stop_polls": 1014,
+          "submissions": 1224,
+          "task_changed": 1,
+          "turning_drive_polls": 5788
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 7,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 1.406940344516455,
+            "y_m": 3.1032989176059553
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "small_5x4",
+        "mode": "async-delay",
+        "completed": false,
+        "elapsed_ms": 47249,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 4.2121961167127,
+          "y_m": 2.6420498022486516,
+          "yaw_rad": 2.778917496284513
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.3460089172091439,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 94810,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 0,
+          "cones": [
+            {
+              "angular_progress_rad": 2.8223961486558324,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 23702,
+              "entry_heading_error_rad": 0.0009714908873026395,
+              "exit_heading_error_rad": null,
+              "index": 0,
+              "outer_side_at": 27165,
+              "passed_at": null,
+              "passed_in_required_order": false
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 473,
+          "certificate_unsafe": 0,
+          "completed_plans": 473,
+          "curvature_slew": 0,
+          "drive_polls": 1948,
+          "execution_changed": 0,
+          "newly_adopted_plans": 472,
+          "output_polls": 2836,
+          "stop_polls": 888,
+          "submissions": 473,
+          "task_changed": 1,
+          "turning_drive_polls": 1646
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "orbit_cone",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 5,
+        "last_pre_fault_target": {
+          "arrival": {
+            "admission_radius_m": 0.065,
+            "next": {
+              "x_m": 3.026224896423237,
+              "y_m": 2.6750000000000016
+            },
+            "next_heading_rad": -3.141592653589793,
+            "next_max_speed_mps": 0.104296875,
+            "type": "pass_through"
+          },
+          "max_speed_mps": 0.104296875,
+          "point": {
+            "x_m": 3.8262248964232373,
+            "y_m": 2.6750000000000016
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "nominal_7x5",
+        "mode": "async-delay",
+        "completed": false,
+        "elapsed_ms": 123449,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 0.6527922423906272,
+          "y_m": 3.3739463768848013,
+          "yaw_rad": -1.7325573167134696
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5190179006368616,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 247811,
+          "available_cones": 2,
+          "both_completed": false,
+          "completed_cones": 1,
+          "cones": [
+            {
+              "angular_progress_rad": 3.141592653589805,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 32232,
+              "entry_heading_error_rad": 0.013833211175410032,
+              "exit_heading_error_rad": 0.08411543398861232,
+              "index": 0,
+              "outer_side_at": 33692,
+              "passed_at": 41248,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 0.0,
+              "began_in_required_order": false,
+              "direction": "clockwise",
+              "entered_at": null,
+              "entry_heading_error_rad": null,
+              "exit_heading_error_rad": null,
+              "index": 1,
+              "outer_side_at": null,
+              "passed_at": null,
+              "passed_in_required_order": false
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 1235,
+          "certificate_unsafe": 0,
+          "completed_plans": 1235,
+          "curvature_slew": 0,
+          "drive_polls": 6515,
+          "execution_changed": 0,
+          "newly_adopted_plans": 1234,
+          "output_polls": 7408,
+          "stop_polls": 893,
+          "submissions": 1235,
+          "task_changed": 1,
+          "turning_drive_polls": 5973
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "cone_entry",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 7,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 1.0672912813101043,
+            "y_m": 2.9401370331232473
+          },
+          "type": "target"
+        }
+      },
+      {
+        "name": "cones_shifted",
+        "mode": "async-delay",
+        "completed": false,
+        "elapsed_ms": 120169,
+        "fault": "ordinary stop exceeded 10 seconds",
+        "final_pose": {
+          "x_m": 4.585958809417258,
+          "y_m": 3.98077772468643,
+          "yaw_rad": 0.4003792227493479
+        },
+        "final_actual_speed_mps": 0.0,
+        "final_actual_curvature_per_m": 0.0,
+        "minimum_cone_clearance_m": 0.5188726757642752,
+        "crosswalk_hold_ms": 3000,
+        "green_observed_ms": 0,
+        "online_referee": {
+          "actual_pose_samples": 241191,
+          "available_cones": 2,
+          "both_completed": true,
+          "completed_cones": 2,
+          "cones": [
+            {
+              "angular_progress_rad": 3.1415926535897967,
+              "began_in_required_order": true,
+              "direction": "counterclockwise",
+              "entered_at": 31421,
+              "entry_heading_error_rad": 0.0039602178795377085,
+              "exit_heading_error_rad": 0.03657252483614348,
+              "index": 0,
+              "outer_side_at": 32896,
+              "passed_at": 40647,
+              "passed_in_required_order": true
+            },
+            {
+              "angular_progress_rad": 3.1415926535897762,
+              "began_in_required_order": true,
+              "direction": "clockwise",
+              "entered_at": 84834,
+              "entry_heading_error_rad": 0.001801329905301241,
+              "exit_heading_error_rad": 0.05807724023157057,
+              "index": 1,
+              "outer_side_at": 86362,
+              "passed_at": 93858,
+              "passed_in_required_order": true
+            }
+          ],
+          "failure_reason": null,
+          "order_valid": true,
+          "trajectory_valid": true
+        },
+        "phases": [
+          "approach_crosswalk",
+          "crosswalk_stop",
+          "cones",
+          "approach_light"
+        ],
+        "counts": {
+          "after_window": 0,
+          "before_window": 0,
+          "captures": 1202,
+          "certificate_unsafe": 0,
+          "completed_plans": 1202,
+          "curvature_slew": 0,
+          "drive_polls": 6302,
+          "execution_changed": 0,
+          "newly_adopted_plans": 1201,
+          "output_polls": 7211,
+          "stop_polls": 909,
+          "submissions": 1202,
+          "task_changed": 1,
+          "turning_drive_polls": 5760
+        },
+        "dropped_trace_records": 0,
+        "logging_errors": 0,
+        "last_pre_fault_behavior": "approach_region",
+        "last_pre_fault_reason": null,
+        "last_pre_fault_task_revision": 9,
+        "last_pre_fault_target": {
+          "arrival": {
+            "type": "stop"
+          },
+          "max_speed_mps": 0.18,
+          "point": {
+            "x_m": 5.68,
+            "y_m": 4.4
+          },
+          "type": "target"
+        }
+      }
+    ]
+  },
+  "extended_failure_window_reruns": [
+    {
+      "case": "cones_shifted",
+      "mode": "async-delay",
+      "tail_records": 128,
+      "first_at": 107445,
+      "last_at": 120169,
+      "completed_cones": 2,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "file": "work/lidar-native-windows-20260928/cones_shifted.async-delay.report.json",
+      "sha256": "a8a29b99b3ce04a31c568bad96febd55f48c110396190ab0afddb9098325dafc",
+      "selected_capture_fixture": "crates/runner/tests/fixtures/lidar-first/cones_shifted.async-delay.stop-window.json"
+    },
+    {
+      "case": "cones_shifted",
+      "mode": "sync",
+      "tail_records": 128,
+      "first_at": 48300,
+      "last_at": 61000,
+      "completed_cones": 1,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "file": "work/lidar-native-windows-20260928/cones_shifted.sync.report.json",
+      "sha256": "12512300b6dff40a6bda98c98779c953141efc158add73db1943ee0f5a013131",
+      "selected_capture_fixture": "crates/runner/tests/fixtures/lidar-first/cones_shifted.sync.stop-window.json"
+    },
+    {
+      "case": "nominal_7x5",
+      "mode": "async",
+      "tail_records": 128,
+      "first_at": 114869,
+      "last_at": 127583,
+      "completed_cones": 1,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "file": "work/lidar-native-windows-20260928/nominal_7x5.async.report.json",
+      "sha256": "d9244442ce62a3786ac1139a99c4fa8b1e83d7873fdca744bdff0adfb2247824",
+      "selected_capture_fixture": "crates/runner/tests/fixtures/lidar-first/nominal_7x5.async.stop-window.json"
+    },
+    {
+      "case": "small_5x4",
+      "mode": "sync",
+      "tail_records": 128,
+      "first_at": 33500,
+      "last_at": 46200,
+      "completed_cones": 0,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "file": "work/lidar-native-windows-20260928/small_5x4.sync.report.json",
+      "sha256": "c924dcc3166f883d37d7c88b8c88fbded3808b22c98ddd1f0898d02df4286b0e",
+      "selected_capture_fixture": "crates/runner/tests/fixtures/lidar-first/small_5x4.sync.stop-window.json"
+    },
+    {
+      "case": "tall_5x6",
+      "mode": "sync",
+      "tail_records": 128,
+      "first_at": 13400,
+      "last_at": 26100,
+      "completed_cones": 0,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "file": "work/lidar-native-windows-20260928/tall_5x6.sync.report.json",
+      "sha256": "47bf6618308957802b861f9d91e5da111fc519a7bfb34b6ac0bd784cac992ce4",
+      "selected_capture_fixture": "crates/runner/tests/fixtures/lidar-first/tall_5x6.sync.stop-window.json"
+    }
+  ],
+  "local_inputs_sha256": {
+    "work/lidar-native-final-20260928/cones_shifted.input.json": "234e11e1cdfeac221f449f5c1861cacee34da75dcb735c3165bda2c9c4fa8e42",
+    "work/lidar-native-final-20260928/large_8x6.input.json": "620faafce622cc0addf049c15aa55c855c8d4b57c6e0e3e56d90ae5aeb5f36ab",
+    "work/lidar-native-final-20260928/nominal_7x5.input.json": "7f58235612722c613fa77cadf0192990eea486ac1e47132f790b220dc2ff1306",
+    "work/lidar-native-final-20260928/small_5x4.input.json": "51eaf150b6cc82db764d0b1c5a9cca536b304d70126a1bae03d6661585c98112",
+    "work/lidar-native-final-20260928/tall_5x6.input.json": "0a54860fabc412b3a24fd7463286c6dcf6b28ff8f9b43810ff1570420f35708b",
+    "work/lidar-native-final-20260928/unequal_bottom1_top2.input.json": "6928b443688169f00af56cb49b1e60bb8fe2cde4154260b67e51533f0d32f00c",
+    "work/lidar-native-final-20260928/unequal_bottom2_top1.input.json": "1ddba73052ec5d1cd3cd3f2f39482e6b28d21327c8032d52c6b81037d78fd082",
+    "work/lidar-native-final-20260928/wide_8x4.input.json": "402ea7b7015a939037b92e1676261d08b133713ab5cab56738ca382d1f347bb9"
+  },
+  "known_limits": [
+    "Whole race completion remains 0/19. Entrance/orbit-exit/light-approach failures must be resolved without relaxing safety or increasing original budgets.",
+    "Square-base classification, deskew/self-occlusion, physical geometry calibration and same-shape decoy semantics are not implemented/validated.",
+    "Vehicle capture adapter must supply real camera heartbeat and capture-time semantic pose; deployment is unchanged.",
+    "YOLO four-class semantics, original RGB/HSV fallback migration, actual stop/finish observation protocol remain teammate work."
+  ]
+}

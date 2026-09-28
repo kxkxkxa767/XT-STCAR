@@ -125,6 +125,8 @@ impl Harness {
             },
             scan: synthetic_scan(&self.config, self.pose, &[], at),
             road: RoadFrame {
+                camera_captured_at: None,
+                observation_pose: None,
                 elements: None,
                 observation: RoadObservation {
                     captured_at: at,

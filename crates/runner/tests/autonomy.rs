@@ -32,6 +32,8 @@ fn sample(config: &SimulationConfig, at: u64) -> (PoseEstimate, LidarSample, Roa
         estimate,
         scan,
         RoadFrame {
+            camera_captured_at: None,
+            observation_pose: None,
             elements: None,
             observation: road,
             image_width_px: rgb.width(),
@@ -339,6 +341,8 @@ fn light_boundary_applies_on_transition_and_only_confirmed_new_green_releases_it
             &estimate,
             &scan,
             &RoadFrame {
+                camera_captured_at: None,
+                observation_pose: None,
                 elements: None,
                 observation,
                 image_width_px: 320,

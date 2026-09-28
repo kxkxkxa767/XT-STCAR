@@ -82,6 +82,7 @@ impl AsyncSimulationOptions {
 
 #[derive(Debug, Default, Serialize)]
 pub struct AsyncCounts {
+    pub task_changed: u64,
     pub captures: u64,
     pub submissions: u64,
     pub completed_plans: u64,
@@ -101,6 +102,7 @@ pub struct AsyncCounts {
 impl AsyncCounts {
     fn rejection(&mut self, rejection: AdoptionRejection) {
         let count = match rejection {
+            AdoptionRejection::TaskChanged => &mut self.task_changed,
             AdoptionRejection::BeforeWindow => &mut self.before_window,
             AdoptionRejection::AfterWindow => &mut self.after_window,
             AdoptionRejection::ExecutionChanged => &mut self.execution_changed,
@@ -268,6 +270,7 @@ struct Observation {
     first_problem: Option<AsyncProblem>,
     last_control: Option<NavigationFrame>,
     recent_attempts: VecDeque<AsyncAttempt>,
+    recent_capacity: usize,
     timing_statistics: AsyncTimingStatistics,
     transitions: Vec<AsyncTransition>,
     previous_transition: Option<TransitionState>,
@@ -292,6 +295,15 @@ impl Observation {
             first_problem: None,
             last_control: None,
             recent_attempts: VecDeque::with_capacity(16),
+            recent_capacity: if config
+                .online_scene
+                .as_ref()
+                .is_some_and(|s| s.ideal_non_cone_semantics)
+            {
+                128
+            } else {
+                16
+            },
             timing_statistics: AsyncTimingStatistics::default(),
             transitions: Vec::with_capacity(128),
             previous_transition: None,
@@ -378,7 +390,7 @@ impl Observation {
             if let Some(fault) = &plan.report.fault {
                 self.fault.get_or_insert_with(|| fault.clone());
             }
-            if self.recent_attempts.len() == 16 {
+            if self.recent_attempts.len() == self.recent_capacity {
                 self.recent_attempts.pop_front();
             }
             self.recent_attempts.push_back(AsyncAttempt {
@@ -592,6 +604,8 @@ fn capture(
             &camera,
             at,
             config.initial_pose.yaw_rad - plant.pose.yaw_rad,
+            plant.pose,
+            light,
         )?,
     })
 }

@@ -14,6 +14,10 @@ use xt_stcar_vision::road::RoadDetector;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct OnlineScene {
+    /// Offline probe only: ideal non-cone semantics/metric regions, explicitly
+    /// separated from RGB detection and never used to inject cone positions.
+    #[serde(default)]
+    pub ideal_non_cone_semantics: bool,
     pub bounds: Rect,
     pub light_stop_region: Rect,
     pub light_boundary_region: Rect,
@@ -68,6 +72,7 @@ impl OnlineScenario {
         let mut markers = ExperimentalMarkerConfig::simulation();
         markers.enabled = self.experimental_markers_enabled;
         let truth = OnlineScene {
+            ideal_non_cone_semantics: false,
             bounds: simulation.autonomy.navigation.bounds,
             light_stop_region: simulation.autonomy.mission.light_stop_region,
             light_boundary_region: simulation
@@ -98,7 +103,7 @@ pub fn controller_config() -> AutonomyConfig {
         max_y_m: 7.0,
     };
     config.cone_radius_m = 0.14 * 2.0f64.sqrt();
-    config.online = Some(OnlineControlConfig::from_limits(&config));
+    config.online = Some(OnlineControlConfig::visual_first_limits(&config));
     config
 }
 
@@ -136,13 +141,23 @@ pub(crate) fn scene_light_boundary(config: &SimulationConfig) -> Result<HalfPlan
         .map_err(|e| e.to_string())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn detect_frame(
     config: &SimulationConfig,
     detector: &RoadDetector,
     image: &RgbImage,
     at: Timestamp,
     expected_heading_body_rad: f64,
+    pose: Pose2,
+    light: xt_stcar_robot_core::autonomy::LightState,
 ) -> Result<RoadFrame> {
+    if config
+        .online_scene
+        .as_ref()
+        .is_some_and(|s| s.ideal_non_cone_semantics)
+    {
+        return ideal_non_cone_frame(config, pose, light, at, image.width(), image.height());
+    }
     let frame = config.autonomy.mission.body_frame.clone();
     let observation = detector.detect(image, &[], at, frame.clone())?;
     let elements = if let Some(scene) = &config.online_scene {
@@ -160,10 +175,78 @@ pub(crate) fn detect_frame(
         None
     };
     Ok(RoadFrame {
+        camera_captured_at: None,
+        observation_pose: None,
         observation,
         elements,
         image_width_px: image.width(),
         image_height_px: image.height(),
+    })
+}
+
+fn ideal_non_cone_frame(
+    config: &SimulationConfig,
+    pose: Pose2,
+    light: xt_stcar_robot_core::autonomy::LightState,
+    at: Timestamp,
+    width: u32,
+    height: u32,
+) -> Result<RoadFrame> {
+    use xt_stcar_robot_core::autonomy::{Point2, RoadObservation};
+    use xt_stcar_robot_core::local_world::{
+        ElementColor, ElementFrame, ElementGeometry, ElementKind, ElementObservation,
+        ObservationSource,
+    };
+    let scene = config
+        .online_scene
+        .as_ref()
+        .ok_or("ideal semantics requires offline scene")?;
+    let regions = [
+        (ElementKind::Crosswalk, config.crosswalk),
+        (ElementKind::StopLine, scene.light_stop_region),
+        (ElementKind::FinishMarker, scene.finish_region),
+    ];
+    let observations = regions
+        .into_iter()
+        .map(|(kind, region)| ElementObservation {
+            kind,
+            color: ElementColor::White,
+            position_body_m: pose.world_to_body(Point2 {
+                x_m: region.min_x_m,
+                y_m: (region.min_y_m + region.max_y_m) / 2.0,
+            }),
+            heading_body_rad: Some(
+                (-pose.yaw_rad + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
+                    - std::f64::consts::PI,
+            ),
+            geometry: ElementGeometry::LineRegion {
+                lateral_half_width_m: (region.max_y_m - region.min_y_m) / 2.0,
+                depth_m: region.max_x_m - region.min_x_m,
+            },
+            source: ObservationSource::GroundMarker,
+            confidence: 1.0,
+            position_error_m: 0.005,
+            heading_error_rad: 0.005,
+        })
+        .collect();
+    Ok(RoadFrame {
+        camera_captured_at: None,
+        observation_pose: None,
+        observation: RoadObservation {
+            captured_at: at,
+            frame_id: config.autonomy.mission.body_frame.clone(),
+            crosswalk: None,
+            light,
+            light_confidence: 1.0,
+            cones_body_m: vec![],
+        },
+        elements: Some(ElementFrame {
+            captured_at: at,
+            frame_id: config.autonomy.mission.body_frame.clone(),
+            observations,
+        }),
+        image_width_px: width,
+        image_height_px: height,
     })
 }
 
@@ -541,6 +624,8 @@ mod referee_tests {
             &image,
             at,
             config.initial_pose.yaw_rad - pose.yaw_rad,
+            pose,
+            xt_stcar_robot_core::autonomy::LightState::Unknown,
         )
         .unwrap();
         let line = observed

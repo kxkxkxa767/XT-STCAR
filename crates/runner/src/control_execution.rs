@@ -383,11 +383,14 @@ pub(crate) fn certify(
     if input.scan.captured_at != input.pose.captured_at {
         return Err(failure(Reason::ScanTimeMismatch));
     }
-    if !input.road.observation.cones_body_m.is_empty()
-        && input.road.observation.captured_at != input.pose.captured_at
-    {
-        return Err(failure(Reason::ConeTimeMismatch));
-    }
+    let visual_pose = if input.road.observation.cones_body_m.is_empty() {
+        &input.pose
+    } else {
+        input
+            .road
+            .source_pose(&input.pose)
+            .map_err(|_| failure(Reason::ConeTimeMismatch))?
+    };
     let end = project_motion(
         context.projected_pose.pose,
         transition(
@@ -519,11 +522,15 @@ pub(crate) fn certify(
         }
     }
     for (index, point) in input.road.observation.cones_body_m.iter().enumerate() {
-        if !envelope.clear_of_disc(*point, config.cone_radius_m) {
+        let point = input
+            .pose
+            .pose
+            .world_to_body(visual_pose.pose.body_to_world(*point));
+        if !envelope.clear_of_disc(point, config.cone_radius_m) {
             return Err(geometry_failure(Reason::VisionCone)
                 .with_index(index)
                 .with_margin(
-                    envelope.signed_disc_margin(*point, config.cone_radius_m),
+                    envelope.signed_disc_margin(point, config.cone_radius_m),
                     Unit::Meters,
                 ));
         }
@@ -538,13 +545,24 @@ pub(crate) fn certify(
             .as_ref()
             .is_none_or(|mission| mission.phase != report.mission.phase)
             || input.road.elements.as_ref().is_none_or(|frame| {
-                frame.captured_at != input.pose.captured_at
+                frame.captured_at != input.road.observation.captured_at
                     || frame.frame_id != online.world.body_frame
             })
             || ((report.mission.phase == MissionPhase::WaitGreen
                 || (report.mission.phase == MissionPhase::ApproachLight
                     && report.active_track_id.is_some()))
                 && report.travel_boundary.is_none())
+        {
+            return Err(geometry_failure(Reason::OnlineEvidenceInvalid));
+        }
+        if (!report.requires_road_semantics
+            && (online.world.lidar_cones.is_none() || report.mission.phase != MissionPhase::Cones))
+            || (report.requires_road_semantics
+                && context
+                    .planned_at
+                    .0
+                    .saturating_sub(input.road.observation.captured_at.0)
+                    >= config.max_sensor_age_ms)
         {
             return Err(geometry_failure(Reason::OnlineEvidenceInvalid));
         }
@@ -566,21 +584,36 @@ pub(crate) fn certify(
         // A processor cannot hide a first credible stop line by passing a
         // different perception snapshot to the planner. Restriction evidence is
         // checked again from this immutable source; it grants no permission.
-        let associated = xt_stcar_robot_core::local_world::associate_visual_cones(
-            input.road.elements.as_ref().expect("validated elements"),
-            &input.scan,
-            &online.cone_association,
-        )
-        .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+        let source_frame = input.road.elements.as_ref().expect("validated elements");
+        let source_pose = input
+            .road
+            .source_pose(&input.pose)
+            .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
+        let associated = if source_frame.captured_at == input.scan.captured_at {
+            xt_stcar_robot_core::local_world::associate_visual_cones(
+                source_frame,
+                &input.scan,
+                &online.cone_association,
+            )
+            .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?
+        } else {
+            let mut regions = source_frame.clone();
+            regions
+                .observations
+                .retain(|o| o.kind != xt_stcar_robot_core::local_world::ElementKind::Cone);
+            regions
+        };
+        // Validate old negative evidence at its own capture time, then expand
+        // its uncertainty through the current command below. Never renew it.
         observed
-            .update(context.planned_at, &input.pose, &associated)
+            .update(source_pose.captured_at, source_pose, &associated)
             .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?;
         if !matches!(
             report.mission.phase,
             MissionPhase::Finish | MissionPhase::Completed
         ) {
             for mut track in
-                crate::online::source_stop_regions(&input.pose, &associated, &online.world)
+                crate::online::source_stop_regions(source_pose, &associated, &online.world)
                     .map_err(|_| geometry_failure(Reason::OnlineEvidenceInvalid))?
                     .into_iter()
                     .flatten()
@@ -737,6 +770,8 @@ mod tests {
             },
             scan: synthetic_scan(&simulation, simulation.initial_pose, &[], Timestamp(0)),
             road: RoadFrame {
+                camera_captured_at: None,
+                observation_pose: None,
                 elements: None,
                 observation: RoadObservation {
                     captured_at: Timestamp(0),

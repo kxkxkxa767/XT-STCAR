@@ -56,6 +56,7 @@ pub enum ObservationSource {
     GroundProjection,
     VisualLidar,
     GroundMarker,
+    LidarGeometry,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
@@ -94,8 +95,11 @@ pub struct ElementTrack {
     pub first_seen: Timestamp,
     /// Latest accepted geometry timestamp; retained for existing consumers.
     pub last_seen: Timestamp,
-    pub last_visual_at: Timestamp,
+    pub last_visual_at: Option<Timestamp>,
     pub last_geometry_at: Timestamp,
+    /// Independent real scan evidence; never counted as a visual observation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lidar: Option<LidarEvidence>,
     /// Distinct visual frames in the current confirmation sequence. Retained
     /// stop/finish regions restart at one after expiry; range-only maintenance
     /// never increments this count.
@@ -104,9 +108,19 @@ pub struct ElementTrack {
     pub valid: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct LidarEvidence {
+    pub source: ObservationSource,
+    pub observations: u32,
+    pub last_seen: Timestamp,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalWorldConfig {
+    /// Explicit opt-in preserves historical visual-first replay fixtures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lidar_cones: Option<crate::lidar_cones::LidarConeConfig>,
     pub body_frame: FrameId,
     pub lidar_frame: FrameId,
     pub world_frame: FrameId,
@@ -136,6 +150,7 @@ pub struct LocalWorldConfig {
 impl LocalWorldConfig {
     pub fn simulation(body_frame: FrameId, lidar_frame: FrameId, world_frame: FrameId) -> Self {
         Self {
+            lidar_cones: None,
             body_frame,
             lidar_frame,
             world_frame,
@@ -160,6 +175,12 @@ impl LocalWorldConfig {
         }
     }
     pub fn validate(&self) -> Result<(), ValidationError> {
+        if let Some(cfg) = &self.lidar_cones {
+            cfg.validate()?;
+            if cfg.max_confirmation_gap_ms > self.track_ttl_ms {
+                return Err(error("lidar confirmation gap exceeds geometry lease"));
+            }
+        }
         self.body_frame.validate()?;
         self.lidar_frame.validate()?;
         self.world_frame.validate()?;
@@ -230,6 +251,7 @@ pub struct LocalWorld {
     // independent range fits, not a per-scan error to add repeatedly.
     visual_error_floor: [Option<(f64, f64)>; MAX_ELEMENTS],
     last_maintenance: Option<(Timestamp, ConeAssociationConfig)>,
+    last_lidar_detection: Option<Timestamp>,
     next_id: u64,
     last_frame: Option<StoredFrame>,
     scan: Option<StoredScan>,
@@ -244,6 +266,7 @@ impl LocalWorld {
             region_pins: [false; MAX_ELEMENTS],
             visual_error_floor: [None; MAX_ELEMENTS],
             last_maintenance: None,
+            last_lidar_detection: None,
             next_id: 1,
             last_frame: None,
             scan: None,
@@ -364,6 +387,7 @@ impl LocalWorld {
                 if let Some(track) = slot
                     && track.kind == observation.kind
                     && (track.processed
+                        || (track.kind == ElementKind::Cone && self.config.lidar_cones.is_some())
                         // Retained region identities can be reobserved after
                         // occlusion. Invalid slots still participate in the
                         // original association/ambiguity checks and cannot be
@@ -418,6 +442,14 @@ impl LocalWorld {
                 if !track.valid || (track.processed && !retain_region_geometry) {
                     continue;
                 }
+                if observation.kind == ElementKind::Cone && self.config.lidar_cones.is_some() {
+                    // YOLO is corroboration only. The scan owns position, error,
+                    // confirmation and expiry, including after visual reappearance.
+                    track.color = observation.color;
+                    track.last_visual_at = Some(frame.captured_at);
+                    track.observations = track.observations.saturating_add(1);
+                    continue;
+                }
                 let restart_confirmation = retain_region_geometry
                     && frame.captured_at.0.saturating_sub(track.last_seen.0)
                         >= self.config.track_ttl_ms;
@@ -431,7 +463,7 @@ impl LocalWorld {
                 track.heading_error_rad = heading_error;
                 track.confidence = observation.confidence;
                 track.last_seen = frame.captured_at;
-                track.last_visual_at = frame.captured_at;
+                track.last_visual_at = Some(frame.captured_at);
                 track.last_geometry_at = frame.captured_at;
                 visual_error_floor[i] = Some((position_error, heading_error));
                 track.observations = if restart_confirmation {
@@ -443,6 +475,9 @@ impl LocalWorld {
                     track.observations.saturating_add(1)
                 };
             } else {
+                if observation.kind == ElementKind::Cone && self.config.lidar_cones.is_some() {
+                    continue; // A visual box cannot create a second cone identity.
+                }
                 let slot = elements
                     .iter()
                     .enumerate()
@@ -471,7 +506,8 @@ impl LocalWorld {
                     heading_error_rad: heading_error,
                     first_seen: frame.captured_at,
                     last_seen: frame.captured_at,
-                    last_visual_at: frame.captured_at,
+                    last_visual_at: Some(frame.captured_at),
+                    lidar: None,
                     last_geometry_at: frame.captured_at,
                     observations: 1,
                     processed: false,
@@ -507,11 +543,21 @@ impl LocalWorld {
             .filter_map(move |mut t| {
                 if at < t.last_seen
                     || at.0 - t.last_seen.0 >= self.config.track_ttl_ms
-                    || (t.kind == ElementKind::Cone
-                        && (at < t.last_visual_at
-                            || at.0 - t.last_visual_at.0 >= self.config.cone_semantic_ttl_ms))
                     || !t.valid
-                    || t.observations < self.config.min_confirmations
+                    || if t.kind == ElementKind::Cone && self.config.lidar_cones.is_some() {
+                        t.lidar.is_none_or(|e| {
+                            at < e.last_seen
+                                || at.0 - e.last_seen.0 >= self.config.track_ttl_ms
+                                || e.observations
+                                    < self.config.lidar_cones.as_ref().unwrap().min_confirmations
+                        })
+                    } else {
+                        t.observations < self.config.min_confirmations
+                            || (t.kind == ElementKind::Cone
+                                && t.last_visual_at.is_none_or(|v| {
+                                    at < v || at.0 - v.0 >= self.config.cone_semantic_ttl_ms
+                                }))
+                    }
                 {
                     return None;
                 }
@@ -583,8 +629,9 @@ impl LocalWorld {
                 || at < track.last_geometry_at
                 || scan.at < track.last_geometry_at
                 || at.0 - track.last_geometry_at.0 >= self.config.track_ttl_ms
-                || at < track.last_visual_at
-                || at.0 - track.last_visual_at.0 >= self.config.cone_semantic_ttl_ms
+                || track
+                    .last_visual_at
+                    .is_none_or(|v| at < v || at.0 - v.0 >= self.config.cone_semantic_ttl_ms)
             {
                 continue;
             }
@@ -729,6 +776,192 @@ impl LocalWorld {
             range_min: scan.range_min_m,
             range_max: scan.range_max_m,
         });
+        Ok(())
+    }
+
+    /// Detect/confirm cones using only the latest validated scan and its matched
+    /// pose. No visual frame is required or synthesized. Duplicate scans cannot
+    /// increase confirmations; ambiguity blocks all competing assignments.
+    pub fn update_lidar_cones(&mut self, at: Timestamp) -> Result<(), ValidationError> {
+        let cfg = self
+            .config
+            .lidar_cones
+            .as_ref()
+            .ok_or_else(|| error("lidar cone mode is disabled"))?;
+        let scan = self
+            .scan
+            .as_ref()
+            .ok_or_else(|| error("lidar cone detection requires a scan"))?;
+        self.validate_pose(at, &scan.pose, scan.at, self.config.scan_ttl_ms)?;
+        if self.last_lidar_detection == Some(scan.at) {
+            return Ok(());
+        }
+        let mut candidates = crate::lidar_cones::detect(
+            &scan.ranges[..scan.len],
+            scan.angle_min,
+            scan.increment,
+            cfg,
+        )?;
+        for candidate in candidates.iter_mut().flatten() {
+            let body = scan.lidar_in_body.body_to_world(candidate.center);
+            candidate.center = scan.pose.pose.body_to_world(body);
+            candidate.error_m += self.config.pose_position_error_m
+                + body.x_m.hypot(body.y_m) * self.config.pose_heading_error_rad;
+        }
+        let mut assignments = [[false; MAX_ELEMENTS]; MAX_ELEMENTS];
+        let mut candidate_matches = [0usize; MAX_ELEMENTS];
+        let mut track_matches = [0usize; MAX_ELEMENTS];
+        for (c, candidate) in candidates.iter().enumerate() {
+            let Some(candidate) =
+                candidate.filter(|c| c.error_m <= self.config.max_position_error_m)
+            else {
+                continue;
+            };
+            for (t, track) in self.elements.iter().enumerate() {
+                if let Some(track) = track
+                    && track.kind == ElementKind::Cone
+                    && candidate.center.distance(track.position)
+                        <= self.config.association_distance_m
+                            + candidate.error_m
+                            + track.position_error_m
+                {
+                    assignments[c][t] = true;
+                    candidate_matches[c] += 1;
+                    track_matches[t] += 1;
+                }
+            }
+        }
+        let mut elements = self.elements;
+        let mut floors = self.visual_error_floor;
+        let mut next_id = self.next_id;
+        let mut allocated = [false; MAX_ELEMENTS];
+        for (c, candidate) in candidates.iter().enumerate() {
+            let Some(candidate) =
+                candidate.filter(|c| c.error_m <= self.config.max_position_error_m)
+            else {
+                continue;
+            };
+            if candidate_matches[c] > 1
+                || assignments[c]
+                    .iter()
+                    .enumerate()
+                    .any(|(t, m)| *m && track_matches[t] > 1)
+            {
+                for (t, matched) in assignments[c].iter().enumerate() {
+                    if *matched {
+                        elements[t].as_mut().expect("matched track").valid = false;
+                    }
+                }
+                continue;
+            }
+            if let Some(t) = assignments[c].iter().position(|m| *m) {
+                let track = elements[t].as_mut().expect("matched track");
+                if track.processed {
+                    continue;
+                }
+                let expired =
+                    scan.at.0.saturating_sub(track.last_seen.0) >= self.config.track_ttl_ms;
+                if !track.valid && !expired {
+                    continue;
+                }
+                let restart = expired
+                    || track.lidar.is_none_or(|e| {
+                        scan.at.0.saturating_sub(e.last_seen.0) > cfg.max_confirmation_gap_ms
+                    });
+                if !compatible_geometry(
+                    track.geometry,
+                    ElementGeometry::Cone {
+                        radius_m: candidate.radius_m,
+                    },
+                    candidate.error_m + track.position_error_m,
+                ) {
+                    track.valid = false;
+                    continue;
+                }
+                let observations = if restart {
+                    1
+                } else {
+                    track.lidar.map_or(1, |e| e.observations.saturating_add(1))
+                };
+                track.position = retain_roundoff_position(track.position, candidate.center);
+                track.geometry = ElementGeometry::Cone {
+                    radius_m: candidate.radius_m,
+                };
+                track.position_error_m = candidate.error_m;
+                track.heading_error_rad = self.config.pose_heading_error_rad;
+                track.last_seen = scan.at;
+                track.last_geometry_at = scan.at;
+                track.lidar = Some(LidarEvidence {
+                    source: ObservationSource::LidarGeometry,
+                    observations,
+                    last_seen: scan.at,
+                });
+                track.valid = true;
+            } else {
+                // Nearby unmatched candidates are not allocated two identities
+                // that could claim the same object on the next frame.
+                if candidates.iter().enumerate().any(|(other, value)| {
+                    other != c
+                        && value.is_some_and(|v| {
+                            candidate.center.distance(v.center)
+                                <= self.config.association_distance_m
+                                    + candidate.error_m
+                                    + v.error_m
+                        })
+                }) {
+                    continue;
+                }
+                let slot = elements
+                    .iter()
+                    .enumerate()
+                    .position(|(t, value)| {
+                        !allocated[t]
+                            && !self.region_pins[t]
+                            && track_matches[t] == 0
+                            && value.is_none_or(|v| {
+                                !v.processed
+                                    && scan.at.0.saturating_sub(v.last_seen.0)
+                                        >= self.config.track_ttl_ms
+                            })
+                    })
+                    .ok_or_else(|| error("lidar cone identity capacity exhausted"))?;
+                let id = TrackId(next_id);
+                next_id = next_id
+                    .checked_add(1)
+                    .ok_or_else(|| error("element identity exhausted"))?;
+                elements[slot] = Some(ElementTrack {
+                    id,
+                    kind: ElementKind::Cone,
+                    color: ElementColor::Unknown,
+                    position: candidate.center,
+                    heading_rad: None,
+                    geometry: ElementGeometry::Cone {
+                        radius_m: candidate.radius_m,
+                    },
+                    confidence: 1.0,
+                    position_error_m: candidate.error_m,
+                    heading_error_rad: self.config.pose_heading_error_rad,
+                    first_seen: scan.at,
+                    last_seen: scan.at,
+                    last_geometry_at: scan.at,
+                    last_visual_at: None,
+                    observations: 0,
+                    lidar: Some(LidarEvidence {
+                        source: ObservationSource::LidarGeometry,
+                        observations: 1,
+                        last_seen: scan.at,
+                    }),
+                    valid: true,
+                    processed: false,
+                });
+                floors[slot] = None;
+                allocated[slot] = true;
+            }
+        }
+        self.elements = elements;
+        self.visual_error_floor = floors;
+        self.next_id = next_id;
+        self.last_lidar_detection = Some(scan.at);
         Ok(())
     }
 
@@ -1334,6 +1567,11 @@ fn compatible_geometry(a: ElementGeometry, b: ElementGeometry, tolerance: f64) -
     }
 }
 fn validate_observation(o: &ElementObservation, associated: bool) -> Result<(), ValidationError> {
+    if o.source == ObservationSource::LidarGeometry {
+        return Err(error(
+            "lidar geometry must originate from validated raw scans",
+        ));
+    }
     if !o.position_body_m.valid()
         || o.position_body_m.x_m.hypot(o.position_body_m.y_m) > 30.0
         || !unit(o.confidence)
@@ -1708,6 +1946,7 @@ fn fitted_cone_center(
 #[cfg(test)]
 mod tests {
     use super::*;
+    include!("local_world_lidar_tests.rs");
     fn config() -> LocalWorldConfig {
         LocalWorldConfig::simulation(
             FrameId("body".into()),
@@ -2252,7 +2491,7 @@ mod tests {
                 (track.id, track.color, track.observations),
                 (old.id, old.color, 2)
             );
-            assert_eq!(track.last_visual_at, Timestamp(100));
+            assert_eq!(track.last_visual_at, Some(Timestamp(100)));
             assert_eq!(track.last_geometry_at, Timestamp(at));
             assert_eq!(track.last_seen, track.last_geometry_at);
             assert!(track.position.distance(old.position) < 1e-9);
@@ -2269,7 +2508,7 @@ mod tests {
         assert_eq!(maintain_with_scan(&mut world, &p, &s, &cfg), 0);
         let stored = world.elements.iter().flatten().next().unwrap();
         assert_eq!(stored.last_geometry_at, Timestamp(20_000));
-        assert_eq!(stored.last_visual_at, Timestamp(100));
+        assert_eq!(stored.last_visual_at, Some(Timestamp(100)));
     }
     #[test]
     fn lidar_maintenance_never_creates_confirms_recolors_or_revives_processed_and_invalid_tracks() {
@@ -2310,7 +2549,7 @@ mod tests {
         assert!(!track.valid);
         assert_eq!(track.color, ElementColor::Red);
         assert_eq!(track.observations, 2);
-        assert_eq!(track.last_visual_at, Timestamp(100));
+        assert_eq!(track.last_visual_at, Some(Timestamp(100)));
     }
     #[test]
     fn lidar_maintenance_rejects_missing_split_displaced_wrong_shape_and_short_arc() {
@@ -2552,7 +2791,7 @@ mod tests {
                 assert!(current.processed && current.valid);
                 assert!(current.position.distance(target) < 1e-12);
                 assert!((current.heading_rad.unwrap() - 0.05).abs() < 1e-12);
-                assert_eq!(current.last_visual_at, Timestamp(at));
+                assert_eq!(current.last_visual_at, Some(Timestamp(at)));
                 assert_eq!(current.last_geometry_at, Timestamp(at));
                 assert_eq!(current.last_seen, Timestamp(at));
                 assert_eq!(current.observations, 2 + (at / 100 - 1) as u32);
@@ -2577,7 +2816,7 @@ mod tests {
             assert_eq!(restored.id, first.id);
             assert!(restored.processed && restored.valid);
             assert_eq!(restored.last_seen, Timestamp(6100));
-            assert_eq!(restored.last_visual_at, Timestamp(6100));
+            assert_eq!(restored.last_visual_at, Some(Timestamp(6100)));
             assert_eq!(restored.observations, 2);
             assert_eq!(world.elements.iter().flatten().count(), 1);
         }
@@ -2913,6 +3152,7 @@ mod tests {
             first_seen: read!(first_seen),
             last_seen: read!(last_seen),
             last_visual_at: read!(last_visual_at),
+            lidar: None,
             last_geometry_at: read!(last_geometry_at),
             observations: read!(observations),
             processed: read!(processed),
@@ -2980,7 +3220,7 @@ mod tests {
                 assert!(stored.processed && !stored.valid);
                 assert_eq!(stored.last_seen, Timestamp(100));
                 assert_eq!(stored.last_geometry_at, Timestamp(100));
-                assert_eq!(stored.last_visual_at, Timestamp(100));
+                assert_eq!(stored.last_visual_at, Some(Timestamp(100)));
                 assert_eq!(stored.observations, first.observations);
                 assert_eq!(world.elements.iter().flatten().count(), 1);
             }
@@ -3043,7 +3283,7 @@ mod tests {
                 original.observations + index as u32 + 1
             );
             assert_eq!(current.last_seen, Timestamp(at));
-            assert_eq!(current.last_visual_at, Timestamp(at));
+            assert_eq!(current.last_visual_at, Some(Timestamp(at)));
             assert_eq!(current.last_geometry_at, Timestamp(at));
             let expected_error = noisy.position_error_m
                 + world.config.pose_position_error_m
@@ -3065,7 +3305,7 @@ mod tests {
         let current = world.tracks(Timestamp(500)).next().unwrap();
         assert_eq!(current.position, changed.position_body_m);
         assert!((current.heading_rad.unwrap() - original.heading_rad.unwrap()).abs() > 0.0009);
-        assert_eq!(current.last_visual_at, Timestamp(500));
+        assert_eq!(current.last_visual_at, Some(Timestamp(500)));
     }
     #[test]
     fn range_maintenance_roundtrips_keep_float_representation_but_millimetre_motion_updates() {

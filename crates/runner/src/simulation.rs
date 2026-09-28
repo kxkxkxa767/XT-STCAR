@@ -504,9 +504,12 @@ pub fn obstacle_clearance(pose: Pose2, footprint: Footprint, obstacle: ObstacleD
 }
 
 /// Last online decisions, independent of the event journal's record budget.
-/// No image, scan, candidate path, or complete NavigationDiagnostics is retained.
+/// Historical runs keep 16 small records. Explicit ideal-perception probes keep
+/// 128 records with their actual bounded source snapshots (no images/tensors).
 #[derive(Debug, Serialize)]
 pub struct OnlineSimulationAttempt {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<crate::autonomy_replay::SensorSnapshot>,
     pub at: Timestamp,
     pub actual_pose: Pose2,
     pub actual_speed_mps: f64,
@@ -534,6 +537,7 @@ pub(crate) fn bounded_online_report(
 fn retain_online_attempt(
     tail: &mut VecDeque<OnlineSimulationAttempt>,
     mut attempt: OnlineSimulationAttempt,
+    capacity: usize,
 ) {
     if let Some(elements) = &mut attempt.elements {
         elements
@@ -546,7 +550,7 @@ fn retain_online_attempt(
     attempt.fault = attempt
         .fault
         .map(|reason| reason.chars().take(256).collect());
-    if tail.len() == 16 {
+    if tail.len() == capacity {
         tail.pop_front();
     }
     tail.push_back(attempt);
@@ -669,6 +673,8 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
                 &camera,
                 at,
                 config.initial_pose.yaw_rad - fresh_pose.pose.yaw_rad,
+                pose,
+                light,
             )
         });
         if ms < config.fault_at_ms || config.fault != SimulationFault::PoseDropout {
@@ -722,6 +728,18 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             retain_online_attempt(
                 &mut recent_online_attempts,
                 OnlineSimulationAttempt {
+                    source: config
+                        .online_scene
+                        .as_ref()
+                        .filter(|s| s.ideal_non_cone_semantics)
+                        .and_then(|_| {
+                            Some(crate::autonomy_replay::SensorSnapshot {
+                                at,
+                                pose: previous_pose.clone()?,
+                                scan: previous_scan.clone()?,
+                                road: previous_road.clone()?,
+                            })
+                        }),
                     at,
                     actual_pose: pose,
                     actual_speed_mps: speed,
@@ -745,6 +763,15 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
                         .as_ref()
                         .and_then(|navigation| navigation.reason.clone()),
                     fault: step.fault.clone(),
+                },
+                if config
+                    .online_scene
+                    .as_ref()
+                    .is_some_and(|s| s.ideal_non_cone_semantics)
+                {
+                    128
+                } else {
+                    16
                 },
             );
         }
@@ -1369,12 +1396,55 @@ mod online_diagnostic_tests {
     use super::*;
 
     #[test]
+    fn ideal_probe_retains_real_source_scans_when_trace_storage_is_exhausted() {
+        let mut config = crate::online_simulation::OnlineScenario::example()
+            .compile()
+            .unwrap();
+        config.autonomy.online = Some(crate::online::OnlineControlConfig::lidar_first(
+            &config.autonomy,
+        ));
+        config
+            .online_scene
+            .as_mut()
+            .unwrap()
+            .ideal_non_cone_semantics = true;
+        config.max_duration_ms = 200;
+        config.telemetry.mode = TelemetryMode::Trace;
+        config.telemetry.max_trace_bytes = 1;
+        let summary = simulate(&config, &mut Vec::new()).unwrap();
+        assert!(summary.dropped_trace_records > 0);
+        for attempt in &summary.recent_online_attempts {
+            let source = attempt
+                .source
+                .as_ref()
+                .expect("probe retains capture snapshot");
+            assert_eq!(source.at, attempt.at);
+            assert_eq!(source.pose, attempt.source_pose.clone().unwrap());
+            assert_eq!(source.scan.captured_at, source.pose.captured_at);
+            assert_eq!(source.road.elements, attempt.elements);
+            assert!(source.road.observation.cones_body_m.is_empty());
+            assert!(
+                source
+                    .road
+                    .elements
+                    .as_ref()
+                    .unwrap()
+                    .observations
+                    .iter()
+                    .all(|o| o.kind != xt_stcar_robot_core::local_world::ElementKind::Cone)
+            );
+            assert_eq!(source.scan.ranges_m.len(), config.autonomy.scan.bins);
+        }
+    }
+
+    #[test]
     fn online_tail_keeps_only_last_sixteen_and_bounds_reason_text() {
         let mut tail = VecDeque::with_capacity(16);
         for at in 0..40 {
             retain_online_attempt(
                 &mut tail,
                 OnlineSimulationAttempt {
+                    source: None,
                     at: Timestamp(at * 100),
                     actual_pose: Pose2::default(),
                     actual_speed_mps: 0.0,
@@ -1390,6 +1460,7 @@ mod online_diagnostic_tests {
                     navigation_reason: Some("原因".repeat(300)),
                     fault: Some("fault".repeat(300)),
                 },
+                16,
             );
         }
         assert_eq!(tail.len(), 16);
