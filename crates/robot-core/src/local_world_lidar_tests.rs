@@ -122,6 +122,45 @@ fn lidar_visual_auxiliary_reuses_identity_and_cannot_create_or_renew_geometry() 
 }
 
 #[test]
+fn filtered_lidar_geometry_covers_current_measurement_and_visual_dropout_keeps_identity() {
+    let mut world = lidar_world();
+    let original = Point2 { x_m: 2.0, y_m: 0.0 };
+    for at in [0, 100, 200] {
+        lidar_tick(&mut world, &cone_scan(at, original, 0.2, Pose2::default()), &pose(at), Pose2::default());
+    }
+    let old = world.tracks(Timestamp(200)).next().unwrap();
+    world.update(Timestamp(200), &pose(200), &frame(200, vec![cone(2.0)])).unwrap();
+    let moved = Point2 { x_m: 2.03, y_m: 0.015 };
+    lidar_tick(&mut world, &cone_scan(300, moved, 0.2, Pose2::default()), &pose(300), Pose2::default());
+    let filtered = world.tracks(Timestamp(300)).next().unwrap();
+    assert!(filtered.position.distance(original) > 0.005);
+    assert!(filtered.position.distance(moved) > 0.005);
+    // Independently run the same raw scan as a fresh measurement. The filtered
+    // uncertainty must contain its entire disc, not just the true test center.
+    let mut fresh = lidar_world();
+    let scan = cone_scan(300, moved, 0.2, Pose2::default());
+    lidar_tick(&mut fresh, &scan, &pose(300), Pose2::default());
+    let measured = fresh.elements.iter().flatten().next().unwrap();
+    assert!(filtered.position_error_m + 1e-12 >= measured.position_error_m + filtered.position.distance(measured.position));
+    for at in (400..=22000).step_by(100) {
+        lidar_tick(&mut world, &cone_scan(at, moved, 0.2, Pose2::default()), &pose(at), Pose2::default());
+    }
+    let current = world.tracks(Timestamp(22000)).next().unwrap();
+    assert_eq!(current.id, old.id);
+    assert_eq!(current.last_visual_at, Some(Timestamp(200)));
+    assert_eq!(current.observations, 1);
+    assert_eq!(current.last_geometry_at, Timestamp(22000));
+    assert!(current.position.distance(moved) < 1e-8);
+    // A long gap starts a new confirmation interval using current geometry.
+    let reacquired = Point2 { x_m: 2.09, y_m: 0.0 };
+    lidar_tick(&mut world, &cone_scan(24000, reacquired, 0.2, Pose2::default()), &pose(24000), Pose2::default());
+    let current = world.elements.iter().flatten().next().unwrap();
+    assert_eq!(current.lidar.unwrap().observations, 1);
+    assert!(current.position.distance(reacquired) < 1e-8);
+    assert_eq!(world.tracks(Timestamp(24000)).count(), 0);
+}
+
+#[test]
 fn lidar_walls_corners_sparse_noise_and_oversized_clusters_do_not_become_cones() {
     for iteration in 0..40 {
         let mut world = lidar_world();

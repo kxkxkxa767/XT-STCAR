@@ -1,0 +1,3241 @@
+{
+  "date": "2026-10-02",
+  "baseline_commit": "ffdfc244a2d6a2f12663ee74b13688be1504877c",
+  "hardware_actions": [],
+  "source_sha256": {
+    "crates/robot-core/src/local_world.rs": "62c2ddcbdc26149351ba6eaa5cd470fd97264777401f75e7b99cfcc62bba14ee",
+    "crates/robot-core/src/local_world_lidar_tests.rs": "2c297b5002472d30fea4a51a193bd5baa1c497dc4c0a0934901e8a4399fb7855",
+    "crates/robot-core/src/navigation.rs": "46c43a4da64c0c74ad93d39b21508b565a7ef632273ba219c4ce8680ccc0e3d4",
+    "crates/robot-core/src/navigation/first_rejection_replay.rs": "14999fb0b3ba34321f0f1347b2543c60f8e275b3869299fa1d3277daac67af0c",
+    "crates/robot-core/src/navigation/terminal.rs": "6e5c389f9c67f5398b2d015fc0c31f08d726d3da539872512dea24b98c05566d",
+    "crates/robot-core/src/online_mission.rs": "d2886a47872d58979544dbba3ae3b63a654d3e2adc13ee3ea96fac398bf89307",
+    "crates/robot-core/src/online_mission_lidar_tests.rs": "8df98b3626311fa07a2b83ee6ece5588830730d1b2141cd6de3382d015e7da40",
+    "crates/runner/examples/lidar_matrix.rs": "da8c22909de579882c3779812649f426490649138a753b80554af1b28dc091ef",
+    "crates/runner/src/online_simulation.rs": "3adcca9bf1b5f204fd6888cdb8fd62c747fcdb9327a897988e8533e49d92480c",
+    "crates/runner/src/simulation.rs": "5f42ac194fa3a3b0412916b820d8b05d0b0dd96fbdd0c2a7c2de8bd76741a099"
+  },
+  "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "checks": {
+    "workspace_release": {
+      "command": "cargo test --workspace --release --locked --offline",
+      "passed": 618,
+      "failed": 0,
+      "ignored": 3,
+      "log_sha256": "dbc89fe796f974abe7ad47bd5f7ea51c0b9e8d948cc1857ef6c9c886bf47e7a8"
+    },
+    "fmt": "passed",
+    "clippy_all_targets_deny_warnings": "passed",
+    "clippy_log_sha256": "8025680086219c25c0bd90dd377fbcc03964c3a36d15d547f3a42b6573d73056"
+  },
+  "scope": {
+    "cone_visual_observations": 0,
+    "pose": "ideal simulation",
+    "cone_shape": "circular section",
+    "non_cone_semantics": "ideal simulator adapter, not YOLO",
+    "range_noise": "bounded uniform +/-0.002 m in two named scenes only",
+    "identical_autonomy_for_all_7x5_offset_and_noise_scenes": true,
+    "async_clock": "deterministic model schedule, host computation freezes simulation time",
+    "default_async": {
+      "input_delays_ms": [
+        60,
+        80
+      ],
+      "adoption_delays_ms": [
+        3,
+        7,
+        9
+      ]
+    },
+    "perturbed_async": {
+      "input_delays_ms": [
+        40,
+        60
+      ],
+      "adoption_delays_ms": [
+        5,
+        9,
+        11
+      ]
+    }
+  },
+  "counts": {
+    "runs": 32,
+    "accepted": 27,
+    "both_cones_completed": 29
+  },
+  "standard_field_counts": {
+    "runs": 20,
+    "accepted": 19,
+    "both_cones_completed": 20
+  },
+  "baseline_shifted": [
+    {
+      "mode": "sync",
+      "completed": false,
+      "completed_cones": 1,
+      "fault": "ordinary stop exceeded 10 seconds"
+    },
+    {
+      "mode": "async",
+      "completed": false,
+      "completed_cones": 1,
+      "fault": "ordinary stop exceeded 10 seconds"
+    }
+  ],
+  "known_limits": [
+    "Not all field sizes complete; see failed rows.",
+    "Some accepted scenarios still take long detours; acceptance is not efficiency or robustness proof.",
+    "Finite tested offsets do not certify every offset inside their range.",
+    "No pose noise, motion distortion, noncircular bases or real semantic ambiguity modeled.",
+    "No hardware access, deployment, motor output, training or RISC-V timing acceptance."
+  ],
+  "results": [
+    {
+      "completed": false,
+      "elapsed_ms": 41800,
+      "distance_m": 5.54566039448388,
+      "minimum_cone_clearance_m": 0.25474521117113275,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 0,
+      "final_pose": {
+        "x_m": 4.051757321362836,
+        "y_m": 2.589973080939527,
+        "yaw_rad": 2.9548806637124034
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "fault"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 42429,
+        "available_cones": 2,
+        "both_completed": false,
+        "completed_cones": 0,
+        "cones": [
+          {
+            "angular_progress_rad": 3.0540884034494225,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 23500,
+            "entry_heading_error_rad": 0.030519907984914774,
+            "exit_heading_error_rad": null,
+            "index": 0,
+            "outer_side_at": 25600,
+            "passed_at": null,
+            "passed_in_required_order": false
+          },
+          {
+            "angular_progress_rad": 0.0,
+            "began_in_required_order": false,
+            "direction": "clockwise",
+            "entered_at": null,
+            "entry_heading_error_rad": null,
+            "exit_heading_error_rad": null,
+            "index": 1,
+            "outer_side_at": null,
+            "passed_at": null,
+            "passed_in_required_order": false
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "small_5x4",
+      "mode": "sync",
+      "accepted": false,
+      "report": "verified",
+      "trajectory_samples": 419,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.11336189238994,
+      "cone_track_samples_without_visual_evidence": 336,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "small_5x4.sync.trajectory.json": "2ff126968dd4a14b0bc82f5f00fa29b0db25a23f0e82687432bfe5638e0f3e95",
+        "small_5x4.input.json": "7d43e683fe75b2081f4ee94516856e7a5bafbaed88324d11a32a71fad7d6aad3",
+        "small_5x4.sync.jsonl": "2a644ed5b60175c4fbead458f99c902df0cbf9f419a34e6c9733b9080fe0e600"
+      },
+      "last_online": {
+        "active_track": {
+          "color": "unknown",
+          "confidence": 1.0,
+          "first_seen": 0,
+          "geometry": {
+            "radius_m": 0.19798989873223363,
+            "shape": "cone"
+          },
+          "heading_error_rad": 0.01,
+          "heading_rad": null,
+          "id": 2,
+          "kind": "cone",
+          "last_geometry_at": 41800,
+          "last_seen": 41800,
+          "last_visual_at": null,
+          "lidar": {
+            "last_seen": 41800,
+            "observations": 419,
+            "source": "lidar_geometry"
+          },
+          "observations": 0,
+          "position": {
+            "x_m": 4.000000000000015,
+            "y_m": 2.0000000000000053
+          },
+          "position_error_m": 0.04148066108463972,
+          "processed": false,
+          "valid": true
+        },
+        "active_track_id": 2,
+        "behavior": "fault",
+        "cone_progress_rad": 3.134330902452947,
+        "goal_heading_rad": null,
+        "mission": {
+          "at": 41800,
+          "crosswalk_stop_elapsed_ms": 3000,
+          "green_elapsed_ms": 0,
+          "output": {
+            "type": "stop"
+          },
+          "phase": "fault",
+          "reason": "ordinary stop exceeded 10 seconds",
+          "waypoint_index": 0
+        },
+        "processed_cones": 0,
+        "requires_road_semantics": true,
+        "search_distance_m": 0.0,
+        "task_revision": 6,
+        "travel_boundary": {
+          "lateral_bounds_m": [
+            -0.5542350175548205,
+            0.5542350175548201
+          ],
+          "max_projection_m": 0.9457649824451795,
+          "normal": {
+            "x_m": 1.0,
+            "y_m": 0.0
+          },
+          "origin": {
+            "x_m": 3.2,
+            "y_m": 3.5
+          }
+        }
+      },
+      "last_navigation_reason": null,
+      "last_blocked_before_fault": {
+        "at": 41700,
+        "pose": {
+          "x_m": 4.051757321362836,
+          "y_m": 2.589973080939527,
+          "yaw_rad": 2.9548806637124034
+        },
+        "speed": 0.0,
+        "curvature": 0.0,
+        "online": {
+          "active_track": {
+            "color": "unknown",
+            "confidence": 1.0,
+            "first_seen": 0,
+            "geometry": {
+              "radius_m": 0.19798989873223363,
+              "shape": "cone"
+            },
+            "heading_error_rad": 0.01,
+            "heading_rad": null,
+            "id": 2,
+            "kind": "cone",
+            "last_geometry_at": 41700,
+            "last_seen": 41700,
+            "last_visual_at": null,
+            "lidar": {
+              "last_seen": 41700,
+              "observations": 418,
+              "source": "lidar_geometry"
+            },
+            "observations": 0,
+            "position": {
+              "x_m": 4.000000000000015,
+              "y_m": 2.0000000000000053
+            },
+            "position_error_m": 0.04148066108463972,
+            "processed": false,
+            "valid": true
+          },
+          "active_track_id": 2,
+          "behavior": "orbit_cone",
+          "cone_progress_rad": 3.134330902452947,
+          "goal_heading_rad": -3.141592653589793,
+          "mission": {
+            "at": 41700,
+            "crosswalk_stop_elapsed_ms": 3000,
+            "green_elapsed_ms": 0,
+            "output": {
+              "arrival": {
+                "type": "stop"
+              },
+              "max_speed_mps": 0.26367187499999994,
+              "point": {
+                "x_m": 4.000000000000015,
+                "y_m": 2.5875000000000052
+              },
+              "type": "target"
+            },
+            "phase": "cones",
+            "reason": "following short arc about current tracked cone",
+            "waypoint_index": 0
+          },
+          "processed_cones": 0,
+          "requires_road_semantics": false,
+          "search_distance_m": 0.0,
+          "task_revision": 5,
+          "travel_boundary": {
+            "lateral_bounds_m": [
+              -0.5542350175548205,
+              0.5542350175548201
+            ],
+            "max_projection_m": 0.9457649824451795,
+            "normal": {
+              "x_m": 1.0,
+              "y_m": 0.0
+            },
+            "origin": {
+              "x_m": 3.2,
+              "y_m": 3.5
+            }
+          }
+        },
+        "navigation_reason": "forward_node_budget_exhausted"
+      }
+    },
+    {
+      "completed": false,
+      "elapsed_ms": 42269,
+      "distance_m": 5.514388863138912,
+      "minimum_cone_clearance_m": 0.2562485085991602,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 0,
+      "final_pose": {
+        "x_m": 4.081973885839776,
+        "y_m": 2.58746326921534,
+        "yaw_rad": 2.9424936103215718
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 84797,
+        "available_cones": 2,
+        "both_completed": false,
+        "completed_cones": 0,
+        "cones": [
+          {
+            "angular_progress_rad": 3.0029491313932493,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 24224,
+            "entry_heading_error_rad": 0.017762192359760398,
+            "exit_heading_error_rad": null,
+            "index": 0,
+            "outer_side_at": 26351,
+            "passed_at": null,
+            "passed_in_required_order": false
+          },
+          {
+            "angular_progress_rad": 0.0,
+            "began_in_required_order": false,
+            "direction": "clockwise",
+            "entered_at": null,
+            "entry_heading_error_rad": null,
+            "exit_heading_error_rad": null,
+            "index": 1,
+            "outer_side_at": null,
+            "passed_at": null,
+            "passed_in_required_order": false
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "small_5x4",
+      "mode": "async",
+      "accepted": false,
+      "report": "verified",
+      "trajectory_samples": 423,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.430626634736451,
+      "cone_track_samples_without_visual_evidence": 338,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "small_5x4.async.trajectory.json": "96e89706b4b1e0e1a200d95bf78e405d02b9983930ebe6732c8f521e18d55c5b",
+        "small_5x4.input.json": "7d43e683fe75b2081f4ee94516856e7a5bafbaed88324d11a32a71fad7d6aad3",
+        "small_5x4.async.jsonl": "f7a7bbd29f5d1b56ab6f34e4d7fae68ebc6e69334064d28c700d776c85a321a3"
+      },
+      "last_online": {
+        "active_track": {
+          "color": "unknown",
+          "confidence": 1.0,
+          "first_seen": 0,
+          "geometry": {
+            "radius_m": 0.19798989873223338,
+            "shape": "cone"
+          },
+          "heading_error_rad": 0.0112,
+          "heading_rad": null,
+          "id": 2,
+          "kind": "cone",
+          "last_geometry_at": 42200,
+          "last_seen": 42200,
+          "last_visual_at": null,
+          "lidar": {
+            "last_seen": 42200,
+            "observations": 423,
+            "source": "lidar_geometry"
+          },
+          "observations": 0,
+          "position": {
+            "x_m": 4.000000000000015,
+            "y_m": 2.0000000000000053
+          },
+          "position_error_m": 0.04257476054542951,
+          "processed": false,
+          "valid": true
+        },
+        "active_track_id": 2,
+        "behavior": "fault",
+        "cone_progress_rad": 3.100504322206715,
+        "goal_heading_rad": null,
+        "mission": {
+          "at": 42260,
+          "crosswalk_stop_elapsed_ms": 3000,
+          "green_elapsed_ms": 0,
+          "output": {
+            "type": "stop"
+          },
+          "phase": "fault",
+          "reason": "ordinary stop exceeded 10 seconds",
+          "waypoint_index": 0
+        },
+        "processed_cones": 0,
+        "requires_road_semantics": true,
+        "search_distance_m": 0.0,
+        "task_revision": 6,
+        "travel_boundary": {
+          "lateral_bounds_m": [
+            -0.5576030970770729,
+            0.5576030970770729
+          ],
+          "max_projection_m": 0.942396902922927,
+          "normal": {
+            "x_m": 1.0,
+            "y_m": 0.0
+          },
+          "origin": {
+            "x_m": 3.2,
+            "y_m": 3.5
+          }
+        }
+      },
+      "last_navigation_reason": null,
+      "last_blocked_before_fault": {
+        "at": 42187,
+        "pose": {
+          "x_m": 4.081973885839776,
+          "y_m": 2.58746326921534,
+          "yaw_rad": 2.9424936103215718
+        },
+        "speed": 0.0,
+        "curvature": 0.0,
+        "online": {
+          "active_track": {
+            "color": "unknown",
+            "confidence": 1.0,
+            "first_seen": 0,
+            "geometry": {
+              "radius_m": 0.19798989873223338,
+              "shape": "cone"
+            },
+            "heading_error_rad": 0.011600000000000001,
+            "heading_rad": null,
+            "id": 2,
+            "kind": "cone",
+            "last_geometry_at": 42100,
+            "last_seen": 42100,
+            "last_visual_at": null,
+            "lidar": {
+              "last_seen": 42100,
+              "observations": 422,
+              "source": "lidar_geometry"
+            },
+            "observations": 0,
+            "position": {
+              "x_m": 4.000000000000015,
+              "y_m": 2.0000000000000053
+            },
+            "position_error_m": 0.04317476054542951,
+            "processed": false,
+            "valid": true
+          },
+          "active_track_id": 2,
+          "behavior": "orbit_cone",
+          "cone_progress_rad": 3.100504322206715,
+          "goal_heading_rad": -3.141592653589793,
+          "mission": {
+            "at": 42180,
+            "crosswalk_stop_elapsed_ms": 3000,
+            "green_elapsed_ms": 0,
+            "output": {
+              "arrival": {
+                "type": "stop"
+              },
+              "max_speed_mps": 0.2554687499999999,
+              "point": {
+                "x_m": 4.000000000000015,
+                "y_m": 2.5875000000000052
+              },
+              "type": "target"
+            },
+            "phase": "cones",
+            "reason": "following short arc about current tracked cone",
+            "waypoint_index": 0
+          },
+          "processed_cones": 0,
+          "requires_road_semantics": false,
+          "search_distance_m": 0.0,
+          "task_revision": 5,
+          "travel_boundary": {
+            "lateral_bounds_m": [
+              -0.5586503106725731,
+              0.5586503106725731
+            ],
+            "max_projection_m": 0.941349689327427,
+            "normal": {
+              "x_m": 1.0,
+              "y_m": 0.0
+            },
+            "origin": {
+              "x_m": 3.2,
+              "y_m": 3.5
+            }
+          }
+        },
+        "navigation_reason": "forward_node_budget_exhausted"
+      }
+    },
+    {
+      "completed": false,
+      "elapsed_ms": 165900,
+      "distance_m": 27.287143308720523,
+      "minimum_cone_clearance_m": 0.34514977109367234,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 0,
+      "final_pose": {
+        "x_m": 3.554051416650709,
+        "y_m": 5.383676513045198,
+        "yaw_rad": 0.19533460244021006
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "fault"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 168275,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589799,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 69700,
+            "entry_heading_error_rad": 0.006557499773964359,
+            "exit_heading_error_rad": 0.02115985977648993,
+            "index": 0,
+            "outer_side_at": 73200,
+            "passed_at": 81900,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589795,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 127700,
+            "entry_heading_error_rad": 0.010785563369733797,
+            "exit_heading_error_rad": 0.030967061999193746,
+            "index": 1,
+            "outer_side_at": 131200,
+            "passed_at": 139900,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "tall_5x6",
+      "mode": "sync",
+      "accepted": false,
+      "report": "verified",
+      "trajectory_samples": 1660,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.666667932912945,
+      "cone_track_samples_without_visual_evidence": 1309,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "tall_5x6.sync.trajectory.json": "8a62d523f75ca11cdc7b0d3d150e4ba9ca85277d022e498837adc5bc3c27195e",
+        "tall_5x6.input.json": "c88beb434d7313ece1864395de84e17e9e8ff1e0de7dcc45a0533c88ad3c4e67",
+        "tall_5x6.sync.jsonl": "678ee5cad66b0cbdcc7341dedcbacfd8c2b5524667d53d7a864502b2fadd714a"
+      },
+      "last_online": {
+        "active_track": {
+          "color": "white",
+          "confidence": 1.0,
+          "first_seen": 0,
+          "geometry": {
+            "depth_m": 1.0,
+            "lateral_half_width_m": 0.6000000000000001,
+            "shape": "line_region"
+          },
+          "heading_error_rad": 0.015,
+          "heading_rad": 0.0,
+          "id": 4,
+          "kind": "stop_line",
+          "last_geometry_at": 165900,
+          "last_seen": 165900,
+          "last_visual_at": 165900,
+          "observations": 1660,
+          "position": {
+            "x_m": 3.2,
+            "y_m": 5.4
+          },
+          "position_error_m": 0.028544275128411133,
+          "processed": false,
+          "valid": true
+        },
+        "active_track_id": 4,
+        "behavior": "fault",
+        "cone_progress_rad": 0.0,
+        "goal_heading_rad": null,
+        "mission": {
+          "at": 165900,
+          "crosswalk_stop_elapsed_ms": 3000,
+          "green_elapsed_ms": 0,
+          "output": {
+            "type": "stop"
+          },
+          "phase": "fault",
+          "reason": "ordinary stop exceeded 10 seconds",
+          "waypoint_index": 2
+        },
+        "processed_cones": 2,
+        "requires_road_semantics": true,
+        "search_distance_m": 0.0,
+        "task_revision": 10,
+        "travel_boundary": {
+          "lateral_bounds_m": [
+            -0.6460371308129469,
+            0.6460371308129469
+          ],
+          "max_projection_m": 0.953962869187053,
+          "normal": {
+            "x_m": 1.0,
+            "y_m": 0.0
+          },
+          "origin": {
+            "x_m": 3.2,
+            "y_m": 5.4
+          }
+        }
+      },
+      "last_navigation_reason": null,
+      "last_blocked_before_fault": {
+        "at": 165800,
+        "pose": {
+          "x_m": 3.554051416650709,
+          "y_m": 5.383676513045198,
+          "yaw_rad": 0.19533460244021006
+        },
+        "speed": 0.0,
+        "curvature": 0.0,
+        "online": {
+          "active_track": {
+            "color": "white",
+            "confidence": 1.0,
+            "first_seen": 0,
+            "geometry": {
+              "depth_m": 1.0,
+              "lateral_half_width_m": 0.6000000000000001,
+              "shape": "line_region"
+            },
+            "heading_error_rad": 0.015,
+            "heading_rad": 0.0,
+            "id": 4,
+            "kind": "stop_line",
+            "last_geometry_at": 165800,
+            "last_seen": 165800,
+            "last_visual_at": 165800,
+            "observations": 1659,
+            "position": {
+              "x_m": 3.2,
+              "y_m": 5.4
+            },
+            "position_error_m": 0.028544275128411133,
+            "processed": false,
+            "valid": true
+          },
+          "active_track_id": 4,
+          "behavior": "approach_region",
+          "cone_progress_rad": 0.0,
+          "goal_heading_rad": 0.0,
+          "mission": {
+            "at": 165800,
+            "crosswalk_stop_elapsed_ms": 3000,
+            "green_elapsed_ms": 0,
+            "output": {
+              "arrival": {
+                "type": "stop"
+              },
+              "max_speed_mps": 0.18,
+              "point": {
+                "x_m": 3.68,
+                "y_m": 5.4
+              },
+              "type": "target"
+            },
+            "phase": "approach_light",
+            "reason": "approaching observed light stop region",
+            "waypoint_index": 2
+          },
+          "processed_cones": 2,
+          "requires_road_semantics": true,
+          "search_distance_m": 0.0,
+          "task_revision": 9,
+          "travel_boundary": {
+            "lateral_bounds_m": [
+              -0.6460371308129469,
+              0.6460371308129469
+            ],
+            "max_projection_m": 0.953962869187053,
+            "normal": {
+              "x_m": 1.0,
+              "y_m": 0.0
+            },
+            "origin": {
+              "x_m": 3.2,
+              "y_m": 5.4
+            }
+          }
+        },
+        "navigation_reason": "no_forward_kinematic_path"
+      }
+    },
+    {
+      "completed": false,
+      "elapsed_ms": 135983,
+      "distance_m": 19.913576759837216,
+      "minimum_cone_clearance_m": 0.3225339009046147,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 0,
+      "final_pose": {
+        "x_m": 1.7093601420757447,
+        "y_m": 4.874904259992549,
+        "yaw_rad": -2.3633783559681425
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": "ordinary stop exceeded 10 seconds",
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 272866,
+        "available_cones": 2,
+        "both_completed": false,
+        "completed_cones": 0,
+        "cones": [
+          {
+            "angular_progress_rad": -2.256720463550114,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 72060,
+            "entry_heading_error_rad": 0.0006281522475317658,
+            "exit_heading_error_rad": null,
+            "index": 0,
+            "outer_side_at": 75733,
+            "passed_at": null,
+            "passed_in_required_order": false
+          },
+          {
+            "angular_progress_rad": 0.0,
+            "began_in_required_order": false,
+            "direction": "clockwise",
+            "entered_at": null,
+            "entry_heading_error_rad": null,
+            "exit_heading_error_rad": null,
+            "index": 1,
+            "outer_side_at": null,
+            "passed_at": null,
+            "passed_in_required_order": false
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "tall_5x6",
+      "mode": "async",
+      "accepted": false,
+      "report": "verified",
+      "trajectory_samples": 1360,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.648810422148782,
+      "cone_track_samples_without_visual_evidence": 1263,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "tall_5x6.async.trajectory.json": "397fb70c707b71a637af40cebeb3915e013d39cc20455d4d0ade389f3a193c11",
+        "tall_5x6.input.json": "c88beb434d7313ece1864395de84e17e9e8ff1e0de7dcc45a0533c88ad3c4e67",
+        "tall_5x6.async.jsonl": "d7b2b54ba9e9d28307517558c28e07f8879f5241e04bd93eab2f1c3f6cb34996"
+      },
+      "last_online": {
+        "active_track": {
+          "color": "unknown",
+          "confidence": 1.0,
+          "first_seen": 0,
+          "geometry": {
+            "radius_m": 0.197989898732231,
+            "shape": "cone"
+          },
+          "heading_error_rad": 0.011600000000000001,
+          "heading_rad": null,
+          "id": 2,
+          "kind": "cone",
+          "last_geometry_at": 135900,
+          "last_seen": 135900,
+          "last_visual_at": null,
+          "lidar": {
+            "last_seen": 135900,
+            "observations": 1360,
+            "source": "lidar_geometry"
+          },
+          "observations": 0,
+          "position": {
+            "x_m": 3.9999999999999973,
+            "y_m": 3.0000000000000204
+          },
+          "position_error_m": 0.07274863575319461,
+          "processed": false,
+          "valid": true
+        },
+        "active_track_id": 2,
+        "behavior": "fault",
+        "cone_progress_rad": 0.32494576183459634,
+        "goal_heading_rad": null,
+        "mission": {
+          "at": 135980,
+          "crosswalk_stop_elapsed_ms": 3000,
+          "green_elapsed_ms": 0,
+          "output": {
+            "type": "stop"
+          },
+          "phase": "fault",
+          "reason": "ordinary stop exceeded 10 seconds",
+          "waypoint_index": 0
+        },
+        "processed_cones": 0,
+        "requires_road_semantics": true,
+        "search_distance_m": 0.0,
+        "task_revision": 6,
+        "travel_boundary": {
+          "lateral_bounds_m": [
+            -0.6625629772034909,
+            0.6625629772034909
+          ],
+          "max_projection_m": 0.9374370227965095,
+          "normal": {
+            "x_m": 1.0,
+            "y_m": 0.0
+          },
+          "origin": {
+            "x_m": 3.2,
+            "y_m": 5.4
+          }
+        }
+      },
+      "last_navigation_reason": null,
+      "last_blocked_before_fault": {
+        "at": 135869,
+        "pose": {
+          "x_m": 1.7093601420757447,
+          "y_m": 4.874904259992549,
+          "yaw_rad": -2.3633783559681425
+        },
+        "speed": 0.0,
+        "curvature": 0.0,
+        "online": {
+          "active_track": {
+            "color": "unknown",
+            "confidence": 1.0,
+            "first_seen": 0,
+            "geometry": {
+              "radius_m": 0.197989898732231,
+              "shape": "cone"
+            },
+            "heading_error_rad": 0.0112,
+            "heading_rad": null,
+            "id": 2,
+            "kind": "cone",
+            "last_geometry_at": 135800,
+            "last_seen": 135800,
+            "last_visual_at": null,
+            "lidar": {
+              "last_seen": 135800,
+              "observations": 1359,
+              "source": "lidar_geometry"
+            },
+            "observations": 0,
+            "position": {
+              "x_m": 3.9999999999999973,
+              "y_m": 3.0000000000000204
+            },
+            "position_error_m": 0.0721486357531946,
+            "processed": false,
+            "valid": true
+          },
+          "active_track_id": 2,
+          "behavior": "orbit_cone",
+          "cone_progress_rad": 0.32494576183459634,
+          "goal_heading_rad": null,
+          "mission": {
+            "at": 135860,
+            "crosswalk_stop_elapsed_ms": 3000,
+            "green_elapsed_ms": 0,
+            "output": {
+              "arrival": {
+                "type": "stop"
+              },
+              "max_speed_mps": 0.18,
+              "point": {
+                "x_m": 2.349005988305695,
+                "y_m": 4.394432417528528
+              },
+              "type": "target"
+            },
+            "phase": "cones",
+            "reason": "following short arc about current tracked cone",
+            "waypoint_index": 0
+          },
+          "processed_cones": 0,
+          "requires_road_semantics": false,
+          "search_distance_m": 0.0,
+          "task_revision": 5,
+          "travel_boundary": {
+            "lateral_bounds_m": [
+              -0.6614965010519027,
+              0.6614965010519027
+            ],
+            "max_projection_m": 0.9385034989480971,
+            "normal": {
+              "x_m": 1.0,
+              "y_m": 0.0
+            },
+            "origin": {
+              "x_m": 3.2,
+              "y_m": 5.4
+            }
+          }
+        },
+        "navigation_reason": "terminal_budget_exhausted"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 116400,
+      "distance_m": 22.031921448475373,
+      "minimum_cone_clearance_m": 0.25448051396127075,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 7.55584240826393,
+        "y_m": 3.500180437441651,
+        "yaw_rad": -0.0002754231435226906
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 118105,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897944,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 36600,
+            "entry_heading_error_rad": 0.03177746636834611,
+            "exit_heading_error_rad": 0.024064190748702252,
+            "index": 0,
+            "outer_side_at": 38200,
+            "passed_at": 43500,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897856,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 71400,
+            "entry_heading_error_rad": 0.027960873670647146,
+            "exit_heading_error_rad": 0.01778069259611792,
+            "index": 1,
+            "outer_side_at": 72800,
+            "passed_at": 80800,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "wide_8x4",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1165,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.322477836410201,
+      "cone_track_samples_without_visual_evidence": 684,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "wide_8x4.sync.trajectory.json": "8c7374b4167ce5fa1aadf89d56a575176cf32585fae993cc6194dba15773934c",
+        "wide_8x4.input.json": "fcc2ca7ce57892426734d3ddae978ad1441e905736546319bfc5d3c8b60faad8",
+        "wide_8x4.sync.jsonl": "8e11628edbf90c262d8e5955c6a4a09bd4de05048638e435084a18176e49580f"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 118263,
+      "distance_m": 22.046151407103793,
+      "minimum_cone_clearance_m": 0.2537034530322853,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 7.557284603375069,
+        "y_m": 3.5002381486939043,
+        "yaw_rad": -0.0020636456487088672
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 237238,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589797,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 37260,
+            "entry_heading_error_rad": 0.021895687710521194,
+            "exit_heading_error_rad": 0.030369191952662966,
+            "index": 0,
+            "outer_side_at": 38866,
+            "passed_at": 44361,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.14159265358979,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 72589,
+            "entry_heading_error_rad": 0.006844324785707734,
+            "exit_heading_error_rad": 0.035365942770380965,
+            "index": 1,
+            "outer_side_at": 74050,
+            "passed_at": 82168,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "wide_8x4",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1183,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.33209834094344,
+      "cone_track_samples_without_visual_evidence": 694,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "wide_8x4.async.trajectory.json": "789b5068f2334939912d82e5bfe6d2f31d85e07813bc2d5ee450db4cae911efd",
+        "wide_8x4.input.json": "fcc2ca7ce57892426734d3ddae978ad1441e905736546319bfc5d3c8b60faad8",
+        "wide_8x4.async.jsonl": "e08735f9452384213a484efeca9cb6207ef39546ee0efeb546f0464024a5658f"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 120100,
+      "distance_m": 23.106609718947254,
+      "minimum_cone_clearance_m": 0.515671981535293,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 7.556250858683437,
+        "y_m": 5.400304147304687,
+        "yaw_rad": -0.00041638657364284626
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 121830,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535898038,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 37800,
+            "entry_heading_error_rad": 0.030465108352915937,
+            "exit_heading_error_rad": 0.017769025842074182,
+            "index": 0,
+            "outer_side_at": 39200,
+            "passed_at": 47200,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897882,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 74700,
+            "entry_heading_error_rad": 0.029843544192348137,
+            "exit_heading_error_rad": 0.017581156472434856,
+            "index": 1,
+            "outer_side_at": 76200,
+            "passed_at": 84100,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "large_8x6",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1202,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 0.9571754612462862,
+      "cone_track_samples_without_visual_evidence": 680,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "large_8x6.sync.trajectory.json": "257d83f9a66bafffc635312f347d5cb2e5b492af9ce9097c7f8529e776a25ed5",
+        "large_8x6.input.json": "03d880ab8f94ab1c536421879068a3500e4a32c74762e23c557f7977999541ad",
+        "large_8x6.sync.jsonl": "a0d82996cffff3178b128fa61f9800e5478c454e2e2064031d992fe0f0215eed"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 122069,
+      "distance_m": 23.12811131061267,
+      "minimum_cone_clearance_m": 0.5213052178091191,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 7.557668886103173,
+        "y_m": 5.4003777997982665,
+        "yaw_rad": -0.0012618521126723792
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 244861,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589795,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 38776,
+            "entry_heading_error_rad": 0.006946031250718576,
+            "exit_heading_error_rad": 0.0439010925090253,
+            "index": 0,
+            "outer_side_at": 40234,
+            "passed_at": 48259,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589778,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 76057,
+            "entry_heading_error_rad": 0.0029528371180593815,
+            "exit_heading_error_rad": 0.03522267372435195,
+            "index": 1,
+            "outer_side_at": 77527,
+            "passed_at": 85565,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "large_8x6",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1221,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 0.9443775305445211,
+      "cone_track_samples_without_visual_evidence": 686,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "large_8x6.async.trajectory.json": "ede072319fbdd866f6adb79af8fb67fef9fc13237c195c04ee6fcba64801d21e",
+        "large_8x6.input.json": "03d880ab8f94ab1c536421879068a3500e4a32c74762e23c557f7977999541ad",
+        "large_8x6.async.jsonl": "ef633a74e3543a5b3f0ccb33e6d238de98adeba5b03b6b9a8d32948c52f12bc1"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 104700,
+      "distance_m": 20.30089824198367,
+      "minimum_cone_clearance_m": 0.5168261404493566,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556146559420117,
+        "y_m": 4.400448439775836,
+        "yaw_rad": -2.307441917315245e-05
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 106172,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897727,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31600,
+            "entry_heading_error_rad": 0.02911626686515012,
+            "exit_heading_error_rad": 0.017729933312432777,
+            "index": 0,
+            "outer_side_at": 33000,
+            "passed_at": 41000,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589796,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 64700,
+            "entry_heading_error_rad": 0.029977656357249582,
+            "exit_heading_error_rad": 0.017588106585364915,
+            "index": 1,
+            "outer_side_at": 66200,
+            "passed_at": 74100,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "nominal_7x5",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1048,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.101943409833286,
+      "cone_track_samples_without_visual_evidence": 623,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "nominal_7x5.sync.trajectory.json": "be3755c9d7f2b98a9fcbe01e4c88201cddba8e69396d19ec1921c2a1a468a168",
+        "nominal_7x5.input.json": "f241ecc6d77182fe69da350892139ba5e150d2e808eaff105aea5675da7f2caf",
+        "nominal_7x5.sync.jsonl": "6180033aa612e92e386e1963a7a2b45140dba14f793609347d0d0c593feca612"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 106469,
+      "distance_m": 20.330091697043898,
+      "minimum_cone_clearance_m": 0.520975371020187,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.558604881720341,
+        "y_m": 4.400562696556178,
+        "yaw_rad": -0.0007180717023405059
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 213575,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897842,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 32180,
+            "entry_heading_error_rad": 0.007396416505605075,
+            "exit_heading_error_rad": 0.04396897768802566,
+            "index": 0,
+            "outer_side_at": 33644,
+            "passed_at": 41769,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897962,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 65666,
+            "entry_heading_error_rad": 0.002495118637041216,
+            "exit_heading_error_rad": 0.041202118925148135,
+            "index": 1,
+            "outer_side_at": 67191,
+            "passed_at": 75289,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "nominal_7x5",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1065,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 3.7506912856916492,
+      "cone_track_samples_without_visual_evidence": 632,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "nominal_7x5.async.trajectory.json": "113a982b352431a03254abb1cc1d2a0e18caf3e713214f62cafc6f785431a75d",
+        "nominal_7x5.input.json": "f241ecc6d77182fe69da350892139ba5e150d2e808eaff105aea5675da7f2caf",
+        "nominal_7x5.async.jsonl": "1e179128c4b80985185519cac24da46554cec760b170fdec77a6db7656de2503"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 102600,
+      "distance_m": 19.505689503641626,
+      "minimum_cone_clearance_m": 0.2540822657071878,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.55204097145209,
+        "y_m": 5.000058298751505,
+        "yaw_rad": -0.0004946627873709808
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 104056,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897962,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 34400,
+            "entry_heading_error_rad": 0.03123554971175757,
+            "exit_heading_error_rad": 0.023500085226845435,
+            "index": 0,
+            "outer_side_at": 36000,
+            "passed_at": 41400,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897754,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 63100,
+            "entry_heading_error_rad": 0.028156500146822694,
+            "exit_heading_error_rad": 0.01778422764874321,
+            "index": 1,
+            "outer_side_at": 64500,
+            "passed_at": 72500,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "unequal_bottom1_top2",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1026,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.3222797646210305,
+      "cone_track_samples_without_visual_evidence": 607,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "unequal_bottom1_top2.sync.trajectory.json": "de59100f13467c4a397e1b6a6d15f3e7e41d03c9cccde01f80af51a3fdde7c9a",
+        "unequal_bottom1_top2.input.json": "c4dcbd7ced10e8547286f649a28d8bf0a644b5af57f26f356d055cab85e4247a",
+        "unequal_bottom1_top2.sync.jsonl": "17c2ec706c82e83e887ae5e6ca24ce553db11f9da22903ad662e9bafcc25b351"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 104267,
+      "distance_m": 19.52250127332812,
+      "minimum_cone_clearance_m": 0.2540061141972095,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.5578854401843865,
+        "y_m": 5.000212850357538,
+        "yaw_rad": -0.000634951474750789
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 209167,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535898113,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 35255,
+            "entry_heading_error_rad": 0.01873473088141342,
+            "exit_heading_error_rad": 0.04153115804151719,
+            "index": 0,
+            "outer_side_at": 36860,
+            "passed_at": 42343,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589803,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 64171,
+            "entry_heading_error_rad": 0.005477754979439808,
+            "exit_heading_error_rad": 0.044395709557290886,
+            "index": 1,
+            "outer_side_at": 65626,
+            "passed_at": 73660,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "unequal_bottom1_top2",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1043,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.273035091023531,
+      "cone_track_samples_without_visual_evidence": 616,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "unequal_bottom1_top2.async.trajectory.json": "7a12519c7e22d0682def2779d516d1494367e2ec52d4829dcfa9337f213b4a6c",
+        "unequal_bottom1_top2.input.json": "c4dcbd7ced10e8547286f649a28d8bf0a644b5af57f26f356d055cab85e4247a",
+        "unequal_bottom1_top2.async.jsonl": "492f2bdf5c6451135a6a56fa18cf406daa77ee49c672366a2524e146957eaf13"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 103700,
+      "distance_m": 20.124308743984546,
+      "minimum_cone_clearance_m": 0.51683654897912,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.5562966325251875,
+        "y_m": 5.5004766623226695,
+        "yaw_rad": -0.00025272803954790035
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 105146,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897905,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31900,
+            "entry_heading_error_rad": 0.029094381403974356,
+            "exit_heading_error_rad": 0.017082022620419135,
+            "index": 0,
+            "outer_side_at": 33300,
+            "passed_at": 41300,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897873,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 63500,
+            "entry_heading_error_rad": 0.029419247545668714,
+            "exit_heading_error_rad": 0.017765521877813217,
+            "index": 1,
+            "outer_side_at": 64900,
+            "passed_at": 72900,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "unequal_bottom2_top1",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1038,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 3.3539571770350927,
+      "cone_track_samples_without_visual_evidence": 612,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "unequal_bottom2_top1.sync.trajectory.json": "9dce8cb7fc14c4d63a565c7b2cf7a101cd0d73eb0dd270dbc3c7a190f2650148",
+        "unequal_bottom2_top1.input.json": "605415774a2dd0c739baacceb5ce64bb69daf0dd1d4310d76ddc063ef322a6d4",
+        "unequal_bottom2_top1.sync.jsonl": "b78514884129d3e9ab10b66f532357fd7876c0fbe6944471789a0e0a0240188e"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 133469,
+      "distance_m": 25.13983401741407,
+      "minimum_cone_clearance_m": 0.5206428322459151,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.55869962310199,
+        "y_m": 5.500733668266066,
+        "yaw_rad": -0.00013143721881725412
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 267662,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589808,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 32387,
+            "entry_heading_error_rad": 0.008072678202442951,
+            "exit_heading_error_rad": 0.03260411859896051,
+            "index": 0,
+            "outer_side_at": 33851,
+            "passed_at": 41962,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897905,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 92571,
+            "entry_heading_error_rad": 0.006684706483493841,
+            "exit_heading_error_rad": 0.044407142976752745,
+            "index": 1,
+            "outer_side_at": 94029,
+            "passed_at": 102103,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "unequal_bottom2_top1",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1335,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.725620014819433,
+      "cone_track_samples_without_visual_evidence": 901,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "unequal_bottom2_top1.async.trajectory.json": "fcbd0bda452d7a98fb1efb22eb471a9d3640e66ffeecbe621567027122731e08",
+        "unequal_bottom2_top1.input.json": "605415774a2dd0c739baacceb5ce64bb69daf0dd1d4310d76ddc063ef322a6d4",
+        "unequal_bottom2_top1.async.jsonl": "e9499f63d335be8a957ba96a51d65b196465ea673d3642d1a06485a6917cce90"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 100700,
+      "distance_m": 19.41084365385072,
+      "minimum_cone_clearance_m": 0.4290971040976151,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556257068228827,
+        "y_m": 4.400610017936378,
+        "yaw_rad": -0.000339807768760636
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 102082,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589792,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31000,
+            "entry_heading_error_rad": 0.02807010577711111,
+            "exit_heading_error_rad": 0.019159043756967975,
+            "index": 0,
+            "outer_side_at": 32500,
+            "passed_at": 39500,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897953,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 61900,
+            "entry_heading_error_rad": 0.027371793348336837,
+            "exit_heading_error_rad": 0.017605560758560568,
+            "index": 1,
+            "outer_side_at": 63300,
+            "passed_at": 71300,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "cones_shifted",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1008,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.117906009740489,
+      "cone_track_samples_without_visual_evidence": 595,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "cones_shifted.sync.trajectory.json": "9a927c43c3a3c1166f69ee6c77752cdb4d5173c084104c822c290ce773123399",
+        "cones_shifted.input.json": "fad4ec4aabf66013d2332ff387a15ae74e07799a237d331cc8ed77bc513f3f8a",
+        "cones_shifted.sync.jsonl": "8f5422131d50511a2c61a424b84d945768c1cc2d8ac94d4607166ba208564393"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 153983,
+      "distance_m": 28.24251634209528,
+      "minimum_cone_clearance_m": 0.3450045973489719,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.553754698623455,
+        "y_m": 4.400619486843973,
+        "yaw_rad": -0.00012233690530738528
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 308940,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.14159265358979,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31458,
+            "entry_heading_error_rad": 0.0025414211009406884,
+            "exit_heading_error_rad": 0.03504945951252747,
+            "index": 0,
+            "outer_side_at": 33005,
+            "passed_at": 40168,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897936,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 114444,
+            "entry_heading_error_rad": 0.00030892654945846587,
+            "exit_heading_error_rad": 0.042190745017556264,
+            "index": 1,
+            "outer_side_at": 115976,
+            "passed_at": 124090,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "cones_shifted",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1540,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 6.740398445161227,
+      "cone_track_samples_without_visual_evidence": 1120,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "cones_shifted.async.trajectory.json": "cc93be3b969b9d306c798b2ec37576edb0ad617e097a67ba83e4eb33adbb5217",
+        "cones_shifted.input.json": "fad4ec4aabf66013d2332ff387a15ae74e07799a237d331cc8ed77bc513f3f8a",
+        "cones_shifted.async.jsonl": "41ceaa08d9f8510acde5104411a54224839e445067394510bfb2e868ee04a5ef"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 114500,
+      "distance_m": 21.077117436819687,
+      "minimum_cone_clearance_m": 0.515269221206482,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.5559858320491875,
+        "y_m": 4.400355633698679,
+        "yaw_rad": -0.00021060389052740547
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 116213,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535898118,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 32700,
+            "entry_heading_error_rad": 0.030589489413836546,
+            "exit_heading_error_rad": 0.020806244740421143,
+            "index": 0,
+            "outer_side_at": 35000,
+            "passed_at": 44800,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589796,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 70300,
+            "entry_heading_error_rad": 0.0314759366060291,
+            "exit_heading_error_rad": 0.017431080412503075,
+            "index": 1,
+            "outer_side_at": 72600,
+            "passed_at": 82500,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_outward",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1146,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.416280780850616,
+      "cone_track_samples_without_visual_evidence": 707,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_outward.sync.trajectory.json": "988d4a3f593fc1140b6d78b5a2649ac97fa6c33e78d367741aa58506d999f4b1",
+        "offset_outward.input.json": "1a5d3fbccc330f83231f26fe6562e479a6e312ad42e6dbbcad1cb3dd46d61282",
+        "offset_outward.sync.jsonl": "4415a6b686ba9014a12d545dadcbd403bcf06254e08b3a5e7f77dcca5a316946"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 116389,
+      "distance_m": 21.097018436736732,
+      "minimum_cone_clearance_m": 0.515519254699748,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.553984627123377,
+        "y_m": 4.400408859698591,
+        "yaw_rad": -0.0006791353629131969
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 233570,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589806,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 33266,
+            "entry_heading_error_rad": 0.0037308343040058922,
+            "exit_heading_error_rad": 0.026910961797748545,
+            "index": 0,
+            "outer_side_at": 35589,
+            "passed_at": 45730,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535898135,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 71463,
+            "entry_heading_error_rad": 0.0032047712211733526,
+            "exit_heading_error_rad": 0.027588433222797804,
+            "index": 1,
+            "outer_side_at": 73782,
+            "passed_at": 83945,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_outward",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1164,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.526130599448004,
+      "cone_track_samples_without_visual_evidence": 719,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_outward.async.trajectory.json": "91dc18a8382de2de0b30713bd9a2a4cfa76b33c5466f02f9c59a5ead354498af",
+        "offset_outward.input.json": "1a5d3fbccc330f83231f26fe6562e479a6e312ad42e6dbbcad1cb3dd46d61282",
+        "offset_outward.async.jsonl": "d17715914cc1af9affda398e1d4d32fac68d85dc2af1678c28444259b89e4308"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 179700,
+      "distance_m": 32.656999690494885,
+      "minimum_cone_clearance_m": 0.4704403163720379,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556179771789301,
+        "y_m": 4.400552852440022,
+        "yaw_rad": -0.0003893456395482886
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 182364,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589819,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 33100,
+            "entry_heading_error_rad": 0.03231143585643359,
+            "exit_heading_error_rad": 0.11449444903068873,
+            "index": 0,
+            "outer_side_at": 35400,
+            "passed_at": 45300,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589796,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 141300,
+            "entry_heading_error_rad": 0.026234295983063483,
+            "exit_heading_error_rad": 0.017268013845687324,
+            "index": 1,
+            "outer_side_at": 142700,
+            "passed_at": 150700,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_forward",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1798,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.544351023161051,
+      "cone_track_samples_without_visual_evidence": 1389,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_forward.sync.trajectory.json": "a788241b7242595c6a64d994a4ba0a6820546a8a8ac94e566dfc3c0bc8b9f896",
+        "offset_both_forward.input.json": "a2918414e45028988dfeec4a78a58307cab758025321b8cbedb01cbb2f2dce22",
+        "offset_both_forward.sync.jsonl": "03fac388adf55b7e4c8479f7ba3b101c22b77f9f94b9952d938357ea4251cef0"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 109387,
+      "distance_m": 20.314399288812105,
+      "minimum_cone_clearance_m": 0.5157273625955094,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.554049531009853,
+        "y_m": 4.400292522436783,
+        "yaw_rad": -0.0004140521740803038
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 219474,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897865,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 33670,
+            "entry_heading_error_rad": 0.00319857740939522,
+            "exit_heading_error_rad": 0.07579571205822777,
+            "index": 0,
+            "outer_side_at": 35991,
+            "passed_at": 46428,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897905,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 70366,
+            "entry_heading_error_rad": 0.006767680821947675,
+            "exit_heading_error_rad": 0.04453225188076182,
+            "index": 1,
+            "outer_side_at": 71821,
+            "passed_at": 79864,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_forward",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1094,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.8358837328823014,
+      "cone_track_samples_without_visual_evidence": 678,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_forward.async.trajectory.json": "3987a819497f6b6fdb6624a363e07cdc43469747094b1e16da40e3a517a5fbfd",
+        "offset_both_forward.input.json": "a2918414e45028988dfeec4a78a58307cab758025321b8cbedb01cbb2f2dce22",
+        "offset_both_forward.async.jsonl": "cbb296a23c2651c4977c8ae74dc33002fa350127c426da7a406aa78da058d3a8"
+      }
+    },
+    {
+      "completed": false,
+      "elapsed_ms": 180300,
+      "distance_m": 33.168555036680196,
+      "minimum_cone_clearance_m": 0.44285426966504543,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.537256262316635,
+        "y_m": 4.400416860494409,
+        "yaw_rad": -0.0008559639040282008
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": "scenario duration exhausted before completion",
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "fault"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 182878,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897625,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 30100,
+            "entry_heading_error_rad": 0.024372021454682535,
+            "exit_heading_error_rad": 0.017305934005530155,
+            "index": 0,
+            "outer_side_at": 31500,
+            "passed_at": 39500,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897842,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 136100,
+            "entry_heading_error_rad": 0.0287155321485546,
+            "exit_heading_error_rad": 0.020019925752665646,
+            "index": 1,
+            "outer_side_at": 138400,
+            "passed_at": 148200,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_back",
+      "mode": "sync",
+      "accepted": false,
+      "report": "verified",
+      "trajectory_samples": 1801,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.527539494588776,
+      "cone_track_samples_without_visual_evidence": 1364,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_back.sync.trajectory.json": "2d788ea1d1569abf4272cc972059c78af305e04cfd9c40468cfe2ea48ada397d",
+        "offset_both_back.input.json": "833d6925c533531973e1f7c7c22b93fef86a64a5e1e7af7c6a388f27aa5807b0",
+        "offset_both_back.sync.jsonl": "046172a65afac66c8a5e8019c1e7cbacf2082676203a6d6a97b70469aa1e4f5b"
+      },
+      "last_online": {
+        "active_track": {
+          "color": "white",
+          "confidence": 1.0,
+          "first_seen": 0,
+          "geometry": {
+            "depth_m": 0.7999999999999998,
+            "lateral_half_width_m": 0.6000000000000001,
+            "shape": "line_region"
+          },
+          "heading_error_rad": 0.015,
+          "heading_rad": 0.0,
+          "id": 4,
+          "kind": "finish_marker",
+          "last_geometry_at": 180000,
+          "last_seen": 180000,
+          "last_visual_at": 180000,
+          "observations": 1801,
+          "position": {
+            "x_m": 6.2,
+            "y_m": 4.4
+          },
+          "position_error_m": 0.02817006567084979,
+          "processed": false,
+          "valid": true
+        },
+        "active_track_id": 4,
+        "behavior": "approach_region",
+        "cone_progress_rad": 0.0,
+        "goal_heading_rad": 0.0,
+        "mission": {
+          "at": 180000,
+          "crosswalk_stop_elapsed_ms": 3000,
+          "green_elapsed_ms": 300,
+          "output": {
+            "arrival": {
+              "type": "stop"
+            },
+            "max_speed_mps": 0.18,
+            "point": {
+              "x_m": 6.58,
+              "y_m": 4.4
+            },
+            "type": "target"
+          },
+          "phase": "finish",
+          "reason": "approaching observed finish region",
+          "waypoint_index": 2
+        },
+        "processed_cones": 2,
+        "requires_road_semantics": true,
+        "search_distance_m": 0.0,
+        "task_revision": 12,
+        "travel_boundary": null
+      },
+      "last_navigation_reason": null,
+      "last_blocked_before_fault": {
+        "at": 173500,
+        "pose": {
+          "x_m": 5.652587536456974,
+          "y_m": 4.398396196707629,
+          "yaw_rad": 0.012217041234043435
+        },
+        "speed": 0.0579055502693815,
+        "curvature": -0.1770159512708187,
+        "online": {
+          "active_track": {
+            "color": "white",
+            "confidence": 1.0,
+            "first_seen": 0,
+            "geometry": {
+              "depth_m": 1.0,
+              "lateral_half_width_m": 0.6000000000000001,
+              "shape": "line_region"
+            },
+            "heading_error_rad": 0.015,
+            "heading_rad": 0.0,
+            "id": 3,
+            "kind": "stop_line",
+            "last_geometry_at": 173500,
+            "last_seen": 173500,
+            "last_visual_at": 173500,
+            "observations": 1736,
+            "position": {
+              "x_m": 5.2,
+              "y_m": 4.4
+            },
+            "position_error_m": 0.029525903780917066,
+            "processed": false,
+            "valid": true
+          },
+          "active_track_id": 3,
+          "behavior": "approach_region",
+          "cone_progress_rad": 0.0,
+          "goal_heading_rad": 0.0,
+          "mission": {
+            "at": 173500,
+            "crosswalk_stop_elapsed_ms": 3000,
+            "green_elapsed_ms": 0,
+            "output": {
+              "arrival": {
+                "type": "stop"
+              },
+              "max_speed_mps": 0.18,
+              "point": {
+                "x_m": 5.68,
+                "y_m": 4.4
+              },
+              "type": "target"
+            },
+            "phase": "approach_light",
+            "reason": "approaching observed light stop region",
+            "waypoint_index": 2
+          },
+          "processed_cones": 2,
+          "requires_road_semantics": true,
+          "search_distance_m": 0.0,
+          "task_revision": 9,
+          "travel_boundary": {
+            "lateral_bounds_m": [
+              -0.6470187594654533,
+              0.6470187594654533
+            ],
+            "max_projection_m": 0.952981240534547,
+            "normal": {
+              "x_m": 1.0,
+              "y_m": 0.0
+            },
+            "origin": {
+              "x_m": 5.2,
+              "y_m": 4.4
+            }
+          }
+        },
+        "navigation_reason": "goal_braking"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 109263,
+      "distance_m": 20.33648395248568,
+      "minimum_cone_clearance_m": 0.5159066939468617,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556450897604042,
+        "y_m": 4.400729253849029,
+        "yaw_rad": -0.00024573857303034075
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 219218,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589779,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 30658,
+            "entry_heading_error_rad": 0.0017497758209388259,
+            "exit_heading_error_rad": 0.041988663582060326,
+            "index": 0,
+            "outer_side_at": 32183,
+            "passed_at": 40293,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589799,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 64065,
+            "entry_heading_error_rad": 0.0028185028032887693,
+            "exit_heading_error_rad": 0.029256836244357043,
+            "index": 1,
+            "outer_side_at": 66414,
+            "passed_at": 76554,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_back",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1093,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.249611033221784,
+      "cone_track_samples_without_visual_evidence": 645,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_back.async.trajectory.json": "0be6024c4e9cd180157bbbf25471b514d477271896607edc7c52b952a53e14aa",
+        "offset_both_back.input.json": "833d6925c533531973e1f7c7c22b93fef86a64a5e1e7af7c6a388f27aa5807b0",
+        "offset_both_back.async.jsonl": "75409a5eb3fa7b3eef27342b4ed709963acb7bd78092ac4b828edd1c67ac0bf5"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 103200,
+      "distance_m": 19.542093011171605,
+      "minimum_cone_clearance_m": 0.2529869093529907,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556297773839229,
+        "y_m": 4.400313947871569,
+        "yaw_rad": -5.5535953820129436e-05
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 104657,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589775,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 33800,
+            "entry_heading_error_rad": 0.03634765598889933,
+            "exit_heading_error_rad": 0.03651908134941362,
+            "index": 0,
+            "outer_side_at": 35500,
+            "passed_at": 40700,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589788,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 63600,
+            "entry_heading_error_rad": 0.029257014131368386,
+            "exit_heading_error_rad": 0.017418357532030804,
+            "index": 1,
+            "outer_side_at": 65000,
+            "passed_at": 73000,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_up",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1033,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.159073815653894,
+      "cone_track_samples_without_visual_evidence": 612,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_up.sync.trajectory.json": "332958c38620dfa97d80e836c716827b7c57be03af1f136cba7ffafae21f99aa",
+        "offset_both_up.input.json": "e4da12be51d6eca9b95f45c8b8a836d030ce54c0812a323c2c3d5dc4585f2ae1",
+        "offset_both_up.sync.jsonl": "2b7cb4baef59bad2b1f2002cf1b9833266803e8bb96abcb9c91cfd703eed30db"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 104867,
+      "distance_m": 19.568561026035358,
+      "minimum_cone_clearance_m": 0.2538119773073572,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.557790580826816,
+        "y_m": 4.400557314909208,
+        "yaw_rad": -8.715840498396688e-05
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 210373,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589792,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 34055,
+            "entry_heading_error_rad": 0.026358398539880312,
+            "exit_heading_error_rad": 0.031055504276505275,
+            "index": 0,
+            "outer_side_at": 35663,
+            "passed_at": 41518,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897905,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 64574,
+            "entry_heading_error_rad": 0.005178102434732601,
+            "exit_heading_error_rad": 0.044508730487794246,
+            "index": 1,
+            "outer_side_at": 66029,
+            "passed_at": 74163,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_up",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1049,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.2722694977236655,
+      "cone_track_samples_without_visual_evidence": 621,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_up.async.trajectory.json": "2e0770f371b339fb9577d84fd1726bea9197a47adb75f7699f84e51464a401d7",
+        "offset_both_up.input.json": "e4da12be51d6eca9b95f45c8b8a836d030ce54c0812a323c2c3d5dc4585f2ae1",
+        "offset_both_up.async.jsonl": "b60c0f3018093cc3106cd4a36c80fac805adedc27594cbb7d600ab162cdc66d5"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 104500,
+      "distance_m": 20.285262427081367,
+      "minimum_cone_clearance_m": 0.5155506857037486,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.552023508544301,
+        "y_m": 4.400551171640548,
+        "yaw_rad": -0.0002857832356459866
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 105954,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589792,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 30900,
+            "entry_heading_error_rad": 0.03127290046107145,
+            "exit_heading_error_rad": 0.01755413798216443,
+            "index": 0,
+            "outer_side_at": 32400,
+            "passed_at": 40300,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897856,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 63900,
+            "entry_heading_error_rad": 0.028495063887294947,
+            "exit_heading_error_rad": 0.01760178618436914,
+            "index": 1,
+            "outer_side_at": 65300,
+            "passed_at": 73300,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_down",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1045,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.401362540146172,
+      "cone_track_samples_without_visual_evidence": 615,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_down.sync.trajectory.json": "62551f45019084fd1711805994eb11fd713b2f067448c3ed1342657cff6ce1d0",
+        "offset_both_down.input.json": "7e267e6f371e78d649ef481cdccf4323987ab1970becf1abae21ef57cb33a155",
+        "offset_both_down.sync.jsonl": "a3ea1d16732b7de0f25bfae540aee1f2e2ecfef064df028d2b97129a945cd1ca"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 106189,
+      "distance_m": 20.320141438599272,
+      "minimum_cone_clearance_m": 0.521125736470808,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.553988823162023,
+        "y_m": 4.400356329996106,
+        "yaw_rad": -0.0004398483943712783
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 212987,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589807,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31472,
+            "entry_heading_error_rad": 0.004301067317440399,
+            "exit_heading_error_rad": 0.02791080670060886,
+            "index": 0,
+            "outer_side_at": 32941,
+            "passed_at": 40952,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589788,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 64735,
+            "entry_heading_error_rad": 0.0008544475905374327,
+            "exit_heading_error_rad": 0.04294515424463352,
+            "index": 1,
+            "outer_side_at": 66355,
+            "passed_at": 74495,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "offset_both_down",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1062,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.307785711182673,
+      "cone_track_samples_without_visual_evidence": 624,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "offset_both_down.async.trajectory.json": "f10723f2beae58dd8a162e4bd0604e09a1669f0ee7927180e11166ceefc641d1",
+        "offset_both_down.input.json": "7e267e6f371e78d649ef481cdccf4323987ab1970becf1abae21ef57cb33a155",
+        "offset_both_down.async.jsonl": "7c59fa65c137afa4f47c47a117d4ec8e5cd4ebd5b9588ba7acd5b2bcc8f027a9"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 104700,
+      "distance_m": 20.304995660506478,
+      "minimum_cone_clearance_m": 0.5162671157904406,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556152630876155,
+        "y_m": 4.40044823608506,
+        "yaw_rad": -2.444632340958819e-05
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 106205,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535898056,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31600,
+            "entry_heading_error_rad": 0.029304938706819605,
+            "exit_heading_error_rad": 0.011827514109785664,
+            "index": 0,
+            "outer_side_at": 33000,
+            "passed_at": 41000,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535898056,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 64700,
+            "entry_heading_error_rad": 0.028203686291087937,
+            "exit_heading_error_rad": 0.016710371295679316,
+            "index": 1,
+            "outer_side_at": 66100,
+            "passed_at": 74100,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "nominal_noise",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1048,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 3.841890199791543,
+      "cone_track_samples_without_visual_evidence": 623,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "nominal_noise.sync.trajectory.json": "aac7f1bc2400ab57ef8f067cfedb7cd89ddc442a8e17b516bf9456aa1ae2d711",
+        "nominal_noise.input.json": "611913ab51c8cbcb5bb840ebfb0262e0712735e3b85388c0b777bb2053078696",
+        "nominal_noise.sync.jsonl": "de91f45e0e5caf9afe3b727e054bd962636b148e567524738c22afd0cb3497cf"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 106263,
+      "distance_m": 20.335556315920243,
+      "minimum_cone_clearance_m": 0.5213397946742979,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556731932796068,
+        "y_m": 4.4003618859552045,
+        "yaw_rad": -0.002556267774696419
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 213199,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589772,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 32174,
+            "entry_heading_error_rad": 0.00639836248881398,
+            "exit_heading_error_rad": 0.04524467389700426,
+            "index": 0,
+            "outer_side_at": 33631,
+            "passed_at": 41766,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897802,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 65658,
+            "entry_heading_error_rad": 0.0024769747010391363,
+            "exit_heading_error_rad": 0.029617230033796904,
+            "index": 1,
+            "outer_side_at": 67128,
+            "passed_at": 75152,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "nominal_noise",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1063,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 3.8269597451958504,
+      "cone_track_samples_without_visual_evidence": 631,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "nominal_noise.async.trajectory.json": "f8b7207e508fc21d5c92c81a0778d73fb3d14772f35ad4460e12bb5ca3032c66",
+        "nominal_noise.input.json": "611913ab51c8cbcb5bb840ebfb0262e0712735e3b85388c0b777bb2053078696",
+        "nominal_noise.async.jsonl": "e143b7f8654ac8184f018c898b8eeb48f0b53f0400395b95746b67e476c2f0c9"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 174100,
+      "distance_m": 31.9336253685441,
+      "minimum_cone_clearance_m": 0.3149097845056407,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.556148221484697,
+        "y_m": 4.400610968039559,
+        "yaw_rad": -0.00018545522935475844
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 176672,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897767,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31000,
+            "entry_heading_error_rad": 0.028357771498978668,
+            "exit_heading_error_rad": 0.019548895876458694,
+            "index": 0,
+            "outer_side_at": 32500,
+            "passed_at": 39500,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535897833,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 135300,
+            "entry_heading_error_rad": 0.028898062375582345,
+            "exit_heading_error_rad": 0.0202154478587393,
+            "index": 1,
+            "outer_side_at": 136700,
+            "passed_at": 144700,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "shifted_noise",
+      "mode": "sync",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1742,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 6.070349243996631,
+      "cone_track_samples_without_visual_evidence": 1329,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "shifted_noise.sync.trajectory.json": "a808afe56f16131de52135f3374a34c58cf7fbddc10430859c6ac8bfd9ae45cc",
+        "shifted_noise.input.json": "6a077704a25997bc3cd27000415ae06efff57f57964b485d72645df8909fe7e2",
+        "shifted_noise.sync.jsonl": "cd60da0b39294fcd032e93a7f4ff8a7aa70f99c67480cb2e6847ca2ed329c41f"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 176669,
+      "distance_m": 32.10533080912636,
+      "minimum_cone_clearance_m": 0.2992553885075076,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.55773159488717,
+        "y_m": 4.401122763799856,
+        "yaw_rad": 0.0001681736383356558
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 354445,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897882,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31557,
+            "entry_heading_error_rad": 0.0014391766370769332,
+            "exit_heading_error_rad": 0.03548377391609048,
+            "index": 0,
+            "outer_side_at": 33207,
+            "passed_at": 40470,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535898016,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 137248,
+            "entry_heading_error_rad": 0.00545138088407926,
+            "exit_heading_error_rad": 0.03140794938496194,
+            "index": 1,
+            "outer_side_at": 138705,
+            "passed_at": 146751,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "shifted_noise",
+      "mode": "async",
+      "accepted": true,
+      "report": "verified",
+      "trajectory_samples": 1767,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 6.148682888340326,
+      "cone_track_samples_without_visual_evidence": 1347,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "shifted_noise.async.trajectory.json": "678e730e375a257784c1d467509acc4691586ea115b74d20d32553a4a5fa4b5a",
+        "shifted_noise.input.json": "6a077704a25997bc3cd27000415ae06efff57f57964b485d72645df8909fe7e2",
+        "shifted_noise.async.jsonl": "acac3a7d57fdccde1fc02c992efe7bf35f3c9b8a7a760e34f5db14f0bf398207"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 106451,
+      "distance_m": 20.326442621736078,
+      "minimum_cone_clearance_m": 0.5215480254411751,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.555174531514372,
+        "y_m": 4.400289873082569,
+        "yaw_rad": -0.00015122277204104861
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 213518,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.1415926535897762,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 32233,
+            "entry_heading_error_rad": 0.014247441159913166,
+            "exit_heading_error_rad": 0.06444592974792007,
+            "index": 0,
+            "outer_side_at": 33692,
+            "passed_at": 41834,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.141592653589814,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 65938,
+            "entry_heading_error_rad": 0.004809398897248851,
+            "exit_heading_error_rad": 0.04509593256324296,
+            "index": 1,
+            "outer_side_at": 67393,
+            "passed_at": 75433,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "nominal_7x5",
+      "mode": "async-delay",
+      "accepted": true,
+      "report": "verified-delay-nominal",
+      "trajectory_samples": 1065,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 4.267665642250916,
+      "cone_track_samples_without_visual_evidence": 634,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "nominal_7x5.async-delay.trajectory.json": "225eae251274ae35976b7552244d72a4b144b6574738c832d78d64b321810794",
+        "nominal_7x5.input.json": "f241ecc6d77182fe69da350892139ba5e150d2e808eaff105aea5675da7f2caf",
+        "nominal_7x5.async-delay.jsonl": "78164585c35063bcf023ef9dd87e932f40d025aa3da7cde86fe7004633f406a6"
+      }
+    },
+    {
+      "completed": true,
+      "elapsed_ms": 177251,
+      "distance_m": 32.18662727163174,
+      "minimum_cone_clearance_m": 0.3041964829394183,
+      "crosswalk_hold_ms": 3000,
+      "green_observed_ms": 300,
+      "final_pose": {
+        "x_m": 6.558904475203589,
+        "y_m": 4.400976633573668,
+        "yaw_rad": -0.001126396702046062
+      },
+      "final_actual_speed_mps": 0.0,
+      "final_actual_curvature_per_m": 0.0,
+      "fault": null,
+      "phases": [
+        "approach_crosswalk",
+        "crosswalk_stop",
+        "cones",
+        "approach_light",
+        "wait_green",
+        "finish",
+        "completed"
+      ],
+      "online_referee": {
+        "actual_pose_samples": 355547,
+        "available_cones": 2,
+        "both_completed": true,
+        "completed_cones": 2,
+        "cones": [
+          {
+            "angular_progress_rad": 3.141592653589796,
+            "began_in_required_order": true,
+            "direction": "counterclockwise",
+            "entered_at": 31417,
+            "entry_heading_error_rad": 0.017424064553258845,
+            "exit_heading_error_rad": 0.048918537710892274,
+            "index": 0,
+            "outer_side_at": 32899,
+            "passed_at": 40219,
+            "passed_in_required_order": true
+          },
+          {
+            "angular_progress_rad": 3.1415926535898024,
+            "began_in_required_order": true,
+            "direction": "clockwise",
+            "entered_at": 137836,
+            "entry_heading_error_rad": 0.016147520114707437,
+            "exit_heading_error_rad": 0.029045241989603898,
+            "index": 1,
+            "outer_side_at": 139297,
+            "passed_at": 147321,
+            "passed_in_required_order": true
+          }
+        ],
+        "failure_reason": null,
+        "order_valid": true,
+        "trajectory_valid": true
+      },
+      "physical_output_enabled": false,
+      "name": "cones_shifted",
+      "mode": "async-delay",
+      "accepted": true,
+      "report": "verified-delay-shifted",
+      "trajectory_samples": 1773,
+      "omitted_trajectory_samples": 0,
+      "max_observed_local_route_m": 5.910151410127556,
+      "cone_track_samples_without_visual_evidence": 1353,
+      "visual_cones_in_retained_sources": 0,
+      "processed_count_monotonic": true,
+      "sha256": {
+        "cones_shifted.async-delay.trajectory.json": "9d350c4d7cd832d0e9114218dc1ac90fa2ea93b52d43904a2e57e227049708cf",
+        "cones_shifted.input.json": "fad4ec4aabf66013d2332ff387a15ae74e07799a237d331cc8ed77bc513f3f8a",
+        "cones_shifted.async-delay.jsonl": "4374b4ce8e90ceabc2a92236714acecbd6881e8ddfa25e0cee1cc7310e885e64"
+      }
+    }
+  ]
+}

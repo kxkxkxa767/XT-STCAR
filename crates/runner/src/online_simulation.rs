@@ -18,6 +18,9 @@ pub struct OnlineScene {
     /// separated from RGB detection and never used to inject cone positions.
     #[serde(default)]
     pub ideal_non_cone_semantics: bool,
+    /// Deterministic bounded range perturbation for offline robustness probes.
+    #[serde(default)]
+    pub lidar_range_noise_m: f64,
     pub bounds: Rect,
     pub light_stop_region: Rect,
     pub light_boundary_region: Rect,
@@ -73,6 +76,7 @@ impl OnlineScenario {
         markers.enabled = self.experimental_markers_enabled;
         let truth = OnlineScene {
             ideal_non_cone_semantics: false,
+            lidar_range_noise_m: 0.0,
             bounds: simulation.autonomy.navigation.bounds,
             light_stop_region: simulation.autonomy.mission.light_stop_region,
             light_boundary_region: simulation
@@ -269,6 +273,8 @@ pub(crate) fn validate_scene(config: &SimulationConfig) -> Result<()> {
             scene_light_boundary(config)?;
             GroundMarkerDetector::new(config.road.clone(), scene.markers.clone())?;
             if config.field.is_some()
+                || !scene.lidar_range_noise_m.is_finite()
+                || !(0.0..=0.02).contains(&scene.lidar_range_noise_m)
                 || scene.occlusions.len() > 16
                 || !config
                     .autonomy

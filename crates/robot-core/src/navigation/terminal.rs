@@ -655,10 +655,37 @@ pub(super) fn single_arc_with_error(
 /// This explicit API leaves the old lattice terminal's 35 cm domain unchanged;
 /// both use the same eight corrections, integrated endpoint and shared ledger.
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(super) fn short_point_arc_with_error(
     start: Pose2,
     initial_curvature: f64,
     goal: Point2,
+    config: &NavigationConfig,
+    grid: &Grid,
+    budget: &TerminalBudget,
+    initial_error: ErrorBound,
+) -> Option<(Vec<Point2>, Pose2, f64, ErrorBound)> {
+    short_arc_with_error(
+        start,
+        initial_curvature,
+        goal,
+        None,
+        config,
+        grid,
+        budget,
+        initial_error,
+    )
+}
+
+/// The same bounded local connector with an optional real tangent constraint.
+/// An oriented rolling circle target should not require a quantized full loop
+/// merely because it is farther than the lattice's 35 cm terminal domain.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn short_arc_with_error(
+    start: Pose2,
+    initial_curvature: f64,
+    goal: Point2,
+    goal_heading: Option<f64>,
     config: &NavigationConfig,
     grid: &Grid,
     budget: &TerminalBudget,
@@ -669,7 +696,7 @@ pub(super) fn short_point_arc_with_error(
         start,
         initial_curvature,
         goal,
-        None,
+        goal_heading,
         config,
         grid,
         budget,
@@ -688,7 +715,7 @@ pub(super) fn short_point_arc_with_error(
             start,
             initial_curvature,
             goal,
-            None,
+            goal_heading,
             config,
             grid,
             budget,
@@ -1078,6 +1105,109 @@ mod tests {
     use super::*;
     use crate::autonomy::{HalfPlane, ObstacleDisc, PoseEstimate};
     use crate::motion_transition::{MotionTransition, project_motion};
+
+    #[test]
+    fn rolling_oriented_arc_keeps_tangent_obstacles_error_and_shared_budget() {
+        let (config, _, _) = arrival_region_scene();
+        let start = Pose2 {
+            x_m: 2.0,
+            y_m: 2.0,
+            yaw_rad: 0.0,
+        };
+        let heading = 0.7f64;
+        let goal = Point2 {
+            x_m: 2.0 + heading.sin(),
+            y_m: 3.0 - heading.cos(),
+        };
+        let grid = Grid::new(&config, &[]);
+        let budget = TerminalBudget::default();
+        assert!(single_arc(start, 1.0, goal, Some(heading), &config, &grid, &budget).is_none());
+        let (points, end, curvature, error) = short_arc_with_error(
+            start,
+            1.0,
+            goal,
+            Some(heading),
+            &config,
+            &grid,
+            &budget,
+            ErrorBound::default(),
+        )
+        .unwrap();
+        assert_eq!(points.last(), Some(&end.point()));
+        assert!(end.point().distance(goal) + error.position_m < config.goal_tolerance_m * 0.5);
+        assert!(
+            angle_error(end.yaw_rad, heading).abs() + error.heading_rad
+                < config.goal_heading_tolerance_rad * 0.5
+        );
+        assert!(curvature.abs() <= config.max_curvature_per_m);
+        assert!(
+            short_arc_with_error(
+                start,
+                1.0,
+                goal,
+                Some(-heading),
+                &config,
+                &grid,
+                &budget,
+                ErrorBound::default()
+            )
+            .is_none()
+        );
+        let blocked = Grid::new(
+            &config,
+            &[ObstacleDisc {
+                center: goal,
+                radius_m: 0.2,
+            }],
+        );
+        assert!(
+            short_arc_with_error(
+                start,
+                1.0,
+                goal,
+                Some(heading),
+                &config,
+                &blocked,
+                &budget,
+                ErrorBound::default()
+            )
+            .is_none()
+        );
+        assert!(
+            short_arc_with_error(
+                start,
+                1.0,
+                goal,
+                Some(heading),
+                &config,
+                &grid,
+                &budget,
+                ErrorBound {
+                    position_m: config.goal_tolerance_m,
+                    heading_rad: 0.0
+                }
+            )
+            .is_none()
+        );
+        while budget.solver().is_some() {}
+        let before = budget.snapshot();
+        assert!(
+            short_arc_with_error(
+                start,
+                1.0,
+                goal,
+                Some(heading),
+                &config,
+                &grid,
+                &budget,
+                ErrorBound::default()
+            )
+            .is_none()
+        );
+        let after = budget.snapshot();
+        assert_eq!(before.solver_attempts, after.solver_attempts);
+        assert!(after.iterations <= 1024 && after.primitive_samples <= 65_536);
+    }
 
     fn arrival_region_scene() -> (NavigationConfig, Pose2, Point2) {
         let raw: serde_json::Value =

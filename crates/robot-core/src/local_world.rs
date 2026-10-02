@@ -883,11 +883,30 @@ impl LocalWorld {
                 } else {
                     track.lidar.map_or(1, |e| e.observations.saturating_add(1))
                 };
-                track.position = retain_roundoff_position(track.position, candidate.center);
+                // Smooth only an unbroken, uniquely associated lidar track.
+                // The new uncertainty contains the CURRENT measurement disc,
+                // so filtering never freezes geometry or claims reduced error.
+                let filtered = if restart {
+                    candidate.center
+                } else {
+                    let weight = 1.0 / cfg.min_confirmations as f64;
+                    Point2 {
+                        x_m: track.position.x_m
+                            + weight * (candidate.center.x_m - track.position.x_m),
+                        y_m: track.position.y_m
+                            + weight * (candidate.center.y_m - track.position.y_m),
+                    }
+                };
+                let filtered_error = candidate.error_m + filtered.distance(candidate.center);
+                if filtered_error > self.config.max_position_error_m {
+                    track.valid = false;
+                    continue;
+                }
+                track.position = retain_roundoff_position(track.position, filtered);
                 track.geometry = ElementGeometry::Cone {
                     radius_m: candidate.radius_m,
                 };
-                track.position_error_m = candidate.error_m;
+                track.position_error_m = filtered_error;
                 track.heading_error_rad = self.config.pose_heading_error_rad;
                 track.last_seen = scan.at;
                 track.last_geometry_at = scan.at;

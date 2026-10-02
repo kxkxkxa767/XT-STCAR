@@ -195,6 +195,7 @@ pub struct OnlineMissionReport {
 struct Orbit {
     radius_m: f64,
     entry_aligned: bool,
+    exit_aligned: bool,
     entered: bool,
     progress_rad: f64,
     saw_outer_side: bool,
@@ -206,6 +207,53 @@ struct ProcessedCone {
     position: Point2,
     radius_m: f64,
     position_error_m: f64,
+}
+
+/// Cubic Hermite geometry is only a reference proposal, never a motion proof.
+/// Use a bounded 32-segment arc-length table to retain the final tangent
+/// throughout the distant approach. The selected footprint is checked below.
+fn tangent_approach_target(
+    pose: Pose2,
+    goal: Point2,
+    heading: f64,
+    horizon: f64,
+) -> Option<(Point2, f64)> {
+    let handle = pose.point().distance(goal) / 3.0;
+    let a = polar(pose.point(), handle, pose.yaw_rad);
+    let b = polar(goal, handle, heading + PI);
+    let point_at = |t: f64| {
+        let u = 1.0 - t;
+        Point2 {
+            x_m: u.powi(3) * pose.x_m
+                + 3.0 * u * u * t * a.x_m
+                + 3.0 * u * t * t * b.x_m
+                + t.powi(3) * goal.x_m,
+            y_m: u.powi(3) * pose.y_m
+                + 3.0 * u * u * t * a.y_m
+                + 3.0 * u * t * t * b.y_m
+                + t.powi(3) * goal.y_m,
+        }
+    };
+    let mut previous = pose.point();
+    let mut travel = 0.0;
+    for i in 1..=32 {
+        let point = point_at(i as f64 / 32.0);
+        let length = previous.distance(point);
+        if travel + length >= horizon && length > 0.0 {
+            let t = i as f64 / 32.0;
+            let u = 1.0 - t;
+            let dx = u * u * (a.x_m - pose.x_m)
+                + 2.0 * u * t * (b.x_m - a.x_m)
+                + t * t * (goal.x_m - b.x_m);
+            let dy = u * u * (a.y_m - pose.y_m)
+                + 2.0 * u * t * (b.y_m - a.y_m)
+                + t * t * (goal.y_m - b.y_m);
+            return (dx.hypot(dy) > 1e-12).then(|| (point_at(t), dy.atan2(dx)));
+        }
+        travel += length;
+        previous = point;
+    }
+    None
 }
 
 struct Proposal {
@@ -520,6 +568,7 @@ impl OnlineMission {
         let mut orbit = self.orbit.unwrap_or(Orbit {
             radius_m: preferred_radius,
             entry_aligned: false,
+            exit_aligned: false,
             entered: false,
             progress_rad: 0.0,
             saw_outer_side: false,
@@ -538,6 +587,28 @@ impl OnlineMission {
             let upper_radius = orbit.radius_m.max(minimum_radius);
             for step in 0..=4 {
                 let radius = upper_radius - (upper_radius - minimum_radius) * step as f64 / 4.0;
+                // A measured permission boundary is relevant to the far half
+                // of the orbit even when that half is occluded in the scan.
+                // Keep the Navigator's circumscribed-body corridor available;
+                // screening only the first quarter could commit a radius that
+                // necessarily runs into the lamp band on the way out.
+                if world.config().lidar_cones.is_some()
+                    && self.travel_boundary().is_some_and(|boundary| {
+                        (0..8).any(|part| {
+                            let a = entry_angle + direction * PI * part as f64 / 8.0;
+                            let b = entry_angle + direction * PI * (part + 1) as f64 / 8.0;
+                            !boundary.contains_points(
+                                &[
+                                    polar(track.position, radius, a),
+                                    polar(track.position, radius, b),
+                                ],
+                                self.body_padding() + radius * (1.0 - (PI / 16.0).cos()),
+                            )
+                        })
+                    })
+                {
+                    continue;
+                }
                 if self.arc_space_state(
                     now,
                     world,
@@ -685,7 +756,10 @@ impl OnlineMission {
         let exit_projection = -direction
             * ((pose.pose.x_m - track.position.x_m) * axis.cos()
                 + (pose.pose.y_m - track.position.y_m) * axis.sin());
-        if orbit.saw_outer_side
+        let lidar_mode = world.config().lidar_cones.is_some();
+        orbit.exit_aligned |= self.near(pose.pose, exit, exit_heading) && self.stopped(pose);
+        if (!lidar_mode || orbit.exit_aligned)
+            && orbit.saw_outer_side
             && orbit.progress_rad >= PI - self.config.goal_heading_tolerance_rad
             && exit_projection >= track.position_error_m
             && self.near(pose.pose, exit_goal, exit_heading)
@@ -708,7 +782,8 @@ impl OnlineMission {
         }
         let progress = (orbit.progress_rad + self.config.arc_lookahead_rad).min(PI);
         let angle = entry_angle + direction * progress;
-        let goal = if progress == PI {
+        let clearing_exit = !lidar_mode || orbit.exit_aligned;
+        let goal = if progress == PI && clearing_exit {
             exit_goal
         } else {
             polar(track.position, orbit.radius_m, angle)
@@ -718,7 +793,7 @@ impl OnlineMission {
         let (next, next_heading) = if next_progress > progress {
             let a = entry_angle + direction * next_progress;
             (
-                if next_progress == PI {
+                if next_progress == PI && clearing_exit {
                     exit_goal
                 } else {
                     polar(track.position, orbit.radius_m, a)
@@ -727,7 +802,11 @@ impl OnlineMission {
             )
         } else {
             (
-                polar(exit_goal, self.config.search_horizon_m, exit_heading),
+                if clearing_exit {
+                    polar(exit_goal, self.config.search_horizon_m, exit_heading)
+                } else {
+                    exit_goal
+                },
                 exit_heading,
             )
         };
@@ -749,7 +828,11 @@ impl OnlineMission {
             pose.pose,
             goal,
             Some(heading),
-            Some((next, next_heading)),
+            if lidar_mode && !clearing_exit && progress == PI {
+                None
+            } else {
+                Some((next, next_heading))
+            },
             cautious_approach,
             OnlineBehavior::OrbitCone,
             "following short arc about current tracked cone",
@@ -1107,6 +1190,46 @@ impl OnlineMission {
         // connection; unoriented search retains its single rolling horizon.
         let target_horizon =
             self.config.search_horizon_m * if heading.is_some() { 2.0 } else { 1.0 };
+        if matches!(
+            behavior,
+            OnlineBehavior::ConeEntry | OnlineBehavior::ApproachRegion
+        ) && world.config().lidar_cones.is_some()
+            && let Some(yaw) = heading
+            && distance > self.config.search_horizon_m
+        {
+            // Keep the entrance tangent in the distant approach. Point-only
+            // clipping aims diagonally at the guide and can leave too little
+            // forward distance to align an Ackermann vehicle. This curve is
+            // only a local target proposal: Navigator and execution still
+            // certify the actual motion and stopping envelope independently.
+            let Some((point, tangent)) =
+                tangent_approach_target(pose, goal, yaw, self.config.search_horizon_m)
+            else {
+                return Proposal::stop(behavior, "degenerate oriented approach");
+            };
+            if !world.known_free_convex_hull(
+                now,
+                &self.config.footprint.corners(Pose2 {
+                    x_m: point.x_m,
+                    y_m: point.y_m,
+                    yaw_rad: tangent,
+                }),
+                self.config.clearance_m,
+            ) {
+                return Proposal::stop(behavior, "curved approach target is unknown or blocked");
+            }
+            return Proposal {
+                output: MissionOutput::Target {
+                    point,
+                    max_speed_mps: self.config.approach_speed_mps,
+                    arrival: ArrivalBehavior::Stop,
+                },
+                heading: Some(tangent),
+                behavior,
+                reason,
+            };
+        }
+
         if distance > target_horizon {
             let yaw = (goal.y_m - pose.y_m).atan2(goal.x_m - pose.x_m);
             for scale in [1.0, 0.75, 0.5, 0.25] {
@@ -3061,6 +3184,7 @@ mod tests {
             mission.orbit = Some(Orbit {
                 radius_m: 0.6,
                 entry_aligned: true,
+                exit_aligned: false,
                 entered: true,
                 progress_rad: PI,
                 saw_outer_side: true,
@@ -3354,6 +3478,7 @@ mod tests {
             mission.orbit = Some(Orbit {
                 radius_m: 0.6,
                 entry_aligned: true,
+                exit_aligned: false,
                 entered: true,
                 progress_rad: 0.0,
                 saw_outer_side: false,

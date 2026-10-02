@@ -1,4 +1,20 @@
 // Policy-level measured-pose sequences; full plant tests live in lidar_matrix.
+#[test]
+fn tangent_approach_translates_and_rotates_with_measured_geometry() {
+    let start = Pose2 { x_m: 1.0, y_m: 0.5, yaw_rad: 0.2 };
+    let goal = Point2 { x_m: 4.0, y_m: 2.0 };
+    let (point, heading) = tangent_approach_target(start, goal, 1.1, 0.8).unwrap();
+    let transform = Pose2 { x_m: -3.0, y_m: 5.0, yaw_rad: 2.0 };
+    let moved = transform.body_to_world(start.point());
+    let (rotated, tangent) = tangent_approach_target(
+        Pose2 { x_m: moved.x_m, y_m: moved.y_m, yaw_rad: start.yaw_rad + transform.yaw_rad },
+        transform.body_to_world(goal), 1.1 + transform.yaw_rad, 0.8,
+    ).unwrap();
+    assert!(rotated.distance(transform.body_to_world(point)) < 1e-12);
+    assert!(wrap(tangent - heading - transform.yaw_rad).abs() < 1e-12);
+    assert!(tangent_approach_target(start, start.point(), start.yaw_rad, 0.8).is_none());
+}
+
 fn lidar_setup() -> (OnlineMission, LocalWorld) {
     let (mut mission, world) = setup();
     let mut config = world.config().clone();
@@ -71,7 +87,7 @@ fn lidar_two_cone_policy_keeps_order_actual_progress_revision_and_real_visual_cl
         for step in 0..=4 {
             let angle = -FRAC_PI_2 + direction * step as f64 * FRAC_PI_4;
             let point = polar(center, radius, angle);
-            let p = pose(
+            let mut p = pose(
                 now,
                 Pose2 {
                     x_m: point.x_m,
@@ -79,6 +95,29 @@ fn lidar_two_cone_policy_keeps_order_actual_progress_revision_and_real_visual_cl
                     yaw_rad: wrap(angle + direction * FRAC_PI_2),
                 },
             );
+            if step == 4 {
+                // Position/progress alone must not mark the exit aligned. A
+                // moving vehicle or an incorrect tangent must first stop at
+                // the circle endpoint; only then may the clearing leg begin.
+                for moving in [false, true] {
+                    let mut unaligned = p.clone();
+                    unaligned.captured_at = Timestamp(now);
+                    if moving {
+                        unaligned.speed_mps = 0.18;
+                    } else {
+                        unaligned.pose.yaw_rad += 0.3;
+                    }
+                    observe_raw_cones(&mut world, &unaligned, &centers);
+                    let r = mission.update(Timestamp(now), &unaligned, &old_road, &mut world);
+                    assert_eq!(r.processed_cones, index);
+                    assert!(!mission.orbit.unwrap().exit_aligned);
+                    assert!(matches!(r.mission.output, MissionOutput::Target {
+                        arrival: ArrivalBehavior::Stop, ..
+                    }));
+                    now += 100;
+                }
+                p.captured_at = Timestamp(now);
+            }
             observe_raw_cones(&mut world, &p, &centers);
             let r = mission.update(Timestamp(now), &p, &old_road, &mut world);
             assert_eq!(r.active_track_id, Some(id));

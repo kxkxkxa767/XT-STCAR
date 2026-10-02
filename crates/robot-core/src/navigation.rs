@@ -1739,19 +1739,20 @@ impl Navigator {
         if self.terminal_budget.snapshot().budget_exhausted {
             return None;
         }
-        // A rolling, unoriented local target can lie beyond the old lattice
+        // A rolling local target can lie beyond the old lattice
         // terminal's 35 cm domain while still admitting one short forward arc.
         // Certify that arc before a quantized search replaces it with a loop.
-        // Existing oriented targets and the old near-terminal domain retain
-        // their original order. Failure leaves all spent work on this ledger.
+        // The old near-terminal domain and two-arc priority retain their
+        // original order. Both oriented and point-only rolling targets may
+        // use a certified longer single arc. Failure stays on this ledger.
         if self.target_policy == TargetPolicy::RollingLocal
-            && goal_heading_rad.is_none()
             && (0.35..(2.0 * self.config.lookahead_m).min(2.0))
                 .contains(&start.point().distance(goal))
-            && let Some((points, endpoint, curvature, error)) = terminal::short_point_arc_with_error(
+            && let Some((points, endpoint, curvature, error)) = terminal::short_arc_with_error(
                 start,
                 initial_curvature,
                 goal,
+                goal_heading_rad,
                 &self.config,
                 grid,
                 &self.terminal_budget,

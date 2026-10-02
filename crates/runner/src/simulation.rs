@@ -482,6 +482,21 @@ pub fn synthetic_scan(
                     }
                 }
             }
+            if let Some(scene) = &config.online_scene
+                && scene.lidar_range_noise_m > 0.0
+            {
+                // SplitMix-style deterministic per-frame/per-beam uniform
+                // noise. No random global state or controller-visible truth.
+                let mut bits =
+                    at.0.wrapping_mul(0x9e3779b97f4a7c15)
+                        .wrapping_add(index as u64);
+                bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+                bits = (bits ^ (bits >> 27)).wrapping_mul(0x94d049bb133111eb);
+                bits ^= bits >> 31;
+                let unit = (bits >> 11) as f64 / ((1u64 << 53) as f64);
+                distance =
+                    (distance + (2.0 * unit - 1.0) * scene.lidar_range_noise_m).clamp(0.02, 12.0);
+            }
             Some(distance)
         })
         .collect();
@@ -589,6 +604,16 @@ pub struct SimulationSummary {
 }
 
 pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<SimulationSummary> {
+    simulate_observed(config, writer, |_, _, _, _| {})
+}
+
+/// Offline observer; receives the actual plant state before the checked
+/// command takes effect. It cannot replace that command or mutate the controller.
+pub fn simulate_observed(
+    config: &SimulationConfig,
+    writer: &mut impl Write,
+    mut observe: impl FnMut(&crate::autonomy::AutonomyStep, Pose2, f64, f64),
+) -> Result<SimulationSummary> {
     config.validate()?;
     let mut journal = RunJournal::new(config.telemetry.clone())?;
     let mut navigation_failure = crate::navigation_diagnostics::FirstNavigationFailure::default();
@@ -698,6 +723,7 @@ pub fn simulate(config: &SimulationConfig, writer: &mut impl Write) -> Result<Si
             }
         };
         ticks += 1;
+        observe(&step, pose, speed, curvature);
         statistics.observe_step(&step);
         let mut phase_changed = false;
         navigation_failure.observe(crate::navigation_diagnostics::NavigationFrame::from_step(
@@ -1394,6 +1420,51 @@ mod stop_tests {
 #[cfg(test)]
 mod online_diagnostic_tests {
     use super::*;
+
+    #[test]
+    fn range_noise_is_bounded_reproducible_and_does_not_change_truth() {
+        let mut config = crate::online_simulation::OnlineScenario::example()
+            .compile()
+            .unwrap();
+        let source = config.initial_pose;
+        let ideal = synthetic_scan(&config, source, &[], Timestamp(100));
+        config.online_scene.as_mut().unwrap().lidar_range_noise_m = 0.002;
+        config.validate().unwrap();
+        let noisy = synthetic_scan(&config, source, &[], Timestamp(100));
+        assert_eq!(noisy, synthetic_scan(&config, source, &[], Timestamp(100)));
+        assert_ne!(noisy.ranges_m, ideal.ranges_m);
+        assert_ne!(
+            noisy.ranges_m,
+            synthetic_scan(&config, source, &[], Timestamp(200)).ranges_m
+        );
+        for (a, b) in noisy.ranges_m.iter().zip(&ideal.ranges_m) {
+            assert!((a.unwrap() - b.unwrap()).abs() <= 0.002 + 1e-12);
+        }
+        for invalid in [-0.001, 0.021, f64::NAN, f64::INFINITY] {
+            config.online_scene.as_mut().unwrap().lidar_range_noise_m = invalid;
+            assert!(config.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn observing_sync_simulation_preserves_commands_and_summary() {
+        let mut config = crate::online_simulation::OnlineScenario::example()
+            .compile()
+            .unwrap();
+        config.max_duration_ms = 200;
+        let mut original_log = Vec::new();
+        let original = simulate(&config, &mut original_log).unwrap();
+        let mut observed_log = Vec::new();
+        let mut samples = 0;
+        let observed =
+            simulate_observed(&config, &mut observed_log, |_, _, _, _| samples += 1).unwrap();
+        assert_eq!(samples, observed.ticks);
+        assert_eq!(
+            serde_json::to_value(original).unwrap(),
+            serde_json::to_value(observed).unwrap()
+        );
+        assert_eq!(original_log, observed_log);
+    }
 
     #[test]
     fn ideal_probe_retains_real_source_scans_when_trace_storage_is_exhausted() {
