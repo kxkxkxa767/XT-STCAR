@@ -482,6 +482,13 @@ pub fn synthetic_scan(
                     }
                 }
             }
+            if let Some(scene) = &config.online_scene {
+                for wall in &scene.internal_walls {
+                    if let Some(hit) = wall.ray_distance(origin, dx, dy) {
+                        distance = distance.min(hit);
+                    }
+                }
+            }
             if let Some(scene) = &config.online_scene
                 && scene.lidar_range_noise_m > 0.0
             {
@@ -1000,7 +1007,12 @@ pub(crate) fn check_plant_pose(
             *obstacle,
         ));
     }
-    *minimum < 0.0
+    config.online_scene.as_ref().is_some_and(|scene| {
+        scene
+            .internal_walls
+            .iter()
+            .any(|wall| wall.body_clearance(config.autonomy.mission.footprint, pose) <= 0.0)
+    }) || *minimum < 0.0
         || travel_boundary.is_some_and(|boundary| {
             !boundary.contains_footprint(config.autonomy.mission.footprint, pose, 0.0)
         })
@@ -1440,7 +1452,13 @@ mod online_diagnostic_tests {
         for (a, b) in noisy.ranges_m.iter().zip(&ideal.ranges_m) {
             assert!((a.unwrap() - b.unwrap()).abs() <= 0.002 + 1e-12);
         }
-        for invalid in [-0.001, 0.021, f64::NAN, f64::INFINITY] {
+        config.online_scene.as_mut().unwrap().lidar_range_noise_m = 0.045;
+        config.validate().unwrap();
+        let stress = synthetic_scan(&config, source, &[], Timestamp(100));
+        for (a, b) in stress.ranges_m.iter().zip(&ideal.ranges_m) {
+            assert!((a.unwrap() - b.unwrap()).abs() <= 0.045 + 1e-12);
+        }
+        for invalid in [-0.001, 0.046, f64::NAN, f64::INFINITY] {
             config.online_scene.as_mut().unwrap().lidar_range_noise_m = invalid;
             assert!(config.validate().is_err());
         }

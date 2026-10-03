@@ -14,6 +14,10 @@ use xt_stcar_vision::road::RoadDetector;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct OnlineScene {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub internal_walls: Vec<crate::simulation_geometry::SimWall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recognition_scope: Option<RecognitionScope>,
     /// Offline probe only: ideal non-cone semantics/metric regions, explicitly
     /// separated from RGB detection and never used to inject cone positions.
     #[serde(default)]
@@ -29,6 +33,16 @@ pub struct OnlineScene {
     pub markers: ExperimentalMarkerConfig,
     #[serde(default)]
     pub occlusions: Vec<VisualOcclusion>,
+}
+
+/// Explicit offline visibility hypothesis, not calibrated camera geometry.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecognitionScope {
+    pub crosswalk_region: Rect,
+    pub light_region: Rect,
+    pub marker_range_m: f64,
+    pub horizontal_fov_rad: f64,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -75,6 +89,8 @@ impl OnlineScenario {
         let mut markers = ExperimentalMarkerConfig::simulation();
         markers.enabled = self.experimental_markers_enabled;
         let truth = OnlineScene {
+            internal_walls: Vec::new(),
+            recognition_scope: None,
             ideal_non_cone_semantics: false,
             lidar_range_noise_m: 0.0,
             bounds: simulation.autonomy.navigation.bounds,
@@ -188,7 +204,7 @@ pub(crate) fn detect_frame(
     })
 }
 
-fn ideal_non_cone_frame(
+pub(crate) fn ideal_non_cone_frame(
     config: &SimulationConfig,
     pose: Pose2,
     light: xt_stcar_robot_core::autonomy::LightState,
@@ -212,6 +228,25 @@ fn ideal_non_cone_frame(
     ];
     let observations = regions
         .into_iter()
+        .filter(|(kind, region)| {
+            let Some(scope) = &scene.recognition_scope else {
+                return true;
+            };
+            let recognition = if *kind == ElementKind::Crosswalk {
+                scope.crosswalk_region
+            } else {
+                scope.light_region
+            };
+            let body = pose.world_to_body(Point2 {
+                x_m: region.min_x_m,
+                y_m: (region.min_y_m + region.max_y_m) / 2.0,
+            });
+            recognition.contains(pose.point())
+                && body.x_m >= 0.0
+                && body.x_m.hypot(body.y_m) <= scope.marker_range_m
+                && body.y_m.atan2(body.x_m).abs() <= scope.horizontal_fov_rad / 2.0
+                && !is_occluded(scene, at, false)
+        })
         .map(|(kind, region)| ElementObservation {
             kind,
             color: ElementColor::White,
@@ -240,7 +275,15 @@ fn ideal_non_cone_frame(
             captured_at: at,
             frame_id: config.autonomy.mission.body_frame.clone(),
             crosswalk: None,
-            light,
+            light: if scene
+                .recognition_scope
+                .as_ref()
+                .is_some_and(|scope| !scope.light_region.contains(pose.point()))
+            {
+                xt_stcar_robot_core::autonomy::LightState::Unknown
+            } else {
+                light
+            },
             light_confidence: 1.0,
             cones_body_m: vec![],
         },
@@ -272,9 +315,34 @@ pub(crate) fn validate_scene(config: &SimulationConfig) -> Result<()> {
             scene.finish_region.validate().map_err(|e| e.to_string())?;
             scene_light_boundary(config)?;
             GroundMarkerDetector::new(config.road.clone(), scene.markers.clone())?;
+            if scene.internal_walls.len() > 16
+                || scene.internal_walls.iter().any(|wall| {
+                    !wall.valid(scene.bounds)
+                        || wall.body_clearance(
+                            config.autonomy.navigation.footprint,
+                            config.initial_pose,
+                        ) <= 0.0
+                })
+            {
+                return Err("invalid offline internal wall geometry or initial collision".into());
+            }
+            if let Some(scope) = &scene.recognition_scope {
+                scope
+                    .crosswalk_region
+                    .validate()
+                    .map_err(|e| e.to_string())?;
+                scope.light_region.validate().map_err(|e| e.to_string())?;
+                if !scope.marker_range_m.is_finite()
+                    || !(0.1..=12.0).contains(&scope.marker_range_m)
+                    || !scope.horizontal_fov_rad.is_finite()
+                    || !(0.1..=std::f64::consts::PI).contains(&scope.horizontal_fov_rad)
+                {
+                    return Err("invalid offline recognition visibility hypothesis".into());
+                }
+            }
             if config.field.is_some()
                 || !scene.lidar_range_noise_m.is_finite()
-                || !(0.0..=0.02).contains(&scene.lidar_range_noise_m)
+                || !(0.0..=0.045).contains(&scene.lidar_range_noise_m)
                 || scene.occlusions.len() > 16
                 || !config
                     .autonomy

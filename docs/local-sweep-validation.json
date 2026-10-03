@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-03",
+  "validation": {
+    "rust_release_workspace": {
+      "passed": 623,
+      "failed": 0,
+      "ignored": 3
+    },
+    "scheduler_tests": {
+      "passed": 1
+    },
+    "fmt": "passed",
+    "clippy_all_targets": "passed"
+  },
+  "baseline_reproduced": {
+    "runs": 32,
+    "accepted": 27,
+    "both_cones": 29
+  },
+  "active_round": {
+    "axes": {
+      "bottom_lane_width_m": [
+        1,
+        1.5,
+        2
+      ],
+      "bottom_straight_span_m": [
+        3.0,
+        3.5,
+        4.0,
+        4.5,
+        5.0,
+        5.5,
+        6.0
+      ],
+      "length_m": [
+        5.0,
+        5.5,
+        6.0,
+        6.5,
+        7.0,
+        7.5,
+        8.0
+      ],
+      "top_lane_width_m": [
+        1,
+        1.5,
+        2
+      ],
+      "top_straight_span_m": [
+        3.0,
+        3.5,
+        4.0,
+        4.5,
+        5.0,
+        5.5,
+        6.0
+      ],
+      "width_m": [
+        4.0,
+        4.5,
+        5.0,
+        5.5,
+        6.0
+      ]
+    },
+    "base_commit": "bd629910a39db66739b07f02f22ae44d0a9eccdd",
+    "binary_sha256": "cc9f482649fa3d4d39608e9e428d4c8b7a9d8328929f8493604bdefa73ec7703",
+    "created": 1791014934.3052921,
+    "host_timeout_seconds": 900,
+    "jobs": 62026,
+    "rules_sha256": "24dfa87d60142be349eb4e7e862e09b1ec0c4e3771010e9471d2c850144eb7d6",
+    "scope": "finite 0.5m geometry grid, cone/visibility/noise samples; not continuous-range proof or actual YOLO",
+    "source_manifest_sha256": "ab92e5dcae97f73329a2770cc64946c62e55818cbe37873db9f040ebcdb0ab4b",
+    "source_sha256": "979dedb407783f452ac4f93bebcd6cb9fd0c5ab366de386d0eccd3925f1d6686",
+    "workers": 2
+  },
+  "progress_snapshot": {
+    "completed": 38,
+    "counts": {
+      "accepted": 11,
+      "failed": 27,
+      "pending": 61986,
+      "running": 2
+    },
+    "mean_process_seconds": 11.868952774131781,
+    "pid": 82670,
+    "rough_remaining_wall_hours_at_two_workers": 102.18179259129619,
+    "state": "running",
+    "updated": 1791015184.892941
+  },
+  "restricted_visibility_nominal": {
+    "completed": false,
+    "fault": "ordinary stop exceeded 10 seconds",
+    "elapsed_ms": 111700,
+    "online_referee": {
+      "actual_pose_samples": 113282,
+      "available_cones": 2,
+      "both_completed": true,
+      "completed_cones": 2,
+      "cones": [
+        {
+          "angular_progress_rad": 3.141592653589818,
+          "began_in_required_order": true,
+          "direction": "counterclockwise",
+          "entered_at": 31600,
+          "entry_heading_error_rad": 0.02567457658908978,
+          "exit_heading_error_rad": 0.017912001544959644,
+          "index": 0,
+          "outer_side_at": 33000,
+          "passed_at": 41000,
+          "passed_in_required_order": true
+        },
+        {
+          "angular_progress_rad": 3.1415926535897865,
+          "began_in_required_order": true,
+          "direction": "clockwise",
+          "entered_at": 64700,
+          "entry_heading_error_rad": 0.030362509534328286,
+          "exit_heading_error_rad": 0.017777529600268682,
+          "index": 1,
+          "outer_side_at": 66100,
+          "passed_at": 74100,
+          "passed_in_required_order": true
+        }
+      ],
+      "failure_reason": null,
+      "order_valid": true,
+      "trajectory_valid": true
+    }
+  },
+  "limitations": [
+    "ideal non-cone semantics and localization",
+    "finite grids not continuous-range proof",
+    "cone grid at nominal field not nine-axis full Cartesian product",
+    "optional walls and visibility are hypotheses",
+    "batch runner does not edit source",
+    "no vehicle operations"
+  ]
+}

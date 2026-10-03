@@ -305,7 +305,9 @@ impl FieldSpec {
         Ok(layout)
     }
 
-    fn validate_measurements(&self) -> Result<(), ValidationError> {
+    /// Check declared rule dimensions and region compatibility, without assuming
+    /// the legacy reference-gate polygon is a physical feasibility proof.
+    pub fn validate_measurements(&self) -> Result<(), ValidationError> {
         if self.schema_version != 1 {
             return Err(invalid("unsupported field schema"));
         }
