@@ -5,7 +5,9 @@
     "python_unit_pty_fault": 36,
     "physical_full_course_completed": false,
     "physical_straight_completed": false,
-    "wheel_distance_measured": false
+    "wheel_distance_measured": false,
+    "arrived_at_left_junction_candidate": true,
+    "left_turn_executed": false
   },
   "source_hashes": {
     "server.py": "4d4abb1a915b0405a47ce7884b8f6b4fc7bddb02e139f2439cc2e2c3e0ee216e",
@@ -528,12 +530,259 @@
         "seq": 73
       },
       "healthy_at_read": true
+    },
+    {
+      "number": 9,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 34,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 0,
+        "walls": {
+          "offset_right_m": -0.01775494724363369,
+          "heading_right_deg": -1.6946643296537063,
+          "slope": -0.029586100343588703,
+          "width_m": 0.9436692383517827
+        },
+        "motion_ticks": 34,
+        "recovery_ticks": 0,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "quality_counts": {},
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.89,
+          "corridor_front_m": 4.649619113817296,
+          "nearest_m": 0.45699999999999996,
+          "scan_seq": 3441,
+          "side_clearance_m": 0.4421960520690164,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            8
+          ],
+          "largest_gap_deg": 1,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.09804943500000718,
+          "lidar": 0.05943261199990957,
+          "control": 0.01758922699991672
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 109
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 10,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 34,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 0,
+        "walls": null,
+        "motion_ticks": 34,
+        "recovery_ticks": 0,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "quality_counts": {},
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 1.028,
+          "corridor_front_m": 3.243609936986723,
+          "nearest_m": 0.474,
+          "scan_seq": 3762,
+          "side_clearance_m": 0.45381023253610137,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            15,
+            16
+          ],
+          "largest_gap_deg": 2,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.11469140599990624,
+          "lidar": 0.04122368799994547,
+          "control": 0.006356013999948118
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 145
+      },
+      "healthy_at_read": true
     }
   ],
   "notes": [
     "attempt03 CLI falsely reported interrupted probe_complete; physical report completed; deadline heartbeat race fixed and regression tested",
     "attempt04 received control age 82.137ms and sent zero drives; receive threshold relaxed to150ms",
     "post-battery attempts07/08 had35/34 motion commands, zero recovery commands, one steering adjustment each",
-    "last camera shows nearby transverse low blue board; lidar corridor says4.65m; stopped to obtain real clearance; do not claim whole straight finished"
-  ]
+    "Camera-only apparent distance was misleading: user measured4.2m before attempt09; subsequent two normal1s segments reached a stable left-opening geometry. No lidar blind spot was established. Vehicle now locked near left junction, front wall approx1.85m from lidar origin; left turn not implemented or executed."
+  ],
+  "user_distance_reference": {
+    "before_attempt09_front_of_car_to_transverse_board_m": 4.2,
+    "source": "user现场报告，未经独立测距核验"
+  },
+  "junction_read_only": {
+    "samples": [
+      {
+        "seq": 5188,
+        "age_s": 0.08568705400000454,
+        "front_wall_x_m": 1.8612910641453784,
+        "left_90_m": 0.522,
+        "right_90_m": 0.634,
+        "left_front_60_m": 2.713,
+        "right_front_60_m": 0.762,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 0.967741935483871,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      },
+      {
+        "seq": 5190,
+        "age_s": 0.04483156100002361,
+        "front_wall_x_m": 1.8608657199095562,
+        "left_90_m": 0.522,
+        "right_90_m": 0.634,
+        "left_front_60_m": 2.729,
+        "right_front_60_m": 0.778,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 0.967741935483871,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      },
+      {
+        "seq": 5191,
+        "age_s": 0.08797085900005186,
+        "front_wall_x_m": 1.853932859954778,
+        "left_90_m": 0.522,
+        "right_90_m": 0.634,
+        "left_front_60_m": 2.713,
+        "right_front_60_m": 0.778,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 0.967741935483871,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      },
+      {
+        "seq": 5193,
+        "age_s": 0.04843593199996121,
+        "front_wall_x_m": 1.8618582041906002,
+        "left_90_m": 0.522,
+        "right_90_m": 0.634,
+        "left_front_60_m": 2.729,
+        "right_front_60_m": 0.778,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 0.967741935483871,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      },
+      {
+        "seq": 5194,
+        "age_s": 0.10134086300001854,
+        "front_wall_x_m": 1.8608657199095562,
+        "left_90_m": 0.522,
+        "right_90_m": 0.634,
+        "left_front_60_m": 2.713,
+        "right_front_60_m": 0.778,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 0.967741935483871,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      },
+      {
+        "seq": 5196,
+        "age_s": 0.04428842699996949,
+        "front_wall_x_m": 1.847,
+        "left_90_m": 0.522,
+        "right_90_m": 0.617,
+        "left_front_60_m": 2.713,
+        "right_front_60_m": 0.778,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 1.0,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      },
+      {
+        "seq": 5197,
+        "age_s": 0.08401613000000907,
+        "front_wall_x_m": 1.847,
+        "left_90_m": 0.522,
+        "right_90_m": 0.617,
+        "left_front_60_m": 2.713,
+        "right_front_60_m": 0.778,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 1.0,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      },
+      {
+        "seq": 5199,
+        "age_s": 0.041880186999947,
+        "front_wall_x_m": 1.8608657199095562,
+        "left_90_m": 0.522,
+        "right_90_m": 0.634,
+        "left_front_60_m": 2.713,
+        "right_front_60_m": 0.778,
+        "left_front_known": 31,
+        "left_front_gt1_5_fraction": 0.967741935483871,
+        "right_front_median_m": 0.905,
+        "incoming_left_wall_end_x_m": 0.23834767284241865,
+        "left_opening_candidate": true
+      }
+    ],
+    "confirmed_candidate_samples": 8,
+    "recognition_in_active_controller": false,
+    "turn_path_certified": false,
+    "front_wall_x_m": 1.8608657199095562,
+    "incoming_left_wall_end_x_m": 0.23834767284241865
+  },
+  "last_verified_control": {
+    "armed": false,
+    "motor": 1500,
+    "servo": 1500,
+    "seq": 145
+  }
 }
