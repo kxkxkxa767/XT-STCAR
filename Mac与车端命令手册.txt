@@ -1,3 +1,14 @@
+2026-10-05受限实车执行入口（不是全程自动驾驶）：
+  [车端SSH终端] 只读状态：
+    python3 ~/xt-stcar-console/20260917/autonomy-control.py status
+  [车端SSH终端] 低速短直行，1530、400ms；不满足条件会拒绝，最多500ms：
+    python3 ~/xt-stcar-console/20260917/autonomy-control.py probe --pwm 1530 --duration-ms 400 --execute
+  [车端SSH终端] 全局停止并锁定：
+    python3 ~/xt-stcar-console/20260917/autonomy-control.py stop
+  本次预检因前方雷达缺回波拒绝，未发送arm/drive。比赛导航仍未连接实车输出。
+  下方旧手册中的“无带动力入口”仅指历史Rust回放程序，当前驾驶台另有上述受限入口。
+  最后两文件源码修复待恢复SSH后补部署；保护清单见 docs/实车控制保护清单-20261005.md。
+
 2026-09-16车端运行库更新：
   已安装用户级SpacemiT 2.0.6 / ORT1.24.2+spacemit.a1，系统原生1.18.1和Python1.18.0保留。
   在车端SSH终端运行（图片改为自己的实际路径）：

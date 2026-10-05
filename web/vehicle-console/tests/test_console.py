@@ -126,6 +126,71 @@ class ConsoleTests(unittest.TestCase):
         image=self.request('/download/'+name)
         self.assertTrue(image.startswith(b'<svg'))
 
+    def auto_start(self, duration=400):
+        state=self.get('/api/state')
+        return self.post('/api/autonomy',{'op':'probe_start','boot':state['boot'],
+                         'epoch':state['autonomy']['epoch'],'tick':state['status']['control']['tick'],
+                         'pwm':1530,'duration_ms':duration})
+
+    def auto_request(self, run, op, seq=1):
+        return self.post('/api/autonomy',{'op':op,'boot':self.get('/api/state')['boot'],
+                         'epoch':run['epoch'],'run_id':run['run_id'],'seq':seq})
+
+    def test_auto_probe_deadline_returns_to_neutral(self):
+        run=self.auto_start()
+        sequence=0
+        deadline=time.monotonic()+1
+        while time.monotonic()<deadline:
+            s=self.get('/api/state')
+            if s['autonomy']['active'] is None: break
+            sequence+=1
+            try:self.auto_request(run,'heartbeat',sequence)
+            except urllib.error.HTTPError:break
+            time.sleep(.035)
+        time.sleep(.06)
+        s=self.get('/api/state')
+        self.assertFalse(s['status']['control']['armed'])
+        self.assertEqual(s['status']['control']['motor'],1500)
+        self.assertTrue(s['autonomy']['last_result']['completed'])
+        self.assertEqual(s['autonomy']['last_result']['reason'],'probe_complete')
+        self.assertFalse(s['autonomy']['competition_supported'])
+
+    def test_auto_loss_of_client_stops_before_deadline(self):
+        self.auto_start(500)
+        time.sleep(.28)
+        s=self.get('/api/state')
+        self.assertFalse(s['status']['control']['armed'])
+        self.assertEqual(s['status']['control']['motor'],1500)
+        self.assertEqual(s['autonomy']['last_result']['reason'],'autonomy_heartbeat_timeout')
+
+    def test_stop_fences_auto_start_and_late_cancel_does_not_stop_manual(self):
+        old=self.get('/api/state')
+        self.post('/api/control',{'op':'stop'});time.sleep(.06)
+        with self.assertRaises(urllib.error.HTTPError):
+            self.post('/api/autonomy',{'op':'probe_start','boot':old['boot'],
+                      'epoch':old['autonomy']['epoch'],'tick':old['status']['control']['tick'],
+                      'pwm':1530,'duration_ms':400})
+        run=self.auto_start();time.sleep(.06)
+        s=self.get('/api/state')
+        self.post('/api/control',{'op':'takeover','boot':s['boot'],'epoch':s['autonomy']['epoch']});time.sleep(.06)
+        self.drive('arm');time.sleep(.04)
+        with self.assertRaises(urllib.error.HTTPError):self.auto_request(run,'cancel')
+        with self.assertRaises(urllib.error.HTTPError):self.auto_request(run,'heartbeat')
+        state=self.get('/api/state')
+        self.assertTrue(state['status']['control']['armed'])
+        self.assertEqual(state['autonomy']['mode'],'manual')
+
+    def test_auto_cli_preflight_is_read_only(self):
+        state=self.get('/api/state')
+        result=subprocess.run([sys.executable,str(ROOT/'web/vehicle-console/autonomy-control.py'),
+                              'probe','--access-file',str(self.folder/'access.json')],
+                             capture_output=True,text=True,timeout=3)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertFalse(json.loads(result.stdout)['motion_requested'])
+        after=self.get('/api/state')
+        self.assertFalse(after['status']['control']['armed'])
+        self.assertEqual(state['autonomy']['epoch'],after['autonomy']['epoch'])
+
     def test_z_restart_reuses_port_and_stays_locked(self):
         cls=type(self)
         cls.proc.terminate();cls.proc.wait(timeout=5);cls.proc.stderr.close()

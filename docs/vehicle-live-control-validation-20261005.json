@@ -1,0 +1,96 @@
+{
+  "healthy": true,
+  "status": {
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 195358
+    },
+    "physical_output": true,
+    "reverse_enabled": true
+  },
+  "settings": {
+    "forward": 1530,
+    "reverse": 1350,
+    "left": 1650,
+    "right": 1350
+  },
+  "ages": {
+    "camera": 0.12827938600003108,
+    "lidar": 0.030720230000042648,
+    "control": 0.018405628999971668
+  },
+  "autonomy": {
+    "mode": "locked",
+    "epoch": 0,
+    "supported": [
+      "straight_probe"
+    ],
+    "competition_supported": false,
+    "probe_ready": false,
+    "rejection": "probe_front_unknown",
+    "clearance": null,
+    "active": null,
+    "last_result": null
+  },
+  "last_stop": null,
+  "owner": null,
+  "physical_test": {
+    "requested_pwm": 1530,
+    "requested_duration_ms": 400,
+    "result": "preflight_rejected",
+    "rejection": "probe_front_unknown",
+    "arm_requests_sent": 0,
+    "drive_requests_sent": 0,
+    "wheel_motion_measured": false
+  },
+  "lidar": {
+    "navigation_validated": false,
+    "calibration": {
+      "clockwise_yaw_bins": 5,
+      "range_offset_m": -0.02,
+      "schema_version": 1,
+      "status": "coarse"
+    },
+    "sampled_ranges": {
+      "-30": 0.792,
+      "-20": 1.103,
+      "-10": 2.263,
+      "0": 7.1080000000000005,
+      "5": 7.077000000000001,
+      "6": null,
+      "10": null,
+      "20": 1.598,
+      "30": 1.103,
+      "90": 0.535,
+      "270": 0.407
+    }
+  },
+  "deployed_sha256": {
+    "server.py": "b9ef6b20a2ee7aa8db02fe258fdc9b055f74f32c99734ea3d540d9dd55d853c3",
+    "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19",
+    "autonomy_live.py": "9d57236fc54ae3e3f7f56e0dd9cc8c5a5f26def4a11c99dabb19e63da14e8619",
+    "autonomy-control.py": "61cbeccec13f7b22a5fa07d1a08a2ff31f6999a8379e922cb6c87c3544fae30c"
+  },
+  "tests": {
+    "python": 18,
+    "frontend": 8,
+    "failed": 0
+  },
+  "deployment_complete": false,
+  "pending_deployment": [
+    "server.py",
+    "autonomy-control.py"
+  ],
+  "pending_reason": "SSH multiplexing session expired; ordinary authentication rejected",
+  "source_sha256": {
+    "server.py": "f2bfb6d1da60674a0c66aae75891a66c479168d0244f9d60c76a5172e59fd2ca",
+    "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19",
+    "autonomy_live.py": "9d57236fc54ae3e3f7f56e0dd9cc8c5a5f26def4a11c99dabb19e63da14e8619",
+    "autonomy-control.py": "203ef8bb556804da98cb88c159882bfb620c2d24262dd91d38d6fd4f988f4c62"
+  },
+  "protection_changes": "none; user requests numbered review before changes"
+}

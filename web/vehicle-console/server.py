@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single-operator console. Rust owns chassis deadlines. No arm/movement on start."""
+"""Shared sensor console and bounded probe; Rust owns the only chassis tty."""
 import argparse
 import base64
 import collections
@@ -23,6 +23,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
+from autonomy_live import HEARTBEAT_S, probe_clearance, probe_parameters
 
 ROOT = Path(__file__).resolve().parent
 
@@ -44,6 +45,10 @@ class Console:
             self.token = existing
         self.boot = secrets.token_urlsafe(16)
         self.owner = None
+        self.control_mode = 'locked'
+        self.control_epoch = 0
+        self.auto_session = None
+        self.auto_result = None
         self.owner_at = 0
         self.arm_sequence = 0
         self.last_stop = None
@@ -100,6 +105,7 @@ class Console:
         threading.Thread(target=self.camera, daemon=True).start()
         threading.Thread(target=self.recorder, daemon=True).start()
         threading.Thread(target=self.health_watch, daemon=True).start()
+        threading.Thread(target=self.autonomy_watch, daemon=True).start()
 
     def read_bridge(self, proc, kind):
         try:
@@ -156,6 +162,12 @@ class Console:
             if not self.stop_latched or self.last_stop is None:
                 self.last_stop = {'reason': reason, 'unix_s': time.time()}
             self.stop_latched = True
+            self.control_epoch += 1
+            self.control_mode = 'locked'
+            if self.auto_session is not None:
+                self.auto_result = {**self.auto_session['report'], 'reason': reason,
+                                    'completed': reason == 'probe_complete' and self.auto_session['report']['observed_pwm']}
+            self.auto_session = None
             self.owner = None
             self.stopped_tick = self.status.get('control', {}).get('tick', -1)
             self.events.append({'unix_s': time.time(), 'stop_reason': reason})
@@ -169,6 +181,13 @@ class Console:
             op = data.get('op')
             if op == 'stop':
                 self.halt('operator_stop')
+                return {'ok': True}
+            if op == 'takeover':
+                if data.get('boot') != self.boot or type(data.get('epoch')) is not int or data['epoch'] != self.control_epoch:
+                    raise ValueError('stale_autonomy_generation')
+                if self.auto_session is None:
+                    raise ValueError('autonomy_session_ended')
+                self.halt('manual_takeover')
                 return {'ok': True}
             if self.stop.is_set():
                 raise ValueError('server is shutting down')
@@ -191,6 +210,7 @@ class Console:
                     raise ValueError('stale arm request')
                 self.stop_latched = False
                 self.owner = client
+                self.control_mode = 'manual'
                 self.browser_sequence = seq
                 self.owner_at = time.monotonic()
                 self.emit('arm', tick=tick)
@@ -221,6 +241,113 @@ class Console:
             else:
                 raise ValueError('unknown control operation')
             return {'ok': True, 'bridge_seq': self.sequence}
+
+    def sensor_ages(self, now):
+        return {'camera': now - self.camera_at, 'lidar': now - self.scan_at,
+                'control': now - self.control_at}
+
+    def autonomy_status(self):
+        now = time.monotonic()
+        try:
+            clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
+            ready, rejection = self.healthy(), None
+            if self.owner is not None or self.status.get('control', {}).get('armed'):
+                ready, rejection = False, 'control_owned_or_unlocked'
+        except ValueError as error:
+            clearance, ready, rejection = None, False, str(error)
+        return {'mode': self.control_mode, 'epoch': self.control_epoch,
+                'supported': ['straight_probe'], 'competition_supported': False,
+                'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
+                'active': dict(self.auto_session['report']) if self.auto_session else None,
+                'last_result': self.auto_result}
+
+    def autonomy_command(self, data):
+        with self.lock:
+            if data.get('boot') != self.boot or type(data.get('epoch')) is not int or data['epoch'] != self.control_epoch:
+                raise ValueError('stale_autonomy_generation')
+            op = data.get('op')
+            if op in ('heartbeat', 'cancel'):
+                session = self.auto_session
+                if session is None or data.get('run_id') != session['report']['run_id']:
+                    raise ValueError('autonomy_session_ended')
+                if op == 'cancel':
+                    self.halt('operator_stop')
+                else:
+                    # Sequence prevents a delayed heartbeat renewing a newer lease.
+                    seq = data.get('seq')
+                    if type(seq) is not int or seq <= session['heartbeat_seq']:
+                        raise ValueError('stale_autonomy_heartbeat')
+                    if time.monotonic() - self.owner_at >= HEARTBEAT_S:
+                        self.halt('autonomy_heartbeat_timeout')
+                        raise ValueError('autonomy_session_ended')
+                    session['heartbeat_seq'] = seq
+                    self.owner_at = time.monotonic()
+                return {'ok': True}
+            if op != 'probe_start':
+                raise ValueError('only_bounded_straight_probe_is_implemented')
+            if self.stop.is_set() or self.owner is not None or self.status.get('control', {}).get('armed'):
+                raise ValueError('already_armed_or_shutting_down')
+            pwm, duration = probe_parameters(data)
+            now = time.monotonic()
+            clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
+            if not self.healthy():
+                raise ValueError('probe_sensor_stale')
+            tick = data.get('tick')
+            current_tick = self.status.get('control', {}).get('tick', -1)
+            if type(tick) is not int or not 0 <= current_tick - tick < 100 or tick <= self.stopped_tick:
+                raise ValueError('stale_arm_request')
+            run_id = secrets.token_urlsafe(18)
+            report = {'run_id': run_id, 'pwm': pwm, 'servo': 1500,
+                      'duration_ms': duration, 'drive_ticks': 0, 'observed_pwm': False,
+                      'wheel_motion_measured': False, 'competition_navigation': False,
+                      'clearance_start': clearance, 'epoch': self.control_epoch}
+            self.auto_session = {'report': report, 'deadline': now + duration / 1000,
+                                 'last_loop': now, 'heartbeat_seq': 0}
+            self.owner = 'auto-' + run_id
+            self.owner_at = now
+            self.control_mode = 'auto_probe'
+            self.stop_latched = False
+            try:
+                self.emit('arm', tick=tick)
+            except (RuntimeError, OSError):
+                self.halt('autonomy_arm_failed')
+                raise
+            self.arm_sequence = self.sequence
+            return {'ok': True, 'run_id': run_id, 'epoch': self.control_epoch}
+
+    def autonomy_watch(self):
+        while not self.stop.wait(.02):
+            with self.lock:
+                session = self.auto_session
+                if session is None:
+                    continue
+                now = time.monotonic()
+                if now - self.owner_at >= HEARTBEAT_S:
+                    self.halt('autonomy_heartbeat_timeout')
+                    continue
+                if now - session['last_loop'] > .08:
+                    self.halt('autonomy_control_gap')
+                    continue
+                session['last_loop'] = now
+                try:
+                    probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
+                    if not self.healthy():
+                        raise ValueError('probe_sensor_stale')
+                    if now >= session['deadline']:
+                        self.halt('probe_complete')
+                        continue
+                    control = self.status.get('control', {})
+                    if not control.get('armed'):
+                        # Await the existing serial owner's arm acknowledgement.
+                        continue
+                    if control.get('seq', -1) < self.arm_sequence:
+                        continue
+                    report = session['report']
+                    report['observed_pwm'] |= control.get('motor') == report['pwm'] and control.get('servo') == 1500
+                    self.emit('drive', report['pwm'], 1500, control['tick'])
+                    report['drive_ticks'] += 1
+                except (ValueError, RuntimeError, OSError, KeyError) as error:
+                    self.halt(str(error))
 
     def configure(self, data):
         with self.lock:
@@ -292,6 +419,7 @@ class Console:
                     'ages': {'camera': now - self.camera_at, 'lidar': now - self.scan_at, 'control': now - self.control_at},
                     'errors': dict(self.errors), 'recording': self.record is not None, 'saving': self.saving,
                     'record_error': self.record_error, 'owner': self.owner, 'last_stop': self.last_stop,
+                    'autonomy': self.autonomy_status(),
                     'files': sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]}
 
     def storage_available(self):
@@ -588,6 +716,7 @@ def serve(args):
                     raise ValueError('JSON object required')
                 path = urlsplit(self.path).path
                 if path == '/api/control': result = app.command(data)
+                elif path == '/api/autonomy': result = app.autonomy_command(data)
                 elif path == '/api/settings': result = app.configure(data)
                 elif path == '/api/snapshot': result = app.snapshot()
                 elif path == '/api/photo': result = app.photo(data.get('kind'))
