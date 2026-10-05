@@ -16,10 +16,11 @@ class ProbeInterrupted(RuntimeError):
         super().__init__('probe interrupted: ' + str(result.get('reason') if result else 'no result'))
 
 
-def run_probe(request, state, pwm, duration_ms, centering=False):
+def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junction=False):
     run = None
     try:
-        run = request('/api/autonomy', {'op': 'straight_start' if centering else 'probe_start', 'boot': state['boot'],
+        op = 'to_left_junction_start' if stop_left_junction else 'straight_start' if centering else 'probe_start'
+        run = request('/api/autonomy', {'op': op, 'boot': state['boot'],
                       'epoch': state['autonomy']['epoch'], 'tick': state['status']['control']['tick'],
                       'pwm': pwm, 'duration_ms': duration_ms})
         sequence = 0
@@ -64,7 +65,7 @@ def run_probe(request, state, pwm, duration_ms, centering=False):
                 pass  # Cannot cancel a newer manual owner; independent deadlines remain.
 
 
-def straight_segment(request, state, pwm, max_seconds, expected_run_id=None):
+def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, stop_left_junction=False):
     """One supervised session; a human/fault stop never causes another arm."""
     if expected_run_id is not None:
         old = state['autonomy']['last_result']
@@ -74,9 +75,9 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None):
                 or (state.get('last_stop') or {}).get('reason') != 'probe_complete'):
             raise RuntimeError('previous phase was stopped or restarted; refusing continuation')
     try:
-        latest, run = run_probe(request, state, pwm, round(max_seconds*1000), centering=True)
+        latest, run = run_probe(request, state, pwm, round(max_seconds*1000), centering=True, stop_left_junction=stop_left_junction)
         result = latest['autonomy']['last_result']
-        reason = 'time_limit'
+        reason = 'left_junction_reached' if result.get('reason') == 'left_junction_reached' else 'time_limit'
     except ProbeInterrupted as error:
         result = error.state['autonomy']['last_result']
         if not result or result.get('reason') != 'probe_obstacle_in_straight_corridor':
@@ -84,15 +85,19 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None):
         run, reason = error.run, 'forward_clearance_limit'
     return {'reason': reason, 'motion_ticks': result.get('motion_ticks', 0),
             'steering_changes': result.get('steering_changes', 0), 'walls': result.get('walls'),
+            'junction_confirmations': result.get('junction_confirmations', 0),
+            'junction_geometry': result.get('junction_geometry'),
+            'current_pwm': result.get('current_pwm'), 'approach_front_m': result.get('approach_front_m'),
+            'pwm_ramp_changes': result.get('pwm_ramp_changes', 0),
             'last_run_id': run['run_id'], 'competition_navigation': False, 'wheel_motion_measured': False}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'probe', 'straight', 'stop'])
+    parser.add_argument('command', choices=['status', 'probe', 'straight', 'to-left-junction', 'stop'])
     parser.add_argument('--pwm', type=int, default=1560)
     parser.add_argument('--duration-ms', type=int, default=400)
-    parser.add_argument('--max-seconds', type=float, default=1, help='straight supervision total limit, 1..30 seconds; default 1 second')
+    parser.add_argument('--max-seconds', type=float, help='total limit 1..30s; straight defaults1s, to-left-junction defaults30s')
     parser.add_argument('--expected-run-id', help='fence a new monitored phase to the previous normal stop')
     parser.add_argument('--execute', action='store_true', help='explicit physical probe; otherwise read-only')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
@@ -129,7 +134,7 @@ def main():
     if not 1501 <= args.pwm <= 1560 or not 100 <= args.duration_ms <= 500:
         raise RuntimeError('probe requires PWM 1501..1560 and duration 100..500 ms')
     if not state['autonomy']['probe_ready']:
-        if args.command != 'straight':
+        if args.command not in ('straight', 'to-left-junction'):
             raise RuntimeError(state['autonomy']['rejection'] or 'probe not ready')
 
     def interrupted(*_):
@@ -137,11 +142,13 @@ def main():
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, interrupted)
-    if args.command == 'straight':
+    if args.command in ('straight', 'to-left-junction'):
+        if args.max_seconds is None:
+            args.max_seconds = 30 if args.command == 'to-left-junction' else 1
         if not 1 <= args.max_seconds <= 30:
             raise RuntimeError('straight total limit must be 1..30 seconds')
         result = straight_segment(request, state, args.pwm, args.max_seconds,
-                                  expected_run_id=args.expected_run_id)
+                                  expected_run_id=args.expected_run_id, stop_left_junction=args.command == 'to-left-junction')
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print('Bounded straight probe requested; this is NOT competition navigation.', flush=True)

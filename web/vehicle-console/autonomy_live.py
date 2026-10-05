@@ -36,7 +36,7 @@ def corridor_walls(scan):
         slope = statistics.median(slopes)
         intercept = statistics.median(y-slope*x for x, y in points)
         inliers = [(x, y) for x, y in points if abs(y-slope*x-intercept) <= .025]
-        if len(inliers) < .80*len(points) or max(x for x, _ in inliers)-min(x for x, _ in inliers) < .5:
+        if len(inliers) < .80*len(points) or max(x for x, _ in inliers)-min(x for x, _ in inliers) < .25:
             return None
         mean_x = statistics.mean(x for x, _ in inliers)
         mean_y = statistics.mean(y for _, y in inliers)
@@ -48,7 +48,7 @@ def corridor_walls(scan):
         fits.append((slope, intercept))
     (right_a, right_b), (left_a, left_b) = fits
     if (not left_b < 0 < right_b or not .65 <= right_b-left_b <= 2.5
-            or abs(math.atan(right_a)-math.atan(left_a)) > math.radians(4)):
+            or abs(math.atan(right_a)-math.atan(left_a)) > math.radians(12)):
         return None
     slope = (right_a+left_a)/2
     return {'offset_right_m': (right_b+left_b)/2,
@@ -80,12 +80,34 @@ class CorridorSteering:
         target = 1500
         if self.correcting:
             # Positive y is right. Lower PWM turns right (user's physical check).
-            correction = round(max(-15, min(15, 100*(offset+.6*walls['slope']))))
+            correction = round(max(-50, min(50, 200*(offset+.6*walls['slope']))))
             target -= correction
-        if now-self.changed_at >= .35 and target != self.servo:
-            self.servo += max(-5, min(5, target-self.servo))
+        if now-self.changed_at >= .25 and target != self.servo:
+            self.servo += max(-10, min(10, target-self.servo))
             self.changed_at = now
         return self.servo
+
+
+class RearLaunch:
+    """At most one second after the first output opportunity; no turning in grace."""
+    def __init__(self):
+        self.active = True
+        self.since = None
+
+    def update(self, scan, now, moving):
+        if not self.active:
+            return False
+        bins = scan.get('ranges') if isinstance(scan, dict) else None
+        if isinstance(bins, list) and len(bins) == 360:
+            sector = bins[115:246]
+            known = [r for r in sector if type(r) in (int, float) and math.isfinite(r)]
+            if len(known) >= .95*len(sector) and all(r >= .4 for r in known):
+                self.active = False
+        if moving and self.since is None:
+            self.since = now
+        if self.since is not None and now-self.since >= 1:
+            self.active = False
+        return self.active
 
 
 class QualityLatch:
@@ -104,7 +126,81 @@ class QualityLatch:
         return 0 if self.since is None else round(max(0, now - self.since) * 1000)
 
 
-def probe_clearance(scan, ages, demo=False, centering=False):
+class ApproachRamp:
+    """Reduce only on fresh native boundary evidence; never regain PWM in this session."""
+    def __init__(self, pwm):
+        self.pwm = pwm
+        self.initial = pwm
+        self.last_seq = -1
+        self.last_change = float('-inf')
+        self.closest_front = None
+        self.changes = 0
+
+    def update(self, scan, age, now):
+        if not isinstance(scan, dict) or type(age) not in (int, float) or not 0 <= age < .3:
+            return self.pwm
+        seq = scan.get('seq')
+        if type(seq) is not int or seq <= self.last_seq:
+            return self.pwm
+        self.last_seq = seq
+        distance = scan.get('front_boundary_m')
+        if type(distance) not in (int, float) or not math.isfinite(distance) or not .6 <= distance <= 4.05:
+            return self.pwm
+        self.closest_front = distance if self.closest_front is None else min(self.closest_front, distance)
+        floor = min(1535, self.initial)
+        target = max(floor, self.initial-round(10*max(0, 4-self.closest_front)))
+        if target < self.pwm and now-self.last_change >= .15:
+            self.pwm = max(target, self.pwm-2)
+            self.last_change = now
+            self.changes += 1
+        return self.pwm
+
+
+class JunctionStop:
+    """Per-session endpoint gate; distinct fresh native scans, never YOLO or map labels."""
+    def __init__(self):
+        self.last_seq = -1
+        self.last_at = None
+        self.previous = None
+        self.count = 0
+
+    def update(self, scan, age, now, motion_ready):
+        geometry = scan.get('left_junction')
+        fields = ['front_wall_m', 'incoming_left_end_m', 'incoming_width_m',
+                  'outgoing_width_m', 'heading_left_rad', 'known_open_fraction']
+        valid = (motion_ready and type(age) in (int, float) and 0 <= age < LIDAR_LATE_S and isinstance(geometry, dict)
+                 and geometry.get('turn_path_certified') is False
+                 and all(type(geometry.get(k)) in (int, float) and math.isfinite(geometry[k]) for k in fields)
+                 and .75 <= geometry['incoming_width_m'] <= 2.2
+                 and .75 <= geometry['outgoing_width_m'] <= 2.25
+                 and .9 <= geometry['known_open_fraction'] <= 1
+                 and abs(geometry['heading_left_rad']) <= math.radians(15)
+                 and .6 <= geometry['front_wall_m'] <= 3
+                 and -.3 <= geometry['incoming_left_end_m'] <= 1)
+        if not valid:
+            self.count, self.previous = 0, None
+            return False
+        seq = scan['seq']
+        if seq <= self.last_seq:
+            if seq < self.last_seq:
+                self.count, self.previous = 0, None
+            return False
+        self.last_seq = seq
+        continuous = self.previous is not None and now-self.last_at < .3
+        if continuous:
+            previous = self.previous
+            df = geometry['front_wall_m']-previous['front_wall_m']
+            de = geometry['incoming_left_end_m']-previous['incoming_left_end_m']
+            continuous = (abs(df-de) < .15 and abs(df) < 3*(now-self.last_at)+.08
+                          and abs(geometry['incoming_width_m']-previous['incoming_width_m']) < .15
+                          and abs(geometry['outgoing_width_m']-previous['outgoing_width_m']) < .15
+                          and abs(geometry['heading_left_rad']-previous['heading_left_rad']) < math.radians(8))
+        self.count = self.count+1 if continuous else 1
+        self.previous, self.last_at = dict(geometry), now
+        return self.count >= 3 and geometry['incoming_left_end_m'] <= .40
+
+
+def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
     if any(type(ages.get(k)) not in (int, float) or not math.isfinite(ages[k]) or ages[k] < 0
            for k in ['camera', 'lidar', 'control']):
@@ -140,7 +236,9 @@ def probe_clearance(scan, ages, demo=False, centering=False):
         if r is None:
             continue
         x, y = r * math.cos(math.radians(angle)), r * math.sin(math.radians(angle))
-        if abs(y) > abs(x):
+        if rear_launch and 115 <= angle <= 245:
+            pass  # Only a bounded neutral-steering forward launch may exempt rear rays.
+        elif abs(y) > abs(x):
             side_clearances.append(abs(y))
             if abs(y) < SIDE_CLEARANCE_M:
                 raise ValueError('probe_obstacle_close_side')

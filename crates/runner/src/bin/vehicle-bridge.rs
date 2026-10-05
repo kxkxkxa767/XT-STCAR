@@ -14,7 +14,8 @@ use std::{
 };
 use xt_stcar_device_io::SerialPort;
 use xt_stcar_robot_core::{
-    FrameId, Timestamp,
+    FrameId, LidarSample, Timestamp,
+    junction::{detect_front_boundary, detect_left_junction},
     protocol::{
         chassis::PwmCommand,
         n10::{N10Config, N10Decoder},
@@ -124,6 +125,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let mut row = serde_json::json!({"seq":seq,"at_ms":start.elapsed().as_millis(),"ranges":bins,"valid_fraction":valid as f64/360.0,"coverage":coverage as f64/360.0,"navigation_validated":false});
                                 if let Some(calibration) = &calibration {
                                     calibration.apply(&mut row)?;
+                                    let frame = FrameId("lidar_origin_coarse_body_heading".into());
+                                    let sample = LidarSample {
+                                        captured_at: Timestamp(start.elapsed().as_millis() as u64),
+                                        frame_id: frame.clone(),
+                                        angle_min_rad: 0.0,
+                                        angle_increment_rad: -std::f64::consts::TAU / 360.0,
+                                        range_min_m: 0.02,
+                                        range_max_m: 12.0,
+                                        ranges_m: serde_json::from_value(row["ranges"].clone())?,
+                                    };
+                                    row["front_boundary_m"] = serde_json::to_value(
+                                        detect_front_boundary(&sample, &frame).ok().flatten(),
+                                    )?;
+                                    // Optional diagnostic; an invalid scan never grants an opening.
+                                    row["left_junction"] = serde_json::to_value(
+                                        detect_left_junction(&sample, &frame).ok().flatten(),
+                                    )?;
                                 }
                                 if matches!(
                                     out.try_send(row),

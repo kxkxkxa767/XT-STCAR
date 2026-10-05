@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-05T18:59:39.488346+08:00",
+  "scope": "one continuous straight approach to left junction and stop; no left turn",
+  "authorization": "user explicitly requested continuous approach and confirmed starting position stationary",
+  "implementation": {
+    "native_detector": "robot-core junction detector in calibrated lidar bridge, forward X/left Y; console clockwise bins converted with negative increment",
+    "requirements": [
+      "extended incoming wall lines (including modest convergence)",
+      "transverse front wall",
+      "known left opening beyond incoming left wall end",
+      "retained extended right forward wall",
+      "three distinct fresh consistent scans",
+      "new gate per session"
+    ],
+    "endpoint_left_end_max_m": 0.4,
+    "maximum_duration_s": 30,
+    "forward_pwm": 1560,
+    "turn_path_certified": false,
+    "navigation_validated": false,
+    "steering_pwm": [
+      1450,
+      1550
+    ],
+    "steering_max_step": 10,
+    "steering_min_interval_ms": 250,
+    "incoming_wall_max_heading_difference_deg": 12,
+    "incoming_wall_min_span_m": 0.25,
+    "rear_launch": {
+      "only_bounded_straight_sessions": true,
+      "exempt_sector_clockwise_deg": [
+        115,
+        245
+      ],
+      "max_s_after_first_armed_output_opportunity": 1,
+      "steering_during_exemption": 1500,
+      "never_reactivates_after_release": true,
+      "front_side_unknown_and_fault_gates_preserved": true
+    },
+    "approach_ramp": {
+      "native_transverse_boundary_m": [
+        0.6,
+        4.05
+      ],
+      "minimum_known_plane_span_m": 0.35,
+      "minimum_known_plane_points": 8,
+      "distance_target": "initial PWM minus10 per metre inside4m, bounded below bymin1535/initial",
+      "maximum_decrease_per_update_pwm": 2,
+      "minimum_interval_ms": 150,
+      "fresh_native_scans_only": true,
+      "never_increases_pwm_in_session": true,
+      "turn_identity_independent": true,
+      "ground_effect_verified": false
+    }
+  },
+  "checks": {
+    "rust_passed": 630,
+    "rust_failed": 0,
+    "rust_ignored": 3,
+    "python_pty_fault_passed": 48,
+    "fmt": true,
+    "clippy_warnings_as_errors": true,
+    "riscv_elf_passed": true,
+    "observed_old_junction_fixture_detected": true,
+    "synthetic_left_cases": 36,
+    "synthetic_widths_m": [
+      0.9,
+      1,
+      1.5,
+      2
+    ],
+    "synthetic_outgoing_widths_m": [
+      1,
+      1.5,
+      2
+    ],
+    "synthetic_yaw_deg": [
+      -8,
+      0,
+      8
+    ]
+  },
+  "deployment": {
+    "backup": "/home/bianbu/xt-stcar-console/backup-junction-20261005-183651",
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 6623
+    },
+    "settings": {
+      "forward": 1560,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "hashes": {
+      "server.py": "8a81803e991877d1616a17cd50ed6ff0c38316ef0559698f0e5c8a67a7dbd736",
+      "autonomy_live.py": "d9fd0022defcb0eb04effebbf86404b2e6811b2e764155334206f1670ba502fd",
+      "autonomy-control.py": "46fd3a14b3ec2c04cfea2272fffddcea4981a0101250f7a09701e0df49a59081",
+      "vehicle-bridge": "187b3cb31f739013107cc344950094fcde2f2dd48b370713d5b3e86821c06d5b",
+      "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+    },
+    "junction_detector_installed": true,
+    "junction_candidate": null
+  },
+  "physical_test": {
+    "motion_requested": true,
+    "single_continuous_session": true,
+    "completed": false,
+    "reason": "probe_obstacle_in_straight_corridor",
+    "motion_ticks": 52,
+    "recovery_ticks": 0,
+    "steering_changes": 0,
+    "elapsed_including_cli_startup_s": 2.8488962139999785,
+    "result": {
+      "run_id": "JOwsunVjt9G3f_qv3HheQ2gi",
+      "pwm": 1560,
+      "servo": 1500,
+      "duration_ms": 30000,
+      "drive_ticks": 52,
+      "observed_pwm": true,
+      "observed_armed": true,
+      "centering": true,
+      "steering_changes": 0,
+      "walls": null,
+      "endpoint": "left_junction",
+      "junction_confirmations": 0,
+      "junction_geometry": null,
+      "motion_ticks": 52,
+      "recovery_ticks": 0,
+      "quality_issues": [],
+      "quality_elapsed_ms": 0,
+      "quality_counts": {},
+      "wheel_motion_measured": false,
+      "competition_navigation": false,
+      "clearance_start": {
+        "front_m": 0.9179999999999999,
+        "corridor_front_m": 7.714,
+        "nearest_m": 0.45399999999999996,
+        "scan_seq": 2332,
+        "side_clearance_m": 0.4341635636485402,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          -6,
+          6,
+          11
+        ],
+        "largest_gap_deg": 1,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "epoch": 0,
+      "sensor_ages": {
+        "camera": 0.10649370100009037,
+        "lidar": 0.020201450000058685,
+        "control": 0.029038369999852875
+      },
+      "sensor_errors": {},
+      "reason": "probe_obstacle_in_straight_corridor",
+      "completed": false
+    },
+    "commanded_neutral_confirmation": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 54,
+      "servo": 1500,
+      "tick": 235213
+    },
+    "later_scan": {
+      "front_beam_m": 1.627,
+      "left_beam_m": 0.182,
+      "right_beam_m": 0.759,
+      "wall_fit_before_fix": null
+    },
+    "user_feedback": "vehicle approached left board; user confirmed it continued after neutral, then was fully stopped and repositioned",
+    "displacement_after_stop_m": null,
+    "frontal_range_delta_is_not_stop_distance": true,
+    "wheel_motion_measured": false,
+    "left_turn_tested": false,
+    "competition_course_completed": false,
+    "root_issue": "centre correction lost fit due narrow near-wall span and modest wall convergence; small original PWM band",
+    "changes_after_attempt": "fit fixes, larger steering band and bounded straight-only rear launch grace deployed; no second ground run yet"
+  },
+  "raised_wheel_check": {
+    "user_confirmed_raised_secured": true,
+    "pwm": 1560,
+    "requested_s": 0.3,
+    "command_window_s": 0.34151195099957476,
+    "commanded_final": {
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500,
+      "seq": 7
+    },
+    "user_confirmed_rotation": true,
+    "physical_neutral_stop_confirmation": "user: very quickly stopped after1500",
+    "ground_stopping_distance_validated": false
+  },
+  "second_ground_attempt": {
+    "user_feedback": "这次效果不错",
+    "completed": false,
+    "reason": "probe_obstacle_in_straight_corridor",
+    "motion_ticks": 83,
+    "recovery_ticks": 0,
+    "steering_changes": 2,
+    "last_servo_pwm": 1520,
+    "current_pwm": 1560,
+    "pwm_ramp_changes": 0,
+    "junction_confirmations": 0,
+    "elapsed_with_cli_startup_and_four_second_post_neutral_monitor_s": 9.175677348000136,
+    "result": {
+      "run_id": "2j3x4UBZCI-PR6_D9Q6IGtZ7",
+      "pwm": 1560,
+      "servo": 1520,
+      "duration_ms": 30000,
+      "drive_ticks": 83,
+      "observed_pwm": true,
+      "observed_armed": true,
+      "centering": true,
+      "steering_changes": 2,
+      "walls": {
+        "offset_right_m": -0.07869863890127227,
+        "heading_right_deg": -4.5434294604935035,
+        "slope": -0.07946443448971702,
+        "width_m": 0.946890798535559
+      },
+      "endpoint": "left_junction",
+      "junction_confirmations": 0,
+      "junction_geometry": null,
+      "rear_launch_active": false,
+      "rear_launch_max_s": 1,
+      "current_pwm": 1560,
+      "approach_front_m": null,
+      "pwm_ramp_changes": 0,
+      "motion_ticks": 83,
+      "recovery_ticks": 0,
+      "quality_issues": [],
+      "quality_elapsed_ms": 0,
+      "quality_counts": {},
+      "wheel_motion_measured": false,
+      "competition_navigation": false,
+      "clearance_start": {
+        "front_m": 0.888,
+        "corridor_front_m": 7.990129662017671,
+        "nearest_m": 0.24700000000000003,
+        "scan_seq": 785,
+        "side_clearance_m": 0.4215857531795962,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          -7,
+          5,
+          15,
+          16
+        ],
+        "largest_gap_deg": 2,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "epoch": 0,
+      "sensor_ages": {
+        "camera": 0.0743324869999924,
+        "lidar": 0.009874102000139828,
+        "control": 0.01785100200049783
+      },
+      "sensor_errors": {},
+      "reason": "probe_obstacle_in_straight_corridor",
+      "completed": false
+    },
+    "notes": "steering correction issued; stopped on straight corridor gate before native junction/boundary evidence, so ramp did not activate and target was not verified"
+  },
+  "reverse_brake": {
+    "user_requested_then_cancelled": true,
+    "deployed": false,
+    "physically_tested": false,
+    "final_policy": "progressively reduce approach PWM; stop with1500, never unverified reverse braking"
+  },
+  "pause": {
+    "explicit_user_request": "先暂停，我吃个饭回来继续弄",
+    "stop_acknowledged": true,
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 86,
+      "servo": 1500,
+      "tick": 235056
+    },
+    "owner": null,
+    "active": null,
+    "no_automatic_continuation": true,
+    "next_steps_after_user_resume": [
+      "evaluate earlier predictive lane correction and reduce speed while correcting",
+      "revalidate full straight approach and native junction stop",
+      "measure ground stopping response with identified wall correspondence, never subtract unrelated frontal beams"
+    ]
+  }
+}

@@ -24,7 +24,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
-from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QualityLatch, CorridorSteering,
+from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QualityLatch, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            corridor_walls, probe_clearance, probe_parameters)
 
 ROOT = Path(__file__).resolve().parent
@@ -185,7 +185,7 @@ class Console:
             self.control_mode = 'locked'
             if self.auto_session is not None:
                 self.auto_result = {**self.auto_session['report'], 'reason': reason,
-                                    'completed': reason == 'probe_complete' and self.auto_session['report'].get('observed_armed', False)}
+                                    'completed': reason in ('probe_complete', 'left_junction_reached') and self.auto_session['report'].get('observed_armed', False)}
             self.auto_session = None
             self.owner = None
             self.stopped_tick = self.status.get('control', {}).get('tick', -1)
@@ -275,7 +275,7 @@ class Console:
         except ValueError as error:
             clearance, ready, rejection = None, False, str(error)
         return {'mode': self.control_mode, 'epoch': self.control_epoch,
-                'supported': ['straight_probe', 'straight_segment'], 'competition_supported': False,
+                'supported': ['straight_probe', 'straight_segment', 'to_left_junction'], 'competition_supported': False,
                 'quality_confirm_s': QUALITY_CONFIRM_S,
                 'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
@@ -303,14 +303,17 @@ class Console:
                     session['heartbeat_seq'] = seq
                     self.owner_at = time.monotonic()
                 return {'ok': True}
-            if op not in ('probe_start', 'straight_start'):
+            if op not in ('probe_start', 'straight_start', 'to_left_junction_start'):
                 raise ValueError('only_bounded_straight_control_is_implemented')
             if self.stop.is_set() or self.owner is not None or self.status.get('control', {}).get('armed'):
                 raise ValueError('already_armed_or_shutting_down')
-            pwm, duration = probe_parameters(data, straight=op == 'straight_start')
-            centering = op == 'straight_start'
+            centering = op != 'probe_start'
+            pwm, duration = probe_parameters(data, straight=centering)
+            if op == 'to_left_junction_start' and self.scan is not None and not all(k in self.scan for k in ['left_junction', 'front_boundary_m']):
+                raise ValueError('native_junction_detector_not_installed')
             now = time.monotonic()
-            clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo, centering)
+            clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo, centering,
+                                        rear_launch=centering)
             if not self.autonomy_healthy():
                 raise ValueError('probe_sensor_stale')
             tick = data.get('tick')
@@ -321,13 +324,19 @@ class Console:
             report = {'run_id': run_id, 'pwm': pwm, 'servo': 1500,
                       'duration_ms': duration, 'drive_ticks': 0, 'observed_pwm': False, 'observed_armed': False,
                       'centering': centering, 'steering_changes': 0, 'walls': None,
+                      'endpoint': 'left_junction' if op == 'to_left_junction_start' else None,
+                      'junction_confirmations': 0, 'junction_geometry': None,
+                      'rear_launch_active': centering, 'rear_launch_max_s': 1,
+                      'current_pwm': pwm, 'approach_front_m': None, 'pwm_ramp_changes': 0,
                       'motion_ticks': 0, 'recovery_ticks': 0,
                       'quality_issues': clearance['quality_issues'], 'quality_elapsed_ms': 0, 'quality_counts': {},
                       'wheel_motion_measured': False, 'competition_navigation': False,
                       'clearance_start': clearance, 'epoch': self.control_epoch}
             self.auto_session = {'report': report, 'deadline': now + duration / 1000,
                                  'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality,
-                                 'steering': CorridorSteering(), 'wall_scan_seq': None}
+                                 'steering': CorridorSteering(), 'wall_scan_seq': None, 'junction': JunctionStop(),
+                                 'rear_launch': RearLaunch() if centering else None,
+                                 'ramp': ApproachRamp(pwm) if op == 'to_left_junction_start' else None}
             self.auto_session['quality'].update(clearance['quality_issues'], now)
             self.owner = 'auto-' + run_id
             self.owner_at = now
@@ -366,7 +375,11 @@ class Console:
             report = session['report']
             report['sensor_ages'] = self.sensor_ages(now)
             report['sensor_errors'] = dict(self.errors)
-            clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False))
+            control = self.status.get('control', {})
+            rear = session.get('rear_launch')
+            rear_active = rear.update(self.scan, now, bool(control.get('armed') and control.get('seq', -1) >= self.arm_sequence)) if rear else False
+            report['rear_launch_active'] = rear_active
+            clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False), rear_launch=rear_active)
             if not self.autonomy_healthy():
                 raise ValueError('probe_sensor_unavailable')
             report['quality_issues'] = clearance['quality_issues']
@@ -379,20 +392,32 @@ class Console:
                 self.halt('perception_quality_timeout')
                 return
             if now >= session['deadline']:
-                self.halt('probe_complete')
+                self.halt('left_junction_timeout' if report.get('endpoint') == 'left_junction' else 'probe_complete')
                 return
             control = self.status.get('control', {})
             if not control.get('armed') or control.get('seq', -1) < self.arm_sequence:
                 return
             report['observed_armed'] = True
             report['observed_pwm'] |= control.get('motor') == report['pwm']
-            motor = report['pwm'] if clearance['motion_ready'] else 1500
+            ramp = session.get('ramp')
+            if ramp:
+                report['current_pwm'] = ramp.update(self.scan, report['sensor_ages']['lidar'], now)
+                report['approach_front_m'] = ramp.closest_front
+                report['pwm_ramp_changes'] = ramp.changes
+            if report.get('endpoint') == 'left_junction':
+                reached = session['junction'].update(self.scan, report['sensor_ages']['lidar'], now, clearance['motion_ready'])
+                report['junction_confirmations'] = session['junction'].count
+                report['junction_geometry'] = session['junction'].previous
+                if reached:
+                    self.halt('left_junction_reached')
+                    return
+            motor = report.get('current_pwm', report['pwm']) if clearance['motion_ready'] else 1500
             servo = 1500
             if report.get('centering'):
                 if session['wall_scan_seq'] != self.scan['seq'] or not clearance['motion_ready']:
                     report['walls'] = corridor_walls(self.scan) if clearance['motion_ready'] else None
                     session['wall_scan_seq'] = self.scan['seq']
-                servo = session['steering'].update(report['walls'], self.scan['seq'], now, clearance['motion_ready'])
+                servo = session['steering'].update(report['walls'], self.scan['seq'], now, clearance['motion_ready'] and not rear_active)
             if servo != report.get('servo', 1500):
                 report['steering_changes'] += 1
             report['servo'] = servo

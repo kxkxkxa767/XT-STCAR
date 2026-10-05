@@ -9,6 +9,7 @@ pub use sensors::*;
 pub mod admission;
 pub mod autonomy;
 pub mod field;
+pub mod junction;
 pub mod lidar_cones;
 pub mod local_world;
 pub mod localization;

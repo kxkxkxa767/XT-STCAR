@@ -27,6 +27,62 @@ def wall_scan(offset=0, slope=0, width=1.):
     return {'seq': 1, 'frame_id': 'lidar_origin_coarse_body_heading', 'ranges': bins}
 
 
+def junction_scan(seq, end=.3):
+    return {'seq': seq, 'ranges': [3.]*360, 'front_boundary_m': end+1.5, 'left_junction': {
+        'front_wall_m': end+1.5, 'incoming_left_end_m': end,
+        'incoming_width_m': 1.2, 'outgoing_width_m': 1.5,
+        'heading_left_rad': 0., 'known_open_fraction': 1., 'turn_path_certified': False}}
+
+
+class ApproachRampTests(unittest.TestCase):
+    def test_progressively_reduces_on_fresh_plane_and_never_reaccelerates(self):
+        ramp = MODULE.ApproachRamp(1560)
+        values = []
+        for i in range(20):
+            scan = {'seq': i, 'front_boundary_m': 2.}
+            values.append(ramp.update(scan, .01, i*.16))
+        self.assertEqual(values[0], 1558)
+        self.assertEqual(values[-1], 1540)
+        self.assertTrue(all(0 <= a-b <= 2 for a, b in zip(values, values[1:])))
+        self.assertEqual(ramp.update({'seq': 20, 'front_boundary_m': 4.}, .01, 4), 1540)
+        self.assertEqual(ramp.update({'seq': 21, 'front_boundary_m': None}, .01, 5), 1540)
+        self.assertEqual(MODULE.ApproachRamp(1560).pwm, 1560)
+
+    def test_duplicate_stale_and_missing_plane_do_not_lower_throttle(self):
+        ramp = MODULE.ApproachRamp(1560)
+        self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 2.}, .3, 0), 1560)
+        self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 2.}, .01, 1), 1558)
+        self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 1.}, .01, 2), 1558)
+        self.assertEqual(ramp.update({'seq': 2, 'front_boundary_m': 1.}, .01, 1.05), 1558)
+
+
+class JunctionStopTests(unittest.TestCase):
+    def test_three_distinct_fresh_scans_and_only_at_endpoint(self):
+        gate = MODULE.JunctionStop()
+        self.assertFalse(gate.update(junction_scan(1, .7), .01, 0, True))
+        self.assertFalse(gate.update(junction_scan(1, .7), .01, .02, True))
+        self.assertEqual(gate.count, 1)
+        self.assertFalse(gate.update(junction_scan(2, .6), .01, .1, True))
+        self.assertFalse(gate.update(junction_scan(3, .5), .01, .2, True))
+        self.assertTrue(gate.update(junction_scan(4, .4), .01, .3, True))
+        self.assertFalse(MODULE.JunctionStop().update(junction_scan(5), .01, .4, True))
+
+    def test_stale_unknown_quality_and_geometry_jumps_reset_votes(self):
+        for invalid in ['age', 'unknown', 'quality', 'jump', 'gap', 'fraction']:
+            gate = MODULE.JunctionStop()
+            for seq in [1, 2]: gate.update(junction_scan(seq), .01, seq*.1, True)
+            scan = junction_scan(3)
+            age, now, ready = .01, .3, True
+            if invalid == 'age': age = .3
+            if invalid == 'unknown': scan['left_junction'] = None
+            if invalid == 'quality': ready = False
+            if invalid == 'jump': scan['left_junction']['front_wall_m'] = 2.6
+            if invalid == 'gap': now = .6
+            if invalid == 'fraction': scan['left_junction']['known_open_fraction'] = 1.1
+            self.assertFalse(gate.update(scan, age, now, ready), invalid)
+            self.assertLess(gate.count, 2, invalid)
+
+
 class CorridorSteeringTests(unittest.TestCase):
     def test_cli_normal_deadline_racing_heartbeat_is_not_failure(self):
         spec = importlib.util.spec_from_file_location('autonomy_cli_test', Path(__file__).parents[1]/'autonomy-control.py')
@@ -51,24 +107,24 @@ class CorridorSteeringTests(unittest.TestCase):
         walls = MODULE.corridor_walls(wall_scan(.12, .02))
         self.assertAlmostEqual(walls['offset_right_m'], .12)
         steering = MODULE.CorridorSteering()
-        self.assertEqual(steering.update(walls, 1, 0), 1495)
-        self.assertEqual(steering.update(walls, 2, .34), 1495)
-        self.assertEqual(steering.update(walls, 3, .36), 1490)
+        self.assertEqual(steering.update(walls, 1, 0), 1490)
+        self.assertEqual(steering.update(walls, 2, .24), 1490)
+        self.assertEqual(steering.update(walls, 3, .26), 1480)
         for i in range(20):
             value = steering.update(walls, i+4, .72+i*.36)
-            self.assertGreaterEqual(value, 1485)
+            self.assertGreaterEqual(value, 1450)
         centred = MODULE.CorridorSteering()
         for i in range(50):
             walls = MODULE.corridor_walls(wall_scan(.06+(.002 if i%2 else -.002), .01))
             self.assertEqual(centred.update(walls, i, i*.05), 1500)
         left = MODULE.CorridorSteering()
-        self.assertEqual(left.update(MODULE.corridor_walls(wall_scan(-.12)), 1, 0), 1505)
+        self.assertEqual(left.update(MODULE.corridor_walls(wall_scan(-.12)), 1, 0), 1510)
 
     def test_hysteresis_no_same_frame_renewal_and_bad_wall_fit(self):
         steering = MODULE.CorridorSteering()
         walls = MODULE.corridor_walls(wall_scan(.12))
-        self.assertEqual(steering.update(walls, 1, 0), 1495)
-        self.assertEqual(steering.update(walls, 1, 1), 1495)
+        self.assertEqual(steering.update(walls, 1, 0), 1490)
+        self.assertEqual(steering.update(walls, 1, 1), 1490)
         middle = MODULE.corridor_walls(wall_scan(.06))
         steering.update(middle, 2, 1)
         self.assertTrue(steering.correcting)
@@ -90,6 +146,44 @@ class CorridorSteeringTests(unittest.TestCase):
         result = MODULE.probe_clearance(scan, {'camera': .01, 'lidar': .01, 'control': .01})
         self.assertEqual(result['side_body_extent_m'], .17)
         self.assertEqual(result['side_min_net_m'], .1)
+
+    def test_real_close_left_wall_and_converging_boards_keep_correction(self):
+        scan = {'seq': 1, 'ranges': json.loads((Path(__file__).parent/'observed-near-left-20261005.json').read_text())}
+        walls = MODULE.corridor_walls(scan)
+        self.assertIsNotNone(walls)
+        self.assertGreater(walls['offset_right_m'], .2)
+        steering = MODULE.CorridorSteering()
+        values = [steering.update(walls, i, i*.26) for i in range(6)]
+        self.assertEqual(values[0], 1490)
+        self.assertEqual(values[-1], 1450)
+        self.assertTrue(all(1450 <= value < 1500 for value in values))
+
+
+class RearLaunchTests(unittest.TestCase):
+    def test_rear_only_grace_never_suppresses_front_or_side_or_quality(self):
+        scan = wall_scan()
+        scan['ranges'][180] = .28
+        scan['ranges'][135] = .28
+        ages = {'camera': .01, 'lidar': .01, 'control': .01}
+        with self.assertRaises(ValueError): MODULE.probe_clearance(scan, ages)
+        self.assertTrue(MODULE.probe_clearance(scan, ages, rear_launch=True)['motion_ready'])
+        for angle in [0, 90, 270]:
+            old = scan['ranges'][angle];scan['ranges'][angle] = .2
+            with self.assertRaises(ValueError): MODULE.probe_clearance(scan, ages, rear_launch=True)
+            scan['ranges'][angle] = old
+        self.assertFalse(MODULE.probe_clearance(scan, dict(ages, lidar=.3), rear_launch=True)['motion_ready'])
+
+    def test_one_second_grace_and_no_reactivation(self):
+        scan = wall_scan();scan['ranges'][180] = .28
+        gate = MODULE.RearLaunch()
+        self.assertTrue(gate.update(scan, 10, False))
+        self.assertTrue(gate.update(scan, 12, True))
+        self.assertTrue(gate.update(scan, 12.99, True))
+        self.assertFalse(gate.update(scan, 13, True))
+        self.assertFalse(gate.update(scan, 13.1, True))
+        gate = MODULE.RearLaunch()
+        self.assertFalse(gate.update(wall_scan(), 0, False))
+        self.assertFalse(gate.update(scan, .1, True))
 
 
 class ProbeClearanceTests(unittest.TestCase):
@@ -256,9 +350,9 @@ class QualityRecoveryTests(unittest.TestCase):
             self.console.scan['seq'] += 1
             self.tick(i*.02)
         servos = [servo for op, _, servo in self.output if op == 'drive']
-        self.assertEqual(servos[0], 1495)
-        self.assertEqual(servos[16], 1495)
-        self.assertEqual(servos[-1], 1490)
+        self.assertEqual(servos[0], 1490)
+        self.assertEqual(servos[11], 1490)
+        self.assertEqual(servos[-1], 1480)
         self.assertEqual(session['report']['steering_changes'], 2)
 
     def test_missing_camera_waits_neutral_until_quality_latch(self):
@@ -286,6 +380,85 @@ class QualityRecoveryTests(unittest.TestCase):
         self.assertIsNotNone(self.console.auto_session)
         self.tick(12)
         self.assertEqual(self.console.auto_result['reason'], 'perception_quality_timeout')
+
+
+    def set_junction_endpoint(self):
+        self.console.scan = junction_scan(1)
+        session = self.console.auto_session
+        session['report']['endpoint'] = 'left_junction'
+        session['junction'] = MODULE.JunctionStop()
+
+    def test_output_loop_continuously_drives_then_stops_at_junction(self):
+        self.set_junction_endpoint()
+        for i in range(10): self.tick(i*.02)
+        self.assertEqual(len(self.output), 10)
+        self.assertTrue(all(row == ('drive', 1560, 1500) for row in self.output))
+        for i in [10, 11]:
+            self.console.scan['seq'] += 1
+            self.tick(i*.02)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'left_junction_reached')
+        self.assertTrue(self.console.auto_result['completed'])
+        self.assertEqual(self.output[-1][0], 'stop')
+        self.tick(.24)
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
+
+    def test_junction_timeout_is_not_success(self):
+        self.set_junction_endpoint()
+        self.console.auto_session['deadline'] = .04
+        for i in range(3): self.tick(i*.02)
+        self.assertEqual(self.console.auto_result['reason'], 'left_junction_timeout')
+        self.assertFalse(self.console.auto_result['completed'])
+
+    def test_manual_stop_cannot_resume_on_next_junction_vote(self):
+        self.set_junction_endpoint()
+        self.tick(0)
+        self.console.scan['seq'] += 1
+        self.tick(.02)
+        self.console.command({'op': 'stop'})
+        self.console.scan['seq'] += 1
+        self.tick(.04)
+        self.assertEqual(self.console.auto_result['reason'], 'operator_stop')
+        self.assertFalse(self.console.auto_result['completed'])
+
+
+    def test_rear_launch_keeps_servo_neutral_then_restores_guards(self):
+        self.console.scan = wall_scan(.12)
+        self.console.scan['ranges'][180] = .28
+        session = self.console.auto_session
+        session['report']['centering'] = True
+        session['steering'] = MODULE.CorridorSteering()
+        session['wall_scan_seq'] = None
+        session['rear_launch'] = MODULE.RearLaunch()
+        for i in range(50):
+            self.console.scan['seq'] += 1
+            self.tick(i*.02)
+        self.assertTrue(all(servo == 1500 for op, _, servo in self.output))
+        self.tick(1)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close')
+        self.assertFalse(self.console.auto_result['completed'])
+
+
+
+    def test_output_loop_decreases_pwm_before_endpoint_then_neutral_stop(self):
+        self.set_junction_endpoint()
+        session = self.console.auto_session
+        session['ramp'] = MODULE.ApproachRamp(1560)
+        self.console.scan['left_junction'] = None
+        self.console.scan['front_boundary_m'] = 3.
+        for i in range(30):
+            self.console.scan['seq'] += 1
+            self.tick(i*.02)
+        motors = [motor for op, motor, _ in self.output if op == 'drive']
+        self.assertEqual(motors[0], 1558)
+        self.assertLess(motors[-1], motors[0])
+        self.assertGreater(motors[-1], 1500)
+        for i in range(30, 33):
+            self.console.scan = junction_scan(i+10)
+            self.tick(i*.02)
+        self.assertEqual(self.output[-1][0], 'stop')
+        self.assertEqual(self.console.auto_result['reason'], 'left_junction_reached')
 
     def test_bridge_large_scan_stream_is_buffered_and_eof_locks(self):
         class CountingRaw(io.RawIOBase):
