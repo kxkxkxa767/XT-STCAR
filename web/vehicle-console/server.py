@@ -24,7 +24,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
-from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QualityLatch, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
+from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, APPROACH_STOP_M, QualityLatch, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            corridor_walls, probe_clearance, probe_parameters)
 
 ROOT = Path(__file__).resolve().parent
@@ -328,6 +328,8 @@ class Console:
                       'junction_confirmations': 0, 'junction_geometry': None,
                       'rear_launch_active': centering, 'rear_launch_max_s': 1,
                       'current_pwm': pwm, 'approach_front_m': None, 'pwm_ramp_changes': 0,
+                      'lane_correcting': False, 'lane_speed_limited': False,
+                      'front_boundary_stop_m': APPROACH_STOP_M if op == 'to_left_junction_start' else None,
                       'motion_ticks': 0, 'recovery_ticks': 0,
                       'quality_issues': clearance['quality_issues'], 'quality_elapsed_ms': 0, 'quality_counts': {},
                       'wheel_motion_measured': False, 'competition_navigation': False,
@@ -399,11 +401,19 @@ class Console:
                 return
             report['observed_armed'] = True
             report['observed_pwm'] |= control.get('motor') == report['pwm']
+            servo = 1500
+            if report.get('centering'):
+                if session['wall_scan_seq'] != self.scan['seq'] or not clearance['motion_ready']:
+                    report['walls'] = corridor_walls(self.scan) if clearance['motion_ready'] else None
+                    session['wall_scan_seq'] = self.scan['seq']
+                servo = session['steering'].update(report['walls'], self.scan['seq'], now, clearance['motion_ready'] and not rear_active)
+            report['lane_correcting'] = bool(report.get('centering') and session['steering'].correcting)
             ramp = session.get('ramp')
             if ramp:
-                report['current_pwm'] = ramp.update(self.scan, report['sensor_ages']['lidar'], now)
+                report['current_pwm'] = ramp.update(self.scan, report['sensor_ages']['lidar'], now, report['lane_correcting'])
                 report['approach_front_m'] = ramp.closest_front
                 report['pwm_ramp_changes'] = ramp.changes
+                report['lane_speed_limited'] = ramp.lane_limited
             if report.get('endpoint') == 'left_junction':
                 reached = session['junction'].update(self.scan, report['sensor_ages']['lidar'], now, clearance['motion_ready'])
                 report['junction_confirmations'] = session['junction'].count
@@ -411,13 +421,10 @@ class Console:
                 if reached:
                     self.halt('left_junction_reached')
                     return
+            if ramp and ramp.stop_requested:
+                self.halt('front_boundary_stop')
+                return
             motor = report.get('current_pwm', report['pwm']) if clearance['motion_ready'] else 1500
-            servo = 1500
-            if report.get('centering'):
-                if session['wall_scan_seq'] != self.scan['seq'] or not clearance['motion_ready']:
-                    report['walls'] = corridor_walls(self.scan) if clearance['motion_ready'] else None
-                    session['wall_scan_seq'] = self.scan['seq']
-                servo = session['steering'].update(report['walls'], self.scan['seq'], now, clearance['motion_ready'] and not rear_active)
             if servo != report.get('servo', 1500):
                 report['steering_changes'] += 1
             report['servo'] = servo

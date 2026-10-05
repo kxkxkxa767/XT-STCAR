@@ -18,6 +18,8 @@ SIDE_BODY_EXTENT_M = .17
 SIDE_MIN_NET_M = .10
 LIDAR_RANGE_ALLOWANCE_M = .03  # Manufacturer's coarse 0..6 m accuracy reference.
 SIDE_CLEARANCE_M = SIDE_BODY_EXTENT_M + SIDE_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
+APPROACH_STOP_M = 2.8  # Supervised straight test margin, not a measured braking distance.
+APPROACH_SLOW_M = 4.0
 
 
 def corridor_walls(scan):
@@ -57,7 +59,7 @@ def corridor_walls(scan):
 
 
 class CorridorSteering:
-    """Small experimental PWM correction, with hysteresis and a minimum interval."""
+    """Bounded correction using wall heading, hysteresis and a minimum interval."""
     def __init__(self):
         self.servo = 1500
         self.correcting = False
@@ -73,9 +75,11 @@ class CorridorSteering:
             return self.servo
         self.last_scan = scan_seq
         offset, heading = walls['offset_right_m'], walls['heading_right_deg']
+        projected_offset = offset + CORRIDOR_LOOKAHEAD_M * walls['slope']
         if not self.correcting:
-            self.correcting = abs(offset) > .08 or abs(heading) > 4
-        elif abs(offset) < .04 and abs(heading) < 2:
+            self.correcting = (abs(offset) > .08 or abs(heading) > 4
+                               or (abs(heading) > 1.5 and abs(projected_offset) > .05))
+        elif abs(offset) < .04 and abs(heading) < 2 and abs(projected_offset) < .035:
             self.correcting = False
         target = 1500
         if self.correcting:
@@ -127,7 +131,7 @@ class QualityLatch:
 
 
 class ApproachRamp:
-    """Reduce only on fresh native boundary evidence; never regain PWM in this session."""
+    """Reduce on fresh wall evidence or lane correction; never regain session PWM."""
     def __init__(self, pwm):
         self.pwm = pwm
         self.initial = pwm
@@ -135,8 +139,10 @@ class ApproachRamp:
         self.last_change = float('-inf')
         self.closest_front = None
         self.changes = 0
+        self.lane_limited = False
+        self.stop_requested = False
 
-    def update(self, scan, age, now):
+    def update(self, scan, age, now, correcting=False):
         if not isinstance(scan, dict) or type(age) not in (int, float) or not 0 <= age < .3:
             return self.pwm
         seq = scan.get('seq')
@@ -144,13 +150,17 @@ class ApproachRamp:
             return self.pwm
         self.last_seq = seq
         distance = scan.get('front_boundary_m')
-        if type(distance) not in (int, float) or not math.isfinite(distance) or not .6 <= distance <= 4.05:
-            return self.pwm
-        self.closest_front = distance if self.closest_front is None else min(self.closest_front, distance)
-        floor = min(1535, self.initial)
-        target = max(floor, self.initial-round(10*max(0, 4-self.closest_front)))
-        if target < self.pwm and now-self.last_change >= .15:
-            self.pwm = max(target, self.pwm-2)
+        if type(distance) in (int, float) and math.isfinite(distance) and .6 <= distance <= 4.05:
+            self.closest_front = distance if self.closest_front is None else min(self.closest_front, distance)
+            self.stop_requested |= distance <= APPROACH_STOP_M
+        target = (self.initial if self.closest_front is None else
+                  1500 + round((self.initial-1500) * max(0, min(1,
+                      (self.closest_front-APPROACH_STOP_M)/(APPROACH_SLOW_M-APPROACH_STOP_M)))))
+        if correcting:
+            target = min(target, 1550)
+            self.lane_limited = True
+        if target < self.pwm and now-self.last_change >= .10:
+            self.pwm = max(target, self.pwm-5)
             self.last_change = now
             self.changes += 1
         return self.pwm

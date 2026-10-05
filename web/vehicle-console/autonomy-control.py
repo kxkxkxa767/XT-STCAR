@@ -80,10 +80,13 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, sto
         reason = 'left_junction_reached' if result.get('reason') == 'left_junction_reached' else 'time_limit'
     except ProbeInterrupted as error:
         result = error.state['autonomy']['last_result']
-        if not result or result.get('reason') != 'probe_obstacle_in_straight_corridor':
+        stops = {'probe_obstacle_in_straight_corridor': 'forward_clearance_limit',
+                 'front_boundary_stop': 'front_boundary_stop'}
+        if not result or result.get('reason') not in stops:
             raise
-        run, reason = error.run, 'forward_clearance_limit'
-    return {'reason': reason, 'motion_ticks': result.get('motion_ticks', 0),
+        run, reason = error.run, stops[result['reason']]
+    return {'reason': reason, 'completed': result.get('completed', False),
+            'motion_ticks': result.get('motion_ticks', 0),
             'steering_changes': result.get('steering_changes', 0), 'walls': result.get('walls'),
             'junction_confirmations': result.get('junction_confirmations', 0),
             'junction_geometry': result.get('junction_geometry'),

@@ -1,0 +1,450 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-05T19:46:44.622590+08:00",
+  "authorization": [
+    "User returned from meal, put car at starting point and requested straight test",
+    "After reporting near collision with front blue board, user put car back and explicitly requested one repeat"
+  ],
+  "scope": "Two individually authorized supervised continuous straight sessions; no left turn, no reverse brake, no full competition run",
+  "implementation": {
+    "prediction_entry": "Existing8cm/4deg OR heading magnitude>1.5deg and offset+slope*1m magnitude>5cm",
+    "prediction_exit": "offset<4cm, heading<2deg and projected offset<3.5cm",
+    "steering_pwm_limits": [
+      1450,
+      1550
+    ],
+    "steering_max_step_pwm": 10,
+    "steering_min_interval_ms": 250,
+    "lane_correction_target_max_pwm": 1550,
+    "boundary_approach_target": "1500+(initial-1500)*clamp((closest_fresh_front_boundary_m-2.8)/1.2,0,1)",
+    "approach_max_decrease_pwm": 5,
+    "approach_min_interval_ms": 100,
+    "front_boundary_stop_m": 2.8,
+    "front_boundary_stop_completed": false,
+    "fresh_native_scans_only": true,
+    "pwm_never_increases_in_session": true,
+    "immediate_manual_close_obstacle_and_control_fault_stops_preserved": true,
+    "navigation_validated": false,
+    "turn_path_certified": false,
+    "stopping_distance_calibrated": false
+  },
+  "checks": {
+    "python_pty_fault_passed": 53,
+    "rust_unchanged": true,
+    "previous_rust_passed": 630,
+    "initial_replay": {
+      "source": "junction-run-02.json",
+      "old_trigger_elapsed_s": 3.1477473760005523,
+      "new_trigger_elapsed_s": 1.5632131040001696,
+      "earlier_s": 1.5845342720003828,
+      "limitation": "Recorded observations only, no changed vehicle trajectory or stopping distance validation"
+    },
+    "front_stop_open_loop_replay": {
+      "stop_elapsed_s": 4.988323896999987,
+      "fresh_front_plane_m": 2.701874347328086,
+      "ramp_pwm_before_neutral": 1525,
+      "old_result": "probe_obstacle_in_straight_corridor",
+      "limitation": "Open-loop replay only; no changed physical trajectory or certified stopping margin"
+    }
+  },
+  "deployment_interim_run_03": {
+    "backup": "/home/bianbu/xt-stcar-console/backup-straight-20261005-193459",
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 6039
+    },
+    "settings": {
+      "forward": 1560,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "hashes": {
+      "server.py": "5e162cd0756075d92b1cb45163a946cdff3482b25b8c124b83623d92436a7c24",
+      "autonomy_live.py": "4c26adcc9267d74b6c07aa8a24734e2617204ec77bb9475ec273e114f9656995",
+      "autonomy-control.py": "46fd3a14b3ec2c04cfea2272fffddcea4981a0101250f7a09701e0df49a59081",
+      "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+    }
+  },
+  "deployment_latest": {
+    "backup": "/home/bianbu/xt-stcar-console/backup-straight-20261005-194305",
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 6172
+    },
+    "settings": {
+      "forward": 1560,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "hashes": {
+      "server.py": "2f2c258c7d7dd3bf6641801b7abf6fdbd5bd39f09efbee124b2c6f4eec0f525c",
+      "autonomy_live.py": "f50706ee5dd180d02debb81b435051e2ec010daa02286917677eee18af71cfd7",
+      "autonomy-control.py": "efdead9a33395764f73fed72f06cd2bf1029a1f0da7e6a642302548b962fbd6c",
+      "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+    },
+    "vehicle_bridge_sha256": "187b3cb31f739013107cc344950094fcde2f2dd48b370713d5b3e86821c06d5b",
+    "one_owner_each_tty_confirmed": true,
+    "local_hashes_match": true
+  },
+  "preflight_03": {
+    "samples": 20,
+    "distinct_scans": 20,
+    "all_motion_ready": true,
+    "junction_at_start": false,
+    "max_fit_ms": 6.5828979999196235,
+    "first": {
+      "healthy": true,
+      "scan_seq": 177,
+      "ages": {
+        "camera": 0.0319556139999122,
+        "lidar": 0.08703805099992223,
+        "control": 0.01627251399997931
+      },
+      "clearance": {
+        "front_m": 0.9259999999999999,
+        "corridor_front_m": 7.966144282169212,
+        "nearest_m": 0.255,
+        "scan_seq": 177,
+        "side_clearance_m": 0.4229715468885242,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          -5,
+          11
+        ],
+        "largest_gap_deg": 1,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "walls": null,
+      "fit_ms": 5.093611000006604,
+      "junction": null,
+      "front_m": 7.971
+    },
+    "last": {
+      "healthy": true,
+      "scan_seq": 202,
+      "ages": {
+        "camera": 0.0228906070000221,
+        "lidar": 0.033968959000048926,
+        "control": 0.00820435200000702
+      },
+      "clearance": {
+        "front_m": 0.896,
+        "corridor_front_m": 7.966144282169212,
+        "nearest_m": 0.254,
+        "scan_seq": 202,
+        "side_clearance_m": 0.4229715468885242,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          -5,
+          6,
+          11
+        ],
+        "largest_gap_deg": 1,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "walls": null,
+      "fit_ms": 4.772212000034415,
+      "junction": null,
+      "front_m": 7.971
+    }
+  },
+  "preflight_04": {
+    "samples": 20,
+    "distinct_scans": 20,
+    "all_motion_ready": true,
+    "junction_at_start": false,
+    "max_fit_ms": 8.445863000133613,
+    "first": {
+      "healthy": true,
+      "scan_seq": 201,
+      "ages": {
+        "camera": 0.027213027000016154,
+        "lidar": 0.04977053800007525,
+        "control": 0.0010047690000192233
+      },
+      "clearance": {
+        "front_m": 0.895,
+        "corridor_front_m": 7.7942490599219285,
+        "nearest_m": 0.414,
+        "scan_seq": 201,
+        "side_clearance_m": 0.4013916085889673,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [],
+        "largest_gap_deg": 0,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "walls": {
+        "offset_right_m": -0.0469831490545059,
+        "heading_right_deg": 1.0502112735332887,
+        "slope": 0.018331697613388043,
+        "width_m": 0.9274296547737629
+      },
+      "fit_ms": 7.208193999986179,
+      "junction": null,
+      "front_m": 7.815
+    },
+    "last": {
+      "healthy": true,
+      "scan_seq": 228,
+      "ages": {
+        "camera": 0.11821667300000627,
+        "lidar": 0.09681415099998958,
+        "control": 0.0062778930000604305
+      },
+      "clearance": {
+        "front_m": 0.879,
+        "corridor_front_m": 7.7942490599219285,
+        "nearest_m": 0.414,
+        "scan_seq": 228,
+        "side_clearance_m": 0.4013916085889673,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          15
+        ],
+        "largest_gap_deg": 1,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "walls": {
+        "offset_right_m": -0.0482985618633919,
+        "heading_right_deg": 1.337876366373014,
+        "slope": 0.02335459234156169,
+        "width_m": 0.9296039006144574
+      },
+      "fit_ms": 6.565713999862055,
+      "junction": null,
+      "front_m": 7.815
+    }
+  },
+  "physical_run_03": {
+    "local_raw_directory": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-upload-20261005/straight-run-03",
+    "helper_elapsed_including_startup_and_post_stop_s": 11.656696012999987,
+    "single_continuous_session": true,
+    "result": {
+      "run_id": "P_RgzeWs-CeQqT5M7tSvzHsh",
+      "pwm": 1560,
+      "servo": 1500,
+      "duration_ms": 30000,
+      "drive_ticks": 166,
+      "observed_pwm": true,
+      "observed_armed": true,
+      "centering": true,
+      "steering_changes": 9,
+      "walls": null,
+      "endpoint": "left_junction",
+      "junction_confirmations": 0,
+      "junction_geometry": null,
+      "rear_launch_active": false,
+      "rear_launch_max_s": 1,
+      "current_pwm": 1537,
+      "approach_front_m": 1.4781339276701075,
+      "pwm_ramp_changes": 12,
+      "lane_correcting": false,
+      "lane_speed_limited": true,
+      "motion_ticks": 166,
+      "recovery_ticks": 0,
+      "quality_issues": [],
+      "quality_elapsed_ms": 0,
+      "quality_counts": {},
+      "wheel_motion_measured": false,
+      "competition_navigation": false,
+      "clearance_start": {
+        "front_m": 0.895,
+        "corridor_front_m": 7.965144891342194,
+        "nearest_m": 0.254,
+        "scan_seq": 364,
+        "side_clearance_m": 0.4252732422950274,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          6,
+          11,
+          12
+        ],
+        "largest_gap_deg": 2,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "epoch": 0,
+      "sensor_ages": {
+        "camera": 0.04285431400001016,
+        "lidar": 0.00020097799995255627,
+        "control": 0.007485673000019233
+      },
+      "sensor_errors": {},
+      "reason": "probe_obstacle_in_straight_corridor",
+      "completed": false
+    },
+    "native_candidates_in_recorded_samples": 3,
+    "max_junction_votes_in_recorded_samples": 2,
+    "commanded_neutral_confirmation": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 168,
+      "servo": 1500,
+      "tick": 49481
+    },
+    "final_healthy": true,
+    "final_owner": null,
+    "final_active": null,
+    "later_cardinal_m": {
+      "0": 0.222,
+      "90": 0.623,
+      "180": 6.899,
+      "270": 2.455
+    },
+    "navigation_validated": false,
+    "sensor_ages_s": {
+      "camera": 0.07235585300009006,
+      "lidar": 0.08385377300010077,
+      "control": 0.015259913000022607
+    }
+  },
+  "physical_run_04": {
+    "local_raw_directory": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-upload-20261005/straight-run-04",
+    "helper_elapsed_including_startup_and_post_stop_s": 8.773376562000067,
+    "single_continuous_session": true,
+    "result": {
+      "run_id": "NR4wWTDkmFeeI4LxTu9-WOJp",
+      "pwm": 1560,
+      "servo": 1480,
+      "duration_ms": 30000,
+      "drive_ticks": 74,
+      "observed_pwm": true,
+      "observed_armed": true,
+      "centering": true,
+      "steering_changes": 3,
+      "walls": {
+        "offset_right_m": 0.059473178048074726,
+        "heading_right_deg": 3.8922592142749415,
+        "slope": 0.06803743184975641,
+        "width_m": 0.9143082305060322
+      },
+      "endpoint": "left_junction",
+      "junction_confirmations": 0,
+      "junction_geometry": null,
+      "rear_launch_active": false,
+      "rear_launch_max_s": 1,
+      "current_pwm": 1550,
+      "approach_front_m": null,
+      "pwm_ramp_changes": 2,
+      "lane_correcting": true,
+      "lane_speed_limited": true,
+      "front_boundary_stop_m": 2.8,
+      "motion_ticks": 74,
+      "recovery_ticks": 0,
+      "quality_issues": [],
+      "quality_elapsed_ms": 0,
+      "quality_counts": {},
+      "wheel_motion_measured": false,
+      "competition_navigation": false,
+      "clearance_start": {
+        "front_m": 0.878,
+        "corridor_front_m": 7.7942490599219285,
+        "nearest_m": 0.413,
+        "scan_seq": 415,
+        "side_clearance_m": 0.4065277286509574,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          -8,
+          -7,
+          5,
+          6
+        ],
+        "largest_gap_deg": 2,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "epoch": 0,
+      "sensor_ages": {
+        "camera": 0.05573179499992875,
+        "lidar": 0.005095659000062369,
+        "control": 0.01906154199991761
+      },
+      "sensor_errors": {},
+      "reason": "probe_obstacle_in_straight_corridor",
+      "completed": false
+    },
+    "native_candidates_in_recorded_samples": 0,
+    "max_junction_votes_in_recorded_samples": 0,
+    "commanded_neutral_confirmation": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 76,
+      "servo": 1500,
+      "tick": 82484
+    },
+    "final_healthy": true,
+    "final_owner": null,
+    "final_active": null,
+    "later_cardinal_m": {
+      "0": 4.1000000000000005,
+      "90": 0.717,
+      "180": 3.9899999999999998,
+      "270": 0.23700000000000002
+    },
+    "navigation_validated": false,
+    "sensor_ages_s": {
+      "camera": 0.068805920999921,
+      "lidar": 0.026300407000007908,
+      "control": 0.003736755999852903
+    }
+  },
+  "user_feedback_03": "刚刚那一轮你差点撞到前方蓝色挡板了",
+  "interpretation": [
+    "Run03 corrected9times and reduced1560to1537 but only intermittent junction evidence; three-frame gate never completed; 1m forward corridor stop was too late for observed coast",
+    "Native detector did return candidates: final zero votes does not mean it never recognized any junction",
+    "Front2.8m neutral fallback was added after near-hit feedback; run04 stopped on left side-front corridor before any front plane, so new endpoint margin is not physically validated",
+    "Run04 corrected3times, PWM1560to1550, still drifted left and coasted after neutral; cannot claim straight goal completed",
+    "Latest stationary read shows armedfalse, motor/servo1500, no active owner; physical steering response and stop distance need checking before another continuous run",
+    "No repeated automatic rearm after either stop; current authorization used, remain locked pending new user instruction",
+    "Server halt resets both motor and servo to1500. Wheels straight after stop are expected and do not establish steering direction during1480 output."
+  ],
+  "user_feedback_04": "停下来后车整体向左偏，但前轮是正的"
+}

@@ -39,21 +39,51 @@ class ApproachRampTests(unittest.TestCase):
         ramp = MODULE.ApproachRamp(1560)
         values = []
         for i in range(20):
-            scan = {'seq': i, 'front_boundary_m': 2.}
+            scan = {'seq': i, 'front_boundary_m': 3.5}
             values.append(ramp.update(scan, .01, i*.16))
-        self.assertEqual(values[0], 1558)
-        self.assertEqual(values[-1], 1540)
-        self.assertTrue(all(0 <= a-b <= 2 for a, b in zip(values, values[1:])))
-        self.assertEqual(ramp.update({'seq': 20, 'front_boundary_m': 4.}, .01, 4), 1540)
-        self.assertEqual(ramp.update({'seq': 21, 'front_boundary_m': None}, .01, 5), 1540)
+        self.assertEqual(values[0], 1555)
+        self.assertEqual(values[-1], 1535)
+        self.assertTrue(all(0 <= a-b <= 5 for a, b in zip(values, values[1:])))
+        self.assertEqual(ramp.update({'seq': 20, 'front_boundary_m': 4.}, .01, 4), 1535)
+        self.assertEqual(ramp.update({'seq': 21, 'front_boundary_m': None}, .01, 5), 1535)
         self.assertEqual(MODULE.ApproachRamp(1560).pwm, 1560)
 
     def test_duplicate_stale_and_missing_plane_do_not_lower_throttle(self):
         ramp = MODULE.ApproachRamp(1560)
         self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 2.}, .3, 0), 1560)
-        self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 2.}, .01, 1), 1558)
-        self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 1.}, .01, 2), 1558)
-        self.assertEqual(ramp.update({'seq': 2, 'front_boundary_m': 1.}, .01, 1.05), 1558)
+        self.assertFalse(ramp.stop_requested)
+        self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 3.5}, .01, 1), 1555)
+        self.assertEqual(ramp.update({'seq': 1, 'front_boundary_m': 1.}, .01, 2), 1555)
+        self.assertFalse(ramp.stop_requested)
+        self.assertEqual(ramp.update({'seq': 2, 'front_boundary_m': 3.5}, .01, 1.05), 1555)
+
+    def test_lane_correction_reduces_without_plane_and_release_never_reaccelerates(self):
+        ramp = MODULE.ApproachRamp(1560)
+        scan = {'seq': 1, 'front_boundary_m': None}
+        self.assertEqual(ramp.update(scan, .3, 0, True), 1560)
+        self.assertFalse(ramp.lane_limited)
+        self.assertEqual(ramp.update(scan, .01, .1, True), 1555)
+        self.assertEqual(ramp.update(scan, .01, .5, True), 1555)
+        for i in range(2, 8):
+            self.assertGreaterEqual(ramp.update(dict(scan, seq=i), .01, i*.16, True), 1550)
+        self.assertEqual(ramp.pwm, 1550)
+        self.assertIsNone(ramp.closest_front)
+        self.assertEqual(ramp.update(dict(scan, seq=8), .01, 2, False), 1550)
+        low = MODULE.ApproachRamp(1535)
+        self.assertEqual(low.update(scan, .01, 0, True), 1535)
+
+    def test_front_margin_is_fresh_native_plane_only_and_latched(self):
+        ramp = MODULE.ApproachRamp(1560)
+        scan = {'seq': 1, 'front_boundary_m': 2.7}
+        ramp.update(scan, .3, 0)
+        self.assertFalse(ramp.stop_requested)
+        ramp.update({'seq': 1, 'front_boundary_m': None}, .01, .1)
+        ramp.update(scan, .01, .2)
+        self.assertFalse(ramp.stop_requested)
+        ramp.update(dict(scan, seq=2), .01, .3)
+        self.assertTrue(ramp.stop_requested)
+        ramp.update({'seq': 3, 'front_boundary_m': None}, .01, .4)
+        self.assertTrue(ramp.stop_requested)
 
 
 class JunctionStopTests(unittest.TestCase):
@@ -84,6 +114,24 @@ class JunctionStopTests(unittest.TestCase):
 
 
 class CorridorSteeringTests(unittest.TestCase):
+    def test_cli_front_margin_is_incomplete_and_never_rearms(self):
+        spec = importlib.util.spec_from_file_location('autonomy_cli_margin', Path(__file__).parents[1]/'autonomy-control.py')
+        cli = importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+        calls = []
+        def request(path, data=None):
+            if data:
+                calls.append(data['op'])
+                if data['op'] == 'to_left_junction_start': return {'run_id': 'run', 'epoch': 0}
+                return {'ok': True}
+            return {'autonomy': {'active': None, 'mode': 'locked',
+                    'last_result': {'run_id': 'run', 'completed': False, 'reason': 'front_boundary_stop'}},
+                    'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}}}
+        result = cli.straight_segment(request, state, 1560, 30, stop_left_junction=True)
+        self.assertFalse(result['completed'])
+        self.assertEqual(result['reason'], 'front_boundary_stop')
+        self.assertEqual(calls, ['to_left_junction_start', 'cancel'])
+
     def test_cli_normal_deadline_racing_heartbeat_is_not_failure(self):
         spec = importlib.util.spec_from_file_location('autonomy_cli_test', Path(__file__).parents[1]/'autonomy-control.py')
         cli = importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
@@ -135,6 +183,20 @@ class CorridorSteeringTests(unittest.TestCase):
         broken = wall_scan(.12)
         for angle in range(60, 121): broken['ranges'][angle] = .7
         self.assertIsNone(MODULE.corridor_walls(broken))
+
+    def test_heading_predicts_drift_before_old_threshold_without_chattering(self):
+        steering = MODULE.CorridorSteering()
+        walls = MODULE.corridor_walls(wall_scan(-.003, math.tan(math.radians(-2.9))))
+        self.assertLess(abs(walls['offset_right_m']), .08)
+        self.assertLess(abs(walls['heading_right_deg']), 4)
+        self.assertGreater(steering.update(walls, 1, 0), 1500)
+        self.assertLessEqual(steering.servo, 1510)
+        for i in range(2, 8):
+            walls = MODULE.corridor_walls(wall_scan(-.025, math.tan(math.radians(-1.8))))
+            steering.update(walls, i, i*.26)
+            self.assertTrue(steering.correcting)
+        steering.update(MODULE.corridor_walls(wall_scan(-.005, -.01)), 8, 3)
+        self.assertFalse(steering.correcting)
 
     def test_side_threshold_uses_body_extent_plus_net_and_range_allowance(self):
         self.assertAlmostEqual(MODULE.SIDE_CLEARANCE_M, .30)
@@ -441,24 +503,42 @@ class QualityRecoveryTests(unittest.TestCase):
 
 
 
-    def test_output_loop_decreases_pwm_before_endpoint_then_neutral_stop(self):
+    def test_output_loop_decreases_pwm_then_front_margin_stops_without_junction(self):
         self.set_junction_endpoint()
         session = self.console.auto_session
         session['ramp'] = MODULE.ApproachRamp(1560)
         self.console.scan['left_junction'] = None
-        self.console.scan['front_boundary_m'] = 3.
+        self.console.scan['front_boundary_m'] = 3.5
         for i in range(30):
             self.console.scan['seq'] += 1
             self.tick(i*.02)
         motors = [motor for op, motor, _ in self.output if op == 'drive']
-        self.assertEqual(motors[0], 1558)
+        self.assertEqual(motors[0], 1555)
         self.assertLess(motors[-1], motors[0])
         self.assertGreater(motors[-1], 1500)
-        for i in range(30, 33):
-            self.console.scan = junction_scan(i+10)
-            self.tick(i*.02)
+        self.console.scan['seq'] += 1
+        self.console.scan['front_boundary_m'] = 2.7
+        self.tick(.6)
         self.assertEqual(self.output[-1][0], 'stop')
-        self.assertEqual(self.console.auto_result['reason'], 'left_junction_reached')
+        self.assertEqual(self.console.auto_result['reason'], 'front_boundary_stop')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.tick(.62)
+        self.assertEqual(self.output[-1][0], 'stop')
+
+    def test_prediction_steering_and_speed_limit_share_first_fresh_output(self):
+        self.console.scan = wall_scan(-.003, math.tan(math.radians(-2.9)))
+        session = self.console.auto_session
+        session['report']['centering'] = True
+        session['steering'] = MODULE.CorridorSteering()
+        session['wall_scan_seq'] = None
+        session['ramp'] = MODULE.ApproachRamp(1560)
+        self.tick(0)
+        op, motor, servo = self.output[-1]
+        self.assertEqual((op, motor), ('drive', 1555))
+        self.assertTrue(1500 < servo <= 1510)
+        self.assertTrue(session['report']['lane_correcting'])
+        self.assertTrue(session['report']['lane_speed_limited'])
+        self.assertIsNone(session['report']['approach_front_m'])
 
     def test_bridge_large_scan_stream_is_buffered_and_eof_locks(self):
         class CountingRaw(io.RawIOBase):
