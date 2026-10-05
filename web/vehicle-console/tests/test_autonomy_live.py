@@ -36,7 +36,8 @@ class ProbeClearanceTests(unittest.TestCase):
         self.scan['navigation_validated'] = False
         MODULE.probe_clearance(self.scan, self.ages)
         self.assertFalse(self.scan['navigation_validated'])
-        with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1531, 'duration_ms': 400})
+        self.assertEqual(MODULE.probe_parameters({'pwm': 1560, 'duration_ms': 400}), (1560, 400))
+        with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1561, 'duration_ms': 400})
         with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1530, 'duration_ms': 501})
         with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': True, 'duration_ms': 400})
 

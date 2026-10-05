@@ -12,7 +12,7 @@ import urllib.request
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['status', 'probe', 'stop'])
-    parser.add_argument('--pwm', type=int, default=1530)
+    parser.add_argument('--pwm', type=int, default=1560)
     parser.add_argument('--duration-ms', type=int, default=400)
     parser.add_argument('--execute', action='store_true', help='explicit physical probe; otherwise read-only')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
@@ -45,8 +45,8 @@ def main():
                           'settings': state['settings'], 'ages': state['ages'],
                           'autonomy': state['autonomy'], 'motion_requested': False}, ensure_ascii=False, indent=2))
         return
-    if not 1501 <= args.pwm <= 1530 or not 100 <= args.duration_ms <= 500:
-        raise RuntimeError('probe requires PWM 1501..1530 and duration 100..500 ms')
+    if not 1501 <= args.pwm <= 1560 or not 100 <= args.duration_ms <= 500:
+        raise RuntimeError('probe requires PWM 1501..1560 and duration 100..500 ms')
     if not state['autonomy']['probe_ready']:
         raise RuntimeError(state['autonomy']['rejection'] or 'probe not ready')
     run = None

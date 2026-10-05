@@ -70,27 +70,65 @@
     }
   },
   "deployed_sha256": {
-    "server.py": "b9ef6b20a2ee7aa8db02fe258fdc9b055f74f32c99734ea3d540d9dd55d853c3",
+    "server.py": "f2bfb6d1da60674a0c66aae75891a66c479168d0244f9d60c76a5172e59fd2ca",
     "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19",
-    "autonomy_live.py": "9d57236fc54ae3e3f7f56e0dd9cc8c5a5f26def4a11c99dabb19e63da14e8619",
-    "autonomy-control.py": "61cbeccec13f7b22a5fa07d1a08a2ff31f6999a8379e922cb6c87c3544fae30c"
+    "autonomy_live.py": "1826f28a5965f5551ad08b11e3b3407f38a609be8cd2c3fe25af3c6240870bb9",
+    "autonomy-control.py": "61bfea4494c8614317cd8ad027c4c7a78f24f0ab80a4dd4c8a12821e72e45480"
+  },
+  "post_reconnect_state": {
+    "healthy": true,
+    "status": {
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 3058
+      },
+      "physical_output": true,
+      "reverse_enabled": true
+    },
+    "settings": {
+      "forward": 1560,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "ages": {
+      "camera": 0.07414462899998853,
+      "lidar": 0.4267812459999618,
+      "control": 0.008460451999951601
+    },
+    "autonomy": {
+      "mode": "locked",
+      "epoch": 0,
+      "supported": [
+        "straight_probe"
+      ],
+      "competition_supported": false,
+      "probe_ready": false,
+      "rejection": "probe_sensor_stale",
+      "clearance": null,
+      "active": null,
+      "last_result": null
+    },
+    "last_stop": null,
+    "owner": null
   },
   "tests": {
     "python": 18,
     "frontend": 8,
     "failed": 0
   },
-  "deployment_complete": false,
-  "pending_deployment": [
-    "server.py",
-    "autonomy-control.py"
-  ],
-  "pending_reason": "SSH multiplexing session expired; ordinary authentication rejected",
+  "deployment_complete": true,
+  "new_motion_requested_after_reconnect": false,
+  "protection_changes": "A1 PWM cap/default changed to1560 by explicit user request; all others unchanged",
   "source_sha256": {
     "server.py": "f2bfb6d1da60674a0c66aae75891a66c479168d0244f9d60c76a5172e59fd2ca",
     "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19",
-    "autonomy_live.py": "9d57236fc54ae3e3f7f56e0dd9cc8c5a5f26def4a11c99dabb19e63da14e8619",
-    "autonomy-control.py": "203ef8bb556804da98cb88c159882bfb620c2d24262dd91d38d6fd4f988f4c62"
+    "autonomy_live.py": "1826f28a5965f5551ad08b11e3b3407f38a609be8cd2c3fe25af3c6240870bb9",
+    "autonomy-control.py": "61bfea4494c8614317cd8ad027c4c7a78f24f0ab80a4dd4c8a12821e72e45480"
   },
-  "protection_changes": "none; user requests numbered review before changes"
+  "pending_deployment": []
 }

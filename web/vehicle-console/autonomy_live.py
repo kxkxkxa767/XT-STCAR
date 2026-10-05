@@ -1,7 +1,7 @@
 """Bounded physical bring-up only. No competition planner or simulated pose."""
 import math
 
-MAX_PWM = 1530
+MAX_PWM = 1560
 MAX_DURATION_MS = 500
 HEARTBEAT_S = .20
 
@@ -40,7 +40,7 @@ def probe_clearance(scan, ages, demo=False):
 def probe_parameters(data):
     pwm, duration = data.get('pwm'), data.get('duration_ms')
     if type(pwm) is not int or not 1501 <= pwm <= MAX_PWM:
-        raise ValueError('probe_pwm_must_be_1501_to_1530')
+        raise ValueError('probe_pwm_must_be_1501_to_1560')
     if type(duration) is not int or not 100 <= duration <= MAX_DURATION_MS:
         raise ValueError('probe_duration_must_be_100_to_500_ms')
     return pwm, duration
