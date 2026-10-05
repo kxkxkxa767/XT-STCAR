@@ -15,12 +15,12 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
-def wall_scan(offset=0, slope=0, width=1.):
+def wall_scan(offset=0, slope=0, width=1., length=7.):
     bins = []
     for angle in range(360):
         sine, cosine = math.sin(math.radians(angle)), math.cos(math.radians(angle))
         denominator = sine-slope*cosine
-        distances = [7/abs(cosine)] if abs(cosine) > 1e-6 else []
+        distances = [length/abs(cosine)] if abs(cosine) > 1e-6 else []
         if abs(denominator) > 1e-6:
             distances.extend(b/denominator for b in (offset-width/2, offset+width/2) if b/denominator > 0)
         bins.append(min(distances))
@@ -36,16 +36,17 @@ def junction_scan(seq, end=.3):
 
 class ApproachRampTests(unittest.TestCase):
     def test_progressively_reduces_on_fresh_plane_and_never_reaccelerates(self):
-        ramp = MODULE.ApproachRamp(1560)
+        ramp = MODULE.ApproachRamp(1570)
         values = []
         for i in range(20):
             scan = {'seq': i, 'front_boundary_m': 3.5}
             values.append(ramp.update(scan, .01, i*.16))
-        self.assertEqual(values[0], 1555)
-        self.assertEqual(values[-1], 1535)
+        self.assertEqual(values[0], 1565)
+        self.assertEqual(values[-1], 1550)
         self.assertTrue(all(0 <= a-b <= 5 for a, b in zip(values, values[1:])))
-        self.assertEqual(ramp.update({'seq': 20, 'front_boundary_m': 4.}, .01, 4), 1535)
-        self.assertEqual(ramp.update({'seq': 21, 'front_boundary_m': None}, .01, 5), 1535)
+        self.assertEqual(ramp.update({'seq': 20, 'front_boundary_m': 4.}, .01, 4), 1550)
+        self.assertEqual(ramp.update({'seq': 21, 'front_boundary_m': None}, .01, 5), 1550)
+        self.assertTrue(ramp.stop_requested)
         self.assertEqual(MODULE.ApproachRamp(1560).pwm, 1560)
 
     def test_duplicate_stale_and_missing_plane_do_not_lower_throttle(self):
@@ -57,22 +58,26 @@ class ApproachRampTests(unittest.TestCase):
         self.assertFalse(ramp.stop_requested)
         self.assertEqual(ramp.update({'seq': 2, 'front_boundary_m': 3.5}, .01, 1.05), 1555)
 
-    def test_lane_correction_reduces_without_plane_and_release_never_reaccelerates(self):
+    def test_lane_correction_reduces_then_release_regains_cruise_before_boundary(self):
         ramp = MODULE.ApproachRamp(1560)
         scan = {'seq': 1, 'front_boundary_m': None}
         self.assertEqual(ramp.update(scan, .3, 0, True), 1560)
         self.assertFalse(ramp.lane_limited)
-        self.assertEqual(ramp.update(scan, .01, .1, True), 1555)
-        self.assertEqual(ramp.update(scan, .01, .5, True), 1555)
-        for i in range(2, 8):
+        self.assertEqual(ramp.update(scan, .01, .1, True), 1560)
+        self.assertEqual(ramp.update(scan, .01, .5, True), 1560)
+        for i in range(2, 10):
             self.assertGreaterEqual(ramp.update(dict(scan, seq=i), .01, i*.16, True), 1550)
         self.assertEqual(ramp.pwm, 1550)
         self.assertIsNone(ramp.closest_front)
-        self.assertEqual(ramp.update(dict(scan, seq=8), .01, 2, False), 1550)
-        low = MODULE.ApproachRamp(1535)
-        self.assertEqual(low.update(scan, .01, 0, True), 1535)
+        for i in range(10, 20):
+            before = ramp.pwm
+            ramp.update(dict(scan, seq=i), .01, 2+(i-10)*.21, False)
+            self.assertTrue(0 <= ramp.pwm-before <= 2)
+        self.assertEqual(ramp.pwm, 1560)
+        low = MODULE.ApproachRamp(1550)
+        self.assertEqual(low.update(scan, .01, 0, True), 1550)
 
-    def test_front_margin_is_fresh_native_plane_only_and_latched(self):
+    def test_front_closing_time_requires_fresh_distinct_consistent_evidence(self):
         ramp = MODULE.ApproachRamp(1560)
         scan = {'seq': 1, 'front_boundary_m': 2.7}
         ramp.update(scan, .3, 0)
@@ -81,8 +86,63 @@ class ApproachRampTests(unittest.TestCase):
         ramp.update(scan, .01, .2)
         self.assertFalse(ramp.stop_requested)
         ramp.update(dict(scan, seq=2), .01, .3)
+        self.assertFalse(ramp.stop_requested)
+        ramp.update({'seq': 3, 'front_boundary_m': 2.6}, .01, .4)
+        ramp.update({'seq': 4, 'front_boundary_m': 2.5}, .01, .5)
         self.assertTrue(ramp.stop_requested)
-        ramp.update({'seq': 3, 'front_boundary_m': None}, .01, .4)
+        ramp.update({'seq': 5, 'front_boundary_m': None}, .01, .6)
+        self.assertTrue(ramp.stop_requested)
+
+    def test_same_distance_has_different_stop_decision_at_different_closing_rates(self):
+        fast, slow = MODULE.ApproachRamp(1560), MODULE.ApproachRamp(1560)
+        for seq, (df, ds) in enumerate(zip([3.8, 3.6, 3.4], [3.5, 3.45, 3.4])):
+            fast.update({'seq': seq, 'front_boundary_m': df}, .01, seq*.2)
+            slow.update({'seq': seq, 'front_boundary_m': ds}, .01, seq*.2)
+        self.assertTrue(fast.stop_requested)
+        self.assertFalse(slow.stop_requested)
+        self.assertAlmostEqual(fast.closing_speed, 1.)
+        self.assertAlmostEqual(slow.closing_speed, .25)
+
+    def test_capture_clock_not_server_delay_sets_closing_rate(self):
+        ramp = MODULE.ApproachRamp(1560)
+        for seq, (d, now) in enumerate(zip([3.6, 3.5, 3.4], [10., 10.15, 10.27])):
+            ramp.update({'seq': seq, 'at_ms': 1000+seq*100, 'front_boundary_m': d}, .01, now)
+        self.assertAlmostEqual(ramp.closing_speed, 1.)
+        self.assertTrue(ramp.stop_requested)
+
+    def test_launch_cruise_and_recovery_do_not_depend_on_course_length(self):
+        ramp = MODULE.ApproachRamp(1580)
+        for seq in range(8):
+            ramp.update({'seq': seq}, .01, seq*.1, moving=False)
+        self.assertIsNone(ramp.launch_since)
+        self.assertEqual(ramp.pwm, 1580)
+        for seq in range(8, 28):
+            ramp.update({'seq': seq}, .01, seq*.11)
+        self.assertTrue(ramp.cruise_limited)
+        self.assertEqual(ramp.pwm, 1570)
+
+    def test_plane_jump_and_long_gap_do_not_create_a_closing_speed(self):
+        ramp = MODULE.ApproachRamp(1560)
+        for seq, d in enumerate([4., 3.9, 1.5]):
+            ramp.update({'seq': seq, 'front_boundary_m': d}, .01, seq*.1)
+        self.assertIsNone(ramp.closing_speed)
+        self.assertIsNone(ramp.time_to_clearance)
+        ramp.update({'seq': 3, 'front_boundary_m': None}, .01, .7)
+        self.assertTrue(ramp.boundary_lost)
+        before = ramp.pwm
+        for seq in range(4, 20):
+            ramp.update({'seq': seq}, .01, .7+seq*.11)
+        self.assertEqual(ramp.pwm, before)
+        self.assertGreaterEqual(ramp.pwm, 1550)
+        self.assertTrue(ramp.stop_requested)
+
+    def test_new_forward_bounds_and_near_boundary_never_emit_subfloor_pwm(self):
+        for value in [1549, 1581, True]:
+            with self.assertRaises(ValueError): MODULE.ApproachRamp(value)
+        ramp = MODULE.ApproachRamp(1580)
+        for seq in range(12):
+            value = ramp.update({'seq': seq, 'front_boundary_m': 3.8-.1*seq}, .01, seq*.1)
+            self.assertTrue(1550 <= value <= 1580)
         self.assertTrue(ramp.stop_requested)
 
 
@@ -116,7 +176,9 @@ class JunctionStopTests(unittest.TestCase):
 class CorridorSteeringTests(unittest.TestCase):
     def test_cli_front_margin_is_incomplete_and_never_rearms(self):
         spec = importlib.util.spec_from_file_location('autonomy_cli_margin', Path(__file__).parents[1]/'autonomy-control.py')
-        cli = importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
+        cli = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {'autonomy_live': MODULE}):
+            spec.loader.exec_module(cli)
         state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
         calls = []
         def request(path, data=None):
@@ -134,7 +196,9 @@ class CorridorSteeringTests(unittest.TestCase):
 
     def test_cli_normal_deadline_racing_heartbeat_is_not_failure(self):
         spec = importlib.util.spec_from_file_location('autonomy_cli_test', Path(__file__).parents[1]/'autonomy-control.py')
-        cli = importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
+        cli = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {'autonomy_live': MODULE}):
+            spec.loader.exec_module(cli)
         state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
         done = False
         def request(path, data=None):
@@ -155,24 +219,24 @@ class CorridorSteeringTests(unittest.TestCase):
         walls = MODULE.corridor_walls(wall_scan(.12, .02))
         self.assertAlmostEqual(walls['offset_right_m'], .12)
         steering = MODULE.CorridorSteering()
-        self.assertEqual(steering.update(walls, 1, 0), 1490)
-        self.assertEqual(steering.update(walls, 2, .24), 1490)
-        self.assertEqual(steering.update(walls, 3, .26), 1480)
+        self.assertEqual(steering.update(walls, 1, 0), 1480)
+        self.assertEqual(steering.update(walls, 2, .14), 1480)
+        self.assertLess(steering.update(walls, 3, .16), 1480)
         for i in range(20):
             value = steering.update(walls, i+4, .72+i*.36)
-            self.assertGreaterEqual(value, 1450)
+            self.assertGreaterEqual(value, 1445)
         centred = MODULE.CorridorSteering()
         for i in range(50):
             walls = MODULE.corridor_walls(wall_scan(.06+(.002 if i%2 else -.002), .01))
             self.assertEqual(centred.update(walls, i, i*.05), 1500)
         left = MODULE.CorridorSteering()
-        self.assertEqual(left.update(MODULE.corridor_walls(wall_scan(-.12)), 1, 0), 1510)
+        self.assertEqual(left.update(MODULE.corridor_walls(wall_scan(-.12)), 1, 0), 1520)
 
     def test_hysteresis_no_same_frame_renewal_and_bad_wall_fit(self):
         steering = MODULE.CorridorSteering()
         walls = MODULE.corridor_walls(wall_scan(.12))
-        self.assertEqual(steering.update(walls, 1, 0), 1490)
-        self.assertEqual(steering.update(walls, 1, 1), 1490)
+        self.assertEqual(steering.update(walls, 1, 0), 1480)
+        self.assertEqual(steering.update(walls, 1, 1), 1480)
         middle = MODULE.corridor_walls(wall_scan(.06))
         steering.update(middle, 2, 1)
         self.assertTrue(steering.correcting)
@@ -190,7 +254,7 @@ class CorridorSteeringTests(unittest.TestCase):
         self.assertLess(abs(walls['offset_right_m']), .08)
         self.assertLess(abs(walls['heading_right_deg']), 4)
         self.assertGreater(steering.update(walls, 1, 0), 1500)
-        self.assertLessEqual(steering.servo, 1510)
+        self.assertLessEqual(steering.servo, 1515)
         for i in range(2, 8):
             walls = MODULE.corridor_walls(wall_scan(-.025, math.tan(math.radians(-1.8))))
             steering.update(walls, i, i*.26)
@@ -216,9 +280,54 @@ class CorridorSteeringTests(unittest.TestCase):
         self.assertGreater(walls['offset_right_m'], .2)
         steering = MODULE.CorridorSteering()
         values = [steering.update(walls, i, i*.26) for i in range(6)]
-        self.assertEqual(values[0], 1490)
-        self.assertEqual(values[-1], 1450)
-        self.assertTrue(all(1450 <= value < 1500 for value in values))
+        self.assertEqual(values[0], 1480)
+        self.assertEqual(values[-1], 1445)
+        self.assertTrue(all(1445 <= value < 1500 for value in values))
+
+    def test_same_error_uses_available_width_and_has_no_left_or_right_bias(self):
+        values = []
+        for width in [.8, 1., 1.5, 2.]:
+            right, left = MODULE.CorridorSteering(), MODULE.CorridorSteering()
+            wr = MODULE.corridor_walls(wall_scan(.12, .03, width))
+            wl = MODULE.corridor_walls(wall_scan(-.12, -.03, width))
+            for seq in range(8):
+                right.update(wr, seq, seq*.26)
+                left.update(wl, seq, seq*.26)
+            self.assertEqual(right.servo+left.servo, 3000)
+            values.append(1500-right.servo)
+        self.assertGreater(values[0], values[-1])
+        self.assertTrue(all(a >= b for a,b in zip(values, values[1:])))
+
+    def test_reversal_and_return_to_centre_use_the_same_bounded_slew(self):
+        steering = MODULE.CorridorSteering()
+        right = MODULE.corridor_walls(wall_scan(.12))
+        left = MODULE.corridor_walls(wall_scan(-.12))
+        self.assertEqual(steering.update(right, 1, 0), 1480)
+        self.assertLess(steering.update(right, 2, .16), 1480)
+        last = steering.servo
+        for seq in range(3, 6):
+            value = steering.update(left, seq, (seq-1)*.16)
+            self.assertTrue(0 <= value-last <= 20)
+            self.assertTrue(1445 <= value <= 1555)
+            last = value
+        self.assertGreater(steering.servo, 1500)
+        centre = MODULE.corridor_walls(wall_scan())
+        for seq in range(6, 10):
+            before = steering.servo
+            value = steering.update(centre, seq, 1+(seq-6)*.26)
+            self.assertTrue(0 <= before-value <= 15)
+        self.assertEqual(steering.servo, 1500)
+
+    def test_wall_control_does_not_depend_on_straight_length_or_turn_location(self):
+        for width in [.8, 1., 1.5, 2.]:
+            for heading in [-8., 0., 8.]:
+                outputs = []
+                for length in [3., 7., 12.]:
+                    walls = MODULE.corridor_walls(wall_scan(.04, math.tan(math.radians(heading)), width, length))
+                    steering = MODULE.CorridorSteering()
+                    outputs.append([steering.update(walls, seq, seq*.26) for seq in range(5)])
+                self.assertEqual(outputs[0], outputs[1])
+                self.assertEqual(outputs[1], outputs[2])
 
 
 class RearLaunchTests(unittest.TestCase):
@@ -314,7 +423,11 @@ class ProbeClearanceTests(unittest.TestCase):
         MODULE.probe_clearance(self.scan, self.ages)
         self.assertFalse(self.scan['navigation_validated'])
         self.assertEqual(MODULE.probe_parameters({'pwm': 1560, 'duration_ms': 400}), (1560, 400))
-        with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1561, 'duration_ms': 400})
+        self.assertEqual(MODULE.probe_parameters({'pwm': 1570, 'duration_ms': 400}), (1570, 400))
+        self.assertEqual(MODULE.probe_parameters({'pwm': 1580, 'duration_ms': 400}), (1580, 400))
+        self.assertEqual(MODULE.probe_parameters({'pwm': 1550, 'duration_ms': 400}), (1550, 400))
+        with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1581, 'duration_ms': 400})
+        with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1549, 'duration_ms': 400})
         with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1530, 'duration_ms': 501})
         with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': True, 'duration_ms': 400})
         self.assertEqual(MODULE.probe_parameters({'pwm': 1560, 'duration_ms': 30000}, straight=True), (1560, 30000))
@@ -412,9 +525,9 @@ class QualityRecoveryTests(unittest.TestCase):
             self.console.scan['seq'] += 1
             self.tick(i*.02)
         servos = [servo for op, _, servo in self.output if op == 'drive']
-        self.assertEqual(servos[0], 1490)
-        self.assertEqual(servos[11], 1490)
-        self.assertEqual(servos[-1], 1480)
+        self.assertEqual(servos[0], 1480)
+        self.assertEqual(servos[6], 1480)
+        self.assertLess(servos[-1], servos[0])
         self.assertEqual(session['report']['steering_changes'], 2)
 
     def test_missing_camera_waits_neutral_until_quality_latch(self):
@@ -508,17 +621,17 @@ class QualityRecoveryTests(unittest.TestCase):
         session = self.console.auto_session
         session['ramp'] = MODULE.ApproachRamp(1560)
         self.console.scan['left_junction'] = None
-        self.console.scan['front_boundary_m'] = 3.5
+        self.console.scan['front_boundary_m'] = 3.8
         for i in range(30):
-            self.console.scan['seq'] += 1
+            self.console.scan['seq'] = i//5
+            self.console.scan['front_boundary_m'] = 3.8-.1*(i//5)
             self.tick(i*.02)
+            if self.console.auto_session is None:
+                break
         motors = [motor for op, motor, _ in self.output if op == 'drive']
         self.assertEqual(motors[0], 1555)
         self.assertLess(motors[-1], motors[0])
         self.assertGreater(motors[-1], 1500)
-        self.console.scan['seq'] += 1
-        self.console.scan['front_boundary_m'] = 2.7
-        self.tick(.6)
         self.assertEqual(self.output[-1][0], 'stop')
         self.assertEqual(self.console.auto_result['reason'], 'front_boundary_stop')
         self.assertFalse(self.console.auto_result['completed'])
@@ -534,10 +647,15 @@ class QualityRecoveryTests(unittest.TestCase):
         session['ramp'] = MODULE.ApproachRamp(1560)
         self.tick(0)
         op, motor, servo = self.output[-1]
-        self.assertEqual((op, motor), ('drive', 1555))
-        self.assertTrue(1500 < servo <= 1510)
+        self.assertEqual((op, motor), ('drive', 1560))
+        self.assertTrue(1500 < servo <= 1515)
         self.assertTrue(session['report']['lane_correcting'])
+        self.assertFalse(session['report']['lane_speed_limited'])
+        for i in range(1, 38):
+            self.console.scan['seq'] += 1
+            self.tick(i*.02)
         self.assertTrue(session['report']['lane_speed_limited'])
+        self.assertTrue(1550 <= self.output[-1][1] <= 1560)
         self.assertIsNone(session['report']['approach_front_m'])
 
     def test_bridge_large_scan_stream_is_buffered_and_eof_locks(self):

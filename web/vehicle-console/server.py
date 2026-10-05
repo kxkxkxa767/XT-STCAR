@@ -24,7 +24,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
-from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, APPROACH_STOP_M, QualityLatch, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
+from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, COAST_TIME_MARGIN_S, QualityLatch, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            corridor_walls, probe_clearance, probe_parameters)
 
 ROOT = Path(__file__).resolve().parent
@@ -329,7 +329,8 @@ class Console:
                       'rear_launch_active': centering, 'rear_launch_max_s': 1,
                       'current_pwm': pwm, 'approach_front_m': None, 'pwm_ramp_changes': 0,
                       'lane_correcting': False, 'lane_speed_limited': False,
-                      'front_boundary_stop_m': APPROACH_STOP_M if op == 'to_left_junction_start' else None,
+                      'front_time_margin_s': COAST_TIME_MARGIN_S if centering else None,
+                      'boundary_closing_mps': None, 'boundary_time_to_clearance_s': None, 'cruise_limited': False,
                       'motion_ticks': 0, 'recovery_ticks': 0,
                       'quality_issues': clearance['quality_issues'], 'quality_elapsed_ms': 0, 'quality_counts': {},
                       'wheel_motion_measured': False, 'competition_navigation': False,
@@ -338,7 +339,7 @@ class Console:
                                  'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality,
                                  'steering': CorridorSteering(), 'wall_scan_seq': None, 'junction': JunctionStop(),
                                  'rear_launch': RearLaunch() if centering else None,
-                                 'ramp': ApproachRamp(pwm) if op == 'to_left_junction_start' else None}
+                                 'ramp': ApproachRamp(pwm) if centering else None}
             self.auto_session['quality'].update(clearance['quality_issues'], now)
             self.owner = 'auto-' + run_id
             self.owner_at = now
@@ -410,10 +411,14 @@ class Console:
             report['lane_correcting'] = bool(report.get('centering') and session['steering'].correcting)
             ramp = session.get('ramp')
             if ramp:
-                report['current_pwm'] = ramp.update(self.scan, report['sensor_ages']['lidar'], now, report['lane_correcting'])
+                report['current_pwm'] = ramp.update(self.scan, report['sensor_ages']['lidar'], now,
+                                                   report['lane_correcting'], clearance['motion_ready'])
                 report['approach_front_m'] = ramp.closest_front
                 report['pwm_ramp_changes'] = ramp.changes
                 report['lane_speed_limited'] = ramp.lane_limited
+                report['boundary_closing_mps'] = ramp.closing_speed
+                report['boundary_time_to_clearance_s'] = ramp.time_to_clearance
+                report['cruise_limited'] = ramp.cruise_limited
             if report.get('endpoint') == 'left_junction':
                 reached = session['junction'].update(self.scan, report['sensor_ages']['lidar'], now, clearance['motion_ready'])
                 report['junction_confirmations'] = session['junction'].count

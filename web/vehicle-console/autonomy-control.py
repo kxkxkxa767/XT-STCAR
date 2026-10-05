@@ -7,6 +7,7 @@ import signal
 import time
 import urllib.error
 import urllib.request
+from autonomy_live import MIN_FORWARD_PWM, MAX_PWM
 
 
 class ProbeInterrupted(RuntimeError):
@@ -91,6 +92,8 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, sto
             'junction_confirmations': result.get('junction_confirmations', 0),
             'junction_geometry': result.get('junction_geometry'),
             'current_pwm': result.get('current_pwm'), 'approach_front_m': result.get('approach_front_m'),
+            'boundary_closing_mps': result.get('boundary_closing_mps'),
+            'boundary_time_to_clearance_s': result.get('boundary_time_to_clearance_s'),
             'pwm_ramp_changes': result.get('pwm_ramp_changes', 0),
             'last_run_id': run['run_id'], 'competition_navigation': False, 'wheel_motion_measured': False}
 
@@ -98,7 +101,7 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, sto
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['status', 'probe', 'straight', 'to-left-junction', 'stop'])
-    parser.add_argument('--pwm', type=int, default=1560)
+    parser.add_argument('--pwm', type=int, default=MAX_PWM)
     parser.add_argument('--duration-ms', type=int, default=400)
     parser.add_argument('--max-seconds', type=float, help='total limit 1..30s; straight defaults1s, to-left-junction defaults30s')
     parser.add_argument('--expected-run-id', help='fence a new monitored phase to the previous normal stop')
@@ -134,8 +137,8 @@ def main():
                           'settings': state['settings'], 'ages': state['ages'],
                           'autonomy': state['autonomy'], 'motion_requested': False}, ensure_ascii=False, indent=2))
         return
-    if not 1501 <= args.pwm <= 1560 or not 100 <= args.duration_ms <= 500:
-        raise RuntimeError('probe requires PWM 1501..1560 and duration 100..500 ms')
+    if not MIN_FORWARD_PWM <= args.pwm <= MAX_PWM or not 100 <= args.duration_ms <= 500:
+        raise RuntimeError(f'probe requires PWM {MIN_FORWARD_PWM}..{MAX_PWM} and duration 100..500 ms')
     if not state['autonomy']['probe_ready']:
         if args.command not in ('straight', 'to-left-junction'):
             raise RuntimeError(state['autonomy']['rejection'] or 'probe not ready')

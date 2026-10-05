@@ -1,0 +1,359 @@
+{
+  "recorded_at": "2026-10-05T20:35:08+08:00",
+  "baseline_commit": "a6d2e45f38cf49abffb9e4d0f571c1f9aa7d5d71",
+  "scope": "Supervised straight corridor only; no left turn, reverse brake, training, or competition route completion. Run05 and run06 are distinct authorised resets; no subsequent motion with the final profile.",
+  "portability": {
+    "course_length_or_corner_coordinates_used": false,
+    "removed_fixed_front_stop_m": 2.8,
+    "steering_inputs": [
+      "live corridor wall fits",
+      "live width minus body clearance",
+      "heading and 1m predicted lateral offset"
+    ],
+    "synthetic_widths_m": [
+      0.8,
+      1,
+      1.5,
+      2
+    ],
+    "synthetic_lengths_m": [
+      3,
+      7,
+      12
+    ],
+    "synthetic_headings_deg": [
+      -8,
+      0,
+      8
+    ],
+    "synthetic_combinations": 36,
+    "synthetic_test_scope": "Wall fit and control output invariance; no closed-loop vehicle dynamics certification.",
+    "front_approach": "Fresh native known transverse plane; capture-time consistent relative closing rates, never differencing arbitrary forward rays.",
+    "front_time_margin_s": 2.5,
+    "time_margin_calibrated": false,
+    "front_plane_observation_window_m": 4,
+    "known_plane_lost_neutral_s": 0.35
+  },
+  "final_profile": {
+    "forward_min": 1550,
+    "launch": 1580,
+    "launch_hold_s": 0.6,
+    "cruise": 1570,
+    "lane_correction_target_ceiling": 1550,
+    "forward_max": 1580,
+    "neutral_motor_servo": 1500,
+    "decrease_max_pwm": 5,
+    "decrease_min_interval_s": 0.1,
+    "increase_before_any_boundary_max_pwm": 2,
+    "increase_min_interval_s": 0.2,
+    "reaccelerate_after_boundary": false,
+    "servo_min": 1445,
+    "servo_max": 1555,
+    "normal_servo_step_max": 15,
+    "normal_servo_interval_s": 0.25,
+    "urgent_servo_step_max": 20,
+    "urgent_servo_interval_s": 0.15,
+    "floor_excludes_neutral_wait_and_emergency_stop": true,
+    "physical_motion_with_final_profile": false
+  },
+  "checks": {
+    "python_tests_passed": 61,
+    "python_tests_failed": 0,
+    "test_log": "work/vehicle-upload-20261005/python-generic-61-final.log",
+    "test_log_sha256": "432b91161c4e02319d66503e48da7f6d4cdbf162ee086fd2e8829038e1724c83",
+    "coverage": [
+      "forward floor, launch and cruise",
+      "plane closing rates, capture clock, gaps and duplicates",
+      "width and length invariance, left/right symmetry",
+      "larger bounded steering, reversal and return to centre",
+      "quality recovery and 2s latch",
+      "manual stop, stale generation and no auto rearm",
+      "PTY serial output and heartbeat races"
+    ],
+    "rust_changed": false,
+    "rust_tests_rerun": false
+  },
+  "run06_deployment": {
+    "backup": "/home/bianbu/xt-stcar-console/backup-straight-20261005-202536",
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 6055
+    },
+    "settings": {
+      "forward": 1570,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "hashes": {
+      "server.py": "ea93ad19402e9b96d5e8b71b6c968c7019a777705155fe27441f36ff4a982d7a",
+      "autonomy_live.py": "146fbca2d19bef33d9def3b0113bc3dfaba29ec2a0f4181a9da5d593143a8e27",
+      "autonomy-control.py": "d8bb03c176a0d167d691d8562de80541c9b5880581bdaf2b639c84bb0e10667c",
+      "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+    }
+  },
+  "run06_preflight": {
+    "samples": 20,
+    "distinct_scans": 20,
+    "all_motion_ready": true,
+    "junction_at_start": false,
+    "max_fit_ms": 7.628512999872328
+  },
+  "physical_runs": [
+    {
+      "run": 5,
+      "profile": {
+        "launch": 1560,
+        "cruise": 1540,
+        "floor": 1535
+      },
+      "result": {
+        "pwm": 1560,
+        "current_pwm": 1535,
+        "reason": "left_junction_timeout",
+        "completed": false,
+        "drive_ticks": 966,
+        "motion_ticks": 959,
+        "recovery_ticks": 7,
+        "steering_changes": 20,
+        "junction_confirmations": 0,
+        "pwm_ramp_changes": 5,
+        "walls": {
+          "offset_right_m": 0.07524865822255816,
+          "heading_right_deg": -2.2881635071800153,
+          "slope": -0.039957231653846216,
+          "width_m": 0.9266172219925085
+        },
+        "approach_front_m": null,
+        "boundary_closing_mps": null,
+        "boundary_time_to_clearance_s": null,
+        "wheel_motion_measured": false,
+        "competition_navigation": false
+      },
+      "helper_exit_code": 1,
+      "helper_elapsed_including_start_and_stop_observation_s": 36.60872564099964,
+      "sample_count": 279,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 968,
+        "servo": 1500,
+        "tick": 142865
+      },
+      "final_lidar_radial_m": {
+        "0": 5.871,
+        "90": 0.538,
+        "180": 2.172,
+        "270": 0.378
+      },
+      "raw_evidence": "work/vehicle-upload-20261005/straight-run-05/",
+      "raw_run_sha256": "c0928721debc99f17c7b6ab0c179e87ad1dffcead13e82e040f2bd47956a197e",
+      "assessment": "30s timeout; scans became nearly static at 1535; user confirmed 1540 cannot move. Motion ticks count issued motion-ready commands, not wheel motion."
+    },
+    {
+      "run": 6,
+      "profile": {
+        "launch": 1570,
+        "cruise": 1560,
+        "floor": 1550
+      },
+      "result": {
+        "pwm": 1570,
+        "current_pwm": 1550,
+        "reason": "probe_obstacle_in_straight_corridor",
+        "completed": false,
+        "drive_ticks": 100,
+        "motion_ticks": 100,
+        "recovery_ticks": 0,
+        "steering_changes": 6,
+        "junction_confirmations": 0,
+        "pwm_ramp_changes": 4,
+        "walls": {
+          "offset_right_m": 0.02774650770435394,
+          "heading_right_deg": 5.252436512613512,
+          "slope": 0.09192997605296502,
+          "width_m": 0.9484940869780347
+        },
+        "approach_front_m": 3.98537931826012,
+        "boundary_closing_mps": null,
+        "boundary_time_to_clearance_s": null,
+        "wheel_motion_measured": false,
+        "competition_navigation": false
+      },
+      "helper_exit_code": 0,
+      "helper_elapsed_including_start_and_stop_observation_s": 9.879788647999703,
+      "sample_count": 76,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 102,
+        "servo": 1500,
+        "tick": 61027
+      },
+      "final_lidar_radial_m": {
+        "0": 2.217,
+        "90": 0.9199999999999999,
+        "180": 4.438000000000001,
+        "270": 0.216
+      },
+      "raw_evidence": "work/vehicle-upload-20261005/straight-run-06/",
+      "raw_run_sha256": "a10e028a342db54da233b9dbd97554f09e05ec97e7ca33fb34883281aa7d0da7",
+      "user_feedback": "停下来的时候还是靠左",
+      "assessment": "No junction confirmations. Direction crossed from approximately -3 to +6 degrees during correction, then side-forward board entered the 1m corridor and stopped the job. Left return subsequently about .216m; cannot resume from here.",
+      "observed_command_changes": [
+        {
+          "elapsed_s": 0.03,
+          "motor": 1500,
+          "servo": 1500,
+          "front_radial_m": 7.934,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 1.202,
+          "motor": 1570,
+          "servo": 1500,
+          "front_radial_m": 7.934,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 1.849,
+          "motor": 1565,
+          "servo": 1500,
+          "front_radial_m": 7.561000000000001,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 1.978,
+          "motor": 1560,
+          "servo": 1500,
+          "front_radial_m": 7.4670000000000005,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 2.858,
+          "motor": 1555,
+          "servo": 1510,
+          "front_radial_m": 6.211,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 3.009,
+          "motor": 1550,
+          "servo": 1510,
+          "front_radial_m": 6.055000000000001,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 3.134,
+          "motor": 1550,
+          "servo": 1524,
+          "front_radial_m": 5.527,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 3.378,
+          "motor": 1550,
+          "servo": 1522,
+          "front_radial_m": 5.199000000000001,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 3.623,
+          "motor": 1550,
+          "servo": 1512,
+          "front_radial_m": 4.904000000000001,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 3.924,
+          "motor": 1550,
+          "servo": 1502,
+          "front_radial_m": 4.438000000000001,
+          "plane_m": null
+        },
+        {
+          "elapsed_s": 4.194,
+          "motor": 1550,
+          "servo": 1487,
+          "front_radial_m": 4.033,
+          "plane_m": 3.98537931826012
+        },
+        {
+          "elapsed_s": 4.31,
+          "motor": 1500,
+          "servo": 1500,
+          "front_radial_m": 3.893,
+          "plane_m": 3.830743937396631
+        }
+      ]
+    }
+  ],
+  "final_deployment": {
+    "backup": "/home/bianbu/xt-stcar-console/backup-straight-20261005-203322",
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 6109
+    },
+    "settings": {
+      "forward": 1580,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "hashes": {
+      "server.py": "ea93ad19402e9b96d5e8b71b6c968c7019a777705155fe27441f36ff4a982d7a",
+      "autonomy_live.py": "65a05b4fae0b4e647bc1d41994ebbee8031bd22a6969e66a83e3a3d61e458c21",
+      "autonomy-control.py": "d8bb03c176a0d167d691d8562de80541c9b5880581bdaf2b639c84bb0e10667c",
+      "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+    }
+  },
+  "final_state": {
+    "healthy": true,
+    "owner": null,
+    "active": null,
+    "mode": "locked",
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 19343
+    },
+    "settings": {
+      "forward": 1580,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "ages_s": {
+      "camera": 0.11852873299994826,
+      "lidar": 0.05541947900019295,
+      "control": 0.01110316500034969
+    },
+    "lidar_navigation_validated": false,
+    "rejection": "probe_obstacle_close_side"
+  },
+  "limitations": [
+    "Sixth run failed to reach left junction; stronger steering and higher final PWM remain physically untested.",
+    "Recorded heading crossover suggests overshoot or response delay, not proof of wrong steering sign; do not blindly reverse servo direction.",
+    "No measured speed/servo map, wheel odometry, coast distance or calibrated braking envelope.",
+    "Time margin cannot certify stopping on other floors, batteries or university courses.",
+    "Observed motor1500 and lock do not by themselves certify physical standstill or body net clearance.",
+    "Single blue-cone model unchanged; four-label target order remains crosswalk/blue_cone/red_light/green_light.",
+    "Complete competition planner remains disconnected from live motor output.",
+    "Guard stop is incomplete; CLI exit0 alone is not success."
+  ]
+}

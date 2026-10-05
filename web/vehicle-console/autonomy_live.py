@@ -2,7 +2,8 @@
 import math
 import statistics
 
-MAX_PWM = 1560
+MIN_FORWARD_PWM = 1550
+MAX_PWM = 1580
 MAX_DURATION_MS = 500
 HEARTBEAT_S = .20
 QUALITY_CONFIRM_S = 2.0
@@ -18,8 +19,12 @@ SIDE_BODY_EXTENT_M = .17
 SIDE_MIN_NET_M = .10
 LIDAR_RANGE_ALLOWANCE_M = .03  # Manufacturer's coarse 0..6 m accuracy reference.
 SIDE_CLEARANCE_M = SIDE_BODY_EXTENT_M + SIDE_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
-APPROACH_STOP_M = 2.8  # Supervised straight test margin, not a measured braking distance.
-APPROACH_SLOW_M = 4.0
+# Vehicle bring-up limits, never a remembered course length or corner position.
+LAUNCH_HOLD_S = .6
+STRAIGHT_CRUISE_PWM = 1570
+COAST_TIME_MARGIN_S = 2.5  # Conservative test allowance; not a calibrated brake model.
+APPROACH_SLOW_EXTRA_S = 1.5
+STEERING_LIMIT_PWM = 55
 
 
 def corridor_walls(scan):
@@ -76,18 +81,23 @@ class CorridorSteering:
         self.last_scan = scan_seq
         offset, heading = walls['offset_right_m'], walls['heading_right_deg']
         projected_offset = offset + CORRIDOR_LOOKAHEAD_M * walls['slope']
+        usable_half_width = max(.01, walls['width_m']/2-SIDE_CLEARANCE_M)
         if not self.correcting:
-            self.correcting = (abs(offset) > .08 or abs(heading) > 4
-                               or (abs(heading) > 1.5 and abs(projected_offset) > .05))
-        elif abs(offset) < .04 and abs(heading) < 2 and abs(projected_offset) < .035:
+            self.correcting = (abs(offset) > min(.08, usable_half_width*.5) or abs(heading) > 4
+                               or (abs(heading) > 1.5 and abs(projected_offset) > min(.05, usable_half_width*.3)))
+        elif (abs(offset) < min(.04, usable_half_width*.25) and abs(heading) < 2
+              and abs(projected_offset) < min(.035, usable_half_width*.2)):
             self.correcting = False
         target = 1500
+        urgent = False
         if self.correcting:
             # Positive y is right. Lower PWM turns right (user's physical check).
-            correction = round(max(-50, min(50, 200*(offset+.6*walls['slope']))))
+            correction = round(STEERING_LIMIT_PWM*max(-1, min(1, projected_offset/usable_half_width)))
             target -= correction
-        if now-self.changed_at >= .25 and target != self.servo:
-            self.servo += max(-10, min(10, target-self.servo))
+            urgent = usable_half_width-abs(projected_offset) < SIDE_MIN_NET_M
+        interval, step = (.15, 20) if urgent else (.25, 15)
+        if now-self.changed_at >= interval and target != self.servo:
+            self.servo += max(-step, min(step, target-self.servo))
             self.changed_at = now
         return self.servo
 
@@ -131,8 +141,10 @@ class QualityLatch:
 
 
 class ApproachRamp:
-    """Reduce on fresh wall evidence or lane correction; never regain session PWM."""
+    """Vehicle launch/cruise plus measured wall closing time; no course coordinates."""
     def __init__(self, pwm):
+        if type(pwm) is not int or not MIN_FORWARD_PWM <= pwm <= MAX_PWM:
+            raise ValueError('invalid_forward_pwm')
         self.pwm = pwm
         self.initial = pwm
         self.last_seq = -1
@@ -141,26 +153,82 @@ class ApproachRamp:
         self.changes = 0
         self.lane_limited = False
         self.stop_requested = False
+        self.launch_since = None
+        self.cruise_limited = False
+        self.previous_boundary = None
+        self.closing_rates = []
+        self.closing_speed = None
+        self.time_to_clearance = None
+        self.boundary_lost = False
+        self.boundary_cap = pwm
+        self.boundary_seen = False
 
-    def update(self, scan, age, now, correcting=False):
+    def update(self, scan, age, now, correcting=False, moving=True):
         if not isinstance(scan, dict) or type(age) not in (int, float) or not 0 <= age < .3:
             return self.pwm
         seq = scan.get('seq')
         if type(seq) is not int or seq <= self.last_seq:
             return self.pwm
         self.last_seq = seq
+        if moving and self.launch_since is None:
+            self.launch_since = now
         distance = scan.get('front_boundary_m')
+        target = self.initial
+        launch_held = self.launch_since is None or now-self.launch_since < LAUNCH_HOLD_S
         if type(distance) in (int, float) and math.isfinite(distance) and .6 <= distance <= 4.05:
+            self.boundary_lost = False
+            self.boundary_seen = True
             self.closest_front = distance if self.closest_front is None else min(self.closest_front, distance)
-            self.stop_requested |= distance <= APPROACH_STOP_M
-        target = (self.initial if self.closest_front is None else
-                  1500 + round((self.initial-1500) * max(0, min(1,
-                      (self.closest_front-APPROACH_STOP_M)/(APPROACH_SLOW_M-APPROACH_STOP_M)))))
-        if correcting:
-            target = min(target, 1550)
+            previous = self.previous_boundary
+            captured_ms = scan.get('at_ms')
+            captured = captured_ms/1000 if type(captured_ms) is int and captured_ms >= 0 else now
+            continuous = previous is not None and .05 <= captured-previous[1] <= .35
+            if continuous:
+                rate = (previous[0]-distance)/(captured-previous[1])
+                continuous = -.4 <= rate <= 3
+            if continuous:
+                self.closing_rates.append(max(0, rate))
+                self.closing_rates = self.closing_rates[-3:]
+            else:
+                self.closing_rates = []
+            self.previous_boundary = (distance, captured, now)
+            self.closing_speed = None
+            self.time_to_clearance = None
+            if len(self.closing_rates) >= 2:
+                speed = statistics.median(self.closing_rates)
+                if max(self.closing_rates)-min(self.closing_rates) <= max(.4, speed*.5):
+                    self.closing_speed = speed
+                    if speed > .05:
+                        self.time_to_clearance = max(0, (distance-CORRIDOR_LOOKAHEAD_M)/speed)
+                        self.stop_requested |= self.time_to_clearance <= COAST_TIME_MARGIN_S
+                        fraction = max(0, min(1, (self.time_to_clearance-COAST_TIME_MARGIN_S)/APPROACH_SLOW_EXTRA_S))
+                        target = 1500+round((self.initial-1500)*fraction)
+            if self.closing_speed is None:
+                target = min(target, MIN_FORWARD_PWM)
+            self.boundary_cap = min(self.boundary_cap, max(MIN_FORWARD_PWM, target))
+        elif self.previous_boundary is not None and now-self.previous_boundary[2] > .35:
+            self.previous_boundary = None
+            self.closing_rates = []
+            self.closing_speed = None
+            self.time_to_clearance = None
+            self.boundary_lost = True
+        if self.boundary_lost:
+            self.stop_requested = True  # Lost a known boundary; request neutral, never sub-floor drive.
+        if self.stop_requested:
+            return self.pwm
+        if not launch_held:
+            target = min(target, STRAIGHT_CRUISE_PWM)
+            self.cruise_limited = True
+        if correcting and not launch_held:
+            target = min(target, MIN_FORWARD_PWM)
             self.lane_limited = True
+        target = max(MIN_FORWARD_PWM, min(target, self.boundary_cap))
         if target < self.pwm and now-self.last_change >= .10:
             self.pwm = max(target, self.pwm-5)
+            self.last_change = now
+            self.changes += 1
+        elif moving and target > self.pwm and not self.boundary_seen and now-self.last_change >= .20:
+            self.pwm = min(target, self.pwm+2)
             self.last_change = now
             self.changes += 1
         return self.pwm
@@ -286,8 +354,8 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False):
 
 def probe_parameters(data, straight=False):
     pwm, duration = data.get('pwm'), data.get('duration_ms')
-    if type(pwm) is not int or not 1501 <= pwm <= MAX_PWM:
-        raise ValueError('probe_pwm_must_be_1501_to_1560')
+    if type(pwm) is not int or not MIN_FORWARD_PWM <= pwm <= MAX_PWM:
+        raise ValueError(f'probe_pwm_must_be_{MIN_FORWARD_PWM}_to_{MAX_PWM}')
     limit = 30000 if straight else MAX_DURATION_MS
     if type(duration) is not int or not 100 <= duration <= limit:
         raise ValueError('straight_duration_must_be_100_to_30000_ms' if straight else 'probe_duration_must_be_100_to_500_ms')

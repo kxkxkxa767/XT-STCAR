@@ -130,7 +130,7 @@ class ConsoleTests(unittest.TestCase):
         state=self.get('/api/state')
         return self.post('/api/autonomy',{'op':'probe_start','boot':state['boot'],
                          'epoch':state['autonomy']['epoch'],'tick':state['status']['control']['tick'],
-                         'pwm':1530,'duration_ms':duration})
+                         'pwm':1580,'duration_ms':duration})
 
     def auto_request(self, run, op, seq=1):
         return self.post('/api/autonomy',{'op':op,'boot':self.get('/api/state')['boot'],
@@ -209,7 +209,7 @@ class ConsoleTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError):
             self.post('/api/autonomy',{'op':'probe_start','boot':old['boot'],
                       'epoch':old['autonomy']['epoch'],'tick':old['status']['control']['tick'],
-                      'pwm':1530,'duration_ms':400})
+                      'pwm':1580,'duration_ms':400})
         run=self.auto_start();time.sleep(.06)
         s=self.get('/api/state')
         self.post('/api/control',{'op':'takeover','boot':s['boot'],'epoch':s['autonomy']['epoch']});time.sleep(.06)
