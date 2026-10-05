@@ -1,0 +1,539 @@
+{
+  "date": "2026-10-05",
+  "scope": "bounded real straight segments; competition planner not connected",
+  "tests": {
+    "python_unit_pty_fault": 36,
+    "physical_full_course_completed": false,
+    "physical_straight_completed": false,
+    "wheel_distance_measured": false
+  },
+  "source_hashes": {
+    "server.py": "4d4abb1a915b0405a47ce7884b8f6b4fc7bddb02e139f2439cc2e2c3e0ee216e",
+    "autonomy_live.py": "2071a189f8c6bc408700cca37b86d3ddfbad5fb0b3aa0d33595a5cb49bdb8016",
+    "autonomy-control.py": "66c8f6ab7d46bdf76036059ef3e6b6d3ad46934630f9289d43a0e5874c2ffc42",
+    "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+  },
+  "deployment": {
+    "active_dir": "/home/bianbu/xt-stcar-console/20260917",
+    "latest_backup": "/home/bianbu/xt-stcar-console/backup-straight-20261005-173354",
+    "post_battery_buffered_reader_and_shared_quality_latch_deployed": true
+  },
+  "side_geometry": {
+    "source": "user measured lidar centre to outside tyres, both sides 17cm",
+    "body_extent_m": 0.17,
+    "minimum_net_m": 0.1,
+    "range_allowance_reference_m": 0.03,
+    "side_stop_m": 0.3,
+    "full_swept_body_or_braking_validated": false
+  },
+  "limits": {
+    "pwm": 1560,
+    "straight_default_s": 1,
+    "straight_max_s": 30,
+    "probe_max_ms": 500,
+    "servo_pwm": [
+      1485,
+      1515
+    ],
+    "servo_step_max": 5,
+    "servo_interval_s": 0.35,
+    "offset_start_m": 0.08,
+    "offset_release_m": 0.04,
+    "heading_start_deg": 4,
+    "heading_release_deg": 2,
+    "camera_late_s": 0.5,
+    "lidar_late_s": 0.3,
+    "control_receive_limit_s": 0.15,
+    "quality_latch_s": 2
+  },
+  "logic_repairs": [
+    "buffer native bridge stdout without buffering actuator stdin",
+    "keep continuous quality streak across normal one-second boundaries",
+    "handle heartbeat racing normal deadline as normal completion and wait for neutral feedback",
+    "never rearm within straight CLI; explicit phase continuation fenced to prior result and epoch"
+  ],
+  "attempts": [
+    {
+      "number": 1,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 5,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 0,
+        "walls": {
+          "offset_right_m": 0.0714620836637597,
+          "heading_right_deg": 1.750397856861549,
+          "slope": 0.03055971369419227,
+          "width_m": 0.9424952784968843
+        },
+        "motion_ticks": 5,
+        "recovery_ticks": 0,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.761,
+          "corridor_front_m": 7.49343242098918,
+          "nearest_m": 0.39199999999999996,
+          "scan_seq": 748,
+          "side_clearance_m": 0.3790092347159896,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            11
+          ],
+          "largest_gap_deg": 1,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "reason": "probe_sensor_unavailable",
+        "completed": false
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 7
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 2,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 33,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 0,
+        "walls": {
+          "offset_right_m": 0.07109754173973815,
+          "heading_right_deg": 1.8054974906183943,
+          "slope": 0.03152231040565853,
+          "width_m": 0.9415279805186154
+        },
+        "motion_ticks": 18,
+        "recovery_ticks": 15,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.777,
+          "corridor_front_m": 2.958702638720613,
+          "nearest_m": 0.39299999999999996,
+          "scan_seq": 177,
+          "side_clearance_m": 0.37924722919100173,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            -5,
+            8,
+            11,
+            12
+          ],
+          "largest_gap_deg": 2,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.025824539999973695,
+          "lidar": 0.11778915600001483,
+          "control": 0.017886867000015627
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 35
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 3,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 32,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 0,
+        "walls": {
+          "offset_right_m": 0.07222566958414575,
+          "heading_right_deg": 1.908309543226939,
+          "slope": 0.03331860579306654,
+          "width_m": 0.94424699378329
+        },
+        "motion_ticks": 30,
+        "recovery_ticks": 2,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "quality_counts": {
+          "lidar_late": 2
+        },
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.761,
+          "corridor_front_m": 7.481860302855276,
+          "nearest_m": 0.39299999999999996,
+          "scan_seq": 249,
+          "side_clearance_m": 0.37775459625236957,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            14
+          ],
+          "largest_gap_deg": 1,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.12440916699995341,
+          "lidar": 0.006630787999938548,
+          "control": 0.011295797999991919
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 34
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 4,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 0,
+        "observed_pwm": false,
+        "observed_armed": false,
+        "centering": true,
+        "steering_changes": 0,
+        "walls": null,
+        "motion_ticks": 0,
+        "recovery_ticks": 0,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "quality_counts": {},
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.745,
+          "corridor_front_m": 1.7874260717171575,
+          "nearest_m": 0.376,
+          "scan_seq": 1198,
+          "side_clearance_m": 0.36829827514871283,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            6,
+            7
+          ],
+          "largest_gap_deg": 2,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.027660895000053642,
+          "lidar": 0.13810728600003586,
+          "control": 0.0821373810000523
+        },
+        "sensor_errors": {},
+        "reason": "probe_sensor_unavailable",
+        "completed": false
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 36
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 5,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 34,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 2,
+        "walls": {
+          "offset_right_m": 0.08109755025767565,
+          "heading_right_deg": 2.6618249945589487,
+          "slope": 0.04649106244862561,
+          "width_m": 0.9441001233824964
+        },
+        "motion_ticks": 14,
+        "recovery_ticks": 20,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "quality_counts": {
+          "lidar_late": 20
+        },
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.728,
+          "corridor_front_m": 1.771669147668962,
+          "nearest_m": 0.376,
+          "scan_seq": 109,
+          "side_clearance_m": 0.3668128938076902,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [],
+          "largest_gap_deg": 0,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.12460677499996109,
+          "lidar": 0.05358600199997454,
+          "control": 0.05688213200005521
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 36
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 6,
+      "report": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 1000,
+        "drive_ticks": 34,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 2,
+        "walls": null,
+        "motion_ticks": 17,
+        "recovery_ticks": 17,
+        "quality_issues": [
+          "lidar_late"
+        ],
+        "quality_elapsed_ms": 223,
+        "quality_counts": {
+          "lidar_late": 18
+        },
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.712,
+          "corridor_front_m": 1.6442255322748371,
+          "nearest_m": 0.375,
+          "scan_seq": 530,
+          "side_clearance_m": 0.3634389354976956,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            11
+          ],
+          "largest_gap_deg": 1,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.11038364700004877,
+          "lidar": 0.5306648940000969,
+          "control": 0.0014639870000792143
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 72
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 7,
+      "report": {
+        "pwm": 1560,
+        "servo": 1497,
+        "duration_ms": 1000,
+        "drive_ticks": 35,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 1,
+        "walls": {
+          "offset_right_m": 0.05985147346575834,
+          "heading_right_deg": -3.23090342400378,
+          "slope": -0.05644974861808344,
+          "width_m": 0.9467108906723929
+        },
+        "motion_ticks": 35,
+        "recovery_ticks": 0,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "quality_counts": {},
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.89,
+          "corridor_front_m": 2.600470917300264,
+          "nearest_m": 0.377,
+          "scan_seq": 435,
+          "side_clearance_m": 0.3623956593687463,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            -10,
+            1,
+            2,
+            9,
+            10
+          ],
+          "largest_gap_deg": 2,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.019281311000042933,
+          "lidar": 0.055448278000028495,
+          "control": 0.008348483000020224
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 37
+      },
+      "healthy_at_read": true
+    },
+    {
+      "number": 8,
+      "report": {
+        "pwm": 1560,
+        "servo": 1503,
+        "duration_ms": 1000,
+        "drive_ticks": 34,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "centering": true,
+        "steering_changes": 1,
+        "walls": {
+          "offset_right_m": 0.001978732637408359,
+          "heading_right_deg": -2.780461111808991,
+          "slope": -0.0485663314600409,
+          "width_m": 0.9340711030109043
+        },
+        "motion_ticks": 34,
+        "recovery_ticks": 0,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "quality_counts": {},
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.89,
+          "corridor_front_m": 4.009209917994234,
+          "nearest_m": 0.424,
+          "scan_seq": 923,
+          "side_clearance_m": 0.40757495907784724,
+          "side_stop_threshold_m": 0.30000000000000004,
+          "side_body_extent_m": 0.17,
+          "side_min_net_m": 0.1,
+          "lidar_range_allowance_m": 0.03,
+          "front_unknown_bins": [
+            11
+          ],
+          "largest_gap_deg": 1,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.32,
+          "corridor_lookahead_m": 1.0
+        },
+        "sensor_ages": {
+          "camera": 0.06654932400005009,
+          "lidar": 0.04990687000002936,
+          "control": 0.014472335000050407
+        },
+        "sensor_errors": {},
+        "reason": "probe_complete",
+        "completed": true
+      },
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "seq": 73
+      },
+      "healthy_at_read": true
+    }
+  ],
+  "notes": [
+    "attempt03 CLI falsely reported interrupted probe_complete; physical report completed; deadline heartbeat race fixed and regression tested",
+    "attempt04 received control age 82.137ms and sent zero drives; receive threshold relaxed to150ms",
+    "post-battery attempts07/08 had35/34 motion commands, zero recovery commands, one steering adjustment each",
+    "last camera shows nearby transverse low blue board; lidar corridor says4.65m; stopped to obtain real clearance; do not claim whole straight finished"
+  ]
+}

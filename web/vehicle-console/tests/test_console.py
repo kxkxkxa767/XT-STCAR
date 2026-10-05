@@ -163,6 +163,46 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(s['status']['control']['motor'],1500)
         self.assertEqual(s['autonomy']['last_result']['reason'],'autonomy_heartbeat_timeout')
 
+    def test_straight_cli_one_session_deadline_and_stop_fence(self):
+        cli = [sys.executable, str(ROOT/'web/vehicle-console/autonomy-control.py'), 'straight',
+               '--pwm', '1560', '--max-seconds', '1', '--execute', '--access-file', str(self.folder/'access.json')]
+        initial_epoch = self.get('/api/state')['autonomy']['epoch']
+        run = subprocess.run(cli, capture_output=True, text=True, timeout=4)
+        self.assertEqual(run.returncode, 0, run.stdout+run.stderr)
+        state = self.get('/api/state')
+        report = state['autonomy']['last_result']
+        self.assertEqual(state['autonomy']['epoch'], initial_epoch+1)  # one arm/stop only
+        self.assertTrue(report['centering'])
+        self.assertGreater(report['motion_ticks'], 20)
+        self.assertFalse(state['status']['control']['armed'])
+        self.assertEqual(state['status']['control']['motor'], 1500)
+        self.post('/api/control', {'op': 'stop'})
+        refused = subprocess.run(cli+['--expected-run-id='+report['run_id']], capture_output=True, text=True, timeout=4)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn('refusing continuation', refused.stdout+refused.stderr)
+        self.assertIsNone(self.get('/api/state')['autonomy']['active'])
+
+    def test_straight_cli_emergency_stop_does_not_rearm(self):
+        cli = [sys.executable, str(ROOT/'web/vehicle-console/autonomy-control.py'), 'straight',
+               '--max-seconds', '3', '--execute', '--access-file', str(self.folder/'access.json')]
+        proc = subprocess.Popen(cli, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            end = time.monotonic()+1
+            while time.monotonic()<end and self.get('/api/state')['autonomy']['active'] is None:
+                time.sleep(.02)
+            self.assertIsNotNone(self.get('/api/state')['autonomy']['active'])
+            self.post('/api/control', {'op': 'stop'})
+            output, errors = proc.communicate(timeout=2)
+            self.assertNotEqual(proc.returncode, 0, output+errors)
+            time.sleep(.1)
+            state = self.get('/api/state')
+            self.assertIsNone(state['autonomy']['active'])
+            self.assertFalse(state['status']['control']['armed'])
+            self.assertEqual(state['autonomy']['last_result']['reason'], 'operator_stop')
+        finally:
+            if proc.poll() is None:
+                proc.terminate(); proc.communicate(timeout=2)
+
     def test_stop_fences_auto_start_and_late_cancel_does_not_stop_manual(self):
         old=self.get('/api/state')
         self.post('/api/control',{'op':'stop'});time.sleep(.06)

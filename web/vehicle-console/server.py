@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import hmac
 import ipaddress
+import io
 import json
 import math
 import os
@@ -23,7 +24,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
-from autonomy_live import HEARTBEAT_S, probe_clearance, probe_parameters
+from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QualityLatch, CorridorSteering,
+                           corridor_walls, probe_clearance, probe_parameters)
 
 ROOT = Path(__file__).resolve().parent
 
@@ -49,6 +51,7 @@ class Console:
         self.control_epoch = 0
         self.auto_session = None
         self.auto_result = None
+        self.perception_quality = QualityLatch()
         self.owner_at = 0
         self.arm_sequence = 0
         self.last_stop = None
@@ -109,8 +112,11 @@ class Console:
 
     def read_bridge(self, proc, kind):
         try:
+            # stdin stays unbuffered/nonblocking. Buffer only stdout: FileIO.readline
+            # reads one byte per syscall and can delay entire scans under CPU load.
+            reader = io.BufferedReader(proc.stdout, buffer_size=65536)
             while not self.stop.is_set():
-                line = proc.stdout.readline(65537)
+                line = reader.readline(65537)
                 if not line or len(line) > 65536:
                     raise RuntimeError(kind + ' bridge ended')
                 value = json.loads(line)
@@ -134,13 +140,26 @@ class Console:
         return (now - self.camera_at < 1 and now - self.scan_at < 1
                 and now - self.control_at < .2 and not self.errors)
 
+    def autonomy_healthy(self):
+        # Perception frame age is handled by the 2-second recovery latch.
+        return time.monotonic() - self.control_at < .2 and not self.errors
+
     def health_watch(self):
         while not self.stop.wait(.05):
             with self.lock:
-                unsafe = not self.healthy() or (self.owner is not None and time.monotonic() - self.owner_at > .35)
+                healthy = self.autonomy_healthy() if self.auto_session else self.healthy()
+                unsafe = not healthy or (self.owner is not None and time.monotonic() - self.owner_at > .35)
                 armed = self.status.get('control', {}).get('armed', False)
                 if unsafe and (armed or self.owner is not None):
-                    self.halt('sensor_stale' if not self.healthy() else 'browser_timeout')
+                    self.halt('sensor_stale' if not healthy else 'browser_timeout')
+                if self.auto_session is None:
+                    # A normal 1-second boundary must not reset a continuous fault.
+                    now = time.monotonic()
+                    try:
+                        clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
+                        self.perception_quality.update(clearance['quality_issues'], now)
+                    except ValueError:
+                        pass  # A hard fault is not evidence of perception recovery.
 
     def emit(self, op, motor=1500, servo=1500, tick=0):
         # Nonblocking writes: a blocked/killed bridge must never block the web watchdog.
@@ -166,7 +185,7 @@ class Console:
             self.control_mode = 'locked'
             if self.auto_session is not None:
                 self.auto_result = {**self.auto_session['report'], 'reason': reason,
-                                    'completed': reason == 'probe_complete' and self.auto_session['report']['observed_pwm']}
+                                    'completed': reason == 'probe_complete' and self.auto_session['report'].get('observed_armed', False)}
             self.auto_session = None
             self.owner = None
             self.stopped_tick = self.status.get('control', {}).get('tick', -1)
@@ -250,13 +269,14 @@ class Console:
         now = time.monotonic()
         try:
             clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
-            ready, rejection = self.healthy(), None
+            ready, rejection = self.autonomy_healthy(), None
             if self.owner is not None or self.status.get('control', {}).get('armed'):
                 ready, rejection = False, 'control_owned_or_unlocked'
         except ValueError as error:
             clearance, ready, rejection = None, False, str(error)
         return {'mode': self.control_mode, 'epoch': self.control_epoch,
-                'supported': ['straight_probe'], 'competition_supported': False,
+                'supported': ['straight_probe', 'straight_segment'], 'competition_supported': False,
+                'quality_confirm_s': QUALITY_CONFIRM_S,
                 'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
@@ -283,14 +303,15 @@ class Console:
                     session['heartbeat_seq'] = seq
                     self.owner_at = time.monotonic()
                 return {'ok': True}
-            if op != 'probe_start':
-                raise ValueError('only_bounded_straight_probe_is_implemented')
+            if op not in ('probe_start', 'straight_start'):
+                raise ValueError('only_bounded_straight_control_is_implemented')
             if self.stop.is_set() or self.owner is not None or self.status.get('control', {}).get('armed'):
                 raise ValueError('already_armed_or_shutting_down')
-            pwm, duration = probe_parameters(data)
+            pwm, duration = probe_parameters(data, straight=op == 'straight_start')
+            centering = op == 'straight_start'
             now = time.monotonic()
-            clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
-            if not self.healthy():
+            clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo, centering)
+            if not self.autonomy_healthy():
                 raise ValueError('probe_sensor_stale')
             tick = data.get('tick')
             current_tick = self.status.get('control', {}).get('tick', -1)
@@ -298,11 +319,16 @@ class Console:
                 raise ValueError('stale_arm_request')
             run_id = secrets.token_urlsafe(18)
             report = {'run_id': run_id, 'pwm': pwm, 'servo': 1500,
-                      'duration_ms': duration, 'drive_ticks': 0, 'observed_pwm': False,
+                      'duration_ms': duration, 'drive_ticks': 0, 'observed_pwm': False, 'observed_armed': False,
+                      'centering': centering, 'steering_changes': 0, 'walls': None,
+                      'motion_ticks': 0, 'recovery_ticks': 0,
+                      'quality_issues': clearance['quality_issues'], 'quality_elapsed_ms': 0, 'quality_counts': {},
                       'wheel_motion_measured': False, 'competition_navigation': False,
                       'clearance_start': clearance, 'epoch': self.control_epoch}
             self.auto_session = {'report': report, 'deadline': now + duration / 1000,
-                                 'last_loop': now, 'heartbeat_seq': 0}
+                                 'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality,
+                                 'steering': CorridorSteering(), 'wall_scan_seq': None}
+            self.auto_session['quality'].update(clearance['quality_issues'], now)
             self.owner = 'auto-' + run_id
             self.owner_at = now
             self.control_mode = 'auto_probe'
@@ -322,32 +348,59 @@ class Console:
                 if session is None:
                     continue
                 now = time.monotonic()
-                if now - self.owner_at >= HEARTBEAT_S:
-                    self.halt('autonomy_heartbeat_timeout')
-                    continue
-                if now - session['last_loop'] > .08:
-                    self.halt('autonomy_control_gap')
-                    continue
-                session['last_loop'] = now
-                try:
-                    probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
-                    if not self.healthy():
-                        raise ValueError('probe_sensor_stale')
-                    if now >= session['deadline']:
-                        self.halt('probe_complete')
-                        continue
-                    control = self.status.get('control', {})
-                    if not control.get('armed'):
-                        # Await the existing serial owner's arm acknowledgement.
-                        continue
-                    if control.get('seq', -1) < self.arm_sequence:
-                        continue
-                    report = session['report']
-                    report['observed_pwm'] |= control.get('motor') == report['pwm'] and control.get('servo') == 1500
-                    self.emit('drive', report['pwm'], 1500, control['tick'])
-                    report['drive_ticks'] += 1
-                except (ValueError, RuntimeError, OSError, KeyError) as error:
-                    self.halt(str(error))
+                self.autonomy_tick(now)
+
+    def autonomy_tick(self, now):
+        """Caller holds the control lock. Clock injection permits fault-path tests."""
+        session = self.auto_session
+        if session is None:
+            return
+        if now - self.owner_at >= HEARTBEAT_S:
+            self.halt('autonomy_heartbeat_timeout')
+            return
+        if now - session['last_loop'] > .08:
+            self.halt('autonomy_control_gap')
+            return
+        session['last_loop'] = now
+        try:
+            report = session['report']
+            report['sensor_ages'] = self.sensor_ages(now)
+            report['sensor_errors'] = dict(self.errors)
+            clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False))
+            if not self.autonomy_healthy():
+                raise ValueError('probe_sensor_unavailable')
+            report['quality_issues'] = clearance['quality_issues']
+            counts = report.setdefault('quality_counts', {})
+            for issue in clearance['quality_issues']:
+                counts[issue] = counts.get(issue, 0)+1
+            confirmed = session['quality'].update(clearance['quality_issues'], now)
+            report['quality_elapsed_ms'] = session['quality'].elapsed_ms(now)
+            if confirmed:
+                self.halt('perception_quality_timeout')
+                return
+            if now >= session['deadline']:
+                self.halt('probe_complete')
+                return
+            control = self.status.get('control', {})
+            if not control.get('armed') or control.get('seq', -1) < self.arm_sequence:
+                return
+            report['observed_armed'] = True
+            report['observed_pwm'] |= control.get('motor') == report['pwm']
+            motor = report['pwm'] if clearance['motion_ready'] else 1500
+            servo = 1500
+            if report.get('centering'):
+                if session['wall_scan_seq'] != self.scan['seq'] or not clearance['motion_ready']:
+                    report['walls'] = corridor_walls(self.scan) if clearance['motion_ready'] else None
+                    session['wall_scan_seq'] = self.scan['seq']
+                servo = session['steering'].update(report['walls'], self.scan['seq'], now, clearance['motion_ready'])
+            if servo != report.get('servo', 1500):
+                report['steering_changes'] += 1
+            report['servo'] = servo
+            self.emit('drive', motor, servo, control['tick'])
+            report['drive_ticks'] += 1
+            report['motion_ticks' if clearance['motion_ready'] else 'recovery_ticks'] += 1
+        except (ValueError, RuntimeError, OSError, KeyError) as error:
+            self.halt(str(error))
 
     def configure(self, data):
         with self.lock:

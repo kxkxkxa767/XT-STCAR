@@ -9,11 +9,91 @@ import urllib.error
 import urllib.request
 
 
+class ProbeInterrupted(RuntimeError):
+    def __init__(self, state, run):
+        self.state, self.run = state, run
+        result = state['autonomy']['last_result']
+        super().__init__('probe interrupted: ' + str(result.get('reason') if result else 'no result'))
+
+
+def run_probe(request, state, pwm, duration_ms, centering=False):
+    run = None
+    try:
+        run = request('/api/autonomy', {'op': 'straight_start' if centering else 'probe_start', 'boot': state['boot'],
+                      'epoch': state['autonomy']['epoch'], 'tick': state['status']['control']['tick'],
+                      'pwm': pwm, 'duration_ms': duration_ms})
+        sequence = 0
+        end = time.monotonic() + duration_ms / 1000 + 1
+        while time.monotonic() < end:
+            latest = request('/api/state')
+            active = latest['autonomy']['active']
+            result = latest['autonomy']['last_result']
+            if result and result.get('run_id') == run['run_id'] and not result.get('completed'):
+                raise ProbeInterrupted(latest, run)
+            if not active or active['run_id'] != run['run_id']:
+                if latest['autonomy']['mode'] == 'manual':
+                    raise RuntimeError('manual operator took control; automatic output cancelled')
+                control = latest['status']['control']
+                if control['armed'] or control.get('motor') != 1500 or control.get('servo') != 1500:
+                    time.sleep(.02)
+                    continue
+                if not result or result.get('run_id') != run['run_id'] or not result.get('completed'):
+                    raise ProbeInterrupted(latest, run)
+                return latest, run
+            sequence += 1
+            try:
+                request('/api/autonomy', {'op': 'heartbeat', 'boot': state['boot'],
+                        'epoch': run['epoch'], 'run_id': run['run_id'], 'seq': sequence})
+            except RuntimeError:
+                latest = request('/api/state')
+                if latest['autonomy']['active'] is None:
+                    result = latest['autonomy']['last_result']
+                    if result and result.get('run_id') == run['run_id'] and result.get('completed'):
+                        time.sleep(.02)
+                        continue  # Normal deadline raced heartbeat; still await neutral feedback.
+                    raise ProbeInterrupted(latest, run) from None
+                raise
+            time.sleep(.04)
+        raise RuntimeError('probe did not confirm neutral output')
+    finally:
+        if run is not None:
+            try:
+                request('/api/autonomy', {'op': 'cancel', 'boot': state['boot'],
+                        'epoch': run['epoch'], 'run_id': run['run_id']})
+            except Exception:
+                pass  # Cannot cancel a newer manual owner; independent deadlines remain.
+
+
+def straight_segment(request, state, pwm, max_seconds, expected_run_id=None):
+    """One supervised session; a human/fault stop never causes another arm."""
+    if expected_run_id is not None:
+        old = state['autonomy']['last_result']
+        if (not old or old.get('run_id') != expected_run_id or not old.get('completed')
+                or old.get('reason') != 'probe_complete' or type(old.get('epoch')) is not int
+                or old['epoch'] + 1 != state['autonomy']['epoch']
+                or (state.get('last_stop') or {}).get('reason') != 'probe_complete'):
+            raise RuntimeError('previous phase was stopped or restarted; refusing continuation')
+    try:
+        latest, run = run_probe(request, state, pwm, round(max_seconds*1000), centering=True)
+        result = latest['autonomy']['last_result']
+        reason = 'time_limit'
+    except ProbeInterrupted as error:
+        result = error.state['autonomy']['last_result']
+        if not result or result.get('reason') != 'probe_obstacle_in_straight_corridor':
+            raise
+        run, reason = error.run, 'forward_clearance_limit'
+    return {'reason': reason, 'motion_ticks': result.get('motion_ticks', 0),
+            'steering_changes': result.get('steering_changes', 0), 'walls': result.get('walls'),
+            'last_run_id': run['run_id'], 'competition_navigation': False, 'wheel_motion_measured': False}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'probe', 'stop'])
+    parser.add_argument('command', choices=['status', 'probe', 'straight', 'stop'])
     parser.add_argument('--pwm', type=int, default=1560)
     parser.add_argument('--duration-ms', type=int, default=400)
+    parser.add_argument('--max-seconds', type=float, default=1, help='straight supervision total limit, 1..30 seconds; default 1 second')
+    parser.add_argument('--expected-run-id', help='fence a new monitored phase to the previous normal stop')
     parser.add_argument('--execute', action='store_true', help='explicit physical probe; otherwise read-only')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
     args = parser.parse_args()
@@ -30,7 +110,8 @@ def main():
             with opener.open(req, timeout=.15) as response:
                 return json.load(response)
         except urllib.error.HTTPError as error:
-            detail = json.load(error).get('error', 'HTTP ' + str(error.code))
+            with error:
+                detail = json.load(error).get('error', 'HTTP ' + str(error.code))
             raise RuntimeError(detail) from None
 
     if args.command == 'stop':
@@ -48,51 +129,25 @@ def main():
     if not 1501 <= args.pwm <= 1560 or not 100 <= args.duration_ms <= 500:
         raise RuntimeError('probe requires PWM 1501..1560 and duration 100..500 ms')
     if not state['autonomy']['probe_ready']:
-        raise RuntimeError(state['autonomy']['rejection'] or 'probe not ready')
-    run = None
+        if args.command != 'straight':
+            raise RuntimeError(state['autonomy']['rejection'] or 'probe not ready')
 
     def interrupted(*_):
         raise KeyboardInterrupt
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, interrupted)
-    try:
-        # Retain the preflight epoch. A stop between read and start must reject start.
-        run = request('/api/autonomy', {'op': 'probe_start', 'boot': state['boot'],
-                      'epoch': state['autonomy']['epoch'], 'tick': state['status']['control']['tick'],
-                      'pwm': args.pwm, 'duration_ms': args.duration_ms})
-        print('Bounded straight probe started; this is NOT competition navigation.', flush=True)
-        sequence = 0
-        end = time.monotonic() + args.duration_ms / 1000 + 1
-        while time.monotonic() < end:
-            latest = request('/api/state')
-            active = latest['autonomy']['active']
-            if not active or active['run_id'] != run['run_id']:
-                result = latest['autonomy']['last_result']
-                # Wait for serial owner confirmation, not just the HTTP stop acknowledgement.
-                if latest['autonomy']['mode'] == 'manual':
-                    raise RuntimeError('manual operator took control; automatic output cancelled')
-                if latest['status']['control']['armed']:
-                    time.sleep(.02)
-                    continue
-                print(json.dumps({'result': result, 'control': latest['status']['control'],
-                                  'healthy': latest['healthy']}, ensure_ascii=False, indent=2))
-                if not result or result.get('run_id') != run['run_id'] or not result.get('completed'):
-                    raise RuntimeError('probe stopped without successful completion')
-                return
-            sequence += 1
-            request('/api/autonomy', {'op': 'heartbeat', 'boot': state['boot'],
-                    'epoch': run['epoch'], 'run_id': run['run_id'], 'seq': sequence})
-            time.sleep(.04)
-        raise RuntimeError('probe did not confirm neutral output')
-    finally:
-        if run is not None:
-            # Compare-and-cancel cannot stop a newer manual controller after takeover.
-            try:
-                request('/api/autonomy', {'op': 'cancel', 'boot': state['boot'],
-                        'epoch': run['epoch'], 'run_id': run['run_id']})
-            except Exception:
-                pass  # Independent vehicle and Rust deadlines remain active.
+    if args.command == 'straight':
+        if not 1 <= args.max_seconds <= 30:
+            raise RuntimeError('straight total limit must be 1..30 seconds')
+        result = straight_segment(request, state, args.pwm, args.max_seconds,
+                                  expected_run_id=args.expected_run_id)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print('Bounded straight probe requested; this is NOT competition navigation.', flush=True)
+        latest, _ = run_probe(request, state, args.pwm, args.duration_ms)
+        print(json.dumps({'result': latest['autonomy']['last_result'], 'control': latest['status']['control'],
+                          'healthy': latest['healthy']}, ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':

@@ -1,0 +1,120 @@
+{
+  "cli_exit_code": 0,
+  "requested_pwm": 1560,
+  "duration_ms": 400,
+  "state": {
+    "healthy": true,
+    "status": {
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 15,
+        "servo": 1500,
+        "tick": 35752
+      },
+      "physical_output": true,
+      "reverse_enabled": true
+    },
+    "settings": {
+      "forward": 1560,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "ages": {
+      "camera": 0.13954878499998813,
+      "lidar": 0.09454452799991486,
+      "control": 0.013632485000016459
+    },
+    "autonomy": {
+      "mode": "locked",
+      "epoch": 1,
+      "supported": [
+        "straight_probe"
+      ],
+      "competition_supported": false,
+      "quality_confirm_s": 2.0,
+      "probe_ready": true,
+      "rejection": null,
+      "clearance": {
+        "front_m": 0.713,
+        "corridor_front_m": 6.857819855005035,
+        "nearest_m": 0.407,
+        "scan_seq": 355,
+        "front_unknown_bins": [],
+        "largest_gap_deg": 0,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.3,
+        "corridor_lookahead_m": 1.0
+      },
+      "active": null,
+      "last_result": {
+        "pwm": 1560,
+        "servo": 1500,
+        "duration_ms": 400,
+        "drive_ticks": 13,
+        "observed_pwm": true,
+        "motion_ticks": 13,
+        "recovery_ticks": 0,
+        "quality_issues": [],
+        "quality_elapsed_ms": 0,
+        "wheel_motion_measured": false,
+        "competition_navigation": false,
+        "clearance_start": {
+          "front_m": 0.777,
+          "corridor_front_m": 7.015723605674053,
+          "nearest_m": 0.408,
+          "scan_seq": 346,
+          "front_unknown_bins": [
+            5,
+            12,
+            13
+          ],
+          "largest_gap_deg": 2,
+          "quality_issues": [],
+          "motion_ready": true,
+          "corridor_half_width_m": 0.3,
+          "corridor_lookahead_m": 1.0
+        },
+        "epoch": 0,
+        "reason": "probe_complete",
+        "completed": true
+      }
+    },
+    "last_stop": {
+      "reason": "probe_complete",
+      "unix_s": 1791190083.5928514
+    },
+    "owner": null
+  },
+  "tests": {
+    "python": 26,
+    "frontend_previous_unchanged": 8,
+    "failed": 0
+  },
+  "sha256": {
+    "server.py": "6a527d38a0507128a0bcdfacd97a900125415ce9b79f21d337f5decc1014f1ab",
+    "autonomy_live.py": "fca224f7b03bc5dd23920351f1db3f13a1fdbc00330a1d41ac64fe8f7a9fdbb9",
+    "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19",
+    "autonomy-control.py": "61bfea4494c8614317cd8ad027c4c7a78f24f0ab80a4dd4c8a12821e72e45480"
+  },
+  "source_sha256": {
+    "server.py": "6a527d38a0507128a0bcdfacd97a900125415ce9b79f21d337f5decc1014f1ab",
+    "autonomy_live.py": "fca224f7b03bc5dd23920351f1db3f13a1fdbc00330a1d41ac64fe8f7a9fdbb9",
+    "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19",
+    "autonomy-control.py": "61bfea4494c8614317cd8ad027c4c7a78f24f0ab80a4dd4c8a12821e72e45480"
+  },
+  "scope": "bounded straight probe only; competition navigation remains disconnected",
+  "wheel_motion_measured": false,
+  "quality_policy": {
+    "confirm_s": 2,
+    "front_max_unknown_bins": 6,
+    "front_max_contiguous_gap_deg": 3,
+    "corridor_half_width_m": 0.3,
+    "corridor_lookahead_m": 1,
+    "unknown_ranges_filled": false,
+    "hard_faults_delayed": false
+  }
+}
