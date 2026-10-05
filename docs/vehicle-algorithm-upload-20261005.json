@@ -1,0 +1,57 @@
+{
+  "healthy": true,
+  "ages": {
+    "camera": 0.03481452399955742,
+    "lidar": 0.07383617699997558,
+    "control": 0.01663596799971856
+  },
+  "control": {
+    "armed": false,
+    "motor": 1500,
+    "reason": "operator_stop",
+    "seq": 701,
+    "servo": 1500,
+    "tick": 3522240
+  },
+  "settings": {
+    "forward": 1530,
+    "reverse": 1350,
+    "left": 1650,
+    "right": 1350
+  },
+  "uploaded_directory": "/home/bianbu/xt-stcar-deploy/algorithms-20261005-faaee1f",
+  "sha_check_files": 34,
+  "binary_sha256": {
+    "xt-stcar": "fdd9139b07ca4e0478169bae0d647f5d5ad82536fe71ff59c3e44be4d4fe82cf",
+    "xt-stcar-robot": "47819f0a9855e0345b92e334e7ef7cf0c63bbd41d10e4bb4ce71a5a14878a867"
+  },
+  "smoke_checks": {
+    "help": true,
+    "online_compile": true,
+    "compiled_simulation_only_flags": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "dependencies_found": true
+  },
+  "active_console_pid": 1010,
+  "motion_commands_sent": 0,
+  "autonomous_hardware_control_implemented": false,
+  "schema_version": 1,
+  "date": "2026-10-05",
+  "source_commit": "faaee1f12d80dab3edb83291abda46db83292752",
+  "build_checks": {
+    "passed": 623,
+    "failed": 0,
+    "ignored": 3,
+    "fmt": true,
+    "clippy_all_targets_warnings_denied": true,
+    "cross_build_and_elf_checks": true
+  },
+  "service_restarted": false,
+  "model_changed": false
+}
