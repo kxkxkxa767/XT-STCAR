@@ -1,0 +1,314 @@
+{
+  "date": "2026-10-05",
+  "scope": "今晚本机修改、离线验证和GitHub上传，明天才按新现场授权实车测试",
+  "base_commit": "910a489c3c5a9feda148f4f395b5de28ad4a0365",
+  "new_code_deployed_to_vehicle": false,
+  "motor_started_after_postponement": false,
+  "physical_run08": {
+    "user_feedback": [
+      "左偏然后撞到前方挡板了",
+      "已完全停住，碰到挡板",
+      "我已经放回起点了"
+    ],
+    "success": false,
+    "last_result": {
+      "run_id": "YtMCDoS7isJjAgm-Dz9b7akM",
+      "pwm": 1580,
+      "servo": 1514,
+      "duration_ms": 30000,
+      "drive_ticks": 82,
+      "observed_pwm": true,
+      "observed_armed": true,
+      "centering": true,
+      "steering_changes": 4,
+      "walls": {
+        "offset_right_m": -0.027964176040364497,
+        "heading_right_deg": 3.9526067729290424,
+        "slope": 0.06909564732249263,
+        "width_m": 0.9521710339152925
+      },
+      "endpoint": "left_junction",
+      "junction_confirmations": 0,
+      "junction_geometry": null,
+      "rear_launch_active": false,
+      "rear_launch_max_s": 1,
+      "current_pwm": 1550,
+      "approach_front_m": 3.439423466799622,
+      "pwm_ramp_changes": 6,
+      "lane_correcting": true,
+      "lane_speed_limited": true,
+      "front_time_margin_s": 2.5,
+      "boundary_closing_mps": 2.3466196506002586,
+      "boundary_time_to_clearance_s": 1.0395478731185195,
+      "cruise_limited": true,
+      "motion_ticks": 82,
+      "recovery_ticks": 0,
+      "quality_issues": [],
+      "quality_elapsed_ms": 0,
+      "quality_counts": {},
+      "quality_confirmed": false,
+      "perception_recovering": false,
+      "recovery_stable_ms": 0,
+      "wheel_motion_measured": false,
+      "competition_navigation": false,
+      "clearance_start": {
+        "front_m": 0.858,
+        "corridor_front_m": 7.762817505194222,
+        "nearest_m": 0.282,
+        "scan_seq": 554,
+        "side_clearance_m": 0.414182658675749,
+        "side_stop_threshold_m": 0.30000000000000004,
+        "side_body_extent_m": 0.17,
+        "side_min_net_m": 0.1,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          5,
+          15,
+          16
+        ],
+        "largest_gap_deg": 2,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "epoch": 0,
+      "sensor_ages": {
+        "camera": 0.08328096599996115,
+        "lidar": 0.03311130199995205,
+        "control": 0.006655757999965317
+      },
+      "sensor_errors": {},
+      "reason": "front_boundary_stop",
+      "completed": false
+    },
+    "last_acknowledged_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 84,
+      "servo": 1500,
+      "tick": 63765
+    },
+    "healthy_at_last_independent_read": true,
+    "post_stop_forward_ray_m": 0.217,
+    "post_stop_scan_changes_approx_s": 2.2,
+    "precise_travel_speed_or_braking_distance_measured": false,
+    "raw_path": "work/vehicle-upload-20261005/straight-start-08",
+    "raw_samples_sha256": "0111040fd78c85ccdb9c16eac56c934d39ba939d5d83b473d7c70afd1ddf02ca",
+    "extra_night_stop_ssh_acknowledged": false,
+    "extra_night_stop_note": "额外stop因SSH连接失败未获确认；不能当最新成功ACK。最后已有seq84中性锁定反馈及用户完全停住/放回起点确认，明天必须新鲜核对。"
+  },
+  "last_vehicle_deployment": {
+    "backup": "/home/bianbu/xt-stcar-console/backup-straight-20261005-205619",
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 6048
+    },
+    "settings": {
+      "forward": 1580,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    },
+    "hashes": {
+      "server.py": "86ef5ef559dd38966c25e56a027dd9427ceae630e19ce2666c29e915bc96be43",
+      "autonomy_live.py": "7f93757c23b5459a4716be94724c655bd04677935fe7def3e638cfaa61df5b61",
+      "autonomy-control.py": "f57e8f8d8d9675d077726a2f410a68fde7e4915e496da775013aeb16a6d25cf6",
+      "app.js": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+    }
+  },
+  "software_changes": {
+    "perception_self_recovery": "same bounded session, neutral wait, no quality issues + >=3 distinct fresh scans over >=0.3s; 2s diagnostic only; no rearm after hard stop",
+    "normal_stop": "drive -> coast (motor1500 only, existing steering lease <=5s) -> locked after qualified lidar low-motion; unknown deadline incomplete",
+    "coast_evidence": "fresh 1500 adoption feedback and scan sequence beyond phase start; two nonparallel uniquely matched static planes; publication and receive windows >=0.5s, >=5 pairs; no old/repeated/parallel evidence",
+    "coast_evidence_calibrated": false,
+    "steering": "1445..1555; existing outward rate; neutral return <=130 PWM/s, <=13 per change and >=50ms; reverse via neutral and distinct scans; trend only releases old turn; sequence and publication high watermarks",
+    "front_boundary": "native candidate/output extends to declared validated scan range; preserves all real support/quality gates; Python accepts known finite planes through existing12m physical scan limit",
+    "active_reverse_braking": false,
+    "full_competition_navigation_connected": false,
+    "vehicle_yolo_classes": [
+      "blue_cone"
+    ],
+    "target_label_order": [
+      "crosswalk",
+      "blue_cone",
+      "red_light",
+      "green_light"
+    ],
+    "lidar_reception_clock": "Only increasing scan sequence/publication updates receive age; repeated JSON cannot keep an old scan fresh and drive waits neutrally at existing300ms age limit"
+  },
+  "offline_validation": {
+    "python": {
+      "passed": 109,
+      "failed": 0,
+      "command": "python3 -m unittest discover -s web/vehicle-console/tests -p 'test_*.py'",
+      "log": "work/vehicle-upload-20261005/python-coast-control-final.log"
+    },
+    "frontend": {
+      "passed": 8,
+      "failed": 0
+    },
+    "rust": {
+      "passed": 645,
+      "failed": 0,
+      "ignored": 3,
+      "command": "cargo test --locked --workspace --all-targets",
+      "log": "work/vehicle-upload-20261005/rust-coast-stop-final.log"
+    },
+    "rust_fmt": "passed",
+    "rust_workspace_clippy_warnings_as_errors": "passed",
+    "front_boundary_observed_replay": {
+      "new_first_seq": 571,
+      "new_first_distance_m": 5.54,
+      "old_first_seq": 578,
+      "old_first_distance_m": 3.909,
+      "first_observation_advance_s": 0.74,
+      "continuous_far_support_guaranteed": false,
+      "collision_avoidance_validated": false
+    },
+    "coast_real_replay": {
+      "method": "Offline whole-scan publication plus receive clocks; no point acquisition timing or counterfactual dynamics",
+      "samples": 71,
+      "stationary_claims": [],
+      "observable_samples": 0,
+      "unknown_reasons": {
+        "reference_initialized": 8,
+        "plane_identity_unmatched": 48,
+        "ambiguous_plane_identity": 6,
+        "insufficient_extended_planes": 9
+      },
+      "software_thresholds": {
+        "min_publication_stable_s": 0.5,
+        "min_receive_stable_s": 0.5,
+        "max_clock_progress_difference_s": 0.15,
+        "min_low_motion_pairs": 5,
+        "max_low_speed_mps": 0.05,
+        "max_low_yaw_rate_rps": 0.03,
+        "max_low_pair_translation_m": 0.008,
+        "max_stable_total_translation_m": 0.02,
+        "max_stable_total_rotation_rad": 0.02
+      },
+      "evidence_type": "uncalibrated_lidar_low_motion",
+      "mac_runtime_ms": {
+        "mean": 8.077200131595765,
+        "max": 11.35049998993054
+      },
+      "limitations": [
+        "This run retains unknown geometry/identity; no low-motion certification, including after the scan plateau.",
+        "Synthetic plane-room checks establish software behavior only; no target-board timing, braking envelope or physical stationary accuracy calibration."
+      ]
+    },
+    "steering_sampled_replay": {
+      "method": "Same recorded trajectory, sampled open-loop steering comparison; omitted native frames and changed future vehicle trajectory not simulated",
+      "input_sha256": "0111040fd78c85ccdb9c16eac56c934d39ba939d5d83b473d7c70afd1ddf02ca",
+      "new_source_sha256": "e14d8eddc4d95c173c0272013c054b60377da8668ccbc430fd430cda2b165d34",
+      "collision_avoidance_validated": false,
+      "selected_trace": [
+        {
+          "seq": 572,
+          "publication_ms": 57194,
+          "heading_right_deg": -2.8397805005510657,
+          "old_sampled_servo": 1515,
+          "new_sampled_servo": 1515,
+          "actual_servo": 1500,
+          "actual_armed": true
+        },
+        {
+          "seq": 575,
+          "publication_ms": 57496,
+          "heading_right_deg": -2.0260496205382776,
+          "old_sampled_servo": 1524,
+          "new_sampled_servo": 1519,
+          "actual_servo": 1524,
+          "actual_armed": true
+        },
+        {
+          "seq": 576,
+          "publication_ms": 57596,
+          "heading_right_deg": -2.713973888005773,
+          "old_sampled_servo": 1529,
+          "new_sampled_servo": 1519,
+          "actual_servo": 1524,
+          "actual_armed": true
+        },
+        {
+          "seq": 577,
+          "publication_ms": 57696,
+          "heading_right_deg": -2.059655359394881,
+          "old_sampled_servo": 1529,
+          "new_sampled_servo": 1526,
+          "actual_servo": 1529,
+          "actual_armed": true
+        },
+        {
+          "seq": 578,
+          "publication_ms": 57795,
+          "heading_right_deg": -0.5384066950655424,
+          "old_sampled_servo": 1529,
+          "new_sampled_servo": 1514,
+          "actual_servo": 1529,
+          "actual_armed": true
+        },
+        {
+          "seq": 580,
+          "publication_ms": 57995,
+          "heading_right_deg": 3.9526067729290424,
+          "old_sampled_servo": 1514,
+          "new_sampled_servo": 1501,
+          "actual_servo": 1514,
+          "actual_armed": true
+        },
+        {
+          "seq": 581,
+          "publication_ms": 58094,
+          "heading_right_deg": 6.694709690300026,
+          "old_sampled_servo": 1500,
+          "new_sampled_servo": 1500,
+          "actual_servo": 1500,
+          "actual_armed": false
+        },
+        {
+          "seq": 582,
+          "publication_ms": 58193,
+          "heading_right_deg": 8.713253392770293,
+          "old_sampled_servo": 1500,
+          "new_sampled_servo": 1500,
+          "actual_servo": 1500,
+          "actual_armed": false
+        },
+        {
+          "seq": 583,
+          "publication_ms": 58293,
+          "heading_right_deg": 9.851089270898203,
+          "old_sampled_servo": 1500,
+          "new_sampled_servo": 1500,
+          "actual_servo": 1500,
+          "actual_armed": false
+        }
+      ]
+    }
+  },
+  "source_sha256": {
+    "web/vehicle-console/server.py": "79ca6c7d35df8508212c1d50b3a0d309ad5fe7f6646833e48d02a600f0938669",
+    "web/vehicle-console/autonomy_live.py": "e14d8eddc4d95c173c0272013c054b60377da8668ccbc430fd430cda2b165d34",
+    "web/vehicle-console/coast_motion.py": "bbe4d1b839c72bc1eb67e7c4aab101b2b6859c3b76ac3a4f0464ba3e3aedc0e7",
+    "web/vehicle-console/autonomy-control.py": "5c53643a46786206375f1f64a75d0349384a989d40aef3c5d986e25daf5438e0",
+    "scripts/start-vehicle-console.py": "a176f02f9e2d7b232942f50f22e04b0ff02b3c9f124938cf6da915024fc6bc9f",
+    "crates/robot-core/src/junction.rs": "95e6a623244494651cc3f240527980df05732a5b737e233e008b1025d7c04026",
+    "crates/robot-core/src/junction/tests.rs": "a284226e1bfab78a63ecac8d4fa6c966496fcc7cf5bc5e2715c6e0571a1ee428",
+    "crates/robot-core/src/junction/observed-front-20261005.json": "a3a69fa6aa482e8d3f4bfd3feec567b2e3b6c7fa76f077ea48ae4eb7b89b59c9"
+  },
+  "next_vehicle_test_requires": [
+    "重新连接并核对新鲜locked/armed=false/motor=servo=1500反馈",
+    "备份并部署所有4份Python含coast_motion.py与对应新Rust桥；默认锁定且核对哈希/运行设置",
+    "新现场状态和明确测试授权，验证真实转向/回中与滑停包络，保护停止不自动重启",
+    "验证实际点云可观测性、低运动阈值和目标板时限，未确认报告unknown",
+    "斑马线YOLO/地面近沿及完整车身标定后再接线前停车和3s赛事任务"
+  ]
+}

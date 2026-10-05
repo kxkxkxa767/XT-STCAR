@@ -7,6 +7,9 @@ MAX_PWM = 1580
 MAX_DURATION_MS = 500
 HEARTBEAT_S = .20
 QUALITY_CONFIRM_S = 2.0
+QUALITY_RECOVERY_STABLE_S = .30
+QUALITY_RECOVERY_MIN_SCANS = 3
+COAST_MAX_S = 5.0
 CAMERA_LATE_S = .50
 LIDAR_LATE_S = .30
 CONTROL_AGE_LIMIT_S = .15
@@ -64,23 +67,62 @@ def corridor_walls(scan):
 
 
 class CorridorSteering:
-    """Bounded correction using wall heading, hysteresis and a minimum interval."""
+    """Wall feedback with hysteresis, trend damping and a faster neutral return."""
     def __init__(self):
         self.servo = 1500
         self.correcting = False
         self.changed_at = float('-inf')
         self.last_scan = None
+        self.last_publication = None
+        self.history = []
+        self.direction = 0
+        self.reverse_count = 0
 
-    def update(self, walls, scan_seq, now, motion_ready=True):
+    def update(self, walls, scan_seq, now, motion_ready=True, scan_at_ms=None):
         if not motion_ready or walls is None:
             self.servo, self.correcting = 1500, False
+            self.changed_at = now
+            self.history = []
+            self.direction, self.reverse_count = 0, 0
+            return self.servo
+        if type(scan_seq) is not int or (self.last_scan is not None and scan_seq < self.last_scan):
+            self.history = []
+            self.servo, self.correcting = 1500, False
+            self.direction, self.reverse_count = 0, 0
             self.changed_at = now
             return self.servo
         if scan_seq == self.last_scan:
             return self.servo
-        self.last_scan = scan_seq
+        published = scan_at_ms/1000 if type(scan_at_ms) is int and scan_at_ms >= 0 else now
+        if self.last_publication is not None and published <= self.last_publication:
+            self.history = []
+            self.servo, self.correcting = 1500, False
+            self.direction, self.reverse_count = 0, 0
+            self.changed_at = now
+            return self.servo
+        self.last_scan, self.last_publication = scan_seq, published
         offset, heading = walls['offset_right_m'], walls['heading_right_deg']
         projected_offset = offset + CORRIDOR_LOOKAHEAD_M * walls['slope']
+        # Whole-scan publication clock. This is wall-motion evidence, not an IMU yaw rate.
+        previous = self.history[-1] if self.history else None
+        if previous and (not 0 < published-previous[0] < LIDAR_LATE_S
+                         or abs(walls['width_m']-previous[3]) > .1
+                         or abs(offset-previous[2]) > .15 or abs(heading-previous[1]) > 8):
+            self.history = []
+            self.reverse_count = 0
+        self.history.append((published, heading, offset, walls['width_m']))
+        self.history = self.history[-3:]
+        damped_offset = projected_offset
+        if len(self.history) == 3 and all(b[0]-a[0] >= .05 for a, b in zip(self.history, self.history[1:])):
+            rates = [math.radians(b[1]-a[1])/(b[0]-a[0])
+                     for a, b in zip(self.history, self.history[1:])]
+            if max(abs(r) for r in rates) <= math.radians(30):
+                candidate = projected_offset + .15*CORRIDOR_LOOKAHEAD_M*statistics.median(rates)
+                # A noisy derivative may release the old turn; it cannot invent its opposite.
+                if candidate*projected_offset <= 0:
+                    damped_offset = 0
+                elif abs(candidate) < abs(projected_offset):
+                    damped_offset = candidate
         usable_half_width = max(.01, walls['width_m']/2-SIDE_CLEARANCE_M)
         if not self.correcting:
             self.correcting = (abs(offset) > min(.08, usable_half_width*.5) or abs(heading) > 4
@@ -92,10 +134,26 @@ class CorridorSteering:
         urgent = False
         if self.correcting:
             # Positive y is right. Lower PWM turns right (user's physical check).
-            correction = round(STEERING_LIMIT_PWM*max(-1, min(1, projected_offset/usable_half_width)))
+            correction = round(STEERING_LIMIT_PWM*max(-1, min(1, damped_offset/usable_half_width)))
             target -= correction
             urgent = usable_half_width-abs(projected_offset) < SIDE_MIN_NET_M
+        sign = (target > 1500)-(target < 1500)
+        if sign and self.direction and sign != self.direction:
+            self.reverse_count += 1
+            if self.servo != 1500 or self.reverse_count < 2:
+                target = 1500  # Release the old turn before growing the opposite turn.
+            else:
+                self.direction, self.reverse_count = sign, 0
+        else:
+            self.reverse_count = 0
+            if sign:
+                self.direction = sign
         interval, step = (.15, 20) if urgent else (.25, 15)
+        if abs(target-1500) < abs(self.servo-1500):
+            # A 99 ms published scan must not wait for another full scan just
+            # because it missed a 100 ms staircase. Bound return by elapsed time.
+            interval = .05
+            step = math.floor(130*min(.1, max(0, now-self.changed_at))+1e-9)
         if now-self.changed_at >= interval and target != self.servo:
             self.servo += max(-step, min(step, target-self.servo))
             self.changed_at = now
@@ -103,7 +161,7 @@ class CorridorSteering:
 
 
 class RearLaunch:
-    """At most one second after the first output opportunity; no turning in grace."""
+    """At most one second after observed positive motor output; no turning in grace."""
     def __init__(self):
         self.active = True
         self.since = None
@@ -125,7 +183,7 @@ class RearLaunch:
 
 
 class QualityLatch:
-    """Only perception-quality faults debounce; recovery resets the whole streak."""
+    """Diagnostic duration of a quality streak; never a reason to rearm."""
     def __init__(self):
         self.since = None
 
@@ -138,6 +196,55 @@ class QualityLatch:
 
     def elapsed_ms(self, now):
         return 0 if self.since is None else round(max(0, now - self.since) * 1000)
+
+
+class QualityRecovery:
+    """Resume only an existing neutral-waiting session after stable fresh evidence."""
+    def __init__(self):
+        self.waiting = False
+        self.good_since = None
+        self.good_scans = 0
+        self.last_seq = None
+        self.last_good_at = None
+
+    def update(self, motion_ready, issues, scan_seq, now):
+        if not motion_ready:
+            self.waiting = True
+            self.good_since = None
+            self.good_scans = 0
+            self.last_seq = scan_seq
+            self.last_good_at = None
+            return False
+        if not self.waiting:
+            return True
+        if issues or type(scan_seq) is not int:
+            self.good_since = None
+            self.good_scans = 0
+            self.last_seq = scan_seq
+            self.last_good_at = None
+            return False
+        if self.last_seq is not None and scan_seq <= self.last_seq:
+            if scan_seq < self.last_seq:
+                self.good_since = None
+                self.good_scans = 0
+                self.last_seq = scan_seq
+                self.last_good_at = None
+            return False
+        self.last_seq = scan_seq
+        if self.last_good_at is not None and now-self.last_good_at >= LIDAR_LATE_S:
+            self.good_since = None
+            self.good_scans = 0
+        self.last_good_at = now
+        if self.good_since is None:
+            self.good_since = now
+        self.good_scans += 1
+        if self.good_scans >= QUALITY_RECOVERY_MIN_SCANS and now-self.good_since >= QUALITY_RECOVERY_STABLE_S:
+            self.waiting = False
+            return True
+        return False
+
+    def stable_ms(self, now):
+        return 0 if self.good_since is None else round(max(0, now-self.good_since)*1000)
 
 
 class ApproachRamp:
@@ -175,13 +282,14 @@ class ApproachRamp:
         distance = scan.get('front_boundary_m')
         target = self.initial
         launch_held = self.launch_since is None or now-self.launch_since < LAUNCH_HOLD_S
-        if type(distance) in (int, float) and math.isfinite(distance) and .6 <= distance <= 4.05:
+        if type(distance) in (int, float) and math.isfinite(distance) and .6 <= distance <= 12:
             self.boundary_lost = False
             self.boundary_seen = True
             self.closest_front = distance if self.closest_front is None else min(self.closest_front, distance)
             previous = self.previous_boundary
-            captured_ms = scan.get('at_ms')
-            captured = captured_ms/1000 if type(captured_ms) is int and captured_ms >= 0 else now
+            # Native at_ms is whole-scan publication time, not per-ray acquisition.
+            published_ms = scan.get('at_ms')
+            captured = published_ms/1000 if type(published_ms) is int and published_ms >= 0 else now
             continuous = previous is not None and .05 <= captured-previous[1] <= .35
             if continuous:
                 rate = (previous[0]-distance)/(captured-previous[1])

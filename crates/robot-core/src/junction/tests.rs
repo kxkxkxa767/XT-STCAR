@@ -13,10 +13,14 @@ fn sample(ranges: Vec<Option<f64>>) -> LidarSample {
 }
 
 fn polygon_scan(poly: &[(f64, f64)], yaw: f64) -> LidarSample {
+    polygon_scan_bins(poly, yaw, 360)
+}
+
+fn polygon_scan_bins(poly: &[(f64, f64)], yaw: f64, bins: usize) -> LidarSample {
     let cross = |a: (f64, f64), b: (f64, f64)| a.0 * b.1 - a.1 * b.0;
-    let ranges = (0..360)
+    let ranges = (0..bins)
         .map(|i| {
-            let angle = i as f64 * TAU / 360.0 + yaw;
+            let angle = i as f64 * TAU / bins as f64 + yaw;
             let direction = (angle.cos(), angle.sin());
             let mut closest: f64 = 12.0;
             for (a, b) in poly
@@ -38,7 +42,9 @@ fn polygon_scan(poly: &[(f64, f64)], yaw: f64) -> LidarSample {
             Some(closest)
         })
         .collect();
-    sample(ranges)
+    let mut scan = sample(ranges);
+    scan.angle_increment_rad = TAU / bins as f64;
+    scan
 }
 
 fn left(width: f64, end: f64, outgoing: f64, yaw: f64) -> LidarSample {
@@ -154,7 +160,7 @@ fn isolated_close_object_does_not_replace_extended_walls() {
 
 #[test]
 fn front_boundary_slows_before_turn_identity_without_claiming_left() {
-    for distance in [2., 3., 4.] {
+    for distance in [2., 3., 4., 5., 6.] {
         for yaw in [-8., 0., 8.] {
             let scan = polygon_scan(
                 &[(-8., -0.5), (distance, -0.5), (distance, 0.5), (-8., 0.5)],
@@ -174,6 +180,138 @@ fn front_boundary_slows_before_turn_identity_without_claiming_left() {
     let scan = polygon_scan(&[(-8., -0.5), (8., -0.5), (8., 0.5), (-8., 0.5)], 0.);
     assert!(
         detect_front_boundary(&scan, &scan.frame_id)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn supported_distant_front_planes_use_the_declared_sensor_range() {
+    for (width, distance) in [(1.5, 8.), (2., 10.), (2.1, 11.9)] {
+        for yaw in [-8., 0., 8.] {
+            let scan = polygon_scan(
+                &[
+                    (-8., -width / 2.),
+                    (distance, -width / 2.),
+                    (distance, width / 2.),
+                    (-8., width / 2.),
+                ],
+                f64::to_radians(yaw),
+            );
+            let front = detect_front_boundary(&scan, &scan.frame_id)
+                .unwrap()
+                .unwrap_or_else(|| panic!("width={width}, distance={distance}, yaw={yaw}"));
+            assert!((front - distance).abs() < 0.02, "{front}");
+            assert!(
+                detect_left_junction(&scan, &scan.frame_id)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+    }
+}
+
+#[test]
+fn distant_narrow_plane_requires_enough_real_samples() {
+    let poly = [(-8., -0.475), (8., -0.475), (8., 0.475), (-8., 0.475)];
+    let coarse = polygon_scan(&poly, 0.);
+    assert!(
+        detect_front_boundary(&coarse, &coarse.frame_id)
+            .unwrap()
+            .is_none()
+    );
+    // Greater angular resolution supplies real ray intersections; the detector
+    // does not interpolate the coarse scan's missing support into a plane.
+    let fine = polygon_scan_bins(&poly, 0., 1440);
+    let front = detect_front_boundary(&fine, &fine.frame_id)
+        .unwrap()
+        .unwrap();
+    assert!((front - 8.).abs() < 0.02);
+}
+
+#[test]
+fn observed_straight_scan_exposes_a_supported_plane_before_the_old_four_metre_limit() {
+    // Continuous run 08, seq 571 / published at_ms 57095: the old detector
+    // returned None despite the visible, supported front plane. This fixture
+    // records only the existing coarse heading/range-corrected bins, not a stopping
+    // distance or a vehicle-speed calibration.
+    let mut scan =
+        sample(serde_json::from_str(include_str!("observed-front-20261005.json")).unwrap());
+    scan.angle_increment_rad = -TAU / 360.;
+    let front = detect_front_boundary(&scan, &scan.frame_id)
+        .unwrap()
+        .unwrap();
+    assert!((5.3..5.8).contains(&front), "{front}");
+    assert!(
+        detect_left_junction(&scan, &scan.frame_id)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn distant_front_plane_keeps_original_support_and_unknown_gates() {
+    let poly = [(-8., -0.75), (8., -0.75), (8., 0.75), (-8., 0.75)];
+    let scan = polygon_scan(&poly, 0.);
+    let mut sparse = scan.clone();
+    for index in [4, 356] {
+        sparse.ranges_m[index] = None;
+    }
+    assert!(
+        detect_front_boundary(&sparse, &sparse.frame_id)
+            .unwrap()
+            .is_none()
+    );
+    let mut no_plane = scan.clone();
+    for index in [0, 1, 2, 3, 4, 356, 357, 358, 359] {
+        no_plane.ranges_m[index] = None;
+    }
+    assert!(detect_front_boundary(&no_plane, &no_plane.frame_id).is_err());
+
+    let mut outside_sensor_range = scan;
+    outside_sensor_range.range_max_m = 7.9;
+    assert!(detect_front_boundary(&outside_sensor_range, &outside_sensor_range.frame_id).is_err());
+}
+
+#[test]
+fn known_distant_returns_outside_the_corridor_are_not_a_front_plane() {
+    let poly = [(-8., -0.475), (8., -0.475), (8., 0.475), (-8., 0.475)];
+    let mut scan = polygon_scan(&poly, 0.);
+    for angle in 7..=20 {
+        // All inserted known hits have x=8 m but lie outside both fitted walls.
+        for index in [angle, 360 - angle] {
+            scan.ranges_m[index] = Some(8. / (angle as f64).to_radians().cos());
+        }
+    }
+    assert!(
+        detect_front_boundary(&scan, &scan.frame_id)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn short_or_isolated_distant_returns_do_not_form_a_front_plane() {
+    let poly = [(-8., -0.75), (8., -0.75), (8., 0.75), (-8., 0.75)];
+    let mut short = polygon_scan_bins(&poly, 0., 1440);
+    // Retain nine central real returns (<35 cm span) and disperse the others
+    // into distinct range bands, without changing either extended side wall.
+    for index in 5..=21 {
+        for beam in [index, 1440 - index] {
+            short.ranges_m[beam] = Some(5. + index as f64 * 0.15);
+        }
+    }
+    assert!(
+        detect_front_boundary(&short, &short.frame_id)
+            .unwrap()
+            .is_none()
+    );
+    let mut isolated = sample(vec![Some(8.); 360]);
+    for angle in 82..98 {
+        isolated.ranges_m[angle] = Some(0.6);
+    }
+    assert!(
+        detect_front_boundary(&isolated, &isolated.frame_id)
             .unwrap()
             .is_none()
     );

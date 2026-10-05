@@ -167,12 +167,15 @@ class ConsoleTests(unittest.TestCase):
         cli = [sys.executable, str(ROOT/'web/vehicle-console/autonomy-control.py'), 'straight',
                '--pwm', '1560', '--max-seconds', '1', '--execute', '--access-file', str(self.folder/'access.json')]
         initial_epoch = self.get('/api/state')['autonomy']['epoch']
-        run = subprocess.run(cli, capture_output=True, text=True, timeout=4)
-        self.assertEqual(run.returncode, 0, run.stdout+run.stderr)
+        run = subprocess.run(cli, capture_output=True, text=True, timeout=8)
+        self.assertNotEqual(run.returncode, 0, run.stdout+run.stderr)
         state = self.get('/api/state')
         report = state['autonomy']['last_result']
         self.assertEqual(state['autonomy']['epoch'], initial_epoch+1)  # one arm/stop only
         self.assertTrue(report['centering'])
+        self.assertEqual(report['reason'], 'coast_standstill_unconfirmed')
+        self.assertFalse(report['completed'])  # Demo's circular returns cannot observe rigid standstill.
+        self.assertGreater(report['coast_ticks'], 100)
         self.assertGreater(report['motion_ticks'], 20)
         self.assertFalse(state['status']['control']['armed'])
         self.assertEqual(state['status']['control']['motor'], 1500)

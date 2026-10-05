@@ -103,7 +103,7 @@ class ApproachRampTests(unittest.TestCase):
         self.assertAlmostEqual(fast.closing_speed, 1.)
         self.assertAlmostEqual(slow.closing_speed, .25)
 
-    def test_capture_clock_not_server_delay_sets_closing_rate(self):
+    def test_publication_clock_not_server_delay_sets_closing_rate(self):
         ramp = MODULE.ApproachRamp(1560)
         for seq, (d, now) in enumerate(zip([3.6, 3.5, 3.4], [10., 10.15, 10.27])):
             ramp.update({'seq': seq, 'at_ms': 1000+seq*100, 'front_boundary_m': d}, .01, now)
@@ -174,6 +174,31 @@ class JunctionStopTests(unittest.TestCase):
 
 
 class CorridorSteeringTests(unittest.TestCase):
+    def test_reordered_sequence_and_publication_cannot_reuse_an_old_turn(self):
+        steering = MODULE.CorridorSteering()
+        walls = MODULE.corridor_walls(wall_scan(.12))
+        self.assertLess(steering.update(walls, 100, 1, scan_at_ms=1000), 1500)
+        for seq, published in [(90, 900), (90, 900), (101, 900), (99, 1100)]:
+            self.assertEqual(steering.update(walls, seq, 2, scan_at_ms=published), 1500)
+        self.assertLess(steering.update(walls, 102, 2.3, scan_at_ms=1200), 1500)
+
+    def test_consistent_heading_trend_releases_old_turn_without_inventing_reverse(self):
+        steering = MODULE.CorridorSteering()
+        values = []
+        for seq, heading in enumerate([-4., -3., -2., -1.]):
+            walls = MODULE.corridor_walls(wall_scan(-.03, math.tan(math.radians(heading))))
+            values.append(steering.update(walls, seq, seq*.1, scan_at_ms=seq*100))
+        self.assertLess(values[-1], values[0])
+        self.assertTrue(all(1500 <= value <= 1555 for value in values))
+
+    def test_return_uses_elapsed_budget_at_99ms_without_waiting_another_scan(self):
+        steering = MODULE.CorridorSteering()
+        left = MODULE.corridor_walls(wall_scan(-.12))
+        centre = MODULE.corridor_walls(wall_scan())
+        self.assertEqual(steering.update(left, 1, 0, scan_at_ms=100), 1520)
+        self.assertEqual(steering.update(centre, 2, .099, scan_at_ms=199), 1508)
+        self.assertEqual(steering.update(centre, 3, .198, scan_at_ms=298), 1500)
+
     def test_cli_front_margin_is_incomplete_and_never_rearms(self):
         spec = importlib.util.spec_from_file_location('autonomy_cli_margin', Path(__file__).parents[1]/'autonomy-control.py')
         cli = importlib.util.module_from_spec(spec)
@@ -298,24 +323,28 @@ class CorridorSteeringTests(unittest.TestCase):
         self.assertGreater(values[0], values[-1])
         self.assertTrue(all(a >= b for a,b in zip(values, values[1:])))
 
-    def test_reversal_and_return_to_centre_use_the_same_bounded_slew(self):
+    def test_reversal_passes_neutral_before_growing_opposite_turn(self):
         steering = MODULE.CorridorSteering()
         right = MODULE.corridor_walls(wall_scan(.12))
         left = MODULE.corridor_walls(wall_scan(-.12))
         self.assertEqual(steering.update(right, 1, 0), 1480)
         self.assertLess(steering.update(right, 2, .16), 1480)
         last = steering.servo
-        for seq in range(3, 6):
+        values = []
+        for seq in range(3, 9):
             value = steering.update(left, seq, (seq-1)*.16)
             self.assertTrue(0 <= value-last <= 20)
             self.assertTrue(1445 <= value <= 1555)
             last = value
+            values.append(value)
         self.assertGreater(steering.servo, 1500)
+        self.assertIn(1500, values)
+        self.assertLess(values.index(1500), next(i for i, v in enumerate(values) if v > 1500))
         centre = MODULE.corridor_walls(wall_scan())
-        for seq in range(6, 10):
+        for seq in range(9, 15):
             before = steering.servo
-            value = steering.update(centre, seq, 1+(seq-6)*.26)
-            self.assertTrue(0 <= before-value <= 15)
+            value = steering.update(centre, seq, 2+(seq-9)*.11)
+            self.assertTrue(0 <= before-value <= 13)
         self.assertEqual(steering.servo, 1500)
 
     def test_wall_control_does_not_depend_on_straight_length_or_turn_location(self):
@@ -434,6 +463,54 @@ class ProbeClearanceTests(unittest.TestCase):
         with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1560, 'duration_ms': 30001}, straight=True)
 
 
+class QualityRecoveryGateTests(unittest.TestCase):
+    def test_initial_good_observation_does_not_delay_motion(self):
+        recovery = MODULE.QualityRecovery()
+        self.assertTrue(recovery.update(True, [], 1, 0))
+        self.assertTrue(recovery.update(True, [], 2, .02))
+
+    def test_recovery_requires_three_distinct_scans_and_stable_time(self):
+        recovery = MODULE.QualityRecovery()
+        self.assertFalse(recovery.update(False, ['front_sparse'], 1, 0))
+        self.assertFalse(recovery.update(True, [], 2, .10))
+        self.assertFalse(recovery.update(True, [], 3, .20))
+        self.assertFalse(recovery.update(True, [], 4, .29))
+        self.assertTrue(recovery.update(True, [], 5, .41))
+
+    def test_repeated_scan_does_not_supply_recovery_evidence(self):
+        recovery = MODULE.QualityRecovery()
+        self.assertFalse(recovery.update(False, ['lidar_late'], 1, 0))
+        for now in [.10, .20, .30, .41]:
+            self.assertFalse(recovery.update(True, [], 2, now))
+
+    def test_backwards_scan_cannot_complete_recovery(self):
+        recovery = MODULE.QualityRecovery()
+        self.assertFalse(recovery.update(False, ['scan_incomplete'], 10, 0))
+        self.assertFalse(recovery.update(True, [], 11, .10))
+        self.assertFalse(recovery.update(True, [], 12, .25))
+        self.assertFalse(recovery.update(True, [], 11, .41))
+        self.assertFalse(recovery.update(True, [], 10, .51))
+
+    def test_any_quality_issue_resets_stable_recovery(self):
+        recovery = MODULE.QualityRecovery()
+        self.assertFalse(recovery.update(False, ['front_sparse'], 1, 0))
+        self.assertFalse(recovery.update(True, [], 2, .10))
+        self.assertFalse(recovery.update(True, [], 3, .24))
+        self.assertFalse(recovery.update(True, ['camera_late'], 4, .25))
+        self.assertFalse(recovery.update(True, [], 5, .30))
+        self.assertFalse(recovery.update(True, [], 6, .45))
+        self.assertTrue(recovery.update(True, [], 7, .61))
+
+    def test_long_gap_between_good_scans_restarts_recovery(self):
+        recovery = MODULE.QualityRecovery()
+        self.assertFalse(recovery.update(False, ['front_sparse'], 1, 0))
+        self.assertFalse(recovery.update(True, [], 2, .10))
+        self.assertFalse(recovery.update(True, [], 3, .25))
+        self.assertFalse(recovery.update(True, [], 4, .60))
+        self.assertFalse(recovery.update(True, [], 5, .75))
+        self.assertTrue(recovery.update(True, [], 6, .91))
+
+
 class QualityRecoveryTests(unittest.TestCase):
     def test_two_seconds_and_full_recovery_reset(self):
         latch = MODULE.QualityLatch()
@@ -474,7 +551,7 @@ class QualityRecoveryTests(unittest.TestCase):
         self.console.auto_session = {'report': {'run_id': 'test', 'pwm': 1560, 'observed_pwm': False,
                                                'drive_ticks': 0, 'motion_ticks': 0, 'recovery_ticks': 0, 'steering_changes': 0},
                                      'deadline': 10, 'last_loop': 0, 'heartbeat_seq': 0,
-                                     'quality': server.QualityLatch()}
+                                     'quality': server.QualityLatch(), 'recovery': server.QualityRecovery()}
 
     def tearDown(self):
         self.temp.cleanup()
@@ -483,21 +560,152 @@ class QualityRecoveryTests(unittest.TestCase):
         self.console.owner_at = now
         self.console.autonomy_tick(now)
 
+    def good_ticks(self, start, count=17):
+        self.console.scan['ranges'] = [3.] * 360
+        for i in range(count):
+            self.console.scan['seq'] += 1
+            self.tick(start+i*.02)
+
     def test_sparse_observation_waits_neutral_recovers_without_rearm(self):
         for i in range(50): self.tick(i*.02)
         self.assertIsNotNone(self.console.auto_session)
         self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        session = self.console.auto_session
+        owner, epoch, deadline = self.console.owner, self.console.control_epoch, session['deadline']
         self.console.scan['ranges'] = [3.] * 360
+        self.console.scan['seq'] += 1
         self.tick(1.0)
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        self.assertTrue(session['report']['perception_recovering'])
+        self.good_ticks(1.02, 16)
         self.assertEqual(self.output[-1], ('drive', 1560, 1500))
-        self.assertEqual(self.console.auto_session['report']['quality_elapsed_ms'], 0)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual((self.console.owner, self.console.control_epoch, session['deadline']),
+                         (owner, epoch, deadline))
+        self.assertFalse(session['report']['perception_recovering'])
+        self.assertEqual(session['report']['quality_elapsed_ms'], 0)
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
 
-    def test_continuous_sparse_observation_latches_after_two_seconds(self):
-        for i in range(100): self.tick(i*.02)
+    def test_continuous_sparse_over_two_seconds_recovers_in_same_session(self):
+        session = self.console.auto_session
+        owner, epoch, deadline = self.console.owner, self.console.control_epoch, session['deadline']
+        for i in range(126): self.tick(i*.02)
+        self.assertIs(self.console.auto_session, session)
+        self.assertTrue(self.console.status['control']['armed'])
+        self.assertTrue(session['report']['quality_confirmed'])
+        self.assertTrue(session['report']['perception_recovering'])
+        self.assertTrue(all(row == ('drive', 1500, 1500) for row in self.output))
+        self.assertIsNone(self.console.auto_result)
+        self.good_ticks(2.52)
+        self.assertEqual(self.output[-1], ('drive', 1560, 1500))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual((self.console.owner, self.console.control_epoch, session['deadline']),
+                         (owner, epoch, deadline))
+        self.assertFalse(session['report']['perception_recovering'])
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
+
+    def test_flapping_quality_restarts_stable_window_in_output_loop(self):
+        self.tick(0)
+        self.good_ticks(.02, 10)
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        self.console.scan['ranges'][5:12] = [None] * 7
+        self.console.scan['seq'] += 1
+        self.tick(.22)
+        self.good_ticks(.24, 15)
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        self.assertTrue(self.console.auto_session['report']['perception_recovering'])
+        self.assertLess(self.console.auto_session['report']['recovery_stable_ms'], 300)
+        self.good_ticks(.54, 2)
+        self.assertEqual(self.output[-1], ('drive', 1560, 1500))
+
+    def test_repeated_scan_stays_neutral_even_after_stable_time(self):
+        self.tick(0)
+        self.console.scan['ranges'] = [3.] * 360
+        self.console.scan['seq'] += 1
+        for i in range(1, 30): self.tick(i*.02)
         self.assertIsNotNone(self.console.auto_session)
-        self.tick(2.0)
+        self.assertTrue(self.console.auto_session['report']['perception_recovering'])
+        self.assertTrue(all(row == ('drive', 1500, 1500) for row in self.output))
+
+    def test_quality_wait_does_not_extend_single_session_deadline(self):
+        session = self.console.auto_session
+        session['deadline'] = 1
+        session['report']['observed_armed'] = True
+        for i in range(51): self.tick(i*.02)
         self.assertIsNone(self.console.auto_session)
-        self.assertEqual(self.console.auto_result['reason'], 'perception_quality_timeout')
+        self.assertEqual(session['deadline'], 1)
+        self.assertEqual(self.console.auto_result['reason'], 'perception_recovery_deadline')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.output[-1], ('stop', 1500, 1500))
+        self.assertIsNone(self.console.owner)
+        self.assertEqual(self.console.control_mode, 'locked')
+        self.good_ticks(1.02)
+        self.assertEqual(self.output[-1][0], 'stop')
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
+
+    def test_deadline_during_stable_recovery_is_not_success(self):
+        self.console.auto_session['deadline'] = .20
+        self.console.auto_session['report']['observed_armed'] = True
+        self.tick(0)
+        self.good_ticks(.02, 10)
+        self.tick(.20)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'perception_recovery_deadline')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.output[-1], ('stop', 1500, 1500))
+
+    def test_recovery_on_deadline_without_motion_is_not_success(self):
+        self.console.auto_session['deadline'] = .35
+        self.console.auto_session['report']['observed_armed'] = True
+        self.tick(0)
+        self.good_ticks(.04, 15)
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        self.console.scan['seq'] += 1
+        self.tick(.35)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['motion_ticks'], 0)
+        self.assertEqual(self.console.auto_result['reason'], 'perception_recovery_deadline')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.output[-1], ('stop', 1500, 1500))
+
+    def test_centering_returns_to_neutral_and_waits_for_stable_recovery(self):
+        self.console.scan = wall_scan(.12)
+        session = self.console.auto_session
+        session['report']['centering'] = True
+        session['steering'] = MODULE.CorridorSteering()
+        session['wall_scan_seq'] = None
+        self.tick(0)
+        self.assertEqual(self.output[-1], ('drive', 1560, 1480))
+        self.console.scan['ranges'][5:12] = [None] * 7
+        self.console.scan['seq'] += 1
+        for i in range(1, 126): self.tick(i*.02)
+        self.assertIs(self.console.auto_session, session)
+        self.assertTrue(all(row == ('drive', 1500, 1500) for row in self.output[1:]))
+        self.console.scan = dict(wall_scan(.12), seq=3)
+        for i in range(16):
+            self.console.scan['seq'] += 1
+            self.tick(2.52+i*.02)
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        self.console.scan['seq'] += 1
+        self.tick(2.84)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(self.output[-1], ('drive', 1560, 1500))
+        for i in range(1, 11):
+            self.console.scan['seq'] += 1
+            self.tick(2.84+i*.02)
+        self.assertEqual(self.output[-1], ('drive', 1560, 1480))
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
+
+    def test_control_feedback_fault_still_locks_during_quality_wait(self):
+        self.tick(0)
+        self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .01, 'control': .15}
+        self.tick(.02)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'probe_sensor_unavailable')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.output[-1], ('stop', 1500, 1500))
+        self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .01, 'control': .01}
+        self.good_ticks(.04)
         self.assertEqual(self.output[-1][0], 'stop')
 
     def test_close_obstacle_is_immediate_during_quality_recovery(self):
@@ -506,14 +714,24 @@ class QualityRecoveryTests(unittest.TestCase):
         self.tick(.02)
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_in_straight_corridor')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.console.control_mode, 'locked')
+        self.assertEqual(self.output[-1], ('stop', 1500, 1500))
+        self.good_ticks(.04)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.output[-1][0], 'stop')
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
 
     def test_emergency_stop_remains_latched_even_if_scan_recovers(self):
         self.tick(0)
         self.console.command({'op': 'stop'})
-        self.console.scan['ranges'] = [3.] * 360
-        self.tick(.02)
+        self.good_ticks(.02)
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.output[-1][0], 'stop')
+        self.assertEqual(self.console.auto_result['reason'], 'operator_stop')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.console.control_mode, 'locked')
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
 
     def test_centering_is_rate_limited_in_actual_output_loop(self):
         self.console.scan = wall_scan(.12)
@@ -530,14 +748,21 @@ class QualityRecoveryTests(unittest.TestCase):
         self.assertLess(servos[-1], servos[0])
         self.assertEqual(session['report']['steering_changes'], 2)
 
-    def test_missing_camera_waits_neutral_until_quality_latch(self):
+    def test_missing_camera_waits_neutral_past_two_seconds_and_recovers(self):
         self.console.scan['ranges'] = [3.]*360
         self.console.sensor_ages = lambda now: {'camera': 1.2+now, 'lidar': .01, 'control': .01}
-        for i in range(100): self.tick(i*.02)
-        self.assertIsNotNone(self.console.auto_session)
+        session = self.console.auto_session
+        for i in range(126): self.tick(i*.02)
+        self.assertIs(self.console.auto_session, session)
         self.assertEqual(self.output[-1], ('drive', 1500, 1500))
-        self.tick(2)
-        self.assertEqual(self.console.auto_result['reason'], 'perception_quality_timeout')
+        self.assertTrue(session['report']['quality_confirmed'])
+        self.assertIsNone(self.console.auto_result)
+        self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .01, 'control': .01}
+        self.good_ticks(2.52)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(self.output[-1], ('drive', 1560, 1500))
+        self.assertFalse(session['report']['perception_recovering'])
+        self.assertNotIn('arm', [op for op, _, _ in self.output])
 
     def test_normal_one_second_boundaries_do_not_reset_quality_streak(self):
         self.console.perception_quality = self.console.auto_session['quality']
@@ -545,6 +770,7 @@ class QualityRecoveryTests(unittest.TestCase):
         self.console.auto_session['report']['observed_armed'] = True
         with patch.object(self.server.time, 'monotonic', return_value=11):
             self.console.halt('probe_complete')
+        previous_result = self.console.auto_result
         self.console.status['control'].update(armed=False, tick=200)
         with patch.object(self.server.time, 'monotonic', return_value=11.2):
             self.console.autonomy_command({'op': 'straight_start', 'boot': self.console.boot,
@@ -554,7 +780,11 @@ class QualityRecoveryTests(unittest.TestCase):
         for i in range(40): self.tick(11.2+i*.02)
         self.assertIsNotNone(self.console.auto_session)
         self.tick(12)
-        self.assertEqual(self.console.auto_result['reason'], 'perception_quality_timeout')
+        self.assertIsNotNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_session['quality'].since, 10)
+        self.assertTrue(self.console.auto_session['report']['quality_confirmed'])
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        self.assertIs(self.console.auto_result, previous_result)
 
 
     def set_junction_endpoint(self):
@@ -563,7 +793,7 @@ class QualityRecoveryTests(unittest.TestCase):
         session['report']['endpoint'] = 'left_junction'
         session['junction'] = MODULE.JunctionStop()
 
-    def test_output_loop_continuously_drives_then_stops_at_junction(self):
+    def test_output_loop_continuously_drives_then_coasts_at_junction(self):
         self.set_junction_endpoint()
         for i in range(10): self.tick(i*.02)
         self.assertEqual(len(self.output), 10)
@@ -571,10 +801,10 @@ class QualityRecoveryTests(unittest.TestCase):
         for i in [10, 11]:
             self.console.scan['seq'] += 1
             self.tick(i*.02)
-        self.assertIsNone(self.console.auto_session)
-        self.assertEqual(self.console.auto_result['reason'], 'left_junction_reached')
-        self.assertTrue(self.console.auto_result['completed'])
-        self.assertEqual(self.output[-1][0], 'stop')
+        self.assertEqual(self.console.auto_session['phase'], 'coast')
+        self.assertEqual(self.console.auto_session['coast_reason'], 'left_junction_reached')
+        self.assertIsNone(self.console.auto_result)
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
         self.tick(.24)
         self.assertNotIn('arm', [op for op, _, _ in self.output])
 
@@ -605,6 +835,7 @@ class QualityRecoveryTests(unittest.TestCase):
         session['steering'] = MODULE.CorridorSteering()
         session['wall_scan_seq'] = None
         session['rear_launch'] = MODULE.RearLaunch()
+        self.console.status['control']['motor'] = 1560
         for i in range(50):
             self.console.scan['seq'] += 1
             self.tick(i*.02)
@@ -631,12 +862,11 @@ class QualityRecoveryTests(unittest.TestCase):
         motors = [motor for op, motor, _ in self.output if op == 'drive']
         self.assertEqual(motors[0], 1555)
         self.assertLess(motors[-1], motors[0])
-        self.assertGreater(motors[-1], 1500)
-        self.assertEqual(self.output[-1][0], 'stop')
-        self.assertEqual(self.console.auto_result['reason'], 'front_boundary_stop')
-        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(motors[-1], 1500)
+        self.assertEqual(self.console.auto_session['coast_reason'], 'front_boundary_stop')
+        self.assertIsNone(self.console.auto_result)
         self.tick(.62)
-        self.assertEqual(self.output[-1][0], 'stop')
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
 
     def test_prediction_steering_and_speed_limit_share_first_fresh_output(self):
         self.console.scan = wall_scan(-.003, math.tan(math.radians(-2.9)))
@@ -674,6 +904,34 @@ class QualityRecoveryTests(unittest.TestCase):
         self.assertLess(raw.calls, 10)  # Whole chunks, rather than 70,000 byte reads.
         self.assertEqual(self.console.last_stop['reason'], 'bridge_failure')
         self.assertEqual(self.output[-1][0], 'stop')
+
+    def test_bridge_repeated_scan_does_not_refresh_age_and_drive_waits_neutral(self):
+        self.console.scan = None
+        scan = {'seq': 10, 'at_ms': 1000, 'ranges': [3.]*360}
+        self.assertTrue(self.console.accept_lidar(scan, 0))
+        self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': now-self.console.scan_at, 'control': .01}
+        for i in range(20):
+            now = i*.02
+            self.assertFalse(self.console.accept_lidar(dict(scan), now))
+            self.tick(now)
+        self.assertEqual(self.console.scan_at, 0)
+        self.assertEqual(self.output[0], ('drive', 1560, 1500))
+        self.assertEqual(self.output[-1], ('drive', 1500, 1500))
+        self.assertTrue(self.console.auto_session['report']['perception_recovering'])
+        self.assertNotIn('arm', [row[0] for row in self.output])
+
+    def test_bridge_sequence_and_publication_regressions_do_not_refresh_age(self):
+        self.console.scan = None
+        self.console.args.demo = False
+        scan = {'seq': 100, 'at_ms': 1000, 'ranges': [3.]*360}
+        self.assertTrue(self.console.accept_lidar(scan, 1))
+        for seq, at in [(90, 1100), (100, 1100), (101, 900), (101, 1000)]:
+            self.assertFalse(self.console.accept_lidar(dict(scan, seq=seq, at_ms=at), 2))
+            self.assertEqual(self.console.scan_at, 1)
+        with self.assertRaises(ValueError):
+            self.console.accept_lidar({'seq': 101, 'ranges': [3.]*360}, 2)
+        self.assertTrue(self.console.accept_lidar(dict(scan, seq=102, at_ms=1200), 2.3))
+        self.assertEqual(self.console.scan_at, 2.3)
 
 
 if __name__ == '__main__':

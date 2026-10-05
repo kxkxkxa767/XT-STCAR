@@ -33,7 +33,7 @@ except (FileNotFoundError, urllib.error.URLError):
         command = Path('/proc/' + str(pid) + '/cmdline')
         if command.exists() and b'xt-stcar-console' in command.read_bytes():
             raise RuntimeError('recorded console process still exists; inspect it before restarting')
-    for name in ['server.py', 'autonomy_live.py', 'autonomy-control.py', 'vehicle-bridge', 'index.html', 'app.js', 'style.css']:
+    for name in ['server.py', 'autonomy_live.py', 'coast_motion.py', 'autonomy-control.py', 'vehicle-bridge', 'index.html', 'app.js', 'style.css']:
         if not (release/name).is_file():
             raise RuntimeError('console not deployed: ' + str(release/name))
     if not os.access(release/'vehicle-bridge', os.X_OK):

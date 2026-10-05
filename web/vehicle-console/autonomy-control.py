@@ -7,7 +7,7 @@ import signal
 import time
 import urllib.error
 import urllib.request
-from autonomy_live import MIN_FORWARD_PWM, MAX_PWM
+from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S
 
 
 class ProbeInterrupted(RuntimeError):
@@ -25,18 +25,17 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                       'epoch': state['autonomy']['epoch'], 'tick': state['status']['control']['tick'],
                       'pwm': pwm, 'duration_ms': duration_ms})
         sequence = 0
-        end = time.monotonic() + duration_ms / 1000 + 1
+        end = time.monotonic() + duration_ms / 1000 + (COAST_MAX_S if centering else 0) + 1
         while time.monotonic() < end:
             latest = request('/api/state')
             active = latest['autonomy']['active']
             result = latest['autonomy']['last_result']
-            if result and result.get('run_id') == run['run_id'] and not result.get('completed'):
-                raise ProbeInterrupted(latest, run)
             if not active or active['run_id'] != run['run_id']:
                 if latest['autonomy']['mode'] == 'manual':
                     raise RuntimeError('manual operator took control; automatic output cancelled')
                 control = latest['status']['control']
-                if control['armed'] or control.get('motor') != 1500 or control.get('servo') != 1500:
+                if (control['armed'] or control.get('motor') != 1500 or control.get('servo') != 1500
+                        or latest.get('ages', {}).get('control', 0) >= .15):
                     time.sleep(.02)
                     continue
                 if not result or result.get('run_id') != run['run_id'] or not result.get('completed'):
@@ -50,9 +49,9 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                 latest = request('/api/state')
                 if latest['autonomy']['active'] is None:
                     result = latest['autonomy']['last_result']
-                    if result and result.get('run_id') == run['run_id'] and result.get('completed'):
+                    if result and result.get('run_id') == run['run_id']:
                         time.sleep(.02)
-                        continue  # Normal deadline raced heartbeat; still await neutral feedback.
+                        continue  # Any stop raced heartbeat; still await fresh neutral feedback.
                     raise ProbeInterrupted(latest, run) from None
                 raise
             time.sleep(.04)
@@ -87,7 +86,10 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, sto
             raise
         run, reason = error.run, stops[result['reason']]
     return {'reason': reason, 'completed': result.get('completed', False),
-            'motion_ticks': result.get('motion_ticks', 0),
+            'motion_ticks': result.get('motion_ticks', 0), 'recovery_ticks': result.get('recovery_ticks', 0),
+            'perception_recovering': result.get('perception_recovering', False),
+            'coast_ticks': result.get('coast_ticks', 0), 'standstill_confirmed': result.get('standstill_confirmed', False),
+            'coast_motion': result.get('coast_motion'),
             'steering_changes': result.get('steering_changes', 0), 'walls': result.get('walls'),
             'junction_confirmations': result.get('junction_confirmations', 0),
             'junction_geometry': result.get('junction_geometry'),

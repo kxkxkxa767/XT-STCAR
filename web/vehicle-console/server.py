@@ -24,8 +24,9 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
-from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, COAST_TIME_MARGIN_S, QualityLatch, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
+from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            corridor_walls, probe_clearance, probe_parameters)
+from coast_motion import CoastMotion
 
 ROOT = Path(__file__).resolve().parent
 
@@ -128,12 +129,27 @@ class Console:
                         if self.owner and not control.get('armed') and control.get('seq', -1) >= self.arm_sequence:
                             self.halt('bridge_' + control.get('reason', 'locked'))
                     else:
-                        self.scan = value
-                        self.scan_at = time.monotonic()
+                        self.accept_lidar(value, time.monotonic())
         except Exception as error:
             with self.lock:
                 self.errors[kind] = str(error)
             self.halt('bridge_failure')
+
+    def accept_lidar(self, value, now):
+        """Receiving a repeated JSON line cannot refresh lidar observation age."""
+        if not isinstance(value, dict) or type(value.get('seq')) is not int or value['seq'] < 0:
+            raise ValueError('invalid_lidar_sequence')
+        published = value.get('at_ms')
+        if not self.args.demo and (type(published) is not int or published < 0):
+            raise ValueError('invalid_lidar_publication_clock')
+        if self.scan is not None:
+            old_seq, old_publication = self.scan.get('seq'), self.scan.get('at_ms')
+            if type(old_seq) is int and value['seq'] <= old_seq:
+                return False
+            if type(old_publication) is int and (type(published) is not int or published <= old_publication):
+                return False
+        self.scan, self.scan_at = value, now
+        return True
 
     def healthy(self):
         now = time.monotonic()
@@ -141,7 +157,7 @@ class Console:
                 and now - self.control_at < .2 and not self.errors)
 
     def autonomy_healthy(self):
-        # Perception frame age is handled by the 2-second recovery latch.
+        # Perception quality waits neutrally inside the existing bounded session.
         return time.monotonic() - self.control_at < .2 and not self.errors
 
     def health_watch(self):
@@ -185,7 +201,10 @@ class Console:
             self.control_mode = 'locked'
             if self.auto_session is not None:
                 self.auto_result = {**self.auto_session['report'], 'reason': reason,
-                                    'completed': reason in ('probe_complete', 'left_junction_reached') and self.auto_session['report'].get('observed_armed', False)}
+                                    'completed': reason in ('probe_complete', 'left_junction_reached')
+                                    and self.auto_session['report'].get('observed_armed', False)
+                                    and (not self.auto_session['report'].get('centering')
+                                         or self.auto_session['report'].get('standstill_confirmed', False))}
             self.auto_session = None
             self.owner = None
             self.stopped_tick = self.status.get('control', {}).get('tick', -1)
@@ -277,6 +296,8 @@ class Console:
         return {'mode': self.control_mode, 'epoch': self.control_epoch,
                 'supported': ['straight_probe', 'straight_segment', 'to_left_junction'], 'competition_supported': False,
                 'quality_confirm_s': QUALITY_CONFIRM_S,
+                'quality_self_recovery': True, 'quality_recovery_stable_s': QUALITY_RECOVERY_STABLE_S,
+                'coast_max_s': COAST_MAX_S,
                 'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
@@ -333,10 +354,13 @@ class Console:
                       'boundary_closing_mps': None, 'boundary_time_to_clearance_s': None, 'cruise_limited': False,
                       'motion_ticks': 0, 'recovery_ticks': 0,
                       'quality_issues': clearance['quality_issues'], 'quality_elapsed_ms': 0, 'quality_counts': {},
+                      'quality_confirmed': False, 'perception_recovering': not clearance['motion_ready'], 'recovery_stable_ms': 0,
+                      'phase': 'drive', 'coast_ticks': 0, 'coast_motion': None, 'standstill_confirmed': False,
                       'wheel_motion_measured': False, 'competition_navigation': False,
                       'clearance_start': clearance, 'epoch': self.control_epoch}
             self.auto_session = {'report': report, 'deadline': now + duration / 1000,
-                                 'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality,
+                                 'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality, 'recovery': QualityRecovery(),
+                                 'phase': 'drive', 'coast_motion': CoastMotion(), 'motion_scan_seq': None,
                                  'steering': CorridorSteering(), 'wall_scan_seq': None, 'junction': JunctionStop(),
                                  'rear_launch': RearLaunch() if centering else None,
                                  'ramp': ApproachRamp(pwm) if centering else None}
@@ -362,6 +386,65 @@ class Console:
                 now = time.monotonic()
                 self.autonomy_tick(now)
 
+    def begin_coast(self, reason, now):
+        """Normal planned neutral phase; retains only the existing owner's steering lease."""
+        session = self.auto_session
+        if session.get('phase') != 'coast':
+            session['phase'] = 'coast'
+            session['coast_since'] = now
+            session['coast_deadline'] = now+COAST_MAX_S
+            session['coast_reason'] = reason
+            session['coast_motion'] = CoastMotion()
+            session['motion_scan_seq'] = None
+            session['coast_start_seq'] = self.scan['seq']
+            session['coast_neutral_sequence'] = None
+            session['coast_endpoint_verified'] = False
+            if reason == 'left_junction_reached':
+                session['junction'] = JunctionStop()
+            if session.get('rear_launch'):
+                session['rear_launch'].active = False
+            session['report'].update(phase='coast', planned_stop_reason=reason,
+                                      current_pwm=1500, coast_ticks=0, standstill_confirmed=False)
+
+    def coast_tick(self, session, now, motion_ready, servo):
+        report = session['report']
+        if now >= session['coast_deadline']:
+            self.halt('coast_standstill_unconfirmed')
+            return
+        if session['coast_reason'] == 'left_junction_reached':
+            session['coast_endpoint_verified'] = session['junction'].update(
+                self.scan, report['sensor_ages']['lidar'], now, motion_ready)
+        control = self.status['control']
+        neutral_ack = (session['coast_neutral_sequence'] is not None
+                       and control.get('seq', -1) >= session['coast_neutral_sequence']
+                       and control.get('motor') == 1500 and control.get('armed'))
+        report['coast_neutral_ack'] = bool(neutral_ack)
+        if not motion_ready or not neutral_ack or self.scan['seq'] <= session['coast_start_seq']:
+            session['coast_motion'] = CoastMotion()
+            session['motion_scan_seq'] = None
+            report['coast_motion'] = {'observable': False, 'stationary': False,
+                                      'reason': 'perception_unavailable' if not motion_ready else 'awaiting_neutral_and_new_scan'}
+        else:
+            report['coast_motion'] = session['coast_motion'].update(self.scan, report['sensor_ages']['lidar'], now)
+            session['motion_scan_seq'] = self.scan['seq']
+        motion = report.get('coast_motion') or {}
+        if motion.get('observable') and motion.get('stationary'):
+            report['standstill_confirmed'] = True
+            reason = session['coast_reason']
+            if reason == 'left_junction_reached' and not session['coast_endpoint_verified']:
+                reason = 'left_junction_coast_position_unverified'
+            self.halt(reason)
+            return
+        # No branch in coast may restore positive motor PWM.
+        if servo != report.get('servo', 1500):
+            report['steering_changes'] += 1
+        report['servo'] = servo
+        report['current_pwm'] = 1500
+        self.emit('drive', 1500, servo, self.status['control']['tick'])
+        if session['coast_neutral_sequence'] is None:
+            session['coast_neutral_sequence'] = self.sequence
+        report['coast_ticks'] += 1
+
     def autonomy_tick(self, now):
         """Caller holds the control lock. Clock injection permits fault-path tests."""
         session = self.auto_session
@@ -374,13 +457,17 @@ class Console:
             self.halt('autonomy_control_gap')
             return
         session['last_loop'] = now
+        if session.get('phase') == 'coast' and now >= session['coast_deadline']:
+            self.halt('coast_standstill_unconfirmed')
+            return
         try:
             report = session['report']
             report['sensor_ages'] = self.sensor_ages(now)
             report['sensor_errors'] = dict(self.errors)
             control = self.status.get('control', {})
             rear = session.get('rear_launch')
-            rear_active = rear.update(self.scan, now, bool(control.get('armed') and control.get('seq', -1) >= self.arm_sequence)) if rear else False
+            rear_active = rear.update(self.scan, now, bool(control.get('armed') and control.get('motor', 1500) > 1500
+                                                         and control.get('seq', -1) >= self.arm_sequence)) if rear else False
             report['rear_launch_active'] = rear_active
             clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False), rear_launch=rear_active)
             if not self.autonomy_healthy():
@@ -391,12 +478,22 @@ class Console:
                 counts[issue] = counts.get(issue, 0)+1
             confirmed = session['quality'].update(clearance['quality_issues'], now)
             report['quality_elapsed_ms'] = session['quality'].elapsed_ms(now)
-            if confirmed:
-                self.halt('perception_quality_timeout')
-                return
-            if now >= session['deadline']:
-                self.halt('left_junction_timeout' if report.get('endpoint') == 'left_junction' else 'probe_complete')
-                return
+            report['quality_confirmed'] = confirmed
+            recovery = session.get('recovery')
+            if recovery is None:
+                recovery = session['recovery'] = QualityRecovery()
+            motion_ready = recovery.update(clearance['motion_ready'], clearance['quality_issues'], self.scan['seq'], now)
+            report['perception_recovering'] = recovery.waiting
+            report['recovery_stable_ms'] = recovery.stable_ms(now)
+            if session.get('phase') != 'coast' and now >= session['deadline']:
+                reason = ('perception_recovery_deadline' if not motion_ready or not report.get('motion_ticks', 0) else
+                          'left_junction_timeout' if report.get('endpoint') == 'left_junction' else 'probe_complete')
+                if report.get('centering') and reason != 'perception_recovery_deadline':
+                    self.begin_coast(reason, now)
+                    rear_active = False
+                else:
+                    self.halt(reason)
+                    return
             control = self.status.get('control', {})
             if not control.get('armed') or control.get('seq', -1) < self.arm_sequence:
                 return
@@ -404,15 +501,19 @@ class Console:
             report['observed_pwm'] |= control.get('motor') == report['pwm']
             servo = 1500
             if report.get('centering'):
-                if session['wall_scan_seq'] != self.scan['seq'] or not clearance['motion_ready']:
-                    report['walls'] = corridor_walls(self.scan) if clearance['motion_ready'] else None
+                if session['wall_scan_seq'] != self.scan['seq'] or not motion_ready:
+                    report['walls'] = corridor_walls(self.scan) if motion_ready else None
                     session['wall_scan_seq'] = self.scan['seq']
-                servo = session['steering'].update(report['walls'], self.scan['seq'], now, clearance['motion_ready'] and not rear_active)
+                servo = session['steering'].update(report['walls'], self.scan['seq'], now,
+                                                  motion_ready and not rear_active, self.scan.get('at_ms'))
             report['lane_correcting'] = bool(report.get('centering') and session['steering'].correcting)
+            if session.get('phase') == 'coast':
+                self.coast_tick(session, now, motion_ready, servo)
+                return
             ramp = session.get('ramp')
             if ramp:
                 report['current_pwm'] = ramp.update(self.scan, report['sensor_ages']['lidar'], now,
-                                                   report['lane_correcting'], clearance['motion_ready'])
+                                                   report['lane_correcting'], motion_ready)
                 report['approach_front_m'] = ramp.closest_front
                 report['pwm_ramp_changes'] = ramp.changes
                 report['lane_speed_limited'] = ramp.lane_limited
@@ -420,22 +521,24 @@ class Console:
                 report['boundary_time_to_clearance_s'] = ramp.time_to_clearance
                 report['cruise_limited'] = ramp.cruise_limited
             if report.get('endpoint') == 'left_junction':
-                reached = session['junction'].update(self.scan, report['sensor_ages']['lidar'], now, clearance['motion_ready'])
+                reached = session['junction'].update(self.scan, report['sensor_ages']['lidar'], now, motion_ready)
                 report['junction_confirmations'] = session['junction'].count
                 report['junction_geometry'] = session['junction'].previous
                 if reached:
-                    self.halt('left_junction_reached')
+                    self.begin_coast('left_junction_reached', now)
+                    self.coast_tick(session, now, motion_ready, servo)
                     return
             if ramp and ramp.stop_requested:
-                self.halt('front_boundary_stop')
+                self.begin_coast('front_boundary_stop', now)
+                self.coast_tick(session, now, motion_ready, servo)
                 return
-            motor = report.get('current_pwm', report['pwm']) if clearance['motion_ready'] else 1500
+            motor = report.get('current_pwm', report['pwm']) if motion_ready else 1500
             if servo != report.get('servo', 1500):
                 report['steering_changes'] += 1
             report['servo'] = servo
             self.emit('drive', motor, servo, control['tick'])
             report['drive_ticks'] += 1
-            report['motion_ticks' if clearance['motion_ready'] else 'recovery_ticks'] += 1
+            report['motion_ticks' if motion_ready else 'recovery_ticks'] += 1
         except (ValueError, RuntimeError, OSError, KeyError) as error:
             self.halt(str(error))
 

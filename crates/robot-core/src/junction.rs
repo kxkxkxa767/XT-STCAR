@@ -204,6 +204,9 @@ pub fn detect_left_junction(
 
 /// Transverse boundary used only to reduce approach PWM, never to claim a turn.
 /// Require two extended side lines and at least 35 cm of a known interior plane.
+/// Search the scan's declared valid range, rather than truncating early returns
+/// to a fixed approach distance. Sparse distant returns remain unknown unless
+/// they satisfy the same point-count, span and plane-consistency requirements.
 pub fn detect_front_boundary(
     scan: &LidarSample,
     heading_frame: &FrameId,
@@ -260,7 +263,7 @@ pub fn detect_front_boundary(
                 && *y < la * x + lb - 0.08
         })
         .map(|&(_, x, y)| (x * cos + y * sin, -x * sin + y * cos))
-        .filter(|(x, _)| (0.55..=4.10).contains(x))
+        .filter(|(x, _)| (0.55..=scan.range_max_m).contains(x))
         .collect();
     let mut candidates = Vec::new();
     for &(anchor, _) in &points {
@@ -280,7 +283,7 @@ pub fn detect_front_boundary(
     }
     Ok(candidates
         .into_iter()
-        .filter(|x| (0.6..=4.05).contains(x))
+        .filter(|x| (0.6..=scan.range_max_m).contains(x))
         .min_by(f64::total_cmp))
 }
 
