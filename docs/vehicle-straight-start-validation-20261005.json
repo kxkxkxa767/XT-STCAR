@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-05",
+  "source_commit": "bc37236ec42e2df65b78901ad76555de5f878a50",
+  "user_request": "你启动电机看看",
+  "scope": "One supervised 1s straight start; no continuous route, left turn, reverse brake or automatic retry.",
+  "profile": {
+    "launch_pwm": 1580,
+    "cruise_pwm": 1570,
+    "minimum_forward_pwm": 1550,
+    "launch_hold_s": 0.6,
+    "steering_limits": [
+      1445,
+      1555
+    ]
+  },
+  "preflight": {
+    "samples": 20,
+    "distinct_scans": 20,
+    "all_motion_ready": true,
+    "junction_at_start": false
+  },
+  "start_walls": null,
+  "result": {
+    "pwm": 1580,
+    "current_pwm": 1570,
+    "duration_ms": 1000,
+    "drive_ticks": 33,
+    "motion_ticks": 33,
+    "recovery_ticks": 0,
+    "steering_changes": 0,
+    "walls": {
+      "offset_right_m": 0.02685929224639233,
+      "heading_right_deg": -1.6837554677471596,
+      "slope": -0.02939553919647422,
+      "width_m": 0.9443623722989956
+    },
+    "rear_launch_active": false,
+    "pwm_ramp_changes": 2,
+    "reason": "probe_complete",
+    "completed": true,
+    "wheel_motion_measured": false,
+    "competition_navigation": false
+  },
+  "helper_exit_code": 0,
+  "helper_elapsed_s_including_start_and_after_exit_observation": 7.609249663999435,
+  "final": {
+    "healthy": true,
+    "owner": null,
+    "active": null,
+    "mode": "locked",
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 35,
+      "servo": 1500,
+      "tick": 463617
+    },
+    "ages_s": {
+      "camera": 0.06822096399992006,
+      "lidar": 0.0702087150002626,
+      "control": 0.008859173000018927
+    },
+    "settings": {
+      "forward": 1580,
+      "reverse": 1350,
+      "left": 1650,
+      "right": 1350
+    }
+  },
+  "radial_lidar_m_before": {
+    "0": 7.98,
+    "90": 0.521,
+    "180": 0.28099999999999997,
+    "270": 0.424
+  },
+  "radial_lidar_m_after": {
+    "0": 5.029000000000001,
+    "90": 0.45599999999999996,
+    "180": 3.022,
+    "270": 0.473
+  },
+  "verification": [
+    "Bridge observed1580; controller decreased1580->1575->1570.",
+    "33 motion-ready drive commands; no quality recovery or steering correction.",
+    "Normal 1s deadline completed; independent fresh state confirmed locked/owner null/active null/armed false and motor/servo1500.",
+    "Full scan and image changed; this is not wheel odometry or measured stopping distance.",
+    "User reported no left drift in this one-second start test."
+  ],
+  "limitations": [
+    "This completed only the bounded start test, not the straight to left junction.",
+    "No larger steering command occurred; left drift correction is still unvalidated.",
+    "Initial long-wall fit unavailable; after moving the wall fit returned.",
+    "CLI abnormal exits do not independently await neutral feedback; supervision must continue until fresh bridge state confirms neutral. This run did confirm it."
+  ],
+  "raw_evidence_directory": "work/vehicle-upload-20261005/straight-start-07/",
+  "raw_run_sha256": "29852846c3b148e269c625245ce4a742a5f22416619a12fc777c685a62340268",
+  "user_feedback": "这一次倒是没有左偏"
+}
