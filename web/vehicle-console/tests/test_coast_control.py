@@ -1,5 +1,6 @@
 """Actual console output/state-machine checks with offline scans and an injected clock."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import threading
@@ -251,6 +252,15 @@ class CoastControlTests(unittest.TestCase):
 
 
 class CoastWorkerTests(unittest.TestCase):
+    def setUp(self):
+        self.thread_errors = []
+        self.thread_error_patch = patch.object(threading, 'excepthook', self.thread_errors.append)
+        self.thread_error_patch.start()
+
+    def tearDown(self):
+        self.thread_error_patch.stop()
+        self.assertEqual(self.thread_errors, [], 'worker raised an unhandled background exception')
+
     class Still:
         def update(self, *args):
             return {'observable': True, 'stationary': True}
@@ -371,6 +381,142 @@ class CoastWorkerTests(unittest.TestCase):
         self.assertEqual(calls, [1])
         self.assertIsNone(worker._result)
         self.assertFalse(worker._thread.is_alive())
+
+    def test_private_process_protocol_resets_generation_and_reports_invalid_input_unknown(self):
+        requests = [{'generation': 1, 'request_id': seq, 'scan': room_scan(seq),
+                     'lidar_age_s': .01, 'received_s': seq*.1} for seq in range(1, 7)]
+        requests += [
+            {'generation': 2, 'request_id': 7, 'scan': room_scan(7), 'lidar_age_s': .01, 'received_s': .7},
+            {'generation': 1, 'request_id': 8, 'scan': room_scan(8), 'lidar_age_s': .01, 'received_s': .8},
+            {'generation': 2, 'request_id': 9, 'scan': room_scan(8), 'lidar_age_s': .01, 'received_s': .8},
+        ]
+        command = [sys.executable, '-u', str(Path(motion_module.__file__).resolve()), '--motion-worker']
+        process = motion_module.subprocess.Popen(command, stdin=motion_module.subprocess.PIPE,
+            stdout=motion_module.subprocess.PIPE, stderr=motion_module.subprocess.PIPE, close_fds=True)
+        output, error = process.communicate(
+            b''.join(json.dumps(request).encode()+b'\n' for request in requests), timeout=5)
+        self.assertEqual(process.returncode, 0, error)
+        replies = [json.loads(line) for line in output.splitlines()]
+        self.assertEqual(len(replies), 9)
+        self.assertEqual([reply['request_id'] for reply in replies], list(range(1, 10)))
+        self.assertTrue(replies[5]['result']['stationary'])
+        self.assertFalse(replies[6]['result']['stationary'])
+        self.assertEqual(replies[6]['result']['reason'], 'reference_initialized')
+        self.assertFalse(replies[7]['result']['observable'])
+        self.assertEqual(replies[7]['result']['reason'], 'motion_worker_protocol_error')
+        self.assertFalse(replies[8]['result']['stationary'])
+        self.assertEqual(replies[8]['result']['reason'], 'reference_initialized')
+
+    def test_default_worker_uses_a_process_with_closed_extra_fds_and_reaps_on_close(self):
+        original = motion_module.subprocess.Popen
+        with patch.object(motion_module.subprocess, 'Popen', wraps=original) as spawn:
+            worker = motion_module.CoastMotionWorker()
+            generation = worker.reset()
+            process = None
+            try:
+                worker.submit(generation, room_scan(1), .01, 1., 1.01)
+                with worker._condition:
+                    self.assertTrue(worker._condition.wait_for(lambda: worker._result is not None, timeout=5))
+                    process = worker._process
+                self.assertTrue(worker._process_mode)
+                self.assertIsNone(worker._motion, 'production fit ran in the parent interpreter')
+                spawn.assert_called_once()
+                self.assertTrue(spawn.call_args.kwargs['close_fds'])
+                self.assertTrue(spawn.call_args.kwargs['start_new_session'])
+                self.assertEqual(spawn.call_args.args[0][-1], '--motion-worker')
+                result = worker.result(generation, room_scan(1), .02, 1., 1.02)
+                self.assertFalse(result['stationary'])
+                self.assertEqual(result['reason'], 'reference_initialized')
+                self.assertEqual(result['source_scan_seq'], 1)
+                self.assertFalse(worker.result(generation, room_scan(2), .02, 1., 1.02)['stationary'])
+                for seq in range(2, 7):
+                    received = 1.+(seq-1)*.1
+                    worker.submit(generation, room_scan(seq), .01, received, received+.01)
+                    with worker._condition:
+                        self.assertTrue(worker._condition.wait_for(
+                            lambda: worker._result is not None and worker._result[1][0] == seq, timeout=5))
+                result = worker.result(generation, room_scan(6), .02, 1.5, 1.52)
+                self.assertTrue(result['stationary'])
+                self.assertFalse(worker.result(generation, room_scan(7), .02, 1.5, 1.52)['stationary'])
+                current = worker.reset()
+                self.assertFalse(worker.result(generation, room_scan(6), .02, 1.5, 1.52)['stationary'])
+                worker.submit(current, room_scan(7), .01, 1.6, 1.61)
+                with worker._condition:
+                    self.assertTrue(worker._condition.wait_for(
+                        lambda: worker._result is not None and worker._result[0] == current, timeout=5))
+                result = worker.result(current, room_scan(7), .02, 1.6, 1.62)
+                self.assertFalse(result['stationary'])
+                self.assertEqual(result['reason'], 'reference_initialized')
+                spawn.assert_called_once()
+            finally:
+                worker.close()
+                worker._thread.join(5)
+            self.assertFalse(worker._thread.is_alive())
+            self.assertIsNotNone(process)
+            self.assertIsNotNone(process.poll())
+
+    def test_process_bad_reply_or_exit_returns_unknown_and_is_reaped(self):
+        programs = [
+            "import sys; sys.stdin.buffer.readline(); print('not-json', flush=True)",
+            "import sys; sys.stdin.buffer.readline()",
+            "import json,sys; r=json.loads(sys.stdin.buffer.readline()); "
+            "print(json.dumps({'generation': r['generation']+1, 'request_id': r['request_id'], "
+            "'result': {'observable': True, 'stationary': True, 'low_motion': True}}), flush=True)",
+            "import json,sys; r=json.loads(sys.stdin.buffer.readline()); "
+            "print(json.dumps({'generation': r['generation'], 'request_id': r['request_id'], "
+            "'result': {'observable': True, 'stationary': True, 'low_motion': True}}), flush=True)",
+        ]
+        original = motion_module.subprocess.Popen
+        for program in programs:
+            with self.subTest(program=program):
+                children = []
+                def faulty_child(command, **kwargs):
+                    child = original([sys.executable, '-u', '-c', program], **kwargs)
+                    children.append(child)
+                    return child
+                with patch.object(motion_module.subprocess, 'Popen', side_effect=faulty_child):
+                    worker = motion_module.CoastMotionWorker()
+                    generation = worker.reset()
+                    try:
+                        worker.submit(generation, room_scan(1), .01, 1., 1.01)
+                        with worker._condition:
+                            self.assertTrue(worker._condition.wait_for(lambda: worker._result is not None, timeout=5))
+                        result = worker.result(generation, room_scan(1), .02, 1., 1.02)
+                        self.assertFalse(result['observable'])
+                        self.assertFalse(result['stationary'])
+                        self.assertEqual(result['reason'], 'motion_estimator_failed')
+                    finally:
+                        worker.close()
+                        worker._thread.join(5)
+                self.assertFalse(worker._thread.is_alive())
+                self.assertTrue(children)
+                self.assertTrue(all(child.poll() is not None for child in children))
+
+    def test_close_interrupts_process_readline_without_closing_its_stream_lock(self):
+        original = motion_module.subprocess.Popen
+        program = "import sys,time; sys.stdin.buffer.readline(); time.sleep(60)"
+        children = []
+        def blocked_child(command, **kwargs):
+            child = original([sys.executable, '-u', '-c', program], **kwargs)
+            children.append(child)
+            return child
+        with patch.object(motion_module.subprocess, 'Popen', side_effect=blocked_child):
+            worker = motion_module.CoastMotionWorker()
+            generation = worker.reset()
+            try:
+                worker.submit(generation, room_scan(1), .01, 1., 1.01)
+                with worker._condition:
+                    self.assertTrue(worker._condition.wait_for(lambda: worker._inflight is not None, timeout=5))
+                worker.submit(generation, room_scan(2), .01, 1.1, 1.11)
+                worker.close()
+                self.assertFalse(worker.result(generation, room_scan(1), .02, 1., 1.02)['stationary'])
+            finally:
+                worker.close()
+                worker._thread.join(5)
+        self.assertFalse(worker._thread.is_alive())
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertIsNone(worker._result)
 
 class CliStopFeedbackTests(unittest.TestCase):
     def test_failure_waits_for_fresh_neutral_feedback_before_returning(self):

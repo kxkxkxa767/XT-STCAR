@@ -7,8 +7,12 @@ geometry, stale/reordered data, ambiguous plane identity or inconsistent fits
 never certify stationary. This assumes static planes and fixed lidar extrinsics;
 it does not establish braking distance or compensate scan acquisition distortion.
 """
+import json
 import math
+from pathlib import Path
 import statistics
+import subprocess
+import sys
 import threading
 import time
 
@@ -303,6 +307,9 @@ class CoastMotionWorker:
         self._motion = None
         self._motion_generation = None
         self._thread = None
+        self._process_mode = autostart and estimator_factory is CoastMotion
+        self._process = None
+        self._request_sequence = 0
         if autostart:
             self._thread = threading.Thread(target=self._run, name='coast-motion', daemon=True)
             self._thread.start()
@@ -343,8 +350,16 @@ class CoastMotionWorker:
             self._closed = True
             self._generation += 1
             self._pending = self._result = self._last_input = None
+            process = self._process
             self._condition.notify_all()
-        # Never wait for fitting while the caller holds the control lock.
+        # Do not wait or close streams here: the IO thread may be in readline.
+        # The child owns no device; terminating it cannot interrupt neutral tty
+        # output. The background thread closes its pipes and reaps it.
+        if process is not None:
+            try:
+                process.terminate()
+            except ProcessLookupError:
+                pass
 
     def submit(self, generation, scan, age, received, now):
         error = self._input_error(scan, age, received, now)
@@ -386,19 +401,108 @@ class CoastMotionWorker:
                 return None
             item, self._pending = self._pending, None
             self._inflight = item[:2]
+            self._condition.notify_all()
             return item
+
+    def _ensure_process(self):
+        with self._condition:
+            if self._closed:
+                raise RuntimeError('motion worker closed')
+            process = self._process
+        if process is not None and process.poll() is None:
+            return process
+        if process is not None:
+            self._reap_process(process)
+        # Only the coordinator thread starts children; at most one can exist.
+        process = subprocess.Popen([sys.executable, '-u', str(Path(__file__).resolve()), '--motion-worker'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            close_fds=True, start_new_session=True)
+        with self._condition:
+            self._process = process
+            closed = self._closed
+            self._condition.notify_all()
+        if closed:
+            process.terminate()
+            raise RuntimeError('motion worker closed')
+        return process
+
+    def _reap_process(self, process):
+        # Runs only in the IO thread, never under the caller's control lock.
+        if process.poll() is None:
+            process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=3)
+        finally:
+            for stream in (process.stdin, process.stdout):
+                try:
+                    stream.close()
+                except OSError:
+                    pass  # A terminated child may leave buffered input unflushable.
+            with self._condition:
+                if self._process is process:
+                    self._process = None
+
+    def _process_update(self, generation, scan, age, received):
+        process = self._ensure_process()
+        self._request_sequence += 1
+        request_id = self._request_sequence
+        payload = json.dumps({'generation': generation, 'request_id': request_id,
+            'scan': scan, 'lidar_age_s': age, 'received_s': received}, allow_nan=False).encode()+b'\n'
+        if len(payload) > 65536:
+            raise RuntimeError('motion worker input too large')
+        process.stdin.write(payload)
+        process.stdin.flush()
+        line = process.stdout.readline(65537)
+        if not line or len(line) > 65536 or not line.endswith(b'\n'):
+            raise RuntimeError('motion worker response missing or oversized')
+        response = json.loads(line)
+        motion = response.get('result')
+        if (type(response.get('generation')) is not int or response['generation'] != generation
+                or type(response.get('request_id')) is not int or response['request_id'] != request_id
+                or not isinstance(motion, dict)
+                or any(type(motion.get(key)) is not bool for key in ('observable', 'stationary', 'low_motion'))
+                or motion.get('evidence_type') != 'uncalibrated_lidar_low_motion'
+                or motion.get('software_thresholds') != SOFTWARE_THRESHOLDS
+                or (motion['stationary'] and not (motion['observable'] and motion['low_motion']))):
+            raise RuntimeError('motion worker response identity or evidence invalid')
+        if motion['stationary']:
+            limits = SOFTWARE_THRESHOLDS
+            checks = [('stable_pairs', limits['min_low_motion_pairs']),
+                      ('stable_publication_ms', 1000*limits['min_publication_stable_s']),
+                      ('stable_receive_ms', 1000*limits['min_receive_stable_s']), ('matched_planes', 2)]
+            if (any(type(motion.get(key)) is not int or motion[key] < minimum for key, minimum in checks)
+                    or any(not _finite(motion.get(key)) for key in ('speed_mps', 'yaw_rate_rps', 'translation_m',
+                        'stable_translation_m', 'stable_rotation_rad', 'rmse_m', 'inlier_fraction'))
+                    or not 0 <= motion['speed_mps'] <= limits['max_low_speed_mps']
+                    or abs(motion['yaw_rate_rps']) > limits['max_low_yaw_rate_rps']
+                    or not 0 <= motion['translation_m'] <= limits['max_low_pair_translation_m']
+                    or not 0 <= motion['stable_translation_m'] <= limits['max_stable_total_translation_m']
+                    or not 0 <= motion['stable_rotation_rad'] <= limits['max_stable_total_rotation_rad']
+                    or not 0 <= motion['rmse_m'] <= .020 or not .90 <= motion['inlier_fraction'] <= 1):
+                raise RuntimeError('motion worker stationary evidence incomplete')
+        return motion
 
     def _compute(self, item):
         generation, identity, scan, age, received, submitted = item
-        if self._motion_generation != generation:
-            self._motion, self._motion_generation = self._factory(), generation
         started = time.perf_counter()
         try:
             # Receive progress is the original accepted scan's clock, never the
             # time a slow fit completes or a repeated control tick polls it.
-            motion = self._motion.update(scan, age, received)
+            if self._process_mode:
+                motion = self._process_update(generation, scan, age, received)
+            else:
+                if self._motion_generation != generation:
+                    self._motion, self._motion_generation = self._factory(), generation
+                motion = self._motion.update(scan, age, received)
         except Exception:
-            self._motion = self._factory()
+            if self._process_mode:
+                if self._process is not None:
+                    self._reap_process(self._process)
+            else:
+                self._motion = self._factory()
             motion = self.unknown('motion_estimator_failed')
         motion = {**motion, 'source_scan_seq': scan['seq'], 'source_publication_at_ms': scan['at_ms'],
                   'source_receive_monotonic_s': received,
@@ -418,11 +522,55 @@ class CoastMotionWorker:
             self._compute(item)
 
     def _run(self):
-        while True:
-            with self._condition:
-                self._condition.wait_for(lambda: self._closed or self._pending is not None)
-                if self._closed:
-                    return
-            item = self._take_pending()
-            if item is not None:
-                self._compute(item)
+        try:
+            if self._process_mode:
+                try:
+                    self._ensure_process()  # Preload while control is still locked/idle.
+                except Exception:
+                    pass  # A later request gets explicit unknown evidence.
+            while True:
+                with self._condition:
+                    self._condition.wait_for(lambda: self._closed or self._pending is not None)
+                    if self._closed:
+                        return
+                item = self._take_pending()
+                if item is not None:
+                    self._compute(item)
+        finally:
+            if self._process is not None:
+                self._reap_process(self._process)
+
+
+def _motion_worker_main():
+    """Private bounded JSONL geometry protocol. No server, tty or actuator APIs."""
+    motion, generation, last_request = CoastMotion(), None, -1
+    while True:
+        line = sys.stdin.buffer.readline(65537)
+        if not line:
+            return
+        if len(line) > 65536 or not line.endswith(b'\n'):
+            return
+        request_generation = request_id = None
+        try:
+            request = json.loads(line)
+            request_generation, request_id = request.get('generation'), request.get('request_id')
+            if (set(request) != {'generation', 'request_id', 'scan', 'lidar_age_s', 'received_s'}
+                    or type(request_generation) is not int or request_generation < 0
+                    or (generation is not None and request_generation < generation)
+                    or type(request_id) is not int or request_id <= last_request):
+                raise ValueError('invalid worker request identity')
+            if request_generation != generation:
+                motion, generation = CoastMotion(), request_generation
+            last_request = request_id
+            result = motion.update(request['scan'], request['lidar_age_s'], request['received_s'])
+        except Exception:
+            result = motion._unknown('motion_worker_protocol_error')
+        response = {'generation': request_generation, 'request_id': request_id, 'result': result}
+        sys.stdout.buffer.write(json.dumps(response, allow_nan=False).encode()+b'\n')
+        sys.stdout.buffer.flush()
+
+
+if __name__ == '__main__':
+    if sys.argv[1:] != ['--motion-worker']:
+        raise SystemExit('Private geometry worker requires --motion-worker')
+    _motion_worker_main()
