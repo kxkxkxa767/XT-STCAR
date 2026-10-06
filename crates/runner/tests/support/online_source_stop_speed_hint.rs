@@ -69,6 +69,7 @@ fn recorded(
     let online = &value["online"];
     let active = track(&online["active_track"]);
     let report = OnlineMissionReport {
+        final_stop_goal: None,
         task_revision: 0,
         requires_road_semantics: true,
         mission: MissionReport {

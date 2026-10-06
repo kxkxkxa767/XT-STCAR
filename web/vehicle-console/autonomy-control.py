@@ -17,13 +17,16 @@ class ProbeInterrupted(RuntimeError):
         super().__init__('probe interrupted: ' + str(result.get('reason') if result else 'no result'))
 
 
-def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junction=False):
+def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junction=False, formal_goal=False):
     run = None
     try:
-        op = 'to_left_junction_start' if stop_left_junction else 'straight_start' if centering else 'probe_start'
-        run = request('/api/autonomy', {'op': op, 'boot': state['boot'],
+        op = 'stop_goal_start' if formal_goal else 'to_left_junction_start' if stop_left_junction else 'straight_start' if centering else 'probe_start'
+        start = {'op': op, 'boot': state['boot'],
                       'epoch': state['autonomy']['epoch'], 'tick': state['status']['control']['tick'],
-                      'pwm': pwm, 'duration_ms': duration_ms})
+                      'pwm': pwm}
+        if not formal_goal:
+            start['duration_ms'] = duration_ms
+        run = request('/api/autonomy', start)
         sequence = 0
         end = time.monotonic() + duration_ms / 1000 + (COAST_MAX_S if centering else 0) + 1
         while time.monotonic() < end:
@@ -43,6 +46,10 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                 return latest, run
             sequence += 1
             try:
+                if formal_goal:
+                    # This reads the configured upstream file; the source's
+                    # timestamps remain authoritative, independent of heartbeat.
+                    request('/api/autonomy', {'op': 'stop_goal_refresh', 'boot': state['boot'], 'epoch': run['epoch']})
                 request('/api/autonomy', {'op': 'heartbeat', 'boot': state['boot'],
                         'epoch': run['epoch'], 'run_id': run['run_id'], 'seq': sequence})
             except RuntimeError:
@@ -102,7 +109,7 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, sto
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'probe', 'straight', 'to-left-junction', 'stop'])
+    parser.add_argument('command', choices=['status', 'probe', 'straight', 'to-left-junction', 'goal-status', 'goal-straight', 'stop'])
     parser.add_argument('--pwm', type=int, default=MAX_PWM)
     parser.add_argument('--duration-ms', type=int, default=400)
     parser.add_argument('--max-seconds', type=float, help='total limit 1..30s; straight defaults1s, to-left-junction defaults30s')
@@ -134,6 +141,27 @@ def main():
     state = request('/api/state')
     if 'autonomy' not in state:
         raise RuntimeError('vehicle console has no live autonomy interface')
+    if args.command in ('goal-status', 'goal-straight'):
+        if args.command == 'goal-status' or not args.execute:
+            print(json.dumps({'healthy': state['healthy'], 'formal_ready': state['autonomy'].get('formal_ready', False),
+                'rejection': state['autonomy'].get('formal_rejection', 'formal_interface_unavailable'),
+                'final_stop_goal': state['autonomy'].get('final_stop_goal'), 'motion_requested': False}, ensure_ascii=False, indent=2))
+            return
+        request('/api/autonomy', {'op': 'stop_goal_refresh', 'boot': state['boot'], 'epoch': state['autonomy']['epoch']})
+        state = request('/api/state')
+        if not state['autonomy'].get('formal_ready'):
+            raise RuntimeError(state['autonomy'].get('formal_rejection') or 'formal source not ready')
+        duration = state['autonomy'].get('formal_max_drive_ms')
+        if type(duration) is not int or not 1 <= duration <= 30000:
+            raise RuntimeError('formal source has no bounded driving budget')
+        def goal_interrupted(*_):
+            raise KeyboardInterrupt
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(sig, goal_interrupted)
+        latest, _ = run_probe(request, state, args.pwm, duration, centering=True, formal_goal=True)
+        print(json.dumps({'result': latest['autonomy']['last_result'], 'control': latest['status']['control'],
+                         'competition_navigation': False}, ensure_ascii=False, indent=2))
+        return
     if args.command == 'status' or not args.execute:
         print(json.dumps({'healthy': state['healthy'], 'control': state['status']['control'],
                           'settings': state['settings'], 'ages': state['ages'],

@@ -234,6 +234,7 @@ fn newer_timestamp_cannot_reinstall_an_older_cone_step_in_the_same_phase() {
     let command = |at, revision, cone| {
         let mut planned = planned(at, at, drive(), false);
         Arc::get_mut(&mut planned.step).unwrap().online = Some(OnlineMissionReport {
+            final_stop_goal: None,
             task_revision: revision,
             requires_road_semantics: false,
             mission: MissionReport {

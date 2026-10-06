@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "measurement_source": "user_ruler_measurement",
+  "measurement_date": "2026-10-06",
+  "reference_origin": "lidar_rotation_center",
+  "coordinate_convention": "x_forward_y_left_yaw_left_positive",
+  "wheelbase_m": 0.25,
+  "straight_footprint": {
+    "front_m": 0.21,
+    "rear_m": 0.20,
+    "left_m": 0.17,
+    "right_m": 0.17
+  },
+  "side_measurement_date": "2026-10-05",
+  "measurement_error_bound_m": null,
+  "lidar_to_rear_axle_m": null,
+  "steering_angle_or_curvature_map": null,
+  "turning_swept_footprint_validated": false,
+  "stopping_envelope_calibrated": false,
+  "navigation_validated": false
+}

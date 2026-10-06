@@ -27,6 +27,7 @@ import zipfile
 from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, FRONT_BOUNDARY_LOSS_S, CONTROL_AGE_LIMIT_S, AUTO_CONTROL_HEALTH_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            corridor_walls, probe_clearance, probe_parameters)
 from coast_motion import CoastMotionWorker
+from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 
 ROOT = Path(__file__).resolve().parent
 
@@ -53,6 +54,21 @@ class Console:
         self.auto_session = None
         self.auto_result = None
         self.coast_worker = None
+        self.stop_goal_source = getattr(args, 'stop_goal_source', None)
+        self.stop_goal_contract = None
+        self.stop_goal_registry = None
+        self.stop_goal_processed = set()
+        self.stop_goal_rejection = 'stop_goal_source_not_configured'
+        contract_file = getattr(args, 'stop_goal_contract', None)
+        if contract_file is not None:
+            try:
+                profile_file = getattr(args, 'stop_goal_vehicle_profile', None)
+                profile = read_local_json(profile_file) if profile_file is not None else None
+                self.stop_goal_contract = StopGoalContract(read_local_json(contract_file), real=not args.demo,
+                                                         vehicle_profile=profile)
+                self.stop_goal_rejection = 'stop_goal_not_received'
+            except StopGoalError as error:
+                self.stop_goal_rejection = str(error)
         self.perception_quality = QualityLatch()
         self.owner_at = 0
         self.arm_sequence = 0
@@ -204,11 +220,17 @@ class Console:
             self.control_epoch += 1
             self.control_mode = 'locked'
             if self.auto_session is not None:
+                report = self.auto_session['report']
+                formal_complete = (reason == 'formal_goal_complete' and report.get('formal_completion_evidence', False)
+                                   and report.get('coast_neutral_ack', False) and report.get('observed_armed', False))
                 self.auto_result = {**self.auto_session['report'], 'reason': reason,
-                                    'completed': reason in ('probe_complete', 'left_junction_reached')
+                                    'completed': formal_complete or (not report.get('formal_stop_goal')
+                                    and reason in ('probe_complete', 'left_junction_reached')
                                     and self.auto_session['report'].get('observed_armed', False)
                                     and (not self.auto_session['report'].get('centering')
-                                         or self.auto_session['report'].get('standstill_confirmed', False))}
+                                         or self.auto_session['report'].get('standstill_confirmed', False)))}
+                if formal_complete:
+                    self.stop_goal_processed.add(self.auto_session['goal_consumer'].goal.identity)
             self.auto_session = None
             if self.coast_worker is not None:
                 self.coast_worker.reset()
@@ -299,17 +321,89 @@ class Console:
                 ready, rejection = False, 'control_owned_or_unlocked'
         except ValueError as error:
             clearance, ready, rejection = None, False, str(error)
+        formal_ready, formal_rejection, goal_summary = False, self.stop_goal_rejection, None
+        if self.stop_goal_registry is not None:
+            goal = self.stop_goal_registry.goal
+            goal_summary = goal.summary()
+            try:
+                goal.check_fresh(now)
+                if goal.identity in self.stop_goal_processed:
+                    raise StopGoalError('stop_goal_already_completed')
+                if self.owner is not None or self.status.get('control', {}).get('armed'):
+                    raise StopGoalError('control_owned_or_unlocked')
+                self.formal_preview(goal, 1580, now)
+                formal_ready, formal_rejection = True, None
+            except (StopGoalError, ValueError) as error:
+                formal_rejection = str(error)
         return {'mode': self.control_mode, 'epoch': self.control_epoch,
-                'supported': ['straight_probe', 'straight_segment', 'to_left_junction'], 'competition_supported': False,
+                'supported': ['straight_probe', 'straight_segment', 'to_left_junction', 'formal_straight_stop'], 'competition_supported': False,
                 'quality_confirm_s': QUALITY_CONFIRM_S,
                 'quality_self_recovery': True, 'quality_recovery_stable_s': QUALITY_RECOVERY_STABLE_S,
                 'coast_max_s': COAST_MAX_S, 'front_boundary_loss_s': FRONT_BOUNDARY_LOSS_S,
                 'control_age_limit_s': CONTROL_AGE_LIMIT_S, 'auto_control_health_s': AUTO_CONTROL_HEALTH_S,
                 'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
+                'formal_ready': formal_ready, 'formal_rejection': formal_rejection, 'final_stop_goal': goal_summary,
+                'formal_max_drive_ms': self.stop_goal_contract.budget['max_drive_ms'] if self.stop_goal_contract else None,
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
 
+    def formal_preview(self, goal, pwm, now):
+        """Same admission for status and start, using an isolated preview consumer."""
+        probe_clearance(self.scan, self.sensor_ages(now), self.args.demo, centering=True, rear_launch=True)
+        if not self.autonomy_healthy():
+            raise StopGoalError('probe_sensor_stale')
+        consumer = StopGoalConsumer(goal, pwm)
+        consumer.tick(now, 'drive', corridor_walls(self.scan))
+        return consumer
+
+    def accept_stop_goal(self, record, now=None):
+        """Protected upstream adapter; a goal never arms, renews heartbeat or emits PWM."""
+        now = time.monotonic() if now is None else now
+        try:
+            goal = FinalStopGoal(record, self.stop_goal_contract, now, real=not self.args.demo)
+            with self.lock:
+                active = self.auto_session is not None and self.auto_session['report'].get('formal_stop_goal')
+                if self.stop_goal_registry is None or (not active and self.stop_goal_registry.goal.identity != goal.identity):
+                    self.stop_goal_registry = StopGoalConsumer(goal, 1580)
+                    updated = True
+                else:
+                    updated = self.stop_goal_registry.update(goal)
+                self.stop_goal_rejection = None
+                return {'updated': updated, 'reason': None if updated else 'repeat_source_not_refreshed',
+                        'final_stop_goal': self.stop_goal_registry.goal.summary(), 'motion_requested': False}
+        except (StopGoalError, KeyError, TypeError) as error:
+            with self.lock:
+                self.stop_goal_rejection = str(error)
+                if self.auto_session is not None and self.auto_session['report'].get('formal_stop_goal'):
+                    self.halt('formal_' + str(error))
+                self.stop_goal_registry = None
+            raise StopGoalError(str(error)) from error
+
+    def refresh_stop_goal(self, data):
+        # No arbitrary source paths or large inline goals can bypass the HTTP limit.
+        if set(data) != {'op', 'boot', 'epoch'}:
+            raise ValueError('stop_goal_refresh_accepts_no_paths_or_inline_goal')
+        with self.lock:
+            if data.get('boot') != self.boot or type(data.get('epoch')) is not int or data['epoch'] != self.control_epoch:
+                raise ValueError('stale_autonomy_generation')
+        if self.stop_goal_source is None:
+            raise ValueError('stop_goal_source_not_configured')
+        try:
+            record = read_local_json(self.stop_goal_source)  # File IO is outside the control lock.
+        except StopGoalError as error:
+            with self.lock:
+                self.stop_goal_rejection = str(error)
+                if self.auto_session is not None and self.auto_session['report'].get('formal_stop_goal'):
+                    self.halt(str(error))
+            raise
+        with self.lock:
+            if data.get('boot') != self.boot or type(data.get('epoch')) is not int or data['epoch'] != self.control_epoch:
+                raise ValueError('stale_autonomy_generation')
+            return self.accept_stop_goal(record)
+
     def autonomy_command(self, data):
+        if data.get('op') == 'stop_goal_refresh':
+            return self.refresh_stop_goal(data)
         with self.lock:
             if data.get('boot') != self.boot or type(data.get('epoch')) is not int or data['epoch'] != self.control_epoch:
                 raise ValueError('stale_autonomy_generation')
@@ -331,12 +425,26 @@ class Console:
                     session['heartbeat_seq'] = seq
                     self.owner_at = time.monotonic()
                 return {'ok': True}
-            if op not in ('probe_start', 'straight_start', 'to_left_junction_start'):
+            formal = op == 'stop_goal_start'
+            if op not in ('probe_start', 'straight_start', 'to_left_junction_start', 'stop_goal_start'):
                 raise ValueError('only_bounded_straight_control_is_implemented')
             if self.stop.is_set() or self.owner is not None or self.status.get('control', {}).get('armed'):
                 raise ValueError('already_armed_or_shutting_down')
             centering = op != 'probe_start'
-            pwm, duration = probe_parameters(data, straight=centering)
+            if formal:
+                if set(data) != {'op', 'boot', 'epoch', 'tick', 'pwm'}:
+                    raise ValueError('stop_goal_start_requires_registered_source_only')
+                if self.stop_goal_registry is None:
+                    raise ValueError(self.stop_goal_rejection or 'stop_goal_not_received')
+                goal = self.stop_goal_registry.goal
+                goal.check_fresh(time.monotonic())
+                if goal.identity in self.stop_goal_processed:
+                    raise ValueError('stop_goal_already_completed')
+                duration = goal.contract.budget['max_drive_ms']
+                pwm, _ = probe_parameters({'pwm': data.get('pwm'), 'duration_ms': 1000}, straight=True)
+                consumer = self.formal_preview(goal, pwm, time.monotonic())
+            else:
+                pwm, duration = probe_parameters(data, straight=centering)
             if op == 'to_left_junction_start' and self.scan is not None and not all(k in self.scan for k in ['left_junction', 'front_boundary_m']):
                 raise ValueError('native_junction_detector_not_installed')
             now = time.monotonic()
@@ -352,7 +460,8 @@ class Console:
             report = {'run_id': run_id, 'pwm': pwm, 'servo': 1500,
                       'duration_ms': duration, 'drive_ticks': 0, 'observed_pwm': False, 'observed_armed': False,
                       'centering': centering, 'steering_changes': 0, 'walls': None,
-                      'endpoint': 'left_junction' if op == 'to_left_junction_start' else None,
+                      'endpoint': 'final_stop_goal' if formal else 'left_junction' if op == 'to_left_junction_start' else None,
+                      'formal_stop_goal': formal, 'formal_completion_evidence': False,
                       'junction_confirmations': 0, 'junction_geometry': None,
                       'rear_launch_active': centering, 'rear_launch_max_s': 1,
                       'current_pwm': pwm, 'approach_front_m': None, 'pwm_ramp_changes': 0,
@@ -372,10 +481,14 @@ class Console:
                                  'steering': CorridorSteering(), 'wall_scan_seq': None, 'junction': JunctionStop(),
                                  'rear_launch': RearLaunch() if centering else None,
                                  'ramp': ApproachRamp(pwm) if centering else None}
+            if formal:
+                self.stop_goal_registry = consumer
+                self.auto_session['goal_consumer'] = consumer
+                report['formal_goal'] = goal.summary()
             self.auto_session['quality'].update(clearance['quality_issues'], now)
             self.owner = 'auto-' + run_id
             self.owner_at = now
-            self.control_mode = 'auto_probe'
+            self.control_mode = 'auto_goal' if formal else 'auto_probe'
             self.stop_latched = False
             try:
                 self.emit('arm', tick=tick)
@@ -411,6 +524,10 @@ class Console:
             session['coast_neutral_sequence'] = None
             session['coast_endpoint_verified'] = False
             session['coast_junction_scan_seq'] = None
+            if session.get('goal_consumer') is not None:
+                session['goal_consumer'].neutral_latched = True
+                session['formal_coast_pose_at'] = session['goal_consumer'].goal.raw['pose_source_at']
+                session['formal_neutral_after_ms'] = None
             if reason == 'left_junction_reached':
                 session['junction'] = JunctionStop()
             if session.get('rear_launch'):
@@ -433,6 +550,15 @@ class Console:
                        and control.get('seq', -1) >= session['coast_neutral_sequence']
                        and control.get('motor') == 1500 and control.get('armed'))
         report['coast_neutral_ack'] = bool(neutral_ack)
+        if session.get('goal_consumer') is not None:
+            consumer = session['goal_consumer']
+            if neutral_ack and session['formal_neutral_after_ms'] is None:
+                session['formal_neutral_after_ms'] = consumer.goal.contract.now_interval(self.control_at)[1]
+            cutoff = session['formal_neutral_after_ms']
+            fresh_pose_after_neutral = (cutoff is not None
+                and consumer.goal.raw['pose_source_at'] > max(cutoff, session['formal_coast_pose_at']))
+            report['formal_plan'] = consumer.tick(now, 'coast' if neutral_ack and fresh_pose_after_neutral
+                                                 else 'neutral_pending', report.get('walls'))
         if not motion_ready or not neutral_ack or self.scan['seq'] <= session['coast_start_seq']:
             if session['motion_ready_for_coast']:
                 session['motion_generation'] = self.coast_worker.reset()
@@ -452,7 +578,14 @@ class Console:
                 session['motion_ready_for_coast'] = False
             session['motion_scan_seq'] = report['coast_motion'].get('source_scan_seq')
         motion = report.get('coast_motion') or {}
-        if motion.get('observable') and motion.get('stationary'):
+        if session.get('goal_consumer') is not None:
+            report['standstill_confirmed'] = bool(motion.get('observable') and motion.get('stationary'))
+            if (neutral_ack and report['formal_plan']['completed']
+                    and session['coast_reason'] == 'formal_goal_neutral'):
+                report['formal_completion_evidence'] = True
+                self.halt('formal_goal_complete')
+                return
+        elif motion.get('observable') and motion.get('stationary'):
             report['standstill_confirmed'] = True
             reason = session['coast_reason']
             if reason == 'left_junction_reached' and not session['coast_endpoint_verified']:
@@ -510,6 +643,9 @@ class Console:
             report['perception_recovering'] = recovery.waiting
             report['recovery_stable_ms'] = recovery.stable_ms(now)
             if session.get('phase') != 'coast' and now >= session['deadline']:
+                if session.get('goal_consumer') is not None:
+                    self.halt('formal_goal_deadline')
+                    return
                 reason = ('perception_recovery_deadline' if not motion_ready or not report.get('motion_ticks', 0) else
                           'left_junction_timeout' if report.get('endpoint') == 'left_junction' else 'probe_complete')
                 if report.get('centering') and reason != 'perception_recovery_deadline':
@@ -534,6 +670,12 @@ class Console:
             if session.get('phase') == 'coast':
                 self.coast_tick(session, now, motion_ready, servo)
                 return
+            if session.get('goal_consumer') is not None:
+                report['formal_plan'] = session['goal_consumer'].tick(now, 'drive', report.get('walls'))
+                if report['formal_plan']['request_coast']:
+                    self.begin_coast('formal_goal_neutral', now)
+                    self.coast_tick(session, now, motion_ready, servo)
+                    return
             ramp = session.get('ramp')
             if ramp:
                 report['current_pwm'] = ramp.update(self.scan, report['sensor_ages']['lidar'], now,
@@ -557,6 +699,8 @@ class Console:
                 self.coast_tick(session, now, motion_ready, servo)
                 return
             motor = report.get('current_pwm', report['pwm']) if motion_ready else 1500
+            if session.get('goal_consumer') is not None:
+                motor = min(motor, report['formal_plan']['motor_cap'])
             if servo != report.get('servo', 1500):
                 report['steering_changes'] += 1
             report['servo'] = servo
@@ -1015,6 +1159,9 @@ def main():
     vision_group.add_argument('--vision-config', type=Path, help='optional persistent shadow configuration JSON')
     vision_group.add_argument('--vision-shadow', nargs=5, metavar=('BIN', 'ROAD_CONFIG', 'MODEL', 'ORT_LIB', 'MODEL_SPEC'), help='optional perception-only process; reuses camera frames, never drives')
     p.add_argument('--allow-reverse', action='store_true', help='Only after supervised ESC reverse calibration')
+    p.add_argument('--stop-goal-source', type=Path, help='Explicit local upstream final-goal file; HTTP cannot choose a path')
+    p.add_argument('--stop-goal-contract', type=Path, help='Verified clock/origin/errors/measured stopping contract')
+    p.add_argument('--stop-goal-vehicle-profile', type=Path, help='Explicit measured vehicle profile; current unverified profile blocks real goals')
     args = p.parse_args()
     if args.vision_config:
         from vision_shadow import load_config

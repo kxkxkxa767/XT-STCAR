@@ -169,6 +169,62 @@ pub enum OnlineBehavior {
     Fault,
 }
 
+/// The final task destination, independent of a rolling Navigator target.
+/// These are observation/geometry proposals from the simulation-only policy,
+/// not physical braking, standstill, or actuator permissions.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FinalStopSemantics {
+    BeforeCrosswalkNearEdge,
+    InsideLightStopRegion,
+    InsideFinishRegion,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct FinalStopGoal {
+    pub schema_version: u32,
+    pub role: &'static str,
+    /// Changes with the task revision; refreshing observations is not a new task.
+    pub goal_id: String,
+    pub track_id: TrackId,
+    pub task_revision: u64,
+    pub element_kind: ElementKind,
+    pub world_frame: FrameId,
+    pub body_frame: FrameId,
+    pub coordinate_convention: &'static str,
+    /// All timestamps below use the existing policy's shared logical clock.
+    /// No mapping to lidar publication, bridge tick, or vehicle monotonic time
+    /// has been established by this export.
+    pub clock_domain: &'static str,
+    pub clock_epoch_id: Option<String>,
+    pub generated_at: Timestamp,
+    pub geometry_source_at: Timestamp,
+    pub visual_source_at: Option<Timestamp>,
+    pub pose_source_at: Timestamp,
+    /// Exclusive deadline; never renewed merely by issuing another report.
+    pub expires_at: Timestamp,
+    pub source_pose: PoseEstimate,
+    pub observed_region_pose: Pose2,
+    pub region_geometry: ElementGeometry,
+    pub position_error_m: f64,
+    pub heading_error_rad: f64,
+    pub region_error_m: f64,
+    pub footprint: Footprint,
+    pub final_pose: Pose2,
+    pub permission_boundary: HalfPlane,
+    pub stop_semantics: FinalStopSemantics,
+    pub goal_tolerance_m: f64,
+    pub goal_heading_tolerance_rad: f64,
+    /// Bounds |v| + |yaw_rate| * footprint radius, not centre speed alone.
+    pub stopped_corner_speed_mps: f64,
+    /// Crosswalk hold starts only after the actual arrival/standstill gates.
+    /// Zero for light/finish: their other permission gates remain in the mission.
+    pub required_hold_ms: u64,
+    pub simulation_only: bool,
+    pub physical_control_ready: bool,
+    pub physical_budget_available: bool,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct OnlineMissionReport {
     /// Changes on each task/target transition, including cone 1 -> cone 2.
@@ -182,6 +238,9 @@ pub struct OnlineMissionReport {
     /// Last accepted geometry, including its actual observation times. May be
     /// stale while holding for reacquisition; presence never authorizes motion.
     pub active_track: Option<ElementTrack>,
+    /// Only a fresh, confirmed active stop region may produce this contract.
+    /// Search, cone navigation, stale acquisition and terminal states clear it.
+    pub final_stop_goal: Option<FinalStopGoal>,
     pub processed_cones: usize,
     pub cone_progress_rad: f64,
     pub search_distance_m: f64,
@@ -281,6 +340,7 @@ pub struct OnlineMission {
     initial_heading: Option<f64>,
     active: Option<TrackId>,
     active_geometry: Option<ElementTrack>,
+    final_stop_goal: Option<FinalStopGoal>,
     missing_since: Option<Timestamp>,
     orbit: Option<Orbit>,
     processed: [Option<ProcessedCone>; 2],
@@ -315,6 +375,7 @@ impl OnlineMission {
             initial_heading: None,
             active: None,
             active_geometry: None,
+            final_stop_goal: None,
             missing_since: None,
             orbit: None,
             processed: [None, None],
@@ -366,6 +427,8 @@ impl OnlineMission {
         road: &RoadObservation,
         world: &mut LocalWorld,
     ) -> OnlineMissionReport {
+        // A previous geometry proposal is never a lease for the next tick.
+        self.final_stop_goal = None;
         self.tick_requires_road =
             self.phase != MissionPhase::Cones || world.config().lidar_cones.is_none();
         if matches!(self.phase, MissionPhase::Completed | MissionPhase::Fault) {
@@ -471,7 +534,11 @@ impl OnlineMission {
                     ),
                 )
             }
-            Ok(proposal) => self.finish_tick(now, pose, new_pose, proposal),
+            Ok(proposal) => {
+                self.final_stop_goal =
+                    self.make_final_stop_goal(now, pose, road, world, proposal.behavior);
+                self.finish_tick(now, pose, new_pose, proposal)
+            }
             Err(error) => self.fault(now, error),
         }
     }
@@ -486,16 +553,7 @@ impl OnlineMission {
         let Some(track) = self.acquire(now, pose.pose, ElementKind::Crosswalk, world) else {
             return self.search(now, pose.pose, world);
         };
-        let heading = track
-            .heading_rad
-            .ok_or("crosswalk has no observed heading")?;
-        let frame = frame(track);
-        let goal = frame.body_to_world(Point2 {
-            x_m: -self.config.footprint.front_m
-                - self.config.crosswalk_stop_margin_m
-                - region_error(track),
-            y_m: 0.0,
-        });
+        let (goal, heading) = self.crosswalk_goal(track)?;
         let boundary = region_boundary(track, false)?;
         if !boundary.contains_footprint(self.config.footprint, pose.pose, 0.0) {
             return Err("crosswalk crossed before required observed stop".into());
@@ -1366,6 +1424,151 @@ impl OnlineMission {
         self.arc_space_state(now, world, center, radius, start, sweep) == SpaceState::KnownFree
     }
 
+    fn crosswalk_goal(&self, track: ElementTrack) -> Result<(Point2, f64), String> {
+        if track.kind != ElementKind::Crosswalk
+            || !matches!(track.geometry, ElementGeometry::LineRegion { .. })
+        {
+            return Err("crosswalk track has incompatible geometry".into());
+        }
+        let heading = track
+            .heading_rad
+            .ok_or("crosswalk has no observed heading")?;
+        Ok((
+            frame(track).body_to_world(Point2 {
+                x_m: -self.config.footprint.front_m
+                    - self.config.crosswalk_stop_margin_m
+                    - region_error(track),
+                y_m: 0.0,
+            }),
+            heading,
+        ))
+    }
+
+    fn make_final_stop_goal(
+        &self,
+        now: Timestamp,
+        pose: &PoseEstimate,
+        road: &RoadObservation,
+        world: &LocalWorld,
+        behavior: OnlineBehavior,
+    ) -> Option<FinalStopGoal> {
+        // Retained negative boundaries may survive an observation lease. They
+        // must not turn a stale active_track into a new positive stop proposal.
+        let (kind, semantics, far, hold_ms) = match (self.phase, behavior) {
+            (
+                MissionPhase::ApproachCrosswalk | MissionPhase::CrosswalkStop,
+                OnlineBehavior::ApproachRegion | OnlineBehavior::HoldCrosswalk,
+            ) => (
+                ElementKind::Crosswalk,
+                FinalStopSemantics::BeforeCrosswalkNearEdge,
+                false,
+                self.config.crosswalk_hold_ms,
+            ),
+            (
+                MissionPhase::ApproachLight | MissionPhase::WaitGreen,
+                OnlineBehavior::ApproachRegion | OnlineBehavior::WaitGreen,
+            ) => (
+                ElementKind::StopLine,
+                FinalStopSemantics::InsideLightStopRegion,
+                true,
+                0,
+            ),
+            (MissionPhase::Finish, OnlineBehavior::ApproachRegion) => (
+                ElementKind::FinishMarker,
+                FinalStopSemantics::InsideFinishRegion,
+                true,
+                0,
+            ),
+            _ => return None,
+        };
+        let id = self.active?;
+        let track = world
+            .tracks(now)
+            .find(|track| track.id == id && track.kind == kind && !track.processed)?;
+        let visual_at = track.last_visual_at?;
+        let expires_at = Timestamp(
+            track
+                .last_geometry_at
+                .0
+                .checked_add(world.config().track_ttl_ms)?
+                .min(visual_at.0.checked_add(world.config().track_ttl_ms)?)
+                .min(
+                    pose.captured_at
+                        .0
+                        .checked_add(self.config.max_pose_age_ms)?,
+                )
+                .min(
+                    road.captured_at
+                        .0
+                        .checked_add(self.config.max_road_age_ms)?,
+                ),
+        );
+        if expires_at <= now
+            || track.last_geometry_at > now
+            || visual_at > now
+            || pose.captured_at > now
+            || road.captured_at > now
+        {
+            return None;
+        }
+        let (goal, heading) = if kind == ElementKind::Crosswalk {
+            self.crosswalk_goal(track).ok()?
+        } else {
+            self.region_goal(track).ok()?
+        };
+        let final_pose = Pose2 {
+            x_m: goal.x_m,
+            y_m: goal.y_m,
+            yaw_rad: heading,
+        };
+        let permission_boundary = region_boundary(track, far).ok()?;
+        if !final_pose.valid()
+            || !permission_boundary.contains_footprint(self.config.footprint, final_pose, 0.0)
+            || (kind != ElementKind::Crosswalk
+                && !inside_region(self.config.footprint, final_pose, track))
+        {
+            return None;
+        }
+        Some(FinalStopGoal {
+            schema_version: 1,
+            role: "final_stop",
+            goal_id: format!("task-{}-track-{}", self.task_revision, id.0),
+            track_id: id,
+            task_revision: self.task_revision,
+            element_kind: kind,
+            world_frame: self.config.world_frame.clone(),
+            body_frame: self.config.body_frame.clone(),
+            coordinate_convention: "x_forward_y_left_yaw_left_positive",
+            clock_domain: "online_shared_monotonic_ms",
+            clock_epoch_id: None,
+            generated_at: now,
+            geometry_source_at: track.last_geometry_at,
+            visual_source_at: Some(visual_at),
+            pose_source_at: pose.captured_at,
+            expires_at,
+            source_pose: pose.clone(),
+            observed_region_pose: frame(track),
+            region_geometry: track.geometry,
+            position_error_m: track.position_error_m,
+            heading_error_rad: track.heading_error_rad,
+            region_error_m: region_error(track),
+            footprint: self.config.footprint,
+            final_pose,
+            permission_boundary,
+            stop_semantics: semantics,
+            goal_tolerance_m: self.config.goal_tolerance_m,
+            goal_heading_tolerance_rad: self.config.goal_heading_tolerance_rad,
+            stopped_corner_speed_mps: self.config.stopped_speed_mps,
+            required_hold_ms: hold_ms,
+            // OnlineMissionConfig validation still requires simulation_only.
+            // A geometry report cannot establish a physical clock mapping or
+            // a measured PWM/neutral-coast/turning braking envelope.
+            simulation_only: self.config.simulation_only,
+            physical_control_ready: false,
+            physical_budget_available: false,
+        })
+    }
+
     fn region_goal(&self, track: ElementTrack) -> Result<(Point2, f64), String> {
         let ElementGeometry::LineRegion {
             lateral_half_width_m,
@@ -1400,6 +1603,7 @@ impl OnlineMission {
         if self.phase != phase {
             self.phase = phase;
             self.task_revision = self.task_revision.saturating_add(1);
+            self.final_stop_goal = None;
         }
     }
     fn transition(&mut self, phase: MissionPhase) {
@@ -1410,6 +1614,7 @@ impl OnlineMission {
         self.phase = phase;
         self.active = None;
         self.active_geometry = None;
+        self.final_stop_goal = None;
         self.orbit = None;
         self.missing_since = None;
         self.search_since = None;
@@ -1513,6 +1718,7 @@ impl OnlineMission {
             behavior: proposal.behavior,
             active_track_id: self.active,
             active_track: self.active_geometry,
+            final_stop_goal: self.final_stop_goal.clone(),
             processed_cones: self.cone_index,
             cone_progress_rad: self.orbit.map_or(0.0, |orbit| orbit.progress_rad),
             search_distance_m: self.search_distance,
@@ -1524,6 +1730,7 @@ impl OnlineMission {
             self.task_revision = self.task_revision.saturating_add(1);
         }
         self.phase = MissionPhase::Fault;
+        self.final_stop_goal = None;
         self.fault_reason.get_or_insert_with(|| reason.into());
         self.report(
             self.last_now.map_or(at, |old| old.max(at)),
@@ -1752,6 +1959,231 @@ mod tests {
             confidence: 0.99,
             position_error_m: 0.001,
             heading_error_rad: 0.0,
+        }
+    }
+
+    #[test]
+    fn final_stop_goal_keeps_the_observed_destination_when_navigation_rolls() {
+        let (mut mission, mut world) = setup();
+        let estimate = pose(200, Pose2::default());
+        let marker = region(ElementKind::Crosswalk, 4.0, 0.0, 0.3);
+        for at in [100, 200] {
+            observe(&mut world, &pose(at, Pose2::default()), &[marker], true);
+        }
+        let report = mission.update(
+            Timestamp(200),
+            &estimate,
+            &road(200, LightState::Unknown),
+            &mut world,
+        );
+        let MissionOutput::Target { point, .. } = report.mission.output else {
+            panic!("fresh distant region should have a rolling approach target");
+        };
+        let goal = report.final_stop_goal.unwrap();
+        assert!(point.x_m <= mission.config.search_horizon_m + 1e-12);
+        assert!(goal.final_pose.x_m > 3.0);
+        assert!(goal.final_pose.point().distance(point) > 2.0);
+        assert_eq!(goal.track_id, report.active_track_id.unwrap());
+        assert_eq!(goal.task_revision, report.task_revision);
+        assert_eq!(goal.source_pose, estimate);
+        assert_eq!(goal.geometry_source_at, Timestamp(200));
+        assert_eq!(goal.visual_source_at, Some(Timestamp(200)));
+        assert_eq!(goal.pose_source_at, Timestamp(200));
+        assert_eq!(goal.generated_at, Timestamp(200));
+        assert_eq!(goal.expires_at, Timestamp(450));
+        assert_eq!(goal.required_hold_ms, 3000);
+        assert_eq!(
+            goal.stop_semantics,
+            FinalStopSemantics::BeforeCrosswalkNearEdge
+        );
+        assert!(
+            goal.permission_boundary
+                .contains_footprint(goal.footprint, goal.final_pose, 0.0)
+        );
+        let encoded = serde_json::to_value(&goal).unwrap();
+        assert_eq!(encoded["schema_version"], 1);
+        assert_eq!(encoded["role"], "final_stop");
+        assert_eq!(
+            encoded["coordinate_convention"],
+            "x_forward_y_left_yaw_left_positive"
+        );
+        assert_eq!(encoded["clock_domain"], "online_shared_monotonic_ms");
+        assert!(encoded["clock_epoch_id"].is_null());
+        assert_eq!(encoded["simulation_only"], true);
+        assert_eq!(encoded["physical_control_ready"], false);
+        assert_eq!(encoded["physical_budget_available"], false);
+    }
+
+    #[test]
+    fn final_stop_goal_uses_far_region_edges_for_light_and_finish() {
+        for (kind, phase, semantics) in [
+            (
+                ElementKind::StopLine,
+                MissionPhase::ApproachLight,
+                FinalStopSemantics::InsideLightStopRegion,
+            ),
+            (
+                ElementKind::FinishMarker,
+                MissionPhase::Finish,
+                FinalStopSemantics::InsideFinishRegion,
+            ),
+        ] {
+            let (mut mission, mut world) = setup();
+            mission.transition(phase);
+            let marker = region(kind, 4.0, 0.0, 1.0);
+            let mut observations = vec![marker];
+            if kind == ElementKind::FinishMarker {
+                observations.push(region(ElementKind::StopLine, -2.0, 0.0, 1.0));
+            }
+            for at in [100, 200] {
+                observe(&mut world, &pose(at, Pose2::default()), &observations, true);
+            }
+            if kind == ElementKind::FinishMarker {
+                mission.light = world
+                    .tracks(Timestamp(200))
+                    .find(|track| track.kind == ElementKind::StopLine);
+            }
+            let report = mission.update(
+                Timestamp(200),
+                &pose(200, Pose2::default()),
+                &road(
+                    200,
+                    if kind == ElementKind::FinishMarker {
+                        LightState::Green
+                    } else {
+                        LightState::Unknown
+                    },
+                ),
+                &mut world,
+            );
+            let goal = report
+                .final_stop_goal
+                .as_ref()
+                .unwrap_or_else(|| panic!("expected {kind:?} final goal: {report:?}"));
+            assert_eq!(goal.element_kind, kind);
+            assert_eq!(goal.stop_semantics, semantics);
+            assert_eq!(goal.required_hold_ms, 0);
+            let reference_in_region = goal
+                .observed_region_pose
+                .world_to_body(goal.final_pose.point());
+            assert!(reference_in_region.x_m > 0.0 && reference_in_region.x_m < 1.0);
+            assert!(
+                (goal.permission_boundary.max_projection_m() - (1.0 - goal.region_error_m)).abs()
+                    < 1e-12
+            );
+            assert!(
+                goal.footprint
+                    .corners(goal.final_pose)
+                    .into_iter()
+                    .all(|point| {
+                        let local = goal.observed_region_pose.world_to_body(point);
+                        local.x_m >= goal.region_error_m && local.x_m <= 1.0 - goal.region_error_m
+                    })
+            );
+        }
+    }
+
+    #[test]
+    fn final_stop_goal_never_renews_its_sources_from_a_repeated_report() {
+        let (mut mission, mut world) = setup();
+        let marker = region(ElementKind::Crosswalk, 4.0, 0.0, 0.3);
+        for at in [100, 200] {
+            observe(&mut world, &pose(at, Pose2::default()), &[marker], true);
+        }
+        let estimate = pose(200, Pose2::default());
+        let semantics = road(200, LightState::Unknown);
+        let first = mission
+            .update(Timestamp(200), &estimate, &semantics, &mut world)
+            .final_stop_goal
+            .unwrap();
+        let repeated = mission
+            .update(Timestamp(210), &estimate, &semantics, &mut world)
+            .final_stop_goal
+            .unwrap();
+        assert_eq!(repeated.goal_id, first.goal_id);
+        assert_eq!(repeated.expires_at, first.expires_at);
+        assert_eq!(repeated.geometry_source_at, first.geometry_source_at);
+        assert_eq!(repeated.pose_source_at, first.pose_source_at);
+        assert_eq!(repeated.generated_at, Timestamp(210));
+    }
+
+    #[test]
+    fn final_stop_goal_requires_confirmation_and_clears_after_geometry_expiry() {
+        let (mut mission, _) = setup();
+        let mut world_config = LocalWorldConfig::simulation(
+            mission.config.body_frame.clone(),
+            FrameId("sim_laser".into()),
+            mission.config.world_frame.clone(),
+        );
+        world_config.track_ttl_ms = 200;
+        world_config.pose_position_error_m = 0.0;
+        world_config.pose_heading_error_rad = 0.0;
+        let mut world = LocalWorld::new(world_config).unwrap();
+        let marker = region(ElementKind::Crosswalk, 4.0, 0.0, 0.3);
+        observe(&mut world, &pose(100, Pose2::default()), &[marker], true);
+        let unconfirmed = mission.update(
+            Timestamp(100),
+            &pose(100, Pose2::default()),
+            &road(100, LightState::Unknown),
+            &mut world,
+        );
+        assert!(unconfirmed.final_stop_goal.is_none());
+        observe(&mut world, &pose(200, Pose2::default()), &[marker], true);
+        let fresh = mission.update(
+            Timestamp(200),
+            &pose(200, Pose2::default()),
+            &road(200, LightState::Unknown),
+            &mut world,
+        );
+        assert_eq!(fresh.final_stop_goal.unwrap().expires_at, Timestamp(400));
+        let expired = mission.update(
+            Timestamp(400),
+            &pose(400, Pose2::default()),
+            &road(400, LightState::Unknown),
+            &mut world,
+        );
+        assert!(expired.active_track.is_some());
+        assert!(expired.travel_boundary.is_some());
+        assert_eq!(expired.mission.output, MissionOutput::Stop);
+        assert!(expired.final_stop_goal.is_none());
+    }
+
+    #[test]
+    fn final_stop_goal_clears_on_task_transition_and_latched_fault() {
+        for next in [
+            MissionPhase::Cones,
+            MissionPhase::Fault,
+            MissionPhase::Completed,
+        ] {
+            let (mut mission, mut world) = setup();
+            let marker = region(ElementKind::Crosswalk, 4.0, 0.0, 0.3);
+            for at in [100, 200] {
+                observe(&mut world, &pose(at, Pose2::default()), &[marker], true);
+            }
+            let fresh = mission.update(
+                Timestamp(200),
+                &pose(200, Pose2::default()),
+                &road(200, LightState::Unknown),
+                &mut world,
+            );
+            assert!(fresh.final_stop_goal.is_some());
+            if next == MissionPhase::Fault {
+                assert!(
+                    mission
+                        .fault(Timestamp(210), "test fault")
+                        .final_stop_goal
+                        .is_none()
+                );
+            } else {
+                mission.transition(next);
+            }
+            let transitioned = mission.update(
+                Timestamp(210),
+                &pose(210, Pose2::default()),
+                &road(210, LightState::Unknown),
+                &mut world,
+            );
+            assert!(transitioned.final_stop_goal.is_none());
         }
     }
     fn cone(x: f64, y: f64, color: ElementColor) -> ElementObservation {

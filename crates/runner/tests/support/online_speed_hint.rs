@@ -74,6 +74,7 @@ fn capture(
     let boundary = &raw["online"]["travel_boundary"];
     let normal: Point2 = serde_json::from_value(boundary["normal"].clone()).unwrap();
     let report = OnlineMissionReport {
+        final_stop_goal: None,
         task_revision: 0,
         requires_road_semantics: true,
         mission: MissionReport {
