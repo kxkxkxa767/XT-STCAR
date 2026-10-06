@@ -15,7 +15,10 @@ use std::{
 use xt_stcar_device_io::SerialPort;
 use xt_stcar_robot_core::{
     FrameId, LidarSample, Timestamp,
-    junction::{detect_front_boundary, detect_left_junction},
+    junction::{
+        detect_corridor_candidates, detect_front_boundary, detect_left_junction,
+        detect_turn_geometry,
+    },
     protocol::{
         chassis::PwmCommand,
         n10::{N10Config, N10Decoder},
@@ -142,6 +145,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     row["left_junction"] = serde_json::to_value(
                                         detect_left_junction(&sample, &frame).ok().flatten(),
                                     )?;
+                                    row["corridor_candidates"] = serde_json::to_value(
+                                        detect_corridor_candidates(&sample, &frame)
+                                            .unwrap_or_default(),
+                                    )?;
+                                    let turn_geometry =
+                                        detect_turn_geometry(&sample, &frame).unwrap_or_default();
+                                    row["wall_candidates"] =
+                                        serde_json::to_value(turn_geometry.walls)?;
+                                    row["left_turn_goal"] =
+                                        serde_json::to_value(turn_geometry.left_goal)?;
                                 }
                                 if matches!(
                                     out.try_send(row),

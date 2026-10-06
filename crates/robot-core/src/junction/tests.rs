@@ -63,6 +63,243 @@ fn left(width: f64, end: f64, outgoing: f64, yaw: f64) -> LidarSample {
 }
 
 #[test]
+fn corridor_candidates_follow_arbitrary_observed_axes_with_real_wall_support() {
+    for yaw_deg in [-130.0_f64, -87.0, -42.0, -7.0, 0.0, 38.0, 94.0, 157.0] {
+        let yaw = yaw_deg.to_radians();
+        let scan = polygon_scan(
+            &[(-8., -0.355), (8., -0.355), (8., 0.595), (-8., 0.595)],
+            yaw,
+        );
+        let candidates = detect_corridor_candidates(&scan, &scan.frame_id).unwrap();
+        let angle_error = |a: f64, b: f64| ((a - b + PI).rem_euclid(TAU) - PI).abs();
+        let forward = candidates
+            .iter()
+            .find(|candidate| angle_error(candidate.heading_left_rad, -yaw) < 0.01)
+            .unwrap_or_else(|| panic!("axis={yaw_deg}, candidates={candidates:?}"));
+        let reverse = candidates
+            .iter()
+            .find(|candidate| angle_error(candidate.heading_left_rad, -yaw + PI) < 0.01)
+            .unwrap();
+        assert!((forward.width_m - 0.95).abs() < 0.01, "{forward:?}");
+        assert!(
+            (forward.center_offset_left_m - 0.12).abs() < 0.01,
+            "{forward:?}"
+        );
+        assert!(
+            (reverse.center_offset_left_m + 0.12).abs() < 0.01,
+            "{reverse:?}"
+        );
+        for candidate in [forward, reverse] {
+            assert!(candidate.left_wall_points >= 16 && candidate.right_wall_points >= 16);
+            assert!(candidate.support_span_m >= 0.35 && candidate.fit_error_m <= 0.04);
+            assert!(candidate.origin_between_walls && candidate.candidate_only);
+            assert!(!candidate.turn_path_certified);
+        }
+    }
+}
+
+#[test]
+fn corridor_candidates_accept_supported_taper_but_reject_divergent_wall_pairs() {
+    // The observed portable boards need not be exactly parallel. Each side is
+    // still a real straight segment, and their shared local support remains
+    // inside the origin-straddling width. Rotation must not change acceptance.
+    for difference_deg in [8.0_f64, 11.5, 13.0] {
+        let taper = (difference_deg * 0.5).to_radians().tan();
+        for yaw_deg in [-83.0_f64, -22.0, 0.0, 47.0, 121.0] {
+            let yaw = yaw_deg.to_radians();
+            let scan = polygon_scan(
+                &[
+                    (-4.0, -0.55 + taper * 4.0),
+                    (4.0, -0.55 - taper * 4.0),
+                    (4.0, 0.65 + taper * 4.0),
+                    (-4.0, 0.65 - taper * 4.0),
+                ],
+                yaw,
+            );
+            let candidates = detect_corridor_candidates(&scan, &scan.frame_id).unwrap();
+            if difference_deg > 12.0 {
+                assert!(
+                    candidates.is_empty(),
+                    "{difference_deg}, {yaw_deg}: {candidates:?}"
+                );
+                continue;
+            }
+            assert_eq!(
+                candidates.len(),
+                2,
+                "{difference_deg}, {yaw_deg}: {candidates:?}"
+            );
+            let candidate = candidates
+                .iter()
+                .find(|c| ((c.heading_left_rad + yaw + PI).rem_euclid(TAU) - PI).abs() < 0.02)
+                .unwrap_or_else(|| panic!("{difference_deg}, {yaw_deg}: {candidates:?}"));
+            assert!((candidate.width_m - 1.2).abs() < 0.01, "{candidate:?}");
+            assert!(
+                (candidate.center_offset_left_m - 0.05).abs() < 0.01,
+                "{candidate:?}"
+            );
+            assert!(candidate.left_wall_points >= 16 && candidate.right_wall_points >= 16);
+            assert!(candidate.support_span_m >= 0.35 && candidate.fit_error_m < 0.001);
+            assert!(candidate.origin_between_walls && candidate.candidate_only);
+            assert!(!candidate.turn_path_certified);
+        }
+    }
+}
+
+#[test]
+fn corridor_candidates_keep_clockwise_scan_axes_and_unknown_returns_explicit() {
+    let mut scan = polygon_scan(&[(-8., -0.5), (8., -0.5), (8., 0.5), (-8., 0.5)], 0.7);
+    let original = scan.ranges_m.clone();
+    scan.ranges_m = (0..360).map(|i| original[(360 - i) % 360]).collect();
+    scan.angle_increment_rad = -TAU / 360.;
+    let candidates = detect_corridor_candidates(&scan, &scan.frame_id).unwrap();
+    assert!(
+        candidates
+            .iter()
+            .any(|candidate| (candidate.heading_left_rad + 0.7).abs() < 0.01)
+    );
+    scan.ranges_m[4] = None;
+    scan.ranges_m[5] = None;
+    assert!(
+        !detect_corridor_candidates(&scan, &scan.frame_id)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(scan.ranges_m[4].is_none() && scan.ranges_m[5].is_none());
+    for r in &mut scan.ranges_m[0..30] {
+        *r = None;
+    }
+    assert!(detect_corridor_candidates(&scan, &scan.frame_id).is_err());
+}
+
+#[test]
+fn corridor_candidates_do_not_invent_planes_or_an_unentered_outgoing_branch() {
+    for scan in [
+        sample(vec![Some(1.0); 360]),
+        polygon_scan(
+            &[(-0.15, -0.5), (0.15, -0.5), (0.15, 0.5), (-0.15, 0.5)],
+            0.,
+        ),
+    ] {
+        assert!(
+            detect_corridor_candidates(&scan, &scan.frame_id)
+                .unwrap()
+                .is_empty()
+        );
+    }
+    let scan = left(0.95, 0.25, 1., 0.);
+    let candidates = detect_corridor_candidates(&scan, &scan.frame_id).unwrap();
+    // The left opening is observable, but both outgoing side walls are still
+    // ahead of the origin. The candidates do not fabricate a traversable 90deg corridor.
+    assert!(
+        detect_left_junction(&scan, &scan.frame_id)
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        !candidates
+            .iter()
+            .any(|candidate| (candidate.heading_left_rad - PI / 2.).abs() < 0.1)
+    );
+}
+
+#[test]
+fn left_alignment_goal_uses_a_measured_outer_tangent_and_known_target_ray() {
+    let tilt = 0.05;
+    let scan = polygon_scan(
+        &[
+            (-8.0, -0.5),
+            (1.75 - tilt * 0.5, -0.5),
+            (1.75 + tilt * 8.0, 8.0),
+            (0.25 + tilt * 8.0, 8.0),
+            (0.25 + tilt * 0.5, 0.5),
+            (-8.0, 0.5),
+        ],
+        0.0,
+    );
+    let observed = detect_turn_geometry(&scan, &scan.frame_id).unwrap();
+    let goal = observed.left_goal.unwrap();
+    assert!(!goal.origin_between_exit_walls);
+    assert!(goal.candidate_only && !goal.turn_path_certified);
+    assert!((goal.heading_left_rad - 1.0_f64.atan2(tilt)).abs() < 0.01);
+    assert!((goal.heading_left_rad - PI / 2.0).abs() > 0.02);
+    assert!(goal.outer_wall.points >= 16 && goal.outer_wall.support_span_m >= 0.35);
+    let ray = &goal.target_support_ray;
+    assert_eq!(scan.ranges_m[ray.index], Some(ray.range_m));
+    assert!(ray.target_range_m > 0.0 && ray.target_range_m + 0.03 < ray.range_m);
+    assert!(
+        (goal.target_point_left_m.x_m - ray.target_range_m * ray.angle_left_rad.cos()).abs()
+            < 1e-12
+    );
+    assert!(
+        (goal.target_point_left_m.y_m - ray.target_range_m * ray.angle_left_rad.sin()).abs()
+            < 1e-12
+    );
+    let n = (-goal.heading_left_rad.sin(), goal.heading_left_rad.cos());
+    assert!(
+        (n.0 * goal.target_point_left_m.x_m + n.1 * goal.target_point_left_m.y_m
+            - goal.center_offset_left_m)
+            .abs()
+            < 1e-12
+    );
+    assert!(observed.walls.iter().any(|wall| {
+        (wall.heading_left_rad - goal.outer_wall.heading_left_rad).abs() < 0.04
+            && (wall.rho_left_m - goal.outer_wall.rho_left_m).abs() < 0.05
+    }));
+}
+
+#[test]
+fn finite_wall_candidates_rotate_and_do_not_require_the_origin_inside_a_future_exit() {
+    for yaw in [-1.7_f64, -0.3, 0.0, 0.8, 2.4] {
+        let scan = polygon_scan(&[(-8.0, -0.5), (8.0, -0.5), (8.0, 0.5), (-8.0, 0.5)], yaw);
+        let observed = detect_turn_geometry(&scan, &scan.frame_id).unwrap();
+        assert!(observed.left_goal.is_none());
+        let heading_error = |h: f64| ((h + yaw + PI).rem_euclid(TAU) - PI).abs();
+        assert!(
+            observed
+                .walls
+                .iter()
+                .any(|wall| heading_error(wall.heading_left_rad) < 0.01
+                    && (wall.rho_left_m.abs() - 0.5).abs() < 0.01)
+        );
+        for wall in observed.walls {
+            assert!(wall.candidate_only && wall.points >= 16 && wall.support_span_m >= 0.35);
+            for point in [wall.support_start_left_m, wall.support_end_left_m] {
+                assert!(
+                    ((-wall.heading_left_rad.sin()) * point.x_m
+                        + wall.heading_left_rad.cos() * point.y_m
+                        - wall.rho_left_m)
+                        .abs()
+                        <= wall.fit_error_m + 1e-9
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn missing_opening_or_invalid_scan_cannot_create_a_left_alignment_goal() {
+    let straight = polygon_scan(&[(-8.0, -0.5), (2.0, -0.5), (2.0, 0.5), (-8.0, 0.5)], 0.0);
+    assert!(
+        detect_turn_geometry(&straight, &straight.frame_id)
+            .unwrap()
+            .left_goal
+            .is_none()
+    );
+    let mut opening = left(0.95, 0.5, 1.5, 0.0);
+    for r in &mut opening.ranges_m[25..85] {
+        *r = None;
+    }
+    assert!(detect_turn_geometry(&opening, &opening.frame_id).is_err());
+    assert!(
+        detect_turn_geometry(&sample(vec![Some(1.0); 360]), &FrameId("heading".into()))
+            .unwrap()
+            .left_goal
+            .is_none()
+    );
+}
+
+#[test]
 fn left_opening_across_widths_and_heading_variation() {
     for width in [0.9, 1.0, 1.5, 2.0] {
         for outgoing in [1., 1.5, 2.] {

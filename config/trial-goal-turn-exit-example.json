@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "goal_id": "trial-left-exit",
+  "source_kind": "simulated",
+  "goal_type": "turn_exit_align",
+  "frame": "run_start_lidar_reference",
+  "coordinate_convention": "x_forward_y_left_yaw_left_positive",
+  "max_seconds": 10
+}

@@ -388,17 +388,20 @@ class JunctionStop:
         return self.count >= 3 and geometry['incoming_left_end_m'] <= .40
 
 
-def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False):
+def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
+    if type(camera_required) is not bool:
+        raise ValueError('invalid_camera_requirement')
+    sensor_inputs = ['camera', 'lidar', 'control'] if camera_required else ['lidar', 'control']
     if any(type(ages.get(k)) not in (int, float) or not math.isfinite(ages[k]) or ages[k] < 0
-           for k in ['camera', 'lidar', 'control']):
+           for k in sensor_inputs):
         raise ValueError('probe_invalid_sensor_age')
     if ages['control'] >= CONTROL_AGE_LIMIT_S:
         raise ValueError('probe_sensor_unavailable')
     issues = []
-    if ages['camera'] >= CAMERA_LATE_S:
+    if camera_required and ages['camera'] >= CAMERA_LATE_S:
         issues.append('camera_late')
-    if ages['camera'] >= 1:
+    if camera_required and ages['camera'] >= 1:
         issues.append('camera_unavailable')
     if ages['lidar'] >= LIDAR_LATE_S:
         issues.append('lidar_late')
@@ -450,6 +453,7 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False):
         issues.append('front_sparse')
     front_values = [r for r in front if r is not None]
     return {'front_m': min(front_values) if front_values else None,
+            'sensor_inputs': sensor_inputs, 'camera_required': camera_required,
             'corridor_front_m': corridor_front, 'nearest_m': nearest, 'scan_seq': scan['seq'],
             'side_clearance_m': min(side_clearances) if side_clearances else None,
             'side_stop_threshold_m': SIDE_CLEARANCE_M,

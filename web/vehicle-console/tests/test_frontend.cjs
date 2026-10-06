@@ -60,9 +60,11 @@ test('unlock samples fresh state and cancellation during sampling cannot arm',as
  assert.equal(g.run('requests.length'),2);assert.equal(g.run('requests[1].data.op'),'stop');
 });
 test('manual takeover stops automatic output without silently unlocking again',async()=>{
- const f=fixture();f.run('var requests=[];api=async(p,data)=>{requests.push({p,data});return p==="/api/state"?{healthy:true,owner:"auto-session",autonomy:{mode:"auto_probe"}}:{ok:true}};$("arm").onclick()');
- await new Promise(setImmediate);
- assert.equal(f.run('requests.length'),2);
- assert.equal(f.run('requests[1].data.op'),'takeover');
- assert.equal(f.run('active'),false);
+ for(const mode of ['auto_probe','auto_goal','auto_turn_trial']){
+  const f=fixture();f.run(`var requests=[];api=async(p,data)=>{requests.push({p,data});return p==="/api/state"?{healthy:${mode!=='auto_turn_trial'},owner:"auto-session",autonomy:{mode:${JSON.stringify(mode)}}}:{ok:true}};$("arm").onclick()`);
+  await new Promise(setImmediate);
+  assert.equal(f.run('requests.length'),2);
+  assert.equal(f.run('requests[1].data.op'),'takeover');
+  assert.equal(f.run('active'),false);
+ }
 });

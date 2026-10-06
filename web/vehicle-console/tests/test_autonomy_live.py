@@ -236,7 +236,8 @@ class CorridorSteeringTests(unittest.TestCase):
     def test_cli_front_margin_is_incomplete_and_never_rearms(self):
         spec = importlib.util.spec_from_file_location('autonomy_cli_margin', Path(__file__).parents[1]/'autonomy-control.py')
         cli = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {'autonomy_live': MODULE}):
+        with patch.dict(sys.modules, {'autonomy_live': MODULE}), patch.object(
+                sys, 'path', [str(Path(__file__).parents[1]), *sys.path]):
             spec.loader.exec_module(cli)
         state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
         calls = []
@@ -247,7 +248,8 @@ class CorridorSteeringTests(unittest.TestCase):
                 return {'ok': True}
             return {'autonomy': {'active': None, 'mode': 'locked',
                     'last_result': {'run_id': 'run', 'completed': False, 'reason': 'front_boundary_stop'}},
-                    'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}}}
+                    'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}},
+                    'ages': {'control': .01}}
         result = cli.straight_segment(request, state, 1560, 30, stop_left_junction=True)
         self.assertFalse(result['completed'])
         self.assertEqual(result['reason'], 'front_boundary_stop')
@@ -256,7 +258,8 @@ class CorridorSteeringTests(unittest.TestCase):
     def test_cli_normal_deadline_racing_heartbeat_is_not_failure(self):
         spec = importlib.util.spec_from_file_location('autonomy_cli_test', Path(__file__).parents[1]/'autonomy-control.py')
         cli = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {'autonomy_live': MODULE}):
+        with patch.dict(sys.modules, {'autonomy_live': MODULE}), patch.object(
+                sys, 'path', [str(Path(__file__).parents[1]), *sys.path]):
             spec.loader.exec_module(cli)
         state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
         done = False
@@ -268,7 +271,8 @@ class CorridorSteeringTests(unittest.TestCase):
                 raise RuntimeError('stale_autonomy_generation')
             return {'autonomy': {'active': None if done else {'run_id': 'run'}, 'mode': 'locked' if done else 'auto_probe',
                                  'last_result': {'run_id': 'run', 'completed': True, 'reason': 'probe_complete'} if done else None},
-                    'status': {'control': {'armed': not done, 'motor': 1500, 'servo': 1500}}}
+                    'status': {'control': {'armed': not done, 'motor': 1500, 'servo': 1500}},
+                    'ages': {'control': .01}}
         with patch.object(cli.time, 'sleep'):
             latest, run = cli.run_probe(request, state, 1560, 400)
         self.assertTrue(latest['autonomy']['last_result']['completed'])

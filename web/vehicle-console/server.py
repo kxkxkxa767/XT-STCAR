@@ -28,6 +28,7 @@ from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STAB
                            corridor_walls, probe_clearance, probe_parameters)
 from coast_motion import CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
+from turn_motion import TurnMotion, parse_trial_goal, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
 
 ROOT = Path(__file__).resolve().parent
 
@@ -59,6 +60,7 @@ class Console:
         self.stop_goal_registry = None
         self.stop_goal_processed = set()
         self.stop_goal_rejection = 'stop_goal_source_not_configured'
+        self.trial_goal_registry = None
         contract_file = getattr(args, 'stop_goal_contract', None)
         if contract_file is not None:
             try:
@@ -180,10 +182,15 @@ class Console:
         # Perception quality waits neutrally inside the existing bounded session.
         return time.monotonic() - self.control_at < AUTO_CONTROL_HEALTH_S and not self.errors
 
+    def turn_healthy(self):
+        return (time.monotonic()-self.control_at < AUTO_CONTROL_HEALTH_S
+                and not any(kind != 'camera' for kind in self.errors))
+
     def health_watch(self):
         while not self.stop.wait(.05):
             with self.lock:
-                healthy = self.autonomy_healthy() if self.auto_session else self.healthy()
+                healthy = (self.turn_healthy() if self.auto_session and self.auto_session['report'].get('turn_trial')
+                           else self.autonomy_healthy() if self.auto_session else self.healthy())
                 unsafe = not healthy or (self.owner is not None and time.monotonic() - self.owner_at > .35)
                 armed = self.status.get('control', {}).get('armed', False)
                 if unsafe and (armed or self.owner is not None):
@@ -224,7 +231,7 @@ class Console:
                 formal_complete = (reason == 'formal_goal_complete' and report.get('formal_completion_evidence', False)
                                    and report.get('coast_neutral_ack', False) and report.get('observed_armed', False))
                 self.auto_result = {**self.auto_session['report'], 'reason': reason,
-                                    'completed': formal_complete or (not report.get('formal_stop_goal')
+                                    'completed': formal_complete or (not report.get('formal_stop_goal') and not report.get('turn_trial')
                                     and reason in ('probe_complete', 'left_junction_reached')
                                     and self.auto_session['report'].get('observed_armed', False)
                                     and (not self.auto_session['report'].get('centering')
@@ -335,8 +342,24 @@ class Console:
                 formal_ready, formal_rejection = True, None
             except (StopGoalError, ValueError) as error:
                 formal_rejection = str(error)
+        turn_ready, turn_rejection, turn_preview = False, None, None
+        try:
+            if self.owner is not None or self.auto_session is not None:
+                raise ValueError('control_owned_or_unlocked')
+            _, turn_preview, _ = self.turn_preview(now)
+            turn_ready = True
+        except ValueError as error:
+            turn_rejection = str(error)
+        trial_goal = dict(self.trial_goal_registry) if self.trial_goal_registry else None
+        if trial_goal is not None:
+            if now >= trial_goal['expires_monotonic_s']:
+                trial_goal.update(execution_ready=False, execution_rejection='trial_goal_expired')
+            elif trial_goal['goal_type'] == 'point_stop' or 'target_point_left_m' in trial_goal:
+                trial_goal.update(execution_ready=False, execution_rejection='real_pose_missing')
+            else:
+                trial_goal.update(execution_ready=turn_ready, execution_rejection=None if turn_ready else turn_rejection)
         return {'mode': self.control_mode, 'epoch': self.control_epoch,
-                'supported': ['straight_probe', 'straight_segment', 'to_left_junction', 'formal_straight_stop'], 'competition_supported': False,
+                'supported': ['straight_probe', 'straight_segment', 'to_left_junction', 'formal_straight_stop', 'bounded_left_turn_trial'], 'competition_supported': False,
                 'quality_confirm_s': QUALITY_CONFIRM_S,
                 'quality_self_recovery': True, 'quality_recovery_stable_s': QUALITY_RECOVERY_STABLE_S,
                 'coast_max_s': COAST_MAX_S, 'front_boundary_loss_s': FRONT_BOUNDARY_LOSS_S,
@@ -344,8 +367,84 @@ class Console:
                 'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
                 'formal_ready': formal_ready, 'formal_rejection': formal_rejection, 'final_stop_goal': goal_summary,
                 'formal_max_drive_ms': self.stop_goal_contract.budget['max_drive_ms'] if self.stop_goal_contract else None,
+                'turn_ready': turn_ready, 'turn_rejection': turn_rejection, 'turn_preview': turn_preview,
+                'turn_drive_max_s': MAX_DRIVE_S, 'turn_presteer_max_s': MAX_PRESTEER_S,
+                'turn_steering_allowance_s': STEERING_ALLOWANCE_S,
+                'turn_requires_operator_placement_confirmation': True,
+                'steering_candidate_bounds': {'min': SERVO_MIN, 'max': SERVO_MAX, 'right_physically_validated': False},
+                'trial_goal': trial_goal,
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
+
+    def turn_preview(self, now, max_drive_s=MAX_DRIVE_S):
+        """Pure admission from this fresh scan; not an entrance/navigation certificate."""
+        ages = self.sensor_ages(now)
+        clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False, camera_required=False)
+        if not self.turn_healthy() or not clearance['motion_ready']:
+            raise ValueError('turn_sensor_unavailable')
+        control = self.status.get('control', {})
+        if (self.control_mode != 'locked' or control.get('armed') is not False
+                or control.get('motor') != 1500 or control.get('servo') != 1500):
+            raise ValueError('turn_requires_fresh_neutral_lock')
+        motion = TurnMotion(now, max_drive_s=max_drive_s)
+        decision = motion.update(self.scan, ages['lidar'], now, control)
+        if not decision['start_ready'] or decision['lock_requested']:
+            raise ValueError(decision['reason'])
+        return motion, decision, clearance
+
+    def start_turn_trial(self, data):
+        allowed = {'op', 'boot', 'epoch', 'tick', 'placement_confirmed', 'max_drive_s', 'goal_id'}
+        if set(data)-allowed or data.get('placement_confirmed') is not True:
+            raise ValueError('turn_trial_requires_operator_placement_confirmation')
+        if self.stop.is_set() or self.owner is not None or self.auto_session is not None:
+            raise ValueError('already_armed_or_shutting_down')
+        now = time.monotonic()
+        limit = data.get('max_drive_s', MAX_DRIVE_S)
+        trial_goal = None
+        if 'goal_id' in data:
+            trial_goal = self.trial_goal_registry
+            if trial_goal is None or data['goal_id'] != trial_goal['goal_id']:
+                raise ValueError('trial_goal_not_registered')
+            if now >= trial_goal['expires_monotonic_s']:
+                raise ValueError('trial_goal_expired')
+            if trial_goal['goal_type'] == 'point_stop' or 'target_point_left_m' in trial_goal:
+                raise ValueError('real_pose_missing')
+            if type(limit) not in (int, float) or not math.isfinite(limit):
+                raise ValueError('invalid_bounded_left_turn_trial')
+            limit = min(limit, trial_goal['max_seconds'])
+        motion, decision, clearance = self.turn_preview(now, limit)
+        tick = data.get('tick')
+        current_tick = self.status['control'].get('tick', -1)
+        if type(tick) is not int or not 0 <= current_tick-tick < 100 or tick <= self.stopped_tick:
+            raise ValueError('stale_arm_request')
+        run_id = secrets.token_urlsafe(18)
+        report = {'run_id': run_id, 'epoch': self.control_epoch, 'pwm': TRIAL_MOTOR, 'servo': 1500,
+            'duration_ms': round(1000*(MAX_PRESTEER_S+motion.max_drive_s)), 'phase': 'presteer',
+            'drive_ticks': 0, 'motion_ticks': 0, 'presteer_ticks': 0, 'coast_ticks': 0, 'recovery_ticks': 0,
+            'observed_pwm': False, 'observed_armed': False, 'steering_changes': 0, 'centering': True,
+            'turn_trial': True, 'formal_stop_goal': False, 'endpoint': 'left_turn_trial',
+            'operator_placement_confirmed': True, 'start_scope': 'operator_placed_mid_segment',
+            'sensor_inputs': ['lidar', 'control'], 'camera_required': False,
+            'trial_goal': dict(trial_goal) if trial_goal else None,
+            'competition_navigation': False, 'wheel_motion_measured': False, 'current_pwm': 1500,
+            'physical_steering_confirmed': False, 'turn_path_certified': False, 'entry_confirmed': False,
+            'observed_alignment': False, 'turn': decision, 'walls': None, 'coast_motion': None,
+            'standstill_confirmed': False, 'quality_issues': [], 'quality_counts': {},
+            'clearance_start': clearance, 'rear_launch_active': False, 'rear_launch_max_s': 0}
+        self.auto_session = {'report': report, 'turn_motion': motion, 'phase': 'presteer',
+            'deadline': now+MAX_PRESTEER_S+motion.max_drive_s, 'last_loop': now, 'heartbeat_seq': 0,
+            'quality': self.perception_quality, 'recovery': QualityRecovery(), 'rear_launch': None,
+            'motion_scan_seq': None, 'turn_last_servo': 1500, 'turn_servo_sequence': None}
+        self.auto_result = None
+        self.owner, self.owner_at = 'auto-turn-'+run_id, now
+        self.control_mode, self.stop_latched = 'auto_turn_trial', False
+        try:
+            self.emit('arm', tick=tick)
+        except (RuntimeError, OSError):
+            self.halt('turn_arm_failed')
+            raise
+        self.arm_sequence = self.sequence
+        return {'ok': True, 'run_id': run_id, 'epoch': self.control_epoch}
 
     def formal_preview(self, goal, pwm, now):
         """Same admission for status and start, using an isolated preview consumer."""
@@ -408,6 +507,18 @@ class Console:
             if data.get('boot') != self.boot or type(data.get('epoch')) is not int or data['epoch'] != self.control_epoch:
                 raise ValueError('stale_autonomy_generation')
             op = data.get('op')
+            if op == 'trial_goal_register':
+                if set(data) != {'op', 'boot', 'epoch', 'goal'}:
+                    raise ValueError('invalid_target_only_trial_registration')
+                target = parse_trial_goal(data['goal'])
+                now = time.monotonic()
+                scan = self.scan or {}
+                self.trial_goal_registry = {**target, 'reference_boot': self.boot,
+                    'reference_scan_seq': scan.get('seq'), 'reference_publication_at_ms': scan.get('at_ms'),
+                    'reference_frame': scan.get('frame_id'), 'received_monotonic_s': now,
+                    'expires_monotonic_s': now+MAX_PRESTEER_S+target['max_seconds']+COAST_MAX_S}
+                return {'registered': True, 'target_only': True, 'motion_requested': False,
+                        'trial_goal': dict(self.trial_goal_registry)}
             if op in ('heartbeat', 'cancel'):
                 session = self.auto_session
                 if session is None or data.get('run_id') != session['report']['run_id']:
@@ -425,6 +536,8 @@ class Console:
                     session['heartbeat_seq'] = seq
                     self.owner_at = time.monotonic()
                 return {'ok': True}
+            if op == 'turn_left_start':
+                return self.start_turn_trial(data)
             formal = op == 'stop_goal_start'
             if op not in ('probe_start', 'straight_start', 'to_left_junction_start', 'stop_goal_start'):
                 raise ValueError('only_bounded_straight_control_is_implemented')
@@ -515,6 +628,8 @@ class Console:
             session['coast_since'] = now
             session['coast_deadline'] = now+COAST_MAX_S
             session['coast_reason'] = reason
+            if session.get('turn_motion') is not None:
+                session['turn_motion'].begin_coast(reason, now)
             if self.coast_worker is None:
                 self.coast_worker = CoastMotionWorker()
             session['motion_generation'] = self.coast_worker.reset()
@@ -540,6 +655,23 @@ class Console:
         if now >= session['coast_deadline']:
             self.halt('coast_standstill_unconfirmed')
             return
+        if session.get('turn_motion') is not None:
+            control = self.status['control']
+            pending_servo = session['turn_servo_sequence']
+            turn_control = {**control, 'command_acked': pending_servo is None or control.get('seq', -1) >= pending_servo}
+            decision = session['turn_motion'].update(self.scan, report['sensor_ages']['lidar'], now,
+                turn_control, safe=motion_ready)
+            report['turn'] = decision
+            report['physical_steering_confirmed'] = False
+            report['observed_alignment'] = decision['observed_alignment']
+            report['alignment_evidence'] = decision['alignment_evidence']
+            report['entry_confirmed'] = decision['entry_confirmed']
+            if decision['lock_requested']:
+                self.halt(decision['reason'])
+                return
+            if decision['motor'] != 1500 or not SERVO_MIN <= decision['servo'] <= SERVO_MAX:
+                raise ValueError('invalid_turn_coast_output')
+            servo = decision['servo']
         if (session['coast_reason'] == 'left_junction_reached'
                 and (session['coast_junction_scan_seq'] != self.scan['seq'] or not motion_ready)):
             session['coast_endpoint_verified'] = session['junction'].update(
@@ -598,6 +730,8 @@ class Console:
         report['servo'] = servo
         report['current_pwm'] = 1500
         self.emit('drive', 1500, servo, self.status['control']['tick'])
+        if session.get('turn_motion') is not None and servo != session['turn_last_servo']:
+            session['turn_last_servo'], session['turn_servo_sequence'] = servo, self.sequence
         if session['coast_neutral_sequence'] is None:
             session['coast_neutral_sequence'] = self.sequence
         report['coast_ticks'] += 1
@@ -626,8 +760,10 @@ class Console:
             rear_active = rear.update(self.scan, now, bool(control.get('armed') and control.get('motor', 1500) > 1500
                                                          and control.get('seq', -1) >= self.arm_sequence)) if rear else False
             report['rear_launch_active'] = rear_active
-            clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False), rear_launch=rear_active)
-            if not self.autonomy_healthy():
+            turn_trial = bool(report.get('turn_trial'))
+            clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
+                                        rear_launch=rear_active, camera_required=not turn_trial)
+            if not (self.turn_healthy() if turn_trial else self.autonomy_healthy()):
                 raise ValueError('probe_sensor_unavailable')
             report['quality_issues'] = clearance['quality_issues']
             counts = report.setdefault('quality_counts', {})
@@ -642,6 +778,9 @@ class Console:
             motion_ready = recovery.update(clearance['motion_ready'], clearance['quality_issues'], self.scan['seq'], now)
             report['perception_recovering'] = recovery.waiting
             report['recovery_stable_ms'] = recovery.stable_ms(now)
+            if session.get('turn_motion') is not None:
+                self.turn_tick(session, now, motion_ready)
+                return
             if session.get('phase') != 'coast' and now >= session['deadline']:
                 if session.get('goal_consumer') is not None:
                     self.halt('formal_goal_deadline')
@@ -710,11 +849,58 @@ class Console:
         except (ValueError, RuntimeError, OSError, KeyError) as error:
             self.halt(str(error))
 
+    def turn_tick(self, session, now, motion_ready):
+        """One trial owner; no rear exemption, segment restart or navigation completion."""
+        report = session['report']
+        if not motion_ready:
+            self.halt('turn_perception_unavailable')
+            return
+        if session.get('phase') == 'coast':
+            self.coast_tick(session, now, motion_ready, report['servo'])
+            return
+        if now >= session['deadline']:
+            self.halt('turn_total_deadline')
+            return
+        control = self.status.get('control', {})
+        if not control.get('armed') or control.get('seq', -1) < self.arm_sequence:
+            return
+        report['observed_armed'] = True
+        report['observed_pwm'] |= control.get('motor') == TRIAL_MOTOR
+        pending_servo = session['turn_servo_sequence']
+        turn_control = {**control, 'command_acked': pending_servo is None or control.get('seq', -1) >= pending_servo}
+        decision = session['turn_motion'].update(self.scan, report['sensor_ages']['lidar'], now, turn_control, safe=True)
+        report['turn'] = decision
+        report['physical_steering_confirmed'] = False
+        report['observed_alignment'] = decision['observed_alignment']
+        report['alignment_evidence'] = decision['alignment_evidence']
+        report['entry_confirmed'] = decision['entry_confirmed']
+        if decision['lock_requested']:
+            self.halt(decision['reason'])
+            return
+        if decision['stop_requested']:
+            self.begin_coast(decision['reason'], now)
+            self.coast_tick(session, now, True, decision['servo'])
+            return
+        session['phase'] = report['phase'] = decision['phase']
+        motor, servo = decision['motor'], decision['servo']
+        if motor not in (1500, TRIAL_MOTOR) or not 1500 <= servo <= SERVO_MAX:
+            raise ValueError('invalid_turn_trial_output')
+        changed = servo != session['turn_last_servo']
+        if changed:
+            report['steering_changes'] += 1
+        report['servo'], report['current_pwm'] = servo, motor
+        self.emit('drive', motor, servo, control['tick'])
+        if changed:
+            session['turn_last_servo'], session['turn_servo_sequence'] = servo, self.sequence
+        report['presteer_ticks' if motor == 1500 else 'motion_ticks'] += 1
+        if motor > 1500:
+            report['drive_ticks'] += 1
+
     def configure(self, data):
         with self.lock:
             if self.owner or self.status.get('control', {}).get('armed'):
                 raise ValueError('stop and lock before editing PWM')
-            ranges = {'forward': (1500, 1620), 'reverse': (1350, 1500), 'left': (1500, 1650), 'right': (1350, 1500)}
+            ranges = {'forward': (1500, 1620), 'reverse': (1350, 1500), 'left': (1500, SERVO_MAX), 'right': (SERVO_MIN, 1500)}
             if set(data) != set(ranges):
                 raise ValueError('four PWM settings required')
             for k, (lo, hi) in ranges.items():
@@ -765,12 +951,16 @@ class Console:
                     self.vision.submit(image, captured_at, sequence)
                 encoded = time.monotonic()
         except Exception as error:
-            with self.lock:
-                self.errors['camera'] = str(error)
-            self.halt('camera_failed')
+            self.camera_failure(error)
         finally:
             if cap is not None:
                 cap.release()
+
+    def camera_failure(self, error):
+        with self.lock:
+            self.errors['camera'] = str(error)
+            if self.auto_session is None or not self.auto_session['report'].get('turn_trial'):
+                self.halt('camera_failed')
 
     def state(self):
         with self.lock:

@@ -1,0 +1,472 @@
+"""Service/CLI left trial: fake adoption, synthetic scans and clocks, no devices."""
+import importlib.util
+import io
+import json
+from pathlib import Path
+import sys
+import tempfile
+import types
+import unittest
+from unittest.mock import patch
+
+from test_coast_motion import room_scan
+from test_turn_motion import scan as corridor_scan, opening_scan
+
+ROOT = Path(__file__).parents[1]
+
+
+class TurnControlTests(unittest.TestCase):
+    def setUp(self):
+        sys.path.insert(0, str(ROOT))
+        try:
+            spec = importlib.util.spec_from_file_location('turn_console_test', ROOT/'server.py')
+            self.server = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self.server)
+        finally:
+            sys.path.pop(0)
+        self.temp = tempfile.TemporaryDirectory()
+        self.console = self.server.Console(types.SimpleNamespace(
+            access_file=str(Path(self.temp.name)/'access.json'), output=str(Path(self.temp.name)/'out'),
+            demo=True, allow_reverse=False))
+        self.console.coast_worker = self.server.CoastMotionWorker(autostart=False)
+        self.console.healthy = self.console.autonomy_healthy = lambda: True
+        self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': now-self.console.scan_at, 'control': .01}
+        self.console.status = {'control': {'armed': False, 'motor': 1500, 'servo': 1500, 'seq': 0, 'tick': 1000}}
+        self.console.scan = self.scan(1)
+        self.now = self.console.scan_at = self.console.control_at = 0.
+        self.outputs = []
+        self.adopt_servo = True
+        def emit(op, motor=1500, servo=1500, tick=0):
+            self.console.sequence += 1
+            self.outputs.append({'op': op, 'motor': motor, 'servo': servo, 'now': self.now})
+            control = self.console.status['control']
+            control.update(seq=self.console.sequence, motor=motor)
+            if op == 'arm':
+                control['armed'] = True
+            elif op == 'stop':
+                control.update(armed=False, motor=1500, servo=1500)
+            if self.adopt_servo:
+                control['servo'] = servo
+            self.console.control_at = self.now
+        self.console.emit = emit
+
+    def tearDown(self):
+        self.console.coast_worker.close()
+        self.temp.cleanup()
+
+    @staticmethod
+    def scan(seq, heading=60.):
+        return {**room_scan(seq, half_width=.6), **corridor_scan(seq, heading=heading)}
+
+    def start(self, max_drive_s=10.):
+        with patch.object(self.server.time, 'monotonic', return_value=self.now):
+            return self.console.autonomy_command({'op': 'turn_left_start', 'boot': self.console.boot,
+                'epoch': self.console.control_epoch, 'tick': self.console.status['control']['tick'],
+                'placement_confirmed': True, 'max_drive_s': max_drive_s})
+
+    def tick(self, now, scan=None):
+        self.now = now
+        self.console.owner_at = now
+        self.console.control_at = now
+        self.console.status['control']['tick'] = 1000+round(now*1000)
+        new_scan = self.scan(1+int(round(now*10, 6))) if scan is None else scan
+        if new_scan['seq'] != self.console.scan['seq']:
+            self.console.scan, self.console.scan_at = new_scan, now
+        with patch.object(self.server.time, 'monotonic', return_value=now):
+            self.console.autonomy_tick(now)
+        self.console.coast_worker.run_pending()
+
+    def drive(self, max_drive_s=10.):
+        self.start(max_drive_s)
+        for index in range(1, 240):
+            now = round(index*.02, 6)
+            self.tick(now)
+            if self.console.auto_session is None:
+                self.fail(self.console.auto_result['reason'])
+            if self.console.auto_session['phase'] == 'drive':
+                return now
+        self.fail('fresh adopted presteer failed to enter bounded drive')
+
+    def test_preview_and_missing_placement_are_neutral_and_do_not_arm(self):
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            before = self.console.autonomy_status()
+            self.assertTrue(before['turn_ready'])
+            self.assertFalse(before['turn_preview']['physical_steering_confirmed'])
+            with self.assertRaisesRegex(ValueError, 'placement_confirmation'):
+                self.console.autonomy_command({'op': 'turn_left_start', 'boot': self.console.boot,
+                    'epoch': 0, 'tick': 1000})
+        self.assertEqual(self.outputs, [])
+        self.assertFalse(self.console.status['control']['armed'])
+
+    def test_no_left_geometry_ambiguity_and_rear_obstacle_refuse_start(self):
+        values = [dict(self.scan(1), corridor_candidates=[]), self.scan(1)]
+        values[1]['corridor_candidates'].append(dict(values[1]['corridor_candidates'][0]))
+        rear = self.scan(1)
+        rear['ranges'][180] = .35
+        values.append(rear)
+        for scan in values:
+            with self.subTest(scan=scan.get('corridor_candidates')):
+                self.console.scan = scan
+                with self.assertRaises(ValueError):
+                    self.start()
+        self.assertEqual(self.outputs, [])
+
+    def test_single_owner_presteers_gradually_before_motor_and_never_completes_competition(self):
+        drive_since = self.drive()
+        positives = [row for row in self.outputs if row['motor'] > 1500]
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+        self.assertEqual(positives[0]['motor'], 1560)
+        self.assertGreaterEqual(drive_since, 1.2)
+        neutral = [row for row in self.outputs if row['op'] == 'drive' and row['motor'] == 1500]
+        previous_servo, last_change = 1500, 0.
+        for row in neutral:
+            self.assertLessEqual(abs(row['servo']-previous_servo), 10)
+            if row['servo'] != previous_servo:
+                self.assertGreaterEqual(row['now']-last_change+1e-9, .10)
+                last_change = row['now']
+            previous_servo = row['servo']
+        self.assertEqual(self.console.control_mode, 'auto_turn_trial')
+        self.assertFalse(self.console.auto_session['report']['rear_launch_active'])
+        self.console.command({'op': 'stop'})
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.outputs[-1]['motor'], 1500)
+
+    def test_unadopted_steering_never_allows_positive_motor(self):
+        self.adopt_servo = False
+        self.start()
+        for index in range(1, 260):
+            self.tick(round(index*.02, 6))
+            if self.console.auto_session is None:
+                break
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
+        self.assertEqual(self.console.auto_result['reason'], 'left_turn_presteer_timeout')
+        self.assertFalse(self.console.auto_result['completed'])
+
+    def test_short_geometry_gap_retains_source_then_sustained_loss_locks_without_rearm(self):
+        self.drive()
+        now = self.now+.10
+        scan = dict(self.scan(1+int(round(now*10, 6))), corridor_candidates=[])
+        self.tick(now-.08)  # Preserve the 80ms loop before admitting the next new scan.
+        self.tick(now-.06)
+        self.tick(now-.04)
+        self.tick(now-.02)
+        self.tick(now, scan)
+        session = self.console.auto_session
+        self.assertIsNotNone(session)
+        source_seq = session['report']['turn']['geometry_source_seq']
+        self.assertTrue(session['report']['turn']['geometry_missing'])
+        self.assertEqual(session['report']['current_pwm'], 1560)
+        for index in range(1, 16):
+            value_now = round(now+index*.02, 6)
+            empty = dict(self.scan(1+int(round(value_now*10, 6))), corridor_candidates=[])
+            self.tick(value_now, empty)
+            if self.console.auto_session is None:
+                break
+            self.assertEqual(session['report']['turn']['geometry_source_seq'], source_seq)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        old = list(self.outputs)
+        self.tick(round(self.now+.02, 6))
+        self.assertEqual(self.outputs, old)
+        self.assertFalse(self.console.auto_result['completed'])
+
+    def test_coast_timeout_or_still_keeps_motor_neutral_and_no_second_arm(self):
+        self.drive()
+        session = self.console.auto_session
+        motion = session['turn_motion']
+        motion.begin_coast('left_turn_observed_corridor_alignment', self.now)
+        motion.observed_alignment = True
+        before = len(self.outputs)
+        for index in range(1, 280):
+            self.tick(round(self.now+.02, 6))
+            if self.console.auto_session is None:
+                break
+        self.assertIsNone(self.console.auto_session)
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[before:]))
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertFalse(self.console.auto_result['entry_confirmed'])
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_coast_service_consumes_turn_updates_and_releases_servo_with_ack_bookkeeping(self):
+        self.drive()
+        session = self.console.auto_session
+        before_servo = session['report']['servo']
+        before_changes = session['report']['steering_changes']
+        last_change = session['turn_motion'].last_change
+        start, before = self.now, len(self.outputs)
+        self.console.begin_coast('left_turn_drive_timeout', start)
+        deadline = session['coast_deadline']
+        unknown = self.console.coast_worker.unknown('test_motion_unknown')
+        with patch.object(self.console.coast_worker, 'result', return_value=unknown):
+            for index in range(1, 101):
+                self.tick(round(start+index*.02, 6))
+                self.assertIs(self.console.auto_session, session)
+                self.assertEqual(session['coast_deadline'], deadline)
+        changes, previous_servo = 0, before_servo
+        for row in self.outputs[before:]:
+            self.assertEqual((row['op'], row['motor']), ('drive', 1500))
+            self.assertLessEqual(abs(row['servo']-previous_servo), 10)
+            if row['servo'] != previous_servo:
+                self.assertGreaterEqual(row['now']-last_change+1e-9, .10)
+                last_change = row['now']
+                changes += 1
+            previous_servo = row['servo']
+        self.assertGreater(changes, 0)
+        self.assertEqual(session['report']['steering_changes']-before_changes, changes)
+        self.assertEqual(session['turn_last_servo'], session['report']['servo'])
+        self.assertEqual(session['report']['servo'], 1500)
+        self.assertEqual(session['report']['turn']['geometry_source_seq'], self.console.scan['seq'])
+        self.assertTrue(session['report']['coast_neutral_ack'])
+        self.assertLessEqual(session['turn_servo_sequence'], self.console.status['control']['seq'])
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_turn_coast_exact_five_second_deadline_never_rearms_or_restores_motor(self):
+        self.drive()
+        session = self.console.auto_session
+        start, before = self.now, len(self.outputs)
+        self.console.begin_coast('left_turn_drive_timeout', start)
+        self.assertEqual(session['coast_deadline']-start, 5.)
+        unknown = self.console.coast_worker.unknown('test_motion_unknown')
+        with patch.object(self.console.coast_worker, 'result', return_value=unknown):
+            for index in range(1, 251):
+                self.tick(round(start+index*.02, 6))
+                if index < 250:
+                    self.assertIs(self.console.auto_session, session)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'coast_standstill_unconfirmed')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[before:]))
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_coast_bridge_lock_on_repeated_scan_is_immediate_neutral(self):
+        self.drive()
+        self.console.begin_coast('planned', self.now)
+        self.console.status['control']['armed'] = False
+        self.tick(round(self.now+.02, 6), self.console.scan)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'turn_bridge_locked')
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                         ('stop', 1500, 1500))
+
+    def test_drive_budget_is_not_extended_by_pending_servo_adoption(self):
+        drive_since = self.drive(max_drive_s=1.)
+        self.console.auto_session['turn_servo_sequence'] = self.console.sequence+1000
+        for index in range(1, 80):
+            self.tick(round(drive_since+index*.02, 6))
+            if self.console.auto_session is None or self.console.auto_session['phase'] == 'coast':
+                break
+        self.assertIsNotNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_session['phase'], 'coast')
+        self.assertEqual(self.console.auto_session['coast_reason'], 'left_turn_drive_timeout')
+        self.assertEqual(self.outputs[-1]['motor'], 1500)
+        self.assertLessEqual(self.now-drive_since, 1.02)
+
+    def test_front_and_side_obstacle_prioritize_immediate_neutral_lock(self):
+        self.drive()
+        now = round(self.now+.02, 6)
+        self.console.scan['ranges'][0] = .8
+        self.tick(now)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1], {'op': 'stop', 'motor': 1500, 'servo': 1500, 'now': now})
+        self.assertFalse(self.console.auto_result['completed'])
+
+    def test_candidate_settings_bounds_and_defaults_preserve_unvalidated_right_label(self):
+        self.assertEqual((self.console.settings['left'], self.console.settings['right']), (1650, 1350))
+        self.console.configure({'forward': 1550, 'reverse': 1450, 'left': 1720, 'right': 1270})
+        for key, value in [('left', 1721), ('right', 1269)]:
+            with self.assertRaises(ValueError):
+                self.console.configure({**self.console.settings, key: value})
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            limits = self.console.autonomy_status()['steering_candidate_bounds']
+        self.assertEqual((limits['min'], limits['max']), (1270, 1720))
+        self.assertFalse(limits['right_physically_validated'])
+
+    def test_camera_absence_is_diagnostic_for_lidar_only_turn_without_faking_age(self):
+        self.console.sensor_ages = lambda now: {'camera': 99., 'lidar': now-self.console.scan_at, 'control': .01}
+        self.console.errors['camera'] = 'offline camera'
+        self.drive()
+        session = self.console.auto_session
+        self.assertEqual(session['report']['sensor_inputs'], ['lidar', 'control'])
+        self.assertEqual(session['report']['sensor_ages']['camera'], 99.)
+        self.assertNotIn('camera_unavailable', session['report']['quality_issues'])
+        self.console.camera_failure(RuntimeError('camera ended'))
+        self.assertIs(self.console.auto_session, session)
+        self.tick(round(self.now+.02, 6))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(self.outputs[-1]['motor'], 1560)
+
+    def test_control_fault_still_locks_turn_and_old_camera_failure_behavior_is_preserved(self):
+        self.drive()
+        self.console.errors['control_write'] = 'failed write'
+        self.tick(round(self.now+.02, 6))
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        self.console.camera_failure(RuntimeError('camera failed in locked/manual mode'))
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+
+    def test_manual_and_simulated_targets_register_but_point_execution_requires_real_pose(self):
+        for source_kind in ['manual', 'simulated']:
+            with self.subTest(source_kind=source_kind), patch.object(self.server.time, 'monotonic', return_value=0.):
+                target = {'schema_version': 1, 'goal_id': source_kind+'-point', 'source_kind': source_kind,
+                    'goal_type': 'point_stop', 'frame': 'run_start_lidar_reference',
+                    'coordinate_convention': 'x_forward_y_left_yaw_left_positive', 'max_seconds': 10,
+                    'target_point_left_m': {'x_m': 1.2, 'y_m': 1.5}}
+                registered = self.console.autonomy_command({'op': 'trial_goal_register', 'boot': self.console.boot,
+                    'epoch': 0, 'goal': target})
+                self.assertTrue(registered['registered'])
+                self.assertFalse(registered['motion_requested'])
+                self.assertEqual(registered['trial_goal']['source_kind'], source_kind)
+                status = self.console.autonomy_status()['trial_goal']
+                self.assertEqual(status['execution_rejection'], 'real_pose_missing')
+                with self.assertRaisesRegex(ValueError, 'real_pose_missing'):
+                    self.console.autonomy_command({'op': 'turn_left_start', 'boot': self.console.boot,
+                        'epoch': 0, 'tick': 1000, 'placement_confirmed': True, 'goal_id': target['goal_id']})
+        self.assertEqual(self.outputs, [])
+
+    def test_simulated_exit_intent_uses_real_opening_geometry_not_a_simulated_pose(self):
+        target = {'schema_version': 1, 'goal_id': 'exit-intent', 'source_kind': 'simulated',
+            'goal_type': 'turn_exit_align', 'frame': 'run_start_lidar_reference',
+            'coordinate_convention': 'x_forward_y_left_yaw_left_positive', 'max_seconds': 4}
+        self.console.scan = opening_scan(1)
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            registered = self.console.autonomy_command({'op': 'trial_goal_register', 'boot': self.console.boot,
+                'epoch': 0, 'goal': target})
+            self.assertEqual(self.outputs, [])
+            self.assertTrue(self.console.autonomy_status()['trial_goal']['execution_ready'])
+            self.console.autonomy_command({'op': 'turn_left_start', 'boot': self.console.boot,
+                'epoch': 0, 'tick': 1000, 'placement_confirmed': True, 'goal_id': target['goal_id']})
+        session = self.console.auto_session
+        self.assertEqual(session['turn_motion'].max_drive_s, 4)
+        self.assertEqual(session['report']['turn']['geometry_mode'], 'opening_wall')
+        self.assertFalse(session['report']['turn']['turn_goal']['origin_between_exit_walls'])
+        self.assertFalse(session['report']['physical_steering_confirmed'])
+        self.assertEqual([(row['op'], row['motor']) for row in self.outputs], [('arm', 1500)])
+        self.assertEqual(registered['trial_goal']['reference_scan_seq'], 1)
+        self.assertEqual(registered['trial_goal']['reference_publication_at_ms'], 100)
+
+    def test_target_registration_expiry_does_not_refresh_measurement_or_allow_late_start(self):
+        target = {'schema_version': 1, 'goal_id': 'exit-intent', 'source_kind': 'manual',
+            'goal_type': 'turn_exit_align', 'frame': 'run_start_lidar_reference',
+            'coordinate_convention': 'x_forward_y_left_yaw_left_positive', 'max_seconds': 4}
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            registered = self.console.autonomy_command({'op': 'trial_goal_register', 'boot': self.console.boot,
+                'epoch': 0, 'goal': target})
+        expires = registered['trial_goal']['expires_monotonic_s']
+        self.assertEqual(self.console.scan_at, 0.)
+        self.now = self.console.scan_at = self.console.control_at = expires
+        self.console.scan = self.scan(2)
+        with patch.object(self.server.time, 'monotonic', return_value=expires):
+            self.assertEqual(self.console.autonomy_status()['trial_goal']['execution_rejection'], 'trial_goal_expired')
+            with self.assertRaisesRegex(ValueError, 'trial_goal_expired'):
+                self.console.autonomy_command({'op': 'turn_left_start', 'boot': self.console.boot,
+                    'epoch': 0, 'tick': 1000, 'placement_confirmed': True, 'goal_id': target['goal_id']})
+        self.assertEqual(self.outputs, [])
+
+
+class TurnCliTests(unittest.TestCase):
+    def module(self):
+        sys.path.insert(0, str(ROOT))
+        try:
+            spec = importlib.util.spec_from_file_location('turn_cli_test', ROOT/'autonomy-control.py')
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+        finally:
+            sys.path.pop(0)
+
+    def test_default_cli_only_gets_state(self):
+        cli = self.module()
+        state = {'healthy': True, 'boot': 'boot', 'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}},
+            'autonomy': {'turn_ready': True, 'turn_rejection': None, 'turn_preview': {'candidate_only': True}}}
+        requests = []
+        class Opener:
+            def open(self, request, timeout=None):
+                requests.append(request)
+                return io.BytesIO(json.dumps(state).encode())
+        with tempfile.TemporaryDirectory() as directory:
+            access = Path(directory)/'access.json'
+            access.write_text(json.dumps({'port': 8081, 'token': 'offline-token'}))
+            for command in ['turn-left', 'trial-goal-status']:
+                with patch.object(sys, 'argv', ['autonomy-control.py', command, '--access-file', str(access)]),\
+                     patch.object(cli.urllib.request, 'build_opener', return_value=Opener()), patch.object(sys, 'stdout', io.StringIO()):
+                    cli.main()
+        self.assertEqual([request.get_method() for request in requests], ['GET', 'GET'])
+
+    def test_cli_explicit_target_registration_preserves_small_message_limit(self):
+        cli = self.module()
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}}
+        target = {'schema_version': 1, 'goal_id': 'manual-intent', 'source_kind': 'manual',
+            'goal_type': 'turn_exit_align', 'frame': 'run_start_lidar_reference',
+            'coordinate_convention': 'x_forward_y_left_yaw_left_positive', 'max_seconds': 10}
+        requests = []
+        class Opener:
+            def open(self, request, timeout=None):
+                requests.append(request)
+                return io.BytesIO(json.dumps(state if request.get_method() == 'GET' else {'registered': True}).encode())
+        with tempfile.TemporaryDirectory() as directory:
+            access, goal = Path(directory)/'access.json', Path(directory)/'goal.json'
+            access.write_text(json.dumps({'port': 8081, 'token': 'offline-token'}))
+            goal.write_text(json.dumps(target))
+            argv = ['autonomy-control.py', 'trial-goal-register', '--access-file', str(access), '--goal-file', str(goal)]
+            with patch.object(sys, 'argv', argv), patch.object(cli.urllib.request, 'build_opener', return_value=Opener()),\
+                 patch.object(sys, 'stdout', io.StringIO()):
+                cli.main()
+                goal.write_text(' '*2049)
+                with self.assertRaisesRegex(RuntimeError, 'HTTP limit'):
+                    cli.main()
+        self.assertEqual([request.get_method() for request in requests], ['GET', 'POST', 'GET'])
+        body = json.loads(requests[1].data)
+        self.assertEqual(body['op'], 'trial_goal_register')
+        self.assertEqual(body['goal'], target)
+        self.assertLessEqual(len(requests[1].data), 2048)
+        self.assertNotIn('target_only', body['goal'])
+
+    def test_cli_starts_once_and_waits_for_neutral_before_report(self):
+        cli = self.module()
+        calls, reads = [], []
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+        def request(path, data=None):
+            if data:
+                calls.append(data)
+                return {'run_id': 'run', 'epoch': 0}
+            index = len(reads)
+            reads.append(index)
+            return {'autonomy': {'active': None, 'mode': 'locked', 'last_result': {
+                'run_id': 'run', 'completed': False, 'reason': 'left_turn_observed_corridor_alignment', 'observed_alignment': True}},
+                'ages': {'control': .01}, 'status': {'control': {'armed': index == 0,
+                    'motor': 1500, 'servo': 1720 if index == 0 else 1500}}}
+        with patch.object(cli.time, 'sleep'):
+            result = cli.left_turn_trial(request, state, 10, True)
+        self.assertEqual([call['op'] for call in calls], ['turn_left_start', 'cancel'])
+        self.assertEqual(reads, [0, 1])
+        self.assertTrue(calls[0]['placement_confirmed'])
+        self.assertEqual(calls[0]['max_drive_s'], 10)
+        self.assertNotIn('pwm', calls[0])
+        self.assertFalse(result['completed'])
+        self.assertFalse(result['entry_confirmed'])
+
+    def test_cli_missing_invalid_or_stale_feedback_age_never_claims_fresh_neutral(self):
+        cli = self.module()
+        calls, reads = [], []
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+        ages = [None, True, float('nan'), -.01, .2, .199]
+        def request(path, data=None):
+            if data:
+                calls.append(data['op'])
+                return {'run_id': 'run', 'epoch': 0}
+            index = len(reads)
+            reads.append(index)
+            return {'autonomy': {'active': None, 'mode': 'locked', 'last_result': {
+                'run_id': 'run', 'completed': False, 'reason': 'left_turn_drive_timeout'}},
+                'ages': {'control': ages[index]},
+                'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}}}
+        with patch.object(cli.time, 'sleep'):
+            result = cli.left_turn_trial(request, state, 10, True)
+        self.assertEqual(reads, list(range(6)))
+        self.assertEqual(calls, ['turn_left_start', 'cancel'])
+        self.assertTrue(result['fresh_neutral_locked_confirmed'])
+
+
+if __name__ == '__main__':
+    unittest.main()

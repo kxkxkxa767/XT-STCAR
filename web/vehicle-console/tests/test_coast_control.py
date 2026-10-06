@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 import test_autonomy_live as live_tests
 from test_coast_motion import MODULE as motion_module, room_scan, parallel_scan
+from test_turn_motion import MODULE as turn_module
 
 
 class CoastControlTests(unittest.TestCase):
@@ -523,7 +524,7 @@ class CliStopFeedbackTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         spec = importlib.util.spec_from_file_location('coast_cli', root/'autonomy-control.py')
         cli = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {'autonomy_live': live_tests.MODULE}):
+        with patch.dict(sys.modules, {'autonomy_live': live_tests.MODULE, 'turn_motion': turn_module}):
             spec.loader.exec_module(cli)
         original = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
         reads, calls = [], []

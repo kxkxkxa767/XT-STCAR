@@ -1,0 +1,904 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-06",
+  "source_main": "08df95746f49b404a57fc159d22ccb052f015172",
+  "user_scope": "skip straight; start at user placed crosswalk stop position; left turn then rule cone route; user authorized small separate segments; user confirmed segment cap 250→500ms, all other gates unchanged",
+  "user_parameters": {
+    "cone_motor_candidate_pwm": 1560,
+    "steering_amplitude_may_increase": true
+  },
+  "actual_test_scope": "single supervised left response through existing console manual interface; not full turn or autonomous cone route",
+  "test_parameters": {
+    "motor_pwm": 1560,
+    "reverse_braking": false,
+    "initial_positive_request_cap_s": 0.25,
+    "latest_positive_request_cap_s": 0.5,
+    "latest_left_servo_pwm": 1650,
+    "initial_left_servo_pwm": 1600
+  },
+  "vehicle_source_hashes": {
+    "server.py": "b43055f3079129f2d8bc29b88bad48b2456008e423fb22e52944a2a27c9cc052",
+    "autonomy_live.py": "7c5d6112b59fa9a84ce984992f36df758766b84773a7312a8ce13ada27060cba",
+    "coast_motion.py": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257",
+    "stop_goal.py": null,
+    "autonomy-control.py": "791a222c20aa4272e1dedbb0430c656f93b7599a5843bb997a605ac4b01dc1c1",
+    "vehicle-bridge": "515476dfb396fa063775bcc2b2951ce72e0b20f90f888b1525b2eb229f671d24"
+  },
+  "vehicle_matches_previous_8efc47b": true,
+  "formal_interface_deployed": false,
+  "competition_control_connected": false,
+  "read_only_initial": {
+    "healthy_samples": 6,
+    "sample_count": 6,
+    "first_control_tick": 1436839,
+    "last_control_tick": 1437964,
+    "lidar_sequences": [
+      14391,
+      14393,
+      14396,
+      14398,
+      14400,
+      14402
+    ],
+    "supported": [
+      "straight_probe",
+      "straight_segment",
+      "to_left_junction"
+    ]
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "utc": "2026-10-06T11:43:32.027082+00:00",
+      "error": "HTTPError: HTTP Error 400: Bad Request",
+      "drive_requests": 0,
+      "arm_acknowledged": false,
+      "operations": [],
+      "software_neutral_locked": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 1,
+        "servo": 1500,
+        "tick": 1887152
+      },
+      "healthy": true,
+      "adopted_motor_1560_servo_1600_samples": 0,
+      "stop_ack": true,
+      "stop_requested_monotonic_s": 1909.587982224,
+      "deadline_monotonic_s": null,
+      "raw_evidence": "work/vehicle-turn-cone-readiness-20261006/left-step01-result.json",
+      "script_sha256": "9d0414bafa3d1be1c520460f4782fcae5ad864672339f89e32a2e796f5cb2e02"
+    },
+    {
+      "attempt": 2,
+      "utc": "2026-10-06T11:46:01.259533+00:00",
+      "error": "ValueError: /api/control: stale arm request",
+      "drive_requests": 0,
+      "arm_acknowledged": false,
+      "operations": [],
+      "software_neutral_locked": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 2,
+        "servo": 1500,
+        "tick": 2035539
+      },
+      "healthy": true,
+      "adopted_motor_1560_servo_1600_samples": 0,
+      "stop_ack": true,
+      "stop_requested_monotonic_s": 2058.507012036,
+      "deadline_monotonic_s": null,
+      "raw_evidence": "work/vehicle-turn-cone-readiness-20261006/left-step02-result.json",
+      "script_sha256": "dd7e877adb4933012704d465d2c8233943d2307044839b985e6c61793c3391c9"
+    },
+    {
+      "attempt": 3,
+      "utc": "2026-10-06T11:48:51.525085+00:00",
+      "error": null,
+      "drive_requests": 1,
+      "arm_acknowledged": true,
+      "operations": [
+        {
+          "op": "arm",
+          "at_monotonic_s": 2226.977619333
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2226.993069133,
+          "relative_s": 0.015440882999882888,
+          "motor": 1560,
+          "servo": 1600
+        }
+      ],
+      "software_neutral_locked": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 88,
+        "servo": 1500,
+        "tick": 2192475
+      },
+      "healthy": true,
+      "adopted_motor_1560_servo_1600_samples": 3,
+      "stop_ack": true,
+      "stop_requested_monotonic_s": 2227.227929431,
+      "deadline_monotonic_s": 2227.22762825,
+      "raw_evidence": "work/vehicle-turn-cone-readiness-20261006/left-step03-result.json",
+      "script_sha256": "77f1dce86639a2f689564997eb6b40dc35c9af26e5db9394097da842bf6be538"
+    },
+    {
+      "attempt": 4,
+      "utc": "2026-10-06T11:53:30.582641+00:00",
+      "error": null,
+      "drive_requests": 8,
+      "arm_acknowledged": true,
+      "operations": [
+        {
+          "op": "arm",
+          "at_monotonic_s": 2506.017152235
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.031858571,
+          "relative_s": 0.014696668999931717,
+          "motor": 1560,
+          "servo": 1600
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.066848337,
+          "relative_s": 0.04968643499978498,
+          "motor": 1560,
+          "servo": 1600
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.134476825,
+          "relative_s": 0.11731492299986712,
+          "motor": 1560,
+          "servo": 1600
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.208910097,
+          "relative_s": 0.19174819499994555,
+          "motor": 1560,
+          "servo": 1600
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.276808433,
+          "relative_s": 0.2596465309998166,
+          "motor": 1560,
+          "servo": 1600
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.344357,
+          "relative_s": 0.32719509799972,
+          "motor": 1560,
+          "servo": 1600
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.418914071,
+          "relative_s": 0.40175216899979205,
+          "motor": 1560,
+          "servo": 1600
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2506.491902806,
+          "relative_s": 0.4747409039996455,
+          "motor": 1560,
+          "servo": 1600
+        }
+      ],
+      "software_neutral_locked": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 99,
+        "servo": 1500,
+        "tick": 2471754
+      },
+      "healthy": true,
+      "adopted_motor_1560_servo_1600_samples": 8,
+      "stop_ack": true,
+      "stop_requested_monotonic_s": 2506.517493564,
+      "deadline_monotonic_s": 2506.517161902,
+      "maximum_power_request_s": 0.5,
+      "raw_evidence": "work/vehicle-turn-cone-readiness-20261006/left-step04-result.json",
+      "script_sha256": "e887ab96b24f08f68e4ce00b6fc371c3df32fb8fb33acf3cfafdc05e780fe31e"
+    },
+    {
+      "attempt": 5,
+      "utc": "2026-10-06T11:56:31.982380+00:00",
+      "error": null,
+      "motor_pwm": 1560,
+      "servo_pwm": 1650,
+      "drive_requests": 8,
+      "arm_acknowledged": true,
+      "operations": [
+        {
+          "op": "arm",
+          "at_monotonic_s": 2687.418501109
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.434231499,
+          "relative_s": 0.01572284799976842,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.467908023,
+          "relative_s": 0.049399371999697905,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.53678382,
+          "relative_s": 0.11827516899984403,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.609060968,
+          "relative_s": 0.19055231699985598,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.678757309,
+          "relative_s": 0.2602486579999095,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.746592092,
+          "relative_s": 0.3280834409997624,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.823616204,
+          "relative_s": 0.4051075529996524,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 2687.890101956,
+          "relative_s": 0.47159330499971475,
+          "motor": 1560,
+          "servo": 1650
+        }
+      ],
+      "software_neutral_locked": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 110,
+        "servo": 1500,
+        "tick": 2653171
+      },
+      "healthy": true,
+      "adopted_requested_pwm_samples": 6,
+      "stop_ack": true,
+      "stop_requested_monotonic_s": 2687.918848672,
+      "deadline_monotonic_s": 2687.918508651,
+      "maximum_power_request_s": 0.5,
+      "raw_evidence": "work/vehicle-turn-cone-readiness-20261006/left-step05-result.json",
+      "script_sha256": "4897153116eb241d76d5062102185e358f2fad1064602ae7d03c3287239a00f7"
+    },
+    {
+      "attempt": 6,
+      "utc": "2026-10-06T12:02:02.913440+00:00",
+      "error": null,
+      "motor_pwm": 1560,
+      "servo_pwm": 1650,
+      "drive_requests": 7,
+      "operations": [
+        {
+          "op": "arm",
+          "at_monotonic_s": 3018.361210363
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 3018.377034015,
+          "relative_s": 0.015814943999885145,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 3018.41913149,
+          "relative_s": 0.057912418999876536,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 3018.493456365,
+          "relative_s": 0.1322372939998786,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 3018.563544488,
+          "relative_s": 0.2023254169998836,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 3018.636400416,
+          "relative_s": 0.2751813449999645,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 3018.709354305,
+          "relative_s": 0.34813523399998303,
+          "motor": 1560,
+          "servo": 1650
+        },
+        {
+          "op": "drive",
+          "at_monotonic_s": 3018.787446923,
+          "relative_s": 0.4262278520000109,
+          "motor": 1560,
+          "servo": 1650
+        }
+      ],
+      "software_neutral_locked": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 120,
+        "servo": 1500,
+        "tick": 2984165
+      },
+      "healthy": true,
+      "adopted_requested_pwm_samples": 7,
+      "stop_ack": true,
+      "stop_requested_monotonic_s": 3018.862037219,
+      "deadline_monotonic_s": 3018.861219071,
+      "maximum_power_request_s": 0.5,
+      "raw_evidence": "work/vehicle-turn-cone-readiness-20261006/left-step06-result.json",
+      "script_sha256": "4897153116eb241d76d5062102185e358f2fad1064602ae7d03c3287239a00f7",
+      "reused_script": "left-step05.py",
+      "forward_corridor_echo_m_after": 1.1294242253852598
+    }
+  ],
+  "failure_diagnosis": {
+    "server_rejection_confirmed_second": "stale arm request",
+    "first_error_body_not_retained": true,
+    "measured_client_construction_ms": [
+      266.987,
+      244.291,
+      217.483
+    ],
+    "measured_reused_state_get_ms": [
+      22.866,
+      14.028,
+      15.844
+    ],
+    "cause": "probe helper rebuilt HTTP opener per request after sampling bridge tick, exceeding 180ms arm age",
+    "fix": "reuse prebuilt normal and stop clients; final tick directly before arm; one positive drive only",
+    "arm_age_limit_changed": false
+  },
+  "physical_operator_observation": {
+    "attempt3": "user did not see clearly; no physical standstill certificate inferred",
+    "attempt4": "user confirms left-forward motion, fully stopped, no board collision; turning amplitude insufficient for limited available radius",
+    "attempt5": "user confirms noticeably tighter left turn, fully stopped, no board collision",
+    "attempt6": "user confirms more left turn still needed, fully stopped, no board collision"
+  },
+  "autonomous_left_turn_completed": false,
+  "cone_route_completed": false,
+  "raw_data_policy": "raw scans/images/client session identifiers stay in ignored work directory, no access tokens printed or committed",
+  "executed_motion_segments": 4,
+  "unchanged_limits": {
+    "manual_arm_tick_age_ms": 180,
+    "native_command_age_ms": 250,
+    "native_watchdog_ms": 300,
+    "front_corridor_m": 1.0,
+    "side_clearance_m": 0.3
+  },
+  "calibration_status": "response probing only; no calibrated steering angle, turn radius, pose or stopping envelope inferred",
+  "latest_user_scope": "finish and verify on Mac, push main and prepare complete bundle; deploy on2026-10-07, no further vehicle connection or movement today",
+  "servo_only_tests": [
+    {
+      "log": "work/vehicle-turn-cone-readiness-20261006/servo-neutral1650-1700.log",
+      "script_sha256": "34717e14183d4f072a96b136b84b7850ab3897f4bc09195e9fe51a7fbaf4819a",
+      "motor_fixed_pwm": 1500,
+      "logged_stages": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288650.2551668,
+          "vehicle_monotonic_s": 3545.583200524
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1650,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288651.2611244,
+          "vehicle_monotonic_s": 3546.589153807
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1660,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288652.2657447,
+          "vehicle_monotonic_s": 3547.593772516
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1670,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288653.2703047,
+          "vehicle_monotonic_s": 3548.598332327
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1680,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288654.2753482,
+          "vehicle_monotonic_s": 3549.603376385
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1690,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288655.2805371,
+          "vehicle_monotonic_s": 3550.608565677
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1700,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288656.2858129,
+          "vehicle_monotonic_s": 3551.613840534
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288657.2911177,
+          "vehicle_monotonic_s": 3552.619145329
+        }
+      ],
+      "unlogged_ramp_stages": false,
+      "result": {
+        "mode": "steering",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "console_restore": {
+        "console_restored": true,
+        "healthy": true,
+        "control": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "locked",
+          "seq": 0,
+          "servo": 1500,
+          "tick": 6016
+        },
+        "settings": {
+          "forward": 1560,
+          "reverse": 1450,
+          "left": 1650,
+          "right": 1350
+        },
+        "motor_fixed_pwm": 1500,
+        "servo_mechanical_observation": "pending_user"
+      }
+    },
+    {
+      "log": "work/vehicle-turn-cone-readiness-20261006/servo-neutral1730.log",
+      "script_sha256": "5d83cabf8ba08d809cf5cb499c310c6d0f191b14061df3335e4ef93724ebf86c",
+      "motor_fixed_pwm": 1500,
+      "logged_stages": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288759.6636963,
+          "vehicle_monotonic_s": 3654.991732873
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1700,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288760.6705325,
+          "vehicle_monotonic_s": 3655.998561765
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1730,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288761.6762836,
+          "vehicle_monotonic_s": 3657.004311339
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791288762.6824114,
+          "vehicle_monotonic_s": 3658.010439111
+        }
+      ],
+      "unlogged_ramp_stages": false,
+      "result": {
+        "mode": "steering",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "console_restore": {
+        "console_restored": true,
+        "healthy": true,
+        "control": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "locked",
+          "seq": 0,
+          "servo": 1500,
+          "tick": 5804
+        },
+        "settings": {
+          "forward": 1560,
+          "reverse": 1450,
+          "left": 1650,
+          "right": 1350
+        },
+        "motor_fixed_pwm": 1500,
+        "servo_mechanical_observation": "pending_user"
+      }
+    },
+    {
+      "log": "work/vehicle-turn-cone-readiness-20261006/servo-neutral1730-smooth.log",
+      "script_sha256": "58b8687a3b65cb53088c10beede5d722c341e0527b3f448d260d0159a577d597",
+      "motor_fixed_pwm": 1500,
+      "logged_stages": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 0.5,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289061.837163,
+          "vehicle_monotonic_s": 3957.165195084
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1650,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289063.7466218,
+          "vehicle_monotonic_s": 3959.074650499
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1660,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289064.7511861,
+          "vehicle_monotonic_s": 3960.079213537
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1670,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289065.7559254,
+          "vehicle_monotonic_s": 3961.083952966
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1680,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289066.7607892,
+          "vehicle_monotonic_s": 3962.088816952
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1690,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289067.7652156,
+          "vehicle_monotonic_s": 3963.093243135
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1700,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289068.7696242,
+          "vehicle_monotonic_s": 3964.097651785
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1710,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289069.774745,
+          "vehicle_monotonic_s": 3965.102773393
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1720,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289070.7801187,
+          "vehicle_monotonic_s": 3966.108146187
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1730,
+          "duration_s": 1.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289071.7855656,
+          "vehicle_monotonic_s": 3967.113593576
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 0.5,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289073.9472313,
+          "vehicle_monotonic_s": 3969.275259259
+        }
+      ],
+      "unlogged_ramp_stages": true,
+      "result": {
+        "mode": "steering",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "console_restore": {
+        "console_restored": true,
+        "healthy": true,
+        "control": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "locked",
+          "seq": 0,
+          "servo": 1500,
+          "tick": 5750
+        },
+        "settings": {
+          "forward": 1560,
+          "reverse": 1450,
+          "left": 1650,
+          "right": 1350
+        },
+        "motor_fixed_pwm": 1500,
+        "servo_mechanical_observation": "pending_user"
+      }
+    },
+    {
+      "log": "work/vehicle-turn-cone-readiness-20261006/servo-neutral1730-single2s.log",
+      "script_sha256": "b658bb59172525ca55654d39d40f4a2e0380da50b707cf25a27f365d8d27ca9b",
+      "motor_fixed_pwm": 1500,
+      "logged_stages": [
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 0.5,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289177.887872,
+          "vehicle_monotonic_s": 4073.215904637
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1730,
+          "duration_s": 2.0,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289180.6001074,
+          "vehicle_monotonic_s": 4075.928135153
+        },
+        {
+          "motor_us": 1500,
+          "servo_us": 1500,
+          "duration_s": 0.5,
+          "mode": "steering",
+          "vehicle_unix_s": 1791289183.7630718,
+          "vehicle_monotonic_s": 4079.091098963
+        }
+      ],
+      "unlogged_ramp_stages": true,
+      "result": {
+        "mode": "steering",
+        "error": null,
+        "parent_stop_writes": 20,
+        "guardian_exit": 0,
+        "physical_stop_observed": false
+      },
+      "console_restore": {
+        "console_restored": true,
+        "healthy": true,
+        "control": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "locked",
+          "seq": 0,
+          "servo": 1500,
+          "tick": 5753
+        },
+        "settings": {
+          "forward": 1560,
+          "reverse": 1450,
+          "left": 1650,
+          "right": 1350
+        },
+        "motor_fixed_pwm": 1500,
+        "servo_mechanical_observation": "pending_user"
+      }
+    }
+  ],
+  "servo_only_observations": {
+    "1650_to1700": "user reports continued increase and no sense of hitting hard stop",
+    "1700_to1730_jump": "user felt a hesitation at1700 then reached1730 position; cause unconfirmed",
+    "1730_single2s": "user reports1730 has no issue and estimates about1s to reach the position",
+    "timing_caveat": "final trial intentionally ramps1510..1720 by10 every0.1s (about2.2s); subjective1s observation is not a calibrated physical step-response measurement",
+    "mechanical_limit_measured": false,
+    "left_dynamic_turn_radius_measured": false,
+    "normal_control_range_changed": false,
+    "normal_control_servo_limits_pwm": [
+      1350,
+      1650
+    ],
+    "physical_candidate_left_pwm": 1730
+  },
+  "superseded_unexecuted_request": "1700,1710,1720,1730 each2s script prepared but not executed; user replaced it with1730 alone2s",
+  "latest_feedback": {
+    "console_restored": true,
+    "healthy": true,
+    "control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 5753
+    },
+    "settings": {
+      "forward": 1560,
+      "reverse": 1450,
+      "left": 1650,
+      "right": 1350
+    },
+    "motor_fixed_pwm": 1500,
+    "servo_mechanical_observation": "pending_user"
+  },
+  "next_powered_probe_preparation": "prepare steering while motor1500, allow and observe steering settle before bounded1560 motion; requires supported1730 execution entry, not a claim the current1650 normal driver supports it",
+  "mac_dynamic_implementation": {
+    "status": "software_complete_verified_not_vehicle_deployed",
+    "forward_pwm": 1560,
+    "neutral_pwm": 1500,
+    "candidate_servo_bounds": [
+      1270,
+      1720
+    ],
+    "left_drive_servo_bounds": [
+      1500,
+      1720
+    ],
+    "coast_correction_bounds": [
+      1445,
+      1555
+    ],
+    "right_physically_tested": false,
+    "pwm_step_max": 10,
+    "pwm_interval_s": 0.1,
+    "presteer_max_s": 5,
+    "steering_wait_test_allowance_s": 1.2,
+    "drive_max_s": 10,
+    "coast_max_s": 5,
+    "completion_uses_duration": false,
+    "sensor_inputs": [
+      "lidar",
+      "control"
+    ],
+    "camera_required": false,
+    "geometry_gap_hold_max_s": 0.3,
+    "coast_positive_pwm_allowed": false,
+    "automatic_rearm": false,
+    "model_required_for_target": false,
+    "test_target_sources": [
+      "manual",
+      "simulated"
+    ],
+    "point_stop_execution_rejection": "real_pose_missing",
+    "formal_goal_default_contract_changed": false,
+    "test_only_not_race_completion": true,
+    "continuous_vehicle_run_executed": false,
+    "vehicle_deployed": false,
+    "left_plus_cone_control_connected": false,
+    "planned_deploy_date": "2026-10-07",
+    "source_sha256": {
+      "crates/robot-core/src/teleop.rs": "a47ba9aad57a491ceea83915aaa6be938605c4ec5a76077f209386c5aaf5008c",
+      "crates/robot-core/src/junction.rs": "b229bea92dc7be6856e32d26b342901910e35fc6fae4cfc9896bb72ade3c8379",
+      "crates/robot-core/src/junction/corridor.rs": "6150cbebc58c368cfdcb553ed4e8dd22d8e33cf7b65d5a17a200128c404048da",
+      "crates/robot-core/src/junction/turn_goal.rs": "3ea85c09a7a8fdea3cc2164965e568a75503c1dbf24ad6a749116ef3ab87f7be",
+      "crates/robot-core/src/junction/tests.rs": "7e60d9d615a64aa4f1e1f3f0b5bcce0c061e3982e5bf74777ee8736ff6a40735",
+      "crates/runner/src/bin/vehicle-bridge.rs": "ecae51a8f4bd5a33193388ba0e483ba1d2cf28d4b8291a32856917f9edfd9c4a",
+      "scripts/start-vehicle-console.py": "752449080665c0cf7c527c518657666c788b30ff9f4e30ebe07724ca7c4122ab",
+      "web/vehicle-console/server.py": "b4e8334b5871a9f532af974b3e748b867676c610903930fba60473b853eda905",
+      "web/vehicle-console/autonomy_live.py": "da2ecc9bc360153bb75a2a493347a658407686e5cccfa064bd45d800d7117a86",
+      "web/vehicle-console/coast_motion.py": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257",
+      "web/vehicle-console/stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+      "web/vehicle-console/turn_motion.py": "042243886696746a3b4fd295c39c5d8081631e83d759fbbc782280a2f5bf2902",
+      "web/vehicle-console/autonomy-control.py": "afb98cf0ef6908298ee9a2f5a0b85ac5d06b5a8984142d226c4e5d515c3d318c",
+      "web/vehicle-console/app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+      "web/vehicle-console/index.html": "f4c71739afad72d3d0a17bafc8b286b412ca4289ab924a77a0fc516579fcf43f",
+      "web/vehicle-console/style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+      "config/trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92"
+    },
+    "validation": {
+      "python_passed": 204,
+      "python_failed": 0,
+      "python_log": "work/vehicle-turn-cone-readiness-20261006/python-final.log",
+      "frontend_passed": 8,
+      "frontend_log": "work/vehicle-turn-cone-readiness-20261006/frontend-final.log",
+      "rust_junction_passed": 20,
+      "rust_teleop_passed": 7,
+      "rust_failed": 0,
+      "fmt": "passed",
+      "related_clippy_warnings_as_errors": "passed",
+      "replay_scans": 194,
+      "replay_with_two_opposite_candidates": 125,
+      "replay_unknown": 69,
+      "replay_multiple_aliases": 0,
+      "cross_bridge_elf": {
+        "architecture": "riscv64",
+        "abi": "lp64d",
+        "pie": true,
+        "maximum_glibc": "2.34",
+        "glibc_baseline": "2.38",
+        "sha256": "7f13145b4c9aeb4d3561580442d18fd94c75707f3a4177964093076eae88c0cd",
+        "size_bytes": 614264,
+        "passed": true,
+        "errors": []
+      }
+    }
+  }
+}

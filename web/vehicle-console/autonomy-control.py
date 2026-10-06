@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Vehicle terminal entry: status, bounded straight probe, or latched stop."""
+"""Vehicle terminal entry: status, bounded motion trials, target registration, or latched stop."""
 import argparse
 import json
+import math
 from pathlib import Path
 import signal
 import time
 import urllib.error
 import urllib.request
 from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S, CONTROL_AGE_LIMIT_S
+from turn_motion import parse_trial_goal, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S
 
 
 class ProbeInterrupted(RuntimeError):
@@ -17,14 +19,20 @@ class ProbeInterrupted(RuntimeError):
         super().__init__('probe interrupted: ' + str(result.get('reason') if result else 'no result'))
 
 
-def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junction=False, formal_goal=False):
+def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junction=False, formal_goal=False,
+              turn_trial=False, placement_confirmed=False, max_turn_s=MAX_DRIVE_S, trial_goal_id=None):
     run = None
     try:
-        op = 'stop_goal_start' if formal_goal else 'to_left_junction_start' if stop_left_junction else 'straight_start' if centering else 'probe_start'
+        op = 'turn_left_start' if turn_trial else 'stop_goal_start' if formal_goal else 'to_left_junction_start' if stop_left_junction else 'straight_start' if centering else 'probe_start'
         start = {'op': op, 'boot': state['boot'],
                       'epoch': state['autonomy']['epoch'], 'tick': state['status']['control']['tick'],
                       'pwm': pwm}
-        if not formal_goal:
+        if turn_trial:
+            start.pop('pwm')
+            start.update(placement_confirmed=placement_confirmed, max_drive_s=max_turn_s)
+            if trial_goal_id is not None:
+                start['goal_id'] = trial_goal_id
+        elif not formal_goal:
             start['duration_ms'] = duration_ms
         run = request('/api/autonomy', start)
         sequence = 0
@@ -37,8 +45,11 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                 if latest['autonomy']['mode'] == 'manual':
                     raise RuntimeError('manual operator took control; automatic output cancelled')
                 control = latest['status']['control']
-                if (control['armed'] or control.get('motor') != 1500 or control.get('servo') != 1500
-                        or latest.get('ages', {}).get('control', 0) >= CONTROL_AGE_LIMIT_S):
+                control_age = latest.get('ages', {}).get('control')
+                if (latest['autonomy']['mode'] != 'locked' or control.get('armed') is not False
+                        or control.get('motor') != 1500 or control.get('servo') != 1500
+                        or type(control_age) not in (int, float) or not math.isfinite(control_age)
+                        or not 0 <= control_age < CONTROL_AGE_LIMIT_S):
                     time.sleep(.02)
                     continue
                 if not result or result.get('run_id') != run['run_id'] or not result.get('completed'):
@@ -70,6 +81,24 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                         'epoch': run['epoch'], 'run_id': run['run_id']})
             except Exception:
                 pass  # Cannot cancel a newer manual owner; independent deadlines remain.
+
+
+def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=None):
+    """One mid-segment trial; alignment evidence never becomes a cone task completion."""
+    try:
+        latest, run = run_probe(request, state, TRIAL_MOTOR, round((MAX_PRESTEER_S+max_seconds)*1000),
+            centering=True, turn_trial=True, placement_confirmed=placement_confirmed, max_turn_s=max_seconds,
+            trial_goal_id=goal_id)
+    except ProbeInterrupted as error:
+        latest, run = error.state, error.run
+    result = latest['autonomy']['last_result']
+    return {'reason': result['reason'], 'completed': False, 'turn': result.get('turn'),
+            'control': latest['status']['control'], 'fresh_neutral_locked_confirmed': True,
+            'operator_placement_confirmed': placement_confirmed, 'last_run_id': run['run_id'],
+            'entry_confirmed': result.get('entry_confirmed', False),
+            'observed_alignment': result.get('observed_alignment', False),
+            'physical_steering_confirmed': False, 'physical_standstill_verified': False,
+            'competition_navigation': False}
 
 
 def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, stop_left_junction=False):
@@ -109,12 +138,16 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, sto
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['status', 'probe', 'straight', 'to-left-junction', 'goal-status', 'goal-straight', 'stop'])
+    parser.add_argument('command', choices=['status', 'probe', 'straight', 'to-left-junction', 'turn-left',
+        'trial-goal-status', 'trial-goal-register', 'goal-status', 'goal-straight', 'stop'])
     parser.add_argument('--pwm', type=int, default=MAX_PWM)
     parser.add_argument('--duration-ms', type=int, default=400)
-    parser.add_argument('--max-seconds', type=float, help='total limit 1..30s; straight defaults1s, to-left-junction defaults30s')
+    parser.add_argument('--max-seconds', type=float, help='drive limit: straight 1..30s, turn-left 1..10s')
     parser.add_argument('--expected-run-id', help='fence a new monitored phase to the previous normal stop')
-    parser.add_argument('--execute', action='store_true', help='explicit physical probe; otherwise read-only')
+    parser.add_argument('--execute', action='store_true', help='explicit motion request; motion commands otherwise only query state')
+    parser.add_argument('--placement-confirmed', action='store_true', help='operator confirms stopped mid-segment placement for this one left trial')
+    parser.add_argument('--goal-file', type=Path, help='Local target-only JSON for explicit trial-goal-register')
+    parser.add_argument('--trial-goal-id', help='Use a registered trial intent; arbitrary point execution requires real pose')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
     args = parser.parse_args()
     access = json.loads(args.access_file.read_text())
@@ -141,6 +174,54 @@ def main():
     state = request('/api/state')
     if 'autonomy' not in state:
         raise RuntimeError('vehicle console has no live autonomy interface')
+    if args.command == 'trial-goal-status':
+        print(json.dumps({'trial_goal': state['autonomy'].get('trial_goal'), 'motion_requested': False}, ensure_ascii=False, indent=2))
+        return
+    if args.command == 'trial-goal-register':
+        if args.goal_file is None:
+            raise RuntimeError('trial-goal-register requires explicit --goal-file')
+        with args.goal_file.open('rb') as handle:
+            source = handle.read(2049)
+        if len(source) > 2048:
+            raise RuntimeError('target-only registration must fit the existing HTTP limit')
+        goal = parse_trial_goal(json.loads(source))
+        # Only producer fields cross the wire; diagnostic parser fields do not.
+        fields = {'schema_version', 'goal_id', 'source_kind', 'goal_type', 'frame',
+                  'coordinate_convention', 'max_seconds', 'target_point_left_m'}
+        data = {'op': 'trial_goal_register', 'boot': state['boot'], 'epoch': state['autonomy']['epoch'],
+                'goal': {key: value for key, value in goal.items() if key in fields}}
+        if len(json.dumps(data).encode()) > 2048:
+            raise RuntimeError('target-only registration exceeds existing HTTP limit')
+        print(json.dumps(request('/api/autonomy', data), ensure_ascii=False, indent=2))
+        return
+    if args.command == 'turn-left':
+        if not args.execute:
+            print(json.dumps({'healthy': state['healthy'], 'control': state['status']['control'],
+                'turn_ready': state['autonomy'].get('turn_ready', False),
+                'rejection': state['autonomy'].get('turn_rejection', 'turn_trial_interface_unavailable'),
+                'preview': state['autonomy'].get('turn_preview'), 'motion_requested': False,
+                'start_scope': 'operator_placed_mid_segment'}, ensure_ascii=False, indent=2))
+            return
+        if not args.placement_confirmed:
+            raise RuntimeError('turn trial requires --placement-confirmed for this stopped mid-segment placement')
+        if args.trial_goal_id is not None:
+            registered = state['autonomy'].get('trial_goal')
+            if not registered or registered.get('goal_id') != args.trial_goal_id:
+                raise RuntimeError('trial_goal_not_registered')
+            if not registered.get('execution_ready'):
+                raise RuntimeError(registered.get('execution_rejection') or 'trial goal not ready')
+        if not state['autonomy'].get('turn_ready'):
+            raise RuntimeError(state['autonomy'].get('turn_rejection') or 'left turn trial not ready')
+        limit = MAX_DRIVE_S if args.max_seconds is None else args.max_seconds
+        if not 1 <= limit <= MAX_DRIVE_S:
+            raise RuntimeError('left turn drive limit must be 1..10 seconds')
+        def turn_interrupted(*_):
+            raise KeyboardInterrupt
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(sig, turn_interrupted)
+        result = left_turn_trial(request, state, limit, args.placement_confirmed, args.trial_goal_id)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        raise SystemExit(1)  # No cone-entry/task completion has been certified.
     if args.command in ('goal-status', 'goal-straight'):
         if args.command == 'goal-status' or not args.execute:
             print(json.dumps({'healthy': state['healthy'], 'formal_ready': state['autonomy'].get('formal_ready', False),

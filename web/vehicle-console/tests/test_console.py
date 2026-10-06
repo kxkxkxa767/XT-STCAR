@@ -94,10 +94,10 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(state['last_stop']['reason'],'operator_stop')
         self.assertIsNone(state['owner']);self.assertEqual(state['status']['control']['motor'],1500)
 
-    def test_calibrated_settings_limits(self):
-        valid={'forward':1550,'reverse':1350,'left':1650,'right':1350}
+    def test_settings_candidate_software_limits(self):
+        valid={'forward':1550,'reverse':1350,'left':1720,'right':1270}
         self.post('/api/settings',valid)
-        for key,value in [('reverse',1349),('left',1651),('right',1349)]:
+        for key,value in [('reverse',1349),('left',1721),('right',1269)]:
             with self.assertRaises(urllib.error.HTTPError):self.post('/api/settings',{**valid,key:value})
         self.post('/api/settings',{'forward':1550,'reverse':1450,'left':1650,'right':1350})
 

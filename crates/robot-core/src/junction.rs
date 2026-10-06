@@ -5,6 +5,11 @@ use crate::{FrameId, LidarSample, ValidationError};
 use serde::{Deserialize, Serialize};
 use std::f64::consts::{PI, TAU};
 
+mod corridor;
+pub use corridor::{CorridorCandidate, detect_corridor_candidates};
+mod turn_goal;
+pub use turn_goal::{LeftTurnGoal, TurnGeometry, WallCandidate, detect_turn_geometry};
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LeftJunction {

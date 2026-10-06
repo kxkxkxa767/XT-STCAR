@@ -73,7 +73,9 @@ impl Guard {
         self.status.seq = req.seq;
         if req.motor > 1620
             || req.motor < if self.reverse { 1350 } else { 1500 }
-            || !(1350..=1650).contains(&req.servo)
+            // Candidate output range requested after the static left check.
+            // This does not claim the right endpoint or moving sweep verified.
+            || !(1270..=1720).contains(&req.servo)
         {
             self.stop("pwm_out_of_range");
             return;
@@ -114,13 +116,13 @@ mod tests {
         }
     }
     #[test]
-    fn calibrated_manual_limits_are_enforced() {
+    fn candidate_manual_limits_are_enforced_without_claiming_calibration() {
         for (motor, servo, allowed) in [
-            (1350, 1350, true),
-            (1350, 1650, true),
+            (1350, 1270, true),
+            (1350, 1720, true),
             (1349, 1500, false),
-            (1500, 1349, false),
-            (1500, 1651, false),
+            (1500, 1269, false),
+            (1500, 1721, false),
         ] {
             let mut g = Guard::new(true);
             g.apply(req(1, 0, "arm", 1500), 0);
@@ -136,6 +138,29 @@ mod tests {
         g.apply(req(1, 0, "arm", 1500), 0);
         g.apply(req(2, 50, "drive", 1400), 50);
         assert!(!g.status.armed);
+    }
+    #[test]
+    fn wider_candidate_steering_does_not_bypass_arm_or_fault_fences() {
+        for servo in [1270, 1720] {
+            for (op, tick, now) in [("drive", 100, 100), ("arm", 100, 100)] {
+                let mut g = Guard::new(false);
+                let mut command = req(1, tick, op, 1500);
+                command.servo = servo;
+                g.apply(command, now);
+                assert!(!g.status.armed);
+                assert_eq!((g.status.motor, g.status.servo), (1500, 1500));
+            }
+            let mut g = Guard::new(false);
+            g.apply(req(1, 100, "arm", 1500), 100);
+            let mut command = req(2, 100, "drive", 1580);
+            command.servo = servo;
+            g.apply(command, 100);
+            assert!(g.status.armed);
+            assert_eq!(g.status.servo, servo);
+            g.advance(251);
+            assert!(!g.status.armed);
+            assert_eq!((g.status.motor, g.status.servo), (1500, 1500));
+        }
     }
     #[test]
     fn timeout_cannot_rearm_with_drive() {
