@@ -7,7 +7,7 @@ import signal
 import time
 import urllib.error
 import urllib.request
-from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S
+from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S, CONTROL_AGE_LIMIT_S
 
 
 class ProbeInterrupted(RuntimeError):
@@ -35,7 +35,7 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                     raise RuntimeError('manual operator took control; automatic output cancelled')
                 control = latest['status']['control']
                 if (control['armed'] or control.get('motor') != 1500 or control.get('servo') != 1500
-                        or latest.get('ages', {}).get('control', 0) >= .15):
+                        or latest.get('ages', {}).get('control', 0) >= CONTROL_AGE_LIMIT_S):
                     time.sleep(.02)
                     continue
                 if not result or result.get('run_id') != run['run_id'] or not result.get('completed'):

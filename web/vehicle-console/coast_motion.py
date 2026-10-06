@@ -9,6 +9,8 @@ it does not establish braking distance or compensate scan acquisition distortion
 """
 import math
 import statistics
+import threading
+import time
 
 
 SOFTWARE_THRESHOLDS = {
@@ -33,8 +35,10 @@ def _wrap(angle):
 
 
 def _fit(points):
-    cx = statistics.mean(p[0] for p in points)
-    cy = statistics.mean(p[1] for p in points)
+    # Coordinates are floats; fmean avoids exact Fraction arithmetic per fit
+    # while retaining an accurately summed floating-point centroid.
+    cx = statistics.fmean(p[0] for p in points)
+    cy = statistics.fmean(p[1] for p in points)
     xx = sum((x-cx)**2 for x, y in points)
     xy = sum((x-cx)*(y-cy) for x, y in points)
     yy = sum((y-cy)**2 for x, y in points)
@@ -278,3 +282,147 @@ class CoastMotion:
                                  'collecting_low_motion_evidence' if low else 'observed_motion'),
                        **self._diagnostics(elapsed, received)}
         return dict(self.cached)
+
+
+class CoastMotionWorker:
+    """One fit in progress and at most one latest pending scan, without control locks.
+
+    Generation changes revoke both queued and completed evidence. Results are
+    usable only for the exact currently received scan, within its original age
+    limit; a stationary result from an older scan cannot stop a newer motion.
+    """
+    def __init__(self, estimator_factory=CoastMotion, autostart=True):
+        self._condition = threading.Condition()
+        self._factory = estimator_factory
+        self._generation = 0
+        self._closed = False
+        self._pending = None
+        self._inflight = None
+        self._result = None
+        self._last_input = None
+        self._motion = None
+        self._motion_generation = None
+        self._thread = None
+        if autostart:
+            self._thread = threading.Thread(target=self._run, name='coast-motion', daemon=True)
+            self._thread.start()
+
+    @staticmethod
+    def unknown(reason):
+        return CoastMotion()._unknown(reason)
+
+    @staticmethod
+    def _identity(scan, received):
+        return (scan.get('seq'), scan.get('at_ms'), scan.get('frame_id'),
+                received, tuple(scan.get('ranges', [])))
+
+    @staticmethod
+    def _input_error(scan, age, received, now):
+        if not isinstance(scan, dict) or not isinstance(scan.get('ranges'), list):
+            return 'invalid_scan_ranges'
+        if (not _finite(received) or received < 0 or not _finite(now)
+                or not _finite(age) or not 0 <= age < .30
+                or not 0 <= now-received < .30):
+            return 'motion_result_stale_receive'
+        if abs((now-received)-age) > .15:
+            return 'motion_result_receive_age_disagreement'
+        if (type(scan.get('seq')) is not int or scan['seq'] < 0
+                or type(scan.get('at_ms')) is not int or scan['at_ms'] < 0):
+            return 'invalid_scan_clock'
+        return None
+
+    def reset(self):
+        with self._condition:
+            self._generation += 1
+            self._pending = self._result = self._last_input = None
+            self._condition.notify_all()
+            return self._generation
+
+    def close(self):
+        with self._condition:
+            self._closed = True
+            self._generation += 1
+            self._pending = self._result = self._last_input = None
+            self._condition.notify_all()
+        # Never wait for fitting while the caller holds the control lock.
+
+    def submit(self, generation, scan, age, received, now):
+        error = self._input_error(scan, age, received, now)
+        if error:
+            return error
+        identity = self._identity(scan, received)
+        with self._condition:
+            if self._closed or generation != self._generation:
+                return 'motion_worker_generation_changed'
+            if identity != self._last_input:
+                # Only immutable identity and a private range list cross threads.
+                snapshot = {key: scan.get(key) for key in ('seq', 'at_ms', 'frame_id')}
+                snapshot['ranges'] = list(scan['ranges'])
+                self._pending = (generation, identity, snapshot, age, received, now)
+                self._last_input = identity
+                self._condition.notify()
+        return None
+
+    def result(self, generation, scan, age, received, now):
+        error = self._input_error(scan, age, received, now)
+        if error:
+            return self.unknown(error)
+        identity = self._identity(scan, received)
+        with self._condition:
+            if self._closed or generation != self._generation:
+                return self.unknown('motion_worker_generation_changed')
+            result = self._result
+            if result is None:
+                return self.unknown('motion_estimator_pending')
+            if result[0] != generation or result[1] != identity:
+                return self.unknown('motion_result_superseded')
+            if not 0 <= now-result[2] < .30:
+                return self.unknown('motion_result_stale_submission')
+            return dict(result[3])
+
+    def _take_pending(self):
+        with self._condition:
+            if self._closed or self._pending is None or self._inflight is not None:
+                return None
+            item, self._pending = self._pending, None
+            self._inflight = item[:2]
+            return item
+
+    def _compute(self, item):
+        generation, identity, scan, age, received, submitted = item
+        if self._motion_generation != generation:
+            self._motion, self._motion_generation = self._factory(), generation
+        started = time.perf_counter()
+        try:
+            # Receive progress is the original accepted scan's clock, never the
+            # time a slow fit completes or a repeated control tick polls it.
+            motion = self._motion.update(scan, age, received)
+        except Exception:
+            self._motion = self._factory()
+            motion = self.unknown('motion_estimator_failed')
+        motion = {**motion, 'source_scan_seq': scan['seq'], 'source_publication_at_ms': scan['at_ms'],
+                  'source_receive_monotonic_s': received,
+                  'processing_ms': (time.perf_counter()-started)*1000}
+        with self._condition:
+            self._inflight = None
+            if not self._closed and generation == self._generation:
+                self._result = generation, identity, submitted, motion
+            self._condition.notify_all()
+
+    def run_pending(self):
+        """Advance an explicitly unscheduled worker in deterministic offline tests."""
+        if self._thread is not None:
+            raise RuntimeError('worker thread already owns fitting')
+        item = self._take_pending()
+        if item is not None:
+            self._compute(item)
+
+    def _run(self):
+        while True:
+            with self._condition:
+                self._condition.wait_for(lambda: self._closed or self._pending is not None)
+                if self._closed:
+                    return
+            item = self._take_pending()
+            if item is not None:
+                self._compute(item)

@@ -2,16 +2,31 @@
 import importlib.util
 from pathlib import Path
 import sys
+import threading
 import unittest
 from unittest.mock import patch
 import test_autonomy_live as live_tests
-from test_coast_motion import room_scan, parallel_scan
+from test_coast_motion import MODULE as motion_module, room_scan, parallel_scan
 
 
 class CoastControlTests(unittest.TestCase):
-    setUp = live_tests.QualityRecoveryTests.setUp
-    tearDown = live_tests.QualityRecoveryTests.tearDown
-    tick = live_tests.QualityRecoveryTests.tick
+    def setUp(self):
+        live_tests.QualityRecoveryTests.setUp(self)
+        self.console.coast_worker = self.server.CoastMotionWorker(autostart=False)
+        self.received_identity = None
+
+    def tearDown(self):
+        self.console.coast_worker.close()
+        live_tests.QualityRecoveryTests.tearDown(self)
+
+    def tick(self, now):
+        identity = self.console.scan.get('seq'), self.console.scan.get('at_ms')
+        if identity != self.received_identity:
+            self.console.scan_at = now
+            self.received_identity = identity
+        live_tests.QualityRecoveryTests.tick(self, now)
+        if self.console.coast_worker._thread is None:
+            self.console.coast_worker.run_pending()
 
     def prepare(self, reason='probe_complete'):
         session = self.console.auto_session
@@ -148,8 +163,12 @@ class CoastControlTests(unittest.TestCase):
         class LateStill:
             def update(self, *args):
                 return {'observable': True, 'stationary': True}
-        session['coast_motion'] = LateStill()
+        self.console.coast_worker.close()
+        self.console.coast_worker = self.server.CoastMotionWorker(LateStill, autostart=False)
+        session['motion_generation'] = self.console.coast_worker.reset()
         self.console.scan = room_scan(2, y=-.12, half_width=.5)
+        self.console.coast_worker.submit(session['motion_generation'], self.console.scan, .01, .02, .03)
+        self.console.coast_worker.run_pending()
         self.tick(.04)
         self.assertEqual(self.console.auto_result['reason'], 'coast_standstill_unconfirmed')
         self.assertFalse(self.console.auto_result['completed'])
@@ -162,6 +181,196 @@ class CoastControlTests(unittest.TestCase):
         self.assertEqual(self.console.auto_result['reason'], 'coast_standstill_unconfirmed')
         self.assertEqual(self.output[-1], ('stop', 1500, 1500))
 
+    def test_auto_health_boundary_and_errors_remain_fail_closed(self):
+        self.console.control_at = 10.
+        with patch.object(self.server.time, 'monotonic', return_value=10.249):
+            self.assertTrue(self.server.Console.autonomy_healthy(self.console))
+        with patch.object(self.server.time, 'monotonic', return_value=10.250):
+            self.assertFalse(self.server.Console.autonomy_healthy(self.console))
+        self.console.errors['control'] = 'failed'
+        with patch.object(self.server.time, 'monotonic', return_value=10.001):
+            self.assertFalse(self.server.Console.autonomy_healthy(self.console))
+        status = self.console.autonomy_status()
+        self.assertEqual(status['control_age_limit_s'], .20)
+        self.assertEqual(status['auto_control_health_s'], .25)
+
+    def test_blocked_fit_does_not_hold_state_heartbeat_or_hard_stop_lock(self):
+        entered, release, tick_done, controls_done = [threading.Event() for _ in range(4)]
+        failures, results = [], []
+        class HeldStill:
+            def update(self, *args):
+                entered.set()
+                release.wait()
+                return {'observable': True, 'stationary': True}
+        self.console.coast_worker.close()
+        worker = self.console.coast_worker = self.server.CoastMotionWorker(HeldStill)
+        self.prepare()
+        self.console.scan = room_scan(2, y=-.12, half_width=.5)
+        def control_tick():
+            try:
+                with self.console.lock:
+                    self.tick(.04)
+            except Exception as error:
+                failures.append(error)
+            finally:
+                tick_done.set()
+        def controls():
+            try:
+                with patch.object(self.server.time, 'monotonic', return_value=.05):
+                    results.append(self.console.state()['autonomy']['mode'])
+                    results.append(self.console.autonomy_command({'op': 'heartbeat', 'boot': self.console.boot,
+                        'epoch': self.console.control_epoch, 'run_id': 'test', 'seq': 1}))
+                    self.console.command({'op': 'stop'})
+                    results.append(self.console.state()['autonomy']['mode'])
+            except Exception as error:
+                failures.append(error)
+            finally:
+                controls_done.set()
+        tick_thread = threading.Thread(target=control_tick)
+        controls_thread = threading.Thread(target=controls)
+        try:
+            tick_thread.start()
+            self.assertTrue(entered.wait(3))
+            self.assertTrue(tick_done.wait(3), 'control tick waited for the blocked estimator')
+            controls_thread.start()
+            self.assertTrue(controls_done.wait(3), 'state, heartbeat or stop waited for fitting')
+            self.assertFalse(release.is_set())
+            self.assertEqual(failures, [])
+            self.assertEqual(results, ['auto_probe', {'ok': True}, 'locked'])
+            self.assertEqual(self.output[-1], ('stop', 1500, 1500))
+            self.assertFalse(self.console.auto_result['completed'])
+        finally:
+            release.set()
+            worker.close()
+            tick_thread.join(3)
+            if controls_thread.ident is not None:
+                controls_thread.join(3)
+            worker._thread.join(3)
+        self.assertIsNone(self.console.auto_session)
+        self.assertFalse(self.console.auto_result['standstill_confirmed'])
+
+
+class CoastWorkerTests(unittest.TestCase):
+    class Still:
+        def update(self, *args):
+            return {'observable': True, 'stationary': True}
+
+    def test_stationary_result_requires_exact_current_identity_and_receive_age(self):
+        worker = motion_module.CoastMotionWorker(self.Still, autostart=False)
+        generation = worker.reset()
+        scan = room_scan(1)
+        worker.submit(generation, scan, .01, 1., 1.01)
+        worker.run_pending()
+        self.assertTrue(worker.result(generation, scan, .02, 1., 1.02)['stationary'])
+        moved = dict(scan, ranges=list(scan['ranges']))
+        moved['ranges'][0] += .01
+        for value, age, received, now, reason in [
+            (room_scan(2), .02, 1., 1.02, 'motion_result_superseded'),
+            (dict(scan, at_ms=101), .02, 1., 1.02, 'motion_result_superseded'),
+            (moved, .02, 1., 1.02, 'motion_result_superseded'),
+            (scan, .01, 1.01, 1.02, 'motion_result_superseded'),
+            (scan, .30, 1., 1.30, 'motion_result_stale_receive'),
+            (scan, .01, 1., 1.20, 'motion_result_receive_age_disagreement'),
+        ]:
+            with self.subTest(reason=reason):
+                result = worker.result(generation, value, age, received, now)
+                self.assertFalse(result['stationary'])
+                self.assertFalse(result['observable'])
+                self.assertEqual(result['reason'], reason)
+        worker.reset()
+        self.assertFalse(worker.result(generation, scan, .02, 1., 1.02)['stationary'])
+        worker.close()
+
+    def test_one_inflight_fit_and_only_latest_pending_scan(self):
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        class Held:
+            def update(self, scan, *args):
+                calls.append(scan['seq'])
+                if scan['seq'] == 1:
+                    entered.set()
+                    release.wait()
+                return {'observable': True, 'stationary': True}
+        worker = motion_module.CoastMotionWorker(Held)
+        generation = worker.reset()
+        try:
+            worker.submit(generation, room_scan(1), .01, 1., 1.01)
+            self.assertTrue(entered.wait(3))
+            worker.submit(generation, room_scan(2), .01, 1.1, 1.11)
+            worker.submit(generation, room_scan(3), .01, 1.2, 1.21)
+            self.assertEqual(calls, [1])
+            self.assertFalse(worker.result(generation, room_scan(3), .02, 1.2, 1.22)['stationary'])
+            release.set()
+            with worker._condition:
+                self.assertTrue(worker._condition.wait_for(
+                    lambda: worker._result is not None and worker._result[1][0] == 3, timeout=3))
+            self.assertEqual(calls, [1, 3])
+            self.assertTrue(worker.result(generation, room_scan(3), .02, 1.2, 1.22)['stationary'])
+        finally:
+            release.set()
+            worker.close()
+            worker._thread.join(3)
+
+    def test_cancel_new_session_and_close_revoke_inflight_evidence(self):
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        class Held:
+            def update(self, scan, *args):
+                calls.append(scan['seq'])
+                if scan['seq'] == 1:
+                    entered.set()
+                    release.wait()
+                return {'observable': True, 'stationary': True}
+        worker = motion_module.CoastMotionWorker(Held)
+        old = worker.reset()
+        try:
+            worker.submit(old, room_scan(1), .01, 1., 1.01)
+            self.assertTrue(entered.wait(3))
+            current = worker.reset()
+            worker.submit(current, room_scan(2), .01, 1.1, 1.11)
+            self.assertFalse(worker.result(old, room_scan(1), .02, 1., 1.02)['stationary'])
+            self.assertFalse(worker.result(current, room_scan(2), .02, 1.1, 1.12)['stationary'])
+            release.set()
+            with worker._condition:
+                self.assertTrue(worker._condition.wait_for(
+                    lambda: worker._result is not None and worker._result[0] == current, timeout=3))
+            self.assertEqual(calls, [1, 2])
+            self.assertTrue(worker.result(current, room_scan(2), .02, 1.1, 1.12)['stationary'])
+            worker.close()
+            self.assertFalse(worker.result(current, room_scan(2), .02, 1.1, 1.12)['stationary'])
+            self.assertEqual(worker.submit(current, room_scan(3), .01, 1.2, 1.21),
+                             'motion_worker_generation_changed')
+        finally:
+            release.set()
+            worker.close()
+            worker._thread.join(3)
+        self.assertFalse(worker._thread.is_alive())
+
+    def test_close_while_fitting_drops_pending_and_late_stationary_result(self):
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+        class Held:
+            def update(self, scan, *args):
+                calls.append(scan['seq'])
+                entered.set()
+                release.wait()
+                return {'observable': True, 'stationary': True}
+        worker = motion_module.CoastMotionWorker(Held)
+        generation = worker.reset()
+        try:
+            worker.submit(generation, room_scan(1), .01, 1., 1.01)
+            self.assertTrue(entered.wait(3))
+            worker.submit(generation, room_scan(2), .01, 1.1, 1.11)
+            worker.close()
+            self.assertFalse(release.is_set())
+            self.assertFalse(worker.result(generation, room_scan(1), .02, 1., 1.02)['stationary'])
+        finally:
+            release.set()
+            worker.close()
+            worker._thread.join(3)
+        self.assertEqual(calls, [1])
+        self.assertIsNone(worker._result)
+        self.assertFalse(worker._thread.is_alive())
 
 class CliStopFeedbackTests(unittest.TestCase):
     def test_failure_waits_for_fresh_neutral_feedback_before_returning(self):

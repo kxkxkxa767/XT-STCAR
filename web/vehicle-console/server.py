@@ -24,9 +24,9 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
-from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
+from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, FRONT_BOUNDARY_LOSS_S, CONTROL_AGE_LIMIT_S, AUTO_CONTROL_HEALTH_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            corridor_walls, probe_clearance, probe_parameters)
-from coast_motion import CoastMotion
+from coast_motion import CoastMotionWorker
 
 ROOT = Path(__file__).resolve().parent
 
@@ -52,6 +52,7 @@ class Console:
         self.control_epoch = 0
         self.auto_session = None
         self.auto_result = None
+        self.coast_worker = None
         self.perception_quality = QualityLatch()
         self.owner_at = 0
         self.arm_sequence = 0
@@ -100,6 +101,9 @@ class Console:
         return proc
 
     def start(self):
+        # Start the idle fit worker before control loops, not during a coast tick.
+        if self.coast_worker is None:
+            self.coast_worker = CoastMotionWorker()
         if self.vision:
             self.vision.start()
         self.control = self.spawn('control', '/dev/car')
@@ -158,7 +162,7 @@ class Console:
 
     def autonomy_healthy(self):
         # Perception quality waits neutrally inside the existing bounded session.
-        return time.monotonic() - self.control_at < .2 and not self.errors
+        return time.monotonic() - self.control_at < AUTO_CONTROL_HEALTH_S and not self.errors
 
     def health_watch(self):
         while not self.stop.wait(.05):
@@ -206,6 +210,8 @@ class Console:
                                     and (not self.auto_session['report'].get('centering')
                                          or self.auto_session['report'].get('standstill_confirmed', False))}
             self.auto_session = None
+            if self.coast_worker is not None:
+                self.coast_worker.reset()
             self.owner = None
             self.stopped_tick = self.status.get('control', {}).get('tick', -1)
             self.events.append({'unix_s': time.time(), 'stop_reason': reason})
@@ -297,7 +303,8 @@ class Console:
                 'supported': ['straight_probe', 'straight_segment', 'to_left_junction'], 'competition_supported': False,
                 'quality_confirm_s': QUALITY_CONFIRM_S,
                 'quality_self_recovery': True, 'quality_recovery_stable_s': QUALITY_RECOVERY_STABLE_S,
-                'coast_max_s': COAST_MAX_S,
+                'coast_max_s': COAST_MAX_S, 'front_boundary_loss_s': FRONT_BOUNDARY_LOSS_S,
+                'control_age_limit_s': CONTROL_AGE_LIMIT_S, 'auto_control_health_s': AUTO_CONTROL_HEALTH_S,
                 'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
@@ -351,6 +358,7 @@ class Console:
                       'current_pwm': pwm, 'approach_front_m': None, 'pwm_ramp_changes': 0,
                       'lane_correcting': False, 'lane_speed_limited': False,
                       'front_time_margin_s': COAST_TIME_MARGIN_S if centering else None,
+                      'front_boundary_loss_s': FRONT_BOUNDARY_LOSS_S if centering else None,
                       'boundary_closing_mps': None, 'boundary_time_to_clearance_s': None, 'cruise_limited': False,
                       'motion_ticks': 0, 'recovery_ticks': 0,
                       'quality_issues': clearance['quality_issues'], 'quality_elapsed_ms': 0, 'quality_counts': {},
@@ -360,7 +368,7 @@ class Console:
                       'clearance_start': clearance, 'epoch': self.control_epoch}
             self.auto_session = {'report': report, 'deadline': now + duration / 1000,
                                  'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality, 'recovery': QualityRecovery(),
-                                 'phase': 'drive', 'coast_motion': CoastMotion(), 'motion_scan_seq': None,
+                                 'phase': 'drive', 'motion_scan_seq': None,
                                  'steering': CorridorSteering(), 'wall_scan_seq': None, 'junction': JunctionStop(),
                                  'rear_launch': RearLaunch() if centering else None,
                                  'ramp': ApproachRamp(pwm) if centering else None}
@@ -394,11 +402,15 @@ class Console:
             session['coast_since'] = now
             session['coast_deadline'] = now+COAST_MAX_S
             session['coast_reason'] = reason
-            session['coast_motion'] = CoastMotion()
+            if self.coast_worker is None:
+                self.coast_worker = CoastMotionWorker()
+            session['motion_generation'] = self.coast_worker.reset()
+            session['motion_ready_for_coast'] = False
             session['motion_scan_seq'] = None
             session['coast_start_seq'] = self.scan['seq']
             session['coast_neutral_sequence'] = None
             session['coast_endpoint_verified'] = False
+            session['coast_junction_scan_seq'] = None
             if reason == 'left_junction_reached':
                 session['junction'] = JunctionStop()
             if session.get('rear_launch'):
@@ -411,22 +423,34 @@ class Console:
         if now >= session['coast_deadline']:
             self.halt('coast_standstill_unconfirmed')
             return
-        if session['coast_reason'] == 'left_junction_reached':
+        if (session['coast_reason'] == 'left_junction_reached'
+                and (session['coast_junction_scan_seq'] != self.scan['seq'] or not motion_ready)):
             session['coast_endpoint_verified'] = session['junction'].update(
                 self.scan, report['sensor_ages']['lidar'], now, motion_ready)
+            session['coast_junction_scan_seq'] = self.scan['seq']
         control = self.status['control']
         neutral_ack = (session['coast_neutral_sequence'] is not None
                        and control.get('seq', -1) >= session['coast_neutral_sequence']
                        and control.get('motor') == 1500 and control.get('armed'))
         report['coast_neutral_ack'] = bool(neutral_ack)
         if not motion_ready or not neutral_ack or self.scan['seq'] <= session['coast_start_seq']:
-            session['coast_motion'] = CoastMotion()
+            if session['motion_ready_for_coast']:
+                session['motion_generation'] = self.coast_worker.reset()
+            session['motion_ready_for_coast'] = False
             session['motion_scan_seq'] = None
-            report['coast_motion'] = {'observable': False, 'stationary': False,
-                                      'reason': 'perception_unavailable' if not motion_ready else 'awaiting_neutral_and_new_scan'}
+            report['coast_motion'] = self.coast_worker.unknown(
+                'perception_unavailable' if not motion_ready else 'awaiting_neutral_and_new_scan')
         else:
-            report['coast_motion'] = session['coast_motion'].update(self.scan, report['sensor_ages']['lidar'], now)
-            session['motion_scan_seq'] = self.scan['seq']
+            session['motion_ready_for_coast'] = True
+            age, received = report['sensor_ages']['lidar'], self.scan_at
+            generation = session['motion_generation']
+            error = self.coast_worker.submit(generation, self.scan, age, received, now)
+            report['coast_motion'] = (self.coast_worker.unknown(error) if error else
+                                     self.coast_worker.result(generation, self.scan, age, received, now))
+            if error:
+                session['motion_generation'] = self.coast_worker.reset()
+                session['motion_ready_for_coast'] = False
+            session['motion_scan_seq'] = report['coast_motion'].get('source_scan_seq')
         motion = report.get('coast_motion') or {}
         if motion.get('observable') and motion.get('stationary'):
             report['standstill_confirmed'] = True
@@ -793,6 +817,8 @@ class Console:
     def close(self):
         self.stop.set()
         self.halt('server_shutdown')
+        if self.coast_worker is not None:
+            self.coast_worker.close()
         if self.vision:
             self.vision.close()
         if hasattr(self, 'control'):

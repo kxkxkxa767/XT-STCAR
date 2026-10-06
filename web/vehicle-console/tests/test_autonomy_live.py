@@ -127,14 +127,48 @@ class ApproachRampTests(unittest.TestCase):
             ramp.update({'seq': seq, 'front_boundary_m': d}, .01, seq*.1)
         self.assertIsNone(ramp.closing_speed)
         self.assertIsNone(ramp.time_to_clearance)
-        ramp.update({'seq': 3, 'front_boundary_m': None}, .01, .7)
+        ramp.update({'seq': 3, 'front_boundary_m': None}, .01, .91)
         self.assertTrue(ramp.boundary_lost)
         before = ramp.pwm
         for seq in range(4, 20):
-            ramp.update({'seq': seq}, .01, .7+seq*.11)
+            ramp.update({'seq': seq}, .01, .91+seq*.11)
         self.assertEqual(ramp.pwm, before)
         self.assertGreaterEqual(ramp.pwm, 1550)
         self.assertTrue(ramp.stop_requested)
+
+    def test_fitted_plane_loss_grace_is_700ms_then_requests_neutral(self):
+        ramp = MODULE.ApproachRamp(1580)
+        ramp.update({'seq': 1, 'at_ms': 1000, 'front_boundary_m': 7.27}, .01, 0)
+        for seq, now in enumerate([.36, .50, .699, .70], start=2):
+            ramp.update({'seq': seq, 'at_ms': 1000+round(now*1000), 'front_boundary_m': None}, .01, now)
+            self.assertFalse(ramp.boundary_lost)
+            self.assertFalse(ramp.stop_requested)
+            self.assertGreaterEqual(ramp.pwm, 1550)
+        ramp.update({'seq': 6, 'at_ms': 1701, 'front_boundary_m': None}, .01, .701)
+        self.assertTrue(ramp.boundary_lost)
+        self.assertTrue(ramp.stop_requested)
+
+    def test_recovered_plane_resets_loss_window_without_inventing_speed(self):
+        ramp = MODULE.ApproachRamp(1580)
+        ramp.update({'seq': 1, 'at_ms': 1000, 'front_boundary_m': 7.27}, .01, 0)
+        ramp.update({'seq': 2, 'at_ms': 1450, 'front_boundary_m': None}, .01, .45)
+        ramp.update({'seq': 3, 'at_ms': 1680, 'front_boundary_m': 7.1}, .01, .68)
+        self.assertFalse(ramp.stop_requested)
+        self.assertIsNone(ramp.closing_speed)
+        self.assertIsNone(ramp.time_to_clearance)
+        ramp.update({'seq': 4, 'at_ms': 2000, 'front_boundary_m': None}, .01, 1.)
+        self.assertFalse(ramp.stop_requested)
+        ramp.update({'seq': 5, 'at_ms': 2390, 'front_boundary_m': None}, .01, 1.39)
+        self.assertTrue(ramp.stop_requested)
+
+    def test_old_or_stale_plane_does_not_extend_the_loss_window(self):
+        for old in [True, False]:
+            ramp = MODULE.ApproachRamp(1580)
+            ramp.update({'seq': 1, 'at_ms': 1000, 'front_boundary_m': 7.27}, .01, 0)
+            ramp.update({'seq': 1 if old else 2, 'at_ms': 1600, 'front_boundary_m': 7.27},
+                        .01 if old else .3, .6)
+            ramp.update({'seq': 3, 'at_ms': 1710, 'front_boundary_m': None}, .01, .71)
+            self.assertTrue(ramp.stop_requested)
 
     def test_new_forward_bounds_and_near_boundary_never_emit_subfloor_pwm(self):
         for value in [1549, 1581, True]:
@@ -439,7 +473,8 @@ class ProbeClearanceTests(unittest.TestCase):
         with self.assertRaises(ValueError): MODULE.probe_clearance(self.scan, self.ages)
         self.scan['frame_id'] = 'lidar_origin_coarse_body_heading'
         self.assertTrue(MODULE.probe_clearance(self.scan, {**self.ages, 'control': .082})['motion_ready'])
-        for key, value in [('control', .15), ('lidar', -1), ('lidar', float('nan'))]:
+        self.assertTrue(MODULE.probe_clearance(self.scan, {**self.ages, 'control': .199})['motion_ready'])
+        for key, value in [('control', .20), ('lidar', -1), ('lidar', float('nan'))]:
             with self.subTest(key=key, value=value):
                 ages = {**self.ages, key: value}
                 with self.assertRaises(ValueError): MODULE.probe_clearance(self.scan, ages)
@@ -698,7 +733,7 @@ class QualityRecoveryTests(unittest.TestCase):
 
     def test_control_feedback_fault_still_locks_during_quality_wait(self):
         self.tick(0)
-        self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .01, 'control': .15}
+        self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .01, 'control': .20}
         self.tick(.02)
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.console.auto_result['reason'], 'probe_sensor_unavailable')

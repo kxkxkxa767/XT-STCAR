@@ -12,7 +12,8 @@ QUALITY_RECOVERY_MIN_SCANS = 3
 COAST_MAX_S = 5.0
 CAMERA_LATE_S = .50
 LIDAR_LATE_S = .30
-CONTROL_AGE_LIMIT_S = .15
+CONTROL_AGE_LIMIT_S = .20
+AUTO_CONTROL_HEALTH_S = .25
 FRONT_MAX_UNKNOWN = 6
 FRONT_MAX_GAP = 3
 CORRIDOR_HALF_WIDTH_M = .30
@@ -26,6 +27,7 @@ SIDE_CLEARANCE_M = SIDE_BODY_EXTENT_M + SIDE_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
 LAUNCH_HOLD_S = .6
 STRAIGHT_CRUISE_PWM = 1570
 COAST_TIME_MARGIN_S = 2.5  # Conservative test allowance; not a calibrated brake model.
+FRONT_BOUNDARY_LOSS_S = .70  # Fresh scans may temporarily lose the fitted plane; not sensor dropout.
 APPROACH_SLOW_EXTRA_S = 1.5
 STEERING_LIMIT_PWM = 55
 
@@ -314,7 +316,7 @@ class ApproachRamp:
             if self.closing_speed is None:
                 target = min(target, MIN_FORWARD_PWM)
             self.boundary_cap = min(self.boundary_cap, max(MIN_FORWARD_PWM, target))
-        elif self.previous_boundary is not None and now-self.previous_boundary[2] > .35:
+        elif self.previous_boundary is not None and now-self.previous_boundary[2] > FRONT_BOUNDARY_LOSS_S:
             self.previous_boundary = None
             self.closing_rates = []
             self.closing_speed = None
