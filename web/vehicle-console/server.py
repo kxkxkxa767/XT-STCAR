@@ -852,7 +852,15 @@ class Console:
     def turn_tick(self, session, now, motion_ready):
         """One trial owner; no rear exemption, segment restart or navigation completion."""
         report = session['report']
-        if not motion_ready:
+        control = self.status.get('control', {})
+        motion = session['turn_motion']
+        neutral_wait = (not motion_ready and session.get('phase') == motion.phase == 'presteer'
+            and control.get('armed') is True and control.get('seq', -1) >= self.arm_sequence
+            and type(control.get('motor')) is int and control['motor'] == 1500
+            and report.get('current_pwm') == 1500
+            and set(report.get('quality_issues', [])) <= {'front_sparse'}
+            and session['recovery'].waiting)
+        if not motion_ready and not neutral_wait:
             self.halt('turn_perception_unavailable')
             return
         if session.get('phase') == 'coast':
@@ -861,22 +869,27 @@ class Console:
         if now >= session['deadline']:
             self.halt('turn_total_deadline')
             return
-        control = self.status.get('control', {})
         if not control.get('armed') or control.get('seq', -1) < self.arm_sequence:
             return
         report['observed_armed'] = True
         report['observed_pwm'] |= control.get('motor') == TRIAL_MOTOR
         pending_servo = session['turn_servo_sequence']
         turn_control = {**control, 'command_acked': pending_servo is None or control.get('seq', -1) >= pending_servo}
-        decision = session['turn_motion'].update(self.scan, report['sensor_ages']['lidar'], now, turn_control, safe=True)
+        decision = motion.update(self.scan, report['sensor_ages']['lidar'], now, turn_control,
+                                 safe=True, presteer_wait=neutral_wait)
         report['turn'] = decision
         report['physical_steering_confirmed'] = False
         report['observed_alignment'] = decision['observed_alignment']
         report['alignment_evidence'] = decision['alignment_evidence']
         report['entry_confirmed'] = decision['entry_confirmed']
+        if 'turn_stage' in decision:
+            report['turn_stage'] = decision['turn_stage']
         if decision['lock_requested']:
             self.halt(decision['reason'])
             return
+        if neutral_wait and (decision['phase'] != 'presteer' or decision['motor'] != 1500
+                             or decision['servo'] != report['servo']):
+            raise ValueError('invalid_turn_presteer_wait_output')
         if decision['stop_requested']:
             self.begin_coast(decision['reason'], now)
             self.coast_tick(session, now, True, decision['servo'])
@@ -892,7 +905,12 @@ class Console:
         self.emit('drive', motor, servo, control['tick'])
         if changed:
             session['turn_last_servo'], session['turn_servo_sequence'] = servo, self.sequence
-        report['presteer_ticks' if motor == 1500 else 'motion_ticks'] += 1
+        if neutral_wait:
+            report['recovery_ticks'] += 1
+        if decision['phase'] == 'presteer':
+            report['presteer_ticks'] += 1
+        elif motor > 1500:
+            report['motion_ticks'] += 1
         if motor > 1500:
             report['drive_ticks'] += 1
 

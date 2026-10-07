@@ -2,6 +2,7 @@
 import importlib.util
 import io
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -76,6 +77,18 @@ class TurnControlTests(unittest.TestCase):
             self.console.autonomy_tick(now)
         self.console.coast_worker.run_pending()
 
+    def observe(self, now, scan):
+        while self.now+.02 < now-1e-9:
+            self.tick(round(self.now+.02, 6), self.console.scan)
+        self.tick(now, scan)
+
+    def sparse_scan(self, seq, published=None):
+        value = self.scan(seq)
+        if published is not None:
+            value['at_ms'] = published
+        value['ranges'][5:17] = [None]*12
+        return value
+
     def drive(self, max_drive_s=10.):
         self.start(max_drive_s)
         for index in range(1, 240):
@@ -141,6 +154,171 @@ class TurnControlTests(unittest.TestCase):
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
         self.assertEqual(self.console.auto_result['reason'], 'left_turn_presteer_timeout')
         self.assertFalse(self.console.auto_result['completed'])
+
+    def test_one_sparse_presteer_scan_waits_in_same_owner_for_original_stable_recovery(self):
+        self.start()
+        self.observe(.1, self.scan(2))
+        session = self.console.auto_session
+        owner, epoch, deadline = self.console.owner, self.console.control_epoch, session['deadline']
+        held_servo = session['report']['servo']
+        self.observe(.2, self.sparse_scan(3))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['report']['quality_issues'], ['front_sparse'])
+        for seq, now in [(4, .303), (5, .406), (6, .509)]:
+            value = self.scan(seq)
+            value['at_ms'] = 100+round(now*1000)
+            self.observe(now, value)
+            self.assertIs(self.console.auto_session, session)
+            self.assertTrue(session['report']['perception_recovering'])
+            self.assertEqual((session['phase'], session['report']['current_pwm'], session['report']['servo']),
+                             ('presteer', 1500, held_servo))
+            self.assertEqual(session['report']['turn']['geometry_source_seq'], seq)
+            self.assertEqual(session['report']['turn']['steering_settle_feedback_ticks'], 0)
+        value = self.scan(7)
+        value['at_ms'] = 712
+        self.observe(.612, value)
+        self.assertFalse(session['report']['perception_recovering'])
+        self.assertGreaterEqual(session['report']['recovery_stable_ms'], 300)
+        self.assertEqual(session['phase'], 'presteer')
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
+        self.assertGreater(session['report']['recovery_ticks'], 0)
+        for index in range(1, 220):
+            self.tick(round(.612+index*.02, 6))
+            self.assertIs(self.console.auto_session, session)
+            if session['phase'] == 'drive':
+                break
+        self.assertEqual(session['phase'], 'drive')
+        self.assertEqual((self.console.owner, self.console.control_epoch, session['deadline']), (owner, epoch, deadline))
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_continuous_fresh_sparse_presteer_keeps_original_five_second_deadline(self):
+        self.start()
+        session = self.console.auto_session
+        deadline = session['deadline']
+        for index in range(1, 251):
+            now = round(index*.02, 6)
+            self.tick(now, self.sparse_scan(1+int(round(now*10, 6))))
+            if index < 250:
+                self.assertIs(self.console.auto_session, session)
+                self.assertEqual(session['deadline'], deadline)
+                self.assertEqual(session['phase'], 'presteer')
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'left_turn_presteer_timeout')
+        self.assertEqual(deadline, 15.)
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_sparse_during_drive_or_coast_still_immediately_locks(self):
+        for coast in [False, True]:
+            with self.subTest(coast=coast):
+                if self.console.auto_session is None and self.outputs:
+                    self.tearDown()
+                    self.setUp()
+                self.drive()
+                if coast:
+                    self.console.begin_coast('planned', self.now)
+                now = round(self.now+.02, 6)
+                self.observe(now, self.sparse_scan(self.console.scan['seq']+1,
+                                                 self.console.scan['at_ms']+20))
+                self.assertIsNone(self.console.auto_session)
+                self.assertEqual(self.console.auto_result['reason'], 'turn_perception_unavailable')
+                self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                                 ('stop', 1500, 1500))
+
+    def test_neutral_presteer_wait_does_not_accept_incomplete_scan_or_positive_adoption(self):
+        for fault in ['incomplete', 'positive_motor', 'reported_positive', 'unarmed', 'old_arm_ack']:
+            with self.subTest(fault=fault):
+                if self.console.auto_session is None and self.outputs:
+                    self.tearDown()
+                    self.setUp()
+                self.start()
+                value = self.sparse_scan(2)
+                self.observe(.08, self.console.scan)
+                if fault == 'incomplete': value['ranges'][80:87] = [None]*7
+                if fault == 'positive_motor': self.console.status['control']['motor'] = 1560
+                if fault == 'reported_positive': self.console.auto_session['report']['current_pwm'] = 1560
+                if fault == 'unarmed': self.console.status['control']['armed'] = False
+                if fault == 'old_arm_ack': self.console.status['control']['seq'] = 0
+                self.tick(.1, value)
+                self.assertIsNone(self.console.auto_session)
+                self.assertEqual(self.console.auto_result['reason'], 'turn_perception_unavailable')
+                self.assertEqual(self.outputs[-1]['op'], 'stop')
+
+    def test_neutral_presteer_wait_preserves_hard_sensor_and_obstacle_stops(self):
+        for fault in ['front', 'side', 'rear', 'lidar_stale', 'control_stale', 'loop_gap']:
+            with self.subTest(fault=fault):
+                if self.console.auto_session is None and self.outputs:
+                    self.tearDown()
+                    self.setUp()
+                self.start()
+                self.observe(.1, self.sparse_scan(2))
+                self.assertIsNotNone(self.console.auto_session)
+                if fault == 'front': self.console.scan['ranges'][0] = .8
+                if fault == 'side': self.console.scan['ranges'][90] = .29
+                if fault == 'rear': self.console.scan['ranges'][180] = .35
+                if fault == 'lidar_stale': self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .3, 'control': .01}
+                if fault == 'control_stale': self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .01, 'control': .2}
+                self.tick(.181 if fault == 'loop_gap' else .12, self.console.scan)
+                self.assertIsNone(self.console.auto_session)
+                self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                                 ('stop', 1500, 1500))
+                self.assertFalse(self.console.auto_result['completed'])
+
+    def test_repeated_recovery_scan_and_operator_stop_cannot_resume_waiting_turn(self):
+        self.start()
+        self.observe(.1, self.sparse_scan(2))
+        self.observe(.2, self.scan(3))
+        session = self.console.auto_session
+        self.observe(.48, self.console.scan)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['recovery'].good_scans, 1)
+        self.assertEqual(session['report']['current_pwm'], 1500)
+        self.console.command({'op': 'stop'})
+        before = len(self.outputs)
+        self.tick(.5, self.scan(4))
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(len(self.outputs), before)
+        self.assertEqual(self.console.auto_result['reason'], 'operator_stop')
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_neutral_presteer_wait_does_not_extend_total_deadline(self):
+        self.start()
+        self.console.auto_session['deadline'] = .2
+        self.observe(.1, self.sparse_scan(2))
+        self.observe(.2, self.sparse_scan(3))
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'turn_total_deadline')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
+
+    def test_entry_approach_is_reported_as_drive_with_neutral_servo(self):
+        def ahead_scan(seq):
+            value = opening_scan(seq)
+            angle, distance = -math.radians(315), math.sqrt(.5)
+            point = {'x_m': distance*math.cos(angle), 'y_m': distance*math.sin(angle)}
+            value['ranges'][315] = distance
+            value['left_turn_goal'].update(incoming_left_end_m=point['x_m'], known_open_fraction=1.,
+                incoming_left_end_support={'index': 315, 'angle_left_rad': angle,
+                    'range_m': distance, 'point_left_m': point})
+            return value
+        self.console.scan = ahead_scan(1)
+        self.start()
+        session = self.console.auto_session
+        for index in range(1, 160):
+            now = round(index*.02, 6)
+            presteer_ticks = session['report']['presteer_ticks']
+            self.tick(now, ahead_scan(1+int(round(now*10, 6))))
+            self.assertIs(self.console.auto_session, session)
+            if session['phase'] == 'drive':
+                break
+        self.assertEqual(session['phase'], 'drive')
+        self.assertEqual(session['report']['turn_stage'], 'approach')
+        self.assertEqual((session['report']['current_pwm'], session['report']['servo']), (1560, 1500))
+        self.assertEqual(session['report']['presteer_ticks'], presteer_ticks)
+        self.assertFalse(session['report']['physical_steering_confirmed'])
+        self.assertFalse(session['report']['turn']['completed'])
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
     def test_short_geometry_gap_retains_source_then_sustained_loss_locks_without_rearm(self):
         self.drive()

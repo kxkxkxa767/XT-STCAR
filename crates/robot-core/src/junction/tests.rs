@@ -62,6 +62,25 @@ fn left(width: f64, end: f64, outgoing: f64, yaw: f64) -> LidarSample {
     )
 }
 
+fn assert_current_incoming_end_support(scan: &LidarSample, goal: &LeftTurnGoal) {
+    let junction = detect_left_junction(scan, &scan.frame_id).unwrap().unwrap();
+    let support = &goal.incoming_left_end_support;
+    assert_eq!(scan.ranges_m[support.index], Some(support.range_m));
+    let angle = (scan.angle_min_rad + support.index as f64 * scan.angle_increment_rad + PI)
+        .rem_euclid(TAU)
+        - PI;
+    assert!((support.angle_left_rad - angle).abs() < 1e-12);
+    assert!((support.point_left_m.x_m - support.range_m * angle.cos()).abs() < 1e-12);
+    assert!((support.point_left_m.y_m - support.range_m * angle.sin()).abs() < 1e-12);
+    let (s, c) = goal.incoming_heading_left_rad.sin_cos();
+    let x = c * support.point_left_m.x_m + s * support.point_left_m.y_m;
+    assert!((x - goal.incoming_left_end_m).abs() <= 1e-6);
+    assert_eq!(goal.incoming_left_end_m, junction.incoming_left_end_m);
+    assert_eq!(goal.known_open_fraction, junction.known_open_fraction);
+    assert!((0.9..=1.0).contains(&goal.known_open_fraction));
+    assert!(goal.candidate_only && !goal.turn_path_certified);
+}
+
 #[test]
 fn corridor_candidates_follow_arbitrary_observed_axes_with_real_wall_support() {
     for yaw_deg in [-130.0_f64, -87.0, -42.0, -7.0, 0.0, 38.0, 94.0, 157.0] {
@@ -219,6 +238,7 @@ fn left_alignment_goal_uses_a_measured_outer_tangent_and_known_target_ray() {
     );
     let observed = detect_turn_geometry(&scan, &scan.frame_id).unwrap();
     let goal = observed.left_goal.unwrap();
+    assert_current_incoming_end_support(&scan, &goal);
     assert!(!goal.origin_between_exit_walls);
     assert!(goal.candidate_only && !goal.turn_path_certified);
     assert!((goal.heading_left_rad - 1.0_f64.atan2(tilt)).abs() < 0.01);
@@ -246,6 +266,92 @@ fn left_alignment_goal_uses_a_measured_outer_tangent_and_known_target_ray() {
         (wall.heading_left_rad - goal.outer_wall.heading_left_rad).abs() < 0.04
             && (wall.rho_left_m - goal.outer_wall.rho_left_m).abs() < 0.05
     }));
+}
+
+#[test]
+fn incoming_end_support_follows_real_rotated_and_clockwise_rays() {
+    for (width, end, outgoing) in [(0.95, 0.2, 1.2), (1.3, 0.55, 1.7)] {
+        for yaw_deg in [-8.0_f64, -3.0, 0.0, 7.0] {
+            for clockwise in [false, true] {
+                let mut scan = left(width, end, outgoing, yaw_deg.to_radians());
+                if clockwise {
+                    let original = scan.ranges_m.clone();
+                    scan.ranges_m = (0..360).map(|i| original[(360 - i) % 360]).collect();
+                    scan.angle_increment_rad = -TAU / 360.0;
+                }
+                let goal = detect_turn_geometry(&scan, &scan.frame_id)
+                    .unwrap()
+                    .left_goal
+                    .unwrap_or_else(|| {
+                        panic!("{width}, {end}, {outgoing}, {yaw_deg}, {clockwise}")
+                    });
+                assert_current_incoming_end_support(&scan, &goal);
+                let serialized = serde_json::to_value(&goal).unwrap();
+                let support = serialized["incoming_left_end_support"].as_object().unwrap();
+                assert_eq!(support.len(), 4);
+                assert!(support.contains_key("index") && support.contains_key("point_left_m"));
+                assert_eq!(serialized["known_open_fraction"], goal.known_open_fraction);
+            }
+        }
+    }
+}
+
+#[test]
+fn incoming_end_support_keeps_small_board_angle_variation_observed() {
+    for slope_deg in [-2.0_f64, 2.0] {
+        let slope = slope_deg.to_radians().tan();
+        let (width, end, front) = (1.1, 0.4, 1.9);
+        let corner_y = width / 2.0 + slope * end;
+        let tilt = 0.04;
+        let poly = [
+            (-8.0, -width / 2.0),
+            (front - tilt * width / 2.0, -width / 2.0),
+            (front + tilt * 8.0, 8.0),
+            (end + tilt * (8.0 - corner_y), 8.0),
+            (end, corner_y),
+            (-8.0, width / 2.0 - slope * 8.0),
+        ];
+        for yaw_deg in [-6.0_f64, 0.0, 6.0] {
+            let scan = polygon_scan(&poly, yaw_deg.to_radians());
+            let goal = detect_turn_geometry(&scan, &scan.frame_id)
+                .unwrap()
+                .left_goal
+                .unwrap_or_else(|| panic!("slope={slope_deg}, yaw={yaw_deg}"));
+            assert_current_incoming_end_support(&scan, &goal);
+            let a = (slope.atan() - yaw_deg.to_radians()).tan();
+            let b =
+                (width / 2.0) / (yaw_deg.to_radians().cos() + slope * yaw_deg.to_radians().sin());
+            assert!(
+                (goal.incoming_left_end_support.point_left_m.y_m
+                    - a * goal.incoming_left_end_support.point_left_m.x_m
+                    - b)
+                    .abs()
+                    <= 0.05
+            );
+        }
+    }
+}
+
+#[test]
+fn missing_incoming_endpoint_ray_is_not_interpolated_or_reused() {
+    let mut scan = left(1.1, 0.4, 1.5, 0.0);
+    let before = detect_turn_geometry(&scan, &scan.frame_id)
+        .unwrap()
+        .left_goal
+        .unwrap();
+    let missing = before.incoming_left_end_support.index;
+    scan.ranges_m[missing] = None;
+    let observed = detect_turn_geometry(&scan, &scan.frame_id).unwrap();
+    if let Some(goal) = observed.left_goal {
+        assert_current_incoming_end_support(&scan, &goal);
+        assert_ne!(goal.incoming_left_end_support.index, missing);
+        assert_ne!(
+            goal.incoming_left_end_support.point_left_m,
+            before.incoming_left_end_support.point_left_m
+        );
+        assert!(goal.incoming_left_end_m < before.incoming_left_end_m);
+    }
+    assert!(scan.ranges_m[missing].is_none());
 }
 
 #[test]
@@ -332,6 +438,11 @@ fn actual_observed_scan_requires_no_yolo_or_map_label() {
         (-0.1..0.5).contains(&result.incoming_left_end_m),
         "{result:?}"
     );
+    let goal = detect_turn_geometry(&scan, &scan.frame_id)
+        .unwrap()
+        .left_goal
+        .unwrap();
+    assert_current_incoming_end_support(&scan, &goal);
 }
 
 #[test]

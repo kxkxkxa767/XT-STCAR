@@ -30,6 +30,15 @@ pub struct TargetSupportRay {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct IncomingLeftEndSupport {
+    pub index: usize,
+    pub angle_left_rad: f64,
+    pub range_m: f64,
+    /// Original same-scan return, not an interpolated or certified board end.
+    pub point_left_m: Point2,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct LeftTurnGoal {
     pub heading_left_rad: f64,
     /// Candidate exit-centre line rho under this heading's LEFT normal.
@@ -41,6 +50,9 @@ pub struct LeftTurnGoal {
     pub incoming_heading_left_rad: f64,
     pub front_wall_m: f64,
     pub incoming_left_end_m: f64,
+    /// Binds the candidate extent to a real return in this publication.
+    pub incoming_left_end_support: IncomingLeftEndSupport,
+    pub known_open_fraction: f64,
     pub origin_between_exit_walls: bool,
     pub candidate_only: bool,
     pub turn_path_certified: bool,
@@ -155,23 +167,38 @@ fn left_goal(rays: &[(usize, f64, f64, Point2)], junction: LeftJunction) -> Opti
                 range,
                 c * p.x_m + s * p.y_m,
                 -s * p.x_m + c * p.y_m,
+                p,
             )
         })
         .collect();
     let incoming_left: Vec<_> = local
         .iter()
-        .filter(|(_, angle, _, _, _)| (90.0..=135.0).contains(&wrap(*angle).to_degrees()))
-        .map(|(_, _, _, x, y)| (*x, *y))
+        .filter(|(_, angle, _, _, _, _)| (90.0..=135.0).contains(&wrap(*angle).to_degrees()))
+        .map(|(_, _, _, x, y, _)| (*x, *y))
         .collect();
     let (left_slope, left_intercept) = wall(&incoming_left)?;
+    // The extent is the detector's most-forward observed incoming-wall point,
+    // not an inferred physical endpoint. Bind it to the original return; if
+    // no current point supports this extent, there is no alignment candidate.
+    let &(index, angle, range, _, _, point) = local.iter().find(|(_, _, _, x, y, _)| {
+        (-1.0..=1.0).contains(x)
+            && (*x - junction.incoming_left_end_m).abs() <= 1e-6
+            && (*y - left_slope * *x - left_intercept).abs() <= 0.05
+    })?;
+    let incoming_left_end_support = IncomingLeftEndSupport {
+        index,
+        angle_left_rad: angle,
+        range_m: range,
+        point_left_m: point,
+    };
     // Only actual transverse-wall returns beyond the observed left opening.
     let outer_points: Vec<_> = local
         .iter()
-        .filter(|(_, _, _, x, y)| {
+        .filter(|(_, _, _, x, y, _)| {
             (*x - junction.front_wall_m).abs() <= 0.12
                 && *y > left_slope * *x + left_intercept + 0.10
         })
-        .map(|(_, _, _, x, y)| (*y, *x))
+        .map(|(_, _, _, x, y, _)| (*y, *x))
         .collect();
     let outer = supported_wall(&outer_points)?;
     // Swapping y/x fits x=a*y+b. Choose the fitted tangent toward the observed
@@ -211,7 +238,7 @@ fn left_goal(rays: &[(usize, f64, f64, Point2)], junction: LeftJunction) -> Opti
     let centre = rho + junction.outgoing_width_m * 0.5;
     let middle = (along(&start) + along(&end)) * 0.5;
     let mut targets = Vec::new();
-    for &(index, angle, range, x, y) in &local {
+    for &(index, angle, range, x, y, _) in &local {
         let relative = wrap(angle - incoming);
         if !(25.0..=85.0).contains(&relative.to_degrees()) {
             continue;
@@ -264,6 +291,8 @@ fn left_goal(rays: &[(usize, f64, f64, Point2)], junction: LeftJunction) -> Opti
         incoming_heading_left_rad: incoming,
         front_wall_m: junction.front_wall_m,
         incoming_left_end_m: junction.incoming_left_end_m,
+        incoming_left_end_support,
+        known_open_fraction: junction.known_open_fraction,
         origin_between_exit_walls: rho <= 0.0 && 0.0 <= rho + junction.outgoing_width_m,
         candidate_only: true,
         turn_path_certified: false,

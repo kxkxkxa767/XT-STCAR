@@ -39,11 +39,15 @@ def wall(heading=60., rho=-1.8, start=1., end=3.):
             'support_span_m': end-start, 'points': 32, 'fit_error_m': .02, 'candidate_only': True}
 
 
-def opening_scan(seq):
+def opening_scan(seq, endpoint_index=254):
     value = dict(scan(seq), corridor_candidates=[])
     theta, target_range = math.radians(30.), 2.4
     outer = wall()
     value['ranges'] = [3.2]*360
+    end_angle = MODULE._wrap(math.radians(-endpoint_index))
+    end_range = .5/math.sin(end_angle)
+    end_point = {'x_m': end_range*math.cos(end_angle), 'y_m': .5}
+    value['ranges'][endpoint_index] = end_range
     value['wall_candidates'] = [outer]
     value['left_turn_goal'] = {'heading_left_rad': math.radians(60.), 'center_offset_left_m': -1.2,
                               'width_m': 1.2, 'target_point_left_m': {'x_m': target_range*math.cos(theta),
@@ -51,7 +55,10 @@ def opening_scan(seq):
                               'target_support_ray': {'index': 330, 'angle_left_rad': theta,
                                                      'range_m': 3.2, 'target_range_m': target_range},
                               'outer_wall': outer, 'incoming_heading_left_rad': 0., 'front_wall_m': 2.2,
-                              'incoming_left_end_m': .5, 'origin_between_exit_walls': False,
+                              'incoming_left_end_m': end_point['x_m'], 'origin_between_exit_walls': False,
+                              'incoming_left_end_support': {'index': endpoint_index, 'angle_left_rad': end_angle,
+                                                           'range_m': end_range, 'point_left_m': end_point},
+                              'known_open_fraction': 1.,
                               'candidate_only': True, 'turn_path_certified': False,
                               'observation_type': 'left_opening_outer_wall_alignment'}
     return value
@@ -87,6 +94,25 @@ def recorded_opening_scan(seq, actual_board=False):
                      2.1579890453384896, 0.5338386048393119, (1.392259147086357, 1.2983026584711803),
                      317, 3.04, 1.9036741647768833)}
     }
+    records.update({4129: {'at_ms': 412301,
+            'outer': (1.5541714539283245,
+                      -2.184040846535792,
+                      1.2449977539018375,
+                      0.02169008347781507,
+                      24,
+                      (2.199276206844011, 0.7572715272673459),
+                      (2.2234893178283643, 2.0020387742257033)),
+            'goal': (1.6377899545469763,
+                     -1.365145869262304,
+                     -0.0030299029696582136,
+                     2.169437960584625,
+                     0.5316480060376487,
+                     (1.3846521173625657, 1.1618610809877687),
+                     320,
+                     2.87,
+                     1.807534967194467)}})
+    # Same-scan endpoint rays derived from the captured native end scalar.
+    end_support = {5403: (311, 0.7949999999999999), 5411: (311, 0.7949999999999999), 5412: (311, 0.7949999999999999), 4129: (317, 0.729)}
     record = records[seq]
     heading, rho, span, error, points, start, end = record['outer']
     outer = {'heading_left_rad': heading, 'rho_left_m': rho, 'support_span_m': span,
@@ -97,6 +123,12 @@ def recorded_opening_scan(seq, actual_board=False):
     ray_angle = (math.pi-math.radians(index)) % (2*math.pi)-math.pi
     ranges = [None]*360
     ranges[index] = distance
+    end_index, end_distance = end_support[seq]
+    end_angle = MODULE._wrap(math.radians(-end_index))
+    ranges[end_index] = end_distance
+    endpoint = {'index': end_index, 'angle_left_rad': end_angle, 'range_m': end_distance,
+                'point_left_m': {'x_m': end_distance*math.cos(end_angle),
+                                 'y_m': end_distance*math.sin(end_angle)}}
     if actual_board:
         if seq != 5412:
             raise ValueError('only the captured 5412 board trace is included')
@@ -112,11 +144,12 @@ def recorded_opening_scan(seq, actual_board=False):
             2.158, 2.158, 2.158, 2.158, 2.158, 2.158, 2.158, 2.173, 2.173, 2.172,
             2.172, None, None, 2.188, 2.204, 2.204, 2.142, 2.034, 1.942, 1.8639999999999999,
         )
-        for position, distance in enumerate(board):
-            ranges[(300+position) % 360] = distance
+        for position, board_distance in enumerate(board):
+            ranges[(300+position) % 360] = board_distance
     goal = {'heading_left_rad': heading, 'center_offset_left_m': offset, 'width_m': width,
             'incoming_heading_left_rad': incoming, 'front_wall_m': front, 'incoming_left_end_m': left_end,
             'outer_wall': outer, 'target_point_left_m': dict(zip(('x_m', 'y_m'), target)),
+            'incoming_left_end_support': endpoint, 'known_open_fraction': 1.,
             'target_support_ray': {'index': index, 'angle_left_rad': ray_angle,
                                    'range_m': distance, 'target_range_m': target_distance},
             'candidate_only': True, 'turn_path_certified': False, 'origin_between_exit_walls': False,
@@ -197,6 +230,19 @@ def surface_scan(theta_deg=90., kind='curve', noise=0., separation=.03):
 
 
 class TurnMotionTests(unittest.TestCase):
+    def approach(self, max_drive_s=10., endpoint_index=280):
+        motion = MODULE.TurnMotion(0., max_drive_s=max_drive_s)
+        previous = {'servo': 1500}
+        for seq in range(1, 30):
+            now = (seq-1)*.1
+            previous = motion.update(opening_scan(seq, endpoint_index), .01, now,
+                                     control(seq, previous['servo']))
+            if previous['phase'] == 'drive':
+                self.assertEqual(previous['turn_stage'], 'approach')
+                self.assertEqual((previous['motor'], previous['servo']), (1560, 1500))
+                return motion, seq, now, previous
+        self.fail('unchanged neutral target must complete the initial adoption allowance')
+
     def drive(self, heading=60., offset=0., max_drive_s=10.):
         motion = MODULE.TurnMotion(0., max_drive_s=max_drive_s)
         result = {'servo': 1500}
@@ -350,6 +396,199 @@ class TurnMotionTests(unittest.TestCase):
         self.assertAlmostEqual(result['corridor']['heading_left_rad'], math.radians(60.))
         self.assertEqual((result['motor'], result['servo']), (1500, 1500))
 
+    def test_recorded_third_trial_start_waits_for_current_corner_instead_of_immediate_left_cut(self):
+        value = recorded_opening_scan(4129)
+        result = MODULE.TurnMotion(0.).update(value, .01, 0., control(1, armed=False))
+        self.assertTrue(result['start_ready'])
+        self.assertEqual(result['steering_target'], 1500)
+        self.assertFalse(result['turn_released'])
+        self.assertGreater(result['corner_end_m'], result['corner_front_limit_m'])
+        self.assertFalse(result['turn_path_certified'])
+
+    def test_neutral_initial_approach_adoption_matures_and_never_turns_on_time_alone(self):
+        motion, seq, now, previous = self.approach()
+        first_drive = motion.drive_since
+        self.assertGreaterEqual(previous['steering_settle_elapsed_s'], 1.2-1e-9)
+        for i in range(1, 10):
+            previous = motion.update(opening_scan(seq+i, 280), .01, now+i*.1,
+                                     control(seq+i, previous['servo'], motor=1560))
+            self.assertEqual((previous['motor'], previous['servo']), (1560, 1500))
+            self.assertFalse(previous['turn_released'])
+            self.assertEqual(previous['alignment_confirmations'], 0)
+            self.assertEqual(motion.drive_since, first_drive)
+
+    def test_corner_release_needs_three_new_frames_and_both_clocks(self):
+        motion = MODULE.TurnMotion(0.)
+        for seq, published, now in [(1, 100, 0.), (2, 225, .1), (3, 350, .2)]:
+            value = opening_scan(seq)
+            value['at_ms'] = published
+            result = motion.update(value, .01, now, control(seq, armed=False))
+            self.assertFalse(result['turn_released'])
+            self.assertEqual(result['steering_target'], 1500)
+        duplicate = motion.update(value, .01, .25, control(4, armed=False))
+        self.assertFalse(duplicate['turn_released'])
+        self.assertEqual(duplicate['corner_confirmations'], 3)
+        value = opening_scan(4)
+        value['at_ms'] = 450
+        result = motion.update(value, .01, .3, control(5, armed=False))
+        self.assertTrue(result['turn_released'])
+        self.assertGreater(result['steering_target'], 1500)
+        self.assertEqual(result['motor'], 1500)
+
+    def test_empty_geometry_breaks_corner_confirmation_streak_without_refreshing_source(self):
+        motion = MODULE.TurnMotion(0.)
+        for seq in (1, 2):
+            result = motion.update(opening_scan(seq), .01, (seq-1)*.1, control(seq, armed=False))
+        source = result['geometry_source_seq']
+        missing = dict(opening_scan(3), left_turn_goal=None, wall_candidates=[], corridor_candidates=[])
+        result = motion.update(missing, .01, .2, control(3, armed=False))
+        self.assertFalse(result['corner_current'])
+        self.assertEqual(result['corner_confirmations'], 0)
+        self.assertIsNone(result['corner_source_seq'])
+        self.assertEqual(result['geometry_source_seq'], source)
+        for seq in (4, 5):
+            result = motion.update(opening_scan(seq), .01, (seq-1)*.1, control(seq, armed=False))
+            self.assertFalse(result['turn_released'])
+
+    def test_approach_does_not_use_favourable_cached_endpoint_when_current_opening_is_missing(self):
+        motion, seq, now, previous = self.approach()
+        first = motion.update(opening_scan(seq+1, 279), .01, now+.1,
+                              control(seq+1, previous['servo'], motor=1560))
+        self.assertEqual(first['corner_confirmations'], 1)
+        self.assertLess(first['corner_end_m'], first['corner_front_limit_m'])
+        current = dict(opening_scan(seq+2, 279), left_turn_goal=None)
+        result = motion.update(current, .01, now+.2, control(seq+2, first['servo'], motor=1560))
+        self.assertEqual(result['turn_goal']['incoming_left_end_m'], first['corner_end_m'])
+        self.assertFalse(result['corner_current'])
+        self.assertFalse(result['turn_released'])
+        self.assertEqual(result['corner_confirmations'], 0)
+        self.assertEqual((result['motor'], result['servo']), (1560, 1500))
+        self.assertEqual(result['alignment_confirmations'], 0)
+
+    def test_approach_to_left_turn_keeps_original_drive_budget_and_gradual_pwm(self):
+        motion, seq, now, previous = self.approach(max_drive_s=.65)
+        first_drive = motion.drive_since
+        for i in range(1, 8):
+            result = motion.update(opening_scan(seq+i, 279), .01, now+i*.1,
+                                   control(seq+i, previous['servo'], motor=previous['motor']))
+            self.assertEqual(motion.drive_since, first_drive)
+            self.assertLessEqual(abs(result['servo']-previous['servo']), 10)
+            if i <= 3:
+                self.assertEqual(result['servo'], 1500)
+            if i == 4:
+                self.assertTrue(result['turn_released'])
+                self.assertEqual(result['servo'], 1510)
+            previous = result
+        self.assertEqual(result['reason'], 'left_turn_drive_timeout')
+        self.assertEqual((result['phase'], result['motor'], result['turn_stage']), ('coast', 1500, 'coast'))
+
+    def test_approach_handover_to_aligned_corridor_does_not_count_exit_alignment(self):
+        motion, seq, now, previous = self.approach()
+        for i in range(1, 13):
+            value = dict(opening_scan(seq+i), left_turn_goal=None, corridor_candidates=[],
+                         wall_candidates=[wall(60.-i*5, -1.8+i*.1)])
+            if i == 12:
+                value['corridor_candidates'] = [corridor(0., 0., 1.2)]
+            previous = motion.update(value, .01, now+i*.1,
+                                     control(seq+i, previous['servo'], motor=1560))
+            self.assertFalse(previous['lock_requested'])
+            self.assertEqual(previous['alignment_confirmations'], 0)
+            self.assertFalse(previous['observed_alignment'])
+            self.assertEqual(previous['servo'], 1500)
+        self.assertEqual(previous['geometry_mode'], 'corridor')
+        self.assertFalse(previous['turn_released'])
+
+    def test_presteer_wait_holds_adopted_servo_and_clears_settle_without_extending_deadline(self):
+        motion = MODULE.TurnMotion(0.)
+        previous = {'servo': 1500}
+        for seq in range(1, 12):
+            previous = motion.update(opening_scan(seq), .01, (seq-1)*.1, control(seq, previous['servo']))
+        held = previous['servo']
+        self.assertGreater(held, 1500)
+        result = motion.update(opening_scan(12), .01, 1.1, control(12, held), presteer_wait=True)
+        self.assertEqual((result['phase'], result['motor'], result['servo']), ('presteer', 1500, held))
+        self.assertFalse(result['start_ready'])
+        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        self.assertEqual(result['geometry_source_seq'], 12)
+        missing = dict(opening_scan(13), left_turn_goal=None, wall_candidates=[], corridor_candidates=[])
+        result = motion.update(missing, .01, 1.2, control(13, held), presteer_wait=True)
+        self.assertEqual(result['servo'], held)
+        self.assertEqual(result['geometry_source_seq'], 12)
+        for seq in range(14, 52):
+            result = motion.update(opening_scan(seq), .01, (seq-1)*.1, control(seq, held), presteer_wait=True)
+        self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
+        self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+
+    def test_presteer_wait_does_not_mask_invalid_current_feedback_or_geometry(self):
+        for fault in ['motor', 'stale', 'ambiguous']:
+            with self.subTest(fault=fault):
+                motion = MODULE.TurnMotion(0.)
+                motion.update(opening_scan(1), .01, 0., control(1))
+                value, age, feedback = opening_scan(2), .01, control(2)
+                if fault == 'motor': feedback['motor'] = 1560
+                if fault == 'stale': age = .3
+                if fault == 'ambiguous':
+                    value['wall_candidates'].append(wall(60., -1.68))
+                result = motion.update(value, age, .1, feedback, presteer_wait=True)
+                self.assertTrue(result['lock_requested'])
+                self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+
+    def test_endpoint_contract_rejects_missing_unknown_mismatched_and_right_side_evidence(self):
+        for fault in ['missing', 'unknown', 'range', 'angle', 'point', 'scalar', 'heading', 'fraction',
+                      'right_side', 'native_window']:
+            with self.subTest(fault=fault):
+                value = opening_scan(1)
+                goal = value['left_turn_goal']
+                endpoint = goal['incoming_left_end_support']
+                if fault == 'missing': del goal['incoming_left_end_support']
+                if fault == 'unknown': value['ranges'][endpoint['index']] = None
+                if fault == 'range': endpoint['range_m'] += .05
+                if fault == 'angle': endpoint['angle_left_rad'] += .02
+                if fault == 'point': endpoint['point_left_m']['x_m'] += .05
+                if fault == 'scalar': goal['incoming_left_end_m'] += .05
+                if fault == 'heading': goal['incoming_heading_left_rad'] = 4.
+                if fault == 'fraction': goal['known_open_fraction'] = .89
+                if fault in ('right_side', 'native_window'):
+                    angle = math.radians(-105) if fault == 'right_side' else math.radians(135)
+                    index = 105 if fault == 'right_side' else 225
+                    distance = .5/abs(math.sin(angle))
+                    point = {'x_m': distance*math.cos(angle), 'y_m': distance*math.sin(angle)}
+                    value['ranges'][index] = distance
+                    goal['incoming_left_end_m'] = point['x_m']
+                    goal['incoming_left_end_support'] = {'index': index, 'angle_left_rad': angle,
+                                                         'range_m': distance, 'point_left_m': point}
+                result = MODULE.TurnMotion(0.).update(value, .01, 0., control(1, armed=False))
+                self.assertEqual(result['reason'], 'invalid_native_turn_wall_goal')
+                self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+
+    def test_corner_gate_uses_current_incoming_axis_and_lesser_front_corner_projection(self):
+        for heading in [-15., 0., 15.]:
+            with self.subTest(heading=heading):
+                value = opening_scan(1)
+                goal, theta = value['left_turn_goal'], math.radians(heading)
+                endpoint = goal['incoming_left_end_support']['point_left_m']
+                goal['incoming_heading_left_rad'] = theta
+                goal['incoming_left_end_m'] = math.cos(theta)*endpoint['x_m']+math.sin(theta)*endpoint['y_m']
+                result = MODULE.TurnMotion(0.).update(value, .01, 0., control(1, armed=False))
+                expected = .21*math.cos(theta)-.17*abs(math.sin(theta))-(.10+.03)
+                self.assertAlmostEqual(result['corner_front_limit_m'], expected)
+                self.assertFalse(result['turn_released'])
+                self.assertFalse(result['turn_path_certified'])
+
+    def test_corner_evidence_after_coast_or_safety_stop_cannot_restart_motor(self):
+        for terminal in ['coast', 'obstacle']:
+            with self.subTest(terminal=terminal):
+                motion, seq, now, previous = self.approach()
+                if terminal == 'coast':
+                    motion.begin_coast('normal_stop', now)
+                for i in range(1, 6):
+                    previous = motion.update(opening_scan(seq+i, 279), .01, now+i*.1,
+                                             control(seq+i, previous['servo'], motor=1500),
+                                             safe=terminal != 'obstacle')
+                    self.assertEqual(previous['motor'], 1500)
+                    self.assertFalse(previous['completed'])
+                self.assertEqual(previous['turn_stage'], previous['phase'])
+
     def test_outer_wall_reprojects_target_and_handover_requires_real_double_walls(self):
         motion = MODULE.TurnMotion(0.)
         previous = {'servo': 1500}
@@ -395,11 +634,13 @@ class TurnMotionTests(unittest.TestCase):
         current = recorded_opening_scan(5412)
         result = motion.update(current, .01, .099, control(2))
         self.assertEqual(result['phase'], 'presteer')
-        self.assertEqual(result['reason'], 'left_turn_presteering')
-        self.assertEqual((result['motor'], result['servo']), (1500, 1510))
+        self.assertEqual(result['reason'], 'left_turn_steering_allowance')
+        self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+        self.assertFalse(result['turn_released'])
+        self.assertGreater(result['corner_end_m'], result['corner_front_limit_m'])
         self.assertEqual(result['geometry_source_seq'], 5412)
         self.assertEqual(result['outer_wall'], current['left_turn_goal']['outer_wall'])
-        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        self.assertEqual(result['steering_settle_feedback_ticks'], 1)
         self.assertFalse(result['completed'])
 
     def test_recorded_before_wall_association_is_unique_but_skipped_frames_do_not_refresh_clock(self):

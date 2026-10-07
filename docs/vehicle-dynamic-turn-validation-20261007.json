@@ -450,7 +450,7 @@
       }
     }
   ],
-  "latest_trial_status": "03 forward confirmed, partial left turn, not at cone entry; operator stopped without collision; no further motion authorized",
+  "latest_trial_status": "03 forward confirmed but incomplete; current entry-approach fix verified and pending matched locked deployment and explicit authorized retry04",
   "latest_user_proposal": "relax the minimum side distance on the side the vehicle turns toward",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -463,5 +463,128 @@
     "thresholds_changed": false,
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
+  },
+  "latest_authorization": "operator put vehicle back at crosswalk and explicitly requested fix then one retry; retry04 not yet executed",
+  "entry_approach_fix": {
+    "implemented": true,
+    "vehicle_deployed": false,
+    "retry_authorized": true,
+    "retry_executed": false,
+    "mechanism": "neutral steering adoption then1560 straight approach; fresh native opening endpoint front-margin gate releases gradual left turn",
+    "measured_vehicle_parameters": {
+      "lidar_front_m": 0.21,
+      "wheel_outside_half_width_m": 0.17
+    },
+    "candidate_front_margin_m": 0.13,
+    "front_gate": "minimum projection of measured two front corners onto current incoming heading, minus10cm trial net margin and3cm coarse range allowance",
+    "native_support_fields": [
+      "incoming_left_end_support:index/angle/range/current point",
+      "known_open_fraction"
+    ],
+    "confirmation_min_fresh_scans": 3,
+    "confirmation_publication_and_receipt_s": 0.25,
+    "same_drive_budget_s": 10,
+    "presteer_budget_s": 5,
+    "approach_does_not_count_exit_alignment": true,
+    "borrow_cached_endpoint_for_release": false,
+    "normal_pwm_slew": "10 per100ms",
+    "neutral_sparse_wait": "only presteer, actual and report motor1500, current healthy lidar/control, front_sparse-only and existing QualityRecovery; actual clocks and geometry validated",
+    "neutral_wait_does_not_extend_deadlines": true,
+    "driving_or_coasting_quality_halt_unchanged": true,
+    "known_close_or_stale_fault_halt_unchanged": true,
+    "front_lookahead_m_unchanged": 1.0,
+    "lidar_side_threshold_m_unchanged": 0.3,
+    "reverse_braking": false,
+    "candidate_only": true,
+    "turn_path_certified": false,
+    "wheel_curvature_measured": false,
+    "rear_axle_offset_assumed": false,
+    "full_vehicle_sweep_certified": false,
+    "validation": {
+      "mac_full_python": 236,
+      "rust_junction": 23,
+      "target_pure_turn_and_service": 87,
+      "fmt_passed": true,
+      "core_and_bridge_clippy_passed": true,
+      "native_raw_replay": {
+        "new_native_openings_accepted_by_python": 61,
+        "unique_raw_scans": 71,
+        "first03_seq": 4118,
+        "first03_endpoint_m": 0.5312173724763466,
+        "front_limit_m": 0.07933662379457743,
+        "neutral_start_steering_target": 1500,
+        "physical_output": false,
+        "test_is_not_changed_closed_loop_trajectory": true
+      },
+      "native_previous_goals61_new_goals61_lost0": true,
+      "target_association_timing": {
+        "source_sha256": "30f317b5e0e4b9e29770e9ec4210821a0481c04ed4a2eac8e1b60d13a3029e9d",
+        "actual_scan_pairs": [
+          {
+            "old_seq": 5403,
+            "new_seq": 5405,
+            "match_count": 1,
+            "elapsed_ms": 0.333263999891642
+          },
+          {
+            "old_seq": 5405,
+            "new_seq": 5406,
+            "match_count": 1,
+            "elapsed_ms": 0.1536089994260692
+          },
+          {
+            "old_seq": 5406,
+            "new_seq": 5408,
+            "match_count": 1,
+            "elapsed_ms": 0.16465299995616078
+          },
+          {
+            "old_seq": 5408,
+            "new_seq": 5409,
+            "match_count": 1,
+            "elapsed_ms": 0.16740399951231666
+          },
+          {
+            "old_seq": 5409,
+            "new_seq": 5411,
+            "match_count": 1,
+            "elapsed_ms": 0.15435900058946572
+          },
+          {
+            "old_seq": 5411,
+            "new_seq": 5412,
+            "match_count": 1,
+            "elapsed_ms": 0.17773899980966235
+          },
+          {
+            "old_seq": 5412,
+            "new_seq": 5414,
+            "match_count": 1,
+            "elapsed_ms": 0.1609860000826302
+          }
+        ],
+        "actual_pairs_all_unique": true,
+        "synthetic_candidate_count": 64,
+        "timing_iterations": 50,
+        "timing_ms": {
+          "median": 54.99150799960262,
+          "p95": 66.8428839999251,
+          "max": 68.71102999957657
+        },
+        "physical_output": false,
+        "timing_is_not_wcet_certificate": true
+      },
+      "independent_module_service_tests": 87,
+      "projection_angles": 1001
+    },
+    "source_sha256": {
+      "web/vehicle-console/server.py": "083eba8c65ea5393aad7634cc0573f158d4ec1f3e3877a1ca5c0eb9e4a28d145",
+      "web/vehicle-console/turn_motion.py": "30f317b5e0e4b9e29770e9ec4210821a0481c04ed4a2eac8e1b60d13a3029e9d",
+      "crates/robot-core/src/junction/turn_goal.rs": "85e15f75646b8d3092338e15c0e07c07162991eb4d421903ce3b3c7c2cf7e037"
+    },
+    "matching_new_bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
+    "riscv_elf_passed": true,
+    "maximum_glibc": "2.34",
+    "physical_acceptance": false
   }
 }
