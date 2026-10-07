@@ -48,6 +48,7 @@ class ManeuverSequence(TurnMotion):
         self.handover_observed = False
         self.orbit_since = self.orbit_reference_range_m = None
         self.orbit_bias_pwm = None
+        self.orbit_feedback = None
         self.handover_control = None
         self.handover_wait_since = None
         self.orbit_track_id = None
@@ -130,6 +131,7 @@ class ManeuverSequence(TurnMotion):
                       handover_observed=self.handover_observed,
                       orbit_reference_range_m=self.orbit_reference_range_m,
                       orbit_bias_pwm=self.orbit_bias_pwm,
+                      orbit_feedback=copy.deepcopy(self.orbit_feedback),
                       handover_control=copy.deepcopy(self.handover_control),
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
@@ -163,15 +165,26 @@ class ManeuverSequence(TurnMotion):
                 and target.get('track_id') is not None)
 
     def _relative_target_pwm(self, target):
-        # Left-positive bearing moves behind the car when yaw is insufficient:
-        # increase left correction. A range above the actual entry reference
-        # similarly requests a modest inward correction. Gains are trial PWM
-        # feedback gains, not curvature/speed calibrations or a course radius.
+        # This is the bounded entry stage, not a settled circular orbit. In
+        # trial18 the object was still ahead of the lateral axis and approaching;
+        # two negative terms erased the adopted left demand immediately after
+        # handover. Preserve that demand during entry. A target moving behind
+        # or farther away adds left correction; current inside-edge clearance
+        # can still independently release steering in the caller.
+        # Gains are trial PWM feedback, not physical curvature or a course radius.
         reference = self.orbit_reference_range_m
-        correction = (ORBIT_BEARING_GAIN*(target['bearing_left_rad']-ORBIT_BEARING_RAD)
-                      + ORBIT_RANGE_GAIN*(target['range_m']-reference)/reference)
+        bearing_term = ORBIT_BEARING_GAIN*(target['bearing_left_rad']-ORBIT_BEARING_RAD)
+        range_term = ORBIT_RANGE_GAIN*(target['range_m']-reference)/reference
+        correction = max(0., bearing_term) + max(0., range_term)
         bias = self.orbit_bias_pwm if self.orbit_bias_pwm is not None else self.initial_presteer_pwm
-        return max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
+        requested = max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
+        self.orbit_feedback = {'source_seq': target.get('source_seq'),
+            'source_at_ms': target.get('source_at_ms'), 'scope': 'bounded_orbit_entry_only',
+            'adopted_handover_bias_pwm': bias, 'bearing_term_pwm': bearing_term,
+            'range_term_pwm': range_term, 'applied_entry_correction_pwm': correction,
+            'nominal_target_pwm': requested, 'inside_edge_release_remains_independent': True,
+            'physical_curvature_calibrated': False}
+        return requested
 
     def _limit_left_for_known_points(self, nominal, lookahead):
         """Apply a bounded release while a measured inside edge is still nearby.

@@ -53,7 +53,8 @@ class Harness:
         self.now = self.seq/10
         self.latest_scan = scan(self.seq, self.now)
         self.latest_control = {'seq': self.seq, 'tick': self.seq*100,
-                               'armed': True, 'motor': self.motor, 'servo': self.servo}
+                               'armed': True, 'motor': self.motor, 'servo': self.servo,
+                               'command_acked': True}
         result = self.motion.update(self.latest_scan, 0., self.now, self.latest_control, **kwargs)
         self.servo, self.motor = result['servo'], result['motor']
         return result
@@ -116,18 +117,51 @@ class ManeuverSequenceTests(unittest.TestCase):
                 h.observer.factory = observation
                 self.assertFalse(h.step()['handover_observed'])
 
-    def test_relative_feedback_changes_target_and_keeps_entry_range(self):
+    def test_entry_feedback_preserves_left_demand_then_increases_for_lag_or_range(self):
         h = Harness()
         first = h.orbit(distance=.9)
         h.observer.factory = lambda value: target(value, bearing=70., distance=.8)
         second = h.step()
         h.observer.factory = lambda value: target(value, bearing=110., distance=1.05)
         third = h.step()
-        self.assertLess(second['steering_target'], first['steering_target'])
+        self.assertEqual(second['steering_target'], first['steering_target'])
         self.assertGreater(third['steering_target'], second['steering_target'])
         self.assertEqual(third['orbit_reference_range_m'], .9)
         self.assertTrue(1500 <= second['servo'] <= 1720)
         self.assertLessEqual(abs(third['servo']-second['servo']), 10)
+
+    def test_entry_bias_is_adopted_handover_not_initial_setting(self):
+        h = Harness(initial=1670)
+        h.drive()
+        h.servo = h.motion.servo = 1598  # Mock adopted feedback after the wall turn.
+        h.observer.factory = lambda value: target(value, bearing=69.5, distance=.965)
+        first = h.step()
+        self.assertEqual(first['servo'], 1598)
+        self.assertEqual(first['steering_target'], 1598)
+        self.assertEqual(first['handover_control']['servo'], 1598)
+        h.observer.factory = lambda value: target(value, bearing=70.5, distance=.901)
+        second = h.step()
+        self.assertEqual(second['steering_target'], 1598)
+        self.assertEqual(second['servo'], 1598)
+        self.assertLess(second['orbit_feedback']['bearing_term_pwm'], 0)
+        self.assertLess(second['orbit_feedback']['range_term_pwm'], 0)
+        self.assertEqual(second['orbit_feedback']['applied_entry_correction_pwm'], 0)
+        h.observer.factory = lambda value: target(value, bearing=105., distance=.9)
+        third = h.step()
+        self.assertGreater(third['steering_target'], 1598)
+        self.assertLessEqual(third['servo']-second['servo'], 10)
+
+    def test_entry_holding_left_does_not_disable_current_inside_edge_release(self):
+        h = Harness()
+        h.orbit()
+        value = scan(h.seq+1, h.now+.1)
+        value['ranges'][300] = .3
+        h.motion._current_scan = value
+        nominal = h.motion._relative_target_pwm(target(value, bearing=70., distance=.9))
+        limited = h.motion._limit_left_for_known_points(nominal, 1.)
+        self.assertEqual(nominal, h.motion.orbit_bias_pwm)
+        self.assertLess(limited, nominal)
+        self.assertEqual(h.motion.inner_clearance['source_seq'], value['seq'])
 
     def test_target_loss_and_identity_jump_latch_coast_without_restart(self):
         for lost in ('none', 'unconfirmed', 'identity'):
@@ -524,7 +558,7 @@ class ManeuverSequenceTests(unittest.TestCase):
                 self.assertLess(targets[-1], targets[0])
                 self.assertEqual(targets[-1], 1500)
 
-    def test_confirmed_orbit_feedback_uses_initial_bias_with_global_cap(self):
+    def test_confirmed_orbit_feedback_uses_adopted_bias_with_global_cap(self):
         h = Harness(initial=1690)
         h.drive()
         h.observer.factory = lambda value: target(value, bearing=90.)
@@ -533,7 +567,8 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(first['steering_target'], 1690)
         h.observer.factory = lambda value: target(value, bearing=120.)
         second = h.step()
-        self.assertEqual(second['steering_target'], 1720)
+        self.assertEqual(second['orbit_feedback']['nominal_target_pwm'], 1720)
+        self.assertTrue(1690 < second['steering_target'] <= 1720)
         self.assertGreater(second['servo'], 1690)
         self.assertLessEqual(second['servo']-first['servo'], 10)
         self.assertTrue(second['handover_observed'])

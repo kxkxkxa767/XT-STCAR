@@ -1,6 +1,7 @@
 """Unknown-object admission, association and original observation leases."""
 import copy
 import importlib.util
+import json
 import math
 from pathlib import Path
 import unittest
@@ -123,6 +124,78 @@ class CompactTargetTests(unittest.TestCase):
             scan = compact_scan()
             scan['ranges'][index] = None
             self.assertIsNone(MODULE.CompactTargetTracker().update(scan, .01))
+
+    def test_confirmed_current_shape_can_cross_one_boundary_null_once(self):
+        tracker, old = self.confirmed()
+        scan = compact_scan(4, 400, .4)
+        scan['ranges'][275] = None
+        result = tracker.update(scan, .41)
+        self.assertTrue(result['confirmed'])
+        self.assertEqual(result['track_id'], old['track_id'])
+        self.assertEqual(result['source_seq'], 4)
+        self.assertEqual(result['confirmation_count'], old['confirmation_count'])
+        self.assertEqual(result['boundary_unknown_bins'], [275])
+        self.assertNotIn(275, result['support_bins'])
+        self.assertEqual(result['last_full_isolation_seq'], 3)
+        self.assertEqual(result['point_count'], 9)
+        self.assertEqual(tracker.reason, 'compact_target_tracked_with_boundary_gap')
+        expected = copy.deepcopy(result)
+        result['boundary_unknown_bins'].clear()
+        result['boundary_far_returns'][0]['range_m'] = 99
+        self.assertEqual(tracker.update(scan, .5), expected)
+        self.assertIsNone(tracker.update(scan, .71))
+
+    def test_boundary_null_never_confirms_new_track_or_renews_partial_chain(self):
+        tracker = MODULE.CompactTargetTracker()
+        tracker.update(compact_scan(), .01)
+        scan = compact_scan(2, 100, .1)
+        scan['ranges'][275] = None
+        self.assertIsNone(tracker.update(scan, .11))
+        tracker, old = self.confirmed()
+        for seq in [4, 5]:
+            scan = compact_scan(seq, seq*100, seq/10)
+            scan['ranges'][275] = None
+            result = tracker.update(scan, seq/10+.01)
+            if seq == 4: self.assertEqual(result['track_id'], old['track_id'])
+            else: self.assertIsNone(result)
+
+    def test_tracking_boundary_gap_requires_bounded_real_background_and_same_shape(self):
+        for change in ('two_nulls', 'both_edges', 'near_background', 'jump', 'ambiguous'):
+            with self.subTest(change=change):
+                tracker, _ = self.confirmed()
+                scan = compact_scan(4, 400, .4, bearing=60. if change == 'jump' else 90.)
+                boundary = 305 if change == 'jump' else 275
+                scan['ranges'][boundary] = None
+                if change == 'two_nulls': scan['ranges'][boundary+1] = None
+                if change == 'both_edges': scan['ranges'][265] = None
+                if change == 'near_background': scan['ranges'][boundary+1] = .9
+                if change == 'ambiguous':
+                    for index in range(246, 255): scan['ranges'][index] = 1.5
+                self.assertIsNone(tracker.update(scan, .41))
+
+    def test_real_trial18_boundary_null_keeps_current_identity_then_strictly_recovers(self):
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-18-boundary-null.json').read_text())
+        tracker = MODULE.CompactTargetTracker()
+        identity = None
+        first_at = fixture['frames'][0]['at_ms']
+        for raw in fixture['frames']:
+            now = (raw['at_ms']-first_at)/1000  # Mock receipt clock, not recorded actuation.
+            scan = {**raw, 'received_at': now}
+            result = tracker.update(scan, now+.01)
+            self.assertIsNotNone(result)
+            if identity is None: identity = result['track_id']
+            self.assertEqual(result['track_id'], identity)
+            self.assertEqual(result['source_seq'], raw['seq'])
+            if raw['seq'] == 618:
+                self.assertEqual(MODULE._candidates(raw['ranges']), [])
+                self.assertTrue(result['confirmed'])
+                self.assertEqual(result['point_count'], 13)
+                self.assertEqual(result['boundary_unknown_bins'], [272])
+                self.assertEqual(result['last_full_isolation_seq'], 617)
+            if raw['seq'] == 620:
+                self.assertTrue(result['confirmed'])
+                self.assertFalse(result['tracking_only_boundary_gap'])
+                self.assertEqual(result['last_full_isolation_seq'], 620)
 
     def test_nearer_neighbor_is_not_far_background(self):
         scan = compact_scan()

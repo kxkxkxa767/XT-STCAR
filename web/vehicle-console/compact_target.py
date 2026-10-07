@@ -6,6 +6,7 @@ use the bridge's calibrated 360 clockwise bins; output coordinates are x forward
 y left. The caller must attach the actual scan receive time as ``received_at``
 (server.scan_at), never a new time for an old observation.
 """
+import copy
 import math
 
 
@@ -48,7 +49,7 @@ def _clusters(points):
     return groups
 
 
-def _candidates(ranges):
+def _candidates(ranges, *, allow_boundary_gap=False):
     # Build components BEFORE range/sector filtering. Filtering first would
     # manufacture a small object from the end of an extended wall.
     points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
@@ -59,10 +60,22 @@ def _candidates(ranges):
         values = [ranges[i] for i in group]
         if min(values) < MIN_RANGE_M or max(values) > MAX_RANGE_M:
             continue
-        before, after = ranges[(group[0]-1) % 360], ranges[(group[-1]+1) % 360]
-        # Null is unknown. Both adjacent rays must observe a substantially
-        # farther surface, not merely a gap or a slanted foreground continuation.
-        if before is None or after is None or min(before, after) <= max(values)+MAX_POINT_GAP_M:
+        # Acquisition needs both immediate neighbors. A confirmed track may
+        # use one missing boundary ray for one scan, provided the next actual
+        # ray is farther and the current whole component still matches uniquely.
+        # The missing ray remains unknown; it is neither support nor free space.
+        unknown, background = [], []
+        for edge, direction in [(group[0], -1), (group[-1], 1)]:
+            index = (edge+direction) % 360
+            value = ranges[index]
+            if value is None and allow_boundary_gap:
+                unknown.append(index)
+                index = (index+direction) % 360
+                value = ranges[index]
+            if value is None or value <= max(values)+MAX_POINT_GAP_M:
+                break
+            background.append({'index': index, 'range_m': value})
+        if len(background) != 2 or len(unknown) > 1:
             continue
         support = [points[i] for i in group]
         if (max(p[0] for p in support)-min(p[0] for p in support) > MAX_DIAMETER_M
@@ -75,7 +88,9 @@ def _candidates(ranges):
         distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
         if MIN_RANGE_M <= distance <= MAX_RANGE_M and MIN_BEARING_RAD <= bearing <= MAX_BEARING_RAD:
             result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
-                           'diameter_m': diameter, 'point_count': len(group), 'support_bins': list(group)})
+                           'diameter_m': diameter, 'point_count': len(group), 'support_bins': list(group),
+                           'boundary_unknown_bins': unknown, 'boundary_far_returns': background,
+                           'tracking_only_boundary_gap': bool(unknown)})
     return result
 
 
@@ -83,7 +98,11 @@ class CompactTargetTracker:
     """Return a current unknown object, or None; never coast on a cached target.
 
     At least three distinct scans and 250 ms of BOTH publication and receive time
-    confirm an unbroken, unique association. Repeat reads can use the unchanged
+    confirm an unbroken, unique association with full boundary observations.
+    An already confirmed identity may tolerate one boundary null in one scan,
+    using a unique current component and a real farther return beyond that null.
+    It cannot initialize/mature a track or tolerate consecutive partial edges.
+    Repeat reads can use the unchanged
     result within its original 300 ms lease, but cannot mature or renew it.
     ``reason`` supplies diagnostics when update returns None.
     """
@@ -121,8 +140,7 @@ class CompactTargetTracker:
                 return self._forget('compact_target_duplicate_changed')
             if now-received >= MAX_AGE_S:
                 return self._forget('compact_target_stale')
-            return None if self._target is None else {**self._target, 'point_left_m': list(self._target['point_left_m']),
-                                                        'support_bins': list(self._target['support_bins'])}
+            return copy.deepcopy(self._target)
         if self._last_at is not None and (published <= self._last_at or received <= self._last_received):
             return self._forget('compact_target_reordered_clock')
         publication_dt = None if self._last_at is None else (published-self._last_at)/1000
@@ -137,28 +155,36 @@ class CompactTargetTracker:
                 self._forget('compact_target_observation_gap')
             elif abs(publication_dt-receive_dt) > .15:
                 return self._forget('compact_target_clock_gap')
-        candidates = _candidates(ranges)
+        old = self._target
+        allow_boundary_gap = (old is not None and old['confirmed']
+                              and not old['tracking_only_boundary_gap'])
+        candidates = _candidates(ranges, allow_boundary_gap=allow_boundary_gap)
         if len(candidates) != 1:
             return self._forget('compact_target_ambiguous' if candidates else 'compact_target_missing')
         current = candidates[0]
-        old = self._target
         # These bounded association gates are not speed, odometry or static
         # object certification. A jump creates a new, unconfirmed identity.
         associated = (old is not None and math.dist(current['point_left_m'], old['point_left_m']) <= .30
                       and abs(current['bearing_left_rad']-old['bearing_left_rad']) <= math.radians(20)
                       and abs(current['diameter_m']-old['diameter_m']) <= .12)
+        boundary_gap = current['tracking_only_boundary_gap']
+        if boundary_gap and not associated:
+            return self._forget('compact_target_boundary_gap_unassociated')
         if associated:
-            track_id, count = old['track_id'], old['confirmation_count']+1
+            track_id = old['track_id']
+            count = old['confirmation_count'] + (0 if boundary_gap else 1)
         else:
             track_id, count = self._next_id, 1
             self._next_id += 1
             self._first_at, self._first_received = published, received
         confirmed = (count >= 3 and published-self._first_at >= round(MIN_CONFIRM_S*1000)
                      and received-self._first_received+1e-9 >= MIN_CONFIRM_S)
-        self.reason = 'compact_target_confirmed' if confirmed else 'compact_target_unconfirmed'
+        self.reason = ('compact_target_tracked_with_boundary_gap' if boundary_gap else
+                       'compact_target_confirmed' if confirmed else 'compact_target_unconfirmed')
         self._target = {**current, 'source_seq': seq, 'source_at_ms': published,
                         'source_received_at': received, 'confirmed': confirmed,
                         'confirmation_count': count, 'semantic_class': 'unknown',
                         'kind': 'lidar_compact_object', 'track_id': track_id,
+                        'last_full_isolation_seq': old['last_full_isolation_seq'] if boundary_gap else seq,
                         'candidate_only': True, 'physical_identity_verified': False}
-        return {**self._target, 'point_left_m': list(current['point_left_m']), 'support_bins': list(current['support_bins'])}
+        return copy.deepcopy(self._target)
