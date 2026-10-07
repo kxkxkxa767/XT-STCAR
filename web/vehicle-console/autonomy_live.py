@@ -29,6 +29,11 @@ FRONT_BODY_EXTENT_M = .20
 REAR_BODY_EXTENT_M = .18
 MANEUVER_MIN_NET_M = .05
 MANEUVER_BODY_CLEARANCE_M = MANEUVER_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
+# Operator authorized a smaller inside-left turn gate after trial17. This
+# experimental 4 cm total still includes the original 3 cm range reference;
+# it is not a certified physical clearance or geometry-error allowance.
+TURNING_LEFT_MIN_NET_M = .01
+TURNING_LEFT_BODY_CLEARANCE_M = TURNING_LEFT_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
 # Vehicle bring-up limits, never a remembered course length or corner position.
 LAUNCH_HOLD_S = .6
 STRAIGHT_CRUISE_PWM = 1570
@@ -402,12 +407,14 @@ class ProbeClearanceError(ValueError):
 
 
 def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True,
-                    clearance_profile='straight'):
+                    clearance_profile='straight', relaxed_turn_left=False):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
     if clearance_profile not in ('straight', 'maneuver') or type(clearance_profile) is not str:
         raise ValueError('invalid_clearance_profile')
     if type(camera_required) is not bool:
         raise ValueError('invalid_camera_requirement')
+    if type(relaxed_turn_left) is not bool or (relaxed_turn_left and clearance_profile != 'maneuver'):
+        raise ValueError('invalid_relaxed_turn_clearance')
     sensor_inputs = ['camera', 'lidar', 'control'] if camera_required else ['lidar', 'control']
     if any(type(ages.get(k)) not in (int, float) or not math.isfinite(ages[k]) or ages[k] < 0
            for k in sensor_inputs):
@@ -442,6 +449,7 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     maneuver = clearance_profile == 'maneuver'
     half_width = CORRIDOR_HALF_WIDTH_M + (.02 if centering else 0)
     nearest_body_point = None
+    stop_trigger_point = None
     body_stop_requested = False
     for angle, r in enumerate(bins):
         if r is None:
@@ -452,15 +460,23 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
         dx = max(-REAR_BODY_EXTENT_M-x, 0, x-FRONT_BODY_EXTENT_M)
         dy = max(abs(y)-SIDE_BODY_EXTENT_M, 0)
         body_distance = math.hypot(dx, dy)
+        # Only known returns beyond the left body side get the turn allowance.
+        # Front-center, right and non-turn observations retain their old gate.
+        relaxed_point = relaxed_turn_left and -y >= SIDE_BODY_EXTENT_M
+        point_stop_m = TURNING_LEFT_BODY_CLEARANCE_M if relaxed_point else MANEUVER_BODY_CLEARANCE_M
+        body_point = {'angle_deg': angle, 'range_m': r, 'forward_x_m': x, 'left_y_m': -y,
+                      'body_distance_m': body_distance, 'stop_distance_m': point_stop_m,
+                      'relaxed_turn_left': relaxed_point}
         if nearest_body_point is None or body_distance < nearest_body_point['body_distance_m']:
-            nearest_body_point = {'angle_deg': angle, 'range_m': r,
-                                  'forward_x_m': x, 'left_y_m': -y,
-                                  'body_distance_m': body_distance}
+            nearest_body_point = body_point
         if maneuver:
             # Equality is allowed; tolerate only floating point roundoff at that boundary.
-            if body_distance < MANEUVER_BODY_CLEARANCE_M and not math.isclose(
-                    body_distance, MANEUVER_BODY_CLEARANCE_M, rel_tol=0, abs_tol=1e-12):
+            if body_distance < point_stop_m and not math.isclose(
+                    body_distance, point_stop_m, rel_tol=0, abs_tol=1e-12):
                 body_stop_requested = True
+                if (stop_trigger_point is None or body_distance-point_stop_m <
+                        stop_trigger_point['body_distance_m']-stop_trigger_point['stop_distance_m']):
+                    stop_trigger_point = body_point
             if abs(y) > abs(x):
                 side_clearances.append(abs(y))
         elif rear_launch and 115 <= angle <= 245:
@@ -487,11 +503,14 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     if len(unknown) > FRONT_MAX_UNKNOWN or largest_gap > FRONT_MAX_GAP:
         issues.append('front_sparse')
     front_values = [r for r in front if r is not None]
+    nearest_relaxed = nearest_body_point is not None and nearest_body_point['relaxed_turn_left']
+    nearest_stop_m = TURNING_LEFT_BODY_CLEARANCE_M if nearest_relaxed else MANEUVER_BODY_CLEARANCE_M
     clearance = {'front_m': min(front_values) if front_values else None,
             'clearance_profile': clearance_profile,
             'clearance_gates': {'straight_corridor_active': not maneuver,
                                 'side_lateral_active': not maneuver, 'radial_active': not maneuver,
                                 'current_body_proximity_active': maneuver,
+                                'relaxed_turn_left_active': relaxed_turn_left,
                                 'rear_launch_exemption_active': bool(rear_launch) and not maneuver},
             'body_proximity': {
                 'scope': 'current_known_lidar_returns_only',
@@ -505,17 +524,24 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
                                    'left': SIDE_BODY_EXTENT_M, 'right': SIDE_BODY_EXTENT_M},
                 'body_rectangle_m': {'x_min': -REAR_BODY_EXTENT_M, 'x_max': FRONT_BODY_EXTENT_M,
                                       'y_min': -SIDE_BODY_EXTENT_M, 'y_max': SIDE_BODY_EXTENT_M},
-                'min_net_clearance_m': MANEUVER_MIN_NET_M if maneuver else None,
-                'min_net_clearance_source': 'operator_selected_maneuver_5cm' if maneuver else None,
+                'min_net_clearance_m': ((TURNING_LEFT_MIN_NET_M if nearest_relaxed else MANEUVER_MIN_NET_M)
+                                        if maneuver else None),
+                'min_net_clearance_source': (('operator_authorized_turn_left_total4cm' if nearest_relaxed
+                                             else 'operator_selected_maneuver_5cm') if maneuver else None),
                 'lidar_range_allowance_m': LIDAR_RANGE_ALLOWANCE_M,
-                'stop_distance_m': MANEUVER_BODY_CLEARANCE_M if maneuver else None,
+                'stop_distance_m': nearest_stop_m if maneuver else None,
+                'default_stop_distance_m': MANEUVER_BODY_CLEARANCE_M if maneuver else None,
+                'relaxed_turn_left_active': relaxed_turn_left,
+                'turning_left_stop_distance_m': TURNING_LEFT_BODY_CLEARANCE_M if relaxed_turn_left else None,
                 'stop_requested': body_stop_requested if maneuver else None,
                 'current_known_min_distance_m': (nearest_body_point['body_distance_m']
                                                  if nearest_body_point is not None else None),
                 'nearest_point': nearest_body_point,
+                'stop_trigger_point': stop_trigger_point,
                 'axis_stop_thresholds_m': ({'front': FRONT_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
                                            'rear': REAR_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
-                                           'left': SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
+                                           'left': SIDE_BODY_EXTENT_M+(TURNING_LEFT_BODY_CLEARANCE_M
+                                                       if relaxed_turn_left else MANEUVER_BODY_CLEARANCE_M),
                                            'right': SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M}
                                           if maneuver else None),
                 'free_space_certified': False, 'swept_path_certified': False,

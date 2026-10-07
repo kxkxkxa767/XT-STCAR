@@ -859,10 +859,17 @@ class Console:
             # Only this server's turn-start path sets the session mode. Camera
             # omission and request fields cannot select the maneuver envelope.
             turn_trial = session.get('turn_trial') is True
+            relaxed_turn_left = (session.get('maneuver_sequence') is True
+                and session.get('phase') == 'drive'
+                and getattr(session.get('turn_motion'), 'phase', None) == 'drive'
+                and control.get('armed') is True and control.get('motor') == TRIAL_MOTOR
+                and type(control.get('servo')) is int and 1500 < control['servo'] <= SERVO_MAX)
             clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
                                         rear_launch=rear_active, camera_required=not turn_trial,
-                                        clearance_profile='maneuver' if turn_trial else 'straight')
+                                        clearance_profile='maneuver' if turn_trial else 'straight',
+                                        relaxed_turn_left=relaxed_turn_left)
             report['clearance_current'] = clearance
+            report['relaxed_turn_left_clearance_active'] = relaxed_turn_left
             if not (self.turn_healthy() if turn_trial else self.autonomy_healthy()):
                 raise ValueError('probe_sensor_unavailable')
             report['quality_issues'] = clearance['quality_issues']
