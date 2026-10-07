@@ -14,6 +14,8 @@ from turn_motion import (TurnMotion, NEUTRAL, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
 ORBIT_ENTRY_MAX_S = 3.0
 COAST_MAX_S = 5.0
 PRESTEER_MAX_S = 8.0
+DEFAULT_INITIAL_PWM = 1690
+INITIAL_PWM_MIN = 1690
 ORBIT_BEARING_RAD = math.pi/2
 ORBIT_BEARING_GAIN = 100.0
 ORBIT_RANGE_GAIN = 70.0
@@ -21,9 +23,16 @@ LEFT_TRIAL_GAIN = 180.0
 MAX_TREND_RELEASE_FRACTION = .20
 
 
+def validate_maneuver_initial_pwm(value):
+    if type(value) is not int or not INITIAL_PWM_MIN <= value <= SERVO_MAX:
+        raise ValueError('invalid_maneuver_initial_presteer_pwm')
+    return value
+
+
 class ManeuverSequence(TurnMotion):
     """Single arm and cumulative drive budget; no automatic restart after stop."""
-    def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=1720):
+    def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=DEFAULT_INITIAL_PWM):
+        validate_maneuver_initial_pwm(initial_presteer_pwm)
         super().__init__(started_at, max_drive_s=max_drive_s,
                          initial_presteer_pwm=initial_presteer_pwm)
         # User-selected neutral preparation budget for this experiment only.
@@ -60,7 +69,7 @@ class ManeuverSequence(TurnMotion):
                 and adoption['control'].get('motor') == NEUTRAL
                 and adoption['control'].get('servo') == self.servo
                 and adoption['control'].get('command_acked', True) is True):
-            # Neutral presteer may wait within its original five-second budget.
+            # Neutral presteer may wait within its original preparation budget.
             # Hold only an already adopted servo, not the unseen wall target.
             # All scan/control validation has run before this measurement error.
             # Fresh unique geometry must be observed again before either slew
@@ -100,6 +109,7 @@ class ManeuverSequence(TurnMotion):
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
                       presteer_max_s=self.max_presteer_s,
+                      left_turn_servo_cap=self.initial_presteer_pwm,
                       object_semantic_verified=False, passed_cones=None,
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,
@@ -131,7 +141,7 @@ class ManeuverSequence(TurnMotion):
         reference = self.orbit_reference_range_m
         correction = (ORBIT_BEARING_GAIN*(target['bearing_left_rad']-ORBIT_BEARING_RAD)
                       + ORBIT_RANGE_GAIN*(target['range_m']-reference)/reference)
-        bias = self.initial_presteer_pwm if self.initial_presteer_pwm is not None else 1720
+        bias = self.initial_presteer_pwm
         return max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
 
     def _target(self, candidate, publication_dt):
@@ -157,7 +167,11 @@ class ManeuverSequence(TurnMotion):
                 if error > 0:
                     damped = max((1-MAX_TREND_RELEASE_FRACTION)*error, min(error, release))
         self.last_error = error
-        target = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
+        # The chosen initial candidate also caps the wall-following left turn.
+        # A smaller preparation command must not jump back toward 1720 as soon
+        # as forward drive begins. Actual compact-target feedback has its own
+        # 1720 bound after handover; this cap is not a fixed driving PWM.
+        target = max(NEUTRAL, min(self.initial_presteer_pwm, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
         self._last_actual_left_target = target if target > NEUTRAL else None
         return target
 

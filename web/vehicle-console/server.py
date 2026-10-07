@@ -29,7 +29,8 @@ from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STAB
 from coast_motion import CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
-from maneuver_sequence import ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S
+from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
+                               DEFAULT_INITIAL_PWM, validate_maneuver_initial_pwm)
 
 ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
@@ -328,7 +329,9 @@ class Console:
             raise ValueError('invalid_maneuver_trial_mode')
         compact_target_trial = trial_mode == 'turn-cone'
         if compact_target_trial and initial_presteer_pwm is None:
-            initial_presteer_pwm = 1720
+            initial_presteer_pwm = DEFAULT_INITIAL_PWM
+        if compact_target_trial:
+            validate_maneuver_initial_pwm(initial_presteer_pwm)
         now = time.monotonic()
         owned = (self.owner is not None or self.auto_session is not None
                  or self.status.get('control', {}).get('armed'))
@@ -414,7 +417,7 @@ class Console:
                 raise ValueError('turn_requires_fresh_neutral_lock')
             controller = ManeuverSequence if compact_target_trial else TurnMotion
             if compact_target_trial and initial_presteer_pwm is None:
-                initial_presteer_pwm = 1720
+                initial_presteer_pwm = DEFAULT_INITIAL_PWM
             motion = controller(now, max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm)
             scan = {**self.scan, 'received_at': self.scan_at} if compact_target_trial else self.scan
             decision = motion.update(scan, ages['lidar'], now, control)
@@ -437,10 +440,13 @@ class Console:
             raise ValueError('turn_trial_requires_operator_placement_confirmation')
         if self.stop.is_set() or self.owner is not None or self.auto_session is not None:
             raise ValueError('already_armed_or_shutting_down')
-        initial_presteer_pwm = data.get('initial_presteer_pwm', 1720 if compact_target_trial else None)
-        if 'initial_presteer_pwm' in data and initial_presteer_pwm is None:
-            raise ValueError('invalid_initial_presteer_pwm')
-        validate_initial_presteer_pwm(initial_presteer_pwm)
+        initial_presteer_pwm = data.get('initial_presteer_pwm', DEFAULT_INITIAL_PWM if compact_target_trial else None)
+        if compact_target_trial:
+            validate_maneuver_initial_pwm(initial_presteer_pwm)
+        else:
+            if 'initial_presteer_pwm' in data and initial_presteer_pwm is None:
+                raise ValueError('invalid_initial_presteer_pwm')
+            validate_initial_presteer_pwm(initial_presteer_pwm)
         now = time.monotonic()
         limit = data.get('max_drive_s', MAX_DRIVE_S)
         trial_goal = None
@@ -1354,8 +1360,10 @@ def serve(args):
                                 if len(initial) != 1 or not initial[0].isascii() or not initial[0].isdigit():
                                     raise ValueError('invalid_initial_presteer_pwm')
                                 initial_pwm = validate_initial_presteer_pwm(int(initial[0]))
-                        except ValueError:
-                            self.reply(400, {'error': 'invalid_initial_presteer_pwm'})
+                                if mode is not None and mode[0] == 'turn-cone':
+                                    initial_pwm = validate_maneuver_initial_pwm(initial_pwm)
+                        except ValueError as error:
+                            self.reply(400, {'error': str(error)})
                             return
                         self.reply(200, app.state(initial_presteer_pwm=initial_pwm,
                                                   trial_mode=mode[0] if mode is not None else 'turn-left'))

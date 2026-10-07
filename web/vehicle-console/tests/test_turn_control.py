@@ -151,7 +151,7 @@ class TurnControlTests(unittest.TestCase):
         for op in ['turn_left_start', 'turn_cone_start']:
             for value in [None, True, False, 1649, 1721, 1500, 1700., float('nan'), float('inf'), '1700', [], {}]:
                 with self.subTest(op=op, value=value), patch.object(self.server.time, 'monotonic', return_value=0.):
-                    with self.assertRaisesRegex(ValueError, 'invalid_initial_presteer_pwm'):
+                    with self.assertRaisesRegex(ValueError, 'invalid_(maneuver_)?initial_presteer_pwm'):
                         self.console.autonomy_command({'op': op, 'boot': self.console.boot,
                             'epoch': 0, 'tick': 1000, 'placement_confirmed': True, 'initial_presteer_pwm': value})
         self.assertEqual(self.outputs, [])
@@ -180,7 +180,11 @@ class TurnControlTests(unittest.TestCase):
                 handler.do_GET()
                 self.assertEqual(responses[-1][0], expected)
             for suffix in ['trial_mode=turn-cone', 'trial_mode=invalid',
-                           'trial_mode=turn-cone&trial_mode=turn-left']:
+                           'trial_mode=turn-cone&trial_mode=turn-left',
+                           'trial_mode=turn-cone&initial_presteer_pwm=1650',
+                           'trial_mode=turn-cone&initial_presteer_pwm=1689',
+                           'trial_mode=turn-cone&initial_presteer_pwm=1700',
+                           'trial_mode=turn-cone&initial_presteer_pwm=1720']:
                 handler = object.__new__(captured['handler'])
                 handler.path = '/api/state?' + suffix
                 handler.headers = {'X-Control-Token': self.console.token}
@@ -210,15 +214,24 @@ class TurnControlTests(unittest.TestCase):
         status, body = responses[len(cases)]
         self.assertEqual(status, 200)
         self.assertEqual(body['autonomy']['trial_mode'], 'turn-cone')
-        self.assertEqual(body['autonomy']['turn_preview']['initial_presteer_pwm'], 1720)
+        self.assertEqual(body['autonomy']['turn_preview']['initial_presteer_pwm'], 1690)
         self.assertEqual(body['autonomy']['turn_presteer_max_s'], 8.)
         self.assertEqual(body['autonomy']['turn_drive_max_s'], 10.)
         self.assertEqual(body['autonomy']['coast_max_s'], 5.)
         self.assertEqual(body['autonomy']['control_loop_limit_s'], .12)
         self.assertEqual(body['autonomy']['turn_preview']['trial_scope'], 'first_lidar_compact_target_orbit_entry')
-        for status, body in responses[len(cases)+1:]:
+        for status, body in responses[len(cases)+1:len(cases)+3]:
             self.assertEqual(status, 400)
             self.assertEqual(body, {'error': 'invalid_maneuver_trial_mode'})
+        for (status, body), value in zip(responses[len(cases)+3:], [1650, 1689, 1700, 1720]):
+            if value < 1690:
+                self.assertEqual(status, 400)
+                self.assertEqual(body, {'error': 'invalid_maneuver_initial_presteer_pwm'})
+            else:
+                self.assertEqual(status, 200)
+                preview = body['autonomy']['turn_preview']
+                self.assertEqual((preview['initial_presteer_pwm'], preview['steering_target']), (value, value))
+                self.assertEqual((preview['motor'], preview['servo']), (1500, 1500))
         self.assertEqual(self.outputs, [])
         self.assertIsNone(self.console.auto_session)
         self.assertIsNone(self.console.owner)
@@ -311,7 +324,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertTrue(session['report']['compact_target']['confirmed'])
         return drive_since, session
 
-    def test_compact_trial_preview_default_1720_and_placement_admission_keep_neutral(self):
+    def test_compact_trial_preview_default_1690_and_placement_admission_keep_neutral(self):
         settings, control = dict(self.console.settings), dict(self.console.status['control'])
         with patch.object(self.server.time, 'monotonic', return_value=0.):
             state = self.console.state(trial_mode='turn-cone')
@@ -320,12 +333,12 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(state['autonomy']['turn_presteer_max_s'], 8.)
         self.assertEqual(state['autonomy']['turn_drive_max_s'], 10.)
         self.assertEqual(state['autonomy']['coast_max_s'], 5.)
-        self.assertEqual(preview['initial_presteer_pwm'], 1720)
+        self.assertEqual(preview['initial_presteer_pwm'], 1690)
         self.assertEqual(preview['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         self.assertEqual(preview['semantic_class'], 'unknown')
         self.assertFalse(preview['completed'])
         self.assertFalse(preview['competition_supported'])
-        self.assertEqual((preview['motor'], preview['servo'], preview['steering_target']), (1500, 1500, 1720))
+        self.assertEqual((preview['motor'], preview['servo'], preview['steering_target']), (1500, 1500, 1690))
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.outputs, [])
         self.assertEqual(self.console.settings, settings)
@@ -345,7 +358,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertTrue(session['turn_trial'])
         self.assertTrue(session['maneuver_sequence'])
         self.assertIsInstance(session['turn_motion'], self.server.ManeuverSequence)
-        self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1720)
+        self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1690)
         self.assertEqual(session['turn_motion'].max_presteer_s, 8.)
         self.assertEqual(session['deadline'], 18.)
         self.assertEqual(session['report']['duration_ms'], 18000)
@@ -360,11 +373,11 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(self.console.control_mode, 'auto_turn_cone_trial')
         self.assertEqual([(row['op'], row['motor']) for row in self.outputs], [('arm', 1500)])
         with patch.object(self.server.time, 'monotonic', return_value=0.):
-            owned = self.console.state(initial_presteer_pwm=1650, trial_mode='turn-cone')
+            owned = self.console.state(initial_presteer_pwm=1700, trial_mode='turn-cone')
         self.assertFalse(owned['autonomy']['turn_ready'])
         self.assertEqual(owned['autonomy']['turn_rejection'], 'control_owned_or_unlocked')
         self.assertIs(self.console.auto_session, session)
-        self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1720)
+        self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1690)
         self.assertEqual(self.console.settings, settings)
         self.assertEqual(len(self.outputs), 1)
 
@@ -409,9 +422,9 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(self.outputs, stopped)
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
-    def test_compact_default_1720_requires_full_adoption_and_maturity_before_positive_motor(self):
+    def test_compact_explicit_1720_requires_full_adoption_and_maturity_before_positive_motor(self):
         self.adopt_servo = False
-        self.start_compact_trial()
+        self.start_compact_trial(initial_presteer_pwm=1720)
         session = self.console.auto_session
         self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1720)
         for index in range(1, 180):
@@ -449,6 +462,44 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1560, 1720))
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[:-1]))
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_compact_default_1690_matures_then_caps_left_drive_without_blocking_release(self):
+        drive_since = self.drive_compact_trial()
+        session = self.console.auto_session
+        first_positive = next(row for row in self.outputs if row['motor'] > 1500)
+        self.assertEqual((first_positive['motor'], first_positive['servo']), (1560, 1690))
+        decision = session['report']['turn']
+        self.assertEqual(decision['initial_presteer_pwm'], 1690)
+        self.assertGreaterEqual(decision['steering_settle_feedback_ticks'], 3)
+        self.assertGreaterEqual(decision['steering_settle_elapsed_s']+1e-9, 1.2)
+        first_adopted = next(row['now'] for row in self.outputs if row['servo'] == 1690)
+        self.assertGreaterEqual(drive_since-first_adopted+1e-9, 1.2)
+        for index in range(1, 9):
+            self.observe(round(drive_since+index*.1, 6),
+                         self.scan(self.console.scan['seq']+1, heading=60+index*5))
+            self.assertIs(self.console.auto_session, session)
+            self.assertLessEqual(session['report']['turn']['steering_target'], 1690)
+            self.assertLessEqual(self.outputs[-1]['servo'], 1690)
+        for index in range(1, 21):
+            self.observe(round(drive_since+.8+index*.1, 6),
+                         self.scan(self.console.scan['seq']+1, heading=100-index*4.5))
+            self.assertIs(self.console.auto_session, session)
+        self.assertLess(session['report']['servo'], 1690)
+        self.assertEqual(self.outputs[-1]['motor'], 1560)
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_newmode_initial_range_rejects_1650_to_1689_while_old_left_accepts_1650(self):
+        for value in [1650, 1689]:
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'invalid_maneuver_initial_presteer_pwm'):
+                self.start_compact_trial(initial_presteer_pwm=value)
+        self.assertEqual(self.outputs, [])
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            old = self.console.state(initial_presteer_pwm=1650)
+        self.assertTrue(old['autonomy']['turn_ready'])
+        self.assertEqual(old['autonomy']['turn_preview']['steering_target'], 1650)
+        self.start(initial_presteer_pwm=1650)
+        self.assertEqual(self.console.auto_session['turn_motion'].initial_presteer_pwm, 1650)
+        self.assertEqual(self.outputs, [{'op': 'arm', 'motor': 1500, 'servo': 1500, 'now': 0.}])
 
     def test_compact_neutral_quality_wait_has_fixed_eight_seconds_and_old_left_keeps_five(self):
         with patch.object(self.server.time, 'monotonic', return_value=0.):
@@ -1434,7 +1485,7 @@ class TurnCliTests(unittest.TestCase):
             'autonomy': {'trial_mode': 'turn-cone', 'turn_ready': True, 'turn_rejection': None,
                 'turn_presteer_max_s': 8., 'turn_drive_max_s': 10., 'coast_max_s': 5.,
                 'control_loop_limit_s': .12, 'turn_preview': {
-                'initial_presteer_pwm': 1720, 'motor': 1500, 'servo': 1500, 'steering_target': 1720,
+                'initial_presteer_pwm': 1690, 'motor': 1500, 'servo': 1500, 'steering_target': 1690,
                 'trial_scope': 'first_lidar_compact_target_orbit_entry', 'compact_target': None}}}
         requests, output = [], io.StringIO()
         class Opener:
@@ -1449,7 +1500,7 @@ class TurnCliTests(unittest.TestCase):
                  patch.object(sys, 'stdout', output):
                 cli.main()
         self.assertEqual([request.get_method() for request in requests], ['GET'])
-        self.assertTrue(requests[0].full_url.endswith('/api/state?trial_mode=turn-cone&initial_presteer_pwm=1720'))
+        self.assertTrue(requests[0].full_url.endswith('/api/state?trial_mode=turn-cone&initial_presteer_pwm=1690'))
         self.assertIsNone(requests[0].data)
         report = json.loads(output.getvalue())
         self.assertFalse(report['motion_requested'])
@@ -1457,7 +1508,9 @@ class TurnCliTests(unittest.TestCase):
         self.assertFalse(report['competition_supported'])
         self.assertEqual(report['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         self.assertEqual(report['semantic_class'], 'unknown')
-        self.assertEqual(report['initial_presteer_pwm'], 1720)
+        self.assertEqual(report['initial_presteer_pwm'], 1690)
+        self.assertEqual(report['initial_presteer_scope'],
+                         'neutral_presteer_and_left_drive_cap_then_relative_target_feedback')
         self.assertEqual((report['turn_presteer_max_s'], report['turn_drive_max_s'], report['coast_max_s']),
                          (8., 10., 5.))
         self.assertEqual(report['control_loop_limit_s'], .12)
@@ -1490,7 +1543,7 @@ class TurnCliTests(unittest.TestCase):
                 with patch.object(sys, 'argv', argv+['--placement-confirmed']), self.assertRaises(SystemExit) as finished:
                     cli.main()
                 self.assertEqual(finished.exception.code, 1)
-                self.assertEqual(trial.call_args.args[1:], (state, 10., True, 1720))
+                self.assertEqual(trial.call_args.args[1:], (state, 10., True, 1690))
         self.assertEqual([request.get_method() for request in requests], ['GET', 'GET', 'GET'])
 
     def test_compact_cli_one_start_payload_and_fresh_neutral_report_keep_unknown_scope(self):
@@ -1516,7 +1569,7 @@ class TurnCliTests(unittest.TestCase):
             result = cli.first_compact_target_trial(request, state, 10, True)
         self.assertEqual([call['op'] for call in calls], ['turn_cone_start', 'cancel'])
         self.assertEqual(reads, [0, 1])
-        self.assertEqual(calls[0]['initial_presteer_pwm'], 1720)
+        self.assertEqual(calls[0]['initial_presteer_pwm'], 1690)
         self.assertEqual(calls[0]['max_drive_s'], 10)
         self.assertTrue(calls[0]['placement_confirmed'])
         self.assertNotIn('pwm', calls[0])
@@ -1578,7 +1631,8 @@ class TurnCliTests(unittest.TestCase):
     def test_cli_invalid_initial_parameter_fails_before_state_request(self):
         cli = self.module()
         for command, value in [('turn-left', '1649'), ('turn-left', '1721'), ('turn-left', '1700.0'),
-                               ('turn-left', 'NaN'), ('turn-left', 'true'), ('straight', '1700')]:
+                               ('turn-left', 'NaN'), ('turn-left', 'true'), ('straight', '1700'),
+                               ('turn-cone', '1650'), ('turn-cone', '1689')]:
             with self.subTest(command=command, value=value),\
                  patch.object(sys, 'argv', ['autonomy-control.py', command, '--initial-presteer-pwm', value]),\
                  patch.object(cli.urllib.request, 'build_opener') as opener,\

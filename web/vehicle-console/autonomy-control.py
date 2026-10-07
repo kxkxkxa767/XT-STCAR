@@ -34,7 +34,11 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
             if trial_goal_id is not None:
                 start['goal_id'] = trial_goal_id
             if initial_presteer_pwm is not None:
-                start['initial_presteer_pwm'] = validate_initial_presteer_pwm(initial_presteer_pwm)
+                if compact_target_trial:
+                    from maneuver_sequence import validate_maneuver_initial_pwm
+                    start['initial_presteer_pwm'] = validate_maneuver_initial_pwm(initial_presteer_pwm)
+                else:
+                    start['initial_presteer_pwm'] = validate_initial_presteer_pwm(initial_presteer_pwm)
         elif not formal_goal:
             start['duration_ms'] = duration_ms
         run = request('/api/autonomy', start)
@@ -112,7 +116,9 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
             competition_supported=False, compact_target=result.get('compact_target'),
             handover_observed=bool(result.get('handover_observed')),
             orbit_entry_elapsed_s=result.get('orbit_entry_elapsed_s', 0.),
-            initial_presteer_pwm=initial_presteer_pwm, turn_presteer_max_s=presteer_max_s,
+            initial_presteer_pwm=initial_presteer_pwm,
+            initial_presteer_scope='neutral_presteer_and_left_drive_cap_then_relative_target_feedback',
+            turn_presteer_max_s=presteer_max_s,
             turn_drive_max_s=max_seconds, coast_max_s=COAST_MAX_S,
             control_loop_limit_s=result.get('control_loop_limit_s'), actual_gap_s=result.get('actual_gap_s'),
             max_actual_gap_s=result.get('max_actual_gap_s'), last_lock_wait_s=result.get('last_lock_wait_s'),
@@ -122,8 +128,10 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
     return report
 
 
-def first_compact_target_trial(request, state, max_seconds, placement_confirmed, initial_presteer_pwm=1720):
+def first_compact_target_trial(request, state, max_seconds, placement_confirmed, initial_presteer_pwm=1690):
     """One continuous left turn and first lidar target orbit-entry experiment."""
+    from maneuver_sequence import validate_maneuver_initial_pwm
+    validate_maneuver_initial_pwm(initial_presteer_pwm)
     return left_turn_trial(request, state, max_seconds, placement_confirmed,
                            initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=True)
 
@@ -181,7 +189,7 @@ def main():
     parser.add_argument('--execute', action='store_true', help='explicit motion request; motion commands otherwise only query state')
     parser.add_argument('--placement-confirmed', action='store_true', help='operator confirms stopped mid-segment placement for this one left trial')
     parser.add_argument('--initial-presteer-pwm', type=initial_presteer_argument,
-        help='turn-left/turn-cone: initial neutral-motor presteer PWM 1650..1720; turn-cone defaults to 1720')
+        help='neutral-motor presteer: turn-left 1650..1720; turn-cone 1690..1720, default 1690')
     parser.add_argument('--goal-file', type=Path, help='Local target-only JSON for explicit trial-goal-register')
     parser.add_argument('--trial-goal-id', help='Use a registered trial intent; arbitrary point execution requires real pose')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
@@ -190,7 +198,14 @@ def main():
         parser.error('--initial-presteer-pwm is only valid for turn-left or turn-cone')
     if args.command == 'turn-cone' and args.trial_goal_id is not None:
         parser.error('turn-cone is a direct first-target placement trial and accepts no --trial-goal-id')
-    initial_presteer_pwm = 1720 if args.command == 'turn-cone' and args.initial_presteer_pwm is None else args.initial_presteer_pwm
+    initial_presteer_pwm = args.initial_presteer_pwm
+    if args.command == 'turn-cone':
+        from maneuver_sequence import DEFAULT_INITIAL_PWM, validate_maneuver_initial_pwm
+        initial_presteer_pwm = DEFAULT_INITIAL_PWM if initial_presteer_pwm is None else initial_presteer_pwm
+        try:
+            validate_maneuver_initial_pwm(initial_presteer_pwm)
+        except ValueError:
+            parser.error('turn-cone initial presteer PWM must be an integer in 1690..1720')
     access = json.loads(args.access_file.read_text())
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -254,6 +269,7 @@ def main():
                     initial_presteer_scope='presteer_only_motor_neutral_then_live_geometry')
             if args.command == 'turn-cone':
                 output.update(trial_mode='turn-cone', trial_scope='first_lidar_compact_target_orbit_entry',
+                    initial_presteer_scope='neutral_presteer_and_left_drive_cap_then_relative_target_feedback',
                     semantic_class='unknown', competition_supported=False, completed=False,
                     turn_presteer_max_s=state['autonomy'].get('turn_presteer_max_s'),
                     turn_drive_max_s=state['autonomy'].get('turn_drive_max_s'),

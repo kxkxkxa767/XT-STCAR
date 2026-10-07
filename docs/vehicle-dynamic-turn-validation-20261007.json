@@ -1931,5 +1931,130 @@
       "model_config_credentials_preserved": true
     },
     "actual_live80ms_cause_not_claimed_resolved": true
+  },
+  "turn11_actual": {
+    "source_commit": "683e0243ff79a3fcb60d782e048b993a6aabcf6e",
+    "operator_authorized": "开始吧",
+    "authorization_consumed": true,
+    "operator_observation": {
+      "statement": "左转的时候碰到左侧墙体；已停住，但碰到了挡板；明显向左转但未到绕桩入口",
+      "physical_collision": true,
+      "physical_stopped": true,
+      "physical_status_source": "operator_confirmation",
+      "completed": false,
+      "latest_instruction": "车放回实验室，等回来再上传，先编译+验证在Mac"
+    },
+    "conclusion": "collision failure; real left motion but no orbit entry, not a completed left turn",
+    "result": {
+      "run_id": "vteSPzBoaKT6WhQPbMBVHvrj",
+      "presteer_ticks": 129,
+      "motion_ticks": 29,
+      "coast_ticks": 0,
+      "steering_changes": 28,
+      "reason": "probe_obstacle_close_body",
+      "completed": false,
+      "handover_observed": false,
+      "last_requested_servo": 1670,
+      "drive_elapsed_s": 1.1332719980000547,
+      "first_saved1690_is_not_initial1690_trial": true,
+      "initial_actual_adopted1720_observed": true,
+      "motor1560_actual_adopted_observed": true,
+      "startup_settle_feedback_ticks": 14,
+      "startup_settle_s": 1.315014,
+      "last_success_scan_seq": 3265,
+      "trigger_body_scan_seq": 3266,
+      "trigger_raw_saved": true,
+      "body_distance_at_trigger_m": 0.05794975484693036,
+      "body_stop_distance_m": 0.08,
+      "neutral_after_scan_body_minima_m": [
+        0.018447,
+        0.0,
+        0.016999,
+        0.012,
+        0.059988,
+        0.096186,
+        0.136149
+      ],
+      "postneutral_obstacle_can_continue_approaching": true,
+      "postneutral_nearest_returns_not_proven_same_entity": true,
+      "exact_physical_contact_location_or_time_not_known": true,
+      "timing": {
+        "control_loop_limit_s": 0.12,
+        "actual_gap_s": 0.032552001000112796,
+        "max_actual_gap_s": 0.07930671399981293,
+        "last_lock_wait_s": 1.212699999086908e-05,
+        "max_lock_wait_s": 0.002562612000019726,
+        "last_tick_compute_s": 0.005784546000086266,
+        "max_tick_compute_s": 0.05398162499977843
+      },
+      "independent_fresh_final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 160,
+        "servo": 1500,
+        "tick": 327593
+      },
+      "healthy": true,
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-11/"
+    },
+    "additional_stop_after_collision": {
+      "cli_requested_stop": true,
+      "fresh_bridge_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 161,
+        "servo": 1500,
+        "tick": 609163
+      },
+      "fresh_feedback_count": 6,
+      "healthy_locked_neutral": true
+    },
+    "independent_analysis": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-11/independent-analysis.json"
+  },
+  "candidate1690_mac_preparation": {
+    "latest_scope": "Mac compile and validation only; vehicle upload and testing deferred until operator returns",
+    "reason_for_choice": "1720 actually turned tightly but collided with inside left wall; select lower allowed1690 as next candidate, not calibrated optimal or guaranteed safe",
+    "default_initial_pwm": 1690,
+    "new_mode_allowed_initial_range": [
+      1690,
+      1720
+    ],
+    "left_turn_drive_pwm_cap": "same selected initial; live target may release lower",
+    "relative_orbit_bias": "same selected initial, dynamic feedback can slew up to1720 only after reliable real target handover",
+    "not_fixed_pwm_or_track_specialization": true,
+    "old_turn_left_initial_range_unchanged": [
+      1650,
+      1720
+    ],
+    "explicit1700and1720_compatible": true,
+    "presteer_s": 8,
+    "drive_s": 10,
+    "coast_s": 5,
+    "new_loop_limit_s": 0.12,
+    "current_body_guard_m": 0.08,
+    "mac_python_passed": 347,
+    "sequence_mac_passed": 28,
+    "service_cli_mac_passed": 65,
+    "independent_coast_mac_passed": 21,
+    "python_compile_files": 9,
+    "rust_source_unchanged_and_matching_bridge_reused": true,
+    "new_target_tests_run": false,
+    "vehicle_deployed": false,
+    "new_motor_trial": false,
+    "physical_acceptance": false,
+    "vehicle_last_known_source": "683e0243ff79a3fcb60d782e048b993a6aabcf6e",
+    "vehicle_last_known_initial_pwm": 1720,
+    "source_sha256": {
+      "web/vehicle-console/server.py": "ce3e3c7c5b03bb537cbfa227c02daed1d6fc783176b0942ec5951dbc4b9e6605",
+      "web/vehicle-console/autonomy-control.py": "d3579a1a11e02b2075762ab732553a4023d1c29b0152808089dab8b15e9ecce5",
+      "web/vehicle-console/maneuver_sequence.py": "6128ed67716f74f31a739ac1eda8d9d9723a0056c8a731276eb22d5cdd79ea3b"
+    },
+    "software_counterfactual_note": "recorded original raw scans produce lower early targets then same release; no1690 physical path/stop/collision certificate",
+    "counterfactual_report": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-11/candidate1690-target-counterfactual.json"
   }
 }

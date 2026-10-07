@@ -6,7 +6,8 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from maneuver_sequence import ManeuverSequence, PRESTEER_MAX_S
+from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S, DEFAULT_INITIAL_PWM,
+                               validate_maneuver_initial_pwm)
 from turn_motion import TurnMotion
 
 
@@ -258,7 +259,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(strong, 1688)
         self.assertTrue(centered < lower < strong <= saturated)
         self.assertEqual(centered, 1500)
-        self.assertEqual(saturated, 1720)
+        self.assertEqual(saturated, 1700)
 
     def test_trend_can_release_only_twenty_percent_of_current_error(self):
         h = Harness()
@@ -361,18 +362,18 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(result['phase'], 'locked')
         self.assertEqual(result['reason'], 'left_turn_outer_wall_ambiguous')
 
-    def test_default_1720_is_fully_adopted_before_any_forward_output(self):
-        h = Harness(initial=1720)
+    def test_default_1690_is_fully_adopted_before_any_forward_output(self):
+        h = Harness(initial=1690)
         h.motion = ManeuverSequence(0.)
-        self.assertEqual(h.motion.initial_presteer_pwm, 1720)
+        self.assertEqual(h.motion.initial_presteer_pwm, DEFAULT_INITIAL_PWM)
         earlier = []
         while True:
             result = h.step()
             if result['phase'] == 'drive': break
             earlier.append(result)
-        self.assertTrue(any(v['servo'] == 1700 for v in earlier))
+        self.assertTrue(any(v['servo'] == 1680 for v in earlier))
         self.assertTrue(all(v['motor'] == 1500 for v in earlier))
-        self.assertEqual(result['servo'], 1720)
+        self.assertEqual(result['servo'], 1690)
         self.assertEqual(result['motor'], 1560)
         self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
         self.assertGreaterEqual(result['steering_settle_elapsed_s']+1e-9, 1.2)
@@ -487,6 +488,55 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(motion.max_presteer_s, 5.)
         self.assertEqual(result['phase'], 'locked')
         self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
+
+    def test_new_initial_candidate_range_is_strict_and_old_turn_range_is_preserved(self):
+        for value in range(1690, 1721):
+            self.assertEqual(validate_maneuver_initial_pwm(value), value)
+            self.assertEqual(ManeuverSequence(0., initial_presteer_pwm=value).initial_presteer_pwm, value)
+        for value in [None, True, False, 1690., '1690', 1689, 1650, 1721, float('nan')]:
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, 'invalid_maneuver_initial_presteer_pwm'):
+                    validate_maneuver_initial_pwm(value)
+                with self.assertRaisesRegex(ValueError, 'invalid_maneuver_initial_presteer_pwm'):
+                    ManeuverSequence(0., initial_presteer_pwm=value)
+        self.assertEqual(TurnMotion(0., initial_presteer_pwm=1650).initial_presteer_pwm, 1650)
+
+    def test_selected_candidate_caps_left_drive_and_current_error_still_releases(self):
+        for selected in [1690, 1700, 1720]:
+            with self.subTest(selected=selected):
+                h = Harness(initial=selected)
+                h.drive()
+                targets = []
+                for heading in [60, 50, 40, 30, 20, 10, 0]:
+                    h.seq += 1
+                    h.now = h.seq/10
+                    value = scan(h.seq, h.now)
+                    value['corridor_candidates'] = [corridor(heading), corridor(heading-180)]
+                    control = {'armed': True, 'motor': h.motor, 'servo': h.servo,
+                               'seq': h.seq, 'tick': h.seq*100}
+                    result = h.motion.update(value, 0., h.now, control)
+                    h.servo, h.motor = result['servo'], result['motor']
+                    targets.append(result['steering_target'])
+                    self.assertEqual(result['phase'], 'drive')
+                    self.assertTrue(1500 <= result['servo'] <= selected)
+                    self.assertTrue(1500 <= result['steering_target'] <= selected)
+                    self.assertEqual(result['left_turn_servo_cap'], selected)
+                self.assertLess(targets[-1], targets[0])
+                self.assertEqual(targets[-1], 1500)
+
+    def test_confirmed_orbit_feedback_can_exceed_left_turn_candidate_cap(self):
+        h = Harness(initial=1690)
+        h.drive()
+        h.observer.factory = lambda value: target(value, bearing=90.)
+        first = h.step()
+        self.assertEqual(first['turn_stage'], 'orbit_entry')
+        self.assertEqual(first['steering_target'], 1690)
+        h.observer.factory = lambda value: target(value, bearing=120.)
+        second = h.step()
+        self.assertEqual(second['steering_target'], 1720)
+        self.assertGreater(second['servo'], 1690)
+        self.assertLessEqual(second['servo']-first['servo'], 10)
+        self.assertTrue(second['handover_observed'])
 
 
 if __name__ == '__main__':
