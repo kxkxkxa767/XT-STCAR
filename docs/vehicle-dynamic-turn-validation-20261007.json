@@ -86,7 +86,7 @@
   "latest_user_constraint": "competition boards are flexible; left wall endpoints must remain measured live, angle differences alone must not imply separate walls; use actual pointcloud continuity and local smoothness",
   "soft_board_fix": {
     "implemented": true,
-    "vehicle_deployed": false,
+    "vehicle_deployed": true,
     "production_sha256": "d7129d63aa78220f644ce15de80b1328675d27355a0de8ee65e5512b028880af",
     "association": "current finite overlap across frames; endpoints replaced by every accepted fresh scan",
     "same_surface": "actual 360-ray continuity and six-point local PCA tangent agreement; bounded current line residual and shared returns; complete-link groups",
@@ -168,6 +168,93 @@
     "rust_bridge_unchanged_sha256": "7f13145b4c9aeb4d3561580442d18fd94c75707f3a4177964093076eae88c0cd",
     "new_motion_requests": 0,
     "physical_acceptance": false,
-    "next_step": "matched locked deployment, then wait for a new explicit trial instruction"
+    "next_step": "new explicit supervised left trial instruction; protective exit never automatically rearms; cone orbit execution remains disconnected",
+    "deployment": {
+      "source_commit": "553b7e60dc69f27962a42b819804906a52028b8a",
+      "archive_sha256": "62deea0717ee42f3b133ed470b85c3353daa9dd11b7ff6f9ad8500e52ffb714b",
+      "backup": "/home/bianbu/xt-stcar-console/backup-soft-wall-20261007-110221",
+      "active_directory": "/home/bianbu/xt-stcar-console/20260917",
+      "target_python_compile_passed": 7,
+      "all_12_installed_hashes_match": true,
+      "installed_sha256": {
+        "app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+        "autonomy-control.py": "afb98cf0ef6908298ee9a2f5a0b85ac5d06b5a8984142d226c4e5d515c3d318c",
+        "autonomy_live.py": "da2ecc9bc360153bb75a2a493347a658407686e5cccfa064bd45d800d7117a86",
+        "coast_motion.py": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257",
+        "index.html": "f4c71739afad72d3d0a17bafc8b286b412ca4289ab924a77a0fc516579fcf43f",
+        "server.py": "b4e8334b5871a9f532af974b3e748b867676c610903930fba60473b853eda905",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "d7129d63aa78220f644ce15de80b1328675d27355a0de8ee65e5512b028880af",
+        "vehicle-bridge": "7f13145b4c9aeb4d3561580442d18fd94c75707f3a4177964093076eae88c0cd",
+        "start-console.py": "752449080665c0cf7c527c518657666c788b30ff9f4e30ebe07724ca7c4122ab"
+      },
+      "runtime_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "post_install_fresh_feedback_count": 10,
+      "independent_fresh_feedback_count": 10,
+      "independent_first_control_tick": 31562,
+      "independent_last_feedback": {
+        "boot": "a5SaLtgB0384EwM6HBAT7Q",
+        "healthy": true,
+        "owner": null,
+        "active": null,
+        "mode": "locked",
+        "control": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "locked",
+          "seq": 0,
+          "servo": 1500,
+          "tick": 33559
+        },
+        "settings": {
+          "forward": 1550,
+          "reverse": 1450,
+          "left": 1650,
+          "right": 1350
+        },
+        "ages": {
+          "camera": 0.10999478600024304,
+          "lidar": 0.022602762000133225,
+          "control": 0.0065877080000973365
+        },
+        "lidar_seq": 334,
+        "lidar_at_ms": 33405,
+        "lidar_age_s": 0.04621158700001615,
+        "turn_ready": true,
+        "turn_rejection": null
+      },
+      "independent_first_lidar_seq": 314,
+      "startup_check_only": {
+        "boot": "a5SaLtgB0384EwM6HBAT7Q",
+        "healthy": true,
+        "armed": false
+      },
+      "turn_readonly_preview_ready": true,
+      "serial_owners": {
+        "/dev/car": {
+          "pid": 18151,
+          "role": "control",
+          "matched_active_bridge": true
+        },
+        "/dev/laser": {
+          "pid": 18155,
+          "role": "lidar",
+          "matched_active_bridge": true
+        }
+      },
+      "preserved_model_configs_verified": true,
+      "original_launch_command_preserved": true,
+      "rollback": null,
+      "arm_or_drive_requests": 0,
+      "prior_successful_straight_backup_preserved": true,
+      "physical_standstill_verified": false
+    }
   }
 }
