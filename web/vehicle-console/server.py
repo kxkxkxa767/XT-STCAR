@@ -395,6 +395,7 @@ class Console:
                 'trial_mode': trial_mode,
                 'trial_scope': COMPACT_TARGET_TRIAL_SCOPE if compact_target_trial else 'bounded_left_turn_trial',
                 'turn_drive_max_s': MAX_DRIVE_S,
+                'left_turn_servo_cap': SERVO_MAX,
                 'turn_presteer_max_s': MANEUVER_PRESTEER_MAX_S if compact_target_trial else MAX_PRESTEER_S,
                 'turn_steering_allowance_s': STEERING_ALLOWANCE_S,
                 'turn_requires_operator_placement_confirmation': True,
@@ -488,6 +489,7 @@ class Console:
             'rear_launch_active': False, 'rear_launch_max_s': 0}
         if compact_target_trial:
             report.update(endpoint='first_compact_target_orbit_entry_trial',
+                left_turn_servo_cap=SERVO_MAX,
                 trial_scope=COMPACT_TARGET_TRIAL_SCOPE, semantic_class='unknown', competition_supported=False,
                 completed=False, compact_target=decision.get('compact_target'),
                 handover_observed=bool(decision.get('handover_observed')),
@@ -1020,6 +1022,7 @@ class Console:
     def record_compact_target_decision(session, decision):
         if session.get('maneuver_sequence'):
             session['report'].update(trial_scope=COMPACT_TARGET_TRIAL_SCOPE, semantic_class='unknown',
+                left_turn_servo_cap=SERVO_MAX,
                 competition_supported=False, completed=False, compact_target=decision.get('compact_target'),
                 handover_observed=bool(decision.get('handover_observed')),
                 orbit_entry_elapsed_s=decision.get('orbit_entry_elapsed_s', 0.))

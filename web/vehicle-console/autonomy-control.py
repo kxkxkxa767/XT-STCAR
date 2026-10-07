@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.request
 from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S, CONTROL_AGE_LIMIT_S
-from turn_motion import parse_trial_goal, validate_initial_presteer_pwm, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S
+from turn_motion import parse_trial_goal, validate_initial_presteer_pwm, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, SERVO_MAX
 
 
 class ProbeInterrupted(RuntimeError):
@@ -117,7 +117,8 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
             handover_observed=bool(result.get('handover_observed')),
             orbit_entry_elapsed_s=result.get('orbit_entry_elapsed_s', 0.),
             initial_presteer_pwm=initial_presteer_pwm,
-            initial_presteer_scope='neutral_presteer_and_left_drive_cap_then_relative_target_feedback',
+            initial_presteer_scope='neutral_presteer_only_then_live_geometry_with_left_max_1720',
+            left_turn_servo_cap=SERVO_MAX,
             turn_presteer_max_s=presteer_max_s,
             turn_drive_max_s=max_seconds, coast_max_s=COAST_MAX_S,
             control_loop_limit_s=result.get('control_loop_limit_s'), actual_gap_s=result.get('actual_gap_s'),
@@ -269,7 +270,8 @@ def main():
                     initial_presteer_scope='presteer_only_motor_neutral_then_live_geometry')
             if args.command == 'turn-cone':
                 output.update(trial_mode='turn-cone', trial_scope='first_lidar_compact_target_orbit_entry',
-                    initial_presteer_scope='neutral_presteer_and_left_drive_cap_then_relative_target_feedback',
+                    initial_presteer_scope='neutral_presteer_only_then_live_geometry_with_left_max_1720',
+                    left_turn_servo_cap=state['autonomy'].get('left_turn_servo_cap'),
                     semantic_class='unknown', competition_supported=False, completed=False,
                     turn_presteer_max_s=state['autonomy'].get('turn_presteer_max_s'),
                     turn_drive_max_s=state['autonomy'].get('turn_drive_max_s'),

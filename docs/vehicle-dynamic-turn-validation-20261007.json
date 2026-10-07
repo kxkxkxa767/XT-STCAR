@@ -2140,5 +2140,28 @@
       "manifest_generic_initial_fields_are_legacy_turn_left_fields": true
     },
     "requires_new_motor_test_request": true
+  },
+  "initial1690_max1720_correction": {
+    "operator_correction": "左转的上限是1720",
+    "operator_latest_request": "不要验证直接上车测试",
+    "root_error_acknowledged": "1690 was incorrectly used as the overall left-drive cap; it is the initial presteer candidate only",
+    "initial_pwm": 1690,
+    "left_turn_max_pwm": 1720,
+    "slew": "at most10PWM/100ms, no jump to full steering",
+    "new_initial_range": [
+      1690,
+      1720
+    ],
+    "extra_validation_waived": true,
+    "full_mac_or_target_suite_for_this_revision_not_run": true,
+    "already_started_focus_before_waiver": {
+      "sequence_passed": 29,
+      "service_cli_passed": 65,
+      "last_two_assertions_added_not_rerun": true
+    },
+    "single12_authorized_by_latest_request": true,
+    "single12_executed": false,
+    "status": "corrected source frozen; pending locked upload then one authorized real trial",
+    "no_collision_resolution_claim": true
   }
 }

@@ -109,7 +109,7 @@ class ManeuverSequence(TurnMotion):
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
                       presteer_max_s=self.max_presteer_s,
-                      left_turn_servo_cap=self.initial_presteer_pwm,
+                      left_turn_servo_cap=SERVO_MAX,
                       object_semantic_verified=False, passed_cones=None,
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,
@@ -167,11 +167,10 @@ class ManeuverSequence(TurnMotion):
                 if error > 0:
                     damped = max((1-MAX_TREND_RELEASE_FRACTION)*error, min(error, release))
         self.last_error = error
-        # The chosen initial candidate also caps the wall-following left turn.
-        # A smaller preparation command must not jump back toward 1720 as soon
-        # as forward drive begins. Actual compact-target feedback has its own
-        # 1720 bound after handover; this cap is not a fixed driving PWM.
-        target = max(NEUTRAL, min(self.initial_presteer_pwm, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
+        # Initial PWM selects neutral preparation only. After adoption, the
+        # current measured turn error may request the full 1720 bound; _slew
+        # still changes the command by at most 10 per 100 ms.
+        target = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
         self._last_actual_left_target = target if target > NEUTRAL else None
         return target
 

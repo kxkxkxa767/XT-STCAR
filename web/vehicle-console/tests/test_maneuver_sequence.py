@@ -259,7 +259,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(strong, 1688)
         self.assertTrue(centered < lower < strong <= saturated)
         self.assertEqual(centered, 1500)
-        self.assertEqual(saturated, 1700)
+        self.assertEqual(saturated, 1720)
 
     def test_trend_can_release_only_twenty_percent_of_current_error(self):
         h = Harness()
@@ -501,7 +501,7 @@ class ManeuverSequenceTests(unittest.TestCase):
                     ManeuverSequence(0., initial_presteer_pwm=value)
         self.assertEqual(TurnMotion(0., initial_presteer_pwm=1650).initial_presteer_pwm, 1650)
 
-    def test_selected_candidate_caps_left_drive_and_current_error_still_releases(self):
+    def test_all_initial_candidates_keep_global_left_cap_and_error_still_releases(self):
         for selected in [1690, 1700, 1720]:
             with self.subTest(selected=selected):
                 h = Harness(initial=selected)
@@ -518,13 +518,13 @@ class ManeuverSequenceTests(unittest.TestCase):
                     h.servo, h.motor = result['servo'], result['motor']
                     targets.append(result['steering_target'])
                     self.assertEqual(result['phase'], 'drive')
-                    self.assertTrue(1500 <= result['servo'] <= selected)
-                    self.assertTrue(1500 <= result['steering_target'] <= selected)
-                    self.assertEqual(result['left_turn_servo_cap'], selected)
+                    self.assertTrue(1500 <= result['servo'] <= 1720)
+                    self.assertTrue(1500 <= result['steering_target'] <= 1720)
+                    self.assertEqual(result['left_turn_servo_cap'], 1720)
                 self.assertLess(targets[-1], targets[0])
                 self.assertEqual(targets[-1], 1500)
 
-    def test_confirmed_orbit_feedback_can_exceed_left_turn_candidate_cap(self):
+    def test_confirmed_orbit_feedback_uses_initial_bias_with_global_cap(self):
         h = Harness(initial=1690)
         h.drive()
         h.observer.factory = lambda value: target(value, bearing=90.)
@@ -537,6 +537,41 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertGreater(second['servo'], 1690)
         self.assertLessEqual(second['servo']-first['servo'], 10)
         self.assertTrue(second['handover_observed'])
+
+    def test_1690_preparation_matures_then_drive_can_gradually_request_1720(self):
+        motion = ManeuverSequence(0.)
+        servo, motor = 1500, 1500
+        earlier = []
+        seq = 0
+        while True:
+            seq += 1
+            value = scan(seq, seq/10)
+            value['corridor_candidates'] = [corridor(90), corridor(-90)]
+            control = {'armed': True, 'motor': motor, 'servo': servo,
+                       'seq': seq, 'tick': seq*100, 'command_acked': True}
+            result = motion.update(value, 0., seq/10, control)
+            servo, motor = result['servo'], result['motor']
+            if result['phase'] == 'drive': break
+            earlier.append(result)
+        self.assertTrue(all(v['motor'] == 1500 for v in earlier))
+        self.assertEqual(result['initial_presteer_pwm'], 1690)
+        self.assertEqual(result['servo'], 1690)
+        self.assertEqual(result['motor'], 1560)
+        self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
+        self.assertGreaterEqual(result['steering_settle_elapsed_s']+1e-9, 1.2)
+        previous_servo = servo
+        for _ in range(3):
+            seq += 1
+            value = scan(seq, seq/10)
+            value['corridor_candidates'] = [corridor(90), corridor(-90)]
+            control = {'armed': True, 'motor': motor, 'servo': servo,
+                       'seq': seq, 'tick': seq*100, 'command_acked': True}
+            result = motion.update(value, 0., seq/10, control)
+            self.assertEqual(result['steering_target'], 1720)
+            self.assertEqual(result['left_turn_servo_cap'], 1720)
+            self.assertLessEqual(result['servo']-previous_servo, 10)
+            previous_servo = servo = result['servo']
+        self.assertEqual(servo, 1720)
 
 
 if __name__ == '__main__':

@@ -231,6 +231,7 @@ class TurnControlTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 preview = body['autonomy']['turn_preview']
                 self.assertEqual((preview['initial_presteer_pwm'], preview['steering_target']), (value, value))
+                self.assertEqual(preview['left_turn_servo_cap'], 1720)
                 self.assertEqual((preview['motor'], preview['servo']), (1500, 1500))
         self.assertEqual(self.outputs, [])
         self.assertIsNone(self.console.auto_session)
@@ -334,6 +335,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(state['autonomy']['turn_drive_max_s'], 10.)
         self.assertEqual(state['autonomy']['coast_max_s'], 5.)
         self.assertEqual(preview['initial_presteer_pwm'], 1690)
+        self.assertEqual(preview['left_turn_servo_cap'], 1720)
         self.assertEqual(preview['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         self.assertEqual(preview['semantic_class'], 'unknown')
         self.assertFalse(preview['completed'])
@@ -463,29 +465,42 @@ class TurnControlTests(unittest.TestCase):
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[:-1]))
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
-    def test_compact_default_1690_matures_then_caps_left_drive_without_blocking_release(self):
+    def test_compact_initial_1690_matures_then_slews_up_to_1720_and_releases_from_geometry(self):
         drive_since = self.drive_compact_trial()
         session = self.console.auto_session
         first_positive = next(row for row in self.outputs if row['motor'] > 1500)
         self.assertEqual((first_positive['motor'], first_positive['servo']), (1560, 1690))
         decision = session['report']['turn']
         self.assertEqual(decision['initial_presteer_pwm'], 1690)
+        self.assertEqual(decision['left_turn_servo_cap'], 1720)
+        self.assertEqual(session['report']['left_turn_servo_cap'], 1720)
         self.assertGreaterEqual(decision['steering_settle_feedback_ticks'], 3)
         self.assertGreaterEqual(decision['steering_settle_elapsed_s']+1e-9, 1.2)
         first_adopted = next(row['now'] for row in self.outputs if row['servo'] == 1690)
         self.assertGreaterEqual(drive_since-first_adopted+1e-9, 1.2)
+        before = len(self.outputs)
+        previous_servo, last_change = first_positive['servo'], session['turn_motion'].last_change
         for index in range(1, 9):
             self.observe(round(drive_since+index*.1, 6),
                          self.scan(self.console.scan['seq']+1, heading=60+index*5))
             self.assertIs(self.console.auto_session, session)
-            self.assertLessEqual(session['report']['turn']['steering_target'], 1690)
-            self.assertLessEqual(self.outputs[-1]['servo'], 1690)
+            self.assertLessEqual(session['report']['turn']['steering_target'], 1720)
+            self.assertLessEqual(self.outputs[-1]['servo'], 1720)
+        self.assertEqual(session['report']['turn']['steering_target'], 1720)
+        self.assertEqual(session['report']['servo'], 1720)
         for index in range(1, 21):
             self.observe(round(drive_since+.8+index*.1, 6),
                          self.scan(self.console.scan['seq']+1, heading=100-index*4.5))
             self.assertIs(self.console.auto_session, session)
         self.assertLess(session['report']['servo'], 1690)
         self.assertEqual(self.outputs[-1]['motor'], 1560)
+        for row in self.outputs[before:]:
+            self.assertEqual(row['motor'], 1560)
+            self.assertLessEqual(abs(row['servo']-previous_servo), 10)
+            if row['servo'] != previous_servo:
+                self.assertGreaterEqual(row['now']-last_change+1e-9, .1)
+                last_change = row['now']
+            previous_servo = row['servo']
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
     def test_newmode_initial_range_rejects_1650_to_1689_while_old_left_accepts_1650(self):
@@ -1484,7 +1499,7 @@ class TurnCliTests(unittest.TestCase):
         state = {'healthy': True, 'boot': 'boot', 'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}},
             'autonomy': {'trial_mode': 'turn-cone', 'turn_ready': True, 'turn_rejection': None,
                 'turn_presteer_max_s': 8., 'turn_drive_max_s': 10., 'coast_max_s': 5.,
-                'control_loop_limit_s': .12, 'turn_preview': {
+                'control_loop_limit_s': .12, 'left_turn_servo_cap': 1720, 'turn_preview': {
                 'initial_presteer_pwm': 1690, 'motor': 1500, 'servo': 1500, 'steering_target': 1690,
                 'trial_scope': 'first_lidar_compact_target_orbit_entry', 'compact_target': None}}}
         requests, output = [], io.StringIO()
@@ -1510,7 +1525,8 @@ class TurnCliTests(unittest.TestCase):
         self.assertEqual(report['semantic_class'], 'unknown')
         self.assertEqual(report['initial_presteer_pwm'], 1690)
         self.assertEqual(report['initial_presteer_scope'],
-                         'neutral_presteer_and_left_drive_cap_then_relative_target_feedback')
+                         'neutral_presteer_only_then_live_geometry_with_left_max_1720')
+        self.assertEqual(report['left_turn_servo_cap'], 1720)
         self.assertEqual((report['turn_presteer_max_s'], report['turn_drive_max_s'], report['coast_max_s']),
                          (8., 10., 5.))
         self.assertEqual(report['control_loop_limit_s'], .12)
