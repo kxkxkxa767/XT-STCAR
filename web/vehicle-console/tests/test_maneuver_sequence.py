@@ -1,4 +1,5 @@
 """Pure control-sequence checks; mock observations are not target detection QA."""
+import json
 import math
 from pathlib import Path
 import sys
@@ -6,6 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from maneuver_sequence import ManeuverSequence
+from turn_motion import TurnMotion
 
 
 def corridor(heading):
@@ -267,6 +269,175 @@ class ManeuverSequenceTests(unittest.TestCase):
         h.motion.last_error = math.radians(5)
         smaller = h.motion._target(corridor(0), .1)
         self.assertEqual(smaller, 1500)
+
+    def test_neutral_presteer_ambiguity_holds_adopted_servo_without_maturing(self):
+        h = Harness()
+        h.step()
+        source = (h.motion.last_geometry_receive, h.motion.last_geometry_publication,
+                  h.motion.last_geometry_seq)
+        servo = h.servo
+        def ambiguous(*args):
+            raise ValueError('left_turn_outer_wall_ambiguous')
+        h.motion._measurement = ambiguous
+        h.motion.settle_since = h.now
+        h.motion.settle_feedback_ticks = 8
+        result = h.step()
+        self.assertEqual((result['phase'], result['motor'], result['servo']), ('presteer', 1500, servo))
+        self.assertEqual(result['reason'], 'left_turn_presteer_wall_ambiguity_hold')
+        self.assertEqual(result['turn_stage'], 'presteer_wait')
+        self.assertFalse(result['start_ready'])
+        self.assertIsNone(h.motion.settle_since)
+        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        self.assertIsNone(result['natural_steering_target'])
+        self.assertEqual((h.motion.last_geometry_receive, h.motion.last_geometry_publication,
+                          h.motion.last_geometry_seq), source)
+
+    def test_neutral_hold_original_five_second_budget_expires_and_cannot_restart(self):
+        h = Harness()
+        h.step()
+        original = h.motion._measurement
+        def ambiguous(*args):
+            raise ValueError('left_turn_outer_wall_ambiguous')
+        h.motion._measurement = ambiguous
+        while h.now < 4.9:
+            result = h.step()
+            self.assertEqual(result['phase'], 'presteer')
+            self.assertEqual(result['motor'], 1500)
+        result = h.step()
+        self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
+        self.assertEqual(result['phase'], 'locked')
+        h.motion._measurement = original
+        self.assertEqual(h.step()['phase'], 'locked')
+
+    def test_unique_real_geometry_recovery_restarts_full_presteer_allowance(self):
+        h = Harness()
+        h.step()
+        original = h.motion._measurement
+        def ambiguous(*args):
+            raise ValueError('left_turn_outer_wall_ambiguous')
+        h.motion._measurement = ambiguous
+        held = h.step()
+        self.assertEqual(held['motor'], 1500)
+        h.motion._measurement = original
+        result = h.step()
+        self.assertEqual(result['phase'], 'presteer')
+        self.assertEqual(result['servo'], held['servo']+10)
+        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        while result['phase'] == 'presteer':
+            result = h.step()
+        self.assertEqual(result['phase'], 'drive')
+        self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
+        self.assertGreaterEqual(result['steering_settle_elapsed_s']+1e-9, 1.2)
+
+    def test_neutral_ambiguity_cannot_hold_unknown_or_unadopted_feedback(self):
+        for invalid in ('no_left', 'motor', 'servo', 'ack', 'unarmed', 'old_tick', 'stale_scan'):
+            with self.subTest(invalid=invalid):
+                h = Harness()
+                if invalid != 'no_left': h.step()
+                def ambiguous(*args):
+                    raise ValueError('left_turn_outer_wall_ambiguous')
+                h.motion._measurement = ambiguous
+                value = scan(h.seq+1, h.now+.1)
+                feedback = {'armed': True, 'motor': 1500, 'servo': h.servo,
+                            'seq': h.seq+1, 'tick': (h.seq+1)*100, 'command_acked': True}
+                if invalid == 'motor': feedback['motor'] = 1560
+                if invalid == 'servo': feedback['servo'] -= 10
+                if invalid == 'ack': feedback['command_acked'] = False
+                if invalid == 'unarmed': feedback['armed'] = False
+                if invalid == 'old_tick': feedback['tick'] -= 100
+                result = h.motion.update(value, .3 if invalid == 'stale_scan' else 0., h.now+.1, feedback)
+                self.assertEqual(result['phase'], 'locked')
+                self.assertEqual(result['motor'], 1500)
+
+    def test_default_turn_motion_still_locks_neutral_wall_ambiguity(self):
+        motion = TurnMotion(0., initial_presteer_pwm=1700)
+        control = {'armed': True, 'motor': 1500, 'servo': 1500, 'seq': 1, 'tick': 100}
+        first = motion.update(scan(1, .1), 0., .1, control)
+        def ambiguous(*args):
+            raise ValueError('left_turn_outer_wall_ambiguous')
+        motion._measurement = ambiguous
+        control.update(servo=first['servo'], seq=2, tick=200)
+        result = motion.update(scan(2, .2), 0., .2, control)
+        self.assertEqual(result['phase'], 'locked')
+        self.assertEqual(result['reason'], 'left_turn_outer_wall_ambiguous')
+
+    def test_default_1720_is_fully_adopted_before_any_forward_output(self):
+        h = Harness(initial=1720)
+        h.motion = ManeuverSequence(0.)
+        self.assertEqual(h.motion.initial_presteer_pwm, 1720)
+        earlier = []
+        while True:
+            result = h.step()
+            if result['phase'] == 'drive': break
+            earlier.append(result)
+        self.assertTrue(any(v['servo'] == 1700 for v in earlier))
+        self.assertTrue(all(v['motor'] == 1500 for v in earlier))
+        self.assertEqual(result['servo'], 1720)
+        self.assertEqual(result['motor'], 1560)
+        self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
+        self.assertGreaterEqual(result['steering_settle_elapsed_s']+1e-9, 1.2)
+
+    def test_actual_scan637_holds_neutral_then_scan639_recovers_geometry(self):
+        # Real recorded geometry, with mock fresh neutral adoption feedback.
+        # Actual run08 was already locked after637; this tests the repaired
+        # state machine, not a physical trajectory or automatic rearm.
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-08-neutral-ambiguity.json').read_text())
+        initial = fixture['initial']
+        def seed(cls):
+            motion = cls(0., initial_presteer_pwm=1700)
+            motion.selected = True
+            motion.servo = fixture['held_servo']
+            motion.steering_target = 1700
+            motion.last_change = 0.
+            motion.corridor = initial['corridor']
+            motion.outer_wall = initial['outer_wall']
+            motion.turn_goal = initial['turn_goal']
+            motion.geometry_mode = initial['geometry_mode']
+            motion.last_seq = motion.last_geometry_seq = initial['geometry_source_seq']
+            motion.last_publication = motion.last_geometry_publication = initial['geometry_source_at_ms']
+            motion.last_receive = motion.last_geometry_receive = 0.
+            return motion
+        motion = seed(ManeuverSequence)
+        motion._last_actual_left_target = fixture['last_actual_left_target']
+        first, second = fixture['frames']
+        now = (first['at_ms']-initial['geometry_source_at_ms'])/1000
+        control = {'armed': True, 'motor': 1500, 'servo': fixture['held_servo'],
+                   'seq': 12, 'tick': 63797, 'command_acked': True}
+        held = motion.update({**first, 'received_at': now}, 0., now, control)
+        self.assertEqual(held['reason'], 'left_turn_presteer_wall_ambiguity_hold')
+        self.assertEqual((held['phase'], held['motor'], held['servo']), ('presteer', 1500, 1540))
+        self.assertEqual(held['geometry_source_seq'], 636)
+        self.assertEqual(held['steering_settle_feedback_ticks'], 0)
+        self.assertFalse(held['start_ready'])
+        previous = seed(TurnMotion).update({**first, 'received_at': now}, 0., now, control)
+        self.assertEqual(previous['phase'], 'locked')
+        self.assertEqual(previous['reason'], 'left_turn_outer_wall_ambiguous')
+        now = (second['at_ms']-initial['geometry_source_at_ms'])/1000
+        control.update(seq=13, tick=64000)
+        recovery = motion.update({**second, 'received_at': now}, 0., now, control)
+        self.assertEqual((recovery['phase'], recovery['motor'], recovery['servo']), ('presteer', 1500, 1550))
+        self.assertEqual(recovery['geometry_source_seq'], 639)
+        self.assertEqual(recovery['steering_target'], 1700)
+        self.assertEqual(recovery['steering_settle_feedback_ticks'], 0)
+
+    def test_neutral_hold_duplicate_frames_cannot_renew_scan_lease(self):
+        h = Harness()
+        h.step()
+        def ambiguous(*args):
+            raise ValueError('left_turn_outer_wall_ambiguous')
+        h.motion._measurement = ambiguous
+        held = h.step()
+        self.assertEqual(held['phase'], 'presteer')
+        receive = h.motion.last_receive
+        control = dict(h.latest_control)
+        control.update(seq=control['seq']+1, tick=control['tick']+100)
+        result = h.motion.update(h.latest_scan, 0., h.now+.2, control)
+        self.assertEqual(result['phase'], 'presteer')
+        self.assertEqual(h.motion.last_receive, receive)
+        control.update(seq=control['seq']+1, tick=control['tick']+100)
+        result = h.motion.update(h.latest_scan, 0., h.now+.31, control)
+        self.assertEqual(result['phase'], 'locked')
+        self.assertEqual(result['reason'], 'turn_scan_not_advancing')
 
 
 if __name__ == '__main__':

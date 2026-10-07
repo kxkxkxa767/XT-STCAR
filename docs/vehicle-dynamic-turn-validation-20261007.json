@@ -1337,7 +1337,7 @@
   "turn08_work": {
     "operator_request": "continue turning and connect left turn with orbit; 接上先测试一下",
     "scope": "bounded left turn followed by first real lidar compact-object left orbit entry",
-    "implementation_state": "frozen and validated; pending complete locked deployment and authorized single08",
+    "implementation_state": "89470fb fully deployed locked and executed once08; neutral presteer wall ambiguity; no positive motor or handover",
     "target_semantics": "unknown compact object, not vision-confirmed blue cone",
     "fixed_track_specialization": false,
     "competition_complete": false,
@@ -1446,6 +1446,89 @@
     "target_initial_pure_tests": 91,
     "target_final_affected_tests": 23,
     "hardware_used_by_tests": false,
-    "compiler_validation": "all eight Python module syntax checked; matching Rust bridge238 and exact unchanged Rust sources retained"
+    "compiler_validation": "all eight Python module syntax checked; matching Rust bridge238 and exact unchanged Rust sources retained",
+    "source_commit": "89470fbc177edcd80321f860c6313047e22ce627",
+    "deployment": {
+      "backup": "/home/bianbu/xt-stcar-console/backup-turn08-20261007-155858",
+      "installed_hash_count": 14,
+      "all_installed_match": true,
+      "runtime_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "independent10_locked_passed": true,
+      "default_locked": true,
+      "serial_owners_verified": true,
+      "bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4"
+    },
+    "authorized_single08_consumed": true,
+    "actual_result": {
+      "run_id": "XeRgI41LFqoKX6R044MnEclk",
+      "presteer_ticks": 12,
+      "motion_ticks": 0,
+      "coast_ticks": 0,
+      "steering_changes": 4,
+      "reason": "left_turn_outer_wall_ambiguous",
+      "completed": false,
+      "handover_observed": false,
+      "orbit_entry_elapsed_s": 0,
+      "terminal_scan_seq": 637,
+      "last_real_geometry_seq": 636,
+      "servo_last": 1540,
+      "actual_terminal_raw_scan_saved": true,
+      "body_distance_m": 0.3182981931293649,
+      "all_motor_samples_neutral": true,
+      "fresh_final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 14,
+        "servo": 1500,
+        "tick": 65163
+      },
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "healthy": true,
+      "physical_standstill_verified": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-08/"
+    }
+  },
+  "turn09_preparation": {
+    "scope": "new sequence neutral presteer only: fresh adopted current servo can hold while wall alias resolves; no settle maturation/no positive motor/no5s budget renewal",
+    "status": "all validated; pending locked deployment; no new motion",
+    "next_motion_requires_new_operator_request": true,
+    "operator_initial_steering_request": "initial angle must be larger, otherwise later corrections are too late",
+    "initial_presteer_default_pwm": 1720,
+    "initial_pwm_reason": "latest requested larger initial; existing operator cap1720",
+    "explicit1700_compatible": true,
+    "steering_before_positive_motor": "slew10/100ms then fresh actual software adoption+3ticks+1.2s; until then motor1500",
+    "raw637_diagnosis": {
+      "actual_raw_saved": true,
+      "wall_alias_heading_difference_deg": 0.3072,
+      "rho_difference_m": 0.015027,
+      "finite_overlap_m": 0.144248,
+      "one_ray_outside_reported_residual_envelopes": 316,
+      "same_surface": false,
+      "next_saved639_unique_after_ms": 206,
+      "not_proof_of_fixed_recovery_frames": true,
+      "no_forced_wall_merge": true
+    },
+    "mac_python_passed": 332,
+    "sequence_unit_passed": 22,
+    "service_cli_unit_passed": 56,
+    "raw637_to639_software_counterfactual_passed": true,
+    "raw_fixture": "web/vehicle-console/tests/fixtures/left-cone-08-neutral-ambiguity.json",
+    "raw_fixture_means": "recorded raw geometry with mock adopted neutral control; not physical recovery or auto rearm",
+    "source_sha256": {
+      "web/vehicle-console/server.py": "fde83207bec5537f69405207c565d19b9fa3d983d79f29ecda3e33a544e53ea5",
+      "web/vehicle-console/autonomy-control.py": "aeb69b450130a7df4690f023c2989f0c969a9cecabee87dc60e1b1cc8c53cd48",
+      "web/vehicle-console/maneuver_sequence.py": "6f2aa76cb8fdba91ef445b4a7321cc2a83e81a94210a771038bc1817c98da927",
+      "web/vehicle-console/tests/fixtures/left-cone-08-neutral-ambiguity.json": "7a785e95c7286b37f7c43269494051e6ba65c544c32ae760b961a3a9e4cd2d28"
+    },
+    "target_final_affected_passed": 32,
+    "target_hardware_api_used": false
   }
 }

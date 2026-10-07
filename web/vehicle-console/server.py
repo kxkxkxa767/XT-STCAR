@@ -326,7 +326,7 @@ class Console:
             raise ValueError('invalid_maneuver_trial_mode')
         compact_target_trial = trial_mode == 'turn-cone'
         if compact_target_trial and initial_presteer_pwm is None:
-            initial_presteer_pwm = 1700
+            initial_presteer_pwm = 1720
         now = time.monotonic()
         try:
             clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
@@ -404,7 +404,7 @@ class Console:
                 raise ValueError('turn_requires_fresh_neutral_lock')
             controller = ManeuverSequence if compact_target_trial else TurnMotion
             if compact_target_trial and initial_presteer_pwm is None:
-                initial_presteer_pwm = 1700
+                initial_presteer_pwm = 1720
             motion = controller(now, max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm)
             scan = {**self.scan, 'received_at': self.scan_at} if compact_target_trial else self.scan
             decision = motion.update(scan, ages['lidar'], now, control)
@@ -427,7 +427,7 @@ class Console:
             raise ValueError('turn_trial_requires_operator_placement_confirmation')
         if self.stop.is_set() or self.owner is not None or self.auto_session is not None:
             raise ValueError('already_armed_or_shutting_down')
-        initial_presteer_pwm = data.get('initial_presteer_pwm', 1700 if compact_target_trial else None)
+        initial_presteer_pwm = data.get('initial_presteer_pwm', 1720 if compact_target_trial else None)
         if 'initial_presteer_pwm' in data and initial_presteer_pwm is None:
             raise ValueError('invalid_initial_presteer_pwm')
         validate_initial_presteer_pwm(initial_presteer_pwm)

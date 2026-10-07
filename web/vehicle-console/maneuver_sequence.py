@@ -22,7 +22,7 @@ MAX_TREND_RELEASE_FRACTION = .20
 
 class ManeuverSequence(TurnMotion):
     """Single arm and cumulative drive budget; no automatic restart after stop."""
-    def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=1700):
+    def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=1720):
         super().__init__(started_at, max_drive_s=max_drive_s,
                          initial_presteer_pwm=initial_presteer_pwm)
         self.target_tracker = CompactTargetTracker()
@@ -32,6 +32,8 @@ class ManeuverSequence(TurnMotion):
         self.orbit_track_id = None
         self.coast_since = None
         self.wall_ambiguity_hold = False
+        self._last_actual_left_target = None
+        self._presteer_adoption_context = None
 
     def begin_coast(self, reason, now):
         if self.phase not in ('coast', 'locked') and _number(now) and now >= self.last_now:
@@ -43,6 +45,29 @@ class ManeuverSequence(TurnMotion):
         # servo briefly while wall aliases resolve. Neither geometry clock nor
         # alignment evidence advances; a compact observation is still required
         # for handover. Default TurnMotion is unchanged.
+        adoption = self._presteer_adoption_context
+        if (reason == 'left_turn_outer_wall_ambiguous' and self.phase == 'presteer'
+                and self.selected and self.last_geometry_receive is not None
+                and self.last_geometry_publication is not None
+                and self._last_actual_left_target is not None
+                and self._last_actual_left_target > NEUTRAL
+                and adoption is not None and adoption['fresh_feedback']
+                and adoption['control'].get('armed') is True
+                and adoption['control'].get('motor') == NEUTRAL
+                and adoption['control'].get('servo') == self.servo
+                and adoption['control'].get('command_acked', True) is True):
+            # Neutral presteer may wait within its original five-second budget.
+            # Hold only an already adopted servo, not the unseen wall target.
+            # All scan/control validation has run before this measurement error.
+            # Fresh unique geometry must be observed again before either slew
+            # or the full adoption/response allowance can restart.
+            self.wall_ambiguity_hold = self.geometry_missing = True
+            self.steering_target = self.servo
+            self._presteer_hold('left_turn_presteer_wall_ambiguity_hold')
+            self.alignment_count = 0
+            self.alignment_evidence = None
+            self.alignment_publication = self.alignment_receive = None
+            return
         if (reason == 'left_turn_outer_wall_ambiguous' and self.phase == 'drive'
                 and self.last_geometry_receive is not None
                 and self.last_geometry_publication is not None
@@ -101,7 +126,7 @@ class ManeuverSequence(TurnMotion):
         reference = self.orbit_reference_range_m
         correction = (ORBIT_BEARING_GAIN*(target['bearing_left_rad']-ORBIT_BEARING_RAD)
                       + ORBIT_RANGE_GAIN*(target['range_m']-reference)/reference)
-        bias = self.initial_presteer_pwm if self.initial_presteer_pwm is not None else 1700
+        bias = self.initial_presteer_pwm if self.initial_presteer_pwm is not None else 1720
         return max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
 
     def _target(self, candidate, publication_dt):
@@ -127,7 +152,9 @@ class ManeuverSequence(TurnMotion):
                 if error > 0:
                     damped = max((1-MAX_TREND_RELEASE_FRACTION)*error, min(error, release))
         self.last_error = error
-        return max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
+        target = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
+        self._last_actual_left_target = target if target > NEUTRAL else None
+        return target
 
     def _orbit_inputs(self, scan, lidar_age_s, now, control, safe, presteer_wait):
         """Same advancing raw-scan/control contract, without a fabricated wall."""
@@ -251,5 +278,13 @@ class ManeuverSequence(TurnMotion):
             return self._orbit_update(scan, lidar_age_s, now, control,
                                       safe=safe, presteer_wait=presteer_wait)
         self.wall_ambiguity_hold = False
-        return super().update(scan, lidar_age_s, now, control, safe=safe,
-                              presteer_wait=presteer_wait)
+        feedback_tick = control.get('tick') if isinstance(control, dict) else None
+        self._presteer_adoption_context = {
+            'control': dict(control) if isinstance(control, dict) else {},
+            'fresh_feedback': (type(feedback_tick) is int
+                               and (self.last_control_tick is None or feedback_tick > self.last_control_tick))}
+        try:
+            return super().update(scan, lidar_age_s, now, control, safe=safe,
+                                  presteer_wait=presteer_wait)
+        finally:
+            self._presteer_adoption_context = None

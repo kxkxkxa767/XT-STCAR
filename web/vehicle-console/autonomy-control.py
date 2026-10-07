@@ -112,7 +112,7 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
     return report
 
 
-def first_compact_target_trial(request, state, max_seconds, placement_confirmed, initial_presteer_pwm=1700):
+def first_compact_target_trial(request, state, max_seconds, placement_confirmed, initial_presteer_pwm=1720):
     """One continuous left turn and first lidar target orbit-entry experiment."""
     return left_turn_trial(request, state, max_seconds, placement_confirmed,
                            initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=True)
@@ -171,7 +171,7 @@ def main():
     parser.add_argument('--execute', action='store_true', help='explicit motion request; motion commands otherwise only query state')
     parser.add_argument('--placement-confirmed', action='store_true', help='operator confirms stopped mid-segment placement for this one left trial')
     parser.add_argument('--initial-presteer-pwm', type=initial_presteer_argument,
-        help='turn-left/turn-cone: initial neutral-motor presteer PWM 1650..1720; turn-cone defaults to 1700')
+        help='turn-left/turn-cone: initial neutral-motor presteer PWM 1650..1720; turn-cone defaults to 1720')
     parser.add_argument('--goal-file', type=Path, help='Local target-only JSON for explicit trial-goal-register')
     parser.add_argument('--trial-goal-id', help='Use a registered trial intent; arbitrary point execution requires real pose')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
@@ -180,7 +180,7 @@ def main():
         parser.error('--initial-presteer-pwm is only valid for turn-left or turn-cone')
     if args.command == 'turn-cone' and args.trial_goal_id is not None:
         parser.error('turn-cone is a direct first-target placement trial and accepts no --trial-goal-id')
-    initial_presteer_pwm = 1700 if args.command == 'turn-cone' and args.initial_presteer_pwm is None else args.initial_presteer_pwm
+    initial_presteer_pwm = 1720 if args.command == 'turn-cone' and args.initial_presteer_pwm is None else args.initial_presteer_pwm
     access = json.loads(args.access_file.read_text())
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
