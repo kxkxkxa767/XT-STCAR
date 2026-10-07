@@ -33,6 +33,8 @@ from maneuver_sequence import ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PREST
 
 ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
+CONTROL_LOOP_LIMIT_S = .08
+MANEUVER_CONTROL_LOOP_LIMIT_S = .12
 
 
 class Console:
@@ -328,13 +330,19 @@ class Console:
         if compact_target_trial and initial_presteer_pwm is None:
             initial_presteer_pwm = 1720
         now = time.monotonic()
-        try:
-            clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
-            ready, rejection = self.autonomy_healthy(), None
-            if self.owner is not None or self.status.get('control', {}).get('armed'):
-                ready, rejection = False, 'control_owned_or_unlocked'
-        except ValueError as error:
-            clearance, ready, rejection = getattr(error, 'clearance', None), False, str(error)
+        owned = (self.owner is not None or self.auto_session is not None
+                 or self.status.get('control', {}).get('armed'))
+        if owned:
+            # No admission is possible while another owner is active. Its
+            # already computed clearance remains in active.clearance_current;
+            # do not re-label that maneuver evidence as a fresh straight scan.
+            clearance, ready, rejection = None, False, 'control_owned_or_unlocked'
+        else:
+            try:
+                clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
+                ready, rejection = self.autonomy_healthy(), None
+            except ValueError as error:
+                clearance, ready, rejection = getattr(error, 'clearance', None), False, str(error)
         formal_ready, formal_rejection, goal_summary = False, self.stop_goal_rejection, None
         if self.stop_goal_registry is not None:
             goal = self.stop_goal_registry.goal
@@ -343,7 +351,7 @@ class Console:
                 goal.check_fresh(now)
                 if goal.identity in self.stop_goal_processed:
                     raise StopGoalError('stop_goal_already_completed')
-                if self.owner is not None or self.status.get('control', {}).get('armed'):
+                if owned:
                     raise StopGoalError('control_owned_or_unlocked')
                 self.formal_preview(goal, 1580, now)
                 formal_ready, formal_rejection = True, None
@@ -351,7 +359,7 @@ class Console:
                 formal_rejection = str(error)
         turn_ready, turn_rejection, turn_preview, turn_clearance = False, None, None, None
         try:
-            if self.owner is not None or self.auto_session is not None:
+            if owned:
                 raise ValueError('control_owned_or_unlocked')
             _, turn_preview, turn_clearance = self.turn_preview(now,
                 initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=compact_target_trial)
@@ -375,6 +383,7 @@ class Console:
                 'quality_self_recovery': True, 'quality_recovery_stable_s': QUALITY_RECOVERY_STABLE_S,
                 'coast_max_s': COAST_MAX_S, 'front_boundary_loss_s': FRONT_BOUNDARY_LOSS_S,
                 'control_age_limit_s': CONTROL_AGE_LIMIT_S, 'auto_control_health_s': AUTO_CONTROL_HEALTH_S,
+                'control_loop_limit_s': MANEUVER_CONTROL_LOOP_LIMIT_S if compact_target_trial else CONTROL_LOOP_LIMIT_S,
                 'probe_ready': ready, 'rejection': rejection, 'clearance': clearance,
                 'formal_ready': formal_ready, 'formal_rejection': formal_rejection, 'final_stop_goal': goal_summary,
                 'formal_max_drive_ms': self.stop_goal_contract.budget['max_drive_ms'] if self.stop_goal_contract else None,
@@ -455,6 +464,8 @@ class Console:
         report = {'run_id': run_id, 'epoch': self.control_epoch, 'pwm': TRIAL_MOTOR, 'servo': 1500,
             'duration_ms': round(1000*(motion.max_presteer_s+motion.max_drive_s)), 'phase': 'presteer',
             'turn_presteer_max_s': motion.max_presteer_s, 'turn_drive_max_s': motion.max_drive_s,
+            'control_loop_limit_s': MANEUVER_CONTROL_LOOP_LIMIT_S if compact_target_trial else CONTROL_LOOP_LIMIT_S,
+            'actual_gap_s': 0., 'max_actual_gap_s': 0.,
             'turn_stage': decision['turn_stage'],
             'drive_ticks': 0, 'motion_ticks': 0, 'presteer_ticks': 0, 'coast_ticks': 0, 'recovery_ticks': 0,
             'observed_pwm': False, 'observed_armed': False, 'steering_changes': 0, 'centering': True,
@@ -637,6 +648,7 @@ class Console:
                       'phase': 'drive', 'coast_ticks': 0, 'coast_motion': None, 'standstill_confirmed': False,
                       'wheel_motion_measured': False, 'competition_navigation': False,
                       'clearance_profile': 'straight', 'clearance_profile_source': 'default_straight',
+                      'control_loop_limit_s': CONTROL_LOOP_LIMIT_S, 'actual_gap_s': 0., 'max_actual_gap_s': 0.,
                       'clearance_start': clearance, 'clearance_current': clearance, 'epoch': self.control_epoch}
             self.auto_session = {'report': report, 'deadline': now + duration / 1000,
                                  'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality, 'recovery': QualityRecovery(),
@@ -663,12 +675,29 @@ class Console:
 
     def autonomy_watch(self):
         while not self.stop.wait(.02):
+            lock_requested_at = time.monotonic()
             with self.lock:
                 session = self.auto_session
                 if session is None:
                     continue
                 now = time.monotonic()
-                self.autonomy_tick(now)
+                try:
+                    self.autonomy_tick(now)
+                finally:
+                    self.record_tick_timing(session, now-lock_requested_at, time.monotonic()-now)
+
+    def record_tick_timing(self, session, lock_wait_s, tick_wall_s):
+        """Host wall timing includes scheduling/GIL waits, never a CPU benchmark."""
+        report = session['report']
+        timing = {'last_lock_wait_s': max(0., lock_wait_s), 'last_tick_compute_s': max(0., tick_wall_s),
+            'max_lock_wait_s': max(report.get('max_lock_wait_s', 0.), lock_wait_s),
+            'max_tick_compute_s': max(report.get('max_tick_compute_s', 0.), tick_wall_s),
+            'control_tick_timing_basis': 'host_monotonic_wall_including_scheduling_and_waits'}
+        report.update(timing)
+        # halt snapshots the report before this finally block runs. Preserve
+        # the final measured tick only on the same terminated run.
+        if self.auto_result is not None and self.auto_result.get('run_id') == report['run_id']:
+            self.auto_result.update(timing)
 
     def begin_coast(self, reason, now):
         """Normal planned neutral phase; retains only the existing owner's steering lease."""
@@ -794,10 +823,16 @@ class Console:
         session = self.auto_session
         if session is None:
             return
+        report = session['report']
+        # The mode comes only from the server's explicit sequence start path.
+        limit = MANEUVER_CONTROL_LOOP_LIMIT_S if session.get('maneuver_sequence') is True else CONTROL_LOOP_LIMIT_S
+        gap = now-session['last_loop']
+        report.update(control_loop_limit_s=limit, actual_gap_s=gap,
+                      max_actual_gap_s=max(report.get('max_actual_gap_s', 0.), gap))
         if now - self.owner_at >= HEARTBEAT_S:
             self.halt('autonomy_heartbeat_timeout')
             return
-        if now - session['last_loop'] > .08:
+        if gap > limit:
             self.halt('autonomy_control_gap')
             return
         session['last_loop'] = now
@@ -1050,6 +1085,9 @@ class Console:
                 self.halt('camera_failed')
 
     def state(self, initial_presteer_pwm=None, trial_mode='turn-left'):
+        # Directory I/O has no control-state authority and must not delay the
+        # shared sensor/control lock used by the autonomous watchdog.
+        files = sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]
         with self.lock:
             now = time.monotonic()
             return {'demo': self.args.demo, 'boot': self.boot, 'status': self.status, 'settings': self.settings,
@@ -1058,7 +1096,7 @@ class Console:
                     'errors': dict(self.errors), 'recording': self.record is not None, 'saving': self.saving,
                     'record_error': self.record_error, 'owner': self.owner, 'last_stop': self.last_stop,
                     'autonomy': self.autonomy_status(initial_presteer_pwm=initial_presteer_pwm, trial_mode=trial_mode),
-                    'files': sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]}
+                    'files': files}
 
     def storage_available(self):
         total = sum(x.stat().st_size for x in self.output.rglob('*') if x.is_file())

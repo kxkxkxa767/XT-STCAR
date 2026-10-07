@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-10-07，10因80ms控制间隔退出，用户要求排查后提高上限）
+
+**用户“开始测试吧”已消费一次10。b26车端8秒版本实际只presteer2、0动力，最后软件请求1510/目标1720；保存底盘舵反馈最高1500，不能称实际已采用1510。因autonomy_control_gap退出，不是8s、墙或车身距离门。用户最新“排查好了改了以后提一提这个上限”，正在仅newmode控制循环80→120ms并减状态查询锁内工作、加精确时延诊断；不自动发11。车端仍b26旧80ms。**
+
+- 10 run 2tjwRPqHlqFT_d-5trWRXfph，pre2/motion0/coast0，last_success turnscan3554/pre_elapsed.0717986/settle0、body.310618m>.08/quality空；3554原ranges未保存，下一保存3555只state3554，不能倒填。终止reason在最新扫描/clearance之前的>80ms门，实际超限gap未记录，不能把observer150ms或controltick209ms当故障间隔。
+- 最后6份fresh healthy/locked/owner与active空/M=S1500，controlseq4/tick355480→356444、lidar3558→3568增长；软件锁定不认证物理停稳。原始完整work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-10/，独立分析与纯profiler保留；真实compact候选15份全0/nohandover，未到1720或1560。
+- 目标板30轮×16真实scan纯计算，无硬件动作：full update max27.048ms、wall match21.816ms，未复现80ms；既非WCET也不能证明实际原因。loop start间隔包含前拍运算、watch20ms等待、Console共享锁及OS调度。active GET已跳过墙preview，仍锁内360ray泛用admission+files目录IO；准备把目录移锁外，已有owner时先拒新admission而保留active真实clearance，记录gap/lock wait/tick walltime。
+- 新120ms仅内部maneuver_sequence会话；default直道/旧turn-left仍80，controlfresh200ms/autohealth250/heartbeat300、初始1720/预打8、drive10/coast5、质量与车体8cm当前点门/stop锁存均保持。用户payload不能自设弱门。修复已冻结，342项Mac/63服务CLI/21独立滑行/车端42受影响专项通过；尚未部署/再arm，验证后成套备份锁定上传并按规范推main；新的动力须用户新当次要求。好直道/全部失败证据/队友原件保留，root独占SSH。
+
 ## 新窗口接手入口（2026-10-07，预打8秒版本已成套锁定部署；尚未再试10）
 
 **最新用户“超时的阈值提高”已完成：newmode中性预打5→8s，初始1720/完整采用3tick及1.2s后1560；forward10/coast5、质量/时钟/车体距离/舵机渐变保持。源码b26e5f5已成套完整备份/锁定更新，14安装哈希一致。用户已重新登录SSH，338项Mac/38项车端纯计算确认通过；没有新的arm/drive，不自动发10。09授权已消费，只有预打到1720、0前进，5s超时；不能记左转或绕行成功。**

@@ -1815,5 +1815,93 @@
       "no_arm_or_drive_requests": true,
       "model_config_credentials_preserved": true
     }
+  },
+  "turn10_actual": {
+    "operator_authorized": "开始测试吧",
+    "authorization_consumed": true,
+    "source_commit": "b26e5f5102d56a4f59ed2f96978d10ba8a160b06",
+    "result": {
+      "run_id": "2tjwRPqHlqFT_d-5trWRXfph",
+      "presteer_ticks": 2,
+      "motion_ticks": 0,
+      "coast_ticks": 0,
+      "steering_changes": 1,
+      "reason": "autonomy_control_gap",
+      "completed": false,
+      "handover_observed": false,
+      "last_requested_servo": 1510,
+      "sampled_adopted_servo_max": 1500,
+      "observed_motor_all_neutral": true,
+      "last_successful_turn_scan": 3554,
+      "raw_last_success_scan_missing": true,
+      "body_distance_last_success_m": 0.31061778424255265,
+      "trigger_actual_loop_gap_not_recorded": true,
+      "fresh_final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 4,
+        "servo": 1500,
+        "tick": 356444
+      },
+      "healthy": true,
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "physical_standstill_verified": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-10/"
+    },
+    "independent_analysis": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-10/trial10-independent-analysis.json"
+  },
+  "turn11_preparation": {
+    "operator_request": "排查好了改了以后提一提这个上限",
+    "new_mode_control_loop_limit_s": 0.12,
+    "old_straight_and_turn_left_limit_s": 0.08,
+    "control_age_limit_s": 0.2,
+    "auto_control_health_s": 0.25,
+    "heartbeat_s": 0.3,
+    "presteer_s": 8,
+    "drive_s": 10,
+    "coast_s": 5,
+    "status": "frozen and validated; pending complete locked deployment; no new motor after10",
+    "target_profile": {
+      "recorded_scan_count": 16,
+      "iterations_per_case": 30,
+      "full_sequence_wall_max_ms": 27.047616999993807,
+      "wall_match_max_ms": 21.815543000002435,
+      "hardware_actions": false,
+      "live_cause_proven": false,
+      "not_wcet": true,
+      "note": "guard covers previous compute+20ms sleep+shared lock and OS scheduling; no actual10 loop-duration trace, missingraw3554"
+    },
+    "changes": "move files listing outside control lock; owned status skips new admission geometry; record actual gap, lock wait and tick walltime; new internal maneuver mode only120ms",
+    "next_motor_trial_requires_new_operator_request": true,
+    "mac_python_passed": 342,
+    "focused_service_cli_passed": 63,
+    "independent_coast_cli_passed": 21,
+    "target_affected_passed": 42,
+    "source_sha256": {
+      "web/vehicle-console/server.py": "761f8bbf56ef4f600ad2b42f22ce1a5070e5c4d7aff54a4319e57750417e0da8",
+      "web/vehicle-console/autonomy-control.py": "64ad5ec3ee336b03db5c99a420e1348d22cbfae73e4bd967450a65e1543f9ded",
+      "web/vehicle-console/tests/test_turn_control.py": "743c8049884a8f55fec5eeee4e764427a1ac259167fe94e3dad4630ad71cd780"
+    },
+    "active_get_pure_profile": {
+      "before_max_ms": 4.904897999949753,
+      "before_median_ms": 4.490976499994304,
+      "after_max_ms": 0.4706780000560684,
+      "after_median_ms": 0.21119050006745965,
+      "temporary_empty_output_directory": true,
+      "not_live_cause_or_wcet": true
+    },
+    "diag_fields": [
+      "control_loop_limit_s",
+      "actual_gap_s",
+      "max_actual_gap_s",
+      "last_lock_wait_s",
+      "max_lock_wait_s",
+      "last_tick_compute_s",
+      "max_tick_compute_s",
+      "control_tick_timing_basis"
+    ]
   }
 }

@@ -214,6 +214,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(body['autonomy']['turn_presteer_max_s'], 8.)
         self.assertEqual(body['autonomy']['turn_drive_max_s'], 10.)
         self.assertEqual(body['autonomy']['coast_max_s'], 5.)
+        self.assertEqual(body['autonomy']['control_loop_limit_s'], .12)
         self.assertEqual(body['autonomy']['turn_preview']['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         for status, body in responses[len(cases)+1:]:
             self.assertEqual(status, 400)
@@ -333,7 +334,8 @@ class TurnControlTests(unittest.TestCase):
             for extra in [{}, {'placement_confirmed': False}, {'placement_confirmed': True, 'goal_id': 'intent'},
                           {'placement_confirmed': True, 'camera_required': False},
                           {'placement_confirmed': True, 'clearance_profile': 'straight'},
-                          {'placement_confirmed': True, 'max_presteer_s': 9}]:
+                          {'placement_confirmed': True, 'max_presteer_s': 9},
+                          {'placement_confirmed': True, 'control_loop_limit_s': .15}]:
                 with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'placement_confirmation'):
                     self.console.autonomy_command({'op': 'turn_cone_start', 'boot': self.console.boot,
                                                   'epoch': 0, 'tick': 1000, **extra})
@@ -475,6 +477,114 @@ class TurnControlTests(unittest.TestCase):
         self.tick(8.02)
         self.assertEqual(self.outputs, before)
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_only_internal_compact_session_uses_120ms_gap_and_old_modes_keep_80ms(self):
+        cases = [('turn-left', .08, True), ('turn-left', .080001, False),
+                 ('straight', .08, True), ('straight', .080001, False),
+                 ('turn-cone', .119999, True), ('turn-cone', .12, True), ('turn-cone', .120001, False)]
+        for mode, gap, permitted in cases:
+            with self.subTest(mode=mode, gap=gap):
+                if self.outputs:
+                    self.tearDown()
+                    self.setUp()
+                if mode == 'turn-cone':
+                    self.start_compact_trial()
+                elif mode == 'turn-left':
+                    self.start()
+                else:
+                    with patch.object(self.server.time, 'monotonic', return_value=0.):
+                        self.console.autonomy_command({'op': 'straight_start', 'boot': self.console.boot,
+                            'epoch': 0, 'tick': 1000, 'pwm': 1560, 'duration_ms': 1000,
+                            'maneuver_sequence': True, 'control_loop_limit_s': .12})
+                session = self.console.auto_session
+                limit = .12 if mode == 'turn-cone' else .08
+                self.assertEqual(session['report']['control_loop_limit_s'], limit)
+                self.tick(gap)
+                report = session['report'] if permitted else self.console.auto_result
+                self.assertEqual(report['control_loop_limit_s'], limit)
+                self.assertEqual((report['actual_gap_s'], report['max_actual_gap_s']), (gap, gap))
+                if permitted:
+                    self.assertIs(self.console.auto_session, session)
+                else:
+                    self.assertIsNone(self.console.auto_session)
+                    self.assertEqual(report['reason'], 'autonomy_control_gap')
+                    self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                                     ('stop', 1500, 1500))
+                    before = list(self.outputs)
+                    self.tick(round(gap+.02, 6))
+                    self.assertEqual(self.outputs, before)
+                self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_owned_getter_skips_new_admission_scan_and_preserves_active_clearance(self):
+        self.start_compact_trial()
+        session = self.console.auto_session
+        clearance = session['report']['clearance_current']
+        before = list(self.outputs)
+        with patch.object(self.server, 'probe_clearance', side_effect=AssertionError('owned GET rescanned')) as scan,\
+             patch.object(self.server.time, 'monotonic', return_value=0.):
+            default = self.console.state()['autonomy']
+            compact = self.console.state(trial_mode='turn-cone')['autonomy']
+            with self.assertRaisesRegex(ValueError, 'already_armed_or_shutting_down'):
+                self.start_compact_trial()
+        scan.assert_not_called()
+        for result, limit in [(default, .08), (compact, .12)]:
+            self.assertFalse(result['probe_ready'])
+            self.assertEqual(result['rejection'], 'control_owned_or_unlocked')
+            self.assertIsNone(result['clearance'])
+            self.assertFalse(result['turn_ready'])
+            self.assertEqual(result['control_loop_limit_s'], limit)
+            self.assertIs(result['active']['clearance_current'], clearance)
+            self.assertEqual(result['active']['clearance_current']['clearance_profile'], 'maneuver')
+            self.assertEqual(result['active']['control_loop_limit_s'], .12)
+        self.assertEqual(self.outputs, before)
+
+    def test_state_directory_io_occurs_outside_shared_control_lock(self):
+        delegate = self.console.lock
+        class TrackingLock:
+            owned = False
+            def __enter__(self):
+                delegate.__enter__()
+                self.owned = True
+            def __exit__(self, *args):
+                self.owned = False
+                return delegate.__exit__(*args)
+        lock = TrackingLock()
+        self.console.lock = lock
+        (self.console.output/'visible.jpg').write_bytes(b'offline-test')
+        (self.console.output/'hidden.txt').write_text('offline-test')
+        original = Path.iterdir
+        def iterdir(path):
+            self.assertFalse(lock.owned)
+            return original(path)
+        with patch.object(Path, 'iterdir', iterdir), patch.object(self.server.time, 'monotonic', return_value=0.):
+            state = self.console.state()
+        self.assertEqual(state['files'], ['visible.jpg'])
+        self.assertFalse(lock.owned)
+        self.assertEqual(self.outputs, [])
+
+    def test_watchdog_terminal_gap_result_keeps_measured_lock_and_tick_wall_time(self):
+        self.start_compact_trial()
+        session = self.console.auto_session
+        with patch.object(self.console.stop, 'wait', side_effect=[False, True]),\
+             patch.object(self.server.time, 'monotonic', side_effect=[.125, .130, .137]):
+            self.console.autonomy_watch()
+        self.assertIsNone(self.console.auto_session)
+        result = self.console.auto_result
+        self.assertEqual(result['run_id'], session['report']['run_id'])
+        self.assertEqual(result['reason'], 'autonomy_control_gap')
+        self.assertEqual((result['control_loop_limit_s'], result['actual_gap_s'], result['max_actual_gap_s']),
+                         (.12, .13, .13))
+        self.assertAlmostEqual(result['last_lock_wait_s'], .005)
+        self.assertAlmostEqual(result['last_tick_compute_s'], .007)
+        self.assertEqual(result['max_lock_wait_s'], result['last_lock_wait_s'])
+        self.assertEqual(result['max_tick_compute_s'], result['last_tick_compute_s'])
+        self.assertEqual(result['control_tick_timing_basis'], 'host_monotonic_wall_including_scheduling_and_waits')
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                         ('stop', 1500, 1500))
+        newer = {'run_id': 'newer', 'last_tick_compute_s': 42.}
+        self.console.auto_result = dict(newer)
+        self.console.record_tick_timing(session, .1, .2)
+        self.assertEqual(self.console.auto_result, newer)
 
     def test_compact_trial_cumulative_drive_budget_and_coast_never_restore_motor(self):
         drive_since, session = self.enter_compact_orbit(max_drive_s=1.)
@@ -1261,6 +1371,9 @@ class TurnCliTests(unittest.TestCase):
     def module(self):
         sys.path.insert(0, str(ROOT))
         try:
+            # The real CLI has its script directory on sys.path. Resolve its
+            # optional compact-mode dependency while this fixture supplies it.
+            importlib.import_module('maneuver_sequence')
             spec = importlib.util.spec_from_file_location('turn_cli_test', ROOT/'autonomy-control.py')
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
@@ -1319,7 +1432,8 @@ class TurnCliTests(unittest.TestCase):
         cli = self.module()
         state = {'healthy': True, 'boot': 'boot', 'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}},
             'autonomy': {'trial_mode': 'turn-cone', 'turn_ready': True, 'turn_rejection': None,
-                'turn_presteer_max_s': 8., 'turn_drive_max_s': 10., 'coast_max_s': 5., 'turn_preview': {
+                'turn_presteer_max_s': 8., 'turn_drive_max_s': 10., 'coast_max_s': 5.,
+                'control_loop_limit_s': .12, 'turn_preview': {
                 'initial_presteer_pwm': 1720, 'motor': 1500, 'servo': 1500, 'steering_target': 1720,
                 'trial_scope': 'first_lidar_compact_target_orbit_entry', 'compact_target': None}}}
         requests, output = [], io.StringIO()
@@ -1346,6 +1460,7 @@ class TurnCliTests(unittest.TestCase):
         self.assertEqual(report['initial_presteer_pwm'], 1720)
         self.assertEqual((report['turn_presteer_max_s'], report['turn_drive_max_s'], report['coast_max_s']),
                          (8., 10., 5.))
+        self.assertEqual(report['control_loop_limit_s'], .12)
 
     def test_compact_cli_execute_requires_mode_interface_and_placement(self):
         cli = self.module()
@@ -1392,7 +1507,9 @@ class TurnCliTests(unittest.TestCase):
             reads.append(index)
             return {'autonomy': {'active': None, 'mode': 'locked', 'last_result': {
                 'run_id': 'run', 'completed': False, 'reason': 'compact_target_lost_or_ambiguous',
-                'handover_observed': True, 'compact_target': target, 'orbit_entry_elapsed_s': .4}},
+                'handover_observed': True, 'compact_target': target, 'orbit_entry_elapsed_s': .4,
+                'control_loop_limit_s': .12, 'actual_gap_s': .126, 'max_actual_gap_s': .126,
+                'last_lock_wait_s': .05, 'last_tick_compute_s': .007}},
                 'ages': {'control': .01}, 'status': {'control': {'armed': index == 0,
                     'motor': 1500, 'servo': 1700 if index == 0 else 1500}}}
         with patch.object(cli.time, 'sleep'):
@@ -1411,6 +1528,9 @@ class TurnCliTests(unittest.TestCase):
         self.assertTrue(result['handover_observed'])
         self.assertEqual(result['compact_target'], target)
         self.assertTrue(result['fresh_neutral_locked_confirmed'])
+        self.assertEqual((result['control_loop_limit_s'], result['actual_gap_s'], result['max_actual_gap_s']),
+                         (.12, .126, .126))
+        self.assertEqual((result['last_lock_wait_s'], result['last_tick_compute_s']), (.05, .007))
 
     def test_cli_compact_budget_uses_eight_neutral_seconds_and_old_left_keeps_five(self):
         cli = self.module()
