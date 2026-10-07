@@ -1,5 +1,19 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-10-07，原生开口修复已部署；14无碰撞但未转到位，用户要求换窗口接手）
+
+**以本节为准，下方均为历史。车端已部署源码 `4e33035c7666cd4e479cd099be04d9d861fdd664` 和匹配新 Rust 桥 `199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9`，并执行了实际第14轮。用户最新反馈“这次没有撞墙，但是没转到位”：记为无碰撞、未完成左转、未接管绕桩，不能报成功。用户当前要求给下一窗口接手指令，本窗口只补记录/推main，不继续改控制或启动新测试。**
+
+- **14实际停止原因**：`probe_obstacle_close_body`，当前已知点到车身矩形最小净距 **0.07258647m < 0.08m**（用户净距5cm+原测距余量3cm）。最近点 ray318/range0.341m，车体坐标 x前0.253412/y左0.228174，在左前角附近；触发scan1244，最后转向几何scan1243。不是超时：max控制间隔87.015ms <120ms。软件drive约1.05948s，pre64/motion30/coast0，初始1670/电机1560/左上限1720，末请求servo1651/目标1642，handover=false/orbit0/completed=false。run `CKS8ZeG0qR4FUHmdOQI3-DmU`。
+- **现场/连接状态必须分开**：用户确认无碰撞和未转到位，尚未单独确认14后物理完全静止或重新摆放。末历史反馈seq96/tick125747、healthy/locked/armed=false/M=S1500、owner与active空；不能作下一轮新鲜反馈。接手整理时SSH复用报 `Broken pipe`，BatchMode回退认证失败，没读到新的车端状态。需用户在终端重建原SSH复用连接，再读取fresh；不要把密码发聊天。
+- **已部署，不要重复当待部署**：完整备份 `/home/bianbu/xt-stcar-console/backup-opening-span-20261007-201206` 保存此前7df/旧桥；14安装哈希一致，默认锁定启动，实际手动设置1550/1450/1650/1350保留。部署记录本地 `work/vehicle-dynamic-deploy-20261007/opening-span-deploy-stdout.json`；完整车端记录 `/home/bianbu/xt-stcar-console/stage-opening-span-20261007-201206/deployment-result.json` 尚未取回。
+- **先取证再改**：本地14摘要 `work/vehicle-dynamic-deploy-20261007/left-cone14-stdout.json` 与helper `left-cone-trial-once-14.py` 已保存；完整原始目录 `/home/bianbu/xt-stcar-console/left-cone-trial-20261007-14` 尚未SCP回Mac（连接已失效）。13完整目录同级 `left-cone-trial-20261007-13` 也待取回，13只有准入拒绝、没有arm/drive；禁止覆盖或说成成功行驶。保存后检查实际采用PWM/成熟等待、左前内侧墙端和净距变化、目标舵回收时机，区分当前点接近和真实扫掠；可能需要提前结合内侧墙端/净距调舵，但**尚未实现或证实新控制方案**，不要直接增加超时/舵上限或缩小停车门当修复。
+- **当前控制参数**：初始1670，new初值范围1670..1720，左动态总上限1720；中性预打20PWM、减左20、加左10，每100ms一次不补跳，跨中心先1500。采用至少3新tick且等1.2s才给1560（不是物理角度反馈）；pre8s/共享drive10s/首目标entry3s/coast5s；new控制loop120ms、旧80ms、control fresh200/autohealth250/heartbeat300ms；body净5cm+粗3cm=.08。禁止反转刹车/假pose/假圈数/赛道固定长度坐标，不把1500当瞬停。
+- **新开口逻辑**：旧25–85度/16点/90%窗口误拒真实缺口，改为0–90度真实几何中的连续远返回投影跨度≥.50m；null/近点/无效或相邻投影缺口>.10m断段，前墙/右墙/外墙证据保留。`.50`为车宽.34+两边.08的观测尺度，非扫掠证明；`known_open_fraction`仅选中连续支持段范围。已单独交叉编译桥614600B/LP64D/maxGLIBC2.34，按用户要求未再跑额外suite。14已通过准入并前进，不能由此声称所有入口/转弯/碰撞问题已解决。
+- **长期授权与偏好**：用户“以后都是，只要我没明说都是直接在车上测试”；调参默认直接实车，不重复问每轮动作许可，不先跑额外Mac/目标板纯计算suite。明确暂停/只Mac/不测时例外；现场停稳和摆放未知仍问必要事实。本次换窗口后先完成取证与必要修改，下一次有动力前确认当前物理停稳/摆放并重读fresh。软件故障锁定不因感知恢复自行rearm。
+- 当前只实现左转→首个真实点云紧凑目标的受限左绕入口试验，目标语义unknown；完整两锥桶S及比赛链未验收。直道正式停车应服从传入停车点，不能绑定练习左路口。车上仍单类blue_cone，训练队友负责。
+- SSH `bianbu@192.168.0.156`，套接字 `/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-test-ssh.sock`；仅执行硬件的主agent持有控制。每次改动更新本入口和 `docs/vehicle-dynamic-turn-validation-20261007.json`，按上传规范fetch/直推main/不强推，保留队友原件及历史失败。好直道8efc47b本地 `work/vehicle-junction-coast-test-20261006/release-process/`、`run04/` 和车端 `backup-dynamic-turn-20261007-102438` 绝不能删。
+
 ## 新窗口接手入口（2026-10-07，截图指出真实左缺口被误拒，原生物理开口修复已编译，待上车）
 
 **用户截图“点云清楚看见左缺口，不应该失败”已复核成立，root此前仅解释摆位偏左不足。旧native25–85°裁窗仅量到.3–.5m，完整真实连续投影开口约1.2–1.4m；已改按真实连续开放段物理跨度≥.50m判断，近点/null/超过.10m投影采样缺口断段，前/右/外墙支撑保留。新Rust桥已单独交叉编译，SHA199f4203/614600B/LP64D/maxGLIBC2.34，未跑额外suite，待完整备份默认锁定上传后按用户常驻实车授权直接测。Python/UI未为此加缓存。**

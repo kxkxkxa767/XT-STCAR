@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "06 partial left, wall ambiguity exited, body5cm gate did not trigger; operator stopped without collision; fixes+initial1700 for authorized07 pending target timing",
+  "latest_trial_status": "14 ran after opening-span deployment; operator reports no collision but insufficient turn; probe_obstacle_close_body at 0.0725864698m < 0.08m, no handover, completed=false",
   "latest_user_proposal": "latest overrides raw20: vehicle perimeter net clearance5cm during turn and slalom; straight stays unchanged",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -796,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "operator requests initial1700 test, confirmed fresh stripe placement/stopped/original heading, later reiterated upload then test; single07 authorization not consumed",
+  "latest_authorization": "User requests handoff to next window now; no additional motion in this handoff. Standing preference remains direct vehicle testing unless explicitly otherwise; physical full stop/reset after14 has not been confirmed.",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -2234,7 +2234,7 @@
     "operator_reset_confirmed": true,
     "single13_authorized": true,
     "single13_executed": false,
-    "status": "locked deployed; trial13 admission rejected before arm; waiting lateral placement adjustment",
+    "status": "locked deployment completed; trial13 rejected before arm; after native opening fix trial14 actually ran, incomplete without collision per operator",
     "new_tests_run": false,
     "source_commit": "7dfd22da50c04c77f8a0914b4a21d422078c8a02",
     "deployed": true,
@@ -2275,7 +2275,7 @@
       "operator_confirmed_soft_board_restored": true,
       "pose_adjustment_requested": "slightly right, maintain original straight heading; no fixed-track control constant"
     },
-    "admission_evidence": "work/vehicle-dynamic-deploy-20261007/trial13-admission-scene.json",
+    "admission_evidence": "work/vehicle-dynamic-deploy-20261007/trial13-admission-scene-before-right-shift.json",
     "no_extra_suite_run": true
   },
   "live_vehicle_validation_preference": {
@@ -2312,7 +2312,119 @@
     "left_max_pwm": 1720,
     "pre_and_left_release_step": 20,
     "left_increase_step": 10,
-    "status": "compiled pending matched locked upload and direct live trial13; no extra suites",
-    "trial13_motor_requests_before_fix": 0
+    "status": "deployed matched full package; actual trial14 admitted and drove, stopped by current body proximity; turn/orbit not completed",
+    "trial13_motor_requests_before_fix": 0,
+    "source_commit": "4e33035c7666cd4e479cd099be04d9d861fdd664",
+    "deployed": true,
+    "all_14_installed_hashes_match": true,
+    "backup": "/home/bianbu/xt-stcar-console/backup-opening-span-20261007-201206",
+    "deployment_stdout_evidence": "work/vehicle-dynamic-deploy-20261007/opening-span-deploy-stdout.json",
+    "full_deployment_result_retrieved": false
+  },
+  "turn14_actual": {
+    "vehicle_source_commit": "4e33035c7666cd4e479cd099be04d9d861fdd664",
+    "bridge_sha256": "199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9",
+    "run_id": "CKS8ZeG0qR4FUHmdOQI3-DmU",
+    "reason": "probe_obstacle_close_body",
+    "presteer_ticks": 64,
+    "motion_ticks": 30,
+    "coast_ticks": 0,
+    "motor_pwm": 1560,
+    "initial_presteer_pwm": 1670,
+    "left_max_pwm": 1720,
+    "last_software_servo": 1651,
+    "last_steering_target": 1642,
+    "drive_elapsed_s": 1.0594822350003597,
+    "max_actual_gap_s": 0.08701463800025522,
+    "control_loop_limit_s": 0.12,
+    "max_lock_wait_s": 0.01622115499958454,
+    "max_tick_compute_s": 0.06192362599995249,
+    "trigger_scan_seq": 1244,
+    "last_turn_geometry_scan_seq": 1243,
+    "body_proximity_at_exit": {
+      "scope": "current_known_lidar_returns_only",
+      "coordinate_convention": "x_forward_y_left",
+      "ray_bin_convention": "clockwise_from_forward",
+      "body_extents_source": "user_measured_lidar_to_front_rear_and_outer_tyre_edges",
+      "body_extents_m": {
+        "front": 0.21,
+        "rear": 0.2,
+        "left": 0.17,
+        "right": 0.17
+      },
+      "body_rectangle_m": {
+        "x_min": -0.2,
+        "x_max": 0.21,
+        "y_min": -0.17,
+        "y_max": 0.17
+      },
+      "min_net_clearance_m": 0.05,
+      "min_net_clearance_source": "operator_selected_maneuver_5cm",
+      "lidar_range_allowance_m": 0.03,
+      "stop_distance_m": 0.08,
+      "stop_requested": true,
+      "current_known_min_distance_m": 0.07258646977144963,
+      "nearest_point": {
+        "angle_deg": 318,
+        "range_m": 0.34099999999999997,
+        "forward_x_m": 0.25341238548779144,
+        "left_y_m": 0.2281735367683706,
+        "body_distance_m": 0.07258646977144963
+      },
+      "axis_stop_thresholds_m": {
+        "front": 0.29,
+        "rear": 0.28,
+        "left": 0.25,
+        "right": 0.25
+      },
+      "free_space_certified": false,
+      "swept_path_certified": false,
+      "standstill_certified": false
+    },
+    "handover_observed": false,
+    "orbit_entry_elapsed_s": 0,
+    "completed": false,
+    "competition_supported": false,
+    "operator_report": "这次没有撞墙，但是没转到位",
+    "collision_reported": false,
+    "turn_sufficient_per_operator": false,
+    "physical_full_stop_after14_confirmed": false,
+    "placement_reset_after14_confirmed": false,
+    "end_feedback": {
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 96,
+        "servo": 1500,
+        "tick": 125747
+      },
+      "healthy": true,
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "ages": {
+        "camera": 0.09939220100022794,
+        "lidar": 0.036346898000374495,
+        "control": 0.009866661000160093
+      }
+    },
+    "end_feedback_is_historical_not_fresh_at_handoff": true,
+    "local_summary": "work/vehicle-dynamic-deploy-20261007/left-cone14-stdout.json",
+    "remote_full_evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261007-14",
+    "full_raw_retrieved_to_mac": false,
+    "handoff_ssh_read_attempt": "multiplex Broken pipe; batch fallback permission denied; no fresh vehicle state obtained",
+    "next_work": "Reconnect SSH; copy full14 raw evidence and full deployment result; analyze actual PWM/adoption, inner front-left wall/end geometry and clearance trend before choosing next control change. Do not merely increase timeout/maximum or relax body gate. No new steering fix implemented yet."
+  },
+  "handoff_20261007_after14": {
+    "task": "User requested a copyable prompt for next window; current window stops after updating records and pushing main",
+    "vehicle_source_commit": "4e33035c7666cd4e479cd099be04d9d861fdd664",
+    "remote_deployment_record": "/home/bianbu/xt-stcar-console/stage-opening-span-20261007-201206/deployment-result.json",
+    "raw13_remote": "/home/bianbu/xt-stcar-console/left-cone-trial-20261007-13",
+    "raw14_remote": "/home/bianbu/xt-stcar-console/left-cone-trial-20261007-14",
+    "new_control_fix_implemented": false,
+    "new_motor_trial_executed": false,
+    "physical_full_stop_reset_unknown": true,
+    "ssh_socket_failed_at_handoff": true
   }
 }
