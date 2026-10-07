@@ -900,5 +900,13 @@
         "errors": []
       }
     }
+  },
+  "subsequent_deployment": {
+    "date": "2026-10-07",
+    "source_commit": "19dd355132a3354d63f22d58dd3db402ea78125f",
+    "vehicle_deployed": true,
+    "motion_requested": false,
+    "record": "docs/vehicle-dynamic-deployment-validation-20261007.json",
+    "note": "2026-10-06 fields retain historical local-only state; this entry describes later deployment only"
   }
 }

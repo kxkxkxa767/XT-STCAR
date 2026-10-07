@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-07",
+  "source_commit": "19dd355132a3354d63f22d58dd3db402ea78125f",
+  "user_authorization": "deploy the prepared software and inspect/clean project-folder cache and obsolete backups, preserving successful straight-test rollback; no motion requested",
+  "vehicle": "bianbu@192.168.0.156",
+  "active_release": "/home/bianbu/xt-stcar-console/20260917",
+  "vehicle_deployed": true,
+  "deployment_archive": "outputs/XT-STCAR-dynamic-turn-19dd355-20261006.tar.gz",
+  "archive_sha256": "91312ee1e7218766be3deae8d2943401b9c05a195eb16384a88dde0604eefee2",
+  "backup": "/home/bianbu/xt-stcar-console/backup-dynamic-turn-20261007-102438",
+  "backup_scope": "whole previous active release, launcher, wrapper, vision config, private access config, user service unit and runtime settings; all replaced prior files checksum-verified",
+  "previous_vehicle_source_evidence": "four Python files and bridge matched deployed 8efc47b run04, stop_goal and turn_motion absent",
+  "previous_files": {
+    "app.js": {
+      "existed": true,
+      "sha256": "146a9f66a4fcbfaa1294a8d5e28c7f4f54dc2c4b798e0708e0ee197b6c3d7b19"
+    },
+    "autonomy-control.py": {
+      "existed": true,
+      "sha256": "791a222c20aa4272e1dedbb0430c656f93b7599a5843bb997a605ac4b01dc1c1"
+    },
+    "autonomy_live.py": {
+      "existed": true,
+      "sha256": "7c5d6112b59fa9a84ce984992f36df758766b84773a7312a8ce13ada27060cba"
+    },
+    "coast_motion.py": {
+      "existed": true,
+      "sha256": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257"
+    },
+    "index.html": {
+      "existed": true,
+      "sha256": "24342507083dc53a19ec03585fe7b148d131559c64ad6074d4b5765549195930"
+    },
+    "server.py": {
+      "existed": true,
+      "sha256": "b43055f3079129f2d8bc29b88bad48b2456008e423fb22e52944a2a27c9cc052"
+    },
+    "stop_goal.py": {
+      "existed": false,
+      "sha256": null
+    },
+    "style.css": {
+      "existed": true,
+      "sha256": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2"
+    },
+    "trial-goal-turn-exit-example.json": {
+      "existed": false,
+      "sha256": null
+    },
+    "turn_motion.py": {
+      "existed": false,
+      "sha256": null
+    },
+    "vehicle-bridge": {
+      "existed": true,
+      "sha256": "515476dfb396fa063775bcc2b2951ce72e0b20f90f888b1525b2eb229f671d24"
+    },
+    "start-console.py": {
+      "existed": true,
+      "sha256": "a176f02f9e2d7b232942f50f22e04b0ff02b3c9f124938cf6da915024fc6bc9f"
+    }
+  },
+  "installed_sha256": {
+    "app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+    "autonomy-control.py": "afb98cf0ef6908298ee9a2f5a0b85ac5d06b5a8984142d226c4e5d515c3d318c",
+    "autonomy_live.py": "da2ecc9bc360153bb75a2a493347a658407686e5cccfa064bd45d800d7117a86",
+    "coast_motion.py": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257",
+    "index.html": "f4c71739afad72d3d0a17bafc8b286b412ca4289ab924a77a0fc516579fcf43f",
+    "server.py": "b4e8334b5871a9f532af974b3e748b867676c610903930fba60473b853eda905",
+    "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+    "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+    "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+    "turn_motion.py": "042243886696746a3b4fd295c39c5d8081631e83d759fbbc782280a2f5bf2902",
+    "vehicle-bridge": "7f13145b4c9aeb4d3561580442d18fd94c75707f3a4177964093076eae88c0cd",
+    "start-console.py": "752449080665c0cf7c527c518657666c788b30ff9f4e30ebe07724ca7c4122ab"
+  },
+  "runtime_settings": {
+    "forward": 1550,
+    "reverse": 1450,
+    "left": 1650,
+    "right": 1350
+  },
+  "settings_note": "current predeployment 1550/1450/1650/1350 preserved, not historical 1560; left-turn trial internally uses1560 and dynamic output",
+  "target_validation": {
+    "architecture": "riscv64",
+    "glibc": "glibc 2.39",
+    "python": "Python 3.12.3",
+    "python_compile_files": 7,
+    "dynamic_dependencies_all_resolved": true,
+    "bridge_dry_physical_output": false,
+    "bridge_dry_armed": false,
+    "bridge_dry_motor": 1500,
+    "bridge_dry_servo": 1500
+  },
+  "predeployment_fresh_feedback": {
+    "sample_count": 6,
+    "same_boot": true,
+    "boot": "LlREgoDDvPaInp7cTwSocQ",
+    "first_control_tick": 799656,
+    "last_control_tick": 800687,
+    "control_sequence": 85,
+    "first_lidar_seq": 8003,
+    "last_lidar_seq": 8013,
+    "first_lidar_at_ms": 799473,
+    "last_lidar_at_ms": 800475,
+    "all_healthy_locked_neutral": true,
+    "max_control_age_s": 0.014422181999975692,
+    "max_lidar_response_age_s": 0.09398845099997288
+  },
+  "postdeployment_fresh_feedback": {
+    "sample_count": 10,
+    "same_boot": true,
+    "boot": "xXn6gmlxYL6tuomS2BIBAw",
+    "first_control_tick": 6743,
+    "last_control_tick": 8730,
+    "control_sequence": 0,
+    "first_lidar_seq": 65,
+    "last_lidar_seq": 85,
+    "first_lidar_at_ms": 6572,
+    "last_lidar_at_ms": 8574,
+    "all_healthy_locked_neutral": true,
+    "max_control_age_s": 0.022122741999965,
+    "max_lidar_response_age_s": 0.0961742490000006
+  },
+  "independent_read_only_feedback": {
+    "sample_count": 10,
+    "same_boot": true,
+    "boot": "xXn6gmlxYL6tuomS2BIBAw",
+    "first_control_tick": 55239,
+    "last_control_tick": 57163,
+    "control_sequence": 0,
+    "first_lidar_seq": 550,
+    "last_lidar_seq": 570,
+    "first_lidar_at_ms": 55033,
+    "last_lidar_at_ms": 57027,
+    "all_healthy_locked_neutral": true,
+    "max_control_age_s": 0.01999985099996593,
+    "max_lidar_response_age_s": 0.09973034100005407
+  },
+  "independent_startup_check_only": {
+    "boot": "xXn6gmlxYL6tuomS2BIBAw",
+    "healthy": true,
+    "armed": false
+  },
+  "serial_owners": {
+    "/dev/car": {
+      "pid": 5743,
+      "role": "control",
+      "matched_active_bridge": true
+    },
+    "/dev/laser": {
+      "pid": 5747,
+      "role": "lidar",
+      "matched_active_bridge": true
+    }
+  },
+  "preserved_model_config_calibration_hashes": {
+    "/home/bianbu/xt-stcar-console/20260917/README.md": "93043cd305f19fb29d3f218832c81504cd8fc2f5121a8b247a77d2d256c1af67",
+    "/home/bianbu/xt-stcar-deploy/blue-cone-20260922/models/road-perception-sim.json": "0f144f88170fc6bb0a972e466a90cbda88430b6500422c55b15944f113d95028",
+    "/home/bianbu/xt-stcar-console/vision.json": "3c6cb5fdf8f4ba4dcd66db81a32190d80aa6e46ec2ffba9057095dfdc3e3c77f",
+    "/home/bianbu/xt-stcar-console/20260917/vision_shadow.py": "c4cc0f0307fd14a528f5c9a21f6df84887b6dc619a4a34295033e6e943843f33",
+    "/home/bianbu/xt-stcar-console/20260917/lidar-calibration.json": "870d4ffd334a3cde6893d961c161b47eab2dc0f200831447085c90aad59c7b67",
+    "/home/bianbu/xt-stcar-deploy/blue-cone-20260922/models/blue_cone.onnx": "a4f0e3f90fe20839ce28b5169e971430cca2449a0f26d26734d28ceaad2d2ed5",
+    "/home/bianbu/xt-stcar-deploy/blue-cone-20260922/models/blue_cone-diagnostic-010.json": "cabbc190265d59d7fecba16bb8072f36d07eeb2ee85d17d78163c86ddbec244e",
+    "/home/bianbu/xt-stcar-console/run-service.py": "fb78562780cc12105eaed45fba82b2488cd6d42e3f9a581fa8e6e024446b50df",
+    "/home/bianbu/xt-stcar-console/20260917/vision-shadow": "d7c4ac29f51394b73eb6443d7506133effcb759ed668a4223e22ccf5ce3ddc8d",
+    "/home/bianbu/.local/opt/xt-stcar/onnxruntime/spacemit-2.0.6/lib/libonnxruntime.so": "93bb75601d9eceb5aca192fa70c0c3e18b94a70b9f57acdc9b34c2ff426e09e3",
+    "/home/bianbu/.config/systemd/user/xt-stcar-console.service": "c715d6f2fc72c0cc7a006c10f24741304258d23cd1ef1a8514473f073b4145e4"
+  },
+  "access_token_preserved": true,
+  "launch_command_preserved": true,
+  "new_interface": {
+    "mode": "locked",
+    "active": null,
+    "epoch": 0,
+    "supported": [
+      "straight_probe",
+      "straight_segment",
+      "to_left_junction",
+      "formal_straight_stop",
+      "bounded_left_turn_trial"
+    ],
+    "competition_supported": false,
+    "coast_max_s": 5.0,
+    "control_age_limit_s": 0.2,
+    "auto_control_health_s": 0.25,
+    "front_boundary_loss_s": 0.7,
+    "turn_ready": true,
+    "turn_rejection": null,
+    "turn_drive_max_s": 10.0,
+    "turn_presteer_max_s": 5.0,
+    "turn_steering_allowance_s": 1.2,
+    "steering_candidate_bounds": {
+      "min": 1270,
+      "max": 1720,
+      "right_physically_validated": false
+    },
+    "trial_goal": null
+  },
+  "independent_turn_preview": {
+    "ready": true,
+    "rejection": null,
+    "motion_requested": false
+  },
+  "arm_or_drive_requests": 0,
+  "autonomy_start_requests": 0,
+  "motion_requested": false,
+  "neutral_output_is_not_physical_standstill_measurement": true,
+  "dynamic_turn_motion_tested": false,
+  "right_1270_physically_validated": false,
+  "low_motion_physical_acceptance": false,
+  "arbitrary_xy_stop_execution": "real_pose_missing",
+  "cone_orbit_execution_connected": false,
+  "competition_navigation": false,
+  "evidence_directory": "work/vehicle-dynamic-deploy-20261007/",
+  "local_validation_reused": "204 Python / 8 frontend / 20 junction Rust / 7 teleop Rust plus clippy,fmt,cross-ELF; no source code change today",
+  "good_straight_backup_retained": {
+    "source_commit": "8efc47b6e83874f08ab8c4437d029246577bc282",
+    "local_release": "work/vehicle-junction-coast-test-20261006/release-process/",
+    "local_run_evidence": "work/vehicle-junction-coast-test-20261006/run04/",
+    "fresh_full_vehicle_backup": "/home/bianbu/xt-stcar-console/backup-dynamic-turn-20261007-102438",
+    "historical_vehicle_pre8ef_backup": "/home/bianbu/xt-stcar-console/backup-coast-process-20261006-161139",
+    "historical_backup_note": "161139 is the version before 8ef deployment; retained but not mislabeled as run04 source"
+  },
+  "local_cleanup": {
+    "schema_version": 1,
+    "date": "2026-10-07",
+    "scope": "local project only, no vehicle backup deletion",
+    "deleted_path_count": 199,
+    "cache_directory_count": 165,
+    "finder_metadata_count": 32,
+    "duplicate_expanded_archives": [
+      {
+        "path": "dist/XT-STCAR-vision-c86cd80-riscv64",
+        "archive_retained": "dist/XT-STCAR-vision-c86cd80-riscv64.zip",
+        "archive_sha256": "1d925934bf0764324e38d0be1aab1da26e75145dc8fe23e7e45a5ce3e19fc4ad",
+        "exact_matched_files": 20
+      },
+      {
+        "path": "dist/XT-STCAR-vision-console-20260922-riscv64",
+        "archive_retained": "dist/XT-STCAR-vision-console-20260922-riscv64.zip",
+        "archive_sha256": "d8363c35ab8c5da2dc335798604fbdfdbdd810dabbb2397e64f29a5ec991c0be",
+        "exact_matched_files": 31
+      }
+    ],
+    "before_project_allocated_bytes": 22118834176,
+    "after_project_allocated_bytes": 7525568512,
+    "disk_available_increase_bytes": 14500646912,
+    "disk_space_note": "APFS extent sharing and other applications may affect available-space change",
+    "retained_hash_count": 765,
+    "all_retained_hashes_match": true,
+    "protected_final_artifact_count": 117,
+    "teammate_original_count": 5,
+    "successful_straight_release_and_run04_preserved": true,
+    "current_delivery_preserved": true,
+    "vehicle_backups_untouched": true,
+    "source_toolchains_models_preserved": true,
+    "historical_tar_archives_preserved": true,
+    "elapsed_s": 23.018148832998122,
+    "deleted_paths_manifest": "work/vehicle-dynamic-deploy-20261007/cleanup-plan.json",
+    "project_gib_before": 20.6,
+    "project_gib_after": 7.01
+  }
+}
