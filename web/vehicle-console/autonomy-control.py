@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S, CONTROL_AGE_LIMIT_S
 from turn_motion import parse_trial_goal, validate_initial_presteer_pwm, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S
+from maneuver_sequence import PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S
 
 
 class ProbeInterrupted(RuntimeError):
@@ -89,8 +90,9 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
 def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=None, initial_presteer_pwm=None,
                     compact_target_trial=False):
     """One mid-segment trial; alignment evidence never becomes a cone task completion."""
+    presteer_max_s = MANEUVER_PRESTEER_MAX_S if compact_target_trial else MAX_PRESTEER_S
     try:
-        latest, run = run_probe(request, state, TRIAL_MOTOR, round((MAX_PRESTEER_S+max_seconds)*1000),
+        latest, run = run_probe(request, state, TRIAL_MOTOR, round((presteer_max_s+max_seconds)*1000),
             centering=True, turn_trial=True, placement_confirmed=placement_confirmed, max_turn_s=max_seconds,
             trial_goal_id=goal_id, initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=compact_target_trial)
     except ProbeInterrupted as error:
@@ -108,7 +110,8 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
             competition_supported=False, compact_target=result.get('compact_target'),
             handover_observed=bool(result.get('handover_observed')),
             orbit_entry_elapsed_s=result.get('orbit_entry_elapsed_s', 0.),
-            initial_presteer_pwm=initial_presteer_pwm)
+            initial_presteer_pwm=initial_presteer_pwm, turn_presteer_max_s=presteer_max_s,
+            turn_drive_max_s=max_seconds, coast_max_s=COAST_MAX_S)
     return report
 
 
@@ -244,7 +247,10 @@ def main():
                     initial_presteer_scope='presteer_only_motor_neutral_then_live_geometry')
             if args.command == 'turn-cone':
                 output.update(trial_mode='turn-cone', trial_scope='first_lidar_compact_target_orbit_entry',
-                              semantic_class='unknown', competition_supported=False, completed=False)
+                    semantic_class='unknown', competition_supported=False, completed=False,
+                    turn_presteer_max_s=state['autonomy'].get('turn_presteer_max_s'),
+                    turn_drive_max_s=state['autonomy'].get('turn_drive_max_s'),
+                    coast_max_s=state['autonomy'].get('coast_max_s'))
             print(json.dumps(output, ensure_ascii=False, indent=2))
             return
         if not args.placement_confirmed:

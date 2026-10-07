@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-10-07，09达到1720但预打5s超时，用户要求提高预打期限）
+
+**用户确认静止并明确开始新一轮，已消费09授权；41f7680先完整预打到1720，但因front_sparse恢复与1.2s采用等待遇到总5s期限，仍0前进/0绕行，随后锁定1500。用户最新“超时的阈值提高”，本轮仅newmode中性presteer5→8s，drive10/coast5不扩。源码已冻结，338项Mac Python/25序列/59服务CLI通过；车端38专项结论因SSH掉线未取回，不能记passed。车端仍41旧5s，不自动发10。**
+
+- 09 run sdqgPckUmFgeYAJDpfnYNeuE，presteer139/motion0/coast0、末servo1720，reason=left_turn_presteer_timeout，trigger2271；所有记录motor1500，没有给1560。第一次保存1720时pre_elapsed3.300同时front_sparse；3newscan/300ms质量恢复后约3.755重启采用等待，到最后保存4.841只等1.086s（需要1.2），5s先到。PWM仅新scan更新有真实间隔抖动，但本轮按用户指定只提高中性预算，不改重复frame步进/质量或成熟要求。
+- 末6份新鲜反馈seq141/tick228326、healthy/locked/owner与active空/M=S1500。用户观察“转了一下然后回中不动了”，与中性预打→超时锁定一致，不认证物理停稳或比赛完成。09完整原始文件work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-09/。
+- 新mode默认初始1720/10PWM100ms，未完整采用及3tick/1.2s前motor1500；newSequence presteer8，server deadline/duration/CLI与外层监督预算一起匹配，默认turn-left仍5，forward10与coast5/no正after收油/no自动rearm不变。真实侧向目标/unknown语义/车体.08m门不变；8s修复已完成Mac验证；SSH复用Broken pipe/连接超时，已向用户请求重新登录，车端专项需取回/核对，再完整备份默认锁定上传。尚未部署8s修复，不能记实测绕行。
+- root独占SSH/硬件，验证后按规范推main并成套完整备份锁定更新/哈希/设置/新fresh复核。09本次授权已消费，故障退出不自动再解锁，新动力须用户新的当次指令。全部好直道备份/历史失败/队友文件保留。
+
 ## 新窗口接手入口（2026-10-07，默认先完整预打1720已验证并锁定部署；08未前进）
 
 **最新用户要求“一开始舵机角度必须大点，不然后期调整来不及”。修正版41f7680已成套备份/默认锁定部署，14安装哈希一致；只读新mode预览初始目标1720，当前M=S1500、armed=false，未重新arm/发09。上一次“接上先测试”已执行08，但中性预打到1540便在真实scan637因墙歧义退出，0前进/0绕行，不能记成功。保护退出不自动重跑，新的动力试验须用户新的当次要求。**

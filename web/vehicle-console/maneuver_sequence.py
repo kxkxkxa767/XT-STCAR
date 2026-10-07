@@ -13,6 +13,7 @@ from turn_motion import (TurnMotion, NEUTRAL, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
 
 ORBIT_ENTRY_MAX_S = 3.0
 COAST_MAX_S = 5.0
+PRESTEER_MAX_S = 8.0
 ORBIT_BEARING_RAD = math.pi/2
 ORBIT_BEARING_GAIN = 100.0
 ORBIT_RANGE_GAIN = 70.0
@@ -25,6 +26,9 @@ class ManeuverSequence(TurnMotion):
     def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=1720):
         super().__init__(started_at, max_drive_s=max_drive_s,
                          initial_presteer_pwm=initial_presteer_pwm)
+        # User-selected neutral preparation budget for this experiment only.
+        # Parent construction and default TurnMotion retain their five seconds.
+        self.max_presteer_s = PRESTEER_MAX_S
         self.target_tracker = CompactTargetTracker()
         self.compact_target = None
         self.handover_observed = False
@@ -95,6 +99,7 @@ class ManeuverSequence(TurnMotion):
                       orbit_reference_range_m=self.orbit_reference_range_m,
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
+                      presteer_max_s=self.max_presteer_s,
                       object_semantic_verified=False, passed_cones=None,
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,

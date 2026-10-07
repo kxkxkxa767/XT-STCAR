@@ -211,6 +211,9 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body['autonomy']['trial_mode'], 'turn-cone')
         self.assertEqual(body['autonomy']['turn_preview']['initial_presteer_pwm'], 1720)
+        self.assertEqual(body['autonomy']['turn_presteer_max_s'], 8.)
+        self.assertEqual(body['autonomy']['turn_drive_max_s'], 10.)
+        self.assertEqual(body['autonomy']['coast_max_s'], 5.)
         self.assertEqual(body['autonomy']['turn_preview']['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         for status, body in responses[len(cases)+1:]:
             self.assertEqual(status, 400)
@@ -313,6 +316,9 @@ class TurnControlTests(unittest.TestCase):
             state = self.console.state(trial_mode='turn-cone')
         preview = state['autonomy']['turn_preview']
         self.assertEqual(state['autonomy']['trial_mode'], 'turn-cone')
+        self.assertEqual(state['autonomy']['turn_presteer_max_s'], 8.)
+        self.assertEqual(state['autonomy']['turn_drive_max_s'], 10.)
+        self.assertEqual(state['autonomy']['coast_max_s'], 5.)
         self.assertEqual(preview['initial_presteer_pwm'], 1720)
         self.assertEqual(preview['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         self.assertEqual(preview['semantic_class'], 'unknown')
@@ -326,7 +332,8 @@ class TurnControlTests(unittest.TestCase):
         with patch.object(self.server.time, 'monotonic', return_value=0.):
             for extra in [{}, {'placement_confirmed': False}, {'placement_confirmed': True, 'goal_id': 'intent'},
                           {'placement_confirmed': True, 'camera_required': False},
-                          {'placement_confirmed': True, 'clearance_profile': 'straight'}]:
+                          {'placement_confirmed': True, 'clearance_profile': 'straight'},
+                          {'placement_confirmed': True, 'max_presteer_s': 9}]:
                 with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'placement_confirmation'):
                     self.console.autonomy_command({'op': 'turn_cone_start', 'boot': self.console.boot,
                                                   'epoch': 0, 'tick': 1000, **extra})
@@ -337,6 +344,10 @@ class TurnControlTests(unittest.TestCase):
         self.assertTrue(session['maneuver_sequence'])
         self.assertIsInstance(session['turn_motion'], self.server.ManeuverSequence)
         self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1720)
+        self.assertEqual(session['turn_motion'].max_presteer_s, 8.)
+        self.assertEqual(session['deadline'], 18.)
+        self.assertEqual(session['report']['duration_ms'], 18000)
+        self.assertEqual(session['report']['turn_presteer_max_s'], 8.)
         report = session['report']
         self.assertEqual(report['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         self.assertEqual(report['semantic_class'], 'unknown')
@@ -381,7 +392,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertGreaterEqual(decision['steering_settle_elapsed_s']+1e-9, 1.2)
         self.assertGreaterEqual(decision['steering_settle_feedback_ticks'], 3)
         self.assertEqual(session['report']['clearance_current']['clearance_profile'], 'maneuver')
-        self.assertEqual(session['deadline'], 15.)
+        self.assertEqual(session['deadline'], 18.)
         near = self.scan(self.console.scan['seq']+1)
         near['ranges'][90] = .24
         self.tick(round(drive_since+.02, 6), near)
@@ -435,6 +446,34 @@ class TurnControlTests(unittest.TestCase):
         self.assertGreaterEqual(self.now-adopted+1e-9, 1.2)
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1560, 1720))
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[:-1]))
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_compact_neutral_quality_wait_has_fixed_eight_seconds_and_old_left_keeps_five(self):
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            self.assertEqual(self.console.state()['autonomy']['turn_presteer_max_s'], 5.)
+        self.start_compact_trial()
+        session = self.console.auto_session
+        owner, epoch, deadline = self.console.owner, self.console.control_epoch, session['deadline']
+        self.assertEqual((session['turn_motion'].max_presteer_s, deadline), (8., 18.))
+        for index in range(1, 401):
+            now = round(index*.02, 6)
+            self.tick(now, self.sparse_scan(1+int(round(now*10, 6))))
+            if index < 400:
+                self.assertIs(self.console.auto_session, session)
+                self.assertEqual((self.console.owner, self.console.control_epoch, session['deadline']),
+                                 (owner, epoch, deadline))
+                self.assertEqual(session['phase'], 'presteer')
+                self.assertEqual(session['report']['current_pwm'], 1500)
+        self.assertEqual(self.now, 8.)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'left_turn_presteer_timeout')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                         ('stop', 1500, 1500))
+        before = list(self.outputs)
+        self.tick(8.02)
+        self.assertEqual(self.outputs, before)
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
     def test_compact_trial_cumulative_drive_budget_and_coast_never_restore_motor(self):
@@ -1279,7 +1318,8 @@ class TurnCliTests(unittest.TestCase):
     def test_compact_cli_default_preview_is_explicit_readonly_first_unknown_target_scope(self):
         cli = self.module()
         state = {'healthy': True, 'boot': 'boot', 'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}},
-            'autonomy': {'trial_mode': 'turn-cone', 'turn_ready': True, 'turn_rejection': None, 'turn_preview': {
+            'autonomy': {'trial_mode': 'turn-cone', 'turn_ready': True, 'turn_rejection': None,
+                'turn_presteer_max_s': 8., 'turn_drive_max_s': 10., 'coast_max_s': 5., 'turn_preview': {
                 'initial_presteer_pwm': 1720, 'motor': 1500, 'servo': 1500, 'steering_target': 1720,
                 'trial_scope': 'first_lidar_compact_target_orbit_entry', 'compact_target': None}}}
         requests, output = [], io.StringIO()
@@ -1304,6 +1344,8 @@ class TurnCliTests(unittest.TestCase):
         self.assertEqual(report['trial_scope'], 'first_lidar_compact_target_orbit_entry')
         self.assertEqual(report['semantic_class'], 'unknown')
         self.assertEqual(report['initial_presteer_pwm'], 1720)
+        self.assertEqual((report['turn_presteer_max_s'], report['turn_drive_max_s'], report['coast_max_s']),
+                         (8., 10., 5.))
 
     def test_compact_cli_execute_requires_mode_interface_and_placement(self):
         cli = self.module()
@@ -1369,6 +1411,49 @@ class TurnCliTests(unittest.TestCase):
         self.assertTrue(result['handover_observed'])
         self.assertEqual(result['compact_target'], target)
         self.assertTrue(result['fresh_neutral_locked_confirmed'])
+
+    def test_cli_compact_budget_uses_eight_neutral_seconds_and_old_left_keeps_five(self):
+        cli = self.module()
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+        latest = {'autonomy': {'last_result': {'reason': 'left_turn_presteer_timeout'}},
+                  'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}}}
+        with patch.object(cli, 'run_probe', return_value=(latest, {'run_id': 'run'})) as probe:
+            compact = cli.first_compact_target_trial(None, state, 10, True)
+            self.assertEqual(probe.call_args.args[3], 18000)
+            self.assertTrue(probe.call_args.kwargs['compact_target_trial'])
+            self.assertTrue(probe.call_args.kwargs['centering'])
+            self.assertEqual((compact['turn_presteer_max_s'], compact['turn_drive_max_s'], compact['coast_max_s']),
+                             (8., 10., 5.))
+            cli.left_turn_trial(None, state, 10, True)
+            self.assertEqual(probe.call_args.args[3], 15000)
+            self.assertFalse(probe.call_args.kwargs['compact_target_trial'])
+        self.assertEqual(cli.COAST_MAX_S, 5.)
+
+    def test_cli_compact_waits_past_old_budget_for_fresh_locked_neutral(self):
+        cli = self.module()
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+        clock, calls, reads = [0.], [], []
+        def monotonic():
+            clock[0] += 1.
+            return clock[0]
+        def request(path, data=None):
+            if data:
+                calls.append(data['op'])
+                return {'run_id': 'run', 'epoch': 0}
+            reads.append(clock[0])
+            ended = clock[0] >= 23.
+            return {'autonomy': {'active': None if ended else {'run_id': 'run'},
+                'mode': 'locked' if ended else 'auto_turn_cone_trial', 'last_result': {
+                    'run_id': 'run', 'completed': False, 'reason': 'coast_standstill_unconfirmed'}},
+                'ages': {'control': .01}, 'status': {'control': {'armed': not ended,
+                    'motor': 1500, 'servo': 1500}}}
+        with patch.object(cli.time, 'monotonic', side_effect=monotonic), patch.object(cli.time, 'sleep'):
+            result = cli.first_compact_target_trial(request, state, 10, True)
+        self.assertEqual(reads[-1], 23.)
+        self.assertEqual(calls.count('turn_cone_start'), 1)
+        self.assertEqual(calls[-1], 'cancel')
+        self.assertTrue(result['fresh_neutral_locked_confirmed'])
+        self.assertFalse(result['completed'])
 
     def test_cli_invalid_initial_parameter_fails_before_state_request(self):
         cli = self.module()

@@ -29,7 +29,7 @@ from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STAB
 from coast_motion import CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
-from maneuver_sequence import ManeuverSequence
+from maneuver_sequence import ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S
 
 ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
@@ -382,7 +382,8 @@ class Console:
                 'turn_clearance': turn_clearance,
                 'trial_mode': trial_mode,
                 'trial_scope': COMPACT_TARGET_TRIAL_SCOPE if compact_target_trial else 'bounded_left_turn_trial',
-                'turn_drive_max_s': MAX_DRIVE_S, 'turn_presteer_max_s': MAX_PRESTEER_S,
+                'turn_drive_max_s': MAX_DRIVE_S,
+                'turn_presteer_max_s': MANEUVER_PRESTEER_MAX_S if compact_target_trial else MAX_PRESTEER_S,
                 'turn_steering_allowance_s': STEERING_ALLOWANCE_S,
                 'turn_requires_operator_placement_confirmation': True,
                 'steering_candidate_bounds': {'min': SERVO_MIN, 'max': SERVO_MAX, 'right_physically_validated': False},
@@ -452,7 +453,8 @@ class Console:
             raise ValueError('stale_arm_request')
         run_id = secrets.token_urlsafe(18)
         report = {'run_id': run_id, 'epoch': self.control_epoch, 'pwm': TRIAL_MOTOR, 'servo': 1500,
-            'duration_ms': round(1000*(MAX_PRESTEER_S+motion.max_drive_s)), 'phase': 'presteer',
+            'duration_ms': round(1000*(motion.max_presteer_s+motion.max_drive_s)), 'phase': 'presteer',
+            'turn_presteer_max_s': motion.max_presteer_s, 'turn_drive_max_s': motion.max_drive_s,
             'turn_stage': decision['turn_stage'],
             'drive_ticks': 0, 'motion_ticks': 0, 'presteer_ticks': 0, 'coast_ticks': 0, 'recovery_ticks': 0,
             'observed_pwm': False, 'observed_armed': False, 'steering_changes': 0, 'centering': True,
@@ -475,7 +477,7 @@ class Console:
                 orbit_entry_elapsed_s=decision.get('orbit_entry_elapsed_s', 0.),
                 clearance_profile_source='bounded_first_compact_target_orbit_entry_trial')
         self.auto_session = {'report': report, 'turn_trial': True, 'turn_motion': motion, 'phase': 'presteer',
-            'deadline': now+MAX_PRESTEER_S+motion.max_drive_s, 'last_loop': now, 'heartbeat_seq': 0,
+            'deadline': now+motion.max_presteer_s+motion.max_drive_s, 'last_loop': now, 'heartbeat_seq': 0,
             'quality': self.perception_quality, 'recovery': QualityRecovery(), 'rear_launch': None,
             'motion_scan_seq': None, 'turn_last_servo': 1500, 'turn_servo_sequence': None}
         if compact_target_trial:

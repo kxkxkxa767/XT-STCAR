@@ -1557,5 +1557,71 @@
       "physical_standstill_verified": false
     },
     "no_new_motor_test_after08": true
+  },
+  "turn09_actual": {
+    "source_commit": "41f768034203fda1031fe862fe1ba1249b6c2d2b",
+    "operator_authorized": "已完全静止，现在开始新一轮",
+    "authorization_consumed": true,
+    "result": {
+      "run_id": "sdqgPckUmFgeYAJDpfnYNeuE",
+      "presteer_ticks": 139,
+      "motion_ticks": 0,
+      "coast_ticks": 0,
+      "steering_changes": 22,
+      "reason": "left_turn_presteer_timeout",
+      "completed": false,
+      "handover_observed": false,
+      "last_servo": 1720,
+      "drive_elapsed_s": 0,
+      "actual_motor_all_neutral": true,
+      "fresh_final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 141,
+        "servo": 1500,
+        "tick": 228326
+      },
+      "healthy": true,
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "physical_standstill_verified": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-09/"
+    },
+    "timing_diagnosis": {
+      "observer_first_saved1720_pre_elapsed_s": 3.3,
+      "front_sparse_then_stable_recovery": true,
+      "settle_resumed_pre_elapsed_s_approx": 3.755,
+      "last_saved_settle_elapsed_s": 1.086,
+      "required_settle_s": 1.2,
+      "presteer_cap_s": 5,
+      "conclusion": "five second neutral budget expires before fresh postquality adoption allowance completes; not lack of initial target angle"
+    }
+  },
+  "turn10_preparation": {
+    "operator_request": "超时的阈值提高",
+    "new_mode_presteer_max_s": 8,
+    "old_turn_left_presteer_s": 5,
+    "drive_max_s": 10,
+    "coast_max_s": 5,
+    "initial_default_pwm": 1720,
+    "scope": "neutral presteer only; settle3ticks1.2 and scan-quality recovery unchanged",
+    "status": "code frozen and mac338 passed; target38 result unavailable after SSH transport loss; not deployed or driven",
+    "mac_python_passed": 338,
+    "sequence_unit_passed": 25,
+    "service_cli_unit_passed": 59,
+    "target_affected_expected": 38,
+    "target_affected_passed": null,
+    "target_validation_blocked": "SSH mux Broken pipe / connection timeout; need fresh login and read final log",
+    "supervisor_max_s": 28,
+    "cli_wait_budget_s_at_drive10": 24,
+    "source_sha256": {
+      "web/vehicle-console/server.py": "44a626521a9ad96217f940f9665a96faf6a1c8229b1498d33c0d9198bae144d1",
+      "web/vehicle-console/autonomy-control.py": "732df3c0812c3ad8368a2c222700c014095973672f84de6ac9452a4961040778",
+      "web/vehicle-console/maneuver_sequence.py": "e18bf106877e145641272396ca07942055701a586285231cdc4e4e3837d80a49"
+    },
+    "vehicle_still_source": "41f768034203fda1031fe862fe1ba1249b6c2d2b",
+    "next_motor_test_not_authorized": true
   }
 }

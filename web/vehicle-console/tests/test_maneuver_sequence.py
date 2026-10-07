@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from maneuver_sequence import ManeuverSequence
+from maneuver_sequence import ManeuverSequence, PRESTEER_MAX_S
 from turn_motion import TurnMotion
 
 
@@ -292,14 +292,14 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual((h.motion.last_geometry_receive, h.motion.last_geometry_publication,
                           h.motion.last_geometry_seq), source)
 
-    def test_neutral_hold_original_five_second_budget_expires_and_cannot_restart(self):
+    def test_neutral_hold_original_eight_second_budget_expires_and_cannot_restart(self):
         h = Harness()
         h.step()
         original = h.motion._measurement
         def ambiguous(*args):
             raise ValueError('left_turn_outer_wall_ambiguous')
         h.motion._measurement = ambiguous
-        while h.now < 4.9:
+        while h.now < 7.9:
             result = h.step()
             self.assertEqual(result['phase'], 'presteer')
             self.assertEqual(result['motor'], 1500)
@@ -438,6 +438,55 @@ class ManeuverSequenceTests(unittest.TestCase):
         result = h.motion.update(h.latest_scan, 0., h.now+.31, control)
         self.assertEqual(result['phase'], 'locked')
         self.assertEqual(result['reason'], 'turn_scan_not_advancing')
+
+    def test_new_presteer_budget_keeps_five_seconds_neutral_then_allows_full_settling(self):
+        h = Harness(initial=1720)
+        while h.now < 5.0:
+            h.servo = 1500  # Mock feedback has not adopted the final command.
+            result = h.step()
+            self.assertEqual(result['phase'], 'presteer')
+            self.assertEqual(result['motor'], 1500)
+        self.assertEqual(result['presteer_max_s'], 8.)
+        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        h.servo = 1720
+        result = h.step()
+        settled_from = h.motion.settle_since
+        self.assertAlmostEqual(settled_from, 5.1)
+        while result['phase'] == 'presteer':
+            self.assertEqual(result['motor'], 1500)
+            result = h.step()
+        self.assertEqual(result['phase'], 'drive')
+        self.assertEqual(result['motor'], 1560)
+        self.assertAlmostEqual(h.now-settled_from, 1.2)
+        self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
+        self.assertLess(h.now, PRESTEER_MAX_S)
+
+    def test_eight_second_exact_timeout_does_not_emit_forward_or_extend_budget(self):
+        h = Harness(initial=1720)
+        for _ in range(79):
+            h.servo = 1500
+            result = h.step()
+            self.assertEqual((result['phase'], result['motor']), ('presteer', 1500))
+        self.assertEqual(h.now, 7.9)
+        result = h.step()
+        self.assertEqual(h.now, 8.)
+        self.assertEqual((result['phase'], result['motor'], result['servo']), ('locked', 1500, 1500))
+        self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
+        self.assertEqual(h.motion.started_at, 0.)
+        self.assertEqual(h.motion.max_presteer_s, PRESTEER_MAX_S)
+        self.assertEqual(h.step()['phase'], 'locked')
+
+    def test_original_turn_motion_keeps_five_second_presteer_limit(self):
+        motion = TurnMotion(0., initial_presteer_pwm=1700)
+        for seq in range(1, 51):
+            now = seq/10
+            control = {'armed': True, 'motor': 1500, 'servo': 1500, 'seq': seq, 'tick': seq*100}
+            result = motion.update(scan(seq, now), 0., now, control)
+            if seq < 50:
+                self.assertEqual((result['phase'], result['motor']), ('presteer', 1500))
+        self.assertEqual(motion.max_presteer_s, 5.)
+        self.assertEqual(result['phase'], 'locked')
+        self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
 
 
 if __name__ == '__main__':
