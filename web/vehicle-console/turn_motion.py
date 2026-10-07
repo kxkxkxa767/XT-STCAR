@@ -18,6 +18,8 @@ PWM_STEP = 10
 PWM_INTERVAL_S = .10
 SCAN_AGE_S = .30
 COAST_SERVO_DELTA = 55
+# Turn-only lidar-to-wall margin: measured half-width + clearance + range allowance.
+TURN_LATERAL_MARGIN_M = .17+.05+.03
 _FRAME = 'lidar_origin_coarse_body_heading'
 _FIELDS = ('heading_left_rad', 'center_offset_left_m', 'width_m',
            'left_wall_points', 'right_wall_points', 'support_span_m',
@@ -145,8 +147,7 @@ def _valid_candidate(value):
             and value['support_span_m'] >= .35 and 0 <= value['fit_error_m'] <= .06
             and all(type(value[k]) is int and value[k] >= 16
                     for k in ('left_wall_points', 'right_wall_points'))
-            # .17 m measured lateral extent + .10 m trial clearance + .03 m reference allowance.
-            and abs(value['center_offset_left_m']) < value['width_m']/2-.30)
+            and abs(value['center_offset_left_m']) < value['width_m']/2-TURN_LATERAL_MARGIN_M)
 
 
 def _surface_supports(scan, walls):
@@ -554,7 +555,7 @@ class TurnMotion:
         # Only an already associated, near-forward measured wall/corridor can
         # correct residual coast. Use its line, never a support midpoint behind
         # the car. This remains candidate geometry, not a certified path.
-        available = candidate['width_m']/2-.30
+        available = candidate['width_m']/2-TURN_LATERAL_MARGIN_M
         if (abs(candidate['heading_left_rad']) > math.radians(15) or available <= 0
                 or abs(candidate['center_offset_left_m']) >= available):
             return NEUTRAL
@@ -739,7 +740,7 @@ class TurnMotion:
         self.steering_target = target
         self._slew(now)
         heading, offset = candidate['heading_left_rad'], candidate['center_offset_left_m']
-        available = candidate['width_m']/2-.30
+        available = candidate['width_m']/2-TURN_LATERAL_MARGIN_M
         aligned = available > 0 and abs(heading) <= math.radians(5) and abs(offset) < available
         if aligned:
             self.alignment_evidence = 'double_wall' if self.geometry_mode == 'corridor' else 'tracked_goal_wall'

@@ -23,6 +23,11 @@ SIDE_BODY_EXTENT_M = .17
 SIDE_MIN_NET_M = .10
 LIDAR_RANGE_ALLOWANCE_M = .03  # Manufacturer's coarse 0..6 m accuracy reference.
 SIDE_CLEARANCE_M = SIDE_BODY_EXTENT_M + SIDE_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
+# Measured lidar-to-body extents; x is forward and y is right in this frame.
+FRONT_BODY_EXTENT_M = .21
+REAR_BODY_EXTENT_M = .20
+MANEUVER_MIN_NET_M = .05
+MANEUVER_BODY_CLEARANCE_M = MANEUVER_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
 # Vehicle bring-up limits, never a remembered course length or corner position.
 LAUNCH_HOLD_S = .6
 STRAIGHT_CRUISE_PWM = 1570
@@ -388,8 +393,18 @@ class JunctionStop:
         return self.count >= 3 and geometry['incoming_left_end_m'] <= .40
 
 
-def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True):
+class ProbeClearanceError(ValueError):
+    """A validated known-body stop carries the current scan's complete diagnostics."""
+    def __init__(self, reason, clearance):
+        super().__init__(reason)
+        self.clearance = clearance
+
+
+def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True,
+                    clearance_profile='straight'):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
+    if clearance_profile not in ('straight', 'maneuver') or type(clearance_profile) is not str:
+        raise ValueError('invalid_clearance_profile')
     if type(camera_required) is not bool:
         raise ValueError('invalid_camera_requirement')
     sensor_inputs = ['camera', 'lidar', 'control'] if camera_required else ['lidar', 'control']
@@ -423,11 +438,31 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     nearest = min(valid) if valid else None
     corridor = []
     side_clearances = []
+    maneuver = clearance_profile == 'maneuver'
+    half_width = CORRIDOR_HALF_WIDTH_M + (.02 if centering else 0)
+    nearest_body_point = None
+    body_stop_requested = False
     for angle, r in enumerate(bins):
         if r is None:
             continue
         x, y = r * math.cos(math.radians(angle)), r * math.sin(math.radians(angle))
-        if rear_launch and 115 <= angle <= 245:
+        # Euclidean distance to the measured rectangle includes all four corners.
+        # It describes current known returns, not unobserved space or a future sweep.
+        dx = max(-REAR_BODY_EXTENT_M-x, 0, x-FRONT_BODY_EXTENT_M)
+        dy = max(abs(y)-SIDE_BODY_EXTENT_M, 0)
+        body_distance = math.hypot(dx, dy)
+        if nearest_body_point is None or body_distance < nearest_body_point['body_distance_m']:
+            nearest_body_point = {'angle_deg': angle, 'range_m': r,
+                                  'forward_x_m': x, 'left_y_m': -y,
+                                  'body_distance_m': body_distance}
+        if maneuver:
+            # Equality is allowed; tolerate only floating point roundoff at that boundary.
+            if body_distance < MANEUVER_BODY_CLEARANCE_M and not math.isclose(
+                    body_distance, MANEUVER_BODY_CLEARANCE_M, rel_tol=0, abs_tol=1e-12):
+                body_stop_requested = True
+            if abs(y) > abs(x):
+                side_clearances.append(abs(y))
+        elif rear_launch and 115 <= angle <= 245:
             pass  # Only a bounded neutral-steering forward launch may exempt rear rays.
         elif abs(y) > abs(x):
             side_clearances.append(abs(y))
@@ -435,11 +470,10 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
                 raise ValueError('probe_obstacle_close_side')
         elif r < .40:
             raise ValueError('probe_obstacle_close')
-        half_width = CORRIDOR_HALF_WIDTH_M + (.02 if centering else 0)
         if x > 0 and abs(y) <= half_width:
             corridor.append(x)
     corridor_front = min(corridor) if corridor else None
-    if corridor_front is not None and corridor_front < CORRIDOR_LOOKAHEAD_M:
+    if not maneuver and corridor_front is not None and corridor_front < CORRIDOR_LOOKAHEAD_M:
         raise ValueError('probe_obstacle_in_straight_corridor')
     if len(valid) < 342:
         issues.append('scan_incomplete')
@@ -452,18 +486,56 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     if len(unknown) > FRONT_MAX_UNKNOWN or largest_gap > FRONT_MAX_GAP:
         issues.append('front_sparse')
     front_values = [r for r in front if r is not None]
-    return {'front_m': min(front_values) if front_values else None,
+    clearance = {'front_m': min(front_values) if front_values else None,
+            'clearance_profile': clearance_profile,
+            'clearance_gates': {'straight_corridor_active': not maneuver,
+                                'side_lateral_active': not maneuver, 'radial_active': not maneuver,
+                                'current_body_proximity_active': maneuver,
+                                'rear_launch_exemption_active': bool(rear_launch) and not maneuver},
+            'body_proximity': {
+                'scope': 'current_known_lidar_returns_only',
+                'coordinate_convention': 'x_forward_y_left',
+                'ray_bin_convention': 'clockwise_from_forward',
+                'body_extents_source': 'user_measured_lidar_to_front_rear_and_outer_tyre_edges',
+                'body_extents_m': {'front': FRONT_BODY_EXTENT_M, 'rear': REAR_BODY_EXTENT_M,
+                                   'left': SIDE_BODY_EXTENT_M, 'right': SIDE_BODY_EXTENT_M},
+                'body_rectangle_m': {'x_min': -REAR_BODY_EXTENT_M, 'x_max': FRONT_BODY_EXTENT_M,
+                                      'y_min': -SIDE_BODY_EXTENT_M, 'y_max': SIDE_BODY_EXTENT_M},
+                'min_net_clearance_m': MANEUVER_MIN_NET_M if maneuver else None,
+                'min_net_clearance_source': 'operator_selected_maneuver_5cm' if maneuver else None,
+                'lidar_range_allowance_m': LIDAR_RANGE_ALLOWANCE_M,
+                'stop_distance_m': MANEUVER_BODY_CLEARANCE_M if maneuver else None,
+                'stop_requested': body_stop_requested if maneuver else None,
+                'current_known_min_distance_m': (nearest_body_point['body_distance_m']
+                                                 if nearest_body_point is not None else None),
+                'nearest_point': nearest_body_point,
+                'axis_stop_thresholds_m': ({'front': FRONT_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
+                                           'rear': REAR_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
+                                           'left': SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
+                                           'right': SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M}
+                                          if maneuver else None),
+                'free_space_certified': False, 'swept_path_certified': False,
+                'standstill_certified': False},
+            'legacy_diagnostic_only_fields': (['corridor_front_m', 'corridor_half_width_m',
+                                               'corridor_lookahead_m', 'side_clearance_m',
+                                               'side_stop_threshold_m'] if maneuver else []),
             'sensor_inputs': sensor_inputs, 'camera_required': camera_required,
             'corridor_front_m': corridor_front, 'nearest_m': nearest, 'scan_seq': scan['seq'],
             'side_clearance_m': min(side_clearances) if side_clearances else None,
-            'side_stop_threshold_m': SIDE_CLEARANCE_M,
-            'side_body_extent_m': SIDE_BODY_EXTENT_M, 'side_min_net_m': SIDE_MIN_NET_M,
+            'side_stop_threshold_m': (SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M
+                                      if maneuver else SIDE_CLEARANCE_M),
+            'side_body_extent_m': SIDE_BODY_EXTENT_M,
+            'side_min_net_m': MANEUVER_MIN_NET_M if maneuver else SIDE_MIN_NET_M,
             'lidar_range_allowance_m': LIDAR_RANGE_ALLOWANCE_M,
             'front_unknown_bins': unknown, 'largest_gap_deg': largest_gap,
             'quality_issues': issues,
-            'motion_ready': not any(i in issues for i in ['camera_unavailable', 'lidar_late', 'scan_incomplete', 'front_sparse']),
+            'motion_ready': not body_stop_requested and not any(
+                i in issues for i in ['camera_unavailable', 'lidar_late', 'scan_incomplete', 'front_sparse']),
             'corridor_half_width_m': half_width,
             'corridor_lookahead_m': CORRIDOR_LOOKAHEAD_M}
+    if body_stop_requested:
+        raise ProbeClearanceError('probe_obstacle_close_body', clearance)
+    return clearance
 
 
 def probe_parameters(data, straight=False):

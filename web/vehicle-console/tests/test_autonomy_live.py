@@ -502,6 +502,199 @@ class ProbeClearanceTests(unittest.TestCase):
         with self.assertRaises(ValueError): MODULE.probe_parameters({'pwm': 1560, 'duration_ms': 30001}, straight=True)
 
 
+class ManeuverClearanceTests(unittest.TestCase):
+    def setUp(self):
+        self.scan = {'seq': 1, 'frame_id': 'lidar_origin_coarse_body_heading', 'ranges': [3.] * 360}
+        self.ages = {'camera': .01, 'lidar': .01, 'control': .01}
+
+    def probe(self, scan=None, ages=None, **kwargs):
+        return MODULE.probe_clearance(scan or self.scan, ages or self.ages,
+                                      clearance_profile='maneuver', **kwargs)
+
+    def point_scan(self, angle, distance):
+        return {**self.scan, 'ranges': [distance if a == angle else 3. for a in range(360)]}
+
+    def test_all_four_faces_use_five_cm_net_plus_three_cm_allowance(self):
+        # The measured front/rear asymmetry matters even after rotating an axial obstacle.
+        for angle, body_extent, axis_threshold in [(0, .21, .29), (90, .17, .25),
+                                                   (180, .20, .28), (270, .17, .25)]:
+            with self.subTest(angle=angle):
+                for net_distance in [.05, .079]:
+                    with self.assertRaisesRegex(MODULE.ProbeClearanceError, 'probe_obstacle_close_body'):
+                        self.probe(self.point_scan(angle, body_extent+net_distance))
+                for distance in [axis_threshold, axis_threshold+.001]:
+                    result = self.probe(self.point_scan(angle, distance))
+                    self.assertTrue(result['motion_ready'])
+                    self.assertAlmostEqual(result['body_proximity']['current_known_min_distance_m'],
+                                           distance-body_extent)
+                    self.assertEqual(result['body_proximity']['nearest_point']['angle_deg'], angle)
+
+    def test_all_corners_use_euclidean_distance_and_preserve_left_right_mirrors(self):
+        # A box enlarged by 8 cm would wrongly stop these passing diagonal points.
+        for angles, extent, close_xy, clear_xy in [((45, 315), .21, .240, .244),
+                                                   ((135, 225), .20, .237, .241)]:
+            distances = []
+            for angle in angles:
+                with self.subTest(angle=angle):
+                    with self.assertRaisesRegex(MODULE.ProbeClearanceError, 'close_body'):
+                        self.probe(self.point_scan(angle, math.sqrt(2)*close_xy))
+                    result = self.probe(self.point_scan(angle, math.sqrt(2)*clear_xy))
+                    distance = result['body_proximity']['current_known_min_distance_m']
+                    self.assertAlmostEqual(distance, math.hypot(clear_xy-extent, clear_xy-.17))
+                    self.assertGreater(distance, .08)
+                    self.assertLess(clear_xy, extent+.08)
+                    self.assertLess(clear_xy, .25)
+                    distances.append(distance)
+            self.assertAlmostEqual(*distances)
+
+    def test_points_inside_the_body_stop_in_every_direction(self):
+        for angle in range(0, 360, 45):
+            with self.subTest(angle=angle):
+                with self.assertRaises(MODULE.ProbeClearanceError) as stopped:
+                    self.probe(self.point_scan(angle, .1), rear_launch=True)
+                body = stopped.exception.clearance['body_proximity']
+                self.assertEqual(body['current_known_min_distance_m'], 0)
+                self.assertTrue(body['stop_requested'])
+                self.assertFalse(stopped.exception.clearance['motion_ready'])
+
+    def test_nearby_maneuver_points_do_not_reuse_straight_rectangle_or_radial_gate(self):
+        for angle, distance, old_reason in [(0, .8, 'straight_corridor'), (0, .35, 'obstacle_close'),
+                                            (180, .35, 'obstacle_close'), (90, .27, 'close_side'),
+                                            (270, .27, 'close_side')]:
+            with self.subTest(angle=angle, distance=distance):
+                scan = self.point_scan(angle, distance)
+                self.assertTrue(self.probe(scan)['motion_ready'])
+                with self.assertRaisesRegex(ValueError, old_reason):
+                    MODULE.probe_clearance(scan, self.ages)
+
+    def test_maneuver_rear_has_no_launch_exemption(self):
+        scan = self.point_scan(180, .27)
+        self.assertTrue(MODULE.probe_clearance(scan, self.ages, rear_launch=True)['motion_ready'])
+        with self.assertRaises(MODULE.ProbeClearanceError) as stopped:
+            self.probe(scan, rear_launch=True)
+        self.assertFalse(stopped.exception.clearance['clearance_gates']['rear_launch_exemption_active'])
+        self.assertAlmostEqual(stopped.exception.clearance['body_proximity']['current_known_min_distance_m'], .07)
+
+    def test_hard_stop_keeps_complete_current_geometry_even_when_quality_is_bad(self):
+        scan = self.point_scan(0, .27)
+        scan['ranges'][180] = .21
+        scan['ranges'][270] = .02  # A later return lies inside the measured body.
+        for angle in range(10, 40):
+            scan['ranges'][angle] = None
+        with self.assertRaises(MODULE.ProbeClearanceError) as stopped:
+            self.probe(scan, {**self.ages, 'lidar': .3}, rear_launch=True)
+        result = stopped.exception.clearance
+        self.assertFalse(result['motion_ready'])
+        self.assertEqual(result['body_proximity']['current_known_min_distance_m'], 0)
+        self.assertEqual(result['body_proximity']['nearest_point']['angle_deg'], 270)
+        self.assertEqual(result['scan_seq'], scan['seq'])
+        self.assertEqual(set(result['quality_issues']), {'scan_incomplete', 'front_sparse', 'lidar_late'})
+
+    def test_actual05_raw_scans_pass_current_body_margin_without_certifying_a_sweep(self):
+        fixture = json.loads((Path(__file__).parent/'observed-turn05-body-20261007.json').read_text())
+        for scan in fixture['scans']:
+            original = json.dumps(scan, sort_keys=True)
+            with self.subTest(seq=scan['seq']):
+                result = self.probe(scan)
+                self.assertTrue(result['motion_ready'])
+                expected = scan['closest_measured_body_point']
+                body = result['body_proximity']
+                self.assertAlmostEqual(body['current_known_min_distance_m'],
+                                       expected['distance_to_measured_rectangle_m'])
+                self.assertEqual(body['nearest_point']['angle_deg'], expected['ray_bin'])
+                self.assertEqual(body['coordinate_convention'], 'x_forward_y_left')
+                self.assertAlmostEqual(body['nearest_point']['forward_x_m'], expected['forward_x_m'])
+                self.assertAlmostEqual(body['nearest_point']['left_y_m'], expected['left_y_m'])
+                self.assertEqual(original, json.dumps(scan, sort_keys=True))
+                for key in ['free_space_certified', 'swept_path_certified', 'standstill_certified']:
+                    self.assertIs(body[key], False)
+        scan = fixture['scans'][-1]
+        self.assertAlmostEqual(self.probe(scan)['body_proximity']['current_known_min_distance_m'],
+                               .10189205477976984)
+        with self.assertRaisesRegex(ValueError, 'close_side'):
+            MODULE.probe_clearance(scan, self.ages)
+
+    def test_profiles_keep_identical_quality_and_missing_data_rules(self):
+        cases = [(self.scan, self.ages),
+                 (self.scan, {**self.ages, 'camera': .6}),
+                 (self.scan, {**self.ages, 'camera': 1.}),
+                 (self.scan, {**self.ages, 'lidar': .3})]
+        for missing in [[5, 6, 7, 12, 13, 14], [5, 6, 7, 8], list(range(60, 79)), list(range(360))]:
+            scan = {**self.scan, 'ranges': [None if a in missing else 3. for a in range(360)]}
+            cases.append((scan, self.ages))
+        for scan, ages in cases:
+            with self.subTest(known=sum(r is not None for r in scan['ranges']), ages=ages):
+                straight, maneuver = MODULE.probe_clearance(scan, ages), self.probe(scan, ages)
+                for key in ['quality_issues', 'motion_ready', 'front_unknown_bins', 'largest_gap_deg',
+                            'sensor_inputs', 'camera_required']:
+                    self.assertEqual(straight[key], maneuver[key], key)
+                if not any(r is not None for r in scan['ranges']):
+                    self.assertIsNone(maneuver['body_proximity']['current_known_min_distance_m'])
+                    self.assertIsNone(maneuver['body_proximity']['nearest_point'])
+                    self.assertFalse(maneuver['motion_ready'])
+
+    def test_profile_does_not_relax_invalid_ranges_heading_sequence_or_sensor_ages(self):
+        scans = [{**self.scan, 'frame_id': 'unknown'}, {**self.scan, 'seq': True},
+                 {**self.scan, 'ranges': [3.]*359}]
+        for value in [False, '3', float('nan'), float('inf'), .019, 12.001]:
+            scans.append(self.point_scan(120, value))
+        for scan in scans:
+            with self.subTest(scan=scan if 'ranges' not in scan else scan.get('seq')):
+                with self.assertRaises(ValueError):
+                    self.probe(scan)
+        for key, value in [('control', .2), ('control', True), ('camera', -.1),
+                           ('lidar', float('nan')), ('lidar', float('inf'))]:
+            with self.subTest(key=key, value=value):
+                with self.assertRaises(ValueError):
+                    self.probe(ages={**self.ages, key: value})
+        self.assertTrue(self.probe(ages={'lidar': .01, 'control': .01}, camera_required=False)['motion_ready'])
+        with self.assertRaises(ValueError):
+            self.probe(ages={'lidar': .01, 'control': .01})
+        for profile in [None, True, 'turn', 'MANEUVER', ['maneuver']]:
+            with self.assertRaisesRegex(ValueError, 'invalid_clearance_profile'):
+                MODULE.probe_clearance(self.scan, self.ages, clearance_profile=profile)
+
+    def test_diagnostics_identify_active_policy_and_keep_default_straight_legacy_values(self):
+        result = self.probe(self.point_scan(0, .35))
+        self.assertEqual(result['clearance_profile'], 'maneuver')
+        self.assertEqual(result['clearance_gates'], {'straight_corridor_active': False,
+                         'side_lateral_active': False, 'radial_active': False,
+                         'current_body_proximity_active': True, 'rear_launch_exemption_active': False})
+        body = result['body_proximity']
+        self.assertEqual(body['scope'], 'current_known_lidar_returns_only')
+        self.assertEqual(body['coordinate_convention'], 'x_forward_y_left')
+        self.assertEqual(body['ray_bin_convention'], 'clockwise_from_forward')
+        self.assertEqual(body['body_extents_source'], 'user_measured_lidar_to_front_rear_and_outer_tyre_edges')
+        self.assertEqual(body['body_extents_m'], {'front': .21, 'rear': .20, 'left': .17, 'right': .17})
+        self.assertEqual(body['body_rectangle_m'], {'x_min': -.20, 'x_max': .21, 'y_min': -.17, 'y_max': .17})
+        self.assertEqual(body['min_net_clearance_m'], .05)
+        self.assertEqual(body['min_net_clearance_source'], 'operator_selected_maneuver_5cm')
+        self.assertEqual(body['lidar_range_allowance_m'], .03)
+        self.assertEqual(body['stop_distance_m'], .08)
+        for direction, expected in [('front', .29), ('rear', .28), ('left', .25), ('right', .25)]:
+            self.assertAlmostEqual(body['axis_stop_thresholds_m'][direction], expected)
+        self.assertAlmostEqual(result['side_stop_threshold_m'], .25)
+        self.assertEqual(result['side_min_net_m'], .05)
+        self.assertIn('corridor_lookahead_m', result['legacy_diagnostic_only_fields'])
+        self.assertIn('side_stop_threshold_m', result['legacy_diagnostic_only_fields'])
+        self.assertAlmostEqual(result['corridor_front_m'], .35)
+        implicit = MODULE.probe_clearance(self.scan, self.ages, centering=True, rear_launch=True)
+        explicit = MODULE.probe_clearance(self.scan, self.ages, centering=True, rear_launch=True,
+                                          clearance_profile='straight')
+        self.assertEqual(implicit, explicit)
+        self.assertEqual(implicit['clearance_profile'], 'straight')
+        self.assertEqual(implicit['legacy_diagnostic_only_fields'], [])
+        self.assertAlmostEqual(implicit['side_stop_threshold_m'], .30)
+        self.assertEqual(implicit['side_min_net_m'], .10)
+        self.assertEqual(implicit['corridor_lookahead_m'], 1.)
+        self.assertEqual(implicit['corridor_half_width_m'], .32)
+        self.assertTrue(implicit['clearance_gates']['rear_launch_exemption_active'])
+        self.assertFalse(implicit['clearance_gates']['current_body_proximity_active'])
+        self.assertIsNone(implicit['body_proximity']['min_net_clearance_m'])
+        self.assertIsNone(implicit['body_proximity']['min_net_clearance_source'])
+        self.assertIsNone(implicit['body_proximity']['axis_stop_thresholds_m'])
+
+
 class QualityRecoveryGateTests(unittest.TestCase):
     def test_initial_good_observation_does_not_delay_motion(self):
         recovery = MODULE.QualityRecovery()

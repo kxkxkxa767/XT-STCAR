@@ -189,7 +189,7 @@ class Console:
     def health_watch(self):
         while not self.stop.wait(.05):
             with self.lock:
-                healthy = (self.turn_healthy() if self.auto_session and self.auto_session['report'].get('turn_trial')
+                healthy = (self.turn_healthy() if self.auto_session and self.auto_session.get('turn_trial') is True
                            else self.autonomy_healthy() if self.auto_session else self.healthy())
                 unsafe = not healthy or (self.owner is not None and time.monotonic() - self.owner_at > .35)
                 armed = self.status.get('control', {}).get('armed', False)
@@ -327,7 +327,7 @@ class Console:
             if self.owner is not None or self.status.get('control', {}).get('armed'):
                 ready, rejection = False, 'control_owned_or_unlocked'
         except ValueError as error:
-            clearance, ready, rejection = None, False, str(error)
+            clearance, ready, rejection = getattr(error, 'clearance', None), False, str(error)
         formal_ready, formal_rejection, goal_summary = False, self.stop_goal_rejection, None
         if self.stop_goal_registry is not None:
             goal = self.stop_goal_registry.goal
@@ -342,13 +342,14 @@ class Console:
                 formal_ready, formal_rejection = True, None
             except (StopGoalError, ValueError) as error:
                 formal_rejection = str(error)
-        turn_ready, turn_rejection, turn_preview = False, None, None
+        turn_ready, turn_rejection, turn_preview, turn_clearance = False, None, None, None
         try:
             if self.owner is not None or self.auto_session is not None:
                 raise ValueError('control_owned_or_unlocked')
-            _, turn_preview, _ = self.turn_preview(now)
+            _, turn_preview, turn_clearance = self.turn_preview(now)
             turn_ready = True
         except ValueError as error:
+            turn_clearance = getattr(error, 'clearance', None)
             turn_rejection = str(error)
         trial_goal = dict(self.trial_goal_registry) if self.trial_goal_registry else None
         if trial_goal is not None:
@@ -368,6 +369,7 @@ class Console:
                 'formal_ready': formal_ready, 'formal_rejection': formal_rejection, 'final_stop_goal': goal_summary,
                 'formal_max_drive_ms': self.stop_goal_contract.budget['max_drive_ms'] if self.stop_goal_contract else None,
                 'turn_ready': turn_ready, 'turn_rejection': turn_rejection, 'turn_preview': turn_preview,
+                'turn_clearance': turn_clearance,
                 'turn_drive_max_s': MAX_DRIVE_S, 'turn_presteer_max_s': MAX_PRESTEER_S,
                 'turn_steering_allowance_s': STEERING_ALLOWANCE_S,
                 'turn_requires_operator_placement_confirmation': True,
@@ -379,17 +381,22 @@ class Console:
     def turn_preview(self, now, max_drive_s=MAX_DRIVE_S):
         """Pure admission from this fresh scan; not an entrance/navigation certificate."""
         ages = self.sensor_ages(now)
-        clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False, camera_required=False)
-        if not self.turn_healthy() or not clearance['motion_ready']:
-            raise ValueError('turn_sensor_unavailable')
-        control = self.status.get('control', {})
-        if (self.control_mode != 'locked' or control.get('armed') is not False
-                or control.get('motor') != 1500 or control.get('servo') != 1500):
-            raise ValueError('turn_requires_fresh_neutral_lock')
-        motion = TurnMotion(now, max_drive_s=max_drive_s)
-        decision = motion.update(self.scan, ages['lidar'], now, control)
-        if not decision['start_ready'] or decision['lock_requested']:
-            raise ValueError(decision['reason'])
+        clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False,
+                                    camera_required=False, clearance_profile='maneuver')
+        try:
+            if not self.turn_healthy() or not clearance['motion_ready']:
+                raise ValueError('turn_sensor_unavailable')
+            control = self.status.get('control', {})
+            if (self.control_mode != 'locked' or control.get('armed') is not False
+                    or control.get('motor') != 1500 or control.get('servo') != 1500):
+                raise ValueError('turn_requires_fresh_neutral_lock')
+            motion = TurnMotion(now, max_drive_s=max_drive_s)
+            decision = motion.update(self.scan, ages['lidar'], now, control)
+            if not decision['start_ready'] or decision['lock_requested']:
+                raise ValueError(decision['reason'])
+        except ValueError as error:
+            error.clearance = clearance
+            raise
         return motion, decision, clearance
 
     def start_turn_trial(self, data):
@@ -431,8 +438,10 @@ class Console:
             'physical_steering_confirmed': False, 'turn_path_certified': False, 'entry_confirmed': False,
             'observed_alignment': False, 'turn': decision, 'walls': None, 'coast_motion': None,
             'standstill_confirmed': False, 'quality_issues': [], 'quality_counts': {},
-            'clearance_start': clearance, 'rear_launch_active': False, 'rear_launch_max_s': 0}
-        self.auto_session = {'report': report, 'turn_motion': motion, 'phase': 'presteer',
+            'clearance_profile': 'maneuver', 'clearance_profile_source': 'bounded_left_turn_trial',
+            'clearance_start': clearance, 'clearance_current': clearance,
+            'rear_launch_active': False, 'rear_launch_max_s': 0}
+        self.auto_session = {'report': report, 'turn_trial': True, 'turn_motion': motion, 'phase': 'presteer',
             'deadline': now+MAX_PRESTEER_S+motion.max_drive_s, 'last_loop': now, 'heartbeat_seq': 0,
             'quality': self.perception_quality, 'recovery': QualityRecovery(), 'rear_launch': None,
             'motion_scan_seq': None, 'turn_last_servo': 1500, 'turn_servo_sequence': None}
@@ -588,7 +597,8 @@ class Console:
                       'quality_confirmed': False, 'perception_recovering': not clearance['motion_ready'], 'recovery_stable_ms': 0,
                       'phase': 'drive', 'coast_ticks': 0, 'coast_motion': None, 'standstill_confirmed': False,
                       'wheel_motion_measured': False, 'competition_navigation': False,
-                      'clearance_start': clearance, 'epoch': self.control_epoch}
+                      'clearance_profile': 'straight', 'clearance_profile_source': 'default_straight',
+                      'clearance_start': clearance, 'clearance_current': clearance, 'epoch': self.control_epoch}
             self.auto_session = {'report': report, 'deadline': now + duration / 1000,
                                  'last_loop': now, 'heartbeat_seq': 0, 'quality': self.perception_quality, 'recovery': QualityRecovery(),
                                  'phase': 'drive', 'motion_scan_seq': None,
@@ -762,9 +772,13 @@ class Console:
             rear_active = rear.update(self.scan, now, bool(control.get('armed') and control.get('motor', 1500) > 1500
                                                          and control.get('seq', -1) >= self.arm_sequence)) if rear else False
             report['rear_launch_active'] = rear_active
-            turn_trial = bool(report.get('turn_trial'))
+            # Only this server's turn-start path sets the session mode. Camera
+            # omission and request fields cannot select the maneuver envelope.
+            turn_trial = session.get('turn_trial') is True
             clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
-                                        rear_launch=rear_active, camera_required=not turn_trial)
+                                        rear_launch=rear_active, camera_required=not turn_trial,
+                                        clearance_profile='maneuver' if turn_trial else 'straight')
+            report['clearance_current'] = clearance
             if not (self.turn_healthy() if turn_trial else self.autonomy_healthy()):
                 raise ValueError('probe_sensor_unavailable')
             report['quality_issues'] = clearance['quality_issues']
@@ -849,6 +863,9 @@ class Console:
             report['drive_ticks'] += 1
             report['motion_ticks' if motion_ready else 'recovery_ticks'] += 1
         except (ValueError, RuntimeError, OSError, KeyError) as error:
+            obstacle_clearance = getattr(error, 'clearance', None)
+            if obstacle_clearance is not None:
+                session['report']['clearance_current'] = obstacle_clearance
             self.halt(str(error))
 
     def turn_tick(self, session, now, motion_ready):
@@ -978,7 +995,7 @@ class Console:
     def camera_failure(self, error):
         with self.lock:
             self.errors['camera'] = str(error)
-            if self.auto_session is None or not self.auto_session['report'].get('turn_trial'):
+            if self.auto_session is None or self.auto_session.get('turn_trial') is not True:
                 self.halt('camera_failed')
 
     def state(self):

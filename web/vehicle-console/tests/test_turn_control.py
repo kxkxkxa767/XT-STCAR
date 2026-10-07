@@ -110,11 +110,171 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(self.outputs, [])
         self.assertFalse(self.console.status['control']['armed'])
 
+    def test_rejected_turn_preview_preserves_current_clearance_diagnostics(self):
+        self.console.scan['corridor_candidates'] = []
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            state = self.console.autonomy_status()
+        self.assertFalse(state['turn_ready'])
+        self.assertEqual(state['turn_rejection'], 'left_corridor_unknown')
+        self.assertEqual(state['turn_clearance']['clearance_profile'], 'maneuver')
+        self.assertFalse(state['turn_clearance']['body_proximity']['stop_requested'])
+        self.console.scan['ranges'][90] = .24
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            state = self.console.autonomy_status()
+        self.assertEqual(state['turn_rejection'], 'probe_obstacle_close_body')
+        self.assertTrue(state['turn_clearance']['body_proximity']['stop_requested'])
+        self.assertAlmostEqual(state['turn_clearance']['body_proximity']['current_known_min_distance_m'], .07)
+        self.assertEqual(self.outputs, [])
+
+    def test_turn_lateral_margin_matches_maneuver_body_profile_and_keeps_straight_margin(self):
+        turn_module = importlib.import_module(self.server.TurnMotion.__module__)
+        live_module = importlib.import_module(self.server.probe_clearance.__module__)
+        self.assertAlmostEqual(turn_module.TURN_LATERAL_MARGIN_M,
+                               live_module.SIDE_BODY_EXTENT_M+live_module.MANEUVER_BODY_CLEARANCE_M)
+        self.assertAlmostEqual(turn_module.TURN_LATERAL_MARGIN_M, .25)
+        self.assertAlmostEqual(live_module.SIDE_CLEARANCE_M, .30)
+
+    def test_turn_profile_diagnostics_follow_preview_presteer_drive_and_coast(self):
+        def nearby_scan(seq):
+            value = self.scan(seq)
+            # These are outside the current body envelope but inside each old
+            # straight gate. They do not certify any future steering sweep.
+            for angle, distance in [(0, .8), (90, .29), (180, .35)]:
+                value['ranges'][angle] = distance
+            return value
+
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            before = self.console.autonomy_status()
+        self.assertEqual(before['clearance']['clearance_profile'], 'straight')
+        self.assertEqual(before['turn_clearance']['clearance_profile'], 'maneuver')
+        self.assertEqual(self.outputs, [])
+        self.console.scan = nearby_scan(1)
+        self.start()
+        session = self.console.auto_session
+        self.assertIs(session['turn_trial'], True)
+        self.assertEqual(session['report']['clearance_profile_source'], 'bounded_left_turn_trial')
+        self.assertEqual(session['report']['clearance_start']['clearance_profile'], 'maneuver')
+        body = session['report']['clearance_start']['body_proximity']
+        self.assertEqual(body['body_extents_m'], {'front': .21, 'rear': .20, 'left': .17, 'right': .17})
+        self.assertEqual((body['min_net_clearance_m'], body['lidar_range_allowance_m']), (.05, .03))
+        self.assertEqual(body['min_net_clearance_source'], 'operator_selected_maneuver_5cm')
+        self.assertAlmostEqual(body['stop_distance_m'], .08)
+        self.assertFalse(body['swept_path_certified'])
+        phases = set()
+        for index in range(1, 240):
+            now = round(index*.02, 6)
+            self.tick(now, nearby_scan(1+int(round(now*10, 6))))
+            self.assertIs(self.console.auto_session, session)
+            phases.add(session['phase'])
+            self.assertEqual(session['report']['clearance_current']['clearance_profile'], 'maneuver')
+            if session['phase'] == 'drive':
+                break
+        self.assertEqual(phases, {'presteer', 'drive'})
+        self.assertEqual(self.outputs[-1]['motor'], 1560)
+        self.assertGreaterEqual(session['report']['turn']['steering_settle_elapsed_s']+1e-9, 1.2)
+        self.assertGreaterEqual(session['report']['turn']['steering_settle_feedback_ticks'], 3)
+        before_coast = len(self.outputs)
+        self.console.begin_coast('planned', self.now)
+        now = round(self.now+.02, 6)
+        self.tick(now, nearby_scan(self.console.scan['seq']+1))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['report']['clearance_current']['clearance_profile'], 'maneuver')
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[before_coast:]))
+        value = nearby_scan(self.console.scan['seq']+1)
+        value['ranges'][90] = .24
+        self.tick(round(self.now+.02, 6), value)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor']), ('stop', 1500))
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+        old_outputs = list(self.outputs)
+        self.tick(round(self.now+.02, 6))
+        self.assertEqual(self.outputs, old_outputs)
+
+    def test_request_profile_flags_cannot_weaken_straight_or_override_turn_mode(self):
+        self.console.scan['ranges'][0] = .8
+        for op in ['probe_start', 'straight_start', 'to_left_junction_start']:
+            with self.subTest(op=op), patch.object(self.server.time, 'monotonic', return_value=0.):
+                if op == 'to_left_junction_start':
+                    self.console.scan.update(left_junction=None, front_boundary_m=None)
+                with self.assertRaisesRegex(ValueError, 'probe_obstacle_in_straight_corridor'):
+                    self.console.autonomy_command({'op': op, 'boot': self.console.boot, 'epoch': 0,
+                        'tick': 1000, 'pwm': 1560, 'duration_ms': 250,
+                        'clearance_profile': 'maneuver', 'camera_required': False})
+        for profile in ['maneuver', 'straight', 'invalid']:
+            with self.subTest(profile=profile), patch.object(self.server.time, 'monotonic', return_value=0.):
+                with self.assertRaisesRegex(ValueError, 'placement_confirmation'):
+                    self.console.autonomy_command({'op': 'turn_left_start', 'boot': self.console.boot,
+                        'epoch': 0, 'tick': 1000, 'placement_confirmed': True, 'clearance_profile': profile})
+        self.assertEqual(self.outputs, [])
+
+    def test_straight_active_session_keeps_one_metre_gate_despite_request_flags(self):
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            self.console.autonomy_command({'op': 'straight_start', 'boot': self.console.boot, 'epoch': 0,
+                'tick': 1000, 'pwm': 1560, 'duration_ms': 1000,
+                'clearance_profile': 'maneuver', 'camera_required': False, 'turn_trial': True})
+        session = self.console.auto_session
+        self.assertFalse(session.get('turn_trial', False))
+        self.assertEqual(session['report']['clearance_start']['clearance_profile'], 'straight')
+        self.assertTrue(session['report']['clearance_start']['camera_required'])
+        value = self.scan(2)
+        value['ranges'][0] = .8
+        self.tick(.02, value)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_in_straight_corridor')
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor']), ('stop', 1500))
+
+    def test_recorded05_near_left_ranges_pass_turn_gate_with_synthetic_service_geometry(self):
+        records = json.loads((Path(__file__).with_name('observed-turn05-body-20261007.json')).read_text())
+        recorded = records['scans'][-1]
+        self.assertEqual(recorded['seq'], 4216)
+
+        def service_scan(seq):
+            # Full unchanged actual05 ranges exercise the obstacle policy. The
+            # corridor hypothesis and replay clock below are synthetic, so this
+            # does not reconstruct the field turn or certify its future sweep.
+            return {**self.scan(seq), 'ranges': list(recorded['ranges'])}
+
+        self.console.scan = service_scan(1)
+        self.start()
+        session = self.console.auto_session
+        for index in range(1, 240):
+            now = round(index*.02, 6)
+            self.tick(now, service_scan(1+int(round(now*10, 6))))
+            self.assertIs(self.console.auto_session, session)
+            report = session['report']
+            current = report['clearance_current']
+            self.assertEqual(current['clearance_profile'], 'maneuver')
+            self.assertAlmostEqual(current['body_proximity']['current_known_min_distance_m'],
+                                   recorded['closest_measured_body_point']['distance_to_measured_rectangle_m'])
+            self.assertEqual(current['body_proximity']['nearest_point']['angle_deg'], 308)
+            self.assertAlmostEqual(current['body_proximity']['nearest_point']['left_y_m'],
+                                   recorded['closest_measured_body_point']['left_y_m'])
+            self.assertFalse(current['body_proximity']['stop_requested'])
+            if session['phase'] == 'drive':
+                break
+            self.assertEqual(report['current_pwm'], 1500)
+        self.assertEqual(session['phase'], 'drive')
+        self.assertEqual(self.outputs[-1]['motor'], 1560)
+        self.assertGreaterEqual(report['turn']['steering_settle_elapsed_s']+1e-9, 1.2)
+        self.assertGreaterEqual(report['turn']['steering_settle_feedback_ticks'], 3)
+        value = service_scan(self.console.scan['seq']+1)
+        value['ranges'][90] = .24
+        self.tick(round(self.now+.02, 6), value)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
+        body = self.console.auto_result['clearance_current']['body_proximity']
+        self.assertTrue(body['stop_requested'])
+        self.assertAlmostEqual(body['current_known_min_distance_m'], .07)
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor']), ('stop', 1500))
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
     def test_no_left_geometry_ambiguity_and_rear_obstacle_refuse_start(self):
         values = [dict(self.scan(1), corridor_candidates=[]), self.scan(1)]
         values[1]['corridor_candidates'].append(dict(values[1]['corridor_candidates'][0]))
         rear = self.scan(1)
-        rear['ranges'][180] = .35
+        rear['ranges'][180] = .27
         values.append(rear)
         for scan in values:
             with self.subTest(scan=scan.get('corridor_candidates')):
@@ -292,9 +452,9 @@ class TurnControlTests(unittest.TestCase):
                 self.start()
                 self.observe(.1, self.sparse_scan(2))
                 self.assertIsNotNone(self.console.auto_session)
-                if fault == 'front': self.console.scan['ranges'][0] = .8
-                if fault == 'side': self.console.scan['ranges'][90] = .29
-                if fault == 'rear': self.console.scan['ranges'][180] = .35
+                if fault == 'front': self.console.scan['ranges'][0] = .28
+                if fault == 'side': self.console.scan['ranges'][90] = .24
+                if fault == 'rear': self.console.scan['ranges'][180] = .27
                 if fault == 'lidar_stale': self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .3, 'control': .01}
                 if fault == 'control_stale': self.console.sensor_ages = lambda now: {'camera': .01, 'lidar': .01, 'control': .2}
                 self.tick(.181 if fault == 'loop_gap' else .12, self.console.scan)
@@ -542,13 +702,20 @@ class TurnControlTests(unittest.TestCase):
         self.assertLessEqual(self.now-drive_since, 1.02)
 
     def test_front_and_side_obstacle_prioritize_immediate_neutral_lock(self):
-        self.drive()
-        now = round(self.now+.02, 6)
-        self.console.scan['ranges'][0] = .8
-        self.tick(now)
-        self.assertIsNone(self.console.auto_session)
-        self.assertEqual(self.outputs[-1], {'op': 'stop', 'motor': 1500, 'servo': 1500, 'now': now})
-        self.assertFalse(self.console.auto_result['completed'])
+        for angle, distance in [(0, .28), (90, .24), (180, .27), (270, .24)]:
+            with self.subTest(angle=angle):
+                if self.outputs:
+                    self.tearDown()
+                    self.setUp()
+                self.drive()
+                now = round(self.now+.02, 6)
+                value = self.scan(self.console.scan['seq']+1)
+                value['ranges'][angle] = distance
+                self.tick(now, value)
+                self.assertIsNone(self.console.auto_session)
+                self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
+                self.assertEqual(self.outputs[-1], {'op': 'stop', 'motor': 1500, 'servo': 1500, 'now': now})
+                self.assertFalse(self.console.auto_result['completed'])
 
     def test_candidate_settings_bounds_and_defaults_preserve_unvalidated_right_label(self):
         self.assertEqual((self.console.settings['left'], self.console.settings['right']), (1650, 1350))

@@ -639,10 +639,83 @@
       "physical_motion_or_stop_model_certified": false,
       "automatic_retry_performed": false,
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-04"
+    },
+    {
+      "attempt_id": "left-turn-trial-20261007-05",
+      "vehicle_source_commit": "16c09560b35674656050c9ff5b3c7d05bf66d948",
+      "authorization": "new explicit placement and single left test",
+      "actual_result": {
+        "run_id": "nemsUbfF_3eTW097pAUtBGCT",
+        "epoch": 0,
+        "phase": "drive",
+        "turn_stage": "drive",
+        "reason": "probe_obstacle_in_straight_corridor",
+        "presteer_ticks": 149,
+        "motion_ticks": 33,
+        "drive_ticks": 33,
+        "coast_ticks": 0,
+        "steering_changes": 25,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "servo": 1632,
+        "current_pwm": 1560,
+        "completed": false,
+        "entry_confirmed": false,
+        "observed_alignment": false
+      },
+      "drive_elapsed_s": 0.9569335000001047,
+      "last_steering_target": 1593,
+      "last_wall_heading_deg": 70.7104676684893,
+      "saved_feedback_count": 45,
+      "saved_armed_feedback_count": 36,
+      "saved_forward1560_feedback_count": 7,
+      "operator_observation": {
+        "operator_confirmed_fully_stopped": true,
+        "operator_confirmed_no_collision": true,
+        "statement": "已完全停住，没有碰到挡板",
+        "wheel_motion_measured": false,
+        "physical_standstill_measured": false
+      },
+      "independent_neutral_count": 6,
+      "independent_first_tick": 421474,
+      "independent_last_tick": 422388,
+      "independent_first_lidar_seq": 4217,
+      "independent_last_lidar_seq": 4226,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 184,
+        "servo": 1500,
+        "tick": 422388
+      },
+      "final_healthy": true,
+      "owner": null,
+      "active": null,
+      "mode": "locked",
+      "diagnosis": {
+        "trigger_state_clearance_scan_seq": 4215,
+        "trigger_raw_scan_captured": false,
+        "last_drive_captured_scan_seq": 4214,
+        "first_locked_captured_scan_seq": 4216,
+        "generic_halfwidth30_front_m": 1.8548787,
+        "generic_side_clearance_m": 0.3039462,
+        "turn_half_width_m": 0.32,
+        "trigger_point_band_evidence": "generic30cm frame passes while turn32cm frame fails; point in additional30-32cm lateral band, exact ray not captured",
+        "near_left_board_next_scan_body_distance_m": 0.10189205477976984,
+        "native_side_next_scan_m": 0.271863709994319,
+        "un_damped_target": 1640,
+        "reported_damped_target": 1593,
+        "trend_release_delta_pwm": 47,
+        "trend_release_not_physical_steering_verification": true
+      },
+      "cone_execution_started": false,
+      "automatic_retry_performed": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-05"
     }
   ],
-  "latest_trial_status": "04 collision failure remains; corrected presteer-first16c0956 deployed and independently locked verified, no new arm/drive or physical turn test",
-  "latest_user_proposal": "relax the minimum side distance on the side the vehicle turns toward",
+  "latest_trial_status": "05 partial left, stopped without collision; maneuver body-net5cm+3cm allowance verified, pending deployment and explicitly authorized06",
+  "latest_user_proposal": "latest overrides raw20: vehicle perimeter net clearance5cm during turn and slalom; straight stays unchanged",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
     "forward_rectangle_half_width_m": 0.32,
@@ -655,7 +728,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "continue software correction only; latest explicit04 retry consumed and no new motion request after collision",
+  "latest_authorization": "operator confirmed placement after crosswalk and explicitly requested upload then direct single test;06 pending",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -940,5 +1013,57 @@
       },
       "not_evidence_of_continuous_ready_or_physical_turn": true
     }
+  },
+  "maneuver_body_profile": {
+    "status": "validated_pending_locked_deployment_and_authorized06",
+    "distance_reference": "current return to measured vehicle rectangle, not lidar raw range",
+    "measured_front_m": 0.21,
+    "measured_rear_m": 0.2,
+    "measured_wheel_outside_half_width_m": 0.17,
+    "requested_net_clearance_m": 0.05,
+    "existing_range_reference_allowance_m": 0.03,
+    "current_point_guard_distance_m": 0.08,
+    "axis_lidar_thresholds_m": {
+      "front": 0.29,
+      "rear": 0.28,
+      "left": 0.25,
+      "right": 0.25
+    },
+    "explicit_turn_profile_only": true,
+    "straight_default_unchanged": true,
+    "cone_execution_chain_connected": false,
+    "future_sweep_or_stopping_certified": false,
+    "new_motion_authorized": true,
+    "previous_raw20_choice_superseded": true,
+    "implemented": true,
+    "vehicle_deployed": false,
+    "new_motion_executed": false,
+    "slalom_shared_profile_available": true,
+    "source_sha256": {
+      "web/vehicle-console/autonomy_live.py": "092dd6eb70710e23c5f92fc7b8e6c13c5e7a900bdc7cf2e2ec24bd5e674ad368",
+      "web/vehicle-console/server.py": "16d56828f6a8961668bcba4b343d71a65c27b4a6ae61bcb3f1b31bd5e22c045d",
+      "web/vehicle-console/turn_motion.py": "2a1e0cab07b7a64b27cf23a35fc718dd05670f893b05ea99c187d8bf37bcf26c"
+    },
+    "validation": {
+      "mac_python": 256,
+      "target_body_helper": 75,
+      "target_turn_and_service": 97,
+      "independent_math_boundary_cases": 1440,
+      "independent_integration_cases": 29,
+      "actual05_min_body_gap_m": 0.10189205477976984,
+      "actual05_after_neutral_gap_m": [
+        0.06396,
+        0.07664,
+        0.06908
+      ],
+      "after_neutral_closer_points_are_not_certified_stopping_envelope": true
+    },
+    "motor1560_unchanged": true,
+    "presteer_order_unchanged": true,
+    "pwm_slew_unchanged": true,
+    "wall_association_rho30cm_unchanged": true,
+    "turn_geometry_lateral_margin_m": 0.25,
+    "rust_frontend_unchanged": true,
+    "matching_bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4"
   }
 }

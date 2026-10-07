@@ -340,6 +340,56 @@ class TurnMotionTests(unittest.TestCase):
         result = MODULE.TurnMotion(0.).update(value, .01, 0., control(1))
         self.assertEqual(result['terminal_reason'], 'invalid_native_corridor_candidates')
 
+    def test_narrow_turn_corridor_uses_body_clearance_and_range_allowance(self):
+        self.assertAlmostEqual(MODULE.TURN_LATERAL_MARGIN_M, .25)
+        available = .6/2-MODULE.TURN_LATERAL_MARGIN_M
+        for sign in (-1, 1):
+            for offset, accepted in [(available-1e-6, True), (available, False),
+                                     (available+1e-6, False)]:
+                with self.subTest(sign=sign, offset=offset):
+                    result = MODULE.TurnMotion(0.).update(
+                        scan(1, heading=20., offset=sign*offset, width=.6), .01, 0.,
+                        control(1, armed=False))
+                    self.assertEqual(result['start_ready'], accepted)
+                    self.assertEqual(result['lock_requested'], not accepted)
+                    self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+                    if accepted:
+                        self.assertGreater(result['steering_target'], 1500)
+                    else:
+                        self.assertEqual(result['reason'], 'invalid_native_corridor_candidates')
+
+    def test_narrow_turn_corridor_presteers_then_confirms_alignment_at_new_margin(self):
+        motion, previous, outputs = MODULE.TurnMotion(0.), {'servo': 1500}, []
+        for seq in range(1, 49):
+            now = (seq-1)*.1
+            previous = motion.update(scan(seq, heading=20., offset=.04, width=.6), .01,
+                                     now, control(seq, previous['servo']))
+            outputs.append(previous)
+            if previous['phase'] == 'drive':
+                break
+        self.assertEqual(previous['phase'], 'drive')
+        self.assertTrue(all(r['motor'] == 1500 for r in outputs[:-1]))
+        self.assertGreater(previous['servo'], 1500)
+        self.assertGreaterEqual(previous['steering_settle_feedback_ticks'], 3)
+        self.assertGreaterEqual(previous['steering_settle_elapsed_s'], 1.2-1e-9)
+        for i, heading in enumerate((12., 4., 3., 2., 1.), start=1):
+            previous = motion.update(scan(seq+i, heading=heading, offset=.04, width=.6), .01,
+                                     now+i*.1, control(seq+i, previous['servo'], motor=1560))
+        self.assertTrue(previous['observed_alignment'])
+        self.assertEqual((previous['phase'], previous['motor']), ('coast', 1500))
+        self.assertFalse(previous['completed'])
+
+    def test_narrow_turn_coast_correction_obeys_the_same_lateral_boundary(self):
+        motion = MODULE.TurnMotion(0.)
+        available = .6/2-MODULE.TURN_LATERAL_MARGIN_M
+        for sign in (-1, 1):
+            with self.subTest(sign=sign):
+                inner = motion._coast_target(corridor(sign*5., sign*(available-1e-6), .6))
+                self.assertGreater(sign*(inner-1500), 0)
+                self.assertTrue(1445 <= inner <= 1555)
+                for offset in (available, available+1e-6):
+                    self.assertEqual(motion._coast_target(corridor(sign*5., sign*offset, .6)), 1500)
+
     def test_stale_reordered_jump_and_unknown_lock_immediately(self):
         for fault in ['stale', 'reordered', 'jump', 'publication']:
             with self.subTest(fault=fault):
