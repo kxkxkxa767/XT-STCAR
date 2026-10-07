@@ -448,9 +448,200 @@
         "side_stop_threshold_m": 0.3,
         "after_scan_variation_is_not_measured_slide_or_curvature": true
       }
+    },
+    {
+      "attempt_id": "left-turn-trial-20261007-04",
+      "vehicle_source_commit": "142dc0208744595d9786b516722d03af72c4fdcf",
+      "authorization": "explicit fix-then-one-retry request; consumed once",
+      "actual_result": {
+        "run_id": "K3Xx7ry2wg079ZPMO-B3JYmJ",
+        "epoch": 0,
+        "phase": "drive",
+        "turn_stage": "approach",
+        "reason": "probe_obstacle_in_straight_corridor",
+        "presteer_ticks": 43,
+        "motion_ticks": 52,
+        "drive_ticks": 52,
+        "coast_ticks": 0,
+        "steering_changes": 0,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "servo": 1500,
+        "current_pwm": 1560,
+        "completed": false,
+        "entry_confirmed": false,
+        "observed_alignment": false
+      },
+      "drive_elapsed_s": 1.6679206529997828,
+      "servo1500_only": true,
+      "turn_released": false,
+      "last_corner_current": false,
+      "last_service_geometry_scan_seq": 925,
+      "last_cached_endpoint_m": 0.09354826329857918,
+      "cached_endpoint_is_not_current_evidence": true,
+      "operator_observation": {
+        "collision_confirmed": true,
+        "operator_collision_statement": "这次吗，没有左转直接撞墙了",
+        "operator_stopped_statement": "已完全停住",
+        "physical_standstill_measured": false,
+        "operator_requested_control_order": "先调整舵机，运行中决定继续左打或回中",
+        "no_new_test_authorization_after_collision": true
+      },
+      "test_outcome": "collision failure, no left turn, no cones",
+      "independent_initial_neutral_feedback_count": 6,
+      "initial_final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 97,
+        "servo": 1500,
+        "tick": 93847
+      },
+      "post_collision_stop_ack_and_feedback": {
+        "stop_ack_received": true,
+        "feedback": [
+          {
+            "healthy": true,
+            "control": {
+              "armed": false,
+              "motor": 1500,
+              "reason": "operator_stop",
+              "seq": 97,
+              "servo": 1500,
+              "tick": 228470
+            },
+            "owner": null,
+            "active": null,
+            "mode": "locked",
+            "ages": {
+              "camera": 0.07789114700062783,
+              "lidar": 0.03910873500080925,
+              "control": 0.015843813000174123
+            },
+            "lidar_seq": 2286,
+            "lidar_at_ms": 228298,
+            "lidar_age_s": 0.061239801000738225
+          },
+          {
+            "healthy": true,
+            "control": {
+              "armed": false,
+              "motor": 1500,
+              "reason": "operator_stop",
+              "seq": 98,
+              "servo": 1500,
+              "tick": 228656
+            },
+            "owner": null,
+            "active": null,
+            "mode": "locked",
+            "ages": {
+              "camera": 0.13039458999992348,
+              "lidar": 0.024501912999767228,
+              "control": 0.014452557999902638
+            },
+            "lidar_seq": 2288,
+            "lidar_at_ms": 228497,
+            "lidar_age_s": 0.04679199299971515
+          },
+          {
+            "healthy": true,
+            "control": {
+              "armed": false,
+              "motor": 1500,
+              "reason": "operator_stop",
+              "seq": 98,
+              "servo": 1500,
+              "tick": 228842
+            },
+            "owner": null,
+            "active": null,
+            "mode": "locked",
+            "ages": {
+              "camera": 0.04197862700038968,
+              "lidar": 0.010685080999792262,
+              "control": 0.01286449300005188
+            },
+            "lidar_seq": 2290,
+            "lidar_at_ms": 228696,
+            "lidar_age_s": 0.029748151999228867
+          },
+          {
+            "healthy": true,
+            "control": {
+              "armed": false,
+              "motor": 1500,
+              "reason": "operator_stop",
+              "seq": 98,
+              "servo": 1500,
+              "tick": 229027
+            },
+            "owner": null,
+            "active": null,
+            "mode": "locked",
+            "ages": {
+              "camera": 0.08354006999979902,
+              "lidar": 0.0847747679999884,
+              "control": 0.007656712999960291
+            },
+            "lidar_seq": 2292,
+            "lidar_at_ms": 228894,
+            "lidar_age_s": 0.008330149999892456
+          },
+          {
+            "healthy": true,
+            "control": {
+              "armed": false,
+              "motor": 1500,
+              "reason": "operator_stop",
+              "seq": 98,
+              "servo": 1500,
+              "tick": 229213
+            },
+            "owner": null,
+            "active": null,
+            "mode": "locked",
+            "ages": {
+              "camera": 0.139889857999151,
+              "lidar": 0.06748953299938876,
+              "control": 0.00786498199977359
+            },
+            "lidar_seq": 2293,
+            "lidar_at_ms": 228997,
+            "lidar_age_s": 0.08828317799998331
+          },
+          {
+            "healthy": true,
+            "control": {
+              "armed": false,
+              "motor": 1500,
+              "reason": "operator_stop",
+              "seq": 98,
+              "servo": 1500,
+              "tick": 229399
+            },
+            "owner": null,
+            "active": null,
+            "mode": "locked",
+            "ages": {
+              "camera": 0.05869542399977945,
+              "lidar": 0.06203481800002919,
+              "control": 0.003505617999508104
+            },
+            "lidar_seq": 2295,
+            "lidar_at_ms": 229196,
+            "lidar_age_s": 0.08582478300013463
+          }
+        ],
+        "physically_stopped": null,
+        "collision_confirmed_by_operator": true
+      },
+      "physical_motion_or_stop_model_certified": false,
+      "automatic_retry_performed": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-04"
     }
   ],
-  "latest_trial_status": "03 forward confirmed but incomplete; current entry-approach fix verified and pending matched locked deployment and explicit authorized retry04",
+  "latest_trial_status": "04 collision failure; presteer-first correction validated, pending locked deployment only; no further motor test authorized",
   "latest_user_proposal": "relax the minimum side distance on the side the vehicle turns toward",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -464,12 +655,12 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "operator put vehicle back at crosswalk and explicitly requested fix then one retry; retry04 not yet executed",
+  "latest_authorization": "continue software correction only; latest explicit04 retry consumed and no new motion request after collision",
   "entry_approach_fix": {
     "implemented": true,
-    "vehicle_deployed": false,
+    "vehicle_deployed": true,
     "retry_authorized": true,
-    "retry_executed": false,
+    "retry_executed": true,
     "mechanism": "neutral steering adoption then1560 straight approach; fresh native opening endpoint front-margin gate releases gradual left turn",
     "measured_vehicle_parameters": {
       "lidar_front_m": 0.21,
@@ -585,6 +776,60 @@
     "matching_new_bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
     "riscv_elf_passed": true,
     "maximum_glibc": "2.34",
+    "physical_acceptance": false,
+    "status": "withdrawn after operator-confirmed straight-approach collision; correcting control order",
+    "deployment": {
+      "source_commit": "142dc0208744595d9786b516722d03af72c4fdcf",
+      "backup": "/home/bianbu/xt-stcar-console/backup-left-entry-20261007-113948",
+      "archive_sha256": "e6d1b7d234aaeeb403ef72d14302e079f359d044869af37b815486451807cbc6",
+      "installed_sha256": {
+        "app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+        "autonomy-control.py": "afb98cf0ef6908298ee9a2f5a0b85ac5d06b5a8984142d226c4e5d515c3d318c",
+        "autonomy_live.py": "da2ecc9bc360153bb75a2a493347a658407686e5cccfa064bd45d800d7117a86",
+        "coast_motion.py": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257",
+        "index.html": "f4c71739afad72d3d0a17bafc8b286b412ca4289ab924a77a0fc516579fcf43f",
+        "server.py": "083eba8c65ea5393aad7634cc0573f158d4ec1f3e3877a1ca5c0eb9e4a28d145",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "30f317b5e0e4b9e29770e9ec4210821a0481c04ed4a2eac8e1b60d13a3029e9d",
+        "vehicle-bridge": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
+        "start-console.py": "752449080665c0cf7c527c518657666c788b30ff9f4e30ebe07724ca7c4122ab"
+      },
+      "runtime_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "post_fresh_feedback": 10,
+      "independent_fresh_feedback": 10,
+      "default_locked": true,
+      "arm_or_drive_requests_during_deployment": 0
+    }
+  },
+  "presteer_restore": {
+    "status": "validated_pending_locked_deployment",
+    "straight_approach_removed": true,
+    "required_order": "neutral motor -> slew steering to fresh left target -> actual adoption and3newcontrolticks plus1.2s ->1560 dynamic steering",
+    "further_motion_authorized": false,
+    "initial_neutral_target_cannot_start": true,
+    "source_sha256": {
+      "web/vehicle-console/turn_motion.py": "28c38f31235dd46b08f00977a54fb81658c19a2ed638b175e04a9f03ebaec7d2",
+      "web/vehicle-console/server.py": "5103f1d471c805c40ae9751be14c31145db5c137b831058f8636631ba564c42d"
+    },
+    "validation": {
+      "mac_full_python": 237,
+      "target_pure_module_service": 88,
+      "independent_module_service_coast": 128,
+      "raw04_observations_replayed": 15,
+      "real_initial_scan_seq": 886,
+      "initial_target": 1681,
+      "replay_motor_always1500_with_unadopted_feedback": true,
+      "replay_not_changed_physical_trajectory": true
+    },
+    "rust_and_frontend_unchanged": true,
+    "matching_bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
     "physical_acceptance": false
   }
 }

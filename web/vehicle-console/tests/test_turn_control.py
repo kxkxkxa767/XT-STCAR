@@ -2,7 +2,6 @@
 import importlib.util
 import io
 import json
-import math
 from pathlib import Path
 import sys
 import tempfile
@@ -11,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from test_coast_motion import room_scan
-from test_turn_motion import scan as corridor_scan, opening_scan
+from test_turn_motion import scan as corridor_scan, opening_scan, recorded_opening_scan
 
 ROOT = Path(__file__).parents[1]
 
@@ -65,11 +64,11 @@ class TurnControlTests(unittest.TestCase):
                 'epoch': self.console.control_epoch, 'tick': self.console.status['control']['tick'],
                 'placement_confirmed': True, 'max_drive_s': max_drive_s})
 
-    def tick(self, now, scan=None):
+    def tick(self, now, scan=None, control_tick=None):
         self.now = now
         self.console.owner_at = now
         self.console.control_at = now
-        self.console.status['control']['tick'] = 1000+round(now*1000)
+        self.console.status['control']['tick'] = (1000+round(now*1000) if control_tick is None else control_tick)
         new_scan = self.scan(1+int(round(now*10, 6))) if scan is None else scan
         if new_scan['seq'] != self.console.scan['seq']:
             self.console.scan, self.console.scan_at = new_scan, now
@@ -126,6 +125,9 @@ class TurnControlTests(unittest.TestCase):
 
     def test_single_owner_presteers_gradually_before_motor_and_never_completes_competition(self):
         drive_since = self.drive()
+        report = self.console.auto_session['report']
+        self.assertGreaterEqual(report['turn']['steering_settle_elapsed_s']+1e-9, 1.2)
+        self.assertGreaterEqual(report['turn']['steering_settle_feedback_ticks'], 3)
         positives = [row for row in self.outputs if row['motor'] > 1500]
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
         self.assertEqual(positives[0]['motor'], 1560)
@@ -144,16 +146,44 @@ class TurnControlTests(unittest.TestCase):
         self.assertFalse(self.console.auto_result['completed'])
         self.assertEqual(self.outputs[-1]['motor'], 1500)
 
-    def test_unadopted_steering_never_allows_positive_motor(self):
-        self.adopt_servo = False
+    def test_unadopted_steering_or_unacked_command_never_allows_positive_motor(self):
+        for missing in ['servo_adoption', 'command_ack']:
+            with self.subTest(missing=missing):
+                if self.console.auto_session is None and self.outputs:
+                    self.tearDown()
+                    self.setUp()
+                self.adopt_servo = missing != 'servo_adoption'
+                self.start()
+                for index in range(1, 260):
+                    if missing == 'command_ack':
+                        self.console.auto_session['turn_servo_sequence'] = self.console.sequence+1000
+                    self.tick(round(index*.02, 6))
+                    if self.console.auto_session is None:
+                        break
+                    report = self.console.auto_session['report']
+                    self.assertEqual((report['drive_ticks'], report['motion_ticks']), (0, 0))
+                self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
+                self.assertEqual(self.console.auto_result['reason'], 'left_turn_presteer_timeout')
+                self.assertFalse(self.console.auto_result['completed'])
+
+    def test_held_control_tick_cannot_mature_adopted_presteer_on_fresh_scans(self):
         self.start()
-        for index in range(1, 260):
-            self.tick(round(index*.02, 6))
+        session = self.console.auto_session
+        held_tick = None
+        for index in range(1, 251):
+            self.tick(round(index*.02, 6), control_tick=held_tick)
             if self.console.auto_session is None:
                 break
+            decision = session['report']['turn']
+            if decision['steering_settle_feedback_ticks'] == 1 and held_tick is None:
+                held_tick = self.console.status['control']['tick']
+            if held_tick is not None:
+                self.assertEqual(decision['steering_settle_feedback_ticks'], 1)
+            self.assertEqual((session['phase'], session['report']['drive_ticks'], session['report']['motion_ticks']),
+                             ('presteer', 0, 0))
+        self.assertIsNotNone(held_tick)
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
         self.assertEqual(self.console.auto_result['reason'], 'left_turn_presteer_timeout')
-        self.assertFalse(self.console.auto_result['completed'])
 
     def test_one_sparse_presteer_scan_waits_in_same_owner_for_original_stable_recovery(self):
         self.start()
@@ -164,6 +194,7 @@ class TurnControlTests(unittest.TestCase):
         self.observe(.2, self.sparse_scan(3))
         self.assertIs(self.console.auto_session, session)
         self.assertEqual(session['report']['quality_issues'], ['front_sparse'])
+        self.assertEqual(session['report']['turn_stage'], 'presteer_wait')
         for seq, now in [(4, .303), (5, .406), (6, .509)]:
             value = self.scan(seq)
             value['at_ms'] = 100+round(now*1000)
@@ -172,14 +203,21 @@ class TurnControlTests(unittest.TestCase):
             self.assertTrue(session['report']['perception_recovering'])
             self.assertEqual((session['phase'], session['report']['current_pwm'], session['report']['servo']),
                              ('presteer', 1500, held_servo))
+            self.assertEqual(session['report']['turn_stage'], 'presteer_wait')
             self.assertEqual(session['report']['turn']['geometry_source_seq'], seq)
             self.assertEqual(session['report']['turn']['steering_settle_feedback_ticks'], 0)
+            self.assertEqual((session['report']['drive_ticks'], session['report']['motion_ticks']), (0, 0))
+            if seq == 4:
+                sparse_count = session['report']['quality_counts']['front_sparse']
+            else:
+                self.assertEqual(session['report']['quality_counts']['front_sparse'], sparse_count)
         value = self.scan(7)
         value['at_ms'] = 712
         self.observe(.612, value)
         self.assertFalse(session['report']['perception_recovering'])
         self.assertGreaterEqual(session['report']['recovery_stable_ms'], 300)
         self.assertEqual(session['phase'], 'presteer')
+        self.assertEqual(session['report']['turn_stage'], 'presteer')
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
         self.assertGreater(session['report']['recovery_ticks'], 0)
         for index in range(1, 220):
@@ -292,32 +330,94 @@ class TurnControlTests(unittest.TestCase):
         self.assertFalse(self.console.auto_result['completed'])
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
 
-    def test_entry_approach_is_reported_as_drive_with_neutral_servo(self):
-        def ahead_scan(seq):
-            value = opening_scan(seq)
-            angle, distance = -math.radians(315), math.sqrt(.5)
-            point = {'x_m': distance*math.cos(angle), 'y_m': distance*math.sin(angle)}
-            value['ranges'][315] = distance
-            value['left_turn_goal'].update(incoming_left_end_m=point['x_m'], known_open_fraction=1.,
-                incoming_left_end_support={'index': 315, 'angle_left_rad': angle,
-                    'range_m': distance, 'point_left_m': point})
+    def test_opening_endpoint_ahead_still_presteers_left_before_positive_motor(self):
+        def recorded_ahead_scan(seq):
+            # Actual 04 first goal, wall and support rays. Other sectors and
+            # replay clocks are synthetic; this isolates service ordering.
+            value = recorded_opening_scan(886)
+            value.update(seq=seq, at_ms=seq*100)
+            value['ranges'] = [3.2 if distance is None else distance for distance in value['ranges']]
             return value
-        self.console.scan = ahead_scan(1)
+        for name, ahead_scan in [('synthetic', lambda seq: opening_scan(seq, endpoint_index=315)),
+                                 ('actual_04_goal_and_rays', recorded_ahead_scan)]:
+            with self.subTest(name=name):
+                if self.outputs:
+                    self.tearDown()
+                    self.setUp()
+                self.assert_opening_presteers_left(ahead_scan)
+
+    def assert_opening_presteers_left(self, sample):
+        self.console.scan = sample(1)
         self.start()
         session = self.console.auto_session
-        for index in range(1, 160):
+        self.assertEqual(session['report']['turn_stage'], 'presteer')
+        first_left = None
+        for index in range(1, 251):
             now = round(index*.02, 6)
-            presteer_ticks = session['report']['presteer_ticks']
-            self.tick(now, ahead_scan(1+int(round(now*10, 6))))
+            self.tick(now, sample(1+int(round(now*10, 6))))
             self.assertIs(self.console.auto_session, session)
+            report = session['report']
+            if report['servo'] > 1500 and first_left is None:
+                first_left = now
+            self.assertTrue(report['turn']['incoming_endpoint_current'])
+            self.assertGreater(report['turn']['incoming_endpoint']['incoming_left_end_m'], .49)
             if session['phase'] == 'drive':
                 break
+            self.assertEqual((report['current_pwm'], report['drive_ticks'], report['motion_ticks']), (1500, 0, 0))
+        self.assertIsNotNone(first_left)
         self.assertEqual(session['phase'], 'drive')
-        self.assertEqual(session['report']['turn_stage'], 'approach')
-        self.assertEqual((session['report']['current_pwm'], session['report']['servo']), (1560, 1500))
-        self.assertEqual(session['report']['presteer_ticks'], presteer_ticks)
+        self.assertEqual(session['report']['turn_stage'], 'drive')
+        self.assertEqual(session['report']['current_pwm'], 1560)
+        self.assertGreater(session['report']['servo'], 1500)
+        self.assertGreaterEqual(session['report']['turn']['steering_settle_elapsed_s']+1e-9, 1.2)
+        self.assertGreaterEqual(session['report']['turn']['steering_settle_feedback_ticks'], 3)
+        self.assertGreaterEqual(self.now-first_left, 1.2)
+        self.assertGreater(session['report']['presteer_ticks'], 0)
+        self.assertEqual((session['report']['drive_ticks'], session['report']['motion_ticks']), (1, 1))
         self.assertFalse(session['report']['physical_steering_confirmed'])
         self.assertFalse(session['report']['turn']['completed'])
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_drive_retargets_left_and_returns_toward_center_from_current_geometry(self):
+        self.drive()
+        session = self.console.auto_session
+        before_servo = session['report']['servo']
+        before_changes = session['report']['steering_changes']
+        last_change = session['turn_motion'].last_change
+        start, before = self.now, len(self.outputs)
+        # Continuous changing native corridor headings model new observations,
+        # not physical vehicle yaw or a measured steering response.
+        for index in range(1, 6):
+            now = round(start+index*.1, 6)
+            self.observe(now, self.scan(self.console.scan['seq']+1, heading=60+index*4))
+            self.assertIs(self.console.auto_session, session)
+            self.assertEqual(session['phase'], 'drive')
+        self.assertGreater(session['report']['servo'], before_servo)
+        more_left_servo = session['report']['servo']
+        for index in range(1, 21):
+            now = round(start+.5+index*.1, 6)
+            self.observe(now, self.scan(self.console.scan['seq']+1, heading=80-index*3.625))
+            self.assertIs(self.console.auto_session, session)
+            self.assertEqual(session['phase'], 'drive')
+        self.assertLess(session['report']['servo'], before_servo)
+        self.assertLess(session['report']['servo'], more_left_servo)
+        self.assertEqual(session['report']['turn']['steering_target'], 1500)
+        self.assertEqual(session['report']['servo'], 1500)
+        changes, previous_servo = 0, before_servo
+        for row in self.outputs[before:]:
+            self.assertEqual((row['op'], row['motor']), ('drive', 1560))
+            self.assertLessEqual(abs(row['servo']-previous_servo), 10)
+            if row['servo'] != previous_servo:
+                self.assertGreaterEqual(row['now']-last_change+1e-9, .10)
+                last_change = row['now']
+                changes += 1
+            previous_servo = row['servo']
+        self.assertGreater(changes, 0)
+        self.assertEqual(session['report']['steering_changes']-before_changes, changes)
+        self.assertEqual(session['turn_last_servo'], session['report']['servo'])
+        self.assertLessEqual(session['turn_servo_sequence'], self.console.status['control']['seq'])
+        self.assertEqual(session['report']['turn_stage'], 'drive')
+        self.assertFalse(session['report']['entry_confirmed'])
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
     def test_short_geometry_gap_retains_source_then_sustained_loss_locks_without_rearm(self):
@@ -394,6 +494,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(session['turn_last_servo'], session['report']['servo'])
         self.assertEqual(session['report']['servo'], 1500)
         self.assertEqual(session['report']['turn']['geometry_source_seq'], self.console.scan['seq'])
+        self.assertEqual(session['report']['turn_stage'], 'coast')
         self.assertTrue(session['report']['coast_neutral_ack'])
         self.assertLessEqual(session['turn_servo_sequence'], self.console.status['control']['seq'])
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)

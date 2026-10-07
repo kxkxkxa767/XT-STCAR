@@ -420,6 +420,7 @@ class Console:
         run_id = secrets.token_urlsafe(18)
         report = {'run_id': run_id, 'epoch': self.control_epoch, 'pwm': TRIAL_MOTOR, 'servo': 1500,
             'duration_ms': round(1000*(MAX_PRESTEER_S+motion.max_drive_s)), 'phase': 'presteer',
+            'turn_stage': decision['turn_stage'],
             'drive_ticks': 0, 'motion_ticks': 0, 'presteer_ticks': 0, 'coast_ticks': 0, 'recovery_ticks': 0,
             'observed_pwm': False, 'observed_armed': False, 'steering_changes': 0, 'centering': True,
             'turn_trial': True, 'formal_stop_goal': False, 'endpoint': 'left_turn_trial',
@@ -666,6 +667,7 @@ class Console:
             report['observed_alignment'] = decision['observed_alignment']
             report['alignment_evidence'] = decision['alignment_evidence']
             report['entry_confirmed'] = decision['entry_confirmed']
+            report['turn_stage'] = decision['turn_stage']
             if decision['lock_requested']:
                 self.halt(decision['reason'])
                 return
@@ -882,8 +884,7 @@ class Console:
         report['observed_alignment'] = decision['observed_alignment']
         report['alignment_evidence'] = decision['alignment_evidence']
         report['entry_confirmed'] = decision['entry_confirmed']
-        if 'turn_stage' in decision:
-            report['turn_stage'] = decision['turn_stage']
+        report['turn_stage'] = decision['turn_stage']
         if decision['lock_requested']:
             self.halt(decision['reason'])
             return

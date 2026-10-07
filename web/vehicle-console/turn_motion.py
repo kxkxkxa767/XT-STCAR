@@ -18,10 +18,6 @@ PWM_STEP = 10
 PWM_INTERVAL_S = .10
 SCAN_AGE_S = .30
 COAST_SERVO_DELTA = 55
-LIDAR_FRONT_EXTENT_M = .21
-WHEEL_OUTSIDE_HALF_WIDTH_M = .17
-CORNER_FRONT_MARGIN_M = .10+.03
-CORNER_CONFIRM_S = .25
 _FRAME = 'lidar_origin_coarse_body_heading'
 _FIELDS = ('heading_left_rad', 'center_offset_left_m', 'width_m',
            'left_wall_points', 'right_wall_points', 'support_span_m',
@@ -318,67 +314,32 @@ class TurnMotion:
         self.alignment_evidence = None
         self.reason = 'awaiting_left_corridor'
         self.start_ready = False
-        self.corner_gate_required = self.turn_released = False
-        self.corner_current = False
-        self.corner_confirmations = 0
-        self.corner_publication = self.corner_receive = None
-        self.corner_end_m = self.corner_front_limit_m = None
-        self.corner_source_seq = self.corner_source_at_ms = None
-        self.corner_release_evidence = None
+        self.presteer_waiting = False
+        self.incoming_endpoint = None
 
-    def _reset_corner_confirmations(self):
-        self.corner_confirmations = 0
-        self.corner_publication = self.corner_receive = None
-
-    def _corner_update(self, scan, now):
+    def _endpoint_observation(self, scan):
+        # Diagnostics only: cached turn_goal fields are not current ray evidence.
         opening = scan.get('left_turn_goal')
-        self.corner_current = opening is not None
-        self.corner_end_m = self.corner_front_limit_m = None
-        self.corner_source_seq = self.corner_source_at_ms = None
-        if opening is None:
-            if not self.turn_released:
-                self._reset_corner_confirmations()
-            return
-        theta = opening['incoming_heading_left_rad']
-        # The lesser projection of the two measured front corners. This is a
-        # candidate front-edge margin, not rear-axle or swept-path evidence.
-        front = LIDAR_FRONT_EXTENT_M*math.cos(theta)-WHEEL_OUTSIDE_HALF_WIDTH_M*abs(math.sin(theta))
-        limit = front-CORNER_FRONT_MARGIN_M
-        end = opening['incoming_left_end_m']
-        self.corner_end_m, self.corner_front_limit_m = end, limit
-        self.corner_source_seq, self.corner_source_at_ms = scan['seq'], scan['at_ms']
-        if self.turn_released or not self.corner_gate_required:
-            return
-        if end > limit:
-            self._reset_corner_confirmations()
-            return
-        self.corner_confirmations += 1
-        if self.corner_publication is None:
-            self.corner_publication, self.corner_receive = scan['at_ms'], now
-        if (self.corner_confirmations >= 3 and (scan['at_ms']-self.corner_publication)/1000 >= CORNER_CONFIRM_S
-                and now-self.corner_receive >= CORNER_CONFIRM_S):
-            self.turn_released = True
-            self.corner_release_evidence = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
-                                          'incoming_left_end_m': end, 'front_limit_m': limit,
-                                          'confirmations': self.corner_confirmations,
-                                          'incoming_left_end_support': copy.deepcopy(opening['incoming_left_end_support']),
-                                          'known_open_fraction': opening['known_open_fraction'],
-                                          'candidate_only': True, 'turn_path_certified': False}
+        self.incoming_endpoint = (None if opening is None else {
+            'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'incoming_left_end_m': opening['incoming_left_end_m'],
+            'incoming_left_end_support': copy.deepcopy(opening['incoming_left_end_support']),
+            'known_open_fraction': opening['known_open_fraction'],
+            'candidate_only': True, 'turn_path_certified': False})
 
     def _presteer_hold(self, reason):
         self.reason, self.start_ready = reason, False
+        self.presteer_waiting = True
         self.settle_since = None
         self.settle_feedback_ticks = 0
         self.last_error = None
-        self.corner_current = False
-        self.corner_end_m = self.corner_front_limit_m = None
-        self.corner_source_seq = self.corner_source_at_ms = None
-        self._reset_corner_confirmations()
 
     def lock(self, reason):
         if self.phase == 'presteer':
             self.presteer_ended_at = self.last_now
         self.phase, self.reason = 'locked', reason
+        self.presteer_waiting = False
+        self.incoming_endpoint = None
         self.servo = self.steering_target = NEUTRAL
         self.start_ready = False
         self.settle_since = None
@@ -429,14 +390,9 @@ class TurnMotion:
                                       max(0, now-self.last_geometry_receive),
                 'geometry_source_seq': self.last_geometry_seq,
                 'geometry_source_at_ms': self.last_geometry_publication,
-                'turn_stage': ('left_turn' if self.turn_released else 'approach')
-                              if self.phase == 'drive' else self.phase,
-                'corner_gate_required': self.corner_gate_required, 'turn_released': self.turn_released,
-                'corner_current': self.corner_current, 'corner_confirmations': self.corner_confirmations,
-                'corner_end_m': self.corner_end_m, 'corner_front_limit_m': self.corner_front_limit_m,
-                'corner_source_seq': self.corner_source_seq, 'corner_source_at_ms': self.corner_source_at_ms,
-                'corner_front_margin_m': CORNER_FRONT_MARGIN_M,
-                'corner_release_evidence': copy.deepcopy(self.corner_release_evidence),
+                'turn_stage': 'presteer_wait' if self.presteer_waiting and self.phase == 'presteer' else self.phase,
+                'incoming_endpoint_current': self.incoming_endpoint is not None,
+                'incoming_endpoint': copy.deepcopy(self.incoming_endpoint),
                 'turn_goal': copy.deepcopy(self.turn_goal),
                 'outer_wall': copy.deepcopy(self.outer_wall),
                 'corridor': dict(self.corridor) if self.corridor else None}
@@ -507,7 +463,6 @@ class TurnMotion:
                     or opening['target_point_left_m']['x_m'] <= 0 or opening['target_point_left_m']['y_m'] <= 0):
                 raise ValueError('left_turn_goal_not_a_forward_left_exit')
             self.outer_wall, self.turn_goal, self.geometry_mode = dict(opening['outer_wall']), dict(opening), 'opening_wall'
-            self.corner_gate_required = True
             return self._opening_candidate(self.outer_wall, opening['width_m'])
         if self.geometry_mode == 'opening_wall':
             matches = self._wall_matches(walls+([opening['outer_wall']] if opening else []), publication_dt, scan)
@@ -552,8 +507,6 @@ class TurnMotion:
                 raise ValueError('left_turn_geometry_missing')
         result = self._candidate(candidates, publication_dt)
         self.geometry_mode = 'corridor'
-        if not self.corner_gate_required:
-            self.turn_released = True  # Already observed inside an outgoing double-wall strip.
         return result
 
     def _candidate(self, candidates, publication_dt):
@@ -573,9 +526,6 @@ class TurnMotion:
         return dict(matches[0])
 
     def _target(self, candidate, publication_dt):
-        if self.corner_gate_required and not self.turn_released:
-            self.last_error = None
-            return NEUTRAL
         heading, offset = candidate['heading_left_rad'], candidate['center_offset_left_m']
         lookahead = max(.35, min(1., candidate['width_m']/2))
         if self.geometry_mode == 'opening_wall':
@@ -631,6 +581,7 @@ class TurnMotion:
         if type(presteer_wait) is not bool:
             self.lock('invalid_turn_presteer_wait')
             return self._result(now)
+        self.presteer_waiting = False
         if safe is not True:
             self.lock('turn_safety_rejected')
             return self._result(now)
@@ -695,6 +646,7 @@ class TurnMotion:
             return self._result(now)
         self.last_seq, self.last_publication, self.last_receive = seq, published, now
         self.last_signature = signature
+        self.incoming_endpoint = None
         geometry_dt = 0 if self.last_geometry_publication is None else (published-self.last_geometry_publication)/1000
         try:
             candidate = self._measurement(scan, candidates, geometry_dt)
@@ -718,10 +670,6 @@ class TurnMotion:
                 self.alignment_publication = self.alignment_receive = None
                 self.last_error = None
                 self.reason = 'left_turn_geometry_gap_hold'
-                self.corner_current = False
-                self.corner_end_m = self.corner_front_limit_m = None
-                self.corner_source_seq = self.corner_source_at_ms = None
-                self._reset_corner_confirmations()
                 if presteer_wait:
                     self._presteer_hold(self.reason)
                 elif control['armed']:
@@ -732,6 +680,7 @@ class TurnMotion:
         self.last_geometry_receive, self.last_geometry_publication, self.last_geometry_seq = now, published, seq
         self.geometry_missing = False
         self.corridor, self.selected, self.start_ready = candidate, True, True
+        self._endpoint_observation(scan)
         if self.phase == 'coast':
             self.steering_target = self._coast_target(candidate)
             self._slew(now)
@@ -739,7 +688,6 @@ class TurnMotion:
         if presteer_wait:
             self._presteer_hold('left_turn_presteer_quality_hold')
             return self._result(now)
-        self._corner_update(scan, now)
         if entry_stop is not None:
             if not self._entry(entry_stop, scan):
                 self.lock('invalid_turn_entry_evidence')
@@ -749,9 +697,19 @@ class TurnMotion:
             return self._result(now)
         target = self._target(candidate, publication_dt)
         if self.phase == 'presteer':
+            # A left-turn trial must first adopt a left command. A currently
+            # neutral target is a hold, never permission to start with centered steering.
+            if target <= NEUTRAL:
+                self.steering_target = NEUTRAL
+                self.start_ready = False
+                self.settle_since = None
+                self.settle_feedback_ticks = 0
+                self.reason = 'left_turn_presteer_left_target_required'
+                if control['armed']:
+                    self._slew(now)
+                return self._result(now)
             # Small measurement noise does not endlessly restart an unchanged presteer command.
-            if ((self.steering_target == NEUTRAL and target != NEUTRAL)
-                    or abs(target-self.steering_target) > 10):
+            if self.steering_target == NEUTRAL or abs(target-self.steering_target) > 10:
                 self.steering_target = target
                 self.settle_since = None
                 self.settle_feedback_ticks = 0
@@ -775,17 +733,11 @@ class TurnMotion:
                 if (new_feedback and self.settle_since is not None and self.settle_feedback_ticks >= 3
                         and now-self.settle_since+1e-9 >= STEERING_ALLOWANCE_S):
                     self.phase, self.drive_since = 'drive', now
-                    self.reason = 'left_turn_tracking_candidate' if self.turn_released else 'left_turn_approaching_opening'
+                    self.reason = 'left_turn_tracking_candidate'
                     self.presteer_ended_at = now
             return self._result(now)
         self.steering_target = target
         self._slew(now)
-        if self.corner_gate_required and not self.turn_released:
-            self.reason = 'left_turn_approaching_opening' if self.corner_current else 'left_turn_approach_endpoint_missing'
-            self.alignment_count = 0
-            self.alignment_evidence = None
-            self.alignment_publication = self.alignment_receive = None
-            return self._result(now)
         heading, offset = candidate['heading_left_rad'], candidate['center_offset_left_m']
         available = candidate['width_m']/2-.30
         aligned = available > 0 and abs(heading) <= math.radians(5) and abs(offset) < available

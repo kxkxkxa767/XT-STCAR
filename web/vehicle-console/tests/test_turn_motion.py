@@ -111,8 +111,15 @@ def recorded_opening_scan(seq, actual_board=False):
                      320,
                      2.87,
                      1.807534967194467)}})
+    records[886] = {'at_ms': 88530,
+            'outer': (1.5831126523694827, -2.1938025609561134, 1.3305570554044794,
+                      0.018386116451866493, 25, (2.183644617576955, 0.8382226339864579),
+                      (2.168696497899141, 2.168696497899141)),
+            'goal': (1.6304507692778052, -1.3785771763172108, 0.01832409115258497,
+                     2.1676119650966146, 0.5371611958188093, (1.3630263756039962, 1.271042658054264),
+                     317, 2.974, 1.8637033935650316)}
     # Same-scan endpoint rays derived from the captured native end scalar.
-    end_support = {5403: (311, 0.7949999999999999), 5411: (311, 0.7949999999999999), 5412: (311, 0.7949999999999999), 4129: (317, 0.729)}
+    end_support = {5403: (311, 0.7949999999999999), 5411: (311, 0.7949999999999999), 5412: (311, 0.7949999999999999), 4129: (317, 0.729), 886: (314, .759)}
     record = records[seq]
     heading, rho, span, error, points, start, end = record['outer']
     outer = {'heading_left_rad': heading, 'rho_left_m': rho, 'support_span_m': span,
@@ -230,19 +237,6 @@ def surface_scan(theta_deg=90., kind='curve', noise=0., separation=.03):
 
 
 class TurnMotionTests(unittest.TestCase):
-    def approach(self, max_drive_s=10., endpoint_index=280):
-        motion = MODULE.TurnMotion(0., max_drive_s=max_drive_s)
-        previous = {'servo': 1500}
-        for seq in range(1, 30):
-            now = (seq-1)*.1
-            previous = motion.update(opening_scan(seq, endpoint_index), .01, now,
-                                     control(seq, previous['servo']))
-            if previous['phase'] == 'drive':
-                self.assertEqual(previous['turn_stage'], 'approach')
-                self.assertEqual((previous['motor'], previous['servo']), (1560, 1500))
-                return motion, seq, now, previous
-        self.fail('unchanged neutral target must complete the initial adoption allowance')
-
     def drive(self, heading=60., offset=0., max_drive_s=10.):
         motion = MODULE.TurnMotion(0., max_drive_s=max_drive_s)
         result = {'servo': 1500}
@@ -396,107 +390,116 @@ class TurnMotionTests(unittest.TestCase):
         self.assertAlmostEqual(result['corridor']['heading_left_rad'], math.radians(60.))
         self.assertEqual((result['motor'], result['servo']), (1500, 1500))
 
-    def test_recorded_third_trial_start_waits_for_current_corner_instead_of_immediate_left_cut(self):
-        value = recorded_opening_scan(4129)
-        result = MODULE.TurnMotion(0.).update(value, .01, 0., control(1, armed=False))
-        self.assertTrue(result['start_ready'])
-        self.assertEqual(result['steering_target'], 1500)
-        self.assertFalse(result['turn_released'])
-        self.assertGreater(result['corner_end_m'], result['corner_front_limit_m'])
-        self.assertFalse(result['turn_path_certified'])
+    def test_recorded_third_and_fourth_trial_starts_preview_dynamic_left_presteer(self):
+        for seq in (4129, 886):
+            with self.subTest(seq=seq):
+                value = recorded_opening_scan(seq)
+                result = MODULE.TurnMotion(0.).update(value, .01, 0., control(1, armed=False))
+                self.assertTrue(result['start_ready'])
+                self.assertEqual(result['turn_stage'], 'presteer')
+                self.assertGreater(result['steering_target'], 1500)
+                self.assertLess(result['steering_target'], 1720)
+                self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+                self.assertTrue(result['incoming_endpoint_current'])
+                self.assertEqual(result['incoming_endpoint']['source_seq'], seq)
+                self.assertFalse(result['turn_path_certified'])
+                if seq == 886:
+                    self.assertEqual(result['steering_target'], 1681)
 
-    def test_neutral_initial_approach_adoption_matures_and_never_turns_on_time_alone(self):
-        motion, seq, now, previous = self.approach()
-        first_drive = motion.drive_since
-        self.assertGreaterEqual(previous['steering_settle_elapsed_s'], 1.2-1e-9)
-        for i in range(1, 10):
-            previous = motion.update(opening_scan(seq+i, 280), .01, now+i*.1,
-                                     control(seq+i, previous['servo'], motor=1560))
-            self.assertEqual((previous['motor'], previous['servo']), (1560, 1500))
-            self.assertFalse(previous['turn_released'])
-            self.assertEqual(previous['alignment_confirmations'], 0)
-            self.assertEqual(motion.drive_since, first_drive)
+    def test_recorded_fourth_start_cannot_drive_before_left_adoption_and_allowance(self):
+        motion, previous, outputs = MODULE.TurnMotion(0.), {'servo': 1500}, []
+        # Synthetic fresh observations of the captured start geometry exercise
+        # command adoption, without treating them as a recorded motion trace.
+        for i in range(49):
+            value = recorded_opening_scan(886)
+            value.update(seq=886+i, at_ms=88530+i*100)
+            feedback = control(i+1, previous['servo'])
+            previous = motion.update(value, .01, i*.1, feedback)
+            outputs.append(previous)
+            if previous['phase'] == 'drive':
+                self.assertEqual(feedback['servo'], previous['steering_target'])
+                self.assertEqual(previous['servo'], 1681)
+                self.assertGreaterEqual(previous['steering_settle_feedback_ticks'], 3)
+                self.assertGreaterEqual(previous['steering_settle_elapsed_s'], 1.2-1e-9)
+                break
+            self.assertEqual(previous['motor'], 1500)
+            self.assertEqual(previous['turn_stage'], 'presteer')
+        self.assertEqual(previous['phase'], 'drive')
+        self.assertEqual(previous['turn_stage'], 'drive')
+        self.assertTrue(all(abs(b['servo']-a['servo']) <= 10 for a, b in zip(outputs, outputs[1:])))
 
-    def test_corner_release_needs_three_new_frames_and_both_clocks(self):
+    def test_recorded_fourth_start_wrong_actual_servo_keeps_motor_neutral(self):
         motion = MODULE.TurnMotion(0.)
-        for seq, published, now in [(1, 100, 0.), (2, 225, .1), (3, 350, .2)]:
-            value = opening_scan(seq)
-            value['at_ms'] = published
-            result = motion.update(value, .01, now, control(seq, armed=False))
-            self.assertFalse(result['turn_released'])
-            self.assertEqual(result['steering_target'], 1500)
-        duplicate = motion.update(value, .01, .25, control(4, armed=False))
-        self.assertFalse(duplicate['turn_released'])
-        self.assertEqual(duplicate['corner_confirmations'], 3)
-        value = opening_scan(4)
-        value['at_ms'] = 450
-        result = motion.update(value, .01, .3, control(5, armed=False))
-        self.assertTrue(result['turn_released'])
+        for i in range(49):
+            value = recorded_opening_scan(886)
+            value.update(seq=886+i, at_ms=88530+i*100)
+            result = motion.update(value, .01, i*.1, control(i+1, 1500))
+            self.assertEqual(result['phase'], 'presteer')
+            self.assertEqual(result['motor'], 1500)
+            self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        self.assertEqual(result['servo'], 1681)
+
+    def test_current_target_change_restarts_presteer_adoption(self):
+        motion, previous = MODULE.TurnMotion(0.), {'servo': 1500}
+        for seq in range(1, 49):
+            now = (seq-1)*.1
+            previous = motion.update(scan(seq), .01, now, control(seq, previous['servo']))
+            if previous['steering_settle_feedback_ticks'] == 4:
+                break
+        old_target = previous['steering_target']
+        result = motion.update(scan(seq+1, heading=70.), .01, now+.1,
+                               control(seq+1, old_target))
+        self.assertGreater(result['steering_target'], old_target+10)
+        self.assertEqual((result['phase'], result['motor']), ('presteer', 1500))
+        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        self.assertEqual(result['steering_settle_elapsed_s'], 0)
+        for i in range(2, 8):
+            result = motion.update(scan(seq+i, heading=70.), .01, now+i*.1,
+                                   control(seq+i, old_target))
+            self.assertEqual(result['motor'], 1500)
+            self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+
+    def test_target_releasing_to_neutral_during_presteer_cannot_start_straight(self):
+        motion, previous = MODULE.TurnMotion(0.), {'servo': 1500}
+        for seq in range(1, 49):
+            heading = 20. if seq == 1 else 10. if seq == 2 else 0.
+            previous = motion.update(scan(seq, heading=heading), .01, (seq-1)*.1,
+                                     control(seq, previous['servo']))
+            self.assertEqual((previous['phase'], previous['motor']), ('presteer', 1500))
+        self.assertEqual(previous['steering_target'], 1500)
+        self.assertFalse(previous['start_ready'])
+        self.assertEqual(previous['steering_settle_feedback_ticks'], 0)
+
+    def test_legal_corridor_with_neutral_initial_target_is_a_bounded_hold(self):
+        motion = MODULE.TurnMotion(0.)
+        for seq in range(1, 51):
+            result = motion.update(scan(seq, heading=15.1, offset=-.65, width=2.), .01,
+                                   (seq-1)*.1, control(seq, armed=seq > 1))
+            self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+            self.assertFalse(result['start_ready'])
+            self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        self.assertEqual(result['phase'], 'presteer')
+        result = motion.update(scan(51, heading=15.1, offset=-.65, width=2.), .01,
+                               5., control(51))
+        self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
+        self.assertEqual((result['phase'], result['motor']), ('locked', 1500))
+
+    def test_endpoint_diagnostic_distinguishes_current_ray_from_cached_goal(self):
+        motion = MODULE.TurnMotion(0.)
+        current = motion.update(opening_scan(1, 280), .01, 0., control(1, armed=False))
+        self.assertTrue(current['incoming_endpoint_current'])
+        tracked = dict(opening_scan(2, 280), left_turn_goal=None)
+        result = motion.update(tracked, .01, .1, control(2, armed=False))
+        self.assertFalse(result['incoming_endpoint_current'])
+        self.assertIsNone(result['incoming_endpoint'])
+        self.assertEqual(result['turn_goal']['incoming_left_end_m'],
+                         current['incoming_endpoint']['incoming_left_end_m'])
         self.assertGreater(result['steering_target'], 1500)
-        self.assertEqual(result['motor'], 1500)
-
-    def test_empty_geometry_breaks_corner_confirmation_streak_without_refreshing_source(self):
-        motion = MODULE.TurnMotion(0.)
-        for seq in (1, 2):
-            result = motion.update(opening_scan(seq), .01, (seq-1)*.1, control(seq, armed=False))
-        source = result['geometry_source_seq']
-        missing = dict(opening_scan(3), left_turn_goal=None, wall_candidates=[], corridor_candidates=[])
+        missing = dict(opening_scan(3, 280), left_turn_goal=None, wall_candidates=[])
         result = motion.update(missing, .01, .2, control(3, armed=False))
-        self.assertFalse(result['corner_current'])
-        self.assertEqual(result['corner_confirmations'], 0)
-        self.assertIsNone(result['corner_source_seq'])
-        self.assertEqual(result['geometry_source_seq'], source)
-        for seq in (4, 5):
-            result = motion.update(opening_scan(seq), .01, (seq-1)*.1, control(seq, armed=False))
-            self.assertFalse(result['turn_released'])
-
-    def test_approach_does_not_use_favourable_cached_endpoint_when_current_opening_is_missing(self):
-        motion, seq, now, previous = self.approach()
-        first = motion.update(opening_scan(seq+1, 279), .01, now+.1,
-                              control(seq+1, previous['servo'], motor=1560))
-        self.assertEqual(first['corner_confirmations'], 1)
-        self.assertLess(first['corner_end_m'], first['corner_front_limit_m'])
-        current = dict(opening_scan(seq+2, 279), left_turn_goal=None)
-        result = motion.update(current, .01, now+.2, control(seq+2, first['servo'], motor=1560))
-        self.assertEqual(result['turn_goal']['incoming_left_end_m'], first['corner_end_m'])
-        self.assertFalse(result['corner_current'])
-        self.assertFalse(result['turn_released'])
-        self.assertEqual(result['corner_confirmations'], 0)
-        self.assertEqual((result['motor'], result['servo']), (1560, 1500))
-        self.assertEqual(result['alignment_confirmations'], 0)
-
-    def test_approach_to_left_turn_keeps_original_drive_budget_and_gradual_pwm(self):
-        motion, seq, now, previous = self.approach(max_drive_s=.65)
-        first_drive = motion.drive_since
-        for i in range(1, 8):
-            result = motion.update(opening_scan(seq+i, 279), .01, now+i*.1,
-                                   control(seq+i, previous['servo'], motor=previous['motor']))
-            self.assertEqual(motion.drive_since, first_drive)
-            self.assertLessEqual(abs(result['servo']-previous['servo']), 10)
-            if i <= 3:
-                self.assertEqual(result['servo'], 1500)
-            if i == 4:
-                self.assertTrue(result['turn_released'])
-                self.assertEqual(result['servo'], 1510)
-            previous = result
-        self.assertEqual(result['reason'], 'left_turn_drive_timeout')
-        self.assertEqual((result['phase'], result['motor'], result['turn_stage']), ('coast', 1500, 'coast'))
-
-    def test_approach_handover_to_aligned_corridor_does_not_count_exit_alignment(self):
-        motion, seq, now, previous = self.approach()
-        for i in range(1, 13):
-            value = dict(opening_scan(seq+i), left_turn_goal=None, corridor_candidates=[],
-                         wall_candidates=[wall(60.-i*5, -1.8+i*.1)])
-            if i == 12:
-                value['corridor_candidates'] = [corridor(0., 0., 1.2)]
-            previous = motion.update(value, .01, now+i*.1,
-                                     control(seq+i, previous['servo'], motor=1560))
-            self.assertFalse(previous['lock_requested'])
-            self.assertEqual(previous['alignment_confirmations'], 0)
-            self.assertFalse(previous['observed_alignment'])
-            self.assertEqual(previous['servo'], 1500)
-        self.assertEqual(previous['geometry_mode'], 'corridor')
-        self.assertFalse(previous['turn_released'])
+        self.assertFalse(result['incoming_endpoint_current'])
+        self.assertIsNone(result['incoming_endpoint'])
+        self.assertEqual(result['geometry_source_seq'], 2)
 
     def test_presteer_wait_holds_adopted_servo_and_clears_settle_without_extending_deadline(self):
         motion = MODULE.TurnMotion(0.)
@@ -507,6 +510,7 @@ class TurnMotionTests(unittest.TestCase):
         self.assertGreater(held, 1500)
         result = motion.update(opening_scan(12), .01, 1.1, control(12, held), presteer_wait=True)
         self.assertEqual((result['phase'], result['motor'], result['servo']), ('presteer', 1500, held))
+        self.assertEqual(result['turn_stage'], 'presteer_wait')
         self.assertFalse(result['start_ready'])
         self.assertEqual(result['steering_settle_feedback_ticks'], 0)
         self.assertEqual(result['geometry_source_seq'], 12)
@@ -514,10 +518,29 @@ class TurnMotionTests(unittest.TestCase):
         result = motion.update(missing, .01, 1.2, control(13, held), presteer_wait=True)
         self.assertEqual(result['servo'], held)
         self.assertEqual(result['geometry_source_seq'], 12)
+        self.assertEqual(result['turn_stage'], 'presteer_wait')
         for seq in range(14, 52):
             result = motion.update(opening_scan(seq), .01, (seq-1)*.1, control(seq, held), presteer_wait=True)
         self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
         self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+
+    def test_presteer_quality_wait_requires_a_new_full_adoption_allowance(self):
+        motion, previous = MODULE.TurnMotion(0.), {'servo': 1500}
+        for seq in range(1, 49):
+            now = (seq-1)*.1
+            previous = motion.update(opening_scan(seq), .01, now, control(seq, previous['servo']))
+            if previous['steering_settle_feedback_ticks'] == 4:
+                break
+        held = previous['servo']
+        waited = motion.update(opening_scan(seq+1), .01, now+.1, control(seq+1, held), presteer_wait=True)
+        self.assertEqual((waited['motor'], waited['servo'], waited['turn_stage']), (1500, held, 'presteer_wait'))
+        self.assertEqual(waited['steering_settle_elapsed_s'], 0)
+        for i in range(2, 14):
+            result = motion.update(opening_scan(seq+i), .01, now+i*.1, control(seq+i, held))
+            self.assertEqual((result['motor'], result['turn_stage']), (1500, 'presteer'))
+        result = motion.update(opening_scan(seq+14), .01, now+1.4, control(seq+14, held))
+        self.assertEqual((result['phase'], result['motor']), ('drive', 1560))
+        self.assertGreaterEqual(result['steering_settle_elapsed_s'], 1.2-1e-9)
 
     def test_presteer_wait_does_not_mask_invalid_current_feedback_or_geometry(self):
         for fault in ['motor', 'stale', 'ambiguous']:
@@ -561,34 +584,6 @@ class TurnMotionTests(unittest.TestCase):
                 self.assertEqual(result['reason'], 'invalid_native_turn_wall_goal')
                 self.assertEqual((result['motor'], result['servo']), (1500, 1500))
 
-    def test_corner_gate_uses_current_incoming_axis_and_lesser_front_corner_projection(self):
-        for heading in [-15., 0., 15.]:
-            with self.subTest(heading=heading):
-                value = opening_scan(1)
-                goal, theta = value['left_turn_goal'], math.radians(heading)
-                endpoint = goal['incoming_left_end_support']['point_left_m']
-                goal['incoming_heading_left_rad'] = theta
-                goal['incoming_left_end_m'] = math.cos(theta)*endpoint['x_m']+math.sin(theta)*endpoint['y_m']
-                result = MODULE.TurnMotion(0.).update(value, .01, 0., control(1, armed=False))
-                expected = .21*math.cos(theta)-.17*abs(math.sin(theta))-(.10+.03)
-                self.assertAlmostEqual(result['corner_front_limit_m'], expected)
-                self.assertFalse(result['turn_released'])
-                self.assertFalse(result['turn_path_certified'])
-
-    def test_corner_evidence_after_coast_or_safety_stop_cannot_restart_motor(self):
-        for terminal in ['coast', 'obstacle']:
-            with self.subTest(terminal=terminal):
-                motion, seq, now, previous = self.approach()
-                if terminal == 'coast':
-                    motion.begin_coast('normal_stop', now)
-                for i in range(1, 6):
-                    previous = motion.update(opening_scan(seq+i, 279), .01, now+i*.1,
-                                             control(seq+i, previous['servo'], motor=1500),
-                                             safe=terminal != 'obstacle')
-                    self.assertEqual(previous['motor'], 1500)
-                    self.assertFalse(previous['completed'])
-                self.assertEqual(previous['turn_stage'], previous['phase'])
-
     def test_outer_wall_reprojects_target_and_handover_requires_real_double_walls(self):
         motion = MODULE.TurnMotion(0.)
         previous = {'servo': 1500}
@@ -598,16 +593,26 @@ class TurnMotionTests(unittest.TestCase):
             if previous['phase'] == 'drive': break
         self.assertEqual(previous['phase'], 'drive')
         old_point = previous['turn_goal']['target_point_left_m']
+        initial_target, first_drive = previous['steering_target'], motion.drive_since
+        targets = []
         for i in range(1, 13):
             heading, rho = 60.-i*5, -1.8+i*.1
             value = dict(scan(seq+i), corridor_candidates=[], wall_candidates=[wall(heading, rho)], left_turn_goal=None)
             if i == 12:
                 value['corridor_candidates'] = [corridor(0., 0., 1.2)]
-            previous = motion.update(value, .01, now+i*.1, control(seq+i, previous['servo'], motor=1560))
+            result = motion.update(value, .01, now+i*.1, control(seq+i, previous['servo'], motor=1560))
+            self.assertLessEqual(abs(result['servo']-previous['servo']), 10)
+            previous = result
             self.assertFalse(previous['lock_requested'])
+            self.assertEqual((previous['motor'], previous['turn_stage']), (1560, 'drive'))
+            self.assertEqual(motion.drive_since, first_drive)
+            self.assertFalse(previous['incoming_endpoint_current'])
+            targets.append(previous['steering_target'])
             if i < 12:
                 self.assertEqual(previous['geometry_mode'], 'opening_wall')
                 self.assertFalse(previous['observed_alignment'])
+        self.assertLess(targets[0], initial_target)
+        self.assertEqual(targets[-4:], [1500]*4)
         self.assertNotEqual(previous['turn_goal']['target_point_left_m'], old_point)
         self.assertEqual(previous['geometry_mode'], 'corridor')
         for i in range(13, 16):
@@ -615,6 +620,7 @@ class TurnMotionTests(unittest.TestCase):
                                      control(seq+i, previous['servo'], motor=1560))
         self.assertTrue(previous['observed_alignment'])
         self.assertTrue(previous['test_sequence_finished'])
+        self.assertEqual((previous['motor'], previous['servo'], previous['turn_stage']), (1500, 1500, 'coast'))
         self.assertFalse(previous['completed'])
 
     def test_overlapping_wall_fits_are_one_identity_but_different_parallel_walls_are_not(self):
@@ -634,13 +640,13 @@ class TurnMotionTests(unittest.TestCase):
         current = recorded_opening_scan(5412)
         result = motion.update(current, .01, .099, control(2))
         self.assertEqual(result['phase'], 'presteer')
-        self.assertEqual(result['reason'], 'left_turn_steering_allowance')
-        self.assertEqual((result['motor'], result['servo']), (1500, 1500))
-        self.assertFalse(result['turn_released'])
-        self.assertGreater(result['corner_end_m'], result['corner_front_limit_m'])
+        self.assertEqual(result['reason'], 'left_turn_presteering')
+        self.assertEqual((result['motor'], result['servo']), (1500, 1510))
+        self.assertGreater(result['steering_target'], 1500)
+        self.assertTrue(result['incoming_endpoint_current'])
         self.assertEqual(result['geometry_source_seq'], 5412)
         self.assertEqual(result['outer_wall'], current['left_turn_goal']['outer_wall'])
-        self.assertEqual(result['steering_settle_feedback_ticks'], 1)
+        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
         self.assertFalse(result['completed'])
 
     def test_recorded_before_wall_association_is_unique_but_skipped_frames_do_not_refresh_clock(self):
