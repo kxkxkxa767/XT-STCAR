@@ -256,5 +256,212 @@
       "prior_successful_straight_backup_preserved": true,
       "physical_standstill_verified": false
     }
+  },
+  "subsequent_trials": [
+    {
+      "attempt_id": "left-turn-trial-20261007-02",
+      "vehicle_source_commit": "553b7e60dc69f27962a42b819804906a52028b8a",
+      "authorization": "new explicit single attempt, no autonomous retry",
+      "operator_report": "operator said did not see clearly, car did not move, requested one more attempt",
+      "actual_result": {
+        "run_id": "7G-QyRaOkk0q57SSThjPlXkX",
+        "epoch": 0,
+        "phase": "presteer",
+        "reason": "turn_perception_unavailable",
+        "presteer_ticks": 55,
+        "motion_ticks": 0,
+        "drive_ticks": 0,
+        "coast_ticks": 0,
+        "steering_changes": 12,
+        "observed_armed": true,
+        "observed_pwm": false,
+        "current_pwm": 1500,
+        "servo": 1620,
+        "observed_alignment": false,
+        "entry_confirmed": false,
+        "completed": false
+      },
+      "observed_adopted_forward_pwm_samples": 0,
+      "observed_motor_values": [
+        1500
+      ],
+      "observed_servo_min_max": [
+        1500,
+        1620
+      ],
+      "elapsed_with_observer_s": 4.565805368999918,
+      "cli_exit_code": 1,
+      "cli_exit_note": "exit1 also denotes no certified cone/task completion; exact halt cause is report.reason",
+      "independent_neutral_feedback_count": 6,
+      "independent_first_tick": 270192,
+      "independent_last_tick": 271173,
+      "independent_first_lidar_seq": 2704,
+      "independent_last_lidar_seq": 2714,
+      "final_healthy": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 57,
+        "servo": 1500,
+        "tick": 271173
+      },
+      "final_owner": null,
+      "final_mode": "locked",
+      "final_active": null,
+      "no_autonomous_rearm": true,
+      "cone_execution_started": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-02",
+      "physical_standstill_measured": false,
+      "diagnosis": {
+        "trigger_scan_seq": 2701,
+        "publication_at_ms": 269726,
+        "front_missing_angles_deg": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16
+        ],
+        "front_max_unknown": 6,
+        "front_max_consecutive_gap": 3,
+        "quality_counts": {
+          "front_sparse": 1
+        },
+        "next_recorded_seq": 2702,
+        "next_recorded_scan_front_recovered": true,
+        "next_publication_delta_ms": 103,
+        "trigger_known_corridor_front_m": 2.1517456564104407,
+        "trigger_known_side_clearance_m": 0.4971628435842167,
+        "cause": "first front_sparse immediately halts turn even while motor is neutral in presteer; this does not certify the missing sector free",
+        "turn_last_valid_geometry_seq": 2700,
+        "forward_motion_confirmed": false
+      }
+    },
+    {
+      "attempt_id": "left-turn-trial-20261007-03",
+      "vehicle_source_commit": "553b7e60dc69f27962a42b819804906a52028b8a",
+      "authorization": "new explicit single attempt, no autonomous retry",
+      "operator_report": "operator confirmed forward motion, not at suitable cone entry; completely stopped without collision",
+      "actual_result": {
+        "run_id": "3P8QNDJheOJfd64hCz7HI5U2",
+        "epoch": 1,
+        "phase": "drive",
+        "reason": "probe_obstacle_in_straight_corridor",
+        "presteer_ticks": 130,
+        "motion_ticks": 29,
+        "drive_ticks": 29,
+        "coast_ticks": 0,
+        "steering_changes": 24,
+        "observed_armed": true,
+        "observed_pwm": true,
+        "current_pwm": 1560,
+        "servo": 1649,
+        "observed_alignment": false,
+        "entry_confirmed": false,
+        "completed": false
+      },
+      "observed_adopted_forward_pwm_samples": 6,
+      "observed_motor_values": [
+        1500,
+        1560
+      ],
+      "observed_servo_min_max": [
+        1500,
+        1677
+      ],
+      "elapsed_with_observer_s": 7.646530662999794,
+      "cli_exit_code": 1,
+      "cli_exit_note": "exit1 also denotes no certified cone/task completion; exact halt cause is report.reason",
+      "independent_neutral_feedback_count": 6,
+      "independent_first_tick": 417802,
+      "independent_last_tick": 418778,
+      "independent_first_lidar_seq": 4183,
+      "independent_last_lidar_seq": 4192,
+      "final_healthy": true,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 218,
+        "servo": 1500,
+        "tick": 418778
+      },
+      "final_owner": null,
+      "final_mode": "locked",
+      "final_active": null,
+      "no_autonomous_rearm": true,
+      "cone_execution_started": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-03",
+      "physical_standstill_measured": false,
+      "operator_stopped_without_collision": true,
+      "drive_elapsed_s": 0.9589639790001456,
+      "diagnosis": {
+        "trigger_scan_seq": 4180,
+        "publication_at_ms": 417395,
+        "front_rectangle_lookahead_m": 1.0,
+        "front_rectangle_half_width_m": 0.32,
+        "trigger_actual_points": [
+          {
+            "ray_bin": 309,
+            "range_m": 0.409,
+            "forward_x_m": 0.25739203993938353,
+            "left_y_m": 0.317852698235901
+          },
+          {
+            "ray_bin": 311,
+            "range_m": 0.409,
+            "forward_x_m": 0.26832814285711737,
+            "left_y_m": 0.3086762183111138
+          },
+          {
+            "ray_bin": 312,
+            "range_m": 0.425,
+            "forward_x_m": 0.28438050770251455,
+            "left_y_m": 0.3158365508278927
+          },
+          {
+            "ray_bin": 313,
+            "range_m": 0.425,
+            "forward_x_m": 0.2898493030265619,
+            "left_y_m": 0.3108253231881474
+          }
+        ],
+        "surface": "incoming left board front end, separate from the far tracked turn reference wall",
+        "last_tracked_wall_heading_deg": 75.66164958916549,
+        "last_tracked_wall_rho_m": -1.9606369231643423,
+        "next_recorded_seq": 4181,
+        "continued_close_return_cluster": true,
+        "no_turn_alignment_confirmation": true,
+        "not_certified_as_safe_turn_path": true,
+        "cause": "measured close left-front board end entered the reused forward rectangle during the beginning of left turn",
+        "next_work": "use live opening endpoint and measured vehicle sweep/curvature to assess turn onset and inner-corner clearance; do not simply remove the1m or side protection",
+        "trigger_lidar_side_clearance_m": 0.3086762183111138,
+        "next_scan_lidar_side_clearance_m": 0.2681153567026549,
+        "side_stop_threshold_m": 0.3,
+        "after_scan_variation_is_not_measured_slide_or_curvature": true
+      }
+    }
+  ],
+  "latest_trial_status": "03 forward confirmed, partial left turn, not at cone entry; operator stopped without collision; no further motion authorized",
+  "latest_user_proposal": "relax the minimum side distance on the side the vehicle turns toward",
+  "assessment_of_proposal": {
+    "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
+    "forward_rectangle_half_width_m": 0.32,
+    "lidar_side_threshold_m": 0.3,
+    "measured_lidar_to_outer_tire_m": 0.17,
+    "minimum_net_side_m": 0.1,
+    "range_allowance_m": 0.03,
+    "potential_improvement": "check actual turning body sweep and current opening endpoints instead of an indiscriminate forward rectangle; adjust turn onset using measured geometry",
+    "thresholds_changed": false,
+    "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
+    "turn_curvature_or_sweep_certified": false
   }
 }
