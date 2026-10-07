@@ -8,6 +8,8 @@ import copy
 import math
 
 from compact_target import CompactTargetTracker
+from autonomy_live import (REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
+                           MANEUVER_BODY_CLEARANCE_M)
 from turn_motion import (TurnMotion, NEUTRAL, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
                          PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number)
 
@@ -49,6 +51,8 @@ class ManeuverSequence(TurnMotion):
         self.wall_ambiguity_hold = False
         self._last_actual_left_target = None
         self._presteer_adoption_context = None
+        self._current_scan = None
+        self.inner_clearance = None
 
     def begin_coast(self, reason, now):
         if self.phase not in ('coast', 'locked') and _number(now) and now >= self.last_now:
@@ -131,6 +135,7 @@ class ManeuverSequence(TurnMotion):
                       object_semantic_verified=False, passed_cones=None,
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,
+                      inner_clearance=copy.deepcopy(self.inner_clearance),
                       wall_ambiguity_hold=self.wall_ambiguity_hold)
         return result
 
@@ -162,6 +167,49 @@ class ManeuverSequence(TurnMotion):
         bias = self.initial_presteer_pwm
         return max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
 
+    def _limit_left_for_known_points(self, nominal, lookahead):
+        """Release left demand before a measured inside edge reaches the body.
+
+        This is a relative-point steering heuristic, not a swept-path certificate
+        or a mapping from PWM to wheel angle. The reference is the measured rear
+        body edge plus the existing clearance, never an assumed rear axle. The
+        hard current-body gate remains independent in the service.
+        """
+        scan = self._current_scan
+        if not isinstance(scan, dict):
+            return nominal
+        ranges = scan.get('ranges')
+        if not isinstance(ranges, list) or len(ranges) != 360:
+            return nominal
+        rear = REAR_BODY_EXTENT_M + MANEUVER_BODY_CLEARANCE_M
+        side = SIDE_BODY_EXTENT_M + MANEUVER_BODY_CLEARANCE_M
+        selected = None
+        target = nominal
+        for index in range(181, 360):
+            distance = ranges[index]
+            if not _number(distance) or not .02 <= distance <= 12:
+                continue  # No interpolation and no free-space assertion.
+            angle = math.radians(index)
+            x, y = distance*math.cos(angle), -distance*math.sin(angle)
+            if not -rear < x <= lookahead or y <= 0:
+                continue
+            clearance_bearing = math.atan2(max(0., y-side), x+rear)
+            point_target = min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*clearance_bearing))
+            if point_target < target:
+                target = point_target
+                selected = {'index': index, 'range_m': distance,
+                            'point_left_m': {'x_m': x, 'y_m': y},
+                            'clearance_bearing_rad': clearance_bearing}
+        self.inner_clearance = {
+            'source_seq': scan.get('seq'), 'source_at_ms': scan.get('at_ms'),
+            'scope': 'current_known_left_returns_only',
+            'nominal_target_pwm': nominal, 'limited_target_pwm': target,
+            'active': target < nominal, 'limiting_return': selected,
+            'lookahead_m': lookahead, 'rear_reference_m': -rear,
+            'left_reference_m': side, 'swept_path_certified': False,
+            'physical_steering_confirmed': False}
+        return target
+
     def _target(self, candidate, publication_dt):
         # Use the same actual heading/finite-point error as TurnMotion. In this
         # sequence the trend term may release at most 20% of the current error,
@@ -189,6 +237,8 @@ class ManeuverSequence(TurnMotion):
         # current measured turn error may request the full 1720 bound; _slew
         # still uses the phase/direction step limit per 100 ms.
         target = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
+        if self.phase == 'drive':
+            target = self._limit_left_for_known_points(target, lookahead)
         self._last_actual_left_target = target if target > NEUTRAL else None
         return target
 
@@ -289,13 +339,22 @@ class ManeuverSequence(TurnMotion):
             self.begin_coast('first_relative_object_entry_trial_timeout', now)
             self._slew(now)
             return self._result(now)
-        self.steering_target = self._relative_target_pwm(self.compact_target)
+        self.steering_target = self._limit_left_for_known_points(
+            self._relative_target_pwm(self.compact_target),
+            max(.35, min(1., self.compact_target['range_m'])))
         self.natural_steering_target = self.steering_target
         self.reason = 'first_relative_object_left_orbit_entry'
         self._slew(now)
         return self._result(now)
 
     def update(self, scan, lidar_age_s, now, control, *, safe=True, entry_stop=None, presteer_wait=False):
+        # Expose only this call's raw returns; cached wall endpoints are never
+        # used to manufacture current inside-edge evidence.
+        self._current_scan = scan
+        if (not isinstance(scan, dict) or self.inner_clearance is None
+                or self.inner_clearance['source_seq'] != scan.get('seq')
+                or self.inner_clearance['source_at_ms'] != scan.get('at_ms')):
+            self.inner_clearance = None
         if self.phase == 'locked':
             return self._result(self.last_now)
         if not _number(now) or now < self.last_now:

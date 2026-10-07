@@ -796,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "User requests handoff to next window now; no additional motion in this handoff. Standing preference remains direct vehicle testing unless explicitly otherwise; physical full stop/reset after14 has not been confirmed.",
+  "latest_authorization": "User resumed work and confirmed fully stopped and reset behind crosswalk facing original straight; standing direct-vehicle testing preference applies, no redundant motion permission question. Next trial15.",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -2319,7 +2319,7 @@
     "all_14_installed_hashes_match": true,
     "backup": "/home/bianbu/xt-stcar-console/backup-opening-span-20261007-201206",
     "deployment_stdout_evidence": "work/vehicle-dynamic-deploy-20261007/opening-span-deploy-stdout.json",
-    "full_deployment_result_retrieved": false
+    "full_deployment_result_retrieved": true
   },
   "turn14_actual": {
     "vehicle_source_commit": "4e33035c7666cd4e479cd099be04d9d861fdd664",
@@ -2388,8 +2388,8 @@
     "operator_report": "这次没有撞墙，但是没转到位",
     "collision_reported": false,
     "turn_sufficient_per_operator": false,
-    "physical_full_stop_after14_confirmed": false,
-    "placement_reset_after14_confirmed": false,
+    "physical_full_stop_after14_confirmed": true,
+    "placement_reset_after14_confirmed": true,
     "end_feedback": {
       "control": {
         "armed": false,
@@ -2412,9 +2412,14 @@
     "end_feedback_is_historical_not_fresh_at_handoff": true,
     "local_summary": "work/vehicle-dynamic-deploy-20261007/left-cone14-stdout.json",
     "remote_full_evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261007-14",
-    "full_raw_retrieved_to_mac": false,
+    "full_raw_retrieved_to_mac": true,
     "handoff_ssh_read_attempt": "multiplex Broken pipe; batch fallback permission denied; no fresh vehicle state obtained",
-    "next_work": "Reconnect SSH; copy full14 raw evidence and full deployment result; analyze actual PWM/adoption, inner front-left wall/end geometry and clearance trend before choosing next control change. Do not merely increase timeout/maximum or relax body gate. No new steering fix implemented yet."
+    "next_work": "Reconnect SSH; copy full14 raw evidence and full deployment result; analyze actual PWM/adoption, inner front-left wall/end geometry and clearance trend before choosing next control change. Do not merely increase timeout/maximum or relax body gate. No new steering fix implemented yet.",
+    "followup_confirmation": {
+      "source": "operator reply in resumed chat",
+      "statement": "已完全静止并复位",
+      "prior_handoff_unknown_record_preserved": true
+    }
   },
   "handoff_20261007_after14": {
     "task": "User requested a copyable prompt for next window; current window stops after updating records and pushing main",
@@ -2426,5 +2431,93 @@
     "new_motor_trial_executed": false,
     "physical_full_stop_reset_unknown": true,
     "ssh_socket_failed_at_handoff": true
+  },
+  "resumption_after14": {
+    "read_all_three_handoff_files": true,
+    "operator_stop_reset_confirmed": true,
+    "ssh_restored": true,
+    "retrieved": [
+      "left-cone-trial-20261007-13",
+      "left-cone-trial-20261007-14",
+      "stage-opening-span-20261007-201206/deployment-result.json"
+    ],
+    "local_directory": "work/vehicle-dynamic-deploy-20261007/resume-after14/",
+    "fresh_evidence": "work/vehicle-dynamic-deploy-20261007/resume-after14/fresh-before-fix.json",
+    "fresh_sample_count": 6,
+    "fresh_boot": "75xl2u40hd51FC59KsHENA",
+    "fresh_last_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 1445757
+    },
+    "all_14_current_installed_hashes_match_4e_deployment": true,
+    "trial14_analysis": {
+      "software_initial1670_adoption_observed": true,
+      "first_saved_drive_settle_field_s": 1.2658455040000263,
+      "first_saved_drive_elapsed_s": 0.058805962000406,
+      "derived_settle_before_drive_transition_s": 1.2070395419996203,
+      "settle_feedback_ticks": 13,
+      "max_saved_actual_servo": 1710,
+      "last_saved_drive_actual_servo": 1671,
+      "last_requested1651_not_independently_saved_as_adopted": true,
+      "front_left_raw_clearance_m_by_scan": {
+        "1234": 0.30440158635589565,
+        "1239": 0.27690528015614696,
+        "1241": 0.22043202012491106,
+        "1242": 0.1808205537895896,
+        "1244": 0.07258646977144963
+      },
+      "wall_endpoint_raw1234_left_m": [
+        0.4794183976444792,
+        0.47941839764447913
+      ],
+      "wall_endpoint_raw1242_left_m": [
+        0.3323401871576773,
+        0.33234018715767727
+      ],
+      "trigger_raw1244_retrieved": true,
+      "after_neutral_some_returns_inside_nominal_rectangle": true,
+      "operator_no_collision_report_preserved": true,
+      "body_rectangle_returns_do_not_prove_contact_or_physical_wheel_angle": true,
+      "inference": "controller followed far exit wall and increased left demand before incoming inner endpoint cleared; current body gate reacted only when already close. This supports an earlier local clearance response, not a calibrated trajectory guarantee.",
+      "raw_and_state_have_separate_clocks_and_scan_sequences": true,
+      "timeline": "work/vehicle-dynamic-deploy-20261007/resume-after14/trial14-measured-timeline.json"
+    },
+    "agent_condensation": {
+      "source_commit": "a4cbd342520f14c4be062855828ea1744a981660",
+      "source_bytes": 280872,
+      "source_sha256": "9e24ffb7507f4029b5dfbace7e430c423a5971d858c6bf2e0bb4d89c147dfadd",
+      "archive": "agent-history-20261007.md",
+      "prefix_bytes": 445,
+      "original_body_byte_exact": true,
+      "current_lines": 83,
+      "history_remains_repository_relative": true
+    },
+    "next_trial_number": 15,
+    "new_motor_trial_executed": false
+  },
+  "inner_clearance_candidate": {
+    "implemented": true,
+    "deployed": false,
+    "physical_acceptance": false,
+    "source": "web/vehicle-console/maneuver_sequence.py",
+    "source_sha256": "044ca12ed621ac10452942feab9eb126c2012dd82e686cdc6c3fe06926eb00e9",
+    "scope": "bounded turn-cone wall following and first relative-object entry only; neutral presteer unchanged",
+    "rule": "min nominal left PWM with 1500+round(180*atan2(max(0,y-(0.17+0.08)),x+(0.20+0.08))) over current valid known left returns inside rear-reference..current lookahead; keep original slew",
+    "lookahead": "existing exit-width/2 or current compact range, bounded0.35..1m; vehicle-relative observation scale, no course coordinates",
+    "rear_reference_is_body_edge_not_assumed_rear_axle": true,
+    "evidence_is_known_points_only_not_free_space_or_sweep_certificate": true,
+    "initial_pwm": 1670,
+    "left_max_pwm": 1720,
+    "motor_pwm": 1560,
+    "body_stop_m": 0.08,
+    "timeouts_heartbeats_quality_and_slew_unchanged": true,
+    "extra_offline_suite_not_run_per_user_preference": true,
+    "syntax_check_pending": false,
+    "next_validation": "matched locked deployment and live trial15 after fresh feedback; no automatic rearm after a software fault",
+    "python_syntax_checked": true
   }
 }
