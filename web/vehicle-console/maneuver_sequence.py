@@ -1,0 +1,255 @@
+"""Bounded left turn followed by one real relative-object orbit entry trial.
+
+The compact object's semantic identity is unknown. This module observes no
+global pose, speed, physical steering angle, passed cone count or complete lap.
+The service retains fresh body-clearance checks, ownership, heartbeat and ACKs.
+"""
+import copy
+import math
+
+from compact_target import CompactTargetTracker
+from turn_motion import (TurnMotion, NEUTRAL, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
+                         _FRAME, _freeze, _number)
+
+ORBIT_ENTRY_MAX_S = 3.0
+COAST_MAX_S = 5.0
+ORBIT_BEARING_RAD = math.pi/2
+ORBIT_BEARING_GAIN = 100.0
+ORBIT_RANGE_GAIN = 70.0
+LEFT_TRIAL_GAIN = 180.0
+MAX_TREND_RELEASE_FRACTION = .20
+
+
+class ManeuverSequence(TurnMotion):
+    """Single arm and cumulative drive budget; no automatic restart after stop."""
+    def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=1700):
+        super().__init__(started_at, max_drive_s=max_drive_s,
+                         initial_presteer_pwm=initial_presteer_pwm)
+        self.target_tracker = CompactTargetTracker()
+        self.compact_target = None
+        self.handover_observed = False
+        self.orbit_since = self.orbit_reference_range_m = None
+        self.orbit_track_id = None
+        self.coast_since = None
+        self.wall_ambiguity_hold = False
+
+    def begin_coast(self, reason, now):
+        if self.phase not in ('coast', 'locked') and _number(now) and now >= self.last_now:
+            self.coast_since = now
+        super().begin_coast(reason, now)
+
+    def lock(self, reason):
+        # Only this experimental sequence may hold its last actually commanded
+        # servo briefly while wall aliases resolve. Neither geometry clock nor
+        # alignment evidence advances; a compact observation is still required
+        # for handover. Default TurnMotion is unchanged.
+        if (reason == 'left_turn_outer_wall_ambiguous' and self.phase == 'drive'
+                and self.last_geometry_receive is not None
+                and self.last_geometry_publication is not None
+                and 0 <= self.last_now-self.last_geometry_receive <= SCAN_AGE_S+1e-9
+                and 0 <= (self.last_publication-self.last_geometry_publication)/1000 <= SCAN_AGE_S+1e-9):
+            self.wall_ambiguity_hold = self.geometry_missing = True
+            self.start_ready = False
+            self.reason = 'left_turn_wall_ambiguity_hold'
+            self.steering_target = self.servo
+            self.alignment_count = 0
+            self.alignment_evidence = None
+            self.alignment_publication = self.alignment_receive = None
+            self.last_error = None
+            return
+        super().lock(reason)
+
+    def _result(self, now):
+        result = super()._result(now)
+        stage = ('orbit_entry' if self.handover_observed and self.phase == 'drive'
+                 else 'left_turn' if self.phase == 'drive' else result['turn_stage'])
+        result.update(turn_stage=stage, trial_scope='first_lidar_compact_target_orbit_entry',
+                      compact_target=copy.deepcopy(self.compact_target),
+                      compact_target_reason=getattr(self.target_tracker, 'reason', None),
+                      handover_observed=self.handover_observed,
+                      orbit_reference_range_m=self.orbit_reference_range_m,
+                      orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
+                      orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
+                      object_semantic_verified=False, passed_cones=None,
+                      competition_supported=False, completed=False,
+                      test_sequence_finished=False,
+                      wall_ambiguity_hold=self.wall_ambiguity_hold)
+        return result
+
+    def _usable_target(self, target, scan):
+        if not isinstance(target, dict) or target.get('confirmed') is not True:
+            return False
+        point = target.get('point_left_m')
+        return (target.get('kind') == 'lidar_compact_object'
+                and target.get('semantic_class') == 'unknown'
+                and target.get('candidate_only') is True
+                and type(target.get('source_seq')) is int and target['source_seq'] == scan.get('seq')
+                and type(target.get('source_at_ms')) is int and target['source_at_ms'] == scan.get('at_ms')
+                and isinstance(point, list) and len(point) == 2 and all(_number(v) for v in point)
+                and _number(target.get('range_m')) and .35 <= target['range_m'] <= 3.0
+                and _number(target.get('bearing_left_rad'))
+                and math.radians(45) <= target['bearing_left_rad'] <= math.radians(135)
+                and abs(math.hypot(*point)-target['range_m']) <= 1e-6
+                and abs(math.atan2(point[1], point[0])-target['bearing_left_rad']) <= 1e-6
+                and target.get('track_id') is not None)
+
+    def _relative_target_pwm(self, target):
+        # Left-positive bearing moves behind the car when yaw is insufficient:
+        # increase left correction. A range above the actual entry reference
+        # similarly requests a modest inward correction. Gains are trial PWM
+        # feedback gains, not curvature/speed calibrations or a course radius.
+        reference = self.orbit_reference_range_m
+        correction = (ORBIT_BEARING_GAIN*(target['bearing_left_rad']-ORBIT_BEARING_RAD)
+                      + ORBIT_RANGE_GAIN*(target['range_m']-reference)/reference)
+        bias = self.initial_presteer_pwm if self.initial_presteer_pwm is not None else 1700
+        return max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
+
+    def _target(self, candidate, publication_dt):
+        # Use the same actual heading/finite-point error as TurnMotion. In this
+        # sequence the trend term may release at most 20% of the current error,
+        # so a rapidly changing wall estimate does not erase most left steering
+        # while the exit is still far from forward. No minimum fixed PWM is
+        # introduced: a genuinely smaller current error still releases toward
+        # center. These are trial gains, not a physical curvature calibration.
+        heading, offset = candidate['heading_left_rad'], candidate['center_offset_left_m']
+        lookahead = max(.35, min(1., candidate['width_m']/2))
+        if self.geometry_mode == 'opening_wall':
+            point = self.turn_goal['target_point_left_m']
+            error = (.65*heading+.35*math.atan2(point['y_m'], point['x_m']) if point['x_m'] > 0
+                     else heading+math.atan2(offset, lookahead))
+        else:
+            error = heading+math.atan2(offset, lookahead)
+        damped = error
+        if self.last_error is not None and .05 <= publication_dt < SCAN_AGE_S:
+            rate = (error-self.last_error)/publication_dt
+            if abs(rate) <= math.radians(90):
+                release = error+.35*rate
+                if error > 0:
+                    damped = max((1-MAX_TREND_RELEASE_FRACTION)*error, min(error, release))
+        self.last_error = error
+        return max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
+
+    def _orbit_inputs(self, scan, lidar_age_s, now, control, safe, presteer_wait):
+        """Same advancing raw-scan/control contract, without a fabricated wall."""
+        if not _number(now) or now < self.last_now:
+            self.lock('invalid_turn_receive_clock')
+            return False
+        self.last_now = now
+        if safe is not True:
+            self.lock('turn_safety_rejected')
+            return False
+        if type(presteer_wait) is not bool or presteer_wait:
+            self.lock('turn_presteer_wait_requires_neutral')
+            return False
+        received = scan.get('received_at') if isinstance(scan, dict) else None
+        ranges = scan.get('ranges') if isinstance(scan, dict) else None
+        if (not _number(lidar_age_s) or not 0 <= lidar_age_s < SCAN_AGE_S
+                or not isinstance(scan, dict) or scan.get('frame_id') != _FRAME
+                or type(scan.get('seq')) is not int or scan['seq'] < 0
+                or type(scan.get('at_ms')) is not int or scan['at_ms'] < 0
+                or not _number(received) or not 0 <= now-received < SCAN_AGE_S
+                or not isinstance(ranges, list) or len(ranges) != 360
+                or any(r is not None and (not _number(r) or not .02 <= r <= 12) for r in ranges)):
+            self.lock('turn_scan_stale_or_invalid')
+            return False
+        if (not isinstance(control, dict) or type(control.get('armed')) is not bool
+                or type(control.get('motor')) is not int or type(control.get('servo')) is not int
+                or type(control.get('tick')) is not int or control['tick'] < 0
+                or type(control.get('seq')) is not int or control['seq'] < 0
+                or not SERVO_MIN <= control['servo'] <= SERVO_MAX):
+            self.lock('invalid_turn_adoption_feedback')
+            return False
+        if self.last_control_tick is not None and (control['tick'] < self.last_control_tick
+                or control['seq'] < self.last_control_seq):
+            self.lock('reordered_turn_adoption_feedback')
+            return False
+        self.last_control_tick, self.last_control_seq = control['tick'], control['seq']
+        if not control['armed']:
+            self.lock('turn_bridge_locked')
+            return False
+        signature = (_freeze(scan.get('corridor_candidates')), _freeze(scan.get('wall_candidates', [])),
+                     _freeze(scan.get('left_turn_goal')), _freeze(scan.get('ranges')))
+        seq, published = scan['seq'], scan['at_ms']
+        if self.last_seq is not None and seq == self.last_seq:
+            if published != self.last_publication or signature != self.last_signature:
+                self.lock('duplicate_turn_scan_changed_content')
+            elif now-self.last_receive >= SCAN_AGE_S:
+                self.lock('turn_scan_not_advancing')
+            return False
+        publication_dt = 0 if self.last_publication is None else (published-self.last_publication)/1000
+        if self.last_seq is not None and (seq < self.last_seq or publication_dt <= 0):
+            self.lock('reordered_turn_scan')
+            return False
+        if self.last_receive is not None and (publication_dt >= SCAN_AGE_S
+                or now-self.last_receive >= SCAN_AGE_S
+                or abs(publication_dt-(now-self.last_receive)) > .15):
+            self.lock('turn_scan_clock_gap')
+            return False
+        self.last_seq, self.last_publication, self.last_receive = seq, published, now
+        self.last_signature = signature
+        return True
+
+    def _orbit_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait):
+        advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, presteer_wait)
+        if self.phase == 'locked':
+            return self._result(self.last_now)
+        if self.phase == 'drive' and now-self.drive_since+1e-9 >= self.max_drive_s:
+            self.begin_coast('maneuver_cumulative_drive_timeout', now)
+        if self.phase == 'coast':
+            if self.coast_since is not None and now-self.coast_since+1e-9 >= COAST_MAX_S:
+                self.lock('coast_standstill_unconfirmed')
+            else:
+                self.steering_target = NEUTRAL
+                self._slew(now)
+            return self._result(now)
+        if not advancing:
+            return self._result(now)
+        if not self._usable_target(self.compact_target, scan):
+            self.begin_coast('compact_target_lost_or_ambiguous', now)
+            self._slew(now)
+            return self._result(now)
+        if not self.handover_observed:
+            self.handover_observed = True
+            self.orbit_since = now
+            self.orbit_reference_range_m = self.compact_target['range_m']
+            self.orbit_track_id = self.compact_target['track_id']
+            self.wall_ambiguity_hold = False
+            self.geometry_missing = True
+            self.alignment_count = 0
+            self.alignment_evidence = None
+            self.alignment_publication = self.alignment_receive = None
+        elif self.compact_target['track_id'] != self.orbit_track_id:
+            self.begin_coast('compact_target_identity_changed', now)
+            self._slew(now)
+            return self._result(now)
+        if now-self.orbit_since+1e-9 >= ORBIT_ENTRY_MAX_S:
+            self.begin_coast('first_relative_object_entry_trial_timeout', now)
+            self._slew(now)
+            return self._result(now)
+        self.steering_target = self._relative_target_pwm(self.compact_target)
+        self.natural_steering_target = self.steering_target
+        self.reason = 'first_relative_object_left_orbit_entry'
+        self._slew(now)
+        return self._result(now)
+
+    def update(self, scan, lidar_age_s, now, control, *, safe=True, entry_stop=None, presteer_wait=False):
+        if self.phase == 'locked':
+            return self._result(self.last_now)
+        if not _number(now) or now < self.last_now:
+            self.lock('invalid_turn_receive_clock')
+            return self._result(self.last_now)
+        try:
+            self.compact_target = self.target_tracker.update(scan, now)
+        except (ValueError, TypeError, KeyError):
+            self.compact_target = None
+        if entry_stop is not None:
+            # The new trial is target tracking, not the old optional stop input.
+            self.lock('unsupported_maneuver_entry_stop')
+            return self._result(self.last_now)
+        if (self.handover_observed or (self.phase == 'coast' and self.wall_ambiguity_hold)
+                or (self.phase == 'drive' and self._usable_target(self.compact_target, scan))):
+            return self._orbit_update(scan, lidar_age_s, now, control,
+                                      safe=safe, presteer_wait=presteer_wait)
+        self.wall_ambiguity_hold = False
+        return super().update(scan, lidar_age_s, now, control, safe=safe,
+                              presteer_wait=presteer_wait)

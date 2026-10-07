@@ -29,8 +29,10 @@ from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STAB
 from coast_motion import CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
+from maneuver_sequence import ManeuverSequence
 
 ROOT = Path(__file__).resolve().parent
+COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
 
 
 class Console:
@@ -319,7 +321,12 @@ class Console:
         return {'camera': now - self.camera_at, 'lidar': now - self.scan_at,
                 'control': now - self.control_at}
 
-    def autonomy_status(self, initial_presteer_pwm=None):
+    def autonomy_status(self, initial_presteer_pwm=None, trial_mode='turn-left'):
+        if trial_mode not in ('turn-left', 'turn-cone'):
+            raise ValueError('invalid_maneuver_trial_mode')
+        compact_target_trial = trial_mode == 'turn-cone'
+        if compact_target_trial and initial_presteer_pwm is None:
+            initial_presteer_pwm = 1700
         now = time.monotonic()
         try:
             clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
@@ -346,7 +353,8 @@ class Console:
         try:
             if self.owner is not None or self.auto_session is not None:
                 raise ValueError('control_owned_or_unlocked')
-            _, turn_preview, turn_clearance = self.turn_preview(now, initial_presteer_pwm=initial_presteer_pwm)
+            _, turn_preview, turn_clearance = self.turn_preview(now,
+                initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=compact_target_trial)
             turn_ready = True
         except ValueError as error:
             turn_clearance = getattr(error, 'clearance', None)
@@ -360,7 +368,9 @@ class Console:
             else:
                 trial_goal.update(execution_ready=turn_ready, execution_rejection=None if turn_ready else turn_rejection)
         return {'mode': self.control_mode, 'epoch': self.control_epoch,
-                'supported': ['straight_probe', 'straight_segment', 'to_left_junction', 'formal_straight_stop', 'bounded_left_turn_trial'], 'competition_supported': False,
+                'supported': ['straight_probe', 'straight_segment', 'to_left_junction', 'formal_straight_stop',
+                              'bounded_left_turn_trial', 'bounded_first_compact_target_orbit_entry_trial'],
+                'competition_supported': False,
                 'quality_confirm_s': QUALITY_CONFIRM_S,
                 'quality_self_recovery': True, 'quality_recovery_stable_s': QUALITY_RECOVERY_STABLE_S,
                 'coast_max_s': COAST_MAX_S, 'front_boundary_loss_s': FRONT_BOUNDARY_LOSS_S,
@@ -370,6 +380,8 @@ class Console:
                 'formal_max_drive_ms': self.stop_goal_contract.budget['max_drive_ms'] if self.stop_goal_contract else None,
                 'turn_ready': turn_ready, 'turn_rejection': turn_rejection, 'turn_preview': turn_preview,
                 'turn_clearance': turn_clearance,
+                'trial_mode': trial_mode,
+                'trial_scope': COMPACT_TARGET_TRIAL_SCOPE if compact_target_trial else 'bounded_left_turn_trial',
                 'turn_drive_max_s': MAX_DRIVE_S, 'turn_presteer_max_s': MAX_PRESTEER_S,
                 'turn_steering_allowance_s': STEERING_ALLOWANCE_S,
                 'turn_requires_operator_placement_confirmation': True,
@@ -378,7 +390,7 @@ class Console:
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
 
-    def turn_preview(self, now, max_drive_s=MAX_DRIVE_S, initial_presteer_pwm=None):
+    def turn_preview(self, now, max_drive_s=MAX_DRIVE_S, initial_presteer_pwm=None, compact_target_trial=False):
         """Pure admission from this fresh scan; not an entrance/navigation certificate."""
         ages = self.sensor_ages(now)
         clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False,
@@ -390,8 +402,15 @@ class Console:
             if (self.control_mode != 'locked' or control.get('armed') is not False
                     or control.get('motor') != 1500 or control.get('servo') != 1500):
                 raise ValueError('turn_requires_fresh_neutral_lock')
-            motion = TurnMotion(now, max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm)
-            decision = motion.update(self.scan, ages['lidar'], now, control)
+            controller = ManeuverSequence if compact_target_trial else TurnMotion
+            if compact_target_trial and initial_presteer_pwm is None:
+                initial_presteer_pwm = 1700
+            motion = controller(now, max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm)
+            scan = {**self.scan, 'received_at': self.scan_at} if compact_target_trial else self.scan
+            decision = motion.update(scan, ages['lidar'], now, control)
+            if compact_target_trial:
+                decision = {**decision, 'trial_scope': COMPACT_TARGET_TRIAL_SCOPE, 'semantic_class': 'unknown',
+                            'competition_supported': False, 'completed': False}
             if not decision['start_ready'] or decision['lock_requested']:
                 raise ValueError(decision['reason'])
         except ValueError as error:
@@ -399,14 +418,16 @@ class Console:
             raise
         return motion, decision, clearance
 
-    def start_turn_trial(self, data):
-        allowed = {'op', 'boot', 'epoch', 'tick', 'placement_confirmed', 'max_drive_s', 'goal_id',
+    def start_turn_trial(self, data, compact_target_trial=False):
+        allowed = {'op', 'boot', 'epoch', 'tick', 'placement_confirmed', 'max_drive_s',
                    'initial_presteer_pwm'}
+        if not compact_target_trial:
+            allowed.add('goal_id')
         if set(data)-allowed or data.get('placement_confirmed') is not True:
             raise ValueError('turn_trial_requires_operator_placement_confirmation')
         if self.stop.is_set() or self.owner is not None or self.auto_session is not None:
             raise ValueError('already_armed_or_shutting_down')
-        initial_presteer_pwm = data.get('initial_presteer_pwm')
+        initial_presteer_pwm = data.get('initial_presteer_pwm', 1700 if compact_target_trial else None)
         if 'initial_presteer_pwm' in data and initial_presteer_pwm is None:
             raise ValueError('invalid_initial_presteer_pwm')
         validate_initial_presteer_pwm(initial_presteer_pwm)
@@ -424,7 +445,7 @@ class Console:
             if type(limit) not in (int, float) or not math.isfinite(limit):
                 raise ValueError('invalid_bounded_left_turn_trial')
             limit = min(limit, trial_goal['max_seconds'])
-        motion, decision, clearance = self.turn_preview(now, limit, initial_presteer_pwm)
+        motion, decision, clearance = self.turn_preview(now, limit, initial_presteer_pwm, compact_target_trial)
         tick = data.get('tick')
         current_tick = self.status['control'].get('tick', -1)
         if type(tick) is not int or not 0 <= current_tick-tick < 100 or tick <= self.stopped_tick:
@@ -446,13 +467,22 @@ class Console:
             'clearance_profile': 'maneuver', 'clearance_profile_source': 'bounded_left_turn_trial',
             'clearance_start': clearance, 'clearance_current': clearance,
             'rear_launch_active': False, 'rear_launch_max_s': 0}
+        if compact_target_trial:
+            report.update(endpoint='first_compact_target_orbit_entry_trial',
+                trial_scope=COMPACT_TARGET_TRIAL_SCOPE, semantic_class='unknown', competition_supported=False,
+                completed=False, compact_target=decision.get('compact_target'),
+                handover_observed=bool(decision.get('handover_observed')),
+                orbit_entry_elapsed_s=decision.get('orbit_entry_elapsed_s', 0.),
+                clearance_profile_source='bounded_first_compact_target_orbit_entry_trial')
         self.auto_session = {'report': report, 'turn_trial': True, 'turn_motion': motion, 'phase': 'presteer',
             'deadline': now+MAX_PRESTEER_S+motion.max_drive_s, 'last_loop': now, 'heartbeat_seq': 0,
             'quality': self.perception_quality, 'recovery': QualityRecovery(), 'rear_launch': None,
             'motion_scan_seq': None, 'turn_last_servo': 1500, 'turn_servo_sequence': None}
+        if compact_target_trial:
+            self.auto_session['maneuver_sequence'] = True
         self.auto_result = None
         self.owner, self.owner_at = 'auto-turn-'+run_id, now
-        self.control_mode, self.stop_latched = 'auto_turn_trial', False
+        self.control_mode, self.stop_latched = ('auto_turn_cone_trial' if compact_target_trial else 'auto_turn_trial'), False
         try:
             self.emit('arm', tick=tick)
         except (RuntimeError, OSError):
@@ -553,6 +583,8 @@ class Console:
                 return {'ok': True}
             if op == 'turn_left_start':
                 return self.start_turn_trial(data)
+            if op == 'turn_cone_start':
+                return self.start_turn_trial(data, compact_target_trial=True)
             formal = op == 'stop_goal_start'
             if op not in ('probe_start', 'straight_start', 'to_left_junction_start', 'stop_goal_start'):
                 raise ValueError('only_bounded_straight_control_is_implemented')
@@ -675,7 +707,8 @@ class Console:
             control = self.status['control']
             pending_servo = session['turn_servo_sequence']
             turn_control = {**control, 'command_acked': pending_servo is None or control.get('seq', -1) >= pending_servo}
-            decision = session['turn_motion'].update(self.scan, report['sensor_ages']['lidar'], now,
+            scan = {**self.scan, 'received_at': self.scan_at} if session.get('maneuver_sequence') else self.scan
+            decision = session['turn_motion'].update(scan, report['sensor_ages']['lidar'], now,
                 turn_control, safe=motion_ready)
             report['turn'] = decision
             report['physical_steering_confirmed'] = False
@@ -683,6 +716,7 @@ class Console:
             report['alignment_evidence'] = decision['alignment_evidence']
             report['entry_confirmed'] = decision['entry_confirmed']
             report['turn_stage'] = decision['turn_stage']
+            self.record_compact_target_decision(session, decision)
             if decision['lock_requested']:
                 self.halt(decision['reason'])
                 return
@@ -899,7 +933,8 @@ class Console:
         report['observed_pwm'] |= control.get('motor') == TRIAL_MOTOR
         pending_servo = session['turn_servo_sequence']
         turn_control = {**control, 'command_acked': pending_servo is None or control.get('seq', -1) >= pending_servo}
-        decision = motion.update(self.scan, report['sensor_ages']['lidar'], now, turn_control,
+        scan = {**self.scan, 'received_at': self.scan_at} if session.get('maneuver_sequence') else self.scan
+        decision = motion.update(scan, report['sensor_ages']['lidar'], now, turn_control,
                                  safe=True, presteer_wait=neutral_wait)
         report['turn'] = decision
         report['physical_steering_confirmed'] = False
@@ -907,6 +942,7 @@ class Console:
         report['alignment_evidence'] = decision['alignment_evidence']
         report['entry_confirmed'] = decision['entry_confirmed']
         report['turn_stage'] = decision['turn_stage']
+        self.record_compact_target_decision(session, decision)
         if decision['lock_requested']:
             self.halt(decision['reason'])
             return
@@ -936,6 +972,14 @@ class Console:
             report['motion_ticks'] += 1
         if motor > 1500:
             report['drive_ticks'] += 1
+
+    @staticmethod
+    def record_compact_target_decision(session, decision):
+        if session.get('maneuver_sequence'):
+            session['report'].update(trial_scope=COMPACT_TARGET_TRIAL_SCOPE, semantic_class='unknown',
+                competition_supported=False, completed=False, compact_target=decision.get('compact_target'),
+                handover_observed=bool(decision.get('handover_observed')),
+                orbit_entry_elapsed_s=decision.get('orbit_entry_elapsed_s', 0.))
 
     def configure(self, data):
         with self.lock:
@@ -1003,7 +1047,7 @@ class Console:
             if self.auto_session is None or self.auto_session.get('turn_trial') is not True:
                 self.halt('camera_failed')
 
-    def state(self, initial_presteer_pwm=None):
+    def state(self, initial_presteer_pwm=None, trial_mode='turn-left'):
         with self.lock:
             now = time.monotonic()
             return {'demo': self.args.demo, 'boot': self.boot, 'status': self.status, 'settings': self.settings,
@@ -1011,7 +1055,7 @@ class Console:
                     'ages': {'camera': now - self.camera_at, 'lidar': now - self.scan_at, 'control': now - self.control_at},
                     'errors': dict(self.errors), 'recording': self.record is not None, 'saving': self.saving,
                     'record_error': self.record_error, 'owner': self.owner, 'last_stop': self.last_stop,
-                    'autonomy': self.autonomy_status(initial_presteer_pwm=initial_presteer_pwm),
+                    'autonomy': self.autonomy_status(initial_presteer_pwm=initial_presteer_pwm, trial_mode=trial_mode),
                     'files': sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]}
 
     def storage_available(self):
@@ -1257,17 +1301,24 @@ def serve(args):
                 if path == '/api/state':
                     query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
                     initial = query.get('initial_presteer_pwm')
-                    if initial is None:
+                    mode = query.get('trial_mode')
+                    if mode is not None and (len(mode) != 1 or mode[0] not in ('turn-left', 'turn-cone')):
+                        self.reply(400, {'error': 'invalid_maneuver_trial_mode'})
+                        return
+                    if initial is None and mode is None:
                         self.reply(200, app.state())
                     else:
                         try:
-                            if len(initial) != 1 or not initial[0].isascii() or not initial[0].isdigit():
-                                raise ValueError('invalid_initial_presteer_pwm')
-                            initial_pwm = validate_initial_presteer_pwm(int(initial[0]))
+                            initial_pwm = None
+                            if initial is not None:
+                                if len(initial) != 1 or not initial[0].isascii() or not initial[0].isdigit():
+                                    raise ValueError('invalid_initial_presteer_pwm')
+                                initial_pwm = validate_initial_presteer_pwm(int(initial[0]))
                         except ValueError:
                             self.reply(400, {'error': 'invalid_initial_presteer_pwm'})
                             return
-                        self.reply(200, app.state(initial_presteer_pwm=initial_pwm))
+                        self.reply(200, app.state(initial_presteer_pwm=initial_pwm,
+                                                  trial_mode=mode[0] if mode is not None else 'turn-left'))
                 elif path == '/api/vision':
                     self.reply(200, app.vision.snapshot() if app.vision else {'enabled': False})
                 elif path == '/api/lidar':

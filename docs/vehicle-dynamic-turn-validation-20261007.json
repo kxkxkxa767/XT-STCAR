@@ -1163,7 +1163,7 @@
     }
   },
   "turn07_preparation": {
-    "status": "mac_and_target_validated_pending_locked_upload_and_authorized_test",
+    "status": "deployed_locked_and_single07_executed_wall_ambiguity",
     "requested_initial_presteer_pwm": 1700,
     "override_scope": "presteer only, actual adoption3ticks+1.2s then drive live geometry",
     "natural_neutral_cannot_start": true,
@@ -1192,7 +1192,7 @@
     "target_tests_passed": true,
     "target_tests_blocked_then_reconnected": true,
     "new_single07_authorized": true,
-    "test07_executed": false,
+    "test07_executed": true,
     "initial1700_is_not_fixed_driving_command": true,
     "cone_side_entry_preference": true,
     "real_cone_handover_connected": false,
@@ -1292,6 +1292,160 @@
     },
     "ssh_reconnected_by_operator": true,
     "initial1700_parameter_implemented": true,
-    "old_body5_profile_kept": true
+    "old_body5_profile_kept": true,
+    "single_run_authorization_consumed": true
+  },
+  "turn07_actual": {
+    "source_commit": "d7b637c6c15919b0f757cc8dc06fd7a5e1e83f76",
+    "deployment": "complete matched package installed locked; 12 installed hashes verified; preserved settings 1550/1450/1650/1350",
+    "backup": "/home/bianbu/xt-stcar-console/backup-turn07-20261007-152029",
+    "result": {
+      "healthy": true,
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 155,
+        "servo": 1500,
+        "tick": 139153
+      },
+      "mode": "locked",
+      "active": null,
+      "owner": null,
+      "physical_standstill_verified": false,
+      "cone_execution_started": false,
+      "run_id": "FtBBUIKPDCAq8-xYTzswaV4u",
+      "presteer_ticks": 118,
+      "motion_ticks": 35,
+      "coast_ticks": 0,
+      "steering_changes": 27,
+      "reason": "left_turn_outer_wall_ambiguous",
+      "completed": false,
+      "drive_elapsed_s": 1.186363670999981,
+      "initial_presteer_pwm": 1700,
+      "trigger_scan_seq": 1378,
+      "last_geometry_scan_seq": 1377,
+      "last_dynamic_servo": 1634,
+      "body_distance_at_trigger_m": 0.12044137713400169,
+      "observed_alignment": false,
+      "entry_confirmed": false,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-07/"
+    },
+    "physical_result": "operator then requested more left turn and combined orbit; post07 standstill/collision question has no separate answer",
+    "conclusion": "partial turn; no cone execution; wall ambiguity, not body clearance; not successful completion"
+  },
+  "turn08_work": {
+    "operator_request": "continue turning and connect left turn with orbit; 接上先测试一下",
+    "scope": "bounded left turn followed by first real lidar compact-object left orbit entry",
+    "implementation_state": "frozen and validated; pending complete locked deployment and authorized single08",
+    "target_semantics": "unknown compact object, not vision-confirmed blue cone",
+    "fixed_track_specialization": false,
+    "competition_complete": false,
+    "read_only_latest_evidence": "work/vehicle-dynamic-deploy-20261007/cone-entry-readonly-fresh.json",
+    "read_only_latest_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 155,
+      "servo": 1500,
+      "tick": 1557620
+    },
+    "mac_python_passed": 323,
+    "modules": 8,
+    "real_replay_summary": {
+      "turn06_after_candidate_counts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "turn07_drive_no_complete_isolated_candidate": true,
+      "turn07_after_six_unique_candidates": true,
+      "latest_locked_six_no_candidate": true,
+      "exact_receive_clock_not_saved_in_old_after_api_samples": true,
+      "no_actual_confirmed_claim_from_receive_proxy": true
+    },
+    "trial_motor": 1560,
+    "initial_presteer": 1700,
+    "left_wall_feedback_gain": 180,
+    "max_trend_release_fraction": 0.2,
+    "orbit_entry_max_s": 3.0,
+    "shared_drive_max_s": 10.0,
+    "coast_max_s": 5.0,
+    "body_current_stop_distance_m": 0.08,
+    "source_sha256": {
+      "web/vehicle-console/server.py": "0718f16c0211b8eddbc2d189529b97c44d50450fdd20066a1d055619ed94b354",
+      "web/vehicle-console/autonomy-control.py": "a0313cbaa26682f9ed50873de0f216a4c51a5307a979a1008b4ee14abf26cb4f",
+      "web/vehicle-console/compact_target.py": "300e3a2c2fc676fece5b17cc038c96f50d7c8a46d1bc8b579321684852c47708",
+      "web/vehicle-console/maneuver_sequence.py": "1132b488c3796df806e2bbf751bff56cfb3cb4523e415fd177448e23b946286c",
+      "scripts/start-vehicle-console.py": "8193cdd48e94a6aaba31d450518e08bf7e68d81a71b28fac98d655803134298b"
+    },
+    "target_compact_cluster_timing": {
+      "pure_saved_scan_computation": true,
+      "hardware_api_used": false,
+      "is_not_wcet": true,
+      "module_sha256": "300e3a2c2fc676fece5b17cc038c96f50d7c8a46d1bc8b579321684852c47708",
+      "real_scan_count": 12,
+      "timing_calls": 600,
+      "median_ms": 2.009319500075435,
+      "p95_ms": 2.7090250000583183,
+      "max_ms": 3.318039000077988,
+      "candidate_counts": [
+        {
+          "seq": 1383,
+          "count": 1
+        },
+        {
+          "seq": 1384,
+          "count": 1
+        },
+        {
+          "seq": 1386,
+          "count": 1
+        },
+        {
+          "seq": 1388,
+          "count": 1
+        },
+        {
+          "seq": 1390,
+          "count": 1
+        },
+        {
+          "seq": 1392,
+          "count": 1
+        },
+        {
+          "seq": 15587,
+          "count": 0
+        },
+        {
+          "seq": 15589,
+          "count": 0
+        },
+        {
+          "seq": 15591,
+          "count": 0
+        },
+        {
+          "seq": 15594,
+          "count": 0
+        },
+        {
+          "seq": 15596,
+          "count": 0
+        },
+        {
+          "seq": 15598,
+          "count": 0
+        }
+      ]
+    },
+    "target_initial_pure_tests": 91,
+    "target_final_affected_tests": 23,
+    "hardware_used_by_tests": false,
+    "compiler_validation": "all eight Python module syntax checked; matching Rust bridge238 and exact unchanged Rust sources retained"
   }
 }

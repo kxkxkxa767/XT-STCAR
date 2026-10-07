@@ -148,11 +148,12 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(len(self.outputs), 1)
 
     def test_invalid_initial_presteer_request_never_arms(self):
-        for value in [None, True, False, 1649, 1721, 1500, 1700., float('nan'), float('inf'), '1700', [], {}]:
-            with self.subTest(value=value), patch.object(self.server.time, 'monotonic', return_value=0.):
-                with self.assertRaisesRegex(ValueError, 'invalid_initial_presteer_pwm'):
-                    self.console.autonomy_command({'op': 'turn_left_start', 'boot': self.console.boot,
-                        'epoch': 0, 'tick': 1000, 'placement_confirmed': True, 'initial_presteer_pwm': value})
+        for op in ['turn_left_start', 'turn_cone_start']:
+            for value in [None, True, False, 1649, 1721, 1500, 1700., float('nan'), float('inf'), '1700', [], {}]:
+                with self.subTest(op=op, value=value), patch.object(self.server.time, 'monotonic', return_value=0.):
+                    with self.assertRaisesRegex(ValueError, 'invalid_initial_presteer_pwm'):
+                        self.console.autonomy_command({'op': op, 'boot': self.console.boot,
+                            'epoch': 0, 'tick': 1000, 'placement_confirmed': True, 'initial_presteer_pwm': value})
         self.assertEqual(self.outputs, [])
         self.assertIsNone(self.console.auto_session)
 
@@ -178,6 +179,13 @@ class TurnControlTests(unittest.TestCase):
                 handler.reply = lambda status, body, content=None: responses.append((status, body))
                 handler.do_GET()
                 self.assertEqual(responses[-1][0], expected)
+            for suffix in ['trial_mode=turn-cone', 'trial_mode=invalid',
+                           'trial_mode=turn-cone&trial_mode=turn-left']:
+                handler = object.__new__(captured['handler'])
+                handler.path = '/api/state?' + suffix
+                handler.headers = {'X-Control-Token': self.console.token}
+                handler.reply = lambda status, body, content=None: responses.append((status, body))
+                handler.do_GET()
             self.console.stop.set()
         args = types.SimpleNamespace(bind='127.0.0.1', lan_bind=None, port=8081,
                                      access_file=str(Path(self.temp.name)/'access.json'))
@@ -199,6 +207,14 @@ class TurnControlTests(unittest.TestCase):
                 self.assertEqual(body['autonomy']['mode'], 'locked')
             else:
                 self.assertEqual(body, {'error': 'invalid_initial_presteer_pwm'})
+        status, body = responses[len(cases)]
+        self.assertEqual(status, 200)
+        self.assertEqual(body['autonomy']['trial_mode'], 'turn-cone')
+        self.assertEqual(body['autonomy']['turn_preview']['initial_presteer_pwm'], 1700)
+        self.assertEqual(body['autonomy']['turn_preview']['trial_scope'], 'first_lidar_compact_target_orbit_entry')
+        for status, body in responses[len(cases)+1:]:
+            self.assertEqual(status, 400)
+            self.assertEqual(body, {'error': 'invalid_maneuver_trial_mode'})
         self.assertEqual(self.outputs, [])
         self.assertIsNone(self.console.auto_session)
         self.assertIsNone(self.console.owner)
@@ -251,6 +267,212 @@ class TurnControlTests(unittest.TestCase):
             self.assertEqual(session['report']['turn']['steering_target'],
                              session['report']['turn']['natural_steering_target'])
         self.assertLess(session['report']['servo'], restored['servo'])
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def start_compact_trial(self, **extra):
+        data = {'op': 'turn_cone_start', 'boot': self.console.boot,
+                'epoch': self.console.control_epoch, 'tick': self.console.status['control']['tick'],
+                'placement_confirmed': True, **extra}
+        with patch.object(self.server.time, 'monotonic', return_value=self.now):
+            return self.console.autonomy_command(data)
+
+    def drive_compact_trial(self, **extra):
+        self.start_compact_trial(**extra)
+        for index in range(1, 240):
+            self.tick(round(index*.02, 6))
+            if self.console.auto_session is None:
+                self.fail(self.console.auto_result['reason'])
+            if self.console.auto_session['phase'] == 'drive':
+                return self.now
+        self.fail('fresh adopted initial presteer did not start compact-target trial')
+
+    def compact_scan(self, seq, observed=True, distance=1.):
+        # Raw synthetic shape observations run the real detector and sequence;
+        # this is no semantic class, course pose or measured vehicle motion.
+        value = self.scan(seq)
+        value['ranges'] = [3.]*360
+        if observed:
+            value['ranges'][266:275] = [distance]*9
+        return value
+
+    def enter_compact_orbit(self, **extra):
+        drive_since = self.drive_compact_trial(**extra)
+        session = self.console.auto_session
+        for index in range(1, 5):
+            self.observe(round(drive_since+index*.1, 6), self.compact_scan(self.console.scan['seq']+1))
+            self.assertIs(self.console.auto_session, session)
+            self.assertEqual(session['phase'], 'drive')
+        self.assertTrue(session['report']['handover_observed'])
+        self.assertEqual(session['report']['turn_stage'], 'orbit_entry')
+        self.assertTrue(session['report']['compact_target']['confirmed'])
+        return drive_since, session
+
+    def test_compact_trial_preview_default_1700_and_placement_admission_keep_neutral(self):
+        settings, control = dict(self.console.settings), dict(self.console.status['control'])
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            state = self.console.state(trial_mode='turn-cone')
+        preview = state['autonomy']['turn_preview']
+        self.assertEqual(state['autonomy']['trial_mode'], 'turn-cone')
+        self.assertEqual(preview['initial_presteer_pwm'], 1700)
+        self.assertEqual(preview['trial_scope'], 'first_lidar_compact_target_orbit_entry')
+        self.assertEqual(preview['semantic_class'], 'unknown')
+        self.assertFalse(preview['completed'])
+        self.assertFalse(preview['competition_supported'])
+        self.assertEqual((preview['motor'], preview['servo'], preview['steering_target']), (1500, 1500, 1700))
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs, [])
+        self.assertEqual(self.console.settings, settings)
+        self.assertEqual(self.console.status['control'], control)
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            for extra in [{}, {'placement_confirmed': False}, {'placement_confirmed': True, 'goal_id': 'intent'},
+                          {'placement_confirmed': True, 'camera_required': False},
+                          {'placement_confirmed': True, 'clearance_profile': 'straight'}]:
+                with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'placement_confirmation'):
+                    self.console.autonomy_command({'op': 'turn_cone_start', 'boot': self.console.boot,
+                                                  'epoch': 0, 'tick': 1000, **extra})
+        self.assertEqual(self.outputs, [])
+        self.start_compact_trial()
+        session = self.console.auto_session
+        self.assertTrue(session['turn_trial'])
+        self.assertTrue(session['maneuver_sequence'])
+        self.assertIsInstance(session['turn_motion'], self.server.ManeuverSequence)
+        self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1700)
+        report = session['report']
+        self.assertEqual(report['trial_scope'], 'first_lidar_compact_target_orbit_entry')
+        self.assertEqual(report['semantic_class'], 'unknown')
+        self.assertFalse(report['completed'])
+        self.assertFalse(report['competition_supported'])
+        self.assertEqual(report['clearance_start']['clearance_profile'], 'maneuver')
+        self.assertFalse(report['rear_launch_active'])
+        self.assertEqual(self.console.control_mode, 'auto_turn_cone_trial')
+        self.assertEqual([(row['op'], row['motor']) for row in self.outputs], [('arm', 1500)])
+        with patch.object(self.server.time, 'monotonic', return_value=0.):
+            owned = self.console.state(initial_presteer_pwm=1650, trial_mode='turn-cone')
+        self.assertFalse(owned['autonomy']['turn_ready'])
+        self.assertEqual(owned['autonomy']['turn_rejection'], 'control_owned_or_unlocked')
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['turn_motion'].initial_presteer_pwm, 1700)
+        self.assertEqual(self.console.settings, settings)
+        self.assertEqual(len(self.outputs), 1)
+
+    def test_compact_trial_receives_actual_scan_clock_and_never_refreshes_duplicate_lease(self):
+        self.start_compact_trial()
+        motion = self.console.auto_session['turn_motion']
+        original = motion.update
+        received = []
+        def update(scan, *args, **kwargs):
+            received.append((scan['seq'], scan['received_at'], args[1]))
+            return original(scan, *args, **kwargs)
+        motion.update = update
+        self.tick(.02, self.console.scan)
+        self.tick(.04, self.console.scan)
+        self.tick(.10, self.scan(2))
+        self.tick(.12, self.console.scan)
+        self.assertEqual(received, [(1, 0., .02), (1, 0., .04), (2, .10, .10), (2, .10, .12)])
+        self.assertNotIn('received_at', self.console.scan)
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
+
+    def test_compact_trial_preserves_1700_adoption_body_stop_and_no_rearm(self):
+        drive_since = self.drive_compact_trial()
+        session = self.console.auto_session
+        decision = session['report']['turn']
+        first_positive = next(row for row in self.outputs if row['motor'] > 1500)
+        self.assertEqual((first_positive['motor'], first_positive['servo']), (1560, 1700))
+        self.assertGreaterEqual(decision['steering_settle_elapsed_s']+1e-9, 1.2)
+        self.assertGreaterEqual(decision['steering_settle_feedback_ticks'], 3)
+        self.assertEqual(session['report']['clearance_current']['clearance_profile'], 'maneuver')
+        self.assertEqual(session['deadline'], 15.)
+        near = self.scan(self.console.scan['seq']+1)
+        near['ranges'][90] = .24
+        self.tick(round(drive_since+.02, 6), near)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertFalse(self.console.auto_result['competition_supported'])
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                         ('stop', 1500, 1500))
+        stopped = list(self.outputs)
+        self.tick(round(self.now+.02, 6))
+        self.assertEqual(self.outputs, stopped)
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_compact_trial_cumulative_drive_budget_and_coast_never_restore_motor(self):
+        drive_since, session = self.enter_compact_orbit(max_drive_s=1.)
+        for index in range(21, 80):
+            now = round(drive_since+index*.02, 6)
+            self.tick(now, self.compact_scan(1+int(round(now*10, 6))))
+            if session['phase'] == 'coast':
+                break
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'coast')
+        self.assertEqual(session['coast_reason'], 'maneuver_cumulative_drive_timeout')
+        self.assertLess(session['report']['orbit_entry_elapsed_s'], 3.)
+        self.assertLessEqual(self.now-drive_since, 1.02)
+        self.assertEqual(session['turn_motion'].drive_since, drive_since)
+        first_neutral = len(self.outputs)-1
+        self.assertEqual(self.outputs[-1]['motor'], 1500)
+        unknown = self.console.coast_worker.unknown('test_motion_unknown')
+        with patch.object(self.console.coast_worker, 'result', return_value=unknown):
+            for index in range(1, 260):
+                self.tick(round(self.now+.02, 6))
+                if self.console.auto_session is None:
+                    break
+        self.assertIsNone(self.console.auto_session)
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[first_neutral:]))
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_real_compact_handover_loss_coasts_to_neutral_without_positive_restore(self):
+        drive_since, session = self.enter_compact_orbit()
+        target = session['report']['compact_target']
+        self.assertEqual(target['kind'], 'lidar_compact_object')
+        self.assertEqual(target['semantic_class'], 'unknown')
+        self.assertEqual(target['source_seq'], self.console.scan['seq'])
+        self.assertEqual(target['source_received_at'], self.console.scan_at)
+        self.assertEqual(session['turn_motion'].drive_since, drive_since)
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+        before_coast = len(self.outputs)
+        self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1, observed=False))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'coast')
+        self.assertEqual(session['coast_reason'], 'compact_target_lost_or_ambiguous')
+        self.assertEqual(self.outputs[-1]['motor'], 1500)
+        first_neutral = next(index for index in range(before_coast, len(self.outputs))
+                             if self.outputs[index]['motor'] == 1500)
+        start = self.now
+        unknown = self.console.coast_worker.unknown('test_motion_unknown')
+        with patch.object(self.console.coast_worker, 'result', return_value=unknown):
+            for index in range(1, 260):
+                now = round(start+index*.02, 6)
+                self.tick(now, self.compact_scan(1+int(round(now*10, 6))))
+                if self.console.auto_session is None:
+                    break
+                self.assertEqual(session['phase'], 'coast')
+                self.assertEqual(session['report']['current_pwm'], 1500)
+        self.assertIsNone(self.console.auto_session)
+        self.assertFalse(self.console.auto_result['completed'])
+        self.assertFalse(self.console.auto_result['entry_confirmed'])
+        self.assertFalse(self.console.auto_result['competition_supported'])
+        self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[first_neutral:]))
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                         ('stop', 1500, 1500))
+        self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
+
+    def test_compact_orbit_operator_cancel_latches_neutral_and_late_heartbeat_cannot_restart(self):
+        _, session = self.enter_compact_orbit()
+        request = {'boot': self.console.boot, 'epoch': self.console.control_epoch,
+                   'run_id': session['report']['run_id']}
+        with patch.object(self.server.time, 'monotonic', return_value=self.now):
+            self.console.autonomy_command({'op': 'cancel', **request})
+            with self.assertRaisesRegex(ValueError, 'stale_autonomy_generation|autonomy_session_ended'):
+                self.console.autonomy_command({'op': 'heartbeat', 'seq': 1000, **request})
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'operator_stop')
+        self.assertEqual((self.outputs[-1]['op'], self.outputs[-1]['motor'], self.outputs[-1]['servo']),
+                         ('stop', 1500, 1500))
+        outputs = list(self.outputs)
+        self.tick(round(self.now+.02, 6))
+        self.assertEqual(self.outputs, outputs)
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
     def test_rejected_turn_preview_preserves_current_clearance_diagnostics(self):
@@ -343,7 +565,8 @@ class TurnControlTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'probe_obstacle_in_straight_corridor'):
                     self.console.autonomy_command({'op': op, 'boot': self.console.boot, 'epoch': 0,
                         'tick': 1000, 'pwm': 1560, 'duration_ms': 250,
-                        'clearance_profile': 'maneuver', 'camera_required': False})
+                        'clearance_profile': 'maneuver', 'camera_required': False,
+                        'trial_mode': 'turn-cone', 'maneuver_sequence': True})
         for profile in ['maneuver', 'straight', 'invalid']:
             with self.subTest(profile=profile), patch.object(self.server.time, 'monotonic', return_value=0.):
                 with self.assertRaisesRegex(ValueError, 'placement_confirmation'):
@@ -355,7 +578,8 @@ class TurnControlTests(unittest.TestCase):
         with patch.object(self.server.time, 'monotonic', return_value=0.):
             self.console.autonomy_command({'op': 'straight_start', 'boot': self.console.boot, 'epoch': 0,
                 'tick': 1000, 'pwm': 1560, 'duration_ms': 1000,
-                'clearance_profile': 'maneuver', 'camera_required': False, 'turn_trial': True})
+                'clearance_profile': 'maneuver', 'camera_required': False, 'turn_trial': True,
+                'trial_mode': 'turn-cone', 'maneuver_sequence': True})
         session = self.console.auto_session
         self.assertFalse(session.get('turn_trial', False))
         self.assertEqual(session['report']['clearance_start']['clearance_profile'], 'straight')
@@ -1010,6 +1234,100 @@ class TurnCliTests(unittest.TestCase):
         self.assertEqual(report['initial_presteer_scope'], 'presteer_only_motor_neutral_then_live_geometry')
         self.assertEqual(report['preview']['steering_target'], 1700)
         self.assertEqual(report['preview']['natural_steering_target'], 1635)
+
+    def test_compact_cli_default_preview_is_explicit_readonly_first_unknown_target_scope(self):
+        cli = self.module()
+        state = {'healthy': True, 'boot': 'boot', 'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}},
+            'autonomy': {'trial_mode': 'turn-cone', 'turn_ready': True, 'turn_rejection': None, 'turn_preview': {
+                'initial_presteer_pwm': 1700, 'motor': 1500, 'servo': 1500, 'steering_target': 1700,
+                'trial_scope': 'first_lidar_compact_target_orbit_entry', 'compact_target': None}}}
+        requests, output = [], io.StringIO()
+        class Opener:
+            def open(self, request, timeout=None):
+                requests.append(request)
+                return io.BytesIO(json.dumps(state).encode())
+        with tempfile.TemporaryDirectory() as directory:
+            access = Path(directory)/'access.json'
+            access.write_text(json.dumps({'port': 8081, 'token': 'offline-token'}))
+            argv = ['autonomy-control.py', 'turn-cone', '--access-file', str(access)]
+            with patch.object(sys, 'argv', argv), patch.object(cli.urllib.request, 'build_opener', return_value=Opener()),\
+                 patch.object(sys, 'stdout', output):
+                cli.main()
+        self.assertEqual([request.get_method() for request in requests], ['GET'])
+        self.assertTrue(requests[0].full_url.endswith('/api/state?trial_mode=turn-cone&initial_presteer_pwm=1700'))
+        self.assertIsNone(requests[0].data)
+        report = json.loads(output.getvalue())
+        self.assertFalse(report['motion_requested'])
+        self.assertFalse(report['completed'])
+        self.assertFalse(report['competition_supported'])
+        self.assertEqual(report['trial_scope'], 'first_lidar_compact_target_orbit_entry')
+        self.assertEqual(report['semantic_class'], 'unknown')
+        self.assertEqual(report['initial_presteer_pwm'], 1700)
+
+    def test_compact_cli_execute_requires_mode_interface_and_placement(self):
+        cli = self.module()
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0, 'turn_ready': True, 'trial_mode': 'turn-cone'},
+                 'status': {'control': {'tick': 100}}}
+        requests = []
+        class Opener:
+            def open(self, request, timeout=None):
+                requests.append(request)
+                return io.BytesIO(json.dumps(state).encode())
+        with tempfile.TemporaryDirectory() as directory:
+            access = Path(directory)/'access.json'
+            access.write_text(json.dumps({'port': 8081, 'token': 'offline-token'}))
+            argv = ['autonomy-control.py', 'turn-cone', '--execute', '--access-file', str(access)]
+            with patch.object(cli.urllib.request, 'build_opener', return_value=Opener()),\
+                 patch.object(cli, 'first_compact_target_trial', return_value={'completed': False}) as trial,\
+                 patch.object(cli.signal, 'signal'), patch.object(sys, 'stdout', io.StringIO()):
+                with patch.object(sys, 'argv', argv), self.assertRaisesRegex(RuntimeError, 'placement-confirmed'):
+                    cli.main()
+                trial.assert_not_called()
+                state['autonomy']['trial_mode'] = 'turn-left'
+                with patch.object(sys, 'argv', argv+['--placement-confirmed']),\
+                     self.assertRaisesRegex(RuntimeError, 'interface_unavailable'):
+                    cli.main()
+                trial.assert_not_called()
+                state['autonomy']['trial_mode'] = 'turn-cone'
+                with patch.object(sys, 'argv', argv+['--placement-confirmed']), self.assertRaises(SystemExit) as finished:
+                    cli.main()
+                self.assertEqual(finished.exception.code, 1)
+                self.assertEqual(trial.call_args.args[1:], (state, 10., True, 1700))
+        self.assertEqual([request.get_method() for request in requests], ['GET', 'GET', 'GET'])
+
+    def test_compact_cli_one_start_payload_and_fresh_neutral_report_keep_unknown_scope(self):
+        cli = self.module()
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+        target = {'kind': 'lidar_compact_object', 'semantic_class': 'unknown', 'confirmed': True,
+                  'point_left_m': [0., 1.], 'range_m': 1., 'source_seq': 50, 'source_at_ms': 5000}
+        calls, reads = [], []
+        def request(path, data=None):
+            if data:
+                calls.append(data)
+                return {'run_id': 'run', 'epoch': 0}
+            index = len(reads)
+            reads.append(index)
+            return {'autonomy': {'active': None, 'mode': 'locked', 'last_result': {
+                'run_id': 'run', 'completed': False, 'reason': 'compact_target_lost_or_ambiguous',
+                'handover_observed': True, 'compact_target': target, 'orbit_entry_elapsed_s': .4}},
+                'ages': {'control': .01}, 'status': {'control': {'armed': index == 0,
+                    'motor': 1500, 'servo': 1700 if index == 0 else 1500}}}
+        with patch.object(cli.time, 'sleep'):
+            result = cli.first_compact_target_trial(request, state, 10, True)
+        self.assertEqual([call['op'] for call in calls], ['turn_cone_start', 'cancel'])
+        self.assertEqual(reads, [0, 1])
+        self.assertEqual(calls[0]['initial_presteer_pwm'], 1700)
+        self.assertEqual(calls[0]['max_drive_s'], 10)
+        self.assertTrue(calls[0]['placement_confirmed'])
+        self.assertNotIn('pwm', calls[0])
+        self.assertNotIn('goal_id', calls[0])
+        self.assertFalse(result['completed'])
+        self.assertFalse(result['competition_supported'])
+        self.assertEqual(result['trial_scope'], 'first_lidar_compact_target_orbit_entry')
+        self.assertEqual(result['semantic_class'], 'unknown')
+        self.assertTrue(result['handover_observed'])
+        self.assertEqual(result['compact_target'], target)
+        self.assertTrue(result['fresh_neutral_locked_confirmed'])
 
     def test_cli_invalid_initial_parameter_fails_before_state_request(self):
         cli = self.module()
