@@ -712,9 +712,77 @@
       "cone_execution_started": false,
       "automatic_retry_performed": false,
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-05"
+    },
+    {
+      "attempt_id": "left-turn-trial-20261007-06",
+      "vehicle_source_commit": "57c7f96443b311db525afc6199bc847b06b70884",
+      "actual_result": {
+        "run_id": "7lRqEFqM4pnIQmcA-JBK7kI8",
+        "epoch": 0,
+        "phase": "drive",
+        "turn_stage": "locked",
+        "reason": "left_turn_outer_wall_ambiguous",
+        "presteer_ticks": 137,
+        "motion_ticks": 39,
+        "drive_ticks": 39,
+        "coast_ticks": 0,
+        "steering_changes": 26,
+        "servo": 1643,
+        "observed_pwm": true,
+        "observed_armed": true,
+        "completed": false,
+        "entry_confirmed": false,
+        "observed_alignment": false
+      },
+      "drive_elapsed_s": 1.2868201470000713,
+      "trigger_scan_seq": 1491,
+      "trigger_raw_saved": true,
+      "body_profile": "maneuver",
+      "body_gap_at_halt_m": 0.08713819389898228,
+      "body_guard_m": 0.08,
+      "body_guard_stop_requested": false,
+      "old_front1m_gate_active": false,
+      "saved_feedback_count": 44,
+      "saved_forward_feedback_count": 8,
+      "last_valid_geometry_seq": 1490,
+      "operator_observation": {
+        "fully_stopped_confirmed": true,
+        "collision_observed": false,
+        "statement": "已完全停住，没有碰到挡板",
+        "new_placement_statement": "已放回斑马线后、完全静止，车头朝原直道",
+        "physical_standstill_measured": false
+      },
+      "neutral_feedback_count": 6,
+      "first_neutral_tick": 149428,
+      "last_neutral_tick": 150403,
+      "first_neutral_lidar_seq": 1495,
+      "last_neutral_lidar_seq": 1504,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 178,
+        "servo": 1500,
+        "tick": 150403
+      },
+      "healthy": true,
+      "owner": null,
+      "active": null,
+      "mode": "locked",
+      "cone_execution_started": false,
+      "automatic_retry": false,
+      "diagnosis": "actual missing rays8/9 eroded strong-window support on the observed same continuous wall segment; candidate0/16 mature points made same_surface unknown and fallback split aliases",
+      "shared_real_contiguous_rays": [
+        10,
+        32
+      ],
+      "shared_points": 23,
+      "shared_segment_max_residual_m": 0.01144,
+      "not_proof_of_surface_across_missing_rays": true,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "05 partial left, stopped without collision; maneuver body-net5cm+3cm allowance verified, pending deployment and explicitly authorized06",
+  "latest_trial_status": "06 partial left, wall ambiguity exited, body5cm gate did not trigger; operator stopped without collision; fixes+initial1700 for authorized07 pending target timing",
   "latest_user_proposal": "latest overrides raw20: vehicle perimeter net clearance5cm during turn and slalom; straight stays unchanged",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -728,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "operator confirmed placement after crosswalk and explicitly requested upload then direct single test;06 pending",
+  "latest_authorization": "operator requests initial1700 test, confirmed fresh stripe placement/stopped/original heading, later reiterated upload then test; single07 authorization not consumed",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -1015,7 +1083,7 @@
     }
   },
   "maneuver_body_profile": {
-    "status": "validated_pending_locked_deployment_and_authorized06",
+    "status": "deployed_and_trial06_executed_not_complete",
     "distance_reference": "current return to measured vehicle rectangle, not lidar raw range",
     "measured_front_m": 0.21,
     "measured_rear_m": 0.2,
@@ -1033,11 +1101,11 @@
     "straight_default_unchanged": true,
     "cone_execution_chain_connected": false,
     "future_sweep_or_stopping_certified": false,
-    "new_motion_authorized": true,
+    "new_motion_authorized": false,
     "previous_raw20_choice_superseded": true,
     "implemented": true,
-    "vehicle_deployed": false,
-    "new_motion_executed": false,
+    "vehicle_deployed": true,
+    "new_motion_executed": true,
     "slalom_shared_profile_available": true,
     "source_sha256": {
       "web/vehicle-console/autonomy_live.py": "092dd6eb70710e23c5f92fc7b8e6c13c5e7a900bdc7cf2e2ec24bd5e674ad368",
@@ -1064,6 +1132,166 @@
     "wall_association_rho30cm_unchanged": true,
     "turn_geometry_lateral_margin_m": 0.25,
     "rust_frontend_unchanged": true,
-    "matching_bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4"
+    "matching_bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
+    "deployment": {
+      "source_commit": "57c7f96443b311db525afc6199bc847b06b70884",
+      "archive_sha256": "0e90720cb026197080478f34e120e14db326f58035631eb71ecdc7bc6ff8b318",
+      "backup": "/home/bianbu/xt-stcar-console/backup-body-margin-20261007-142046",
+      "installed_sha256": {
+        "app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+        "autonomy-control.py": "afb98cf0ef6908298ee9a2f5a0b85ac5d06b5a8984142d226c4e5d515c3d318c",
+        "autonomy_live.py": "092dd6eb70710e23c5f92fc7b8e6c13c5e7a900bdc7cf2e2ec24bd5e674ad368",
+        "coast_motion.py": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257",
+        "index.html": "f4c71739afad72d3d0a17bafc8b286b412ca4289ab924a77a0fc516579fcf43f",
+        "server.py": "16d56828f6a8961668bcba4b343d71a65c27b4a6ae61bcb3f1b31bd5e22c045d",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "2a1e0cab07b7a64b27cf23a35fc718dd05670f893b05ea99c187d8bf37bcf26c",
+        "vehicle-bridge": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
+        "start-console.py": "752449080665c0cf7c527c518657666c788b30ff9f4e30ebe07724ca7c4122ab"
+      },
+      "runtime_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "all_12_installed_hashes_match": true,
+      "default_locked": true,
+      "deployment_arm_or_drive_requests": 0
+    }
+  },
+  "turn07_preparation": {
+    "status": "mac_and_target_validated_pending_locked_upload_and_authorized_test",
+    "requested_initial_presteer_pwm": 1700,
+    "override_scope": "presteer only, actual adoption3ticks+1.2s then drive live geometry",
+    "natural_neutral_cannot_start": true,
+    "bounded_override1650to1720": true,
+    "edge_fix": "6-point PCA windows clamped within actual basic-connected runs, no cross-null edge or gap interpolation; previous thresholds unchanged",
+    "raw1491_alias_unique_after_fix": true,
+    "mature_support_before": [
+      0,
+      16
+    ],
+    "mature_support_after": [
+      18,
+      21
+    ],
+    "source_sha256": {
+      "web/vehicle-console/turn_motion.py": "b1d820e816ccac3df7be8e03bb45c67e20baaec3606bf1de362e7ae8f8120a4c",
+      "web/vehicle-console/server.py": "17e88484c3868d3e9ccadc8ab009fbff46d68bf188c4614efd59b07014f37714",
+      "web/vehicle-console/autonomy-control.py": "edbb538840b5213447959852dd4f9d74605a30f03a864e4098b12ab1a86fd77a"
+    },
+    "mac_python_passed": 277,
+    "focused_module_service": [
+      72,
+      46
+    ],
+    "slow_pca_equivalence_cases": 749,
+    "target_tests_passed": true,
+    "target_tests_blocked_then_reconnected": true,
+    "new_single07_authorized": true,
+    "test07_executed": false,
+    "initial1700_is_not_fixed_driving_command": true,
+    "cone_side_entry_preference": true,
+    "real_cone_handover_connected": false,
+    "physical_acceptance": false,
+    "target_turn_service_count": 118,
+    "target_association_benchmark": {
+      "source_sha256": "b1d820e816ccac3df7be8e03bb45c67e20baaec3606bf1de362e7ae8f8120a4c",
+      "actual_scan_pairs": [
+        {
+          "old_seq": 5403,
+          "new_seq": 5405,
+          "match_count": 1,
+          "elapsed_ms": 0.2934000000323067
+        },
+        {
+          "old_seq": 5405,
+          "new_seq": 5406,
+          "match_count": 1,
+          "elapsed_ms": 0.13855099996362696
+        },
+        {
+          "old_seq": 5406,
+          "new_seq": 5408,
+          "match_count": 1,
+          "elapsed_ms": 0.12071100002231105
+        },
+        {
+          "old_seq": 5408,
+          "new_seq": 5409,
+          "match_count": 1,
+          "elapsed_ms": 0.11800199990830151
+        },
+        {
+          "old_seq": 5409,
+          "new_seq": 5411,
+          "match_count": 1,
+          "elapsed_ms": 0.11775200005104125
+        },
+        {
+          "old_seq": 5411,
+          "new_seq": 5412,
+          "match_count": 1,
+          "elapsed_ms": 0.1590589999977965
+        },
+        {
+          "old_seq": 5412,
+          "new_seq": 5414,
+          "match_count": 1,
+          "elapsed_ms": 0.12183599994841643
+        }
+      ],
+      "actual_pairs_all_unique": true,
+      "synthetic_candidate_count": 64,
+      "timing_iterations": 50,
+      "timing_ms": {
+        "median": 57.70375949998652,
+        "p95": 68.30220599999848,
+        "max": 69.06982399993922
+      },
+      "physical_output": false,
+      "timing_is_not_wcet_certificate": true
+    },
+    "target_exact1491_full_candidate_benchmark": {
+      "source_sha256": "b1d820e816ccac3df7be8e03bb45c67e20baaec3606bf1de362e7ae8f8120a4c",
+      "scan_seq": 1491,
+      "full_native_candidate_count": 16,
+      "unique_matches": 1,
+      "timing_iterations": 50,
+      "timing_ms": {
+        "median": 18.017377500086695,
+        "p95": 19.55994200011446,
+        "max": 20.111863000011
+      },
+      "hardware_api_used": false,
+      "timing_is_not_wcet": true
+    },
+    "pure_boundary_followup": {
+      "scope": "pure synthetic feedback with unknown motion result; follow-up of float equality and1720 release-window assumptions; no hardware",
+      "results": [
+        {
+          "requested": 1700,
+          "release_after2p4s": 1500,
+          "neutral_motor": true,
+          "deadline_delta_s": 5.000000000000001,
+          "exact_deadline_stops": true,
+          "no_restart_after_stop": true
+        },
+        {
+          "requested": 1720,
+          "release_after2p4s": 1500,
+          "neutral_motor": true,
+          "deadline_delta_s": 5.0,
+          "exact_deadline_stops": true,
+          "no_restart_after_stop": true
+        }
+      ]
+    },
+    "ssh_reconnected_by_operator": true,
+    "initial1700_parameter_implemented": true,
+    "old_body5_profile_kept": true
   }
 }

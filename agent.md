@@ -1,5 +1,15 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-10-07，06墙歧义退出，初始1700与片段边缘修复已全验证，待上传/单轮07）
+
+**用户最新要求“编译好了上传车辆继续测试”，已明确初始1700，并确认回到斑马线后/完全静止/车头朝原直道；07新单轮授权待消费。车端57c7f96的车身净距5cm+原3cm参考余量已成套部署并执行06，未到位，真实wall_ambiguous退出（不是距离门），用户确认停住无碰撞。当前Mac修复已完成277项Python与72模块/46服务专项；车端118专项与计时已通过，再备份默认锁定上传后执行07一次，保护退出不自动重启。SSH曾失效，用户已重新连接，已完成新目标板纯计算验证；不能把旧seq178当实时状态。**
+
+- 06 run7lRqEFqM4pnIQmcA-JBK7kI8，presteer137/motion39/coast0、26舵变；预打1690采用13新tick/1.31286s后1560，软件drive_elapsed1.28682s，最后服务servo1643/内部terminal锁定1500，软件reason=left_turn_outer_wall_ambiguous，seq1491原始scan完整保存。body min.087138m>guard.08、stop_requested=false，旧1m/径向40/侧30门inactive；completed/entry/alignment=false，无绕桩。
+- exact1491有unknown8/9，旧11边双侧PCA窗把真实已知ray10–14也割裂，候选47.123°/rho−1.5847有限成熟0组(主段13点)、52.449°/−1.6399成熟16；same_surface=None而不是证实两墙，fallback差5.326°/5.522cm超过2°/5cm，留下2群。ray10–32实际23连续点basic10–31全True，独立PCA残差max1.14cm/span.694m。新edge clamp只在每条真实basic run内选完整6点窗口、不跨unknown/真实深跳，成熟18/21、同面true/unique1；原20°局部角/4cm跳/16点/4shared/allinterval/complete-link与rho关联门不放宽，真双墙/尖折/gap/短run负例保留。
+- 新可选initial_presteer_pwm=1700只用于M1500的预打舵，仍10PWM/100ms、目标actual采用+3newticks+1.2s后1560；drive恢复原实时_target，不固定1700。自然目标<=1500仍不能起步，bool/float/null/1650..1720之外拒绝。CLI只读GET preview query，无setter不改manualsettings；默认请求完全兼容。moduleb1d820e8/server17e88484/CLIedbb5388，bodyhelper092dd6eb和桥238a2c8f未变，目标板118纯模块/服务通过；旧实际7帧对unique、64候选50轮median57.704/max69.070ms，exact1491完整16原候选unique1，median18.017/max20.112ms（皆非WCET/物理验收），未扩80ms门。独立749slowPCA位掩码零差；277全Python通过。边界探索2个测试假设不适用（float5s减法尾差及1720需2.2s回中），采用明确Unknown motion/2.4s观测及exactdeadline补核1700/1720均neutral/无重启，保留原探索记录不伪称63全过。
+- 用户进一步明确不必正对桶，侧前/侧面对真实桶可继续左转衔接绕桩；这是目标要求，当前实车S链仍未接。06停止后有持续隔离小物体候选，单纯原circle simulation(.003误差/minradius8cm)无法验证实际6.4–8cm截半径/噪声，不认定bluecone/假pose或圈数、不从wall歧义直接切绕桩。先本轮1700+识别修复真实验证，侧面接管需真实目标/通过与车辆曲率证据，仍不宣称比赛链完成。
+- 06独立6份反馈seq178/healthy/owner=null/active=null/locked/armed=false/M=S1500，用户实际停住无碰撞确认另存；原数据work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06/（exact1491及before/after保留）。车端新body backup-body-margin-20261007-142046保存16c；全部历史/好直道8ef备份及队友文件保留。最新机器记录见[记录](docs/vehicle-dynamic-turn-validation-20261007.json)。root独占SSH/硬件，验证/成套上传/实际设置和新鲜反馈核对后消费一次07授权，按上传规范推main、不强推。
+
 ## 新窗口接手入口（2026-10-07，05预打后部分左转，车身净距5cm已验证，用户授权上传后直接06测试）
 
 **用户新摆放到斑马线后并明确开始测试，已消费一次05授权。先预打成熟、再1560前进约0.957s，未对齐左通道，前1m矩形门退出；用户明确已完全停住、没有碰到挡板。之后用户要求保护距离调整，最新“改成车身四周5cm”覆盖先前雷达中心20cm选择；当前车体近距profile已验证，仅turn/将来绕桩内部使用、直道旧门保持。用户随后明确“编译完上传车上直接测试，已放到斑马线后面”，获得待消费一次06授权；成套默认锁定上传与哈希/设置/新鲜反馈核对后再执行。车端仍16c0956锁定1500，profile尚未下车。**

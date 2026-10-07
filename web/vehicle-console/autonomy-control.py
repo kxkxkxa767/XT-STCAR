@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.request
 from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S, CONTROL_AGE_LIMIT_S
-from turn_motion import parse_trial_goal, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S
+from turn_motion import parse_trial_goal, validate_initial_presteer_pwm, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S
 
 
 class ProbeInterrupted(RuntimeError):
@@ -20,7 +20,8 @@ class ProbeInterrupted(RuntimeError):
 
 
 def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junction=False, formal_goal=False,
-              turn_trial=False, placement_confirmed=False, max_turn_s=MAX_DRIVE_S, trial_goal_id=None):
+              turn_trial=False, placement_confirmed=False, max_turn_s=MAX_DRIVE_S, trial_goal_id=None,
+              initial_presteer_pwm=None):
     run = None
     try:
         op = 'turn_left_start' if turn_trial else 'stop_goal_start' if formal_goal else 'to_left_junction_start' if stop_left_junction else 'straight_start' if centering else 'probe_start'
@@ -32,6 +33,8 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
             start.update(placement_confirmed=placement_confirmed, max_drive_s=max_turn_s)
             if trial_goal_id is not None:
                 start['goal_id'] = trial_goal_id
+            if initial_presteer_pwm is not None:
+                start['initial_presteer_pwm'] = validate_initial_presteer_pwm(initial_presteer_pwm)
         elif not formal_goal:
             start['duration_ms'] = duration_ms
         run = request('/api/autonomy', start)
@@ -83,12 +86,12 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                 pass  # Cannot cancel a newer manual owner; independent deadlines remain.
 
 
-def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=None):
+def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=None, initial_presteer_pwm=None):
     """One mid-segment trial; alignment evidence never becomes a cone task completion."""
     try:
         latest, run = run_probe(request, state, TRIAL_MOTOR, round((MAX_PRESTEER_S+max_seconds)*1000),
             centering=True, turn_trial=True, placement_confirmed=placement_confirmed, max_turn_s=max_seconds,
-            trial_goal_id=goal_id)
+            trial_goal_id=goal_id, initial_presteer_pwm=initial_presteer_pwm)
     except ProbeInterrupted as error:
         latest, run = error.state, error.run
     result = latest['autonomy']['last_result']
@@ -99,6 +102,13 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
             'observed_alignment': result.get('observed_alignment', False),
             'physical_steering_confirmed': False, 'physical_standstill_verified': False,
             'competition_navigation': False}
+
+
+def initial_presteer_argument(value):
+    try:
+        return validate_initial_presteer_pwm(int(value))
+    except ValueError:
+        raise argparse.ArgumentTypeError('initial presteer PWM must be an integer in 1650..1720') from None
 
 
 def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, stop_left_junction=False):
@@ -146,10 +156,14 @@ def main():
     parser.add_argument('--expected-run-id', help='fence a new monitored phase to the previous normal stop')
     parser.add_argument('--execute', action='store_true', help='explicit motion request; motion commands otherwise only query state')
     parser.add_argument('--placement-confirmed', action='store_true', help='operator confirms stopped mid-segment placement for this one left trial')
+    parser.add_argument('--initial-presteer-pwm', type=initial_presteer_argument,
+        help='turn-left only: initial neutral-motor presteer PWM 1650..1720; driving uses live geometry')
     parser.add_argument('--goal-file', type=Path, help='Local target-only JSON for explicit trial-goal-register')
     parser.add_argument('--trial-goal-id', help='Use a registered trial intent; arbitrary point execution requires real pose')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
     args = parser.parse_args()
+    if args.initial_presteer_pwm is not None and args.command != 'turn-left':
+        parser.error('--initial-presteer-pwm is only valid for turn-left')
     access = json.loads(args.access_file.read_text())
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -171,7 +185,10 @@ def main():
         request('/api/control', {'op': 'stop'})
         print('STOP requested; control locked. No automatic resume.')
         return
-    state = request('/api/state')
+    state_path = '/api/state'
+    if args.command == 'turn-left' and args.initial_presteer_pwm is not None:
+        state_path += '?initial_presteer_pwm=' + str(args.initial_presteer_pwm)
+    state = request(state_path)
     if 'autonomy' not in state:
         raise RuntimeError('vehicle console has no live autonomy interface')
     if args.command == 'trial-goal-status':
@@ -196,11 +213,15 @@ def main():
         return
     if args.command == 'turn-left':
         if not args.execute:
-            print(json.dumps({'healthy': state['healthy'], 'control': state['status']['control'],
+            output = {'healthy': state['healthy'], 'control': state['status']['control'],
                 'turn_ready': state['autonomy'].get('turn_ready', False),
                 'rejection': state['autonomy'].get('turn_rejection', 'turn_trial_interface_unavailable'),
                 'preview': state['autonomy'].get('turn_preview'), 'motion_requested': False,
-                'start_scope': 'operator_placed_mid_segment'}, ensure_ascii=False, indent=2))
+                'start_scope': 'operator_placed_mid_segment'}
+            if args.initial_presteer_pwm is not None:
+                output.update(initial_presteer_pwm=args.initial_presteer_pwm,
+                    initial_presteer_scope='presteer_only_motor_neutral_then_live_geometry')
+            print(json.dumps(output, ensure_ascii=False, indent=2))
             return
         if not args.placement_confirmed:
             raise RuntimeError('turn trial requires --placement-confirmed for this stopped mid-segment placement')
@@ -219,7 +240,8 @@ def main():
             raise KeyboardInterrupt
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, turn_interrupted)
-        result = left_turn_trial(request, state, limit, args.placement_confirmed, args.trial_goal_id)
+        result = left_turn_trial(request, state, limit, args.placement_confirmed, args.trial_goal_id,
+                                 args.initial_presteer_pwm)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         raise SystemExit(1)  # No cone-entry/task completion has been certified.
     if args.command in ('goal-status', 'goal-straight'):

@@ -1,5 +1,6 @@
 """No hardware: native geometry, adoption evidence and bounded left trial checks."""
 import importlib.util
+import json
 import math
 from pathlib import Path
 import unittest
@@ -237,8 +238,8 @@ def surface_scan(theta_deg=90., kind='curve', noise=0., separation=.03):
 
 
 class TurnMotionTests(unittest.TestCase):
-    def drive(self, heading=60., offset=0., max_drive_s=10.):
-        motion = MODULE.TurnMotion(0., max_drive_s=max_drive_s)
+    def drive(self, heading=60., offset=0., max_drive_s=10., initial_presteer_pwm=None):
+        motion = MODULE.TurnMotion(0., max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm)
         result = {'servo': 1500}
         outputs = []
         for seq in range(1, 49):
@@ -267,6 +268,94 @@ class TurnMotionTests(unittest.TestCase):
         self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
         self.assertFalse(result['physical_steering_confirmed'])
         self.assertFalse(result['completed'])
+
+    def test_initial_1700_override_is_only_presteer_and_drive_uses_live_target(self):
+        motion, seq, now, previous, outputs = self.drive(initial_presteer_pwm=1700)
+        self.assertTrue(all(r['motor'] == 1500 for r in outputs[:-1]))
+        self.assertTrue(all(r['initial_presteer_active'] for r in outputs[:-1]))
+        self.assertTrue(all(r['steering_target'] == 1700 for r in outputs))
+        self.assertTrue(all(0 <= b['servo']-a['servo'] <= 10 for a, b in zip(outputs, outputs[1:])))
+        self.assertEqual((previous['servo'], previous['motor']), (1700, 1560))
+        self.assertFalse(previous['initial_presteer_active'])
+        self.assertGreaterEqual(previous['steering_settle_feedback_ticks'], 3)
+        self.assertGreaterEqual(previous['steering_settle_elapsed_s'], 1.2-1e-9)
+        first_drive = motion.drive_since
+        result = motion.update(scan(seq+1, heading=55.), .01, now+.1,
+                               control(seq+1, 1700, motor=1560))
+        self.assertEqual((result['phase'], result['motor'], result['servo']), ('drive', 1560, 1690))
+        self.assertEqual(result['steering_target'], result['natural_steering_target'])
+        self.assertLess(result['steering_target'], 1700)
+        self.assertFalse(result['initial_presteer_active'])
+        self.assertEqual(motion.drive_since, first_drive)
+
+    def test_initial_override_cannot_bypass_current_neutral_target_or_deadline(self):
+        motion = MODULE.TurnMotion(0., initial_presteer_pwm=1700)
+        for seq in range(1, 51):
+            result = motion.update(scan(seq, heading=15.1, offset=-.65, width=2.), .01,
+                                   (seq-1)*.1, control(seq, armed=seq > 1))
+            self.assertEqual((result['motor'], result['servo'], result['steering_target']), (1500, 1500, 1500))
+            self.assertFalse(result['start_ready'])
+            self.assertFalse(result['initial_presteer_active'])
+            self.assertEqual(result['natural_steering_target'], 1500)
+            self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        result = motion.update(scan(51, heading=15.1, offset=-.65, width=2.), .01, 5., control(51))
+        self.assertEqual((result['phase'], result['motor']), ('locked', 1500))
+        self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
+
+    def test_initial_override_needs_its_exact_acknowledged_fresh_adoption(self):
+        for fault in ('wrong_servo', 'unacked', 'same_tick'):
+            with self.subTest(fault=fault):
+                motion, previous = MODULE.TurnMotion(0., initial_presteer_pwm=1700), {'servo': 1500}
+                for seq in range(1, 49):
+                    feedback = control(seq, 1647 if fault == 'wrong_servo' else previous['servo'],
+                                       tick=100 if fault == 'same_tick' else seq*100)
+                    if fault == 'unacked': feedback['command_acked'] = False
+                    previous = motion.update(scan(seq), .01, (seq-1)*.1, feedback)
+                    self.assertEqual(previous['motor'], 1500)
+                self.assertLessEqual(previous['steering_settle_feedback_ticks'], 1)
+
+    def test_initial_override_quality_wait_holds_servo_and_restarts_allowance(self):
+        motion, previous = MODULE.TurnMotion(0., initial_presteer_pwm=1700), {'servo': 1500}
+        for seq in range(1, 49):
+            now = (seq-1)*.1
+            previous = motion.update(scan(seq), .01, now, control(seq, previous['servo']))
+            if previous['steering_settle_feedback_ticks'] == 4:
+                break
+        waited = motion.update(scan(seq+1), .01, now+.1, control(seq+1, 1700), presteer_wait=True)
+        self.assertEqual((waited['motor'], waited['servo'], waited['turn_stage']), (1500, 1700, 'presteer_wait'))
+        self.assertFalse(waited['initial_presteer_active'])
+        self.assertEqual(waited['steering_settle_elapsed_s'], 0)
+        for i in range(2, 14):
+            result = motion.update(scan(seq+i), .01, now+i*.1, control(seq+i, 1700))
+            self.assertEqual(result['motor'], 1500)
+            self.assertTrue(result['initial_presteer_active'])
+        result = motion.update(scan(seq+14), .01, now+1.4, control(seq+14, 1700))
+        self.assertEqual((result['phase'], result['motor']), ('drive', 1560))
+        self.assertGreaterEqual(result['steering_settle_elapsed_s'], 1.2-1e-9)
+
+    def test_initial_override_validator_rejects_noninteger_or_outside_candidates(self):
+        for value in (None, 1650, 1700, 1720):
+            self.assertEqual(MODULE.validate_initial_presteer_pwm(value), value)
+            self.assertEqual(MODULE.TurnMotion(0., initial_presteer_pwm=value).initial_presteer_pwm, value)
+        for value in (True, False, 1700., math.nan, math.inf, '1700', 1649, 1721, 1500, 1270):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, 'invalid_initial_presteer_pwm'):
+                    MODULE.validate_initial_presteer_pwm(value)
+                with self.assertRaisesRegex(ValueError, 'invalid_initial_presteer_pwm'):
+                    MODULE.TurnMotion(0., initial_presteer_pwm=value)
+
+    def test_initial_override_cannot_restart_motor_after_coast_or_safety_lock(self):
+        for stop in ('coast', 'safety'):
+            with self.subTest(stop=stop):
+                motion, seq, now, previous, _ = self.drive(initial_presteer_pwm=1700)
+                if stop == 'coast': motion.begin_coast('planned_stop', now)
+                for i in range(1, 25):
+                    previous = motion.update(scan(seq+i), .01, now+i*.1,
+                                             control(seq+i, previous['servo'], motor=1500), safe=stop == 'coast')
+                    self.assertEqual(previous['motor'], 1500)
+                    self.assertFalse(previous['initial_presteer_active'])
+                self.assertEqual(previous['servo'], 1500)
+                self.assertEqual(previous['phase'], 'coast' if stop == 'coast' else 'locked')
 
     def test_motor_neutral_ack_with_wrong_servo_never_starts_drive(self):
         motion = MODULE.TurnMotion(0.)
@@ -757,6 +846,86 @@ class TurnMotionTests(unittest.TestCase):
         motion = MODULE.TurnMotion(0.)
         motion.outer_wall = outer
         self.assertEqual(len(motion._wall_matches([outer, alias], .1, actual)), 1)
+
+    def test_recorded_1491_missing_edge_bins_keep_real_mature_same_surface_support(self):
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-turn-1491-fragmented-board.json').read_text())
+        self.assertEqual(fixture['recorded_stage'], 'drive')
+        actual, walls = fixture['scan'], fixture['scan']['wall_candidates']
+        self.assertEqual((actual['seq'], actual['at_ms']), (1491, 148921))
+        self.assertEqual([i for i, value in enumerate(actual['ranges']) if value is None], [8, 9])
+        self.assertGreater(abs(walls[0]['heading_left_rad']-walls[1]['heading_left_rad']), math.radians(2))
+        self.assertGreater(abs(walls[0]['rho_left_m']-walls[1]['rho_left_m']), .05)
+        supports = MODULE._surface_supports(actual, walls)
+        self.assertTrue(all(support and support[0] for support in supports))
+        self.assertTrue(all(min(group[0].bit_count() for group in support[0].values()) >= 16
+                            for support in supports))
+        self.assertIs(MODULE._same_surface(*supports), True)
+        motion = MODULE.TurnMotion(0.)
+        motion.outer_wall = fixture['previous_selected_outer_wall']
+        selected = motion._wall_matches(walls, fixture['publication_dt_s'], actual)
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(motion._wall_matches(list(reversed(walls)), fixture['publication_dt_s'], actual), selected)
+        self.assertEqual(len(motion._wall_matches(walls, fixture['publication_dt_s'])), 2)
+
+    def test_recorded_1491_recovery_cannot_bridge_a_new_unknown_or_out_of_line_return(self):
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-turn-1491-fragmented-board.json').read_text())
+        motion = MODULE.TurnMotion(0.)
+        motion.outer_wall = fixture['previous_selected_outer_wall']
+        for fault in ('unknown', 'out_of_line'):
+            with self.subTest(fault=fault):
+                actual = dict(fixture['scan'], ranges=list(fixture['scan']['ranges']))
+                actual['ranges'][20] = None if fault == 'unknown' else actual['ranges'][20]+.08
+                walls = actual['wall_candidates']
+                self.assertIsNot(MODULE._same_surface(*MODULE._surface_supports(actual, walls)), True)
+                self.assertEqual(len(motion._wall_matches(walls, fixture['publication_dt_s'], actual)), 2)
+
+    def test_basic_run_edges_do_not_reduce_six_point_or_sixteen_support_requirements(self):
+        measured = wall(90., -2., -.8, .8)
+        for first in (0, 352):
+            for length in (5, 6, 11, 12, 15, 16):
+                with self.subTest(first=first, length=length):
+                    ranges = [None]*360
+                    for offset in range(length):
+                        index = (first+offset) % 360
+                        ranges[index] = 2/math.cos(math.radians(index))
+                    supports = MODULE._surface_supports({'ranges': ranges}, [measured, measured])
+                    if length < 16:
+                        self.assertEqual(supports, [None, None])
+                    else:
+                        self.assertEqual([group[0].bit_count() for group in supports[0][0].values()], [16])
+                        self.assertIs(MODULE._same_surface(*supports), True)
+
+    def test_complete_circular_basic_run_keeps_wrap_windows_real(self):
+        measured = dict(wall(0., 3.2, -.6, .6), fit_error_m=.06)
+        supports = MODULE._surface_supports({'ranges': [3.2]*360}, [measured, measured])
+        self.assertIs(MODULE._same_surface(*supports), True)
+        self.assertGreaterEqual(sum(group[0].bit_count() for group in supports[0][0].values()), 16)
+
+    def test_short_kink_arm_at_measured_run_edge_remains_a_separate_candidate(self):
+        for short_count in range(1, 7):
+            with self.subTest(short_count=short_count):
+                motion, walls, actual = surface_scan(90., 'kink')
+                negative = sorted((i for i, r in enumerate(actual['ranges'])
+                                   if r is not None and -r*math.sin(math.radians(i)) < 0),
+                                  key=lambda i: abs(actual['ranges'][i]*math.sin(math.radians(i))))
+                keep = set(negative[:short_count])
+                actual['ranges'] = [r if r is None or -r*math.sin(math.radians(i)) >= 0 or i in keep else None
+                                    for i, r in enumerate(actual['ranges'])]
+                self.assertEqual(len(motion._wall_matches(walls, .2, actual)), 2)
+
+    def test_same_surface_still_needs_four_shared_returns_and_full_connecting_interval(self):
+        left = (1 << 16)-1
+        for shift, expected in ((12, True), (13, False)):
+            right = ((1 << 16)-1) << shift
+            a = ({0: (left, 0, 15)}, left)
+            b = ({0: (right, shift, shift+15)}, right)
+            self.assertIs(MODULE._same_surface(a, b), expected)
+        # Two real mature supports with four shared returns can still have an
+        # unexplained intervening return, which must not become a wall witness.
+        left = ((1 << 18)-1) & ~(1 << 5) & ~(1 << 9)
+        right = ((1 << 16)-1) << 14
+        self.assertIs(MODULE._same_surface(({0: (left, 0, 17)}, left),
+                                          ({0: (right, 14, 29)}, right)), False)
 
     def test_identical_angle_separate_parallel_returns_stay_ambiguous(self):
         for heading in [-30., 90., 170.]:

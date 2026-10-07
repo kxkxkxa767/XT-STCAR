@@ -9,6 +9,7 @@ import math
 
 SERVO_MIN = 1270
 SERVO_MAX = 1720
+INITIAL_PRESTEER_MIN = 1650
 NEUTRAL = 1500
 TRIAL_MOTOR = 1560
 MAX_DRIVE_S = 10.0
@@ -30,6 +31,12 @@ _RAY_AXES = tuple((math.cos(math.radians(-i)), math.sin(math.radians(-i))) for i
 
 def _number(value):
     return type(value) in (int, float) and math.isfinite(value)
+
+
+def validate_initial_presteer_pwm(value):
+    if value is not None and (type(value) is not int or not INITIAL_PRESTEER_MIN <= value <= SERVO_MAX):
+        raise ValueError('invalid_initial_presteer_pwm')
+    return value
 
 
 def _wrap(angle):
@@ -170,38 +177,64 @@ def _surface_supports(scan, walls):
         limit = 0 if p is None or q is None else min(.15, .04+3*min(ranges[i], ranges[j])*sample_angle)
         basic.append(p is not None and q is not None and math.hypot(q[0]-p[0], q[1]-p[1]) <= limit)
 
-    # Each six-return PCA window is reused on neighbouring edges. Prefix
-    # moments avoid repeated Python point lists and centred-sum loops.
-    extended = points[-5:]+points+points[:6]
-    sx, sy, sxx, syy, sxy, broken = ([0.] for _ in range(6))
-    edges = basic[-5:]+basic+basic[:6]
-    for p, edge in zip(extended, edges):
+    # Six-return windows stay inside their actual basic-connected run. Near a
+    # measured run edge they become one-sided, rather than erasing five real
+    # returns because a centred window would cross unknown space. Interior
+    # edges retain the original separated before/after windows and gates.
+    basic_pivot = next(((i+1) % 360 for i, edge in enumerate(basic) if not edge), 0)
+    basic_order = [(basic_pivot+i) % 360 for i in range(360)]
+    ordered = [points[i] for i in basic_order]
+    circular = all(basic)
+    run_start, run_end, start = [None]*360, [None]*360, 0
+    for position, i in enumerate(basic_order):
+        if points[i] is None:
+            continue
+        if position == 0 or not basic[basic_order[position-1]]:
+            start = position
+        run_start[position] = start
+        if position == 359 or not basic[i]:
+            for member in range(start, position+1):
+                run_end[member] = position+1
+
+    # Prefix moments and cached windows are shared by every candidate wall.
+    # The padding serves only a genuinely continuous 359/0 run, not a gap.
+    extended = ordered[-5:]+ordered+ordered[:6]
+    sx, sy, sxx, syy, sxy = ([0.] for _ in range(5))
+    for p in extended:
         x, y = (0., 0.) if p is None else p
         sx.append(sx[-1]+x)
         sy.append(sy[-1]+y)
         sxx.append(sxx[-1]+x*x)
         syy.append(syy[-1]+y*y)
         sxy.append(sxy[-1]+x*y)
-        broken.append(broken[-1]+int(not edge))
-    tangents = [None]*360
-    for i in range(360):
-        if extended[i] is None or broken[i+5] != broken[i]:
-            continue
-        x, y = sx[i+6]-sx[i], sy[i+6]-sy[i]
-        xx = sxx[i+6]-sxx[i]-x*x/6
-        yy = syy[i+6]-syy[i]-y*y/6
-        xy = sxy[i+6]-sxy[i]-x*y/6
-        angle = .5*math.atan2(2*xy, xx-yy)
-        direction = math.cos(angle), math.sin(angle)
-        first, last = extended[i], extended[i+5]
-        dx, dy = last[0]-first[0], last[1]-first[1]
-        tangents[i] = direction if direction[0]*dx+direction[1]*dy >= 0 else (-direction[0], -direction[1])
+    tangents = {}
+    def tangent(window):
+        if window not in tangents:
+            i = window+5
+            x, y = sx[i+6]-sx[i], sy[i+6]-sy[i]
+            xx = sxx[i+6]-sxx[i]-x*x/6
+            yy = syy[i+6]-syy[i]-y*y/6
+            xy = sxy[i+6]-sxy[i]-x*y/6
+            angle = .5*math.atan2(2*xy, xx-yy)
+            direction = math.cos(angle), math.sin(angle)
+            first, last = extended[i], extended[i+5]
+            dx, dy = last[0]-first[0], last[1]-first[1]
+            tangents[window] = (direction if direction[0]*dx+direction[1]*dy >= 0
+                                else (-direction[0], -direction[1]))
+        return tangents[window]
 
     strong = [False]*360
-    for i in range(360):
-        if broken[i+11] != broken[i]:
+    for position, i in enumerate(basic_order):
+        if not basic[i]:
             continue
-        before, after = tangents[i], tangents[(i+6) % 360]
+        low, high = run_start[position], run_end[position]
+        if high-low < 6:
+            continue
+        before_start, after_start = position-5, position+1
+        if not circular:
+            before_start = max(low, min(before_start, high-6))
+            after_start = max(low, min(after_start, high-6))
+        before, after = tangent(before_start), tangent(after_start)
         cross = before[0]*after[1]-before[1]*after[0]
         dot = before[0]*after[0]+before[1]*after[1]
         p, q = points[i], points[(i+1) % 360]
@@ -283,13 +316,15 @@ class TurnMotion:
     never measured wheel position. Before arm, update is a neutral preview.
     """
     def __init__(self, started_at, max_drive_s=MAX_DRIVE_S, motor_pwm=TRIAL_MOTOR,
-                 max_presteer_s=MAX_PRESTEER_S):
+                 max_presteer_s=MAX_PRESTEER_S, initial_presteer_pwm=None):
         if (not _number(started_at) or started_at < 0
                 or not _number(max_drive_s) or not 0 < max_drive_s <= MAX_DRIVE_S
                 or not _number(max_presteer_s) or not 0 < max_presteer_s <= MAX_PRESTEER_S
                 or type(motor_pwm) is not int or motor_pwm != TRIAL_MOTOR):
             raise ValueError('invalid_bounded_left_turn_trial')
         self.started_at = started_at
+        self.initial_presteer_pwm = validate_initial_presteer_pwm(initial_presteer_pwm)
+        self.natural_steering_target = None
         self.max_drive_s, self.max_presteer_s = max_drive_s, max_presteer_s
         self.phase = 'presteer'
         self.servo = self.steering_target = NEUTRAL
@@ -334,6 +369,7 @@ class TurnMotion:
         self.settle_since = None
         self.settle_feedback_ticks = 0
         self.last_error = None
+        self.natural_steering_target = None
 
     def lock(self, reason):
         if self.phase == 'presteer':
@@ -341,6 +377,7 @@ class TurnMotion:
         self.phase, self.reason = 'locked', reason
         self.presteer_waiting = False
         self.incoming_endpoint = None
+        self.natural_steering_target = None
         self.servo = self.steering_target = NEUTRAL
         self.start_ready = False
         self.settle_since = None
@@ -356,6 +393,7 @@ class TurnMotion:
             self.steering_target = NEUTRAL
             self.settle_since = None
             self.last_error = None
+            self.natural_steering_target = None
 
     def _slew(self, now):
         if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != self.steering_target:
@@ -368,6 +406,11 @@ class TurnMotion:
         coast = self.phase == 'coast'
         return {'phase': self.phase, 'motor': TRIAL_MOTOR if self.phase == 'drive' else NEUTRAL,
                 'servo': self.servo, 'steering_target': self.steering_target,
+                'initial_presteer_pwm': self.initial_presteer_pwm,
+                'initial_presteer_active': (self.phase == 'presteer' and self.initial_presteer_pwm is not None
+                                            and self.start_ready and self.natural_steering_target is not None
+                                            and self.natural_steering_target > NEUTRAL),
+                'natural_steering_target': self.natural_steering_target,
                 'start_ready': self.start_ready and self.phase == 'presteer',
                 'request_coast': coast, 'stop_requested': coast,
                 'lock_requested': self.phase == 'locked',
@@ -648,6 +691,7 @@ class TurnMotion:
         self.last_seq, self.last_publication, self.last_receive = seq, published, now
         self.last_signature = signature
         self.incoming_endpoint = None
+        self.natural_steering_target = None
         geometry_dt = 0 if self.last_geometry_publication is None else (published-self.last_geometry_publication)/1000
         try:
             candidate = self._measurement(scan, candidates, geometry_dt)
@@ -697,6 +741,7 @@ class TurnMotion:
                 self.begin_coast('left_turn_entry_candidate_stop', now)
             return self._result(now)
         target = self._target(candidate, publication_dt)
+        self.natural_steering_target = target
         if self.phase == 'presteer':
             # A left-turn trial must first adopt a left command. A currently
             # neutral target is a hold, never permission to start with centered steering.
@@ -709,6 +754,8 @@ class TurnMotion:
                 if control['armed']:
                     self._slew(now)
                 return self._result(now)
+            if self.initial_presteer_pwm is not None:
+                target = self.initial_presteer_pwm
             # Small measurement noise does not endlessly restart an unchanged presteer command.
             if self.steering_target == NEUTRAL or abs(target-self.steering_target) > 10:
                 self.steering_target = target

@@ -28,7 +28,7 @@ from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STAB
                            corridor_walls, probe_clearance, probe_parameters)
 from coast_motion import CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
-from turn_motion import TurnMotion, parse_trial_goal, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
+from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
 
 ROOT = Path(__file__).resolve().parent
 
@@ -319,7 +319,7 @@ class Console:
         return {'camera': now - self.camera_at, 'lidar': now - self.scan_at,
                 'control': now - self.control_at}
 
-    def autonomy_status(self):
+    def autonomy_status(self, initial_presteer_pwm=None):
         now = time.monotonic()
         try:
             clearance = probe_clearance(self.scan, self.sensor_ages(now), self.args.demo)
@@ -346,7 +346,7 @@ class Console:
         try:
             if self.owner is not None or self.auto_session is not None:
                 raise ValueError('control_owned_or_unlocked')
-            _, turn_preview, turn_clearance = self.turn_preview(now)
+            _, turn_preview, turn_clearance = self.turn_preview(now, initial_presteer_pwm=initial_presteer_pwm)
             turn_ready = True
         except ValueError as error:
             turn_clearance = getattr(error, 'clearance', None)
@@ -378,7 +378,7 @@ class Console:
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
 
-    def turn_preview(self, now, max_drive_s=MAX_DRIVE_S):
+    def turn_preview(self, now, max_drive_s=MAX_DRIVE_S, initial_presteer_pwm=None):
         """Pure admission from this fresh scan; not an entrance/navigation certificate."""
         ages = self.sensor_ages(now)
         clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False,
@@ -390,7 +390,7 @@ class Console:
             if (self.control_mode != 'locked' or control.get('armed') is not False
                     or control.get('motor') != 1500 or control.get('servo') != 1500):
                 raise ValueError('turn_requires_fresh_neutral_lock')
-            motion = TurnMotion(now, max_drive_s=max_drive_s)
+            motion = TurnMotion(now, max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm)
             decision = motion.update(self.scan, ages['lidar'], now, control)
             if not decision['start_ready'] or decision['lock_requested']:
                 raise ValueError(decision['reason'])
@@ -400,11 +400,16 @@ class Console:
         return motion, decision, clearance
 
     def start_turn_trial(self, data):
-        allowed = {'op', 'boot', 'epoch', 'tick', 'placement_confirmed', 'max_drive_s', 'goal_id'}
+        allowed = {'op', 'boot', 'epoch', 'tick', 'placement_confirmed', 'max_drive_s', 'goal_id',
+                   'initial_presteer_pwm'}
         if set(data)-allowed or data.get('placement_confirmed') is not True:
             raise ValueError('turn_trial_requires_operator_placement_confirmation')
         if self.stop.is_set() or self.owner is not None or self.auto_session is not None:
             raise ValueError('already_armed_or_shutting_down')
+        initial_presteer_pwm = data.get('initial_presteer_pwm')
+        if 'initial_presteer_pwm' in data and initial_presteer_pwm is None:
+            raise ValueError('invalid_initial_presteer_pwm')
+        validate_initial_presteer_pwm(initial_presteer_pwm)
         now = time.monotonic()
         limit = data.get('max_drive_s', MAX_DRIVE_S)
         trial_goal = None
@@ -419,7 +424,7 @@ class Console:
             if type(limit) not in (int, float) or not math.isfinite(limit):
                 raise ValueError('invalid_bounded_left_turn_trial')
             limit = min(limit, trial_goal['max_seconds'])
-        motion, decision, clearance = self.turn_preview(now, limit)
+        motion, decision, clearance = self.turn_preview(now, limit, initial_presteer_pwm)
         tick = data.get('tick')
         current_tick = self.status['control'].get('tick', -1)
         if type(tick) is not int or not 0 <= current_tick-tick < 100 or tick <= self.stopped_tick:
@@ -998,7 +1003,7 @@ class Console:
             if self.auto_session is None or self.auto_session.get('turn_trial') is not True:
                 self.halt('camera_failed')
 
-    def state(self):
+    def state(self, initial_presteer_pwm=None):
         with self.lock:
             now = time.monotonic()
             return {'demo': self.args.demo, 'boot': self.boot, 'status': self.status, 'settings': self.settings,
@@ -1006,7 +1011,7 @@ class Console:
                     'ages': {'camera': now - self.camera_at, 'lidar': now - self.scan_at, 'control': now - self.control_at},
                     'errors': dict(self.errors), 'recording': self.record is not None, 'saving': self.saving,
                     'record_error': self.record_error, 'owner': self.owner, 'last_stop': self.last_stop,
-                    'autonomy': self.autonomy_status(),
+                    'autonomy': self.autonomy_status(initial_presteer_pwm=initial_presteer_pwm),
                     'files': sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]}
 
     def storage_available(self):
@@ -1250,7 +1255,19 @@ def serve(args):
                     self.reply(403, {'error': 'access token required'})
                     return
                 if path == '/api/state':
-                    self.reply(200, app.state())
+                    query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                    initial = query.get('initial_presteer_pwm')
+                    if initial is None:
+                        self.reply(200, app.state())
+                    else:
+                        try:
+                            if len(initial) != 1 or not initial[0].isascii() or not initial[0].isdigit():
+                                raise ValueError('invalid_initial_presteer_pwm')
+                            initial_pwm = validate_initial_presteer_pwm(int(initial[0]))
+                        except ValueError:
+                            self.reply(400, {'error': 'invalid_initial_presteer_pwm'})
+                            return
+                        self.reply(200, app.state(initial_presteer_pwm=initial_pwm))
                 elif path == '/api/vision':
                     self.reply(200, app.vision.snapshot() if app.vision else {'enabled': False})
                 elif path == '/api/lidar':
