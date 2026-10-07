@@ -641,7 +641,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-04"
     }
   ],
-  "latest_trial_status": "04 collision failure; presteer-first correction validated, pending locked deployment only; no further motor test authorized",
+  "latest_trial_status": "04 collision failure remains; corrected presteer-first16c0956 deployed and independently locked verified, no new arm/drive or physical turn test",
   "latest_user_proposal": "relax the minimum side distance on the side the vehicle turns toward",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -809,7 +809,7 @@
     }
   },
   "presteer_restore": {
-    "status": "validated_pending_locked_deployment",
+    "status": "deployed_locked_no_new_motion_trial",
     "straight_approach_removed": true,
     "required_order": "neutral motor -> slew steering to fresh left target -> actual adoption and3newcontrolticks plus1.2s ->1560 dynamic steering",
     "further_motion_authorized": false,
@@ -830,6 +830,115 @@
     },
     "rust_and_frontend_unchanged": true,
     "matching_bridge_sha256": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
-    "physical_acceptance": false
+    "physical_acceptance": false,
+    "vehicle_deployed": true,
+    "source_commit": "16c09560b35674656050c9ff5b3c7d05bf66d948",
+    "deployment": {
+      "source_commit": "16c09560b35674656050c9ff5b3c7d05bf66d948",
+      "archive_sha256": "bd62a192fa968d9656204981b26603e7e498bbd78a150982631f873c5b76596d",
+      "backup": "/home/bianbu/xt-stcar-console/backup-presteer-restore-20261007-134438",
+      "active_directory": "/home/bianbu/xt-stcar-console/20260917",
+      "installed_sha256": {
+        "app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+        "autonomy-control.py": "afb98cf0ef6908298ee9a2f5a0b85ac5d06b5a8984142d226c4e5d515c3d318c",
+        "autonomy_live.py": "da2ecc9bc360153bb75a2a493347a658407686e5cccfa064bd45d800d7117a86",
+        "coast_motion.py": "4726277416335bc50e472b49cee017ef0c00a529cc8331594c854556c4dfd257",
+        "index.html": "f4c71739afad72d3d0a17bafc8b286b412ca4289ab924a77a0fc516579fcf43f",
+        "server.py": "5103f1d471c805c40ae9751be14c31145db5c137b831058f8636631ba564c42d",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "28c38f31235dd46b08f00977a54fb81658c19a2ed638b175e04a9f03ebaec7d2",
+        "vehicle-bridge": "238a2c8fcb6f95f0faf7b3bbc2c0017c46d382524232af4e3b235ffb138e6ad4",
+        "start-console.py": "752449080665c0cf7c527c518657666c788b30ff9f4e30ebe07724ca7c4122ab"
+      },
+      "all_12_installed_hashes_match": true,
+      "target_static_python_compiled": 7,
+      "matching_bridge_unchanged": true,
+      "runtime_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "post_install_fresh_feedback_count": 10,
+      "independent_fresh_feedback_count": 10,
+      "independent_first_control_tick": 93180,
+      "independent_last_feedback": {
+        "boot": "3QWZyaRoJ1CPo_HIuUpm2Q",
+        "healthy": true,
+        "owner": null,
+        "active": null,
+        "mode": "locked",
+        "control": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "locked",
+          "seq": 0,
+          "servo": 1500,
+          "tick": 95156
+        },
+        "settings": {
+          "forward": 1550,
+          "reverse": 1450,
+          "left": 1650,
+          "right": 1350
+        },
+        "ages": {
+          "camera": 0.04546488400001181,
+          "lidar": 0.0228946340002949,
+          "control": 0.003770746000100189
+        },
+        "lidar_seq": 951,
+        "lidar_at_ms": 94993,
+        "lidar_age_s": 0.04266304000020682,
+        "turn_ready": false,
+        "turn_rejection": "left_corridor_unknown"
+      },
+      "startup_check_only": {
+        "boot": "3QWZyaRoJ1CPo_HIuUpm2Q",
+        "healthy": true,
+        "armed": false
+      },
+      "serial_owners": {
+        "/dev/car": {
+          "pid": 7361,
+          "role": "control",
+          "matched_active_bridge": true
+        },
+        "/dev/laser": {
+          "pid": 7365,
+          "role": "lidar",
+          "matched_active_bridge": true
+        }
+      },
+      "arm_or_drive_requests": 0,
+      "preserved_model_config_checks_passed": true,
+      "access_token_and_launch_command_preserved": true,
+      "rollback": null
+    },
+    "independent_readonly_preview": {
+      "turn_ready": true,
+      "motion_requested": false,
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 97395
+      },
+      "decision": {
+        "phase": "presteer",
+        "motor": 1500,
+        "servo": 1500,
+        "steering_target": 1682,
+        "turn_stage": "presteer",
+        "incoming_endpoint_current": true,
+        "scan_seq": 973,
+        "publication_at_ms": 97189
+      },
+      "not_evidence_of_continuous_ready_or_physical_turn": true
+    }
   }
 }

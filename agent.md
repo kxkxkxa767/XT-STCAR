@@ -1,14 +1,15 @@
 # XT-STCAR 接手与开发约定
 
-## 新窗口接手入口（2026-10-07，04无舵直进撞墙失败，先打舵更正已验证，待锁定部署；不发车）
+## 新窗口接手入口（2026-10-07，04无舵直进撞墙失败，先打舵更正已验证并锁定部署；不发车）
 
-**用户最新多次明确“继续修改/继续”，并纠正“转弯时应该先调整舵机，运行中决定继续往左或回中”。142dc02已成套部署并消费一次04授权；新无舵直进策略实际没有左转，用户明确“没有左转直接撞墙了”，这是碰撞失败，不能记成功。用户确认已完全停住。root补发全局stop获得ACK，6份新鲜反馈seq98/locked/armed=false/电机舵机1500。当前只更正程序及锁定更新，不再沿用04授权启动。下节“尚未部署/授权未消费”是历史，不能当当前入口。**
+**用户最新多次明确“继续修改/继续”，并纠正“转弯时应该先调整舵机，运行中决定继续往左或回中”。142dc02已成套部署并消费一次04授权；新无舵直进策略实际没有左转，用户明确“没有左转直接撞墙了”，这是碰撞失败，不能记成功。用户确认已完全停住。root补发全局stop获得ACK，6份新鲜反馈seq98/locked/armed=false/电机舵机1500。更正程序16c0956已成套备份/锁定更新并独立复核，本轮没有arm/drive，不再沿用04授权启动。下节“尚未部署/授权未消费”是历史，不能当当前入口。**
 
 - 04：run K3Xx7ry2wg079ZPMO-B3JYmJ，presteer43/motion52/coast0、steering_changes0，motor1560且舵机始终1500；software drive_elapsed1.6679s。最后服务scan925仍stage=approach/turn_released=false/corner_current=false，保存的旧端头0.09355m仅是历史字段，完整opening已丢失；代码继续直进，最终probe_obstacle_in_straight_corridor/completed=false。用户确认实际撞墙，无左转/无绕桩；仅软件锁定反馈无法倒推碰撞前物理已停。
-- 本次更正要撤除corner gate/straight-approach推进，恢复553的先渐变左预打舵：电机1500，舵机10PWM/100ms到当前真实目标，控制反馈采用目标后至少3个新tick和1.2s响应余量再1560；行驶中按新点云继续左打或渐回中，不固定最大档。正确的soft-board归并、native端头真实射线校验和中性front_sparse原3帧/300ms恢复保留；5s预打/10s前进/15s总期、原硬障/帧龄/急停/coast不回正PWM均不放宽。软件更正已完成：无corner/straight-approach控制路径，初始目标1500保持中性/start_ready=false/5s不延期，drive中新墙回中允许。237项Mac Python、目标板88项无设备模块/服务测试、独立128项turn/coast通过；原04前15份完整raw观测和实际control回放均presteer/motor1500（旧servo1500不算目标1681采用），不把回放称新物理轨迹。新module SHA28c38f31235dd46b08f00977a54fb81658c19a2ed638b175e04a9f03ebaec7d2、server5103f1d471c805c40ae9751be14c31145db5c137b831058f8636631ba564c42d，待成套锁定部署；不能当实车左转验收。
-- 车端目前仍142dc0208744595d9786b516722d03af72c4fdcf（server083eba8c/turn_motion30f317b5/匹配新桥238a2c8f），12安装哈希一致，7Python静态编译/依赖/无设备桥和独立10新反馈曾通过。备份`/home/bianbu/xt-stcar-console/backup-left-entry-20261007-113948`完整保存替换前553；`backup-soft-wall-20261007-110221`保存19dd，`backup-dynamic-turn-20261007-102438`保存直道8efc47b；全部保留。网页设置1550/1450/1650/1350、模型/视觉/校准/凭据/启动命令未改。
+- 本次更正要撤除corner gate/straight-approach推进，恢复553的先渐变左预打舵：电机1500，舵机10PWM/100ms到当前真实目标，控制反馈采用目标后至少3个新tick和1.2s响应余量再1560；行驶中按新点云继续左打或渐回中，不固定最大档。正确的soft-board归并、native端头真实射线校验和中性front_sparse原3帧/300ms恢复保留；5s预打/10s前进/15s总期、原硬障/帧龄/急停/coast不回正PWM均不放宽。软件更正已完成：无corner/straight-approach控制路径，初始目标1500保持中性/start_ready=false/5s不延期，drive中新墙回中允许。237项Mac Python、目标板88项无设备模块/服务测试、独立128项turn/coast通过；原04前15份完整raw观测和实际control回放均presteer/motor1500（旧servo1500不算目标1681采用），不把回放称新物理轨迹。新module SHA28c38f31235dd46b08f00977a54fb81658c19a2ed638b175e04a9f03ebaec7d2、server5103f1d471c805c40ae9751be14c31145db5c137b831058f8636631ba564c42d，已成套锁定部署；不能当实车左转验收。
+- 车端当前更正源码`16c09560b35674656050c9ff5b3c7d05bf66d948`（server5103f1d4/turn_motion28c38f31），匹配桥仍238a2c8f，Rust/前端未变。12安装哈希一致、包13项/目标板7Python静态编译/依赖/无设备桥通过。新完整备份`/home/bianbu/xt-stcar-console/backup-presteer-restore-20261007-134438`保存替换前142失败程序，用于复盘；`backup-left-entry-20261007-113948`保存553、`backup-soft-wall-20261007-110221`保存19dd、`backup-dynamic-turn-20261007-102438`保存直道8efc47b，全部保留，不把失败版本当好备份。网页1550/1450/1650/1350、模型/视觉/校准/凭据/启动命令均保持。
+- 安装后10份及独立10份新鲜反馈均healthy/owner=null/active=null/locked/armed=false/M=S1500；独立末control tick95156/seq0、lidar seq951/at_ms94993，boot3QWZyaRoJ1CPo_HIuUpm2Q。设备各一匹配桥持有（当时/dev/car7361、/dev/laser7365），下次重新读取。只读CLI后续一帧preview left target1682/M=S1500，真实端头诊断current；独立state末帧turn_ready=false/left_corridor_unknown，随后CLI为true，不能记持续可用或真实转弯通过。这轮没有arm/drive、没有新动力试验。
 - 碰撞后追加stop新鲜反馈control tick228470→229399、lidar seq2286→2295增长，最后seq98，healthy=true/owner=null/active=null/locked/M=S1500；这些是当时读数，下次重新读。物理停住来自用户确认，不称点云停稳/刹停模型通过。原始碰撞扫描/CLI/observer及人类陈述在work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-04/，stop记录在collision04-stop-stdout.json。
-- root独占SSH/硬件；模块和服务代理各自独占代码/测试，独立审计只读。验证后成套备份锁定更新、记录hash/settings/freshfeedback并按上传规范推送main；不再发正PWM，下一轮须重新摆车并明确新测试指令。好直道备份/队友原件保留。详见[最新失败与更正记录](docs/vehicle-dynamic-turn-validation-20261007.json)。
+- root独占SSH/硬件；模块和服务代理各自独占代码/测试，独立审计只读。已完成成套备份锁定更新、hash/settings/freshfeedback复核，文档按上传规范推送main；不再发正PWM，下一轮须重新摆车并明确新测试指令。好直道备份/队友原件保留。详见[最新失败与更正记录](docs/vehicle-dynamic-turn-validation-20261007.json)。
 
 ## 新窗口接手入口（2026-10-07，用户放回起点，实时端头起弯修复已验证，待成套部署及授权重试）
 
