@@ -2017,7 +2017,7 @@
     "independent_analysis": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-11/independent-analysis.json"
   },
   "candidate1690_mac_preparation": {
-    "latest_scope": "Mac compile and validation only; vehicle upload and testing deferred until operator returns",
+    "latest_scope": "operator returned and explicitly authorized upload; complete locked deployment, no motor trial",
     "reason_for_choice": "1720 actually turned tightly but collided with inside left wall; select lower allowed1690 as next candidate, not calibrated optimal or guaranteed safe",
     "default_initial_pwm": 1690,
     "new_mode_allowed_initial_range": [
@@ -2043,12 +2043,12 @@
     "independent_coast_mac_passed": 21,
     "python_compile_files": 9,
     "rust_source_unchanged_and_matching_bridge_reused": true,
-    "new_target_tests_run": false,
-    "vehicle_deployed": false,
+    "new_target_tests_run": true,
+    "vehicle_deployed": true,
     "new_motor_trial": false,
     "physical_acceptance": false,
-    "vehicle_last_known_source": "683e0243ff79a3fcb60d782e048b993a6aabcf6e",
-    "vehicle_last_known_initial_pwm": 1720,
+    "vehicle_last_known_source": "73e1f2f657298da16d0eb6a8c471a9907fdddddc",
+    "vehicle_last_known_initial_pwm": 1690,
     "source_sha256": {
       "web/vehicle-console/server.py": "ce3e3c7c5b03bb537cbfa227c02daed1d6fc783176b0942ec5951dbc4b9e6605",
       "web/vehicle-console/autonomy-control.py": "d3579a1a11e02b2075762ab732553a4023d1c29b0152808089dab8b15e9ecce5",
@@ -2063,6 +2063,82 @@
     "archive_nondirectory_files": 18,
     "delivery_ready_local_only": true,
     "no_vehicle_contact_after_latest_mac_only_instruction": true,
-    "pause_until_operator_returns": true
+    "pause_until_operator_returns": false,
+    "target_affected_passed": 47,
+    "deployment": {
+      "operator_request": "车已经连上了，你上传吧",
+      "source_commit": "73e1f2f657298da16d0eb6a8c471a9907fdddddc",
+      "backup": "/home/bianbu/xt-stcar-console/backup-candidate1690-20261007-190110",
+      "installed_hash_count": 14,
+      "all_installed_match": true,
+      "preserved_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "independent_fresh_sample_count": 10,
+      "final_locked_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 119387
+      },
+      "mode": "locked",
+      "healthy": true,
+      "default_initial_and_left_cap": {
+        "pure_instance_only": true,
+        "physical_evidence": false,
+        "default_initial_pwm": 1690,
+        "new_mode_integer_range": [
+          1690,
+          1720
+        ],
+        "left_drive_target_cap": 1690,
+        "presteer_max_s": 8,
+        "drive_max_s": 10,
+        "coast_max_s": 5,
+        "new_mode_loop_s": 0.12,
+        "old_loop_s": 0.08,
+        "old_presteer_s": 5,
+        "motor_output_requested": false
+      },
+      "parameter_get_previews": [
+        {
+          "requested": 1690,
+          "ready": true,
+          "rejection": null
+        },
+        {
+          "requested": 1700,
+          "ready": true,
+          "rejection": null
+        },
+        {
+          "requested": 1720,
+          "ready": true,
+          "rejection": null
+        }
+      ],
+      "models_config_credentials_launch_preserved": true,
+      "serial_unique_owners": {
+        "/dev/car": {
+          "pid": 2483,
+          "role": "control",
+          "matched_active_bridge": true
+        },
+        "/dev/laser": {
+          "pid": 2487,
+          "role": "lidar",
+          "matched_active_bridge": true
+        }
+      },
+      "arm_or_drive_requests": 0,
+      "ready_preview_not_physical_acceptance": true,
+      "manifest_generic_initial_fields_are_legacy_turn_left_fields": true
+    },
+    "requires_new_motor_test_request": true
   }
 }
