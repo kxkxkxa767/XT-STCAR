@@ -1,5 +1,16 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-10-07，预打8秒版本已成套锁定部署；尚未再试10）
+
+**最新用户“超时的阈值提高”已完成：newmode中性预打5→8s，初始1720/完整采用3tick及1.2s后1560；forward10/coast5、质量/时钟/车体距离/舵机渐变保持。源码b26e5f5已成套完整备份/锁定更新，14安装哈希一致。用户已重新登录SSH，338项Mac/38项车端纯计算确认通过；没有新的arm/drive，不自动发10。09授权已消费，只有预打到1720、0前进，5s超时；不能记左转或绕行成功。**
+
+- 09 run sdqgPckUmFgeYAJDpfnYNeuE，presteer139/motion0/coast0/末servo1720，全程motor1500；首次保存1720的pre_elapsed3.300遇front_sparse，原3新帧/300ms恢复后约3.755重做1.2s采用等待，最后4.84090等1.08648，5.00471锁定。这是中性预算不足，未给1560。用户观察转一下后回中不动，已据软件记录解释；没有用旧09状态恢复会话。
+- newSequence固定presteer8，原TurnMotion/defaultturn-left仍5；server报告/期限按实例8+drive10=18s、CLI8+drive10+coast5+1等待，外层once监督预备28s。没有改重复scan推进、质量恢复、PWM10/100ms、1720初始完整采用/3新tick/1.2s、目标确认/手动急停/收油后不正/no rearm。
+- 338项Mac Python/25序列/59服务CLI通过，目标板38项受影响纯计算通过（SSH掉线时未先声称通过，重新登录后取回38/40.55s OK）。真实09时限缺额反事实只说明尚差约.114s，不虚构后续扫描/物理成功。第一目标unknown compact-object左绕起段3s/累计drive10，完整两桶S/比赛仍未验收。
+- 当前车端源b26e5f5102d56a4f59ed2f96978d10ba8a160b06，桥238a2c8f未变；完整backup-turn10-20261007-162756保存41f旧5s版，全部早期失败/直道好8ef备份和队友文件保留。实际网页1550/1450/1650/1350、模型/配置/校准/凭据/启动命令保留。重连读到新boot后重新读取，不沿旧seq141。
+- 部署及独立各10份fresh healthy/locked/owner与active空/M=S1500，独立末seq0/tick54427；只读newmodeCLI预览ready=true/initial1720/pre8/drive10/coast5/motion_requested=false，oldmodepre5也核对。这些是当次软件反馈，下次重读，不当物理停稳证据。记录见[机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)；09原始完整目录work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-09/。
+- root独占SSH/硬件，按上传规范推main不强推。**保护退出不自动重跑**；新一次动力须用户新当次测试指令及车辆已静止，重新读fresh再单轮。已准备left-cone-trial-once-10.py但没有执行，不从“重新SSH登录”推导新的动力授权。
+
 ## 新窗口接手入口（2026-10-07，09达到1720但预打5s超时，用户要求提高预打期限）
 
 **用户确认静止并明确开始新一轮，已消费09授权；41f7680先完整预打到1720，但因front_sparse恢复与1.2s采用等待遇到总5s期限，仍0前进/0绕行，随后锁定1500。用户最新“超时的阈值提高”，本轮仅newmode中性presteer5→8s，drive10/coast5不扩。源码已冻结，338项Mac Python/25序列/59服务CLI通过；车端38专项结论因SSH掉线未取回，不能记passed。车端仍41旧5s，不自动发10。**

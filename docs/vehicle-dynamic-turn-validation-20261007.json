@@ -1607,13 +1607,13 @@
     "coast_max_s": 5,
     "initial_default_pwm": 1720,
     "scope": "neutral presteer only; settle3ticks1.2 and scan-quality recovery unchanged",
-    "status": "code frozen and mac338 passed; target38 result unavailable after SSH transport loss; not deployed or driven",
+    "status": "complete matched locked deployment and independent checks passed; no new motor trial after09",
     "mac_python_passed": 338,
     "sequence_unit_passed": 25,
     "service_cli_unit_passed": 59,
     "target_affected_expected": 38,
-    "target_affected_passed": null,
-    "target_validation_blocked": "SSH mux Broken pipe / connection timeout; need fresh login and read final log",
+    "target_affected_passed": 38,
+    "target_validation_blocked": null,
     "supervisor_max_s": 28,
     "cli_wait_budget_s_at_drive10": 24,
     "source_sha256": {
@@ -1621,7 +1621,199 @@
       "web/vehicle-console/autonomy-control.py": "732df3c0812c3ad8368a2c222700c014095973672f84de6ac9452a4961040778",
       "web/vehicle-console/maneuver_sequence.py": "e18bf106877e145641272396ca07942055701a586285231cdc4e4e3837d80a49"
     },
-    "vehicle_still_source": "41f768034203fda1031fe862fe1ba1249b6c2d2b",
-    "next_motor_test_not_authorized": true
+    "vehicle_still_source": "b26e5f5102d56a4f59ed2f96978d10ba8a160b06",
+    "next_motor_test_not_authorized": true,
+    "source_commit": "b26e5f5102d56a4f59ed2f96978d10ba8a160b06",
+    "target_result_recovered_after_operator_relogin": true,
+    "deployment": {
+      "backup": "/home/bianbu/xt-stcar-console/backup-turn10-20261007-162756",
+      "installed_hash_count": 14,
+      "all_installed_match": true,
+      "settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "independent_locked_samples": 10,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 54427
+      },
+      "default1720_preview": {
+        "healthy": true,
+        "control": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "locked",
+          "seq": 0,
+          "servo": 1500,
+          "tick": 56489
+        },
+        "turn_ready": true,
+        "rejection": null,
+        "preview": {
+          "phase": "presteer",
+          "motor": 1500,
+          "servo": 1500,
+          "steering_target": 1720,
+          "initial_presteer_pwm": 1720,
+          "initial_presteer_active": true,
+          "natural_steering_target": 1720,
+          "start_ready": true,
+          "request_coast": false,
+          "stop_requested": false,
+          "lock_requested": false,
+          "terminal_reason": null,
+          "reason": "left_turn_neutral_preview",
+          "observed_alignment": false,
+          "test_sequence_finished": false,
+          "entry_confirmed": false,
+          "completed": false,
+          "competition_navigation": false,
+          "candidate_only": true,
+          "turn_path_certified": false,
+          "physical_steering_confirmed": false,
+          "steering_allowance_s": 1.2,
+          "presteer_elapsed_s": 0,
+          "steering_settle_elapsed_s": 0,
+          "steering_settle_feedback_ticks": 0,
+          "drive_elapsed_s": 0,
+          "alignment_confirmations": 0,
+          "alignment_evidence": null,
+          "scan_seq": 563,
+          "publication_at_ms": 56307,
+          "geometry_mode": "opening_wall",
+          "geometry_missing": false,
+          "geometry_missing_s": 0,
+          "geometry_source_seq": 563,
+          "geometry_source_at_ms": 56307,
+          "turn_stage": "presteer",
+          "incoming_endpoint_current": true,
+          "incoming_endpoint": {
+            "source_seq": 563,
+            "source_at_ms": 56307,
+            "incoming_left_end_m": 0.5321097482938586,
+            "incoming_left_end_support": {
+              "angle_left_rad": 0.9075712110370509,
+              "index": 308,
+              "point_left_m": {
+                "x_m": 0.4783689663280368,
+                "y_m": 0.6122843555524228
+              },
+              "range_m": 0.777
+            },
+            "known_open_fraction": 1.0,
+            "candidate_only": true,
+            "turn_path_certified": false
+          },
+          "turn_goal": {
+            "candidate_only": true,
+            "center_offset_left_m": -1.3654493622436805,
+            "front_wall_m": 2.155509722493383,
+            "heading_left_rad": 1.6149555870951584,
+            "incoming_heading_left_rad": 0.09113968221883804,
+            "incoming_left_end_m": 0.5321097482938586,
+            "incoming_left_end_support": {
+              "angle_left_rad": 0.9075712110370509,
+              "index": 308,
+              "point_left_m": {
+                "x_m": 0.4783689663280368,
+                "y_m": 0.6122843555524228
+              },
+              "range_m": 0.777
+            },
+            "known_open_fraction": 1.0,
+            "observation_type": "left_opening_outer_wall_alignment",
+            "origin_between_exit_walls": false,
+            "outer_wall": {
+              "candidate_only": true,
+              "fit_error_m": 0.018204083799927634,
+              "heading_left_rad": 1.6149555870951584,
+              "points": 21,
+              "rho_left_m": -2.1771493493434426,
+              "support_end_left_m": {
+                "x_m": 2.0646177642331267,
+                "y_m": 2.3750710489610634
+              },
+              "support_span_m": 1.336924911083098,
+              "support_start_left_m": {
+                "x_m": 2.1319394778216236,
+                "y_m": 1.0398163601836923
+              }
+            },
+            "target_point_left_m": {
+              "x_m": 1.3028437746244947,
+              "y_m": 1.4469546009652692
+            },
+            "target_support_ray": {
+              "angle_left_rad": 0.8377580409572785,
+              "index": 312,
+              "range_m": 3.116,
+              "target_range_m": 1.9470694693133992
+            },
+            "turn_path_certified": false,
+            "width_m": 1.6233999741995242
+          },
+          "outer_wall": {
+            "candidate_only": true,
+            "fit_error_m": 0.018204083799927634,
+            "heading_left_rad": 1.6149555870951584,
+            "points": 21,
+            "rho_left_m": -2.1771493493434426,
+            "support_end_left_m": {
+              "x_m": 2.0646177642331267,
+              "y_m": 2.3750710489610634
+            },
+            "support_span_m": 1.336924911083098,
+            "support_start_left_m": {
+              "x_m": 2.1319394778216236,
+              "y_m": 1.0398163601836923
+            }
+          },
+          "corridor": {
+            "heading_left_rad": 1.6149555870951584,
+            "center_offset_left_m": -1.3654493622436805,
+            "width_m": 1.6233999741995242,
+            "candidate_only": true,
+            "turn_path_certified": false,
+            "origin_between_walls": false
+          },
+          "trial_scope": "first_lidar_compact_target_orbit_entry",
+          "compact_target": null,
+          "compact_target_reason": "compact_target_missing",
+          "handover_observed": false,
+          "orbit_reference_range_m": null,
+          "orbit_entry_elapsed_s": 0,
+          "orbit_entry_max_s": 3.0,
+          "presteer_max_s": 8.0,
+          "object_semantic_verified": false,
+          "passed_cones": null,
+          "competition_supported": false,
+          "wall_ambiguity_hold": false,
+          "semantic_class": "unknown"
+        },
+        "motion_requested": false,
+        "start_scope": "operator_placed_mid_segment",
+        "initial_presteer_pwm": 1720,
+        "initial_presteer_scope": "presteer_only_motor_neutral_then_live_geometry",
+        "trial_mode": "turn-cone",
+        "trial_scope": "first_lidar_compact_target_orbit_entry",
+        "semantic_class": "unknown",
+        "competition_supported": false,
+        "completed": false,
+        "turn_presteer_max_s": 8.0,
+        "turn_drive_max_s": 10.0,
+        "coast_max_s": 5.0
+      },
+      "default_old_left_presteer5_verified": true,
+      "new_presteer8_verified": true,
+      "no_arm_or_drive_requests": true,
+      "model_config_credentials_preserved": true
+    }
   }
 }
