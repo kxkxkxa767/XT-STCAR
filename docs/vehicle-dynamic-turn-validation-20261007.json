@@ -2055,6 +2055,14 @@
       "web/vehicle-console/maneuver_sequence.py": "6128ed67716f74f31a739ac1eda8d9d9723a0056c8a731276eb22d5cdd79ea3b"
     },
     "software_counterfactual_note": "recorded original raw scans produce lower early targets then same release; no1690 physical path/stop/collision certificate",
-    "counterfactual_report": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-11/candidate1690-target-counterfactual.json"
+    "counterfactual_report": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-11/candidate1690-target-counterfactual.json",
+    "source_commit": "73e1f2f657298da16d0eb6a8c471a9907fdddddc",
+    "mac_delivery_archive": "XT-STCAR-candidate1690-Mac-73e1f2f-20261007.tar.gz",
+    "archive_sha256": "bb3488ee47271ab0cab44eeb8c3017d9f7777e59b121b0cd8e3baa5ca87f40ec",
+    "archive_verified_hashes": 15,
+    "archive_nondirectory_files": 18,
+    "delivery_ready_local_only": true,
+    "no_vehicle_contact_after_latest_mac_only_instruction": true,
+    "pause_until_operator_returns": true
   }
 }
