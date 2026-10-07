@@ -1863,7 +1863,7 @@
     "presteer_s": 8,
     "drive_s": 10,
     "coast_s": 5,
-    "status": "frozen and validated; pending complete locked deployment; no new motor after10",
+    "status": "complete matched locked deployment and independent GET/hash checks passed; no new motor after10",
     "target_profile": {
       "recorded_scan_count": 16,
       "iterations_per_case": 30,
@@ -1902,6 +1902,34 @@
       "last_tick_compute_s",
       "max_tick_compute_s",
       "control_tick_timing_basis"
-    ]
+    ],
+    "source_commit": "683e0243ff79a3fcb60d782e048b993a6aabcf6e",
+    "deployment": {
+      "backup": "/home/bianbu/xt-stcar-console/backup-turn11-20261007-165653",
+      "installed_hash_count": 14,
+      "all_installed_match": true,
+      "settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "independent_locked_samples": 10,
+      "final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 66679
+      },
+      "initial_default": 1720,
+      "new_loop_limit_s": 0.12,
+      "old_loop80_verified": true,
+      "presteer8_verified": true,
+      "no_arm_or_drive_requests": true,
+      "model_config_credentials_preserved": true
+    },
+    "actual_live80ms_cause_not_claimed_resolved": true
   }
 }

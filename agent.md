@@ -1,5 +1,16 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-10-07，newmode120ms与共享锁优化已验证并锁定部署；尚未再试11）
+
+**最新用户要求“排查好了改了以后提一提这个上限”已完成：仅newmode控制循环80→120ms，owned GET不重复准入扫描/目录IO移锁外，加实际gap/锁等待/tick墙耗时。源码683e024成套完整备份/默认锁定部署，14安装哈希一致，独立GET确认new120/old80、初始1720/pre8。车辆M=S1500/armed=false，未新arm/drive。10授权已消费，只有中性预打两拍、0前进，不能记左转或绕行成功。**
+
+- 10 run 2tjwRPqHlqFT_d-5trWRXfph，pre2/motion0/coast0；软件最后请求1510，保存底盘servo最高1500，不能称实际采用1510。最后success turnscan3554/pre_elapsed.0717986/settle0、body.310618>.08、quality空；3554 raw未保存。autonomy_control_gap在新感知更新前退出，实际gap未记录，不把observer150ms或controlticks209ms当控制间隔。
+- 目标板30×16真实scan纯计算完整更新max27.048ms、wall21.816ms，不复现80ms，实际原因仍未精确归因。tick间隔含前拍运算+watch20ms+共享锁/调度；新source记录actual_gap_s/max、last/max_lock_wait_s、last/max_tick_compute_s、timing_basis（主机wall含调度等待，非CPU/物理）。halt同runid保留最后测量。owned GET明确clearance=None/admission拒绝，active.clearance_current原profile保留；files IO不再持控制lock。
+- new120只由内部maneuver_sequence会话选择，客户端不能自设门；默认直道/旧turn-left80，control age200/autohealth250/heartbeat300、初始1720完整采用3tick/1.2、预打8/drive10/coast5、质量/近距/急停/no正aftercoast/no rearm保持。342项Mac Python、63服务CLI/21独立coast、目标板42受影响纯计算通过；活动GET纯代码max4.90→.47ms为临时空目录，不当实际IO/WCET/现场成功认证。
+- 当前车端代码683e0243ff79a3fcb60d782e048b993a6aabcf6e，桥238a2c8f未变。完整backup-turn11-20261007-165653保存b26，所有好直道8ef/失败备份/队友原件保留；实际网页1550/1450/1650/1350与模型/配置/校准/凭据/启动命令保持。
+- 部署与独立各10份fresh healthy/locked/owner与active空/M=S1500，独立末seq0/tick66679；新只读CLI初始1720/pre8/loop.12/motion_requested=false，defaultGET loop.08也核对。都是当次软件反馈，下次重读，不认证物理停稳。最新[机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)，10原始/独立分析/profiler保留在work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-10/。
+- root独占SSH/硬件，按上传规范推main不强推。**保护退出不自动重跑**，新的动力须用户新当次指令和已静止；已准备once11但没有执行。第一unknown紧凑目标左绕起段限3s，共用drive10，完整两桶S/比赛尚未验收，不用假pose、模拟圈数或场地特化。
+
 ## 新窗口接手入口（2026-10-07，10因80ms控制间隔退出，用户要求排查后提高上限）
 
 **用户“开始测试吧”已消费一次10。b26车端8秒版本实际只presteer2、0动力，最后软件请求1510/目标1720；保存底盘舵反馈最高1500，不能称实际已采用1510。因autonomy_control_gap退出，不是8s、墙或车身距离门。用户最新“排查好了改了以后提一提这个上限”，正在仅newmode控制循环80→120ms并减状态查询锁内工作、加精确时延诊断；不自动发11。车端仍b26旧80ms。**
