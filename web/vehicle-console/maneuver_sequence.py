@@ -25,6 +25,7 @@ ORBIT_BEARING_GAIN = 100.0
 ORBIT_RANGE_GAIN = 70.0
 LEFT_TRIAL_GAIN = 180.0
 MAX_TREND_RELEASE_FRACTION = .20
+MAX_INNER_RELEASE_FRACTION = .20
 
 
 def validate_maneuver_initial_pwm(value):
@@ -168,12 +169,14 @@ class ManeuverSequence(TurnMotion):
         return max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
 
     def _limit_left_for_known_points(self, nominal, lookahead):
-        """Release left demand before a measured inside edge reaches the body.
+        """Apply a bounded release while a measured inside edge is still nearby.
 
         This is a relative-point steering heuristic, not a swept-path certificate
         or a mapping from PWM to wheel angle. The reference is the measured rear
-        body edge plus the existing clearance, never an assumed rear axle. The
-        hard current-body gate remains independent in the service.
+        body edge plus the existing clearance, never an assumed rear axle.
+        Its clearance bearing is only a correction signal: treating that small
+        bearing as an absolute PWM erased the needed exit-turn demand in trial15.
+        The hard current-body gate remains independent in the service.
         """
         scan = self._current_scan
         if not isinstance(scan, dict):
@@ -200,10 +203,17 @@ class ManeuverSequence(TurnMotion):
                 selected = {'index': index, 'range_m': distance,
                             'point_left_m': {'x_m': x, 'y_m': y},
                             'clearance_bearing_rad': clearance_bearing}
+        bearing_demand = target
+        # Retain the live exit/relative-target demand. Near points can release
+        # at most this fraction of the requested left offset from center; this
+        # is a trial gain, not a fixed minimum PWM or a physical steering limit.
+        target = nominal-round(MAX_INNER_RELEASE_FRACTION*(nominal-bearing_demand))
         self.inner_clearance = {
             'source_seq': scan.get('seq'), 'source_at_ms': scan.get('at_ms'),
             'scope': 'current_known_left_returns_only',
             'nominal_target_pwm': nominal, 'limited_target_pwm': target,
+            'clearance_bearing_demand_pwm': bearing_demand,
+            'max_release_fraction': MAX_INNER_RELEASE_FRACTION,
             'active': target < nominal, 'limiting_return': selected,
             'lookahead_m': lookahead, 'rear_reference_m': -rear,
             'left_reference_m': side, 'swept_path_certified': False,

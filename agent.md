@@ -1,14 +1,14 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-07，第14轮未完成，修正待实测；下一轮15）
+## 当前接手入口（2026-10-07，第15轮未完成，修正待实测；下一轮16）
 
 **当前目标：解决左转未到位，并衔接真实点云目标绕桩。本节为唯一当前入口；不要采用历史参数。**
 
-- 车端已部署源码 `4e33035c7666cd4e479cd099be04d9d861fdd664`，匹配 Rust 桥 SHA256 `199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9`。连续真实开口识别修复已上车，不是待部署。
+- 车端已部署源码 `8d905ca8447a601dcc0bda18af8cd0b4df44119e`，匹配 Rust 桥 SHA256 `199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9`。4e33035的连续真实开口识别修复保持，已上车，不是待部署。
 - 第14轮 run `CKS8ZeG0qR4FUHmdOQI3-DmU`：用户反馈“没有撞墙，但是没转到位”，`handover=false / completed=false`。软件前进约1.05948s，`probe_obstacle_close_body`退出；scan1244左前角已知回波到车身矩形7.25865cm，小于8cm门。最大控制间隔87.015ms，小于120ms，**不是超时**。
-- 本次接手用户已明确确认“已完全静止并复位”（斑马线后、车头朝原直道）。SSH现已恢复；`fresh-before-fix.json`的独立6份反馈同boot `75xl2u40hd51FC59KsHENA`，healthy/locked、armed=false、M=S1500、owner/active空，control tick1444614→1445757、lidar seq14468→14480递增。这是当次软件反馈，动力前仍读fresh，不把1500当物理瞬停。
-- 第13、14轮完整目录和开口修复完整部署记录已取回。13只准入拒绝、无arm/drive；14确有前进。已分析实际PWM采用和内侧墙端/净距：1670成熟后起步，早期又加到实存1710，内侧端头仍在车头前。新候选已在`maneuver_sequence.py`加入基于当帧已知左侧点和实量车体余量的提前减左约束，端头让开后恢复出口/真实目标反馈；尚未部署/实测。预打1670、1720上限、1560电机、原步幅/时间/8cm停车门均保持；不是物理曲率或扫掠证书。
-- 新证据不得覆盖旧证据，下一实际试验编号**15**。只实现第一真实点云紧凑目标的受限左绕入口，语义unknown；完整两桶S和比赛链未验收，不把候选、软件反馈或保护退出记成完成。
+- 第15轮 run `QcrBeVlAa5vERADbtc_0Ih2-`：前进约1.07024s，scan730前方+10..13°缺测触发`turn_perception_unavailable`；净距14.1519cm、未触发8cm门，不是超时。用户反馈转向不足；软件行驶采用1650→1550，目标1525，不能说始终1670或将PWM当轮角。未接管、completed=false，完整证据已取回。
+- 第15轮后用户已再次确认“已完全静止并复位”。SSH恢复，最新部署14个文件哈希核对一致；该轮末6份反馈healthy/locked、armed=false、M=S1500、owner/active空，boot `_oFcBJ97GaKIJsB8enxaaQ`、末tick74387。动力前仍读fresh，不把1500当物理瞬停。
+- 15的绝对夹角限幅减左过度。下一候选改为以出口/真实目标需求为主、内侧点云只施加最多20%的有界减量；不是固定1670下限，端头让开后恢复出口跟踪。尚未部署/实测，下一编号**16**；预打1670、上限1720、电机1560、原步幅/时间/8cm停车及缺测门均保持。只做语义unknown的首个真实紧凑目标受限入口，完整两桶S/比赛链未完成。
 
 ## 当前控制参数
 
@@ -32,10 +32,10 @@
 ## 下一步与证据位置
 
 1. 读本文件、[上传规范](上传规范.md)及[动态左转机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)。先fetch核对main，再修改。历史记录只按需检索。
-2. 已取回的14原始记录：`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-14/`；13同级。14摘要 `left-cone14-stdout.json`，原helper `left-cone-trial-once-14.py`保留，不重跑或覆盖。
-3. 完整部署记录：`work/vehicle-dynamic-deploy-20261007/resume-after14/opening-span-deployment-result.json`。原车端路径 `/home/bianbu/xt-stcar-console/stage-opening-span-20261007-201206/deployment-result.json`；13/14原始目录在同一base下。
+2. 已取回13/14/15原始目录：`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15}/`。摘要、原helper与完整记录保留，不重跑或覆盖；车端原目录在base下。
+3. 完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`：`opening-span-deployment-result.json`及`inner-clearance-deployment-result.json`。原车端stage分别为`stage-opening-span-20261007-201206`、`stage-inner-clearance-20261007-205728`，均在base下。
 4. 本次记录分析：`work/vehicle-dynamic-deploy-20261007/resume-after14/`。区分state采样与raw scan各自序号/时间，不把相邻扫描倒填成触发帧，不把PWM采用值当物理转角。
-5. 修正后按既有实车授权成套备份、默认锁定部署并核对哈希、设置及fresh反馈，再进行15。软件故障锁定不得因感知恢复自行rearm；每次退出先核对新中性反馈与必要现场事实。
+5. 修正后按既有实车授权成套备份、默认锁定部署并核对哈希、设置及fresh反馈，再进行16。软件故障锁定不得因感知恢复自行rearm；每次退出先核对新中性反馈与必要现场事实。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署
@@ -45,7 +45,7 @@
 - 车端base `/home/bianbu/xt-stcar-console`；活动目录 `20260917`，用户服务 `xt-stcar-console.service`。仅执行硬件的主agent持有控制；共享驾驶台采集与唯一串口所有者，不另开相机/雷达/底盘抢设备。
 - 更新须备份完整活动目录、入口、运行设置及私有配置，传齐8个Python模块、匹配Rust桥、入口、三前端和目标配置例；核对依赖、运行路径、安装哈希及锁定反馈。模型、视觉配置、雷达校准、访问码和启动命令保留。失败恢复整套。
 - 当前实际手动设置1550/1450/1650/1350；与内部turn-cone参数分开。重启会重置内存设置，部署前后核对实际值。
-- 已部署开口修复完整备份 `/home/bianbu/xt-stcar-console/backup-opening-span-20261007-201206`，保存此前7df/旧桥；不得删除。
+- 备份`/home/bianbu/xt-stcar-console/backup-inner-clearance-20261007-205728`保存4e整套；`backup-opening-span-20261007-201206`保存此前7df/旧桥，两者均不得删除。
 
 ## 长期约束
 

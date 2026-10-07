@@ -796,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "User resumed work and confirmed fully stopped and reset behind crosswalk facing original straight; standing direct-vehicle testing preference applies, no redundant motion permission question. Next trial15.",
+  "latest_authorization": "Standing direct-vehicle testing applies; user again confirmed fully stopped and reset after trial15. Next trial16, with fresh feedback; no automatic rearm after fault.",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -2496,12 +2496,15 @@
       "current_lines": 83,
       "history_remains_repository_relative": true
     },
-    "next_trial_number": 15,
-    "new_motor_trial_executed": false
+    "next_trial_number": 16,
+    "new_motor_trial_executed": true,
+    "executed_trial_numbers": [
+      15
+    ]
   },
   "inner_clearance_candidate": {
     "implemented": true,
-    "deployed": false,
+    "deployed": true,
     "physical_acceptance": false,
     "source": "web/vehicle-console/maneuver_sequence.py",
     "source_sha256": "044ca12ed621ac10452942feab9eb126c2012dd82e686cdc6c3fe06926eb00e9",
@@ -2517,7 +2520,120 @@
     "timeouts_heartbeats_quality_and_slew_unchanged": true,
     "extra_offline_suite_not_run_per_user_preference": true,
     "syntax_check_pending": false,
-    "next_validation": "matched locked deployment and live trial15 after fresh feedback; no automatic rearm after a software fault",
+    "next_validation": "Executed in trial15, left turn incomplete; superseded locally by bounded correction for trial16.",
+    "python_syntax_checked": true,
+    "deployed_source_commit": "8d905ca8447a601dcc0bda18af8cd0b4df44119e",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261007/resume-after14/inner-clearance-deployment-result.json",
+    "backup": "/home/bianbu/xt-stcar-console/backup-inner-clearance-20261007-205728",
+    "all_14_installed_hashes_match": true,
+    "physical_trial": 15,
+    "superseded_locally_by": "inner_clearance_bounded_candidate"
+  },
+  "turn15_actual": {
+    "vehicle_source_commit": "8d905ca8447a601dcc0bda18af8cd0b4df44119e",
+    "bridge_sha256": "199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9",
+    "run_id": "QcrBeVlAa5vERADbtc_0Ih2-",
+    "initial_pwm": 1670,
+    "left_max_pwm": 1720,
+    "motor_pwm": 1560,
+    "drive_elapsed_s": 1.0702364409999063,
+    "exit_reason": "turn_perception_unavailable",
+    "max_control_loop_gap_s": 0.0656084050001482,
+    "limit_s": 0.12,
+    "timeout": false,
+    "quality_issues": [
+      "front_sparse"
+    ],
+    "trigger_scan": 730,
+    "front_unknown_bins": [
+      10,
+      11,
+      12,
+      13
+    ],
+    "largest_gap_deg": 4,
+    "trigger_current_known_body_distance_m": 0.14151900105612694,
+    "body_stop_requested": false,
+    "last_turn_geometry_scan": 729,
+    "last_adopted_drive_servo": 1550,
+    "last_requested_servo": 1550,
+    "last_target_pwm": 1525,
+    "last_inner_clearance": {
+      "source_seq": 729,
+      "source_at_ms": 72872,
+      "scope": "current_known_left_returns_only",
+      "nominal_target_pwm": 1694,
+      "limited_target_pwm": 1525,
+      "active": true,
+      "limiting_return": {
+        "index": 307,
+        "range_m": 0.40499999999999997,
+        "point_left_m": {
+          "x_m": 0.2437350843765794,
+          "y_m": 0.32344738156915365
+        },
+        "clearance_bearing_rad": 0.1393290231758626
+      },
+      "lookahead_m": 0.8243625916821984,
+      "rear_reference_m": -0.28,
+      "left_reference_m": 0.25,
+      "swept_path_certified": false,
+      "physical_steering_confirmed": false
+    },
+    "handover": false,
+    "completed": false,
+    "operator_report": "你好像一直1670导致转弯角度不够",
+    "operator_turn_sufficient": false,
+    "collision_report": null,
+    "physical_wheel_angle_not_measured": true,
+    "physical_full_stop_confirmed": true,
+    "placement_reset_confirmed": true,
+    "stop_reset_confirmation": "已完全静止并复位",
+    "end_feedback": {
+      "healthy": true,
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 107,
+        "servo": 1500,
+        "tick": 74387
+      },
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "ages": {
+        "camera": 0.03544068600012906,
+        "lidar": 0.09544978200028709,
+        "control": 0.02061911400005556
+      }
+    },
+    "after_feedback_samples": 6,
+    "full_raw_retrieved": true,
+    "local_evidence": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-15",
+    "remote_evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261007-15",
+    "analysis": "Inner point bearing was incorrectly used as an absolute steering target and suppressed the live exit demand; bounded additive release is next candidate. The front sparse trigger had four actual missing bins at scan730; scan731 only one missing bin in that region. Do not fill unknowns or label the quality stop as success.",
+    "quality_gate_unchanged": true
+  },
+  "inner_clearance_bounded_candidate": {
+    "implemented": true,
+    "deployed": false,
+    "physical_acceptance": false,
+    "source": "web/vehicle-console/maneuver_sequence.py",
+    "source_sha256": "59c173c2ef102218d57f8fe57fb12a52f95f64f11afc170f18d9c247f21b451d",
+    "rule": "target = nominal - round(0.20 * (nominal - min(nominal, current_known_inner_bearing_demand)))",
+    "max_release_fraction_of_current_left_demand": 0.2,
+    "absolute_bearing_pwm_cap_removed": true,
+    "fixed_minimum_left_pwm": null,
+    "initial_pwm": 1670,
+    "left_max_pwm": 1720,
+    "motor_pwm": 1560,
+    "body_stop_m": 0.08,
+    "unknown_coverage_time_and_slew_gates_unchanged": true,
+    "no_course_specific_coordinates_or_lengths": true,
+    "extra_offline_suite_not_run_per_user_preference": true,
+    "next_trial_number": 16,
+    "next_validation": "matched locked deployment, independent hashes/fresh feedback, direct vehicle trial16; physical stop/reset confirmed after15",
     "python_syntax_checked": true
   }
 }
