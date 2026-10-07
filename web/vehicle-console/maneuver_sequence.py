@@ -10,7 +10,7 @@ import math
 from compact_target import CompactTargetTracker
 from autonomy_live import (REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M)
-from turn_motion import (TurnMotion, NEUTRAL, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
+from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
                          PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number)
 
 ORBIT_ENTRY_MAX_S = 3.0
@@ -47,6 +47,9 @@ class ManeuverSequence(TurnMotion):
         self.compact_target = None
         self.handover_observed = False
         self.orbit_since = self.orbit_reference_range_m = None
+        self.orbit_bias_pwm = None
+        self.handover_control = None
+        self.handover_wait_since = None
         self.orbit_track_id = None
         self.coast_since = None
         self.wall_ambiguity_hold = False
@@ -126,6 +129,8 @@ class ManeuverSequence(TurnMotion):
                       compact_target_reason=getattr(self.target_tracker, 'reason', None),
                       handover_observed=self.handover_observed,
                       orbit_reference_range_m=self.orbit_reference_range_m,
+                      orbit_bias_pwm=self.orbit_bias_pwm,
+                      handover_control=copy.deepcopy(self.handover_control),
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
                       presteer_max_s=self.max_presteer_s,
@@ -165,7 +170,7 @@ class ManeuverSequence(TurnMotion):
         reference = self.orbit_reference_range_m
         correction = (ORBIT_BEARING_GAIN*(target['bearing_left_rad']-ORBIT_BEARING_RAD)
                       + ORBIT_RANGE_GAIN*(target['range_m']-reference)/reference)
-        bias = self.initial_presteer_pwm
+        bias = self.orbit_bias_pwm if self.orbit_bias_pwm is not None else self.initial_presteer_pwm
         return max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
 
     def _limit_left_for_known_points(self, nominal, lookahead):
@@ -331,10 +336,31 @@ class ManeuverSequence(TurnMotion):
             self.begin_coast('compact_target_lost_or_ambiguous', now)
             self._slew(now)
             return self._result(now)
+        just_handed_over = False
         if not self.handover_observed:
+            # Continue the adopted left command across normal stage handover.
+            # A target never bypasses an ACK, neutral/protection stop or re-arms
+            # the bridge. This is command feedback, not physical wheel angle.
+            adopted = (control.get('motor') == TRIAL_MOTOR
+                       and control.get('servo') == self.servo > NEUTRAL
+                       and control.get('command_acked') is True)
+            if not adopted:
+                if self.handover_wait_since is None:
+                    self.handover_wait_since = now
+                if now-self.handover_wait_since+1e-9 >= SCAN_AGE_S:
+                    self.begin_coast('compact_handover_adoption_unconfirmed', now)
+                    self._slew(now)
+                else:
+                    self.reason = 'compact_handover_waiting_adopted_left'
+                return self._result(now)
             self.handover_observed = True
+            just_handed_over = True
             self.orbit_since = now
             self.orbit_reference_range_m = self.compact_target['range_m']
+            self.orbit_bias_pwm = control['servo']
+            self.handover_control = {key: control[key] for key in ('motor', 'servo', 'tick', 'seq')}
+            self.handover_control.update(command_acked=True, physical_steering_confirmed=False,
+                target_source_seq=scan['seq'], target_source_at_ms=scan['at_ms'])
             self.orbit_track_id = self.compact_target['track_id']
             self.wall_ambiguity_hold = False
             self.geometry_missing = True
@@ -348,6 +374,10 @@ class ManeuverSequence(TurnMotion):
         if now-self.orbit_since+1e-9 >= ORBIT_ENTRY_MAX_S:
             self.begin_coast('first_relative_object_entry_trial_timeout', now)
             self._slew(now)
+            return self._result(now)
+        if just_handed_over:
+            self.steering_target = self.natural_steering_target = self.orbit_bias_pwm
+            self.reason = 'first_relative_object_handover_keep_adopted_left'
             return self._result(now)
         self.steering_target = self._limit_left_for_known_points(
             self._relative_target_pwm(self.compact_target),

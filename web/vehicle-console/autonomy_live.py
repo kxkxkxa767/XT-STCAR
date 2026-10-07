@@ -18,14 +18,15 @@ FRONT_MAX_UNKNOWN = 6
 FRONT_MAX_GAP = 3
 CORRIDOR_HALF_WIDTH_M = .30
 CORRIDOR_LOOKAHEAD_M = 1.0
-# User measured lidar centre to both outside tyre boundaries on 2026-10-05.
-SIDE_BODY_EXTENT_M = .17
+# Operator's revised rough measurement, explicitly resolved to 28 cm total
+# width on 2026-10-07. No calibrated measurement-error bound was supplied.
+SIDE_BODY_EXTENT_M = .14
 SIDE_MIN_NET_M = .10
 LIDAR_RANGE_ALLOWANCE_M = .03  # Manufacturer's coarse 0..6 m accuracy reference.
 SIDE_CLEARANCE_M = SIDE_BODY_EXTENT_M + SIDE_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
 # Measured lidar-to-body extents; x is forward and y is right in this frame.
-FRONT_BODY_EXTENT_M = .21
-REAR_BODY_EXTENT_M = .20
+FRONT_BODY_EXTENT_M = .20
+REAR_BODY_EXTENT_M = .18
 MANEUVER_MIN_NET_M = .05
 MANEUVER_BODY_CLEARANCE_M = MANEUVER_MIN_NET_M + LIDAR_RANGE_ALLOWANCE_M
 # Vehicle bring-up limits, never a remembered course length or corner position.
@@ -497,6 +498,9 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
                 'coordinate_convention': 'x_forward_y_left',
                 'ray_bin_convention': 'clockwise_from_forward',
                 'body_extents_source': 'user_measured_lidar_to_front_rear_and_outer_tyre_edges',
+                'body_extents_measurement_date': '2026-10-07',
+                'body_extents_measurement_quality': 'operator_rough_measurement',
+                'body_extents_error_bound_m': None,
                 'body_extents_m': {'front': FRONT_BODY_EXTENT_M, 'rear': REAR_BODY_EXTENT_M,
                                    'left': SIDE_BODY_EXTENT_M, 'right': SIDE_BODY_EXTENT_M},
                 'body_rectangle_m': {'x_min': -REAR_BODY_EXTENT_M, 'x_max': FRONT_BODY_EXTENT_M,

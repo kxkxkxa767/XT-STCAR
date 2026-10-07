@@ -1,21 +1,34 @@
 {
   "schema_version": 1,
-  "measurement_source": "user_ruler_measurement",
-  "measurement_date": "2026-10-06",
+  "measurement_source": "user_rough_measurement",
+  "measurement_date": "2026-10-07",
   "reference_origin": "lidar_rotation_center",
   "coordinate_convention": "x_forward_y_left_yaw_left_positive",
   "wheelbase_m": 0.25,
   "straight_footprint": {
-    "front_m": 0.21,
-    "rear_m": 0.20,
-    "left_m": 0.17,
-    "right_m": 0.17
+    "front_m": 0.2,
+    "rear_m": 0.18,
+    "left_m": 0.14,
+    "right_m": 0.14
   },
-  "side_measurement_date": "2026-10-05",
+  "side_measurement_date": "2026-10-07",
   "measurement_error_bound_m": null,
   "lidar_to_rear_axle_m": null,
   "steering_angle_or_curvature_map": null,
   "turning_swept_footprint_validated": false,
   "stopping_envelope_calibrated": false,
-  "navigation_validated": false
+  "navigation_validated": false,
+  "wheelbase_measurement_date": "2026-10-06",
+  "operator_width_resolution": "按左右各14cm，总宽28cm",
+  "raw_initial_measurement_statement": "车长38，宽（到轮胎外侧）30，雷达原点到车前20到车尾18到左右两侧距离一样14，只是粗测",
+  "previous_footprint_measurement": {
+    "measurement_date": "2026-10-06",
+    "side_measurement_date": "2026-10-05",
+    "front_m": 0.21,
+    "rear_m": 0.2,
+    "left_m": 0.17,
+    "right_m": 0.17,
+    "superseded_by_operator_rough_measurement_on": "2026-10-07"
+  },
+  "measurement_note": "Gross rectangular envelope only; detailed tyre/chassis outline, error bound, turning sweep and stopping envelope remain uncalibrated. Original 3cm lidar range allowance is retained, not a claimed bound on geometry error."
 }

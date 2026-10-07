@@ -796,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "Standing direct-vehicle testing applies; user again confirmed fully stopped and reset after trial15. Next trial16, with fresh feedback; no automatic rearm after fault.",
+  "latest_authorization": "User accepted trial16 left turn, no collision, requests continuous left steering into real lidar-target orbit. Fully stopped/reset after16 confirmed. Revised rough geometry explicitly resolved to front20/rear18/left14/right14cm, total38x28cm. Update and directly test trial17 under standing authorization; preserve 8cm gate and no automatic rearm.",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -2496,10 +2496,11 @@
       "current_lines": 83,
       "history_remains_repository_relative": true
     },
-    "next_trial_number": 16,
+    "next_trial_number": 17,
     "new_motor_trial_executed": true,
     "executed_trial_numbers": [
-      15
+      15,
+      16
     ]
   },
   "inner_clearance_candidate": {
@@ -2617,7 +2618,7 @@
   },
   "inner_clearance_bounded_candidate": {
     "implemented": true,
-    "deployed": false,
+    "deployed": true,
     "physical_acceptance": false,
     "source": "web/vehicle-console/maneuver_sequence.py",
     "source_sha256": "59c173c2ef102218d57f8fe57fb12a52f95f64f11afc170f18d9c247f21b451d",
@@ -2633,7 +2634,154 @@
     "no_course_specific_coordinates_or_lengths": true,
     "extra_offline_suite_not_run_per_user_preference": true,
     "next_trial_number": 16,
-    "next_validation": "matched locked deployment, independent hashes/fresh feedback, direct vehicle trial16; physical stop/reset confirmed after15",
-    "python_syntax_checked": true
+    "next_validation": "Left turn behavior retained at operator request; normal continuous handover candidate pending; complete sequence still unaccepted.",
+    "python_syntax_checked": true,
+    "deployed_source_commit": "5ec5b737a9de387dfd2a0541155fdb2b8eb7eb9a",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261007/resume-after14/bounded-inner-deployment-result.json",
+    "backup": "/home/bianbu/xt-stcar-console/backup-bounded-inner-20261007-210822",
+    "all_14_installed_hashes_match": true,
+    "physical_trial": 16,
+    "operator_left_turn_accepted": true
+  },
+  "turn16_actual": {
+    "vehicle_source_commit": "5ec5b737a9de387dfd2a0541155fdb2b8eb7eb9a",
+    "bridge_sha256": "199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9",
+    "run_id": "D27CnOYfvo9kN7K_sJEbMxhs",
+    "drive_elapsed_s": 1.0790464120000252,
+    "exit_reason": "probe_obstacle_close_body",
+    "trigger_scan": 832,
+    "current_known_body_distance_m": 0.048038101413680145,
+    "trigger_point": {
+      "angle_deg": 316,
+      "range_m": 0.311,
+      "forward_x_m": 0.2237146779053204,
+      "left_y_m": 0.21603875321274824,
+      "body_distance_m": 0.048038101413680145
+    },
+    "body_stop_requested": true,
+    "max_control_loop_gap_s": 0.06306344299991906,
+    "control_loop_limit_s": 0.12,
+    "timeout": false,
+    "quality_issues": [],
+    "initial_pwm": 1670,
+    "motor_pwm": 1560,
+    "left_max_pwm": 1720,
+    "max_saved_drive_adopted_servo": 1685,
+    "last_saved_drive_adopted_servo": 1615,
+    "last_target_pwm": 1615,
+    "last_nominal_pwm": 1644,
+    "handover": false,
+    "completed": false,
+    "operator_report": "没有碰撞，这次可以了保持舵机向左接着绕转看看，把绕桩加进去左转后不回正，接着绕桩看看",
+    "collision_reported": false,
+    "operator_left_turn_accepted": true,
+    "complete_orbit_not_accepted": true,
+    "physical_stop_reset_confirmed": true,
+    "stop_reset_statement": "已完全静止并复位",
+    "end_feedback": {
+      "healthy": true,
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 112,
+        "servo": 1500,
+        "tick": 84572
+      },
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "ages": {
+        "camera": 0.05581220199974268,
+        "lidar": 0.09518268400006491,
+        "control": 0.013042337000115367
+      }
+    },
+    "full_raw_retrieved": true,
+    "local_evidence": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-16",
+    "remote_evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261007-16",
+    "first_saved_shape_candidate_scan": 835,
+    "shape_candidate_after_stop_publication_delta_ms": 302,
+    "first_saved_shape_candidate": {
+      "point_left_m": [
+        0.2740174305228984,
+        1.101243126345117
+      ],
+      "range_m": 1.1348224423022037,
+      "bearing_left_rad": 1.3269233301080618,
+      "diameter_m": 0.16729897697202564,
+      "point_count": 9,
+      "support_bins": [
+        280,
+        281,
+        282,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288
+      ]
+    },
+    "saved_shape_candidate_is_not_live_handover_or_semantic_confirmation": true,
+    "diagnosis_path": "work/vehicle-dynamic-deploy-20261007/resume-after14/compact-target-14-15-16-diagnosis.json"
+  },
+  "continuous_left_handover_candidate": {
+    "implemented": true,
+    "deployed": false,
+    "physical_acceptance": false,
+    "source": "web/vehicle-console/maneuver_sequence.py",
+    "source_sha256": "6a45300bd04bb5c1d14533e5db386e85fe36223eca3f5f9828a581ae1608d8c6",
+    "left_turn_policy_unchanged_from_operator_accepted_16": true,
+    "normal_handover": "require current confirmed compact target and acknowledged adopted positive-left PWM at motor1560; preserve that adopted servo for first handover output, then use it as relative orbit bias",
+    "replaces_old_orbit_bias": "selected initial presteer value; not the current adopted left command",
+    "missing_adoption_wait_max_s": 0.3,
+    "adoption_wait_does_not_rearm_or_renew_target": true,
+    "body_quality_time_slew_gates_unchanged": true,
+    "normal_handover_does_not_bypass_current_8cm_guard": true,
+    "motor_after_protection_does_not_resume": true,
+    "first_target_entry_budget_s": 3,
+    "cumulative_drive_budget_s": 10,
+    "full_two_target_S_complete": false,
+    "next_trial": 17,
+    "physical_footprint_measurements_requested": false,
+    "pending_measurement_not_used_to_change_body_model": false,
+    "python_syntax_checked": true,
+    "extra_offline_suite_not_run_per_user_preference": true,
+    "new_geometry_confirmed_by_operator": true
+  },
+  "geometry_revision_20261007": {
+    "source": "config/vehicle-geometry-measured-20261006.json",
+    "raw_operator_statement": "车长38，宽（到轮胎外侧）30，雷达原点到车前20到车尾18到左右两侧距离一样14，只是粗测",
+    "width_confirmation": "按左右各14cm，总宽28cm",
+    "measurement_quality": "rough",
+    "measurement_error_bound_m": null,
+    "current_rectangular_extents_m": {
+      "front_m": 0.2,
+      "rear_m": 0.18,
+      "left_m": 0.14,
+      "right_m": 0.14
+    },
+    "superseded_extents_m": {
+      "measurement_date": "2026-10-06",
+      "side_measurement_date": "2026-10-05",
+      "front_m": 0.21,
+      "rear_m": 0.2,
+      "left_m": 0.17,
+      "right_m": 0.17,
+      "superseded_by_operator_rough_measurement_on": "2026-10-07"
+    },
+    "wheelbase_m": 0.25,
+    "wheelbase_remeasured_today": false,
+    "min_net_clearance_m": 0.05,
+    "lidar_range_allowance_m": 0.03,
+    "body_stop_m": 0.08,
+    "old_raw_results_not_relabelled_using_new_shape": true,
+    "gross_rectangle_not_detailed_chassis_outline": true,
+    "rust_opening_span_minimum_m": 0.5,
+    "rust_opening_gate_retained_conservatively_unchanged": true,
+    "vehicle_deployed": false,
+    "physical_acceptance": false,
+    "source_sha256": "6d0a67792c7c484ea312a6cc5da5f491b50051715d9ba76f13c4596b9735db8b"
   }
 }
