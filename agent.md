@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 新窗口接手入口（2026-10-07，12再次撞墙；用户确认静止/复位，初1670与非对称步幅待13）
+
+**用户最新“还是撞上了，初始1670看看，变化幅度可以大点”，已确认物理完全停住、复位斑马线后/车头朝原直道，并明确选择预打和减左20PWM、加左仍10PWM（100ms间隔）。本次13授权待消费；此前“不验证直接上车测试”继续，不再启动额外suite。root先最小改源/成套锁定上传，再执行13一次；不自动多轮。当前车端f3初1690/leftmax1720/旧10步。**
+
+- 12 run FWRZJdQstplzM2zRu0Ay_IZA：pre134/motion33/coast0/drive1.16959s，末请求1680/目标1623，reason=probe_obstacle_close_body、min当前矩形净距2.7283cm<8cm、nearest316/r.284/x.204293/y.197283；nohandover/completed=false，用户确认撞墙，碰撞失败。maxgap84.382ms<120、max锁等1.873ms、max主机tickwall63.085ms，本次不是时序门。
+- 最后6fresh locked/healthy/unowned/M=S1500/seq169；root碰撞后另stop并新6freshseq170，用户已确认物理停住和复位（不凭sensor认证）。12原始完整work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-12/，错误1690行驶cap早已撤回。
+- 新mode DEFAULT/MIN1670..1720，1690初值已被最新1670覆盖；LEFT总上限1720。仅newSequence预打M1500step20，减左step20，加左仍step10，100ms不catchup；降过中心先1500，coast从中性向右保持10。pre8/drive10/entry3/coast5、采用3新tick/1.2、loop120/old80、controlage200/autohealth250/hb300、body净5+粗3=.08、质量/时钟/急停/no正aftercoast/no rearm保持。旧TurnMotion1650..1720及10步不变，不用赛道特化/假pose。
+- 按用户明确要求只改必要source/断言期望，不新跑Mac/目标板suite；不能把旧347或旧47声称新1670/20步已验证。车辆root独占，新的13严格一次，真实反馈/现场结果分别记，不宣称初1670可解决碰撞。
+
 ## 新窗口接手入口（2026-10-07，用户纠正左转上限1720，并要求不再验证直接上传实测）
 
 **最新用户“左转上限是1720”“不要验证直接上车测试”优先：root承认把1690作全left-drive cap误解。新源恢复初始预打1690、所有左转动态上限1720，每100ms最多10PWM，不给突变；其他budget/profile/heartbeat不改。按用户要求不再启动额外验证套件，改完直接成套锁定上传后执行用户本次12一次授权。本次12尚未执行。车端当前仍73e旧错误cap1690，不能当已改1720。**

@@ -2160,8 +2160,81 @@
       "last_two_assertions_added_not_rerun": true
     },
     "single12_authorized_by_latest_request": true,
-    "single12_executed": false,
-    "status": "corrected source frozen; pending locked upload then one authorized real trial",
-    "no_collision_resolution_claim": true
+    "single12_executed": true,
+    "status": "f3 corrected source fully locked deployed then single12 executed; actual collision failure",
+    "no_collision_resolution_claim": true,
+    "source_commit": "f3a6d26247f146f6b134902e39da5d456b2a69a7",
+    "deployed": true
+  },
+  "turn12_actual": {
+    "source_commit": "f3a6d26247f146f6b134902e39da5d456b2a69a7",
+    "operator_authorized": "不要验证直接上车测试",
+    "authorization_consumed": true,
+    "operator_observation": {
+      "collision": true,
+      "collision_statement": "还是撞上了",
+      "fully_stopped_confirmed": true,
+      "next_placement_confirmed": "已放回斑马线后，车头朝原直道",
+      "next_parameters": "初始1670；预打及减小左舵20PWM，加左舵仍10PWM",
+      "extra_validation_waived_still_applies": true
+    },
+    "conclusion": "collision failure; no orbit handover/completion",
+    "result": {
+      "run_id": "FWRZJdQstplzM2zRu0Ay_IZA",
+      "presteer_ticks": 134,
+      "motion_ticks": 33,
+      "coast_ticks": 0,
+      "steering_changes": 26,
+      "reason": "probe_obstacle_close_body",
+      "completed": false,
+      "handover_observed": false,
+      "last_requested_servo": 1680,
+      "last_natural_target": 1623,
+      "drive_elapsed_s": 1.1695881799998915,
+      "last_turn_scan": 769,
+      "body_distance_m": 0.027282977210355275,
+      "body_stop_m": 0.08,
+      "timing": {
+        "max_actual_gap_s": 0.08438167700001031,
+        "max_lock_wait_s": 0.0018731210000169085,
+        "max_tick_compute_s": 0.06308475800005908
+      },
+      "fresh_final_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 169,
+        "servo": 1500,
+        "tick": 78385
+      },
+      "healthy": true,
+      "mode": "locked",
+      "owner": null,
+      "active": null,
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-12/"
+    }
+  },
+  "initial1670_step_change": {
+    "operator_request": "初始1670看看，变化幅度可以大点",
+    "operator_confirmed_choice": "预打及减小左舵20PWM，加左舵仍10PWM",
+    "default_initial": 1670,
+    "new_initial_range": [
+      1670,
+      1720
+    ],
+    "left_max": 1720,
+    "presteer_step": 20,
+    "left_release_step": 20,
+    "left_increase_step": 10,
+    "interval_ms": 100,
+    "center_crossing": "stop at1500 first before changing to right during coast",
+    "budgets_profile_health_unchanged": true,
+    "extra_suite_not_run_as_requested": true,
+    "operator_stop_confirmed": true,
+    "operator_reset_confirmed": true,
+    "single13_authorized": true,
+    "single13_executed": false,
+    "status": "minimal source frozen; no extra suite; pending locked upload then single13",
+    "new_tests_run": false
   }
 }

@@ -86,7 +86,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(steps[-1]['servo'], 1700)
         self.assertGreaterEqual(steps[-1]['steering_settle_feedback_ticks'], 3)
         self.assertGreaterEqual(steps[-1]['steering_settle_elapsed_s']+1e-9, 1.2)
-        self.assertTrue(all(abs(a['servo']-b['servo']) <= 10 for a, b in zip(steps, steps[1:])))
+        self.assertTrue(all(abs(a['servo']-b['servo']) <= 20 for a, b in zip(steps, steps[1:])))
 
     def test_side_target_can_handover_while_wall_is_not_forward(self):
         h = Harness()
@@ -322,7 +322,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         h.motion._measurement = original
         result = h.step()
         self.assertEqual(result['phase'], 'presteer')
-        self.assertEqual(result['servo'], held['servo']+10)
+        self.assertEqual(result['servo'], held['servo']+20)
         self.assertEqual(result['steering_settle_feedback_ticks'], 0)
         while result['phase'] == 'presteer':
             result = h.step()
@@ -362,8 +362,8 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(result['phase'], 'locked')
         self.assertEqual(result['reason'], 'left_turn_outer_wall_ambiguous')
 
-    def test_default_1690_is_fully_adopted_before_any_forward_output(self):
-        h = Harness(initial=1690)
+    def test_default_1670_is_fully_adopted_before_any_forward_output(self):
+        h = Harness(initial=1670)
         h.motion = ManeuverSequence(0.)
         self.assertEqual(h.motion.initial_presteer_pwm, DEFAULT_INITIAL_PWM)
         earlier = []
@@ -371,9 +371,9 @@ class ManeuverSequenceTests(unittest.TestCase):
             result = h.step()
             if result['phase'] == 'drive': break
             earlier.append(result)
-        self.assertTrue(any(v['servo'] == 1680 for v in earlier))
+        self.assertTrue(any(v['servo'] == 1660 for v in earlier))
         self.assertTrue(all(v['motor'] == 1500 for v in earlier))
-        self.assertEqual(result['servo'], 1690)
+        self.assertEqual(result['servo'], 1670)
         self.assertEqual(result['motor'], 1560)
         self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
         self.assertGreaterEqual(result['steering_settle_elapsed_s']+1e-9, 1.2)
@@ -416,7 +416,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         now = (second['at_ms']-initial['geometry_source_at_ms'])/1000
         control.update(seq=13, tick=64000)
         recovery = motion.update({**second, 'received_at': now}, 0., now, control)
-        self.assertEqual((recovery['phase'], recovery['motor'], recovery['servo']), ('presteer', 1500, 1550))
+        self.assertEqual((recovery['phase'], recovery['motor'], recovery['servo']), ('presteer', 1500, 1560))
         self.assertEqual(recovery['geometry_source_seq'], 639)
         self.assertEqual(recovery['steering_target'], 1700)
         self.assertEqual(recovery['steering_settle_feedback_ticks'], 0)
@@ -490,10 +490,10 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(result['reason'], 'left_turn_presteer_timeout')
 
     def test_new_initial_candidate_range_is_strict_and_old_turn_range_is_preserved(self):
-        for value in range(1690, 1721):
+        for value in range(1670, 1721):
             self.assertEqual(validate_maneuver_initial_pwm(value), value)
             self.assertEqual(ManeuverSequence(0., initial_presteer_pwm=value).initial_presteer_pwm, value)
-        for value in [None, True, False, 1690., '1690', 1689, 1650, 1721, float('nan')]:
+        for value in [None, True, False, 1670., '1670', 1669, 1650, 1721, float('nan')]:
             with self.subTest(value=value):
                 with self.assertRaisesRegex(ValueError, 'invalid_maneuver_initial_presteer_pwm'):
                     validate_maneuver_initial_pwm(value)
@@ -538,7 +538,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertLessEqual(second['servo']-first['servo'], 10)
         self.assertTrue(second['handover_observed'])
 
-    def test_1690_preparation_matures_then_drive_can_gradually_request_1720(self):
+    def test_1670_preparation_matures_then_drive_can_gradually_request_1720(self):
         motion = ManeuverSequence(0.)
         servo, motor = 1500, 1500
         earlier = []
@@ -554,13 +554,13 @@ class ManeuverSequenceTests(unittest.TestCase):
             if result['phase'] == 'drive': break
             earlier.append(result)
         self.assertTrue(all(v['motor'] == 1500 for v in earlier))
-        self.assertEqual(result['initial_presteer_pwm'], 1690)
-        self.assertEqual(result['servo'], 1690)
+        self.assertEqual(result['initial_presteer_pwm'], 1670)
+        self.assertEqual(result['servo'], 1670)
         self.assertEqual(result['motor'], 1560)
         self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
         self.assertGreaterEqual(result['steering_settle_elapsed_s']+1e-9, 1.2)
         previous_servo = servo
-        for _ in range(3):
+        for _ in range(5):
             seq += 1
             value = scan(seq, seq/10)
             value['corridor_candidates'] = [corridor(90), corridor(-90)]

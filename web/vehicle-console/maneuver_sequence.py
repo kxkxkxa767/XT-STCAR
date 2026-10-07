@@ -9,13 +9,15 @@ import math
 
 from compact_target import CompactTargetTracker
 from turn_motion import (TurnMotion, NEUTRAL, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
-                         _FRAME, _freeze, _number)
+                         PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number)
 
 ORBIT_ENTRY_MAX_S = 3.0
 COAST_MAX_S = 5.0
 PRESTEER_MAX_S = 8.0
-DEFAULT_INITIAL_PWM = 1690
-INITIAL_PWM_MIN = 1690
+DEFAULT_INITIAL_PWM = 1670
+INITIAL_PWM_MIN = 1670
+PRESTEER_PWM_STEP = 20
+LEFT_RELEASE_PWM_STEP = 20
 ORBIT_BEARING_RAD = math.pi/2
 ORBIT_BEARING_GAIN = 100.0
 ORBIT_RANGE_GAIN = 70.0
@@ -52,6 +54,19 @@ class ManeuverSequence(TurnMotion):
         if self.phase not in ('coast', 'locked') and _number(now) and now >= self.last_now:
             self.coast_since = now
         super().begin_coast(reason, now)
+
+    def _slew(self, now):
+        if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != self.steering_target:
+            target = self.steering_target
+            reducing_left = self.servo > NEUTRAL and target < self.servo
+            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else (
+                LEFT_RELEASE_PWM_STEP if reducing_left else PWM_STEP)
+            if reducing_left and target < NEUTRAL:
+                target = NEUTRAL  # First release to center; a later right step stays at 10.
+            delta = max(-step, min(step, target-self.servo))
+            self.servo += delta
+            self.last_change = now  # One step only; delayed ticks never catch up.
+            self.settle_since = None
 
     def lock(self, reason):
         # Only this experimental sequence may hold its last actually commanded
@@ -110,6 +125,9 @@ class ManeuverSequence(TurnMotion):
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
                       presteer_max_s=self.max_presteer_s,
                       left_turn_servo_cap=SERVO_MAX,
+                      steering_step_policy={'presteer': PRESTEER_PWM_STEP,
+                          'reduce_left': LEFT_RELEASE_PWM_STEP, 'increase_left': PWM_STEP,
+                          'center_to_right': PWM_STEP, 'interval_s': PWM_INTERVAL_S},
                       object_semantic_verified=False, passed_cones=None,
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,
@@ -169,7 +187,7 @@ class ManeuverSequence(TurnMotion):
         self.last_error = error
         # Initial PWM selects neutral preparation only. After adoption, the
         # current measured turn error may request the full 1720 bound; _slew
-        # still changes the command by at most 10 per 100 ms.
+        # still uses the phase/direction step limit per 100 ms.
         target = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
         self._last_actual_left_target = target if target > NEUTRAL else None
         return target

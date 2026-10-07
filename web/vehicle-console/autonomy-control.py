@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S, CONTROL_AGE_LIMIT_S
 from turn_motion import parse_trial_goal, validate_initial_presteer_pwm, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, SERVO_MAX
+_DEFAULT_INITIAL_PRESTEER = object()
 
 
 class ProbeInterrupted(RuntimeError):
@@ -129,9 +130,11 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
     return report
 
 
-def first_compact_target_trial(request, state, max_seconds, placement_confirmed, initial_presteer_pwm=1690):
+def first_compact_target_trial(request, state, max_seconds, placement_confirmed, initial_presteer_pwm=_DEFAULT_INITIAL_PRESTEER):
     """One continuous left turn and first lidar target orbit-entry experiment."""
-    from maneuver_sequence import validate_maneuver_initial_pwm
+    from maneuver_sequence import DEFAULT_INITIAL_PWM, validate_maneuver_initial_pwm
+    if initial_presteer_pwm is _DEFAULT_INITIAL_PRESTEER:
+        initial_presteer_pwm = DEFAULT_INITIAL_PWM
     validate_maneuver_initial_pwm(initial_presteer_pwm)
     return left_turn_trial(request, state, max_seconds, placement_confirmed,
                            initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=True)
@@ -180,6 +183,7 @@ def straight_segment(request, state, pwm, max_seconds, expected_run_id=None, sto
 
 
 def main():
+    from maneuver_sequence import DEFAULT_INITIAL_PWM, INITIAL_PWM_MIN, validate_maneuver_initial_pwm
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['status', 'probe', 'straight', 'to-left-junction', 'turn-left', 'turn-cone',
         'trial-goal-status', 'trial-goal-register', 'goal-status', 'goal-straight', 'stop'])
@@ -190,7 +194,7 @@ def main():
     parser.add_argument('--execute', action='store_true', help='explicit motion request; motion commands otherwise only query state')
     parser.add_argument('--placement-confirmed', action='store_true', help='operator confirms stopped mid-segment placement for this one left trial')
     parser.add_argument('--initial-presteer-pwm', type=initial_presteer_argument,
-        help='neutral-motor presteer: turn-left 1650..1720; turn-cone 1690..1720, default 1690')
+        help=f'neutral-motor presteer: turn-left 1650..1720; turn-cone {INITIAL_PWM_MIN}..{SERVO_MAX}, default {DEFAULT_INITIAL_PWM}')
     parser.add_argument('--goal-file', type=Path, help='Local target-only JSON for explicit trial-goal-register')
     parser.add_argument('--trial-goal-id', help='Use a registered trial intent; arbitrary point execution requires real pose')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
@@ -201,12 +205,11 @@ def main():
         parser.error('turn-cone is a direct first-target placement trial and accepts no --trial-goal-id')
     initial_presteer_pwm = args.initial_presteer_pwm
     if args.command == 'turn-cone':
-        from maneuver_sequence import DEFAULT_INITIAL_PWM, validate_maneuver_initial_pwm
         initial_presteer_pwm = DEFAULT_INITIAL_PWM if initial_presteer_pwm is None else initial_presteer_pwm
         try:
             validate_maneuver_initial_pwm(initial_presteer_pwm)
         except ValueError:
-            parser.error('turn-cone initial presteer PWM must be an integer in 1690..1720')
+            parser.error(f'turn-cone initial presteer PWM must be an integer in {INITIAL_PWM_MIN}..{SERVO_MAX}')
     access = json.loads(args.access_file.read_text())
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
