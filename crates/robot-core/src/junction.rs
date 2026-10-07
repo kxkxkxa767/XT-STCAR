@@ -10,6 +10,12 @@ pub use corridor::{CorridorCandidate, detect_corridor_candidates};
 mod turn_goal;
 pub use turn_goal::{LeftTurnGoal, TurnGeometry, WallCandidate, detect_turn_geometry};
 
+// This vehicle's measured outer tyre width (0.34 m) plus its current two
+// 0.08 m lidar/body observation margins. Vehicle geometry, not course width.
+const MIN_OBSERVED_OPENING_SUPPORT_M: f64 = 0.34 + 2.0 * 0.08;
+// A candidate observation-density limit; never a free-space/swept-path proof.
+const MAX_OPENING_PROJECTION_GAP_M: f64 = 0.10;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LeftJunction {
@@ -18,6 +24,8 @@ pub struct LeftJunction {
     pub incoming_width_m: f64,
     pub outgoing_width_m: f64,
     pub heading_left_rad: f64,
+    /// Known-return fraction inside the selected contiguous observed opening
+    /// support. This is not the fraction of the entire inferred branch.
     pub known_open_fraction: f64,
     pub turn_path_certified: bool,
 }
@@ -175,25 +183,41 @@ pub fn detect_left_junction(
     if retained.len() < 8 || max_x - min_x < 0.3 {
         return Ok(None);
     }
-    let opening: Vec<_> = aligned
-        .iter()
-        .filter(|(a, _)| {
-            let crossing_x = left / (a.tan() - left_slope);
-            (25.0..=85.0).contains(&a.to_degrees())
-                && crossing_x > end + 0.10
-                && crossing_x < front - 0.20
-        })
-        .collect();
-    let known_open = opening
-        .iter()
-        .filter(|(_, p)| {
-            p.is_some_and(|(x, y)| {
+    // Observe the finite gap in metres, rather than counting beams inside a
+    // fixed 25--85 degree slice. Moving laterally changes that angular count
+    // without changing the physical opening. The selected support must span
+    // the current measured 34 cm body plus two 8 cm observation margins.
+    // Unknown/near returns break support; adjacent projected crossings farther
+    // than 10 cm apart also break it. Neither condition is interpolated away.
+    let mut run_start: Option<f64> = None;
+    let mut previous_crossing: Option<f64> = None;
+    let mut observed_span: f64 = 0.0;
+    for &(angle, point) in &aligned {
+        let denominator = angle.tan() - left_slope;
+        let crossing = left / denominator;
+        let known_open = angle > 0.0
+            && angle < PI / 2.0
+            && denominator > 0.0
+            && crossing > end + 0.10
+            && crossing < front - 0.20
+            && point.is_some_and(|(x, y)| {
                 y > left + left_slope * x + 0.10 && x > end + 0.05 && x <= front + 0.15
-            })
-        })
-        .count();
-    let fraction = known_open as f64 / opening.len().max(1) as f64;
-    if opening.len() < 16 || fraction < 0.9 {
+            });
+        if !known_open {
+            run_start = None;
+            previous_crossing = None;
+            continue;
+        }
+        if previous_crossing.is_none_or(|last| {
+            (crossing - last).abs() * left_slope.hypot(1.0) > MAX_OPENING_PROJECTION_GAP_M
+        }) {
+            run_start = Some(crossing);
+        }
+        previous_crossing = Some(crossing);
+        let span = (crossing - run_start.unwrap()).abs() * left_slope.hypot(1.0);
+        observed_span = observed_span.max(span);
+    }
+    if observed_span < MIN_OBSERVED_OPENING_SUPPORT_M {
         return Ok(None);
     }
     Ok(Some(LeftJunction {
@@ -202,7 +226,9 @@ pub fn detect_left_junction(
         incoming_width_m: width,
         outgoing_width_m: outgoing,
         heading_left_rad: heading,
-        known_open_fraction: fraction,
+        // Every beam of the selected support has an actual farther return.
+        // Returns outside it, including the measured edges, remain separate.
+        known_open_fraction: 1.0,
         turn_path_certified: false,
     }))
 }

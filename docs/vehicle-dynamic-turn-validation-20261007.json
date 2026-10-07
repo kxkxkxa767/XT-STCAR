@@ -2234,7 +2234,85 @@
     "operator_reset_confirmed": true,
     "single13_authorized": true,
     "single13_executed": false,
-    "status": "minimal source frozen; no extra suite; pending locked upload then single13",
-    "new_tests_run": false
+    "status": "locked deployed; trial13 admission rejected before arm; waiting lateral placement adjustment",
+    "new_tests_run": false,
+    "source_commit": "7dfd22da50c04c77f8a0914b4a21d422078c8a02",
+    "deployed": true,
+    "single13_motor_requests": 0,
+    "admission_rejection": "left_corridor_unknown",
+    "admission_known_observation": {
+      "fresh_scan_seqs": [
+        4643,
+        4645,
+        4647,
+        4649,
+        4651,
+        4653,
+        4655,
+        4657
+      ],
+      "native_left_goal_in_all": false,
+      "corridor_heading_deg_approx": 0.6,
+      "body_gap_m_range": [
+        0.2147,
+        0.2213
+      ],
+      "front_raw_min_m_range": [
+        1.291,
+        1.307
+      ],
+      "incoming_left_intercept_m_approx": 0.41,
+      "incoming_right_intercept_m_approx": -0.654,
+      "prior_left_intercept_m_approx": 0.53,
+      "known_open_rays_range": [
+        10,
+        13
+      ],
+      "native_minimum_open_rays": 16,
+      "some_known_open_fraction": 0.846,
+      "native_minimum_known_open_fraction": 0.9,
+      "operator_confirmed_real_opening_open": true,
+      "operator_confirmed_soft_board_restored": true,
+      "pose_adjustment_requested": "slightly right, maintain original straight heading; no fixed-track control constant"
+    },
+    "admission_evidence": "work/vehicle-dynamic-deploy-20261007/trial13-admission-scene.json",
+    "no_extra_suite_run": true
+  },
+  "live_vehicle_validation_preference": {
+    "operator_statement": "以后都是，只要我没明说都是直接在车上测试",
+    "scope": "subsequent control tuning and test work defaults to live vehicle trials, unless explicit Mac-only/pause/no-test instruction",
+    "no_routine_extra_offline_or_target_pure_suite_before_trials": true,
+    "vehicle_fresh_state_and_known_physical_stop_placement_needed": true,
+    "do_not_request_redundant_motion_permission_each_iteration": true,
+    "software_fault_lock_does_not_self_rearm_on_sensor_recovery": true
+  },
+  "opening_visible_gap_correction": {
+    "operator_evidence": "截图2026-10-07 19.57.21.png shows an obvious left-side gap",
+    "root_revision": "fixed angular window/count caused false negative; lateral-position explanation alone was insufficient",
+    "old_rule": "25..85deg angular slice plus16 rays and90% whole slice",
+    "actual_current_projection_span_m_approx": [
+      1.2,
+      1.4
+    ],
+    "new_rule": "current contiguous real farther-return support projected along observed left-wall extension spans>=0.50m, near/null/invalid rays break support, adjacent projection gap>0.10m breaks support",
+    "minimum_span_source": "measured vehicle outer tyre width0.34+two current observation margins0.08",
+    "no_fixed_course_coordinates": true,
+    "native_goal_schema_unchanged": true,
+    "known_open_fraction_new_scope": "selected contiguous real-return support only, not entire gap/trajectory free-space certificate",
+    "front_wall_right_retained_and_outer_wall_fit_preserved": true,
+    "no_service_cache_added": true,
+    "extra_suite_not_run_as_requested": true,
+    "new_rust_bridge_compiled_on_mac": true,
+    "bridge_sha256": "199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9",
+    "bridge_bytes": 614600,
+    "build_target": "riscv64gc-unknown-linux-gnu.2.38",
+    "elf_passed": true,
+    "maximum_required_glibc": "2.34",
+    "initial_pwm": 1670,
+    "left_max_pwm": 1720,
+    "pre_and_left_release_step": 20,
+    "left_increase_step": 10,
+    "status": "compiled pending matched locked upload and direct live trial13; no extra suites",
+    "trial13_motor_requests_before_fix": 0
   }
 }

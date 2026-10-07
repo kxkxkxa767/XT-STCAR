@@ -52,6 +52,7 @@ pub struct LeftTurnGoal {
     pub incoming_left_end_m: f64,
     /// Binds the candidate extent to a real return in this publication.
     pub incoming_left_end_support: IncomingLeftEndSupport,
+    /// Fraction for the detector's selected contiguous real-return support.
     pub known_open_fraction: f64,
     pub origin_between_exit_walls: bool,
     pub candidate_only: bool,
@@ -240,7 +241,7 @@ fn left_goal(rays: &[(usize, f64, f64, Point2)], junction: LeftJunction) -> Opti
     let mut targets = Vec::new();
     for &(index, angle, range, x, y, _) in &local {
         let relative = wrap(angle - incoming);
-        if !(25.0..=85.0).contains(&relative.to_degrees()) {
+        if !(relative > 0.0 && relative < PI / 2.0) {
             continue;
         }
         let crossing = left_intercept / (relative.tan() - left_slope);
