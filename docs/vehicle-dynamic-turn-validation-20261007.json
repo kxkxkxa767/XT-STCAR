@@ -1498,7 +1498,7 @@
   },
   "turn09_preparation": {
     "scope": "new sequence neutral presteer only: fresh adopted current servo can hold while wall alias resolves; no settle maturation/no positive motor/no5s budget renewal",
-    "status": "all validated; pending locked deployment; no new motion",
+    "status": "complete matched locked deployment and independent check passed; no new arm/drive; next motor test pending operator request",
     "next_motion_requires_new_operator_request": true,
     "operator_initial_steering_request": "initial angle must be larger, otherwise later corrections are too late",
     "initial_presteer_default_pwm": 1720,
@@ -1529,6 +1529,33 @@
       "web/vehicle-console/tests/fixtures/left-cone-08-neutral-ambiguity.json": "7a785e95c7286b37f7c43269494051e6ba65c544c32ae760b961a3a9e4cd2d28"
     },
     "target_final_affected_passed": 32,
-    "target_hardware_api_used": false
+    "target_hardware_api_used": false,
+    "source_commit": "41f768034203fda1031fe862fe1ba1249b6c2d2b",
+    "deployment": {
+      "backup": "/home/bianbu/xt-stcar-console/backup-turn09-20261007-161045",
+      "installed_hash_count": 14,
+      "all_installed_match": true,
+      "runtime_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "independent_locked_samples": 10,
+      "final_fresh_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 37159
+      },
+      "independent_default_preview_target": 1720,
+      "default_locked": true,
+      "arm_or_drive_requests": 0,
+      "preserved_good_straight_backup": true,
+      "physical_standstill_verified": false
+    },
+    "no_new_motor_test_after08": true
   }
 }
