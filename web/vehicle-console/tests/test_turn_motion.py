@@ -57,6 +57,145 @@ def opening_scan(seq):
     return value
 
 
+def recorded_opening_scan(seq, actual_board=False):
+    # Compact actual observations from the 2026-10-07 trial, not vehicle pose
+    # or wheel feedback. Only the goal-support ray is needed by this adapter;
+    # the full raw scans remain in ignored work/.
+    records = {
+        5403: {
+            'at_ms': 539722,
+            'outer': (1.5646674578789872, -2.1964654010888034, 1.554855844854365,
+                      0.018679049943563054, 27, (2.2011344707415534, 0.8893160527693753),
+                      (2.2007705643142836, 2.44420333099515)),
+            'goal': (1.6230809417647114, -1.3849249302064477, 0.022178004105570397,
+                     2.157825186262612, 0.5347442444979006, (1.3929118987384266, 1.2989113592342365),
+                     317, 3.04, 1.9045666900360356)},
+        5411: {
+            'at_ms': 540522,
+            'outer': (1.5656449523392322, -2.1965240856932935, 1.5548647729048408,
+                      0.02746331575072961, 26, (2.201134470741553, 0.8893160527693753),
+                      (2.200770564314284, 2.44420333099515)),
+            'goal': (1.6218090389922744, -1.3856195661971564, 0.024438574913648002,
+                     2.1578817650840327, 0.5360727260917584, (1.3925655029858237, 1.3447848744169772),
+                     316, 3.087, 1.9358938603567206)},
+        5412: {
+            'at_ms': 540621,
+            'outer': (1.5580785672907735, -2.187710719998273, 1.5718263374867365,
+                      0.021324689176498685, 26, (2.1872267129230516, 0.8836969538681367),
+                      (2.2108075234096662, 2.455350503377311)),
+            'goal': (1.6241504404991778, -1.3756354997486842, 0.020639609241906953,
+                     2.1579890453384896, 0.5338386048393119, (1.392259147086357, 1.2983026584711803),
+                     317, 3.04, 1.9036741647768833)}
+    }
+    record = records[seq]
+    heading, rho, span, error, points, start, end = record['outer']
+    outer = {'heading_left_rad': heading, 'rho_left_m': rho, 'support_span_m': span,
+             'fit_error_m': error, 'points': points, 'candidate_only': True,
+             'support_start_left_m': dict(zip(('x_m', 'y_m'), start)),
+             'support_end_left_m': dict(zip(('x_m', 'y_m'), end))}
+    width, offset, incoming, front, left_end, target, index, distance, target_distance = record['goal']
+    ray_angle = (math.pi-math.radians(index)) % (2*math.pi)-math.pi
+    ranges = [None]*360
+    ranges[index] = distance
+    if actual_board:
+        if seq != 5412:
+            raise ValueError('only the captured 5412 board trace is included')
+        # Actual quantized board/corner returns, including unknown bins. Other
+        # sectors stay unknown; this is evidence for surface identity only.
+        board = (
+            0.667, 0.6829999999999999, 0.6829999999999999, 0.7, 0.7, 0.715, 0.731, 0.747, 0.747, 0.763,
+            0.78, 0.7949999999999999, 3.304, 3.273, 3.181, 3.134, 3.087, 3.04, 2.962, 2.915,
+            2.887, 2.84, 2.777, 2.761, 2.73, 2.715, 2.652, 2.637, 2.605, 2.589,
+            2.543, 2.527, 2.497, 2.483, 2.436, 2.42, 2.405, 2.39, 2.359, 2.343,
+            2.343, 2.328, 2.296, 2.296, 2.282, 2.266, 2.251, 2.251, 2.251, 2.235,
+            2.219, 2.219, 2.204, 2.204, 2.188, 2.173, 2.173, 2.158, 2.158, 2.158,
+            2.158, 2.158, 2.158, 2.158, 2.158, 2.158, 2.158, 2.173, 2.173, 2.172,
+            2.172, None, None, 2.188, 2.204, 2.204, 2.142, 2.034, 1.942, 1.8639999999999999,
+        )
+        for position, distance in enumerate(board):
+            ranges[(300+position) % 360] = distance
+    goal = {'heading_left_rad': heading, 'center_offset_left_m': offset, 'width_m': width,
+            'incoming_heading_left_rad': incoming, 'front_wall_m': front, 'incoming_left_end_m': left_end,
+            'outer_wall': outer, 'target_point_left_m': dict(zip(('x_m', 'y_m'), target)),
+            'target_support_ray': {'index': index, 'angle_left_rad': ray_angle,
+                                   'range_m': distance, 'target_range_m': target_distance},
+            'candidate_only': True, 'turn_path_certified': False, 'origin_between_exit_walls': False,
+            'observation_type': 'left_opening_outer_wall_alignment'}
+    walls = [outer]
+    if seq == 5412:
+        walls.append({'candidate_only': True,
+                      'fit_error_m': 0.014604957177516793,
+                      'heading_left_rad': 1.5138636694540555,
+                      'points': 24,
+                      'rho_left_m': -2.1570072453451923,
+                      'support_end_left_m': {'x_m': 2.193599190131244, 'y_m': 0.6290044459743911},
+                      'support_span_m': 0.8944721136357403,
+                      'support_start_left_m': {'x_m': 2.156802787516593, 'y_m': -0.26482208321938533}})
+    return {'seq': seq, 'at_ms': record['at_ms'], 'frame_id': 'lidar_origin_coarse_body_heading',
+            'navigation_validated': False, 'ranges': ranges, 'corridor_candidates': [],
+            'wall_candidates': walls, 'left_turn_goal': goal}
+
+
+def surface_scan(theta_deg=90., kind='curve', noise=0., separation=.03):
+    """Raycast observed surfaces and fit real subsets; no physical pose feedback."""
+    theta = math.radians(theta_deg)
+    c, s = math.cos(theta), math.sin(theta)
+    ranges, points = [None]*360, []
+    for i in range(360):
+        angle = math.radians(-i)
+        normal, along_ray = math.sin(angle-theta), math.cos(angle-theta)
+        if normal >= -.02:
+            continue
+        distance = -2/normal
+        for _ in range(10):
+            along = distance*along_ray
+            if kind in ('curve', 'gap'):
+                offset, derivative = -2+.04*along*along, .08*along*along_ray
+            elif kind == 'kink':
+                slope = math.tan(math.radians(17.5))
+                offset, derivative = -2+abs(along)*slope, math.copysign(slope, along)*along_ray
+            else:
+                offset, derivative = -2., 0.
+            distance -= (distance*normal-offset)/(normal-derivative)
+        along = distance*along_ray
+        if not .02 <= distance <= 12 or not -1.5 <= along <= 1.5:
+            continue
+        if kind == 'gap' and abs(along) < .1:
+            continue
+        distance += noise*math.sin(i*2.3)
+        if kind == 'parallel':
+            distance = (2+(separation if i % 2 else 0))/-normal
+        ranges[i] = distance
+        points.append((i, distance*math.cos(angle), distance*math.sin(angle), distance*along_ray))
+
+    def fitted(low, high, parity=None):
+        values = [p for p in points if low <= p[3] <= high and (parity is None or p[0] % 2 == parity)]
+        xs, ys = [c*p[1]+s*p[2] for p in values], [-s*p[1]+c*p[2] for p in values]
+        x, y = sum(xs)/len(xs), sum(ys)/len(ys)
+        slope = sum((a-x)*(b-y) for a, b in zip(xs, ys))/sum((a-x)**2 for a in xs)
+        intercept = y-slope*x
+        heading = MODULE._wrap(theta+math.atan(slope))
+        hc, hs = math.cos(heading), math.sin(heading)
+        rho = intercept/math.hypot(1, slope)
+        error = max(abs(-hs*p[1]+hc*p[2]-rho) for p in values)
+        first = min(values, key=lambda p: hc*p[1]+hs*p[2])
+        last = max(values, key=lambda p: hc*p[1]+hs*p[2])
+        return {'candidate_only': True, 'heading_left_rad': heading, 'rho_left_m': rho,
+                'fit_error_m': error, 'points': len(values),
+                'support_span_m': hc*(last[1]-first[1])+hs*(last[2]-first[2]),
+                'support_start_left_m': {'x_m': first[1], 'y_m': first[2]},
+                'support_end_left_m': {'x_m': last[1], 'y_m': last[2]}}
+    if kind == 'curve':
+        candidates = [fitted(-1.4, .5), fitted(-.5, 1.4)]
+    elif kind in ('gap', 'kink'):
+        candidates = [fitted(-1.4, -.15), fitted(.15, 1.4)]
+    else:
+        candidates = [fitted(-1.4, 1.4, 0), fitted(-1.4, 1.4, 1)]
+    motion = MODULE.TurnMotion(0.)
+    motion.outer_wall = wall(theta_deg, -2., -1.4, 1.4)
+    return motion, candidates, {'ranges': ranges, 'combined_fit': fitted(-1.4, 1.4)}
+
+
 class TurnMotionTests(unittest.TestCase):
     def drive(self, heading=60., offset=0., max_drive_s=10.):
         motion = MODULE.TurnMotion(0., max_drive_s=max_drive_s)
@@ -121,6 +260,15 @@ class TurnMotionTests(unittest.TestCase):
         motion.update(scan(1), .01, 0., control(1))
         result = motion.update(scan(1, heading=61.), .01, .1, control(2))
         self.assertEqual(result['terminal_reason'], 'duplicate_turn_scan_changed_content')
+
+    def test_actual_ranges_at_same_scan_identity_cannot_change(self):
+        motion = MODULE.TurnMotion(0.)
+        value = dict(scan(1), ranges=[None]*360)
+        motion.update(value, .01, 0., control(1))
+        value['ranges'][270] = 1.1
+        result = motion.update(value, .01, .1, control(2))
+        self.assertEqual(result['terminal_reason'], 'duplicate_turn_scan_changed_content')
+        self.assertEqual((result['motor'], result['servo']), (1500, 1500))
 
     def test_unknown_initial_left_target_refuses_start(self):
         for value in [dict(scan(1), corridor_candidates=[]), scan(1, heading=0.)]:
@@ -239,6 +387,126 @@ class TurnMotionTests(unittest.TestCase):
                 second['wall_candidates'].append(wall(60.1, -1.7 if ambiguous else -1.799, 1.2, 2.6))
                 result = motion.update(second, .01, .1, control(2))
                 self.assertEqual(result['lock_requested'], ambiguous)
+
+    def test_recorded_nonoverlapping_near_wall_does_not_make_selected_outer_support_ambiguous(self):
+        motion = MODULE.TurnMotion(0.)
+        previous = motion.update(recorded_opening_scan(5411), .01, 0., control(1, armed=False))
+        self.assertTrue(previous['start_ready'])
+        current = recorded_opening_scan(5412)
+        result = motion.update(current, .01, .099, control(2))
+        self.assertEqual(result['phase'], 'presteer')
+        self.assertEqual(result['reason'], 'left_turn_presteering')
+        self.assertEqual((result['motor'], result['servo']), (1500, 1510))
+        self.assertEqual(result['geometry_source_seq'], 5412)
+        self.assertEqual(result['outer_wall'], current['left_turn_goal']['outer_wall'])
+        self.assertEqual(result['steering_settle_feedback_ticks'], 0)
+        self.assertFalse(result['completed'])
+
+    def test_recorded_before_wall_association_is_unique_but_skipped_frames_do_not_refresh_clock(self):
+        motion = MODULE.TurnMotion(0.)
+        motion.update(recorded_opening_scan(5403), .01, 0., control(1, armed=False))
+        current = recorded_opening_scan(5412)
+        matches = motion._wall_matches(current['wall_candidates'], .899)
+        self.assertEqual(matches, [current['left_turn_goal']['outer_wall']])
+        result = motion.update(current, .01, .899, control(2))
+        self.assertEqual(result['reason'], 'turn_scan_clock_gap')
+        self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+        self.assertEqual(result['geometry_source_seq'], 5403)
+
+    def test_finite_support_association_works_for_rotated_walls_and_reversed_endpoint_order(self):
+        for heading in [-170., -45., 20., 75., 145.]:
+            with self.subTest(heading=heading):
+                motion = MODULE.TurnMotion(0.)
+                motion.outer_wall = wall(heading, -1.8, 1., 3.)
+                selected = wall(heading+1., -1.79, 1.05, 3.05)
+                selected['support_start_left_m'], selected['support_end_left_m'] = (
+                    selected['support_end_left_m'], selected['support_start_left_m'])
+                other_segment = wall(heading-2.5, -1.78, -.8, .6)
+                self.assertEqual(motion._wall_matches([other_segment, selected], .1), [selected])
+
+    def test_nonoverlapping_wall_cannot_replace_selected_finite_support(self):
+        motion = MODULE.TurnMotion(0.)
+        motion.update(opening_scan(1), .01, 0., control(1, armed=False))
+        current = dict(opening_scan(2), left_turn_goal=None, wall_candidates=[wall(60., -1.8, 4., 6.)])
+        result = motion.update(current, .01, .1, control(2))
+        self.assertEqual(result['reason'], 'left_turn_outer_wall_identity_jump')
+        self.assertEqual((result['motor'], result['servo']), (1500, 1500))
+        self.assertEqual(result['geometry_source_seq'], 1)
+
+    def test_smooth_deformed_surface_merges_different_fitted_angles_with_real_returns(self):
+        for heading in [-145., -30., 0., 90., 170.]:
+            for noise in [0., .02]:
+                with self.subTest(heading=heading, noise=noise):
+                    motion, walls, actual = surface_scan(heading, noise=noise)
+                    self.assertTrue(all(MODULE._valid_wall(w) for w in walls))
+                    self.assertGreater(abs(walls[0]['heading_left_rad']-walls[1]['heading_left_rad']),
+                                       math.radians(2))
+                    # Reverse endpoint order without changing the actual surface.
+                    walls[1]['support_start_left_m'], walls[1]['support_end_left_m'] = (
+                        walls[1]['support_end_left_m'], walls[1]['support_start_left_m'])
+                    self.assertEqual(len(motion._wall_matches(walls, .1, actual)), 1)
+                    self.assertEqual(len(motion._wall_matches(walls, .1)), 2)
+
+    def test_recorded_quantized_board_support_and_measured_window_bridge_are_smooth(self):
+        actual = recorded_opening_scan(5412, actual_board=True)
+        outer, near = actual['wall_candidates']
+        self.assertGreater(abs(outer['heading_left_rad']-near['heading_left_rad']), math.radians(2))
+        # Although the fitted finite windows stop on either side of the gap,
+        # actual returns in that interval witness one gently bending board.
+        supports = MODULE._surface_supports(actual, [outer, near])
+        self.assertIs(MODULE._same_surface(*supports), True)
+        alias = dict(outer, heading_left_rad=outer['heading_left_rad']+.0017,
+                     rho_left_m=outer['rho_left_m']-.001)
+        motion = MODULE.TurnMotion(0.)
+        motion.outer_wall = outer
+        self.assertEqual(len(motion._wall_matches([outer, alias], .1, actual)), 1)
+
+    def test_identical_angle_separate_parallel_returns_stay_ambiguous(self):
+        for heading in [-30., 90., 170.]:
+            for separation in [.03, .15]:
+                with self.subTest(heading=heading, separation=separation):
+                    motion, walls, actual = surface_scan(heading, 'parallel', separation=separation)
+                    self.assertTrue(all(MODULE._valid_wall(w) for w in walls))
+                    self.assertAlmostEqual(walls[0]['heading_left_rad'], walls[1]['heading_left_rad'])
+                    self.assertEqual(len(motion._wall_matches(walls, .1, actual)), 2)
+
+    def test_broad_fit_cannot_transitively_merge_separate_parallel_surfaces(self):
+        motion, walls, actual = surface_scan(kind='parallel')
+        broad = actual['combined_fit']
+        self.assertTrue(MODULE._valid_wall(broad))
+        self.assertGreaterEqual(broad['support_span_m'], max(w['support_span_m'] for w in walls))
+        # The combined fit individually agrees with either set of returns, but
+        # their precise fits witness two genuinely separate parallel surfaces.
+        self.assertEqual(len(motion._wall_matches([broad]+walls, .1, actual)), 2)
+
+    def test_maximum_duplicate_candidates_preserve_alias_and_parallel_results(self):
+        for kind, expected in [('curve', 1), ('parallel', 2)]:
+            with self.subTest(kind=kind):
+                motion, walls, actual = surface_scan(kind=kind)
+                repeated = [dict(walls[i % 2]) for i in range(64)]
+                self.assertEqual(motion._wall_matches(repeated, .1, actual),
+                                 motion._wall_matches(walls, .1, actual))
+                self.assertEqual(len(motion._wall_matches(repeated, .1, actual)), expected)
+
+    def test_actual_kink_and_unknown_gap_cannot_be_merged_as_smooth_board(self):
+        for heading in [-30., 90., 170.]:
+            for kind in ['kink', 'gap']:
+                with self.subTest(heading=heading, kind=kind):
+                    motion, walls, actual = surface_scan(heading, kind)
+                    self.assertTrue(all(MODULE._valid_wall(w) for w in walls))
+                    self.assertEqual(len(motion._wall_matches(walls, .2, actual)), 2)
+
+    def test_missing_malformed_or_short_raw_support_cannot_relax_alias_rule(self):
+        for fault in ['missing', 'short', 'malformed', 'sparse']:
+            with self.subTest(fault=fault):
+                motion, walls, actual = surface_scan()
+                if fault == 'missing': actual = {}
+                if fault == 'short': actual['ranges'] = actual['ranges'][:-1]
+                if fault == 'malformed': actual['ranges'][0] = True
+                if fault == 'sparse':
+                    keep = [i for i, r in enumerate(actual['ranges']) if r is not None][:15]
+                    actual['ranges'] = [r if i in keep else None for i, r in enumerate(actual['ranges'])]
+                self.assertEqual(len(motion._wall_matches(walls, .1, actual)), 2)
 
     def test_turn_goal_without_real_support_ray_or_inconsistent_reference_refuses(self):
         for fault in ['ray', 'mirror', 'line', 'flag']:
@@ -386,7 +654,9 @@ class TurnMotionTests(unittest.TestCase):
         for i in range(1, 17):
             heading = max(0., 60.-i*5)
             rho = -1.8+min(i, 12)*.1+.12
-            support = wall(heading, rho, -3., -1.) if i >= 12 else wall(heading, rho)
+            # A continuous slide of observed finite support, rather than a
+            # one-frame four-metre jump, eventually puts it behind the car.
+            support = wall(heading, rho, 1.-.35*i, 3.-.35*i)
             value = dict(scan(seq+i), corridor_candidates=[], wall_candidates=[support], left_turn_goal=None)
             result = motion.update(value, .01, now+i*.1, control(seq+i, previous['servo'], motor=1560))
             self.assertFalse(result['lock_requested'])

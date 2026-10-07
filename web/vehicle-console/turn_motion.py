@@ -23,6 +23,7 @@ _FIELDS = ('heading_left_rad', 'center_offset_left_m', 'width_m',
            'left_wall_points', 'right_wall_points', 'support_span_m',
            'fit_error_m', 'origin_between_walls', 'candidate_only',
            'turn_path_certified')
+_RAY_AXES = tuple((math.cos(math.radians(-i)), math.sin(math.radians(-i))) for i in range(360))
 
 
 def _number(value):
@@ -131,6 +132,131 @@ def _valid_candidate(value):
             and abs(value['center_offset_left_m']) < value['width_m']/2-.30)
 
 
+def _surface_supports(scan, walls):
+    """Current actual returns supporting local smooth surfaces, never free space.
+
+    Coordinates and continuity edges are computed once, not per wall pair.
+    Missing returns break the chain; publication time is not a per-point clock.
+    """
+    ranges = scan.get('ranges') if isinstance(scan, dict) else None
+    if (not isinstance(ranges, list) or len(ranges) != 360
+            or any(r is not None and (not _number(r) or not .02 <= r <= 12) for r in ranges)):
+        return [None]*len(walls)
+    points = [None if r is None else (r*a[0], r*a[1]) for r, a in zip(ranges, _RAY_AXES)]
+    basic = []
+    sample_angle = math.radians(1)
+    for i, p in enumerate(points):
+        j, q = (i+1) % 360, points[(i+1) % 360]
+        # Bound the observed step by actual angular sample spacing plus the
+        # native 4 cm inlier allowance, with a 15 cm cap for sparse far returns.
+        limit = 0 if p is None or q is None else min(.15, .04+3*min(ranges[i], ranges[j])*sample_angle)
+        basic.append(p is not None and q is not None and math.hypot(q[0]-p[0], q[1]-p[1]) <= limit)
+
+    # Each six-return PCA window is reused on neighbouring edges. Prefix
+    # moments avoid repeated Python point lists and centred-sum loops.
+    extended = points[-5:]+points+points[:6]
+    sx, sy, sxx, syy, sxy, broken = ([0.] for _ in range(6))
+    edges = basic[-5:]+basic+basic[:6]
+    for p, edge in zip(extended, edges):
+        x, y = (0., 0.) if p is None else p
+        sx.append(sx[-1]+x)
+        sy.append(sy[-1]+y)
+        sxx.append(sxx[-1]+x*x)
+        syy.append(syy[-1]+y*y)
+        sxy.append(sxy[-1]+x*y)
+        broken.append(broken[-1]+int(not edge))
+    tangents = [None]*360
+    for i in range(360):
+        if extended[i] is None or broken[i+5] != broken[i]:
+            continue
+        x, y = sx[i+6]-sx[i], sy[i+6]-sy[i]
+        xx = sxx[i+6]-sxx[i]-x*x/6
+        yy = syy[i+6]-syy[i]-y*y/6
+        xy = sxy[i+6]-sxy[i]-x*y/6
+        angle = .5*math.atan2(2*xy, xx-yy)
+        direction = math.cos(angle), math.sin(angle)
+        first, last = extended[i], extended[i+5]
+        dx, dy = last[0]-first[0], last[1]-first[1]
+        tangents[i] = direction if direction[0]*dx+direction[1]*dy >= 0 else (-direction[0], -direction[1])
+
+    strong = [False]*360
+    for i in range(360):
+        if broken[i+11] != broken[i]:
+            continue
+        before, after = tangents[i], tangents[(i+6) % 360]
+        cross = before[0]*after[1]-before[1]*after[0]
+        dot = before[0]*after[0]+before[1]*after[1]
+        p, q = points[i], points[(i+1) % 360]
+        dx, dy = q[0]-p[0], q[1]-p[1]
+        strong[i] = (abs(math.atan2(cross, dot)) <= math.radians(20)
+                     and abs(before[0]*dy-before[1]*dx) <= .04
+                     and abs(after[0]*dy-after[1]*dx) <= .04)
+    # Start after a real break so a surface crossing ray 359/0 remains one run.
+    pivot = next(((i+1) % 360 for i, edge in enumerate(strong) if not edge), 0)
+    order = [(pivot+i) % 360 for i in range(360)]
+    labels, label = [], 0
+    for position, i in enumerate(order):
+        if position and not strong[order[position-1]]:
+            label += 1
+        labels.append(label)
+    supports = []
+    ordered_points = [(position, points[i], labels[position], 1 << position)
+                      for position, i in enumerate(order) if points[i] is not None]
+    projections = {}
+    for wall in walls:
+        theta = wall['heading_left_rad']
+        c, s = math.cos(theta), math.sin(theta)
+        low, high = sorted(c*wall[k]['x_m']+s*wall[k]['y_m']
+                           for k in ('support_start_left_m', 'support_end_left_m'))
+        groups, count, line_bits = {}, 0, 0
+        if theta not in projections:
+            projections[theta] = [(position, -s*p[0]+c*p[1], c*p[0]+s*p[1], key, bit)
+                                  for position, p, key, bit in ordered_points]
+        rho, error = wall['rho_left_m'], wall['fit_error_m']+1e-6
+        low, high = low-1e-6, high+1e-6
+        for position, normal, along, key, bit in projections[theta]:
+            if abs(normal-rho) > error:
+                continue
+            line_bits |= bit
+            if not low <= along <= high:
+                continue
+            count += 1
+            mask, start, _ = groups.get(key, (0, position, position))
+            groups[key] = mask | bit, start, position
+        mature = {key: value for key, value in groups.items() if value[0].bit_count() >= 16}
+        supports.append((mature, line_bits) if count >= 16 else None)
+    return supports
+
+
+def _same_surface(a, b):
+    if a is None or b is None:
+        return None
+    a, left_line = a
+    b, right_line = b
+    shared = left_line & right_line
+    # Actual disjoint near-zero-error supports are separate even if their
+    # fitted headings are identical and separation is below the old 5 cm gate.
+    if not shared:
+        return False
+    mature = False
+    for key in a.keys() & b.keys():
+        left, lo, hi = a[key]
+        right, start, end = b[key]
+        if left.bit_count() < 16 or right.bit_count() < 16:
+            continue
+        mature = True
+        low, high = min(lo, start), max(hi, end)
+        interval = ((1 << (high-low+1))-1) << low
+        # Every actual connecting return must fit one of these lines within
+        # its reported residual, including a visible bridge between windows.
+        # The interval is bounded by their current finite supports; a distant
+        # rounded corner cannot join independent parallel boards.
+        if (left_line | right_line) & interval == interval and (shared & interval).bit_count() >= 4:
+            return True
+    # Fragmented or short raw support cannot relax the original alias rule.
+    return False if mature else None
+
+
 class TurnMotion:
     """Single-use state machine. The service retains safety/heartbeat/ACK ownership.
 
@@ -235,25 +361,56 @@ class TurnMotion:
                 'width_m': width, 'candidate_only': True, 'turn_path_certified': False,
                 'origin_between_walls': False}
 
-    def _wall_matches(self, walls, publication_dt):
+    def _wall_matches(self, walls, publication_dt, scan=None):
         old = self.outer_wall
         gate = min(math.radians(30), .12+math.radians(90)*publication_dt)
+        def interval(w, theta):
+            return sorted(math.cos(theta)*w[k]['x_m']+math.sin(theta)*w[k]['y_m']
+                          for k in ('support_start_left_m', 'support_end_left_m'))
+        def overlaps_previous(w):
+            # Similar infinite lines can describe unrelated finite segments.
+            # Associate only support that still overlaps the selected wall.
+            theta = w['heading_left_rad']
+            a, b = interval(old, theta), interval(w, theta)
+            return min(a[1], b[1])-max(a[0], b[0]) >= .10
         matches = [w for w in walls if abs(_wrap(w['heading_left_rad']-old['heading_left_rad'])) <= gate
-                   and abs(w['rho_left_m']-old['rho_left_m']) <= .30]
+                   and abs(w['rho_left_m']-old['rho_left_m']) <= .30 and overlaps_previous(w)]
+        # The opening goal commonly repeats an identical native wall candidate.
+        # Remove exact copies before any raw-surface work, preserving order.
+        distinct = []
+        for wall in matches:
+            if wall not in distinct:
+                distinct.append(wall)
+        matches = distinct
+        if len(matches) <= 1:
+            return [dict(wall) for wall in matches]
+        supports = _surface_supports(scan, matches)
         # Overlapping fits of the same actual finite wall are one observation,
         # not two different destinations. Distinct parallel supports stay ambiguous.
         unique = []
-        for wall in sorted(matches, key=lambda w: w['support_span_m'], reverse=True):
+        for index in sorted(range(len(matches)), key=lambda i: matches[i]['support_span_m'], reverse=True):
+            wall, support = matches[index], supports[index]
             theta = wall['heading_left_rad']
-            def interval(w):
-                return sorted(math.cos(theta)*w[k]['x_m']+math.sin(theta)*w[k]['y_m']
-                              for k in ('support_start_left_m', 'support_end_left_m'))
-            a = interval(wall)
-            if not any(abs(_wrap(wall['heading_left_rad']-u['heading_left_rad'])) <= math.radians(2)
-                       and abs(wall['rho_left_m']-u['rho_left_m']) <= .05
-                       and min(a[1], interval(u)[1])-max(a[0], interval(u)[0]) >= .10 for u in unique):
-                unique.append(dict(wall))
-        return unique
+            a = interval(wall, theta)
+            def same(u, evidence):
+                if wall == u:
+                    return True
+                observed = _same_surface(support, evidence)
+                if observed is not None:
+                    return observed
+                # Incomplete raw evidence cannot relax the original geometric
+                # alias rule. It does not manufacture a surface witness.
+                return (abs(_wrap(wall['heading_left_rad']-u['heading_left_rad'])) <= math.radians(2)
+                        and abs(wall['rho_left_m']-u['rho_left_m']) <= .05
+                        and min(a[1], interval(u, theta)[1])-max(a[0], interval(u, theta)[0]) >= .10)
+            # A broad fit cannot transitively join two distinct surfaces: a
+            # new alias must agree with every actual member of its group.
+            group = next((group for group in unique if all(same(u, evidence) for u, evidence in group)), None)
+            if group is None:
+                unique.append([(wall, support)])
+            else:
+                group.append((wall, support))
+        return [dict(group[0][0]) for group in unique]
 
     def _measurement(self, scan, candidates, publication_dt):
         opening, walls = scan.get('left_turn_goal'), scan.get('wall_candidates', [])
@@ -267,7 +424,7 @@ class TurnMotion:
             self.outer_wall, self.turn_goal, self.geometry_mode = dict(opening['outer_wall']), dict(opening), 'opening_wall'
             return self._opening_candidate(self.outer_wall, opening['width_m'])
         if self.geometry_mode == 'opening_wall':
-            matches = self._wall_matches(walls+([opening['outer_wall']] if opening else []), publication_dt)
+            matches = self._wall_matches(walls+([opening['outer_wall']] if opening else []), publication_dt, scan)
             if len(matches) > 1:
                 raise ValueError('left_turn_outer_wall_ambiguous')
             if not matches:
@@ -400,7 +557,7 @@ class TurnMotion:
             self.lock('invalid_native_corridor_candidates')
             return self._result(now)
         signature = (_freeze(candidates), _freeze(scan.get('wall_candidates', [])),
-                     _freeze(scan.get('left_turn_goal')))
+                     _freeze(scan.get('left_turn_goal')), _freeze(scan.get('ranges')))
         if (not isinstance(control, dict) or type(control.get('armed')) is not bool
                 or type(control.get('motor')) is not int or type(control.get('servo')) is not int
                 or type(control.get('tick')) is not int or control['tick'] < 0

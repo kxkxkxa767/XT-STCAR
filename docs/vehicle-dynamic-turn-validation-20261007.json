@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-07",
+  "vehicle_source_commit": "19dd355132a3354d63f22d58dd3db402ea78125f",
+  "requested_scope": "left turn then cones; only bounded dynamic left controller currently connected",
+  "operator_confirmed": "at crosswalk stop position, fully stopped, nose along original straight",
+  "attempt_id": "left-turn-trial-20261007-01",
+  "trial_parameters": {
+    "motor_forward": 1560,
+    "neutral": 1500,
+    "servo_max": 1720,
+    "max_drive_s": 10,
+    "max_presteer_s": 5,
+    "max_coast_s": 5,
+    "pwm_slew": "10 per100ms"
+  },
+  "actual_result": {
+    "run_id": "7gLPvuqGsrDutUsbDp3kIdUI",
+    "reason": "left_turn_outer_wall_ambiguous",
+    "phase": "presteer",
+    "presteer_ticks": 1,
+    "motion_ticks": 0,
+    "coast_ticks": 0,
+    "steering_changes": 0,
+    "observed_pwm": false,
+    "observed_armed": true,
+    "current_pwm": 1500,
+    "servo": 1500,
+    "observed_alignment": false,
+    "entry_confirmed": false,
+    "completed": false
+  },
+  "actual_motor_forward_requests": 0,
+  "software_arm_observed": true,
+  "steering_changed": false,
+  "cone_execution_started": false,
+  "control_at_end": {
+    "armed": false,
+    "motor": 1500,
+    "reason": "operator_stop",
+    "seq": 3,
+    "servo": 1500,
+    "tick": 542078
+  },
+  "healthy": true,
+  "owner": null,
+  "active": null,
+  "mode": "locked",
+  "ages": {
+    "camera": 0.14223716699984834,
+    "lidar": 0.034790090999877066,
+    "control": 0.012551862999998775
+  },
+  "independent_neutral_feedback_count": 6,
+  "first_tick": 541137,
+  "last_tick": 542078,
+  "first_lidar_seq": 5416,
+  "last_lidar_seq": 5425,
+  "cli_exit_code": 1,
+  "cli_note": "exit1 intentionally means no certified cone/task completion; failure cause comes from last_result, not exit alone",
+  "trigger_scan_seq": 5413,
+  "last_valid_geometry_scan_seq": 5412,
+  "diagnosis": "angle/rho-only association admitted a non-overlapping finite near wall along with the selected far wall; seq5412 reproduces while actual terminal seq5413 not separately captured",
+  "recorded_far_wall": {
+    "heading_deg": 89.27132605555136,
+    "rho_m": -2.187710719998273,
+    "support_y_m": [
+      0.8836969538681367,
+      2.455350503377311
+    ]
+  },
+  "recorded_near_wall": {
+    "heading_deg": 86.7379990179053,
+    "rho_m": -2.1570072453451923,
+    "support_y_m": [
+      -0.26482208321938533,
+      0.6290044459743911
+    ]
+  },
+  "no_autonomous_rearm_after_protective_exit": true,
+  "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-01/",
+  "physical_motion_acceptance": false,
+  "physical_standstill_measured": false,
+  "competition_navigation": false,
+  "remaining_cone_chain": "real candidate association/through evidence and execution handover not connected; simulated pose/curvature/radius must not be substituted",
+  "latest_user_constraint": "competition boards are flexible; left wall endpoints must remain measured live, angle differences alone must not imply separate walls; use actual pointcloud continuity and local smoothness",
+  "soft_board_fix": {
+    "implemented": true,
+    "vehicle_deployed": false,
+    "production_sha256": "d7129d63aa78220f644ce15de80b1328675d27355a0de8ee65e5512b028880af",
+    "association": "current finite overlap across frames; endpoints replaced by every accepted fresh scan",
+    "same_surface": "actual 360-ray continuity and six-point local PCA tangent agreement; bounded current line residual and shared returns; complete-link groups",
+    "angle_alone_is_not_separation": true,
+    "fixed_track_coordinates": false,
+    "interpolated_returns": false,
+    "negative_cases": [
+      "distinct parallel faces including3cm separation",
+      "missing sector",
+      "sharp kink",
+      "insufficient or malformed raw support",
+      "transitive broad-fit merge",
+      "stale clocks or same-frame raw mutation"
+    ],
+    "performance_optimization": "exact duplicate removal; cached prefix-moment PCA windows and per-heading projections; same classification as pre-optimization implementation",
+    "validation": {
+      "mac_full_python_passed": 216,
+      "target_focused_python_passed": 46,
+      "independent_equivalence_cases": 156,
+      "independent_equivalence_mismatches": 0,
+      "target_benchmark": {
+        "source_sha256": "d7129d63aa78220f644ce15de80b1328675d27355a0de8ee65e5512b028880af",
+        "actual_scan_pairs": [
+          {
+            "old_seq": 5403,
+            "new_seq": 5405,
+            "match_count": 1,
+            "elapsed_ms": 0.2976400000989088
+          },
+          {
+            "old_seq": 5405,
+            "new_seq": 5406,
+            "match_count": 1,
+            "elapsed_ms": 0.15782199989189394
+          },
+          {
+            "old_seq": 5406,
+            "new_seq": 5408,
+            "match_count": 1,
+            "elapsed_ms": 0.1285660000576172
+          },
+          {
+            "old_seq": 5408,
+            "new_seq": 5409,
+            "match_count": 1,
+            "elapsed_ms": 0.12914900025862153
+          },
+          {
+            "old_seq": 5409,
+            "new_seq": 5411,
+            "match_count": 1,
+            "elapsed_ms": 0.1256909999938216
+          },
+          {
+            "old_seq": 5411,
+            "new_seq": 5412,
+            "match_count": 1,
+            "elapsed_ms": 0.15448800013473374
+          },
+          {
+            "old_seq": 5412,
+            "new_seq": 5414,
+            "match_count": 1,
+            "elapsed_ms": 0.12485699971875874
+          }
+        ],
+        "actual_pairs_all_unique": true,
+        "synthetic_candidate_count": 64,
+        "timing_iterations": 50,
+        "timing_ms": {
+          "median": 49.56474849996084,
+          "p95": 55.43320200013113,
+          "max": 56.566739000118105
+        },
+        "physical_output": false,
+        "timing_is_not_wcet_certificate": true
+      }
+    },
+    "rust_bridge_unchanged_sha256": "7f13145b4c9aeb4d3561580442d18fd94c75707f3a4177964093076eae88c0cd",
+    "new_motion_requests": 0,
+    "physical_acceptance": false,
+    "next_step": "matched locked deployment, then wait for a new explicit trial instruction"
+  }
+}
