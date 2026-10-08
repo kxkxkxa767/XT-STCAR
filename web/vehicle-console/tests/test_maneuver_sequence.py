@@ -76,6 +76,95 @@ class Harness:
 
 
 class ManeuverSequenceTests(unittest.TestCase):
+    def test_actual24_farther_endpoint_reduces_preparation_relative_to16(self):
+        fixture = Path(__file__).with_name('fixtures')/'left-cone-24-entry-endpoint.json'
+        caps = {}
+        for record in json.loads(fixture.read_text())['records']:
+            value = record['scan']
+            motion = ManeuverSequence(0.)
+            value = dict(value, received_at=.1)
+            result = motion.update(value, 0., .1, {'armed': False, 'motor': 1500,
+                'servo': 1500, 'tick': 100, 'seq': 0, 'command_acked': True})
+            self.assertTrue(result['start_ready'])
+            self.assertTrue(result['entry_bearing_required'])
+            self.assertFalse(result['entry_bearing_released'])
+            self.assertFalse(result['entry_bearing']['swept_path_certified'])
+            self.assertEqual(result['entry_bearing']['source_seq'], value['seq'])
+            self.assertEqual(result['motor'], 1500)
+            caps[record['trial']] = result['steering_target']
+        self.assertTrue(1500 < caps[24] < caps[16] < 1670, caps)
+
+    def test_endpoint_limited_preparation_still_waits_full_adoption_allowance(self):
+        fixture = Path(__file__).with_name('fixtures')/'left-cone-24-entry-endpoint.json'
+        original = json.loads(fixture.read_text())['records'][1]['scan']
+        motion = ManeuverSequence(0.)
+        servo, motor, first_adopted = 1500, 1500, None
+        for seq in range(1, 61):
+            now = seq/10
+            value = dict(original, seq=seq, at_ms=seq*100, received_at=now)
+            adopted = {'armed': True, 'servo': servo, 'motor': motor,
+                       'tick': seq*100, 'seq': seq, 'command_acked': True}
+            result = motion.update(value, 0., now, adopted)
+            servo, motor = result['servo'], result['motor']
+            if adopted['servo'] == result['steering_target'] and first_adopted is None:
+                first_adopted = now
+            if motor == 1560:
+                self.assertTrue(1500 < servo < 1670)
+                self.assertGreaterEqual(now-first_adopted+1e-9, 1.2)
+                self.assertGreaterEqual(result['steering_settle_feedback_ticks'], 3)
+                self.assertFalse(result['entry_bearing_released'])
+                break
+        else:
+            self.fail('limited preparation never adopted')
+
+    def test_endpoint_release_requires_advancing_evidence_then_keeps_left_demand(self):
+        from test_turn_motion import opening_scan
+        motion = ManeuverSequence(0.)
+        servo = 1500
+        for seq in range(1, 5):
+            # Synthetic endpoint is already lateral to the inflated front.
+            value = dict(opening_scan(seq), received_at=seq/10)
+            adopted = {'armed': True, 'servo': servo, 'motor': 1500,
+                       'tick': seq*100, 'seq': seq, 'command_acked': True}
+            result = motion.update(value, 0., seq/10, adopted)
+            servo = result['servo']
+            self.assertEqual(result['entry_bearing_released'], seq == 4)
+            duplicate = motion.update(value, 0., seq/10+.001, adopted)
+            self.assertEqual(duplicate['entry_bearing']['confirmation_count'], seq)
+        motion.phase, motion.drive_since = 'drive', .4
+        motion.turn_goal['target_point_left_m'] = {'x_m': 1., 'y_m': .3}
+        requested = motion._target(corridor(30.), .1)
+        self.assertTrue(motion.left_turn_feedback['opening_left_continuation_active'])
+        self.assertGreaterEqual(motion.left_turn_feedback['nominal_target_pwm'], 1670)
+        self.assertGreater(requested, 1500)
+        self.assertFalse(motion.entry_bearing['endpoint_passed_proven'])
+
+    def test_missing_endpoint_cannot_handover_or_extend_early_approach(self):
+        from test_turn_motion import opening_scan
+        motion = ManeuverSequence(0.)
+        original = opening_scan(1, endpoint_index=325)
+        original['received_at'] = .1
+        adopted = {'armed': True, 'servo': 1500, 'motor': 1500,
+                   'tick': 100, 'seq': 1, 'command_acked': True}
+        motion.update(original, 0., .1, adopted)
+        motion.phase, motion.drive_since, motion.servo = 'drive', .1, 1590
+        value = copy.deepcopy(original)
+        value['left_turn_goal'] = None
+        for seq in range(2, 5):
+            now = seq/10
+            value.update(seq=seq, at_ms=seq*100, received_at=now)
+            adopted.update(servo=1590, motor=1560, seq=seq, tick=seq*100)
+            result = motion.update(value, 0., now, adopted)
+            self.assertIsNone(result['entry_bearing'])
+            self.assertFalse(result['entry_bearing_released'])
+            self.assertFalse(motion._usable_target(target(value), value))
+            if seq < 4:
+                self.assertEqual(result['motor'], 1560)
+                self.assertEqual(result['servo'], 1590)
+            else:
+                self.assertEqual(result['motor'], 1500)
+                self.assertEqual(result['terminal_reason'], 'left_turn_entry_endpoint_lost')
+
     def test_actual21_same_wall_moderate_width_change_continues_but_old_turn_rejects(self):
         fixture = Path(__file__).with_name('fixtures')/'left-cone-21-exit-width.json'
         scans = json.loads(fixture.read_text())['scans']
@@ -587,7 +676,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         recovery = motion.update({**second, 'received_at': now}, 0., now, control)
         self.assertEqual((recovery['phase'], recovery['motor'], recovery['servo']), ('presteer', 1500, 1560))
         self.assertEqual(recovery['geometry_source_seq'], 639)
-        self.assertEqual(recovery['steering_target'], 1700)
+        self.assertEqual(recovery['steering_target'], 1670)  # Current endpoint bounds this early preparation.
         self.assertEqual(recovery['steering_settle_feedback_ticks'], 0)
 
     def test_neutral_hold_duplicate_frames_cannot_renew_scan_lease(self):

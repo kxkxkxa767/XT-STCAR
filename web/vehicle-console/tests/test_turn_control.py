@@ -1526,7 +1526,7 @@ class TurnCliTests(unittest.TestCase):
         self.assertEqual(report['semantic_class'], 'unknown')
         self.assertEqual(report['initial_presteer_pwm'], 1670)
         self.assertEqual(report['initial_presteer_scope'],
-                         'neutral_presteer_only_then_live_geometry_with_left_max_1720')
+                         'endpoint_limited_neutral_preparation_then_live_geometry_with_configured_left_reference')
         self.assertEqual(report['left_turn_servo_cap'], 1720)
         self.assertEqual((report['turn_presteer_max_s'], report['turn_drive_max_s'], report['coast_max_s']),
                          (8., 10., 5.))

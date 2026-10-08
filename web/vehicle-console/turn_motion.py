@@ -372,6 +372,9 @@ class TurnMotion:
         self.last_error = None
         self.natural_steering_target = None
 
+    def _presteer_target(self, target):
+        return self.initial_presteer_pwm if self.initial_presteer_pwm is not None else target
+
     def lock(self, reason):
         if self.phase == 'presteer':
             self.presteer_ended_at = self.last_now
@@ -776,8 +779,7 @@ class TurnMotion:
                 if control['armed']:
                     self._slew(now)
                 return self._result(now)
-            if self.initial_presteer_pwm is not None:
-                target = self.initial_presteer_pwm
+            target = self._presteer_target(target)
             # Small measurement noise does not endlessly restart an unchanged presteer command.
             if self.steering_target == NEUTRAL or abs(target-self.steering_target) > 10:
                 self.steering_target = target

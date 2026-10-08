@@ -8,7 +8,7 @@ import copy
 import math
 
 from compact_target import CompactTargetTracker
-from autonomy_live import (REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
+from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
                          PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number)
@@ -62,6 +62,91 @@ class ManeuverSequence(TurnMotion):
         self._current_scan = None
         self.inner_clearance = None
         self.quality_coast_servo = None
+        self.entry_bearing_required = False
+        self.entry_bearing_released = False
+        self.entry_bearing = None
+        self._entry_last_receive = self._entry_last_publication = None
+        self._entry_ready_count = 0
+        self._entry_ready_receive = self._entry_ready_publication = None
+        self.adopted_presteer_pwm = None
+
+    def _measurement(self, scan, candidates, publication_dt):
+        candidate = super()._measurement(scan, candidates, publication_dt)
+        if self.geometry_mode == 'opening_wall':
+            self.entry_bearing_required = True
+        return candidate
+
+    def _endpoint_observation(self, scan):
+        super()._endpoint_observation(scan)
+        if not self.entry_bearing_required or self.entry_bearing_released:
+            return
+        # Called only after native geometry and its same-scan ray binding have
+        # been validated. The cached turn_goal may contain an OLD endpoint.
+        opening = scan.get('left_turn_goal')
+        if opening is None:
+            self.entry_bearing = None
+            self._entry_ready_count = 0
+            self._entry_ready_receive = self._entry_ready_publication = None
+            return
+        point = opening['incoming_left_end_support']['point_left_m']
+        heading = opening['incoming_heading_left_rad']
+        c, s = math.cos(heading), math.sin(heading)
+        corners = [(x, y) for x in (-REAR_BODY_EXTENT_M, FRONT_BODY_EXTENT_M)
+                   for y in (-SIDE_BODY_EXTENT_M, SIDE_BODY_EXTENT_M)]
+        # Project the measured body, with the existing 8 cm allowance, onto
+        # the current incoming-wall axes. Neither distance is a course length.
+        front = max(c*x+s*y for x, y in corners)+MANEUVER_BODY_CLEARANCE_M
+        side = max(-s*x+c*y for x, y in corners)+MANEUVER_BODY_CLEARANCE_M
+        forward_gap = c*point['x_m']+s*point['y_m']-front
+        lateral_gap = -s*point['x_m']+c*point['y_m']-side
+        bearing = heading+math.atan2(max(0., lateral_gap), max(0., forward_gap))
+        cap = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*bearing)))
+        if lateral_gap <= 0:
+            cap = NEUTRAL
+        permits_prepared_left = cap >= self.initial_presteer_pwm
+        if permits_prepared_left:
+            if self._entry_ready_count == 0:
+                self._entry_ready_receive = self.last_now
+                self._entry_ready_publication = scan['at_ms']
+            self._entry_ready_count += 1
+            if (self._entry_ready_count >= 3
+                    and self.last_now-self._entry_ready_receive >= .25
+                    and (scan['at_ms']-self._entry_ready_publication)/1000 >= .25):
+                self.entry_bearing_released = True
+        else:
+            self._entry_ready_count = 0
+            self._entry_ready_receive = self._entry_ready_publication = None
+        self._entry_last_receive, self._entry_last_publication = self.last_now, scan['at_ms']
+        self.entry_bearing = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'endpoint_return': copy.deepcopy(opening['incoming_left_end_support']),
+            'incoming_heading_left_rad': heading, 'body_forward_support_m': front,
+            'body_left_support_m': side, 'forward_gap_m': forward_gap,
+            'lateral_gap_m': lateral_gap, 'clearance_bearing_left_rad': bearing,
+            'steering_cap_pwm': cap, 'prepared_left_pwm': self.initial_presteer_pwm,
+            'confirmation_count': self._entry_ready_count,
+            'released': self.entry_bearing_released,
+            'scope': 'early_turn_endpoint_bearing_heuristic',
+            'endpoint_passed_proven': False, 'swept_path_certified': False,
+            'physical_curvature_calibrated': False}
+
+    def _entry_target(self, target):
+        if not self.entry_bearing_required or self.entry_bearing_released:
+            return target
+        if self.entry_bearing is not None:
+            return min(target, self.entry_bearing['steering_cap_pwm'])
+        if self.phase == 'presteer':
+            return NEUTRAL  # Missing current endpoint cannot mature adoption.
+        # A brief missing endpoint only holds the already commanded steering;
+        # it cannot authorize more left, target handover or a renewed lease.
+        if (self._entry_last_receive is not None
+                and self.last_now-self._entry_last_receive < SCAN_AGE_S
+                and (self.last_publication-self._entry_last_publication)/1000 < SCAN_AGE_S):
+            return self.servo
+        self.begin_coast('left_turn_entry_endpoint_lost', self.last_now)
+        return NEUTRAL
+
+    def _presteer_target(self, target):
+        return self._entry_target(super()._presteer_target(target))
 
     def begin_quality_coast(self, now, control):
         """Cut power while retaining only an ACKed left orbit-entry command."""
@@ -158,6 +243,8 @@ class ManeuverSequence(TurnMotion):
         super().lock(reason)
 
     def _result(self, now):
+        if self.phase == 'drive' and self.adopted_presteer_pwm is None:
+            self.adopted_presteer_pwm = self.servo
         result = super()._result(now)
         stage = ('orbit_entry' if self.handover_observed and self.phase == 'drive'
                  else 'left_turn' if self.phase == 'drive' else result['turn_stage'])
@@ -181,6 +268,10 @@ class ManeuverSequence(TurnMotion):
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,
                       inner_clearance=copy.deepcopy(self.inner_clearance),
+                      entry_bearing=copy.deepcopy(self.entry_bearing),
+                      entry_bearing_required=self.entry_bearing_required,
+                      entry_bearing_released=self.entry_bearing_released,
+                      adopted_presteer_pwm=self.adopted_presteer_pwm,
                       quality_coast_servo=self.quality_coast_servo,
                       quality_coast_hold_active=(self.phase == 'coast'
                                                 and self.quality_coast_servo is not None),
@@ -188,6 +279,8 @@ class ManeuverSequence(TurnMotion):
         return result
 
     def _usable_target(self, target, scan):
+        if self.entry_bearing_required and not self.entry_bearing_released:
+            return False
         if not isinstance(target, dict) or target.get('confirmed') is not True:
             return False
         point = target.get('point_left_m')
@@ -209,7 +302,7 @@ class ManeuverSequence(TurnMotion):
         # trial18 the object was still ahead of the lateral axis and approaching;
         # two negative terms erased the adopted left demand immediately after
         # handover. Trial19 additionally inherited an already released 1538.
-        # Continue from the adopted preparation demand, rather than treating
+        # Continue from the configured left reference, rather than treating
         # the wall controller's final release as an orbit feedforward value.
         # The first handover output still holds the current adopted command;
         # subsequent increases obey the normal slew. A target moving behind
@@ -290,7 +383,8 @@ class ManeuverSequence(TurnMotion):
         # so a rapidly changing wall estimate does not erase most left steering
         # while the exit is still far from forward. No minimum fixed PWM is
         # introduced: a genuinely smaller current error still releases toward
-        # center. These are trial gains, not a physical curvature calibration.
+        # center before the continuation rule below. These are trial gains,
+        # not a physical curvature calibration.
         heading, offset = candidate['heading_left_rad'], candidate['center_offset_left_m']
         lookahead = max(.35, min(1., candidate['width_m']/2))
         if self.geometry_mode == 'opening_wall':
@@ -317,17 +411,19 @@ class ManeuverSequence(TurnMotion):
                               and self.turn_goal['target_point_left_m']['y_m'] <= 0)
         if transition_trigger:
             self.left_handover_preparing = True
-        continuing_left = opening_drive and heading > 0 and self.left_handover_preparing
+        continuing_left = (opening_drive and heading > 0
+                           and (self.left_handover_preparing or self.entry_bearing_released))
         if continuing_left:
             # Opening-wall alignment is not a request to straighten before the
             # next left orbit. Trial19's projected target moved to the right
             # while exit heading was still left, driving its command near1500.
-            # Earlier opening steering is unchanged. Once this transition has
-            # started, a small projection sign change cannot release it again.
+            # The current endpoint-bearing gate can also establish this demand
+            # after the early approach. A small projection sign change cannot
+            # release it again. Neither condition proves the endpoint is passed.
             # Current geometry, original leases and all hard gates still apply.
-            # The initial command has already passed adopted neutral presteer
-            # before drive. Keep it as the continuation baseline, with live
-            # stronger demand and independent inside-edge release below.
+            # Initial PWM is the configured continuation reference; the entry
+            # gate may have lowered actual neutral preparation, recorded as
+            # adopted_presteer_pwm. All increases retain the normal slew.
             target = max(target, self.initial_presteer_pwm)
         self.left_turn_feedback = {
             'source_seq': self._current_scan.get('seq') if self._current_scan else None,
@@ -342,6 +438,8 @@ class ManeuverSequence(TurnMotion):
             'physical_curvature_calibrated': False}
         if self.phase == 'drive':
             target = self._limit_left_for_known_points(target, lookahead)
+        target = self._entry_target(target)
+        self.left_turn_feedback['endpoint_limited_target_pwm'] = target
         self._last_actual_left_target = target if target > NEUTRAL else None
         return target
 

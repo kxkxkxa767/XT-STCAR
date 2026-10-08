@@ -158,7 +158,7 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
             handover_observed=bool(result.get('handover_observed')),
             orbit_entry_elapsed_s=result.get('orbit_entry_elapsed_s', 0.),
             initial_presteer_pwm=initial_presteer_pwm,
-            initial_presteer_scope='neutral_presteer_only_then_live_geometry_with_left_max_1720',
+            initial_presteer_scope='endpoint_limited_neutral_preparation_then_live_geometry_with_configured_left_reference',
             left_turn_servo_cap=SERVO_MAX,
             turn_presteer_max_s=presteer_max_s,
             turn_drive_max_s=max_seconds, coast_max_s=COAST_MAX_S,
@@ -313,7 +313,7 @@ def main():
                     initial_presteer_scope='presteer_only_motor_neutral_then_live_geometry')
             if args.command == 'turn-cone':
                 output.update(trial_mode='turn-cone', trial_scope='first_lidar_compact_target_orbit_entry',
-                    initial_presteer_scope='neutral_presteer_only_then_live_geometry_with_left_max_1720',
+                    initial_presteer_scope='endpoint_limited_neutral_preparation_then_live_geometry_with_configured_left_reference',
                     left_turn_servo_cap=state['autonomy'].get('left_turn_servo_cap'),
                     semantic_class='unknown', competition_supported=False, completed=False,
                     turn_presteer_max_s=state['autonomy'].get('turn_presteer_max_s'),
