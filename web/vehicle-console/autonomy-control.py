@@ -44,8 +44,45 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
             start['duration_ms'] = duration_ms
         run = request('/api/autonomy', start)
         sequence = 0
+        heartbeat_stats = {'requests': 0, 'acknowledged': 0, 'full_state_reads': 0,
+                           'max_request_elapsed_s': 0., 'max_ack_gap_s': 0.,
+                           'mode': 'heartbeat_first_terminal_state_read'}
+        last_heartbeat_ack = None
+        if compact_target_trial:
+            run['client_heartbeat'] = heartbeat_stats
         end = time.monotonic() + duration_ms / 1000 + (COAST_MAX_S if centering else 0) + 1
         while time.monotonic() < end:
+            heartbeat_error = None
+            if compact_target_trial:
+                # The service validates run/epoch/sequence and its unchanged
+                # 300 ms lease before ACKing. A full-state GET must not delay
+                # each renewal. The service owns all live motion/quality gates;
+                # no thread or heartbeat continues after this bounded loop.
+                sequence += 1
+                heartbeat_stats['requests'] += 1
+                sent_at = time.monotonic()
+                try:
+                    ack = request('/api/autonomy', {'op': 'heartbeat', 'boot': state['boot'],
+                        'epoch': run['epoch'], 'run_id': run['run_id'], 'seq': sequence})
+                    if not isinstance(ack, dict) or ack.get('ok') is not True:
+                        raise RuntimeError('invalid_autonomy_heartbeat_ack')
+                except RuntimeError as error:
+                    heartbeat_error = error
+                finally:
+                    replied_at = time.monotonic()
+                    heartbeat_stats['max_request_elapsed_s'] = max(
+                        heartbeat_stats['max_request_elapsed_s'], replied_at-sent_at)
+                if heartbeat_error is None:
+                    heartbeat_stats['acknowledged'] += 1
+                    if last_heartbeat_ack is not None:
+                        heartbeat_stats['max_ack_gap_s'] = max(
+                            heartbeat_stats['max_ack_gap_s'], replied_at-last_heartbeat_ack)
+                    last_heartbeat_ack = replied_at
+                    time.sleep(.04)
+                    continue
+                # An ended/changed run rejects heartbeat. Read its terminal
+                # state and still wait for fresh neutral feedback below.
+                heartbeat_stats['full_state_reads'] += 1
             latest = request('/api/state')
             active = latest['autonomy']['active']
             result = latest['autonomy']['last_result']
@@ -63,6 +100,8 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
                 if not result or result.get('run_id') != run['run_id'] or not result.get('completed'):
                     raise ProbeInterrupted(latest, run)
                 return latest, run
+            if compact_target_trial:
+                raise heartbeat_error  # Rejection while still active is not retried.
             sequence += 1
             try:
                 if formal_goal:
@@ -113,6 +152,7 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
             'physical_steering_confirmed': False, 'physical_standstill_verified': False,
             'competition_navigation': False}
     if compact_target_trial:
+        report['client_heartbeat'] = run.get('client_heartbeat')
         report.update(trial_scope='first_lidar_compact_target_orbit_entry', semantic_class='unknown',
             competition_supported=False, compact_target=result.get('compact_target'),
             handover_observed=bool(result.get('handover_observed')),

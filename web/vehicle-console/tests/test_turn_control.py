@@ -1572,6 +1572,8 @@ class TurnCliTests(unittest.TestCase):
         def request(path, data=None):
             if data:
                 calls.append(data)
+                if data['op'] == 'heartbeat':
+                    raise RuntimeError('autonomy_session_ended')
                 return {'run_id': 'run', 'epoch': 0}
             index = len(reads)
             reads.append(index)
@@ -1584,7 +1586,7 @@ class TurnCliTests(unittest.TestCase):
                     'motor': 1500, 'servo': 1700 if index == 0 else 1500}}}
         with patch.object(cli.time, 'sleep'):
             result = cli.first_compact_target_trial(request, state, 10, True)
-        self.assertEqual([call['op'] for call in calls], ['turn_cone_start', 'cancel'])
+        self.assertEqual([call['op'] for call in calls], ['turn_cone_start', 'heartbeat', 'heartbeat', 'cancel'])
         self.assertEqual(reads, [0, 1])
         self.assertEqual(calls[0]['initial_presteer_pwm'], 1670)
         self.assertEqual(calls[0]['max_drive_s'], 10)
@@ -1623,12 +1625,13 @@ class TurnCliTests(unittest.TestCase):
         cli = self.module()
         state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
         clock, calls, reads = [0.], [], []
-        def monotonic():
-            clock[0] += 1.
-            return clock[0]
         def request(path, data=None):
             if data:
                 calls.append(data['op'])
+                if data['op'] == 'heartbeat':
+                    if clock[0] >= 23.:
+                        raise RuntimeError('autonomy_session_ended')
+                    return {'ok': True}
                 return {'run_id': 'run', 'epoch': 0}
             reads.append(clock[0])
             ended = clock[0] >= 23.
@@ -1637,13 +1640,73 @@ class TurnCliTests(unittest.TestCase):
                     'run_id': 'run', 'completed': False, 'reason': 'coast_standstill_unconfirmed'}},
                 'ages': {'control': .01}, 'status': {'control': {'armed': not ended,
                     'motor': 1500, 'servo': 1500}}}
-        with patch.object(cli.time, 'monotonic', side_effect=monotonic), patch.object(cli.time, 'sleep'):
+        def sleep(seconds):
+            clock[0] = round(clock[0]+seconds, 6)
+        with patch.object(cli.time, 'monotonic', side_effect=lambda: clock[0]),\
+             patch.object(cli.time, 'sleep', side_effect=sleep):
             result = cli.first_compact_target_trial(request, state, 10, True)
         self.assertEqual(reads[-1], 23.)
         self.assertEqual(calls.count('turn_cone_start'), 1)
         self.assertEqual(calls[-1], 'cancel')
         self.assertTrue(result['fresh_neutral_locked_confirmed'])
         self.assertFalse(result['completed'])
+
+    def test_compact_cli_renews_without_full_state_poll_and_records_roundtrip_timing(self):
+        cli = self.module()
+        state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+        clock, calls, reads, heartbeats = [0.], [], [], []
+        def request(path, data=None):
+            if data:
+                calls.append(data['op'])
+                if data['op'] == 'heartbeat':
+                    heartbeats.append(data['seq'])
+                    clock[0] += .06
+                    if len(heartbeats) == 6:
+                        raise RuntimeError('autonomy_session_ended')
+                    return {'ok': True}
+                return {'run_id': 'run', 'epoch': 0}
+            reads.append(clock[0])
+            self.assertEqual(len(heartbeats), 6)
+            # A slow full report is requested only after lease rejection.
+            clock[0] += .2
+            return {'autonomy': {'mode': 'locked', 'active': None, 'last_result': {
+                'run_id': 'run', 'reason': 'coast_standstill_unconfirmed', 'completed': False}},
+                'status': {'control': {'armed': False, 'motor': 1500, 'servo': 1500}},
+                'ages': {'control': .01}}
+        def sleep(seconds):
+            clock[0] += seconds
+        with patch.object(cli.time, 'monotonic', side_effect=lambda: clock[0]),\
+             patch.object(cli.time, 'sleep', side_effect=sleep):
+            result = cli.first_compact_target_trial(request, state, 10, True)
+        self.assertEqual(heartbeats, list(range(1, 7)))
+        self.assertEqual(len(reads), 1)
+        self.assertEqual(calls.count('turn_cone_start'), 1)
+        self.assertEqual(calls[-1], 'cancel')
+        stats = result['client_heartbeat']
+        self.assertEqual((stats['requests'], stats['acknowledged'], stats['full_state_reads']), (6, 5, 1))
+        self.assertAlmostEqual(stats['max_request_elapsed_s'], .06)
+        self.assertAlmostEqual(stats['max_ack_gap_s'], .10)
+        self.assertFalse(result['completed'])
+
+    def test_compact_cli_active_heartbeat_failure_or_manual_takeover_never_restarts(self):
+        for fault in ['rejected_active', 'invalid_ack', 'manual']:
+            with self.subTest(fault=fault):
+                cli = self.module()
+                state = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
+                calls = []
+                def request(path, data=None):
+                    if data:
+                        calls.append(data['op'])
+                        if data['op'] == 'heartbeat':
+                            if fault == 'invalid_ack':
+                                return {'ok': False}
+                            raise RuntimeError('heartbeat rejected')
+                        return {'run_id': 'run', 'epoch': 0}
+                    return {'autonomy': {'active': None if fault == 'manual' else {'run_id': 'run'},
+                        'mode': 'manual' if fault == 'manual' else 'auto_turn_cone_trial', 'last_result': None}}
+                with self.assertRaises(RuntimeError):
+                    cli.first_compact_target_trial(request, state, 10, True)
+                self.assertEqual(calls, ['turn_cone_start', 'heartbeat', 'cancel'])
 
     def test_cli_invalid_initial_parameter_fails_before_state_request(self):
         cli = self.module()
