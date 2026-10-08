@@ -743,12 +743,16 @@ class Console:
             self.halt('coast_standstill_unconfirmed')
             return
         if session.get('turn_motion') is not None:
+            quality_hold = self.turn_quality_coast_active(session)
+            if (getattr(session['turn_motion'], 'quality_coast_servo', None) is not None
+                    and not quality_hold):
+                raise ValueError('turn_quality_coast_feedback_changed')
             control = self.status['control']
             pending_servo = session['turn_servo_sequence']
             turn_control = {**control, 'command_acked': pending_servo is None or control.get('seq', -1) >= pending_servo}
             scan = {**self.scan, 'received_at': self.scan_at} if session.get('maneuver_sequence') else self.scan
             decision = session['turn_motion'].update(scan, report['sensor_ages']['lidar'], now,
-                turn_control, safe=motion_ready)
+                turn_control, safe=motion_ready or quality_hold)
             report['turn'] = decision
             report['physical_steering_confirmed'] = False
             report['observed_alignment'] = decision['observed_alignment']
@@ -959,6 +963,22 @@ class Console:
                 session['report']['clearance_current'] = obstacle_clearance
             self.halt(str(error))
 
+    def turn_quality_coast_active(self, session):
+        """Incomplete returns permit only bounded neutral holding, never drive."""
+        motion = session.get('turn_motion')
+        held = getattr(motion, 'quality_coast_servo', None)
+        control = self.status.get('control', {})
+        neutral_seq = session.get('coast_neutral_sequence')
+        return (session.get('maneuver_sequence') is True
+                and session.get('phase') == getattr(motion, 'phase', None) == 'coast'
+                and type(held) is int and 1500 < held <= SERVO_MAX
+                and set(session['report'].get('quality_issues', [])) <= {'scan_incomplete'}
+                and control.get('armed') is True and control.get('servo') == held
+                and control.get('seq', -1) >= self.arm_sequence
+                and (control.get('motor') == 1500
+                     or (control.get('motor') == TRIAL_MOTOR
+                         and (neutral_seq is None or control.get('seq', -1) < neutral_seq))))
+
     def turn_tick(self, session, now, motion_ready):
         """One trial owner; no rear exemption, segment restart or navigation completion."""
         report = session['report']
@@ -971,8 +991,27 @@ class Console:
             and set(report.get('quality_issues', [])) <= {'front_sparse'}
             and session['recovery'].waiting)
         if not motion_ready and not neutral_wait:
-            self.halt('turn_perception_unavailable')
-            return
+            pending_servo = session['turn_servo_sequence']
+            turn_control = {**control, 'command_acked': pending_servo is None
+                            or control.get('seq', -1) >= pending_servo}
+            if (session.get('maneuver_sequence') is True
+                    and session.get('phase') == motion.phase == 'drive'
+                    and control.get('seq', -1) >= self.arm_sequence
+                    and set(report.get('quality_issues', [])) == {'scan_incomplete'}
+                    and motion.begin_quality_coast(now, turn_control)):
+                # Trial20 centered immediately on incomplete returns while the
+                # vehicle could still be coasting. Keep only its already ACKed
+                # left steering and cut motor now. Other faults still halt.
+                self.begin_coast('turn_perception_unavailable', now)
+                report['quality_coast_trigger'] = {
+                    'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
+                    'quality_issues': list(report['quality_issues']),
+                    'adopted_servo': control['servo'], 'control_tick': control['tick'],
+                    'control_seq': control['seq'], 'motor_command': 1500,
+                    'hold_max_s': COAST_MAX_S, 'positive_motor_restore_allowed': False}
+            elif not self.turn_quality_coast_active(session):
+                self.halt('turn_perception_unavailable')
+                return
         if session.get('phase') == 'coast':
             self.coast_tick(session, now, motion_ready, report['servo'])
             return

@@ -60,6 +60,23 @@ class ManeuverSequence(TurnMotion):
         self._presteer_adoption_context = None
         self._current_scan = None
         self.inner_clearance = None
+        self.quality_coast_servo = None
+
+    def begin_quality_coast(self, now, control):
+        """Cut power while retaining only an ACKed left orbit-entry command."""
+        if (self.phase != 'drive' or not self.handover_observed
+                or control.get('armed') is not True
+                or control.get('motor') != TRIAL_MOTOR
+                or control.get('command_acked') is not True
+                or type(control.get('servo')) is not int
+                or not NEUTRAL < control['servo'] == self.servo <= SERVO_MAX):
+            return False
+        self.begin_coast('turn_perception_unavailable', now)
+        if self.phase != 'coast':
+            return False
+        self.quality_coast_servo = control['servo']
+        self.steering_target = self.quality_coast_servo
+        return True
 
     def begin_coast(self, reason, now):
         if self.phase not in ('coast', 'locked') and _number(now) and now >= self.last_now:
@@ -147,6 +164,9 @@ class ManeuverSequence(TurnMotion):
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,
                       inner_clearance=copy.deepcopy(self.inner_clearance),
+                      quality_coast_servo=self.quality_coast_servo,
+                      quality_coast_hold_active=(self.phase == 'coast'
+                                                and self.quality_coast_servo is not None),
                       wall_ambiguity_hold=self.wall_ambiguity_hold)
         return result
 
@@ -378,7 +398,8 @@ class ManeuverSequence(TurnMotion):
             if self.coast_since is not None and now-self.coast_since+1e-9 >= COAST_MAX_S:
                 self.lock('coast_standstill_unconfirmed')
             else:
-                self.steering_target = NEUTRAL
+                self.steering_target = (NEUTRAL if self.quality_coast_servo is None
+                                        else self.quality_coast_servo)
                 self._slew(now)
             return self._result(now)
         if not advancing:
