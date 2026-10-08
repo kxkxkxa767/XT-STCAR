@@ -46,6 +46,9 @@ class ManeuverSequence(TurnMotion):
         self.max_presteer_s = PRESTEER_MAX_S
         self.target_tracker = CompactTargetTracker()
         self.compact_target = None
+        self._last_confirmed_compact_target = None
+        self.compact_target_error = None
+        self.compact_loss_evidence = None
         self.handover_observed = False
         self.orbit_since = self.orbit_reference_range_m = None
         self.orbit_bias_pwm = None
@@ -264,6 +267,7 @@ class ManeuverSequence(TurnMotion):
         result.update(turn_stage=stage, trial_scope='first_lidar_compact_target_orbit_entry',
                       compact_target=copy.deepcopy(self.compact_target),
                       compact_target_reason=getattr(self.target_tracker, 'reason', None),
+                      compact_loss_evidence=copy.deepcopy(self.compact_loss_evidence),
                       handover_observed=self.handover_observed,
                       orbit_reference_range_m=self.orbit_reference_range_m,
                       orbit_bias_pwm=self.orbit_bias_pwm,
@@ -310,6 +314,24 @@ class ManeuverSequence(TurnMotion):
                 and abs(math.hypot(*point)-target['range_m']) <= 1e-6
                 and abs(math.atan2(point[1], point[0])-target['bearing_left_rad']) <= 1e-6
                 and target.get('track_id') is not None)
+
+    def _capture_compact_loss(self, scan, now, control, reason):
+        # A one-shot in-memory snapshot from the actual control decision.
+        # HTTP observers can skip the failing frame between successive reads.
+        # Later scans must not overwrite this evidence. No disk IO or new
+        # actuator behavior is introduced into the control tick.
+        if self.compact_loss_evidence is None:
+            self.compact_loss_evidence = {
+                'decision_at': now, 'reason': reason,
+                'tracker_reason': getattr(self.target_tracker, 'reason', None),
+                'tracker_error': self.compact_target_error,
+                'scan': copy.deepcopy({k: scan.get(k) for k in
+                    ('frame_id', 'seq', 'at_ms', 'received_at', 'ranges')}),
+                'previous_confirmed_target': copy.deepcopy(self._last_confirmed_compact_target),
+                'current_target': copy.deepcopy(self.compact_target),
+                'control': copy.deepcopy({k: control.get(k) for k in
+                    ('armed', 'motor', 'servo', 'tick', 'seq', 'command_acked')}),
+                'physical_identity_verified': False}
 
     def _relative_target_pwm(self, target):
         # This is the bounded entry stage, not a settled circular orbit. In
@@ -559,6 +581,7 @@ class ManeuverSequence(TurnMotion):
         if not advancing:
             return self._result(now)
         if not self._usable_target(self.compact_target, scan):
+            self._capture_compact_loss(scan, now, control, 'compact_target_lost_or_ambiguous')
             self.begin_coast('compact_target_lost_or_ambiguous', now)
             self._slew(now)
             return self._result(now)
@@ -595,6 +618,7 @@ class ManeuverSequence(TurnMotion):
             self.alignment_evidence = None
             self.alignment_publication = self.alignment_receive = None
         elif self.compact_target['track_id'] != self.orbit_track_id:
+            self._capture_compact_loss(scan, now, control, 'compact_target_identity_changed')
             self.begin_coast('compact_target_identity_changed', now)
             self._slew(now)
             return self._result(now)
@@ -627,10 +651,14 @@ class ManeuverSequence(TurnMotion):
         if not _number(now) or now < self.last_now:
             self.lock('invalid_turn_receive_clock')
             return self._result(self.last_now)
+        if self.compact_target is not None and self.compact_target.get('confirmed') is True:
+            self._last_confirmed_compact_target = self.compact_target
+        self.compact_target_error = None
         try:
             self.compact_target = self.target_tracker.update(scan, now)
-        except (ValueError, TypeError, KeyError):
+        except (ValueError, TypeError, KeyError) as error:
             self.compact_target = None
+            self.compact_target_error = type(error).__name__
         if entry_stop is not None:
             # The new trial is target tracking, not the old optional stop input.
             self.lock('unsupported_maneuver_entry_stop')

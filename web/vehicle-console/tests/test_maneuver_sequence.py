@@ -461,6 +461,27 @@ class ManeuverSequenceTests(unittest.TestCase):
                 self.assertEqual(second['orbit_feedback']['nominal_target_pwm'], 1720)
                 self.assertEqual(second['servo'], 1548)
 
+    def test_target_loss_keeps_exact_decision_scan_after_recovery(self):
+        h = Harness()
+        prior = h.orbit()
+        h.observer.factory = lambda value: None
+        h.observer.reason = 'compact_target_missing'
+        stopped = h.step()
+        evidence = copy.deepcopy(stopped['compact_loss_evidence'])
+        self.assertEqual(evidence['scan'], {k: h.latest_scan[k] for k in
+            ('frame_id', 'seq', 'at_ms', 'received_at', 'ranges')})
+        self.assertEqual(evidence['previous_confirmed_target'], prior['compact_target'])
+        self.assertEqual(evidence['tracker_reason'], 'compact_target_missing')
+        self.assertEqual(evidence['control'], h.latest_control)
+        self.assertEqual(stopped['motor'], 1500)
+        stopped['compact_loss_evidence']['scan']['ranges'][0] = 99
+        h.latest_scan['ranges'][1] = 99
+        h.observer.factory = lambda value: target(value, identity=2)
+        recovered = h.step()
+        self.assertEqual(recovered['compact_loss_evidence'], evidence)
+        self.assertEqual(recovered['phase'], 'coast')
+        self.assertEqual(recovered['motor'], 1500)
+
     def test_target_loss_and_identity_jump_latch_coast_without_restart(self):
         for lost in ('none', 'unconfirmed', 'identity'):
             with self.subTest(lost=lost):
