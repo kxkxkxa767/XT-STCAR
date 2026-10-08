@@ -50,6 +50,9 @@ class ManeuverSequence(TurnMotion):
         self.orbit_since = self.orbit_reference_range_m = None
         self.orbit_bias_pwm = None
         self.orbit_feedback = None
+        self.orbit_left_entry_boost = False
+        self._orbit_abeam_count = 0
+        self._orbit_abeam_publication = self._orbit_abeam_receive = None
         self.left_turn_feedback = None
         self.left_handover_preparing = False
         self.handover_control = None
@@ -265,6 +268,7 @@ class ManeuverSequence(TurnMotion):
                       orbit_reference_range_m=self.orbit_reference_range_m,
                       orbit_bias_pwm=self.orbit_bias_pwm,
                       orbit_feedback=copy.deepcopy(self.orbit_feedback),
+                      orbit_left_entry_boost=self.orbit_left_entry_boost,
                       left_turn_feedback=copy.deepcopy(self.left_turn_feedback),
                       handover_control=copy.deepcopy(self.handover_control),
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
@@ -326,11 +330,36 @@ class ManeuverSequence(TurnMotion):
         bias = self.orbit_bias_pwm if self.orbit_bias_pwm is not None else self.initial_presteer_pwm
         entry_base = max(bias, self.initial_presteer_pwm)
         requested = max(NEUTRAL, min(SERVO_MAX, round(entry_base+correction)))
+        # Trial26's accepted initial turn handed over with the real object
+        # still left/front. Both old correction terms stayed negative, so the
+        # command stopped increasing at1670 and the operator hit the right
+        # wall. For this bounded entry only, continue requesting the existing
+        # left limit while that same confirmed object has not reached abeam.
+        # Actual commands still increase at10/100ms, and current inside points
+        # may release left independently. This is not a calibrated orbit law.
+        if self.orbit_left_entry_boost:
+            if target['bearing_left_rad'] >= ORBIT_BEARING_RAD:
+                if self._orbit_abeam_count == 0:
+                    self._orbit_abeam_publication = target['source_at_ms']
+                    self._orbit_abeam_receive = self.last_now
+                self._orbit_abeam_count += 1
+                if (self._orbit_abeam_count >= 3
+                        and (target['source_at_ms']-self._orbit_abeam_publication)/1000 >= .25
+                        and self.last_now-self._orbit_abeam_receive >= .25):
+                    self.orbit_left_entry_boost = False
+            else:
+                self._orbit_abeam_count = 0
+                self._orbit_abeam_publication = self._orbit_abeam_receive = None
+            if self.orbit_left_entry_boost:
+                requested = SERVO_MAX
         self.orbit_feedback = {'source_seq': target.get('source_seq'),
             'source_at_ms': target.get('source_at_ms'), 'scope': 'bounded_orbit_entry_only',
             'adopted_handover_bias_pwm': bias, 'prepared_left_pwm': self.initial_presteer_pwm,
             'entry_base_pwm': entry_base, 'bearing_term_pwm': bearing_term,
             'range_term_pwm': range_term, 'applied_entry_correction_pwm': correction,
+            'left_entry_boost_active': self.orbit_left_entry_boost,
+            'abeam_confirmations': self._orbit_abeam_count,
+            'boost_scope': 'first_target_ahead_at_handover_until_current_abeam_evidence',
             'nominal_target_pwm': requested, 'inside_edge_release_remains_independent': True,
             'physical_curvature_calibrated': False}
         return requested
@@ -555,6 +584,7 @@ class ManeuverSequence(TurnMotion):
             self.orbit_since = now
             self.orbit_reference_range_m = self.compact_target['range_m']
             self.orbit_bias_pwm = control['servo']
+            self.orbit_left_entry_boost = self.compact_target['bearing_left_rad'] < ORBIT_BEARING_RAD
             self.handover_control = {key: control[key] for key in ('motor', 'servo', 'tick', 'seq')}
             self.handover_control.update(command_acked=True, physical_steering_confirmed=False,
                 target_source_seq=scan['seq'], target_source_at_ms=scan['at_ms'])
