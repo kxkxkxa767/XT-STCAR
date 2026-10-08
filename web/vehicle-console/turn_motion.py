@@ -352,6 +352,7 @@ class TurnMotion:
         self.start_ready = False
         self.presteer_waiting = False
         self.incoming_endpoint = None
+        self.exit_width_change = None
 
     def _endpoint_observation(self, scan):
         # Diagnostics only: cached turn_goal fields are not current ray evidence.
@@ -437,6 +438,7 @@ class TurnMotion:
                 'turn_stage': 'presteer_wait' if self.presteer_waiting and self.phase == 'presteer' else self.phase,
                 'incoming_endpoint_current': self.incoming_endpoint is not None,
                 'incoming_endpoint': copy.deepcopy(self.incoming_endpoint),
+                'exit_width_change': copy.deepcopy(self.exit_width_change),
                 'turn_goal': copy.deepcopy(self.turn_goal),
                 'outer_wall': copy.deepcopy(self.outer_wall),
                 'corridor': dict(self.corridor) if self.corridor else None}
@@ -497,6 +499,12 @@ class TurnMotion:
                 group.append((wall, support))
         return [dict(group[0][0]) for group in unique]
 
+    def _exit_width_change_limit(self, previous_width):
+        return .15
+
+    def _continue_with_tracked_width(self):
+        return False
+
     def _measurement(self, scan, candidates, publication_dt):
         opening, walls = scan.get('left_turn_goal'), scan.get('wall_candidates', [])
         if (not isinstance(walls, list) or len(walls) > 64 or any(not _valid_wall(w) for w in walls)
@@ -518,12 +526,26 @@ class TurnMotion:
                 raise ValueError('left_turn_geometry_missing')
             wall = matches[0]
             width = self.corridor['width_m']
+            update_from_opening = opening is not None
             if opening:
-                if abs(opening['width_m']-width) > .15:
-                    raise ValueError('left_turn_exit_width_jump')
-                width = opening['width_m']
-                self.turn_goal = dict(opening)
-            else:
+                delta = abs(opening['width_m']-width)
+                limit = self._exit_width_change_limit(width)
+                accepted = delta <= limit or math.isclose(delta, limit, rel_tol=0, abs_tol=1e-12)
+                self.exit_width_change = {'source_seq': scan['seq'],
+                    'source_at_ms': scan['at_ms'], 'previous_width_m': width,
+                    'current_width_m': opening['width_m'], 'absolute_change_m': delta,
+                    'relative_change': delta/width, 'allowed_change_m': limit,
+                    'accepted': accepted, 'wall_identity_checked': True,
+                    'action': 'adopt_current_width' if accepted else 'reject_width_jump'}
+                if not accepted:
+                    if not self._continue_with_tracked_width():
+                        raise ValueError('left_turn_exit_width_jump')
+                    update_from_opening = False
+                    self.exit_width_change['action'] = 'track_current_wall_keep_previous_width'
+                else:
+                    width = opening['width_m']
+                    self.turn_goal = dict(opening)
+            if not update_from_opening:
                 # Live finite support defines a new reference point on the same
                 # measured wall's offset centerline; no global pose is invented.
                 theta = wall['heading_left_rad']

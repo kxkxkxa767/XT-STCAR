@@ -1,5 +1,6 @@
 """Pure control-sequence checks; mock observations are not target detection QA."""
 import json
+import copy
 import math
 from pathlib import Path
 import sys
@@ -75,6 +76,82 @@ class Harness:
 
 
 class ManeuverSequenceTests(unittest.TestCase):
+    def test_actual21_same_wall_moderate_width_change_continues_but_old_turn_rejects(self):
+        fixture = Path(__file__).with_name('fixtures')/'left-cone-21-exit-width.json'
+        scans = json.loads(fixture.read_text())['scans']
+        previous, current = scans[:2]
+        for cls in [ManeuverSequence, TurnMotion]:
+            with self.subTest(controller=cls.__name__):
+                motion = cls(0.)
+                motion.corridor = motion._measurement(previous, [], .1)
+                motion.selected, motion.phase = True, 'drive'
+                dt = (current['at_ms']-previous['at_ms'])/1000
+                if cls is TurnMotion:
+                    with self.assertRaisesRegex(ValueError, 'left_turn_exit_width_jump'):
+                        motion._measurement(current, [], dt)
+                else:
+                    result = motion._measurement(current, [], dt)
+                    self.assertEqual(result['width_m'], current['left_turn_goal']['width_m'])
+                    self.assertTrue(motion.exit_width_change['accepted'])
+                    self.assertAlmostEqual(motion.exit_width_change['absolute_change_m'], .16073534680188284)
+                    self.assertAlmostEqual(motion.exit_width_change['relative_change'], .08523824014010425)
+                    self.assertEqual(motion.exit_width_change['source_seq'], 579)
+
+    def test_width_limit_scales_but_large_jump_uses_current_wall_without_new_width(self):
+        from test_turn_motion import opening_scan
+        def opening(seq, width):
+            value = opening_scan(seq)
+            goal = value['left_turn_goal']
+            goal['width_m'] = width
+            goal['center_offset_left_m'] = goal['outer_wall']['rho_left_m']+width/2
+            ray = goal['target_support_ray']
+            angle, heading = ray['angle_left_rad'], goal['heading_left_rad']
+            distance = goal['center_offset_left_m']/math.sin(angle-heading)
+            ray['target_range_m'] = distance
+            goal['target_point_left_m'] = {'x_m': distance*math.cos(angle), 'y_m': distance*math.sin(angle)}
+            return value
+        for width in [1.2, 2., 3.]:
+            limit = max(.15, width*.1)
+            for sign in [-1, 1]:
+                for extra in [0., .0001]:
+                    with self.subTest(width=width, sign=sign, excess=extra):
+                        motion = ManeuverSequence(0.)
+                        previous = opening(1, width)
+                        motion.corridor = motion._measurement(previous, [], .1)
+                        motion.selected, motion.phase = True, 'drive'
+                        current = opening(2, width+sign*(limit+extra))
+                        result = motion._measurement(current, [], .1)
+                        self.assertEqual(result['width_m'], width if extra else current['left_turn_goal']['width_m'])
+                        self.assertEqual(motion.exit_width_change['action'],
+                            'track_current_wall_keep_previous_width' if extra else 'adopt_current_width')
+                        if extra:
+                            self.assertEqual(motion.turn_goal['observation_type'], 'tracked_actual_outer_wall')
+                            self.assertEqual(motion.turn_goal['outer_wall'], current['left_turn_goal']['outer_wall'])
+                            self.assertIsNone(motion.turn_goal['target_support_ray'])
+                            motion.phase = 'presteer'
+                            with self.assertRaisesRegex(ValueError, 'left_turn_exit_width_jump'):
+                                motion._measurement(current, [], .1)
+                        self.assertAlmostEqual(motion.exit_width_change['allowed_change_m'], limit)
+
+    def test_small_width_change_does_not_bypass_missing_or_invalid_wall_evidence(self):
+        from test_turn_motion import opening_scan
+        for fault in ['missing', 'identity_jump', 'invalid_ray']:
+            with self.subTest(fault=fault):
+                motion = ManeuverSequence(0.)
+                previous = opening_scan(1)
+                motion.corridor = motion._measurement(previous, [], .1)
+                motion.selected, motion.phase = True, 'drive'
+                current = copy.deepcopy(opening_scan(2))
+                if fault == 'missing':
+                    current['left_turn_goal'], current['wall_candidates'] = None, []
+                elif fault == 'identity_jump':
+                    motion.outer_wall['rho_left_m'] -= 1.
+                else:
+                    current['ranges'][current['left_turn_goal']['target_support_ray']['index']] = None
+                with self.assertRaises(ValueError):
+                    motion._measurement(current, [], .1)
+                self.assertIsNone(motion.exit_width_change)
+
     def test_presteer_remains_neutral_until_real_software_adoption_allowance(self):
         h = Harness()
         steps = []

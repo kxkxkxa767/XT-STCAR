@@ -26,6 +26,7 @@ ORBIT_RANGE_GAIN = 70.0
 LEFT_TRIAL_GAIN = 180.0
 MAX_TREND_RELEASE_FRACTION = .20
 MAX_INNER_RELEASE_FRACTION = .20
+MAX_EXIT_WIDTH_CHANGE_FRACTION = .10
 
 
 def validate_maneuver_initial_pwm(value):
@@ -82,6 +83,22 @@ class ManeuverSequence(TurnMotion):
         if self.phase not in ('coast', 'locked') and _number(now) and now >= self.last_now:
             self.coast_since = now
         super().begin_coast(reason, now)
+
+    def _exit_width_change_limit(self, previous_width):
+        # Operator permits moderate changes in the live exit-width estimate.
+        # Trial21's same-wall pair changed 8.5%, just above the old 15 cm gate.
+        # Scale with the previous accepted observation, not a course dimension;
+        # unique actual wall association is still required before this check.
+        return max(super()._exit_width_change_limit(previous_width),
+                   MAX_EXIT_WIDTH_CHANGE_FRACTION*previous_width)
+
+    def _continue_with_tracked_width(self):
+        # The operator confirms the exit remains present when the soft board
+        # moves. An abrupt width estimate alone must not center an active turn.
+        # Reuse the existing current-wall-only path construction with the last
+        # accepted observed width; never invent a new wall or renew a missing
+        # wall. No new-width target is adopted. Current body gates stay outside.
+        return self.phase == 'drive'
 
     def _slew(self, now):
         if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != self.steering_target:

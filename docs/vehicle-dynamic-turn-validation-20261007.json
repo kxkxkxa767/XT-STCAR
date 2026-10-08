@@ -3199,9 +3199,10 @@
     "fresh_after_deployment": "work/vehicle-dynamic-deploy-20261008/fresh-after-deploy19.json",
     "executed_trial_numbers": [
       19,
-      20
+      20,
+      21
     ],
-    "next_trial": 21
+    "next_trial": 22
   },
   "turn19_actual": {
     "date": "2026-10-08",
@@ -3386,14 +3387,14 @@
     "all_14_installed_hashes_match": true
   },
   "current_handoff_20261008": {
-    "latest_actual_trial": 20,
-    "next_trial": 21,
-    "installed_vehicle_source_commit": "4bc48414a326a5d5ef29ae0e25e6bdfd9c84c0b3",
-    "quality_coast_candidate_not_deployed": true,
+    "latest_actual_trial": 21,
+    "next_trial": 22,
+    "installed_vehicle_source_commit": "e7cc43aa848a1588dff48b8d4adde94ed63a737a",
+    "width_follow_candidate_not_deployed": true,
     "current_operator_authorization_active": true,
-    "operator_stopped_reset_after20_confirmed": true,
+    "operator_stopped_reset_after21_confirmed": true,
     "next_motion_requires_fresh_vehicle_feedback": true,
-    "latest_physical_result": "collision",
+    "latest_physical_result": "no collision; early width-jump exit before handover",
     "full_competition_complete": false
   },
   "turn20_actual": {
@@ -3976,8 +3977,8 @@
   },
   "after20_quality_coast_correction": {
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "physical_acceptance": false,
     "next_trial": 21,
     "source_sha256": {
@@ -4005,6 +4006,490 @@
       "physical_acceptance": false
     },
     "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/fresh-before-deploy21.json",
-    "all14_current_installed_hashes_match4bc": true
+    "all14_current_installed_hashes_match4bc": true,
+    "physical_trial": 21,
+    "quality_coast_path_exercised_in_trial21": false,
+    "deployed_source_commit": "e7cc43aa848a1588dff48b8d4adde94ed63a737a",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261008/quality-coast-deployment-result.json",
+    "backup": "/home/bianbu/xt-stcar-console/backup-quality-coast-20261008-193537",
+    "stage": "/home/bianbu/xt-stcar-console/stage-quality-coast-20261008-193537",
+    "archive_sha256": "4b50c778ec4245a0933394d1cacfd35a960feb4f8db6ed7f5426ac3e30912c13",
+    "all_14_installed_hashes_match": true
+  },
+  "turn21_actual": {
+    "source_commit": "e7cc43aa848a1588dff48b8d4adde94ed63a737a",
+    "run_id": "qts-rsU1RDKup24jBlk2Mibo",
+    "raw_evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-21",
+    "remote_evidence_directory": "/home/bianbu/xt-stcar-console/left-cone-trial-20261008-21",
+    "timeline": "work/vehicle-dynamic-deploy-20261008/trial21-timeline.json",
+    "operator_report": "没有撞墙，出口宽度变了只要变化量不是太大都左转吧",
+    "collision_reported": false,
+    "completed": false,
+    "operator_fully_stopped_reset_behind_crosswalk_original_heading_after21": true,
+    "actual_result": {
+      "run_id": "qts-rsU1RDKup24jBlk2Mibo",
+      "epoch": 0,
+      "pwm": 1560,
+      "servo": 1692,
+      "duration_ms": 18000,
+      "phase": "drive",
+      "turn_presteer_max_s": 8.0,
+      "turn_drive_max_s": 10.0,
+      "control_loop_limit_s": 0.12,
+      "actual_gap_s": 0.029990556000029756,
+      "max_actual_gap_s": 0.08269230299993069,
+      "turn_stage": "locked",
+      "drive_ticks": 14,
+      "motion_ticks": 14,
+      "presteer_ticks": 58,
+      "coast_ticks": 0,
+      "recovery_ticks": 0,
+      "observed_pwm": true,
+      "observed_armed": true,
+      "steering_changes": 12,
+      "centering": true,
+      "turn_trial": true,
+      "formal_stop_goal": false,
+      "endpoint": "first_compact_target_orbit_entry_trial",
+      "operator_placement_confirmed": true,
+      "start_scope": "operator_placed_mid_segment",
+      "sensor_inputs": [
+        "lidar",
+        "control"
+      ],
+      "camera_required": false,
+      "trial_goal": null,
+      "competition_navigation": false,
+      "wheel_motion_measured": false,
+      "current_pwm": 1560,
+      "physical_steering_confirmed": false,
+      "turn_path_certified": false,
+      "entry_confirmed": false,
+      "observed_alignment": false,
+      "turn": {
+        "phase": "locked",
+        "motor": 1500,
+        "servo": 1500,
+        "steering_target": 1500,
+        "initial_presteer_pwm": 1670,
+        "initial_presteer_active": false,
+        "natural_steering_target": null,
+        "start_ready": false,
+        "request_coast": false,
+        "stop_requested": false,
+        "lock_requested": true,
+        "terminal_reason": "left_turn_exit_width_jump",
+        "reason": "left_turn_exit_width_jump",
+        "observed_alignment": false,
+        "test_sequence_finished": false,
+        "entry_confirmed": false,
+        "completed": false,
+        "competition_navigation": false,
+        "candidate_only": true,
+        "turn_path_certified": false,
+        "physical_steering_confirmed": false,
+        "steering_allowance_s": 1.2,
+        "presteer_elapsed_s": 2.561961823999809,
+        "steering_settle_elapsed_s": 0,
+        "steering_settle_feedback_ticks": 0,
+        "drive_elapsed_s": 0.5760868480001591,
+        "alignment_confirmations": 0,
+        "alignment_evidence": null,
+        "scan_seq": 579,
+        "publication_at_ms": 57835,
+        "geometry_mode": "opening_wall",
+        "geometry_missing": false,
+        "geometry_missing_s": 0,
+        "geometry_source_seq": 578,
+        "geometry_source_at_ms": 57736,
+        "turn_stage": "locked",
+        "incoming_endpoint_current": false,
+        "incoming_endpoint": null,
+        "turn_goal": {
+          "candidate_only": true,
+          "center_offset_left_m": -1.425100779399607,
+          "front_wall_m": 2.3427717482458847,
+          "heading_left_rad": 1.5693135992640572,
+          "incoming_heading_left_rad": 0.013958522186037067,
+          "incoming_left_end_m": 0.4570524935079973,
+          "incoming_left_end_support": {
+            "angle_left_rad": 0.9424777960769379,
+            "index": 306,
+            "point_left_m": {
+              "x_m": 0.448480147499157,
+              "y_m": 0.6172799667080849
+            },
+            "range_m": 0.763
+          },
+          "known_open_fraction": 1.0,
+          "observation_type": "left_opening_outer_wall_alignment",
+          "origin_between_exit_walls": false,
+          "outer_wall": {
+            "candidate_only": true,
+            "fit_error_m": 0.0210862000848215,
+            "heading_left_rad": 1.5693135992640572,
+            "points": 24,
+            "rho_left_m": -2.367960406768551,
+            "support_end_left_m": {
+              "x_m": 2.385494889782436,
+              "y_m": 2.1479092464119347
+            },
+            "support_span_m": 1.3346735062583195,
+            "support_start_left_m": {
+              "x_m": 2.361905401847093,
+              "y_m": 0.813269249833977
+            }
+          },
+          "target_point_left_m": {
+            "x_m": 1.427007479176591,
+            "y_m": 1.2848833054938673
+          },
+          "target_support_ray": {
+            "angle_left_rad": 0.7330382858376181,
+            "index": 318,
+            "range_m": 3.21,
+            "target_range_m": 1.9202279693731095
+          },
+          "turn_path_certified": false,
+          "width_m": 1.8857192547378874
+        },
+        "outer_wall": {
+          "candidate_only": true,
+          "fit_error_m": 0.0210862000848215,
+          "heading_left_rad": 1.5693135992640572,
+          "points": 24,
+          "rho_left_m": -2.367960406768551,
+          "support_end_left_m": {
+            "x_m": 2.385494889782436,
+            "y_m": 2.1479092464119347
+          },
+          "support_span_m": 1.3346735062583195,
+          "support_start_left_m": {
+            "x_m": 2.361905401847093,
+            "y_m": 0.813269249833977
+          }
+        },
+        "corridor": {
+          "heading_left_rad": 1.5693135992640572,
+          "center_offset_left_m": -1.425100779399607,
+          "width_m": 1.8857192547378874,
+          "candidate_only": true,
+          "turn_path_certified": false,
+          "origin_between_walls": false
+        },
+        "trial_scope": "first_lidar_compact_target_orbit_entry",
+        "compact_target": null,
+        "compact_target_reason": "compact_target_missing",
+        "handover_observed": false,
+        "orbit_reference_range_m": null,
+        "orbit_bias_pwm": null,
+        "orbit_feedback": null,
+        "left_turn_feedback": {
+          "source_seq": 578,
+          "source_at_ms": 57736,
+          "geometry_mode": "opening_wall",
+          "opening_left_continuation_active": false,
+          "handover_preparation_trigger_current": false,
+          "alignment_target_pwm": 1720,
+          "prepared_left_pwm": 1670,
+          "nominal_target_pwm": 1720,
+          "inside_edge_release_remains_independent": true,
+          "physical_curvature_calibrated": false
+        },
+        "handover_control": null,
+        "orbit_entry_elapsed_s": 0,
+        "orbit_entry_max_s": 3.0,
+        "presteer_max_s": 8.0,
+        "left_turn_servo_cap": 1720,
+        "steering_step_policy": {
+          "presteer": 20,
+          "reduce_left": 20,
+          "increase_left": 10,
+          "center_to_right": 10,
+          "interval_s": 0.1
+        },
+        "object_semantic_verified": false,
+        "passed_cones": null,
+        "competition_supported": false,
+        "inner_clearance": null,
+        "quality_coast_servo": null,
+        "quality_coast_hold_active": false,
+        "wall_ambiguity_hold": false
+      },
+      "walls": null,
+      "coast_motion": null,
+      "standstill_confirmed": false,
+      "quality_issues": [],
+      "quality_counts": {},
+      "clearance_profile": "maneuver",
+      "clearance_profile_source": "bounded_first_compact_target_orbit_entry_trial",
+      "clearance_start": {
+        "front_m": 1.029,
+        "clearance_profile": "maneuver",
+        "clearance_gates": {
+          "straight_corridor_active": false,
+          "side_lateral_active": false,
+          "radial_active": false,
+          "current_body_proximity_active": true,
+          "relaxed_turn_left_active": false,
+          "rear_launch_exemption_active": false
+        },
+        "body_proximity": {
+          "scope": "current_known_lidar_returns_only",
+          "coordinate_convention": "x_forward_y_left",
+          "ray_bin_convention": "clockwise_from_forward",
+          "body_extents_source": "user_measured_lidar_to_front_rear_and_outer_tyre_edges",
+          "body_extents_measurement_date": "2026-10-07",
+          "body_extents_measurement_quality": "operator_rough_measurement",
+          "body_extents_error_bound_m": null,
+          "body_extents_m": {
+            "front": 0.2,
+            "rear": 0.18,
+            "left": 0.14,
+            "right": 0.14
+          },
+          "body_rectangle_m": {
+            "x_min": -0.18,
+            "x_max": 0.2,
+            "y_min": -0.14,
+            "y_max": 0.14
+          },
+          "min_net_clearance_m": 0.05,
+          "min_net_clearance_source": "operator_selected_maneuver_5cm",
+          "lidar_range_allowance_m": 0.03,
+          "stop_distance_m": 0.08,
+          "default_stop_distance_m": 0.08,
+          "relaxed_turn_left_active": false,
+          "turning_left_stop_distance_m": null,
+          "stop_requested": false,
+          "current_known_min_distance_m": 0.36630517412056895,
+          "nearest_point": {
+            "angle_deg": 93,
+            "range_m": 0.507,
+            "forward_x_m": -0.02653432981517253,
+            "left_y_m": -0.506305174120569,
+            "body_distance_m": 0.36630517412056895,
+            "stop_distance_m": 0.08,
+            "relaxed_turn_left": false
+          },
+          "stop_trigger_point": null,
+          "axis_stop_thresholds_m": {
+            "front": 0.28,
+            "rear": 0.26,
+            "left": 0.22000000000000003,
+            "right": 0.22000000000000003
+          },
+          "free_space_certified": false,
+          "swept_path_certified": false,
+          "standstill_certified": false
+        },
+        "legacy_diagnostic_only_fields": [
+          "corridor_front_m",
+          "corridor_half_width_m",
+          "corridor_lookahead_m",
+          "side_clearance_m",
+          "side_stop_threshold_m"
+        ],
+        "sensor_inputs": [
+          "lidar",
+          "control"
+        ],
+        "camera_required": false,
+        "corridor_front_m": 2.390830636465329,
+        "nearest_m": 0.507,
+        "scan_seq": 547,
+        "side_clearance_m": 0.48781291897998674,
+        "side_stop_threshold_m": 0.22000000000000003,
+        "side_body_extent_m": 0.14,
+        "side_min_net_m": 0.05,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          7,
+          8
+        ],
+        "largest_gap_deg": 2,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "clearance_current": {
+        "front_m": 1.183,
+        "clearance_profile": "maneuver",
+        "clearance_gates": {
+          "straight_corridor_active": false,
+          "side_lateral_active": false,
+          "radial_active": false,
+          "current_body_proximity_active": true,
+          "relaxed_turn_left_active": true,
+          "rear_launch_exemption_active": false
+        },
+        "body_proximity": {
+          "scope": "current_known_lidar_returns_only",
+          "coordinate_convention": "x_forward_y_left",
+          "ray_bin_convention": "clockwise_from_forward",
+          "body_extents_source": "user_measured_lidar_to_front_rear_and_outer_tyre_edges",
+          "body_extents_measurement_date": "2026-10-07",
+          "body_extents_measurement_quality": "operator_rough_measurement",
+          "body_extents_error_bound_m": null,
+          "body_extents_m": {
+            "front": 0.2,
+            "rear": 0.18,
+            "left": 0.14,
+            "right": 0.14
+          },
+          "body_rectangle_m": {
+            "x_min": -0.18,
+            "x_max": 0.2,
+            "y_min": -0.14,
+            "y_max": 0.14
+          },
+          "min_net_clearance_m": 0.05,
+          "min_net_clearance_source": "operator_selected_maneuver_5cm",
+          "lidar_range_allowance_m": 0.03,
+          "stop_distance_m": 0.08,
+          "default_stop_distance_m": 0.08,
+          "relaxed_turn_left_active": true,
+          "turning_left_stop_distance_m": 0.04,
+          "stop_requested": false,
+          "current_known_min_distance_m": 0.36707715973445254,
+          "nearest_point": {
+            "angle_deg": 115,
+            "range_m": 0.5549999999999999,
+            "forward_x_m": -0.2345531352660881,
+            "left_y_m": -0.5030008218053407,
+            "body_distance_m": 0.36707715973445254,
+            "stop_distance_m": 0.08,
+            "relaxed_turn_left": false
+          },
+          "stop_trigger_point": null,
+          "axis_stop_thresholds_m": {
+            "front": 0.28,
+            "rear": 0.26,
+            "left": 0.18000000000000002,
+            "right": 0.22000000000000003
+          },
+          "free_space_certified": false,
+          "swept_path_certified": false,
+          "standstill_certified": false
+        },
+        "legacy_diagnostic_only_fields": [
+          "corridor_front_m",
+          "corridor_half_width_m",
+          "corridor_lookahead_m",
+          "side_clearance_m",
+          "side_stop_threshold_m"
+        ],
+        "sensor_inputs": [
+          "lidar",
+          "control"
+        ],
+        "camera_required": false,
+        "corridor_front_m": 2.2736554858306453,
+        "nearest_m": 0.523,
+        "scan_seq": 579,
+        "side_clearance_m": 0.49130908363129866,
+        "side_stop_threshold_m": 0.22000000000000003,
+        "side_body_extent_m": 0.14,
+        "side_min_net_m": 0.05,
+        "lidar_range_allowance_m": 0.03,
+        "front_unknown_bins": [
+          9
+        ],
+        "largest_gap_deg": 1,
+        "quality_issues": [],
+        "motion_ready": true,
+        "corridor_half_width_m": 0.32,
+        "corridor_lookahead_m": 1.0
+      },
+      "rear_launch_active": false,
+      "rear_launch_max_s": 0,
+      "left_turn_servo_cap": 1720,
+      "trial_scope": "first_lidar_compact_target_orbit_entry",
+      "semantic_class": "unknown",
+      "competition_supported": false,
+      "completed": false,
+      "compact_target": null,
+      "handover_observed": false,
+      "orbit_entry_elapsed_s": 0,
+      "sensor_ages": {
+        "camera": 0.17334663300016473,
+        "lidar": 0.014434091000111948,
+        "control": 0.00383552499988582
+      },
+      "sensor_errors": {},
+      "relaxed_turn_left_clearance_active": true,
+      "quality_elapsed_ms": 0,
+      "quality_confirmed": false,
+      "perception_recovering": false,
+      "recovery_stable_ms": 0,
+      "last_lock_wait_s": 9.58500004344387e-06,
+      "last_tick_compute_s": 0.01312952399985079,
+      "max_lock_wait_s": 0.003271154999765713,
+      "max_tick_compute_s": 0.05894585400028518,
+      "control_tick_timing_basis": "host_monotonic_wall_including_scheduling_and_waits",
+      "alignment_evidence": null,
+      "reason": "left_turn_exit_width_jump"
+    },
+    "trigger_scan_seq": 579,
+    "previous_width_scan_seq": 578,
+    "previous_width_m": 1.8857192547378874,
+    "new_width_m": 1.7249839079360045,
+    "absolute_change_m": 0.16073534680188284,
+    "relative_change": 0.08523824014010425,
+    "old_jump_limit_m": 0.15,
+    "body_gate_triggered": false,
+    "quality_gate_triggered": false,
+    "handover_observed": false,
+    "new_quality_coast_exercised": false,
+    "software_final_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 74,
+      "servo": 1500,
+      "tick": 59375
+    },
+    "software_final_boot": "nOjRfqBAOLPZ0Z_ewbOueg",
+    "six_fresh_locked_samples_retrieved": true,
+    "physical_wheel_angle_speed_coast_distance_not_measured": true,
+    "full_competition_complete": false
+  },
+  "after21_width_follow_correction": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "physical_acceptance": false,
+    "next_trial": 22,
+    "operator_instructions": [
+      "出口宽度变了只要变化量不是太大都左转吧",
+      "这个地方变化只有可能是板子太软了，动了一下，但左转的路口可定是有的，只要不撞到板子，就让他左转"
+    ],
+    "source_sha256": {
+      "web/vehicle-console/maneuver_sequence.py": "d27d231d8ecdfd517243872ac60b177b876f54275d0376200e054c03c1377306",
+      "web/vehicle-console/turn_motion.py": "ac5620005670c2981cf1e306ee389c63fc3d9536c8edb5c9ac84aa5cc07ab1b1",
+      "web/vehicle-console/tests/test_maneuver_sequence.py": "299cfb5d925f3dbab8cf2d33a5935ad086c418e1fc723689b65c10f6251bd398",
+      "web/vehicle-console/tests/fixtures/left-cone-21-exit-width.json": "23b8b7c5e516065b2c1d7de96b744722b3827e70f143d3b925ef0e30935de978"
+    },
+    "rule": "Only ManeuverSequence updates accepted live width when delta<=max(0.15m,10% previous observed width). After drive has begun, larger valid width jumps alone do not stop: reuse the existing current-wall-only goal construction with last accepted observed width and current uniquely associated real outer wall. Do not adopt the jumping opening target. Before drive, large jumps still reject; old TurnMotion keeps15cm gate.",
+    "width_is_not_fixed_course_dimension": true,
+    "wall_position_heading_support_and_body_points_remain_current": true,
+    "no_new_wall_from_cached_observation": true,
+    "missing_or_ambiguous_wall_quality_freshness_nearbody_ACK_deadlines_unchanged": true,
+    "quality_coast_from_e7_preserved": true,
+    "no_auto_rearm_or_drive_restore": true,
+    "diagnostic": "exit_width_change records source seq/time, previous/current width, delta/fraction/limit, acceptance and chosen action; cached width is not a new measurement.",
+    "soft_board_motion_not_independently_proven_only_cause": true,
+    "rust_unchanged": true,
+    "validation": {
+      "affected_sequence_checks_passed": 37,
+      "quality_coast_service_checks_passed": 4,
+      "total_methods_passed": 41,
+      "actual21_native_pair_included": true,
+      "synthetic_clocks_adoption_not_physical_replay": true,
+      "extra_full_suite_run": false,
+      "physical_acceptance": false
+    },
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/fresh-before-deploy22.json"
   }
 }
