@@ -3402,7 +3402,11 @@
     "operator_stopped_reset_after29_confirmed_at_end_of29": true,
     "next_motion_requires_fresh_feedback_and_only_unknown_current_placement_facts": true,
     "main_sync_still_requested": true,
-    "full_competition_complete": false
+    "full_competition_complete": false,
+    "local_candidate_source_commit": "2fe692b599ee4fb2a63f8f05911e45332cbb8f06",
+    "local_package_index": "work/vehicle-dynamic-deploy-20261008/right-exit-package.json",
+    "local_package_ready": true,
+    "vehicle_upload_after_deferral": false
   },
   "turn20_actual": {
     "source_commit": "4bc48414a326a5d5ef29ae0e25e6bdfd9c84c0b3",
@@ -9431,6 +9435,17 @@
     "unchanged_rust_bridge_sha256": "199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9",
     "rust_source_unchanged_no_new_binary_claimed": true,
     "local_package_index": "work/vehicle-dynamic-deploy-20261008/right-exit-package.json",
-    "package_built": false
+    "package_built": true,
+    "source_commit": "2fe692b599ee4fb2a63f8f05911e45332cbb8f06",
+    "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-right-exit-2fe692b.tar.gz",
+    "archive_sha256": "c5795618a76346cf2ba978d5ff2d5ffecad75ebda56b0f34b905c9c073969157",
+    "archive_verified_files": 19,
+    "matched_manifest_files": 16,
+    "python_compile_files": 9,
+    "remote_stage_created": false,
+    "vehicle_upload_after_deferral": false,
+    "vehicle_test_after_deferral": false,
+    "stage_must_be_chosen_fresh_on_resumption": true,
+    "planned_trial_date": "2026-10-09"
   }
 }
