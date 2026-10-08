@@ -1,4 +1,4 @@
-"""Bounded left turn followed by one real relative-object orbit entry trial.
+"""Bounded left turn, first relative-object pass and observed corridor exit.
 
 The compact object's semantic identity is unknown. This module observes no
 global pose, speed, physical steering angle, passed cone count or complete lap.
@@ -11,7 +11,7 @@ from compact_target import CompactTargetTracker
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
-                         PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number)
+                         PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number, _valid_candidate)
 
 ORBIT_ENTRY_MAX_S = 3.0
 COAST_MAX_S = 5.0
@@ -27,6 +27,8 @@ LEFT_TRIAL_GAIN = 180.0
 MAX_TREND_RELEASE_FRACTION = .20
 MAX_INNER_RELEASE_FRACTION = .20
 MAX_EXIT_WIDTH_CHANGE_FRACTION = .10
+RIGHT_EXIT_MIN_PWM = 1350  # Existing manual right bound; no measured curvature implied.
+RIGHT_EXIT_MAX_S = 3.0
 
 
 def validate_maneuver_initial_pwm(value):
@@ -75,6 +77,15 @@ class ManeuverSequence(TurnMotion):
         self._entry_ready_count = 0
         self._entry_ready_receive = self._entry_ready_publication = None
         self.adopted_presteer_pwm = None
+        self.first_pass_preparing = False
+        self.first_pass_evidence = None
+        self.first_pass_progress = None
+        self._first_pass_history = []
+        self.right_exit_since = None
+        self.right_exit_center_ack = None
+        self.right_exit_adoption_wait_since = None
+        self.right_exit_geometry = None
+        self._right_exit_last_receive = self._right_exit_last_publication = None
 
     def _measurement(self, scan, candidates, publication_dt):
         candidate = super()._measurement(scan, candidates, publication_dt)
@@ -264,10 +275,22 @@ class ManeuverSequence(TurnMotion):
         result = super()._result(now)
         stage = ('orbit_entry' if self.handover_observed and self.phase == 'drive'
                  else 'left_turn' if self.phase == 'drive' else result['turn_stage'])
+        if self.phase == 'drive' and self.first_pass_preparing:
+            stage = 'right_exit' if self.first_pass_evidence is not None else 'first_pass_prepare'
         result.update(turn_stage=stage, trial_scope='first_lidar_compact_target_orbit_entry',
                       compact_target=copy.deepcopy(self.compact_target),
                       compact_target_reason=getattr(self.target_tracker, 'reason', None),
                       compact_loss_evidence=copy.deepcopy(self.compact_loss_evidence),
+                      first_pass_preparing=self.first_pass_preparing,
+                      first_pass_progress=copy.deepcopy(self.first_pass_progress),
+                      first_pass_evidence=copy.deepcopy(self.first_pass_evidence),
+                      right_exit_center_ack=copy.deepcopy(self.right_exit_center_ack),
+                      right_exit_geometry=copy.deepcopy(self.right_exit_geometry),
+                      right_exit_min_pwm=RIGHT_EXIT_MIN_PWM,
+                      right_exit_elapsed_s=0 if self.right_exit_since is None else max(0, now-self.right_exit_since),
+                      right_exit_max_s=RIGHT_EXIT_MAX_S,
+                      second_target_handover_observed=False,
+                      full_two_cone_s_supported=False,
                       handover_observed=self.handover_observed,
                       orbit_reference_range_m=self.orbit_reference_range_m,
                       orbit_bias_pwm=self.orbit_bias_pwm,
@@ -332,6 +355,144 @@ class ManeuverSequence(TurnMotion):
                 'control': copy.deepcopy({k: control.get(k) for k in
                     ('armed', 'motor', 'servo', 'tick', 'seq', 'command_acked')}),
                 'physical_identity_verified': False}
+
+    def _observe_first_pass(self, scan, now, control):
+        """Prepare command reversal from current target/body geometry.
+
+        Relative point motion is an observation trend, NOT vehicle speed or
+        odometry. The lead covers commanded PWM steps only, not measured servo
+        lag. Partial boundary observations cannot establish this new phase.
+        """
+        target = self.compact_target
+        bins = target.get('support_bins') if isinstance(target, dict) else None
+        if (target is None or target.get('track_id') != self.orbit_track_id
+                or not target.get('confirmed') or target.get('tracking_only_boundary_gap') is not False
+                or not isinstance(bins, list) or len(bins) < 5
+                or any(type(i) is not int or not 0 <= i < 360 for i in bins)):
+            self._first_pass_history = []
+            return
+        ranges = scan['ranges']
+        if any(not _number(ranges[i]) for i in bins):
+            self._first_pass_history = []
+            return
+        points = [(ranges[i]*math.cos(math.radians(i)), -ranges[i]*math.sin(math.radians(i))) for i in bins]
+        # Always derive extents from current raw support, never a cone radius.
+        front = max(p[0] for p in points)
+        side = min(p[1] for p in points)-SIDE_BODY_EXTENT_M
+        x = sum(p[0] for p in points)/len(points)
+        row = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+               'received_at': scan['received_at'], 'center_x_m': x}
+        history = self._first_pass_history
+        if history and (scan['seq'] <= history[-1]['source_seq']
+                        or scan['at_ms'] <= history[-1]['source_at_ms']
+                        or scan['received_at'] <= history[-1]['received_at']):
+            return
+        history.append(row)
+        self._first_pass_history = history = history[-6:]
+        pub_span = (row['source_at_ms']-history[0]['source_at_ms'])/1000
+        receive_span = row['received_at']-history[0]['received_at']
+        approaching = (len(history) >= 3 and pub_span >= .25 and receive_span >= .25
+                       and all(b['center_x_m'] < a['center_x_m'] for a, b in zip(history, history[1:])))
+        adopted = (control.get('command_acked') is True and control.get('motor') == TRIAL_MOTOR
+                   and control.get('servo') == self.servo and NEUTRAL <= self.servo <= SERVO_MAX)
+        lead = (math.ceil((self.servo-NEUTRAL)/LEFT_RELEASE_PWM_STEP)+1)*PWM_INTERVAL_S
+        closing = (min((history[0]['center_x_m']-x)/pub_span,
+                       (history[0]['center_x_m']-x)/receive_span) if approaching else None)
+        prepare = (adopted and approaching and x <= FRONT_BODY_EXTENT_M
+                   and side >= MANEUVER_BODY_CLEARANCE_M
+                   and front+REAR_BODY_EXTENT_M <= closing*lead)
+        self.first_pass_progress = {**row, 'observed_frontmost_x_m': front,
+            'observed_left_body_gap_m': side, 'command_center_lead_s': lead,
+            'relative_x_closing_mps': closing, 'relative_trend_is_vehicle_speed': False,
+            'prepare_condition': prepare, 'body_rear_x_m': -REAR_BODY_EXTENT_M,
+            'physical_steering_confirmed': False}
+        if prepare:
+            self.first_pass_preparing = True
+            self.orbit_left_entry_boost = False
+        if (self.first_pass_preparing and self.first_pass_evidence is None
+                and front <= -REAR_BODY_EXTENT_M and side >= MANEUVER_BODY_CLEARANCE_M):
+            self.first_pass_evidence = {**self.first_pass_progress,
+                'track_id': target['track_id'], 'support_bins': list(bins),
+                'basis': 'current_confirmed_target_observed_support_behind_body_rear',
+                'semantic_class': 'unknown', 'physical_cone_pass_certified': False,
+                'swept_path_certified': False}
+            self.right_exit_since = now
+
+    def _right_exit_target(self, scan, now):
+        """Use a current native forward corridor, never a guessed second cone."""
+        values = scan.get('corridor_candidates')
+        if (not isinstance(values, list) or len(values) > 24
+                or any(not _valid_candidate(c, lateral_margin=SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M)
+                       for c in values)):
+            return None, 'right_exit_invalid_corridor'
+        forward = [c for c in values if -math.pi/2 < c['heading_left_rad'] < math.pi/2]
+        if len(forward) != 1:
+            return None, 'right_exit_corridor_ambiguous' if forward else 'right_exit_corridor_missing'
+        c = forward[0]
+        previous = self.right_exit_geometry
+        if previous is not None:
+            # Bound each new corridor against the preceding real observation.
+            dt = (scan['at_ms']-previous['source_at_ms'])/1000
+            if (dt <= 0 or dt >= SCAN_AGE_S
+                    or abs(c['heading_left_rad']-previous['heading_left_rad']) > math.radians(25)
+                    or abs(c['center_offset_left_m']-previous['center_offset_left_m']) > .30
+                    or abs(c['width_m']-previous['width_m']) > max(.15, .1*previous['width_m'])):
+                return None, 'right_exit_corridor_identity_changed'
+        lookahead = max(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M,
+                        min(1., c['width_m']/2))
+        error = c['heading_left_rad']+math.atan2(c['center_offset_left_m'], lookahead)
+        target = max(RIGHT_EXIT_MIN_PWM, min(NEUTRAL, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
+        self.right_exit_geometry = {**copy.deepcopy(c), 'source_seq': scan['seq'],
+            'source_at_ms': scan['at_ms'], 'received_at': scan['received_at'],
+            'lookahead_m': lookahead, 'steering_target_pwm': target,
+            'source': 'current_native_corridor', 'second_target_confirmed': False}
+        self._right_exit_last_receive, self._right_exit_last_publication = scan['received_at'], scan['at_ms']
+        return target, None
+
+    def _right_exit_update(self, scan, now, control):
+        if now-self.right_exit_since+1e-9 >= RIGHT_EXIT_MAX_S:
+            self.begin_coast('first_target_right_exit_trial_timeout', now)
+            self._slew(now)
+            return self._result(now)
+        target, rejection = self._right_exit_target(scan, now)
+        if target is None:
+            # Missing geometry only retains an already selected command under
+            # its original observation lease; it cannot advance a right turn.
+            held = (rejection == 'right_exit_corridor_missing'
+                    and self._right_exit_last_receive is not None
+                    and now-self._right_exit_last_receive < SCAN_AGE_S
+                    and (scan['at_ms']-self._right_exit_last_publication)/1000 < SCAN_AGE_S)
+            if held:
+                self.steering_target = self.servo
+                self.reason = 'right_exit_corridor_missing_hold'
+            else:
+                self.begin_coast(rejection, now)
+                self._slew(now)
+            return self._result(now)
+        adopted = (control.get('motor') == TRIAL_MOTOR and control.get('servo') == self.servo
+                   and control.get('command_acked') is True)
+        if not adopted:
+            if self.right_exit_adoption_wait_since is None:
+                self.right_exit_adoption_wait_since = now
+            if now-self.right_exit_adoption_wait_since+1e-9 >= SCAN_AGE_S:
+                self.begin_coast('right_exit_adoption_unconfirmed', now)
+                self._slew(now)
+            else:
+                self.steering_target = self.servo
+                self.reason = 'right_exit_waiting_adopted_command'
+            return self._result(now)
+        self.right_exit_adoption_wait_since = None
+        if self.right_exit_center_ack is None:
+            if (self.servo == NEUTRAL and control.get('servo') == NEUTRAL
+                    and control.get('motor') == TRIAL_MOTOR and control.get('command_acked') is True):
+                self.right_exit_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
+            else:
+                target = NEUTRAL
+        self.steering_target = self.natural_steering_target = target
+        self.reason = ('first_target_right_exit_tracking' if self.right_exit_center_ack is not None
+                       else 'first_target_right_exit_waiting_center_ack')
+        self._slew(now)
+        return self._result(now)
 
     def _relative_target_pwm(self, target):
         # This is the bounded entry stage, not a settled circular orbit. In
@@ -580,6 +741,8 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         if not advancing:
             return self._result(now)
+        if self.first_pass_evidence is not None:
+            return self._right_exit_update(scan, now, control)
         if not self._usable_target(self.compact_target, scan):
             self._capture_compact_loss(scan, now, control, 'compact_target_lost_or_ambiguous')
             self.begin_coast('compact_target_lost_or_ambiguous', now)
@@ -629,6 +792,14 @@ class ManeuverSequence(TurnMotion):
         if just_handed_over:
             self.steering_target = self.natural_steering_target = self.orbit_bias_pwm
             self.reason = 'first_relative_object_handover_keep_adopted_left'
+            return self._result(now)
+        self._observe_first_pass(scan, now, control)
+        if self.first_pass_evidence is not None:
+            return self._right_exit_update(scan, now, control)
+        if self.first_pass_preparing:
+            self.steering_target = self.natural_steering_target = NEUTRAL
+            self.reason = 'first_target_pass_preparing_neutral'
+            self._slew(now)
             return self._result(now)
         self.steering_target = self._limit_left_for_known_points(
             self._relative_target_pwm(self.compact_target),

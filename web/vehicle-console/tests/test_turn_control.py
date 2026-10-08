@@ -400,6 +400,44 @@ class TurnControlTests(unittest.TestCase):
         self.assertNotIn('received_at', self.console.scan)
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs))
 
+    def right_exit_output(self, *, passed=True, centered=True, stage='right_exit', servo=1490):
+        self.drive_compact_trial()
+        session = self.console.auto_session
+        motion = session['turn_motion']
+        motion.first_pass_preparing = True
+        motion.first_pass_evidence = {'source_seq': self.console.scan['seq']} if passed else None
+        motion.right_exit_center_ack = {'servo': 1500, 'tick': 1000} if centered else None
+        motion.handover_observed = True
+        motion.servo = servo
+        decision = motion._result(self.now)
+        decision['turn_stage'] = stage
+        motion.update = lambda *args, **kwargs: decision
+        self.tick(round(self.now+.02, 6), self.console.scan)
+        return session
+
+    def test_observed_pass_and_center_ack_enable_only_bounded_newmode_right_output(self):
+        session = self.right_exit_output()
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1560, 1490))
+        self.assertFalse(session['report']['completed'])
+
+    def test_right_output_without_pass_is_rejected_even_with_forged_stage(self):
+        self.right_exit_output(passed=False)
+        self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+
+    def test_right_output_without_center_ack_is_rejected(self):
+        self.right_exit_output(centered=False)
+        self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
+
+    def test_right_output_outside_exit_stage_is_rejected(self):
+        self.right_exit_output(stage='orbit_entry')
+        self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
+
+    def test_right_output_below_1350_is_rejected(self):
+        self.right_exit_output(servo=1340)
+        self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
+
     def test_compact_trial_preserves_1700_adoption_body_stop_and_no_rearm(self):
         drive_since = self.drive_compact_trial(initial_presteer_pwm=1700)
         session = self.console.auto_session

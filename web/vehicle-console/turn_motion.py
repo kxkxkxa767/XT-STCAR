@@ -142,7 +142,7 @@ def parse_trial_goal(record):
     return result
 
 
-def _valid_candidate(value):
+def _valid_candidate(value, *, lateral_margin=TURN_LATERAL_MARGIN_M):
     if not isinstance(value, dict) or any(k not in value for k in _FIELDS):
         return False
     if not all(_number(value[k]) for k in _FIELDS[:3]+('support_span_m', 'fit_error_m')):
@@ -154,7 +154,7 @@ def _valid_candidate(value):
             and value['support_span_m'] >= .35 and 0 <= value['fit_error_m'] <= .06
             and all(type(value[k]) is int and value[k] >= 16
                     for k in ('left_wall_points', 'right_wall_points'))
-            and abs(value['center_offset_left_m']) < value['width_m']/2-TURN_LATERAL_MARGIN_M)
+            and abs(value['center_offset_left_m']) < value['width_m']/2-lateral_margin)
 
 
 def _surface_supports(scan, walls):

@@ -30,7 +30,7 @@ from coast_motion import CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
-                               DEFAULT_INITIAL_PWM, validate_maneuver_initial_pwm)
+                               DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm)
 
 ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
@@ -1046,7 +1046,12 @@ class Console:
             return
         session['phase'] = report['phase'] = decision['phase']
         motor, servo = decision['motor'], decision['servo']
-        if motor not in (1500, TRIAL_MOTOR) or not 1500 <= servo <= SERVO_MAX:
+        right_exit = (session.get('maneuver_sequence') is True and isinstance(motion, ManeuverSequence)
+                      and motion.first_pass_evidence is not None
+                      and motion.right_exit_center_ack is not None
+                      and decision['turn_stage'] == 'right_exit')
+        minimum_servo = RIGHT_EXIT_MIN_PWM if right_exit else 1500
+        if motor not in (1500, TRIAL_MOTOR) or not minimum_servo <= servo <= SERVO_MAX:
             raise ValueError('invalid_turn_trial_output')
         changed = servo != session['turn_last_servo']
         if changed:

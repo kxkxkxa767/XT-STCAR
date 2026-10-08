@@ -76,6 +76,160 @@ class Harness:
 
 
 class ManeuverSequenceTests(unittest.TestCase):
+    def pass_step(self, h, x, *, target_present=True, partial=False, corridors=None, ack=True):
+        from compact_target import _candidates
+        from test_compact_target import compact_scan
+        h.seq += 1
+        h.now = h.seq/10
+        value = scan(h.seq, h.now)
+        value['ranges'] = compact_scan(bearing=math.degrees(math.atan2(.5, x)),
+                                        distance=math.hypot(x, .5))['ranges']
+        value['corridor_candidates'] = ([corridor(-35), corridor(145)] if corridors is None else corridors)
+        candidates = _candidates(value['ranges'])
+        observed = None
+        if target_present and candidates:
+            c = candidates[0]
+            observed = {**target(value), **c, 'tracking_only_boundary_gap': partial}
+        h.observer.factory = lambda _: observed
+        feedback = {'armed': True, 'motor': h.motor, 'servo': h.servo,
+                    'tick': h.seq*100, 'seq': h.seq, 'command_acked': ack}
+        result = h.motion.update(value, 0., h.now, feedback)
+        h.servo, h.motor = result['servo'], result['motor']
+        return result
+
+    def pass_harness(self):
+        h = Harness(initial=1670)
+        h.orbit(bearing=80.)
+        outputs = [self.pass_step(h, x) for x in [.4, .35, .28, .18, .1, 0., -.1, -.2, -.3]]
+        self.assertTrue(outputs[-1]['first_pass_evidence'])
+        return h, outputs
+
+    def test_first_pass_prepares_before_rear_then_requires_adopted_center_for_right(self):
+        h, outputs = self.pass_harness()
+        preparation = next(r for r in outputs if r['first_pass_preparing'])
+        self.assertGreater(preparation['first_pass_progress']['observed_frontmost_x_m'], -.18)
+        self.assertIsNone(preparation['first_pass_evidence'])
+        self.assertFalse(preparation['orbit_left_entry_boost'])
+        for _ in range(19):
+            outputs.append(self.pass_step(h, -.3, target_present=False))
+        right = [r for r in outputs if r['servo'] < 1500]
+        self.assertTrue(right)
+        self.assertEqual(min(r['servo'] for r in outputs), 1390)
+        self.assertTrue(all(r['servo'] >= 1350 for r in outputs))
+        self.assertTrue(all(r['right_exit_center_ack']['servo'] == 1500 for r in right))
+        self.assertTrue(all(r['first_pass_evidence'] is not None for r in right))
+        self.assertTrue(all(r['turn_stage'] == 'right_exit' for r in right))
+        for a, b in zip(outputs, outputs[1:]):
+            limit = 20 if a['servo'] > 1500 and b['servo'] < a['servo'] else 10
+            self.assertLessEqual(abs(b['servo']-a['servo']), limit)
+            if a['servo'] > 1500:
+                self.assertGreaterEqual(b['servo'], 1500)
+        self.assertTrue(all(r['motor'] == 1560 for r in outputs))
+        self.assertFalse(outputs[-1]['second_target_handover_observed'])
+        self.assertFalse(outputs[-1]['completed'])
+
+    def test_pass_preparation_needs_full_current_approaching_target_and_both_clocks(self):
+        for invalid in ('partial', 'receding', 'unacked'):
+            with self.subTest(invalid=invalid):
+                h = Harness(initial=1670)
+                h.orbit()
+                xs = [.01, .04, .08, .12, .18] if invalid == 'receding' else [.4, .3, .2, .1, 0.]
+                for x in xs:
+                    result = self.pass_step(h, x, partial=invalid=='partial', ack=invalid!='unacked')
+                    self.assertFalse(result['first_pass_preparing'])
+                    self.assertIsNone(result['first_pass_evidence'])
+
+    def test_target_loss_before_rear_evidence_still_coasts_and_never_restarts(self):
+        h = Harness(initial=1670)
+        h.orbit()
+        for x in [.4, .3, .2, .1]:
+            result = self.pass_step(h, x)
+        self.assertTrue(result['first_pass_preparing'])
+        self.assertIsNone(result['first_pass_evidence'])
+        stopped = self.pass_step(h, 0., target_present=False)
+        self.assertEqual((stopped['phase'], stopped['motor']), ('coast', 1500))
+        self.assertEqual(self.pass_step(h, -.3)['motor'], 1500)
+
+    def test_right_exit_missing_geometry_cannot_renew_or_advance_command(self):
+        h, _ = self.pass_harness()
+        adopted = h.servo
+        for _ in range(2):
+            result = self.pass_step(h, -.3, target_present=False, corridors=[])
+            self.assertEqual(result['motor'], 1560)
+            self.assertEqual(result['servo'], adopted)
+        result = self.pass_step(h, -.3, target_present=False, corridors=[])
+        self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+        self.assertEqual(result['reason'], 'right_exit_corridor_missing')
+        self.assertEqual(self.pass_step(h, -.3)['motor'], 1500)
+
+    def test_right_exit_ambiguity_identity_jump_and_budget_still_stop(self):
+        for failure in ('ambiguity', 'identity', 'invalid', 'budget'):
+            with self.subTest(failure=failure):
+                h, _ = self.pass_harness()
+                values = [corridor(-35), corridor(-10)] if failure == 'ambiguity' else (
+                    [corridor(20)] if failure == 'identity' else [{'fake': True}] if failure == 'invalid' else None)
+                if failure == 'budget':
+                    h.motion.right_exit_since = h.now-3
+                result = self.pass_step(h, -.3, corridors=values)
+                self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+
+    def test_recorded29_geometry_prepares_before_observed_target_reaches_rear(self):
+        from compact_target import _candidates
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-29-pass-exit.json').read_text())
+        motion = ManeuverSequence(0.)
+        motion.orbit_track_id = 1
+        motion.servo = 1700  # Mock adopted command, not a changed physical replay.
+        first_prepare = None
+        for raw in fixture['frames']:
+            now = raw['at_ms']/1000
+            value = {**raw, 'received_at': now}
+            c = _candidates(raw['ranges'])[0]
+            motion.compact_target = {**c, 'confirmed': True, 'track_id': 1}
+            motion._observe_first_pass(value, now, {'motor': 1560, 'servo': 1700, 'command_acked': True})
+            if motion.first_pass_preparing and first_prepare is None:
+                first_prepare = raw['seq']
+        self.assertEqual(first_prepare, 613)
+        self.assertEqual(motion.first_pass_evidence['source_seq'], 620)
+        goal, reason = motion._right_exit_target(value, now)
+        self.assertIsNone(reason)
+        self.assertTrue(1350 <= goal < 1500)
+        self.assertFalse(motion.first_pass_evidence['physical_cone_pass_certified'])
+
+    def test_right_exit_command_bound_and_cumulative_drive_budget(self):
+        h, _ = self.pass_harness()
+        h.motion.right_exit_geometry = None
+        value = scan(h.seq+1, h.now+.1)
+        value['corridor_candidates'] = [corridor(-80)]
+        self.assertEqual(h.motion._right_exit_target(value, h.now+.1)[0], 1350)
+        h.motion.max_drive_s = h.now-h.motion.drive_since
+        result = self.pass_step(h, -.3)
+        self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+        self.assertEqual(result['reason'], 'maneuver_cumulative_drive_timeout')
+
+    def test_right_exit_waits_for_each_adopted_command_then_coasts_on_timeout(self):
+        h, _ = self.pass_harness()
+        original = h.servo
+        for _ in range(3):
+            result = self.pass_step(h, -.3, ack=False)
+            self.assertEqual(result['servo'], original)
+            self.assertIsNone(result['right_exit_center_ack'])
+        stopped = self.pass_step(h, -.3, ack=False)
+        self.assertEqual((stopped['phase'], stopped['motor']), ('coast', 1500))
+        self.assertEqual(stopped['reason'], 'right_exit_adoption_unconfirmed')
+
+    def test_first_pass_preparation_cannot_use_source_time_for_receive_maturity(self):
+        from compact_target import _candidates
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-29-pass-exit.json').read_text())
+        motion = ManeuverSequence(0.)
+        motion.orbit_track_id, motion.servo = 1, 1700
+        for i, raw in enumerate(fixture['frames']):
+            receive = i*.01  # Deliberately compressed; no250ms receipt evidence.
+            motion.compact_target = {**_candidates(raw['ranges'])[0], 'confirmed': True, 'track_id': 1}
+            motion._observe_first_pass({**raw, 'received_at': receive}, receive,
+                {'motor': 1560, 'servo': 1700, 'command_acked': True})
+        self.assertFalse(motion.first_pass_preparing)
+        self.assertIsNone(motion.first_pass_evidence)
+
     def test_actual24_farther_endpoint_reduces_preparation_relative_to16(self):
         fixture = Path(__file__).with_name('fixtures')/'left-cone-24-entry-endpoint.json'
         caps = {}
