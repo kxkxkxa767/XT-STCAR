@@ -49,6 +49,8 @@ class ManeuverSequence(TurnMotion):
         self.orbit_since = self.orbit_reference_range_m = None
         self.orbit_bias_pwm = None
         self.orbit_feedback = None
+        self.left_turn_feedback = None
+        self.left_handover_preparing = False
         self.handover_control = None
         self.handover_wait_since = None
         self.orbit_track_id = None
@@ -132,6 +134,7 @@ class ManeuverSequence(TurnMotion):
                       orbit_reference_range_m=self.orbit_reference_range_m,
                       orbit_bias_pwm=self.orbit_bias_pwm,
                       orbit_feedback=copy.deepcopy(self.orbit_feedback),
+                      left_turn_feedback=copy.deepcopy(self.left_turn_feedback),
                       handover_control=copy.deepcopy(self.handover_control),
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
@@ -168,7 +171,11 @@ class ManeuverSequence(TurnMotion):
         # This is the bounded entry stage, not a settled circular orbit. In
         # trial18 the object was still ahead of the lateral axis and approaching;
         # two negative terms erased the adopted left demand immediately after
-        # handover. Preserve that demand during entry. A target moving behind
+        # handover. Trial19 additionally inherited an already released 1538.
+        # Continue from the adopted preparation demand, rather than treating
+        # the wall controller's final release as an orbit feedforward value.
+        # The first handover output still holds the current adopted command;
+        # subsequent increases obey the normal slew. A target moving behind
         # or farther away adds left correction; current inside-edge clearance
         # can still independently release steering in the caller.
         # Gains are trial PWM feedback, not physical curvature or a course radius.
@@ -177,10 +184,12 @@ class ManeuverSequence(TurnMotion):
         range_term = ORBIT_RANGE_GAIN*(target['range_m']-reference)/reference
         correction = max(0., bearing_term) + max(0., range_term)
         bias = self.orbit_bias_pwm if self.orbit_bias_pwm is not None else self.initial_presteer_pwm
-        requested = max(NEUTRAL, min(SERVO_MAX, round(bias+correction)))
+        entry_base = max(bias, self.initial_presteer_pwm)
+        requested = max(NEUTRAL, min(SERVO_MAX, round(entry_base+correction)))
         self.orbit_feedback = {'source_seq': target.get('source_seq'),
             'source_at_ms': target.get('source_at_ms'), 'scope': 'bounded_orbit_entry_only',
-            'adopted_handover_bias_pwm': bias, 'bearing_term_pwm': bearing_term,
+            'adopted_handover_bias_pwm': bias, 'prepared_left_pwm': self.initial_presteer_pwm,
+            'entry_base_pwm': entry_base, 'bearing_term_pwm': bearing_term,
             'range_term_pwm': range_term, 'applied_entry_correction_pwm': correction,
             'nominal_target_pwm': requested, 'inside_edge_release_remains_independent': True,
             'physical_curvature_calibrated': False}
@@ -261,10 +270,39 @@ class ManeuverSequence(TurnMotion):
                 if error > 0:
                     damped = max((1-MAX_TREND_RELEASE_FRACTION)*error, min(error, release))
         self.last_error = error
-        # Initial PWM selects neutral preparation only. After adoption, the
-        # current measured turn error may request the full 1720 bound; _slew
-        # still uses the phase/direction step limit per 100 ms.
+        # Current measured turn error may request the full 1720 bound. The
+        # adopted preparation value also anchors the handover phase below;
+        # _slew retains the phase/direction step limit per 100 ms.
         target = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*damped)))
+        alignment_target = target
+        opening_drive = self.phase == 'drive' and self.geometry_mode == 'opening_wall'
+        transition_trigger = (opening_drive and heading > 0
+                              and self.turn_goal['target_point_left_m']['y_m'] <= 0)
+        if transition_trigger:
+            self.left_handover_preparing = True
+        continuing_left = opening_drive and heading > 0 and self.left_handover_preparing
+        if continuing_left:
+            # Opening-wall alignment is not a request to straighten before the
+            # next left orbit. Trial19's projected target moved to the right
+            # while exit heading was still left, driving its command near1500.
+            # Earlier opening steering is unchanged. Once this transition has
+            # started, a small projection sign change cannot release it again.
+            # Current geometry, original leases and all hard gates still apply.
+            # The initial command has already passed adopted neutral presteer
+            # before drive. Keep it as the continuation baseline, with live
+            # stronger demand and independent inside-edge release below.
+            target = max(target, self.initial_presteer_pwm)
+        self.left_turn_feedback = {
+            'source_seq': self._current_scan.get('seq') if self._current_scan else None,
+            'source_at_ms': self._current_scan.get('at_ms') if self._current_scan else None,
+            'geometry_mode': self.geometry_mode,
+            'opening_left_continuation_active': continuing_left,
+            'handover_preparation_trigger_current': transition_trigger,
+            'alignment_target_pwm': alignment_target,
+            'prepared_left_pwm': self.initial_presteer_pwm,
+            'nominal_target_pwm': target,
+            'inside_edge_release_remains_independent': True,
+            'physical_curvature_calibrated': False}
         if self.phase == 'drive':
             target = self._limit_left_for_known_points(target, lookahead)
         self._last_actual_left_target = target if target > NEUTRAL else None

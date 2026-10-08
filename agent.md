@@ -1,15 +1,15 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-07，第18轮撞右墙；暂停实车，下一轮19）
+## 当前接手入口（2026-10-08，第19轮左转基本认可、衔接撞右墙；下一轮20）
 
-**当前目标：保留已认可左转，修正绕行入口减舵和边缘缺测断跟。本节为唯一当前入口；不要采用历史参数。用户最新要求“修改完后先推送云端明天继续”，今晚不再部署或动力。**
+**当前目标：保留前段左转，修正衔接绕桩时左舵过弱。本节为唯一当前入口；不要采用历史参数。用户10月8日已恢复上传和实车测试授权，第19轮后已确认完全静止复位。**
 
-- 车端已部署源码 `688a50023cbc95bb8baf09f91dc9ffdf615ed823`，Rust桥 SHA256 `199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9`。4e开口修复、新尺寸、连续左舵接管及实际左转内侧4cm门均已上车；14个安装文件匹配，不是待部署。main另含下述18后修正，**尚未部署/实车验证**。
-- 第16轮左转效果获用户认可，整段未完成；17轮无碰撞但scan1118左前7.54cm触发8cm门，未接管。第18轮 run `z_G9uRTKuDKalyORTHentLva` 在scan612首次真实点簇接管，交接采用M1560/S1598；随后减左至约1560，scan618断跟收油，scan622近距锁定。用户明确报告“撞到锥桶所在通道右侧的墙上，后续左转幅度不够”；**碰撞、completed=false，不能记成功**。
-- 18后用户对“完全静止并复位”回答否；物理静止/摆放均未确认。末次取回6份软件反馈healthy/locked、armed=false、M=S1500、owner/active空，boot `K1Xu8n9tdfLwHKiCf3hXQw`、末tick63527；它不是物理停稳证明。之后追加SSH只读超时，未取得更新状态；明日若连接仍坏，让用户终端重连，不索取密码。
-- 18断跟根因：scan618仍有13个回波、直径17.17cm的目标点簇，仅相邻bin272为null，另一侧与越过该单束后的真实远回波均在；原逻辑丢弃身份并回正。正常接管分支已实际执行，但后续nominal约1559使左舵变弱。接管至首次已存中性约0.633s；最终orbit计数0.977s/drive计数2.678s**均含coast，不能当持续动力时长**。
-- 18后候选：受限绕行入口不因目标仍在左前/距离缩短而削弱交接左舵基准，落后或外离再加左，独立内侧近障减舵保留；已确认目标只允许一次边缘单束null、当前完整点簇唯一关联且两侧有真实远回波，下一帧必须恢复严格边界，缺测不补点、不当free、不用于首次确认。58项相关检查通过（含618真实点云、模拟收帧时钟）；仅代码验证，不能宣称碰撞已解决。
-- 已部署近距门：仅turn-cone实际armed/M1560/左舵drive时，y_left≥14cm当前左侧点用总4cm（试验净距1cm+原3cm测距参考）；其他方向、准入/预打/coast仍8cm，4cm内仍停，质量/失联/时限保留。18已存动力state最小净距8.41cm，不能把本轮进展完全归因于4cm门。粗测38×28cm、前20/后18/左右14；完整两桶S/比赛链未完成。
+- 车端已部署源码 `b6db0439ee356595f206c1cd3976f18e0a1806e3`，Rust桥 SHA256 `199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9`；14个安装文件匹配。4e开口、新尺寸、4cm内侧门、连续接管及18后单束边缘跟踪修正都已上车。下面的19后衔接修正尚待部署/第20轮实测。
+- 第19轮 run `4PKwg-KU1dwSatOpCw7Qp_Cx`：用户报告撞到绕桩通道右墙，并补充“转弯某种意义上成功了”，失败在后续衔接；**左转基本认可，整段碰撞、completed=false**。scan664接管M1560/S1538，之后始终同一确认目标，末请求1572/目标1586；scan673正前16.4cm、粗测车身净距0触发8cm门。非断跟/超时，最后drive计数2.637s、orbit计数0.864s，coast ticks=0。
+- 用户已确认19后完全静止、复位斑马线后且朝原直道；不重复问，下一动力前读fresh。19末6份软件反馈healthy/locked、armed=false、M=S1500、owner/active空，boot `iZu1R6c_YpdkdRVVySP8BQ`、末tick68746；与用户现场确认分开记录。SSH可用，19全量记录及部署记录已取回。
+- 19衔接诊断：接管前当前出口对齐点转到车身右侧，仍有左向出口角却将目标压到1509，舵已降至1538；切换帧并未直接发1500，但弱左舵继承后补左太慢，符合用户回中观感，实际轮角未测。18的单束断跟修正本轮没有已存触发帧；不能冒称该容错已实车验收。
+- 20候选保留前段左转：只有当前开口几何仍向左、其对齐点已在车身前向轴线右侧时进入衔接准备；此后左向开口阶段保留已采用预打值作nominal基准，叠加更强实时需求，独立近障减左保留。真实目标仍需多帧确认/ACK才接管，首拍保持已采用舵值；后续以max(接管采用值,本轮预打值)为基准按原步长渐变，不将1538当绕行基准。34项受影响检查通过，未证明实车足够转向。
+- 近距门不变：仅turn-cone实际armed/M1560/左舵drive时，y_left≥14cm当前左侧点总4cm（试验净距1cm+原3cm测距参考）；其他方向、准入/预打/coast总8cm。质量/失联/时限/锁定保持。粗测38×28cm、前20/后18/左右14；无赛道固定坐标/长度，完整两桶S/比赛链未完成。
 
 ## 当前控制参数
 
@@ -33,10 +33,10 @@
 ## 下一步与证据位置
 
 1. 读本文件、[上传规范](上传规范.md)及[动态左转机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)。先fetch核对main，再修改。历史记录只按需检索。
-2. 已取回13至18原始目录：`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`。摘要、原helper与完整记录保留，不重跑或覆盖；车端原目录在base下。
-3. 完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`：`opening-span-deployment-result.json`、`inner-clearance-deployment-result.json`、`bounded-inner-deployment-result.json`、`continuous-left-deployment-result.json`及`turn-left-clearance-deployment-result.json`。最新stage为base下`stage-turn-left-clearance-20261007-215109`。
-4. 本次记录分析同目录：`trial18-analysis.json`、`trial18-target-components.json`；最小真实点云回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。区分state与raw scan序号/时间，不将PWM当物理转角，不将计数器当动力时长。
-5. 今晚只修改并推送，不再部署/动力。用户明日继续时先确认18后必要静止/复位事实，读fresh；成套备份、锁定部署main新修正并核对安装哈希/设置后，下一轮用**19**。正常缺测恢复不得自行rearm，不覆盖18碰撞证据。
+2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-19/`。原helper/摘要/完整记录均保留；车端原目录在base下。
+3. 旧完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`。19部署/分析在`work/vehicle-dynamic-deploy-20261008/entry-tracking-deployment-result.json`及`trial19-timeline.json`；stage为base下`stage-entry-tracking-20261008-190253`。
+4. 18分析仍在旧目录`trial18-analysis.json`/`trial18-target-components.json`，回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。18的最终drive/orbit计数含coast；区分各自scan序号、PWM/物理轮角、计数器/动力时长。
+5. 当前实车授权有效、19后现场事实已确认。提交推送20候选，读fresh、成套备份及锁定部署核对安装哈希/设置，再用**20**继续测试。保护锁定后不自行rearm；保留18/19碰撞记录及前段左转认可，不混为整段成功。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署
@@ -46,7 +46,7 @@
 - 车端base `/home/bianbu/xt-stcar-console`；活动目录 `20260917`，用户服务 `xt-stcar-console.service`。仅执行硬件的主agent持有控制；共享驾驶台采集与唯一串口所有者，不另开相机/雷达/底盘抢设备。
 - 更新须备份完整活动目录、入口、运行设置及私有配置，传齐8个Python模块、匹配Rust桥、入口、三前端和目标配置例；核对依赖、运行路径、安装哈希及锁定反馈。模型、视觉配置、雷达校准、访问码和启动命令保留。失败恢复整套。
 - 当前实际手动设置1550/1450/1650/1350；与内部turn-cone参数分开。重启会重置内存设置，部署前后核对实际值。
-- base下`backup-turn-left-clearance-20261007-215109`保存f00整套；`backup-continuous-left-20261007-213347`保存用户认可的16轮5ec整套；`backup-bounded-inner-20261007-210822`保存8d整套；`backup-inner-clearance-20261007-205728`保存4e整套；`backup-opening-span-20261007-201206`保存此前7df/旧桥，均不得删除。
+- base下`backup-entry-tracking-20261008-190253`保存688整套；`backup-turn-left-clearance-20261007-215109`保存f00整套；`backup-continuous-left-20261007-213347`保存用户认可的16轮5ec整套；其余8d/4e/7df备份同样保留，路径见历次部署记录，均不得删除。
 
 ## 长期约束
 

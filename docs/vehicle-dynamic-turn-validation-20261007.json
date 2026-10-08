@@ -782,8 +782,8 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "18 collided with right wall of cone corridor per operator; real handover at scan612 with adopted1598, then nominal left release, target missing at618, neutral coast, body gate at622; completed=false; next19 after tomorrow resume and necessary stop/reset facts.",
-  "latest_user_proposal": "Turn-only inside-left total4cm deployed for18; after collision user reports insufficient subsequent left turn and requests fixes pushed to cloud, continue tomorrow.",
+  "latest_trial_status": "19 ran deployed b6db043; operator accepts left turn in a qualified sense, but transition/orbit failed and hit right cone-corridor wall. Handover adopted1538, same confirmed target retained, front body proximity at scan673; completed=false. Fully stopped/reset confirmed; scoped transition correction prepared for20.",
+  "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
     "forward_rectangle_half_width_m": 0.32,
@@ -796,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "User after18: 撞到锥桶所在通道右侧的墙上，后续左转幅度不够. Fully stopped/reset: 否，这轮你修改完后先推送云端明天继续. Finish local code/evidence and push main; no further deployment or powered trials tonight. Standing vehicle-test preference resumes only after user continues and necessary physical facts/fresh feedback are known.",
+  "latest_authorization": "2026-10-08 user resumed: 车连上了，放到斑马线后面了，你上传后开始测试吧. Before19 fully stopped/facing original straight confirmed. After19 right-wall collision reported, fully stopped/reset to original placement confirmed. Clarification: 转弯某种意义上成功了，后续衔接绕桩的任务，切换的时候舵机貌似回中导致撞上挡板. Preserve earlier left turn and correct transition; standing direct vehicle-test authorization active, next20.",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -3100,8 +3100,8 @@
   },
   "after18_entry_tracking_correction": {
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "physical_acceptance": false,
     "next_trial": 19,
     "source_sha256": {
@@ -3156,7 +3156,12 @@
       "hardware_used": false,
       "new_deployment": false,
       "physical_acceptance": false
-    }
+    },
+    "deployed_source_commit": "b6db0439ee356595f206c1cd3976f18e0a1806e3",
+    "physical_trial": 19,
+    "deployment_record": "work/vehicle-dynamic-deploy-20261008/entry-tracking-deployment-result.json",
+    "saved_orbit_identity_continuous": true,
+    "boundary_gap_path_observed_in_saved_states": false
   },
   "current_handoff_after18": {
     "authoritative_entry": "agent.md top",
@@ -3171,5 +3176,216 @@
     "do_not_overwrite_old_trials": true,
     "accepted_straight_and_left16_backups_preserved": true,
     "no_claim_collision_resolved": true
+  },
+  "resumption_20261008": {
+    "operator_upload_and_test_authorized": true,
+    "fully_stopped_facing_original_straight_before19_confirmed": true,
+    "placement": "behind crosswalk",
+    "ssh_restored": true,
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/fresh-before-deploy19.json",
+    "old_14_installed_hashes_match_688": true,
+    "deployed_source_commit": "b6db0439ee356595f206c1cd3976f18e0a1806e3",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261008/entry-tracking-deployment-result.json",
+    "backup": "/home/bianbu/xt-stcar-console/backup-entry-tracking-20261008-190253",
+    "stage": "/home/bianbu/xt-stcar-console/stage-entry-tracking-20261008-190253",
+    "archive_sha256": "4cfae3e6b11882d2263a8ad7562af382633585b4f83b54e9814df8ff4f4f927a",
+    "all_14_installed_hashes_match": true,
+    "settings_preserved": {
+      "forward": 1550,
+      "reverse": 1450,
+      "left": 1650,
+      "right": 1350
+    },
+    "fresh_after_deployment": "work/vehicle-dynamic-deploy-20261008/fresh-after-deploy19.json",
+    "executed_trial_numbers": [
+      19
+    ],
+    "next_trial": 20
+  },
+  "turn19_actual": {
+    "date": "2026-10-08",
+    "vehicle_source_commit": "b6db0439ee356595f206c1cd3976f18e0a1806e3",
+    "bridge_sha256": "199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9",
+    "run_id": "4PKwg-KU1dwSatOpCw7Qp_Cx",
+    "operator_report": "撞到锥桶通道的右侧，同上次一样后续没有继续让舵机向左",
+    "operator_clarification": "转弯某种意义上成功了，后续衔接绕桩的任务，切换的时候舵机貌似回中导致撞上挡板",
+    "collision_reported": true,
+    "collision_location": "right wall of cone corridor",
+    "left_turn_basically_accepted_per_operator": true,
+    "transition_and_orbit_failed": true,
+    "completed": false,
+    "handover_observed": true,
+    "handover_control": {
+      "motor": 1560,
+      "servo": 1538,
+      "tick": 66484,
+      "seq": 115,
+      "command_acked": true,
+      "physical_steering_confirmed": false,
+      "target_source_seq": 664,
+      "target_source_at_ms": 66354
+    },
+    "handover_frame_requested1500": false,
+    "weak_left_command_before_handover": 1538,
+    "physical_wheel_angle_not_measured": true,
+    "same_confirmed_track_retained": true,
+    "track_id": 1,
+    "final_target_confirmation_count": 12,
+    "final_target": {
+      "point_left_m": [
+        -0.5950125382528775,
+        0.8991619121205474
+      ],
+      "range_m": 1.0782078022748727,
+      "bearing_left_rad": 2.155381278690079,
+      "diameter_m": 0.17755573233646912,
+      "point_count": 10,
+      "support_bins": [
+        232,
+        233,
+        234,
+        235,
+        236,
+        237,
+        238,
+        239,
+        240,
+        241
+      ],
+      "boundary_unknown_bins": [],
+      "boundary_far_returns": [
+        {
+          "index": 231,
+          "range_m": 2.446
+        },
+        {
+          "index": 242,
+          "range_m": 3.143
+        }
+      ],
+      "tracking_only_boundary_gap": false,
+      "source_seq": 672,
+      "source_at_ms": 67150,
+      "source_received_at": 383.825041019,
+      "confirmed": true,
+      "confirmation_count": 12,
+      "semantic_class": "unknown",
+      "kind": "lidar_compact_object",
+      "track_id": 1,
+      "last_full_isolation_seq": 672,
+      "candidate_only": true,
+      "physical_identity_verified": false
+    },
+    "boundary_gap_path_observed_in_saved_states": false,
+    "last_requested_servo": 1572,
+    "last_target_pwm": 1586,
+    "last_orbit_feedback": {
+      "source_seq": 672,
+      "source_at_ms": 67150,
+      "scope": "bounded_orbit_entry_only",
+      "adopted_handover_bias_pwm": 1538,
+      "bearing_term_pwm": 58.458495189518224,
+      "range_term_pwm": 11.87608629880883,
+      "applied_entry_correction_pwm": 70.33458148832705,
+      "nominal_target_pwm": 1608,
+      "inside_edge_release_remains_independent": true,
+      "physical_curvature_calibrated": false
+    },
+    "drive_elapsed_at_last_motion_update_s": 2.637046274999989,
+    "orbit_elapsed_at_last_motion_update_s": 0.8644708610000293,
+    "coast_ticks": 0,
+    "exit_reason": "probe_obstacle_close_body",
+    "trigger_scan": 673,
+    "body_trigger": {
+      "angle_deg": 0,
+      "range_m": 0.164,
+      "forward_x_m": 0.164,
+      "left_y_m": -0.0,
+      "body_distance_m": 0.0,
+      "stop_distance_m": 0.08,
+      "relaxed_turn_left": false
+    },
+    "quality_issues": [],
+    "max_control_loop_gap_s": 0.07189851999999064,
+    "control_loop_limit_s": 0.12,
+    "timeout": false,
+    "first_saved_below8cm_powered_body": {
+      "scan": 662,
+      "body_distance_m": 0.07820640497799841,
+      "active_left_gate_m": 0.04
+    },
+    "initial_pwm": 1670,
+    "left_max_pwm": 1720,
+    "motor_pwm": 1560,
+    "end_feedback": {
+      "boot": "iZu1R6c_YpdkdRVVySP8BQ",
+      "healthy": true,
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 140,
+        "servo": 1500,
+        "tick": 68746
+      },
+      "owner": null,
+      "active": null,
+      "mode": "locked",
+      "ages": {
+        "camera": 0.05945631399998774,
+        "lidar": 0.06917191899998443,
+        "control": 0.004408355000009578
+      }
+    },
+    "fresh_neutral_after_samples": 6,
+    "physical_full_stop_reset_confirmed": true,
+    "stop_reset_answer": "是的",
+    "full_raw_retrieved": true,
+    "local_evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-19",
+    "remote_evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261008-19",
+    "timeline": "work/vehicle-dynamic-deploy-20261008/trial19-timeline.json",
+    "semantic_class": "unknown",
+    "competition_supported": false
+  },
+  "after19_transition_correction": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "physical_acceptance": false,
+    "next_trial": 20,
+    "source_sha256": {
+      "web/vehicle-console/maneuver_sequence.py": "775411bae02814436da8bdace7971c90666b07af5e83a58dbc2a8973ff172bf5",
+      "web/vehicle-console/tests/test_maneuver_sequence.py": "e2e8db2d77684d51f4ebc1e141c2d322e7a8cd7e153d5ae0e1a89af1bb0c991c"
+    },
+    "trigger": "Current opening-wall goal still heads left but its projected alignment target is at/right of body forward axis; begin left-handover preparation, not cone handover. No fixed course coordinate/length.",
+    "earlier_opening_left_turn_policy_preserved": true,
+    "transition_rule": "After trigger, while fresh opening geometry still heads left, nominal left demand is at least the already adopted preparation PWM. Current stronger wall demand and independent inside-edge release remain. A later small projection sign change cannot cancel this phase.",
+    "first_actual_target_handover_still_requires_confirmed_current_identity_and_adopted_ACK": true,
+    "first_handover_output_still_current_adopted_servo": true,
+    "orbit_rule": "Entry base=max(current handover adopted PWM, this runs adopted initial preparation PWM); positive relative target corrections,1720cap,current inside-edge release,then original slew.",
+    "initial1670_is_not_fixed_driving_servo": true,
+    "prepared_base_varies_with_selected_initial_pwm": true,
+    "new_geometry_or_motion_calibration_claimed": false,
+    "quality_nearbody_age_owner_ACK_time_and_slew_gates_unchanged": true,
+    "no_auto_rearm": true,
+    "compact_target_code_unchanged_from_b6": true,
+    "rust_unchanged": true,
+    "validation": {
+      "affected_maneuver_sequence_passed": 34,
+      "extra_full_suite_run": false,
+      "hardware_used": false,
+      "physical_acceptance": false
+    }
+  },
+  "current_handoff_20261008": {
+    "latest_actual_trial": 19,
+    "next_trial": 20,
+    "installed_vehicle_source_commit": "b6db0439ee356595f206c1cd3976f18e0a1806e3",
+    "new_transition_candidate_not_deployed": true,
+    "current_operator_authorization_active": true,
+    "operator_stopped_reset_after19_confirmed": true,
+    "next_motion_requires_fresh_vehicle_feedback": true,
+    "left_turn_basically_accepted_but_orbit_failed": true,
+    "full_competition_complete": false
   }
 }

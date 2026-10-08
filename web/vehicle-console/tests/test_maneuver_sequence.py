@@ -130,7 +130,7 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertTrue(1500 <= second['servo'] <= 1720)
         self.assertLessEqual(abs(third['servo']-second['servo']), 10)
 
-    def test_entry_bias_is_adopted_handover_not_initial_setting(self):
+    def test_weak_handover_is_continuous_then_slews_toward_prepared_left_baseline(self):
         h = Harness(initial=1670)
         h.drive()
         h.servo = h.motion.servo = 1598  # Mock adopted feedback after the wall turn.
@@ -141,8 +141,10 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(first['handover_control']['servo'], 1598)
         h.observer.factory = lambda value: target(value, bearing=70.5, distance=.901)
         second = h.step()
-        self.assertEqual(second['steering_target'], 1598)
-        self.assertEqual(second['servo'], 1598)
+        self.assertEqual(second['steering_target'], 1670)
+        self.assertEqual(second['servo'], 1608)
+        self.assertEqual(second['orbit_feedback']['adopted_handover_bias_pwm'], 1598)
+        self.assertEqual(second['orbit_feedback']['entry_base_pwm'], 1670)
         self.assertLess(second['orbit_feedback']['bearing_term_pwm'], 0)
         self.assertLess(second['orbit_feedback']['range_term_pwm'], 0)
         self.assertEqual(second['orbit_feedback']['applied_entry_correction_pwm'], 0)
@@ -162,6 +164,62 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertEqual(nominal, h.motion.orbit_bias_pwm)
         self.assertLess(limited, nominal)
         self.assertEqual(h.motion.inner_clearance['source_seq'], value['seq'])
+
+    def test_opening_alignment_cannot_erase_prepared_left_before_handover(self):
+        h = Harness(initial=1670)
+        h.drive()
+        h.motion.geometry_mode = 'opening_wall'
+        h.motion.turn_goal = {'target_point_left_m': {'x_m': .5, 'y_m': .1}}
+        h.motion.last_error = None
+        earlier = h.motion._target(corridor(40.), .1)
+        self.assertLess(earlier, 1670)
+        self.assertFalse(h.motion.left_turn_feedback['opening_left_continuation_active'])
+        # Left exit heading with a rightward projected alignment point: the
+        # failure pattern from trial19, varied without any fixed course lookup.
+        for heading, y in [(28., -.4), (23., -.35), (10., -.1)]:
+            with self.subTest(heading=heading):
+                h.motion.last_error = None
+                h.motion.turn_goal = {'target_point_left_m': {'x_m': .5, 'y_m': y}}
+                requested = h.motion._target(corridor(heading), .1)
+                self.assertLess(h.motion.left_turn_feedback['alignment_target_pwm'], 1670)
+                self.assertEqual(h.motion.left_turn_feedback['nominal_target_pwm'], 1670)
+                self.assertEqual(requested, 1670)
+        h.motion.last_error = None
+        h.motion.turn_goal = {'target_point_left_m': {'x_m': .5, 'y_m': .01}}
+        self.assertEqual(h.motion._target(corridor(23.), .1), 1670)
+        self.assertFalse(h.motion.left_turn_feedback['handover_preparation_trigger_current'])
+        self.assertTrue(h.motion.left_turn_feedback['opening_left_continuation_active'])
+        h.motion.last_error = None
+        h.motion.turn_goal = {'target_point_left_m': {'x_m': .5, 'y_m': .8}}
+        stronger = h.motion._target(corridor(90.), .1)
+        self.assertGreater(stronger, 1670)
+        self.assertLessEqual(stronger, 1720)
+
+    def test_opening_continuation_keeps_live_inside_edge_release(self):
+        h = Harness(initial=1670)
+        h.drive()
+        h.motion.geometry_mode = 'opening_wall'
+        h.motion.turn_goal = {'target_point_left_m': {'x_m': .5, 'y_m': -.4}}
+        h.motion._current_scan = scan(h.seq+1, h.now+.1)
+        h.motion._current_scan['ranges'][300] = .3
+        requested = h.motion._target(corridor(25.), .1)
+        self.assertEqual(h.motion.left_turn_feedback['nominal_target_pwm'], 1670)
+        self.assertTrue(1500 < requested < 1670)
+        self.assertTrue(h.motion.inner_clearance['active'])
+
+    def test_prepared_orbit_baseline_uses_this_runs_selected_pwm(self):
+        for initial in [1670, 1690, 1720]:
+            with self.subTest(initial=initial):
+                h = Harness(initial=initial)
+                h.drive()
+                h.servo = h.motion.servo = 1538
+                h.observer.factory = lambda value: target(value, bearing=72.)
+                first = h.step()
+                self.assertEqual(first['servo'], 1538)
+                second = h.step()
+                self.assertEqual(second['orbit_feedback']['entry_base_pwm'], initial)
+                self.assertEqual(second['orbit_feedback']['nominal_target_pwm'], initial)
+                self.assertEqual(second['servo'], 1548)
 
     def test_target_loss_and_identity_jump_latch_coast_without_restart(self):
         for lost in ('none', 'unconfirmed', 'identity'):
