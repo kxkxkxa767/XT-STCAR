@@ -103,6 +103,12 @@ class ManeuverSequence(TurnMotion):
         cap = max(NEUTRAL, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*bearing)))
         if lateral_gap <= 0:
             cap = NEUTRAL
+        # The native full-junction candidate can disappear as the car rotates.
+        # Trial25 already put the CURRENT endpoint at the inflated front
+        # projection, but a second 250 ms maturity wait delayed the handoff
+        # until that candidate was gone. This direct same-frame geometry can
+        # end the early cap; it does not assert rear/body or path clearance.
+        front_projection_reached = forward_gap <= 0 and lateral_gap > 0 and cap > NEUTRAL
         permits_prepared_left = cap >= self.initial_presteer_pwm
         if permits_prepared_left:
             if self._entry_ready_count == 0:
@@ -116,6 +122,8 @@ class ManeuverSequence(TurnMotion):
         else:
             self._entry_ready_count = 0
             self._entry_ready_receive = self._entry_ready_publication = None
+        if front_projection_reached:
+            self.entry_bearing_released = True
         self._entry_last_receive, self._entry_last_publication = self.last_now, scan['at_ms']
         self.entry_bearing = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
             'endpoint_return': copy.deepcopy(opening['incoming_left_end_support']),
@@ -125,6 +133,8 @@ class ManeuverSequence(TurnMotion):
             'steering_cap_pwm': cap, 'prepared_left_pwm': self.initial_presteer_pwm,
             'confirmation_count': self._entry_ready_count,
             'released': self.entry_bearing_released,
+            'release_basis': ('current_endpoint_at_body_front_projection' if front_projection_reached
+                              else 'prepared_left_bearing_matured' if self.entry_bearing_released else None),
             'scope': 'early_turn_endpoint_bearing_heuristic',
             'endpoint_passed_proven': False, 'swept_path_certified': False,
             'physical_curvature_calibrated': False}

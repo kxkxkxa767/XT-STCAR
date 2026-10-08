@@ -1,0 +1,110 @@
+{
+  "scope": "actual_validated_geometry_from_saved_control_state; full_raw604_not_captured; not_full_scan_replay",
+  "source": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-25/feedback.jsonl",
+  "observations": [
+    {
+      "seq": 602,
+      "at_ms": 60136,
+      "left_turn_goal": {
+        "candidate_only": true,
+        "center_offset_left_m": -1.2532843273605192,
+        "front_wall_m": 2.043850840192458,
+        "heading_left_rad": 1.4561519155021623,
+        "incoming_heading_left_rad": -0.07518545659094057,
+        "incoming_left_end_m": 0.43519383503678544,
+        "incoming_left_end_support": {
+          "angle_left_rad": 0.7330382858376181,
+          "index": 318,
+          "point_left_m": {
+            "x_m": 0.4681812400507585,
+            "y_m": 0.4215522820060805
+          },
+          "range_m": 0.63
+        },
+        "known_open_fraction": 1.0,
+        "observation_type": "left_opening_outer_wall_alignment",
+        "origin_between_exit_walls": false,
+        "outer_wall": {
+          "candidate_only": true,
+          "fit_error_m": 0.02067403487903113,
+          "heading_left_rad": 1.4561519155021623,
+          "points": 29,
+          "rho_left_m": -2.0576128299383556,
+          "support_end_left_m": {
+            "x_m": 2.2784682226925494,
+            "y_m": 1.9806422085223414
+          },
+          "support_span_m": 1.5021410911914064,
+          "support_start_left_m": {
+            "x_m": 2.11243430045439,
+            "y_m": 0.48769388581749956
+          }
+        },
+        "target_point_left_m": {
+          "x_m": 1.3862820466006556,
+          "y_m": 1.0830822372934066
+        },
+        "target_support_ray": {
+          "angle_left_rad": 0.6632251157578448,
+          "index": 322,
+          "range_m": 2.913,
+          "target_range_m": 1.7592171683643247
+        },
+        "turn_path_certified": false,
+        "width_m": 1.6086570051556728
+      }
+    },
+    {
+      "seq": 604,
+      "at_ms": 60332,
+      "left_turn_goal": {
+        "candidate_only": true,
+        "center_offset_left_m": -1.078194915525457,
+        "front_wall_m": 1.9235276580214093,
+        "heading_left_rad": 1.3232080254563492,
+        "incoming_heading_left_rad": -0.2029204568248029,
+        "incoming_left_end_m": 0.2667959593323566,
+        "incoming_left_end_support": {
+          "angle_left_rad": 0.7853981633974483,
+          "index": 315,
+          "point_left_m": {
+            "x_m": 0.3429467888754756,
+            "y_m": 0.34294678887547553
+          },
+          "range_m": 0.485
+        },
+        "known_open_fraction": 1.0,
+        "observation_type": "left_opening_outer_wall_alignment",
+        "origin_between_exit_walls": false,
+        "outer_wall": {
+          "candidate_only": true,
+          "fit_error_m": 0.02678589168976299,
+          "heading_left_rad": 1.3232080254563492,
+          "points": 33,
+          "rho_left_m": -1.9065607648699834,
+          "support_end_left_m": {
+            "x_m": 2.4160409705582104,
+            "y_m": 1.8876180833484675
+          },
+          "support_span_m": 1.7275324279015165,
+          "support_start_left_m": {
+            "x_m": 2.0019725753763344,
+            "y_m": 0.2104157965577857
+          }
+        },
+        "target_point_left_m": {
+          "x_m": 1.3983366631511083,
+          "y_m": 1.1323507028509532
+        },
+        "target_support_ray": {
+          "angle_left_rad": 0.6806784082777888,
+          "index": 321,
+          "range_m": 3.05,
+          "target_range_m": 1.7993230776488207
+        },
+        "turn_path_certified": false,
+        "width_m": 1.6567316986890528
+      }
+    }
+  ]
+}

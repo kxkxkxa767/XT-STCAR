@@ -122,8 +122,8 @@ class ManeuverSequenceTests(unittest.TestCase):
         motion = ManeuverSequence(0.)
         servo = 1500
         for seq in range(1, 5):
-            # Synthetic endpoint is already lateral to the inflated front.
-            value = dict(opening_scan(seq), received_at=seq/10)
+            # Still ahead of the front projection, but its bearing permits left.
+            value = dict(opening_scan(seq, endpoint_index=305), received_at=seq/10)
             adopted = {'armed': True, 'servo': servo, 'motor': 1500,
                        'tick': seq*100, 'seq': seq, 'command_acked': True}
             result = motion.update(value, 0., seq/10, adopted)
@@ -138,6 +138,41 @@ class ManeuverSequenceTests(unittest.TestCase):
         self.assertGreaterEqual(motion.left_turn_feedback['nominal_target_pwm'], 1670)
         self.assertGreater(requested, 1500)
         self.assertFalse(motion.entry_bearing['endpoint_passed_proven'])
+
+    def test_recorded25_front_projection_releases_before_complete_opening_loss(self):
+        fixture = Path(__file__).with_name('fixtures')/'left-cone-25-entry-endpoint-state.json'
+        observations = json.loads(fixture.read_text())['observations']
+        motion = ManeuverSequence(0.)
+        motion.entry_bearing_required = True
+        for value in observations:
+            motion.last_now = value['at_ms']/1000
+            motion._endpoint_observation(value)  # Geometry was already validated in saved state.
+        self.assertTrue(motion.entry_bearing_released)
+        self.assertLess(motion.entry_bearing['forward_gap_m'], 0)
+        self.assertGreater(motion.entry_bearing['lateral_gap_m'], 0)
+        self.assertLess(motion.entry_bearing['confirmation_count'], 3)
+        self.assertEqual(motion.entry_bearing['release_basis'],
+                         'current_endpoint_at_body_front_projection')
+        self.assertFalse(motion.entry_bearing['endpoint_passed_proven'])
+        motion._endpoint_observation({'seq': 605, 'at_ms': observations[-1]['at_ms']+100,
+                                      'left_turn_goal': None})
+        self.assertTrue(motion.entry_bearing_released)
+        self.assertEqual(motion._entry_target(1670), 1670)
+
+    def test_front_projection_does_not_release_without_lateral_gap(self):
+        from test_turn_motion import opening_scan
+        value = opening_scan(1, endpoint_index=270)
+        value['ranges'][270] = .21
+        support = value['left_turn_goal']['incoming_left_end_support']
+        support['range_m'] = .21
+        support['point_left_m'] = {'x_m': 0., 'y_m': .21}
+        value['left_turn_goal']['incoming_left_end_m'] = 0.
+        motion = ManeuverSequence(0.)
+        result = motion.update(value, 0., .1, {'armed': False, 'motor': 1500,
+            'servo': 1500, 'seq': 0, 'tick': 100, 'command_acked': True})
+        self.assertFalse(result['entry_bearing_released'])
+        self.assertFalse(result['start_ready'])
+        self.assertEqual(result['motor'], 1500)
 
     def test_missing_endpoint_cannot_handover_or_extend_early_approach(self):
         from test_turn_motion import opening_scan
