@@ -15,6 +15,7 @@ MAX_AGE_S = .30
 MIN_CONFIRM_S = .25
 MIN_POINTS = 5
 MAX_POINT_GAP_M = .18
+MAX_BOUNDARY_GAP_BINS = 3
 MIN_DIAMETER_M = .06
 MAX_DIAMETER_M = .35
 MIN_RANGE_M = .35
@@ -61,21 +62,24 @@ def _candidates(ranges, *, allow_boundary_gap=False):
         if min(values) < MIN_RANGE_M or max(values) > MAX_RANGE_M:
             continue
         # Acquisition needs both immediate neighbors. A confirmed track may
-        # use one missing boundary ray for one scan, provided the next actual
-        # ray is farther and the current whole component still matches uniquely.
-        # The missing ray remains unknown; it is neither support nor free space.
-        unknown, background = [], []
+        # cross a bounded null run at ONE edge, with a real farther return
+        # beyond it. The tracker also limits this to the last full isolation's
+        # original lease. Nulls are neither object support nor free space.
+        unknown, background, partial_edges = [], [], 0
         for edge, direction in [(group[0], -1), (group[-1], 1)]:
             index = (edge+direction) % 360
             value = ranges[index]
-            if value is None and allow_boundary_gap:
+            edge_gaps = 0
+            while value is None and allow_boundary_gap and edge_gaps < MAX_BOUNDARY_GAP_BINS:
                 unknown.append(index)
+                edge_gaps += 1
                 index = (index+direction) % 360
                 value = ranges[index]
+            partial_edges += bool(edge_gaps)
             if value is None or value <= max(values)+MAX_POINT_GAP_M:
                 break
             background.append({'index': index, 'range_m': value})
-        if len(background) != 2 or len(unknown) > 1:
+        if len(background) != 2 or partial_edges > 1:
             continue
         support = [points[i] for i in group]
         if (max(p[0] for p in support)-min(p[0] for p in support) > MAX_DIAMETER_M
@@ -99,11 +103,11 @@ class CompactTargetTracker:
 
     At least three distinct scans and 250 ms of BOTH publication and receive time
     confirm an unbroken, unique association with full boundary observations.
-    An already confirmed identity may tolerate one boundary null in one scan,
-    using a unique current component and a real farther return beyond that null.
-    It cannot initialize/mature a track or tolerate consecutive partial edges.
-    Repeat reads can use the unchanged
-    result within its original 300 ms lease, but cannot mature or renew it.
+    An already confirmed identity may tolerate up to three null bins at one
+    boundary, using a unique current component and a real farther return beyond
+    them. Partial frames cannot initialize/mature a track or renew the last FULL
+    isolation's 300 ms publication/receive lease. Repeat reads also respect that
+    lease, as well as the current scan's age; they cannot mature or renew either.
     ``reason`` supplies diagnostics when update returns None.
     """
     def __init__(self):
@@ -140,6 +144,9 @@ class CompactTargetTracker:
                 return self._forget('compact_target_duplicate_changed')
             if now-received >= MAX_AGE_S:
                 return self._forget('compact_target_stale')
+            if (self._target is not None and self._target['tracking_only_boundary_gap']
+                    and now-self._target['last_full_isolation_received_at'] >= MAX_AGE_S):
+                return self._forget('compact_target_boundary_gap_expired')
             return copy.deepcopy(self._target)
         if self._last_at is not None and (published <= self._last_at or received <= self._last_received):
             return self._forget('compact_target_reordered_clock')
@@ -156,8 +163,7 @@ class CompactTargetTracker:
             elif abs(publication_dt-receive_dt) > .15:
                 return self._forget('compact_target_clock_gap')
         old = self._target
-        allow_boundary_gap = (old is not None and old['confirmed']
-                              and not old['tracking_only_boundary_gap'])
+        allow_boundary_gap = old is not None and old['confirmed']
         candidates = _candidates(ranges, allow_boundary_gap=allow_boundary_gap)
         if len(candidates) != 1:
             return self._forget('compact_target_ambiguous' if candidates else 'compact_target_missing')
@@ -170,6 +176,9 @@ class CompactTargetTracker:
         boundary_gap = current['tracking_only_boundary_gap']
         if boundary_gap and not associated:
             return self._forget('compact_target_boundary_gap_unassociated')
+        if boundary_gap and ((published-old['last_full_isolation_at_ms'])/1000 >= MAX_AGE_S
+                             or now-old['last_full_isolation_received_at'] >= MAX_AGE_S):
+            return self._forget('compact_target_boundary_gap_expired')
         if associated:
             track_id = old['track_id']
             count = old['confirmation_count'] + (0 if boundary_gap else 1)
@@ -186,5 +195,7 @@ class CompactTargetTracker:
                         'confirmation_count': count, 'semantic_class': 'unknown',
                         'kind': 'lidar_compact_object', 'track_id': track_id,
                         'last_full_isolation_seq': old['last_full_isolation_seq'] if boundary_gap else seq,
+                        'last_full_isolation_at_ms': old['last_full_isolation_at_ms'] if boundary_gap else published,
+                        'last_full_isolation_received_at': old['last_full_isolation_received_at'] if boundary_gap else received,
                         'candidate_only': True, 'physical_identity_verified': False}
         return copy.deepcopy(self._target)
