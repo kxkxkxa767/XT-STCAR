@@ -2,7 +2,7 @@
 
 ## 当前接手入口（2026-10-09，第35轮缺测等待退出；下一轮36）
 
-**用户反馈35“已经直行了…到第二个桶还有段距离就停了”；已完全静止并复位到斑马线后朝原直道。整段未完成，碰撞有无未单独回答，不补答。车端d50b756，显式continue_route衔接已实现/部署，但35仅进入中性等待，尚未实测恢复动力、软件首目标pass/右对齐/通道跟随/第二接管。下一轮36，正在审查中性等待缺测门，不直接沿用动力缺测门，也不降低恢复动力的原质量门。**
+**用户反馈35“已经直行了…到第二个桶还有段距离就停了”；已完全静止并复位到斑马线后朝原直道。整段未完成，碰撞有无未单独回答，不补答。车端d50b756，显式continue_route衔接已实现/部署，但35仅进入中性等待，尚未实测恢复动力、软件首目标pass/右对齐/通道跟随/第二接管。下一轮36，36最小修正已实现并通过33项定向检查和独立审查：仅已实际中性ACK的quality_wait复用既有中性观测≥324/360有效点下限；恢复动力仍全原质量门。新修正尚未部署。**
 
 - 已部署 `d50b7567053f4dc2e75c8c6aed5a35c4a1d0eb8d`；`work/vehicle-dynamic-deploy-20261008/route-continuation-deployment-result.json`。14文件与六份fresh核对；Rust桥SHA256仍为 `199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9`。34整套备份 `backup-route-continuation-20261009-202823`，31及直道好版本均保留。手动1550/1450/1650/1350与私有配置保留。
 - 35预打1664，648完整开口释放，658首目标接管时采用1648。666有效337/360先scan_incomplete，M1500保1698进入独立quality_wait；667实际中性ACK已确认。668前方-30..-19共12null超过等待门沿用6上限，立即turn_perception_unavailable回中锁定。不是心跳/累计动力超时或8cm近距（已知最近约35.38cm）。现场“已直行”与软件阶段分开记录，不能声称右对齐已触发。
@@ -40,7 +40,7 @@
 2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至35在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35}/`。原helper/摘要/完整记录均保留；车端原目录在base下。
 3. 旧完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`。19至30部署及逐帧分析在`work/vehicle-dynamic-deploy-20261008/`；29为`target-evidence-deployment-result.json`，stage为base下`stage-target-evidence-20261008-212120`。
 4. 18分析仍在旧目录`trial18-analysis.json`/`trial18-target-components.json`，回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。18的最终drive/orbit计数含coast；区分各自scan序号、PWM/物理轮角、计数器/动力时长。
-5. 下一轮**36**；35后已静止复位确认。正在审查中性等待缺测门；35已部署路线未完成实车验证。修改后成套备份/部署读fresh再试，不覆盖旧轮。
+5. 下一轮**36**；35后已静止复位确认。36中性等待有效返回下限修正已检查，待成套部署；35已部署路线未完成实车验证。修改后成套备份/部署读fresh再试，不覆盖旧轮。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署

@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "35 operator reports already driving straight then stopped before second cone. Runtime quality_wait firsttarget at666 held1698 with actual neutral ACK667;668 front_sparse12>existing6 caused hard stop and center. No positive resume/software first-pass/right-align/corridor-follow/second reached. Full task incomplete. User fully stopped/reset confirmed.36 next; bounded neutral wait refinement under review.",
+  "latest_trial_status": "35 operator reports already driving straight then stopped before second cone. Runtime quality_wait firsttarget at666 held1698 with actual neutral ACK667;668 front_sparse12>existing6 caused hard stop and center. No positive resume/software first-pass/right-align/corridor-follow/second reached. Full task incomplete. User fully stopped/reset confirmed.36 next; bounded neutral wait refinement under review.36 neutral-wait coverage correction implemented and33 targeted checks passed; not yet deployed.",
   "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -14517,5 +14517,39 @@
     },
     "timeline": "work/vehicle-dynamic-deploy-20261008/trial35-timeline.json",
     "analysis_file": "work/vehicle-dynamic-deploy-20261008/trial35-quality-analysis.json"
+  },
+  "after35_neutral_wait_coverage_correction": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 36,
+    "reason": "35 entered quality_wait on scan_incomplete; after actual neutral ACK the next front_sparse12 exceeded reused powered front limit6 and hard-stopped before any full quality restoration. User reports already straight but still before second cone.",
+    "change": "Only explicit continue_route quality_wait AFTER actual M1500/held-servo neutral command ACK uses existing COAST_MIN_VALID_POINTS=324 valid current returns (finite within.02..12m). Reject malformed/range-invalid/current scan-clearance mismatch. front_sparse diagnostic remains; nulls remain unknown.",
+    "origin_of324": "Extract unchanged existing coast_motion neutral-observation literal324. No new threshold selected from observed12 or current course.",
+    "powered_and_pending_neutral_front_sparse_unchanged": true,
+    "positive_resume_requirements_unchanged": "Original full powered quality, same-ID current full target, real neutral ACK, at least3 new scans/publication+receipt>=300ms, original quality recovery readiness; first resumed command held servo and actual positive ACK before steering.",
+    "guardrails": "Original wait/first orbit/cumulative total budgets and one resume; missing current same-ID support/known8cm/stale/heartbeat/control fault remains terminal. Less324, all front61 blind (at most299valid) and full blind reject. Old terminal coast never reopens.",
+    "does_not_certify_free_space_braking_or_standstill": true,
+    "actual668_fixture": "Actual calibrated/raw668 saved; its observer state was667. Test may supply mocked already-neutral state/clock, must not label as real restored motion. Runtime35 never updated tracker668.",
+    "raw670_note": "Post-lock scan670 valid357 with front unknown[-20,14,15]; this is not proof full multi-frame quality restoration could or did occur during35.",
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/before36-neutral-route-fresh.json",
+    "old14_installed_hashes_match_d50b756": true,
+    "operator_stopped_reset_after35_confirmed": true,
+    "source_sha256": {
+      "web/vehicle-console/server.py": "8c316ecdfee504008ba0083d2bfdfa22c4c4ec456f93efb986240f43b1360a65",
+      "web/vehicle-console/coast_motion.py": "fe392fdc7c31a420c651e4a19bb50953ada27f28126a26c61b78d869769667e1",
+      "web/vehicle-console/tests/test_route_control.py": "f154f2b711fc9ba42c849f23c1d9ada7447212123d04de4d825e53ce691e625d",
+      "web/vehicle-console/tests/fixtures/left-cone-35-neutral-wait-front-gap.json": "1aa7b5ec2358bb04e38b97338758cc0e7c4c0ec9baf960a1d88c15beea4ca983"
+    },
+    "validation": {
+      "route_control_methods": 23,
+      "legacy_quality_coast_methods": 10,
+      "total_methods": 33,
+      "python_compile_files": 3,
+      "diff_check": true,
+      "independent_readonly_review": "No remaining blocker;23 route methods independently passed; actual range counting/ACK/current target/unchanged recovery and old coast verified.",
+      "fixture_matches_exact_raw668_and_prior_target667": true,
+      "physical_restore_not_yet_tested": true
+    }
   }
 }

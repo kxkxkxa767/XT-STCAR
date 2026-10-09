@@ -27,7 +27,7 @@ from urllib.parse import parse_qs, urlsplit
 import zipfile
 from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, FRONT_BOUNDARY_LOSS_S, CONTROL_AGE_LIMIT_S, AUTO_CONTROL_HEALTH_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            FRONT_MAX_UNKNOWN, corridor_walls, probe_clearance, probe_parameters)
-from coast_motion import CoastMotionWorker
+from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
@@ -1068,12 +1068,21 @@ class Console:
                            and (neutral_seq is None or control.get('seq', -1) < neutral_seq))
         if not neutral_ack and not pending_neutral:
             return False
+        ranges = scan.get('ranges')
+        if neutral_ack:
+            # Reuse the existing neutral-observation floor, not the powered
+            # front-gap gate. Nulls remain unknown; quality_clear stays false.
+            # Count current ranges rather than trusting scan metadata.
+            if (not isinstance(ranges, list) or len(ranges) != 360
+                    or any(r is not None and (type(r) not in (int, float)
+                           or not math.isfinite(r) or not .02 <= r <= 12) for r in ranges)
+                    or sum(r is not None for r in ranges) < COAST_MIN_VALID_POINTS):
+                return False
         if 'front_sparse' in issues:
-            ranges = scan.get('ranges')
             if not neutral_ack or not isinstance(ranges, list) or len(ranges) != 360:
                 return False
             unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
-            if unknown != clearance.get('front_unknown_bins') or len(unknown) > FRONT_MAX_UNKNOWN:
+            if unknown != clearance.get('front_unknown_bins'):
                 return False
         return True
 

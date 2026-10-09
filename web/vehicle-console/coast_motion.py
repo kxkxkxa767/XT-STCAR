@@ -17,6 +17,11 @@ import threading
 import time
 
 
+# Existing minimum for neutral-motion observations; it is not a drive-quality
+# threshold or a certificate of free space, braking distance or standstill.
+COAST_MIN_VALID_POINTS = 324
+
+
 SOFTWARE_THRESHOLDS = {
     'min_publication_stable_s': .5,
     'min_receive_stable_s': .5,
@@ -232,7 +237,7 @@ class CoastMotion:
                 or any(r is not None and (not _finite(r) or not .02 <= r <= 12) for r in ranges)):
             return self._unknown('invalid_scan_ranges')
         self.last_ranges = tuple(ranges)
-        if sum(r is not None for r in ranges) < 324:
+        if sum(r is not None for r in ranges) < COAST_MIN_VALID_POINTS:
             return self._unknown('scan_coverage_insufficient')
         current = _planes(ranges)
         if len(current) < 2:

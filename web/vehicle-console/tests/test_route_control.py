@@ -145,14 +145,110 @@ class RouteControlTests(unittest.TestCase):
 
     def test_front_sparse_only_extends_actual_neutral_wait_and_never_restores(self):
         session, held = self.wait()
-        for _ in range(3):
-            self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1, front_gap=5))
+        # 20 unknown elsewhere plus 16 front unknown leaves exactly the
+        # existing 324-return neutral floor. This never passes drive quality.
+        for front_gap in (5, 7, 12, 16):
+            value = self.incomplete(self.console.scan['seq']+1, front_gap=front_gap)
+            value.update(coverage=0., valid_fraction=0.)  # Not admission evidence.
+            self.observe(round(self.now+.1, 6), value)
             self.assertIs(self.console.auto_session, session)
             self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, held))
             self.assertIsNone(session.get('quality_resume_sequence'))
-        self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1, front_gap=7))
+            self.assertFalse(session['report']['clearance_current']['motion_ready'])
+            self.assertIn('front_sparse', session['report']['quality_issues'])
+        self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1, front_gap=17))
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.outputs[-1]['op'], 'stop')
+
+    def test_actual35_668_only_changes_neutral_wait_eligibility_not_drive_quality(self):
+        session, _ = self.wait()
+        fixture = json.loads((Path(__file__).with_name('fixtures')/
+            'left-cone-35-neutral-wait-front-gap.json').read_text())
+        value = copy.deepcopy(fixture['scan'])
+        self.assertEqual(value['seq'], 668)
+        self.assertEqual(fixture['prior_controller_target_summary']['source_seq'], 667)
+        self.assertEqual(sum(r is not None for r in value['ranges']), 337)
+        # Only eligibility is evaluated here. The recorded target667 summary
+        # is not fabricated into controller target668 or a full predecessor scan.
+        self.console.scan = value
+        control = copy.deepcopy(fixture['observed_control'])
+        self.console.status['control'] = control
+        session['quality_wait_neutral_sequence'] = control['seq']  # Mock prior command ACK boundary.
+        session['turn_motion'].quality_wait_servo = control['servo']
+        clearance = self.server.probe_clearance(value, {'camera': .01, 'lidar': .01, 'control': .01},
+            True, camera_required=False, clearance_profile='maneuver')
+        session['report'].update(clearance_current=clearance, quality_issues=clearance['quality_issues'])
+        self.assertEqual(clearance['front_unknown_bins'], list(range(-30, -18)))
+        self.assertEqual(clearance['quality_issues'], ['scan_incomplete', 'front_sparse'])
+        self.assertFalse(clearance['motion_ready'])
+        before = len(self.outputs)
+        self.assertTrue(self.console.turn_quality_wait_eligible(session))
+        self.assertEqual(len(self.outputs), before)
+        for fault in ('old_clearance', 'false_unknowns', 'pending_neutral', 'drive'):
+            with self.subTest(fault=fault):
+                original = copy.deepcopy(clearance)
+                if fault == 'old_clearance': clearance['scan_seq'] -= 1
+                if fault == 'false_unknowns': clearance['front_unknown_bins'] = []
+                if fault == 'pending_neutral':
+                    control['motor'] = 1560
+                    session['quality_wait_neutral_sequence'] = control['seq']+1
+                if fault == 'drive': session['phase'] = 'drive'
+                self.assertFalse(self.console.turn_quality_wait_eligible(session))
+                clearance.clear(); clearance.update(original)
+                control['motor'] = 1500
+                session['quality_wait_neutral_sequence'] = control['seq']
+                session['phase'] = 'quality_wait'
+
+    def test_neutral_wait_floor_rejects_323_returns_even_without_front_sparse_and_blindness(self):
+        for fault in ('323_elsewhere', 'front_blind', 'all_blind'):
+            with self.subTest(fault=fault):
+                self.reset_case()
+                self.wait()
+                value = self.compact_scan(self.console.scan['seq']+1)
+                if fault == '323_elsewhere': value['ranges'][90:127] = [None]*37
+                if fault == 'front_blind':
+                    for angle in range(-30, 31): value['ranges'][angle % 360] = None
+                if fault == 'all_blind': value['ranges'] = [None]*360
+                value.update(valid_fraction=1., coverage=1.)  # Cannot hide actual missing returns.
+                before = len(self.outputs)
+                self.observe(round(self.now+.1, 6), value)
+                self.assertIsNone(self.console.auto_session)
+                self.assertEqual(self.outputs[-1]['op'], 'stop')
+                self.assertFalse(any(row['motor'] > 1500 for row in self.outputs[before:]))
+
+    def test_neutral_wait_ranges_keep_original_finite_range_definition(self):
+        session, _ = self.wait()
+        value = self.incomplete(self.console.scan['seq']+1, front_gap=12)
+        clearance = self.server.probe_clearance(value, {'camera': .01, 'lidar': .01, 'control': .01},
+            True, camera_required=False, clearance_profile='maneuver')
+        self.console.scan = value
+        session['report'].update(clearance_current=clearance, quality_issues=clearance['quality_issues'])
+        original = value['ranges'][130]
+        for invalid in (False, True, '1.0', float('nan'), float('inf'), .019, 12.001):
+            with self.subTest(invalid=invalid):
+                value['ranges'][130] = invalid
+                self.assertFalse(self.console.turn_quality_wait_eligible(session))
+        for valid in (.02, 12., original):
+            value['ranges'][130] = valid
+            self.assertTrue(self.console.turn_quality_wait_eligible(session))
+
+    def test_front_sparse_wait_still_requires_full_stable_quality_before_one_resume(self):
+        session, held = self.wait()
+        for _ in range(3):
+            self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1, front_gap=12))
+            self.assertIs(self.console.auto_session, session)
+            self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, held))
+        clear_since = round(self.now+.1, 6)
+        for _ in range(8):
+            self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
+            self.assertIs(self.console.auto_session, session)
+            if session.get('quality_resume_sequence') is not None:
+                self.assertGreaterEqual(self.now-clear_since+1e-9, .30)
+                break
+            self.assertEqual(self.outputs[-1]['motor'], 1500)
+        self.assertIsNotNone(session.get('quality_resume_sequence'))
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1560, held))
+        self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
     def test_front_sparse_from_drive_and_unacked_or_forged_neutral_cannot_wait(self):
         for fault in ('drive', 'missing_sequence', 'unacked', 'positive', 'servo_changed', 'bridge_locked'):
