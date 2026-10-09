@@ -22,7 +22,9 @@ class ProbeInterrupted(RuntimeError):
 
 def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junction=False, formal_goal=False,
               turn_trial=False, placement_confirmed=False, max_turn_s=MAX_DRIVE_S, trial_goal_id=None,
-              initial_presteer_pwm=None, compact_target_trial=False):
+              initial_presteer_pwm=None, compact_target_trial=False, continue_route=False):
+    if type(continue_route) is not bool or (continue_route and not compact_target_trial):
+        raise ValueError('invalid_continue_route')
     run = None
     try:
         op = 'turn_cone_start' if compact_target_trial else 'turn_left_start' if turn_trial else 'stop_goal_start' if formal_goal else 'to_left_junction_start' if stop_left_junction else 'straight_start' if centering else 'probe_start'
@@ -32,6 +34,8 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
         if turn_trial:
             start.pop('pwm')
             start.update(placement_confirmed=placement_confirmed, max_drive_s=max_turn_s)
+            if compact_target_trial and continue_route:
+                start['continue_route'] = True
             if trial_goal_id is not None:
                 start['goal_id'] = trial_goal_id
             if initial_presteer_pwm is not None:
@@ -131,7 +135,7 @@ def run_probe(request, state, pwm, duration_ms, centering=False, stop_left_junct
 
 
 def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=None, initial_presteer_pwm=None,
-                    compact_target_trial=False):
+                    compact_target_trial=False, continue_route=False):
     """One mid-segment trial; alignment evidence never becomes a cone task completion."""
     presteer_max_s = MAX_PRESTEER_S
     if compact_target_trial:
@@ -140,7 +144,8 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
     try:
         latest, run = run_probe(request, state, TRIAL_MOTOR, round((presteer_max_s+max_seconds)*1000),
             centering=True, turn_trial=True, placement_confirmed=placement_confirmed, max_turn_s=max_seconds,
-            trial_goal_id=goal_id, initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=compact_target_trial)
+            trial_goal_id=goal_id, initial_presteer_pwm=initial_presteer_pwm,
+            compact_target_trial=compact_target_trial, continue_route=continue_route)
     except ProbeInterrupted as error:
         latest, run = error.state, error.run
     result = latest['autonomy']['last_result']
@@ -167,17 +172,31 @@ def left_turn_trial(request, state, max_seconds, placement_confirmed, goal_id=No
             max_lock_wait_s=result.get('max_lock_wait_s'), last_tick_compute_s=result.get('last_tick_compute_s'),
             max_tick_compute_s=result.get('max_tick_compute_s'),
             control_tick_timing_basis=result.get('control_tick_timing_basis'))
+        report['continue_route'] = continue_route
+        if continue_route:
+            for key in ('route_stage', 'quality_wait_active', 'quality_wait_servo', 'quality_wait_evidence',
+                        'quality_wait_trigger', 'quality_wait_snapshot', 'quality_wait_neutral_ack',
+                        'quality_resume_pending', 'quality_resume_snapshot', 'quality_resume_ack',
+                        'second_target', 'role_distinct_evidence', 'route_right_output_authorized',
+                        'route_center_ack', 'route_alignment_evidence', 'second_center_ack',
+                        'second_pass_evidence', 'second_acquisition_reason', 'route_events',
+                        'two_target_observed_pass_complete'):
+                report[key] = result.get(key)
     return report
 
 
-def first_compact_target_trial(request, state, max_seconds, placement_confirmed, initial_presteer_pwm=_DEFAULT_INITIAL_PRESTEER):
+def first_compact_target_trial(request, state, max_seconds, placement_confirmed,
+                               initial_presteer_pwm=_DEFAULT_INITIAL_PRESTEER, continue_route=False):
     """One continuous left turn and first lidar target orbit-entry experiment."""
     from maneuver_sequence import DEFAULT_INITIAL_PWM, validate_maneuver_initial_pwm
     if initial_presteer_pwm is _DEFAULT_INITIAL_PRESTEER:
         initial_presteer_pwm = DEFAULT_INITIAL_PWM
     validate_maneuver_initial_pwm(initial_presteer_pwm)
+    if type(continue_route) is not bool:
+        raise ValueError('invalid_continue_route')
     return left_turn_trial(request, state, max_seconds, placement_confirmed,
-                           initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=True)
+                           initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=True,
+                           continue_route=continue_route)
 
 
 def initial_presteer_argument(value):
@@ -233,12 +252,16 @@ def main():
     parser.add_argument('--expected-run-id', help='fence a new monitored phase to the previous normal stop')
     parser.add_argument('--execute', action='store_true', help='explicit motion request; motion commands otherwise only query state')
     parser.add_argument('--placement-confirmed', action='store_true', help='operator confirms stopped mid-segment placement for this one left trial')
+    parser.add_argument('--continue-route', action='store_true',
+        help='turn-cone only: bounded first-target exit, current-corridor following and second-target trial')
     parser.add_argument('--initial-presteer-pwm', type=initial_presteer_argument,
         help=f'neutral-motor presteer: turn-left 1650..1720; turn-cone {INITIAL_PWM_MIN}..{SERVO_MAX}, default {DEFAULT_INITIAL_PWM}')
     parser.add_argument('--goal-file', type=Path, help='Local target-only JSON for explicit trial-goal-register')
     parser.add_argument('--trial-goal-id', help='Use a registered trial intent; arbitrary point execution requires real pose')
     parser.add_argument('--access-file', type=Path, default=Path.home() / 'xt-stcar-console/access.json')
     args = parser.parse_args()
+    if args.continue_route and args.command != 'turn-cone':
+        parser.error('--continue-route is only valid for turn-cone')
     if args.initial_presteer_pwm is not None and args.command not in ('turn-left', 'turn-cone'):
         parser.error('--initial-presteer-pwm is only valid for turn-left or turn-cone')
     if args.command == 'turn-cone' and args.trial_goal_id is not None:
@@ -274,6 +297,8 @@ def main():
     state_path = '/api/state'
     if args.command == 'turn-cone':
         state_path += '?trial_mode=turn-cone&initial_presteer_pwm=' + str(initial_presteer_pwm)
+        if args.continue_route:
+            state_path += '&continue_route=true'
     elif args.command == 'turn-left' and initial_presteer_pwm is not None:
         state_path += '?initial_presteer_pwm=' + str(initial_presteer_pwm)
     state = request(state_path)
@@ -281,6 +306,8 @@ def main():
         raise RuntimeError('vehicle console has no live autonomy interface')
     if args.command == 'turn-cone' and state['autonomy'].get('trial_mode') != 'turn-cone':
         raise RuntimeError('first_compact_target_trial_interface_unavailable')
+    if args.continue_route and state['autonomy'].get('continue_route') is not True:
+        raise RuntimeError('continue_route_trial_interface_unavailable')
     if args.command == 'trial-goal-status':
         print(json.dumps({'trial_goal': state['autonomy'].get('trial_goal'), 'motion_requested': False}, ensure_ascii=False, indent=2))
         return
@@ -313,6 +340,7 @@ def main():
                     initial_presteer_scope='presteer_only_motor_neutral_then_live_geometry')
             if args.command == 'turn-cone':
                 output.update(trial_mode='turn-cone', trial_scope='first_lidar_compact_target_orbit_entry',
+                    continue_route=args.continue_route,
                     initial_presteer_scope='endpoint_limited_neutral_preparation_then_live_geometry_with_configured_left_reference',
                     left_turn_servo_cap=state['autonomy'].get('left_turn_servo_cap'),
                     semantic_class='unknown', competition_supported=False, completed=False,
@@ -340,7 +368,9 @@ def main():
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, turn_interrupted)
         if args.command == 'turn-cone':
-            result = first_compact_target_trial(request, state, limit, args.placement_confirmed, initial_presteer_pwm)
+            options = {'continue_route': True} if args.continue_route else {}
+            result = first_compact_target_trial(request, state, limit, args.placement_confirmed,
+                                                initial_presteer_pwm, **options)
         else:
             result = left_turn_trial(request, state, limit, args.placement_confirmed, args.trial_goal_id,
                                      initial_presteer_pwm)

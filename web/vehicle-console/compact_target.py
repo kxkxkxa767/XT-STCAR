@@ -30,6 +30,25 @@ def _number(value):
     return type(value) in (int, float) and math.isfinite(value)
 
 
+def _bearing_range(value, name):
+    if (not isinstance(value, (tuple, list)) or len(value) != 2
+            or not all(_number(bound) for bound in value)
+            or not -math.pi <= value[0] < value[1] <= math.pi):
+        raise ValueError(f'{name} must be an ordered bearing interval within [-pi, pi]')
+    return tuple(value)
+
+
+def _associated(current, old):
+    if old is None:
+        return False
+    bearing_delta = abs(current['bearing_left_rad']-old['bearing_left_rad'])
+    if bearing_delta > math.pi:
+        bearing_delta = 2*math.pi-bearing_delta
+    return (math.dist(current['point_left_m'], old['point_left_m']) <= .30
+            and bearing_delta <= math.radians(20)
+            and abs(current['diameter_m']-old['diameter_m']) <= .12)
+
+
 def _clusters(points):
     """Whole contiguous components, including the beam-359/0 edge."""
     def cut(a, b):
@@ -50,7 +69,11 @@ def _clusters(points):
     return groups
 
 
-def _candidates(ranges, *, allow_boundary_gap=False):
+def _candidates(ranges, *, allow_boundary_gap=False,
+                bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD)):
+    bearing_min, bearing_max = _bearing_range(bearing_range_rad, 'bearing_range_rad')
+    if type(allow_boundary_gap) is not bool:
+        raise ValueError('allow_boundary_gap must be a bool')
     # Build components BEFORE range/sector filtering. Filtering first would
     # manufacture a small object from the end of an extended wall.
     points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
@@ -100,7 +123,7 @@ def _candidates(ranges, *, allow_boundary_gap=False):
                 continue
         center = [sum(p[axis] for p in support)/len(support) for axis in (0, 1)]
         distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
-        if MIN_RANGE_M <= distance <= MAX_RANGE_M and MIN_BEARING_RAD <= bearing <= MAX_BEARING_RAD:
+        if MIN_RANGE_M <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
             result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
                            'diameter_m': diameter, 'point_count': len(group), 'support_bins': list(group),
                            'boundary_unknown_bins': unknown, 'boundary_far_returns': background,
@@ -119,13 +142,24 @@ class CompactTargetTracker:
     have a range/angle projection no larger than both the actual component's
     diameter and the point-gap limit, and component diameter plus projection
     cannot exceed the existing diameter limit. All require a unique current
-    component and real farther returns beyond both edges. Partial frames cannot
+    component and real farther returns beyond both edges. With
+    ``select_associated=True``, unrelated components may coexist, but exactly one
+    component must pass the original association gates for a confirmed identity.
+    The optional maintenance sector applies only to confirmed identities;
+    unconfirmed/new identities always use the acquisition sector. Partial frames cannot
     initialize/mature a track or renew the last FULL isolation's 300 ms
     publication/receive lease. Repeat reads also respect that
     lease, as well as the current scan's age; they cannot mature or renew either.
     ``reason`` supplies diagnostics when update returns None.
     """
-    def __init__(self):
+    def __init__(self, *, acquisition_bearing_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD),
+                 maintenance_bearing_rad=None, select_associated=False):
+        self._acquisition_bearing_rad = _bearing_range(acquisition_bearing_rad, 'acquisition_bearing_rad')
+        self._maintenance_bearing_rad = (None if maintenance_bearing_rad is None else
+                                         _bearing_range(maintenance_bearing_rad, 'maintenance_bearing_rad'))
+        if type(select_associated) is not bool:
+            raise ValueError('select_associated must be a bool')
+        self._select_associated = select_associated
         self.reason = 'compact_target_not_observed'
         self._last_now = None
         self._last_seq = self._last_at = self._last_received = self._signature = None
@@ -138,7 +172,10 @@ class CompactTargetTracker:
         self._first_at = self._first_received = None
         return None
 
-    def update(self, scan, now):
+    def update(self, scan, now, *, acquire=True):
+        """Use only current support; ``acquire=False`` cannot create a new ID."""
+        if type(acquire) is not bool:
+            raise ValueError('acquire must be a bool')
         if not _number(now) or now < 0 or (self._last_now is not None and now < self._last_now):
             return self._forget('compact_target_invalid_receive_clock')
         self._last_now = now
@@ -179,21 +216,32 @@ class CompactTargetTracker:
                 return self._forget('compact_target_clock_gap')
         old = self._target
         allow_boundary_gap = old is not None and old['confirmed']
-        candidates = _candidates(ranges, allow_boundary_gap=allow_boundary_gap)
+        bearing_range = (self._maintenance_bearing_rad
+                         if allow_boundary_gap and self._maintenance_bearing_rad is not None
+                         else self._acquisition_bearing_rad)
+        candidates = _candidates(ranges, allow_boundary_gap=allow_boundary_gap,
+                                 bearing_range_rad=bearing_range)
+        if self._select_associated and allow_boundary_gap:
+            # Confirmed role trackers must not switch to an unrelated object
+            # merely because it is the only component left in their sector.
+            candidates = [candidate for candidate in candidates if _associated(candidate, old)]
         if len(candidates) != 1:
             return self._forget('compact_target_ambiguous' if candidates else 'compact_target_missing')
         current = candidates[0]
         # These bounded association gates are not speed, odometry or static
         # object certification. A jump creates a new, unconfirmed identity.
-        associated = (old is not None and math.dist(current['point_left_m'], old['point_left_m']) <= .30
-                      and abs(current['bearing_left_rad']-old['bearing_left_rad']) <= math.radians(20)
-                      and abs(current['diameter_m']-old['diameter_m']) <= .12)
+        associated = _associated(current, old)
         boundary_gap = current['tracking_only_boundary_gap']
         if boundary_gap and not associated:
             return self._forget('compact_target_boundary_gap_unassociated')
         if boundary_gap and ((published-old['last_full_isolation_at_ms'])/1000 >= MAX_AGE_S
                              or now-old['last_full_isolation_received_at'] >= MAX_AGE_S):
             return self._forget('compact_target_boundary_gap_expired')
+        if not associated and not acquire:
+            return self._forget('compact_target_acquisition_disabled')
+        if (not associated
+                and not self._acquisition_bearing_rad[0] <= current['bearing_left_rad'] <= self._acquisition_bearing_rad[1]):
+            return self._forget('compact_target_outside_acquisition_sector')
         if associated:
             track_id = old['track_id']
             count = old['confirmation_count'] + (0 if boundary_gap else 1)

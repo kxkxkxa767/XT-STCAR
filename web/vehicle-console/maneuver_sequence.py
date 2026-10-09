@@ -1,4 +1,4 @@
-"""Bounded left turn, first relative-object pass and observed corridor exit.
+"""Bounded left turn and opt-in observed corridor / second-object continuation.
 
 The compact object's semantic identity is unknown. This module observes no
 global pose, speed, physical steering angle, passed cone count or complete lap.
@@ -7,7 +7,7 @@ The service retains fresh body-clearance checks, ownership, heartbeat and ACKs.
 import copy
 import math
 
-from compact_target import CompactTargetTracker
+from compact_target import CompactTargetTracker, _candidates, MAX_DIAMETER_M
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
@@ -39,15 +39,25 @@ def validate_maneuver_initial_pwm(value):
 
 
 class ManeuverSequence(TurnMotion):
-    """Single arm and cumulative drive budget; no automatic restart after stop."""
-    def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=DEFAULT_INITIAL_PWM):
+    """Single arm / cumulative budget; terminal coast never restarts.
+
+    Explicit route mode may perform one fresh-evidence neutral quality wait.
+    It does not reset a drive/phase budget or certify a physical two-cone path.
+    """
+    def __init__(self, started_at, max_drive_s=10.0, initial_presteer_pwm=DEFAULT_INITIAL_PWM,
+                 continue_route=False):
+        if type(continue_route) is not bool:
+            raise ValueError('invalid_continue_route')
         validate_maneuver_initial_pwm(initial_presteer_pwm)
         super().__init__(started_at, max_drive_s=max_drive_s,
                          initial_presteer_pwm=initial_presteer_pwm)
         # User-selected neutral preparation budget for this experiment only.
         # Parent construction and default TurnMotion retain their five seconds.
         self.max_presteer_s = PRESTEER_MAX_S
-        self.target_tracker = CompactTargetTracker()
+        self.continue_route = continue_route
+        self.target_tracker = (CompactTargetTracker(maintenance_bearing_rad=(-math.pi, math.pi),
+                                                   select_associated=True)
+                               if continue_route else CompactTargetTracker())
         self.compact_target = None
         self._last_confirmed_compact_target = None
         self.compact_target_error = None
@@ -90,6 +100,166 @@ class ManeuverSequence(TurnMotion):
         self.right_exit_adoption_wait_since = None
         self.right_exit_geometry = None
         self._right_exit_last_receive = self._right_exit_last_publication = None
+        self.route_stage = 'first_target'
+        self.route_events = {}
+        self.quality_wait_since = self.quality_wait_servo = None
+        self.quality_wait_used = False
+        self.quality_wait_evidence = None
+        self.quality_resume_pending = False
+        self.quality_resume_since = None
+        self._quality_good_history = []
+        self._quality_pass_history = []
+        self._route_alignment_history = []
+        self.route_alignment_evidence = None
+        self._route_center_ack = None
+        self.second_tracker = self._new_second_tracker() if continue_route else None
+        self.second_target = None
+        self.second_track_id = None
+        self.second_target_handover_observed = False
+        self.second_center_ack = None
+        self.second_orbit_since = None
+        self.second_pass_evidence = None
+        self.second_feedback = None
+        self.role_distinct_evidence = None
+        self.second_acquisition_reason = None
+        self._second_pass_history = []
+
+    @staticmethod
+    def _new_second_tracker():
+        return CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, 0.),
+            maintenance_bearing_rad=(-3*math.pi/4, 0.), select_associated=True)
+
+    def _route_event(self, name, scan, control, evidence=None):
+        # One snapshot per transition, never an unbounded in-control log.
+        if name not in self.route_events:
+            self.route_events[name] = {'scan': copy.deepcopy({k: scan.get(k) for k in
+                ('frame_id', 'seq', 'at_ms', 'received_at', 'ranges', 'corridor_candidates')}),
+                'control': copy.deepcopy(control), 'evidence': copy.deepcopy(evidence)}
+
+    @staticmethod
+    def _full_target_points(target, scan, identity):
+        if (not isinstance(target, dict) or target.get('track_id') != identity
+                or target.get('confirmed') is not True
+                or target.get('tracking_only_boundary_gap') is not False
+                or target.get('source_seq') != scan.get('seq')
+                or target.get('source_at_ms') != scan.get('at_ms')
+                or target.get('source_received_at') != scan.get('received_at')):
+            return None
+        bins, ranges = target.get('support_bins'), scan.get('ranges')
+        if (not isinstance(bins, list) or len(bins) < 5 or len(set(bins)) != len(bins)
+                or not isinstance(ranges, list) or len(ranges) != 360
+                or any(type(i) is not int or not 0 <= i < 360 or not _number(ranges[i]) for i in bins)):
+            return None
+        return [(ranges[i]*math.cos(math.radians(i)), -ranges[i]*math.sin(math.radians(i))) for i in bins]
+
+    @staticmethod
+    def _mature_observation(history, scan, duration):
+        row = (scan['seq'], scan['at_ms'], scan['received_at'])
+        if history and row[0] == history[-1][0]:
+            return False
+        if history and (row[0] <= history[-1][0] or row[1] <= history[-1][1]
+                        or row[2] <= history[-1][2]
+                        or (row[1]-history[-1][1])/1000 >= SCAN_AGE_S
+                        or row[2]-history[-1][2] >= SCAN_AGE_S
+                        or abs((row[1]-history[-1][1])/1000-(row[2]-history[-1][2])) > .15):
+            history.clear()
+        history.append(row)
+        del history[:-6]
+        return (len(history) >= 3 and (row[1]-history[0][1])/1000+1e-9 >= duration
+                and row[2]-history[0][2]+1e-9 >= duration)
+
+    def begin_quality_wait(self, now, control, *, scan=None):
+        """One opt-in neutral wait; this never reopens a terminal coast."""
+        if (not self.continue_route or self.quality_wait_used or self.phase != 'drive'
+                or not self.handover_observed or self.first_pass_evidence is not None
+                or self.right_exit_since is not None or self.route_stage != 'first_target'
+                or not _number(now) or now < self.last_now
+                or control.get('armed') is not True or control.get('motor') != TRIAL_MOTOR
+                or control.get('command_acked') is not True
+                or not NEUTRAL < control.get('servo', 0) == self.servo <= SERVO_MAX):
+            return False
+        scan = self._current_scan if scan is None else scan
+        if (not isinstance(scan, dict) or not _number(scan.get('received_at'))
+                or not 0 <= now-scan['received_at'] < SCAN_AGE_S):
+            return False
+        observed = self.target_tracker.update(scan, now, acquire=True)
+        if self._full_target_points(observed, scan, self.orbit_track_id) is None:
+            return False
+        self.compact_target = observed
+        self._current_scan = scan
+        self.quality_wait_used = True
+        self.quality_wait_since, self.quality_wait_servo = now, self.servo
+        self.quality_wait_evidence = {'entry_seq': scan['seq'], 'entry_at_ms': scan['at_ms'],
+            'entry_received_at': scan['received_at'], 'held_servo': self.servo,
+            'target_id': self.orbit_track_id, 'maximum_resumes': 1}
+        self._quality_good_history.clear()
+        self._quality_pass_history.clear()
+        self._first_pass_history.clear()
+        self.first_pass_preparing = False
+        self.phase, self.reason = 'quality_wait', 'route_quality_wait_neutral'
+        self.steering_target = self.servo
+        self._route_event('quality_wait', scan, control, self.quality_wait_evidence)
+        return True
+
+    def _quality_wait_update(self, scan, now, control, advancing, quality_clear, resume_ready):
+        self.steering_target = self.quality_wait_servo
+        if (now-self.quality_wait_since >= COAST_MAX_S
+                or now-self.drive_since >= self.max_drive_s
+                or now-self.orbit_since >= ORBIT_ENTRY_MAX_S):
+            self.lock('route_quality_wait_original_budget_expired')
+            return self._result(now)
+        if (control.get('servo') != self.quality_wait_servo
+                or control.get('motor') not in (NEUTRAL, TRIAL_MOTOR)
+                or (control.get('neutral_acked') is True and control['motor'] != NEUTRAL)):
+            self.lock('route_quality_wait_feedback_changed')
+            return self._result(now)
+        neutral = control.get('neutral_acked') is True and control['motor'] == NEUTRAL
+        if not neutral and now-self.quality_wait_since >= SCAN_AGE_S:
+            self.lock('route_quality_wait_neutral_ack_timeout')
+            return self._result(now)
+        points = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
+        if points is None:
+            self.lock('route_quality_wait_target_unconfirmed')
+            return self._result(now)
+        if not advancing:
+            return self._result(now)
+        front, side = max(p[0] for p in points), min(p[1] for p in points)-SIDE_BODY_EXTENT_M
+        passed = front <= -REAR_BODY_EXTENT_M and side >= MANEUVER_BODY_CLEARANCE_M
+        if passed:
+            pass_ready = self._mature_observation(self._quality_pass_history, scan, .25)
+        else:
+            self._quality_pass_history.clear()
+            pass_ready = False
+        if quality_clear is not True or not neutral:
+            self._quality_good_history.clear()
+            return self._result(now)
+        good = self._mature_observation(self._quality_good_history, scan, .30)
+        if not good or resume_ready is not True:
+            return self._result(now)
+        if passed:
+            if not pass_ready:
+                return self._result(now)
+            _, rejection = self._right_exit_target(scan, now)
+            if rejection is not None:
+                self.lock('route_quality_wait_pass_corridor_unavailable')
+                return self._result(now)
+            self.first_pass_preparing = True
+            self.first_pass_evidence = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                'received_at': scan['received_at'], 'track_id': self.orbit_track_id,
+                'support_bins': list(self.compact_target['support_bins']),
+                'observed_frontmost_x_m': front, 'observed_left_body_gap_m': side,
+                'basis': 'current_complete_support_behind_rear_during_neutral_wait',
+                'physical_cone_pass_certified': False, 'swept_path_certified': False}
+            self.right_exit_since, self.route_stage = now, 'right_align'
+            self._route_event('first_pass', scan, control, self.first_pass_evidence)
+        self.phase, self.reason = 'drive', 'route_quality_resume_waiting_ack'
+        self.quality_resume_pending, self.quality_resume_since = True, now
+        self.quality_wait_evidence.update(resume_seq=scan['seq'], resume_at_ms=scan['at_ms'],
+            resume_received_at=scan['received_at'], good_frame_count=len(self._quality_good_history))
+        self._first_pass_history.clear()
+        self._route_event('quality_resume_request', scan, control, self.quality_wait_evidence)
+        # First powered output holds the actually ACKed neutral-wait steering.
+        return self._result(now)
 
     def _measurement(self, scan, candidates, publication_dt):
         candidate = super()._measurement(scan, candidates, publication_dt)
@@ -443,7 +613,7 @@ class ManeuverSequence(TurnMotion):
                       right_exit_min_pwm=RIGHT_EXIT_MIN_PWM,
                       right_exit_elapsed_s=0 if self.right_exit_since is None else max(0, now-self.right_exit_since),
                       right_exit_max_s=RIGHT_EXIT_MAX_S,
-                      second_target_handover_observed=False,
+                      second_target_handover_observed=self.second_target_handover_observed,
                       full_two_cone_s_supported=False,
                       handover_observed=self.handover_observed,
                       orbit_reference_range_m=self.orbit_reference_range_m,
@@ -472,6 +642,32 @@ class ManeuverSequence(TurnMotion):
                       quality_coast_hold_active=(self.phase == 'coast'
                                                 and self.quality_coast_servo is not None),
                       wall_ambiguity_hold=self.wall_ambiguity_hold)
+        result.update(continue_route=self.continue_route, route_stage=self.route_stage,
+            quality_wait_active=self.phase == 'quality_wait',
+            quality_wait_servo=self.quality_wait_servo,
+            quality_wait_used=self.quality_wait_used,
+            quality_wait_evidence=copy.deepcopy(self.quality_wait_evidence),
+            quality_resume_pending=self.quality_resume_pending,
+            route_alignment_evidence=copy.deepcopy(self.route_alignment_evidence),
+            second_target=copy.deepcopy(self.second_target),
+            second_center_ack=copy.deepcopy(self.second_center_ack),
+            second_pass_evidence=copy.deepcopy(self.second_pass_evidence),
+            second_feedback=copy.deepcopy(self.second_feedback),
+            second_acquisition_reason=self.second_acquisition_reason,
+            role_distinct_evidence=copy.deepcopy(self.role_distinct_evidence),
+            route_events=copy.deepcopy(self.route_events),
+            two_target_observed_pass_complete=self.second_pass_evidence is not None,
+            route_right_output_authorized=(self.continue_route and self.phase == 'drive'
+                and not self.quality_resume_pending and self.first_pass_evidence is not None
+                and self._route_center_ack is not None
+                and ((self.route_stage in ('right_align', 'corridor_follow')
+                      and self.right_exit_center_ack is not None)
+                     or (self.route_stage == 'second_orbit' and self.second_center_ack is not None))),
+            route_center_ack=copy.deepcopy(self._route_center_ack))
+        if self.continue_route and self.phase == 'drive' and self.route_stage != 'first_target':
+            result['turn_stage'] = self.route_stage
+        if self.continue_route:
+            result['trial_scope'] = 'opt_in_observed_two_target_route'
         return result
 
     def _usable_target(self, target, scan):
@@ -572,6 +768,9 @@ class ManeuverSequence(TurnMotion):
                 'semantic_class': 'unknown', 'physical_cone_pass_certified': False,
                 'swept_path_certified': False}
             self.right_exit_since = now
+            if self.continue_route:
+                self.route_stage = 'right_align'
+                self._route_event('first_pass', scan, control, self.first_pass_evidence)
 
     def _right_exit_target(self, scan, now):
         """Use a current native forward corridor, never a guessed second cone."""
@@ -588,14 +787,19 @@ class ManeuverSequence(TurnMotion):
         if previous is not None:
             # Bound each new corridor against the preceding real observation.
             dt = (scan['at_ms']-previous['source_at_ms'])/1000
+            receive_dt = scan['received_at']-previous['received_at']
             if (dt <= 0 or dt >= SCAN_AGE_S
+                    or (self.continue_route and (not 0 < receive_dt < SCAN_AGE_S
+                        or now-previous['received_at'] >= SCAN_AGE_S
+                        or abs(dt-receive_dt) > .15))
                     or abs(c['heading_left_rad']-previous['heading_left_rad']) > math.radians(25)
                     or abs(c['center_offset_left_m']-previous['center_offset_left_m']) > .30
                     or abs(c['width_m']-previous['width_m']) > max(.15, .1*previous['width_m'])):
                 return None, 'right_exit_corridor_identity_changed'
         lookahead = max(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M,
                         min(1., c['width_m']/2))
-        error = c['heading_left_rad']+math.atan2(c['center_offset_left_m'], lookahead)
+        error = (c['heading_left_rad'] if self.continue_route else
+                 c['heading_left_rad']+math.atan2(c['center_offset_left_m'], lookahead))
         target = max(RIGHT_EXIT_MIN_PWM, min(NEUTRAL, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
         self.right_exit_geometry = {**copy.deepcopy(c), 'source_seq': scan['seq'],
             'source_at_ms': scan['at_ms'], 'received_at': scan['received_at'],
@@ -603,6 +807,40 @@ class ManeuverSequence(TurnMotion):
             'source': 'current_native_corridor', 'second_target_confirmed': False}
         self._right_exit_last_receive, self._right_exit_last_publication = scan['received_at'], scan['at_ms']
         return target, None
+
+    @staticmethod
+    def _corridor_body_gap(candidate):
+        heading = candidate['heading_left_rad']
+        projections = [-math.sin(heading)*x+math.cos(heading)*y
+                       for x in (-REAR_BODY_EXTENT_M, FRONT_BODY_EXTENT_M)
+                       for y in (-SIDE_BODY_EXTENT_M, SIDE_BODY_EXTENT_M)]
+        offset, half = candidate['center_offset_left_m'], candidate['width_m']/2
+        return min(half+offset-max(projections), min(projections)-(offset-half))
+
+    def _route_adopted(self, control, now):
+        if control.get('servo', NEUTRAL) > NEUTRAL:
+            self._route_center_ack = None
+            self.second_center_ack = None
+            if self.servo < NEUTRAL:
+                self.lock('route_actual_steering_crossed_center')
+                return False
+        adopted = (control.get('motor') == TRIAL_MOTOR and control.get('servo') == self.servo
+                   and control.get('command_acked') is True)
+        if not adopted:
+            if self.right_exit_adoption_wait_since is None:
+                self.right_exit_adoption_wait_since = now
+            if now-self.right_exit_adoption_wait_since >= SCAN_AGE_S:
+                self.begin_coast('route_adoption_unconfirmed', now)
+            else:
+                self.steering_target = self.servo
+                self.reason = 'route_waiting_adopted_command'
+            return False
+        self.right_exit_adoption_wait_since = None
+        if self.servo > NEUTRAL:
+            self._route_center_ack = None
+        elif self.servo == NEUTRAL:
+            self._route_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
+        return True
 
     def _right_exit_update(self, scan, now, control):
         if now-self.right_exit_since+1e-9 >= RIGHT_EXIT_MAX_S:
@@ -624,6 +862,8 @@ class ManeuverSequence(TurnMotion):
                 self.begin_coast(rejection, now)
                 self._slew(now)
             return self._result(now)
+        if self.continue_route and not self._route_adopted(control, now):
+            return self._result(now)
         adopted = (control.get('motor') == TRIAL_MOTOR and control.get('servo') == self.servo
                    and control.get('command_acked') is True)
         if not adopted:
@@ -641,11 +881,163 @@ class ManeuverSequence(TurnMotion):
             if (self.servo == NEUTRAL and control.get('servo') == NEUTRAL
                     and control.get('motor') == TRIAL_MOTOR and control.get('command_acked') is True):
                 self.right_exit_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
+                self._route_center_ack = dict(self.right_exit_center_ack)
             else:
                 target = NEUTRAL
+        if self.continue_route and self.right_exit_center_ack is not None:
+            c = self.right_exit_geometry
+            aligned = (abs(c['heading_left_rad']) <= math.radians(5)
+                       and self._corridor_body_gap(c) >= MANEUVER_BODY_CLEARANCE_M)
+            if aligned and self._mature_observation(self._route_alignment_history, scan, .25):
+                self.route_alignment_evidence = {**copy.deepcopy(c),
+                    'body_normal_gap_m': self._corridor_body_gap(c),
+                    'physical_alignment_certified': False}
+                self.route_stage = 'corridor_follow'
+                self._route_event('corridor_follow', scan, control, self.route_alignment_evidence)
+                self.steering_target = self.servo
+                self.reason = 'route_corridor_alignment_observed'
+                return self._result(now)
+            if not aligned:
+                self._route_alignment_history.clear()
         self.steering_target = self.natural_steering_target = target
         self.reason = ('first_target_right_exit_tracking' if self.right_exit_center_ack is not None
                        else 'first_target_right_exit_waiting_center_ack')
+        self._slew(now)
+        return self._result(now)
+
+    def _second_role_observation(self, scan, now):
+        first = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
+        candidates = _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, 0.))
+        c = self.right_exit_geometry
+        proof = None
+        if first is not None and self.first_pass_evidence is not None and len(candidates) == 1:
+            target = candidates[0]
+            bins = target['support_bins']
+            points = [(scan['ranges'][i]*math.cos(math.radians(i)),
+                       -scan['ranges'][i]*math.sin(math.radians(i))) for i in bins]
+            x, y = target['point_left_m']
+            heading = c['heading_left_rad']
+            along = math.cos(heading)*x+math.sin(heading)*y
+            normal = -math.sin(heading)*x+math.cos(heading)*y
+            separation = min(math.dist(a, b) for a in first for b in points)
+            distinct = (not set(bins).intersection(self.compact_target['support_bins'])
+                        and separation > MAX_DIAMETER_M
+                        and x > FRONT_BODY_EXTENT_M and y < 0 and along > FRONT_BODY_EXTENT_M
+                        and abs(normal-c['center_offset_left_m']) < c['width_m']/2-MANEUVER_BODY_CLEARANCE_M)
+            if distinct:
+                proof = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                    'source_received_at': scan['received_at'], 'first_track_id': self.orbit_track_id,
+                    'first_support_bins': list(self.compact_target['support_bins']),
+                    'second_support_bins': list(bins), 'actual_support_separation_m': separation,
+                    'corridor_heading_left_rad': heading, 'second_along_m': along,
+                    'second_normal_m': normal, 'physical_identity_verified': False}
+        if proof is None:
+            # acquire=False alone would still mature an existing unconfirmed
+            # association. No role proof means discard that entire interval.
+            self.second_tracker = self._new_second_tracker()
+            self.second_target = None
+            self.role_distinct_evidence = None
+            self.second_acquisition_reason = 'second_role_current_distinct_support_missing'
+            return
+        self.second_target = self.second_tracker.update(scan, now, acquire=True)
+        self.role_distinct_evidence = proof
+        self.second_acquisition_reason = self.second_tracker.reason
+
+    def _corridor_follow_update(self, scan, now, control):
+        _, rejection = self._right_exit_target(scan, now)
+        if rejection is not None:
+            self.begin_coast(rejection, now)
+            self._slew(now)
+            return self._result(now)
+        if self._corridor_body_gap(self.right_exit_geometry) < MANEUVER_BODY_CLEARANCE_M:
+            self.begin_coast('route_corridor_body_margin_unavailable', now)
+            return self._result(now)
+        if not self._route_adopted(control, now):
+            return self._result(now)
+        self._second_role_observation(scan, now)
+        if self.second_target is not None and self.second_target.get('confirmed') is True:
+            self.second_track_id = self.second_target['track_id']
+            self.second_target_handover_observed = True
+            self.second_orbit_since, self.route_stage = now, 'second_orbit'
+            # An uninterrupted right command may retain its actual center ACK.
+            # A new left-to-right change must acquire a new center ACK below.
+            if self.servo <= NEUTRAL and self._route_center_ack is not None:
+                self.second_center_ack = dict(self._route_center_ack)
+            self.steering_target = self.servo
+            self.reason = 'second_target_handover_keep_adopted_command'
+            self._route_event('second_handover', scan, control, self.role_distinct_evidence)
+            return self._result(now)
+        c = self.right_exit_geometry
+        error = c['heading_left_rad']+math.atan2(c['center_offset_left_m'], c['lookahead_m'])
+        target = max(NEUTRAL-55, min(NEUTRAL+55, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
+        if target < NEUTRAL and self._route_center_ack is None:
+            target = NEUTRAL
+        self.steering_target = self.natural_steering_target = target
+        self.reason = 'route_corridor_follow_current_geometry'
+        self._slew(now)
+        if self.servo > NEUTRAL:
+            self._route_center_ack = None
+        return self._result(now)
+
+    def _second_orbit_update(self, scan, now, control):
+        if now-self.second_orbit_since >= ORBIT_ENTRY_MAX_S:
+            self.begin_coast('second_target_entry_trial_timeout', now)
+            self._slew(now)
+            return self._result(now)
+        target = self.second_target
+        if target is None or target.get('track_id') != self.second_track_id or not target.get('confirmed'):
+            self.begin_coast('second_target_lost_or_identity_changed', now)
+            self._slew(now)
+            return self._result(now)
+        if not self._route_adopted(control, now):
+            return self._result(now)
+        if self.second_center_ack is None:
+            if self.servo == NEUTRAL:
+                self.second_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
+            else:
+                self.steering_target = NEUTRAL
+                self.reason = 'second_target_waiting_center_ack'
+                self._slew(now)
+                return self._result(now)
+        points = self._full_target_points(target, scan, self.second_track_id)
+        passed = (points is not None and max(p[0] for p in points) <= -REAR_BODY_EXTENT_M
+                  and min(-p[1] for p in points)-SIDE_BODY_EXTENT_M >= MANEUVER_BODY_CLEARANCE_M)
+        if passed and self._mature_observation(self._second_pass_history, scan, .25):
+            self.second_pass_evidence = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                'received_at': scan['received_at'], 'track_id': self.second_track_id,
+                'support_bins': list(target['support_bins']),
+                'observed_frontmost_x_m': max(p[0] for p in points),
+                'observed_right_body_gap_m': min(-p[1] for p in points)-SIDE_BODY_EXTENT_M,
+                'basis': 'current_complete_support_behind_rear',
+                'physical_cone_pass_certified': False, 'swept_path_certified': False}
+            self._route_event('second_pass', scan, control, self.second_pass_evidence)
+            self.begin_coast('two_target_observed_support_pass', now)
+            self._slew(now)
+            return self._result(now)
+        if not passed:
+            self._second_pass_history.clear()
+        if points is None:
+            # Partial boundaries maintain only the already selected command;
+            # they cannot define a new bypass point or prove a pass.
+            self.steering_target = self.servo
+            self.reason = 'second_target_partial_support_hold'
+            return self._result(now)
+        body_length = FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M
+        front = max(p[0] for p in points)
+        left_edge = max(p[1] for p in points)
+        waypoint = [max(body_length, front+FRONT_BODY_EXTENT_M),
+                    left_edge+SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M]
+        bearing = math.atan2(waypoint[1], waypoint[0])
+        nominal = max(RIGHT_EXIT_MIN_PWM, min(NEUTRAL,
+            NEUTRAL+round(LEFT_TRIAL_GAIN*bearing)))
+        self.second_feedback = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'current_support_left_edge_y_m': left_edge, 'current_support_frontmost_x_m': front,
+            'relative_bypass_point_left_m': waypoint, 'bearing_left_rad': bearing,
+            'nominal_target_pwm': nominal,
+            'scope': 'current_support_relative_point_trial',
+            'swept_path_certified': False, 'physical_curvature_calibrated': False}
+        self.steering_target = self.natural_steering_target = nominal
+        self.reason = 'second_target_clockwise_bounded_entry'
         self._slew(now)
         return self._result(now)
 
@@ -880,10 +1272,14 @@ class ManeuverSequence(TurnMotion):
         self.last_signature = signature
         return True
 
-    def _orbit_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait):
+    def _orbit_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait,
+                      quality_clear=False, quality_resume_ready=False):
         advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, presteer_wait)
         if self.phase == 'locked':
             return self._result(self.last_now)
+        if self.phase == 'quality_wait':
+            return self._quality_wait_update(scan, now, control, advancing,
+                                             quality_clear, quality_resume_ready)
         if self.phase == 'drive' and now-self.drive_since+1e-9 >= self.max_drive_s:
             self.begin_coast('maneuver_cumulative_drive_timeout', now)
         if self.phase == 'coast':
@@ -894,8 +1290,36 @@ class ManeuverSequence(TurnMotion):
                                         else self.quality_coast_servo)
                 self._slew(now)
             return self._result(now)
+        if self.quality_resume_pending:
+            if self.first_pass_evidence is not None and advancing:
+                _, rejection = self._right_exit_target(scan, now)
+                if rejection is not None:
+                    self.lock('route_quality_resume_corridor_unconfirmed')
+                    return self._result(now)
+            if self._full_target_points(self.compact_target, scan, self.orbit_track_id) is None:
+                self.lock('route_quality_resume_target_unconfirmed')
+            elif (self.first_pass_evidence is None and now-self.orbit_since >= ORBIT_ENTRY_MAX_S):
+                self.lock('route_quality_resume_original_budget_expired')
+            elif (control.get('servo') != self.quality_wait_servo
+                    or control.get('motor') not in (NEUTRAL, TRIAL_MOTOR)):
+                self.lock('route_quality_resume_feedback_changed')
+            elif (control.get('resume_acked') is True and control['motor'] == TRIAL_MOTOR
+                  and control.get('command_acked') is True):
+                self.quality_resume_pending = False
+                self.quality_wait_evidence['resume_ack'] = {k: control.get(k) for k in
+                    ('motor', 'servo', 'seq', 'tick')}
+            elif now-self.quality_resume_since >= SCAN_AGE_S:
+                self.lock('route_quality_resume_ack_timeout')
+            else:
+                self.steering_target = self.quality_wait_servo
+            # Even the ACK observation cannot change steering on this output.
+            return self._result(now)
         if not advancing:
             return self._result(now)
+        if self.continue_route and self.route_stage == 'corridor_follow':
+            return self._corridor_follow_update(scan, now, control)
+        if self.continue_route and self.route_stage == 'second_orbit':
+            return self._second_orbit_update(scan, now, control)
         if self.first_pass_evidence is not None:
             return self._right_exit_update(scan, now, control)
         if not self._usable_target(self.compact_target, scan):
@@ -969,7 +1393,8 @@ class ManeuverSequence(TurnMotion):
         self._slew(now)
         return self._result(now)
 
-    def update(self, scan, lidar_age_s, now, control, *, safe=True, entry_stop=None, presteer_wait=False):
+    def update(self, scan, lidar_age_s, now, control, *, safe=True, entry_stop=None, presteer_wait=False,
+               quality_clear=False, quality_resume_ready=False):
         # Expose only this call's raw returns; cached wall endpoints are never
         # used to manufacture current inside-edge evidence.
         self._current_scan = scan
@@ -986,7 +1411,10 @@ class ManeuverSequence(TurnMotion):
             self._last_confirmed_compact_target = self.compact_target
         self.compact_target_error = None
         try:
-            self.compact_target = self.target_tracker.update(scan, now)
+            self.compact_target = (self.target_tracker.update(scan, now, acquire=self.first_pass_evidence is None)
+                                   if self.continue_route else self.target_tracker.update(scan, now))
+            if self.continue_route and self.route_stage == 'second_orbit':
+                self.second_target = self.second_tracker.update(scan, now, acquire=False)
         except (ValueError, TypeError, KeyError) as error:
             self.compact_target = None
             self.compact_target_error = type(error).__name__
@@ -997,7 +1425,8 @@ class ManeuverSequence(TurnMotion):
         if (self.handover_observed or (self.phase == 'coast' and self.wall_ambiguity_hold)
                 or (self.phase == 'drive' and self._usable_target(self.compact_target, scan))):
             return self._orbit_update(scan, lidar_age_s, now, control,
-                                      safe=safe, presteer_wait=presteer_wait)
+                                      safe=safe, presteer_wait=presteer_wait,
+                                      quality_clear=quality_clear, quality_resume_ready=quality_resume_ready)
         self.wall_ambiguity_hold = False
         feedback_tick = control.get('tick') if isinstance(control, dict) else None
         self._presteer_adoption_context = {

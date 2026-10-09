@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "34 first obstacle physically passed, then stopped; full task incomplete. Original scan_incomplete neutral hold1690 persisted until fixed5s, new front_sparse coast branch not exercised (three issue ticks were presteer). User reset confirmed and requests right alignment to current corridor, forward corridor following until real second target, then clockwise second pass.35 next, continuation not implemented.",
+  "latest_trial_status": "34 first obstacle physically passed, then stopped; full task incomplete. Original scan_incomplete neutral hold1690 persisted until fixed5s, new front_sparse coast branch not exercised (three issue ticks were presteer). User reset confirmed and requests right alignment to current corridor, forward corridor following until real second target, then clockwise second pass.35 next; explicit continuation implemented and targeted checks passed, not yet packaged/deployed or physically tested.",
   "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -10612,7 +10612,7 @@
     "trial34_in_progress": false,
     "physical_stop_reset_after34_confirmed": true,
     "operator_first_obstacle34_passed": true,
-    "after34_continuation_implemented": false
+    "after34_continuation_implemented": true
   },
   "after30_double_boundary_and_loss_coast_correction": {
     "implemented": true,
@@ -14166,10 +14166,69 @@
   },
   "after34_requested_continuation": {
     "operator_request": "绕过第一锥桶后向右修正并平行于实时通道，沿通道前进至第二目标再绕第二",
-    "implemented": false,
+    "implemented": true,
     "physical_trial_executed": false,
     "no_fixed_straight_distance_or_course_coordinates": true,
     "current_blocker": "scan_incomplete irreversibly enters coast before software pass/right_exit; coast does not advance pass stage. Subsequent quality recovery does not restore positive motor.",
-    "investigation": "Review bounded same-owner neutral waiting with fresh quality and target/corridor revalidation; hard-stop/rearm must remain latched. Review actual corridor alignment and separate second target identity. No new behavior uploaded yet."
+    "investigation": "Review bounded same-owner neutral waiting with fresh quality and target/corridor revalidation; hard-stop/rearm must remain latched. Review actual corridor alignment and separate second target identity. No new behavior uploaded yet.",
+    "implementation_status": "implemented and targeted checks passed; not yet packaged/deployed/physically tested",
+    "design": {
+      "temporary_quality_wait": "Only first exact scan_incomplete after first handover may enter independent same-owner/same-arm neutral wait; old coast and hard stops never resume. At most one restoration per run.",
+      "resume_conditions": "Current complete same-ID target, at least3 strictly new scans with both publication and actual receipt span>=300ms, unchanged full quality checks and actual neutral ACK. Fresh route stage reassessment; current adopted servo preserved on first resumed command, positive-command ACK required before further steering.",
+      "budgets": "Original10s cumulative drive wall-clock budget, original orbit/right stage clocks and session deadline preserved. No wait or quality flicker renews them.",
+      "alignment": "Current unique native corridor direction, then fresh multi-frame alignment evidence; lateral centering moves to bounded corridor-follow stage.",
+      "second_role": "Configurable right-sector tracker and simultaneous current first/second disjoint actual support before acquiring second; no consumed ID reacquisition or guessed unseen second.",
+      "completion": "Observed two-target pass is separate from semantic/collision/full-competition acceptance."
+    },
+    "null_diagnosis": {
+      "bridge_scan_publication": "packet start-angle revolution wrap, not100ms timer cutoff",
+      "calibration_did_not_add_nulls_to_inspected33_621_or34_591_frames": true,
+      "raw_ranges_are_decoded_aggregates_not_uart_bytes": true,
+      "missing_instrumentation": [
+        "per-bin seen mask",
+        "raw distance invalid reason",
+        "decoder error counters"
+      ],
+      "do_not_infer_free_space_or_physical_sensor_fault": true
+    }
+  },
+  "after34_route_continuation_candidate": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 35,
+    "activation": "Explicit turn-cone --continue-route; strict boolean; existing default and turn-left behavior retained.",
+    "quality_wait": "At most one same-owner/same-arm neutral wait on exact scan_incomplete in first target drive. Holds adopted servo. Actual neutral command ACK, current full original target, at least3 new scans with publication AND receipt span>=300ms, original quality recovery gate required. First resumed M1560 keeps held servo and requires actual positive command ACK before steering.",
+    "hard_stop": "No reopening old coast, no automatic unlock/rearm; missing/changed target, front-sparse beyond existing neutral limit6, full blind/stale/heartbeat/control/near gates remain terminal.",
+    "budgets": "Original cumulative drive10s including wait, first orbit3s, right align3s, second entry3s, total deadline; wait max5s subordinate to original budget. No renewal.",
+    "route": "Original current full support behind rear-.18m +8cm side multi-frame pass, then heading-only right alignment against unique current native corridor. At least3 fresh frames spanning250ms publication AND receipt, heading within5deg and body projection margin8cm before corridor_follow. Follow current heading+offset bounded1455..1555 until actual second confirmation; no fixed straight distance.",
+    "second_identity": "Current original first-ID full support required in each second acquisition frame; disjoint actual support and separation>existing compact max diameter. Right forward actual target, inside unique current corridor, existing tracker multi-frame dual clocks. Missing proof resets unconfirmed second tracker. Consumed first/locked second never reacquired as new role.",
+    "second_steering": "Relative bypass point from current actual left edge+body side.14+clearance.08 and max(bodylength.38, current frontmost+.20); atan2 to bounded1350..1500 feedback. Same10/100ms right slew and actual center ACK on every new left-right crossing. No fixed1350 command or extra range attenuation; no calibrated swept/curvature claim.",
+    "clearance": "Original first-entry4cm left exemption only before pass and not resume-pending; waiting/resume/right alignment/corridor/second all8cm.",
+    "completion": "two_target_observed_pass_complete separate; semantic unknown, completed=false and competition_supported=false.",
+    "evidence": "One bounded current raw/control snapshot per route event; exact quality-trigger/resume ACK snapshots. Trial34 fixture15 actual raw scans with mocked receipt/control explicitly labeled; no real second-target fixture.",
+    "validation": {
+      "maneuver_old_and_new_methods": 88,
+      "new_maneuver_route_methods": 25,
+      "new_service_cli_methods": 19,
+      "compact_old_and_new_methods": 63,
+      "new_compact_role_methods": 17,
+      "independent_readonly_review": "No remaining code blocker; resumed-current-ID, center crossing ACK, role support and deadlines reviewed. Physical trajectory unverified.",
+      "final_integrated_new_and_legacy_quality_methods": 71,
+      "extra_full_suite_not_run": true
+    },
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/before35-route-fresh.json",
+    "old14_installed_hashes_match_35d0fb9": true,
+    "operator_stopped_reset_after34_confirmed": true,
+    "source_sha256": {
+      "web/vehicle-console/maneuver_sequence.py": "ad92d178c761adfa27e68b2657cd8dcd423df5f1f74d6a4053de93351f340090",
+      "web/vehicle-console/compact_target.py": "016f80fbfbe76aedea83800e5364703d3017695d7f33aef1ef471bb1a7ec0b8d",
+      "web/vehicle-console/server.py": "b7902b47d714c031b221b37bcb5e0a159244b8ec43c408d065be73e23934779c",
+      "web/vehicle-console/autonomy-control.py": "8efbcbebe8b14f4a10859a3fda1de1da639efb6f52b8ef6a4aacc1b52287a7dd",
+      "web/vehicle-console/tests/test_maneuver_route.py": "f8b51977ca865327f262f17d3ac7ad18ee114ceb3ed3bb1d8ad51075f1e4ba1f",
+      "web/vehicle-console/tests/test_route_control.py": "8c8730d3a54c9c8f111df8121ccac0482e13567bdad633aae0f742578100392a",
+      "web/vehicle-console/tests/test_compact_target_roles.py": "4176755e0ec4b2cf4efb7b28eaf203bcc9fcdac92f5d38705135d2f70d0e4d11",
+      "web/vehicle-console/tests/fixtures/left-cone-34-route-observations.json": "5bf9db2121d59a6dba76dd566dca9248e38072456148e96931a232bda028fe0d"
+    }
   }
 }

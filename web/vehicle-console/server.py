@@ -3,6 +3,7 @@
 import argparse
 import base64
 import collections
+import copy
 import fcntl
 import hashlib
 import hmac
@@ -324,10 +325,12 @@ class Console:
         return {'camera': now - self.camera_at, 'lidar': now - self.scan_at,
                 'control': now - self.control_at}
 
-    def autonomy_status(self, initial_presteer_pwm=None, trial_mode='turn-left'):
+    def autonomy_status(self, initial_presteer_pwm=None, trial_mode='turn-left', continue_route=False):
         if trial_mode not in ('turn-left', 'turn-cone'):
             raise ValueError('invalid_maneuver_trial_mode')
         compact_target_trial = trial_mode == 'turn-cone'
+        if type(continue_route) is not bool or (continue_route and not compact_target_trial):
+            raise ValueError('invalid_continue_route')
         if compact_target_trial and initial_presteer_pwm is None:
             initial_presteer_pwm = DEFAULT_INITIAL_PWM
         if compact_target_trial:
@@ -365,7 +368,8 @@ class Console:
             if owned:
                 raise ValueError('control_owned_or_unlocked')
             _, turn_preview, turn_clearance = self.turn_preview(now,
-                initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=compact_target_trial)
+                initial_presteer_pwm=initial_presteer_pwm, compact_target_trial=compact_target_trial,
+                continue_route=continue_route)
             turn_ready = True
         except ValueError as error:
             turn_clearance = getattr(error, 'clearance', None)
@@ -393,6 +397,7 @@ class Console:
                 'turn_ready': turn_ready, 'turn_rejection': turn_rejection, 'turn_preview': turn_preview,
                 'turn_clearance': turn_clearance,
                 'trial_mode': trial_mode,
+                'continue_route': continue_route,
                 'trial_scope': COMPACT_TARGET_TRIAL_SCOPE if compact_target_trial else 'bounded_left_turn_trial',
                 'turn_drive_max_s': MAX_DRIVE_S,
                 'left_turn_servo_cap': SERVO_MAX,
@@ -404,8 +409,11 @@ class Console:
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
 
-    def turn_preview(self, now, max_drive_s=MAX_DRIVE_S, initial_presteer_pwm=None, compact_target_trial=False):
+    def turn_preview(self, now, max_drive_s=MAX_DRIVE_S, initial_presteer_pwm=None,
+                     compact_target_trial=False, continue_route=False):
         """Pure admission from this fresh scan; not an entrance/navigation certificate."""
+        if type(continue_route) is not bool or (continue_route and not compact_target_trial):
+            raise ValueError('invalid_continue_route')
         ages = self.sensor_ages(now)
         clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False,
                                     camera_required=False, clearance_profile='maneuver')
@@ -419,7 +427,8 @@ class Console:
             controller = ManeuverSequence if compact_target_trial else TurnMotion
             if compact_target_trial and initial_presteer_pwm is None:
                 initial_presteer_pwm = DEFAULT_INITIAL_PWM
-            motion = controller(now, max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm)
+            options = {'continue_route': continue_route} if compact_target_trial else {}
+            motion = controller(now, max_drive_s=max_drive_s, initial_presteer_pwm=initial_presteer_pwm, **options)
             scan = {**self.scan, 'received_at': self.scan_at} if compact_target_trial else self.scan
             decision = motion.update(scan, ages['lidar'], now, control)
             if compact_target_trial:
@@ -435,8 +444,13 @@ class Console:
     def start_turn_trial(self, data, compact_target_trial=False):
         allowed = {'op', 'boot', 'epoch', 'tick', 'placement_confirmed', 'max_drive_s',
                    'initial_presteer_pwm'}
-        if not compact_target_trial:
+        if compact_target_trial:
+            allowed.add('continue_route')
+        else:
             allowed.add('goal_id')
+        continue_route = data.get('continue_route', False)
+        if type(continue_route) is not bool or ('continue_route' in data and not compact_target_trial):
+            raise ValueError('invalid_continue_route')
         if set(data)-allowed or data.get('placement_confirmed') is not True:
             raise ValueError('turn_trial_requires_operator_placement_confirmation')
         if self.stop.is_set() or self.owner is not None or self.auto_session is not None:
@@ -462,7 +476,8 @@ class Console:
             if type(limit) not in (int, float) or not math.isfinite(limit):
                 raise ValueError('invalid_bounded_left_turn_trial')
             limit = min(limit, trial_goal['max_seconds'])
-        motion, decision, clearance = self.turn_preview(now, limit, initial_presteer_pwm, compact_target_trial)
+        motion, decision, clearance = self.turn_preview(now, limit, initial_presteer_pwm,
+                                                      compact_target_trial, continue_route)
         tick = data.get('tick')
         current_tick = self.status['control'].get('tick', -1)
         if type(tick) is not int or not 0 <= current_tick-tick < 100 or tick <= self.stopped_tick:
@@ -489,6 +504,7 @@ class Console:
             'rear_launch_active': False, 'rear_launch_max_s': 0}
         if compact_target_trial:
             report.update(endpoint='first_compact_target_orbit_entry_trial',
+                continue_route=continue_route,
                 left_turn_servo_cap=SERVO_MAX,
                 trial_scope=COMPACT_TARGET_TRIAL_SCOPE, semantic_class='unknown', competition_supported=False,
                 completed=False, compact_target=decision.get('compact_target'),
@@ -501,6 +517,7 @@ class Console:
             'motion_scan_seq': None, 'turn_last_servo': 1500, 'turn_servo_sequence': None}
         if compact_target_trial:
             self.auto_session['maneuver_sequence'] = True
+            self.auto_session['continue_route'] = continue_route
         self.auto_result = None
         self.owner, self.owner_at = 'auto-turn-'+run_id, now
         self.control_mode, self.stop_latched = ('auto_turn_cone_trial' if compact_target_trial else 'auto_turn_trial'), False
@@ -866,6 +883,11 @@ class Console:
             relaxed_turn_left = (session.get('maneuver_sequence') is True
                 and session.get('phase') == 'drive'
                 and getattr(session.get('turn_motion'), 'phase', None) == 'drive'
+                and (session.get('continue_route') is not True
+                     or (getattr(session.get('turn_motion'), 'first_pass_evidence', None) is None
+                         and getattr(session.get('turn_motion'), 'right_exit_since', None) is None
+                         and getattr(session.get('turn_motion'), 'route_stage', None) == 'first_target'
+                         and not getattr(session.get('turn_motion'), 'quality_resume_pending', False)))
                 and control.get('armed') is True and control.get('motor') == TRIAL_MOTOR
                 and type(control.get('servo')) is int and 1500 < control['servo'] <= SERVO_MAX)
             clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
@@ -1019,11 +1041,84 @@ class Console:
                      or (control.get('motor') == TRIAL_MOTOR
                          and (neutral_seq is None or control.get('seq', -1) < neutral_seq))))
 
+    def turn_quality_wait_eligible(self, session):
+        """Only current bounded missing-return evidence may retain neutral steering."""
+        motion, control = session.get('turn_motion'), self.status.get('control', {})
+        held = getattr(motion, 'quality_wait_servo', None)
+        clearance, scan = session['report'].get('clearance_current'), self.scan
+        issues = set(session['report'].get('quality_issues', []))
+        neutral_seq = session.get('quality_wait_neutral_sequence')
+        if (session.get('continue_route') is not True or not isinstance(motion, ManeuverSequence)
+                or getattr(motion, 'continue_route', False) is not True
+                or session.get('phase') != 'quality_wait' or motion.phase != 'quality_wait'
+                or not isinstance(clearance, dict) or not isinstance(scan, dict)
+                or type(scan.get('seq')) is not int or scan['seq'] < 0
+                or type(clearance.get('scan_seq')) is not int or clearance['scan_seq'] != scan['seq']
+                or set(clearance.get('quality_issues', [])) != issues
+                or not issues <= {'scan_incomplete', 'front_sparse'}
+                or type(held) is not int or not 1500 < held <= SERVO_MAX
+                or control.get('armed') is not True or control.get('servo') != held
+                or control.get('seq', -1) < self.arm_sequence):
+            return False
+        neutral_ack = (type(neutral_seq) is int and control.get('seq', -1) >= neutral_seq
+                       and control.get('motor') == 1500)
+        # Pending neutral is tolerated only before its first ACK. Once ACKed,
+        # positive motor feedback cannot be relabeled as continued waiting.
+        pending_neutral = (control.get('motor') == TRIAL_MOTOR
+                           and (neutral_seq is None or control.get('seq', -1) < neutral_seq))
+        if not neutral_ack and not pending_neutral:
+            return False
+        if 'front_sparse' in issues:
+            ranges = scan.get('ranges')
+            if not neutral_ack or not isinstance(ranges, list) or len(ranges) != 360:
+                return False
+            unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
+            if unknown != clearance.get('front_unknown_bins') or len(unknown) > FRONT_MAX_UNKNOWN:
+                return False
+        return True
+
+    def turn_route_control(self, session, control):
+        """Derive adoption from the current bridge feedback, never report flags."""
+        held = getattr(session['turn_motion'], 'quality_wait_servo', None)
+        neutral_seq = session.get('quality_wait_neutral_sequence')
+        resume_seq = session.get('quality_resume_sequence')
+        current = (control.get('armed') is True and type(control.get('seq')) is int
+                   and control['seq'] >= self.arm_sequence and control.get('servo') == held)
+        return {**control,
+                'neutral_acked': bool(current and type(neutral_seq) is int
+                                      and control['seq'] >= neutral_seq and control.get('motor') == 1500),
+                'resume_acked': bool(current and type(resume_seq) is int
+                                     and control['seq'] >= resume_seq and control.get('motor') == TRIAL_MOTOR)}
+
+    def turn_quality_snapshot(self, session, control, now):
+        """A bounded, exact scan at an event; no state/access data or per-tick log."""
+        scan = self.scan
+        return {'continue_route': True, 'observed_at': now,
+                'scan': {'seq': scan['seq'], 'at_ms': scan['at_ms'], 'received_at': self.scan_at,
+                         'frame_id': scan.get('frame_id'), 'ranges': list(scan['ranges'])},
+                'control': {key: control.get(key) for key in ('tick', 'seq', 'motor', 'servo', 'armed',
+                            'command_acked', 'neutral_acked', 'resume_acked')},
+                'compact_target': copy.deepcopy(session['turn_motion'].compact_target),
+                'clearance': copy.deepcopy(session['report'].get('clearance_current')),
+                'drive_since': session['turn_motion'].drive_since,
+                'session_deadline': session['deadline']}
+
     def turn_tick(self, session, now, motion_ready):
         """One trial owner; no rear exemption, segment restart or navigation completion."""
         report = session['report']
         control = self.status.get('control', {})
         motion = session['turn_motion']
+        route = (session.get('continue_route') is True and isinstance(motion, ManeuverSequence)
+                 and getattr(motion, 'continue_route', False) is True)
+        if route and session.get('phase') != 'coast':
+            # Waiting never starts a new segment budget or pauses the original
+            # cumulative drive clock. A deadline wins over same-tick recovery.
+            if now >= session['deadline']:
+                self.halt('turn_total_deadline')
+                return
+            if motion.drive_since is not None and now-motion.drive_since+1e-9 >= motion.max_drive_s:
+                self.halt('maneuver_cumulative_drive_timeout')
+                return
         neutral_wait = (not motion_ready and session.get('phase') == motion.phase == 'presteer'
             and control.get('armed') is True and control.get('seq', -1) >= self.arm_sequence
             and type(control.get('motor')) is int and control['motor'] == 1500
@@ -1034,7 +1129,27 @@ class Console:
             pending_servo = session['turn_servo_sequence']
             turn_control = {**control, 'command_acked': pending_servo is None
                             or control.get('seq', -1) >= pending_servo}
-            if (session.get('maneuver_sequence') is True
+            if route and session.get('phase') == motion.phase == 'quality_wait':
+                if not self.turn_quality_wait_eligible(session):
+                    self.halt('turn_perception_unavailable')
+                    return
+            elif (route and session.get('phase') == motion.phase == 'drive'
+                    and control.get('seq', -1) >= self.arm_sequence
+                    and set(report.get('quality_issues', [])) == {'scan_incomplete'}
+                    and self.turn_quality_hold_eligible(session)
+                    and motion.begin_quality_wait(now, turn_control,
+                        scan={**self.scan, 'received_at': self.scan_at})):
+                session['phase'] = report['phase'] = 'quality_wait'
+                session['quality_wait_neutral_sequence'] = None
+                session['quality_resume_sequence'] = None
+                report['quality_wait_trigger'] = {
+                    'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
+                    'quality_issues': list(report['quality_issues']), 'adopted_servo': control['servo'],
+                    'control_tick': control['tick'], 'control_seq': control['seq'],
+                    'motor_command': 1500, 'existing_arm_sequence': self.arm_sequence}
+                report['quality_wait_snapshot'] = self.turn_quality_snapshot(session,
+                    self.turn_route_control(session, turn_control), now)
+            elif (not route and session.get('maneuver_sequence') is True
                     and session.get('phase') == motion.phase == 'drive'
                     and control.get('seq', -1) >= self.arm_sequence
                     and set(report.get('quality_issues', [])) == {'scan_incomplete'}
@@ -1056,18 +1171,33 @@ class Console:
         if session.get('phase') == 'coast':
             self.coast_tick(session, now, motion_ready, report['servo'])
             return
+        if route and session.get('phase') == 'quality_wait' and not self.turn_quality_wait_eligible(session):
+            self.halt('turn_quality_wait_feedback_changed')
+            return
         if now >= session['deadline']:
             self.halt('turn_total_deadline')
             return
         if not control.get('armed') or control.get('seq', -1) < self.arm_sequence:
+            if route and (session.get('phase') != 'presteer' or report.get('observed_armed')
+                          or getattr(motion, 'handover_observed', False)):
+                self.halt('turn_bridge_locked_or_arm_feedback_lost')
             return
         report['observed_armed'] = True
         report['observed_pwm'] |= control.get('motor') == TRIAL_MOTOR
         pending_servo = session['turn_servo_sequence']
         turn_control = {**control, 'command_acked': pending_servo is None or control.get('seq', -1) >= pending_servo}
         scan = {**self.scan, 'received_at': self.scan_at} if session.get('maneuver_sequence') else self.scan
+        update_options = {}
+        if route:
+            turn_control = self.turn_route_control(session, turn_control)
+            if session.get('quality_resume_sequence') is not None:
+                report['quality_resume_ack'] = turn_control['resume_acked']
+            clearance = report.get('clearance_current') or {}
+            update_options = {'quality_clear': bool(clearance.get('motion_ready') is True
+                              and not report.get('quality_issues') and clearance.get('scan_seq') == self.scan['seq']),
+                              'quality_resume_ready': motion_ready is True}
         decision = motion.update(scan, report['sensor_ages']['lidar'], now, turn_control,
-                                 safe=True, presteer_wait=neutral_wait)
+                                 safe=True, presteer_wait=neutral_wait, **update_options)
         report['turn'] = decision
         report['physical_steering_confirmed'] = False
         report['observed_alignment'] = decision['observed_alignment']
@@ -1091,14 +1221,47 @@ class Console:
                       and motion.first_pass_evidence is not None
                       and motion.right_exit_center_ack is not None
                       and decision['turn_stage'] == 'right_exit')
+        route_center = decision.get('route_center_ack')
+        route_stage = decision.get('route_stage')
+        route_right = (route and decision['phase'] == 'drive' and motion.phase == 'drive'
+            and route_stage == getattr(motion, 'route_stage', None)
+            and decision.get('route_right_output_authorized') is True
+            and decision.get('quality_resume_pending') is False
+            and type(control.get('servo')) is int and control['servo'] <= 1500
+            and motion.first_pass_evidence is not None and isinstance(route_center, dict)
+            and route_center.get('servo') == 1500 and route_center.get('motor') == TRIAL_MOTOR
+            and type(route_center.get('seq')) is int
+            and self.arm_sequence <= route_center['seq'] <= control.get('seq', -1)
+            and type(route_center.get('tick')) is int and 0 <= route_center['tick'] <= control.get('tick', -1)
+            and ((route_stage in ('right_align', 'corridor_follow') and motion.right_exit_center_ack is not None)
+                 or (route_stage == 'second_orbit' and getattr(motion, 'second_center_ack', None) is not None)))
+        # New route output always uses its current continuous center proof;
+        # the legacy first-exit ACK cannot authorize a later phase on its own.
+        right_exit = route_right if route else right_exit
         minimum_servo = RIGHT_EXIT_MIN_PWM if right_exit else 1500
         if motor not in (1500, TRIAL_MOTOR) or not minimum_servo <= servo <= SERVO_MAX:
             raise ValueError('invalid_turn_trial_output')
+        if route and decision['phase'] == 'quality_wait' and (motor != 1500 or servo != motion.quality_wait_servo):
+            raise ValueError('invalid_turn_quality_wait_output')
+        if route and decision.get('quality_resume_pending') is True and (
+                motor != TRIAL_MOTOR or servo != motion.quality_wait_servo):
+            raise ValueError('invalid_turn_quality_resume_output')
+        if (route and turn_control['resume_acked'] and session.get('quality_resume_sequence') is not None
+                and 'quality_resume_snapshot' not in report and not decision.get('lock_requested')):
+            report['quality_resume_snapshot'] = self.turn_quality_snapshot(session, turn_control, now)
         changed = servo != session['turn_last_servo']
         if changed:
             report['steering_changes'] += 1
         report['servo'], report['current_pwm'] = servo, motor
         self.emit('drive', motor, servo, control['tick'])
+        if route and decision['phase'] == 'quality_wait':
+            if session.get('quality_wait_neutral_sequence') is None:
+                session['quality_wait_neutral_sequence'] = self.sequence
+            report['quality_wait_neutral_ack'] = turn_control['neutral_acked']
+        if route and decision.get('quality_resume_pending') is True:
+            if session.get('quality_resume_sequence') is None:
+                session['quality_resume_sequence'] = self.sequence
+            report['quality_resume_ack'] = turn_control['resume_acked']
         if changed:
             session['turn_last_servo'], session['turn_servo_sequence'] = servo, self.sequence
         if neutral_wait:
@@ -1118,6 +1281,14 @@ class Console:
                 competition_supported=False, completed=False, compact_target=decision.get('compact_target'),
                 handover_observed=bool(decision.get('handover_observed')),
                 orbit_entry_elapsed_s=decision.get('orbit_entry_elapsed_s', 0.))
+            if session.get('continue_route') is True:
+                for key in ('continue_route', 'route_stage', 'quality_wait_active', 'quality_wait_servo',
+                            'quality_wait_evidence', 'quality_wait_used', 'quality_resume_pending', 'second_target',
+                            'role_distinct_evidence', 'route_right_output_authorized',
+                            'route_center_ack', 'route_alignment_evidence', 'second_center_ack',
+                            'second_pass_evidence', 'second_acquisition_reason', 'route_events',
+                            'two_target_observed_pass_complete'):
+                    session['report'][key] = decision.get(key)
 
     def configure(self, data):
         with self.lock:
@@ -1185,7 +1356,7 @@ class Console:
             if self.auto_session is None or self.auto_session.get('turn_trial') is not True:
                 self.halt('camera_failed')
 
-    def state(self, initial_presteer_pwm=None, trial_mode='turn-left'):
+    def state(self, initial_presteer_pwm=None, trial_mode='turn-left', continue_route=False):
         # Directory I/O has no control-state authority and must not delay the
         # shared sensor/control lock used by the autonomous watchdog.
         files = sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]
@@ -1196,7 +1367,8 @@ class Console:
                     'ages': {'camera': now - self.camera_at, 'lidar': now - self.scan_at, 'control': now - self.control_at},
                     'errors': dict(self.errors), 'recording': self.record is not None, 'saving': self.saving,
                     'record_error': self.record_error, 'owner': self.owner, 'last_stop': self.last_stop,
-                    'autonomy': self.autonomy_status(initial_presteer_pwm=initial_presteer_pwm, trial_mode=trial_mode),
+                    'autonomy': self.autonomy_status(initial_presteer_pwm=initial_presteer_pwm,
+                                                    trial_mode=trial_mode, continue_route=continue_route),
                     'files': files}
 
     def storage_available(self):
@@ -1443,10 +1615,15 @@ def serve(args):
                     query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
                     initial = query.get('initial_presteer_pwm')
                     mode = query.get('trial_mode')
+                    route = query.get('continue_route')
                     if mode is not None and (len(mode) != 1 or mode[0] not in ('turn-left', 'turn-cone')):
                         self.reply(400, {'error': 'invalid_maneuver_trial_mode'})
                         return
-                    if initial is None and mode is None:
+                    if route is not None and (len(route) != 1 or route[0] not in ('true', 'false')
+                                              or mode != ['turn-cone']):
+                        self.reply(400, {'error': 'invalid_continue_route'})
+                        return
+                    if initial is None and mode is None and route is None:
                         self.reply(200, app.state())
                     else:
                         try:
@@ -1461,7 +1638,8 @@ def serve(args):
                             self.reply(400, {'error': str(error)})
                             return
                         self.reply(200, app.state(initial_presteer_pwm=initial_pwm,
-                                                  trial_mode=mode[0] if mode is not None else 'turn-left'))
+                                                  trial_mode=mode[0] if mode is not None else 'turn-left',
+                                                  continue_route=route == ['true']))
                 elif path == '/api/vision':
                     self.reply(200, app.vision.snapshot() if app.vision else {'enabled': False})
                 elif path == '/api/lidar':
