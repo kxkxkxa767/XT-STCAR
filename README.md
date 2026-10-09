@@ -1,6 +1,6 @@
 # XT-STCAR
 
-2026-10-09当前：车端0b84bf9的第33轮获反馈已绕过第一锥桶，随后将要碰锥桶通道右墙，任务未完成。实际先因scan_incomplete收油保1702，紧接着front_sparse锁定回中；34候选已修已ACK中性滑行中的同左舵保持，16项定向检查通过，待部署；不放宽drive质量门。31认可版及所有直道/左转好版本整套备份保留。当前入口见[agent.md](agent.md)，逐轮事实见[机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)。
+2026-10-09当前：车端35d0fb9的第34轮获反馈已绕过第一锥桶，随后停车，整段未完成。实际scan_incomplete触发收油后保1690至原5秒期限；新front_sparse保舵分支本轮未触发。下一步衔接第一桶后按实时通道向右对齐、沿通道接第二目标，不写死直行距离；新续行方案尚未实现。所有直道/左转好版本与完整失败记录保留。当前入口见[agent.md](agent.md)，逐轮事实见[机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)。
 
 下方日期条目保留历史结果，当前参数与部署状态以`agent.md`为准。
 
