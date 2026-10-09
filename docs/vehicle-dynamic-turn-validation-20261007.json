@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "33: operator reports first obstacle passed then imminent right corridor wall collision; stopped/reset confirmed.620 scan_incomplete cut motor and held1702;621 front_sparse from5 consecutive missing rays within6 total caused halt/center. Whole route incomplete.34 candidate preserves only already-ACKed neutral left hold for bounded clustered front loss, no drive quality relaxation.",
+  "latest_trial_status": "33 first obstacle passed then imminent right-wall collision, fully stopped/reset.34 neutral front-gap hold candidate implemented;16 targeted checks and independent review passed; not yet deployed.",
   "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -10609,7 +10609,7 @@
     "physical_stop_reset_after33_confirmed": true,
     "operator_imminent_right_wall_collision_reported": true,
     "operator_first_obstacle33_passed": true,
-    "after33_neutral_sparse_hold_correction_implemented": false
+    "after33_neutral_sparse_hold_correction_implemented": true
   },
   "after30_double_boundary_and_loss_coast_correction": {
     "implemented": true,
@@ -13303,5 +13303,43 @@
     },
     "timeline": "work/vehicle-dynamic-deploy-20261008/trial33-timeline.json",
     "analysis_file": "work/vehicle-dynamic-deploy-20261008/trial33-quality-analysis.json"
+  },
+  "after33_neutral_front_gap_hold_correction": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "physical_acceptance": false,
+    "next_trial": 34,
+    "reason": "Trial33 already neutral-ACKed coast at1702 was centered when621 gained front_sparse from5 consecutive missing beams; total front unknown6 still met unchanged existing count limit. Operator reports first obstacle passed then imminent right-wall collision.",
+    "activation": "Continue only existing first-entry left hold in coast with actual motor1500, neutral command sequence ACKed, current adopted servo equal held1501..1720. front_sparse permitted only for this neutral continuation when current front unknown count<=existing FRONT_MAX_UNKNOWN; current clearance scan seq/quality/null list must match current scan.",
+    "drive_front_sparse_still_halts": true,
+    "no_new_coast_entry_for_front_sparse": true,
+    "original_scan_incomplete_coast_entry_retained": true,
+    "quality_issues_and_motion_ready_unchanged": true,
+    "same_held_left_servo_only": true,
+    "positive_motor_never_restored": true,
+    "original_coast5s_deadline_not_renewed": true,
+    "body8cm_stale_heartbeat_loop_ack_and_operator_stop_preserved": true,
+    "more_than_existing_unknown_limit_or_all_unknown_halts": true,
+    "no_fixed_course_geometry": true,
+    "rust_unchanged": true,
+    "validation": {
+      "status": "passed targeted checks and independent readonly review",
+      "fixture_scope": "Only actual621 raw geometry saved;620 raw is absent. Prior drive/hold/neutralACK and test clock are mocks, not a recorded620 replay or physical success proof.",
+      "extra_full_suite_not_run": true,
+      "quality_coast_checks_passed": 10,
+      "target_loss_coast_checks_passed": 6,
+      "total_test_methods_passed": 16,
+      "python_compile_files": 2,
+      "independent_readonly_review": "No remaining blocking issues; actual neutralACK/current scan binding/old target-loss compatibility/unchanged drive halt verified."
+    },
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/neutral-front-gap-before34-fresh.json",
+    "old14_installed_hashes_match_0b84bf9": true,
+    "operator_stopped_reset_after33_confirmed": true,
+    "source_sha256": {
+      "web/vehicle-console/server.py": "7297cd9dcdeed4ff0b80eb2fd3f5366d25c9f92405d5a67b897c82d6e0b7447d",
+      "web/vehicle-console/tests/test_turn_quality_coast.py": "67d357fe13ee82fd7222f7d3387f1129734313b2bc502bb47d505cceb397049f",
+      "web/vehicle-console/tests/fixtures/left-cone-33-front-gap-coast.json": "1f54fee68ce0ac74bc3bcbbe6485f427e14bfd25335b49e450e317ae1aa100dd"
+    }
   }
 }

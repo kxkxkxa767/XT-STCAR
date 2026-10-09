@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
 from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, FRONT_BOUNDARY_LOSS_S, CONTROL_AGE_LIMIT_S, AUTO_CONTROL_HEALTH_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
-                           corridor_walls, probe_clearance, probe_parameters)
+                           FRONT_MAX_UNKNOWN, corridor_walls, probe_clearance, probe_parameters)
 from coast_motion import CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
@@ -963,16 +963,56 @@ class Console:
                 session['report']['clearance_current'] = obstacle_clearance
             self.halt(str(error))
 
+    def turn_quality_hold_eligible(self, session):
+        """Quality may permit neutral steering continuity, never powered motion.
+
+        A front gap may exceed the existing consecutive-gap limit only while
+        its total unknown count still meets the existing front-count limit.
+        Keep the failed quality report and motion_ready unchanged.
+        """
+        report = session['report']
+        issues = set(report.get('quality_issues', []))
+        clearance = report.get('clearance_current')
+        scan = self.scan
+        if (not isinstance(clearance, dict) or not isinstance(scan, dict)
+                or type(scan.get('seq')) is not int or scan['seq'] < 0
+                or type(clearance.get('scan_seq')) is not int
+                or not issues <= {'scan_incomplete', 'front_sparse'}
+                or clearance.get('scan_seq') != scan.get('seq')
+                or set(clearance.get('quality_issues', [])) != issues):
+            return False
+        if 'front_sparse' in issues:
+            control = self.status.get('control', {})
+            neutral_seq = session.get('coast_neutral_sequence')
+            # This narrower allowance only continues a neutral command that
+            # the bridge has already adopted. It cannot enter from drive or
+            # share the old incomplete-scan grace while neutral is pending.
+            if (session.get('phase') != 'coast' or type(neutral_seq) is not int
+                    or control.get('motor') != 1500
+                    or control.get('seq', -1) < neutral_seq):
+                return False
+            ranges = scan.get('ranges')
+            if not isinstance(ranges, list) or len(ranges) != 360:
+                return False
+            unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
+            if (unknown != clearance.get('front_unknown_bins')
+                    or len(unknown) > FRONT_MAX_UNKNOWN):
+                return False
+        return True
+
     def turn_quality_coast_active(self, session):
-        """Incomplete returns permit only bounded neutral holding, never drive."""
+        """Eligible missing returns permit bounded neutral holding, never drive."""
         motion = session.get('turn_motion')
         held = getattr(motion, 'quality_coast_servo', None)
         control = self.status.get('control', {})
         neutral_seq = session.get('coast_neutral_sequence')
         return (session.get('maneuver_sequence') is True
                 and session.get('phase') == getattr(motion, 'phase', None) == 'coast'
+                and getattr(motion, 'handover_observed', False) is True
+                and getattr(motion, 'first_pass_evidence', None) is None
+                and getattr(motion, 'right_exit_since', None) is None
                 and type(held) is int and 1500 < held <= SERVO_MAX
-                and set(session['report'].get('quality_issues', [])) <= {'scan_incomplete'}
+                and self.turn_quality_hold_eligible(session)
                 and control.get('armed') is True and control.get('servo') == held
                 and control.get('seq', -1) >= self.arm_sequence
                 and (control.get('motor') == 1500
@@ -998,6 +1038,7 @@ class Console:
                     and session.get('phase') == motion.phase == 'drive'
                     and control.get('seq', -1) >= self.arm_sequence
                     and set(report.get('quality_issues', [])) == {'scan_incomplete'}
+                    and self.turn_quality_hold_eligible(session)
                     and motion.begin_quality_coast(now, turn_control)):
                 # Trial20 centered immediately on incomplete returns while the
                 # vehicle could still be coasting. Keep only its already ACKed
