@@ -70,6 +70,7 @@ class ManeuverSequence(TurnMotion):
         self._current_scan = None
         self.inner_clearance = None
         self.quality_coast_servo = None
+        self.quality_coast_reason = None
         self.entry_bearing_required = False
         self.entry_bearing_released = False
         self.entry_bearing = None
@@ -176,18 +177,23 @@ class ManeuverSequence(TurnMotion):
         return self._entry_target(super()._presteer_target(target))
 
     def begin_quality_coast(self, now, control):
+        return self._begin_adopted_left_coast('turn_perception_unavailable', now, control)
+
+    def _begin_adopted_left_coast(self, reason, now, control):
         """Cut power while retaining only an ACKed left orbit-entry command."""
         if (self.phase != 'drive' or not self.handover_observed
+                or self.first_pass_evidence is not None or self.right_exit_since is not None
                 or control.get('armed') is not True
                 or control.get('motor') != TRIAL_MOTOR
                 or control.get('command_acked') is not True
                 or type(control.get('servo')) is not int
                 or not NEUTRAL < control['servo'] == self.servo <= SERVO_MAX):
             return False
-        self.begin_coast('turn_perception_unavailable', now)
+        self.begin_coast(reason, now)
         if self.phase != 'coast':
             return False
         self.quality_coast_servo = control['servo']
+        self.quality_coast_reason = reason
         self.steering_target = self.quality_coast_servo
         return True
 
@@ -314,6 +320,7 @@ class ManeuverSequence(TurnMotion):
                       entry_bearing_released=self.entry_bearing_released,
                       adopted_presteer_pwm=self.adopted_presteer_pwm,
                       quality_coast_servo=self.quality_coast_servo,
+                      quality_coast_reason=self.quality_coast_reason,
                       quality_coast_hold_active=(self.phase == 'coast'
                                                 and self.quality_coast_servo is not None),
                       wall_ambiguity_hold=self.wall_ambiguity_hold)
@@ -745,7 +752,11 @@ class ManeuverSequence(TurnMotion):
             return self._right_exit_update(scan, now, control)
         if not self._usable_target(self.compact_target, scan):
             self._capture_compact_loss(scan, now, control, 'compact_target_lost_or_ambiguous')
-            self.begin_coast('compact_target_lost_or_ambiguous', now)
+            # Losing object identity removes the drive request, not the
+            # already adopted left steering. Keep that command only in the
+            # existing bounded neutral coast; never reacquire powered motion.
+            if not self._begin_adopted_left_coast('compact_target_lost_or_ambiguous', now, control):
+                self.begin_coast('compact_target_lost_or_ambiguous', now)
             self._slew(now)
             return self._result(now)
         just_handed_over = False
@@ -782,7 +793,8 @@ class ManeuverSequence(TurnMotion):
             self.alignment_publication = self.alignment_receive = None
         elif self.compact_target['track_id'] != self.orbit_track_id:
             self._capture_compact_loss(scan, now, control, 'compact_target_identity_changed')
-            self.begin_coast('compact_target_identity_changed', now)
+            if not self._begin_adopted_left_coast('compact_target_identity_changed', now, control):
+                self.begin_coast('compact_target_identity_changed', now)
             self._slew(now)
             return self._result(now)
         if now-self.orbit_since+1e-9 >= ORBIT_ENTRY_MAX_S:

@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "30: operator reports collision with cone-corridor right wall. Target ID1 lost at exact scan940 because both component boundaries have one unknown bin. Motor cut and steering centered; subsequent scan_incomplete ends turn_perception_unavailable. First-pass preparation/right exit were never reached; completed=false. Vehicle2fe692b, next31; physical stop/reset after30 not yet confirmed.",
+  "latest_trial_status": "30 remains collision with cone-corridor right wall, completed=false. Operator reset confirmed.31 candidate implemented locally: strict1+1 boundary-gap maintenance and ACKed-left neutral coast on target loss.100 targeted checks passed; not yet deployed/tested.",
   "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -796,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "2026-10-09: 你上传测试吧. Operator confirmed current vehicle fully stopped, behind crosswalk and facing original straight. Prior overnight deferral superseded.",
+  "latest_authorization": "2026-10-09: 已经放回去了，你继续. Operator answered pending post30 placement question and authorized continuation; preserve original start position/heading, no repeated action approval.",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -9498,7 +9498,7 @@
     "operator_report": "这一次又撞到了锥桶通道的右侧",
     "collision_reported": true,
     "collision_location": "锥桶通道右侧墙",
-    "operator_stopped_reset_after30_confirmed": null,
+    "operator_stopped_reset_after30_confirmed": true,
     "completed": false,
     "local_raw_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-30/",
     "remote_raw_directory": "/home/bianbu/xt-stcar-console/left-cone-trial-20261009-30",
@@ -10581,7 +10581,8 @@
     "timeline": "work/vehicle-dynamic-deploy-20261008/trial30-timeline.json",
     "analysis": "work/vehicle-dynamic-deploy-20261008/trial30-target-loss-analysis.json",
     "new_correction_after30_implemented": false,
-    "next_work": "Evaluate bounded maintenance of the same confirmed whole current component with short gaps at both edges, retaining original full-isolation lease and fresh real far returns. Also assess subsequent quality exit/steering during coast; do not blindly loosen gates or claim that target-only change will solve collision."
+    "next_work": "Evaluate bounded maintenance of the same confirmed whole current component with short gaps at both edges, retaining original full-isolation lease and fresh real far returns. Also assess subsequent quality exit/steering during coast; do not blindly loosen gates or claim that target-only change will solve collision.",
+    "operator_reset_statement": "已经放回去了，你继续"
   },
   "current_handoff_20261009": {
     "authoritative_entry": "agent.md top",
@@ -10591,12 +10592,48 @@
     "deployment_record": "work/vehicle-dynamic-deploy-20261008/right-exit-deployment-result.json",
     "backup": "/home/bianbu/xt-stcar-console/backup-right-exit-20261009-191516",
     "prior_overnight_deferral_resumed_by_operator": true,
-    "physical_stop_reset_after30_confirmed": null,
+    "physical_stop_reset_after30_confirmed": true,
     "operator_collision_report": "锥桶通道右侧",
     "full_evidence_retrieved": true,
     "new_right_exit_stage_not_reached": true,
-    "after30_new_correction_implemented": false,
+    "after30_new_correction_implemented": true,
     "full_competition_complete": false,
     "accepted_straight_and_left_versions_preserved": true
+  },
+  "after30_double_boundary_and_loss_coast_correction": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "physical_acceptance": false,
+    "next_trial": 31,
+    "source_sha256": {
+      "web/vehicle-console/compact_target.py": "acdd0d6571b64111768cde483e8f1d87890533e9030fe14878647f661fb9b6c1",
+      "web/vehicle-console/maneuver_sequence.py": "e9343ecf4e6ecb4ccfc8bd8939d30da60b1ff0ea93dbed3854bd7b0e94d56e5b",
+      "web/vehicle-console/tests/test_compact_target.py": "bea3b7659145af701cba592fbe4b18bd198f03de4d80ee0d01e47f311c9212f2",
+      "web/vehicle-console/tests/test_maneuver_sequence.py": "7e1510bdf3ff24b32fd265dd20ed79d193b3a209e4aaabb9a2b0b3122d24ba3c",
+      "web/vehicle-console/tests/test_turn_control.py": "8ffaf5c333b8cbe1a6b615f74b5b5656e2226f41c30eab4d33c5ffdfa1ac74c0",
+      "web/vehicle-console/tests/fixtures/left-cone-30-double-boundary-gaps.json": "f4902d7ae1a119b637d287e80782a12b0613116184657630468ca79a202503c5"
+    },
+    "tracking_rule": "Existing confirmed uniquely associated current whole compact component may retain ID across exactly1unknown bin on EACH boundary with true far return beyond each. Existing single-edge<=3 retained.1+2/2+1 or larger, missing actual background, ambiguity or jump reject.",
+    "original_full_isolation_lease_unchanged_s": 0.3,
+    "partial_frames_cannot_start_confirm_count_or_renew": true,
+    "partial_frames_cannot_create_first_pass_event": true,
+    "loss_coast_rule": "When a handed-over first target is lost/unconfirmed/changes ID and actual armedM1560 leftservo matches commanded with ACK, cut motor1500 and hold ONLY that adopted leftservo. Reuse original5s neutral coast; no extra slew/add-left or powered restoration after target reappears. If no ACK/mismatch/pre-handover or first-pass/right-exit stage, no new hold.",
+    "new_diagnostic": "quality_coast_reason distinguishes original quality loss from compact-target loss while keeping existing hold fields compatible.",
+    "coast_hard_gates": "No changes to server body/front_sparse/stale/heartbeat/adoption gates. Coast restores original8cm all-side body gate; a4..8cm left gap can therefore still hardhalt/center. Changed servo or positive motor after neutral ACK halts. Low-motion observation may end coast earlier; original5s maximum unchanged.",
+    "first_turn_first_pass_right_exit_and_motor_slew_unchanged": true,
+    "no_course_coordinates_lengths_or_synthetic_returns": true,
+    "rust_unchanged": true,
+    "validation": {
+      "tracker_checks_passed": 39,
+      "maneuver_checks_passed": 56,
+      "targeted_service_hold_checks_passed": 5,
+      "total_passed": 100,
+      "full_legacy_service_suite_not_rerun": true,
+      "recorded30_fixture_scope": "939 recorded target state seeds identity;940 exact control-decision raw snapshot and941 actual saved raw scan.941 receipt clock and prior maturity test-injected, not a physical replay or collision-avoidance certificate."
+    },
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/dual-gap-before31-fresh.json",
+    "old14_installed_hashes_match_2fe692b": true,
+    "operator_reset_after30_confirmed": true
   }
 }

@@ -62,10 +62,11 @@ def _candidates(ranges, *, allow_boundary_gap=False):
         if min(values) < MIN_RANGE_M or max(values) > MAX_RANGE_M:
             continue
         # Acquisition needs both immediate neighbors. A confirmed track may
-        # cross a bounded null run at ONE edge, with a real farther return
-        # beyond it. The tracker also limits this to the last full isolation's
-        # original lease. Nulls are neither object support nor free space.
-        unknown, background, partial_edges = [], [], 0
+        # cross up to three nulls at one edge, or exactly one at each edge,
+        # with real farther returns beyond both edges. The tracker also limits
+        # this to the last full isolation's original lease. Nulls are neither
+        # object support nor free space; the whole current component stays intact.
+        unknown, background, gap_counts = [], [], []
         for edge, direction in [(group[0], -1), (group[-1], 1)]:
             index = (edge+direction) % 360
             value = ranges[index]
@@ -75,11 +76,11 @@ def _candidates(ranges, *, allow_boundary_gap=False):
                 edge_gaps += 1
                 index = (index+direction) % 360
                 value = ranges[index]
-            partial_edges += bool(edge_gaps)
+            gap_counts.append(edge_gaps)
             if value is None or value <= max(values)+MAX_POINT_GAP_M:
                 break
             background.append({'index': index, 'range_m': value})
-        if len(background) != 2 or partial_edges > 1:
+        if len(background) != 2 or (all(gap_counts) and gap_counts != [1, 1]):
             continue
         support = [points[i] for i in group]
         if (max(p[0] for p in support)-min(p[0] for p in support) > MAX_DIAMETER_M
@@ -104,8 +105,9 @@ class CompactTargetTracker:
     At least three distinct scans and 250 ms of BOTH publication and receive time
     confirm an unbroken, unique association with full boundary observations.
     An already confirmed identity may tolerate up to three null bins at one
-    boundary, using a unique current component and a real farther return beyond
-    them. Partial frames cannot initialize/mature a track or renew the last FULL
+    boundary, or exactly one at each boundary, using a unique current component
+    and real farther returns beyond both edges. Partial frames cannot
+    initialize/mature a track or renew the last FULL
     isolation's 300 ms publication/receive lease. Repeat reads also respect that
     lease, as well as the current scan's age; they cannot mature or renew either.
     ``reason`` supplies diagnostics when update returns None.

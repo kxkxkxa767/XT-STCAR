@@ -383,6 +383,62 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(self.console.settings, settings)
         self.assertEqual(len(self.outputs), 1)
 
+    def lose_compact_target_to_neutral_hold(self):
+        _, session = self.enter_compact_orbit()
+        adopted = self.console.status['control']['servo']
+        self.observe(round(self.now+.1, 6), self.scan(self.console.scan['seq']+1))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'coast')
+        self.assertEqual(session['coast_reason'], 'compact_target_lost_or_ambiguous')
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, adopted))
+        return session, adopted
+
+    def test_compact_loss_coast_holds_adopted_left_through_incomplete_scan(self):
+        session, adopted = self.lose_compact_target_to_neutral_hold()
+        deadline = session['coast_deadline']
+        incomplete = self.scan(self.console.scan['seq']+1)
+        incomplete['ranges'][90:120] = [None]*30
+        self.observe(round(self.now+.1, 6), incomplete)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['report']['quality_issues'], ['scan_incomplete'])
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, adopted))
+        self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['coast_deadline'], deadline)
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, adopted))
+
+    def test_compact_loss_hold_still_halts_for_front_sparse(self):
+        self.lose_compact_target_to_neutral_hold()
+        self.observe(round(self.now+.1, 6), self.sparse_scan(self.console.scan['seq']+1))
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        self.assertIn('front_sparse', self.console.auto_result['quality_issues'])
+
+    def test_compact_loss_hold_retains_original_eight_cm_coast_body_gate(self):
+        self.lose_compact_target_to_neutral_hold()
+        close = self.scan(self.console.scan['seq']+1)
+        close['ranges'][270] = .20  # Left side .14m:6cm gap, below coast8cm gate.
+        self.observe(round(self.now+.1, 6), close)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
+
+    def test_compact_loss_hold_rejects_changed_adopted_servo(self):
+        _, held = self.lose_compact_target_to_neutral_hold()
+        self.console.status['control']['servo'] = held-10
+        self.tick(round(self.now+.02, 6), self.console.scan)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        self.assertEqual(self.console.auto_result['reason'], 'turn_quality_coast_feedback_changed')
+
+    def test_compact_loss_hold_rejects_positive_motor_after_neutral_ack(self):
+        self.lose_compact_target_to_neutral_hold()
+        self.console.status['control']['motor'] = 1560
+        self.tick(round(self.now+.02, 6), self.console.scan)
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        self.assertEqual(self.console.auto_result['reason'], 'turn_quality_coast_feedback_changed')
+
     def test_compact_trial_receives_actual_scan_clock_and_never_refreshes_duplicate_lease(self):
         self.start_compact_trial()
         motion = self.console.auto_session['turn_motion']

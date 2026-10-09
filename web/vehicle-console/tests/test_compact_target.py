@@ -20,6 +20,15 @@ def compact_scan(seq=1, published=0, received=0., bearing=90., distance=1., size
             'received_at': received, 'ranges': ranges}
 
 
+def double_gap_scan(seq=4, published=400, received=.4, *, bearing=90., gaps=(1, 1)):
+    scan = compact_scan(seq, published, received, bearing=bearing)
+    middle = round(-bearing) % 360
+    for direction, count in zip((-1, 1), gaps):
+        for offset in range(count):
+            scan['ranges'][(middle+direction*(5+offset)) % 360] = None
+    return scan
+
+
 class CompactTargetTests(unittest.TestCase):
     def confirmed(self):
         tracker = MODULE.CompactTargetTracker()
@@ -202,18 +211,135 @@ class CompactTargetTests(unittest.TestCase):
         self.assertEqual(result['last_full_isolation_received_at'], .55)
 
     def test_tracking_boundary_gap_requires_bounded_real_background_and_same_shape(self):
-        for change in ('four_nulls', 'both_edges', 'near_background', 'jump', 'ambiguous'):
+        for change in ('four_nulls', 'both_edges_one_plus_two', 'near_background', 'jump', 'ambiguous'):
             with self.subTest(change=change):
                 tracker, _ = self.confirmed()
                 scan = compact_scan(4, 400, .4, bearing=60. if change == 'jump' else 90.)
                 boundary = 305 if change == 'jump' else 275
                 scan['ranges'][boundary] = None
                 if change == 'four_nulls': scan['ranges'][boundary:boundary+4] = [None]*4
-                if change == 'both_edges': scan['ranges'][265] = None
+                if change == 'both_edges_one_plus_two': scan['ranges'][264:266] = [None]*2
                 if change == 'near_background': scan['ranges'][boundary+1] = .9
                 if change == 'ambiguous':
                     for index in range(246, 255): scan['ranges'][index] = 1.5
                 self.assertIsNone(tracker.update(scan, .41))
+
+    def test_double_single_null_keeps_only_current_confirmed_support_and_original_lease(self):
+        tracker, old = self.confirmed()
+        result = tracker.update(double_gap_scan(), .41)
+        self.assertTrue(result['confirmed'])
+        self.assertEqual(result['track_id'], old['track_id'])
+        self.assertEqual(result['confirmation_count'], old['confirmation_count'])
+        self.assertEqual(result['source_seq'], 4)
+        self.assertEqual(result['support_bins'], list(range(266, 275)))
+        self.assertEqual(result['point_count'], 9)
+        self.assertEqual(result['boundary_unknown_bins'], [265, 275])
+        self.assertEqual(result['boundary_far_returns'],
+                         [{'index': 264, 'range_m': 3.}, {'index': 276, 'range_m': 3.}])
+        self.assertTrue(result['tracking_only_boundary_gap'])
+        self.assertEqual(result['last_full_isolation_seq'], 3)
+        self.assertEqual(result['last_full_isolation_at_ms'], 300)
+        self.assertEqual(result['last_full_isolation_received_at'], .3)
+        self.assertFalse(result['physical_identity_verified'])
+        self.assertEqual(tracker.reason, 'compact_target_tracked_with_boundary_gap')
+
+    def test_double_single_null_never_initializes_or_confirms_a_target(self):
+        for unconfirmed_seed in (False, True):
+            with self.subTest(unconfirmed_seed=unconfirmed_seed):
+                tracker = MODULE.CompactTargetTracker()
+                if unconfirmed_seed:
+                    self.assertFalse(tracker.update(compact_scan(3, 300, .3), .31)['confirmed'])
+                self.assertIsNone(tracker.update(double_gap_scan(), .41))
+                self.assertEqual(tracker.reason, 'compact_target_missing')
+                recovered = tracker.update(compact_scan(5, 500, .5), .51)
+                self.assertFalse(recovered['confirmed'])
+                self.assertEqual(recovered['confirmation_count'], 1)
+
+    def test_double_boundary_gap_rejects_more_than_one_null_on_either_side(self):
+        for gaps in ((1, 2), (2, 1), (2, 2), (1, 3), (3, 1)):
+            with self.subTest(gaps=gaps):
+                tracker, _ = self.confirmed()
+                self.assertIsNone(tracker.update(double_gap_scan(gaps=gaps), .41))
+                self.assertEqual(tracker.reason, 'compact_target_missing')
+
+    def test_double_boundary_gap_requires_real_far_return_beyond_each_null(self):
+        for index in (264, 276):
+            for value in (None, .9, 1.18):
+                with self.subTest(index=index, value=value):
+                    tracker, _ = self.confirmed()
+                    scan = double_gap_scan()
+                    scan['ranges'][index] = value
+                    self.assertIsNone(tracker.update(scan, .41))
+                    self.assertEqual(tracker.reason, 'compact_target_missing')
+
+    def test_double_boundary_gap_rejects_identity_jump_and_current_ambiguity(self):
+        for change in ('jump', 'ambiguous'):
+            with self.subTest(change=change):
+                tracker, _ = self.confirmed()
+                scan = double_gap_scan(bearing=60. if change == 'jump' else 90.)
+                if change == 'ambiguous':
+                    for index in range(246, 255): scan['ranges'][index] = 1.5
+                self.assertIsNone(tracker.update(scan, .41))
+                self.assertEqual(tracker.reason, 'compact_target_boundary_gap_unassociated'
+                                 if change == 'jump' else 'compact_target_ambiguous')
+
+    def test_double_boundary_chain_cannot_renew_either_original_clock(self):
+        for published, received in ((600, .5), (500, .6)):
+            with self.subTest(published=published, received=received):
+                tracker, old = self.confirmed()
+                partial = tracker.update(double_gap_scan(), .41)
+                self.assertEqual(partial['confirmation_count'], old['confirmation_count'])
+                self.assertIsNone(tracker.update(double_gap_scan(5, published, received), received+.01))
+                self.assertEqual(tracker.reason, 'compact_target_boundary_gap_expired')
+
+    def test_double_boundary_repeat_cannot_extend_full_isolation_lease(self):
+        tracker, _ = self.confirmed()
+        scan = double_gap_scan(4, 500, .5)
+        result = tracker.update(scan, .51)
+        self.assertIsNotNone(result)
+        self.assertEqual(tracker.update(scan, .59), result)
+        self.assertIsNone(tracker.update(scan, .61))  # Partial scan is only 110 ms old.
+        self.assertEqual(tracker.reason, 'compact_target_boundary_gap_expired')
+
+    def test_trial30_exact_loss_frame_and_next_raw_frame_maintain_seeded_identity(self):
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-30-double-boundary-gaps.json').read_text())
+        tracker = MODULE.CompactTargetTracker()
+        seed = copy.deepcopy(fixture['validated_state_target939'])
+        # Raw scan939 was NOT captured. This is its recorded target summary;
+        # prior maturity is injected bookkeeping, not a fabricated raw frame.
+        tracker._target = seed
+        tracker._last_seq = seed['source_seq']
+        tracker._last_at = seed['source_at_ms']
+        tracker._last_received = tracker._last_now = seed['source_received_at']
+        tracker._first_at = seed['source_at_ms']-300
+        tracker._first_received = seed['source_received_at']-.3
+        tracker._next_id = seed['track_id']+1
+        loss_frame = fixture['raw_frames'][0]
+        for raw in fixture['raw_frames']:
+            scan = copy.deepcopy(raw)
+            if raw['seq'] == 940:
+                now = fixture['loss_decision_at']  # Both receive and decision clocks are recorded.
+            else:
+                # Only this receive interval is mocked; raw941 points/source time are recorded.
+                scan['received_at'] = loss_frame['received_at']+(raw['at_ms']-loss_frame['at_ms'])/1000
+                now = scan['received_at']+.001
+            result = tracker.update(scan, now)
+            self.assertIsNotNone(result)
+            self.assertEqual(MODULE._candidates(raw['ranges']), [])
+            self.assertEqual(result['track_id'], seed['track_id'])
+            self.assertEqual(result['confirmation_count'], seed['confirmation_count'])
+            self.assertTrue(result['confirmed'])
+            self.assertTrue(result['tracking_only_boundary_gap'])
+            self.assertFalse(result['physical_identity_verified'])
+            self.assertEqual(result['source_seq'], raw['seq'])
+            self.assertEqual(result['last_full_isolation_seq'], 939)
+            self.assertEqual(result['last_full_isolation_at_ms'], seed['source_at_ms'])
+            self.assertEqual(result['last_full_isolation_received_at'], seed['source_received_at'])
+            self.assertEqual(result['support_bins'], list(range(276, 287)) if raw['seq'] == 940
+                             else list(range(273, 286)))
+            self.assertEqual(result['boundary_unknown_bins'], [275, 287] if raw['seq'] == 940 else [286, 287])
+        self.assertIsNone(tracker.update(scan, seed['source_received_at']+.301))
+        self.assertEqual(tracker.reason, 'compact_target_boundary_gap_expired')
 
     def test_trial27_current_components_keep_seeded_confirmed_identity(self):
         fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-27-boundary-gaps.json').read_text())

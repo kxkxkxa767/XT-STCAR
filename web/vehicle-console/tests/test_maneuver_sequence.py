@@ -641,18 +641,43 @@ class ManeuverSequenceTests(unittest.TestCase):
             with self.subTest(lost=lost):
                 h = Harness()
                 h.orbit()
+                adopted_left = h.servo
                 h.observer.factory = (lambda value: None) if lost == 'none' else (
                     lambda value: target(value, confirmed=lost != 'unconfirmed', identity=2))
                 result = h.step()
                 self.assertEqual(result['phase'], 'coast')
                 self.assertEqual(result['motor'], 1500)
+                self.assertEqual(result['servo'], adopted_left)
+                self.assertEqual(result['quality_coast_servo'], adopted_left)
+                self.assertEqual(result['quality_coast_reason'], result['reason'])
                 first_coast_at = h.motion.coast_since
                 h.observer.factory = lambda value: target(value)
                 for _ in range(7):
                     result = h.step()
                     self.assertEqual(result['motor'], 1500)
                     self.assertEqual(result['phase'], 'coast')
+                    self.assertEqual(result['servo'], adopted_left)
                 self.assertEqual(h.motion.coast_since, first_coast_at)
+                for _ in range(43):
+                    result = h.step()
+                self.assertEqual((result['phase'], result['motor'], result['servo']),
+                                 ('locked', 1500, 1500))
+
+    def test_loss_hold_requires_actual_acknowledged_left_after_handover(self):
+        for invalid in ('ack', 'servo', 'neutral', 'right', 'handover', 'passed'):
+            with self.subTest(invalid=invalid):
+                h = Harness()
+                h.orbit()
+                control = dict(h.latest_control, servo=h.servo, motor=1560)
+                if invalid == 'ack': control['command_acked'] = False
+                if invalid == 'servo': control['servo'] -= 10
+                if invalid in ('neutral', 'right'):
+                    control['servo'] = h.motion.servo = 1500 if invalid == 'neutral' else 1490
+                if invalid == 'handover': h.motion.handover_observed = False
+                if invalid == 'passed': h.motion.first_pass_evidence = {'source_seq': h.seq}
+                self.assertFalse(h.motion._begin_adopted_left_coast(
+                    'compact_target_lost_or_ambiguous', h.now, control))
+                self.assertIsNone(h.motion.quality_coast_servo)
 
     def test_orbit_entry_bound_and_five_second_coast_do_not_report_completion(self):
         h = Harness()
