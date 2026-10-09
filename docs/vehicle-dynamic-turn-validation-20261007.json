@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "37 recovered then kept left around first target; first-ID software association remained continuous, second never selected. User fully stopped/reset confirmed.38 geometric neutral preparation implemented and95+23 targeted checks/review passed; not yet deployed.",
+  "latest_trial_status": "38 operator still reports circling first cone. New prepare607 and full rear pass613 observed, but no powered centerACK/rightPWM; current corridor missing at613 caused coast,616 body2.675cm hardstop. >6 front unknown neutral wait branch actually exercised598, raw598 absent. User stopped/reset confirmed.39 next; prepare evidence across healthy neutral recovery and100ms ACKed neutral-release timing under implementation.",
   "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -10586,11 +10586,11 @@
   },
   "current_handoff_20261009": {
     "authoritative_entry": "agent.md top",
-    "latest_actual_trial": 37,
-    "next_trial": 38,
-    "installed_vehicle_source_commit": "682bf949d9a64cd1efb0f954cbd52e90399e5a1e",
-    "deployment_record": "work/vehicle-dynamic-deploy-20261008/neutral-route-wait-deployment-result.json",
-    "backup": "/home/bianbu/xt-stcar-console/backup-neutral-route-wait-20261009-203802",
+    "latest_actual_trial": 38,
+    "next_trial": 39,
+    "installed_vehicle_source_commit": "37ed519a48fef2a1c56ac8c8ade06efbff095463",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261008/observed-exit-deployment-result.json",
+    "backup": "/home/bianbu/xt-stcar-console/backup-observed-exit-20261009-205333",
     "prior_overnight_deferral_resumed_by_operator": true,
     "physical_stop_reset_after30_confirmed": true,
     "operator_collision_report": null,
@@ -10618,7 +10618,9 @@
     "trial36_in_progress": false,
     "physical_stop_reset_after36_confirmed": true,
     "trial37_in_progress": false,
-    "physical_stop_reset_after37_confirmed": true
+    "physical_stop_reset_after37_confirmed": true,
+    "trial38_in_progress": false,
+    "physical_stop_reset_after38_confirmed": true
   },
   "after30_double_boundary_and_loss_coast_correction": {
     "implemented": true,
@@ -15031,8 +15033,8 @@
   },
   "after37_observed_exit_preparation_correction": {
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 38,
     "reason": "Relative-x-rate prediction never matured while continuing left near first target, making first-pass-preparing and route continuation unreachable before close wall; no evidence of first ID replaced by a second object.",
     "scope": "Only continue_route after real first handover; prepare neutral release separately from whole-body rear-pass ledger.",
@@ -15071,6 +15073,293 @@
       "diff_check": true,
       "independent_readonly_review": "No blocker; geometry preparation only releases toward neutral, default prediction/rear-pass/right-current-corridor/ACK/second identity/budgets unchanged. Every fixture raw and summary field verified against actual37 saved data.",
       "physical_effect_not_yet_tested": true
-    }
+    },
+    "deployed_source_commit": "37ed519a48fef2a1c56ac8c8ade06efbff095463",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261008/observed-exit-deployment-result.json",
+    "remote_stage": "/home/bianbu/xt-stcar-console/stage-observed-exit-20261009-205333",
+    "backup": "/home/bianbu/xt-stcar-console/backup-observed-exit-20261009-205333",
+    "archive_sha256": "141eaeec03d46ac64786c85b3c6caee6dcb9afa34fec86e36c93304829833140",
+    "all_14_installed_hashes_verified": true,
+    "python_compile_files": 9,
+    "fresh_after_deployment": "work/vehicle-dynamic-deploy-20261008/observed-exit-installed38-fresh.json",
+    "trial_helper_sha256": "8340dc386ee3b9bd8f1769c1a47170d00264721a3ad54d5cd3ad10498b296458",
+    "trial_command": [
+      "python3",
+      "/home/bianbu/xt-stcar-console/20260917/autonomy-control.py",
+      "turn-cone",
+      "--max-seconds",
+      "10",
+      "--initial-presteer-pwm",
+      "1670",
+      "--continue-route",
+      "--placement-confirmed",
+      "--execute"
+    ],
+    "physical_trial": 38,
+    "new_prepare_triggered": true,
+    "software_whole_support_rear_pass_observed": true,
+    "actual_right_steering_executed": false,
+    "physical_acceptance": false
+  },
+  "turn38_actual": {
+    "source_commit": "37ed519a48fef2a1c56ac8c8ade06efbff095463",
+    "run_id": "k7sQaOtPfhwvXfQPmw2_xEZ9",
+    "evidence_directory": "/home/bianbu/xt-stcar-console/left-cone-trial-20261009-38",
+    "local_evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-38",
+    "evidence_sha256": {
+      "after.json": "9e8a9b22a48431db3c5cf4cf5c5ea53e26ef942217e9f9886eaf7b898de5b7fa",
+      "before-lidar.json": "bf2ad7b2a5917ee2cc01c4149f609bb82b1ba396fdf505201a59da54a6496626",
+      "before.json": "5aa782f489b1f0f9a202769a5be599346068ad4fc75838a8655bc228ad27aba4",
+      "cli-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cli-result.json": "e133910f048cd09abb878125545b61b0c58d841ea26c8ba5523d68e316cc6997",
+      "feedback.jsonl": "fcfe7b8e95d283443044e82865922fef20e79fc01579d173004f6794d30cbe84",
+      "summary.json": "8e96d5f1d424d8142a955babeb12b76173bdb564034fcbc8f569468dcb872a30"
+    },
+    "completed": false,
+    "competition_supported": false,
+    "operator_feedback": "还是和上次一样绕着第一个锥桶回去了",
+    "operator_collision_report": null,
+    "operator_stopped_and_reset_confirmed": true,
+    "independent_neutral_feedback_count": 6,
+    "physical_standstill_measured": false,
+    "analysis": {
+      "trial": 38,
+      "source_commit": "37ed519a48fef2a1c56ac8c8ade06efbff095463",
+      "operator_feedback": "还是和上次一样绕着第一个锥桶回去了",
+      "operator_collision_report": null,
+      "operator_stopped_and_reset_confirmed": true,
+      "reason": "probe_obstacle_close_body",
+      "prior_coast_reason": "right_exit_corridor_missing",
+      "adopted_presteer_pwm": 1656,
+      "handover_control": {
+        "motor": 1560,
+        "servo": 1655,
+        "tick": 58840,
+        "seq": 98,
+        "command_acked": true,
+        "physical_steering_confirmed": false,
+        "target_source_seq": 587,
+        "target_source_at_ms": 58683
+      },
+      "quality_wait_trigger": {
+        "scan_seq": 597,
+        "source_at_ms": 59680,
+        "quality_issues": [
+          "scan_incomplete"
+        ],
+        "adopted_servo": 1705,
+        "control_tick": 59817,
+        "control_seq": 122,
+        "motor_command": 1500,
+        "existing_arm_sequence": 1
+      },
+      "quality_wait_evidence": {
+        "entry_seq": 597,
+        "entry_at_ms": 59680,
+        "entry_received_at": 6212.954578497,
+        "held_servo": 1705,
+        "target_id": 1,
+        "maximum_resumes": 1,
+        "resume_seq": 603,
+        "resume_at_ms": 60282,
+        "resume_received_at": 6213.568740392,
+        "good_frame_count": 5,
+        "resume_ack": {
+          "motor": 1560,
+          "servo": 1705,
+          "seq": 138,
+          "tick": 60479
+        }
+      },
+      "actual_positive_resume_confirmed": true,
+      "resume_snapshot_scan": 603,
+      "resume_snapshot_observed_at": 6213.647418505,
+      "wait_entry_to_resume_ack_observation_s": 0.6834586209997724,
+      "front_over6_neutral_wait_branch_exercised": true,
+      "front_over6_evidence": {
+        "controller_scan": 598,
+        "unknown_bins": [
+          -30,
+          -29,
+          -28,
+          -27,
+          -26,
+          -25,
+          -24,
+          14
+        ],
+        "neutral_ack": true,
+        "actual_motor": 1500,
+        "actual_servo": 1705,
+        "actual_control_seq": 128,
+        "actual_control_tick": 60030,
+        "raw598_not_saved": true,
+        "same_observer_row_lidar_is599_not598": true,
+        "front_sparse_control_tick_count": 3
+      },
+      "first_exit_prepare_evidence": {
+        "source_seq": 607,
+        "source_at_ms": 60678,
+        "received_at": 6213.963829856,
+        "center_x_m": -0.14320821501523476,
+        "track_id": 1,
+        "support_bins": [
+          250,
+          251,
+          252,
+          253,
+          254,
+          255,
+          256,
+          257,
+          258,
+          259,
+          260,
+          261,
+          262
+        ],
+        "observed_frontmost_x_m": -0.08753988050388141,
+        "observed_left_body_gap_m": 0.411612779451189,
+        "observation_count": 4,
+        "first_source_seq": 604,
+        "publication_span_s": 0.298,
+        "receive_span_s": 0.2789418920001481,
+        "adopted_control": {
+          "motor": 1560,
+          "servo": 1708,
+          "tick": 60824,
+          "seq": 145,
+          "command_acked": true
+        },
+        "basis": "current_first_target_center_behind_lidar_support_behind_body_front",
+        "action": "release_left_toward_neutral_only",
+        "observed_rear_pass": false,
+        "right_steering_authorized": false,
+        "physical_cone_pass_certified": false
+      },
+      "first_pass_evidence": {
+        "source_seq": 613,
+        "source_at_ms": 61278,
+        "received_at": 6214.595806964,
+        "center_x_m": -0.2529284393178426,
+        "observed_frontmost_x_m": -0.1908763756281379,
+        "observed_left_body_gap_m": 0.526242068137209,
+        "command_center_lead_s": 0.8,
+        "relative_x_closing_mps": 0.1860344010066428,
+        "relative_trend_is_vehicle_speed": false,
+        "prepare_condition": true,
+        "prediction_prepare_condition": true,
+        "geometric_exit_prepare_condition": true,
+        "body_rear_x_m": -0.18,
+        "physical_steering_confirmed": false,
+        "track_id": 1,
+        "support_bins": [
+          244,
+          245,
+          246,
+          247,
+          248,
+          249,
+          250,
+          251,
+          252,
+          253,
+          254,
+          255,
+          256
+        ],
+        "basis": "current_confirmed_target_observed_support_behind_body_rear",
+        "semantic_class": "unknown",
+        "physical_cone_pass_certified": false,
+        "swept_path_certified": false
+      },
+      "right_align_state_entered": true,
+      "right_exit_current_corridor_confirmed": false,
+      "right_exit_center_ack": null,
+      "actual_right_pwm_not_executed": true,
+      "corridor_follow_entered": false,
+      "second_target_handover": false,
+      "actual_steering_samples": [
+        {
+          "servo": 1708,
+          "control_seq": 145,
+          "tick": 60846
+        },
+        {
+          "servo": 1668,
+          "control_seq": 150,
+          "tick": 61103
+        },
+        {
+          "servo": 1628,
+          "control_seq": 155,
+          "tick": 61383
+        },
+        {
+          "servo": 1608,
+          "motor": 1500,
+          "control_seq": 158,
+          "tick": 61614
+        },
+        {
+          "servo": 1500,
+          "motor": 1500,
+          "armed": false,
+          "control_seq": 161,
+          "tick": 61933,
+          "hard_stop_not_route_center_ack": true
+        }
+      ],
+      "last_controller_servo_decision1588_is_not_verified_actual_adoption": true,
+      "single_20pwm_steps_not_all_sampled": true,
+      "prepare_source607_to_pass613_actual_feedback_tick_span_ms": 622,
+      "prepare1708_to_pass1628_actual_net_release_pwm": 80,
+      "release_only_new_scan_plus100ms_can_delay_steps": true,
+      "first_restored_drive604_reentered_left_control_target1710_before_new_prepare607": true,
+      "last_motion_seq": 615,
+      "last_motion_servo_decision": 1588,
+      "last_motion_target": 1500,
+      "final_near_scan": 616,
+      "final_near_point": {
+        "angle_deg": 6,
+        "range_m": 0.228,
+        "forward_x_m": 0.22675099214396632,
+        "left_y_m": -0.023832489625024992,
+        "body_distance_m": 0.026750992143966312,
+        "stop_distance_m": 0.08,
+        "relaxed_turn_left": false
+      },
+      "final_body_stop_distance_m": 0.08,
+      "client_heartbeat": {
+        "requests": 100,
+        "acknowledged": 99,
+        "full_state_reads": 1,
+        "max_request_elapsed_s": 0.07201114799954667,
+        "max_ack_gap_s": 0.11237303999951109,
+        "mode": "heartbeat_first_terminal_state_read"
+      },
+      "quality_counts": {
+        "scan_incomplete": 6,
+        "front_sparse": 3
+      },
+      "max_actual_gap_s": 0.0914635070002987,
+      "max_tick_compute_s": 0.06961378899995907,
+      "completed": false,
+      "competition_supported": false,
+      "terminal_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 161,
+        "servo": 1500,
+        "tick": 63316
+      },
+      "terminal_boot": "ecsevFKQ-z4027cnyZ38xg",
+      "terminal_scan": 632,
+      "six_fresh_locks_verified": true,
+      "all_seven_hashes_verified": true
+    },
+    "timeline": "work/vehicle-dynamic-deploy-20261008/trial38-timeline.json",
+    "analysis_file": "work/vehicle-dynamic-deploy-20261008/trial38-route-analysis.json"
   }
 }
