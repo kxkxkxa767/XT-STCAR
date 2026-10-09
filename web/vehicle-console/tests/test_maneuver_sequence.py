@@ -354,6 +354,164 @@ class ManeuverSequenceTests(unittest.TestCase):
                 self.assertEqual(result['motor'], 1500)
                 self.assertEqual(result['terminal_reason'], 'left_turn_entry_endpoint_lost')
 
+    def incoming_endpoint_fixture(self):
+        fixture = Path(__file__).with_name('fixtures')/'left-cone-32-current-incoming-endpoint.json'
+        full, current, later = json.loads(fixture.read_text())['raw_frames']
+        # Geometry is recorded. Receipt times, prior drive adoption and control
+        # feedback below are mocked; this is not a counterfactual physical run.
+        full['received_at'], current['received_at'], later['received_at'] = .1, .299, .498
+        motion = ManeuverSequence(0.)
+        motion.update(full, 0., .1, {'armed': False, 'motor': 1500, 'servo': 1500,
+            'seq': 0, 'tick': 0, 'command_acked': True})
+        motion.phase, motion.drive_since, motion.servo = 'drive', .1, 1660
+        motion.last_now = .299
+        return motion, full, current, later
+
+    def test_recorded32_current_incoming_wall_releases_without_fabricating_opening(self):
+        motion, full, current, _ = self.incoming_endpoint_fixture()
+        original_width = motion.turn_goal['width_m']
+        self.assertFalse(motion.entry_bearing_released)
+        self.assertAlmostEqual(motion.entry_bearing['forward_gap_m'], .004397103349114362)
+        result = motion.update(current, 0., .299, {'armed': True, 'motor': 1560,
+            'servo': 1660, 'seq': 1, 'tick': 1, 'command_acked': True})
+        bearing = result['entry_bearing']
+        self.assertTrue(result['entry_bearing_released'])
+        self.assertEqual((result['phase'], result['motor']), ('drive', 1560))
+        self.assertEqual(bearing['observation_type'], 'tracked_current_incoming_wall')
+        self.assertEqual(bearing['source_seq'], 540)
+        self.assertEqual(bearing['source_received_at'], .299)
+        self.assertEqual(bearing['endpoint_return']['index'], 312)
+        self.assertEqual(bearing['endpoint_return']['range_m'], .413)
+        self.assertEqual(bearing['current_near_support_bins'], list(range(312, 296, -1)))
+        self.assertEqual(bearing['adjacent_far_return'], {'index': 313, 'range_m': 2.531})
+        self.assertAlmostEqual(bearing['forward_gap_m'], -.15520475119987953)
+        self.assertAlmostEqual(bearing['lateral_gap_m'], .10275619158718408)
+        self.assertEqual(bearing['release_basis'], 'current_endpoint_at_body_front_projection')
+        self.assertIsNone(current['left_turn_goal'])
+        self.assertFalse(result['incoming_endpoint_current'])  # No synthetic full opening.
+        self.assertEqual(motion.turn_goal['width_m'], original_width)
+        self.assertEqual(motion.turn_goal['incoming_left_end_support'],
+                         full['left_turn_goal']['incoming_left_end_support'])
+        self.assertEqual(motion._incoming_association['source_seq'], 540)
+        self.assertFalse(bearing['endpoint_passed_proven'])
+
+    def test_current_incoming_reverse_alias_normalizes_both_rho_and_endpoints(self):
+        motion, _, current, _ = self.incoming_endpoint_fixture()
+        current['wall_candidates'] = [current['wall_candidates'][11]]
+        result = motion._current_incoming_endpoint(current)
+        self.assertIsNotNone(result)
+        self.assertAlmostEqual(result['heading_left_rad'], -.3358458989236368)
+        self.assertGreater(result['wall']['rho_left_m'], 0)
+        self.assertEqual(result['endpoint_return']['index'], 312)
+
+    def test_current_incoming_rejects_unknown_near_or_nonterminal_window_end(self):
+        for change in ('outside_unknown', 'outside_near', 'inside_unknown', 'detached_six_points',
+                       'no_exact_ray', 'window_end'):
+            with self.subTest(change=change):
+                motion, _, current, _ = self.incoming_endpoint_fixture()
+                wall = copy.deepcopy(current['wall_candidates'][5])
+                current['wall_candidates'] = [wall]
+                if change == 'outside_unknown': current['ranges'][313] = None
+                if change == 'outside_near': current['ranges'][313] = .42
+                if change == 'inside_unknown': current['ranges'][310] = None
+                if change == 'detached_six_points': current['ranges'][306] = None
+                if change == 'no_exact_ray': wall['support_end_left_m']['x_m'] += .001
+                if change == 'window_end':
+                    r = current['ranges'][310]
+                    wall['support_end_left_m'] = {'x_m': r*math.cos(math.radians(310)),
+                                                 'y_m': -r*math.sin(math.radians(310))}
+                self.assertIsNone(motion._current_incoming_endpoint(current))
+
+    def test_current_incoming_does_not_initialize_presteer_or_extend_missing_geometry(self):
+        for change in ('no_seed', 'presteer', 'publication_expired', 'receive_expired',
+                       'no_receipt', 'negative_receipt', 'future_receipt', 'same_receipt',
+                       'same_seq', 'same_publication', 'clock_gap'):
+            with self.subTest(change=change):
+                motion, _, current, _ = self.incoming_endpoint_fixture()
+                old = copy.deepcopy(motion._incoming_association)
+                if change == 'no_seed': motion._incoming_association = None
+                if change == 'presteer': motion.phase = 'presteer'
+                if change == 'publication_expired': current['at_ms'] = old['source_at_ms']+300
+                if change == 'receive_expired': motion.last_now = .401
+                if change == 'no_receipt': del current['received_at']
+                if change == 'negative_receipt': current['received_at'] = -.1
+                if change == 'future_receipt': current['received_at'] = .4
+                if change == 'same_receipt': current['received_at'] = .1
+                if change == 'same_seq': current['seq'] = old['source_seq']
+                if change == 'same_publication': current['at_ms'] = old['source_at_ms']
+                if change == 'clock_gap': current['received_at'] = .101
+                expected = copy.deepcopy(motion._incoming_association)
+                self.assertIsNone(motion._current_incoming_endpoint(current))
+                self.assertEqual(motion._incoming_association, expected)
+
+    def test_current_incoming_rejects_angle_rho_endpoint_jumps_and_raw542_far_wall(self):
+        for change in ('angle', 'rho', 'endpoint', 'later_far_wall'):
+            with self.subTest(change=change):
+                motion, _, current, later = self.incoming_endpoint_fixture()
+                if change == 'later_far_wall':
+                    current = dict(later, seq=540, at_ms=current['at_ms'], received_at=.299)
+                else:
+                    current['wall_candidates'] = [copy.deepcopy(current['wall_candidates'][5])]
+                    old = motion._incoming_association
+                    if change == 'angle': old['heading_left_rad'] += math.radians(40)
+                    if change == 'rho': old['rho_left_m'] += .31
+                    if change == 'endpoint': old['endpoint_return']['point_left_m']['x_m'] += .31
+                self.assertIsNone(motion._current_incoming_endpoint(current))
+
+    def test_current_incoming_does_not_merge_distinct_real_parallel_endpoints(self):
+        motion, _, current, _ = self.incoming_endpoint_fixture()
+        wall = copy.deepcopy(current['wall_candidates'][5])
+        heading, rho = wall['heading_left_rad'], .498
+        # A second current board with its own real support, end and far neighbor.
+        # Its endpoint is inside the same association bound, so selection is ambiguous.
+        for i in range(240, 295):
+            current['ranges'][i] = rho/(-math.sin(heading)*math.cos(math.radians(i))
+                                       -math.cos(heading)*math.sin(math.radians(i)))
+        current['ranges'][295] = 3.
+        def point(i):
+            return {'x_m': current['ranges'][i]*math.cos(math.radians(i)),
+                    'y_m': -current['ranges'][i]*math.sin(math.radians(i))}
+        wall.update(rho_left_m=rho, support_start_left_m=point(240), support_end_left_m=point(294),
+                    points=55, fit_error_m=.001)
+        wall['support_span_m'] = (math.cos(heading)*(point(294)['x_m']-point(240)['x_m'])
+                                 +math.sin(heading)*(point(294)['y_m']-point(240)['y_m']))
+        self.assertIsNotNone(motion._observed_wall_endpoint(wall, current['ranges']))
+        current['wall_candidates'].append(wall)
+        old = copy.deepcopy(motion._incoming_association)
+        self.assertIsNone(motion._current_incoming_endpoint(current))
+        self.assertEqual(motion._incoming_association, old)
+
+    def test_tracked_endpoint_lease_uses_actual_receive_not_delayed_decision(self):
+        motion, full, _, later = self.incoming_endpoint_fixture()
+        # Reuse real538 points with a synthetic subsequent native fit that
+        # reaches its real316 end (the saved fit stopped at315). The endpoint
+        # remains ahead of the front projection, exercising lease, not release.
+        current = copy.deepcopy(full)
+        wall = copy.deepcopy(current['wall_candidates'][6])
+        wall['support_end_left_m'] = copy.deepcopy(full['left_turn_goal']['incoming_left_end_support']['point_left_m'])
+        h = wall['heading_left_rad']
+        a, b = wall['support_start_left_m'], wall['support_end_left_m']
+        wall['support_span_m'] = math.cos(h)*(b['x_m']-a['x_m'])+math.sin(h)*(b['y_m']-a['y_m'])
+        current.update(seq=539, at_ms=full['at_ms']+100, received_at=.299,
+                       left_turn_goal=None, wall_candidates=[wall])
+        motion.last_now = .35
+        motion._endpoint_observation(current)
+        self.assertFalse(motion.entry_bearing_released)
+        self.assertGreater(motion.entry_bearing['forward_gap_m'], 0)
+        self.assertEqual(motion._entry_last_receive, .299)
+        self.assertEqual(motion._incoming_association['source_received_at'], .299)
+        self.assertEqual(motion._entry_ready_count, 1)  # Full/native clocks do not mix.
+        switched = copy.deepcopy(motion)
+        switched.last_now = .599
+        switched._endpoint_observation(dict(full, seq=540, at_ms=full['at_ms']+200, received_at=.399))
+        self.assertEqual(switched._entry_ready_count, 1)
+        self.assertFalse(switched.entry_bearing_released)
+        motion.last_now, motion.last_publication = .600, current['at_ms']+200
+        self.assertIsNone(motion._current_incoming_endpoint(dict(later, received_at=.599)))
+        motion.entry_bearing = None
+        self.assertEqual(motion._entry_target(1670), 1500)
+        self.assertEqual(motion.phase, 'coast')
+
     def test_actual21_same_wall_moderate_width_change_continues_but_old_turn_rejects(self):
         fixture = Path(__file__).with_name('fixtures')/'left-cone-21-exit-width.json'
         scans = json.loads(fixture.read_text())['scans']

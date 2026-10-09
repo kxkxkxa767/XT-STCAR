@@ -11,7 +11,8 @@ from compact_target import CompactTargetTracker
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
-                         PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number, _valid_candidate)
+                         PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number, _valid_candidate,
+                         _valid_wall, _wrap, _surface_supports, _same_surface)
 
 ORBIT_ENTRY_MAX_S = 3.0
 COAST_MAX_S = 5.0
@@ -74,9 +75,11 @@ class ManeuverSequence(TurnMotion):
         self.entry_bearing_required = False
         self.entry_bearing_released = False
         self.entry_bearing = None
+        self._incoming_association = None
         self._entry_last_receive = self._entry_last_publication = None
         self._entry_ready_count = 0
         self._entry_ready_receive = self._entry_ready_publication = None
+        self._entry_ready_observation_type = None
         self.adopted_presteer_pwm = None
         self.first_pass_preparing = False
         self.first_pass_evidence = None
@@ -101,14 +104,31 @@ class ManeuverSequence(TurnMotion):
         # Called only after native geometry and its same-scan ray binding have
         # been validated. The cached turn_goal may contain an OLD endpoint.
         opening = scan.get('left_turn_goal')
-        if opening is None:
+        observation = ({'endpoint_return': opening['incoming_left_end_support'],
+                        'heading_left_rad': opening['incoming_heading_left_rad'],
+                        'observation_type': 'full_opening', 'wall': None}
+                       if opening is not None else self._current_incoming_endpoint(scan))
+        if observation is None:
             self.entry_bearing = None
             self._entry_ready_count = 0
             self._entry_ready_receive = self._entry_ready_publication = None
+            self._entry_ready_observation_type = None
             return
-        point = opening['incoming_left_end_support']['point_left_m']
-        heading = opening['incoming_heading_left_rad']
+        point = observation['endpoint_return']['point_left_m']
+        heading = observation['heading_left_rad']
         c, s = math.cos(heading), math.sin(heading)
+        # This separate descriptor associates the next CURRENT observation.
+        # It never supplies a missing point, heading, opening width or outer wall.
+        received = scan.get('received_at')
+        prior = self._incoming_association
+        if (_number(received) and received >= 0 and 0 <= self.last_now-received < SCAN_AGE_S
+                and (prior is None or (scan['seq'] > prior['source_seq']
+                    and scan['at_ms'] > prior['source_at_ms']
+                    and received > prior['source_received_at']))):
+            self._incoming_association = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                'source_received_at': received, 'heading_left_rad': heading,
+                'rho_left_m': -s*point['x_m']+c*point['y_m'],
+                'endpoint_return': copy.deepcopy(observation['endpoint_return'])}
         corners = [(x, y) for x in (-REAR_BODY_EXTENT_M, FRONT_BODY_EXTENT_M)
                    for y in (-SIDE_BODY_EXTENT_M, SIDE_BODY_EXTENT_M)]
         # Project the measured body, with the existing 8 cm allowance, onto
@@ -128,13 +148,21 @@ class ManeuverSequence(TurnMotion):
         # end the early cap; it does not assert rear/body or path clearance.
         front_projection_reached = forward_gap <= 0 and lateral_gap > 0 and cap > NEUTRAL
         permits_prepared_left = cap >= self.initial_presteer_pwm
+        observation_clock = (received if observation['observation_type'] == 'tracked_current_incoming_wall'
+                             else self.last_now)
+        # Keep the existing full-opening maturity clock. A change of source
+        # starts a new maturity interval rather than mixing decision/receipt time.
+        if self._entry_ready_observation_type != observation['observation_type']:
+            self._entry_ready_count = 0
+            self._entry_ready_receive = self._entry_ready_publication = None
+        self._entry_ready_observation_type = observation['observation_type']
         if permits_prepared_left:
             if self._entry_ready_count == 0:
-                self._entry_ready_receive = self.last_now
+                self._entry_ready_receive = observation_clock
                 self._entry_ready_publication = scan['at_ms']
             self._entry_ready_count += 1
             if (self._entry_ready_count >= 3
-                    and self.last_now-self._entry_ready_receive >= .25
+                    and observation_clock-self._entry_ready_receive >= .25
                     and (scan['at_ms']-self._entry_ready_publication)/1000 >= .25):
                 self.entry_bearing_released = True
         else:
@@ -142,9 +170,14 @@ class ManeuverSequence(TurnMotion):
             self._entry_ready_receive = self._entry_ready_publication = None
         if front_projection_reached:
             self.entry_bearing_released = True
-        self._entry_last_receive, self._entry_last_publication = self.last_now, scan['at_ms']
+        self._entry_last_receive, self._entry_last_publication = observation_clock, scan['at_ms']
         self.entry_bearing = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
-            'endpoint_return': copy.deepcopy(opening['incoming_left_end_support']),
+            'source_received_at': received,
+            'endpoint_return': copy.deepcopy(observation['endpoint_return']),
+            'observation_type': observation['observation_type'],
+            'current_incoming_wall': copy.deepcopy(observation['wall']),
+            'current_near_support_bins': list(observation.get('near_support_bins', [])),
+            'adjacent_far_return': copy.deepcopy(observation.get('adjacent_far_return')),
             'incoming_heading_left_rad': heading, 'body_forward_support_m': front,
             'body_left_support_m': side, 'forward_gap_m': forward_gap,
             'lateral_gap_m': lateral_gap, 'clearance_bearing_left_rad': bearing,
@@ -156,6 +189,121 @@ class ManeuverSequence(TurnMotion):
             'scope': 'early_turn_endpoint_bearing_heuristic',
             'endpoint_passed_proven': False, 'swept_path_certified': False,
             'physical_curvature_calibrated': False}
+
+    def _current_incoming_endpoint(self, scan):
+        """Associate a currently observed wall end after a full opening was seen.
+
+        A native fit may stop at a sampling window. Its forward end must bind
+        to a current return, followed immediately by a real farther return,
+        and retain a contiguous, actually observed inlier chain behind it.
+        """
+        old = self._incoming_association
+        if self.phase != 'drive' or old is None:
+            return None
+        publication_dt = (scan['at_ms']-old['source_at_ms'])/1000
+        received = scan.get('received_at')
+        if (scan['seq'] <= old['source_seq'] or not 0 < publication_dt < SCAN_AGE_S
+                or not _number(received) or received < 0 or not 0 <= self.last_now-received < SCAN_AGE_S
+                or received <= old['source_received_at']
+                or not 0 <= self.last_now-old['source_received_at'] < SCAN_AGE_S
+                or abs(publication_dt-(received-old['source_received_at'])) > .15):
+            return None
+        ranges, walls = scan.get('ranges'), scan.get('wall_candidates')
+        if (not isinstance(ranges, list) or len(ranges) != 360
+                or any(r is not None and (not _number(r) or not .02 <= r <= 12) for r in ranges)
+                or not isinstance(walls, list) or len(walls) > 64
+                or any(not _valid_wall(w) for w in walls)):
+            return None
+        gate = min(math.radians(30), .12+math.radians(90)*publication_dt)
+        previous = old['endpoint_return']['point_left_m']
+        matches = []
+        for original in walls:
+            wall = copy.deepcopy(original)
+            heading = wall['heading_left_rad']
+            if abs(_wrap(heading-old['heading_left_rad'])) > math.pi/2:
+                heading = wall['heading_left_rad'] = _wrap(heading+math.pi)
+                wall['rho_left_m'] = -wall['rho_left_m']
+                wall['support_start_left_m'], wall['support_end_left_m'] = (
+                    wall['support_end_left_m'], wall['support_start_left_m'])
+            end = wall['support_end_left_m']
+            if (abs(_wrap(heading-old['heading_left_rad'])) > gate or wall['rho_left_m'] <= 0
+                    or abs(wall['rho_left_m']-old['rho_left_m']) > .30
+                    or math.hypot(end['x_m']-previous['x_m'], end['y_m']-previous['y_m']) > .30):
+                continue
+            observation = self._observed_wall_endpoint(wall, ranges)
+            if observation is not None and not any(wall == item['wall'] for item in matches):
+                matches.append(observation)
+        if not matches:
+            return None
+        supports = _surface_supports(scan, [item['wall'] for item in matches])
+        groups = []
+        for observation, support in zip(matches, supports):
+            if support is None:
+                continue
+            # Merge only aliases of the same real endpoint AND current surface.
+            # Similar headings alone never merge distinct parallel boards.
+            group = next((g for g in groups if all(
+                observation['endpoint_return']['index'] == prior['endpoint_return']['index']
+                and _same_surface(support, evidence) is True for prior, evidence in g)), None)
+            if group is None:
+                groups.append([(observation, support)])
+            else:
+                group.append((observation, support))
+        return groups[0][0][0] if len(groups) == 1 else None
+
+    @staticmethod
+    def _observed_wall_endpoint(wall, ranges):
+        heading, end = wall['heading_left_rad'], wall['support_end_left_m']
+        c, s = math.cos(heading), math.sin(heading)
+        along = lambda p: c*p['x_m']+s*p['y_m']
+        normal = lambda p: -s*p['x_m']+c*p['y_m']
+        low, high = along(wall['support_start_left_m']), along(end)
+        if low >= high or abs(normal(end)-wall['rho_left_m']) > .05:
+            return None
+        index = round(-math.degrees(math.atan2(end['y_m'], end['x_m']))) % 360
+        distance = ranges[index]
+        if distance is None:
+            return None
+        point = lambda i: {'x_m': ranges[i]*math.cos(math.radians(i)),
+                           'y_m': -ranges[i]*math.sin(math.radians(i))}
+        measured = point(index)
+        if math.hypot(measured['x_m']-end['x_m'], measured['y_m']-end['y_m']) > 1e-6:
+            return None
+        for direction in (-1, 1):
+            outside = (index+direction) % 360
+            far = ranges[outside]
+            if far is None or far <= distance+.18:
+                continue
+            # Require the adjacent beam to continue forward along this wall's
+            # orientation, independently of its much farther observed range.
+            adjacent = {'x_m': distance*math.cos(math.radians(outside)),
+                        'y_m': -distance*math.sin(math.radians(outside))}
+            if along(adjacent) <= high or along(point(outside)) <= high:
+                continue
+            previous = measured
+            support_bins = [index]
+            # Match the native wall's minimum actual support count at THIS end;
+            # a separate mature patch elsewhere on the line is insufficient.
+            for step in range(1, 16):
+                inside = (index-direction*step) % 360
+                if ranges[inside] is None:
+                    break
+                current = point(inside)
+                if (not low-1e-6 <= along(current) < high
+                        or abs(normal(current)-wall['rho_left_m']) > .05
+                        or math.hypot(current['x_m']-previous['x_m'], current['y_m']-previous['y_m']) > .18):
+                    break
+                support_bins.append(inside)
+                previous = current
+            if len(support_bins) == 16:
+                return {'endpoint_return': {'index': index,
+                            'angle_left_rad': _wrap(-math.radians(index)),
+                            'range_m': distance, 'point_left_m': measured},
+                        'heading_left_rad': heading,
+                        'observation_type': 'tracked_current_incoming_wall', 'wall': wall,
+                        'near_support_bins': support_bins,
+                        'adjacent_far_return': {'index': outside, 'range_m': far}}
+        return None
 
     def _entry_target(self, target):
         if not self.entry_bearing_required or self.entry_bearing_released:
