@@ -61,17 +61,24 @@ def _candidates(ranges, *, allow_boundary_gap=False):
         values = [ranges[i] for i in group]
         if min(values) < MIN_RANGE_M or max(values) > MAX_RANGE_M:
             continue
+        support = [points[i] for i in group]
+        if (max(p[0] for p in support)-min(p[0] for p in support) > MAX_DIAMETER_M
+                or max(p[1] for p in support)-min(p[1] for p in support) > MAX_DIAMETER_M):
+            continue
+        diameter = max(math.dist(a, b) for index, a in enumerate(support) for b in support[index+1:])
+        if not MIN_DIAMETER_M <= diameter <= MAX_DIAMETER_M:
+            continue
         # Acquisition needs both immediate neighbors. A confirmed track may
         # cross up to three nulls at one edge, or exactly one at each edge,
-        # with real farther returns beyond both edges. The tracker also limits
-        # this to the last full isolation's original lease. Nulls are neither
-        # object support nor free space; the whole current component stays intact.
+        # with real farther returns beyond both edges. Longer single-edge gaps
+        # need the bounded projection below, with no gap at the opposite edge.
+        # Nulls are neither support nor free space; the current component stays intact.
         unknown, background, gap_counts = [], [], []
         for edge, direction in [(group[0], -1), (group[-1], 1)]:
             index = (edge+direction) % 360
             value = ranges[index]
             edge_gaps = 0
-            while value is None and allow_boundary_gap and edge_gaps < MAX_BOUNDARY_GAP_BINS:
+            while value is None and allow_boundary_gap and edge_gaps < len(ranges):
                 unknown.append(index)
                 edge_gaps += 1
                 index = (index+direction) % 360
@@ -82,19 +89,22 @@ def _candidates(ranges, *, allow_boundary_gap=False):
             background.append({'index': index, 'range_m': value})
         if len(background) != 2 or (all(gap_counts) and gap_counts != [1, 1]):
             continue
-        support = [points[i] for i in group]
-        if (max(p[0] for p in support)-min(p[0] for p in support) > MAX_DIAMETER_M
-                or max(p[1] for p in support)-min(p[1] for p in support) > MAX_DIAMETER_M):
-            continue
-        diameter = max(math.dist(a, b) for index, a in enumerate(support) for b in support[index+1:])
-        if not MIN_DIAMETER_M <= diameter <= MAX_DIAMETER_M:
-            continue
+        projected_gap = None
+        if max(gap_counts) > MAX_BOUNDARY_GAP_BINS:
+            # Arc at the farthest ACTUAL support range, spanning the boundary
+            # beams. This only bounds an association projection, not the physical
+            # contents/depth of missing beams or an observed object diameter.
+            projected_gap = max(values)*math.radians(max(gap_counts)+1)
+            if (projected_gap > min(MAX_POINT_GAP_M, diameter)
+                    or diameter+projected_gap > MAX_DIAMETER_M):
+                continue
         center = [sum(p[axis] for p in support)/len(support) for axis in (0, 1)]
         distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
         if MIN_RANGE_M <= distance <= MAX_RANGE_M and MIN_BEARING_RAD <= bearing <= MAX_BEARING_RAD:
             result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
                            'diameter_m': diameter, 'point_count': len(group), 'support_bins': list(group),
                            'boundary_unknown_bins': unknown, 'boundary_far_returns': background,
+                           'boundary_gap_projected_span_m': projected_gap,
                            'tracking_only_boundary_gap': bool(unknown)})
     return result
 
@@ -105,10 +115,13 @@ class CompactTargetTracker:
     At least three distinct scans and 250 ms of BOTH publication and receive time
     confirm an unbroken, unique association with full boundary observations.
     An already confirmed identity may tolerate up to three null bins at one
-    boundary, or exactly one at each boundary, using a unique current component
-    and real farther returns beyond both edges. Partial frames cannot
-    initialize/mature a track or renew the last FULL
-    isolation's 300 ms publication/receive lease. Repeat reads also respect that
+    boundary, or exactly one at each boundary. A longer single-boundary gap must
+    have a range/angle projection no larger than both the actual component's
+    diameter and the point-gap limit, and component diameter plus projection
+    cannot exceed the existing diameter limit. All require a unique current
+    component and real farther returns beyond both edges. Partial frames cannot
+    initialize/mature a track or renew the last FULL isolation's 300 ms
+    publication/receive lease. Repeat reads also respect that
     lease, as well as the current scan's age; they cannot mature or renew either.
     ``reason`` supplies diagnostics when update returns None.
     """

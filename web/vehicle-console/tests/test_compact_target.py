@@ -29,12 +29,22 @@ def double_gap_scan(seq=4, published=400, received=.4, *, bearing=90., gaps=(1, 
     return scan
 
 
+def projected_gap_scan(seq=4, published=400, received=.4, *, gap_count=4, side=1,
+                       bearing=90., distance=1., size=9):
+    scan = compact_scan(seq, published, received, bearing=bearing, distance=distance, size=size)
+    middle = round(-bearing) % 360
+    edge = middle-size//2 if side == -1 else middle+size-size//2-1
+    for offset in range(1, gap_count+1):
+        scan['ranges'][(edge+side*offset) % 360] = None
+    return scan
+
+
 class CompactTargetTests(unittest.TestCase):
-    def confirmed(self):
+    def confirmed(self, *, distance=1., size=9):
         tracker = MODULE.CompactTargetTracker()
         result = None
         for seq, published, received in [(1, 0, 0.), (2, 100, .1), (3, 300, .3)]:
-            result = tracker.update(compact_scan(seq, published, received), received+.01)
+            result = tracker.update(compact_scan(seq, published, received, distance=distance, size=size), received+.01)
         self.assertTrue(result['confirmed'])
         return tracker, result
 
@@ -211,13 +221,13 @@ class CompactTargetTests(unittest.TestCase):
         self.assertEqual(result['last_full_isolation_received_at'], .55)
 
     def test_tracking_boundary_gap_requires_bounded_real_background_and_same_shape(self):
-        for change in ('four_nulls', 'both_edges_one_plus_two', 'near_background', 'jump', 'ambiguous'):
+        for change in ('excessive_span', 'both_edges_one_plus_two', 'near_background', 'jump', 'ambiguous'):
             with self.subTest(change=change):
                 tracker, _ = self.confirmed()
                 scan = compact_scan(4, 400, .4, bearing=60. if change == 'jump' else 90.)
                 boundary = 305 if change == 'jump' else 275
                 scan['ranges'][boundary] = None
-                if change == 'four_nulls': scan['ranges'][boundary:boundary+4] = [None]*4
+                if change == 'excessive_span': scan['ranges'][boundary:boundary+11] = [None]*11
                 if change == 'both_edges_one_plus_two': scan['ranges'][264:266] = [None]*2
                 if change == 'near_background': scan['ranges'][boundary+1] = .9
                 if change == 'ambiguous':
@@ -300,6 +310,137 @@ class CompactTargetTests(unittest.TestCase):
         self.assertEqual(tracker.update(scan, .59), result)
         self.assertIsNone(tracker.update(scan, .61))  # Partial scan is only 110 ms old.
         self.assertEqual(tracker.reason, 'compact_target_boundary_gap_expired')
+
+    def test_projected_single_gap_keeps_current_support_without_renewing_full_lease(self):
+        for side in (-1, 1):
+            with self.subTest(side=side):
+                tracker, old = self.confirmed()
+                result = tracker.update(projected_gap_scan(side=side), .41)
+                self.assertIsNotNone(result)
+                self.assertTrue(result['confirmed'])
+                self.assertEqual(result['track_id'], old['track_id'])
+                self.assertEqual(result['confirmation_count'], old['confirmation_count'])
+                self.assertEqual(result['support_bins'], old['support_bins'])
+                self.assertEqual(result['point_count'], old['point_count'])
+                self.assertEqual(result['diameter_m'], old['diameter_m'])
+                self.assertEqual(result['last_full_isolation_seq'], 3)
+                self.assertEqual(result['last_full_isolation_at_ms'], 300)
+                self.assertEqual(result['last_full_isolation_received_at'], .3)
+                self.assertEqual(len(result['boundary_unknown_bins']), 4)
+                self.assertAlmostEqual(result['boundary_gap_projected_span_m'], math.radians(5))
+                self.assertTrue(result['tracking_only_boundary_gap'])
+                self.assertFalse(result['physical_identity_verified'])
+                self.assertEqual(tracker.reason, 'compact_target_tracked_with_boundary_gap')
+
+    def test_projected_gap_never_initializes_or_matures_unconfirmed_target(self):
+        for unconfirmed_seed in (False, True):
+            with self.subTest(unconfirmed_seed=unconfirmed_seed):
+                tracker = MODULE.CompactTargetTracker()
+                if unconfirmed_seed:
+                    tracker.update(compact_scan(3, 300, .3), .31)
+                self.assertIsNone(tracker.update(projected_gap_scan(), .41))
+                self.assertEqual(tracker.reason, 'compact_target_missing')
+
+    def test_projected_gap_rejects_span_beyond_point_gap_or_visible_diameter_or_total_limit(self):
+        cases = [(2., 9, 5, 'point_gap'), (1., 5, 4, 'visible_diameter'), (1., 17, 4, 'total')]
+        for distance, size, gap_count, exceeded in cases:
+            with self.subTest(exceeded=exceeded):
+                tracker, old = self.confirmed(distance=distance, size=size)
+                span = distance*math.radians(gap_count+1)
+                if exceeded == 'point_gap':
+                    self.assertGreater(span, MODULE.MAX_POINT_GAP_M)
+                elif exceeded == 'visible_diameter':
+                    self.assertGreater(span, old['diameter_m'])
+                    self.assertLess(span, MODULE.MAX_POINT_GAP_M)
+                    self.assertLess(span+old['diameter_m'], MODULE.MAX_DIAMETER_M)
+                else:
+                    self.assertGreater(span+old['diameter_m'], MODULE.MAX_DIAMETER_M)
+                    self.assertLess(span, min(MODULE.MAX_POINT_GAP_M, old['diameter_m']))
+                self.assertIsNone(tracker.update(projected_gap_scan(distance=distance, size=size,
+                                                                    gap_count=gap_count), .41))
+                self.assertEqual(tracker.reason, 'compact_target_missing')
+
+    def test_projected_gap_requires_immediate_opposite_and_real_far_outer_return(self):
+        for change in ('opposite_null', 'opposite_long_gap', 'outer_near', 'outer_beyond_span'):
+            with self.subTest(change=change):
+                tracker, _ = self.confirmed()
+                scan = projected_gap_scan()
+                if change == 'opposite_null': scan['ranges'][265] = None
+                if change == 'opposite_long_gap': scan['ranges'][262:266] = [None]*4
+                if change == 'outer_near': scan['ranges'][279] = 1.18
+                if change == 'outer_beyond_span': scan['ranges'][279:] = [None]*(360-279)
+                self.assertIsNone(tracker.update(scan, .41))
+                self.assertEqual(tracker.reason, 'compact_target_missing')
+
+    def test_projected_gap_rejects_unassociated_or_ambiguous_current_shape(self):
+        for change in ('jump', 'ambiguous'):
+            with self.subTest(change=change):
+                tracker, _ = self.confirmed()
+                scan = projected_gap_scan(bearing=60. if change == 'jump' else 90.)
+                if change == 'ambiguous':
+                    for index in range(246, 255): scan['ranges'][index] = 1.5
+                self.assertIsNone(tracker.update(scan, .41))
+                self.assertEqual(tracker.reason, 'compact_target_boundary_gap_unassociated'
+                                 if change == 'jump' else 'compact_target_ambiguous')
+
+    def test_projected_gap_cannot_renew_either_original_clock_or_duplicate_lease(self):
+        for published, received in ((600, .5), (500, .6)):
+            with self.subTest(published=published, received=received):
+                tracker, _ = self.confirmed()
+                self.assertIsNotNone(tracker.update(projected_gap_scan(), .41))
+                self.assertIsNone(tracker.update(projected_gap_scan(5, published, received), received+.01))
+                self.assertEqual(tracker.reason, 'compact_target_boundary_gap_expired')
+        tracker, _ = self.confirmed()
+        scan = projected_gap_scan(4, 500, .5)
+        result = tracker.update(scan, .51)
+        self.assertIsNotNone(result)
+        self.assertEqual(tracker.update(scan, .59), result)
+        self.assertIsNone(tracker.update(scan, .61))
+        self.assertEqual(tracker.reason, 'compact_target_boundary_gap_expired')
+
+    def test_trial31_recorded_full_loss_and_returned_boundaries_keep_seeded_identity(self):
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-31-projected-boundary-gap.json').read_text())
+        tracker = MODULE.CompactTargetTracker()
+        seed = copy.deepcopy(fixture['validated_state_target599'])
+        full, loss, following = fixture['raw_frames']
+        # Unlike trial30, raw599 WAS saved. Its geometry must match the recorded
+        # target; only earlier confirmation bookkeeping is injected here.
+        full_candidates = MODULE._candidates(full['ranges'])
+        self.assertEqual(len(full_candidates), 1)
+        for key in ('point_left_m', 'diameter_m', 'support_bins', 'boundary_far_returns'):
+            self.assertEqual(full_candidates[0][key], seed[key])
+        tracker._target = seed
+        tracker._last_seq, tracker._last_at = seed['source_seq'], seed['source_at_ms']
+        tracker._last_received = tracker._last_now = seed['source_received_at']
+        tracker._signature = tuple(full['ranges'])
+        tracker._first_at, tracker._first_received = seed['source_at_ms']-300, seed['source_received_at']-.3
+        tracker._next_id = seed['track_id']+1
+        self.assertEqual(tracker.update(full, full['received_at']+.001), seed)
+        result = tracker.update(loss, fixture['loss_decision_at'])
+        self.assertIsNotNone(result)
+        self.assertEqual(MODULE._candidates(loss['ranges']), [])
+        self.assertEqual(result['track_id'], seed['track_id'])
+        self.assertTrue(result['confirmed'])
+        self.assertTrue(result['tracking_only_boundary_gap'])
+        self.assertEqual(result['confirmation_count'], seed['confirmation_count'])
+        self.assertEqual(result['last_full_isolation_seq'], 599)
+        self.assertEqual(result['last_full_isolation_at_ms'], seed['source_at_ms'])
+        self.assertEqual(result['last_full_isolation_received_at'], seed['source_received_at'])
+        self.assertEqual(result['support_bins'], list(range(280, 291)))
+        self.assertEqual(result['boundary_unknown_bins'], list(range(291, 300)))
+        self.assertAlmostEqual(result['boundary_gap_projected_span_m'], .901*math.radians(10))
+        self.assertEqual(result['boundary_far_returns'],
+                         [{'index': 279, 'range_m': loss['ranges'][279]}, {'index': 300, 'range_m': 4.714}])
+        # Raw601 points/time are recorded. This receive interval is mocked, not
+        # evidence of resumed actuation or a physically identical whole cone.
+        scan = {**following, 'received_at': loss['received_at']+(following['at_ms']-loss['at_ms'])/1000}
+        restored = tracker.update(scan, scan['received_at']+.001)
+        self.assertEqual(restored['track_id'], seed['track_id'])
+        self.assertTrue(restored['confirmed'])
+        self.assertFalse(restored['tracking_only_boundary_gap'])
+        self.assertEqual(restored['confirmation_count'], seed['confirmation_count']+1)
+        self.assertEqual(restored['last_full_isolation_seq'], 601)
+        self.assertFalse(restored['physical_identity_verified'])
 
     def test_trial30_exact_loss_frame_and_next_raw_frame_maintain_seeded_identity(self):
         fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-30-double-boundary-gaps.json').read_text())
