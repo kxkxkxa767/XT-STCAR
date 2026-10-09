@@ -15360,6 +15360,79 @@
       "all_seven_hashes_verified": true
     },
     "timeline": "work/vehicle-dynamic-deploy-20261008/trial38-timeline.json",
-    "analysis_file": "work/vehicle-dynamic-deploy-20261008/trial38-route-analysis.json"
+    "analysis_file": "work/vehicle-dynamic-deploy-20261008/trial38-route-analysis.json",
+    "current_geometry_review": {
+      "scan613_ranges_event_exactly_match_raw": true,
+      "scan613_valid_points": 360,
+      "scan613_coverage": 1.0,
+      "scan613_wall_candidates": 20,
+      "wall_candidates_include_reverse_and_same_wall_windows": true,
+      "corridor_empty_not_all_walls_missing": true,
+      "native_failure": "Whole90deg side-sector fit fails:90deg seed48/91 inliers<80%;75/105deg adjacent fits24.98/-16.87deg exceed15deg fit-angle gate. Native wall detector separately keeps24point windows.",
+      "current613_possible_wall_pair": [
+        {
+          "heading_deg": -88.73295,
+          "rho_m": -1.36341,
+          "points": 86,
+          "span_m": 3.03758
+        },
+        {
+          "heading_deg": -86.2449,
+          "rho_m": 0.7407,
+          "points": 24,
+          "span_m": 0.48162
+        }
+      ],
+      "possible_common_axis_deg": -87.48893,
+      "possible_current_width_m": 2.1046,
+      "possible_center_offset_m": -0.31143,
+      "actual_shared_support_span_m": 0.4816,
+      "body_normal_gap_m": 0.53493,
+      "candidate_not_swept_path_certification": true,
+      "scan616_no_pair_meeting_same12deg_parallel_gate": true,
+      "old_reported_outer_wall_source586_is_stale_and_unusable": true,
+      "second_target_review": "All46 saved raw scans under existing360deg full compact detection never show two fully isolated candidates simultaneously. FirstID remains1; no second acquired. A601 component250..260 has following261 near first support, fails far isolation.",
+      "rust_change_deferred_until_timing_fix_actual_result": true,
+      "if_needed_future_geometry": "Pair same-frame native actual wall windows under existing width/parallel/shared-support margins; merge duplicate physical windows and reject multi-axis ambiguity; never cached old walls/course coordinates."
+    }
+  },
+  "after38_recovery_exit_timing_correction": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 39,
+    "reason": "38 re-entered left boost after strict recovery, then waited for new prepare window; latched release only ran on new scans, delaying actual center. Lost current corridor before any right PWM.",
+    "geometry_prepare": "Only continuing route, original firstID full actual support frontmost<=measured body front+.20m and side gap>=8cm; do not also wait for centroid<=0. Original default prediction unchanged.",
+    "healthy_neutral_window": "Entry to quality_wait clears pre-wait history. Only actual neutralACK + current quality_clear full drive quality + sameID/full/fresh strictly new scans rebuild .25s dual-clock geometry window. Any bad quality/partial/changedID/clock stale resets. Existing strict quality restoration unchanged.",
+    "resume": "First powered output and actualACK observation retain same adopted steering. A mature fresh window rebuilt during healthy neutral wait may carry to the next validated control output, avoiding new left boost plus another .25s after ACK. It never itself certifies rear pass or right authorization.",
+    "release_timing": "Only already latched first_pass_preparing continuing-route drive before rearpass; repeated current scan must remain fresh/full/sameID and actual previous motor1560/servo/commandACK match. Original_slew may then take at most one20PWM step per elapsed100ms toward1500. No catch-up, no repeated-frame observation/pass maturation, no right PWM.",
+    "preserved": "Whole support rear-.18 ledger, current native unique corridor/right centerACK, actual distinct second proof, same positive1560, all original deadlines/quality/body gates, old default and terminalcoast behavior.",
+    "actual38_basis": "599/601/603 actual raw frontmost .12002/.04046/about0 meet bodyfront; controller600/602 actual center+diameter bounds .153893/.102990 likewise below.20, side conservative>.26. Exact raw600/602 absent, do not fabricate them.",
+    "operator_stopped_reset_after38_confirmed": true,
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/before39-recovery-exit-fresh.json",
+    "old14_installed_hashes_match_37ed519": true,
+    "fresh_session_note": {
+      "boot_differs_from38_terminal": true,
+      "new_boot": "7_Wk6aKUB8lgMfnDRoqPQg",
+      "systemd_active_enter": "2026-10-09 20:56:09 CST",
+      "systemd_n_restarts": 0,
+      "systemd_result": "success",
+      "reason_for_restart_not_inferred": true,
+      "six_samples_healthy_locked_ready_and14_hashes_and_runtime_settings_verified": true
+    },
+    "validation": {
+      "maneuver_tests_passed": 103,
+      "route_control_tests_passed": 23,
+      "python_compile": true,
+      "diff_check": true,
+      "independent_read_only_review": "no blocker; actual fixture matched source; no physical success inferred",
+      "source_sha256": {
+        "web/vehicle-console/maneuver_sequence.py": "f5889ee2717ab6b8bbe011cf7301a6f5b78869efba1376369511f2f98960eeb4",
+        "web/vehicle-console/tests/test_maneuver_route.py": "729e248bc21498ffd513d388fd8ac3e43bb333e6e7aa31fb587837e3998d1756",
+        "web/vehicle-console/tests/fixtures/left-cone-38-wait-exit-prepare.json": "3f603c72fef7e9d21d5a66f9920b83cf47ad6a2693be6da46c50622e2100c088"
+      }
+    },
+    "fixture": "web/vehicle-console/tests/fixtures/left-cone-38-wait-exit-prepare.json",
+    "native_wall_pair_fallback_deferred": true
   }
 }

@@ -96,6 +96,7 @@ class ManeuverSequence(TurnMotion):
         self.first_pass_progress = None
         self._first_pass_history = []
         self._first_exit_prepare_history = []
+        self._quality_exit_prepare_ready = False
         self.first_exit_prepare_evidence = None
         self.right_exit_since = None
         self.right_exit_center_ack = None
@@ -170,6 +171,34 @@ class ManeuverSequence(TurnMotion):
         return (len(history) >= 3 and (row[1]-history[0][1])/1000+1e-9 >= duration
                 and row[2]-history[0][2]+1e-9 >= duration)
 
+    def _clear_exit_prepare_window(self):
+        self._first_exit_prepare_history.clear()
+        self._quality_exit_prepare_ready = False
+
+    def _latch_exit_prepare(self, scan, control, *, basis):
+        points = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
+        if points is None or not self._first_exit_prepare_history:
+            return
+        history = self._first_exit_prepare_history
+        self.first_pass_preparing = True
+        self.orbit_left_entry_boost = False
+        self.first_exit_prepare_evidence = {
+            'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'received_at': scan['received_at'],
+            'center_x_m': sum(p[0] for p in points)/len(points),
+            'track_id': self.orbit_track_id, 'support_bins': list(self.compact_target['support_bins']),
+            'observed_frontmost_x_m': max(p[0] for p in points),
+            'observed_left_body_gap_m': min(p[1] for p in points)-SIDE_BODY_EXTENT_M,
+            'observation_count': len(history), 'first_source_seq': history[0][0],
+            'last_preparation_source_seq': history[-1][0],
+            'publication_span_s': (history[-1][1]-history[0][1])/1000,
+            'receive_span_s': history[-1][2]-history[0][2],
+            'adopted_control': {k: control.get(k) for k in ('motor', 'servo', 'tick', 'seq', 'command_acked')},
+            'basis': basis, 'action': 'release_left_toward_neutral_only',
+            'observed_rear_pass': False, 'right_steering_authorized': False,
+            'physical_cone_pass_certified': False}
+        self._route_event('first_exit_prepare', scan, control, self.first_exit_prepare_evidence)
+
     def begin_quality_wait(self, now, control, *, scan=None):
         """One opt-in neutral wait; this never reopens a terminal coast."""
         if (not self.continue_route or self.quality_wait_used or self.phase != 'drive'
@@ -197,7 +226,7 @@ class ManeuverSequence(TurnMotion):
         self._quality_good_history.clear()
         self._quality_pass_history.clear()
         self._first_pass_history.clear()
-        self._first_exit_prepare_history.clear()
+        self._clear_exit_prepare_window()
         self.first_pass_preparing = False
         self.phase, self.reason = 'quality_wait', 'route_quality_wait_neutral'
         self.steering_target = self.servo
@@ -222,8 +251,12 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         points = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
         if points is None:
+            self._clear_exit_prepare_window()
             self.lock('route_quality_wait_target_unconfirmed')
             return self._result(now)
+        if quality_clear is not True or not neutral:
+            self._clear_exit_prepare_window()
+            self._quality_good_history.clear()
         if not advancing:
             return self._result(now)
         front, side = max(p[0] for p in points), min(p[1] for p in points)-SIDE_BODY_EXTENT_M
@@ -234,8 +267,14 @@ class ManeuverSequence(TurnMotion):
             self._quality_pass_history.clear()
             pass_ready = False
         if quality_clear is not True or not neutral:
-            self._quality_good_history.clear()
             return self._result(now)
+        # Rebuild only from NEW, fully healthy observations in this neutral
+        # wait. No pre-wait window or degraded frame can mature the intention.
+        if front <= FRONT_BODY_EXTENT_M and side >= MANEUVER_BODY_CLEARANCE_M:
+            self._quality_exit_prepare_ready = self._mature_observation(
+                self._first_exit_prepare_history, scan, .25)
+        else:
+            self._clear_exit_prepare_window()
         good = self._mature_observation(self._quality_good_history, scan, .30)
         if not good or resume_ready is not True:
             return self._result(now)
@@ -260,7 +299,8 @@ class ManeuverSequence(TurnMotion):
         self.quality_wait_evidence.update(resume_seq=scan['seq'], resume_at_ms=scan['at_ms'],
             resume_received_at=scan['received_at'], good_frame_count=len(self._quality_good_history))
         self._first_pass_history.clear()
-        self._first_exit_prepare_history.clear()
+        if not self._quality_exit_prepare_ready:
+            self._clear_exit_prepare_window()
         self._route_event('quality_resume_request', scan, control, self.quality_wait_evidence)
         # First powered output holds the actually ACKed neutral-wait steering.
         return self._result(now)
@@ -724,7 +764,7 @@ class ManeuverSequence(TurnMotion):
         if self.continue_route and (self._full_target_points(target, scan, self.orbit_track_id) is None
                 or not _number(scan.get('received_at'))
                 or not 0 <= now-scan['received_at'] < SCAN_AGE_S):
-            self._first_exit_prepare_history.clear()
+            self._clear_exit_prepare_window()
             self._first_pass_history.clear()
             return
         if (target is None or target.get('track_id') != self.orbit_track_id
@@ -732,12 +772,12 @@ class ManeuverSequence(TurnMotion):
                 or not isinstance(bins, list) or len(bins) < 5
                 or any(type(i) is not int or not 0 <= i < 360 for i in bins)):
             self._first_pass_history = []
-            self._first_exit_prepare_history.clear()
+            self._clear_exit_prepare_window()
             return
         ranges = scan['ranges']
         if any(not _number(ranges[i]) for i in bins):
             self._first_pass_history = []
-            self._first_exit_prepare_history.clear()
+            self._clear_exit_prepare_window()
             return
         points = [(ranges[i]*math.cos(math.radians(i)), -ranges[i]*math.sin(math.radians(i))) for i in bins]
         # Always derive extents from current raw support, never a cone radius.
@@ -773,26 +813,16 @@ class ManeuverSequence(TurnMotion):
         geometric_ready = False
         eligible = (self.continue_route and self.handover_observed is True
                     and self.phase == 'drive' and self.route_stage == 'first_target'
-                    and x <= 0 and front <= FRONT_BODY_EXTENT_M
+                    and front <= FRONT_BODY_EXTENT_M
                     and side >= MANEUVER_BODY_CLEARANCE_M)
         if eligible:
             geometric_ready = self._mature_observation(self._first_exit_prepare_history, scan, .25)
         else:
-            self._first_exit_prepare_history.clear()
+            self._clear_exit_prepare_window()
         geometric_prepare = geometric_ready and adopted
         if geometric_prepare and not self.first_pass_preparing:
-            self.first_exit_prepare_evidence = {**row,
-                'track_id': self.orbit_track_id, 'support_bins': list(bins),
-                'observed_frontmost_x_m': front, 'observed_left_body_gap_m': side,
-                'observation_count': len(self._first_exit_prepare_history),
-                'first_source_seq': self._first_exit_prepare_history[0][0],
-                'publication_span_s': (scan['at_ms']-self._first_exit_prepare_history[0][1])/1000,
-                'receive_span_s': scan['received_at']-self._first_exit_prepare_history[0][2],
-                'adopted_control': {k: control.get(k) for k in ('motor', 'servo', 'tick', 'seq', 'command_acked')},
-                'basis': 'current_first_target_center_behind_lidar_support_behind_body_front',
-                'action': 'release_left_toward_neutral_only', 'observed_rear_pass': False,
-                'right_steering_authorized': False, 'physical_cone_pass_certified': False}
-            self._route_event('first_exit_prepare', scan, control, self.first_exit_prepare_evidence)
+            self._latch_exit_prepare(scan, control,
+                basis='current_first_target_complete_support_behind_body_front')
         prepare = prediction_prepare or geometric_prepare
         self.first_pass_progress = {**row, 'observed_frontmost_x_m': front,
             'observed_left_body_gap_m': side, 'command_center_lead_s': lead,
@@ -1320,7 +1350,7 @@ class ManeuverSequence(TurnMotion):
                       quality_clear=False, quality_resume_ready=False):
         advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, presteer_wait)
         if self.phase == 'locked':
-            self._first_exit_prepare_history.clear()
+            self._clear_exit_prepare_window()
             return self._result(self.last_now)
         if self.phase == 'quality_wait':
             return self._quality_wait_update(scan, now, control, advancing,
@@ -1336,12 +1366,17 @@ class ManeuverSequence(TurnMotion):
                 self._slew(now)
             return self._result(now)
         if self.quality_resume_pending:
+            points = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
+            if (quality_clear is not True or points is None
+                    or max(p[0] for p in points) > FRONT_BODY_EXTENT_M
+                    or min(p[1] for p in points)-SIDE_BODY_EXTENT_M < MANEUVER_BODY_CLEARANCE_M):
+                self._clear_exit_prepare_window()
             if self.first_pass_evidence is not None and advancing:
                 _, rejection = self._right_exit_target(scan, now)
                 if rejection is not None:
                     self.lock('route_quality_resume_corridor_unconfirmed')
                     return self._result(now)
-            if self._full_target_points(self.compact_target, scan, self.orbit_track_id) is None:
+            if points is None:
                 self.lock('route_quality_resume_target_unconfirmed')
             elif (self.first_pass_evidence is None and now-self.orbit_since >= ORBIT_ENTRY_MAX_S):
                 self.lock('route_quality_resume_original_budget_expired')
@@ -1353,13 +1388,36 @@ class ManeuverSequence(TurnMotion):
                 self.quality_resume_pending = False
                 self.quality_wait_evidence['resume_ack'] = {k: control.get(k) for k in
                     ('motor', 'servo', 'seq', 'tick')}
+                if self._quality_exit_prepare_ready and self.first_pass_evidence is None:
+                    self._latch_exit_prepare(scan, control,
+                        basis='healthy_neutral_wait_body_front_support_rechecked_at_resume_ack')
+                    self._quality_exit_prepare_ready = False
             elif now-self.quality_resume_since >= SCAN_AGE_S:
                 self.lock('route_quality_resume_ack_timeout')
             else:
                 self.steering_target = self.quality_wait_servo
+            if self.phase == 'locked':
+                self._clear_exit_prepare_window()
             # Even the ACK observation cannot change steering on this output.
             return self._result(now)
         if not advancing:
+            # A repeated fresh observation cannot establish preparation or a
+            # pass. It may execute ONE already-authorized release step once
+            # the previous actual command is ACKed and its 100 ms is due.
+            if (self.continue_route and self.phase == 'drive'
+                    and self.handover_observed and self.route_stage == 'first_target'
+                    and self.first_pass_preparing and self.first_pass_evidence is None
+                    and NEUTRAL <= self.servo <= SERVO_MAX
+                    and self._full_target_points(self.compact_target, scan, self.orbit_track_id) is not None
+                    and 0 <= now-scan['received_at'] < SCAN_AGE_S
+                    and control.get('command_acked') is True
+                    and control.get('motor') == TRIAL_MOTOR and control.get('servo') == self.servo):
+                if now-self.orbit_since+1e-9 >= ORBIT_ENTRY_MAX_S:
+                    self.begin_coast('first_relative_object_entry_trial_timeout', now)
+                else:
+                    self.steering_target = self.natural_steering_target = NEUTRAL
+                    self.reason = 'first_target_pass_preparing_neutral'
+                self._slew(now)
             return self._result(now)
         if self.continue_route and self.route_stage == 'corridor_follow':
             return self._corridor_follow_update(scan, now, control)
@@ -1368,7 +1426,7 @@ class ManeuverSequence(TurnMotion):
         if self.first_pass_evidence is not None:
             return self._right_exit_update(scan, now, control)
         if not self._usable_target(self.compact_target, scan):
-            self._first_exit_prepare_history.clear()
+            self._clear_exit_prepare_window()
             self._capture_compact_loss(scan, now, control, 'compact_target_lost_or_ambiguous')
             # Losing object identity removes the drive request, not the
             # already adopted left steering. Keep that command only in the
@@ -1410,7 +1468,7 @@ class ManeuverSequence(TurnMotion):
             self.alignment_evidence = None
             self.alignment_publication = self.alignment_receive = None
         elif self.compact_target['track_id'] != self.orbit_track_id:
-            self._first_exit_prepare_history.clear()
+            self._clear_exit_prepare_window()
             self._capture_compact_loss(scan, now, control, 'compact_target_identity_changed')
             if not self._begin_adopted_left_coast('compact_target_identity_changed', now, control):
                 self.begin_coast('compact_target_identity_changed', now)
