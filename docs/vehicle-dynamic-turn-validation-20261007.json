@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "35 operator reports already driving straight then stopped before second cone. Runtime quality_wait firsttarget at666 held1698 with actual neutral ACK667;668 front_sparse12>existing6 caused hard stop and center. No positive resume/software first-pass/right-align/corridor-follow/second reached. Full task incomplete. User fully stopped/reset confirmed.36 next; bounded neutral wait refinement under review.36 neutral-wait coverage correction implemented and33 targeted checks passed; not yet deployed.",
+  "latest_trial_status": "37 same682 successfully waited/resumed with actualACK, then circled first obstacle per operator and1977 body2.729cm caused8cm hardstop. No first software pass/right align/second. First-ID exit-preparation never triggered. Operator fully stopped/reset.38 next; investigate observed side/rear first-target geometry to begin steering release separately from final rear-pass ledger, no new correction implemented.",
   "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -10586,11 +10586,11 @@
   },
   "current_handoff_20261009": {
     "authoritative_entry": "agent.md top",
-    "latest_actual_trial": 35,
-    "next_trial": 36,
-    "installed_vehicle_source_commit": "d50b7567053f4dc2e75c8c6aed5a35c4a1d0eb8d",
-    "deployment_record": "work/vehicle-dynamic-deploy-20261008/route-continuation-deployment-result.json",
-    "backup": "/home/bianbu/xt-stcar-console/backup-route-continuation-20261009-202823",
+    "latest_actual_trial": 37,
+    "next_trial": 38,
+    "installed_vehicle_source_commit": "682bf949d9a64cd1efb0f954cbd52e90399e5a1e",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261008/neutral-route-wait-deployment-result.json",
+    "backup": "/home/bianbu/xt-stcar-console/backup-neutral-route-wait-20261009-203802",
     "prior_overnight_deferral_resumed_by_operator": true,
     "physical_stop_reset_after30_confirmed": true,
     "operator_collision_report": null,
@@ -10614,7 +10614,11 @@
     "operator_first_obstacle34_passed": true,
     "after34_continuation_implemented": true,
     "trial35_in_progress": false,
-    "physical_stop_reset_after35_confirmed": true
+    "physical_stop_reset_after35_confirmed": true,
+    "trial36_in_progress": false,
+    "physical_stop_reset_after36_confirmed": true,
+    "trial37_in_progress": false,
+    "physical_stop_reset_after37_confirmed": true
   },
   "after30_double_boundary_and_loss_coast_correction": {
     "implemented": true,
@@ -14520,8 +14524,8 @@
   },
   "after35_neutral_wait_coverage_correction": {
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 36,
     "reason": "35 entered quality_wait on scan_incomplete; after actual neutral ACK the next front_sparse12 exceeded reused powered front limit6 and hard-stopped before any full quality restoration. User reports already straight but still before second cone.",
     "change": "Only explicit continue_route quality_wait AFTER actual M1500/held-servo neutral command ACK uses existing COAST_MIN_VALID_POINTS=324 valid current returns (finite within.02..12m). Reject malformed/range-invalid/current scan-clearance mismatch. front_sparse diagnostic remains; nulls remain unknown.",
@@ -14550,6 +14554,391 @@
       "independent_readonly_review": "No remaining blocker;23 route methods independently passed; actual range counting/ACK/current target/unchanged recovery and old coast verified.",
       "fixture_matches_exact_raw668_and_prior_target667": true,
       "physical_restore_not_yet_tested": true
+    },
+    "deployed_source_commit": "682bf949d9a64cd1efb0f954cbd52e90399e5a1e",
+    "deployment_record": "work/vehicle-dynamic-deploy-20261008/neutral-route-wait-deployment-result.json",
+    "remote_stage": "/home/bianbu/xt-stcar-console/stage-neutral-route-wait-20261009-203802",
+    "backup": "/home/bianbu/xt-stcar-console/backup-neutral-route-wait-20261009-203802",
+    "archive_sha256": "5cec0411a73fc9a79dab5bcf8ccfa976e0110cdc539eb58c776bd42b1b59f5ff",
+    "all_14_installed_hashes_verified": true,
+    "python_compile_files": 9,
+    "fresh_after_deployment": "work/vehicle-dynamic-deploy-20261008/neutral-route-wait-installed36-fresh.json",
+    "trial_helper_sha256": "68d71de6a14fa26e35bbfcc44b852d4097725adbdc5ba1d67dfc841afc2cca8f",
+    "trial_command": [
+      "python3",
+      "/home/bianbu/xt-stcar-console/20260917/autonomy-control.py",
+      "turn-cone",
+      "--max-seconds",
+      "10",
+      "--initial-presteer-pwm",
+      "1670",
+      "--continue-route",
+      "--placement-confirmed",
+      "--execute"
+    ],
+    "physical_trial": 36,
+    "quality_wait_entered": false,
+    "new_neutral_324_branch_exercised": false,
+    "physical_acceptance": false,
+    "physical_trials": [
+      36,
+      37
+    ],
+    "quality_wait_entered_trial37": true,
+    "actual_positive_resume_confirmed_trial37": true,
+    "new_neutral_324_front_over6_branch_exercised": false
+  },
+  "turn36_actual": {
+    "source_commit": "682bf949d9a64cd1efb0f954cbd52e90399e5a1e",
+    "run_id": "9mvpWSU-G1bsznyYzb_RNf3N",
+    "evidence_directory": "/home/bianbu/xt-stcar-console/left-cone-trial-20261009-36",
+    "local_evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-36",
+    "evidence_sha256": {
+      "after.json": "afc9b47b947d30b0b9520a3357fcfc8f393dd428fe463ac7e54fb2f68d424da3",
+      "before-lidar.json": "884995516463a0113cd33ed999392cac519e401269d26181be7c1d5d502fbb6e",
+      "before.json": "6498cfff0f4732f4c4c7351a5270193aa0e71640af1a52064d7717d7f26e8248",
+      "cli-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cli-result.json": "1deff413865d955a336bf45f0f6ecd3704311899aa4ad6c8fb18419f8d79796b",
+      "feedback.jsonl": "e4fd917210b1dc53e7a134d40ef5f4830e2e53b587ce93ef24593f40073621db",
+      "summary.json": "b3a357444966b20007fdaffe4475da157a2e897897c483fd9c2e0878dfd12cf9"
+    },
+    "all_seven_hashes_verified": true,
+    "fresh_neutral_verified": true,
+    "independent_neutral_feedback_count": 6,
+    "physical_standstill_measured": false,
+    "completed": false,
+    "competition_supported": false,
+    "operator_feedback": "这遍是赛道的问题我已经放回去了你再试试",
+    "operator_collision_report": null,
+    "operator_stopped_and_reset_confirmed": true,
+    "operator_requests_same_version_retry": true,
+    "actual_reason": "turn_perception_unavailable",
+    "trigger_scan": 617,
+    "quality_issues": [
+      "scan_incomplete"
+    ],
+    "front_unknown": [
+      6,
+      7,
+      8
+    ],
+    "body_min_distance_m": 0.11534357234695286,
+    "body_stop": false,
+    "handover_observed": false,
+    "quality_wait_entered": false,
+    "new_neutral_324_branch_exercised": false,
+    "adopted_presteer_pwm": 1636,
+    "last_controlled_turn": {
+      "seq": 616,
+      "reason": "left_turn_wall_ambiguity_hold",
+      "servo": 1637,
+      "drive_elapsed_s": 1.6611810640006297
+    },
+    "last_target": {
+      "point_left_m": [
+        0.30271901676357477,
+        1.0904637369819365
+      ],
+      "range_m": 1.1317022421038652,
+      "bearing_left_rad": 1.30000917716329,
+      "diameter_m": 0.1436221530307096,
+      "point_count": 8,
+      "support_bins": [
+        282,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288,
+        289
+      ],
+      "boundary_unknown_bins": [],
+      "boundary_far_returns": [
+        {
+          "index": 281,
+          "range_m": 2.803
+        },
+        {
+          "index": 290,
+          "range_m": 2.368
+        }
+      ],
+      "boundary_gap_projected_span_m": null,
+      "tracking_only_boundary_gap": false,
+      "source_seq": 616,
+      "source_at_ms": 61574,
+      "source_received_at": 5281.308317219,
+      "confirmed": false,
+      "confirmation_count": 2,
+      "semantic_class": "unknown",
+      "kind": "lidar_compact_object",
+      "track_id": 1,
+      "last_full_isolation_seq": 616,
+      "last_full_isolation_at_ms": 61574,
+      "last_full_isolation_received_at": 5281.308317219,
+      "candidate_only": true,
+      "physical_identity_verified": false
+    },
+    "client_heartbeat": {
+      "requests": 57,
+      "acknowledged": 56,
+      "full_state_reads": 1,
+      "max_request_elapsed_s": 0.08507175500017183,
+      "max_ack_gap_s": 0.12525494300007267,
+      "mode": "heartbeat_first_terminal_state_read"
+    },
+    "max_actual_gap_s": 0.08829920700009097,
+    "max_tick_compute_s": 0.06788867599971127,
+    "terminal_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 96,
+      "servo": 1500,
+      "tick": 63374
+    },
+    "raw617_analysis": {
+      "raw_saved": true,
+      "effective_points": 331,
+      "coverage_seen_count": 357,
+      "same_valid_count_pre_post_calibration": true,
+      "nulls": [
+        6,
+        7,
+        8,
+        230,
+        231,
+        232,
+        233,
+        234,
+        239,
+        240,
+        241,
+        242,
+        243,
+        244,
+        245,
+        246,
+        247,
+        248,
+        249,
+        250,
+        254,
+        255,
+        256,
+        257,
+        258,
+        259,
+        260,
+        261,
+        262
+      ],
+      "target617_offline_single_full_component": true,
+      "offline_candidate_not_runtime_identity": true,
+      "first_target_first_seen615_to617_publication_ms": 199,
+      "required_confirmation_span_ms": 250,
+      "current617_wall_candidates": [],
+      "current617_left_turn_goal": null,
+      "last_runtime_outer_wall_seq": 616,
+      "operator_report_course_issue_preserved": true
     }
+  },
+  "turn37_actual": {
+    "source_commit": "682bf949d9a64cd1efb0f954cbd52e90399e5a1e",
+    "run_id": "wqqH10WUfdxV1ym0t2emIZ4z",
+    "evidence_directory": "/home/bianbu/xt-stcar-console/left-cone-trial-20261009-37",
+    "local_evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-37",
+    "evidence_sha256": {
+      "after.json": "7687dba2c89a1fd9eb7377f3797ce53a567386c278125c901319a75981f6e960",
+      "before-lidar.json": "feb60309a16482f87e7642e4149fb283a3d195e21b3b5c257aa0532572b1aa21",
+      "before.json": "b682386cac7d6de5a7a079e5c629fa1fe1ef7906705df14465a2b3369d6d51ac",
+      "cli-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cli-result.json": "fd88e8d8e79e40bdbef6e8a6a4c4597bc671b728a705b83e926671e50c581361",
+      "feedback.jsonl": "def6dbc5295ca774dd48f370d45d9849fe6614b2c5ee087441cd81090bc8573d",
+      "summary.json": "609ea206b66c3fbfa6c8d556e3afa28be02fc8c8d4398cd5151a2eeb8d161976"
+    },
+    "fresh_neutral_verified": true,
+    "independent_neutral_feedback_count": 6,
+    "physical_standstill_measured": false,
+    "completed": false,
+    "competition_supported": false,
+    "operator_feedback": "怎么绕着第一个锥桶又回转回去了，你要分辨两个锥桶",
+    "operator_collision_report": null,
+    "operator_stopped_and_reset_confirmed": true,
+    "analysis": {
+      "trial": 37,
+      "source_commit": "682bf949d9a64cd1efb0f954cbd52e90399e5a1e",
+      "same_version_as36": true,
+      "reason": "probe_obstacle_close_body",
+      "operator_feedback": "怎么绕着第一个锥桶又回转回去了，你要分辨两个锥桶",
+      "operator_collision_report": null,
+      "operator_stopped_and_reset_confirmed": true,
+      "adopted_presteer_pwm": 1628,
+      "handover_control": {
+        "motor": 1560,
+        "servo": 1638,
+        "tick": 194681,
+        "seq": 190,
+        "command_acked": true,
+        "physical_steering_confirmed": false,
+        "target_source_seq": 1948,
+        "target_source_at_ms": 194563
+      },
+      "quality_wait_trigger": {
+        "scan_seq": 1956,
+        "source_at_ms": 195358,
+        "quality_issues": [
+          "scan_incomplete"
+        ],
+        "adopted_servo": 1678,
+        "control_tick": 195468,
+        "control_seq": 210,
+        "motor_command": 1500,
+        "existing_arm_sequence": 97
+      },
+      "quality_wait_evidence": {
+        "entry_seq": 1956,
+        "entry_at_ms": 195358,
+        "entry_received_at": 5415.058909362,
+        "held_servo": 1678,
+        "target_id": 1,
+        "maximum_resumes": 1,
+        "resume_seq": 1960,
+        "resume_at_ms": 195760,
+        "resume_received_at": 5415.495818354,
+        "good_frame_count": 4,
+        "resume_ack": {
+          "motor": 1560,
+          "servo": 1678,
+          "seq": 222,
+          "tick": 195964
+        }
+      },
+      "actual_positive_resume_confirmed": true,
+      "resume_observation_from_wait_s": 0.503268043,
+      "original_budget_preserved": true,
+      "expanded_front_unknown_neutral_allowance_exercised": false,
+      "quality_wait_front_unknown_observed_max": 3,
+      "quality_counts": {
+        "scan_incomplete": 3
+      },
+      "quality_resume_ack_final_current_match": false,
+      "quality_resume_ack_false_is_not_failed_historical_restore": true,
+      "terminal_near_scan": 1977,
+      "terminal_near_point": {
+        "angle_deg": 7,
+        "range_m": 0.229,
+        "forward_x_m": 0.22729306872586275,
+        "left_y_m": -0.027908079639778774,
+        "body_distance_m": 0.027293068725862735,
+        "stop_distance_m": 0.08,
+        "relaxed_turn_left": false
+      },
+      "terminal_body_stop_threshold_m": 0.08,
+      "terminal_current_clearance_quality_issues": [
+        "front_sparse"
+      ],
+      "top_quality_issues_stale_due_body_exception_priority": true,
+      "last_motion_seq": 1976,
+      "last_motion_servo": 1650,
+      "last_motion_target_pwm": 1650,
+      "last_first_target": {
+        "point_left_m": [
+          -0.13710027750264944,
+          0.8208158297343365
+        ],
+        "range_m": 0.8321869456040336,
+        "bearing_left_rad": 1.7362977969557012,
+        "diameter_m": 0.16983867346583653,
+        "point_count": 12,
+        "support_bins": [
+          255,
+          256,
+          257,
+          258,
+          259,
+          260,
+          261,
+          262,
+          263,
+          264,
+          265,
+          266
+        ],
+        "boundary_unknown_bins": [],
+        "boundary_far_returns": [
+          {
+            "index": 254,
+            "range_m": 2.214
+          },
+          {
+            "index": 267,
+            "range_m": 2.819
+          }
+        ],
+        "boundary_gap_projected_span_m": null,
+        "tracking_only_boundary_gap": false,
+        "source_seq": 1976,
+        "source_at_ms": 197358,
+        "source_received_at": 5417.067186568,
+        "confirmed": true,
+        "confirmation_count": 31,
+        "semantic_class": "unknown",
+        "kind": "lidar_compact_object",
+        "track_id": 1,
+        "last_full_isolation_seq": 1976,
+        "last_full_isolation_at_ms": 197358,
+        "last_full_isolation_received_at": 5417.067186568,
+        "candidate_only": true,
+        "physical_identity_verified": false
+      },
+      "first_pass_preparing": false,
+      "first_pass_progress": {
+        "source_seq": 1976,
+        "source_at_ms": 197358,
+        "received_at": 5417.067186568,
+        "center_x_m": -0.13710027750264944,
+        "observed_frontmost_x_m": -0.061804235737295266,
+        "observed_left_body_gap_m": 0.6354854749236546,
+        "command_center_lead_s": 0.9,
+        "relative_x_closing_mps": 0.040303597732641666,
+        "relative_trend_is_vehicle_speed": false,
+        "prepare_condition": false,
+        "body_rear_x_m": -0.18,
+        "physical_steering_confirmed": false
+      },
+      "first_pass_evidence": null,
+      "right_align_entered": false,
+      "corridor_follow_entered": false,
+      "second_target_handover": false,
+      "completed": false,
+      "competition_supported": false,
+      "client_heartbeat": {
+        "requests": 104,
+        "acknowledged": 103,
+        "full_state_reads": 1,
+        "max_request_elapsed_s": 0.08313764800004719,
+        "max_ack_gap_s": 0.12337238899999647,
+        "mode": "heartbeat_first_terminal_state_read"
+      },
+      "max_actual_gap_s": 0.10442961200078571,
+      "max_tick_compute_s": 0.07510851800088858,
+      "terminal_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "operator_stop",
+        "seq": 259,
+        "servo": 1500,
+        "tick": 199151
+      },
+      "terminal_boot": "kaocee1Cwck8rP_XdSqkDg",
+      "terminal_scan": 1993,
+      "six_fresh_locks_verified": true,
+      "all_seven_hashes_verified": true
+    },
+    "timeline": "work/vehicle-dynamic-deploy-20261008/trial37-timeline.json",
+    "analysis_file": "work/vehicle-dynamic-deploy-20261008/trial37-route-analysis.json",
+    "preparation": "work/vehicle-dynamic-deploy-20261008/trial37-preparation.json"
   }
 }
