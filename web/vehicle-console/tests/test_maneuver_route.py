@@ -411,6 +411,132 @@ class ManeuverRouteTests(unittest.TestCase):
             self.assertEqual(len(observed), 1)
             self.assertGreater(observed[0]['point_left_m'][1], 0.)
 
+    def exit_observation(self, motion, seq, *, bearing=97., receipt=None, partial=False,
+                         identity=None, **control):
+        """Inject a full current target / prior handover, not a powered replay."""
+        value = observation(seq, first=bearing, received=receipt)
+        value['corridor_candidates'] = []
+        c = _candidates(value['ranges'])[0]
+        motion.compact_target = {**c, 'track_id': motion.orbit_track_id if identity is None else identity,
+            'confirmed': True, 'source_seq': value['seq'], 'source_at_ms': value['at_ms'],
+            'source_received_at': value['received_at'], 'tracking_only_boundary_gap': partial}
+        adopted = feedback(seq, motion.servo)
+        adopted.update(control)
+        motion._observe_first_pass(value, value['received_at'], adopted)
+        return value
+
+    def test_geometric_exit_prepares_without_corridor_closing_rate_or_rear_pass(self):
+        motion = self.seeded()
+        for seq in (5, 6, 7):
+            self.exit_observation(motion, seq)
+            self.assertFalse(motion.first_pass_preparing)
+        self.exit_observation(motion, 8)
+        self.assertTrue(motion.first_pass_preparing)
+        self.assertFalse(motion.orbit_left_entry_boost)
+        self.assertFalse(motion.first_pass_progress['prediction_prepare_condition'])
+        self.assertTrue(motion.first_pass_progress['geometric_exit_prepare_condition'])
+        self.assertIsNone(motion.first_pass_evidence)
+        self.assertIsNone(motion.right_exit_center_ack)
+        self.assertFalse(motion._result(.8)['route_right_output_authorized'])
+        self.assertEqual(motion.first_exit_prepare_evidence['action'], 'release_left_toward_neutral_only')
+        self.assertFalse(motion.first_exit_prepare_evidence['observed_rear_pass'])
+
+    def test_geometric_exit_default_mode_still_uses_original_predictive_rule(self):
+        motion = self.seeded()
+        motion.continue_route = False
+        for seq in range(5, 12): self.exit_observation(motion, seq)
+        self.assertFalse(motion.first_pass_preparing)
+        self.assertIsNone(motion.first_exit_prepare_evidence)
+
+    def test_geometric_exit_needs_handover_current_ack_and_actual_command(self):
+        for fault in ('handover', 'ack', 'servo', 'motor'):
+            motion = self.seeded()
+            if fault == 'handover': motion.handover_observed = False
+            for seq in range(5, 10):
+                extra = ({'command_acked': False} if fault == 'ack' else
+                         {'servo': 1660} if fault == 'servo' else
+                         {'motor': 1500} if fault == 'motor' else {})
+                self.exit_observation(motion, seq, **extra)
+            self.assertFalse(motion.first_pass_preparing, fault)
+            self.assertIsNone(motion.first_exit_prepare_evidence)
+
+    def test_geometric_exit_window_breaks_on_partial_identity_source_or_stale(self):
+        for fault in ('partial', 'identity', 'source', 'stale'):
+            motion = self.seeded()
+            for seq in (5, 6): self.exit_observation(motion, seq)
+            value = observation(7, first=97.)
+            c = _candidates(value['ranges'])[0]
+            motion.compact_target = {**c, 'track_id': 9 if fault == 'identity' else motion.orbit_track_id,
+                'confirmed': True, 'source_seq': 6 if fault == 'source' else 7,
+                'source_at_ms': 700, 'source_received_at': .7,
+                'tracking_only_boundary_gap': fault == 'partial'}
+            motion._observe_first_pass(value, 1.01 if fault == 'stale' else .7, feedback(7))
+            self.assertEqual(motion._first_exit_prepare_history, [])
+            for seq in (8, 9, 10):
+                self.exit_observation(motion, seq)
+                self.assertFalse(motion.first_pass_preparing)
+            self.exit_observation(motion, 11)
+            self.assertTrue(motion.first_pass_preparing)
+
+    def test_geometric_exit_duplicate_or_short_receive_span_cannot_mature(self):
+        motion = self.seeded()
+        for _ in range(6): self.exit_observation(motion, 5)
+        self.assertFalse(motion.first_pass_preparing)
+        self.assertEqual(len(motion._first_exit_prepare_history), 1)
+        motion = self.seeded()
+        for seq, receipt in ((5, .5), (6, .55), (8, .69)):
+            self.exit_observation(motion, seq, receipt=receipt)
+        self.assertFalse(motion.first_pass_preparing)
+
+    def test_quality_wait_clears_geometric_window_and_latched_prepare_keeps_neutral_limit(self):
+        motion = self.seeded()
+        for seq in (5, 6):
+            value = self.exit_observation(motion, seq)
+            motion.target_tracker.update(value, seq/10)
+        self.assertTrue(motion._first_exit_prepare_history)
+        # Actual tracker still owns seed4; a current same-ID90-degree target
+        # supplies the independent quality-wait entry, not the injected history.
+        self.assertTrue(motion.begin_quality_wait(.7, feedback(7), scan=observation(7)))
+        self.assertEqual(motion._first_exit_prepare_history, [])
+        # Separate integrated sequence verifies the normal controller releases
+        # in bounded steps and never gets right authorization from preparation.
+        motion = self.seeded()
+        outputs = [self.step(motion, seq, first=97.) for seq in range(5, 18)]
+        prepared = [r for r in outputs if r['first_pass_preparing']]
+        self.assertTrue(prepared)
+        self.assertTrue(all(r['servo'] >= 1500 and not r['route_right_output_authorized'] for r in prepared))
+        self.assertTrue(all(r['first_pass_evidence'] is None for r in prepared))
+        for a, b in zip(prepared, prepared[1:]):
+            self.assertGreaterEqual(a['servo']-b['servo'], 0)
+            self.assertLessEqual(a['servo']-b['servo'], 20)
+        self.assertEqual(prepared[-1]['servo'], 1500)
+
+    def test_real37_current_support_prepares_without_fabricating_missing_raw1964(self):
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-37-first-exit-prepare.json').read_text())
+        summaries = fixture['controller_summaries']
+        self.assertEqual([v['controller_scan_seq'] for v in summaries], [1961, 1963, 1964])
+        progress = [v['derived_current_support_progress'] for v in summaries]
+        self.assertTrue(all(v['center_x_m'] <= 0 and v['observed_frontmost_x_m'] <= .20
+                            and v['observed_left_body_gap_m'] >= .08 for v in progress))
+        self.assertGreaterEqual((progress[-1]['source_at_ms']-progress[0]['source_at_ms'])/1000, .25)
+        self.assertGreaterEqual(progress[-1]['received_at']-progress[0]['received_at'], .25)
+        self.assertNotIn(1964, [v['seq'] for v in fixture['raw_frames']])
+        motion = self.seeded()
+        for raw in fixture['raw_frames']:
+            # These are MOCK receipt/ACK/handover values. Raw ranges, sequences
+            # and publication clocks are the actual saved1961/1963/1965 frames.
+            now = raw['at_ms']/1000
+            value = {**raw, 'received_at': now}
+            c = _candidates(value['ranges'])[0]
+            motion.compact_target = {**c, 'track_id': motion.orbit_track_id, 'confirmed': True,
+                'source_seq': raw['seq'], 'source_at_ms': raw['at_ms'], 'source_received_at': now}
+            motion._observe_first_pass(value, now, feedback(raw['seq'], motion.servo))
+        self.assertTrue(motion.first_pass_preparing)
+        self.assertEqual(motion.first_exit_prepare_evidence['source_seq'], 1965)
+        self.assertIsNone(motion.first_pass_evidence)
+        self.assertFalse(motion._result(now)['route_right_output_authorized'])
+        self.assertIn('first_exit_prepare', motion.route_events)
+
 
 if __name__ == '__main__':
     unittest.main()

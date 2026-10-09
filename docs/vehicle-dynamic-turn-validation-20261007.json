@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "37 same682 successfully waited/resumed with actualACK, then circled first obstacle per operator and1977 body2.729cm caused8cm hardstop. No first software pass/right align/second. First-ID exit-preparation never triggered. Operator fully stopped/reset.38 next; investigate observed side/rear first-target geometry to begin steering release separately from final rear-pass ledger, no new correction implemented.",
+  "latest_trial_status": "37 recovered then kept left around first target; first-ID software association remained continuous, second never selected. User fully stopped/reset confirmed.38 geometric neutral preparation implemented and95+23 targeted checks/review passed; not yet deployed.",
   "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -14939,6 +14939,138 @@
     },
     "timeline": "work/vehicle-dynamic-deploy-20261008/trial37-timeline.json",
     "analysis_file": "work/vehicle-dynamic-deploy-20261008/trial37-route-analysis.json",
-    "preparation": "work/vehicle-dynamic-deploy-20261008/trial37-preparation.json"
+    "preparation": "work/vehicle-dynamic-deploy-20261008/trial37-preparation.json",
+    "identity_review": {
+      "runtime_targets_filtered_to_current_run": true,
+      "different_source_samples": 18,
+      "first_id": 1,
+      "first_source_seq": 1945,
+      "last_source_seq": 1976,
+      "count_first_last": [
+        1,
+        31
+      ],
+      "sampled_id_reset_or_reacquisition": false,
+      "partial1954_kept_original_id_with1953_full_lease": true,
+      "max_saved_sample_center_step_m": 0.116607,
+      "max_saved_sample_angle_step_deg": 3.00512,
+      "physical_semantic_identity_not_verified": true,
+      "second_handover_not_started": true,
+      "sparse_unknown_components_not_named_second_cone": [
+        {
+          "seq": 1970,
+          "bins": [
+            50,
+            51,
+            52,
+            53
+          ],
+          "points": 4,
+          "bearing_deg": -51.5,
+          "range_m": 3.0734
+        },
+        {
+          "seq": 1972,
+          "bins": [
+            76,
+            77,
+            78,
+            79
+          ],
+          "points": 4,
+          "bearing_deg": -77.5,
+          "range_m": 2.9602
+        },
+        {
+          "seq": 1974,
+          "bins": [
+            103,
+            104,
+            105,
+            106,
+            107
+          ],
+          "points": 5,
+          "bearing_deg": -105,
+          "range_m": 3.0183
+        },
+        {
+          "seq": 1976,
+          "bins": [
+            130,
+            131,
+            132
+          ],
+          "points": 3,
+          "bearing_deg": -131,
+          "range_m": 3.1997
+        }
+      ],
+      "sparse_support_separation_from_first_m": [
+        3.689,
+        3.734
+      ],
+      "unique_current_forward_corridors": [
+        {
+          "seq": 1968,
+          "heading_deg": -39.297493,
+          "width_m": 1.96948,
+          "offset_m": 0.468415,
+          "body_normal_gap_m": 0.293981
+        },
+        {
+          "seq": 1970,
+          "heading_deg": -61.131353,
+          "width_m": 1.971522,
+          "offset_m": 0.212728,
+          "body_normal_gap_m": 0.547809
+        }
+      ],
+      "saved1960_1961_1963_1965_1972_1974_1976_no_native_corridor": true
+    }
+  },
+  "after37_observed_exit_preparation_correction": {
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 38,
+    "reason": "Relative-x-rate prediction never matured while continuing left near first target, making first-pass-preparing and route continuation unreachable before close wall; no evidence of first ID replaced by a second object.",
+    "scope": "Only continue_route after real first handover; prepare neutral release separately from whole-body rear-pass ledger.",
+    "new_preparation_rule": "Current full original target support, center x<=lidar transverse axis0, frontmost support<=measured body front+.20m, left body gap>=.08m; at least3 strictly fresh frames and both publication/receipt span>=.25s; actual adopted M1560/same commanded servo ACK required before latch.",
+    "action": "Latch first_pass_preparing, turn left-entry boost off; only existing20PWM/100ms left release toward1500. This alone never authorizes right PWM or records first passed.",
+    "preserved": "Original full support behind rear-.18m for first pass; current unique corridor and actual centerACK before right; separate second target proof; all body/quality/heartbeat/control/total and stage deadlines. Default continue_route=false prediction unchanged.",
+    "history": "Freshness/identity/partial failures reset new observation window; quality_wait cannot carry old window into resumed preparation.",
+    "actual37_observed_possible_prepare_interval": {
+      "scan_seqs": [
+        1961,
+        1963,
+        1964
+      ],
+      "publication_span_s": 0.298,
+      "received_span_s": 0.290562,
+      "new_geometric_evidence_matures_at1964": "Only evidence timing, actual command output still requires that decision tick ACK; not a counterfactual trajectory success.",
+      "no_current_corridor_required_for_neutral_preparation": true
+    },
+    "no_fixed_course_coordinate_or_length": true,
+    "operator_stopped_reset_after37_confirmed": true,
+    "fresh_before_deployment": "work/vehicle-dynamic-deploy-20261008/before38-observed-exit-fresh.json",
+    "old14_installed_hashes_match_682bf94": true,
+    "fixture_observation_scope": "Actual controller summary1961/1963/1964 can establish geometric timestamps; full raw1964 not saved. Raw integration fixture uses actual1961/1963/1965 and mocked prior ACK/clock only. No invented1964 ranges or counterfactual physical pass.",
+    "source_sha256": {
+      "web/vehicle-console/maneuver_sequence.py": "ea8f80f4bd83a8b8d607b5cceff61535f4c88d42c2863023ad1725c8cd5912a0",
+      "web/vehicle-console/tests/test_maneuver_route.py": "a0099997c9fe78e73ac411eafa3fbb912f8c163ac62ddf5c1aab91f30753c98f",
+      "web/vehicle-console/tests/fixtures/left-cone-37-first-exit-prepare.json": "59a2c114622ce5738a22d55f89c24a73df780bf3d471555f7df3a426980b1379"
+    },
+    "validation": {
+      "maneuver_methods_total": 95,
+      "old_maneuver_methods": 63,
+      "route_methods": 32,
+      "new_route_methods_this_change": 7,
+      "final_service_route_integration_methods": 23,
+      "python_compile_passed": true,
+      "diff_check": true,
+      "independent_readonly_review": "No blocker; geometry preparation only releases toward neutral, default prediction/rear-pass/right-current-corridor/ACK/second identity/budgets unchanged. Every fixture raw and summary field verified against actual37 saved data.",
+      "physical_effect_not_yet_tested": true
+    }
   }
 }
