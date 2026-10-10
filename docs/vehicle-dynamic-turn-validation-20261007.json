@@ -783,7 +783,7 @@
     }
   ],
   "latest_trial_status": "38 operator still reports circling first cone. New prepare607 and full rear pass613 observed, but no powered centerACK/rightPWM; current corridor missing at613 caused coast,616 body2.675cm hardstop. >6 front unknown neutral wait branch actually exercised598, raw598 absent. User stopped/reset confirmed.39 next; prepare evidence across healthy neutral recovery and100ms ACKed neutral-release timing under implementation.",
-  "latest_user_proposal": "Preserve the basically successful left turn; fix steering release around the transition into real pointcloud target orbit.",
+  "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
     "forward_rectangle_half_width_m": 0.32,
@@ -796,7 +796,7 @@
     "reason_to_retain_net_distance": "recorded lateral lidar clearance0.3087m then0.2681m; latter is about9.8cm beyond the measured tire envelope before range allowance",
     "turn_curvature_or_sweep_certified": false
   },
-  "latest_authorization": "2026-10-09: 已经放回去了，你继续. Operator answered pending post30 placement question and authorized continuation; preserve original start position/heading, no repeated action approval.",
+  "latest_authorization": "2026-10-10 20:47 用户：你修改完后直接上传到车然后开始测试。Claude仍须确认当次静止/摆放事实，helper只执行一次。",
   "entry_approach_fix": {
     "implemented": true,
     "vehicle_deployed": true,
@@ -15681,5 +15681,43 @@
     "remaining_problem": "First cone exit still physically loops back. After body-rear pass, center not ACKed before current native corridor disappeared; missing_hold keeps steering. Current wall-window geometry and continued release toward center require investigation, not yet implemented.",
     "entry": "agent.md top",
     "preserve_original_straight_version": "8efc47b6e83874f08ab8c4437d029246577bc282"
+  },
+  "after39_claude_correction": {
+    "author": "Claude (handoff from Codex), round40 candidate",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 40,
+    "analysis_scope": "Offline only: actual 37/38/39 raw scans were chained by scan matching and replayed through a coarse kinematic model to compare options. Neither the reconstructed course nor the model is used by the controller; no course coordinate, length or angle enters code.",
+    "finding": {
+      "common_pattern_37_38_39": "scan_incomplete quality_wait began as the first target came beside the car; the wait held the adopted left 1678..1705 while the car kept coasting and rotating; after resume the 20 PWM/100 ms release took about 1 s to reach neutral, adding roughly 60..90 deg of orbit before any right command; 39 then held residual left when the native corridor fit vanished at 489.",
+      "native_corridor_gap": "the whole-sector native fit rejects frames where the tracked first target or a board end sits inside one side sector, while the same frame still contains two parallel native wall windows (39: 489; 38: 599, 603).",
+      "not_inferred": "No claim that 39 confused the second cone with the first; first ID stayed 1. No claim of speed, pose or wheel angle from the offline reconstruction."
+    },
+    "change": {
+      "scope": "Explicit turn-cone --continue-route only; default mode and turn-left unchanged.",
+      "drive_exit_prepare": "Same existing geometric condition (current full same-ID support frontmost <= measured body front .20 m and left body gap >= .08 m, actual M1560 command ACK) now latches after two strictly fresh consecutive frames instead of three frames over .25 s. Release-only; rear-pass ledger, corridor, center ACK and right authorization unchanged.",
+      "quality_wait_release": "In the single neutral quality_wait, after an actual neutral ACK, two strictly fresh frames of the same full isolated first-target support at the body front (or a release already latched before the wait) decide a release-only intention. The held wait servo then steps toward 1500 (never below) only after the previous step is ACKed; the bridge may report the immediately previous step only while that newer command is un-ACKed. Resume is requested only on an ACKed unchanged command and its first powered output still holds that command; after resume ACK first_pass_preparing is latched.",
+      "route_exit_release_step": "ROUTE_EXIT_RELEASE_PWM_STEP=40 per 100 ms for reducing left only in continue_route exit release (latched prepare, right_exit release, wait release). Generic left release stays 20; increase-left and right steps stay 10; no catch-up.",
+      "right_exit_missing": "Missing current corridor inside its existing lease now releases left toward neutral instead of holding residual left. Before any corridor, only the actual first-pass frame provides that same SCAN_AGE lease and only while steering is still left. Missing geometry never authorizes right; lease expiry still coasts.",
+      "wall_window_pair_fallback": "When the native corridor list has no forward candidate, pair same-frame native wall_candidates: forward-oriented windows on opposite sides, parallel <=12 deg, width .65..2.5 m, shared projected support >=.35 m (corridor.rs gates); windows of the same boards merge within 12 deg / width max(.15,10%) / offset .15 m; any second axis is ambiguous. Native candidates, when present, are used exactly as before. Existing identity, validity and lateral-margin checks apply.",
+      "service": "server.py accepts the held wait servo or the immediately previous release step only while the newer command sequence is un-ACKed; held wait servo may reach 1500; resume ACK still requires the exact held servo."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 48, test_route_control 23, test_maneuver_sequence 63: 134 passed",
+      "pre_existing_failures_unchanged": "test_turn_control/test_turn_quality_coast/test_coast_control show the same 27 failures with and without this change in the Linux Python 3.13 sandbox; not caused by this change and not re-investigated per operator preference against extra offline suites.",
+      "real39_fixture": "web/vehicle-console/tests/fixtures/left-cone-39-exit-release-pairs.json (actual saved 466..489, source sha256 149c070301d36a7e90d77a94a71878cfc2e7cc3a518169d95bafabc8e977d858); receipts/ACKs/wait entry mocked; command decisions only.",
+      "real39_replay_result": "with mocked ACKs and a wait entered on saved 474, release is decided at 476 (474/476 body-front supports) and steps down inside the wait; actual 39 still held 1694 until 479.",
+      "pairing_vs_native": "trial39 482/484/486 paired headings within 2 deg of native; 489 native empty -> one pair at about -83 deg; 478 still missing.",
+      "physical_effect_not_yet_tested": true
+    },
+    "risks_not_resolved": [
+      "Earlier release can leave the car on the outer side of the first target; second-target role acquisition then depends on later corridor_follow geometry.",
+      "Vehicle still coasts fast in neutral; 1500 is not a stop.",
+      "Right steps remain 10 per 100 ms."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false
   }
 }

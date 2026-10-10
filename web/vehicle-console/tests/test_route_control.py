@@ -19,8 +19,18 @@ class RouteControlTests(unittest.TestCase):
     observe = base.TurnControlTests.observe
     start_compact_trial = base.TurnControlTests.start_compact_trial
     drive_compact_trial = base.TurnControlTests.drive_compact_trial
-    compact_scan = base.TurnControlTests.compact_scan
     enter_compact_orbit = base.TurnControlTests.enter_compact_orbit
+    # Wait/resume mechanics below keep the synthetic target ahead of the
+    # measured body front (about 80 deg, frontmost ~.24 m), so the trial40
+    # release-only branch stays inactive unless a test moves it abeam.
+    target_bins = slice(276, 285)
+
+    def compact_scan(self, seq, observed=True, distance=1.):
+        value = self.scan(seq)
+        value['ranges'] = [3.]*360
+        if observed:
+            value['ranges'][self.target_bins] = [distance]*9
+        return value
 
     def incomplete(self, seq, front_gap=0):
         value = self.compact_scan(seq)
@@ -369,7 +379,7 @@ class RouteControlTests(unittest.TestCase):
                 self.wait()
                 value = self.compact_scan(self.console.scan['seq']+1,
                     observed=fault != 'missing', distance=2. if fault == 'changed' else 1.)
-                if fault == 'partial': value['ranges'][265] = None
+                if fault == 'partial': value['ranges'][self.target_bins.start-1] = None
                 before = len(self.outputs)
                 self.observe(round(self.now+.1, 6), value)
                 self.assertIsNone(self.console.auto_session)

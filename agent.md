@@ -1,18 +1,16 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-10整理；第39轮后用户明确暂停；下一轮40）
+## 当前接手入口（2026-10-10 Claude第40轮；用户已恢复并授权“修改完后直接上传到车然后开始测试”）
 
-**用户第39轮反馈“还是和上次一样，先暂停吧”，并确认当时已完全静止复位。第一桶后的回转仍未解决，completed=false；碰撞有无未单独回答。第39轮已于2026-10-09部署并运行，车端最后核验源码为eb2f4e0，不是待部署。现在只完成Claude接手记录，暂停继续有效，不自动上传或发动力；等用户明确恢复后再继续。昨日复位事实不能冒充今日现场状态。**
+**2026-10-10 20:40用户恢复，20:47明确“你修改完后直接上传到车然后开始测试”，20:54要求“不要对这个赛道硬编码”。Claude已实现第40轮候选（机器记录 `after39_claude_correction`，implemented=true、deployed=false、physical_trial_executed=false，以记录为准）。车端最后核验仍为39的eb2f4e0，直到新的部署结果和新鲜反馈另行证明。执行前仍须确认当次静止/摆放事实，helper只跑一次。**
 
-- 已部署 `eb2f4e0034a894859e379fab29c1bead12e2f4b9`；部署记录 `work/vehicle-dynamic-deploy-20261008/recovery-exit-timing-deployment-result.json`，包记录同目录 `recovery-exit-timing-package.json`。14安装哈希、6份新鲜锁定反馈、实际设置核对通过；Rust桥SHA256仍为 `199f42039ce21af03421626257040611c12ec30511c1d53aaa596681aefc0cf9`。旧38整套保存在车端 `backup-recovery-exit-timing-20261009-211326`。手动1550/1450/1650/1350、模型、私有配置和启动入口保留。
-- 39代码修正：仅continue_route模式，在全质量、实际中性ACK、同ID完整新鲜支撑下重建准备窗；原恢复首输出及实际ACK当次仍保舵，下一机会减左。全部支撑越车头+.20m、侧8cm即可准备，不再另等质心越原点；已准备且上一实际命令ACK时重复新鲜扫描允许原20PWM/100ms单步减左。重复扫描不增加观测/过尾账本、不授权向右；126项相关检查与独立复核通过，但现场未通过。
-- 39在473因scan_incomplete进入quality_wait保1694；475..478全质量新窗成熟，478请求恢复，479实际M1560/S1694 ACK seq132/tick47959并锁存提前减左。新等待证据衔接确实生效，仍不能据此称整段成功。
-- 486原ID1全部支撑最前x=-.2403295m越rear-.18，取得首通过账本，实际ACK仍S1574。486/487/488有当前通道，方向约-68.735/-74.385/-78.962°；与38在首通过当帧即无通道不同。
-- 489原始360有效点、22个墙候选，但native corridor为空；进入right_exit_corridor_missing_hold，控制器请求保1534，不再继续减左，回中ACK为空、未授权右舵。1534为控制器决策，不能凭此声称已采到实际采用。490近距快照记录6°返回.229m、车身前净距.0277455m，触发8cm硬停；完整raw490未采到（raw489后为491）。不是心跳/预算超时，也不是先进入终止coast。
-- 首目标仍原ID1，未进入第二独立目标获取；不能把现象断言为第二桶被误认回第一桶。未进入corridor_follow，无实际回中/向右完成证据，最终1500来自硬停。39全部7原始文件哈希及最终6fresh锁定已核；用户反馈仍失败，现场静止依用户确认，不是软件实测停稳。
-- 恢复后待分析：通道缺失时保持残余左舵与过尾后回中时序；当前原生墙窗是否能提供唯一通道。38已发现同帧墙窗和整扇区通道拟合不一致；39未完成墙窗配对复算，任何新修正都尚未实现。不能用旧通道充当前、不能放宽身份账本或采用赛道坐标/固定长度。
-- 显式 `turn-cone --continue-route`；一次有界quality_wait中实际中性ACK后至少324实际有效返回，恢复仍须原动力质量、同ID/full、≥3帧发布/实收均≥300ms及实际ACK。旧coast/硬停不恢复，原累计10s/首入口3s等预算不刷新。PWM非实测轮角，中性非瞬停。
-- 原始39在 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-39/`，车端同名目录位于base下；本机 `trial39-remote-sha256.txt`、`trial39-stdout.json`、`recovery-exit-timing-installed39-fresh.json` 均保留。详细事实与部署见机器记录 `turn39_actual`、`after38_recovery_exit_timing_correction`、`handoff_prepared_20261010`。
+- 39根因（离线复盘37/38/39原始扫描，仅分析，不进代码）：首目标刚到车身侧前方时恰遇scan_incomplete进入中性等待，等待期间保持1678..1705左舵而车仍高速滑行继续绕；恢复后减左20PWM/100ms约1s才回中，又多绕约60..90°；39在489整扇区通道拟合为空时还保持残余左舵，最终车头对挡板触发8cm硬停。首目标ID始终为1，不能说成误认第二桶。
+- 40修正（仅显式 `--continue-route`）：①现有车头线几何条件（同ID完整支撑最前≤车头.20m、侧≥8cm、实际M1560 ACK）改为连续2帧新鲜即锁存减左，不再3帧/.25s；②中性等待内实际中性ACK后，同一完整孤立支撑连续2帧到车头线（或等待前已锁存）即决定只减左，等待舵量在前一步ACK后才逐步回向1500、绝不越中；恢复请求只在舵量已ACK且不变时发出，首个动力输出仍保持该舵量；③路线退出阶段减左每100ms 40（通用减左仍20，加左/向右仍10，不补跳）；④通道缺失在原租约内改为回中而非保持左舵，首次通道出现前只借首过尾帧本身的300ms租约，缺几何绝不授权右舵；⑤原生通道无前向候选时，用同帧原生墙段配对（平行≤12°、宽.65..2.5m、共同支撑≥.35m，沿用corridor.rs门槛；多轴即歧义）。不含赛道坐标、长度、角度或时间猜拐点。
+- server.py：等待舵量允许到1500；桥在新减左命令未ACK期间仍报告前一步时视为同一等待，其余任何舵量变化仍锁定；恢复ACK仍须精确等于保持舵量。
+- 验证：test_maneuver_route 48、test_route_control 23、test_maneuver_sequence 63共134项通过；真实39保存帧466..489 fixture（源sha 149c07…）显示等待内476即决定减左（39实际保持1694到479），482/484/486墙段配对与原生通道差<2°，489原生为空时配对得约-83°；test_turn_control等三组在本改动前后同为27项失败（沙箱既有，不属本改动）。未跑额外全套。
+- 未解决风险：更早回舵可能使车停在第一桶外侧，第二目标角色获取取决于后续通道跟随；中性滑行仍快，1500不是停车；向右仍10/100ms。
+- 部署按 `work/vehicle-dynamic-deploy-20261008/` 现有流程：旧包标签 `recovery-exit-timing`、新包标签 `claude-turn40`、记录键 `after39_claude_correction`；`deploy-recovery-exit-timing.py` 是38→39旧脚本，不得重跑或删OLD校验。Rust未改，复用匹配桥。
+- 39详细事实：机器记录 `turn39_actual`、`after38_recovery_exit_timing_correction`、`handoff_prepared_20261010`；原始39在 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-39/`。
 
 ## 当前控制参数
 
@@ -42,7 +40,7 @@
 2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至39在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35,36,37,38,39}/`。原helper/摘要/完整记录均保留；车端原目录在base下。
 3. 旧完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`。19至30部署及逐帧分析在`work/vehicle-dynamic-deploy-20261008/`；29为`target-evidence-deployment-result.json`，stage为base下`stage-target-evidence-20261008-212120`。
 4. 18分析仍在旧目录`trial18-analysis.json`/`trial18-target-components.json`，回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。18的最终drive/orbit计数含coast；区分各自scan序号、PWM/物理轮角、计数器/动力时长。
-5. 下一轮**40**，但用户第39轮后明确暂停。先交接，不自动恢复动力；用户恢复后再读取新鲜锁定反馈并确认必要现场事实，不覆盖旧轮。
+5. 第40轮已获用户授权（修改后上传并测试）；执行前读取新鲜锁定反馈并确认必要现场事实，helper只执行一次，不覆盖旧轮。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署

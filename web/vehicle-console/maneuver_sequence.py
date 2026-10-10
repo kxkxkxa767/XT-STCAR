@@ -30,6 +30,23 @@ MAX_INNER_RELEASE_FRACTION = .20
 MAX_EXIT_WIDTH_CHANGE_FRACTION = .10
 RIGHT_EXIT_MIN_PWM = 1350  # Existing manual right bound; no measured curvature implied.
 RIGHT_EXIT_MAX_S = 3.0
+# Explicit continue_route only: once the current first-target support is back
+# at the measured body front, every further left step only extends the orbit.
+# Release toward neutral (never past it) faster than the generic 20 PWM step.
+# Rightward steps and every other phase keep their existing limits.
+ROUTE_EXIT_RELEASE_PWM_STEP = 40
+# Consecutive strictly fresh full-support frames for the body-front release.
+ROUTE_EXIT_PREPARE_FRAMES = 2
+# Same-frame native wall-window pairing reuses the native corridor gates
+# (corridor.rs): parallel 12 deg, width .65..2.5 m, shared support .35 m.
+PAIR_MAX_ANGLE_RAD = math.radians(12)
+PAIR_MIN_WIDTH_M, PAIR_MAX_WIDTH_M = .65, 2.5
+PAIR_MIN_SHARED_SUPPORT_M = .35
+# Several windows of the same two physical boards differ by a few degrees
+# (trial39 scan480: 6 deg). The merge tolerance reuses the parallel gate; a
+# different physical axis (corner/T) differs far more and stays ambiguous.
+PAIR_MERGE_HEADING_RAD = PAIR_MAX_ANGLE_RAD
+PAIR_MERGE_OFFSET_M = .15
 
 
 def validate_maneuver_initial_pwm(value):
@@ -97,6 +114,11 @@ class ManeuverSequence(TurnMotion):
         self._first_pass_history = []
         self._first_exit_prepare_history = []
         self._quality_exit_prepare_ready = False
+        # Neutral-wait release: decided from current full first-target support
+        # (or a release already latched before the wait). Release only.
+        self.quality_wait_release = None
+        self.quality_wait_previous_servo = None
+        self._wait_release_history = []
         self.first_exit_prepare_evidence = None
         self.right_exit_since = None
         self.right_exit_center_ack = None
@@ -171,15 +193,97 @@ class ManeuverSequence(TurnMotion):
         return (len(history) >= 3 and (row[1]-history[0][1])/1000+1e-9 >= duration
                 and row[2]-history[0][2]+1e-9 >= duration)
 
+    @staticmethod
+    def _consecutive_fresh(history, scan, count=ROUTE_EXIT_PREPARE_FRAMES):
+        """Same freshness/ordering resets as _mature_observation, frame count only.
+
+        A repeated scan never counts twice; a gap or clock mismatch restarts.
+        """
+        row = (scan['seq'], scan['at_ms'], scan['received_at'])
+        if history and row[0] == history[-1][0]:
+            return len(history) >= count
+        if history and (row[0] <= history[-1][0] or row[1] <= history[-1][1]
+                        or row[2] <= history[-1][2]
+                        or (row[1]-history[-1][1])/1000 >= SCAN_AGE_S
+                        or row[2]-history[-1][2] >= SCAN_AGE_S
+                        or abs((row[1]-history[-1][1])/1000-(row[2]-history[-1][2])) > .15):
+            history.clear()
+        history.append(row)
+        del history[:-6]
+        return len(history) >= count
+
+    def _route_exit_release_active(self):
+        return (self.continue_route and self.handover_observed
+                and ((self.phase == 'drive' and (self.first_pass_preparing
+                                                 or self.first_pass_evidence is not None))
+                     or (self.phase == 'quality_wait' and self.quality_wait_release is not None)))
+
+    @staticmethod
+    def _paired_window_corridor(scan):
+        """Pair same-frame native wall windows into one forward corridor.
+
+        Only current native windows are used; nothing is cached or extended.
+        Gates mirror corridor.rs. Two distinct axes are ambiguous (None, True).
+        Returns (candidate | None, ambiguous).
+        """
+        walls = scan.get('wall_candidates')
+        if not isinstance(walls, list) or len(walls) > 64:
+            return None, False
+        forward = [w for w in walls if _valid_wall(w) and abs(w['heading_left_rad']) < math.pi/2]
+        pairs = []
+        for left in forward:
+            if left['rho_left_m'] <= 0:
+                continue
+            for right in forward:
+                if right['rho_left_m'] >= 0:
+                    continue
+                difference = _wrap(left['heading_left_rad']-right['heading_left_rad'])
+                if abs(difference) > PAIR_MAX_ANGLE_RAD:
+                    continue
+                heading = _wrap(right['heading_left_rad']+difference/2)
+                if abs(heading) >= math.pi/2:
+                    continue
+                c, s = math.cos(heading), math.sin(heading)
+                ends = {}
+                for name, wall in (('left', left), ('right', right)):
+                    points = [wall['support_start_left_m'], wall['support_end_left_m']]
+                    normal = [-s*p['x_m']+c*p['y_m'] for p in points]
+                    along = [c*p['x_m']+s*p['y_m'] for p in points]
+                    ends[name] = (sum(normal)/2, min(along), max(along))
+                width = ends['left'][0]-ends['right'][0]
+                shared = min(ends['left'][2], ends['right'][2])-max(ends['left'][1], ends['right'][1])
+                if (not ends['left'][0] > 0 > ends['right'][0]
+                        or not PAIR_MIN_WIDTH_M <= width <= PAIR_MAX_WIDTH_M
+                        or shared < PAIR_MIN_SHARED_SUPPORT_M):
+                    continue
+                pairs.append({'heading_left_rad': heading,
+                    'center_offset_left_m': (ends['left'][0]+ends['right'][0])/2,
+                    'width_m': width, 'left_wall_points': left['points'],
+                    'right_wall_points': right['points'], 'support_span_m': shared,
+                    'fit_error_m': max(left['fit_error_m'], right['fit_error_m']),
+                    'origin_between_walls': True, 'candidate_only': True,
+                    'turn_path_certified': False})
+        if not pairs:
+            return None, False
+        base = max(pairs, key=lambda p: p['support_span_m'])
+        for p in pairs:
+            # Several windows of the same two physical walls merge; any other
+            # axis/width/offset is a second interpretation, never a choice.
+            if (abs(_wrap(p['heading_left_rad']-base['heading_left_rad'])) > PAIR_MERGE_HEADING_RAD
+                    or abs(p['width_m']-base['width_m']) > max(.15, MAX_EXIT_WIDTH_CHANGE_FRACTION*base['width_m'])
+                    or abs(p['center_offset_left_m']-base['center_offset_left_m']) > PAIR_MERGE_OFFSET_M):
+                return None, True
+        return {**base, 'source_kind': 'native_wall_window_pair', 'pair_count': len(pairs)}, False
+
     def _clear_exit_prepare_window(self):
         self._first_exit_prepare_history.clear()
         self._quality_exit_prepare_ready = False
 
-    def _latch_exit_prepare(self, scan, control, *, basis):
+    def _latch_exit_prepare(self, scan, control, *, basis, history=None):
         points = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
-        if points is None or not self._first_exit_prepare_history:
+        history = self._first_exit_prepare_history if history is None else history
+        if points is None or not history:
             return
-        history = self._first_exit_prepare_history
         self.first_pass_preparing = True
         self.orbit_left_entry_boost = False
         self.first_exit_prepare_evidence = {
@@ -227,6 +331,15 @@ class ManeuverSequence(TurnMotion):
         self._quality_pass_history.clear()
         self._first_pass_history.clear()
         self._clear_exit_prepare_window()
+        self._wait_release_history.clear()
+        self.quality_wait_previous_servo = None
+        # A release decided from healthy drive frames before this wait stays a
+        # release-only intention; it never carries observation windows.
+        self.quality_wait_release = ({'basis': 'release_latched_before_neutral_wait',
+                                      'source_seq': self.first_exit_prepare_evidence.get('source_seq')
+                                      if isinstance(self.first_exit_prepare_evidence, dict) else None,
+                                      'held_servo_at_entry': self.servo}
+                                     if self.first_pass_preparing else None)
         self.first_pass_preparing = False
         self.phase, self.reason = 'quality_wait', 'route_quality_wait_neutral'
         self.steering_target = self.servo
@@ -240,7 +353,15 @@ class ManeuverSequence(TurnMotion):
                 or now-self.orbit_since >= ORBIT_ENTRY_MAX_S):
             self.lock('route_quality_wait_original_budget_expired')
             return self._result(now)
-        if (control.get('servo') != self.quality_wait_servo
+        servo_feedback = control.get('servo')
+        if servo_feedback == self.quality_wait_servo:
+            self.quality_wait_previous_servo = None
+        # Only the immediately preceding release step may still be reported
+        # while its command is not yet ACKed; nothing else may change steering.
+        pending_release = (self.quality_wait_previous_servo is not None
+                           and servo_feedback == self.quality_wait_previous_servo
+                           and control.get('command_acked') is False)
+        if ((servo_feedback != self.quality_wait_servo and not pending_release)
                 or control.get('motor') not in (NEUTRAL, TRIAL_MOTOR)
                 or (control.get('neutral_acked') is True and control['motor'] != NEUTRAL)):
             self.lock('route_quality_wait_feedback_changed')
@@ -257,9 +378,41 @@ class ManeuverSequence(TurnMotion):
         if quality_clear is not True or not neutral:
             self._clear_exit_prepare_window()
             self._quality_good_history.clear()
-        if not advancing:
-            return self._result(now)
         front, side = max(p[0] for p in points), min(p[1] for p in points)-SIDE_BODY_EXTENT_M
+        # Release-only decision in the neutral wait. Degraded scan quality does
+        # not hide this complete, isolated same-ID support; it never advances a
+        # pass, authorizes right steering or restores motor power.
+        if advancing and neutral and self.quality_wait_release is None:
+            if front <= FRONT_BODY_EXTENT_M and side >= MANEUVER_BODY_CLEARANCE_M:
+                if self._consecutive_fresh(self._wait_release_history, scan):
+                    self.quality_wait_release = {'basis': 'neutral_wait_current_support_at_body_front',
+                        'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                        'received_at': scan['received_at'], 'track_id': self.orbit_track_id,
+                        'observed_frontmost_x_m': front, 'observed_left_body_gap_m': side,
+                        'observation_count': len(self._wait_release_history),
+                        'first_source_seq': self._wait_release_history[0][0],
+                        'held_servo_at_decision': self.quality_wait_servo,
+                        'action': 'release_left_toward_neutral_only',
+                        'right_steering_authorized': False, 'physical_cone_pass_certified': False}
+                    self._route_event('quality_wait_release', scan, control, self.quality_wait_release)
+            else:
+                self._wait_release_history.clear()
+        def hold():
+            # A release step is issued only on ticks that do not request the
+            # powered resume, so that output always holds an ACKed command.
+            if (self.phase == 'quality_wait' and self.quality_wait_release is not None and neutral
+                    and servo_feedback == self.quality_wait_servo and self.servo > NEUTRAL):
+                before = self.servo
+                self.steering_target = NEUTRAL
+                self._slew(now)
+                if self.servo != before:
+                    self.quality_wait_previous_servo = before
+                    self.quality_wait_servo = self.servo
+                    self.reason = 'route_quality_wait_neutral_release_left'
+                self.steering_target = self.quality_wait_servo
+            return self._result(now)
+        if not advancing:
+            return hold()
         passed = front <= -REAR_BODY_EXTENT_M and side >= MANEUVER_BODY_CLEARANCE_M
         if passed:
             pass_ready = self._mature_observation(self._quality_pass_history, scan, .25)
@@ -267,7 +420,7 @@ class ManeuverSequence(TurnMotion):
             self._quality_pass_history.clear()
             pass_ready = False
         if quality_clear is not True or not neutral:
-            return self._result(now)
+            return hold()
         # Rebuild only from NEW, fully healthy observations in this neutral
         # wait. No pre-wait window or degraded frame can mature the intention.
         if front <= FRONT_BODY_EXTENT_M and side >= MANEUVER_BODY_CLEARANCE_M:
@@ -276,11 +429,13 @@ class ManeuverSequence(TurnMotion):
         else:
             self._clear_exit_prepare_window()
         good = self._mature_observation(self._quality_good_history, scan, .30)
-        if not good or resume_ready is not True:
-            return self._result(now)
+        if (not good or resume_ready is not True
+                or servo_feedback != self.quality_wait_servo or self.quality_wait_previous_servo is not None):
+            # Resume only on an ACKed, unchanged neutral-wait steering command.
+            return hold()
         if passed:
             if not pass_ready:
-                return self._result(now)
+                return hold()
             _, rejection = self._right_exit_target(scan, now)
             if rejection is not None:
                 self.lock('route_quality_wait_pass_corridor_unavailable')
@@ -585,7 +740,8 @@ class ManeuverSequence(TurnMotion):
             target = self.steering_target
             reducing_left = self.servo > NEUTRAL and target < self.servo
             step = PRESTEER_PWM_STEP if self.phase == 'presteer' else (
-                LEFT_RELEASE_PWM_STEP if reducing_left else PWM_STEP)
+                (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
+                if reducing_left else PWM_STEP)
             if reducing_left and target < NEUTRAL:
                 target = NEUTRAL  # First release to center; a later right step stays at 10.
             delta = max(-step, min(step, target-self.servo))
@@ -672,7 +828,9 @@ class ManeuverSequence(TurnMotion):
                       presteer_max_s=self.max_presteer_s,
                       left_turn_servo_cap=SERVO_MAX,
                       steering_step_policy={'presteer': PRESTEER_PWM_STEP,
-                          'reduce_left': LEFT_RELEASE_PWM_STEP, 'increase_left': PWM_STEP,
+                          'reduce_left': LEFT_RELEASE_PWM_STEP,
+                          'route_exit_reduce_left': ROUTE_EXIT_RELEASE_PWM_STEP if self.continue_route else None,
+                          'increase_left': PWM_STEP,
                           'center_to_right': PWM_STEP, 'interval_s': PWM_INTERVAL_S},
                       object_semantic_verified=False, passed_cones=None,
                       competition_supported=False, completed=False,
@@ -693,6 +851,8 @@ class ManeuverSequence(TurnMotion):
             quality_wait_used=self.quality_wait_used,
             quality_wait_evidence=copy.deepcopy(self.quality_wait_evidence),
             quality_resume_pending=self.quality_resume_pending,
+            quality_wait_release=copy.deepcopy(self.quality_wait_release),
+            quality_wait_previous_servo=self.quality_wait_previous_servo,
             route_alignment_evidence=copy.deepcopy(self.route_alignment_evidence),
             second_target=copy.deepcopy(self.second_target),
             second_center_ack=copy.deepcopy(self.second_center_ack),
@@ -816,7 +976,10 @@ class ManeuverSequence(TurnMotion):
                     and front <= FRONT_BODY_EXTENT_M
                     and side >= MANEUVER_BODY_CLEARANCE_M)
         if eligible:
-            geometric_ready = self._mature_observation(self._first_exit_prepare_history, scan, .25)
+            # Trial37..39: three frames over .25 s plus the 20 PWM release let the
+            # orbit continue far past the target. Two strictly fresh current
+            # full-support frames are required now; still release-only.
+            geometric_ready = self._consecutive_fresh(self._first_exit_prepare_history, scan)
         else:
             self._clear_exit_prepare_window()
         geometric_prepare = geometric_ready and adopted
@@ -854,9 +1017,21 @@ class ManeuverSequence(TurnMotion):
                        for c in values)):
             return None, 'right_exit_invalid_corridor'
         forward = [c for c in values if -math.pi/2 < c['heading_left_rad'] < math.pi/2]
-        if len(forward) != 1:
-            return None, 'right_exit_corridor_ambiguous' if forward else 'right_exit_corridor_missing'
-        c = forward[0]
+        if len(forward) > 1:
+            return None, 'right_exit_corridor_ambiguous'
+        if forward:
+            c = {**forward[0], 'source_kind': 'native_corridor'}
+        elif self.continue_route:
+            # A nearby compact object or a wall that ends inside one side
+            # sector can defeat the whole-sector fit while the same frame still
+            # holds two parallel native wall windows (trials38/39).
+            c, ambiguous = self._paired_window_corridor(scan)
+            if ambiguous:
+                return None, 'right_exit_corridor_ambiguous'
+            if c is None or not _valid_candidate(c, lateral_margin=SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M):
+                return None, 'right_exit_corridor_missing'
+        else:
+            return None, 'right_exit_corridor_missing'
         previous = self.right_exit_geometry
         if previous is not None:
             # Bound each new corridor against the preceding real observation.
@@ -925,11 +1100,25 @@ class ManeuverSequence(TurnMotion):
         if target is None:
             # Missing geometry only retains an already selected command under
             # its original observation lease; it cannot advance a right turn.
+            lease_receive, lease_publication = self._right_exit_last_receive, self._right_exit_last_publication
+            if (lease_receive is None and self.continue_route and self.servo > NEUTRAL
+                    and isinstance(self.first_pass_evidence, dict)):
+                # Before any corridor: only the actual first-pass frame's own
+                # lease, and only to keep releasing toward neutral.
+                lease_receive = self.first_pass_evidence.get('received_at')
+                lease_publication = self.first_pass_evidence.get('source_at_ms')
             held = (rejection == 'right_exit_corridor_missing'
-                    and self._right_exit_last_receive is not None
-                    and now-self._right_exit_last_receive < SCAN_AGE_S
-                    and (scan['at_ms']-self._right_exit_last_publication)/1000 < SCAN_AGE_S)
-            if held:
+                    and _number(lease_receive) and _number(lease_publication)
+                    and now-lease_receive < SCAN_AGE_S
+                    and (scan['at_ms']-lease_publication)/1000 < SCAN_AGE_S)
+            if held and self.continue_route and self.servo > NEUTRAL:
+                # Trial39 489: holding residual left while the corridor was
+                # missing continued the orbit. Release toward neutral only;
+                # missing geometry still never authorizes a right command.
+                self.steering_target = NEUTRAL
+                self.reason = 'right_exit_corridor_missing_release_left'
+                self._slew(now)
+            elif held:
                 self.steering_target = self.servo
                 self.reason = 'right_exit_corridor_missing_hold'
             else:
@@ -1392,6 +1581,16 @@ class ManeuverSequence(TurnMotion):
                     self._latch_exit_prepare(scan, control,
                         basis='healthy_neutral_wait_body_front_support_rechecked_at_resume_ack')
                     self._quality_exit_prepare_ready = False
+                if self.quality_wait_release is not None and self.first_pass_evidence is None:
+                    # The wait already released left; resumed power must not
+                    # restart the orbit demand. Release-only, no right PWM.
+                    if not self.first_pass_preparing:
+                        self._latch_exit_prepare(scan, control,
+                            basis='neutral_wait_release_continued_at_resume_ack',
+                            history=self._wait_release_history or [(scan['seq'], scan['at_ms'],
+                                                                    scan['received_at'])])
+                    self.first_pass_preparing = True
+                    self.orbit_left_entry_boost = False
             elif now-self.quality_resume_since >= SCAN_AGE_S:
                 self.lock('route_quality_resume_ack_timeout')
             else:

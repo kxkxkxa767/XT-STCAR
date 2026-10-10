@@ -1056,8 +1056,8 @@ class Console:
                 or type(clearance.get('scan_seq')) is not int or clearance['scan_seq'] != scan['seq']
                 or set(clearance.get('quality_issues', [])) != issues
                 or not issues <= {'scan_incomplete', 'front_sparse'}
-                or type(held) is not int or not 1500 < held <= SERVO_MAX
-                or control.get('armed') is not True or control.get('servo') != held
+                or type(held) is not int or not 1500 <= held <= SERVO_MAX
+                or control.get('armed') is not True or not self.turn_wait_servo_matches(session, control)
                 or control.get('seq', -1) < self.arm_sequence):
             return False
         neutral_ack = (type(neutral_seq) is int and control.get('seq', -1) >= neutral_seq
@@ -1086,13 +1086,29 @@ class Console:
                 return False
         return True
 
+    def turn_wait_servo_matches(self, session, control):
+        """Actual servo equals the held wait command, or the one release step
+        before it while that newer command is still un-ACKed (release only)."""
+        motion = session.get('turn_motion')
+        held = getattr(motion, 'quality_wait_servo', None)
+        previous = getattr(motion, 'quality_wait_previous_servo', None)
+        pending_seq = session.get('turn_servo_sequence')
+        servo = control.get('servo')
+        if type(held) is not int or type(servo) is not int:
+            return False
+        if servo == held:
+            return True
+        return (type(previous) is int and servo == previous and previous > held >= 1500
+                and getattr(motion, 'quality_wait_release', None) is not None
+                and type(pending_seq) is int and type(control.get('seq')) is int
+                and control['seq'] < pending_seq)
+
     def turn_route_control(self, session, control):
         """Derive adoption from the current bridge feedback, never report flags."""
-        held = getattr(session['turn_motion'], 'quality_wait_servo', None)
         neutral_seq = session.get('quality_wait_neutral_sequence')
         resume_seq = session.get('quality_resume_sequence')
         current = (control.get('armed') is True and type(control.get('seq')) is int
-                   and control['seq'] >= self.arm_sequence and control.get('servo') == held)
+                   and control['seq'] >= self.arm_sequence and self.turn_wait_servo_matches(session, control))
         return {**control,
                 'neutral_acked': bool(current and type(neutral_seq) is int
                                       and control['seq'] >= neutral_seq and control.get('motor') == 1500),

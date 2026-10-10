@@ -32,12 +32,24 @@ def feedback(seq, servo=1670, motor=1560, **extra):
 
 
 class ManeuverRouteTests(unittest.TestCase):
+    # Default synthetic target is exactly abeam (at the measured body front).
+    # Wait/resume mechanics tests that must not trigger the trial40 release use
+    # HOLD_BEARING, whose current support stays ahead of the body front.
+    HOLD_BEARING = 80.
+
+    def setUp(self):
+        self.bearing = 90.
+
+    def edge(self):
+        # Range bin just outside the synthetic support (partial boundary).
+        return (round(-self.bearing) % 360)-5
+
     def seeded(self, *, servo=1670):
         # Mock a previously adopted initial turn; target maturation itself uses
         # the real tracker and explicit synthetic scan publication/receipt times.
         motion = ManeuverSequence(0., continue_route=True)
         for seq in (1, 2, 3, 4):
-            scan = observation(seq)
+            scan = observation(seq, first=self.bearing)
             motion.compact_target = motion.target_tracker.update(scan, seq/10)
         motion.phase = 'drive'
         motion.drive_since = motion.orbit_since = .4
@@ -51,11 +63,12 @@ class ManeuverRouteTests(unittest.TestCase):
 
     def begin_wait(self):
         motion = self.seeded()
-        self.assertTrue(motion.begin_quality_wait(.5, feedback(5), scan=observation(5)))
+        self.assertTrue(motion.begin_quality_wait(.5, feedback(5), scan=observation(5, first=self.bearing)))
         return motion
 
     def step(self, motion, seq, *, servo=None, motor=None, quality=False, ready=False,
-             first=90., second=None, heading=-25., offset=0., **control):
+             first=None, second=None, heading=-25., offset=0., **control):
+        first = self.bearing if first is None else first
         value = observation(seq, first=first, second=second, heading=heading, offset=offset)
         result = motion.update(value, 0., seq/10,
             feedback(seq, motion.servo if servo is None else servo,
@@ -101,6 +114,7 @@ class ManeuverRouteTests(unittest.TestCase):
                 self.assertFalse(motion.begin_quality_wait(.5, control, scan=value))
 
     def test_quality_wait_matures_new_frames_then_holds_until_actual_resume_ack(self):
+        self.bearing = self.HOLD_BEARING
         motion = self.begin_wait()
         for seq in (5, 6, 7):
             result = self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
@@ -142,26 +156,31 @@ class ManeuverRouteTests(unittest.TestCase):
             for seq, bearing in ((5, 90.), (6, 105.), (7, 120.), (8, 120.), (9, 120.)):
                 value = observation(seq, first=bearing)
                 if ambiguous: value['corridor_candidates'].append(corridor(-20.))
-                result = motion.update(value, 0., seq/10, feedback(seq, 1670, 1500, neutral_acked=True),
+                result = motion.update(value, 0., seq/10,
+                                       feedback(seq, motion.servo, 1500, neutral_acked=True),
                                        quality_clear=True, quality_resume_ready=True)
             if ambiguous:
                 self.assertEqual(result['reason'], 'route_quality_wait_pass_corridor_unavailable')
                 self.assertIsNone(result['first_pass_evidence'])
             else:
-                self.assertEqual((result['phase'], result['servo']), ('drive', 1670))
+                # The abeam 5/6 supports already released left in the wait.
+                self.assertEqual(result['phase'], 'drive')
+                self.assertTrue(1500 <= result['servo'] < 1670)
+                self.assertEqual(result['quality_wait_release']['source_seq'], 6)
                 self.assertTrue(result['quality_resume_pending'])
                 self.assertEqual(result['route_stage'], 'right_align')
                 self.assertLessEqual(result['first_pass_evidence']['observed_frontmost_x_m'], -.18)
 
     def test_pending_resume_target_loss_or_partial_cuts_power_even_on_ack(self):
+        self.bearing = self.HOLD_BEARING
         for failure in ('missing', 'partial', 'identity'):
             for ack in (False, True):
                 motion = self.begin_wait()
                 for seq in (5, 6, 7, 8):
                     self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
-                value = observation(9)
+                value = observation(9, first=self.bearing)
                 if failure == 'missing': value['ranges'] = [3.]*360
-                elif failure == 'partial': value['ranges'][265] = None
+                elif failure == 'partial': value['ranges'][self.edge()] = None
                 else: value = observation(9, first=120.)
                 result = motion.update(value, 0., .9,
                     feedback(9, 1670, 1560 if ack else 1500, resume_acked=ack))
@@ -194,6 +213,7 @@ class ManeuverRouteTests(unittest.TestCase):
                 self.assertEqual(result['motor'], 1500)
 
     def test_neutral_and_resume_ack_deadlines_and_original_orbit_budget(self):
+        self.bearing = self.HOLD_BEARING
         motion = self.begin_wait()
         for seq in (5, 6, 7, 8):
             result = self.step(motion, seq, motor=1560)
@@ -378,10 +398,17 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertTrue(motion.begin_quality_wait(start['received_at'], feedback(591, 1690), scan=start))
         for seq in (591, 593, 595, 597, 598, 601):
             value = {**frames[seq], 'received_at': frames[seq]['at_ms']/1000}
-            result = motion.update(value, 0., value['received_at'], feedback(seq, 1690, 1500, neutral_acked=True),
+            # Mock bridge reports each released wait command as already ACKed.
+            result = motion.update(value, 0., value['received_at'],
+                                   feedback(seq, motion.servo, 1500, neutral_acked=True),
                                    quality_clear=seq>=595, quality_resume_ready=True)
-        self.assertEqual((result['motor'], result['servo']), (1560, 1690))
+        # Actual saved 591/593 supports reach the measured body front; trial40
+        # releases left only (never right) during the neutral wait.
+        self.assertEqual(result['quality_wait_release']['source_seq'], 593)
+        self.assertEqual(result['motor'], 1560)
+        self.assertTrue(1500 <= result['servo'] < 1690)
         self.assertTrue(result['quality_resume_pending'])
+        self.assertFalse(result['route_right_output_authorized'])
         self.assertIsNone(result['first_pass_evidence'])
         self.assertFalse(result['second_target_handover_observed'])
         end = frames[640]
@@ -427,11 +454,12 @@ class ManeuverRouteTests(unittest.TestCase):
 
     def test_geometric_exit_prepares_without_corridor_closing_rate_or_rear_pass(self):
         motion = self.seeded()
-        for seq in (5, 6, 7):
-            self.exit_observation(motion, seq)
-            self.assertFalse(motion.first_pass_preparing)
-        self.exit_observation(motion, 8)
+        self.exit_observation(motion, 5)
+        self.assertFalse(motion.first_pass_preparing)
+        # Trial40: two strictly fresh current full-support frames, not .25 s.
+        self.exit_observation(motion, 6)
         self.assertTrue(motion.first_pass_preparing)
+        self.assertEqual(motion.first_exit_prepare_evidence['observation_count'], 2)
         self.assertFalse(motion.orbit_left_entry_boost)
         self.assertFalse(motion.first_pass_progress['prediction_prepare_condition'])
         self.assertTrue(motion.first_pass_progress['geometric_exit_prepare_condition'])
@@ -463,7 +491,7 @@ class ManeuverRouteTests(unittest.TestCase):
     def test_geometric_exit_window_breaks_on_partial_identity_source_or_stale(self):
         for fault in ('partial', 'identity', 'source', 'stale'):
             motion = self.seeded()
-            for seq in (5, 6): self.exit_observation(motion, seq)
+            self.exit_observation(motion, 6)
             value = observation(7, first=97.)
             c = _candidates(value['ranges'])[0]
             motion.compact_target = {**c, 'track_id': 9 if fault == 'identity' else motion.orbit_track_id,
@@ -472,10 +500,10 @@ class ManeuverRouteTests(unittest.TestCase):
                 'tracking_only_boundary_gap': fault == 'partial'}
             motion._observe_first_pass(value, 1.01 if fault == 'stale' else .7, feedback(7))
             self.assertEqual(motion._first_exit_prepare_history, [])
-            for seq in (8, 9, 10):
-                self.exit_observation(motion, seq)
-                self.assertFalse(motion.first_pass_preparing)
-            self.exit_observation(motion, 11)
+            self.assertFalse(motion.first_pass_preparing)
+            self.exit_observation(motion, 8)
+            self.assertFalse(motion.first_pass_preparing)
+            self.exit_observation(motion, 9)
             self.assertTrue(motion.first_pass_preparing)
 
     def test_geometric_exit_duplicate_or_short_receive_span_cannot_mature(self):
@@ -483,10 +511,13 @@ class ManeuverRouteTests(unittest.TestCase):
         for _ in range(6): self.exit_observation(motion, 5)
         self.assertFalse(motion.first_pass_preparing)
         self.assertEqual(len(motion._first_exit_prepare_history), 1)
-        motion = self.seeded()
-        for seq, receipt in ((5, .5), (6, .55), (8, .69)):
-            self.exit_observation(motion, seq, receipt=receipt)
-        self.assertFalse(motion.first_pass_preparing)
+        for frames in (((5, .5), (6, .82)), ((5, .5), (6, .35)), ((5, .5), (8, .69))):
+            # Receipt gap at the scan age limit, reordered receipt, or a
+            # receipt/publication mismatch restarts the two-frame window.
+            motion = self.seeded()
+            for seq, receipt in frames:
+                self.exit_observation(motion, seq, receipt=receipt)
+            self.assertFalse(motion.first_pass_preparing, frames)
 
     def test_quality_wait_clears_geometric_window_and_latched_prepare_keeps_neutral_limit(self):
         motion = self.seeded()
@@ -508,7 +539,7 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertTrue(all(r['first_pass_evidence'] is None for r in prepared))
         for a, b in zip(prepared, prepared[1:]):
             self.assertGreaterEqual(a['servo']-b['servo'], 0)
-            self.assertLessEqual(a['servo']-b['servo'], 20)
+            self.assertLessEqual(a['servo']-b['servo'], 40)
         self.assertEqual(prepared[-1]['servo'], 1500)
 
     def test_real37_current_support_prepares_without_fabricating_missing_raw1964(self):
@@ -532,7 +563,10 @@ class ManeuverRouteTests(unittest.TestCase):
                 'source_seq': raw['seq'], 'source_at_ms': raw['at_ms'], 'source_received_at': now}
             motion._observe_first_pass(value, now, feedback(raw['seq'], motion.servo))
         self.assertTrue(motion.first_pass_preparing)
-        self.assertEqual(motion.first_exit_prepare_evidence['source_seq'], 1965)
+        # Trial40 two-frame rule: actual 1961 and 1963 suffice; 1964 is still
+        # absent and never fabricated.
+        self.assertEqual(motion.first_exit_prepare_evidence['source_seq'], 1963)
+        self.assertEqual(motion.first_exit_prepare_evidence['first_source_seq'], 1961)
         self.assertIsNone(motion.first_pass_evidence)
         self.assertFalse(motion._result(now)['route_right_output_authorized'])
         self.assertIn('first_exit_prepare', motion.route_events)
@@ -549,37 +583,80 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertIsNone(motion.first_pass_evidence)
         self.assertFalse(motion._result(.8)['route_right_output_authorized'])
 
-    def test_wait_body_window_carries_only_after_actual_resume_ack_and_then_releases(self):
+    def test_wait_release_holds_resume_output_then_continues_after_actual_ack(self):
         motion = self.begin_wait()
-        for seq in (5, 6, 7, 8):
-            result = self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
-        self.assertTrue(motion._quality_exit_prepare_ready)
-        self.assertFalse(result['first_pass_preparing'])
-        self.assertEqual((result['motor'], result['servo']), (1560, 1670))
+        outputs = [self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
+                   for seq in (5, 6, 7, 8)]
+        # Two fresh abeam supports decide a release-only intention in the wait.
+        self.assertEqual([r['servo'] for r in outputs[:3]], [1670, 1630, 1590])
+        self.assertTrue(all(r['motor'] == 1500 for r in outputs[:3]))
+        self.assertEqual(outputs[1]['quality_wait_release']['source_seq'], 6)
+        self.assertFalse(outputs[1]['quality_wait_release']['right_steering_authorized'])
+        # The powered resume request itself holds the ACKed released command.
+        self.assertEqual((outputs[3]['motor'], outputs[3]['servo']), (1560, 1590))
+        self.assertTrue(outputs[3]['quality_resume_pending'])
+        self.assertFalse(outputs[3]['first_pass_preparing'])
         value = observation(8)
-        result = motion.update(value, .05, .85, feedback(9, motor=1500), quality_clear=True)
+        result = motion.update(value, .05, .85, feedback(9, 1590, motor=1500), quality_clear=True)
         self.assertTrue(result['quality_resume_pending'])
-        self.assertFalse(result['first_pass_preparing'])
-        self.assertEqual(result['servo'], 1670)
-        result = motion.update(value, .10, .90,
-            feedback(10, resume_acked=True), quality_clear=True)
+        self.assertEqual(result['servo'], 1590)
+        result = motion.update(value, .10, .90, feedback(10, 1590, resume_acked=True), quality_clear=True)
         self.assertFalse(result['quality_resume_pending'])
         self.assertTrue(result['first_pass_preparing'])
-        self.assertEqual(result['servo'], 1670)  # Actual ACK output still holds.
-        prep, passed = copy.deepcopy(motion._first_exit_prepare_history), copy.deepcopy(motion._first_pass_history)
-        result = motion.update(value, .11, .91, feedback(11), quality_clear=True)
-        self.assertEqual((result['motor'], result['servo']), (1560, 1650))
-        self.assertEqual((motion._first_exit_prepare_history, motion._first_pass_history), (prep, passed))
-        self.assertEqual(result['first_exit_prepare_evidence']['last_preparation_source_seq'], 8)
+        self.assertEqual(result['servo'], 1590)  # Actual ACK output still holds.
+        result = motion.update(value, .11, .91, feedback(11, 1590), quality_clear=True)
+        self.assertEqual((result['motor'], result['servo']), (1560, 1550))
         self.assertIsNone(result['first_pass_evidence'])
         self.assertFalse(result['route_right_output_authorized'])
+
+    def test_wait_release_needs_actual_neutral_ack_and_previous_step_ack(self):
+        motion = self.begin_wait()
+        # No actual neutral ACK: no release decision even with abeam support.
+        for seq in (5, 6):
+            result = motion.update(observation(seq), 0., seq/10, feedback(seq, 1670, 1500))
+        self.assertIsNone(result['quality_wait_release'])
+        self.assertEqual(result['servo'], 1670)
+        motion = self.begin_wait()
+        self.step(motion, 5, neutral_acked=True)
+        result = self.step(motion, 6, neutral_acked=True)
+        self.assertEqual(result['servo'], 1630)
+        # The bridge still reports the previous command: wait, never stack steps.
+        result = motion.update(observation(7), 0., .7,
+            feedback(7, 1670, 1500, neutral_acked=True, command_acked=False))
+        self.assertEqual((result['phase'], result['servo']), ('quality_wait', 1630))
+        # Any other actual steering is a changed adoption and locks.
+        result = motion.update(observation(8), 0., .8,
+            feedback(8, 1610, 1500, neutral_acked=True))
+        self.assertTrue(result['lock_requested'])
+        self.assertEqual(result['reason'], 'route_quality_wait_feedback_changed')
+
+    def test_wait_release_never_crosses_center_or_outputs_right(self):
+        motion = self.begin_wait()
+        servos = [self.step(motion, seq, neutral_acked=True)['servo'] for seq in range(5, 12)]
+        self.assertEqual(servos[-1], 1500)
+        self.assertTrue(all(v >= 1500 for v in servos))
+        self.assertTrue(all(a-b <= 40 for a, b in zip(servos, servos[1:])))
+        self.assertEqual(motion.phase, 'quality_wait')
+
+    def test_release_latched_before_wait_continues_release_inside_wait(self):
+        motion = self.seeded()
+        for seq in (5, 6): self.step(motion, seq, first=85.)
+        self.assertTrue(motion.first_pass_preparing)
+        servo = motion.servo
+        value = observation(7, first=85.)
+        self.assertTrue(motion.begin_quality_wait(.7, feedback(7, servo), scan=value))
+        self.assertEqual(motion.quality_wait_release['basis'], 'release_latched_before_neutral_wait')
+        result = motion.update(observation(8, first=85.), 0., .8,
+            feedback(8, servo, 1500, neutral_acked=True))
+        self.assertEqual((result['phase'], result['motor'], result['servo']),
+                         ('quality_wait', 1500, servo-40))
 
     def test_wait_bad_quality_duplicate_and_unacked_neutral_clear_body_window(self):
         motion = self.begin_wait()
         for seq in (5, 6, 7, 8):
             self.step(motion, seq, quality=True, neutral_acked=True)
         self.assertTrue(motion._quality_exit_prepare_ready)
-        motion.update(observation(8), .01, .81, feedback(9, motor=1500, neutral_acked=True),
+        motion.update(observation(8), .01, .81, feedback(9, motion.servo, motor=1500, neutral_acked=True),
                       quality_clear=False, quality_resume_ready=True)
         self.assertEqual(motion._first_exit_prepare_history, [])
         self.assertFalse(motion._quality_exit_prepare_ready)
@@ -590,7 +667,7 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertEqual(self.step(motion, 12, quality=True, ready=True, neutral_acked=True)['motor'], 1560)
         motion = self.begin_wait()
         self.step(motion, 5, quality=True, neutral_acked=True)
-        motion.update(observation(5), .01, .51, feedback(6, motor=1500, neutral_acked=False),
+        motion.update(observation(5), .01, .51, feedback(6, motion.servo, motor=1500, neutral_acked=False),
                       quality_clear=True)
         self.assertEqual(motion._first_exit_prepare_history, [])
 
@@ -601,34 +678,42 @@ class ManeuverRouteTests(unittest.TestCase):
                 self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
             result = self.step(motion, 9, motor=1500, first=80. if fault == 'body_front' else 90.,
                                quality=fault != 'quality')
-            self.assertEqual(result['servo'], 1670)
+            # The healthy pre-resume window is still discarded on mismatch.
+            self.assertEqual(result['servo'], 1590)
             self.assertTrue(result['quality_resume_pending'])
             self.assertEqual(motion._first_exit_prepare_history, [])
             self.assertFalse(motion._quality_exit_prepare_ready)
+            # Trial40: a release already decided in the wait stays release-only;
+            # it never becomes a pass, a right command or a new left demand.
             result = self.step(motion, 10, motor=1560, quality=True, resume_acked=True)
-            self.assertFalse(result['first_pass_preparing'])
-            self.assertEqual(result['servo'], 1670)
+            self.assertTrue(result['first_pass_preparing'])
+            self.assertEqual(result['first_exit_prepare_evidence']['basis'],
+                             'neutral_wait_release_continued_at_resume_ack')
+            self.assertEqual(result['servo'], 1590)
+            self.assertIsNone(result['first_pass_evidence'])
+            self.assertFalse(result['route_right_output_authorized'])
 
     def test_repeat_scan_only_releases_latched_prepare_at_100ms_without_catchup(self):
         motion = self.seeded()
-        for seq in (5, 6): self.step(motion, seq, first=85.)
+        self.step(motion, 5, first=85.)
         before = motion.servo
-        motion.update(observation(6, first=85.), .1, .7, feedback(7, before))
+        motion.update(observation(5, first=85.), .1, .6, feedback(6, before))
         self.assertFalse(motion.first_pass_preparing)
         self.assertEqual(motion.servo, before)
-        self.assertEqual(len(motion._first_exit_prepare_history), 2)
+        self.assertEqual(len(motion._first_exit_prepare_history), 1)
         # A separate genuinely mature window, then repeated control ticks.
         motion = self.seeded()
-        for seq in (5, 6, 7, 8): self.step(motion, seq, first=85.)
+        for seq in (5, 6): self.step(motion, seq, first=85.)
         self.assertTrue(motion.first_pass_preparing)
-        value, before = observation(8, first=85.), motion.servo
+        value, before = observation(6, first=85.), motion.servo
+        self.assertGreaterEqual(before, 1600)
         prep, passed = copy.deepcopy(motion._first_exit_prepare_history), copy.deepcopy(motion._first_pass_history)
-        result = motion.update(value, .09, .89, feedback(9, before))
+        result = motion.update(value, .09, .69, feedback(7, before))
         self.assertEqual(result['servo'], before)
-        result = motion.update(value, .10, .90, feedback(10, before))
-        self.assertEqual(result['servo'], before-20)
-        result = motion.update(value, .29, 1.09, feedback(11, before-20))
-        self.assertEqual(result['servo'], before-40)  # One step, not catch-up.
+        result = motion.update(value, .10, .70, feedback(8, before))
+        self.assertEqual(result['servo'], before-40)
+        result = motion.update(value, .29, .89, feedback(9, before-40))
+        self.assertEqual(result['servo'], before-80)  # One step, not catch-up.
         self.assertEqual((motion._first_exit_prepare_history, motion._first_pass_history), (prep, passed))
         self.assertIsNone(result['first_pass_evidence'])
         self.assertFalse(result['route_right_output_authorized'])
@@ -689,23 +774,168 @@ class ManeuverRouteTests(unittest.TestCase):
         for raw in fixture['raw_frames']:
             now = .6+(raw['at_ms']-origin)/1000
             value = {**raw, 'received_at': now, 'corridor_candidates': []}
+            # Mock bridge reports each released wait command as already ACKed.
             result = motion.update(value, 0., now,
-                feedback(raw['seq'], 1705, 1500, neutral_acked=True),
+                feedback(raw['seq'], motion.servo, 1500, neutral_acked=True),
                 quality_clear=True, quality_resume_ready=True)
+        # Actual 599/601 supports are at the body front: trial40 releases left
+        # inside the neutral wait (never right), then resumes on that command.
+        self.assertEqual(result['quality_wait_release']['source_seq'], 601)
+        self.assertEqual(result['quality_wait_release']['first_source_seq'], 599)
         self.assertTrue(result['quality_resume_pending'])
         self.assertFalse(result['first_pass_preparing'])
-        self.assertEqual((result['motor'], result['servo']), (1560, 1705))
+        self.assertEqual((result['motor'], result['servo']), (1560, 1665))
         result = motion.update(value, .02, now+.02,
-            feedback(604, 1705, 1560, resume_acked=True), quality_clear=True)
+            feedback(604, 1665, 1560, resume_acked=True), quality_clear=True)
         self.assertTrue(result['first_pass_preparing'])
-        self.assertEqual(result['servo'], 1705)
-        result = motion.update(value, .03, now+.03, feedback(605, 1705), quality_clear=True)
-        self.assertEqual(result['servo'], 1685)
+        self.assertEqual(result['servo'], 1665)
+        result = motion.update(value, .03, now+.12, feedback(605, 1665), quality_clear=True)
+        self.assertEqual(result['servo'], 1625)
         self.assertEqual(result['first_exit_prepare_evidence']['first_source_seq'], 599)
         self.assertEqual(result['first_exit_prepare_evidence']['source_seq'], 603)
         self.assertIsNone(result['first_pass_evidence'])
         self.assertFalse(result['route_right_output_authorized'])
 
+
+    # ---- trial40: release-only exit timing and same-frame wall-window pairs ----
+
+    @staticmethod
+    def real39():
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-39-exit-release-pairs.json').read_text())
+        return {f['seq']: f for f in fixture['frames']}
+
+    def test_real39_wall_window_pairs_match_native_and_fill_only_missing(self):
+        frames = self.real39()
+        for seq in (482, 484, 486):
+            native = [c for c in frames[seq]['corridor_candidates'] if abs(c['heading_left_rad']) < math.pi/2]
+            paired, ambiguous = ManeuverSequence._paired_window_corridor(frames[seq])
+            self.assertFalse(ambiguous)
+            self.assertEqual(len(native), 1)
+            self.assertLess(abs(paired['heading_left_rad']-native[0]['heading_left_rad']), math.radians(2))
+            self.assertLess(abs(paired['width_m']-native[0]['width_m']), .1)
+        # Actual 489: native fit empty with the first target in a side sector;
+        # its two parallel native windows still give one current corridor.
+        value = {**frames[489], 'received_at': frames[489]['at_ms']/1000}
+        self.assertFalse([c for c in value['corridor_candidates'] if abs(c['heading_left_rad']) < math.pi/2])
+        motion = ManeuverSequence(0., continue_route=True)
+        pwm, reason = motion._right_exit_target(value, value['received_at'])
+        self.assertIsNone(reason)
+        self.assertEqual(motion.right_exit_geometry['source_kind'], 'native_wall_window_pair')
+        self.assertTrue(1350 <= pwm < 1500)
+        self.assertFalse(motion.right_exit_geometry['turn_path_certified'])
+        # Actual 478 has no pair with enough shared support: still missing.
+        value = {**frames[478], 'received_at': frames[478]['at_ms']/1000}
+        self.assertEqual(ManeuverSequence(0., continue_route=True)._right_exit_target(value, value['received_at']),
+                         (None, 'right_exit_corridor_missing'))
+        # Default mode never uses the new fallback.
+        value = {**frames[489], 'received_at': frames[489]['at_ms']/1000}
+        self.assertEqual(ManeuverSequence(0.)._right_exit_target(value, value['received_at']),
+                         (None, 'right_exit_corridor_missing'))
+
+    def test_wall_window_pairs_with_distinct_axes_are_ambiguous_not_chosen(self):
+        def window(heading_deg, rho, start, end):
+            return {'candidate_only': True, 'heading_left_rad': math.radians(heading_deg), 'rho_left_m': rho,
+                    'support_span_m': math.dist(start, end), 'fit_error_m': .02, 'points': 24,
+                    'support_start_left_m': {'x_m': start[0], 'y_m': start[1]},
+                    'support_end_left_m': {'x_m': end[0], 'y_m': end[1]}}
+        walls = [window(0., 1., (-.5, 1.), (1., 1.)), window(0., -1., (-.5, -1.), (1., -1.))]
+        paired, ambiguous = ManeuverSequence._paired_window_corridor({'wall_candidates': walls})
+        self.assertFalse(ambiguous)
+        self.assertAlmostEqual(paired['width_m'], 2.)
+        self.assertAlmostEqual(paired['center_offset_left_m'], 0.)
+        # A second, differently oriented parallel pair is a competing axis.
+        c, s_ = math.cos(math.radians(40)), math.sin(math.radians(40))
+        rot = lambda x, y: (c*x-s_*y, s_*x+c*y)
+        walls += [window(40., .8, rot(-.5, .8), rot(1., .8)), window(40., -.8, rot(-.5, -.8), rot(1., -.8))]
+        self.assertEqual(ManeuverSequence._paired_window_corridor({'wall_candidates': walls}), (None, True))
+        # Too narrow, non-overlapping or same-side windows never pair.
+        for bad in ([window(0., .3, (-.5, .3), (1., .3)), window(0., -.3, (-.5, -.3), (1., -.3))],
+                    [window(0., 1., (1., 1.), (2., 1.)), window(0., -1., (-1., -1.), (.5, -1.))],
+                    [window(0., 1., (-.5, 1.), (1., 1.)), window(0., 2., (-.5, 2.), (1., 2.))]):
+            self.assertEqual(ManeuverSequence._paired_window_corridor({'wall_candidates': bad}), (None, False))
+
+    def test_right_exit_missing_corridor_releases_left_only_then_coasts_after_lease(self):
+        motion = self.route(servo=1574)
+        motion.right_exit_center_ack = motion._route_center_ack = None
+        motion._right_exit_last_receive, motion._right_exit_last_publication = .45, 450
+        value = observation(5)
+        value['corridor_candidates'] = []
+        result = motion.update(value, 0., .5, feedback(5, 1574))
+        self.assertEqual(result['reason'], 'right_exit_corridor_missing_release_left')
+        self.assertEqual((result['motor'], result['servo']), (1560, 1534))
+        self.assertFalse(result['route_right_output_authorized'])
+        value = observation(6)
+        value['corridor_candidates'] = []
+        result = motion.update(value, 0., .6, feedback(6, 1534))
+        self.assertEqual(result['servo'], 1500)  # Clamped at neutral, never right.
+        value = observation(8)
+        value['corridor_candidates'] = []
+        result = motion.update(value, 0., .8, feedback(8, 1500))
+        self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+        self.assertGreaterEqual(result['servo'], 1500)
+
+    def test_first_pass_frame_lease_only_releases_until_a_current_corridor_exists(self):
+        motion = self.route(servo=1614)
+        motion.right_exit_center_ack = motion._route_center_ack = None
+        motion.first_pass_evidence = {'track_id': motion.orbit_track_id, 'source_seq': 5,
+                                      'source_at_ms': 500, 'received_at': .5}
+        value = observation(6)
+        value['corridor_candidates'] = []
+        result = motion.update(value, 0., .6, feedback(6, 1614))
+        self.assertEqual((result['phase'], result['servo']), ('drive', 1574))
+        value = observation(7)
+        value['corridor_candidates'] = []
+        result = motion.update(value, 0., .7, feedback(7, 1574))
+        self.assertEqual((result['phase'], result['servo']), ('drive', 1534))
+        value = observation(8)
+        value['corridor_candidates'] = []
+        result = motion.update(value, 0., .8, feedback(8, 1534))
+        self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+
+    def test_real39_actual_frames_release_inside_wait_before_resume(self):
+        """Actual saved 466..489 ranges/publication; ACKs/receipt/wait entry MOCKED.
+
+        Actual trial39 entered its wait on unsaved scan473; this command replay
+        enters on the first saved incomplete frame 474. It shows command
+        decisions only, never a counterfactual vehicle path or pass.
+        """
+        frames = self.real39()
+        motion = ManeuverSequence(0., continue_route=True)
+        for seq in (466, 467, 469):
+            value = {**frames[seq], 'received_at': frames[seq]['at_ms']/1000}
+            motion.compact_target = motion.target_tracker.update(value, value['received_at'])
+        self.assertTrue(motion.compact_target['confirmed'])
+        motion.phase, motion.servo = 'drive', frames[469]['recorded_control']['servo']
+        motion.steering_target = motion.servo
+        motion.drive_since, motion.orbit_since = 44.9, 46.5
+        motion.handover_observed = True
+        motion.orbit_track_id = motion.compact_target['track_id']
+        motion.orbit_bias_pwm, motion.orbit_reference_range_m = motion.servo, 1.
+        motion.last_seq, motion.last_publication = 469, frames[469]['at_ms']
+        motion.last_receive = frames[469]['at_ms']/1000
+        motion.last_change = motion.last_receive
+        outputs = {}
+        for seq in (471, 472, 474, 476, 478, 480, 482):
+            value = {**frames[seq], 'received_at': frames[seq]['at_ms']/1000}
+            now = value['received_at']
+            if seq == 474:
+                self.assertEqual(frames[seq]['recorded_quality_issues'], ['scan_incomplete'])
+                self.assertTrue(motion.begin_quality_wait(now, feedback(seq, motion.servo), scan=value))
+            wait = motion.phase == 'quality_wait'
+            outputs[seq] = motion.update(value, 0., now,
+                feedback(seq, motion.servo, 1500 if wait else 1560, neutral_acked=wait,
+                         resume_acked=motion.quality_resume_pending),
+                quality_clear=seq >= 476, quality_resume_ready=seq >= 476)
+        # 474/476 actual supports are at the measured body front.
+        self.assertEqual(outputs[476]['quality_wait_release']['source_seq'], 476)
+        self.assertEqual(outputs[476]['quality_wait_release']['first_source_seq'], 474)
+        self.assertLess(outputs[476]['servo'], frames[476]['recorded_control']['servo'])
+        released = [outputs[s]['servo'] for s in (476, 478, 480, 482)]
+        self.assertTrue(all(1500 <= v for v in released))
+        self.assertTrue(all(a >= b for a, b in zip(released, released[1:])))
+        self.assertLess(released[-1], frames[482]['recorded_control']['servo'])
+        self.assertTrue(all(not r['route_right_output_authorized'] for r in outputs.values()))
+        self.assertTrue(all(r['first_pass_evidence'] is None for r in outputs.values()))
 
 if __name__ == '__main__':
     unittest.main()
