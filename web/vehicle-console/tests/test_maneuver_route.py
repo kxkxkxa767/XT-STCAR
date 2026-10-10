@@ -7,7 +7,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from maneuver_sequence import ManeuverSequence
+from maneuver_sequence import ManeuverSequence, SECOND_ORBIT_PWM_STEP, SECOND_BYPASS_SUPPORT_GAP_M
 from compact_target import _candidates
 from test_compact_target import compact_scan
 from test_compact_target_roles import add_object
@@ -279,13 +279,14 @@ class ManeuverRouteTests(unittest.TestCase):
             self.assertIsNone(result['route_center_ack'])
             self.assertFalse(result['route_right_output_authorized'])
 
-    def test_second_needs_current_distinct_first_support_each_maturity_frame(self):
+    def test_second_role_needs_one_support_ahead_inside_corridor_each_maturity_frame(self):
         motion = self.route('corridor_follow')
         for seq in (5, 6):
             result = self.step(motion, seq, second=-45., heading=0.)
             self.assertFalse(result['second_target_handover_observed'])
-        value = observation(7, second=-45., heading=0.)
-        value['ranges'][265] = None  # first is partial; second itself stays full
+        # A second support ahead in the same corridor is ambiguous and
+        # discards the whole maturity interval.
+        value = add_object(observation(7, second=-45., heading=0.), bearing=30.)
         result = motion.update(value, 0., .7, feedback(7, motion.servo))
         self.assertIsNone(result['second_target'])
         for seq in (8, 9, 10):
@@ -294,7 +295,88 @@ class ManeuverRouteTests(unittest.TestCase):
         result = self.step(motion, 11, second=-45., heading=0.)
         self.assertTrue(result['second_target_handover_observed'])
         self.assertEqual(result['route_stage'], 'second_orbit')
-        self.assertGreater(result['role_distinct_evidence']['actual_support_separation_m'], .35)
+        evidence = result['role_distinct_evidence']
+        self.assertTrue(evidence['first_support_visible'])
+        self.assertGreater(evidence['actual_support_separation_m'], .35)
+
+    def test_partial_first_no_longer_discards_second_role_after_first_pass(self):
+        motion = self.route('corridor_follow')
+        for seq in (5, 6, 7, 8):
+            value = observation(seq, second=-45., heading=0.)
+            if seq == 7: value['ranges'][265] = None  # first partial; second stays full
+            result = motion.update(value, 0., seq/10, feedback(seq, motion.servo))
+        self.assertTrue(result['second_target_handover_observed'])
+
+    def test_support_outside_current_corridor_is_never_second_role(self):
+        motion = self.route('corridor_follow')
+        for seq in (5, 6, 7, 8, 9):
+            value = observation(seq, heading=0.)  # corridor half width 1.2, offset 0
+            add_object(value, bearing=-70., distance=2.)  # normal about -1.88 m
+            result = motion.update(value, 0., seq/10, feedback(seq, motion.servo))
+        self.assertFalse(result['second_target_handover_observed'])
+        self.assertEqual(result['second_acquisition_reason'], 'second_role_current_distinct_support_missing')
+
+    def test_trial43_left_front_second_support_gets_left_bypass_then_right_after_center_ack(self):
+        motion = self.route('corridor_follow')
+        for seq in (5, 6, 7, 8):
+            result = self.step(motion, seq, second=15., heading=0.)
+        self.assertTrue(result['second_target_handover_observed'])
+        self.assertEqual(result['role_distinct_evidence']['second_side'], 'left')
+        self.assertEqual(result['servo'], 1500)
+        result = self.step(motion, 9, second=15., heading=0.)
+        self.assertEqual(result['reason'], 'second_target_left_of_support_entry')
+        self.assertEqual(result['servo'], 1500+SECOND_ORBIT_PWM_STEP)
+        feedback_ = result['second_feedback']
+        self.assertAlmostEqual(feedback_['relative_bypass_point_left_m'][1],
+                               feedback_['current_support_left_edge_y_m']+SECOND_BYPASS_SUPPORT_GAP_M)
+        self.assertGreater(result['steering_target'], 1500)
+        # Once the support is right of the bypass line the law asks for right:
+        # first release to an ACKed center, never a direct left-to-right step.
+        servos = []
+        for seq, bearing in enumerate((5., -5., -15., -25., -35., -45., -55., -65.), 10):
+            result = self.step(motion, seq, second=bearing, heading=0.)  # tracked, ~.17 m/frame
+            self.assertEqual(result['route_stage'], 'second_orbit')
+            servos.append(result['servo'])
+        self.assertIn(1500, servos)
+        first_right = next(i for i, v in enumerate(servos) if v < 1500)
+        self.assertEqual(servos[first_right-1], 1500)
+        self.assertIsNotNone(result['second_center_ack'])
+
+    def test_real43_left_front_second_support_has_role_proof_on_each_saved_frame(self):
+        # Actual trial43 scans; the old right-half rule never produced a proof.
+        # Saved frames are every other scan (~.36 m apart at ~1.8 m/s), beyond
+        # the .30 m tracker association gate, so only the per-frame role proof
+        # is replayed here, not live confirmation.
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-43-second-left-front.json').read_text())
+        motion = self.route('corridor_follow')
+        motion.compact_target = None  # the first support had left view
+        proofs = {}
+        for frame in fixture['frames']:
+            scan = {**frame, 'received_at': frame['at_ms']/1000}
+            motion.right_exit_geometry = dict(frame['controller_corridor'])
+            motion._second_role_observation(scan, scan['received_at'])
+            proofs[frame['seq']] = motion.role_distinct_evidence
+        self.assertIsNone(proofs[2564])
+        for seq in (2566, 2568, 2570, 2572, 2575):
+            self.assertEqual(proofs[seq]['second_side'], 'left')
+            self.assertFalse(proofs[seq]['first_support_visible'])
+            self.assertLess(abs(proofs[seq]['second_normal_m']-.35), .05)
+
+    def test_second_pass_coast_holds_acked_clockwise_command(self):
+        motion, _ = self.second_handover()
+        bearings = (-60., -70., -80., -90., -100., -110., -120., -130., -140., -150.)
+        for seq, bearing in enumerate(bearings, 9):
+            result = self.step(motion, seq, second=bearing, heading=0.)  # tracked, ~.17 m/frame
+            if result['two_target_observed_pass_complete']:
+                break
+        self.assertTrue(result['two_target_observed_pass_complete'])
+        held = result['route_end_coast_servo']
+        self.assertIsNotNone(held)
+        self.assertLess(held, 1500)
+        self.assertEqual((result['motor'], result['servo']), (1500, held))
+        for extra in (1, 2):
+            result = self.step(motion, seq+extra, second=-150., heading=0.)
+            self.assertEqual((result['motor'], result['servo']), (1500, held))
 
     def second_handover(self, servo=1500):
         motion = self.route('corridor_follow', servo=servo)
@@ -308,7 +390,7 @@ class ManeuverRouteTests(unittest.TestCase):
         motion, result = self.second_handover()
         self.assertEqual(result['servo'], 1500)
         result = self.step(motion, 9, second=-45., heading=0.)
-        self.assertEqual(result['servo'], 1490)
+        self.assertEqual(result['servo'], 1500-SECOND_ORBIT_PWM_STEP)
         self.assertTrue(result['route_right_output_authorized'])
         self.assertTrue(1350 <= result['steering_target'] < 1500)
 
@@ -330,7 +412,9 @@ class ManeuverRouteTests(unittest.TestCase):
             return result['steering_target']
         self.assertGreater(pwm(2.8, -.65), pwm(.6, -.65))
         self.assertGreater(pwm(.8, -.25), pwm(.8, -.8))
-        self.assertEqual(pwm(.8, -.2), 1500)
+        # Trial43: the bypass line keeps SECOND_BYPASS_SUPPORT_GAP_M from the
+        # support's left edge, so a support just right of center needs left.
+        self.assertGreater(pwm(.8, -.2), 1500)
         self.assertNotEqual(pwm(math.cos(math.radians(25)), -math.sin(math.radians(25))),
                             pwm(math.cos(math.radians(60)), -math.sin(math.radians(60))))
 
@@ -349,7 +433,7 @@ class ManeuverRouteTests(unittest.TestCase):
                 self.assertGreaterEqual(result['servo'], 1500)
                 self.assertIsNone(result['second_center_ack'])
         self.assertEqual(result['second_center_ack']['seq'], 7)
-        self.assertEqual(result['servo'], 1490)
+        self.assertEqual(result['servo'], 1500-SECOND_ORBIT_PWM_STEP)
 
     def test_second_loss_is_terminal_and_does_not_reacquire(self):
         motion, _ = self.second_handover()
@@ -368,16 +452,30 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertFalse(result['completed'])
         self.assertFalse(result['second_pass_evidence']['physical_cone_pass_certified'])
 
-    def test_first_lost_then_new_numeric_id_cannot_be_second_role_proof(self):
+    def test_first_lost_then_reappearing_beside_is_never_second_role_proof(self):
+        # The lost first support may reappear under a new numeric ID; beside or
+        # behind the body front it is never a second-role candidate.
         motion = self.route('corridor_follow')
-        value = observation(5, second=-45., heading=0.)
+        value = observation(5, heading=0.)
         for i in range(266, 275): value['ranges'][i] = 3.
         motion.update(value, 0., .5, feedback(5, 1500))
         for seq in (6, 7, 8, 9):
-            result = self.step(motion, seq, second=-45., heading=0.)
+            result = self.step(motion, seq, heading=0.)
         self.assertIsNone(result['compact_target'])
         self.assertIsNone(result['second_target'])
         self.assertFalse(result['second_target_handover_observed'])
+
+    def test_first_lost_single_support_ahead_is_second_after_recorded_first_pass(self):
+        # Trial43: the first support left view before the second appeared.
+        motion = self.route('corridor_follow')
+        for seq in (5, 6, 7, 8):
+            value = observation(seq, first=200., second=-45., heading=0.)  # first behind, not tracked
+            result = motion.update(value, 0., seq/10, feedback(seq, motion.servo))
+        self.assertTrue(result['second_target_handover_observed'])
+        evidence = result['role_distinct_evidence']
+        self.assertFalse(evidence['first_support_visible'])
+        self.assertIsNone(evidence['actual_support_separation_m'])
+        self.assertEqual(evidence['basis'], 'single_support_ahead_inside_current_corridor_after_first_pass')
 
     def test_real34_wait_recovery_retains_original_rear_gate_and_no_second_claim(self):
         fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-34-route-observations.json').read_text())

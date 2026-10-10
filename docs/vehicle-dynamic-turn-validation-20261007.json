@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "42 (5dd48fa) ran once: full 1670 presteer from this placement, left turn halted on front_sparse before cone handover; no contact in data. Round-42 coast fallback not exercised. No further run.",
+  "latest_trial_status": "43 (906761f) ran once: left turn, first-cone orbit, wait release, right exit and corridor alignment all worked; the second support appeared at the left front and was passed on the wrong side, then a terminal coast hit the end board at ~1.8 m/s (operator-reported). Round-44 candidate committed, not deployed; test planned for the next day.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -15909,8 +15909,8 @@
   "after42_front_sparse_route_coast_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 43,
     "user_instruction": "2026-10-10 用户：按方案1修改然后进行第43轮（方案1：左转与绕桶阶段把前方缺回波与扫描不完整同样处理，断电并保持已确认舵量，不停机回中）",
     "change": {
@@ -15930,6 +15930,86 @@
       "1500 still coasts; no stop distance certified.",
       "Front unknown > 6 still halts and recenters.",
       "Round-40 exit changes still physically untested."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "source_commit": "906761f1dce7cb28da7fea88142610627f62d813",
+      "archive_sha256": "8393ef3d4d5ac53ab09cb833a8480a2fa7902237c502554f7e20e7749d0d5fac",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn43-20261010-215936",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn43-20261010-215936",
+      "helper_sha256": "e66d84f997463cd8ec81624e3f9d819ee1f8f83603bcf1ce6d47d21142712888",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before43-fresh.json (5dd48fa, ready) / after43-deploy-fresh.json / pre43-run-fresh.json: six fresh locked ready samples each, 14 hashes match",
+      "github": "906761f pushed with the gh login after the keychain credential stopped working; user later ran gh auth setup-git"
+    }
+  },
+  "turn43_actual": {
+    "date": "2026-10-10",
+    "executor": "Claude",
+    "vehicle_source_commit": "906761f1dce7cb28da7fea88142610627f62d813",
+    "operator_go_ahead": "用户：我已经执行了，你开始下一轮测试吧 (after earlier requests to confirm stillness/start/heading; not restated). Claude verified the live state and compared start geometry before power.",
+    "pre_run_check": "pre43-run-fresh.json: six fresh locked ready samples, 14 hashes and settings match, continue_route preview; helper sha e66d84f9 unchanged; no prior left-cone-trial-20261010-43; no autonomy process.",
+    "start_geometry_vs_37_42": "front wall 2.15 m (2.12..2.28), incoming board end .49 m (.48..64), exit width 1.66 m, exit heading 92.4 deg (87.9..94.0), incoming heading 1.2 deg (-1.7..1.7); entry lateral gap .197 m smallest so far (.251..349); endpoint-limited presteer 1641/1642.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261010-43/ (7 files sha256 match trial43-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 11.9,
+    "observer_stop_requested": false,
+    "terminal": "turn coast right_exit_corridor_missing at 2579, then server lock probe_obstacle_close_body at 2588",
+    "operator_report": "用户：这一次绕过第一个锥桶直行后没左转导致没有绕第二个锥桶，然后直行撞到锥桶所在直道的墙上了",
+    "physical_contact": true,
+    "timeline": {
+      "left_turn": "drive from 2522 (3.48 s), servo 1641->1677; outer-wall ambiguity hold 2530..2537; nearest body gap .087 m on the left (bin 263) at 2534.",
+      "first_target": "handover 2538 (track 1, 1.10 m, 77 deg); orbit entry 1655->1705.",
+      "quality_wait": "2546 scan_incomplete -> route quality wait holding 1705; release decided at 2547 (neutral_wait_current_support_at_body_front, 2 frames); 40/100 ms release to 1500; resume requested at 2554 and adopted.",
+      "first_pass_and_right_exit": "first_pass_evidence 2555 (center x -.30 m) -> right_align; powered right 1480/1470 commanded and reported by the bridge (38 recorded none).",
+      "corridor": "2566 route_corridor_alignment_observed (heading .3 deg, center offset .41 m left, width 2.10 m) -> corridor_follow, servo 1496->1555 toward the corridor center.",
+      "second_support": "left front: 2566 +11 deg 1.90 m, 2568 +15/1.57, 2570 +19/1.22, 2572 +26/.88, 2575 +54/.41 (about .2 m from the body side); passed with the support on the car LEFT; second_acquisition_reason second_role_current_distinct_support_missing on every frame (right-half-only rule; first support also left view at 2572).",
+      "end": "native corridor list empty from 2574, corridor used 2576 (-4.3 deg), then missing -> 2579 terminal coast, servo to 1500. End board ahead: nothing within 1.2 m (+-30 deg) at 2579, .916 m at 2582, .533 at 2584, .197 (body front) at 2586; locked 2588.",
+      "rest": "after.json: front +-30 deg continuous .197..213 m, slightly closer at the sides (soft board pressed at the bumper)."
+    },
+    "closing_rates_not_calibrated_speed": "second support 1.82 m/s (2566->2575), end board 1.81 m/s (2582->2586, during neutral coast): neutral coasting barely slowed the car over ~1.2 m.",
+    "route_rule_reference": "Competition rules figure 1 (repo PDF, page 3): anticlockwise around the first cone, then pass below the second cone keeping it on the right (clockwise) and turn up into the traffic-light lane. Used only as the task rule (side to pass), never as coordinates.",
+    "exercised": {
+      "round40_exit_changes": "first physical exercise: release inside the wait at 40/100 ms, resume, right exit, corridor alignment/follow",
+      "round43_front_sparse_coast": "not triggered (scan_incomplete used the existing wait)"
+    },
+    "post_trial_lock": "after.json and after43-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500; turn_ready false (probe_obstacle_close_body at rest).",
+    "not_inferred": "No pose, wheel angle or calibrated speed; side of pass is from relative support bearings only.",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after43_second_target_side_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 44,
+    "user_instruction": "2026-10-10 用户：你继续修改，当前修改完后上传到仓库并保存，明天再测试 (earlier: 我已经放回去了，下一轮你可以直接测试). Not deployed; vehicle still runs 906761f.",
+    "change": {
+      "scope": "Explicit --continue-route, second-target stage only; default sequence, turn-left and the first target unchanged.",
+      "acquisition": "corridor_follow accepts exactly one compact support in the forward half that is ahead of the body front (x and along-corridor > .20 m) and inside the current corridor (|normal-offset| < width/2-.08); either side. Distinct from the first because the first has a recorded pass behind the rear and the car follows a forward corridor; if the first support is still fully visible it must share no bins and be > .35 m away. Two such supports = ambiguous, interval discarded. Second tracker acquisition (-90,+90) deg, maintenance (-180,+90) deg so the support stays tracked until the pass matures.",
+      "bypass": "Waypoint = (max(body length .38, support nearest x), support left edge + SECOND_BYPASS_SUPPORT_GAP_M .40 = detector MIN_RANGE .35 + .05): reaches the bypass line at the support near face (a pursuit arc to the old far-face point cut inside the support) and keeps the support observable when abeam (.26 m to the body side). Nominal = 1500 + LEFT_TRIAL_GAIN*bearing within 1350..1720: left allowed; any right still only after a current actual center ACK following left (route_right_output_authorized/server unchanged).",
+      "steps": "SECOND_ORBIT_PWM_STEP 40 per 100 ms for every second-target steering change (route exit release step already exercised in trial43); center crossing unchanged.",
+      "end": "At the observed second pass, if the bridge reports the commanded servo <= 1500 with ACK, the terminal coast keeps that clockwise command (route_end_coast_servo) instead of recentering. Loss of the second support still coasts toward center."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 58, test_route_control 30, test_maneuver_sequence 63, test_compact_target + roles: 214 passed. Three second-target tests rewritten to the new rule (first-lost beside never second; partial first no longer discards; geometry: support just right of center now gets a small left), step expectations 1490 -> 1500-40.",
+      "real43_fixture": "tests/fixtures/left-cone-43-second-left-front.json (saved 2564..2575 with the controller corridor, source sha256 4a05d802...): role proof on 2566/2568/2570/2572/2575 (left, normal ~.35 m), none on 2564. Live confirmation not replayed: saved frames are ~.36 m apart, beyond the .30 m association gate (live scans ~.18 m).",
+      "default_suites": "test_turn_quality_coast/test_turn_control/test_coast_control failure set identical before and after (pre-existing)."
+    },
+    "risks_not_resolved": [
+      "At ~1.8 m/s the support is first seen ~1.9 m ahead (5-point detector limit) and confirms ~0.3 s later; the left swing to a .40 m gap may be too late -> body gate or cone contact.",
+      "A dropped scan at ~1.8 m/s exceeds the .30 m association gate and restarts confirmation.",
+      "A strong left swing in a ~2.1 m band may approach the far wall before the right turn; the end board was ~1.5 m beyond the second support in trial43.",
+      "No speed limit exists; neutral coasting barely decelerates. Speed management after the first target is the main open design question."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

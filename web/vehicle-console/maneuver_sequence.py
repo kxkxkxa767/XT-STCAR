@@ -7,7 +7,7 @@ The service retains fresh body-clearance checks, ownership, heartbeat and ACKs.
 import copy
 import math
 
-from compact_target import CompactTargetTracker, _candidates, MAX_DIAMETER_M
+from compact_target import CompactTargetTracker, _candidates, MAX_DIAMETER_M, MIN_RANGE_M
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S,
@@ -41,6 +41,19 @@ ROUTE_EXIT_PREPARE_FRAMES = 2
 # bearings (1947/1948) but lost the native opening before the third, so the
 # entry cap coasted the left turn. Same frame count as the exit prepare.
 ROUTE_ENTRY_RELEASE_FRAMES = 2
+# Explicit continue_route only. Trial43: after the first-target right exit the
+# second target appeared at the LEFT front (+11 deg, 1.9 m) and was passed on
+# the wrong side at about 1.8 m/s (lidar closing rate). Passing it clockwise
+# (support kept on the right) needs a left swing and later a right turn within
+# about one second each, so every second-target steering step uses the route
+# exit release step already exercised on the car in trial43 (center crossing
+# and the right-after-center-ACK rule are unchanged).
+SECOND_ORBIT_PWM_STEP = 40
+# Lateral gap from the lidar origin to the support's current left edge at the
+# bypass point: keeps the support above the detector's minimum range while it
+# is abeam (trial43 lost the second support below .35 m) and leaves .26 m to
+# the measured body side, above the existing .08 m maneuver clearance.
+SECOND_BYPASS_SUPPORT_GAP_M = MIN_RANGE_M+.05
 # Same-frame native wall-window pairing reuses the native corridor gates
 # (corridor.rs): parallel 12 deg, width .65..2.5 m, shared support .35 m.
 PAIR_MAX_ANGLE_RAD = math.radians(12)
@@ -151,14 +164,18 @@ class ManeuverSequence(TurnMotion):
         self.second_orbit_since = None
         self.second_pass_evidence = None
         self.second_feedback = None
+        self.route_end_coast_servo = None
         self.role_distinct_evidence = None
         self.second_acquisition_reason = None
         self._second_pass_history = []
 
     @staticmethod
     def _new_second_tracker():
-        return CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, 0.),
-            maintenance_bearing_rad=(-3*math.pi/4, 0.), select_associated=True)
+        # Trial43: the second support first appears ahead on either side;
+        # once confirmed it moves from the front through the right to behind
+        # the rear, where the pass is matured over .25 s.
+        return CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, math.pi/2),
+            maintenance_bearing_rad=(-math.pi, math.pi/2), select_associated=True)
 
     def _route_event(self, name, scan, control, evidence=None):
         # One snapshot per transition, never an unbounded in-control log.
@@ -777,7 +794,9 @@ class ManeuverSequence(TurnMotion):
         if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != self.steering_target:
             target = self.steering_target
             reducing_left = self.servo > NEUTRAL and target < self.servo
-            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else (
+            second_orbit = (self.continue_route and self.phase == 'drive'
+                            and self.route_stage == 'second_orbit')
+            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else SECOND_ORBIT_PWM_STEP if second_orbit else (
                 (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
                 if reducing_left else PWM_STEP)
             if reducing_left and target < NEUTRAL:
@@ -868,6 +887,7 @@ class ManeuverSequence(TurnMotion):
                       steering_step_policy={'presteer': PRESTEER_PWM_STEP,
                           'reduce_left': LEFT_RELEASE_PWM_STEP,
                           'route_exit_reduce_left': ROUTE_EXIT_RELEASE_PWM_STEP if self.continue_route else None,
+                          'second_orbit': SECOND_ORBIT_PWM_STEP if self.continue_route else None,
                           'increase_left': PWM_STEP,
                           'center_to_right': PWM_STEP, 'interval_s': PWM_INTERVAL_S},
                       object_semantic_verified=False, passed_cones=None,
@@ -897,6 +917,7 @@ class ManeuverSequence(TurnMotion):
             second_center_ack=copy.deepcopy(self.second_center_ack),
             second_pass_evidence=copy.deepcopy(self.second_pass_evidence),
             second_feedback=copy.deepcopy(self.second_feedback),
+            route_end_coast_servo=self.route_end_coast_servo,
             second_acquisition_reason=self.second_acquisition_reason,
             role_distinct_evidence=copy.deepcopy(self.role_distinct_evidence),
             route_events=copy.deepcopy(self.route_events),
@@ -1208,31 +1229,51 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     def _second_role_observation(self, scan, now):
-        first = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
-        candidates = _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, 0.))
+        """One distinct compact support ahead inside the current corridor.
+
+        Trial43: the second target appeared at the left front while the first
+        was already behind; the old right-half-only, first-still-visible proof
+        never matched. The first support has a recorded pass behind the rear
+        and the car follows a forward corridor, so a support ahead of the body
+        front inside that corridor is a different object. If the first support
+        is still fully visible it must also share no bins and be separated.
+        """
         c = self.right_exit_geometry
         proof = None
-        if first is not None and self.first_pass_evidence is not None and len(candidates) == 1:
-            target = candidates[0]
-            bins = target['support_bins']
-            points = [(scan['ranges'][i]*math.cos(math.radians(i)),
-                       -scan['ranges'][i]*math.sin(math.radians(i))) for i in bins]
-            x, y = target['point_left_m']
+        if self.first_pass_evidence is not None and isinstance(c, dict):
+            first = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
             heading = c['heading_left_rad']
-            along = math.cos(heading)*x+math.sin(heading)*y
-            normal = -math.sin(heading)*x+math.cos(heading)*y
-            separation = min(math.dist(a, b) for a in first for b in points)
-            distinct = (not set(bins).intersection(self.compact_target['support_bins'])
-                        and separation > MAX_DIAMETER_M
-                        and x > FRONT_BODY_EXTENT_M and y < 0 and along > FRONT_BODY_EXTENT_M
-                        and abs(normal-c['center_offset_left_m']) < c['width_m']/2-MANEUVER_BODY_CLEARANCE_M)
-            if distinct:
-                proof = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
-                    'source_received_at': scan['received_at'], 'first_track_id': self.orbit_track_id,
-                    'first_support_bins': list(self.compact_target['support_bins']),
-                    'second_support_bins': list(bins), 'actual_support_separation_m': separation,
-                    'corridor_heading_left_rad': heading, 'second_along_m': along,
-                    'second_normal_m': normal, 'physical_identity_verified': False}
+            bound = c['width_m']/2-MANEUVER_BODY_CLEARANCE_M
+            ahead = []
+            for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2)):
+                x, y = target['point_left_m']
+                along = math.cos(heading)*x+math.sin(heading)*y
+                normal = -math.sin(heading)*x+math.cos(heading)*y
+                if (x > FRONT_BODY_EXTENT_M and along > FRONT_BODY_EXTENT_M
+                        and abs(normal-c['center_offset_left_m']) < bound):
+                    ahead.append((target, along, normal))
+            if len(ahead) == 1:
+                target, along, normal = ahead[0]
+                bins = target['support_bins']
+                points = [(scan['ranges'][i]*math.cos(math.radians(i)),
+                           -scan['ranges'][i]*math.sin(math.radians(i))) for i in bins]
+                separation = (None if first is None else
+                              min(math.dist(a, b) for a in first for b in points))
+                distinct = first is None or (
+                    not set(bins).intersection(self.compact_target['support_bins'])
+                    and separation > MAX_DIAMETER_M)
+                if distinct:
+                    proof = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                        'source_received_at': scan['received_at'], 'first_track_id': self.orbit_track_id,
+                        'first_support_visible': first is not None,
+                        'first_support_bins': (list(self.compact_target['support_bins'])
+                                               if first is not None else None),
+                        'first_pass_source_seq': self.first_pass_evidence.get('source_seq'),
+                        'second_support_bins': list(bins), 'actual_support_separation_m': separation,
+                        'corridor_heading_left_rad': heading, 'second_along_m': along,
+                        'second_normal_m': normal, 'second_side': 'left' if target['point_left_m'][1] > 0 else 'right',
+                        'basis': 'single_support_ahead_inside_current_corridor_after_first_pass',
+                        'physical_identity_verified': False}
         if proof is None:
             # acquire=False alone would still mature an existing unconfirmed
             # association. No role proof means discard that entire interval.
@@ -1293,14 +1334,8 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         if not self._route_adopted(control, now):
             return self._result(now)
-        if self.second_center_ack is None:
-            if self.servo == NEUTRAL:
-                self.second_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
-            else:
-                self.steering_target = NEUTRAL
-                self.reason = 'second_target_waiting_center_ack'
-                self._slew(now)
-                return self._result(now)
+        if self.second_center_ack is None and self.servo == NEUTRAL:
+            self.second_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
         points = self._full_target_points(target, scan, self.second_track_id)
         passed = (points is not None and max(p[0] for p in points) <= -REAR_BODY_EXTENT_M
                   and min(-p[1] for p in points)-SIDE_BODY_EXTENT_M >= MANEUVER_BODY_CLEARANCE_M)
@@ -1314,6 +1349,12 @@ class ManeuverSequence(TurnMotion):
                 'physical_cone_pass_certified': False, 'swept_path_certified': False}
             self._route_event('second_pass', scan, control, self.second_pass_evidence)
             self.begin_coast('two_target_observed_support_pass', now)
+            if (self.phase == 'coast' and control.get('servo') == self.servo <= NEUTRAL
+                    and control.get('command_acked') is True):
+                # Trial43 rolled straight into the end board at ~1.8 m/s: keep
+                # the ACKed clockwise (right/center) command, never recenter.
+                self.route_end_coast_servo = self.servo
+                self.steering_target = self.servo
             self._slew(now)
             return self._result(now)
         if not passed:
@@ -1326,20 +1367,32 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         body_length = FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M
         front = max(p[0] for p in points)
+        near = min(p[0] for p in points)
         left_edge = max(p[1] for p in points)
-        waypoint = [max(body_length, front+FRONT_BODY_EXTENT_M),
-                    left_edge+SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M]
+        # Reach the bypass line at the support's near face, not beyond its far
+        # face: a pursuit arc to a point past the support cuts inside it. The
+        # receding point then keeps that gap while the support is abeam.
+        waypoint = [max(body_length, near), left_edge+SECOND_BYPASS_SUPPORT_GAP_M]
         bearing = math.atan2(waypoint[1], waypoint[0])
-        nominal = max(RIGHT_EXIT_MIN_PWM, min(NEUTRAL,
+        # Trial43: the bypass point left of a left-front support needs left;
+        # right still requires a current actual center ACK after any left.
+        nominal = max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX,
             NEUTRAL+round(LEFT_TRIAL_GAIN*bearing)))
         self.second_feedback = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
             'current_support_left_edge_y_m': left_edge, 'current_support_frontmost_x_m': front,
+            'current_support_nearest_x_m': near, 'bypass_support_gap_m': SECOND_BYPASS_SUPPORT_GAP_M,
             'relative_bypass_point_left_m': waypoint, 'bearing_left_rad': bearing,
             'nominal_target_pwm': nominal,
             'scope': 'current_support_relative_point_trial',
             'swept_path_certified': False, 'physical_curvature_calibrated': False}
-        self.steering_target = self.natural_steering_target = nominal
-        self.reason = 'second_target_clockwise_bounded_entry'
+        self.natural_steering_target = nominal
+        if nominal < NEUTRAL and (self.second_center_ack is None or self.servo > NEUTRAL):
+            self.steering_target = NEUTRAL
+            self.reason = 'second_target_waiting_center_ack'
+        else:
+            self.steering_target = nominal
+            self.reason = ('second_target_left_of_support_entry' if nominal > NEUTRAL
+                           else 'second_target_clockwise_bounded_entry')
         self._slew(now)
         return self._result(now)
 
@@ -1589,8 +1642,9 @@ class ManeuverSequence(TurnMotion):
             if self.coast_since is not None and now-self.coast_since+1e-9 >= COAST_MAX_S:
                 self.lock('coast_standstill_unconfirmed')
             else:
-                self.steering_target = (NEUTRAL if self.quality_coast_servo is None
-                                        else self.quality_coast_servo)
+                self.steering_target = (self.quality_coast_servo if self.quality_coast_servo is not None
+                                        else self.route_end_coast_servo if self.route_end_coast_servo is not None
+                                        else NEUTRAL)
                 self._slew(now)
             return self._result(now)
         if self.quality_resume_pending:
