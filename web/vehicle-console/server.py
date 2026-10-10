@@ -1174,6 +1174,21 @@ class Console:
                     'motor_command': 1500, 'existing_arm_sequence': self.arm_sequence}
                 report['quality_wait_snapshot'] = self.turn_quality_snapshot(session,
                     self.turn_route_control(session, turn_control), now)
+            elif (route and session.get('phase') == motion.phase == 'drive'
+                    and control.get('seq', -1) >= self.arm_sequence
+                    and set(report.get('quality_issues', [])) == {'scan_incomplete'}
+                    and self.turn_quality_hold_eligible(session)
+                    and motion.begin_route_quality_coast(now, turn_control)):
+                # Trial41: a refused wait halted and centered while rolling.
+                # Cut motor, hold the adopted left; no resume (terminal coast).
+                self.begin_coast('turn_perception_unavailable', now)
+                report['quality_coast_trigger'] = {
+                    'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
+                    'quality_issues': list(report['quality_issues']),
+                    'adopted_servo': control['servo'], 'control_tick': control['tick'],
+                    'control_seq': control['seq'], 'motor_command': 1500,
+                    'hold_max_s': COAST_MAX_S, 'positive_motor_restore_allowed': False,
+                    'route_wait_refusal': copy.deepcopy(getattr(motion, 'quality_wait_refusal', None))}
             elif (not route and session.get('maneuver_sequence') is True
                     and session.get('phase') == motion.phase == 'drive'
                     and control.get('seq', -1) >= self.arm_sequence

@@ -15838,5 +15838,32 @@
     "not_inferred": "No speed, pose or wheel angle claimed; whether held left steering would have avoided the board is unknown.",
     "completed": false,
     "competition_supported": false
+  },
+  "after41_route_quality_coast_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 42,
+    "user_instruction": "2026-10-10 用户对“路线模式quality_wait被拒时改用保持已ACK左舵断电coast并记录拒绝原因”回复：是的",
+    "change": {
+      "scope": "Explicit --continue-route, route_stage first_target only; default and turn-left unchanged.",
+      "server": "When phase drive, quality_issues == {scan_incomplete}, turn_quality_hold_eligible, and begin_quality_wait refused: if ManeuverSequence.begin_route_quality_coast accepts, begin_coast(turn_perception_unavailable) with motor 1500 and the ACKed left held (existing _begin_adopted_left_coast / turn_quality_coast_active path used by default mode since trial20); report quality_coast_trigger incl. route_wait_refusal. Otherwise halt as before.",
+      "coast_conditions": "handover observed, no first-pass evidence or right exit, armed, motor 1560, command ACKed and bridge servo == commanded servo in (1500,1720]. Un-ACKed step keeps the old halt (late ACK would change held feedback). Terminal coast: COAST_MAX_S 5, no power restore, no new wait.",
+      "refusal_record": "begin_quality_wait stores quality_wait_refusal {reason: route_state|control_not_acked_left|scan_stale|target_not_fully_isolated, control_servo, command_acked, servo, scan_seq}; reported in turn result.",
+      "behavior_change_noted": "A second scan_incomplete after the single used wait (refusal route_state) now also coasts with ACKed left instead of halting; test renamed test_second_quality_loss_coasts_with_acked_left_without_rearming_or_new_wait."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 52, test_route_control 25 (2 new, 1 changed), test_maneuver_sequence 63: 140 passed",
+      "default_suites": "test_turn_quality_coast/test_turn_control/test_coast_control: 27 failures identical before and after (pre-existing)."
+    },
+    "risks_not_resolved": [
+      "Neutral 1500 still coasts; holding left does not certify missing the board.",
+      "An un-ACKed +10 step at the refused frame still halts and centers.",
+      "Round-40 exit changes remain physically untested."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false
   }
 }

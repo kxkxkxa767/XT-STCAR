@@ -102,6 +102,7 @@ class ManeuverSequence(TurnMotion):
         self._current_scan = None
         self.inner_clearance = None
         self.quality_coast_servo = None
+        self.quality_wait_refusal = None
         self.quality_coast_reason = None
         self.entry_bearing_required = False
         self.entry_bearing_released = False
@@ -310,21 +311,28 @@ class ManeuverSequence(TurnMotion):
 
     def begin_quality_wait(self, now, control, *, scan=None):
         """One opt-in neutral wait; this never reopens a terminal coast."""
+        def refuse(reason):
+            # Trial41: the refusal reason was not recorded; keep it for analysis.
+            self.quality_wait_refusal = {'reason': reason, 'at': now if _number(now) else None,
+                'control_servo': control.get('servo'), 'command_acked': control.get('command_acked'),
+                'servo': self.servo, 'scan_seq': scan.get('seq') if isinstance(scan, dict) else None}
+            return False
         if (not self.continue_route or self.quality_wait_used or self.phase != 'drive'
                 or not self.handover_observed or self.first_pass_evidence is not None
                 or self.right_exit_since is not None or self.route_stage != 'first_target'
-                or not _number(now) or now < self.last_now
-                or control.get('armed') is not True or control.get('motor') != TRIAL_MOTOR
+                or not _number(now) or now < self.last_now):
+            return refuse('route_state')
+        if (control.get('armed') is not True or control.get('motor') != TRIAL_MOTOR
                 or control.get('command_acked') is not True
                 or not NEUTRAL < control.get('servo', 0) == self.servo <= SERVO_MAX):
-            return False
+            return refuse('control_not_acked_left')
         scan = self._current_scan if scan is None else scan
         if (not isinstance(scan, dict) or not _number(scan.get('received_at'))
                 or not 0 <= now-scan['received_at'] < SCAN_AGE_S):
-            return False
+            return refuse('scan_stale')
         observed = self.target_tracker.update(scan, now, acquire=True)
         if self._full_target_points(observed, scan, self.orbit_track_id) is None:
-            return False
+            return refuse('target_not_fully_isolated')
         self.compact_target = observed
         self._current_scan = scan
         self.quality_wait_used = True
@@ -711,6 +719,18 @@ class ManeuverSequence(TurnMotion):
     def begin_quality_coast(self, now, control):
         return self._begin_adopted_left_coast('turn_perception_unavailable', now, control)
 
+    def begin_route_quality_coast(self, now, control):
+        """Route fallback when the neutral wait is refused on scan_incomplete.
+
+        Trial41 halted, snapping 1689 to center while still rolling, and hit
+        the outer board. Cut power and hold the ACKed left instead, exactly
+        as the default sequence has since trial20. An un-ACKed step keeps the
+        old halt (a late ACK would change the held feedback).
+        """
+        if not self.continue_route or self.route_stage != 'first_target':
+            return False
+        return self._begin_adopted_left_coast('route_quality_coast_adopted_left', now, control)
+
     def _begin_adopted_left_coast(self, reason, now, control):
         """Cut power while retaining only an ACKed left orbit-entry command."""
         if (self.phase != 'drive' or not self.handover_observed
@@ -856,6 +876,7 @@ class ManeuverSequence(TurnMotion):
                       entry_bearing_released=self.entry_bearing_released,
                       adopted_presteer_pwm=self.adopted_presteer_pwm,
                       quality_coast_servo=self.quality_coast_servo,
+                      quality_wait_refusal=copy.deepcopy(self.quality_wait_refusal),
                       quality_coast_reason=self.quality_coast_reason,
                       quality_coast_hold_active=(self.phase == 'coast'
                                                 and self.quality_coast_servo is not None),

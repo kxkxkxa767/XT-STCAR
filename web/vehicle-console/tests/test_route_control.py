@@ -143,15 +143,50 @@ class RouteControlTests(unittest.TestCase):
         self.assertFalse(session['report']['completed'])
         self.assertFalse(session['report']['competition_supported'])
 
-    def test_second_quality_loss_halts_without_rearming_or_new_wait(self):
-        session, _ = self.resume()
+    def test_second_quality_loss_coasts_with_acked_left_without_rearming_or_new_wait(self):
+        # Trial41: a refused wait no longer halts/centers while rolling.
+        session, held = self.resume()
         self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
         snapshot = copy.deepcopy(session['report']['quality_wait_snapshot'])
+        servo = self.console.status['control']['servo']
         self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1))
-        self.assertIsNone(self.console.auto_session)
-        self.assertEqual(self.outputs[-1]['op'], 'stop')
-        self.assertEqual(self.console.auto_result['quality_wait_snapshot'], snapshot)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'coast')
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
+        self.assertEqual(session['turn_motion'].quality_wait_refusal['reason'], 'route_state')
+        self.assertEqual(session['report']['quality_wait_snapshot'], snapshot)
+        self.assertFalse(session['report']['quality_coast_trigger']['positive_motor_restore_allowed'])
+        for _ in range(4):
+            self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
+            self.assertFalse(any(row.get('motor', 1500) > 1500 for row in self.outputs[-1:]))
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
+
+    def test_refused_first_wait_on_partial_target_coasts_with_acked_left(self):
+        _, session = self.enter_compact_orbit(continue_route=True)
+        servo = self.console.status['control']['servo']
+        value = self.incomplete(self.console.scan['seq']+1)
+        value['ranges'][self.target_bins.start-1] = None  # Trial41 1356: return beside target missing.
+        self.observe(round(self.now+.1, 6), value)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'coast')
+        self.assertEqual(session['turn_motion'].quality_wait_refusal['reason'], 'target_not_fully_isolated')
+        self.assertEqual(session['report']['quality_coast_trigger']['route_wait_refusal']['reason'],
+                         'target_not_fully_isolated')
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
+        coast_start = len(self.outputs)
+        for _ in range(4):
+            self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
+        self.assertTrue(all(row.get('motor', 1500) <= 1500 for row in self.outputs[coast_start:]))
+        self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
+
+    def test_refused_wait_with_unacked_step_still_halts(self):
+        _, session = self.enter_compact_orbit(continue_route=True)
+        motion = session['turn_motion']
+        self.assertFalse(motion.begin_route_quality_coast(self.now,
+            {**self.console.status['control'], 'command_acked': False}))
+        self.assertFalse(motion.begin_route_quality_coast(self.now,
+            {**self.console.status['control'], 'servo': motion.servo-10, 'command_acked': True}))
+        self.assertEqual(motion.phase, 'drive')
 
     def test_front_sparse_only_extends_actual_neutral_wait_and_never_restores(self):
         session, held = self.wait()
