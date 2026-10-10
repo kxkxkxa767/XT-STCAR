@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "40 (5a3d05b) ran once: left turn not completed; outer wall ambiguity at 1949, endpoint lost 1952 -> coast, ambiguity in coast 1955 -> lock; no cone handover. Round-40 exit changes not exercised. User returned car to start. No further run.",
+  "latest_trial_status": "41 (5d68f85) ran once: entry release (2 fresh frames) and first-cone handover worked; during orbit entry a scan_incomplete frame was not accepted for the route quality wait, server halted and centered steering at once, car coasted into the right board of the cone channel (operator-reported contact). No further run.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -15769,8 +15769,8 @@
   "after40_entry_release_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 41,
     "user_instruction": "2026-10-10 用户：你修改然后进行第41轮吧",
     "finding": {
@@ -15793,6 +15793,49 @@
       "Outer-wall ambiguity or compact-target confirmation may still stop the turn before handover."
     ],
     "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "source_commit": "5d68f858cbf42290eaeb6e7f0d2acff86c07b5c9",
+      "archive_sha256": "cd83cfd4953bcb3322fa67169ddd4aebf7a5e2f07d4f4ead23f4d2be5d5d440b",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn41-20261010-214045",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn41-20261010-214045",
+      "helper_sha256": "0ea89508884e435e2ccb97c7f087756818cb822aea5e61bff01d19a4d970e8dc",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before41-fresh.json (5a3d05b, ready) / after41-deploy-fresh.json / pre41-run-fresh.json: six fresh locked ready samples each, 14 hashes match"
+    }
+  },
+  "turn41_actual": {
+    "date": "2026-10-10",
+    "executor": "Claude",
+    "vehicle_source_commit": "5d68f858cbf42290eaeb6e7f0d2acff86c07b5c9",
+    "operator_confirmed_before_run": "用户：我已经放回去了，你开始吧",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261010-41/ (7 files sha256 match trial41-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 7.33,
+    "observer_stop_requested": false,
+    "terminal_reason": "turn_perception_unavailable (server halt)",
+    "operator_report": "用户：这一次撞到锥桶通道右边的挡板了",
+    "physical_contact": true,
+    "timeline": {
+      "presteer": "adopted 1653 (endpoint-limited)",
+      "entry_release": "scan 1339, route_fresh_frames 2 (round-41 change exercised); servo 1663->1672 then geometry target fell to 1643",
+      "handover": "1349 compact track 1 confirmation 4 at 1.16 m; orbit entry 1350..1356 servo 1659->1689 (+10), target 1710..1712",
+      "before_halt": "1356: outer board ahead at about .62 m from body front (index 6); cone .84..0.94 m at left; returns 285..291 next to the cone missing (valid fraction .944)",
+      "halt": "1357 (~5.94 s): quality_issues == {scan_incomplete}, but route begin_quality_wait did not accept; server took the final branch halt(turn_perception_unavailable): motor 1500 and servo 1500 immediately (from 1689). Nearest board then .505 m from body box at front-right (index 33).",
+      "rest": "after.json 1368: returns at indices 15..19 at the front-right body edge (box gap 0.0) -> consistent with operator-reported contact."
+    },
+    "quality_wait_refusal_inferred": "Most likely _full_target_points failed on incomplete scan 1356 (missing returns right next to the cone support) or servo/ACK mismatch during +10 stepping; the refusal reason is not recorded, so not proven.",
+    "round41_change_exercised": true,
+    "round40_exit_changes_exercised": false,
+    "post_trial_lock": "after.json six fresh neutral samples; after41-trial-fresh.json six fresh samples healthy, owner None, locked, unarmed, 1500/1500, turn_ready false (probe_obstacle_close_body at rest).",
+    "not_inferred": "No speed, pose or wheel angle claimed; whether held left steering would have avoided the board is unknown.",
     "completed": false,
     "competition_supported": false
   }

@@ -1,9 +1,12 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-10 Claude第41轮：修正路线模式左转入口释放；用户授权“你修改然后进行第41轮吧”）
+## 当前接手入口（2026-10-10 Claude第41轮已实车一次：左转与首桶交接成功，绕桶入口时停机回中撞右挡板；暂停待新指令）
 
-**用户要求修改后进行第41轮。Claude实现 `after40_entry_release_correction`（机器记录为准；部署/实车状态以该键及 `turn41_actual` 为准）。执行前仍须确认当次静止/摆放，helper只跑一次。5a3d05b（第40轮）已部署并实车一次，备份 `backup-claude-turn40-20261010-211412`；机器记录 `turn40_actual`。**
+**5d68f85（第41轮）已部署并实车一次（备份 `backup-claude-turn41-20261010-214045`，机器记录 `turn41_actual`）。用户报告：“这一次撞到锥桶通道右边的挡板了”。下一轮须用户新指令，并再次确认静止/摆放；helper只跑一次。**
 
+- 41实际：预打1653；1339以2帧新鲜释放入口上限（41修正生效）；1349首桶交接（track1、1.16m），绕桶入口舵1659→1689。1357仅有scan_incomplete，但路线quality_wait未接受，服务端走最后分支 `halt(turn_perception_unavailable)`，电机与舵立即1500（舵由1689瞬间回中），车滑行撞右前挡板（停后1368前右车身边缘有回波，间隙0）。
+- 拒绝原因未记录，最可能：1356/1357不完整扫描中锥桶旁回波缺失致 `_full_target_points` 失败，或+10加舵中舵量/ACK不一致；不得写成已证。40出口修改仍未触发。
+- 待用户决定的修正方向（未实现）：路线模式在仅scan_incomplete而quality_wait被拒时，改用已有“保持已ACK左舵并断电”的coast（默认模式trial20起已用），而不是立即回中停机；并记录拒绝原因。
 - 41修正（仅显式 `--continue-route`）：左转入口端头方位上限释放由“3帧且≥.25s”改为“同一允许条件（端头方位上限≥预打1670、侧向间隙>0）连续2帧严格新鲜”（复用 `_consecutive_fresh`：seq/at_ms/接收时刻严格递增、间隔<.30s、时钟差≤.15s，重复帧不计）；任一不允许帧、端头缺失或观测类型变化即清零。释放仍只解除入口上限，交接仍需已确认的紧凑目标。默认模式与turn-left不变。
 - 41依据：40控制记录1947（上限1696、前向间隙.086m）与1948计到2帧，1949外墙歧义使端头观测未执行，1951起开口消失、计数清零、.3s租约到期→1952入口端头丢失coast。38/39各在开口消失前1–2帧以第4帧成熟释放，37以车头投影释放；40差一帧。另：保存的1949原生开口端头已越过车头投影（-.083m），但同帧外墙歧义跳过观测；此顺序未改。
 - 验证：test_maneuver_route 52（新增4项RouteEntryReleaseTests）、test_route_control 23、test_maneuver_sequence 63共138项通过。保存帧缺1948，未用回放冒充实车释放。
@@ -43,10 +46,10 @@
 ## 下一步与证据位置
 
 1. 读本文件、[上传规范](上传规范.md)及[动态左转机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)。先fetch核对main，再修改。历史记录只按需检索。
-2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至39在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35,36,37,38,39}/`；40在同目录 `left-cone-trial-20261010-40/`。原helper/摘要/完整记录均保留；车端原目录在base下。
+2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至39在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35,36,37,38,39}/`；40、41在同目录 `left-cone-trial-20261010-{40,41}/`。原helper/摘要/完整记录均保留；车端原目录在base下。
 3. 旧完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`。19至30部署及逐帧分析在`work/vehicle-dynamic-deploy-20261008/`；29为`target-evidence-deployment-result.json`，stage为base下`stage-target-evidence-20261008-212120`。
 4. 18分析仍在旧目录`trial18-analysis.json`/`trial18-target-components.json`，回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。18的最终drive/orbit计数含coast；区分各自scan序号、PWM/物理轮角、计数器/动力时长。
-5. 第41轮已获用户授权（修改后进行）；部署按 `build-matched.py claude-turn40 claude-turn41 41 after40_entry_release_correction` 与 `deploy-matched.py claude-turn41 41`，执行前读取新鲜锁定反馈并确认静止/摆放，helper只执行一次，不覆盖旧轮。
+5. 第41轮已执行（一次，撞右挡板）。再试须用户新指令；新轮用 `build-matched.py claude-turn41 claude-turn42 42 <记录键>` 与 `deploy-matched.py claude-turn42 42`（须在工程根目录运行build），执行前读取新鲜锁定反馈并确认静止/摆放，helper只执行一次，不覆盖旧轮。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署
