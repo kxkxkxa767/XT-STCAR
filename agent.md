@@ -1,11 +1,13 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-10 第42轮已实车一次：左转中front_sparse停机，未交接首桶；暂停待新指令）
+## 当前接手入口（2026-10-10 Claude第43轮：方案1，路线模式左转/绕桶入口的front_sparse与scan_incomplete一律保持已ACK舵量断电滑行；用户：“按方案1修改然后进行第43轮”）
 
-**5dd48fa（第42轮）已部署并实车一次（备份 `backup-claude-turn42-20261010-214921`，机器记录 `turn42_actual`）。用户：“42轮测试完成后，左转没有完成”。执行的确认与启动不在分析时可见的会话中，仅由本地 `pre42-run-fresh.json`/`trial42-stdout.json` 时间及车端唯一目录证明执行一次。下一轮须用户新指令并再次确认静止/摆放。**
+**实现 `after42_front_sparse_route_coast_correction`（部署/实车以该键及 `turn43_actual` 为准）。执行前仍须确认当次静止/摆放，helper只跑一次。第42轮（5dd48fa）见 `turn42_actual`。**
 
+- 43修正（仅显式 `--continue-route`、first_target阶段且未过首桶）：drive中质量问题为{scan_incomplete, front_sparse}的非空子集时，交接后仅scan_incomplete仍先试单次中性等待；否则只要前±30°未知数≤现有上限6（连续缺口可>3）、命令已ACK且桥舵量==命令舵量(1500,1720]，即进入保持该舵量、电机1500的终止coast（左转阶段也适用，`route_quality_coast`）。该coast在中性待ACK期间亦允许front_sparse延续；运动侧held coast一律走 `_orbit_update`，只校验扫描/控制/armed新鲜，不再做墙几何关联，故歧义或几何缺失不再回中；5s上限、静止即停不变。未知>6、未ACK、其他质量问题、车身近距、旧帧、桥锁定等仍halt。
+- 验证：route 52、route_control 30（新增5、移出1个子用例）、maneuver_sequence 63共145项通过；去掉update路由的变异使新左转用例失败（舵1670→1650）；默认三组失败集合改动前后一致。
+- 风险：左转中保持左舵滑行可能扫向内侧板端，仅当前回波车身近距门保护；1500仍滑行。
 - 42实际：本次摆放端头方位上限1694，静止预打中即按2帧释放（旧3帧规则静止时同样会释放），预打1670（37–40为1627–1667）；drive中舵1670→1692，579外墙歧义保持后目标降至约1645；585/587之后因front_sparse（前±30°未知>6或连续>3）在drive中halt回中。保存帧578..587右前6..16°反复缺回波，前方挡板约1.8–2.3m；触发帧本身未被observer采到。未交接首桶，42的路线coast未触发（仅交接后且仅scan_incomplete）。停后最近回波距车身.667m，数据无接触证据。
-- 待用户决定（未实现）：front_sparse在drive中仍硬停回中；可选方向为左转/绕桶阶段把front_sparse与scan_incomplete同样处理（保持已ACK舵量断电coast），或对前方缺回波仅在其不覆盖行驶方向近距时容忍。均为假设，需用户确认后再改。
 - 42修正（仅显式 `--continue-route`、first_target阶段）：drive中仅scan_incomplete且quality_wait被拒时，若已交接、未过首桶、命令已ACK且桥舵量==命令舵量（1500,1720]，改走默认模式trial20起已有的“保持已ACK左舵、电机1500”终止coast（5s，不恢复动力、不再等待）；否则仍halt。begin_quality_wait记录拒绝原因 `quality_wait_refusal`（route_state/control_not_acked_left/scan_stale/target_not_fully_isolated），coast触发记录 `route_wait_refusal`。已用过一次等待后的第二次scan_incomplete同样改为该coast（测试已改名）。
 - 验证：route 52、route_control 25（新增2、改1）、maneuver_sequence 63共140项通过；默认三组同为27项既有失败，改动前后一致。
 - 41实际：预打1653；1339以2帧新鲜释放入口上限（41修正生效）；1349首桶交接（track1、1.16m），绕桶入口舵1659→1689。1357仅有scan_incomplete，但路线quality_wait未接受，服务端走最后分支 `halt(turn_perception_unavailable)`，电机与舵立即1500（舵由1689瞬间回中），车滑行撞右前挡板（停后1368前右车身边缘有回波，间隙0）。
@@ -52,7 +54,7 @@
 2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至39在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35,36,37,38,39}/`；40–42在同目录 `left-cone-trial-20261010-{40,41,42}/`。原helper/摘要/完整记录均保留；车端原目录在base下。
 3. 旧完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`。19至30部署及逐帧分析在`work/vehicle-dynamic-deploy-20261008/`；29为`target-evidence-deployment-result.json`，stage为base下`stage-target-evidence-20261008-212120`。
 4. 18分析仍在旧目录`trial18-analysis.json`/`trial18-target-components.json`，回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。18的最终drive/orbit计数含coast；区分各自scan序号、PWM/物理轮角、计数器/动力时长。
-5. 第42轮已执行（一次，左转front_sparse停机）。再试须用户新指令；新轮用 `build-matched.py claude-turn42 claude-turn43 43 <记录键>` 与 `deploy-matched.py claude-turn43 43`（须在工程根目录运行build），执行前读取新鲜锁定反馈并确认静止/摆放，helper只执行一次，不覆盖旧轮。
+5. 第43轮已获用户授权（方案1）；部署用 `build-matched.py claude-turn42 claude-turn43 43 after42_front_sparse_route_coast_correction` 与 `deploy-matched.py claude-turn43 43`（须在工程根目录运行build），执行前读取新鲜锁定反馈并确认静止/摆放，helper只执行一次，不覆盖旧轮。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署

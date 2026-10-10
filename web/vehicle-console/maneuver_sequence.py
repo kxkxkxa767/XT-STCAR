@@ -720,20 +720,23 @@ class ManeuverSequence(TurnMotion):
         return self._begin_adopted_left_coast('turn_perception_unavailable', now, control)
 
     def begin_route_quality_coast(self, now, control):
-        """Route fallback when the neutral wait is refused on scan_incomplete.
+        """Route fallback for bounded missing returns in the first-target stage.
 
         Trial41 halted, snapping 1689 to center while still rolling, and hit
-        the outer board. Cut power and hold the ACKed left instead, exactly
-        as the default sequence has since trial20. An un-ACKed step keeps the
-        old halt (a late ACK would change the held feedback).
+        the outer board; trial42 halted the same way on front_sparse during
+        the left turn. Cut power and hold the ACKed left instead, as the
+        default sequence has since trial20, before or after handover. An
+        un-ACKed step keeps the old halt (a late ACK would change the held
+        feedback).
         """
         if not self.continue_route or self.route_stage != 'first_target':
             return False
-        return self._begin_adopted_left_coast('route_quality_coast_adopted_left', now, control)
+        return self._begin_adopted_left_coast('route_quality_coast_adopted_left', now, control,
+                                              require_handover=False)
 
-    def _begin_adopted_left_coast(self, reason, now, control):
+    def _begin_adopted_left_coast(self, reason, now, control, *, require_handover=True):
         """Cut power while retaining only an ACKed left orbit-entry command."""
-        if (self.phase != 'drive' or not self.handover_observed
+        if (self.phase != 'drive' or (require_handover and not self.handover_observed)
                 or self.first_pass_evidence is not None or self.right_exit_since is not None
                 or control.get('armed') is not True
                 or control.get('motor') != TRIAL_MOTOR
@@ -1762,7 +1765,12 @@ class ManeuverSequence(TurnMotion):
             # The new trial is target tracking, not the old optional stop input.
             self.lock('unsupported_maneuver_entry_stop')
             return self._result(self.last_now)
-        if (self.handover_observed or (self.phase == 'coast' and self.wall_ambiguity_hold)
+        # A held quality coast (route mode may start one in the left turn)
+        # only validates advancing scans/control and keeps its ACKed servo;
+        # no geometry association can recenter it while still rolling.
+        if (self.handover_observed
+                or (self.phase == 'coast' and (self.wall_ambiguity_hold
+                                               or self.quality_coast_servo is not None))
                 or (self.phase == 'drive' and self._usable_target(self.compact_target, scan))):
             return self._orbit_update(scan, lidar_age_s, now, control,
                                       safe=safe, presteer_wait=presteer_wait,

@@ -985,7 +985,7 @@ class Console:
                 session['report']['clearance_current'] = obstacle_clearance
             self.halt(str(error))
 
-    def turn_quality_hold_eligible(self, session):
+    def turn_quality_hold_eligible(self, session, *, route_entry=False):
         """Quality may permit neutral steering continuity, never powered motion.
 
         A front gap may exceed the existing consecutive-gap limit only while
@@ -1006,12 +1006,17 @@ class Console:
         if 'front_sparse' in issues:
             control = self.status.get('control', {})
             neutral_seq = session.get('coast_neutral_sequence')
-            # This narrower allowance only continues a neutral command that
-            # the bridge has already adopted. It cannot enter from drive or
-            # share the old incomplete-scan grace while neutral is pending.
-            if (session.get('phase') != 'coast' or type(neutral_seq) is not int
-                    or control.get('motor') != 1500
-                    or control.get('seq', -1) < neutral_seq):
+            # Trial42 (explicit route only): front_sparse in drive may enter
+            # the held-steering motor cut, and that coast may continue while
+            # its neutral command is still pending; the alternative halt is
+            # the same pending neutral but recenters while rolling. Otherwise
+            # this narrower allowance only continues an adopted neutral.
+            route_coast = (session.get('route_quality_coast') is True
+                           and session.get('phase') == 'coast')
+            if (not route_entry and not route_coast
+                    and (session.get('phase') != 'coast' or type(neutral_seq) is not int
+                         or control.get('motor') != 1500
+                         or control.get('seq', -1) < neutral_seq)):
                 return False
             ranges = scan.get('ranges')
             if not isinstance(ranges, list) or len(ranges) != 360:
@@ -1030,7 +1035,8 @@ class Console:
         neutral_seq = session.get('coast_neutral_sequence')
         return (session.get('maneuver_sequence') is True
                 and session.get('phase') == getattr(motion, 'phase', None) == 'coast'
-                and getattr(motion, 'handover_observed', False) is True
+                and (getattr(motion, 'handover_observed', False) is True
+                     or session.get('route_quality_coast') is True)
                 and getattr(motion, 'first_pass_evidence', None) is None
                 and getattr(motion, 'right_exit_since', None) is None
                 and type(held) is int and 1500 < held <= SERVO_MAX
@@ -1176,11 +1182,15 @@ class Console:
                     self.turn_route_control(session, turn_control), now)
             elif (route and session.get('phase') == motion.phase == 'drive'
                     and control.get('seq', -1) >= self.arm_sequence
-                    and set(report.get('quality_issues', [])) == {'scan_incomplete'}
-                    and self.turn_quality_hold_eligible(session)
+                    and set(report.get('quality_issues', []))
+                    and set(report.get('quality_issues', [])) <= {'scan_incomplete', 'front_sparse'}
+                    and self.turn_quality_hold_eligible(session, route_entry=True)
                     and motion.begin_route_quality_coast(now, turn_control)):
-                # Trial41: a refused wait halted and centered while rolling.
-                # Cut motor, hold the adopted left; no resume (terminal coast).
+                # Trial41/42: a refused wait or front_sparse halted and centered
+                # while rolling, in orbit entry and in the left turn. Cut motor,
+                # hold the adopted left; no resume (terminal coast). Front
+                # unknowns above the existing count limit still halt.
+                session['route_quality_coast'] = True
                 self.begin_coast('turn_perception_unavailable', now)
                 report['quality_coast_trigger'] = {
                     'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
@@ -1188,7 +1198,9 @@ class Console:
                     'adopted_servo': control['servo'], 'control_tick': control['tick'],
                     'control_seq': control['seq'], 'motor_command': 1500,
                     'hold_max_s': COAST_MAX_S, 'positive_motor_restore_allowed': False,
-                    'route_wait_refusal': copy.deepcopy(getattr(motion, 'quality_wait_refusal', None))}
+                    'route_wait_refusal': copy.deepcopy(getattr(motion, 'quality_wait_refusal', None)),
+                    'handover_observed': motion.handover_observed,
+                    'front_unknown_bins': list((report.get('clearance_current') or {}).get('front_unknown_bins', []))}
             elif (not route and session.get('maneuver_sequence') is True
                     and session.get('phase') == motion.phase == 'drive'
                     and control.get('seq', -1) >= self.arm_sequence

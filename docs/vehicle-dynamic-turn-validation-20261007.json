@@ -15905,5 +15905,34 @@
     "not_inferred": "No claim that grazing incidence is the cause of the missing returns; no speed/pose.",
     "completed": false,
     "competition_supported": false
+  },
+  "after42_front_sparse_route_coast_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 43,
+    "user_instruction": "2026-10-10 用户：按方案1修改然后进行第43轮（方案1：左转与绕桶阶段把前方缺回波与扫描不完整同样处理，断电并保持已确认舵量，不停机回中）",
+    "change": {
+      "scope": "Explicit --continue-route, route_stage first_target (left turn and orbit entry, before first-pass evidence/right exit); default sequence and turn-left unchanged.",
+      "server_entry": "In drive with quality_issues a non-empty subset of {scan_incomplete, front_sparse}: post-handover scan_incomplete-only still tries the single neutral wait first; otherwise turn_quality_hold_eligible(route_entry=True) (front +-30 deg unknown count <= existing FRONT_MAX_UNKNOWN 6; consecutive gap may exceed 3) and begin_route_quality_coast -> session route_quality_coast, begin_coast(turn_perception_unavailable), motor 1500, ACKed servo held. quality_coast_trigger adds handover_observed and front_unknown_bins.",
+      "server_continuation": "turn_quality_coast_active accepts route_quality_coast in place of handover; front_sparse continuation in that coast allowed while its neutral is pending (same pending window as the halt alternative), still count <= 6 and exact unknown-bin match, servo == held, armed, no positive motor.",
+      "motion": "_begin_adopted_left_coast(require_handover=False) for the route coast; ManeuverSequence.update routes any held quality coast to _orbit_update, which validates advancing scan/control/armed and holds quality_coast_servo without geometry association (no recentering by wall ambiguity or missing geometry). Coast still locks at COAST_MAX_S 5 s and halts on observed standstill.",
+      "still_halts": "front unknown > 6, un-ACKed step or servo != commanded, any other quality issue, body proximity, stale/reordered scans or control, bridge locked, deadlines."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 52, test_route_control 30 (5 new, 1 subtest moved), test_maneuver_sequence 63: 145 passed",
+      "mutation_check": "Reverting only the update() routing makes the new left-turn test fail (coast servo 1670 -> 1650 from geometry coast target).",
+      "default_suites": "test_turn_quality_coast/test_turn_control/test_coast_control failure set identical before and after (pre-existing 27)."
+    },
+    "risks_not_resolved": [
+      "Holding left while coasting in the left turn may sweep toward the inner board end; only the existing current-return body proximity gate protects.",
+      "1500 still coasts; no stop distance certified.",
+      "Front unknown > 6 still halts and recenters.",
+      "Round-40 exit changes still physically untested."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false
   }
 }
