@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "41 (5d68f85) ran once: entry release (2 fresh frames) and first-cone handover worked; during orbit entry a scan_incomplete frame was not accepted for the route quality wait, server halted and centered steering at once, car coasted into the right board of the cone channel (operator-reported contact). No further run.",
+  "latest_trial_status": "42 (5dd48fa) ran once: full 1670 presteer from this placement, left turn halted on front_sparse before cone handover; no contact in data. Round-42 coast fallback not exercised. No further run.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -15842,8 +15842,8 @@
   "after41_route_quality_coast_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 42,
     "user_instruction": "2026-10-10 用户对“路线模式quality_wait被拒时改用保持已ACK左舵断电coast并记录拒绝原因”回复：是的",
     "change": {
@@ -15863,6 +15863,46 @@
       "Round-40 exit changes remain physically untested."
     ],
     "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "source_commit": "5dd48fad5b55adacc9eb5dc963e6eceab78dfb91",
+      "archive_sha256": "05508b474d09dbb9d6e75462b6dfddd0eed8fd625934585a71605f88160f6c90",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn42-20261010-214921",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn42-20261010-214921",
+      "helper_sha256": "b6784c407a94918fd57d1e29368b98cb2c82001b5fed1a8e4c3aeff3da09d658",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before42-fresh.json (5d68f85) / after42-deploy-fresh.json / pre42-run-fresh.json: six fresh locked ready samples, 14 hashes match"
+    }
+  },
+  "turn42_actual": {
+    "date": "2026-10-10",
+    "vehicle_source_commit": "5dd48fad5b55adacc9eb5dc963e6eceab78dfb91",
+    "launch_provenance": "pre42-run-fresh.json written 21:50:24 and trial42-stdout.json 21:50:30..37 (Mac clock) after the deploy; the operator confirmation and launch are not in the Claude conversation context available at analysis time. Vehicle base has exactly one left-cone-trial-20261010-42 directory (created 23:16 vehicle clock).",
+    "operator_report": "用户：42轮测试完成后，左转没有完成",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261010-42/ (7 files sha256 match trial42-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 6.5,
+    "observer_stop_requested": false,
+    "terminal_reason": "turn_perception_unavailable (server halt, quality front_sparse)",
+    "physical_contact_observed_in_data": false,
+    "timeline": {
+      "presteer": "entry bearing cap 1694 (forward gap .182 m) at the stationary start: released after 2 route frames during presteer (old 3-frame rule would also release while stationary); adopted full 1670 (37..40 were endpoint-limited 1627..1667) -> placement-dependent.",
+      "drive": "573..577 servo 1670->1692; 579 outer-wall ambiguity hold; geometry target fell to 1650..1645, servo 1691->1646.",
+      "halt": "after saved 585/587: front_sparse (front +-30 deg unknown > 6 or gap > 3) in drive -> halt, motor and servo 1500. Saved 578..587 show repeated null runs at bins 6..16 (right-front) while the board ahead was ~1.8..2.3 m; the tripping scan itself was not sampled by the observer.",
+      "handover": "none (compact target never confirmed); round-42 route coast fallback not applicable before handover and only for scan_incomplete."
+    },
+    "rest": "after.json 599: nearest return .667 m from body box (no contact evidence).",
+    "post_trial_lock": "after.json and after42-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500 (turn_ready false: left_corridor_unknown, off start).",
+    "round42_change_exercised": false,
+    "history": "max front null run in 37/38/39 feedback: 3/6/3 (38 also tolerated by sampling).",
+    "not_inferred": "No claim that grazing incidence is the cause of the missing returns; no speed/pose.",
     "completed": false,
     "competition_supported": false
   }
