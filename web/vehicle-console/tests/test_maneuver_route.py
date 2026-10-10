@@ -937,5 +937,56 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertTrue(all(not r['route_right_output_authorized'] for r in outputs.values()))
         self.assertTrue(all(r['first_pass_evidence'] is None for r in outputs.values()))
 
+class RouteEntryReleaseTests(unittest.TestCase):
+    """Trial40: two fresh permitting endpoint bearings, then the opening vanished."""
+
+    def run_frames(self, frames, continue_route=True):
+        from test_turn_motion import opening_scan
+        motion = ManeuverSequence(0., continue_route=continue_route)
+        servo, released = 1500, []
+        for seq, received, endpoint_index in frames:
+            value = dict(opening_scan(seq, endpoint_index=endpoint_index),
+                         at_ms=round(received*1000), received_at=received)
+            result = motion.update(value, 0., received, {'armed': True, 'servo': servo,
+                'motor': 1500, 'tick': seq*100, 'seq': seq, 'command_acked': True})
+            servo = result['servo']
+            released.append(result['entry_bearing_released'])
+        return motion, released
+
+    def test_route_releases_on_second_fresh_permitting_frame(self):
+        motion, released = self.run_frames([(1, .1, 305), (2, .2, 305), (3, .3, 305)])
+        self.assertEqual(released, [False, True, True])
+        self.assertEqual(motion.entry_bearing['route_fresh_frames'], 2)
+        self.assertFalse(motion.entry_bearing['endpoint_passed_proven'])
+
+    def test_default_mode_keeps_three_frame_quarter_second_maturity(self):
+        _, released = self.run_frames([(seq, seq/10, 305) for seq in range(1, 5)],
+                                      continue_route=False)
+        self.assertEqual(released, [False, False, False, True])
+
+    def test_clock_gap_or_non_permitting_frame_restarts(self):
+        # .30 s receipt gap is no longer consecutive.
+        _, released = self.run_frames([(1, .1, 305), (2, .4, 305)])
+        self.assertEqual(released, [False, False])
+        # A non-permitting bearing between them clears the chain.
+        motion, released = self.run_frames([(1, .1, 305), (2, .2, 320), (3, .3, 305)])
+        self.assertEqual(released, [False, False, False])
+        self.assertEqual(motion.entry_bearing['route_fresh_frames'], 1)
+
+    def test_missing_endpoint_clears_chain(self):
+        from test_turn_motion import opening_scan
+        motion = ManeuverSequence(0., continue_route=True)
+        motion.entry_bearing_required = True
+        first = dict(opening_scan(1, endpoint_index=305), at_ms=100, received_at=.1)
+        motion.last_now = .1
+        motion._endpoint_observation(first)
+        motion.last_now = .2
+        motion._endpoint_observation({'seq': 2, 'at_ms': 200, 'received_at': .2,
+                                      'left_turn_goal': None, 'wall_candidates': [],
+                                      'ranges': [None]*360})
+        self.assertEqual(motion._entry_ready_history, [])
+        self.assertFalse(motion.entry_bearing_released)
+
+
 if __name__ == '__main__':
     unittest.main()

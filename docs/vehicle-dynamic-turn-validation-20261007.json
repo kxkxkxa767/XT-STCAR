@@ -15765,5 +15765,35 @@
     "not_inferred": "No speed, pose, wheel angle or cause attribution to placement claimed; whether lower adopted presteer 1633 caused the shallow turn is a hypothesis.",
     "completed": false,
     "competition_supported": false
+  },
+  "after40_entry_release_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 41,
+    "user_instruction": "2026-10-10 用户：你修改然后进行第41轮吧",
+    "finding": {
+      "trial40": "Controller record: entry-bearing cap counted permitting frames 1947 (cap 1696, forward gap .086 m) and 1948 (count 2). 1949 raised outer-wall ambiguity in _measurement, so _endpoint_observation did not run; from 1951 no native opening/current endpoint, count reset, 0.3 s hold lease expired -> left_turn_entry_endpoint_lost coast at 1952 -> coast ambiguity lock 1955. entry_bearing_released stayed false.",
+      "comparison": "38 released at 579 (count 4, prepared_left_bearing_matured), 39 at 456 (count 4), 37 at 1940 (body-front projection). Each released one to two frames before the native opening vanished; 40 missed the third frame.",
+      "side_note_not_changed": "Saved 1949 /api/lidar native opening alone puts the endpoint past the inflated body front (-.083 m), but outer-wall ambiguity in the same scan skips endpoint observation. Ordering left unchanged."
+    },
+    "change": {
+      "scope": "Explicit --continue-route only; default turn-cone and turn-left keep 3 frames over .25 s.",
+      "entry_release": "ROUTE_ENTRY_RELEASE_FRAMES=2: the existing permitting condition (endpoint bearing cap >= prepared 1670, positive lateral gap) in two strictly fresh consecutive scans via existing _consecutive_fresh (seq/at_ms/received strictly increasing, gap < SCAN_AGE .30 s, clock skew <= .15 s; repeat does not count). Any non-permitting bearing, missing endpoint or observation-type change clears the chain. Release still only lifts the entry cap; target handover still needs a confirmed compact target.",
+      "record_field": "entry_bearing.route_fresh_frames"
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 52 (4 new RouteEntryReleaseTests), test_route_control 23, test_maneuver_sequence 63: 138 passed",
+      "replay_note": "Saved trial40 frames lack 1948 (observer did not sample it), so no fixture replay claims the live 1948 release; synthetic tests cover release on frame 2, default 3-frame rule, gap/non-permitting/missing resets."
+    },
+    "risks_not_resolved": [
+      "Release one frame earlier also lifts the cap earlier on placements where the bearing is noisy near 1670.",
+      "Round-40 exit changes are still physically untested.",
+      "Outer-wall ambiguity or compact-target confirmation may still stop the turn before handover."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false
   }
 }

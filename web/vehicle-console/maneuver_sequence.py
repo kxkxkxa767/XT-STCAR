@@ -37,6 +37,10 @@ RIGHT_EXIT_MAX_S = 3.0
 ROUTE_EXIT_RELEASE_PWM_STEP = 40
 # Consecutive strictly fresh full-support frames for the body-front release.
 ROUTE_EXIT_PREPARE_FRAMES = 2
+# Explicit continue_route only: trial40 had two fresh permitting endpoint
+# bearings (1947/1948) but lost the native opening before the third, so the
+# entry cap coasted the left turn. Same frame count as the exit prepare.
+ROUTE_ENTRY_RELEASE_FRAMES = 2
 # Same-frame native wall-window pairing reuses the native corridor gates
 # (corridor.rs): parallel 12 deg, width .65..2.5 m, shared support .35 m.
 PAIR_MAX_ANGLE_RAD = math.radians(12)
@@ -107,6 +111,7 @@ class ManeuverSequence(TurnMotion):
         self._entry_ready_count = 0
         self._entry_ready_receive = self._entry_ready_publication = None
         self._entry_ready_observation_type = None
+        self._entry_ready_history = []
         self.adopted_presteer_pwm = None
         self.first_pass_preparing = False
         self.first_pass_evidence = None
@@ -482,6 +487,7 @@ class ManeuverSequence(TurnMotion):
             self._entry_ready_count = 0
             self._entry_ready_receive = self._entry_ready_publication = None
             self._entry_ready_observation_type = None
+            self._entry_ready_history.clear()
             return
         point = observation['endpoint_return']['point_left_m']
         heading = observation['heading_left_rad']
@@ -524,6 +530,7 @@ class ManeuverSequence(TurnMotion):
         if self._entry_ready_observation_type != observation['observation_type']:
             self._entry_ready_count = 0
             self._entry_ready_receive = self._entry_ready_publication = None
+            self._entry_ready_history.clear()
         self._entry_ready_observation_type = observation['observation_type']
         if permits_prepared_left:
             if self._entry_ready_count == 0:
@@ -534,9 +541,16 @@ class ManeuverSequence(TurnMotion):
                     and observation_clock-self._entry_ready_receive >= .25
                     and (scan['at_ms']-self._entry_ready_publication)/1000 >= .25):
                 self.entry_bearing_released = True
+            # Route mode: the same permitting bearing in two strictly fresh,
+            # consistently clocked frames; a repeat, gap or clock skew restarts.
+            if (self.continue_route and _number(received)
+                    and self._consecutive_fresh(self._entry_ready_history, scan,
+                                                ROUTE_ENTRY_RELEASE_FRAMES)):
+                self.entry_bearing_released = True
         else:
             self._entry_ready_count = 0
             self._entry_ready_receive = self._entry_ready_publication = None
+            self._entry_ready_history.clear()
         if front_projection_reached:
             self.entry_bearing_released = True
         self._entry_last_receive, self._entry_last_publication = observation_clock, scan['at_ms']
@@ -555,6 +569,7 @@ class ManeuverSequence(TurnMotion):
             'released': self.entry_bearing_released,
             'release_basis': ('current_endpoint_at_body_front_projection' if front_projection_reached
                               else 'prepared_left_bearing_matured' if self.entry_bearing_released else None),
+            'route_fresh_frames': len(self._entry_ready_history) if self.continue_route else None,
             'scope': 'early_turn_endpoint_bearing_heuristic',
             'endpoint_passed_proven': False, 'swept_path_certified': False,
             'physical_curvature_calibrated': False}
