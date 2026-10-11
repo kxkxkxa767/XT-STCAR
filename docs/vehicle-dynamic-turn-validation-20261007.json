@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "52 (7e615ad) ran once: first cone confirmed/handed over, first pass, exit alignment, corridor follow; the second cone (in the right dropout band) was never acquired -> contact. Round-53 candidate: holistic perception (tolerant detector + tracker hold for all trackers), path check after handover, slow motor from handover, corridor-aimed exit release; verified by unit tests, detector replay over rounds 40-52 and open-loop replay of rounds 51/52.",
+  "latest_trial_status": "53 (3d5bd5f) ran once: first cone handover and pass; after the pass the new path check (no clear arc) kept the servo left of center, so the right-turn center ACK never came -> outer board. Round-54 candidate: path check never overrides without a clear arc or while a right turn waits for its center ACK; body-front release robust to one missed scan and held frames.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16663,8 +16663,8 @@
   "after52_holistic_robustness_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 53,
     "user_instruction": "2026-10-11 用户：为什么不同的轮数你老重复错误；你改你整体改啊；明天我让gpt接手做，所以你每一个大的变动都要能让gpt知道。",
     "change": {
@@ -16689,6 +16689,76 @@
       "Path check uses an approximate curvature model; at 1550 the real curvature for a given PWM is larger (trial50: 1710 -> 1.3-1.7 1/m).",
       "Second-orbit curvature law starts gently at 1.4 m; whether the closed-loop swing clears the cone is untested on the car.",
       "Light-lane turn untested."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "3d5bd5f10e76848021662158a2a79c5190590401",
+      "archive_sha256": "6143ba39c59b27a847cc19b96bf7cb71afd100fdaa7a9cd87b4d385558479e44",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn53-20261011-202852",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn53-20261011-202852",
+      "helper_sha256": "6636d6513672b1de850d30aa754659f4e343c7df8b9165b903b93f9d4bece143",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before53-fresh.json (vs turn52) / after53-deploy-fresh.json / pre53-run-fresh.json (vs turn53): six fresh locked ready samples, 14 hashes match",
+      "note": "build-matched.py requires crates/ unchanged vs the deployed commit: the host geometry tool was moved to tools/scan-geometry before this build",
+      "trial_executed": "turn53_actual"
+    }
+  },
+  "turn53_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "3d5bd5f10e76848021662158a2a79c5190590401",
+    "start_geometry": "front wall 2.157 m, board end .511 m, width 1.646 m, exit 91.0 deg, incoming -0.5 deg, lateral .298 m, presteer cap 1663.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-53/ (7 files sha256 match trial53-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 11.22,
+    "observer_stop_requested": false,
+    "terminal": "probe_obstacle_close_body in right_align (~9.2 s): contact with the outer board of the return lane",
+    "operator_report": "用户：绕过第一个锥桶后没有右转，和之前的错误一样",
+    "physical_contact": true,
+    "timeline": {
+      "first_target": "handover 5.60 (1550), orbit 1692-1704, missing-frame holds 6.56/6.74 kept 1691 while the car was already at heading ~169 deg (lane axis 180); wait 6.91 (target lost > .30 s) coasting ~1 m/s with left held/released slowly -> heading 246 deg; rebind ID 2; release; first pass 8.06",
+      "right_align": "corridor axis -58..-63 deg (right), stage target 1500 waiting for the center ACK before steering right; the new path check found no clear arc and its fallback picked marginally longer LEFT arcs (1520..1640, 1-3 cm more free distance) -> servo never reached center, no ACK, no right turn -> outer board"
+    },
+    "path_reconstruction": "trial-map: orbit speed at 1550 still 1.1-1.4 m/s (momentum from the 1560 left turn); curvature 1.1-1.45 1/m",
+    "diagnosis": [
+      "Path-check fallback without a clear arc overrode the stage and blocked the right-turn center-ACK protocol (new bug of round 53).",
+      "Body-front release did not trigger: the two body-front frames were .30 s apart around a tracker-held frame, and held frames cleared the window; the wait then held left while coasting."
+    ],
+    "post_trial_lock": "after53-trial-fresh.json: healthy, owner None, locked, unarmed, 1500/1500 (rejection probe_obstacle_close_body).",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after53_path_check_and_release_continuity_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 54,
+    "user_instruction": "2026-10-11 用户：绕过第一个锥桶后没有右转，和之前的错误一样。",
+    "change": {
+      "path_check_never_blocks_stage": "The path check only replaces the stage target with a CLEAR arc; with no clear arc it keeps the stage target, and it never acts while the stage waits for its center ACK before steering right. Regression test from trial53 saved scans 348-358 (fixtures/route-53-right-align-board.json).",
+      "body_front_window_one_missed_scan": "The two body-front observations that latch the first-target release may be up to .45 s apart (one missed scan); tracker-held frames no longer clear the window.",
+      "held_frame_release": "In a tracker-held frame of the first orbit, if the release is latched or the support was last seen at/behind the body front, steering releases toward the measured exit corridor target (>= 1500) instead of holding left.",
+      "wait_release_by_anchor": "In a first-target wait without a current support, a release latched before the wait or an anchor (last full sighting) at/behind the body front keeps releasing toward the exit while the car coasts."
+    },
+    "rejected_alternative": "Capping left at any measured lane within 12 deg of the heading was implemented and removed: it assumes the first cone sits at a U-turn; with a cone in a straight lane it would forbid going around it (course specialization).",
+    "verification": {
+      "unit": "route suites 255 passed; full discovery 576 tests, failure set identical to before round 53.",
+      "route_replay": "51 handover at 1.70 s; 52 second_orbit at 5.19 s; 53 after the first pass: center ACK then right steering 1460 -> 1380 (open loop)."
+    },
+    "risks_not_resolved": [
+      "Orbit speed at 1550 is still ~1.1-1.4 m/s right after the 1560 left turn.",
+      "The 5 Hz saved scans make open-loop replay pessimistic for tracker leases.",
+      "Body-contact stop still terminal (operator decision pending)."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

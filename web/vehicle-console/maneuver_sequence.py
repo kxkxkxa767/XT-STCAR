@@ -352,7 +352,7 @@ class ManeuverSequence(TurnMotion):
                 and row[2]-history[0][2]+1e-9 >= duration)
 
     @staticmethod
-    def _consecutive_fresh(history, scan, count=ROUTE_EXIT_PREPARE_FRAMES):
+    def _consecutive_fresh(history, scan, count=ROUTE_EXIT_PREPARE_FRAMES, max_gap_s=SCAN_AGE_S):
         """Same freshness/ordering resets as _mature_observation, frame count only.
 
         A repeated scan never counts twice; a gap or clock mismatch restarts.
@@ -362,8 +362,8 @@ class ManeuverSequence(TurnMotion):
             return len(history) >= count
         if history and (row[0] <= history[-1][0] or row[1] <= history[-1][1]
                         or row[2] <= history[-1][2]
-                        or (row[1]-history[-1][1])/1000 >= SCAN_AGE_S
-                        or row[2]-history[-1][2] >= SCAN_AGE_S
+                        or (row[1]-history[-1][1])/1000 >= max_gap_s
+                        or row[2]-history[-1][2] >= max_gap_s
                         or abs((row[1]-history[-1][1])/1000-(row[2]-history[-1][2])) > .15):
             history.clear()
         history.append(row)
@@ -671,7 +671,16 @@ class ManeuverSequence(TurnMotion):
             # away from close known returns.
             self._clear_exit_prepare_window()
             self._quality_good_history.clear()
-            self._wait_steer(now, servo_feedback, neutral, self._wait_inside_base(1.))
+            # Round 54 (trial53): a support last fully seen at/behind the body
+            # front (or a release latched before the wait) keeps releasing
+            # toward the exit while the car coasts; otherwise hold, releasing
+            # only for close inside returns.
+            anchor = self.quality_wait_anchor
+            anchored_front = (isinstance(anchor, dict) and isinstance(anchor.get('point_left_m'), list)
+                              and anchor['point_left_m'][0] <= FRONT_BODY_EXTENT_M)
+            base = (self._exit_release_target(scan, now) if self.quality_wait_release is not None or anchored_front
+                    else self._wait_inside_base(1.))
+            self._wait_steer(now, servo_feedback, neutral, base)
             self.reason = 'route_quality_wait_target_reacquiring'
             return self._result(now)
         self.quality_wait_anchor = {'track_id': self.orbit_track_id,
@@ -1370,15 +1379,26 @@ class ManeuverSequence(TurnMotion):
                      or self.route_stage == 'light_turn'))
 
     def _route_path_target(self, target):
-        """Stage target, or the nearest candidate whose arc is clear (round 53)."""
+        """Stage target, or the nearest candidate whose arc is clear (round 53).
+
+        Trial53: with the car pointing at a board after the first pass, no arc
+        was clear and the old fallback took the arc with the longest free
+        distance (1-3 cm more, always left). That held the servo off center,
+        so the center ACK that must precede the right turn never came and the
+        car turned into the board. The check therefore never overrides when
+        no candidate is clear, and never while the stage waits for its center
+        ACK before steering right; it may only pick a clear arc.
+        """
         scan = self._current_scan
+        natural = self.natural_steering_target
+        pending_right = _number(natural) and natural < NEUTRAL and not self._route_right_authorized()
         key = (scan.get('seq') if isinstance(scan, dict) else None, target, self.route_stage,
-               self._route_right_authorized())
+               self._route_right_authorized(), pending_right)
         if self._path_cache is not None and self._path_cache[0] == key:
             return self._path_cache[1]
         points = self._path_points(scan)
         choice = target
-        if points:
+        if points and not pending_right:
             free = self._path_free_distance(points, target)
             if free < ROUTE_PATH_LOOKAHEAD_M:
                 candidates = list(ROUTE_PATH_LEFT_CANDIDATES)
@@ -1391,13 +1411,12 @@ class ManeuverSequence(TurnMotion):
                     above = [c for c in clear if c >= target]
                     pool = above if prefer_left and above else clear
                     choice = min(pool, key=lambda c: (abs(c-target), -c))
-                else:
-                    choice = max(scored, key=lambda c: (scored[c], -abs(c-target)))
+                    self.path_override_count += 1
                 self.path_evidence = {'source_seq': key[0], 'stage': self.route_stage, 'stage_target': target,
-                    'stage_free_m': free, 'chosen': choice, 'chosen_free_m': scored[choice],
-                    'clear_candidates': len(clear), 'right_authorized': key[3],
+                    'stage_free_m': free, 'chosen': choice,
+                    'chosen_free_m': scored.get(choice, free), 'clear_candidates': len(clear),
+                    'overridden': choice != target, 'right_authorized': key[3],
                     'pwm_per_curvature': ROUTE_PWM_PER_CURVATURE, 'swept_path_certified': False}
-                self.path_override_count += 1
         self._path_cache = (key, choice)
         return choice
 
@@ -1625,6 +1644,15 @@ class ManeuverSequence(TurnMotion):
                     ('armed', 'motor', 'servo', 'tick', 'seq', 'command_acked')}),
                 'physical_identity_verified': False}
 
+    @staticmethod
+    def _held_support_points(held):
+        """Support points of a tracker-held identity's last observation (car frame then)."""
+        if not isinstance(held, dict) or not isinstance(held.get('point_left_m'), list):
+            return []
+        x, y = held['point_left_m']
+        radius = (held.get('diameter_m') or 0.)/2
+        return [(x-radius, y), (x+radius, y)]
+
     def _observe_first_pass(self, scan, now, control):
         """Prepare command reversal from current target/body geometry.
 
@@ -1693,7 +1721,10 @@ class ManeuverSequence(TurnMotion):
             # Trial37..39: three frames over .25 s plus the 20 PWM release let the
             # orbit continue far past the target. Two strictly fresh current
             # full-support frames are required now; still release-only.
-            geometric_ready = self._consecutive_fresh(self._first_exit_prepare_history, scan)
+            # Round 54 (trial53): one missed scan between the two body-front
+            # observations (tracker-held frame) must not restart the count.
+            geometric_ready = self._consecutive_fresh(self._first_exit_prepare_history, scan,
+                                                      max_gap_s=SCAN_AGE_S+.15 if self.continue_route else SCAN_AGE_S)
         else:
             self._clear_exit_prepare_window()
         geometric_prepare = geometric_ready and adopted
@@ -2615,10 +2646,18 @@ class ManeuverSequence(TurnMotion):
         if (self.continue_route and self.compact_target is None and self.handover_observed
                 and isinstance(held, dict) and held.get('track_id') == self.orbit_track_id):
             # Tolerant tracker kept the orbited identity through a missing
-            # frame (trial50/51 flicker): keep the current command this frame.
-            self._clear_exit_prepare_window()
-            self.steering_target = self.servo
-            self.reason = 'first_target_missing_frame_hold'
+            # frame (trial50/51 flicker): keep the current command this frame,
+            # except that a support last seen at/behind the body front (or an
+            # already latched release) keeps releasing toward the exit
+            # (trial53: holding 1691 here over-rotated the car 66 deg past the
+            # lane). The body-front window is kept, not cleared.
+            last_front = max((p[0] for p in self._held_support_points(held)), default=None)
+            if self.first_pass_preparing or (last_front is not None and last_front <= FRONT_BODY_EXTENT_M):
+                self.steering_target = self._exit_release_target(scan, now)
+                self.reason = 'first_target_missing_frame_release'
+            else:
+                self.steering_target = self.servo
+                self.reason = 'first_target_missing_frame_hold'
             self._slew(now)
             return self._result(now)
         if not self._usable_target(self.compact_target, scan):

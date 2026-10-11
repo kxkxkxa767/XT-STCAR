@@ -287,7 +287,8 @@ class ManeuverRouteTests(unittest.TestCase):
             with self.subTest(invalid=invalid):
                 motion = self.begin_wait()
                 for seq in (5, 6, 7, 8, 9):
-                    value, control = observation(seq), feedback(seq, motor=1500, neutral_acked=True)
+                    # Feedback reports the commanded (possibly released) servo.
+                    value, control = observation(seq), feedback(seq, motion.servo, motor=1500, neutral_acked=True)
                     if invalid == 'partial': self.partial(value)
                     if invalid == 'missing': value['ranges'] = [3.]*360
                     if invalid == 'far_identity': value = far_identity(seq)
@@ -328,7 +329,7 @@ class ManeuverRouteTests(unittest.TestCase):
         old_id = motion.orbit_track_id
         for seq in (5, 6, 7, 8, 9):
             result = motion.update(observation(seq, first=120.), 0., seq/10,
-                                   feedback(seq, motor=1500, neutral_acked=True),
+                                   feedback(seq, motion.servo, motor=1500, neutral_acked=True),
                                    quality_clear=True, quality_resume_ready=True)
             self.assertFalse(result['lock_requested'])
             if result['quality_wait_rebind'] is not None:
@@ -343,7 +344,7 @@ class ManeuverRouteTests(unittest.TestCase):
         for seq in (5, 6, 7, 8, 9):
             value = observation(seq, first=120.)
             add_object(value, bearing=60., distance=.6)
-            result = motion.update(value, 0., seq/10, feedback(seq, motor=1500, neutral_acked=True),
+            result = motion.update(value, 0., seq/10, feedback(seq, motion.servo, motor=1500, neutral_acked=True),
                                    quality_clear=True, quality_resume_ready=True)
         if result['quality_wait_rebind'] is not None:
             self.assertLess(result['quality_wait_rebind']['range_m'], .7)
@@ -893,13 +894,19 @@ class ManeuverRouteTests(unittest.TestCase):
         for _ in range(6): self.exit_observation(motion, 5)
         self.assertFalse(motion.first_pass_preparing)
         self.assertEqual(len(motion._first_exit_prepare_history), 1)
-        for frames in (((5, .5), (6, .82)), ((5, .5), (6, .35)), ((5, .5), (8, .69))):
-            # Receipt gap at the scan age limit, reordered receipt, or a
-            # receipt/publication mismatch restarts the two-frame window.
+        for frames in (((5, .5), (6, .82)), ((5, .5), (6, .35)), ((5, .5), (10, 1.))):
+            # Receipt/publication mismatch, reordered receipt, or a gap beyond
+            # one missed scan (.45 s, round 54) restarts the two-frame window.
             motion = self.seeded()
             for seq, receipt in frames:
                 self.exit_observation(motion, seq, receipt=receipt)
             self.assertFalse(motion.first_pass_preparing, frames)
+        # Trial53: one tracker-held scan between the two body-front frames
+        # (.30 s apart) no longer restarts the window.
+        motion = self.seeded()
+        for seq, receipt in ((5, .5), (8, .8)):
+            self.exit_observation(motion, seq, receipt=receipt)
+        self.assertTrue(motion.first_pass_preparing)
 
     def test_quality_wait_clears_geometric_window_and_latched_prepare_keeps_neutral_limit(self):
         motion = self.seeded()
@@ -1418,6 +1425,27 @@ class RoutePathCheckTests(unittest.TestCase):
                 points = motion._path_points(motion._current_scan)
                 self.assertGreaterEqual(motion._path_free_distance(points, choice), .7)
 
+    def test_trial53_board_ahead_after_first_pass_never_blocks_center_ack_for_right(self):
+        # Trial53: corridor axis ~60 deg right, car pointing at the board; no arc
+        # clear. The old fallback picked marginally longer left arcs (1520..1640),
+        # the center ACK never came and the car turned into the board.
+        fixture = json.loads((Path(__file__).parent/'fixtures'/'route-53-right-align-board.json').read_text())
+        for frame in fixture['frames']:
+            with self.subTest(seq=frame['seq']):
+                motion = self.motion('right_align')
+                motion.natural_steering_target = 1350  # stage wants right, not yet authorized
+                motion._current_scan = {'seq': frame['seq'], 'ranges': frame['ranges']}
+                self.assertEqual(motion._route_path_target(1500), 1500)
+                # Even without a pending right, no clear arc means no override.
+                motion = self.motion('right_align')
+                motion.natural_steering_target = 1500
+                motion._current_scan = {'seq': frame['seq'], 'ranges': frame['ranges']}
+                points = motion._path_points(motion._current_scan)
+                clear = [c for c in range(1500, 1721, 20) if motion._path_free_distance(points, c) >= .7]
+                if not clear:
+                    self.assertEqual(motion._route_path_target(1500), 1500)
+                    self.assertEqual(motion.path_override_count, 0)
+
     def test_first_target_exit_release_aims_at_measured_left_corridor(self):
         # Trial49: centering at heading ~145 deg of the U-turn hit the outer
         # board. With the exit corridor 40 deg left, the release keeps left.
@@ -1703,3 +1731,33 @@ class LightLaneTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class FirstTargetReleaseContinuityTests(unittest.TestCase):
+    def test_trial53_missing_frame_after_body_front_releases_instead_of_holding_left(self):
+        motion = ManeuverSequence(0., continue_route=True)
+        for seq in (1, 2, 3, 4):
+            motion.compact_target = motion.target_tracker.update(observation(seq, first=80.), seq/10)
+        motion.phase, motion.drive_since, motion.orbit_since, motion.handover_observed = 'drive', .4, .4, True
+        motion.orbit_track_id = motion.compact_target['track_id']
+        motion.servo = motion.steering_target = motion.orbit_bias_pwm = 1691
+        motion.orbit_reference_range_m = 1.
+        # Support approaches to the body front (x ~ .09 m at .5 m), then one
+        # missing frame.
+        for seq, distance in ((5, .85), (6, .7), (7, .6), (8, .5)):
+            value = observation(seq, first=80.)
+            for offset in range(-4, 5):
+                value['ranges'][(round(-80.)+offset) % 360] = 3.
+            for offset in range(-4, 5):
+                value['ranges'][(round(-80.)+offset) % 360] = distance
+            motion.update(value, 0., seq/10, feedback(seq, motion.servo))
+        self.assertEqual(motion.compact_target['track_id'], motion.orbit_track_id)
+        before = motion.servo
+        missing = observation(9, first=80.)
+        for offset in range(-6, 7):
+            missing['ranges'][(round(-80.)+offset) % 360] = 3.
+        result = motion.update(missing, 0., .9, feedback(9, before))
+        self.assertEqual(result['reason'], 'first_target_missing_frame_release')
+        self.assertLessEqual(result['servo'], before)
+        self.assertLess(result['steering_target'], before)
+        self.assertGreaterEqual(result['steering_target'], 1500)
