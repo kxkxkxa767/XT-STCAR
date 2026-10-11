@@ -31,7 +31,8 @@ from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
-                               DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm)
+                               DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
+                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S)
 
 ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
@@ -1315,17 +1316,24 @@ class Console:
             and decision.get('quality_resume_pending') is False
             and type(control.get('servo')) is int and control['servo'] <= 1500
             and motion.first_pass_evidence is not None and isinstance(route_center, dict)
-            and route_center.get('servo') == 1500 and route_center.get('motor') == TRIAL_MOTOR
+            and route_center.get('servo') == 1500 and route_center.get('motor') in DRIVE_MOTORS
             and type(route_center.get('seq')) is int
             and self.arm_sequence <= route_center['seq'] <= control.get('seq', -1)
             and type(route_center.get('tick')) is int and 0 <= route_center['tick'] <= control.get('tick', -1)
             and ((route_stage in ('right_align', 'corridor_follow') and motion.right_exit_center_ack is not None)
-                 or (route_stage == 'second_orbit' and getattr(motion, 'second_center_ack', None) is not None)))
+                 or (route_stage == 'second_orbit' and getattr(motion, 'second_center_ack', None) is not None)
+                 or route_stage == 'light_turn'))
         # New route output always uses its current continuous center proof;
         # the legacy first-exit ACK cannot authorize a later phase on its own.
         right_exit = route_right if route else right_exit
         minimum_servo = RIGHT_EXIT_MIN_PWM if right_exit else 1500
-        if motor not in (1500, TRIAL_MOTOR) or not minimum_servo <= servo <= SERVO_MAX:
+        # Route mode after the first pass drives at the operator's manual
+        # forward PWM (slow section); every other output keeps 1500/1560.
+        slow_allowed = (route and decision['phase'] == 'drive' and route_stage in POST_PASS_STAGES
+                        and motion.first_pass_evidence is not None
+                        and decision.get('quality_resume_pending') is False)
+        if (motor not in ((1500, TRIAL_MOTOR, ROUTE_SLOW_MOTOR) if slow_allowed else (1500, TRIAL_MOTOR))
+                or not minimum_servo <= servo <= SERVO_MAX):
             raise ValueError('invalid_turn_trial_output')
         if route and decision['phase'] == 'quality_wait' and (motor != 1500 or servo != motion.quality_wait_servo):
             raise ValueError('invalid_turn_quality_wait_output')

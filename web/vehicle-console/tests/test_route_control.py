@@ -603,6 +603,34 @@ class RouteControlTests(unittest.TestCase):
                     self.assertIsNone(self.console.auto_session)
                     self.assertEqual([row['op'] for row in self.outputs[before:]], ['stop'])
 
+    def test_slow_motor_only_after_first_pass_including_light_turn(self):
+        cases = (('right_align', 1500, True), ('light_turn', 1500, True), ('light_turn', 1480, True),
+                 ('first_target', 1500, False))
+        for stage, servo, accepted in cases:
+            with self.subTest(stage=stage, servo=servo):
+                self.reset_case()
+                _, session = self.enter_compact_orbit(continue_route=True)
+                motion = session['turn_motion']
+                if stage != 'first_target':
+                    motion.first_pass_evidence = {'source_seq': self.console.scan['seq']}
+                    motion.right_exit_center_ack = {'servo': 1500}
+                motion.route_stage = stage
+                self.console.status['control']['servo'] = 1500
+                decision = copy.deepcopy(session['report']['turn'])
+                proof = {**self.console.status['control'], 'servo': 1500, 'motor': 1550}
+                decision.update(servo=servo, motor=1550, phase='drive', route_stage=stage,
+                    route_right_output_authorized=servo < 1500, route_center_ack=proof,
+                    quality_resume_pending=False, stop_requested=False, lock_requested=False)
+                before = len(self.outputs)
+                with patch.object(motion, 'update', return_value=decision):
+                    self.tick(round(self.now+.02, 6), self.compact_scan(self.console.scan['seq']+1))
+                if accepted:
+                    self.assertIs(self.console.auto_session, session)
+                    self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1550, servo))
+                else:
+                    self.assertIsNone(self.console.auto_session)
+                    self.assertEqual([row['op'] for row in self.outputs[before:]], ['stop'])
+
     def test_route_later_stage_and_resume_pending_use_full_eight_cm_body_gate(self):
         for stage in ('right_align', 'corridor_follow', 'second_orbit', 'resume_pending'):
             with self.subTest(stage=stage):

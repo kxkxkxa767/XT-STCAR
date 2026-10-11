@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from autonomy_live import MIN_FORWARD_PWM, MAX_PWM, COAST_MAX_S, CONTROL_AGE_LIMIT_S
 from turn_motion import parse_trial_goal, validate_initial_presteer_pwm, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, SERVO_MAX
+from maneuver_sequence import ROUTE_MAX_DRIVE_S
 _DEFAULT_INITIAL_PRESTEER = object()
 
 
@@ -361,8 +362,11 @@ def main():
         if not state['autonomy'].get('turn_ready'):
             raise RuntimeError(state['autonomy'].get('turn_rejection') or 'left turn trial not ready')
         limit = MAX_DRIVE_S if args.max_seconds is None else args.max_seconds
-        if not 1 <= limit <= MAX_DRIVE_S:
-            raise RuntimeError('left turn drive limit must be 1..10 seconds')
+        # Only the explicit two-target route (now followed by the light-lane
+        # turn) may use the longer cumulative drive budget.
+        ceiling = ROUTE_MAX_DRIVE_S if args.command == 'turn-cone' and args.continue_route else MAX_DRIVE_S
+        if not 1 <= limit <= ceiling:
+            raise RuntimeError(f'drive limit must be 1..{ceiling:g} seconds')
         def turn_interrupted(*_):
             raise KeyboardInterrupt
         for sig in (signal.SIGINT, signal.SIGTERM):

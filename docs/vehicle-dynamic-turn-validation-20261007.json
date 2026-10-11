@@ -16200,5 +16200,35 @@
     "post_trial_lock": "after.json and after46-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500 (turn_ready false: probe_obstacle_close_body at rest).",
     "completed": false,
     "competition_supported": false
+  },
+  "after46_light_lane_turn_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 47,
+    "user_instruction": "2026-10-11 用户：这一次你可以加上绕桶后转弯的任务了，注意要让摄像头能识别出红绿灯，而且这个地方车速要慢，因为红绿灯是由车身碰到红外传感器而触发读秒的；红绿灯与人行横道识别由YOLO负责（本改动不做灯识别）。",
+    "change": {
+      "scope": "Explicit --continue-route only; default sequence and turn-left unchanged. No traffic-light or crosswalk recognition (YOLO owns those).",
+      "light_turn": "After the observed second-target pass the run no longer ends: route_stage light_turn (motor 1550). Each scan: _free_space finds the deepest free direction in the front +-100 deg for the measured body half width + .08 m (polar footprint; front null runs <= 5 bins between known returns block at the nearer return, longer/unbracketed runs block at .60 m, never free), aims at the middle of the near-deepest window (keeps the window holding the previous choice), plus a centering term when nearly lined up. Right needs a current center ACK. Aligned = best heading within 6 deg, >= 2.5 m free straight ahead, side clearances balanced within .20 m, for .30 s -> terminal coast holding the ACKed command (light_lane_aligned). 4 s stage budget -> light_stage_timeout coast. Direction comes only from the scan (trial46 scan498: left-front wall .6 m, right open, 5.2 m lane behind-right, consistent with the competition diagram clockwise loop).",
+      "slow_section": "After the first pass (exit alignment, corridor follow, second target, light turn) the motor is MIN_FORWARD_PWM 1550 (operator manual forward) instead of 1560; adoption accepts either drive PWM during the switch; server accepts 1550 only in those stages after the first pass and not while a quality resume is pending; center proofs with 1550 count.",
+      "exit_alignment_damping": "Pursuit lookahead = corridor width capped at 2 m (was 1 m) plus .30 s x observed corridor-heading rate; alignment tolerance 8 deg (was 5); corridor_follow uses the same damping.",
+      "second_target_in_exit": "Second-target role proof and handover also run during exit alignment (trial46 saw the support at 487 before alignment matured).",
+      "drive_budget": "Route mode may use up to ROUTE_MAX_DRIVE_S 16 s cumulative drive (CLI turn-cone --continue-route 1..16; default stays 1..10). Total deadline, coast, stage budgets unchanged. Round 47 helper uses --max-seconds 16."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 69 (8 new LightLaneTests incl. synthetic left/right junctions, aligned lane hold, timeout, front-null rule, exit second acquisition, damping sign, route-only budget), test_route_control 32 (1 new: 1550 only after the first pass), test_maneuver_sequence 63, compact 46+17.",
+      "default_suites": "test_turn_quality_coast/test_turn_control/test_coast_control/test_autonomy_live failure set identical before and after (49 pre-existing).",
+      "timing": "_free_space ~.25..32 ms per call on the Mac (synthetic and real trial46 scan498)."
+    },
+    "risks_not_resolved": [
+      "Free-space following can choose a wrong open area if the lane opening is not the deepest free direction within +-100 deg.",
+      "Unknown whether 1550 keeps the car moving through tight turns (stall would end the run at neutral).",
+      "Alignment uses scan symmetry, not the light itself; YOLO must confirm the light is visible.",
+      "No stop at the light zone yet (needs YOLO red/green); the run ends with a coast once aligned."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false
   }
 }

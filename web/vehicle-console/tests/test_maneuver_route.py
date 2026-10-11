@@ -7,7 +7,8 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from maneuver_sequence import ManeuverSequence, ROUTE_POST_PASS_PWM_STEP, SECOND_BYPASS_SUPPORT_GAP_M
+from maneuver_sequence import (ManeuverSequence, ROUTE_POST_PASS_PWM_STEP, SECOND_BYPASS_SUPPORT_GAP_M,
+                               ROUTE_SLOW_MOTOR, ROUTE_MAX_DRIVE_S, LIGHT_STAGE_MAX_S)
 from compact_target import _candidates
 from test_compact_target import compact_scan
 from test_compact_target_roles import add_object
@@ -256,20 +257,22 @@ class ManeuverRouteTests(unittest.TestCase):
 
     def test_exit_alignment_pursues_observed_center_line_either_side(self):
         # The exit side is observed, never assumed (trial43 right, trial45 left).
-        def expected(heading, offset):
-            return max(1350, min(1720, 1500+round(180*(math.radians(heading)+math.atan2(offset, 1.)))))
-        # Axis right but the car already converges on the center line: slight left.
+        def expected(heading, offset, width=2.4):
+            lookahead = min(2., width)  # about one corridor width (trial46 damping)
+            return max(1350, min(1720, 1500+round(180*(math.radians(heading)+math.atan2(offset, lookahead)))))
+        # Axis 23 deg right, center .54 m left: already converging -> gentle right.
         motion = self.route()
         result = self.step(motion, 5, heading=-23., offset=.54)
         self.assertEqual(result['right_exit_geometry']['steering_target_pwm'], expected(-23., .54))
-        self.assertGreater(result['steering_target'], 1500)
-        self.assertEqual(result['servo'], min(result['steering_target'], 1500+ROUTE_POST_PASS_PWM_STEP))
-        self.assertEqual(result['reason'], 'first_target_exit_alignment_left')
-        # Trial45: axis 9.4 deg left, center .66 m left -> strong left at once.
+        self.assertLess(result['steering_target'], 1500)
+        # Trial45: axis 9.4 deg left, center .66 m left -> left at once, no center ACK needed.
         motion = self.route()
+        motion._route_center_ack = motion.right_exit_center_ack = None
         result = self.step(motion, 5, heading=9.4, offset=.66)
-        self.assertGreater(result['steering_target'], 1600)
+        self.assertEqual(result['steering_target'], expected(9.4, .66))
+        self.assertGreater(result['steering_target'], 1550)
         self.assertEqual(result['servo'], 1500+ROUTE_POST_PASS_PWM_STEP)
+        self.assertEqual(result['reason'], 'first_target_exit_alignment_left')
         # Axis and center both right: right, after the existing center ACK.
         motion = self.route()
         result = self.step(motion, 5, heading=-10., offset=-.4)
@@ -304,7 +307,7 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertEqual(result['route_stage'], 'corridor_follow')
         self.assertFalse(result['route_alignment_evidence']['physical_alignment_certified'])
         result = self.step(motion, 9, heading=-1.)
-        self.assertEqual(result['motor'], 1560)
+        self.assertEqual(result['motor'], ROUTE_SLOW_MOTOR)  # slow section after the first pass
         self.assertFalse(result['second_target_handover_observed'])
 
     def test_ambiguous_corridor_and_right_budget_still_stop(self):
@@ -319,7 +322,8 @@ class ManeuverRouteTests(unittest.TestCase):
     def test_corridor_left_then_right_requires_new_actual_center_ack(self):
         motion = self.route('corridor_follow')
         first = self.step(motion, 5, heading=4., offset=.3)
-        self.assertEqual(first['servo'], 1500+ROUTE_POST_PASS_PWM_STEP)
+        self.assertGreater(first['servo'], 1500)
+        self.assertEqual(first['servo'], min(first['steering_target'], 1500+ROUTE_POST_PASS_PWM_STEP))
         self.assertIsNone(first['route_center_ack'])
         # Stay inside existing offset association gate while changing correction.
         self.step(motion, 6, heading=-4., offset=.01)
@@ -423,21 +427,18 @@ class ManeuverRouteTests(unittest.TestCase):
             self.assertFalse(proofs[seq]['first_support_visible'])
             self.assertLess(abs(proofs[seq]['second_normal_m']-.35), .05)
 
-    def test_second_pass_coast_holds_acked_clockwise_command(self):
+    def test_second_pass_starts_light_turn_keeping_adopted_command(self):
         motion, _ = self.second_handover()
         bearings = (-60., -70., -80., -90., -100., -110., -120., -130., -140., -150.)
         for seq, bearing in enumerate(bearings, 9):
+            before = motion.servo
             result = self.step(motion, seq, second=bearing, heading=0.)  # tracked, ~.17 m/frame
             if result['two_target_observed_pass_complete']:
                 break
-        self.assertTrue(result['two_target_observed_pass_complete'])
-        held = result['route_end_coast_servo']
-        self.assertIsNotNone(held)
-        self.assertLess(held, 1500)
-        self.assertEqual((result['motor'], result['servo']), (1500, held))
-        for extra in (1, 2):
-            result = self.step(motion, seq+extra, second=-150., heading=0.)
-            self.assertEqual((result['motor'], result['servo']), (1500, held))
+        self.assertEqual(result['route_stage'], 'light_turn')
+        self.assertEqual(result['reason'], 'light_turn_started_keep_adopted_command')
+        self.assertEqual(result['servo'], before)
+        self.assertIn('light_turn', result['route_events'])
 
     def second_handover(self, servo=1500):
         motion = self.route('corridor_follow', servo=servo)
@@ -508,7 +509,9 @@ class ManeuverRouteTests(unittest.TestCase):
         motion, _ = self.second_handover()
         for seq, bearing in enumerate((-60., -75., -90., -105., -120., -120., -120., -120.), 9):
             result = self.step(motion, seq, second=bearing, heading=0.)
-        self.assertEqual(result['motor'], 1500)
+        # Trial46: the pass no longer ends the run; the light-lane turn follows slowly.
+        self.assertEqual(result['route_stage'], 'light_turn')
+        self.assertEqual((result['phase'], result['motor']), ('drive', ROUTE_SLOW_MOTOR))
         self.assertTrue(result['two_target_observed_pass_complete'])
         self.assertFalse(result['completed'])
         self.assertFalse(result['second_pass_evidence']['physical_cone_pass_certified'])
@@ -583,12 +586,14 @@ class ManeuverRouteTests(unittest.TestCase):
             motion = ManeuverSequence(0., continue_route=True)
             value = {**frames[seq], 'received_at': frames[seq]['at_ms']/1000}
             results[seq] = motion._right_exit_target(value, value['received_at'])
-        # 602: axis 23 deg right, center .54 m left: already converging -> slight left.
-        self.assertEqual(results[602], (1517, None))
+        # 602: axis 23 deg right, center .54 m left: converging -> gentle right.
+        self.assertIsNone(results[602][1])
+        self.assertTrue(1450 < results[602][0] < 1500)
         # 604: two native fits 2.7 deg apart with the same offset/width are one axis.
         self.assertIsNone(results[604][1])
         self.assertLess(results[604][0], 1500)
-        self.assertEqual(results[607], (1427, None))
+        self.assertIsNone(results[607][1])
+        self.assertLess(results[607][0], results[602][0])
         # Default sequence keeps its old strict rule.
         value = {**frames[604], 'received_at': frames[604]['at_ms']/1000}
         self.assertEqual(ManeuverSequence(0.)._right_exit_target(value, value['received_at']),
@@ -1034,7 +1039,7 @@ class ManeuverRouteTests(unittest.TestCase):
         value['corridor_candidates'] = []
         result = motion.update(value, 0., .5, feedback(5, 1574))
         self.assertEqual(result['reason'], 'right_exit_corridor_missing_release_left')
-        self.assertEqual((result['motor'], result['servo']), (1560, 1534))
+        self.assertEqual((result['motor'], result['servo']), (ROUTE_SLOW_MOTOR, 1534))
         self.assertFalse(result['route_right_output_authorized'])
         value = observation(6)
         value['corridor_candidates'] = []
@@ -1159,6 +1164,141 @@ class RouteEntryReleaseTests(unittest.TestCase):
         self.assertEqual(motion._entry_ready_history, [])
         self.assertFalse(motion.entry_bearing_released)
 
+
+
+def segment_ranges(segments):
+    """Ray-cast synthetic walls (x forward, y left) into the 360 lidar bins."""
+    ranges = []
+    for index in range(360):
+        bearing = math.radians(-index)
+        dx, dy = math.cos(bearing), math.sin(bearing)
+        best = None
+        for x1, y1, x2, y2 in segments:
+            ex, ey = x2-x1, y2-y1
+            det = ex*dy-dx*ey
+            if abs(det) < 1e-12:
+                continue
+            t = (ex*y1-ey*x1)/det
+            u = (dx*y1-dy*x1)/det
+            if t > .05 and -1e-9 <= u <= 1+1e-9 and (best is None or t < best):
+                best = t
+        ranges.append(None if best is None or best > 12 else round(best, 3))
+    return ranges
+
+
+def lane(width=1.8, offset=0.):
+    left, right = offset+width/2, offset-width/2
+    return [(-2., left, 8., left), (-2., right, 8., right), (6., right, 6., left)]
+
+
+def junction(side=1.):
+    # Band along +x ends at x=1.2; on `side` the band wall stops at x=-.2 and a
+    # lane continues sideways between x=-.2 and x=1.2. Mirror with side=-1.
+    s = side
+    return [(-2., -1.*s, 1.2, -1.*s), (-2., 1.*s, -.2, 1.*s),
+            (1.2, -1.*s, 1.2, 4.*s), (-.2, 1.*s, -.2, 4.*s), (-.2, 4.*s, 1.2, 4.*s)]
+
+
+class LightLaneTests(unittest.TestCase):
+    def light(self, servo=1500):
+        helper = ManeuverRouteTests()
+        helper.setUp()
+        motion = helper.route('second_orbit', servo=servo)
+        motion.route_stage, motion.light_since = 'light_turn', .4
+        motion.second_pass_evidence = {'track_id': 2, 'source_seq': 4}
+        return motion
+
+    def step(self, motion, seq, segments):
+        value = observation(seq, heading=0.)
+        value['ranges'] = segment_ranges(segments)
+        return motion.update(value, 0., seq/10, feedback(seq, motion.servo))
+
+    def test_free_space_turns_toward_the_open_side_either_way(self):
+        for side in (1., -1.):
+            with self.subTest(side=side):
+                space = ManeuverSequence._free_space({'ranges': segment_ranges(junction(side))})
+                self.assertGreater(side*space['best_heading_rad'], math.radians(30))
+                self.assertGreater(space['deepest_free_m'], 2.)
+                self.assertLess(space['free_ahead_m'], 1.3)
+
+    def test_free_space_never_treats_front_nulls_as_free(self):
+        ranges = segment_ranges(lane())
+        for index in range(355, 365): ranges[index % 360] = None  # 10 nulls straight ahead
+        space = ManeuverSequence._free_space({'ranges': ranges})
+        self.assertLessEqual(space['free_ahead_m'], .6)
+        self.assertNotEqual(space['best_heading_rad'], 0.)
+        # A short bracketed gap is the surrounding surface (far wall): still free.
+        ranges = segment_ranges(lane())
+        for index in (358, 359, 0, 1): ranges[index] = None
+        self.assertEqual(ManeuverSequence._free_space({'ranges': ranges})['free_ahead_m'], 3.)
+
+    def test_light_turn_follows_open_side_then_holds_once_lane_aligned(self):
+        motion = self.light()
+        result = self.step(motion, 5, junction(1.))
+        self.assertEqual(result['reason'], 'light_turn_follow_free_space')
+        self.assertEqual(result['motor'], ROUTE_SLOW_MOTOR)
+        self.assertGreater(result['steering_target'], 1500)  # left toward the opening
+        # A long free lane straight ahead with balanced sides: aligned after .30 s.
+        for seq in (6, 7, 8, 9):
+            result = self.step(motion, seq, lane())
+            if result['phase'] == 'coast':
+                break
+        self.assertEqual(result['phase'], 'coast')
+        self.assertEqual(result['reason'], 'light_lane_aligned')
+        self.assertIsNotNone(result['light_alignment_evidence'])
+        self.assertFalse(result['light_alignment_evidence']['camera_facing_certified'])
+        held = result['route_end_coast_servo']
+        self.assertEqual((result['motor'], result['servo']), (1500, held))
+        result = self.step(motion, seq+1, lane())
+        self.assertEqual((result['motor'], result['servo']), (1500, held))
+
+    def test_off_center_lane_is_not_aligned_and_steers_back_to_center(self):
+        motion = self.light()
+        for seq in (5, 6, 7, 8):
+            result = self.step(motion, seq, lane(offset=.5))  # lane center .5 m left
+        self.assertEqual(result['phase'], 'drive')
+        self.assertGreater(result['steering_target'], 1500)
+
+    def test_light_turn_right_needs_center_ack_and_stage_is_bounded(self):
+        motion = self.light(servo=1560)
+        motion._route_center_ack = None
+        result = self.step(motion, 5, junction(-1.))
+        self.assertGreaterEqual(result['servo'], 1500)  # release toward center first
+        seq = 5
+        while result['phase'] == 'drive' and seq < 5+int(LIGHT_STAGE_MAX_S*10)+5:
+            seq += 1
+            result = self.step(motion, seq, junction(-1.))
+        self.assertEqual(result['reason'], 'light_stage_timeout')
+        self.assertLess(seq/10-.4, LIGHT_STAGE_MAX_S+.2)
+
+    def test_exit_alignment_also_acquires_the_second_target(self):
+        helper = ManeuverRouteTests()
+        helper.setUp()
+        motion = helper.route('right_align')
+        for seq in (5, 6, 7, 8):
+            result = helper.step(motion, seq, second=-45., heading=0.)
+        self.assertTrue(result['second_target_handover_observed'])
+        self.assertEqual(result['route_stage'], 'second_orbit')
+
+    def test_exit_pursuit_damps_observed_heading_rate(self):
+        helper = ManeuverRouteTests()
+        helper.setUp()
+        steady = helper.route('right_align')
+        helper.step(steady, 5, heading=-8., offset=.2)
+        steady_target = helper.step(steady, 6, heading=-8., offset=.2)['right_exit_geometry']['steering_target_pwm']
+        yawing = helper.route('right_align')
+        helper.step(yawing, 5, heading=-2., offset=.2)
+        yawing_target = helper.step(yawing, 6, heading=-8., offset=.2)['right_exit_geometry']['steering_target_pwm']
+        # The axis moving right means the car is yawing left: less left / more right.
+        self.assertLess(yawing_target, steady_target)
+
+    def test_route_drive_budget_extension_is_route_only(self):
+        self.assertEqual(ManeuverSequence(0., max_drive_s=ROUTE_MAX_DRIVE_S, continue_route=True).max_drive_s,
+                         ROUTE_MAX_DRIVE_S)
+        with self.assertRaises(ValueError):
+            ManeuverSequence(0., max_drive_s=ROUTE_MAX_DRIVE_S)
+        with self.assertRaises(ValueError):
+            ManeuverSequence(0., max_drive_s=ROUTE_MAX_DRIVE_S+1, continue_route=True)
 
 if __name__ == '__main__':
     unittest.main()
