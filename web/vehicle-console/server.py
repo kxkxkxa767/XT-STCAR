@@ -889,7 +889,7 @@ class Console:
                          and getattr(session.get('turn_motion'), 'right_exit_since', None) is None
                          and getattr(session.get('turn_motion'), 'route_stage', None) == 'first_target'
                          and not getattr(session.get('turn_motion'), 'quality_resume_pending', False)))
-                and control.get('armed') is True and control.get('motor') == TRIAL_MOTOR
+                and control.get('armed') is True and control.get('motor') in DRIVE_MOTORS
                 and type(control.get('servo')) is int and 1500 < control['servo'] <= SERVO_MAX)
             clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
                                         rear_launch=rear_active, camera_required=not turn_trial,
@@ -1064,7 +1064,7 @@ class Console:
                 and control.get('armed') is True and control.get('servo') == held
                 and control.get('seq', -1) >= self.arm_sequence
                 and (control.get('motor') == 1500
-                     or (control.get('motor') == TRIAL_MOTOR
+                     or (control.get('motor') in DRIVE_MOTORS
                          and (neutral_seq is None or control.get('seq', -1) < neutral_seq))))
 
     def turn_quality_wait_eligible(self, session):
@@ -1388,8 +1388,9 @@ class Console:
         minimum_servo = RIGHT_EXIT_MIN_PWM if right_exit or right_hold else 1500
         # Route mode after the first pass drives at the operator's manual
         # forward PWM (slow section); every other output keeps 1500/1560.
-        slow_allowed = (route and decision['phase'] == 'drive' and route_stage in POST_PASS_STAGES
-                        and motion.first_pass_evidence is not None
+        slow_allowed = (route and decision['phase'] == 'drive'
+                        and ((route_stage in POST_PASS_STAGES and motion.first_pass_evidence is not None)
+                             or (route_stage == 'first_target' and motion.handover_observed is True))
                         and decision.get('quality_resume_pending') is False)
         if (motor not in ((1500, TRIAL_MOTOR, ROUTE_SLOW_MOTOR) if slow_allowed else (1500, TRIAL_MOTOR))
                 or not minimum_servo <= servo <= SERVO_MAX):

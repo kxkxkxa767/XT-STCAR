@@ -45,6 +45,13 @@ class ManeuverRouteTests(unittest.TestCase):
         # Range bin just outside the synthetic support (partial boundary).
         return (round(-self.bearing) % 360)-5
 
+    def partial(self, value):
+        # Three unknown bins at one edge: still partial under the tolerant
+        # detector (<= 2 edge bins now count as a full observation, trial51/52).
+        for offset in range(3):
+            value['ranges'][(self.edge()-offset) % 360] = None
+        return value
+
     def seeded(self, *, servo=1670):
         # Mock a previously adopted initial turn; target maturation itself uses
         # the real tracker and explicit synthetic scan publication/receipt times.
@@ -159,7 +166,7 @@ class ManeuverRouteTests(unittest.TestCase):
                 if invalid == 'ack': control['command_acked'] = False
                 if invalid == 'motor': control['motor'] = 1500
                 if invalid == 'servo': control['servo'] = 1660
-                if invalid == 'partial': value['ranges'][265] = None
+                if invalid == 'partial': self.partial(value)
                 if invalid == 'identity': value = observation(5, first=120.)
                 if invalid == 'old': value['received_at'] = .1
                 if invalid == 'passed': motion.first_pass_evidence = {'track_id': 1}
@@ -240,7 +247,7 @@ class ManeuverRouteTests(unittest.TestCase):
                     self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
                 value = observation(9, first=self.bearing)
                 if failure == 'missing': value['ranges'] = [3.]*360
-                elif failure == 'partial': value['ranges'][self.edge()] = None
+                elif failure == 'partial': self.partial(value)
                 else: value = observation(9, first=120.)
                 result = motion.update(value, 0., .9,
                     feedback(9, 1670, 1560 if ack else 1500, resume_acked=ack))
@@ -281,7 +288,7 @@ class ManeuverRouteTests(unittest.TestCase):
                 motion = self.begin_wait()
                 for seq in (5, 6, 7, 8, 9):
                     value, control = observation(seq), feedback(seq, motor=1500, neutral_acked=True)
-                    if invalid == 'partial': value['ranges'][265] = None
+                    if invalid == 'partial': self.partial(value)
                     if invalid == 'missing': value['ranges'] = [3.]*360
                     if invalid == 'far_identity': value = far_identity(seq)
                     result = motion.update(value, 0., seq/10, control,
@@ -344,13 +351,12 @@ class ManeuverRouteTests(unittest.TestCase):
     def test_wait_entry_uses_fresh_full_anchor_when_trigger_frame_is_partial(self):
         motion = self.seeded()
         value = observation(5, first=self.bearing)
-        value['ranges'][self.edge()] = None  # trial47 scan401: edge return missing
+        self.partial(value)  # trial47 scan401: edge returns missing
         self.assertTrue(motion.begin_quality_wait(.5, feedback(5), scan=value))
         self.assertEqual(motion.quality_wait_anchor['basis'], 'previous_fresh_full_isolation')
         stale = self.seeded()
         stale.compact_target = dict(stale.compact_target, last_full_isolation_received_at=.1)
-        value = observation(5, first=self.bearing)
-        value['ranges'][self.edge()] = None
+        value = self.partial(observation(5, first=self.bearing))
         # Trial50: no fresh full sighting no longer refuses (which ended the
         # route); the wait starts without an anchor and may rebind later.
         self.assertTrue(stale.begin_quality_wait(.5, feedback(5), scan=value))
@@ -507,15 +513,26 @@ class ManeuverRouteTests(unittest.TestCase):
         for seq in (5, 6):
             result = self.step(motion, seq, second=-45., heading=0.)
             self.assertFalse(result['second_target_handover_observed'])
-        # A second support ahead in the same corridor is ambiguous and
-        # discards the whole maturity interval.
+        # A second support ahead in the same corridor is ambiguous: within one
+        # .30 s lease (trial52 flicker) that frame neither counts nor discards.
         value = add_object(observation(7, second=-45., heading=0.), bearing=30.)
         result = motion.update(value, 0., .7, feedback(7, motion.servo))
         self.assertIsNone(result['second_target'])
-        for seq in (8, 9, 10):
+        self.assertEqual(result['second_acquisition_reason'], 'second_role_proof_gap_held')
+        result = self.step(motion, 8, second=-45., heading=0.)
+        self.assertTrue(result['second_target_handover_observed'])  # 3 proven frames over .30 s
+        # Ambiguity beyond the lease discards the whole maturity interval.
+        motion = self.route('corridor_follow')
+        for seq in (5, 6):
+            self.step(motion, seq, second=-45., heading=0.)
+        for seq in (7, 8, 9, 10):
+            value = add_object(observation(seq, second=-45., heading=0.), bearing=30.)
+            result = motion.update(value, 0., seq/10, feedback(seq, motion.servo))
+        self.assertEqual(result['second_acquisition_reason'], 'second_role_current_distinct_support_missing')
+        for seq in (11, 12, 13):
             result = self.step(motion, seq, second=-45., heading=0.)
             self.assertFalse(result['second_target_handover_observed'])
-        result = self.step(motion, 11, second=-45., heading=0.)
+        result = self.step(motion, 14, second=-45., heading=0.)
         self.assertTrue(result['second_target_handover_observed'])
         self.assertEqual(result['route_stage'], 'second_orbit')
         evidence = result['role_distinct_evidence']
@@ -526,7 +543,7 @@ class ManeuverRouteTests(unittest.TestCase):
         motion = self.route('corridor_follow')
         for seq in (5, 6, 7, 8):
             value = observation(seq, second=-45., heading=0.)
-            if seq == 7: value['ranges'][265] = None  # first partial; second stays full
+            if seq == 7: self.partial(value)  # first partial; second stays full
             result = motion.update(value, 0., seq/10, feedback(seq, motion.servo))
         self.assertTrue(result['second_target_handover_observed'])
 
@@ -579,7 +596,8 @@ class ManeuverRouteTests(unittest.TestCase):
             motion.right_exit_geometry = dict(frame['controller_corridor'])
             motion._second_role_observation(scan, scan['received_at'])
             proofs[frame['seq']] = motion.role_distinct_evidence
-        self.assertIsNone(proofs[2564])
+        # Tolerant detection (trial52) already finds the 4-return support here.
+        self.assertEqual(proofs[2564]['second_side'], 'left')
         for seq in (2566, 2568, 2570, 2572, 2575):
             self.assertEqual(proofs[seq]['second_side'], 'left')
             self.assertFalse(proofs[seq]['first_support_visible'])
@@ -673,10 +691,17 @@ class ManeuverRouteTests(unittest.TestCase):
 
     def test_second_loss_returns_to_corridor_follow_and_reacquires(self):
         motion, _ = self.second_handover()
+        # One missing frame keeps the selected command (tolerant tracker hold).
         result = self.step(motion, 9, heading=0.)
+        self.assertEqual(result['reason'], 'second_target_missing_frame_hold')
+        self.assertEqual(result['route_stage'], 'second_orbit')
+        for seq in (10, 11, 12):
+            result = self.step(motion, seq, heading=0.)
+            if result['reason'] == 'second_target_lost_back_to_corridor':
+                break
         self.assertEqual(result['reason'], 'second_target_lost_back_to_corridor')
         self.assertEqual((result['phase'], result['route_stage']), ('drive', 'corridor_follow'))
-        for seq in range(10, 16):
+        for seq in range(seq+1, seq+8):
             result = self.step(motion, seq, second=-45., heading=0.)
             if result['route_stage'] == 'second_orbit':
                 break
@@ -703,7 +728,9 @@ class ManeuverRouteTests(unittest.TestCase):
         motion.update(value, 0., .5, feedback(5, 1500))
         for seq in (6, 7, 8, 9):
             result = self.step(motion, seq, heading=0.)
-        self.assertIsNone(result['compact_target'])
+        # The tolerant first tracker may keep the same first identity; it is
+        # never re-labelled as a second-role candidate.
+        self.assertTrue(result['compact_target'] is None or result['compact_target']['track_id'] == 1)
         self.assertIsNone(result['second_target'])
         self.assertFalse(result['second_target_handover_observed'])
 
@@ -960,7 +987,8 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertTrue(result['first_pass_preparing'])
         self.assertEqual(result['servo'], 1590)  # Actual ACK output still holds.
         result = motion.update(value, .11, .91, feedback(11, 1590), quality_clear=True)
-        self.assertEqual((result['motor'], result['servo']), (1560, 1550))
+        # Slow motor from the first-target handover (round 53).
+        self.assertEqual((result['motor'], result['servo']), (ROUTE_SLOW_MOTOR, 1550))
         self.assertIsNone(result['first_pass_evidence'])
         self.assertFalse(result['route_right_output_authorized'])
 
@@ -1102,7 +1130,7 @@ class ManeuverRouteTests(unittest.TestCase):
                 # Route mode has no orbit-entry clock (trial50); the release
                 # continues under the cumulative drive budget.
                 self.assertEqual(result['reason'], 'first_target_pass_preparing_neutral')
-                self.assertEqual(result['motor'], 1560)
+                self.assertEqual(result['motor'], ROUTE_SLOW_MOTOR)
                 self.assertFalse(result['lock_requested'])
             elif fault == 'changed_receipt':
                 self.assertIsNone(result['compact_target'])
@@ -1335,6 +1363,78 @@ class RouteProximityTests(unittest.TestCase):
             motion._avoid = {'side': 'right', 'gap_m': .1}
             motion._slew(0.)
             self.assertEqual(motion.servo, expected)
+
+
+class RoutePathCheckTests(unittest.TestCase):
+    @staticmethod
+    def motion(stage='corridor_follow', right=False):
+        motion = ManeuverSequence(0., continue_route=True)
+        motion.phase, motion.handover_observed, motion.route_stage = 'drive', True, stage
+        if stage != 'first_target':
+            motion.first_pass_evidence = {'source_seq': 1}
+        if right:
+            motion._route_center_ack = {'servo': 1500}
+            motion.right_exit_center_ack = {'servo': 1500}
+        return motion
+
+    @staticmethod
+    def scan(seq, values):
+        ranges = [3.]*360
+        for index, value in values.items():
+            ranges[index % 360] = value
+        return {'seq': seq, 'ranges': ranges}
+
+    def test_trial52_support_ahead_right_of_path_is_passed_on_its_left(self):
+        # Trial52 scan436: second support at -11 deg, .72 m (bins 6-16).
+        motion = self.motion(right=True)
+        motion._current_scan = self.scan(436, {i: .70 for i in range(6, 17)})
+        self.assertLess(motion._path_free_distance(motion._path_points(motion._current_scan), 1494), .7)
+        choice = motion._route_path_target(1494)
+        self.assertGreater(choice, 1494)  # left of the support (task rule), not right
+        points = motion._path_points(motion._current_scan)
+        self.assertGreaterEqual(motion._path_free_distance(points, choice), .7)
+        self.assertEqual(motion.path_evidence['stage_target'], 1494)
+
+    def test_clear_path_and_returns_beside_the_body_keep_the_stage_target(self):
+        motion = self.motion()
+        motion._current_scan = self.scan(1, {})
+        self.assertEqual(motion._route_path_target(1520), 1520)
+        # A board 2 cm off the right side, parallel: straight ahead stays clear.
+        board = {i: .16/math.sin(math.radians(i)) for i in range(60, 121)}
+        motion._current_scan = self.scan(2, board)
+        self.assertEqual(motion._route_path_target(1500), 1500)
+        self.assertIsNone(motion.path_evidence)
+
+    def test_wall_ahead_turns_away_and_right_only_when_authorized(self):
+        # Wall across the path .8 m ahead, ending 5 deg right: open to the right.
+        wall = {i: .8/math.cos(math.radians(i)) for i in range(-60 % 360, 360)}
+        wall.update({i: .8/math.cos(math.radians(i)) for i in range(0, 6)})
+        for right, expect_right in ((False, False), (True, True)):
+            motion = self.motion('right_align', right=right)
+            motion._current_scan = self.scan(3, wall)
+            choice = motion._route_path_target(1500)
+            self.assertEqual(choice < 1500, expect_right)
+            if right:
+                points = motion._path_points(motion._current_scan)
+                self.assertGreaterEqual(motion._path_free_distance(points, choice), .7)
+
+    def test_first_target_exit_release_aims_at_measured_left_corridor(self):
+        # Trial49: centering at heading ~145 deg of the U-turn hit the outer
+        # board. With the exit corridor 40 deg left, the release keeps left.
+        motion = ManeuverSequence(0., continue_route=True)
+        motion.phase, motion.handover_observed, motion.servo = 'drive', True, 1690
+        left = observation(5, heading=40.)
+        self.assertGreater(motion._exit_release_target(left, .5), 1550)
+        self.assertLessEqual(motion._exit_release_target(left, .5), 1690)  # never adds left
+        motion = ManeuverSequence(0., continue_route=True)
+        motion.phase, motion.handover_observed, motion.servo = 'drive', True, 1690
+        right = observation(5, heading=-25.)
+        self.assertEqual(motion._exit_release_target(right, .5), 1500)  # never right of center
+        missing = observation(5)
+        missing['corridor_candidates'] = []
+        motion = ManeuverSequence(0., continue_route=True)
+        motion.phase, motion.handover_observed, motion.servo = 'drive', True, 1690
+        self.assertEqual(motion._exit_release_target(missing, .5), 1500)
 
 
 class RouteLeftOvershootTests(unittest.TestCase):

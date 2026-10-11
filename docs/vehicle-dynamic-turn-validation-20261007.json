@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "51 (f8a6467) ran once: first support never confirmed in the left turn (edge null bins every other scan reset the unconfirmed identity), overshoot coast centered at ~1.5 m/s -> outer board (operator). Round-52 candidate: edge-gap continuity for unconfirmed first-target identities + evidence-gated overshoot hold.",
+  "latest_trial_status": "52 (7e615ad) ran once: first cone confirmed/handed over, first pass, exit alignment, corridor follow; the second cone (in the right dropout band) was never acquired -> contact. Round-53 candidate: holistic perception (tolerant detector + tracker hold for all trackers), path check after handover, slow motor from handover, corridor-aimed exit release; verified by unit tests, detector replay over rounds 40-52 and open-loop replay of rounds 51/52.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16598,8 +16598,8 @@
   "after51_left_turn_target_continuity_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 52,
     "user_instruction": "2026-10-11 用户：这次撞到锥桶右侧的挡板了；要注意不能对此赛道特化，后期测试完成的片段写入自动控制程序中，让车启动后自动按照任务要求跑完全程。",
     "change": {
@@ -16615,6 +16615,80 @@
       "8 cm body-gate contact still ends the run (user request pending; classifier denial).",
       "Exit release still targets center (trial49 case).",
       "Speed 1.3-1.6 m/s at 1560."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "7e615ad6e4aa0fbe472d90b2c54598a779d844b6",
+      "archive_sha256": "a7cdee770b1bc97affa3024a3e7eeceb3ce7c77517a25f62cc50a782ceb691f8",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn52-20261011-195629",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn52-20261011-195629",
+      "helper_sha256": "732a9b87de8a432867a1dd433cd3e86acf993bdf4da928afea6a545e0ab0e354",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before52-fresh.json (vs turn51 package) / after52-deploy-fresh.json / pre52-run-fresh.json (vs turn52 package): six fresh locked ready samples, 14 hashes match",
+      "trial_executed": "turn52_actual"
+    }
+  },
+  "turn52_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "7e615ad6e4aa0fbe472d90b2c54598a779d844b6",
+    "start_geometry": "front wall 2.141 m, board end .488 m, width 1.654 m, exit 87.8 deg, incoming -3.5 deg, lateral .248 m, presteer cap 1650.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-52/ (7 files sha256 match trial52-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 12.22,
+    "observer_stop_requested": false,
+    "terminal": "probe_obstacle_close_body in corridor_follow (~10.2 s): contact with the second cone (operator)",
+    "operator_report": "用户：绕第二个桶的时候你舵机没有左转撞到第二个桶了；为什么不同的轮数你老重复错误；你整体改啊",
+    "physical_contact": true,
+    "timeline": {
+      "first_target": "confirmed and handed over at 4.94 s (round-52 tracker rule worked); orbit entry 1691->1709 (40 step); wait 5.76-6.69 (target lost, ID 2 rebound), release, resume 6.88; first pass 7.10",
+      "exit": "right_align 7.10-8.49 (axis -30 -> -4 deg), corridor_follow from 8.72 at 1550",
+      "second_target": "second cone ahead at -10 deg, 1.72 m (8.72) -> .72 m (9.6), never acquired: strict detection found it in 2 of 7 saved scans (edge nulls at 11-12, a null inside at 8/11, a mixed edge return at bin 6 - the 5-17 deg right dropout band) and the second-role observation discarded its tracker on every miss",
+      "end": ".15 m avoidance fired at ~10.06 (too late at ~1 m/s); 8 cm gate locked"
+    },
+    "diagnosis": "Same failure class as the first cone in trials 41/47/50/51 (detection flicker from null bins at support edges), fixed in round 52 only for the first tracker; no fallback steering when recognition fails.",
+    "post_trial_lock": "after52-trial-fresh.json: healthy, owner None, locked, unarmed, 1500/1500 (rejection probe_obstacle_close_body: car at the cone).",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after52_holistic_robustness_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 53,
+    "user_instruction": "2026-10-11 用户：为什么不同的轮数你老重复错误；你改你整体改啊；明天我让gpt接手做，所以你每一个大的变动都要能让gpt知道。",
+    "change": {
+      "perception_tolerant_detector": "compact_target._candidates(tolerant=True), used by both route trackers, the second-role observation and the rebind: bridges <= 2 null bins inside a support (neighbors within .18 m), treats <= 2 null or not-far bins at each edge as unknown when a real farther return lies beyond (diameter + unknown arc <= .35 m), accepts 4 returns; such frames are full observations. 3 edge bins remain tracking-only (confirmed identities only). Default detector unchanged.",
+      "perception_tracker_hold": "CompactTargetTracker(tolerant=True): a missing/ambiguous frame keeps the identity (tracker.held, returns None, never counts) for the 300 ms lease; association gates widen with time since last observation (1.5 m/s, 100 deg/s).",
+      "stages_hold_through_misses": "first orbit and second orbit keep the current command for a held frame (first_target_missing_frame_hold / second_target_missing_frame_hold) instead of a wait / return to corridor; second-role proof gaps within .30 s neither count nor discard the second tracker.",
+      "path_check": "After handover (route drive): each scan the stage target is checked against the predicted body sweep along its arc (curvature (servo-1500)/160 per m, measured), .7 m lookahead, .04 m margin ahead; if it hits a known return, the nearest clear candidate is used (corridor/second stages prefer passing obstacles on their left = second cone clockwise); right of center only where the route already authorizes it. Replaces the .15 m reactive rule in drive (kept for the left turn and waits).",
+      "slow_motor_from_handover": "Route drive uses 1550 from the first-target handover (was: after the first pass); left turn and powered resume keep 1560. All orbit-path motor checks accept DRIVE_MOTORS; the server allows 1550 in first_target after handover and keeps the 4 cm inner gate at 1550.",
+      "exit_release_to_corridor": "At the first-target body front (drive and wait) the release aims at the measured exit corridor pursuit target clamped to [1500, current], measured without storing corridor identity; center when unmeasured.",
+      "second_orbit_return_fresh_corridor": "Returning from second_orbit to corridor_follow restarts the corridor identity (no stale-identity recovery pause)."
+    },
+    "verification": {
+      "unit": "route suites 253 passed; full discovery 574 tests, failure set identical to before (pre-existing failures only).",
+      "detector_replay": "scripts/detector-replay.py over rounds 40-52 saved scans: first-target confirmed frames 162 -> 187, identity resets 20 -> 16; ahead sector confirmed 94 -> 113, resets 33 -> 20. Round-52 second cone: tolerant detection in 5 of 7 saved scans (strict 2).",
+      "route_replay_51": "scripts/route-replay.py (open loop, real scans): first cone confirmed and handed over at 1.70 s after drive start (car on the day: never), orbit 1550, missing frame held.",
+      "route_replay_52": "first pass, exit alignment, second cone acquired 4.79 s, confirmed 5.19 s, second_orbit left ramp 1485 -> 1677 before the recorded contact (open loop: the scans still show the old straight path).",
+      "closed_loop_sim": "scripts/route-sim.py + crates/robot-core/examples/scan_geometry.rs: the geometry tool reproduces the car bridge fields exactly (57/57 scans); the rebuilt world model is not yet faithful (wall fragments/duplicates) so the closed-loop sim is EXPERIMENTAL and not a gate."
+    },
+    "not_changed_pending_user": "Body contact (8 cm gate) still ends the run; making it non-terminal was denied by the auto-mode safety classifier and needs the operator decision.",
+    "risks_not_resolved": [
+      "Tolerant detection could accept a small board fragment as a target in an unseen geometry (size gates unchanged).",
+      "Path check uses an approximate curvature model; at 1550 the real curvature for a given PWM is larger (trial50: 1710 -> 1.3-1.7 1/m).",
+      "Second-orbit curvature law starts gently at 1.4 m; whether the closed-loop swing clears the cone is untested on the car.",
+      "Light-lane turn untested."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

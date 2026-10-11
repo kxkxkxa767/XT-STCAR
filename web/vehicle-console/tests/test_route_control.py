@@ -89,7 +89,7 @@ class RouteControlTests(unittest.TestCase):
         self.assertEqual(session['report']['quality_issues'], [])
         self.assertTrue(session['report']['clearance_current']['scan_incomplete_tolerated'])
         self.assertEqual(session['report']['scan_incomplete_tolerated_count'], 1)
-        self.assertEqual(self.outputs[-1]['motor'], 1560)
+        self.assertEqual(self.outputs[-1]['motor'], 1550)
         # A 13-bin unknown run is still incomplete and takes the existing wait.
         value = self.compact_scan(self.console.scan['seq']+1)
         value['ranges'][150:163] = [None]*13
@@ -183,7 +183,7 @@ class RouteControlTests(unittest.TestCase):
         snapshot = copy.deepcopy(session['report']['quality_wait_snapshot'])
         self.assertEqual(snapshot['scan']['ranges'], self.console.scan['ranges'])
         self.assertEqual(snapshot['scan']['received_at'], self.console.scan_at)
-        self.assertEqual(snapshot['control']['motor'], 1560)
+        self.assertEqual(snapshot['control']['motor'], 1550)  # orbit at the slow motor
         self.assertTrue(snapshot['control']['command_acked'])
         for _ in range(8):
             self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
@@ -221,7 +221,7 @@ class RouteControlTests(unittest.TestCase):
         _, session = self.enter_compact_orbit(continue_route=True)
         servo = self.console.status['control']['servo']
         value = self.incomplete(self.console.scan['seq']+1)
-        value['ranges'][self.target_bins.start-1] = None
+        value['ranges'][self.target_bins.start-3:self.target_bins.start] = [None]*3
         self.observe(round(self.now+.1, 6), value)
         self.assertIs(self.console.auto_session, session)
         self.assertEqual(session['phase'], 'quality_wait')
@@ -586,7 +586,7 @@ class RouteControlTests(unittest.TestCase):
                 for _ in range(4):
                     value = self.compact_scan(self.console.scan['seq']+1,
                         observed=fault != 'missing', distance=2. if fault == 'changed' else 1.)
-                    if fault == 'partial': value['ranges'][self.target_bins.start-1] = None
+                    if fault == 'partial': value['ranges'][self.target_bins.start-3:self.target_bins.start] = [None]*3
                     self.observe(round(self.now+.1, 6), value)
                     self.assertIs(self.console.auto_session, session)
                     self.assertEqual(session['phase'], 'quality_wait')
@@ -618,7 +618,17 @@ class RouteControlTests(unittest.TestCase):
         # re-bind the same support (new ID at the same place), then resume once.
         _, session = self.enter_compact_orbit(continue_route=True)
         held = self.console.status['control']['servo']
+        # One missing frame (tolerant tracker hold) keeps driving the command.
         self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1, observed=False))
+        self.assertEqual(session['phase'], 'drive')
+        self.assertEqual(session['turn_motion'].reason, 'first_target_missing_frame_hold')
+        self.assertEqual(self.outputs[-1]['motor'], 1550)
+        # Missing beyond the .30 s lease starts the recovery wait.
+        for _ in range(4):
+            held = self.console.status['control']['servo']
+            self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1, observed=False))
+            if session['phase'] == 'quality_wait':
+                break
         self.assertEqual(session['phase'], 'quality_wait')
         self.assertEqual(session['quality_wait_kind'], 'orbit_wait')
         self.assertEqual(session['turn_motion'].reason, 'route_orbit_target_recovery_wait')
@@ -661,13 +671,16 @@ class RouteControlTests(unittest.TestCase):
                     self.assertEqual([row['op'] for row in self.outputs[before:]], ['stop'])
 
     def test_slow_motor_only_after_first_pass_including_light_turn(self):
+        # Round 53: also the first-target orbit after handover; never the left turn.
         cases = (('right_align', 1500, True), ('light_turn', 1500, True), ('light_turn', 1480, True),
-                 ('first_target', 1500, False))
+                 ('first_target', 1600, True), ('left_turn', 1600, False))
         for stage, servo, accepted in cases:
             with self.subTest(stage=stage, servo=servo):
                 self.reset_case()
                 _, session = self.enter_compact_orbit(continue_route=True)
                 motion = session['turn_motion']
+                if stage == 'left_turn':
+                    motion.handover_observed, stage = False, 'first_target'
                 if stage != 'first_target':
                     motion.first_pass_evidence = {'source_seq': self.console.scan['seq']}
                     motion.right_exit_center_ack = {'servo': 1500}

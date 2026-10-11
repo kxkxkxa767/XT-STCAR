@@ -7,7 +7,7 @@ The service retains fresh body-clearance checks, ownership, heartbeat and ACKs.
 import copy
 import math
 
-from compact_target import CompactTargetTracker, _candidates, MAX_DIAMETER_M, MIN_RANGE_M
+from compact_target import CompactTargetTracker, _candidates, MAX_DIAMETER_M, MIN_RANGE_M, TOLERANT_MIN_POINTS
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
@@ -120,6 +120,24 @@ ROUTE_WAIT_INSIDE_MARGIN_PWM = 60
 # is held at drive power while the first-target handover is checked every
 # frame; only after this long does the held-left coast (no centering) follow.
 ROUTE_LEFT_OVERSHOOT_HOLD_S = 1.0
+# Explicit route, after the first-target handover (round 53): check the stage's
+# steering against the predicted body sweep along its arc, independent of any
+# object recognition (trial52: the second support was not recognized and the
+# car drove straight into it). Curvature per PWM is the value measured from
+# the rebuilt paths of trials 49/50/52 (scripts/trial-map.py): ~1.0-1.1 1/m at
+# 1655-1665, ~1.3 1/m at 1710 slow. If the stage target's arc meets a known
+# return (body side .14 m, +4 cm ahead of the front face) within the
+# lookahead, the nearest clear candidate is used; corridor and second-target
+# stages prefer passing an obstacle on its left (task rule: the second cone is
+# passed clockwise). Right of center only where the route already authorizes it.
+ROUTE_PWM_PER_CURVATURE = 160.
+ROUTE_PATH_LOOKAHEAD_M = .70
+ROUTE_PATH_MARGIN_M = .04
+ROUTE_PATH_RANGE_M = 2.
+ROUTE_PATH_LEFT_CANDIDATES = tuple(range(NEUTRAL, SERVO_MAX, 20))+(SERVO_MAX,)
+ROUTE_PATH_RIGHT_CANDIDATES = (1350, 1390, 1430, 1470)
+_DIRECTION_COS = tuple(math.cos(math.radians(i)) for i in range(360))
+_DIRECTION_SIN = tuple(math.sin(math.radians(i)) for i in range(360))
 LIGHT_BRIDGE_MAX_BINS = 5
 # Lateral gap from the lidar origin to the support's current left edge at the
 # bypass point: keeps the support above the detector's minimum range while it
@@ -174,7 +192,8 @@ class ManeuverSequence(TurnMotion):
         self.max_presteer_s = PRESTEER_MAX_S
         self.continue_route = continue_route
         self.target_tracker = (CompactTargetTracker(maintenance_bearing_rad=(-math.pi, math.pi),
-                                                   select_associated=True, unconfirmed_boundary_gap=True)
+                                                   select_associated=True, unconfirmed_boundary_gap=True,
+                                                   tolerant=True)
                                if continue_route else CompactTargetTracker())
         self.compact_target = None
         self._route_left_hold_since = None
@@ -272,9 +291,14 @@ class ManeuverSequence(TurnMotion):
         self.light_alignment_evidence = None
         self.role_distinct_evidence = None
         self.second_acquisition_reason = None
+        self._second_proof_at = None
         self._second_pass_history = []
         # Route: current-scan proximity avoidance and steering inside waits.
         self._avoid = None
+        self._exit_release_cache = None
+        self._path_cache = None
+        self.path_evidence = None
+        self.path_override_count = 0
         self.avoid_count = 0
         self.avoid_evidence = []
         self.wait_steering_changes = 0
@@ -285,7 +309,8 @@ class ManeuverSequence(TurnMotion):
         # once confirmed it moves from the front through the right to behind
         # the rear, where the pass is matured over .25 s.
         return CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, math.pi/2),
-            maintenance_bearing_rad=(-math.pi, math.pi/2), select_associated=True)
+            maintenance_bearing_rad=(-math.pi, math.pi/2), select_associated=True,
+            unconfirmed_boundary_gap=True, tolerant=True)
 
     def _route_event(self, name, scan, control, evidence=None):
         # One snapshot per transition, never an unbounded in-control log.
@@ -304,7 +329,7 @@ class ManeuverSequence(TurnMotion):
                 or target.get('source_received_at') != scan.get('received_at')):
             return None
         bins, ranges = target.get('support_bins'), scan.get('ranges')
-        if (not isinstance(bins, list) or len(bins) < 5 or len(set(bins)) != len(bins)
+        if (not isinstance(bins, list) or len(bins) < TOLERANT_MIN_POINTS or len(set(bins)) != len(bins)
                 or not isinstance(ranges, list) or len(ranges) != 360
                 or any(type(i) is not int or not 0 <= i < 360 or not _number(ranges[i]) for i in bins)):
             return None
@@ -449,7 +474,7 @@ class ManeuverSequence(TurnMotion):
                 or self.right_exit_since is not None or self.route_stage != 'first_target'
                 or not _number(now) or now < self.last_now):
             return refuse('route_state')
-        if (control.get('armed') is not True or control.get('motor') != TRIAL_MOTOR
+        if (control.get('armed') is not True or control.get('motor') not in DRIVE_MOTORS
                 or control.get('command_acked') is not True
                 or not NEUTRAL < control.get('servo', 0) == self.servo <= SERVO_MAX):
             return refuse('control_not_acked_left')
@@ -519,7 +544,7 @@ class ManeuverSequence(TurnMotion):
         if points is None:
             return None
         try:
-            others = _candidates(scan['ranges'], bearing_range_rad=(0., math.pi))
+            others = _candidates(scan['ranges'], bearing_range_rad=(0., math.pi), tolerant=True)
         except (ValueError, TypeError, KeyError):
             return None
         if any(_number(o.get('range_m')) and o['range_m'] < target['range_m']-.05 for o in others):
@@ -578,6 +603,30 @@ class ManeuverSequence(TurnMotion):
             self.wait_steering_changes += 1
         self.steering_target = self.quality_wait_servo
 
+    def _exit_release_target(self, scan, now):
+        """Release-only target once the first support is at the body front.
+
+        Round 53 (trial49): centering at heading ~145 deg of the first U-turn
+        drove the car into the outer board while the exit corridor axis was
+        still well to the left. Route mode releases toward the measured exit
+        corridor pursuit target instead, never right of center and never above
+        the current command; center when no corridor is measured.
+        """
+        if not self.continue_route or not isinstance(scan, dict):
+            return NEUTRAL
+        cached = self._exit_release_cache
+        if cached is not None and cached[0] == scan.get('seq'):
+            return max(NEUTRAL, min(self.servo, cached[1]))
+        # Measure only: the corridor identity used after the first pass must
+        # start fresh exactly as before (round-53 replay of trial52: a U-turn
+        # corridor kept as identity was rejected at the first pass -> pause).
+        saved = (self.right_exit_geometry, self._right_exit_last_receive, self._right_exit_last_publication)
+        target, rejection = self._right_exit_target(scan, now)
+        self.right_exit_geometry, self._right_exit_last_receive, self._right_exit_last_publication = saved
+        value = NEUTRAL if rejection is not None or not _number(target) else max(NEUTRAL, int(target))
+        self._exit_release_cache = (scan.get('seq'), value)
+        return max(NEUTRAL, min(self.servo, value))
+
     def _wait_inside_base(self, lookahead):
         """Held left, released only for a close inside return (no creep)."""
         held = self.quality_wait_servo
@@ -604,7 +653,7 @@ class ManeuverSequence(TurnMotion):
                            and servo_feedback == self.quality_wait_previous_servo
                            and control.get('command_acked') is False)
         if ((servo_feedback != self.quality_wait_servo and not pending_release)
-                or control.get('motor') not in (NEUTRAL, TRIAL_MOTOR)
+                or control.get('motor') not in (NEUTRAL,)+DRIVE_MOTORS
                 or (control.get('neutral_acked') is True and control['motor'] != NEUTRAL)):
             self.lock('route_quality_wait_feedback_changed')
             return self._result(now)
@@ -655,7 +704,7 @@ class ManeuverSequence(TurnMotion):
             # powered resume, so that output always holds an ACKed command.
             if self.phase == 'quality_wait':
                 before = self.servo
-                base = (NEUTRAL if self.quality_wait_release is not None
+                base = (self._exit_release_target(scan, now) if self.quality_wait_release is not None
                         else self._wait_inside_base(max(.35, min(1., self.compact_target['range_m']))))
                 self._wait_steer(now, servo_feedback, neutral, base)
                 if self.servo != before and self.quality_wait_release is not None and self.servo < before:
@@ -1171,7 +1220,7 @@ class ManeuverSequence(TurnMotion):
         if (self.phase != 'drive' or (require_handover and not self.handover_observed)
                 or self.first_pass_evidence is not None or self.right_exit_since is not None
                 or control.get('armed') is not True
-                or control.get('motor') != TRIAL_MOTOR
+                or control.get('motor') not in (DRIVE_MOTORS if self.continue_route else (TRIAL_MOTOR,))
                 or control.get('command_acked') is not True
                 or type(control.get('servo')) is not int
                 or not NEUTRAL < control['servo'] == self.servo <= SERVO_MAX):
@@ -1278,6 +1327,80 @@ class ManeuverSequence(TurnMotion):
             side = 'left' if best['point_left_m'][1] > 0 else 'right'
         return {**best, 'side': side, 'source_seq': scan.get('seq')}
 
+    @staticmethod
+    def _path_points(scan):
+        ranges = scan.get('ranges') if isinstance(scan, dict) else None
+        if not isinstance(ranges, list) or len(ranges) != 360:
+            return None
+        points = []
+        for index, distance in enumerate(ranges):
+            if _number(distance) and .02 <= distance <= ROUTE_PATH_RANGE_M:
+                x, y = _DIRECTION_COS[index]*distance, -_DIRECTION_SIN[index]*distance
+                if x > -REAR_BODY_EXTENT_M-.2:
+                    points.append((x, y))
+        return points
+
+    @staticmethod
+    def _path_free_distance(points, servo):
+        """Lidar travel before the body meets a known return on this arc (inf: clear)."""
+        kappa = (servo-NEUTRAL)/ROUTE_PWM_PER_CURVATURE
+        best = math.inf
+        for x, y in points:
+            if abs(kappa) < 1e-3:
+                along, normal = x, y
+            else:
+                radius = 1/abs(kappa)
+                side = y if kappa > 0 else -y
+                rho = math.hypot(x, radius-side)
+                normal = radius-rho
+                along = radius*math.atan2(x, radius-side)
+            if along+REAR_BODY_EXTENT_M < 0:
+                continue  # behind the rear face: never reached driving forward
+            half = SIDE_BODY_EXTENT_M+(ROUTE_PATH_MARGIN_M if along > FRONT_BODY_EXTENT_M else 0.)
+            if abs(normal) > half:
+                continue
+            best = min(best, max(0., along-FRONT_BODY_EXTENT_M))
+        return best
+
+    def _route_right_authorized(self):
+        return (self.continue_route and self.phase == 'drive' and not self.quality_resume_pending
+                and self.first_pass_evidence is not None and self._route_center_ack is not None
+                and ((self.route_stage in ('right_align', 'corridor_follow') and self.right_exit_center_ack is not None)
+                     or (self.route_stage == 'second_orbit' and self.second_center_ack is not None)
+                     or self.route_stage == 'light_turn'))
+
+    def _route_path_target(self, target):
+        """Stage target, or the nearest candidate whose arc is clear (round 53)."""
+        scan = self._current_scan
+        key = (scan.get('seq') if isinstance(scan, dict) else None, target, self.route_stage,
+               self._route_right_authorized())
+        if self._path_cache is not None and self._path_cache[0] == key:
+            return self._path_cache[1]
+        points = self._path_points(scan)
+        choice = target
+        if points:
+            free = self._path_free_distance(points, target)
+            if free < ROUTE_PATH_LOOKAHEAD_M:
+                candidates = list(ROUTE_PATH_LEFT_CANDIDATES)
+                if key[3]:
+                    candidates += list(ROUTE_PATH_RIGHT_CANDIDATES)
+                scored = {c: self._path_free_distance(points, c) for c in candidates}
+                clear = [c for c, f in scored.items() if f >= ROUTE_PATH_LOOKAHEAD_M]
+                prefer_left = self.route_stage in ('corridor_follow', 'second_orbit')
+                if clear:
+                    above = [c for c in clear if c >= target]
+                    pool = above if prefer_left and above else clear
+                    choice = min(pool, key=lambda c: (abs(c-target), -c))
+                else:
+                    choice = max(scored, key=lambda c: (scored[c], -abs(c-target)))
+                self.path_evidence = {'source_seq': key[0], 'stage': self.route_stage, 'stage_target': target,
+                    'stage_free_m': free, 'chosen': choice, 'chosen_free_m': scored[choice],
+                    'clear_candidates': len(clear), 'right_authorized': key[3],
+                    'pwm_per_curvature': ROUTE_PWM_PER_CURVATURE, 'swept_path_certified': False}
+                self.path_override_count += 1
+        self._path_cache = (key, choice)
+        return choice
+
     def _avoid_target(self, target):
         avoid = self._avoid
         if avoid is None:
@@ -1287,8 +1410,13 @@ class ManeuverSequence(TurnMotion):
         return max(target, ROUTE_AVOID_LEFT_PWM)
 
     def _slew(self, now):
-        avoid_target = (self._avoid_target(self.steering_target)
-                        if self.continue_route and self.phase in ('drive', 'quality_wait') else self.steering_target)
+        if (self.continue_route and self.phase == 'drive' and self.handover_observed
+                and not self.quality_resume_pending):
+            avoid_target = self._route_path_target(self.steering_target)
+        elif self.continue_route and self.phase in ('drive', 'quality_wait'):
+            avoid_target = self._avoid_target(self.steering_target)
+        else:
+            avoid_target = self.steering_target
         if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != avoid_target:
             target = avoid_target
             reducing_left = self.servo > NEUTRAL and target < self.servo
@@ -1424,6 +1552,7 @@ class ManeuverSequence(TurnMotion):
             route_left_hold_active=self._route_left_hold_since is not None,
             left_overshoot_evidence=copy.deepcopy(self.left_overshoot_evidence),
             route_avoid=copy.deepcopy(self._avoid), avoid_count=self.avoid_count,
+            path_evidence=copy.deepcopy(self.path_evidence), path_override_count=self.path_override_count,
             avoid_evidence=copy.deepcopy(self.avoid_evidence),
             wait_steering_changes=self.wait_steering_changes,
             post_pass_pause_evidence=copy.deepcopy(self.post_pass_pause_evidence),
@@ -1513,7 +1642,7 @@ class ManeuverSequence(TurnMotion):
             return
         if (target is None or target.get('track_id') != self.orbit_track_id
                 or not target.get('confirmed') or target.get('tracking_only_boundary_gap') is not False
-                or not isinstance(bins, list) or len(bins) < 5
+                or not isinstance(bins, list) or len(bins) < TOLERANT_MIN_POINTS
                 or any(type(i) is not int or not 0 <= i < 360 for i in bins)):
             self._first_pass_history = []
             self._clear_exit_prepare_window()
@@ -1541,7 +1670,8 @@ class ManeuverSequence(TurnMotion):
         receive_span = row['received_at']-history[0]['received_at']
         approaching = (len(history) >= 3 and pub_span >= .25 and receive_span >= .25
                        and all(b['center_x_m'] < a['center_x_m'] for a, b in zip(history, history[1:])))
-        adopted = (control.get('command_acked') is True and control.get('motor') == TRIAL_MOTOR
+        adopted = (control.get('command_acked') is True
+                   and control.get('motor') in (DRIVE_MOTORS if self.continue_route else (TRIAL_MOTOR,))
                    and control.get('servo') == self.servo and NEUTRAL <= self.servo <= SERVO_MAX)
         lead = (math.ceil((self.servo-NEUTRAL)/LEFT_RELEASE_PWM_STEP)+1)*PWM_INTERVAL_S
         closing = (min((history[0]['center_x_m']-x)/pub_span,
@@ -1675,11 +1805,16 @@ class ManeuverSequence(TurnMotion):
         return min(half+offset-max(projections), min(projections)-(offset-half))
 
     def _route_motor(self):
-        """Commanded drive PWM: slow after the first pass in explicit route mode."""
-        return (ROUTE_SLOW_MOTOR if (self.continue_route and self.phase == 'drive'
-                                     and self.first_pass_evidence is not None
-                                     and not self.quality_resume_pending
-                                     and self.route_stage in POST_PASS_STAGES)
+        """Commanded drive PWM: slow from the first-target handover in route mode.
+
+        Trials 49-51 (rebuilt paths): ~1.3-1.6 m/s at 1560 through the first
+        U-turn and ~.5 m/s^2 rolling decel; 1550 measured ~.6-1.1 m/s. The
+        left turn keeps 1560; a powered resume keeps its 1560 ACK sequence.
+        """
+        slow_stage = ((self.handover_observed and self.route_stage == 'first_target')
+                      or (self.first_pass_evidence is not None and self.route_stage in POST_PASS_STAGES))
+        return (ROUTE_SLOW_MOTOR if (self.continue_route and self.phase == 'drive' and slow_stage
+                                     and not self.quality_resume_pending)
                 else TRIAL_MOTOR)
 
     def _route_adopted(self, control, now):
@@ -1823,7 +1958,7 @@ class ManeuverSequence(TurnMotion):
             heading = c['heading_left_rad']
             bound = c['width_m']/2-MANEUVER_BODY_CLEARANCE_M
             ahead = []
-            for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2)):
+            for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True):
                 x, y = target['point_left_m']
                 along = math.cos(heading)*x+math.sin(heading)*y
                 normal = -math.sin(heading)*x+math.cos(heading)*y
@@ -1852,14 +1987,24 @@ class ManeuverSequence(TurnMotion):
                         'second_normal_m': normal, 'second_side': 'left' if target['point_left_m'][1] > 0 else 'right',
                         'basis': 'single_support_ahead_inside_current_corridor_after_first_pass',
                         'physical_identity_verified': False}
+        if (proof is None and self._second_proof_at is not None
+                and 0 <= now-self._second_proof_at < SCAN_AGE_S):
+            # Trial52: the second support flickered (dropout band) and every
+            # missed frame discarded its tracker. Within one lease a frame
+            # without proof neither advances (counts) nor discards the tracker.
+            self.second_target = None
+            self.second_acquisition_reason = 'second_role_proof_gap_held'
+            return
         if proof is None:
             # acquire=False alone would still mature an existing unconfirmed
             # association. No role proof means discard that entire interval.
+            self._second_proof_at = None
             self.second_tracker = self._new_second_tracker()
             self.second_target = None
             self.role_distinct_evidence = None
             self.second_acquisition_reason = 'second_role_current_distinct_support_missing'
             return
+        self._second_proof_at = now
         self.second_target = self.second_tracker.update(scan, now, acquire=True)
         self.role_distinct_evidence = proof
         self.second_acquisition_reason = self.second_tracker.reason
@@ -1919,12 +2064,26 @@ class ManeuverSequence(TurnMotion):
 
     def _second_orbit_update(self, scan, now, control):
         target = self.second_target
+        held = getattr(self.second_tracker, 'held', None)
+        if (target is None and isinstance(held, dict) and held.get('track_id') == self.second_track_id
+                and now-self.second_orbit_since < ORBIT_ENTRY_MAX_S):
+            # Tolerant tracker kept the identity through a missing frame:
+            # keep the selected command for this frame only.
+            self.steering_target = self.servo
+            self.reason = 'second_target_missing_frame_hold'
+            self._slew(now)
+            return self._result(now)
         lost = (target is None or target.get('track_id') != self.second_track_id
                 or not target.get('confirmed'))
         if now-self.second_orbit_since >= ORBIT_ENTRY_MAX_S or lost:
             # Self-recovery: go back to corridor following, which re-acquires
             # the second support (or continues) from the current position.
             self.route_stage = 'corridor_follow'
+            # The second orbit does not refresh the corridor estimate; restart
+            # its identity from the next fresh observation (no stale-identity
+            # rejection and recovery pause on return).
+            self.right_exit_geometry = None
+            self._right_exit_last_receive = self._right_exit_last_publication = None
             self.second_tracker = self._new_second_tracker()
             self.second_target = None
             self.second_center_ack = None
@@ -2434,10 +2593,13 @@ class ManeuverSequence(TurnMotion):
                     and self._full_target_points(self.compact_target, scan, self.orbit_track_id) is not None
                     and 0 <= now-scan['received_at'] < SCAN_AGE_S
                     and control.get('command_acked') is True
-                    and control.get('motor') == TRIAL_MOTOR and control.get('servo') == self.servo):
+                    and control.get('motor') in DRIVE_MOTORS and control.get('servo') == self.servo):
                 # Route mode: no orbit-entry clock (trial50); the cumulative
-                # drive budget and the service deadline still bound it.
-                self.steering_target = self.natural_steering_target = NEUTRAL
+                # drive budget and the service deadline still bound it. A
+                # repeated frame reuses the last measured release target.
+                cached = self._exit_release_cache
+                self.steering_target = self.natural_steering_target = (
+                    max(NEUTRAL, min(self.servo, cached[1])) if cached is not None else NEUTRAL)
                 self.reason = 'first_target_pass_preparing_neutral'
                 self._slew(now)
             return self._result(now)
@@ -2449,6 +2611,16 @@ class ManeuverSequence(TurnMotion):
             return self._second_orbit_update(scan, now, control)
         if self.first_pass_evidence is not None:
             return self._right_exit_update(scan, now, control)
+        held = getattr(self.target_tracker, 'held', None)
+        if (self.continue_route and self.compact_target is None and self.handover_observed
+                and isinstance(held, dict) and held.get('track_id') == self.orbit_track_id):
+            # Tolerant tracker kept the orbited identity through a missing
+            # frame (trial50/51 flicker): keep the current command this frame.
+            self._clear_exit_prepare_window()
+            self.steering_target = self.servo
+            self.reason = 'first_target_missing_frame_hold'
+            self._slew(now)
+            return self._result(now)
         if not self._usable_target(self.compact_target, scan):
             self._clear_exit_prepare_window()
             self._capture_compact_loss(scan, now, control, 'compact_target_lost_or_ambiguous')
@@ -2467,7 +2639,7 @@ class ManeuverSequence(TurnMotion):
             # Continue the adopted left command across normal stage handover.
             # A target never bypasses an ACK, neutral/protection stop or re-arms
             # the bridge. This is command feedback, not physical wheel angle.
-            adopted = (control.get('motor') == TRIAL_MOTOR
+            adopted = (control.get('motor') in (DRIVE_MOTORS if self.continue_route else (TRIAL_MOTOR,))
                        and control.get('servo') == self.servo > NEUTRAL
                        and control.get('command_acked') is True)
             if not adopted:
@@ -2516,7 +2688,7 @@ class ManeuverSequence(TurnMotion):
         if self.first_pass_evidence is not None:
             return self._right_exit_update(scan, now, control)
         if self.first_pass_preparing:
-            self.steering_target = self.natural_steering_target = NEUTRAL
+            self.steering_target = self.natural_steering_target = self._exit_release_target(scan, now)
             self.reason = 'first_target_pass_preparing_neutral'
             self._slew(now)
             return self._result(now)

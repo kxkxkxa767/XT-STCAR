@@ -22,6 +22,26 @@ MIN_RANGE_M = .35
 MAX_RANGE_M = 3.
 MIN_BEARING_RAD = math.radians(45)
 MAX_BEARING_RAD = math.radians(135)
+# Opt-in ``tolerant`` detection (explicit route). Trials 41/47/50/51/52: a
+# support ~.2 m wide at .5-2 m often has 1-2 null bins at an edge (beam split
+# at the depth step), an intermediate "mixed" return there, or a null inside
+# it (the 5-17 deg right dropout band). Strict detection then flickers every
+# other scan and trackers reset. Tolerant detection keeps the same size/range
+# gates but: bridges <= TOLERANT_INTERNAL_NULLS null bins inside a support
+# whose neighbors are within MAX_POINT_GAP_M; treats <= TOLERANT_EDGE_BINS
+# null or not-far bins at each edge as unknown when a real farther return
+# lies beyond; and bounds the unknown edge extent: diameter plus its arc must
+# stay within MAX_DIAMETER_M. Such frames count as full observations.
+TOLERANT_INTERNAL_NULLS = 2
+TOLERANT_EDGE_BINS = 2
+# Trial52 scan429: second support at 1.5 m kept 4 returns beside 2 edge nulls;
+# real farther returns on both sides still bound it.
+TOLERANT_MIN_POINTS = 4
+# Tolerant trackers keep an identity through missing/ambiguous frames for the
+# same 300 ms lease, widening the association gate by the elapsed time
+# (static object, moving car: ~1.5 m/s and ~100 deg/s observed in turns).
+TOLERANT_GATE_M_PER_S = 1.5
+TOLERANT_GATE_RAD_PER_S = math.radians(100)
 _DIRECTIONS = tuple((math.cos(math.radians(i)), -math.sin(math.radians(i)))
                     for i in range(360))
 
@@ -38,15 +58,44 @@ def _bearing_range(value, name):
     return tuple(value)
 
 
-def _associated(current, old):
+def _associated(current, old, slack_s=0.):
     if old is None:
         return False
     bearing_delta = abs(current['bearing_left_rad']-old['bearing_left_rad'])
     if bearing_delta > math.pi:
         bearing_delta = 2*math.pi-bearing_delta
-    return (math.dist(current['point_left_m'], old['point_left_m']) <= .30
-            and bearing_delta <= math.radians(20)
+    slack_s = max(0., slack_s)
+    return (math.dist(current['point_left_m'], old['point_left_m']) <= .30+TOLERANT_GATE_M_PER_S*slack_s
+            and bearing_delta <= math.radians(20)+TOLERANT_GATE_RAD_PER_S*slack_s
             and abs(current['diameter_m']-old['diameter_m']) <= .12)
+
+
+def _clusters_bridged(points, bridge_nulls):
+    """Components over returns only; <= bridge_nulls null bins between two
+    returns within MAX_POINT_GAP_M do not split a component (nulls are never
+    support). bridge_nulls=0 reproduces _clusters."""
+    present = [i for i in range(360) if points[i] is not None]
+    if not present:
+        return []
+    if len(present) == 1:
+        return [present]
+
+    def linked(a, b):
+        return (b-a) % 360 <= 1+bridge_nulls and math.dist(points[a], points[b]) <= MAX_POINT_GAP_M
+    count = len(present)
+    start = next((k for k in range(count) if not linked(present[k-1], present[k])), None)
+    if start is None:
+        return []  # A continuous enclosure cannot supply a compact target.
+    groups, group = [], []
+    for offset in range(count):
+        k = (start+offset) % count
+        if group and not linked(present[k-1], present[k]):
+            groups.append(group)
+            group = []
+        group.append(present[k])
+    if group:
+        groups.append(group)
+    return groups
 
 
 def _clusters(points):
@@ -69,17 +118,43 @@ def _clusters(points):
     return groups
 
 
+def _tolerant_edges(ranges, group, values, diameter, allow_boundary_gap):
+    """Tolerant edge rule: (unknown bins, background, gap counts, tracking_only) or None."""
+    limit = MAX_BOUNDARY_GAP_BINS if allow_boundary_gap else TOLERANT_EDGE_BINS
+    far = max(values)+MAX_POINT_GAP_M
+    unknown, background, gap_counts = [], [], []
+    for edge, direction in [(group[0], -1), (group[-1], 1)]:
+        found, count = None, 0
+        for step in range(1, limit+2):
+            index = (edge+direction*step) % 360
+            value = ranges[index]
+            if value is not None and value > far:
+                found = {'index': index, 'range_m': value}
+                break
+            if step > limit:
+                break
+            unknown.append(index)  # null, or a not-far (mixed / nearer) return
+            count += 1
+        if found is None:
+            return None
+        background.append(found)
+        gap_counts.append(count)
+    if any(gap_counts) and diameter+max(values)*math.radians(sum(gap_counts)) > MAX_DIAMETER_M:
+        return None
+    return unknown, background, gap_counts, max(gap_counts) > TOLERANT_EDGE_BINS
+
+
 def _candidates(ranges, *, allow_boundary_gap=False,
-                bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD)):
+                bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD), tolerant=False):
     bearing_min, bearing_max = _bearing_range(bearing_range_rad, 'bearing_range_rad')
-    if type(allow_boundary_gap) is not bool:
-        raise ValueError('allow_boundary_gap must be a bool')
+    if type(allow_boundary_gap) is not bool or type(tolerant) is not bool:
+        raise ValueError('allow_boundary_gap and tolerant must be bools')
     # Build components BEFORE range/sector filtering. Filtering first would
     # manufacture a small object from the end of an extended wall.
     points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
     result = []
-    for group in _clusters(points):
-        if not MIN_POINTS <= len(group) <= 128:
+    for group in (_clusters_bridged(points, TOLERANT_INTERNAL_NULLS) if tolerant else _clusters(points)):
+        if not (TOLERANT_MIN_POINTS if tolerant else MIN_POINTS) <= len(group) <= 128:
             continue
         values = [ranges[i] for i in group]
         if min(values) < MIN_RANGE_M or max(values) > MAX_RANGE_M:
@@ -90,6 +165,24 @@ def _candidates(ranges, *, allow_boundary_gap=False,
             continue
         diameter = max(math.dist(a, b) for index, a in enumerate(support) for b in support[index+1:])
         if not MIN_DIAMETER_M <= diameter <= MAX_DIAMETER_M:
+            continue
+        if tolerant:
+            edges = _tolerant_edges(ranges, group, values, diameter, allow_boundary_gap)
+            if edges is None:
+                continue
+            unknown, background, gap_counts, tracking_only = edges
+            center = [sum(p[axis] for p in support)/len(support) for axis in (0, 1)]
+            distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
+            if MIN_RANGE_M <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
+                internal = [i for i in range(group[0], group[0]+(group[-1]-group[0]) % 360+1)
+                            if i % 360 not in group]
+                result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
+                               'diameter_m': diameter, 'point_count': len(group), 'support_bins': list(group),
+                               'boundary_unknown_bins': unknown, 'boundary_far_returns': background,
+                               'internal_null_bins': [i % 360 for i in internal],
+                               'boundary_gap_projected_span_m': (max(values)*math.radians(sum(gap_counts))
+                                                                 if any(gap_counts) else None),
+                               'tracking_only_boundary_gap': tracking_only, 'tolerant_detection': True})
             continue
         # Acquisition needs both immediate neighbors. A confirmed track may
         # cross up to three nulls at one edge, or exactly one at each edge,
@@ -153,14 +246,17 @@ class CompactTargetTracker:
     ``reason`` supplies diagnostics when update returns None.
     """
     def __init__(self, *, acquisition_bearing_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD),
-                 maintenance_bearing_rad=None, select_associated=False, unconfirmed_boundary_gap=False):
+                 maintenance_bearing_rad=None, select_associated=False, unconfirmed_boundary_gap=False,
+                 tolerant=False):
         self._acquisition_bearing_rad = _bearing_range(acquisition_bearing_rad, 'acquisition_bearing_rad')
         self._maintenance_bearing_rad = (None if maintenance_bearing_rad is None else
                                          _bearing_range(maintenance_bearing_rad, 'maintenance_bearing_rad'))
         if type(select_associated) is not bool:
             raise ValueError('select_associated must be a bool')
-        if type(unconfirmed_boundary_gap) is not bool:
-            raise ValueError('unconfirmed_boundary_gap must be a bool')
+        if type(unconfirmed_boundary_gap) is not bool or type(tolerant) is not bool:
+            raise ValueError('unconfirmed_boundary_gap and tolerant must be bools')
+        self._tolerant = tolerant
+        self.held = None  # tolerant: identity kept through this missing/ambiguous frame
         self._select_associated = select_associated
         # Opt-in (explicit route first target). Trial51: the first support at
         # ~1 m had 1-2 null bins at one edge in about every other scan (the
@@ -186,6 +282,7 @@ class CompactTargetTracker:
         """Use only current support; ``acquire=False`` cannot create a new ID."""
         if type(acquire) is not bool:
             raise ValueError('acquire must be a bool')
+        self.held = None
         if not _number(now) or now < 0 or (self._last_now is not None and now < self._last_now):
             return self._forget('compact_target_invalid_receive_clock')
         self._last_now = now
@@ -231,17 +328,30 @@ class CompactTargetTracker:
                          if confirmed_old and self._maintenance_bearing_rad is not None
                          else self._acquisition_bearing_rad)
         candidates = _candidates(ranges, allow_boundary_gap=allow_boundary_gap,
-                                 bearing_range_rad=bearing_range)
+                                 bearing_range_rad=bearing_range, tolerant=self._tolerant)
+        # Tolerant: the gate widens with the time since the identity was last
+        # observed beyond one nominal scan period (held frames in between).
+        slack = (max(0., (published-old['source_at_ms'])/1000-.1)
+                 if self._tolerant and old is not None else 0.)
         if self._select_associated and allow_boundary_gap:
             # Confirmed role trackers must not switch to an unrelated object
             # merely because it is the only component left in their sector.
-            candidates = [candidate for candidate in candidates if _associated(candidate, old)]
+            candidates = [candidate for candidate in candidates if _associated(candidate, old, slack)]
+        self.held = None
         if len(candidates) != 1:
-            return self._forget('compact_target_ambiguous' if candidates else 'compact_target_missing')
+            reason = 'compact_target_ambiguous' if candidates else 'compact_target_missing'
+            if (self._tolerant and old is not None
+                    and (published-old['source_at_ms'])/1000 < MAX_AGE_S
+                    and received-old['source_received_at'] < MAX_AGE_S):
+                # Keep the identity (not its observation) for the lease; this
+                # frame returns None and never counts toward confirmation.
+                self.reason, self.held = reason+'_held', copy.deepcopy(old)
+                return None
+            return self._forget(reason)
         current = candidates[0]
         # These bounded association gates are not speed, odometry or static
         # object certification. A jump creates a new, unconfirmed identity.
-        associated = _associated(current, old)
+        associated = _associated(current, old, slack)
         boundary_gap = current['tracking_only_boundary_gap']
         if boundary_gap and not associated:
             return self._forget('compact_target_boundary_gap_unassociated')

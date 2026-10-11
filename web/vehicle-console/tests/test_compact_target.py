@@ -643,3 +643,66 @@ class CompactTargetTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TolerantDetectionTests(unittest.TestCase):
+    """Trial52 second support (bins 7-21 in the 5-17 deg right dropout band)."""
+    @staticmethod
+    def scan_with(values, background=3.):
+        ranges = [background]*360
+        for index, value in values.items():
+            ranges[index % 360] = value
+        return ranges
+
+    def found(self, ranges, **kwargs):
+        return MODULE._candidates(ranges, bearing_range_rad=(-math.pi/2, math.pi/2), **kwargs)
+
+    def test_internal_null_mixed_edge_and_four_returns_are_one_full_support(self):
+        cases = {
+            # scan431: a null inside the support splits it under strict rules
+            'internal_null': {7: 1.31, 8: None, 9: 1.37, 10: 1.37, 11: 1.39, 12: 1.40},
+            # scan433: an intermediate (mixed) edge return between support and wall
+            'mixed_edge': {6: 1.22, 7: 1.03, 8: 1.01, 9: 1.01, 10: 1.01, 11: 1.03, 12: 1.03, 13: 1.04, 14: 1.06},
+            # scan429: two edge nulls leave four returns
+            'four_returns': {7: 1.52, 8: 1.49, 9: 1.48, 10: 1.49, 11: None, 12: None},
+        }
+        for name, values in cases.items():
+            with self.subTest(name):
+                ranges = self.scan_with(values)
+                self.assertEqual(self.found(ranges), [])
+                tolerant = self.found(ranges, tolerant=True)
+                self.assertEqual(len(tolerant), 1)
+                self.assertFalse(tolerant[0]['tracking_only_boundary_gap'])
+                self.assertLess(tolerant[0]['bearing_left_rad'], 0)
+
+    def test_wall_end_and_three_edge_nulls_are_not_acquired(self):
+        wall = {i: 1.0 for i in range(5, 40)}  # long board: too large
+        self.assertEqual(self.found(self.scan_with(wall), tolerant=True), [])
+        near_board = {i: 1.0 for i in range(5, 12)}
+        near_board.update({12: None, 13: None, 14: None, 15: 1.05, 16: 1.05})  # board continues past 3 nulls
+        self.assertEqual(self.found(self.scan_with(near_board), tolerant=True), [])
+        gap3 = {i: 1.0 for i in range(5, 12)}
+        gap3.update({12: None, 13: None, 14: None})
+        self.assertEqual(self.found(self.scan_with(gap3), tolerant=True), [])
+        tracked = self.found(self.scan_with(gap3), tolerant=True, allow_boundary_gap=True)
+        self.assertEqual(len(tracked), 1)
+        self.assertTrue(tracked[0]['tracking_only_boundary_gap'])  # confirmed identities only
+
+    def test_tolerant_tracker_holds_identity_for_one_lease_then_forgets(self):
+        tracker = MODULE.CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, math.pi/2),
+                                              select_associated=True, unconfirmed_boundary_gap=True,
+                                              tolerant=True)
+        support = {i: 1.0 for i in range(5, 14)}
+        def scan(seq, observed=True):
+            return {'frame_id': MODULE.FRAME, 'seq': seq, 'at_ms': seq*100, 'received_at': seq/10,
+                    'ranges': self.scan_with(support if observed else {})}
+        self.assertEqual(tracker.update(scan(1), .1)['track_id'], 1)
+        self.assertIsNone(tracker.update(scan(2, False), .2))
+        self.assertEqual(tracker.held['track_id'], 1)
+        self.assertEqual(tracker.reason, 'compact_target_missing_held')
+        result = tracker.update(scan(3), .3)
+        self.assertEqual((result['track_id'], result['confirmation_count']), (1, 2))
+        for seq in (4, 5, 6):
+            tracker.update(scan(seq, False), seq/10)
+        self.assertIsNone(tracker.held)  # beyond the 300 ms lease
+        self.assertEqual(tracker.update(scan(7), .7)['track_id'], 2)
