@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "53 (3d5bd5f) ran once: first cone handover and pass; after the pass the new path check (no clear arc) kept the servo left of center, so the right-turn center ACK never came -> outer board. Round-54 candidate: path check never overrides without a clear arc or while a right turn waits for its center ACK; body-front release robust to one missed scan and held frames.",
+  "latest_trial_status": "54 (c6bdf75) ran once: first cone handed over, released correctly and physically passed, then a wait could not re-find the support behind-left and timed out (no contact). Round-55 candidate (not deployed): rear-left re-acquisition after handover; open-loop replay of 54 completes the pass and resumes.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16740,8 +16740,8 @@
   "after53_path_check_and_release_continuity_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 54,
     "user_instruction": "2026-10-11 用户：绕过第一个锥桶后没有右转，和之前的错误一样。",
     "change": {
@@ -16758,6 +16758,68 @@
     "risks_not_resolved": [
       "Orbit speed at 1550 is still ~1.1-1.4 m/s right after the 1560 left turn.",
       "The 5 Hz saved scans make open-loop replay pessimistic for tracker leases.",
+      "Body-contact stop still terminal (operator decision pending)."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "c6bdf75c6bc0bf62dc808a2c5a8a8e4f1b9794cf",
+      "archive_sha256": "dcee776adc116ae5be65737668a7653187725b5b24f776315368965509fa1aa1",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn54-20261011-204024",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn54-20261011-204024",
+      "helper_sha256": "4552016e13d4b7be330726ae75778a004e83fb4bbccac3ada8d34e3f55440f20",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before54-fresh.json (vs turn53) / after54-deploy-fresh.json / pre54-run-fresh.json (vs turn54): six fresh locked ready samples, 14 hashes match",
+      "trial_executed": "turn54_actual"
+    }
+  },
+  "turn54_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "c6bdf75c6bc0bf62dc808a2c5a8a8e4f1b9794cf",
+    "start_geometry": "front wall 2.152 m, board end .507 m, width 1.645 m, exit 91.9 deg, incoming -0.1 deg, lateral .326 m, presteer cap 1673.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-54/ (7 files sha256 match trial54-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 21.77,
+    "observer_stop_requested": false,
+    "terminal": "maneuver_cumulative_drive_timeout after a 13 s first-target wait; no contact (rest gap .18 m to the right board)",
+    "operator_report": "用户：绕过第一个桶将要撞到右侧挡板的时候停下来了",
+    "physical_contact": false,
+    "timeline": {
+      "first_target": "handover 5.61, orbit 1676-1695 at 1550, missing frame held 6.12, body-front release 6.28 -> servo 1690 -> 1500 by 6.99 (round-54 fix worked: heading settled at ~169 deg, no over-rotation)",
+      "wait": "6.63 wait (scan_incomplete + front_sparse: 11-bin null run left-front, not tolerable); the car coasted past the support and stopped beside the right board",
+      "stall": "support reappeared behind-left at 128 -> 163 deg (.4 -> 1.0 m) but new identities could only be acquired at 45-135 deg; it never confirmed, no rebind, no pass, wait until the 16 s drive budget"
+    },
+    "diagnosis": "Pass detection needs the support tracked to behind the rear; re-acquisition sector excluded the rear-left after handover.",
+    "post_trial_lock": "after54-trial-fresh.json: healthy, owner None, locked, unarmed, 1500/1500.",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after54_rear_reacquisition_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 55,
+    "user_instruction": "2026-10-11 用户：绕过第一个桶将要撞到右侧挡板的时候停下来了，就到这吧，推送仓库，给一份给gpt的命令。",
+    "change": {
+      "rear_left_reacquisition": "After the first-target handover (route only) the first tracker acquisition sector widens from 45-135 deg to 45-180 deg (CompactTargetTracker.widen_acquisition), so a passed support re-found behind-left can be confirmed, rebound by the nearest-left rule and complete the pass from the wait. Before handover the sector is unchanged (no locking onto objects behind during the left turn)."
+    },
+    "verification": {
+      "unit": "route suites 256 passed; full discovery 577 tests, failure set identical to before round 53.",
+      "route_replay_54": "open loop on trial54 scans: wait re-acquires the support (ID 2) at 3.0 s, confirms 3.29 s, pass and resume at 3.70 s, right_align steers left (~1615) away from the right board."
+    },
+    "risks_not_resolved": [
+      "A different compact object behind-left within 1.2 m could be rebound as the first support.",
+      "The wait started from an untolerable 11-bin front null run; coasting still ends near boards.",
       "Body-contact stop still terminal (operator decision pending)."
     ],
     "no_fixed_course_coordinate_or_length": true,

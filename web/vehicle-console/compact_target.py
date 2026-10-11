@@ -273,6 +273,10 @@ class CompactTargetTracker:
         self._next_id = 1
         self._first_at = self._first_received = None
 
+    def widen_acquisition(self, bearing_range_rad):
+        """Replace the acquisition sector (route first target after handover)."""
+        self._acquisition_bearing_rad = _bearing_range(bearing_range_rad, 'acquisition_bearing_rad')
+
     def _forget(self, reason):
         self.reason, self._target = reason, None
         self._first_at = self._first_received = None

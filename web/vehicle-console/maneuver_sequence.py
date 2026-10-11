@@ -2692,6 +2692,14 @@ class ManeuverSequence(TurnMotion):
                 return self._result(now)
             self.handover_observed = True
             self._route_left_hold_since = None
+            if self.continue_route:
+                # Trial54: the car passed the support while the tracker lost it
+                # beside the body; it reappeared behind-left (128-163 deg) where
+                # no new identity could be acquired, so the pass was never
+                # observed and the wait stalled. After handover the first
+                # support is anywhere on the left (task rule: anticlockwise),
+                # so re-acquisition covers the rear-left too.
+                self.target_tracker.widen_acquisition((math.radians(45), math.pi))
             just_handed_over = True
             self.orbit_since = now
             self.orbit_reference_range_m = self.compact_target['range_m']

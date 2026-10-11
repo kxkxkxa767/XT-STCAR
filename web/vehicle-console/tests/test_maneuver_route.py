@@ -1761,3 +1761,21 @@ class FirstTargetReleaseContinuityTests(unittest.TestCase):
         self.assertLessEqual(result['servo'], before)
         self.assertLess(result['steering_target'], before)
         self.assertGreaterEqual(result['steering_target'], 1500)
+
+
+class FirstTargetRearReacquisitionTests(unittest.TestCase):
+    def test_trial54_after_handover_first_tracker_reacquires_rear_left(self):
+        # Trial54: the passed support reappeared at 128-163 deg (behind-left),
+        # outside the 45-135 deg acquisition sector, and the wait stalled.
+        motion = ManeuverSequence(0., continue_route=True)
+        self.assertEqual(motion.target_tracker._acquisition_bearing_rad, (math.radians(45), math.radians(135)))
+        for seq in (1, 2, 3, 4):
+            motion.compact_target = motion.target_tracker.update(observation(seq, first=80.), seq/10)
+        motion.phase, motion.drive_since = 'drive', .4
+        motion.servo = motion.steering_target = 1670
+        motion.update(observation(5, first=80.), 0., .5, feedback(5, 1670))
+        self.assertTrue(motion.handover_observed)
+        self.assertEqual(motion.target_tracker._acquisition_bearing_rad, (math.radians(45), math.pi))
+        fresh = ManeuverSequence(0., continue_route=True).target_tracker
+        fresh.widen_acquisition((math.radians(45), math.pi))
+        self.assertEqual(fresh.update(observation(1, first=150.), .1)['track_id'], 1)
