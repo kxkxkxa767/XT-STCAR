@@ -1,0 +1,14 @@
+# Host-only analysis tool (never deployed): same native scan geometry as the
+# vehicle bridge, for offline replay/simulation. Kept outside crates/ so the
+# deployed Rust bridge sources stay byte-identical (build-matched.py check).
+[package]
+name = "xt-stcar-scan-geometry"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+xt-stcar-robot-core = { path = "../../crates/robot-core" }
+serde_json = "1.0"

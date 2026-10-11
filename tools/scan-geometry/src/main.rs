@@ -5,7 +5,8 @@
 //! same native fields the vehicle bridge adds after calibration:
 //! front_boundary_m, left_junction, corridor_candidates, wall_candidates,
 //! left_turn_goal. Usage:
-//!   cargo run --release -q -p xt-stcar-robot-core --example scan_geometry < scans.jsonl
+//!   cargo build --release -q --manifest-path tools/scan-geometry/Cargo.toml
+//!   tools/scan-geometry/target/release/xt-stcar-scan-geometry < scans.jsonl
 use std::io::{self, BufRead, Write};
 use xt_stcar_robot_core::{
     FrameId, LidarSample, Timestamp,

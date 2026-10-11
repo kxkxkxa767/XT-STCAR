@@ -118,7 +118,7 @@
 2. `scripts/trial-map.py <轮目录> --png out.png --panels t1,t2`：ICP重建实际轨迹、车速、曲率（第5节）。
 3. `scripts/detector-replay.py work/vehicle-dynamic-deploy-20261008/left-cone-trial-202610*-*`：把所有录像喂给三种跟踪器配置（51严格、52、容错），看 seen/conf/ids/first。**任何感知修改后都要跑**，TOTAL不能变差。53时的TOTAL：first/tolerant conf 187 ids 16；ahead/tolerant conf 113 ids 20。
 4. `scripts/route-replay.py <轮目录> [--from 秒 --to 秒]`：开环回放——把真实录像按真实时间喂给**当前工作区**的控制器，打印每帧阶段、舵、目标编号、路径检查（PATH行）、等待原因（cause）。只在“新代码的决策与当天不同”之前有意义（之后录像不再对应新舵量）。**任何逻辑修改后都要回放51和52**：51应在开车后约1.7s交接；52应进入second_orbit并开始向左。
-5. `crates/robot-core/examples/scan_geometry.rs`：在Mac上算与车上桥完全相同的几何字段（`cargo build --release -q -p xt-stcar-robot-core --example scan_geometry`；对52的57帧逐字段一致）。
+5. `tools/scan-geometry`：在Mac上算与车上桥完全相同的几何字段（`cargo build --release -q --manifest-path tools/scan-geometry/Cargo.toml`；对52的57帧逐字段一致）。放在 `crates/` 之外，因为 `build-matched.py` 要求 `crates/` 与已部署版本完全一致（不要把开发工具放进 `crates/`）。
 6. `scripts/route-sim.py <轮目录> --seeds 3 --png out.png`：闭环仿真（真实控制代码+模拟雷达+车模型）。**实验性**：世界模型还不准，结果只作参考，不作门槛。
 
 ## 当前控制参数
@@ -200,7 +200,7 @@
 | `scripts/detector-replay.py` | 只读：所有录像喂给多种跟踪器配置，比较检测稳定性（第7节） |
 | `scripts/route-replay.py` | 只读：真实录像开环回放当前控制器决策（第7节） |
 | `scripts/route-sim.py` | 实验性闭环仿真（第7节） |
-| `crates/robot-core/examples/scan_geometry.rs` | Mac上计算与车上桥相同的几何字段 |
+| `tools/scan-geometry/` | Mac上计算与车上桥相同的几何字段（独立cargo工程，不部署） |
 | `scripts/trial-map.py` | 只读分析：ICP重建实际轨迹，逐帧车速/偏航率/曲率/舵量表，俯视轨迹PNG与车体坐标面板（指南第5节） |
 | `scripts/trial-timeline.py` | 只读分析：起点几何、逐帧实时阶段/舵/质量/通道/目标/车身间隙，`--objects` 列紧凑物体 |
 | [README](README.md)、[命令手册](Mac与车端命令手册.txt) | 代码结构、模块入口、Mac/车端命令 |

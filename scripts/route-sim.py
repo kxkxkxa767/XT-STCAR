@@ -2,7 +2,7 @@
 """EXPERIMENTAL closed-loop route simulation through the real console/route code.
 
 Usage (from the repository root; builds the host geometry tool once):
-    cargo build --release -q -p xt-stcar-robot-core --example scan_geometry
+    cargo build --release -q --manifest-path tools/scan-geometry/Cargo.toml
     python3 -I scripts/route-sim.py work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-52 \
         --seeds 5 --png /tmp/sim.png
 
@@ -10,7 +10,7 @@ World: the course rebuilt from a recorded trial's scans (scripts/trial-map.py IC
 start pose = that trial's start). Sensor: z-buffered ray casting of the map with
 range noise, the recurring 5-17 deg right dropout band and edge nulls at depth
 steps (measured on the car, trials 50-52). Geometry: the same Rust junction code
-as the vehicle bridge (crates/robot-core/examples/scan_geometry.rs; matches the
+as the vehicle bridge (tools/scan-geometry; matches the
 car's recorded fields exactly). Car: lidar-path kinematics with speeds/decel and
 curvature-per-PWM measured from rebuilt paths (1560 ~1.4 m/s, 1550 ~.9 m/s,
 neutral ~.5 m/s^2, kappa ~ (servo-1500)/160 1/m, ~.12 s steering lag).
@@ -33,7 +33,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT/'web'/'vehicle-console'/'tests'
-GEOMETRY = ROOT/'target'/'release'/'examples'/'scan_geometry'
+GEOMETRY = ROOT/'tools'/'scan-geometry'/'target'/'release'/'xt-stcar-scan-geometry'
 FRONT, REAR, SIDE = .20, .18, .14
 SPEED = {1560: 1.4, 1550: .9}
 ACCEL, COAST_DECEL, PWM_PER_KAPPA, STEER_TAU = 1.5, .5, 160., .12
@@ -337,7 +337,7 @@ def main():
     parser.add_argument('--png')
     args = parser.parse_args()
     if not GEOMETRY.exists():
-        sys.exit('build first: cargo build --release -q -p xt-stcar-robot-core --example scan_geometry')
+        sys.exit('build first: cargo build --release -q --manifest-path tools/scan-geometry/Cargo.toml')
     points = extract_shapes(world_map(args.trial_dir, args.min_hits), random.Random(7))
     print('world:', len(points[0]), 'boards,', len(points[1]), 'cones', [tuple(round(v, 2) for v in c) for c, _ in points[1]])
     geometry = subprocess.Popen([str(GEOMETRY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
