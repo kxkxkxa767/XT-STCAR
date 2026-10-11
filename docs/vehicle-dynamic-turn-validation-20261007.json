@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "43 (906761f) ran once: left turn, first-cone orbit, wait release, right exit and corridor alignment all worked; the second support appeared at the left front and was passed on the wrong side, then a terminal coast hit the end board at ~1.8 m/s (operator-reported). Round-44 candidate committed, not deployed; test planned for the next day.",
+  "latest_trial_status": "44 (7baa522) ran once: left turn fine; one scan with 4 consecutive missing front returns (8..11 deg right, the recurring 5..17 deg dropout band) at the first-target sighting triggered the terminal round-43 quality coast before target confirmation; car rolled to rest beside the target, no contact. Second-target changes not exercised.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -15989,8 +15989,8 @@
   "after43_second_target_side_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 44,
     "user_instruction": "2026-10-10 用户：你继续修改，当前修改完后上传到仓库并保存，明天再测试 (earlier: 我已经放回去了，下一轮你可以直接测试). Not deployed; vehicle still runs 906761f.",
     "change": {
@@ -16012,6 +16012,49 @@
       "No speed limit exists; neutral coasting barely decelerates. Speed management after the first target is the main open design question."
     ],
     "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "7baa522473168cd162f14818db389cfcb424d38d",
+      "archive_sha256": "edde821fcaeac3d214a906fb53e9ba9a93b2d82b45d0089051d78cd3e0de94f0",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn44-20261011-085209",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn44-20261011-085209",
+      "helper_sha256": "f38f69459589cbf0c7aedf1dfc25728a33ca87418fe58df75254a1fda2247019",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before44-fresh.json (906761f, ready) / after44-deploy-fresh.json / pre44-run-fresh.json: six fresh locked ready samples each, 14 hashes match"
+    }
+  },
+  "turn44_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "7baa522473168cd162f14818db389cfcb424d38d",
+    "operator_go_ahead": "用户：我连上了，开启下一轮测试吧 (stillness/start not restated; standing permission 下一轮你可以直接测试). Claude verified the live state and start geometry before power.",
+    "start_geometry": "front wall 2.17 m, incoming board end .52 m, exit width 1.65 m, exit heading 90.5 deg, incoming heading -1.4 deg, entry lateral gap .28 m, endpoint-limited presteer 1654 (inside the 37..43 range).",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-44/ (7 files sha256 match trial44-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 11.92,
+    "observer_stop_requested": false,
+    "terminal": "route quality coast (turn_perception_unavailable, route_quality_coast_adopted_left, held 1641) from server scan 463, then lock coast_standstill_unconfirmed at the 5 s coast limit",
+    "operator_question": "用户：为什么这一次左转后没有绕锥桶就停下来了",
+    "physical_contact_observed_in_data": false,
+    "timeline": {
+      "left_turn": "drive from 447 (3.78 s), servo 1653->1674; entry cap released at 453 (forward gap .10 m); geometry target fell to ~1641 by 460.",
+      "first_target": "first sighting at 461 (5.18 s): track 1, 1.26 m, 81 deg, confirmation 1. Confirmation needs 3 frames over .25 s.",
+      "fault": "server scan 463 (5.34 s): front unknown bins 8,9,10,11 (run 4 > FRONT_MAX_GAP 3, count 4 <= 6) -> front_sparse. Round-43 rule: first-target stage -> terminal route quality coast, motor 1500, ACKed 1641 held. Target confirmation was 2 at that moment, so no handover.",
+      "after": "live quality clean from the next scan (464) onward, but the route quality coast is terminal (no power restore). The car rolled to rest beside the target (track 1 still tracked: ~.80 m at 73 deg left, confirmation count reached 46) holding 1641.",
+      "standstill": "coast_motion reported motion_result_superseded on every sample: coast_tick submits the current scan to the background estimator and asks for that same scan result in the same tick; on the car the estimator is always behind, so standstill was never confirmed and the coast ran to the 5 s limit (pre-existing; earlier coasts ended sooner)."
+    },
+    "lidar_dropout_pattern": "Across 37..44, null returns appear only at bins 5..17 (5..17 deg right of forward), including stationary start scans (37: 6,7; 39: 9; 40: 16; 41: 16,17; 43: 9,10) and while stationary during the 44 coast, at varying distances (1.0..2.3 m) and surfaces. No other bin of the 360 drops. Consistent with something at the car/lidar side at that angle (bracket, cable, window mark); not physically verified. The same band produced the front_sparse stops in 42 (bins 6..16) and 44 (8..11).",
+    "round44_second_target_changes_exercised": false,
+    "post_trial_lock": "after.json and after44-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500 (turn_ready false: left_corridor_unknown, off start).",
+    "not_inferred": "No claim of what object causes the dropouts; no speed/pose.",
     "completed": false,
     "competition_supported": false
   }
