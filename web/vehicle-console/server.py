@@ -896,19 +896,24 @@ class Console:
                                         clearance_profile='maneuver' if turn_trial else 'straight',
                                         relaxed_turn_left=relaxed_turn_left)
             route_motion = session.get('turn_motion')
-            if (turn_trial and session.get('continue_route') is True and isinstance(route_motion, ManeuverSequence)
-                    and getattr(route_motion, 'continue_route', False) is True
-                    and getattr(route_motion, 'handover_observed', False) is True
-                    and 'scan_incomplete' in clearance['quality_issues']
-                    and clearance.get('scan_incomplete_tolerable') is True):
+            tolerated = ([issue for issue in ('scan_incomplete', 'front_sparse')
+                          if issue in clearance['quality_issues'] and clearance.get(issue+'_tolerable') is True]
+                         if (turn_trial and session.get('continue_route') is True
+                             and isinstance(route_motion, ManeuverSequence)
+                             and getattr(route_motion, 'continue_route', False) is True
+                             and getattr(route_motion, 'handover_observed', False) is True) else [])
+            if tolerated:
                 # Route mode after the first-target handover only: a scan with
-                # >= 90% returns and no unknown run over 12 bins keeps the
-                # stage's own steering instead of a coasting wait (trial49).
-                clearance['quality_issues'] = [i for i in clearance['quality_issues'] if i != 'scan_incomplete']
-                clearance['scan_incomplete_tolerated'] = True
+                # >= 90% returns and no unknown run over 12 bins (trial49), or
+                # front unknown runs of <= 5 bins (trial50), keeps the stage's
+                # own steering instead of a coasting wait.
+                clearance['quality_issues'] = [i for i in clearance['quality_issues'] if i not in tolerated]
+                for issue in tolerated:
+                    clearance[issue+'_tolerated'] = True
+                    report[issue+'_tolerated_count'] = report.get(issue+'_tolerated_count', 0)+1
                 clearance['motion_ready'] = not any(i in clearance['quality_issues']
-                                                    for i in ('camera_unavailable', 'lidar_late', 'front_sparse'))
-                report['scan_incomplete_tolerated_count'] = report.get('scan_incomplete_tolerated_count', 0)+1
+                                                    for i in ('camera_unavailable', 'lidar_late', 'scan_incomplete',
+                                                              'front_sparse'))
             report['clearance_current'] = clearance
             report['relaxed_turn_left_clearance_active'] = relaxed_turn_left
             if not (self.turn_healthy() if turn_trial else self.autonomy_healthy()):
@@ -1116,8 +1121,10 @@ class Console:
         return True
 
     def turn_wait_servo_matches(self, session, control):
-        """Actual servo equals the held wait command, or the one release step
-        before it while that newer command is still un-ACKed (release only)."""
+        """Actual servo equals the held wait command, or the one steering step
+        before it while that newer command is still un-ACKed. Route waits may
+        steer either way while the car still rolls (trial49/50), one step at
+        a time inside the wait's held bounds; the motor stays at neutral."""
         motion = session.get('turn_motion')
         held = getattr(motion, 'quality_wait_servo', None)
         previous = getattr(motion, 'quality_wait_previous_servo', None)
@@ -1127,8 +1134,10 @@ class Console:
             return False
         if servo == held:
             return True
-        return (type(previous) is int and servo == previous and previous > held >= 1500
-                and getattr(motion, 'quality_wait_release', None) is not None
+        lower = RIGHT_EXIT_MIN_PWM if session.get('quality_wait_kind') in ('post_pass_pause', 'recovery_hold') else 1500
+        return (type(previous) is int and servo == previous and previous != held
+                and lower <= held <= SERVO_MAX and lower <= previous <= SERVO_MAX
+                and session.get('continue_route') is True
                 and type(pending_seq) is int and type(control.get('seq')) is int
                 and control['seq'] < pending_seq)
 
@@ -1372,7 +1381,11 @@ class Console:
         # New route output always uses its current continuous center proof;
         # the legacy first-exit ACK cannot authorize a later phase on its own.
         right_exit = route_right if route else right_exit
-        minimum_servo = RIGHT_EXIT_MIN_PWM if right_exit else 1500
+        # A post-pass pause / recovery hold keeps (and may steer within) its
+        # held bounds, which already include the route's right range.
+        right_hold = (route and decision['phase'] == 'quality_wait'
+                      and session.get('quality_wait_kind') in ('post_pass_pause', 'recovery_hold'))
+        minimum_servo = RIGHT_EXIT_MIN_PWM if right_exit or right_hold else 1500
         # Route mode after the first pass drives at the operator's manual
         # forward PWM (slow section); every other output keeps 1500/1560.
         slow_allowed = (route and decision['phase'] == 'drive' and route_stage in POST_PASS_STAGES

@@ -93,6 +93,26 @@ LIGHT_UNKNOWN_BLOCK_M = .60
 # association gate of that last full sighting and it then confirms.
 QUALITY_WAIT_REBIND_M = .30
 QUALITY_WAIT_REBIND_WINDOW_S = .60
+# Trial50: the coasting wait lost the first support at ~.9 m; the tracker then
+# found the same support as new IDs (.75 m, then .37 m once stopped) that the
+# association gate above never matched, and the orbit budget locked a car that
+# was well placed. In a first-target wait, the nearest compact candidate on the
+# left, confirmed and fully isolated within this range, is the orbited support.
+ORBIT_REBIND_MAX_RANGE_M = 1.2
+# Explicit route only: steer away from close known returns before the service
+# body gate (8 cm, unchanged) is reached. Within this gap a return on the right
+# (or a head-on return with the left front more open) demands at least
+# ROUTE_AVOID_LEFT_PWM; one on the left caps steering at center. Before the
+# first-target pass the inside (left) is left to the turn/orbit laws, which
+# already keep their own inside clearance. Steps use the route step.
+ROUTE_AVOID_GAP_M = .15
+ROUTE_AVOID_LEFT_PWM = NEUTRAL+150
+ROUTE_AVOID_PWM_STEP = 40
+# Route waits (motor at neutral, car may still roll): the held left is
+# released only while it exceeds the closest inside return's clearance-bearing
+# demand by more than this margin (trial50: 1710 held while the support closed
+# from .9 to .37 m on the inside). A static scene never changes the hold.
+ROUTE_WAIT_INSIDE_MARGIN_PWM = 60
 LIGHT_BRIDGE_MAX_BINS = 5
 # Lateral gap from the lidar origin to the support's current left edge at the
 # bypass point: keeps the support above the detector's minimum range while it
@@ -243,6 +263,11 @@ class ManeuverSequence(TurnMotion):
         self.role_distinct_evidence = None
         self.second_acquisition_reason = None
         self._second_pass_history = []
+        # Route: current-scan proximity avoidance and steering inside waits.
+        self._avoid = None
+        self.avoid_count = 0
+        self.avoid_evidence = []
+        self.wait_steering_changes = 0
 
     @staticmethod
     def _new_second_tracker():
@@ -430,13 +455,16 @@ class ManeuverSequence(TurnMotion):
         else:
             last = (previous if isinstance(previous, dict) and previous.get('confirmed') is True
                     else self._last_confirmed_compact_target)
-            if not (isinstance(last, dict) and last.get('track_id') == self.orbit_track_id
+            if (isinstance(last, dict) and last.get('track_id') == self.orbit_track_id
                     and _number(last.get('last_full_isolation_received_at'))
                     and 0 <= now-last['last_full_isolation_received_at'] < SCAN_AGE_S):
-                return refuse('target_not_fully_isolated')
-            anchor = {'track_id': last['track_id'], 'point_left_m': list(last['point_left_m']),
-                      'received_at': last['last_full_isolation_received_at'],
-                      'basis': 'previous_fresh_full_isolation'}
+                anchor = {'track_id': last['track_id'], 'point_left_m': list(last['point_left_m']),
+                          'received_at': last['last_full_isolation_received_at'],
+                          'basis': 'previous_fresh_full_isolation'}
+            else:
+                # Trial50: wait without an anchor rather than ending the
+                # route; the nearest-left rebind can still recover the support.
+                anchor = None
         self.compact_target = observed
         self.neutral_pause_kind = None
         self.recovery_count += 1
@@ -468,18 +496,47 @@ class ManeuverSequence(TurnMotion):
         self._route_event('quality_wait', scan, control, self.quality_wait_evidence)
         return True
 
+    def _nearest_left_rebind(self, scan, control):
+        target = self.compact_target
+        if (self.route_stage != 'first_target' or self.first_pass_evidence is not None
+                or not isinstance(target, dict) or target.get('confirmed') is not True
+                or target.get('track_id') in (None, self.orbit_track_id)
+                or not _number(target.get('bearing_left_rad')) or not _number(target.get('range_m'))
+                or not 0 < target['bearing_left_rad'] < math.pi
+                or not target['range_m'] <= ORBIT_REBIND_MAX_RANGE_M):
+            return None
+        points = self._full_target_points(target, scan, target['track_id'])
+        if points is None:
+            return None
+        try:
+            others = _candidates(scan['ranges'], bearing_range_rad=(0., math.pi))
+        except (ValueError, TypeError, KeyError):
+            return None
+        if any(_number(o.get('range_m')) and o['range_m'] < target['range_m']-.05 for o in others):
+            return None
+        self.quality_wait_rebind = {'old_track_id': self.orbit_track_id, 'new_track_id': target['track_id'],
+            'source_seq': scan['seq'], 'anchor': copy.deepcopy(self.quality_wait_anchor),
+            'range_m': target['range_m'], 'bearing_left_rad': target['bearing_left_rad'],
+            'basis': 'nearest_confirmed_full_compact_on_left_within_1.2m_during_first_target_wait',
+            'physical_identity_verified': False}
+        self.orbit_track_id = target['track_id']
+        self._route_event('quality_wait_target_rebind', scan, control, self.quality_wait_rebind)
+        return points
+
     def _quality_wait_rebind(self, scan, control):
         target, anchor = self.compact_target, self.quality_wait_anchor
-        if (not isinstance(target, dict) or anchor is None or target.get('track_id') == self.orbit_track_id
+        if (not isinstance(target, dict) or target.get('track_id') == self.orbit_track_id
                 or not isinstance(target.get('point_left_m'), list) or not _number(target.get('source_received_at'))):
             return None
+        if anchor is None:
+            return self._nearest_left_rebind(scan, control)
         if target.get('confirmation_count') == 1:
             if (math.dist(target['point_left_m'], anchor['point_left_m']) <= QUALITY_WAIT_REBIND_M
                     and 0 <= target['source_received_at']-anchor['received_at'] < QUALITY_WAIT_REBIND_WINDOW_S):
                 self._wait_rebind_candidate = target['track_id']
             return None
         if target.get('confirmed') is not True or target['track_id'] != self._wait_rebind_candidate:
-            return None
+            return self._nearest_left_rebind(scan, control)
         points = self._full_target_points(target, scan, target['track_id'])
         if points is None:
             return None
@@ -491,11 +548,41 @@ class ManeuverSequence(TurnMotion):
         self._route_event('quality_wait_target_rebind', scan, control, self.quality_wait_rebind)
         return points
 
+    def _wait_steer(self, now, servo_feedback, neutral, base):
+        """Route wait/pause steering while the car may still be rolling (trial49:
+        ~.5 m/s^2 rolling decel; trial50: a held 1710 curled into the support).
+        One ACKed step at a time toward base, plus proximity avoidance; the
+        motor stays at neutral and every step is recorded for the service."""
+        self.steering_target = self.quality_wait_servo
+        if not neutral or servo_feedback != self.quality_wait_servo or self.quality_wait_previous_servo is not None:
+            return
+        lower = RIGHT_EXIT_MIN_PWM if self.neutral_pause_kind in ('post_pass', 'recovery') else NEUTRAL
+        before = self.servo
+        self.steering_target = max(lower, min(SERVO_MAX, base))
+        self._slew(now)
+        if not lower <= self.servo <= SERVO_MAX:
+            self.servo = before
+        if self.servo != before:
+            self.quality_wait_previous_servo = before
+            self.quality_wait_servo = self.servo
+            self.wait_steering_changes += 1
+        self.steering_target = self.quality_wait_servo
+
+    def _wait_inside_base(self, lookahead):
+        """Held left, released only for a close inside return (no creep)."""
+        held = self.quality_wait_servo
+        self._limit_left_for_known_points(held, lookahead)
+        demand = (self.inner_clearance or {}).get('clearance_bearing_demand_pwm')
+        if not _number(demand):
+            return held
+        return min(held, round(demand)+ROUTE_WAIT_INSIDE_MARGIN_PWM)
+
     def _quality_wait_update(self, scan, now, control, advancing, quality_clear, resume_ready):
         self.steering_target = self.quality_wait_servo
-        if (now-self.quality_wait_since >= COAST_MAX_S
-                or now-self.drive_since >= self.max_drive_s
-                or now-self.orbit_since >= ORBIT_ENTRY_MAX_S):
+        # Trial50: the orbit-entry (3 s) and wait (5 s) clocks locked a car that
+        # was stopped well placed beside the support. Only the cumulative drive
+        # budget (and the service's total deadline) bound a route wait now.
+        if now-self.drive_since >= self.max_drive_s:
             self.lock('route_quality_wait_original_budget_expired')
             return self._result(now)
         servo_feedback = control.get('servo')
@@ -519,11 +606,13 @@ class ManeuverSequence(TurnMotion):
         if points is None:
             points = self._quality_wait_rebind(scan, control)
         if points is None:
-            # Missing/partial support only holds the ACKed neutral wait; power
-            # never resumes without the confirmed, fully isolated orbit support.
+            # Missing/partial support: power never resumes without the
+            # confirmed, fully isolated orbit support. While still rolling,
+            # steering may only release left for close inside returns or move
+            # away from close known returns.
             self._clear_exit_prepare_window()
             self._quality_good_history.clear()
-            self.steering_target = self.quality_wait_servo
+            self._wait_steer(now, servo_feedback, neutral, self._wait_inside_base(1.))
             self.reason = 'route_quality_wait_target_reacquiring'
             return self._result(now)
         self.quality_wait_anchor = {'track_id': self.orbit_track_id,
@@ -552,18 +641,15 @@ class ManeuverSequence(TurnMotion):
             else:
                 self._wait_release_history.clear()
         def hold():
-            # A release step is issued only on ticks that do not request the
+            # A steering step is issued only on ticks that do not request the
             # powered resume, so that output always holds an ACKed command.
-            if (self.phase == 'quality_wait' and self.quality_wait_release is not None and neutral
-                    and servo_feedback == self.quality_wait_servo and self.servo > NEUTRAL):
+            if self.phase == 'quality_wait':
                 before = self.servo
-                self.steering_target = NEUTRAL
-                self._slew(now)
-                if self.servo != before:
-                    self.quality_wait_previous_servo = before
-                    self.quality_wait_servo = self.servo
+                base = (NEUTRAL if self.quality_wait_release is not None
+                        else self._wait_inside_base(max(.35, min(1., self.compact_target['range_m']))))
+                self._wait_steer(now, servo_feedback, neutral, base)
+                if self.servo != before and self.quality_wait_release is not None and self.servo < before:
                     self.reason = 'route_quality_wait_neutral_release_left'
-                self.steering_target = self.quality_wait_servo
             return self._result(now)
         if not advancing:
             return hold()
@@ -980,7 +1066,10 @@ class ManeuverSequence(TurnMotion):
                 self.right_exit_geometry = None  # restart identity on the next frame
                 self.recovery_evidence['last_readiness_rejection'] = rejection
                 return False
-            return self._corridor_body_gap(self.right_exit_geometry) >= MANEUVER_BODY_CLEARANCE_M
+            # The service body gate (8 cm, raw returns) still stops a real
+            # contact; a model-margin deficit alone must not keep a stopped car
+            # waiting forever. Resume once the corridor model does not overlap.
+            return self._corridor_body_gap(self.right_exit_geometry) >= 0.
         if stage == 'light_turn':
             return self._free_space(scan, self._light_heading) is not None
         if stage == 'second_orbit':
@@ -997,11 +1086,18 @@ class ManeuverSequence(TurnMotion):
             return self._result(self.last_now)
         self.steering_target = self.quality_wait_servo
         kind = self.neutral_pause_kind
-        if (now-self.quality_wait_since >= COAST_MAX_S
-                or now-self.drive_since >= self.max_drive_s):
+        # Trial50: only the cumulative drive budget (and the service's total
+        # deadline) bound a route pause; it keeps re-checking until then.
+        if now-self.drive_since >= self.max_drive_s:
             self.lock(f'route_{kind}_pause_original_budget_expired')
             return self._result(now)
-        if (control.get('servo') != self.quality_wait_servo
+        servo_feedback = control.get('servo')
+        if servo_feedback == self.quality_wait_servo:
+            self.quality_wait_previous_servo = None
+        pending_step = (self.quality_wait_previous_servo is not None
+                        and servo_feedback == self.quality_wait_previous_servo
+                        and control.get('command_acked') is False)
+        if ((servo_feedback != self.quality_wait_servo and not pending_step)
                 or control.get('motor') not in (NEUTRAL,)+DRIVE_MOTORS):
             self.lock(f'route_{kind}_pause_feedback_changed')
             return self._result(now)
@@ -1032,8 +1128,11 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         if quality_clear is not True or not neutral or not self._pause_stage_ready(scan, now):
             self._quality_good_history.clear()
+            self._wait_steer(now, servo_feedback, neutral, self.quality_wait_servo)
             return self._result(now)
-        if not self._mature_observation(self._quality_good_history, scan, .30) or resume_ready is not True:
+        if (not self._mature_observation(self._quality_good_history, scan, .30) or resume_ready is not True
+                or servo_feedback != self.quality_wait_servo or self.quality_wait_previous_servo is not None):
+            self._wait_steer(now, servo_feedback, neutral, self.quality_wait_servo)
             return self._result(now)
         self.phase, self.reason = 'drive', f'route_{kind}_pause_resume_waiting_ack'
         self.quality_resume_pending, self.quality_resume_since = True, now
@@ -1096,9 +1195,48 @@ class ManeuverSequence(TurnMotion):
         # wall. No new-width target is adopted. Current body gates stay outside.
         return self.phase == 'drive'
 
+    def _route_proximity(self, scan):
+        """Nearest known return within ROUTE_AVOID_GAP_M of the body box, or None."""
+        ranges = scan.get('ranges') if isinstance(scan, dict) else None
+        if not isinstance(ranges, list) or len(ranges) != 360:
+            return None
+        best = None
+        for index, distance in enumerate(ranges):
+            if not _number(distance) or not .02 <= distance <= 12:
+                continue
+            angle = math.radians(index)
+            x, y = distance*math.cos(angle), -distance*math.sin(angle)
+            head_on = x > FRONT_BODY_EXTENT_M and abs(y) <= SIDE_BODY_EXTENT_M/2
+            if y > 0 and not head_on and self.first_pass_evidence is None:
+                continue  # inside of the left turn / first orbit: their own laws
+            gap = math.hypot(max(-REAR_BODY_EXTENT_M-x, 0., x-FRONT_BODY_EXTENT_M),
+                             max(abs(y)-SIDE_BODY_EXTENT_M, 0.))
+            if gap < ROUTE_AVOID_GAP_M and x >= -REAR_BODY_EXTENT_M and (best is None or gap < best['gap_m']):
+                best = {'gap_m': gap, 'point_left_m': [x, y], 'bin': index, 'head_on': head_on}
+        if best is None:
+            return None
+        if best['head_on']:
+            def nearest(bins):
+                values = [ranges[i] for i in bins if _number(ranges[i])]
+                return min(values) if values else 12.
+            side = 'front_left_open' if nearest(range(270, 340)) >= nearest(range(20, 91)) else 'front_right_open'
+        else:
+            side = 'left' if best['point_left_m'][1] > 0 else 'right'
+        return {**best, 'side': side, 'source_seq': scan.get('seq')}
+
+    def _avoid_target(self, target):
+        avoid = self._avoid
+        if avoid is None:
+            return target
+        if avoid['side'] in ('left', 'front_right_open'):
+            return min(target, NEUTRAL)
+        return max(target, ROUTE_AVOID_LEFT_PWM)
+
     def _slew(self, now):
-        if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != self.steering_target:
-            target = self.steering_target
+        avoid_target = (self._avoid_target(self.steering_target)
+                        if self.continue_route and self.phase in ('drive', 'quality_wait') else self.steering_target)
+        if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != avoid_target:
+            target = avoid_target
             reducing_left = self.servo > NEUTRAL and target < self.servo
             post_pass = (self.continue_route and self.phase == 'drive'
                          and self.first_pass_evidence is not None
@@ -1109,6 +1247,8 @@ class ManeuverSequence(TurnMotion):
             step = PRESTEER_PWM_STEP if self.phase == 'presteer' else ROUTE_POST_PASS_PWM_STEP if post_pass else (
                 (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
                 if reducing_left else ROUTE_ORBIT_LEFT_PWM_STEP if orbit_left else PWM_STEP)
+            if avoid_target != self.steering_target:
+                step = max(step, ROUTE_AVOID_PWM_STEP)
             if reducing_left and target < NEUTRAL:
                 target = NEUTRAL  # First release to center; a later right step stays at 10.
             delta = max(-step, min(step, target-self.servo))
@@ -1227,6 +1367,9 @@ class ManeuverSequence(TurnMotion):
             neutral_pause_kind=self.neutral_pause_kind,
             recovery_count=self.recovery_count,
             recovery_evidence=copy.deepcopy(self.recovery_evidence),
+            route_avoid=copy.deepcopy(self._avoid), avoid_count=self.avoid_count,
+            avoid_evidence=copy.deepcopy(self.avoid_evidence),
+            wait_steering_changes=self.wait_steering_changes,
             post_pass_pause_evidence=copy.deepcopy(self.post_pass_pause_evidence),
             left_turn_pause_evidence=copy.deepcopy(self.left_turn_pause_evidence),
             left_turn_pause_geometry_error=self.left_turn_pause_geometry_error,
@@ -1682,7 +1825,9 @@ class ManeuverSequence(TurnMotion):
             self._begin_recovery_hold(rejection, now, control)
             self._slew(now)
             return self._result(now)
-        if self._corridor_body_gap(self.right_exit_geometry) < MANEUVER_BODY_CLEARANCE_M:
+        if self._corridor_body_gap(self.right_exit_geometry) < 0.:
+            # Model overlap only; a small model margin keeps pursuing the
+            # center line (away from the near board) with proximity avoidance.
             self._begin_recovery_hold('route_corridor_body_margin_unavailable', now, control)
             return self._result(now)
         if not self._route_adopted(control, now):
@@ -2192,8 +2337,6 @@ class ManeuverSequence(TurnMotion):
                     return self._result(now)
             if points is None:
                 self.lock('route_quality_resume_target_unconfirmed')
-            elif (self.first_pass_evidence is None and now-self.orbit_since >= ORBIT_ENTRY_MAX_S):
-                self.lock('route_quality_resume_original_budget_expired')
             elif (control.get('servo') != self.quality_wait_servo
                     or control.get('motor') not in (NEUTRAL, TRIAL_MOTOR)):
                 self.lock('route_quality_resume_feedback_changed')
@@ -2236,11 +2379,10 @@ class ManeuverSequence(TurnMotion):
                     and 0 <= now-scan['received_at'] < SCAN_AGE_S
                     and control.get('command_acked') is True
                     and control.get('motor') == TRIAL_MOTOR and control.get('servo') == self.servo):
-                if now-self.orbit_since+1e-9 >= ORBIT_ENTRY_MAX_S:
-                    self.begin_coast('first_relative_object_entry_trial_timeout', now)
-                else:
-                    self.steering_target = self.natural_steering_target = NEUTRAL
-                    self.reason = 'first_target_pass_preparing_neutral'
+                # Route mode: no orbit-entry clock (trial50); the cumulative
+                # drive budget and the service deadline still bound it.
+                self.steering_target = self.natural_steering_target = NEUTRAL
+                self.reason = 'first_target_pass_preparing_neutral'
                 self._slew(now)
             return self._result(now)
         if self.continue_route and self.route_stage == 'light_turn':
@@ -2305,7 +2447,7 @@ class ManeuverSequence(TurnMotion):
                 self.begin_coast('compact_target_identity_changed', now)
             self._slew(now)
             return self._result(now)
-        if now-self.orbit_since+1e-9 >= ORBIT_ENTRY_MAX_S:
+        if not self.continue_route and now-self.orbit_since+1e-9 >= ORBIT_ENTRY_MAX_S:
             self.begin_coast('first_relative_object_entry_trial_timeout', now)
             self._slew(now)
             return self._result(now)
@@ -2334,6 +2476,12 @@ class ManeuverSequence(TurnMotion):
         # Expose only this call's raw returns; cached wall endpoints are never
         # used to manufacture current inside-edge evidence.
         self._current_scan = scan
+        self._avoid = self._route_proximity(scan) if self.continue_route and self.phase != 'locked' else None
+        if self._avoid is not None:
+            self.avoid_count += 1
+            if len(self.avoid_evidence) < 40:
+                self.avoid_evidence.append({**self._avoid, 'phase': self.phase, 'route_stage': self.route_stage,
+                                            'servo': self.servo})
         if (not isinstance(scan, dict) or self.inner_clearance is None
                 or self.inner_clearance['source_seq'] != scan.get('seq')
                 or self.inner_clearance['source_at_ms'] != scan.get('at_ms')):

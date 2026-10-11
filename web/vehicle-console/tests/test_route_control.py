@@ -39,6 +39,43 @@ class RouteControlTests(unittest.TestCase):
             value['ranges'][5:5+front_gap] = [None]*front_gap
         return value
 
+    def test_trial50_short_front_gap_keeps_orbit_drive_but_longer_gap_waits(self):
+        # Trial50: a 4-bin front null run beside a range step (dropout band)
+        # started the wait; <= 5 bins cannot hide a cone closer than ~2.3 m.
+        _, session = self.enter_compact_orbit(continue_route=True)
+        value = self.compact_scan(self.console.scan['seq']+1)
+        value['ranges'][5:9] = [None]*4
+        value['ranges'][9] = 2.
+        self.observe(round(self.now+.1, 6), value)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'drive')
+        self.assertEqual(session['report']['quality_issues'], [])
+        self.assertTrue(session['report']['clearance_current']['front_sparse_tolerated'])
+        self.assertEqual(session['report']['front_sparse_tolerated_count'], 1)
+        value = self.compact_scan(self.console.scan['seq']+1)
+        value['ranges'][5:11] = [None]*6
+        value['ranges'][11] = 2.
+        self.observe(round(self.now+.1, 6), value)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'quality_wait')
+
+    def test_trial50_wait_steering_step_is_accepted_while_unacked(self):
+        # Route waits may steer while rolling; the service accepts the one
+        # pending step either way and keeps the motor at neutral.
+        session, held = self.wait()
+        motion = session['turn_motion']
+        motion.quality_wait_previous_servo, motion.quality_wait_servo = held, held-20
+        control = dict(self.console.status['control'], servo=held, seq=self.console.sequence-1)
+        session['turn_servo_sequence'] = self.console.sequence
+        self.assertTrue(self.console.turn_wait_servo_matches(session, control))
+        motion.quality_wait_servo = held+20
+        self.assertTrue(self.console.turn_wait_servo_matches(session, control))
+        control['seq'] = self.console.sequence
+        self.assertFalse(self.console.turn_wait_servo_matches(session, control))  # ACKed: must equal held
+        motion.quality_wait_servo = 1490
+        control['seq'] = self.console.sequence-1
+        self.assertFalse(self.console.turn_wait_servo_matches(session, control))  # orbit wait never below center
+
     def test_trial49_tolerable_incomplete_scan_keeps_orbit_drive_after_handover(self):
         # Trial49: 336/337 returns from 9-11 bin open runs started a coasting
         # wait mid-orbit; after handover such a scan keeps the stage steering.
@@ -394,17 +431,22 @@ class RouteControlTests(unittest.TestCase):
         self.assertEqual(motion.recovery_count, 2)
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, held))
 
-    def test_left_turn_pause_never_resumes_without_geometry_and_expires_on_budget(self):
+    def test_left_turn_pause_never_resumes_without_geometry_and_only_cumulative_budget_ends_it(self):
         session, motion, servo = self.left_turn_pause()
         start = self.now
-        while self.console.auto_session is session and self.now < start+6:
+        alive_past_old_pause_clock = False
+        while self.console.auto_session is session and self.now < start+20:
             bare = self.scan(self.console.scan['seq']+1)
             bare.update(corridor_candidates=[], wall_candidates=[], left_turn_goal=None)
             self.observe(round(self.now+.1, 6), bare)
             if self.console.auto_session is session:
                 self.assertIsNone(session.get('quality_resume_sequence'))
+                alive_past_old_pause_clock |= self.now > start+5.5
+        # Trial50: no 5 s pause clock; the cumulative drive budget ends it.
+        self.assertTrue(alive_past_old_pause_clock)
         self.assertIsNone(self.console.auto_session)
-        self.assertEqual(self.console.auto_result['reason'], 'route_left_turn_pause_original_budget_expired')
+        self.assertIn(self.console.auto_result['reason'], ('route_left_turn_pause_original_budget_expired',
+                                                           'maneuver_cumulative_drive_timeout'))
         self.assertFalse(any(row.get('motor', 1500) > 1500 for row in self.outputs[-40:]))
 
     def test_orbit_front_sparse_uses_single_neutral_wait(self):

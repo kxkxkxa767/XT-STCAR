@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "49 (6891fcd) ran once: left turn, handover, orbit entry slew-limited (1636->1676 while 1707 asked); scan_incomplete wait at 5.94 cut power but the car kept rolling ~1.5 m/s and the wait centered the steering -> outer wall contact (operator), second target never reached. Round-50 candidate: route orbit left step 40 + route scan_incomplete tolerance after handover; built and deployed (bd10828), trial 50 pending until the user returns.",
+  "latest_trial_status": "50 (bd10828) ran once: 40-step orbit entry gave a tight U-turn; a front_sparse wait (dropout band) cut power, the held 1710 curled the coasting car next to the first support (.17 m, no contact), new support IDs were not rebound and the 3 s orbit clock locked it. Round-51 candidate: no stage clocks in route waits, nearest-left rebind, steering while coasting, .15 m proximity avoidance, short front-gap tolerance.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16435,7 +16435,7 @@
     "author": "Claude",
     "implemented": true,
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "next_trial": 50,
     "user_instruction": "2026-10-11 用户：这一次绕第一个锥桶的时候撞上了锥桶右侧的墙…；用户：轨迹图分析方法本轮后写进agent.md教gpt；用户：5小时额度不够，这轮先构建好，五小时后再测试。",
     "change": {
@@ -16472,7 +16472,81 @@
       ],
       "fresh_checks": "before50-fresh.json (vs turn49 package) / after50-deploy-fresh.json (vs turn50 package): six fresh locked ready samples each, 14 hashes match; continue_route preview true, turn_ready true, 1500/1500",
       "pre_run_state": "no left-cone-trial-20261011-50 directory on the car; stage trial50.py sha256 matches the local helper; no autonomy-control process",
-      "trial_pending": "Not run: user quota exhausted; run once after the user returns (re-check pre50-run-fresh.json first)."
+      "trial_pending": null,
+      "trial_executed": "turn50_actual"
     }
+  },
+  "turn50_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "bd10828b659e2086bf8aa7a0e09fd14db336d79b",
+    "pre_run": "car rebooted ~8 min before (user service active, settings 1550/1450/1650/1350 intact); pre50-run-fresh.json six fresh locked ready samples, 14 hashes and settings match turn50 package; trial50.py sha256 f3dce343... matched; no trial-50 directory",
+    "start_geometry": "front wall 2.168 m, board end .536 m, width 1.632 m, exit 89.0 deg, incoming -2.5 deg, lateral .245 m, presteer cap 1632.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-50/ (7 files sha256 match trial50-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 9.68,
+    "observer_stop_requested": false,
+    "terminal": "route_quality_wait_original_budget_expired (3 s orbit-entry clock from the 4.94 s handover) while the wait held for target reacquisition; not the body gate (rest gap .169 m at bin 305)",
+    "operator_report": "用户：停住第一个桶旁边了，离得很近，估计触发车边缘矩形的保护了",
+    "physical_contact": false,
+    "timeline": {
+      "left_turn": "3.43 drive 1560; servo 1632..1672, released to 1639 at 4.62 by the left-turn law",
+      "handover": "4.94 handover (1640 kept); 5.12 orbit entry 1680 -> 1710 within .35 s (round-50 40 PWM step worked; asked 1711)",
+      "wait": "5.29 front_sparse (unbridged 4-bin run at bins 5-8, recurring right dropout band) -> orbit wait, motor 1500, servo held 1710",
+      "coast": "car coasted 5.29-6.89 at ~1-1.2 m/s with 1710 held, curvature 1.25-1.7 1/m, turning from heading 83 to 185 deg; support closed from 1.1 to .37 m on the inside",
+      "tracking": "support lost at 5.67, re-found as track 2 (.75 m) and track 3 (.37 m, confirmed by 7.03); the .30 m/.60 s rebind gate never matched",
+      "lock": "8.11 orbit-entry clock expired -> locked, car stopped beside the support (61.5 deg left, .37 m) facing down the return lane"
+    },
+    "path_reconstruction": "scripts/trial-map.py: tight U-turn (lidar radius ~.7 m), stopped at heading 184.7 deg in the return lane with the support at the left front; the route could have continued straight past it",
+    "diagnosis": [
+      "A front_sparse wait again cut power mid-orbit (dropout band).",
+      "The held 1710 while coasting curled the car toward the support (no inside release in waits).",
+      "Identity loss + strict rebind gate + 3 s orbit clock ended a well-placed run."
+    ],
+    "exercised": {
+      "orbit_left_step_40": "yes (1640->1710 in .35 s)",
+      "scan_incomplete_tolerance": "not triggered",
+      "second_target": "no",
+      "light_turn": "no"
+    },
+    "post_trial_lock": "after50-trial-fresh.json: healthy, owner None, locked, unarmed, 1500/1500 (turn_rejection left_corridor_unknown: car not at start).",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after50_never_give_up_recovery_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 51,
+    "user_instruction": "2026-10-11 用户：停住第一个桶旁边了…现在你改成无论碰没碰到都继续后续的任务，毕竟撞到才扣20s，没完成就真没完成了。",
+    "change": {
+      "no_stage_clocks_in_route_waits": "Route waits and pauses lock only on the cumulative drive budget (and the service total deadline); the 3 s orbit-entry clock no longer ends the orbit, its release, its resume or a wait, and the 5 s wait/pause clock is gone.",
+      "nearest_left_rebind": "In a first-target wait, a confirmed fully isolated compact target on the left (0..180 deg) within 1.2 m that is the nearest compact candidate there becomes the orbit target (trial50 IDs 2/3). The old .30 m/.60 s gate still applies first.",
+      "wait_without_anchor": "A first-target wait no longer refuses when no fresh full isolation exists; it starts without an anchor and may rebind.",
+      "wait_steering": "While a route wait/pause holds the motor at neutral (car may roll ~2 m), steering moves one ACKed step at a time: release held left while it exceeds the closest inside return clearance-bearing demand by > 60 PWM (no creep in a static scene), the existing body-front release, and proximity avoidance. The service accepts the one pending step either way inside the held bounds; post-pass/recovery pauses keep their right range.",
+      "proximity_avoidance": "Route drive and waits: a known return within .15 m of the body box (right side; left side only after the first pass; head-on toward the more open front quarter) steers away before the unchanged 8 cm service body gate: right -> at least 1650, left -> capped at 1500, steps of 40.",
+      "front_sparse_tolerance": "After handover in route mode, front_sparse with unbridged front null runs <= 5 bins and <= 8 unknown front bins is waived (a <= 5 deg run cannot hide a .2 m cone closer than ~2.3 m).",
+      "corridor_model_margin": "corridor_follow pauses only when the corridor model overlaps the body (gap < 0, was < 8 cm), and a pause resumes when the model does not overlap; the raw-return 8 cm gate is unchanged."
+    },
+    "not_changed_pending_user": {
+      "request": "body contact (8 cm service body gate) should not end the run",
+      "status": "not implemented: the Claude Code auto-mode safety classifier denied the edit that made the body gate non-terminal on the vehicle; the gate stays terminal until the operator decides how to proceed."
+    },
+    "validation": {
+      "related_suites": "241 passed (test_maneuver_route, test_route_control, test_maneuver_sequence, test_compact_target, test_compact_target_roles); 5 tests rewritten for the new semantics (no orbit/wait clocks, anchor-less wait, nearest-left rebind, left-turn pause bounded only by the cumulative budget) and 7 added.",
+      "default_suites": "identical failure set before/after (34 unique pre-existing failing tests)."
+    },
+    "risks_not_resolved": [
+      "Contact with the 8 cm gate still ends the run (see not_changed_pending_user).",
+      "Avoidance overrides stage laws within .15 m and may oscillate along a board.",
+      "A wait can now last until the cumulative 16 s budget; a car stuck without a recoverable target just waits.",
+      "Exit release still targets center rather than the measured exit corridor (trial49 outer-wall case).",
+      "Speed 1.3-1.6 m/s at 1560 in the U-turn."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false
   }
 }

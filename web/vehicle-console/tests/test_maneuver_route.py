@@ -268,22 +268,78 @@ class ManeuverRouteTests(unittest.TestCase):
                                        quality_clear=True, quality_resume_ready=True)
                 self.assertTrue(result['lock_requested'])
                 self.assertEqual(result['motor'], 1500)
-        # Trial41/47: a partial/missing support or another object far from the
-        # last full sighting only holds the neutral wait; power never resumes.
-        for invalid in ('partial', 'missing', 'identity'):
+        # Trial41/47: a partial/missing support, or another object on the left
+        # beyond 1.2 m (trial50 rebind range), only holds the neutral wait;
+        # power never resumes.
+        def far_identity(seq):
+            value = observation(seq, first=120.)
+            for offset in range(-4, 5):
+                value['ranges'][(round(-120.)+offset) % 360] = 1.5
+            return value
+        for invalid in ('partial', 'missing', 'far_identity'):
             with self.subTest(invalid=invalid):
                 motion = self.begin_wait()
                 for seq in (5, 6, 7, 8, 9):
                     value, control = observation(seq), feedback(seq, motor=1500, neutral_acked=True)
                     if invalid == 'partial': value['ranges'][265] = None
                     if invalid == 'missing': value['ranges'] = [3.]*360
-                    if invalid == 'identity': value = observation(seq, first=120.)
+                    if invalid == 'far_identity': value = far_identity(seq)
                     result = motion.update(value, 0., seq/10, control,
                                            quality_clear=True, quality_resume_ready=True)
                     self.assertFalse(result['lock_requested'])
                     self.assertEqual((result['phase'], result['motor']), ('quality_wait', 1500))
                     self.assertFalse(result['quality_resume_pending'])
                 self.assertIsNone(result['quality_wait_rebind'])
+
+    def test_trial50_wait_releases_held_left_while_inside_support_closes(self):
+        # Trial50: 1710 held while the support closed from .9 to .37 m inside.
+        motion = self.begin_wait()
+        held = motion.quality_wait_servo
+        value = observation(5, first=60.)
+        for offset in range(-4, 5):
+            value['ranges'][(round(-60.)+offset) % 360] = .37
+        result = motion.update(value, 0., .5, feedback(5, servo=held, motor=1500, neutral_acked=True))
+        self.assertEqual((result['phase'], result['motor']), ('quality_wait', 1500))
+        self.assertLess(result['servo'], held)
+        self.assertEqual(motion.quality_wait_previous_servo, held)
+        self.assertEqual(result['quality_wait_servo'], result['servo'])
+        # A static far scene never changes the hold (no creep); the support
+        # stays ahead of the body front so the old release stays inactive.
+        self.bearing = self.HOLD_BEARING
+        motion = self.begin_wait()
+        held = motion.quality_wait_servo
+        for seq in (5, 6, 7):
+            result = motion.update(observation(seq, first=self.bearing), 0., seq/10,
+                                   feedback(seq, servo=held, motor=1500, neutral_acked=True))
+            self.assertEqual(result['servo'], held)
+
+    def test_trial50_wait_rebinds_nearest_confirmed_left_support_under_new_identity(self):
+        # Trial50: the support came back as new IDs that the association gate
+        # never matched; the nearest confirmed full compact on the left within
+        # 1.2 m is the orbited support. The wait never locks meanwhile.
+        motion = self.begin_wait()
+        old_id = motion.orbit_track_id
+        for seq in (5, 6, 7, 8, 9):
+            result = motion.update(observation(seq, first=120.), 0., seq/10,
+                                   feedback(seq, motor=1500, neutral_acked=True),
+                                   quality_clear=True, quality_resume_ready=True)
+            self.assertFalse(result['lock_requested'])
+            if result['quality_wait_rebind'] is not None:
+                break
+        rebind = result['quality_wait_rebind']
+        self.assertIsNotNone(rebind)
+        self.assertEqual(rebind['old_track_id'], old_id)
+        self.assertEqual(rebind['basis'], 'nearest_confirmed_full_compact_on_left_within_1.2m_during_first_target_wait')
+        self.assertNotEqual(motion.orbit_track_id, old_id)
+        # A nearer compact candidate on the left blocks the rebind.
+        motion = self.begin_wait()
+        for seq in (5, 6, 7, 8, 9):
+            value = observation(seq, first=120.)
+            add_object(value, bearing=60., distance=.6)
+            result = motion.update(value, 0., seq/10, feedback(seq, motor=1500, neutral_acked=True),
+                                   quality_clear=True, quality_resume_ready=True)
+        if result['quality_wait_rebind'] is not None:
+            self.assertLess(result['quality_wait_rebind']['range_m'], .7)
 
     def test_wait_entry_uses_fresh_full_anchor_when_trigger_frame_is_partial(self):
         motion = self.seeded()
@@ -295,8 +351,11 @@ class ManeuverRouteTests(unittest.TestCase):
         stale.compact_target = dict(stale.compact_target, last_full_isolation_received_at=.1)
         value = observation(5, first=self.bearing)
         value['ranges'][self.edge()] = None
-        self.assertFalse(stale.begin_quality_wait(.5, feedback(5), scan=value))
-        self.assertEqual(stale.quality_wait_refusal['reason'], 'target_not_fully_isolated')
+        # Trial50: no fresh full sighting no longer refuses (which ended the
+        # route); the wait starts without an anchor and may rebind later.
+        self.assertTrue(stale.begin_quality_wait(.5, feedback(5), scan=value))
+        self.assertIsNone(stale.quality_wait_anchor)
+        self.assertEqual(stale.phase, 'quality_wait')
 
     def test_wait_rebinds_reacquired_support_near_last_full_sighting_then_resumes(self):
         self.bearing = self.HOLD_BEARING
@@ -330,9 +389,15 @@ class ManeuverRouteTests(unittest.TestCase):
         for seq in (9, 10, 11, 12):
             result = self.step(motion, seq, motor=1500)
         self.assertEqual(result['reason'], 'route_quality_resume_ack_timeout')
+        # Trial50: the orbit-entry and wait clocks no longer end a route wait;
+        # only the cumulative drive budget does.
         motion = self.begin_wait()
-        motion.orbit_since = -2.5
+        motion.orbit_since, motion.quality_wait_since = -2.5, -9.
         result = self.step(motion, 5, neutral_acked=True)
+        self.assertFalse(result['lock_requested'])
+        self.assertEqual(result['phase'], 'quality_wait')
+        motion.drive_since = -motion.max_drive_s
+        result = self.step(motion, 6, neutral_acked=True)
         self.assertEqual(result['reason'], 'route_quality_wait_original_budget_expired')
 
     def test_exit_alignment_pursues_observed_center_line_either_side(self):
@@ -1034,8 +1099,11 @@ class ManeuverRouteTests(unittest.TestCase):
             if fault == 'budget': motion.orbit_since = -2.1
             result = motion.update(value, .1, .9, feedback(9, before))
             if fault == 'budget':
-                self.assertEqual(result['reason'], 'first_relative_object_entry_trial_timeout')
-                self.assertEqual(result['motor'], 1500)
+                # Route mode has no orbit-entry clock (trial50); the release
+                # continues under the cumulative drive budget.
+                self.assertEqual(result['reason'], 'first_target_pass_preparing_neutral')
+                self.assertEqual(result['motor'], 1560)
+                self.assertFalse(result['lock_requested'])
             elif fault == 'changed_receipt':
                 self.assertIsNone(result['compact_target'])
                 self.assertEqual(result['servo'], before)
@@ -1228,6 +1296,46 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertLess(released[-1], frames[482]['recorded_control']['servo'])
         self.assertTrue(all(not r['route_right_output_authorized'] for r in outputs.values()))
         self.assertTrue(all(r['first_pass_evidence'] is None for r in outputs.values()))
+
+class RouteProximityTests(unittest.TestCase):
+    @staticmethod
+    def scan_with(points):
+        ranges = [3.]*360
+        for index, distance in points:
+            ranges[index] = distance
+        return {'seq': 1, 'ranges': ranges}
+
+    def test_close_returns_steer_away_before_the_body_gate(self):
+        motion = ManeuverSequence(0., continue_route=True)
+        right = motion._route_proximity(self.scan_with([(90, .24)]))  # .10 m off the right side
+        self.assertEqual((right['side'], round(right['gap_m'], 3)), ('right', .1))
+        motion._avoid = right
+        self.assertEqual(motion._avoid_target(1560), 1650)
+        self.assertEqual(motion._avoid_target(1700), 1700)
+        self.assertIsNone(motion._route_proximity(self.scan_with([(90, .30)])))  # .16 m: no action
+        # Inside (left) before the first pass belongs to the turn/orbit laws.
+        self.assertIsNone(motion._route_proximity(self.scan_with([(270, .24)])))
+        motion.first_pass_evidence = {'basis': 'test'}
+        motion._avoid = motion._route_proximity(self.scan_with([(270, .24)]))
+        self.assertEqual(motion._avoid['side'], 'left')
+        self.assertEqual(motion._avoid_target(1600), 1500)
+        self.assertEqual(motion._avoid_target(1420), 1420)
+        # Head-on: toward the more open front quarter.
+        motion._avoid = motion._route_proximity(self.scan_with([(0, .30), (45, .8)]))
+        self.assertEqual(motion._avoid['side'], 'front_left_open')
+        self.assertEqual(motion._avoid_target(1500), 1650)
+        motion._avoid = motion._route_proximity(self.scan_with([(0, .30), (315, .8)]))
+        self.assertEqual(motion._avoid['side'], 'front_right_open')
+        self.assertEqual(motion._avoid_target(1600), 1500)
+
+    def test_avoidance_steps_at_route_step_and_never_in_default_mode(self):
+        for route, expected in ((True, 1600), (False, 1570)):
+            motion = ManeuverSequence(0., continue_route=route)
+            motion.phase, motion.servo, motion.steering_target, motion.last_change = 'drive', 1560, 1570, -1.
+            motion._avoid = {'side': 'right', 'gap_m': .1}
+            motion._slew(0.)
+            self.assertEqual(motion.servo, expected)
+
 
 class RouteOrbitSlewTests(unittest.TestCase):
     def test_trial49_route_orbit_left_increase_uses_route_step_release_unchanged(self):

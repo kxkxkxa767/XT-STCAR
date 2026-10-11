@@ -32,6 +32,12 @@ FRONT_BRIDGE_MAX_STEP_M = .15
 # 12 bins is usable there; front_sparse and the known-return body gate stay.
 MANEUVER_TOLERABLE_MIN_VALID = 324
 MANEUVER_TOLERABLE_MAX_NULL_RUN = 12
+# Same scope. A front null run of <= 5 bins cannot hide an object as wide as a
+# cone (~.2 m) closer than ~2.3 m (.2/tan 5 deg), and boards continue past the
+# run where they are seen. Trial50: a 4-bin run beside a wall edge in the
+# recurring 5-17 deg right dropout band started the wait that ended the run.
+MANEUVER_TOLERABLE_FRONT_RUN = FRONT_BRIDGE_MAX_BINS
+MANEUVER_TOLERABLE_FRONT_UNKNOWN = 8
 CORRIDOR_HALF_WIDTH_M = .30
 CORRIDOR_LOOKAHEAD_M = 1.0
 # Operator's revised rough measurement, explicitly resolved to 28 cm total
@@ -542,6 +548,9 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
         largest_open_gap = max(largest_open_gap, run)
     if len(open_unknown) > FRONT_MAX_UNKNOWN or largest_open_gap > FRONT_MAX_GAP:
         issues.append('front_sparse')
+    front_sparse_tolerable = (maneuver and 'front_sparse' in issues
+                              and largest_open_gap <= MANEUVER_TOLERABLE_FRONT_RUN
+                              and len(open_unknown) <= MANEUVER_TOLERABLE_FRONT_UNKNOWN)
     front_values = [r for r in front if r is not None]
     nearest_relaxed = nearest_body_point is not None and nearest_body_point['relaxed_turn_left']
     nearest_stop_m = TURNING_LEFT_BODY_CLEARANCE_M if nearest_relaxed else MANEUVER_BODY_CLEARANCE_M
@@ -602,6 +611,7 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
             'quality_issues': issues,
             'valid_returns': len(valid), 'longest_null_run_bins': longest_null_run,
             'scan_incomplete_tolerable': incomplete_tolerable,
+            'front_sparse_tolerable': front_sparse_tolerable,
             'motion_ready': not body_stop_requested and not any(
                 i in issues for i in ['camera_unavailable', 'lidar_late', 'scan_incomplete', 'front_sparse']),
             'corridor_half_width_m': half_width,
