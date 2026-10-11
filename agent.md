@@ -1,28 +1,68 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-11：第46轮候选=出口按实测通道双向对齐等；第45轮已实车撞右墙）
+## 当前接手入口（2026-10-11：第46轮已实车——两桶都已绕过但第二桶未正式交接，停在前方挡板；下一目标：继续左转到红绿灯并正对）
 
-**用户：“不能针对这个赛道进行特化，比赛规则中的赛道是个范围”；“you could relax the security rules to the extent you deem appropriate”；第46轮结束后要把完整接手指南写进本文件。第46轮记录键 `after45_exit_alignment_correction`，第45轮结果 `turn45_actual`。**
+**车端为 a15115a（第46轮，备份 `backup-claude-turn46-20261011-092117`，机器记录 `turn46_actual`）。用户：“这一次两个锥桶都绕过去了，如果你继续左转的话就到红绿灯那个位置了，尽量让转弯后车头正对着红绿灯，不然识别不出来”。后续代理先读下方《接手指南》，按其流程逐轮推进。**
 
-- 45实际：左转与首桶绕行正常（左转阶段无质量故障，未用停顿）；429起交接后等待内减左到1500；436首过时实测通道轴线在车头**左**9.4°、中心偏左.66m，车距右墙约.22m且朝向右墙——需要继续左转；但出口阶段是第34轮起“只向右”的设计（舵≤1500），随后一帧通道“歧义”即终止滑行，撞右墙（用户报告）。根因是赛道特化假设：首桶后出口总向右（34/43成立，45不成立）。
-- 46修正：①首过后按实测通道中心线做纯追踪（1500+180×(轴线角+atan(中心偏移/前视))，限1350..1720），左右都可，向左直接、向右仍须先回中取得实际中位ACK；②路线模式原生前向通道若互为别名（12°/.15m/宽度max(.15,10%)以内）视为同一轴，取支撑最多者，真正第二轴仍歧义；③出口与通道跟随阶段单帧通道缺失/歧义均给同一观测租约（保持已采用命令，过期才滑行）；④首过后所有路线转向步长40/100ms；⑤安全规则有限放宽（仅maneuver剖面）：前±30°内≤5格的空回波段若两侧相邻回波距离差≤.15m，视为同一表面（占据，不当free），不再计入front_sparse；所有空格仍报告在 `front_unknown_bins`，另报 `front_bridged_bins`。直道剖面、车身近距、旧帧、桥锁定与期限不变。
-- 46验证：route 61、route_control 31、maneuver_sequence 63、compact 46+17共218项通过；默认四组（含autonomy_live）失败集合改动前后一致（49项既有）。
+- 46实际：左转、首桶交接与逆时针绕行、交接后等待、首过都正常。首过后的出口按实测通道双向追踪（先向左1568）也生效了，但追踪欠阻尼：车越过通道中心线（轴线偏到右侧20.6°），转为强右（舵到1411）后又过冲（轴线偏到左侧26.5°），“|轴线|≤5°且持续.25s”始终没满足，所以没有进入通道跟随，也就没有执行第二桶获取。第二桶在487出现（−33°/0.87m），车恰好从桶的左侧通过（桶在车右，正是顺时针该走的一侧），492时距车身右侧约.12m；之后通道缺失，车停在前方挡板（停后车头前回波约.20–.30m，疑似接触）。
+- 40–46各轮修正与实车结果见机器记录：`after39_claude_correction`/`turn40_actual`、`after40_entry_release_correction`/`turn41_actual`、`after41_route_quality_coast_correction`/`turn42_actual`、`after42_front_sparse_route_coast_correction`/`turn43_actual`、`after43_second_target_side_correction`/`turn44_actual`、`after44_left_turn_quality_pause_correction`/`turn45_actual`、`after45_exit_alignment_correction`/`turn46_actual`。
 
-- 45修正（已部署eb45f33；仅显式 `--continue-route` 的首桶阶段）：交接前左转中，质量问题为{scan_incomplete, front_sparse}非空子集、前±30°未知≤6、命令已ACK且桥舵量==命令左舵时，进入**单次**中性停顿（phase quality_wait，保持舵量、电机1500）；服务端沿用等待门、中性/恢复ACK与输出校验。停顿中运动侧只校验新鲜扫描/控制，并用当前真实扫描刷新左转几何（不转舵）；需连续≥3个新鲜帧、≥.30s质量干净且每帧几何测量成功，才以原舵量恢复1560并等ACK；5s或原drive预算到期则锁定。独立单次标志 `left_turn_pause_used`，交接后的原等待仍可用，且交接后等待现也可由有界front_sparse触发；以front_sparse进入的等待在中性未ACK期间按同一计数上限容忍。用尽或被拒时仍走43终止held coast；>6未知、未ACK、其他质量问题、车身近距、旧帧、桥锁定仍halt。
-- 45验证：route 59、route_control 31（改写3、新增1）、maneuver_sequence 63及compact，共216项通过；默认三组失败集合不变。
-- 45风险：停顿中车身近距门为8cm（不放宽到4cm）；几何持续歧义会在5s后锁定；右前5–17°空回波带未实物排查；coast静止检测仍superseded。
+## 接手指南（给后续代理，逐步照做）
 
-- 44实际：起点几何在37–43范围内；左转正常，453释放入口上限。461首桶首次出现（1.26m/81°，确认计数1；确认需3帧且≥.25s）。服务端扫描463在右前8–11°连续缺4个回波（连续缺口上限3），判为front_sparse。按43规则，首桶阶段直接进入**终止**滑行：断电、保持已ACK的1641，不恢复动力。当时首桶计数才2，没有交接。下一帧起质量即恢复，但终止滑行不会恢复，车保持1641滑停在首桶旁（桶约.8m/73°），数据无接触。之后standstill检测器每帧都报 `motion_result_superseded`（coast_tick提交当前扫描并在同一tick要该扫描的结果，车端估计器总落后一帧），一直无法确认静止，到5s滑行上限才锁定——这是既有问题。
-- 关键发现：37–44各轮中，空回波只出现在右前5–17°，起点静止时也会出现（37:6,7；39:9；40:16；41:16,17；43:9,10），44滑停静止期间也持续间歇出现；距离与表面不同也照样掉，其余360°从不掉。疑似车体/雷达侧在该角度有遮挡（支架、线缆、窗口污渍），尚未实物核实。42（6–16°）与44（8–11°）的front_sparse停机都出自这一带。44的第二桶修改未触发。
-- 待用户决定（未实现）：①先实物检查雷达右前5–17°附近（线缆、支架、相机、窗口划痕或污渍）；②软件上把首桶阶段的单帧front_sparse改为“有界中性保持、质量连续恢复N帧后恢复动力”（单次、原预算不刷新），不再终止；③修复coast静止检测“同tick取结果”导致永远superseded的问题。建议①+②。
+### 0. 必须遵守的原则
 
-- 43实际（`turn43_actual`）：左转、首桶交接与逆时针绕行、等待内减左（40步）、恢复动力、首过后右转出口（桥实际报告1480/1470）、通道对齐与跟随，均为首次实车走通。随后第二桶出现在车的左前方（2566 +11°/1.90m → 2575 +54°/0.41m），而旧规则只在右半区找、且要求首桶仍可见，所以一直没有获取。车从桶的错误一侧直行通过；2574起原生通道消失，2579终止coast回中，以约1.8m/s（激光相对接近速率，非标定车速）撞上端头挡板（用户报告接触，停后前±30°回波贴车头）。
-- 路线依据：比赛规则图1（仓库PDF第3页）——首桶逆时针，第二桶从其下方通过、使桶在车右侧（顺时针），再上行到红绿灯区。只作“从哪侧通过”的任务规则，不作坐标或长度。
-- 44修改（已部署7baa522，第44轮未触发；仅显式 `--continue-route` 的第二桶阶段；默认模式、turn-left、首桶不变）：①获取：已有首过记录且沿前向通道时，前半区内唯一位于车头前方、且在当前通道内的紧凑支撑即第二桶（左右均可）；首桶仍完整可见时须不共享bin且相距>.35m；出现两个即歧义，整段丢弃。第二跟踪器获取(-90°,+90°)，维持(-180°,+90°)。②绕行点：(max(车长.38m, 支撑最近x), 支撑左缘+.40m)；.40=检测器最小量程.35+.05，使桶在车旁时仍可观测、距车身侧.26m；旧点在桶远侧之外，追踪弧会切进桶。舵=1500+180×方位，限1350..1720，可向左；任何向右仍须先回中并取得实际中位ACK（服务端规则不变）。③第二桶阶段所有舵量步长40/100ms（与43已实车的退出减左相同）。④观测到第二桶通过时，若桥报告舵量≤1500且已ACK，终止coast保持该顺时针舵量、不回中；第二桶丢失仍按原coast回中。
-- 44验证：route 58（第二桶旧测试按新规则重写3项、新增7项，含真实43保存帧fixture）、route_control 30、maneuver_sequence 63、compact_target及roles，共214项通过；默认三组失败集合改动前后一致。真实43帧（`tests/fixtures/left-cone-43-second-left-front.json`）自2566起每帧都有第二桶角色证明（左侧、法向≈.35m）；保存帧相隔约.36m，超过.30m关联门，所以没有回放实时确认（实时每帧约.18m）。
-- 44第二桶修改的未解决风险（仍待实车）：约1.8m/s下第二桶约1.9m处才被检测（5点下限），约.3s后确认，左摆到.40m间隙可能来不及，导致车身近距门停机或碰桶；高速下丢一帧就超关联门、需重新确认；约2.1m宽的通道里强左摆后再右转，可能靠近另一侧挡板；43中端头挡板距第二桶约1.5m。当前没有限速，1500滑行几乎不减速——首桶之后的速度管理是主要未决设计问题，需要用户决定。
-- 40–43各轮修正与实车结果见机器记录：`after39_claude_correction`/`turn40_actual`、`after40_entry_release_correction`/`turn41_actual`、`after41_route_quality_coast_correction`/`turn42_actual`、`after42_front_sparse_route_coast_correction`/`turn43_actual`（均已部署实车）；39及以前见 `turn39_actual` 等。
-- GitHub：钥匙串凭据失效后，曾用 `gh` 登录单次推送；用户已执行 `gh auth setup-git`，此后 git 推送使用 gh 凭据。
+1. **不针对练习赛道特化。** 比赛赛道是一个范围（规则：场地约长5–8m、宽4–6m，人行道和红绿灯位置随机；示意图在仓库规则PDF第3页）。转向和阶段切换只能用实时激光几何（原生通道的轴线角/中心偏移/宽度、开口、真实支撑点）和任务规则（首桶逆时针、二桶顺时针、红绿灯停走、到终点）。禁止写赛道坐标、长度、固定角度，或按时间猜拐点。反例：第34轮的“首桶出口总向右”就是特化，第45轮因此撞墙；第46轮改成按实测通道决定方向。
+2. **自行决策，不要反复询问用户。** 用户已允许“适度放宽安全规则”，但要保留硬保护：车身近距停车门、旧帧/时钟门、桥锁/失联、期限预算。任何放宽都要有数据依据，并写进机器记录。
+3. **每轮流程固定**：修改→相关测试→记录→提交推送→构建部署→新鲜核验→跑一次→取回校验→分析→记录→推送。helper每轮只跑一次；不覆盖旧轮目录；保留所有备份、失败证据和队友文件；直接在main开发，不强推。
+4. **只在确实受阻时问用户**：SSH失效、校验失败、turn_ready=false（车不在起点，请用户放回）、凭据问题。
+
+### 1. 一轮的完整命令（在工程根目录 `/Users/yuhaojin/Documents/XT-STCAR` 执行）
+
+记号：上一轮标签N（如46），新一轮M=N+1，记录键K（如 `after46_xxx_correction`），`W=work/vehicle-dynamic-deploy-20261008`，`SSH="ssh -S work/vehicle-test-ssh.sock -o BatchMode=yes -o ConnectTimeout=5 bianbu@192.168.0.156"`。
+
+1. 同步：`git fetch origin && git rev-list --left-right --count HEAD...origin/main`，必须是 `0 0`；远端有新提交时先 `git pull --ff-only origin main`。
+2. 改代码：路线逻辑在 `web/vehicle-console/maneuver_sequence.py`，服务端门控/输出校验在 `server.py`，质量与车身近距在 `autonomy_live.py`。新行为只放在 `continue_route=True` 路径，默认模式不变。
+3. 测试（必须全过）：`cd web/vehicle-console/tests && python3 -m unittest test_maneuver_route test_route_control test_maneuver_sequence test_compact_target test_compact_target_roles`。默认四组 `test_turn_quality_coast test_turn_control test_coast_control test_autonomy_live` 有49项既有失败（与本线改动无关）：用 `git stash` 前后各跑一次，比较 `grep -E '^(FAIL|ERROR):' | sort` 的结果，必须完全一致。
+4. 记录：在 `docs/vehicle-dynamic-turn-validation-20261007.json` 新增键K（implemented=true、deployed=false、physical_trial_executed=false，写change/validation/risks），改写本文件顶部入口；`git add` 只加本次文件，`git commit`（结尾加 `Co-Authored-By` 行），`git push origin main`（已配置gh凭据）。
+5. 构建：`python3 $W/build-matched.py claude-turnN claude-turnM M K`。它要求工作区与HEAD一致，所以必须先提交。输出里有stage路径和helper；`diff $W/left-cone-trial-once-N.py $W/left-cone-trial-once-M.py` 应该只差输出目录。
+6. 部署前核验：`$SSH 'python3 -' < $W/read-fresh-route.py > $W/beforeM-fresh.json && python3 $W/validate-fresh.py $W/beforeM-fresh.json $W/claude-turnN-package.json`，必须打印 “Six fresh locked ready samples;14 hashes and settings match”。如果报 turn_ready=false（left_corridor_unknown、probe_obstacle_close_body 等），说明车不在起点。
+7. 部署：`python3 $W/deploy-matched.py claude-turnM M`（只装文件，不动车）；再取 `afterM-deploy-fresh.json`，用 `claude-turnM-package.json` 核验，并确认 continue_route 预览为true。
+8. 跑前检查：车端没有 `left-cone-trial-<日期>-M` 目录；`sha256sum <stage>/trialM.py` 与本地 `left-cone-trial-once-M.py` 一致；没有 autonomy-control 进程。再取 `preM-run-fresh.json` 核验，并比较起点几何（参考37–46：前墙2.12–2.28m、板端.48–.64m、出口宽1.64–1.66m、出口角87.9–94.0°、入射角−1.7..1.7°、侧向余量.197–.349m）。几何明显异常时停下问用户。
+9. 跑一次：`$SSH 'python3 <stage>/trialM.py' > $W/trialM-stdout.json 2> $W/trialM-stderr.txt`。
+10. 取回与校验：`$SSH "cd /home/bianbu/xt-stcar-console/left-cone-trial-<日期>-M && sha256sum *" > $W/trialM-remote-sha256.txt`；`scp -o ControlPath=work/vehicle-test-ssh.sock -p -r bianbu@192.168.0.156:/home/bianbu/xt-stcar-console/left-cone-trial-<日期>-M $W/`；`(cd $W/left-cone-trial-<日期>-M && shasum -a 256 -c ../trialM-remote-sha256.txt)` 要7个OK。再取 `afterM-trial-fresh.json`，确认 locked、1500/1500、未armed。
+11. 分析：`python3 -I scripts/trial-timeline.py $W/left-cone-trial-<日期>-M --from 3 --objects`，结合用户口述。
+12. 记录：JSON新增 `turnM_actual`；把K改为 deployed=true、physical_trial_executed=true，并加deployment块（commit、archive_sha256、backup、stage、helper sha、设置、核验文件）；改写本文件顶部入口和README首行；提交推送。
+
+### 2. 当前路线逻辑（a15115a，显式 `--continue-route`）
+
+- **左转**：TurnMotion用原生开口/外墙几何；入口端头方位上限，同一允许条件连续2帧严格新鲜即释放（41）；drive中外墙歧义短暂保持。
+- **质量故障（首桶阶段）**：交接前单次中性停顿，质量连续干净.30s且几何测量成功后恢复（45）；交接后单次等待（scan_incomplete或有界front_sparse）；用尽后改为保持已ACK舵量的终止coast（43）；前方未知>6等仍halt。**其他阶段的质量故障直接halt。**
+- **空回波桥接**（maneuver剖面，46）：前±30°内≤5格的空回波段，若两侧回波距离差≤.15m，视为同一表面，不计入front_sparse；所有空格仍报告在 `front_unknown_bins`。
+- **首桶**：同ID、3帧≥.25s确认后交接，左boost到正横；车头线到达（2帧）后只减左，等待内也可只减左，减左步长40。
+- **首过后出口对齐**（stage名仍叫right_align）：目标=1500+180×(通道轴线角+atan(中心偏移/前视1.0m))，限1350..1720；向左直接，向右须先回中并取得实际中位ACK；单帧通道缺失/歧义给.3s租约；原生通道别名合并。对齐成熟（|轴线|≤5°、车身余量≥8cm、持续.25s）后进入corridor_follow（±55追踪）。
+- **corridor_follow**：获取第二桶——前方通道内唯一的紧凑支撑，左右均可（首过记录保证它不是首桶）；确认后进入second_orbit。
+- **second_orbit**：绕行点=(max(.38m, 支撑最近x), 支撑左缘+.40m)，舵=1500+180×方位（1350..1720），向右须中位ACK；支撑在车尾后、右侧余量≥8cm且持续.25s即算通过，进入终止coast并保持≤1500的已ACK舵量。
+- 首过后所有转向步长40/100ms。
+
+### 3. 下一步（按优先级，46之后）
+
+1. **出口对齐欠阻尼**（46）：前视1.0m、增益180/rad、步长40、约1.6m/s，导致左右过冲，对齐判据一直不满足。建议：前视取约通道宽度，或随实测接近率增大；加入通道轴线角变化率（相邻帧差/时间）的阻尼项；对齐判据改为“轴线角和中心偏移都在门内，且变化率小”。先用46保存帧离线检查收敛，再上车。
+2. **第二桶获取扩展到出口对齐阶段**：在 `_right_exit_update` 里同样调用 `_second_role_observation`，确认后直接进入second_orbit。46中第二桶在出口对齐阶段（487）就已出现。
+3. **第二桶之后新增阶段（用户需求）**：第二桶通过后不再终止coast。改为用实时几何识别前方开口/转向——练习赛道上是继续左转，但方向必须由实测开口决定，不得写死。转入后对齐新通道轴线并居中，使车头正对红绿灯（灯装在赛道上方居中，相机需正对才能识别），然后交给视觉停走。可复用左转阶段的原生开口几何（`left_turn_goal`）和通道追踪。
+4. **速度**：首桶后约1.6–1.8m/s，1500滑行几乎不减速，目前没有限速。可考虑用静止物的激光接近率（记为相对接近率，不是标定车速）做功率占空限速。
+5. **右前5–17°空回波带**：37–46每轮都在这一带出现空回波，起点静止时也有，疑似车体/雷达侧遮挡，需要实物检查。
+6. **coast静止检测**：coast_tick提交当前扫描后，同一tick就去取该扫描的结果，车端估计器总落后一帧，于是每帧都是superseded，coast只能靠5s上限结束。应改为接受最近完成且仍新鲜的结果。
+
+### 4. 分析时的坑
+
+- `feedback.jsonl` 约每150ms采样一次（通常隔一帧），控制器看到的是每一帧；决策可能来自没保存的扫描。
+- 要看实时字段 `state.autonomy.active.quality_issues` 和 `state.autonomy.active.turn`；`*_trigger`、`*_snapshot` 是事件快照，不是逐帧质量（44轮曾因此误判）。
+- 角度约定：通道 heading_left>0 表示轴线在车头左侧，center_offset_left>0 表示中心线在车左侧；雷达bin i 表示自正前方顺时针i度（1..179在右侧）；紧凑目标 bearing_left>0 在左侧。
+- 车身盒以雷达为原点：前.20m、后.18m、两侧各.14m。停后最近回波的车身间隙≈0多半是接触，以用户口述为准。
+- 紧凑目标关联门：相邻两帧移动≤.30m且方位变化≤20°。保存帧相隔约.36m（1.8m/s）时，回放无法确认目标——只能回放逐帧证明，不能冒充实时确认。
+- 车端时钟曾比Mac慢一天；目录名用Mac日期。
+- `build-matched.py` 必须在工程根目录运行；历次deploy脚本和旧轮helper都是已用脚本，不得重跑或改写。
+- git推送已配置gh凭据（`gh auth setup-git`）。
 
 ## 当前控制参数
 
@@ -33,12 +73,12 @@
 | 电机 | 前进1560，中性1500；禁止反转刹车 |
 | 初始预打 | 配置默认1670、允许1670..1720；已按当前端头限制实际预打，采用值单独记录 |
 | 左舵上限 | 1720；行驶中依据新鲜几何动态增减，不固定档 |
-| PWM渐变 | 中性预打20、减左20、加左/过中后向右10，每100ms最多一步、不补跳；向右前确认采用1500。路线模式首过/退出阶段减左40；第二桶阶段全部40（已部署，未实车触发） |
+| PWM渐变 | 中性预打20、减左20、加左/过中后向右10，每100ms最多一步、不补跳；向右前确认采用1500。路线模式首过后（出口对齐、通道跟随、第二桶）所有转向步长40（已部署a15115a） |
 | 起步前采用等待 | 初始舵目标已采用、至少3个新control tick且等待1.2s；并非实测轮角反馈 |
 | 预算 | 中性预打8s、累计drive10s、首目标入口3s、右对齐3s、路线模式第二入口3s、coast5s；累计预算含quality_wait，不刷新；终止coast不恢复 |
 | 旧默认质量收油 | continue_route=false：接管后scan_incomplete进入coast，有限front_sparse可保已采用左舵；最多5s，不恢复动力 |
 | 路线模式质量等待 | continue_route=true：接管后一次有界quality_wait；实际中性ACK后至少324有效返回，稳定达到原动力质量/同ID/双时钟门才恢复，原期限不刷新。首桶阶段（含左转）等待被拒或front_sparse（前±30°未知≤6）时，保持已ACK舵量断电终止coast（43已部署） |
-| 路线模式第二桶 | 已部署7baa522（尚未实车触发）：前方通道内唯一支撑、左右均可，绕行点距支撑左缘.40m，可向左，向右须中位ACK，通过后终止coast保持顺时针舵量 |
+| 路线模式出口与第二桶 | 已部署a15115a：首过后按实测通道中心线双向追踪（向右须中位ACK）；corridor_follow中获取前方通道内唯一支撑为第二桶，绕行点距支撑左缘.40m，通过后终止coast保持顺时针舵量；第二桶之后尚无阶段 |
 | 已部署出口宽度 | 小变动更新，大跳变不单独中断drive，沿当前真实外墙及上次观测宽度继续 |
 | 时间门 | new控制loop120ms；旧模式80ms；control fresh200ms、autohealth250ms、heartbeat300ms |
 | 车身近距门 | 首目标pass前实际左转drive左侧点总4cm；路线模式恢复ACK等待、后续路线及其余情况总8cm；不认证未来扫掠或停车距离 |
@@ -50,10 +90,10 @@
 ## 下一步与证据位置
 
 1. 读本文件、[上传规范](上传规范.md)及[动态左转机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)。先fetch核对main，再修改。历史记录只按需检索。
-2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至39在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35,36,37,38,39}/`；40–43在同目录 `left-cone-trial-20261010-{40,41,42,43}/`，44为 `left-cone-trial-20261011-44/`。原helper/摘要/完整记录均保留；车端原目录在base下。
+2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至39在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35,36,37,38,39}/`；40–43在同目录 `left-cone-trial-20261010-{40,41,42,43}/`，44–46为 `left-cone-trial-20261011-{44,45,46}/`。原helper/摘要/完整记录均保留；车端原目录在base下。
 3. 旧完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`。19至30部署及逐帧分析在`work/vehicle-dynamic-deploy-20261008/`；29为`target-evidence-deployment-result.json`，stage为base下`stage-target-evidence-20261008-212120`。
 4. 18分析仍在旧目录`trial18-analysis.json`/`trial18-target-components.json`，回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。18的最终drive/orbit计数含coast；区分各自scan序号、PWM/物理轮角、计数器/动力时长。
-5. 第44轮已执行（一次，首桶确认前单帧front_sparse终止滑行）。再试须用户新指令；新轮在工程根目录用 `build-matched.py claude-turn44 claude-turn45 45 <记录键>` 与 `deploy-matched.py claude-turn45 45`，部署前后各取新鲜锁定反馈，执行前确认静止/摆放，helper只执行一次，不覆盖旧轮。
+5. 第46轮已执行（一次）。新一轮按《接手指南》第1节：`build-matched.py claude-turn46 claude-turn47 47 <记录键>` 与 `deploy-matched.py claude-turn47 47`。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署
@@ -94,6 +134,7 @@
 | `autonomy-control.py`、`stop_goal.py`（同目录） | CLI、正式停车目标契约 |
 | `crates/robot-core/src/junction.rs`、`junction/turn_goal.rs` | 原生开口/墙线/端头几何 |
 | `crates/robot-core`、`crates/runner` | Rust任务/导航、桥与执行；离线比赛结果不等于实车闭环 |
+| `scripts/trial-timeline.py` | 只读分析：起点几何、逐帧实时阶段/舵/质量/通道/目标/车身间隙，`--objects` 列紧凑物体 |
 | [README](README.md)、[命令手册](Mac与车端命令手册.txt) | 代码结构、模块入口、Mac/车端命令 |
 | [环境](资料/环境.md)、[资料索引](资料/资料索引.md) | 工具链、厂商文字/源码来源 |
 | [动态接口](docs/动态左转与测试目标接口-20261006.md) | 实车左转及实验目标边界 |

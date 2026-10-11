@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "45 (eb45f33) ran once: left turn and first-target orbit fine; at the first pass the corridor needed more LEFT but the exit stage was right-only; one ambiguous corridor frame coasted it into the right wall (operator-reported). Round-46 candidate: observed-side exit alignment, alias merge, ambiguity lease, post-pass 40 steps, maneuver front-gap bridging.",
+  "latest_trial_status": "46 (a15115a) ran once: left turn, first target, orbit wait, observed-side exit alignment; the pursuit oscillated, passed the second support on the correct (right) side without a handover, then stopped at the board ahead. Operator: both cones passed; next, keep turning left to the traffic light and end facing it.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16131,8 +16131,8 @@
   "after45_exit_alignment_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 46,
     "user_instruction": "2026-10-11 用户：不能针对这个赛道进行特化（比赛赛道是范围）；you could relax the security rules to the extent you deem appropriate；下一轮结束后更新 agent.md 教其他代理完成任务。",
     "change": {
@@ -16154,6 +16154,50 @@
       "Coast standstill detection still superseded on the car."
     ],
     "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "a15115ae2f5e793871684ecfdb5718fc9af30eef",
+      "archive_sha256": "b940edd1a5676fa87a4191324bc6e556a921a9e6204fa443e417795114b1d692",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn46-20261011-092117",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn46-20261011-092117",
+      "helper_sha256": "9358b4ea9c9aca59e9568a73ffa556dc168b4c132124e0a55a55f2e082658579",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before46-fresh.json (eb45f33, ready) / after46-deploy-fresh.json / pre46-run-fresh.json: six fresh locked ready samples each, 14 hashes match"
+    }
+  },
+  "turn46_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "a15115ae2f5e793871684ecfdb5718fc9af30eef",
+    "start_geometry": "front wall 2.15 m, board end .49 m, width 1.65 m, exit 91.3 deg, incoming -.3 deg, lateral .31 m, presteer cap 1669..1675 (inside the 37..45 range).",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-46/ (7 files sha256 match trial46-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 12.12,
+    "observer_stop_requested": false,
+    "terminal": "server lock probe_obstacle_close_body at ~10.2 s while still driving in right_align (no motion terminal reason)",
+    "operator_report": "用户：这一次两个锥桶都绕过去了，如果你继续左转的话就到红绿灯那个位置了，尽量让转弯后车头正对着红绿的，不然识别不出来",
+    "physical_contact": "likely: at rest the front +-60 deg holds continuous returns .20..30 m (body front .20 m); operator did not mention contact",
+    "timeline": {
+      "left_turn": "wall ambiguity hold 450..453, nearest left gap .085 m; no quality fault, pause unused; no front_sparse anywhere (bridging deployed, nulls present but short).",
+      "first_target": "handover 455 (1.06 m, 69 deg); orbit entry 1658->1688; 463 scan_incomplete -> orbit wait; release in wait 1688->1608; 469 resume with exit prepare.",
+      "exit_alignment": "471 first pass -> right_align: corridor (-5.7 deg, .57 m left, 2.02 m) -> pursuit LEFT 1568 (new observed-side rule). The car kept rotating left and crossed the center line (offset .57 -> -.35, axis up to 20.6 deg right); from 479 the law asked right after a center ACK, servo down to 1411; overshoot until the axis was 26.5 deg LEFT; 496 back to left 1515/1555; |heading| <= 5 deg for .25 s never held, so corridor_follow (and second-target acquisition) never started.",
+      "second_support": "compact object at 487 -33 deg/.87 m, 490 -54 deg/.40 m, beside right at 492 (.26 m, body gap .118), behind at 494: passed with the support on the car RIGHT (correct clockwise side) only because the oscillation had swung the car left; no second-target handover.",
+      "end": "500 corridor missing -> release left (trial-39 rule) with the board ahead at the front-left (bin 324 gap 0) -> lock."
+    },
+    "diagnosis": [
+      "Exit pursuit underdamped: lookahead 1.0 m, gain 180 PWM/rad, 40 PWM/100 ms, closing rate ~1.6 m/s -> overshoot both sides.",
+      "Second-target acquisition only runs in corridor_follow; the second support was visible during exit alignment.",
+      "No stage after the second target: operator says continuing left leads to the traffic light and the car should end facing it (camera recognition)."
+    ],
+    "post_trial_lock": "after.json and after46-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500 (turn_ready false: probe_obstacle_close_body at rest).",
     "completed": false,
     "competition_supported": false
   }
