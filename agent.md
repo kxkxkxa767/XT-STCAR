@@ -8,7 +8,7 @@
 - 49经过（用新工具 `scripts/trial-map.py` 从保存的雷达帧重建轨迹）：首桶在回程车道入口内侧，绕它是约180°的左U形弯。左转律在交接前把舵从1665减到1636（它只瞄90°出口）；交接后绕行要1707，但加左步长10/100ms，.5s只到1676，U形弯半径约1.07m（需约.95m）。5.94帧scan_incomplete（336返回；左前53–74°有9和11格空段＝回程车道远端开阔）→交接后等待：断电，但车速约1.5m/s、滑行减速仅约.5m/s²，车继续滚；6.28起等待内“车头线到达”减左1676→1500，车头172°（车道轴180°）斜向外墙→6.79车身近距门锁定，车贴墙又滑约1m。
 - 50修改（仅显式 `--continue-route`）：①交接后（first_target、drive、首过前）加左步长40/100ms，减左与交接前左转不变；②`probe_clearance`（maneuver剖面）新增 `valid_returns`、`longest_null_run_bins`、`scan_incomplete_tolerable`（324≤有效<342且循环空段≤12格）；服务端只在路线模式交接后丢弃这种scan_incomplete，继续本阶段转向；front_sparse、旧帧、期限、车身近距门不变。49的403/407帧都满足。③新增只读工具 `scripts/trial-map.py`（见指南第5节）。
 - 验证：maneuver_route+route_control共109项通过（新增交接后步长、可容忍扫描继续drive/13格空段仍进入等待）；ManeuverClearance新增测试通过；默认四组失败集合前后完全一致（34个既有失败用例）。
-- 第50轮跑法：用户回来后按指南第1节第6–12步执行（49已部署的是6891fcd；50的包需先构建部署，见下）。
+- **第50轮状态：已构建并部署（bd10828，stage `/home/bianbu/xt-stcar-console/stage-claude-turn50-20261011-102706`，helper sha256 f3dce343…，部署后新鲜核验通过），尚未实车运行。** 用户回来后：确认车在起点并静止→按指南第1节第8步取 `pre50-run-fresh.json` 用 `claude-turn50-package.json` 核验并比较起点几何→第9步跑一次 `$SSH 'python3 /home/bianbu/xt-stcar-console/stage-claude-turn50-20261011-102706/trial50.py' > $W/trial50-stdout.json 2> $W/trial50-stderr.txt`→第10–12步取回、校验、用trial-timeline和trial-map分析、记录。不要重新构建或重新部署50。
 
 - 48实际：首桶交接后471不完整扫描→交接后等待→等待内减左→485恢复并首过；出口对齐平滑收敛；494通道跟随（1550慢速，实测.6–1.1m/s）；500首次看到第二桶，504确认→左侧绕行舵1563→1590，桶仍几乎正前（.91m），511丢失→回通道跟随→514恢复保持→车身近距门锁定（碰第二桶，自恢复成功）。
 - 49候选（已部署6891fcd，未被行使）：第二桶入口按追踪曲率转向：舵=1500+205×κ，κ=2y/(x²+y²)。
