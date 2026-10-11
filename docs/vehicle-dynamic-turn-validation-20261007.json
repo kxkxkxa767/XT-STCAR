@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "44 (7baa522) ran once: left turn fine; one scan with 4 consecutive missing front returns (8..11 deg right, the recurring 5..17 deg dropout band) at the first-target sighting triggered the terminal round-43 quality coast before target confirmation; car rolled to rest beside the target, no contact. Second-target changes not exercised.",
+  "latest_trial_status": "45 (eb45f33) ran once: left turn and first-target orbit fine; at the first pass the corridor needed more LEFT but the exit stage was right-only; one ambiguous corridor frame coasted it into the right wall (operator-reported). Round-46 candidate: observed-side exit alignment, alias merge, ambiguity lease, post-pass 40 steps, maneuver front-gap bridging.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16061,8 +16061,8 @@
   "after44_left_turn_quality_pause_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 45,
     "user_instruction": "2026-10-11 用户：按方案2修改然后进行第45轮；并要求 Claude 自行选择最佳方案、不要总是询问。",
     "change": {
@@ -16082,6 +16082,76 @@
       "Resume needs a unique left-turn geometry match; persistent wall ambiguity expires the pause after 5 s (lock at neutral).",
       "The 5..17 deg right-front lidar dropout band is not physically resolved.",
       "Coast standstill detection still reports motion_result_superseded on the car."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "eb45f3310bae9b8b646390b36d175c0bc0c8d122",
+      "archive_sha256": "9dddcd69b157fad29aa2790d96ff0704fab90f5d73cf6643b0914f284cc5f9ff",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn45-20261011-090640",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn45-20261011-090640",
+      "helper_sha256": "9a69d8f740484220e58e3ddd500f4dc7358b0df43fa1390cc0f441ba4f2619e4",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before45-fresh.json (7baa522, ready) / after45-deploy-fresh.json / pre45-run-fresh.json: six fresh locked ready samples each, 14 hashes match"
+    }
+  },
+  "turn45_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "eb45f3310bae9b8b646390b36d175c0bc0c8d122",
+    "operator_go_ahead": "用户：按方案2修改然后进行第45轮 + you should choice the best one that you think, do not always enquire me. Start verified from live data (front wall 2.17 m, board end .51 m, width 1.66 m, exit 93.0 deg, incoming .9 deg, lateral .29 m, presteer cap 1665).",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-45/ (7 files sha256 match trial45-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 9.65,
+    "observer_stop_requested": false,
+    "terminal": "turn coast right_exit_corridor_ambiguous, then server lock probe_obstacle_close_body at 444",
+    "operator_report": "用户：这次绕过第一个锥桶后没有继续左转导致撞到锥桶所在通道右边的墙上了；你不能针对这个赛道进行特化，比赛规则中的赛道是个范围",
+    "physical_contact": true,
+    "timeline": {
+      "left_turn": "drive from 403 (3.72 s); outer-wall ambiguity hold 416..418; nearest body gap .069 m (bin 239) at 418; no left-turn quality fault, so the new pause was not used.",
+      "first_target": "handover 420 (track 1, 1.09 m, 70 deg); orbit entry 1636->1686; exit prepare latched at 428 (first_target_pass_preparing_neutral).",
+      "orbit_wait": "429 scan_incomplete -> single orbit wait (held 1616, release latched before the wait) -> 40/100 ms release to 1500; one front_sparse frame inside the wait (431).",
+      "first_pass": "436 during the wait: support behind the rear (x -.60 m), 6 clean frames -> resume requested in right_align.",
+      "exit_geometry": "corridor at 436: axis +9.4 deg (LEFT of the car heading), center .66 m left, width 2.04 m: the car was ~.22 m from the right wall and pointing into it, so it needed more left. The exit stage only allowed <=1500 (right-only design from round 34).",
+      "end": "437/438: right_exit_corridor_ambiguous (437 not saved by the observer; saved 438 has one forward native corridor plus its reverse alias) -> terminal coast at 1500 -> right-front gap (bins 39..51) .167 -> .037 m -> lock at 444."
+    },
+    "diagnosis": "Track-specific assumption: the exit after the first target was always a right turn (true in 34/43, false here). The exit side must come from the observed corridor.",
+    "post_trial_lock": "after.json and after45-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500 (turn_ready false: probe_obstacle_close_body at rest).",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after45_exit_alignment_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 46,
+    "user_instruction": "2026-10-11 用户：不能针对这个赛道进行特化（比赛赛道是范围）；you could relax the security rules to the extent you deem appropriate；下一轮结束后更新 agent.md 教其他代理完成任务。",
+    "change": {
+      "scope": "Explicit --continue-route except the front-gap bridging (maneuver clearance profile). Default sequence and straight profile unchanged.",
+      "exit_alignment": "After the first pass, target = 1500 + 180*(corridor heading + atan(center offset / lookahead)), clamped 1350..1720: pursue the observed corridor center line either side. Left is direct; right still needs a current actual center ACK after any left (server rules unchanged). Alignment check (|heading| <= 5 deg, body gap >= .08 m, .25 s) no longer waits for a first center ACK.",
+      "native_alias_merge": "Forward native corridors within the existing window-merge tolerances (12 deg, offset .15 m, width max(.15 m, 10%)) are one axis: keep the best-supported one. A different axis stays ambiguous.",
+      "ambiguity_lease": "An ambiguous corridor frame gets the same observation lease as a missing one in the exit stage; corridor_follow now also holds the adopted command within that lease for one missing/ambiguous frame, then coasts.",
+      "post_pass_steps": "ROUTE_POST_PASS_PWM_STEP 40 per 100 ms for every route steering change after the first pass (exit alignment, corridor follow, second target).",
+      "front_gap_bridging": "Maneuver profile: a null run of <= 5 bins inside the front +-30 deg whose two adjacent returns differ by <= .15 m is treated as that surface (occupied) for front_sparse. All nulls remain in front_unknown_bins; new fields front_bridged_bins and largest_open_gap_deg. Longer runs, range steps or missing neighbours stay unknown. Body proximity, stale data, bridge lock and deadlines unchanged."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 61, test_route_control 31, test_maneuver_sequence 63, test_compact_target 46, test_compact_target_roles 17: 218 passed. Real34 frames: 602 1517 (left, already converging), 604 aliases merged -> 1475, 607 1427; default mode keeps 604 ambiguous.",
+      "default_suites": "test_turn_quality_coast/test_turn_control/test_coast_control/test_autonomy_live failure set identical before and after (49 pre-existing); new autonomy_live bridging tests pass."
+    },
+    "risks_not_resolved": [
+      "Pursuit to the corridor center line can bring the car toward cones that sit on the center line; second-target acquisition must take over once a support is seen.",
+      "A 5-bin bridged gap at ~2 m could hide a thin object; cones (13..16 cm) span more bins once close.",
+      "Speed ~1.8 m/s after the first target and no speed limit remain.",
+      "Coast standstill detection still superseded on the car."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

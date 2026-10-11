@@ -41,14 +41,13 @@ ROUTE_EXIT_PREPARE_FRAMES = 2
 # bearings (1947/1948) but lost the native opening before the third, so the
 # entry cap coasted the left turn. Same frame count as the exit prepare.
 ROUTE_ENTRY_RELEASE_FRAMES = 2
-# Explicit continue_route only. Trial43: after the first-target right exit the
-# second target appeared at the LEFT front (+11 deg, 1.9 m) and was passed on
-# the wrong side at about 1.8 m/s (lidar closing rate). Passing it clockwise
-# (support kept on the right) needs a left swing and later a right turn within
-# about one second each, so every second-target steering step uses the route
-# exit release step already exercised on the car in trial43 (center crossing
-# and the right-after-center-ACK rule are unchanged).
-SECOND_ORBIT_PWM_STEP = 40
+# Explicit continue_route only. After the first-target pass every route
+# steering change (exit alignment, corridor follow, second target) uses the
+# route exit release step already exercised on the car in trial43. Trial43
+# needed a left swing around the second support within about one second;
+# trial45 needed a quick left away from a right wall .22 m from the body.
+# Center crossing and the right-after-center-ACK rule are unchanged.
+ROUTE_POST_PASS_PWM_STEP = 40
 # Lateral gap from the lidar origin to the support's current left edge at the
 # bypass point: keeps the support above the detector's minimum range while it
 # is abeam (trial43 lost the second support below .35 m) and leaves .26 m to
@@ -903,9 +902,10 @@ class ManeuverSequence(TurnMotion):
         if now-self.last_change+1e-9 >= PWM_INTERVAL_S and self.servo != self.steering_target:
             target = self.steering_target
             reducing_left = self.servo > NEUTRAL and target < self.servo
-            second_orbit = (self.continue_route and self.phase == 'drive'
-                            and self.route_stage == 'second_orbit')
-            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else SECOND_ORBIT_PWM_STEP if second_orbit else (
+            post_pass = (self.continue_route and self.phase == 'drive'
+                         and self.first_pass_evidence is not None
+                         and self.route_stage in ('right_align', 'corridor_follow', 'second_orbit'))
+            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else ROUTE_POST_PASS_PWM_STEP if post_pass else (
                 (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
                 if reducing_left else PWM_STEP)
             if reducing_left and target < NEUTRAL:
@@ -996,7 +996,7 @@ class ManeuverSequence(TurnMotion):
                       steering_step_policy={'presteer': PRESTEER_PWM_STEP,
                           'reduce_left': LEFT_RELEASE_PWM_STEP,
                           'route_exit_reduce_left': ROUTE_EXIT_RELEASE_PWM_STEP if self.continue_route else None,
-                          'second_orbit': SECOND_ORBIT_PWM_STEP if self.continue_route else None,
+                          'route_post_pass': ROUTE_POST_PASS_PWM_STEP if self.continue_route else None,
                           'increase_left': PWM_STEP,
                           'center_to_right': PWM_STEP, 'interval_s': PWM_INTERVAL_S},
                       object_semantic_verified=False, passed_cones=None,
@@ -1189,6 +1189,18 @@ class ManeuverSequence(TurnMotion):
                        for c in values)):
             return None, 'right_exit_invalid_corridor'
         forward = [c for c in values if -math.pi/2 < c['heading_left_rad'] < math.pi/2]
+        if len(forward) > 1 and self.continue_route:
+            # Trial34 604 / trial45: the native fit can report the same
+            # corridor twice a few degrees apart. Aliases within the existing
+            # window-merge tolerances are one axis (keep the best-supported
+            # one); a different axis (corner/T) stays ambiguous.
+            base = forward[0]
+            if all(abs(_wrap(c['heading_left_rad']-base['heading_left_rad'])) <= PAIR_MERGE_HEADING_RAD
+                   and abs(c['center_offset_left_m']-base['center_offset_left_m']) <= PAIR_MERGE_OFFSET_M
+                   and abs(c['width_m']-base['width_m']) <= max(.15, MAX_EXIT_WIDTH_CHANGE_FRACTION*base['width_m'])
+                   for c in forward[1:]):
+                forward = [max(forward, key=lambda c: (c.get('left_wall_points', 0)+c.get('right_wall_points', 0),
+                                                       -c.get('fit_error_m', 0.)))]
         if len(forward) > 1:
             return None, 'right_exit_corridor_ambiguous'
         if forward:
@@ -1219,9 +1231,13 @@ class ManeuverSequence(TurnMotion):
                 return None, 'right_exit_corridor_identity_changed'
         lookahead = max(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M,
                         min(1., c['width_m']/2))
-        error = (c['heading_left_rad'] if self.continue_route else
-                 c['heading_left_rad']+math.atan2(c['center_offset_left_m'], lookahead))
-        target = max(RIGHT_EXIT_MIN_PWM, min(NEUTRAL, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
+        error = c['heading_left_rad']+math.atan2(c['center_offset_left_m'], lookahead)
+        # Trial45: after the first pass the corridor axis was 9.4 deg LEFT and
+        # its center .66 m left (trial43: axis 10 deg right). The exit side is
+        # observed, never assumed: route mode pursues the current corridor
+        # center line either way; right still needs a current center ACK.
+        upper = SERVO_MAX if self.continue_route else NEUTRAL
+        target = max(RIGHT_EXIT_MIN_PWM, min(upper, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
         self.right_exit_geometry = {**copy.deepcopy(c), 'source_seq': scan['seq'],
             'source_at_ms': scan['at_ms'], 'received_at': scan['received_at'],
             'lookahead_m': lookahead, 'steering_target_pwm': target,
@@ -1279,7 +1295,10 @@ class ManeuverSequence(TurnMotion):
                 # lease, and only to keep releasing toward neutral.
                 lease_receive = self.first_pass_evidence.get('received_at')
                 lease_publication = self.first_pass_evidence.get('source_at_ms')
-            held = (rejection == 'right_exit_corridor_missing'
+            # Trial45: one ambiguous frame coasted the exit straight into a
+            # wall; route mode gives it the same lease as a missing corridor.
+            held = ((rejection == 'right_exit_corridor_missing'
+                     or (self.continue_route and rejection == 'right_exit_corridor_ambiguous'))
                     and _number(lease_receive) and _number(lease_publication)
                     and now-lease_receive < SCAN_AGE_S
                     and (scan['at_ms']-lease_publication)/1000 < SCAN_AGE_S)
@@ -1317,9 +1336,15 @@ class ManeuverSequence(TurnMotion):
                     and control.get('motor') == TRIAL_MOTOR and control.get('command_acked') is True):
                 self.right_exit_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
                 self._route_center_ack = dict(self.right_exit_center_ack)
-            else:
+            elif not self.continue_route:
                 target = NEUTRAL
-        if self.continue_route and self.right_exit_center_ack is not None:
+        natural = target
+        if self.continue_route and target < NEUTRAL and (
+                self.right_exit_center_ack is None or self._route_center_ack is None or self.servo > NEUTRAL):
+            # Left toward the observed center line is direct; right still
+            # needs a current actual center ACK after any left command.
+            target = NEUTRAL
+        if self.continue_route:
             c = self.right_exit_geometry
             aligned = (abs(c['heading_left_rad']) <= math.radians(5)
                        and self._corridor_body_gap(c) >= MANEUVER_BODY_CLEARANCE_M)
@@ -1334,8 +1359,9 @@ class ManeuverSequence(TurnMotion):
                 return self._result(now)
             if not aligned:
                 self._route_alignment_history.clear()
-        self.steering_target = self.natural_steering_target = target
-        self.reason = ('first_target_right_exit_tracking' if self.right_exit_center_ack is not None
+        self.steering_target, self.natural_steering_target = target, natural
+        self.reason = ('first_target_exit_alignment_left' if target > NEUTRAL
+                       else 'first_target_right_exit_tracking' if self.right_exit_center_ack is not None
                        else 'first_target_right_exit_waiting_center_ack')
         self._slew(now)
         return self._result(now)
@@ -1401,6 +1427,17 @@ class ManeuverSequence(TurnMotion):
     def _corridor_follow_update(self, scan, now, control):
         _, rejection = self._right_exit_target(scan, now)
         if rejection is not None:
+            # Trial45: a single missing/ambiguous corridor frame only keeps the
+            # adopted command within the last observation lease; no new
+            # steering authority, and expiry still coasts.
+            lease_receive, lease_publication = self._right_exit_last_receive, self._right_exit_last_publication
+            if (rejection in ('right_exit_corridor_missing', 'right_exit_corridor_ambiguous')
+                    and _number(lease_receive) and _number(lease_publication)
+                    and now-lease_receive < SCAN_AGE_S
+                    and (scan['at_ms']-lease_publication)/1000 < SCAN_AGE_S):
+                self.steering_target = self.servo
+                self.reason = 'route_corridor_' + rejection.rsplit('_', 1)[1] + '_hold'
+                return self._result(now)
             self.begin_coast(rejection, now)
             self._slew(now)
             return self._result(now)

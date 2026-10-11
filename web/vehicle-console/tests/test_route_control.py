@@ -192,7 +192,9 @@ class RouteControlTests(unittest.TestCase):
         session, held = self.wait()
         # 20 unknown elsewhere plus 16 front unknown leaves exactly the
         # existing 324-return neutral floor. This never passes drive quality.
-        for front_gap in (5, 7, 12, 16):
+        # Gaps up to FRONT_BRIDGE_MAX_BINS between equal returns are bridged
+        # (maneuver profile); these stay unbridged front_sparse.
+        for front_gap in (6, 7, 12, 16):
             value = self.incomplete(self.console.scan['seq']+1, front_gap=front_gap)
             value.update(coverage=0., valid_fraction=0.)  # Not admission evidence.
             self.observe(round(self.now+.1, 6), value)

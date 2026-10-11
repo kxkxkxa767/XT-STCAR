@@ -16,6 +16,13 @@ CONTROL_AGE_LIMIT_S = .20
 AUTO_CONTROL_HEALTH_S = .25
 FRONT_MAX_UNKNOWN = 6
 FRONT_MAX_GAP = 3
+# Maneuver profile only: a short null run whose two adjacent returns lie on one
+# continuous surface is treated as that surface (occupied, never free) for the
+# front-gap rule. Trials 37..45: nulls only at 5..17 deg right of forward, also
+# while standing still, with equal-range neighbours. Longer runs or a range
+# step between the neighbours stay unknown; all nulls are still reported.
+FRONT_BRIDGE_MAX_BINS = 5
+FRONT_BRIDGE_MAX_STEP_M = .15
 CORRIDOR_HALF_WIDTH_M = .30
 CORRIDOR_LOOKAHEAD_M = 1.0
 # Operator's revised rough measurement, explicitly resolved to 28 cm total
@@ -500,7 +507,25 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     for r in front:
         run = run + 1 if r is None else 0
         largest_gap = max(largest_gap, run)
-    if len(unknown) > FRONT_MAX_UNKNOWN or largest_gap > FRONT_MAX_GAP:
+    bridged = []
+    if maneuver:
+        start = None
+        for angle in range(-30, 32):
+            missing = angle <= 30 and bins[angle % 360] is None
+            if missing and start is None:
+                start = angle
+            elif not missing and start is not None:
+                left, right = bins[(start-1) % 360], bins[angle % 360]
+                if (angle-start <= FRONT_BRIDGE_MAX_BINS and left is not None and right is not None
+                        and abs(left-right) <= FRONT_BRIDGE_MAX_STEP_M):
+                    bridged.extend(range(start, angle))
+                start = None
+    open_unknown = [angle for angle in unknown if angle not in bridged]
+    run = largest_open_gap = 0
+    for angle in range(-30, 31):
+        run = run + 1 if angle in open_unknown else 0
+        largest_open_gap = max(largest_open_gap, run)
+    if len(open_unknown) > FRONT_MAX_UNKNOWN or largest_open_gap > FRONT_MAX_GAP:
         issues.append('front_sparse')
     front_values = [r for r in front if r is not None]
     nearest_relaxed = nearest_body_point is not None and nearest_body_point['relaxed_turn_left']
@@ -558,6 +583,7 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
             'side_min_net_m': MANEUVER_MIN_NET_M if maneuver else SIDE_MIN_NET_M,
             'lidar_range_allowance_m': LIDAR_RANGE_ALLOWANCE_M,
             'front_unknown_bins': unknown, 'largest_gap_deg': largest_gap,
+            'front_bridged_bins': bridged, 'largest_open_gap_deg': largest_open_gap,
             'quality_issues': issues,
             'motion_ready': not body_stop_requested and not any(
                 i in issues for i in ['camera_unavailable', 'lidar_late', 'scan_incomplete', 'front_sparse']),

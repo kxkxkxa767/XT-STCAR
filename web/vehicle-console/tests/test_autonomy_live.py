@@ -514,6 +514,33 @@ class ManeuverClearanceTests(unittest.TestCase):
     def point_scan(self, angle, distance):
         return {**self.scan, 'ranges': [distance if a == angle else 3. for a in range(360)]}
 
+    def test_short_gap_inside_one_surface_is_bridged_only_for_maneuvers(self):
+        # Trial44 scan463: nulls 8..11 between equal-range wall returns.
+        scan = {**self.scan, 'ranges': [1.6]*360}
+        for angle in (8, 9, 10, 11): scan['ranges'][angle] = None
+        result = self.probe(scan)
+        self.assertNotIn('front_sparse', result['quality_issues'])
+        self.assertTrue(result['motion_ready'])
+        self.assertEqual(result['front_unknown_bins'], [8, 9, 10, 11])  # still reported
+        self.assertEqual(result['front_bridged_bins'], [8, 9, 10, 11])
+        self.assertEqual(result['largest_gap_deg'], 4)
+        self.assertEqual(result['largest_open_gap_deg'], 0)
+        straight = MODULE.probe_clearance(scan, self.ages, camera_required=False)
+        self.assertIn('front_sparse', straight['quality_issues'])
+        self.assertEqual(straight['front_bridged_bins'], [])
+
+    def test_gap_at_range_step_or_longer_than_bridge_stays_unknown(self):
+        for case in ('step', 'long', 'edge_null'):
+            with self.subTest(case=case):
+                scan = {**self.scan, 'ranges': [1.6]*360}
+                gap = range(8, 12) if case != 'long' else range(8, 8+MODULE.FRONT_BRIDGE_MAX_BINS+1)
+                for angle in gap: scan['ranges'][angle] = None
+                if case == 'step': scan['ranges'][12] = 2.4  # different surface on one side
+                if case == 'edge_null': scan['ranges'][7] = None; scan['ranges'][6] = None
+                result = self.probe(scan)
+                self.assertIn('front_sparse', result['quality_issues'])
+                self.assertFalse(result['motion_ready'])
+
     def test_all_four_faces_use_five_cm_net_plus_three_cm_allowance(self):
         # The measured front/rear asymmetry matters even after rotating an axial obstacle.
         for angle, body_extent, axis_threshold in [(0, .21, .29), (90, .17, .25),
@@ -625,9 +652,16 @@ class ManeuverClearanceTests(unittest.TestCase):
         for scan, ages in cases:
             with self.subTest(known=sum(r is not None for r in scan['ranges']), ages=ages):
                 straight, maneuver = MODULE.probe_clearance(scan, ages), self.probe(scan, ages)
-                for key in ['quality_issues', 'motion_ready', 'front_unknown_bins', 'largest_gap_deg',
-                            'sensor_inputs', 'camera_required']:
+                for key in ['front_unknown_bins', 'largest_gap_deg', 'sensor_inputs', 'camera_required']:
                     self.assertEqual(straight[key], maneuver[key], key)
+                # The only maneuver difference: a short front gap between two
+                # equal-range returns is bridged (occupied surface), never free.
+                bridged = bool(maneuver['front_bridged_bins'])
+                self.assertEqual([i for i in straight['quality_issues'] if not (bridged and i == 'front_sparse')],
+                                 maneuver['quality_issues'])
+                if not bridged or 'front_sparse' not in straight['quality_issues']:
+                    self.assertEqual(straight['motion_ready'], maneuver['motion_ready'])
+                self.assertEqual(straight['front_bridged_bins'], [])
                 if not any(r is not None for r in scan['ranges']):
                     self.assertIsNone(maneuver['body_proximity']['current_known_min_distance_m'])
                     self.assertIsNone(maneuver['body_proximity']['nearest_point'])

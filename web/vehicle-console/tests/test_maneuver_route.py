@@ -7,7 +7,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from maneuver_sequence import ManeuverSequence, SECOND_ORBIT_PWM_STEP, SECOND_BYPASS_SUPPORT_GAP_M
+from maneuver_sequence import ManeuverSequence, ROUTE_POST_PASS_PWM_STEP, SECOND_BYPASS_SUPPORT_GAP_M
 from compact_target import _candidates
 from test_compact_target import compact_scan
 from test_compact_target_roles import add_object
@@ -254,12 +254,46 @@ class ManeuverRouteTests(unittest.TestCase):
         result = self.step(motion, 5, neutral_acked=True)
         self.assertEqual(result['reason'], 'route_quality_wait_original_budget_expired')
 
-    def test_right_alignment_uses_heading_not_cancelling_offset(self):
+    def test_exit_alignment_pursues_observed_center_line_either_side(self):
+        # The exit side is observed, never assumed (trial43 right, trial45 left).
+        def expected(heading, offset):
+            return max(1350, min(1720, 1500+round(180*(math.radians(heading)+math.atan2(offset, 1.)))))
+        # Axis right but the car already converges on the center line: slight left.
         motion = self.route()
         result = self.step(motion, 5, heading=-23., offset=.54)
-        self.assertEqual(result['servo'], 1490)
+        self.assertEqual(result['right_exit_geometry']['steering_target_pwm'], expected(-23., .54))
+        self.assertGreater(result['steering_target'], 1500)
+        self.assertEqual(result['servo'], min(result['steering_target'], 1500+ROUTE_POST_PASS_PWM_STEP))
+        self.assertEqual(result['reason'], 'first_target_exit_alignment_left')
+        # Trial45: axis 9.4 deg left, center .66 m left -> strong left at once.
+        motion = self.route()
+        result = self.step(motion, 5, heading=9.4, offset=.66)
+        self.assertGreater(result['steering_target'], 1600)
+        self.assertEqual(result['servo'], 1500+ROUTE_POST_PASS_PWM_STEP)
+        # Axis and center both right: right, after the existing center ACK.
+        motion = self.route()
+        result = self.step(motion, 5, heading=-10., offset=-.4)
+        self.assertLess(result['steering_target'], 1500)
+        self.assertEqual(result['servo'], 1500-ROUTE_POST_PASS_PWM_STEP)
         self.assertTrue(result['route_right_output_authorized'])
-        self.assertLess(result['right_exit_geometry']['steering_target_pwm'], 1500)
+
+    def test_exit_left_then_right_needs_new_actual_center_ack(self):
+        motion = self.route()
+        motion._route_center_ack = None
+        motion.right_exit_center_ack = None
+        # Corridor changes stay inside the existing identity gates.
+        servos, centers = [], []
+        for seq, (heading, offset) in zip(range(5, 11), ((9.4, .66), (-10., .45), (-30., .2),
+                                                         (-30., .15), (-30., .1), (-30., .1))):
+            result = self.step(motion, seq, heading=heading, offset=offset)
+            self.assertEqual(result['phase'], 'drive')
+            servos.append(result['servo'])
+            centers.append(result['route_center_ack'])
+        self.assertGreater(servos[0], 1500)  # left needs no center ACK
+        first_right = next(i for i, v in enumerate(servos) if v < 1500)
+        self.assertEqual(servos[first_right-1], 1500)  # released to center first
+        self.assertIsNotNone(centers[first_right])
+        self.assertTrue(all(v >= 1500 for v in servos[:first_right]))
 
     def test_alignment_matures_both_clocks_then_follows_without_fixed_distance(self):
         motion = self.route()
@@ -285,15 +319,17 @@ class ManeuverRouteTests(unittest.TestCase):
     def test_corridor_left_then_right_requires_new_actual_center_ack(self):
         motion = self.route('corridor_follow')
         first = self.step(motion, 5, heading=4., offset=.3)
-        self.assertEqual(first['servo'], 1510)
+        self.assertEqual(first['servo'], 1500+ROUTE_POST_PASS_PWM_STEP)
         self.assertIsNone(first['route_center_ack'])
         # Stay inside existing offset association gate while changing correction.
         self.step(motion, 6, heading=-4., offset=.01)
-        result = self.step(motion, 7, heading=-4., offset=-.1, servo=1510, command_acked=False)
+        result = self.step(motion, 7, heading=-4., offset=-.1, servo=1500+ROUTE_POST_PASS_PWM_STEP,
+                           command_acked=False)
         self.assertGreaterEqual(result['servo'], 1500)
         self.assertFalse(result['route_right_output_authorized'])
         result = self.step(motion, 8, heading=-4., offset=-.1, servo=1500)
-        self.assertEqual(result['servo'], 1490)
+        self.assertEqual(result['servo'], max(result['steering_target'], 1500-ROUTE_POST_PASS_PWM_STEP))
+        self.assertLess(result['servo'], 1500)
         self.assertEqual(result['route_center_ack']['seq'], 8)
 
     def test_unexpected_actual_left_command_revokes_right_continuity(self):
@@ -350,7 +386,7 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertEqual(result['servo'], 1500)
         result = self.step(motion, 9, second=15., heading=0.)
         self.assertEqual(result['reason'], 'second_target_left_of_support_entry')
-        self.assertEqual(result['servo'], 1500+SECOND_ORBIT_PWM_STEP)
+        self.assertEqual(result['servo'], 1500+ROUTE_POST_PASS_PWM_STEP)
         feedback_ = result['second_feedback']
         self.assertAlmostEqual(feedback_['relative_bypass_point_left_m'][1],
                                feedback_['current_support_left_edge_y_m']+SECOND_BYPASS_SUPPORT_GAP_M)
@@ -415,7 +451,7 @@ class ManeuverRouteTests(unittest.TestCase):
         motion, result = self.second_handover()
         self.assertEqual(result['servo'], 1500)
         result = self.step(motion, 9, second=-45., heading=0.)
-        self.assertEqual(result['servo'], 1500-SECOND_ORBIT_PWM_STEP)
+        self.assertEqual(result['servo'], 1500-ROUTE_POST_PASS_PWM_STEP)
         self.assertTrue(result['route_right_output_authorized'])
         self.assertTrue(1350 <= result['steering_target'] < 1500)
 
@@ -458,7 +494,7 @@ class ManeuverRouteTests(unittest.TestCase):
                 self.assertGreaterEqual(result['servo'], 1500)
                 self.assertIsNone(result['second_center_ack'])
         self.assertEqual(result['second_center_ack']['seq'], 7)
-        self.assertEqual(result['servo'], 1500-SECOND_ORBIT_PWM_STEP)
+        self.assertEqual(result['servo'], 1500-ROUTE_POST_PASS_PWM_STEP)
 
     def test_second_loss_is_terminal_and_does_not_reacquire(self):
         motion, _ = self.second_handover()
@@ -539,19 +575,32 @@ class ManeuverRouteTests(unittest.TestCase):
         front = max(end['ranges'][i]*math.cos(math.radians(i)) for i in target['support_bins'])
         self.assertGreater(front, -.18)
 
-    def test_real34_current_corridor_can_request_right_but_alias_ambiguity_remains(self):
+    def test_real34_exit_pursuit_and_native_alias_merge(self):
         fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-34-route-observations.json').read_text())
         frames = {s['seq']: s for s in fixture['frames']}
+        results = {}
         for seq in (602, 604, 607):
             motion = ManeuverSequence(0., continue_route=True)
             value = {**frames[seq], 'received_at': frames[seq]['at_ms']/1000}
-            pwm, reason = motion._right_exit_target(value, value['received_at'])
-            if seq == 604:
-                self.assertIsNone(pwm)
-                self.assertEqual(reason, 'right_exit_corridor_ambiguous')
-            else:
-                self.assertTrue(1350 <= pwm < 1500)
-                self.assertIsNone(reason)
+            results[seq] = motion._right_exit_target(value, value['received_at'])
+        # 602: axis 23 deg right, center .54 m left: already converging -> slight left.
+        self.assertEqual(results[602], (1517, None))
+        # 604: two native fits 2.7 deg apart with the same offset/width are one axis.
+        self.assertIsNone(results[604][1])
+        self.assertLess(results[604][0], 1500)
+        self.assertEqual(results[607], (1427, None))
+        # Default sequence keeps its old strict rule.
+        value = {**frames[604], 'received_at': frames[604]['at_ms']/1000}
+        self.assertEqual(ManeuverSequence(0.)._right_exit_target(value, value['received_at']),
+                         (None, 'right_exit_corridor_ambiguous'))
+
+    def test_distinct_second_native_axis_stays_ambiguous(self):
+        motion = self.route()
+        value = observation(5, heading=-10.)
+        other = corridor(40.)
+        other['width_m'] = 2.4
+        value['corridor_candidates'].append(other)
+        self.assertEqual(motion._right_exit_target(value, .5), (None, 'right_exit_corridor_ambiguous'))
 
     def test_real34_saved_frames_have_no_independent_second_full_component(self):
         fixture = json.loads((Path(__file__).parent/'fixtures'/'left-cone-34-route-observations.json').read_text())
