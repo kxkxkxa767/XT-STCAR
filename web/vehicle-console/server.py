@@ -1085,10 +1085,16 @@ class Console:
                     or sum(r is not None for r in ranges) < COAST_MIN_VALID_POINTS):
                 return False
         if 'front_sparse' in issues:
-            if not neutral_ack or not isinstance(ranges, list) or len(ranges) != 360:
+            if not isinstance(ranges, list) or len(ranges) != 360:
                 return False
             unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
             if unknown != clearance.get('front_unknown_bins'):
+                return False
+            # Trial44: a wait entered on bounded front_sparse keeps the same
+            # front-count limit while its neutral command is still pending;
+            # halting instead would be the same pending neutral but recentered.
+            if not neutral_ack and not (session.get('quality_wait_front_sparse_entry') is True
+                                        and pending_neutral and len(unknown) <= FRONT_MAX_UNKNOWN):
                 return False
         return True
 
@@ -1166,19 +1172,47 @@ class Console:
                     return
             elif (route and session.get('phase') == motion.phase == 'drive'
                     and control.get('seq', -1) >= self.arm_sequence
-                    and set(report.get('quality_issues', [])) == {'scan_incomplete'}
-                    and self.turn_quality_hold_eligible(session)
+                    and set(report.get('quality_issues', []))
+                    and set(report.get('quality_issues', [])) <= {'scan_incomplete', 'front_sparse'}
+                    and self.turn_quality_hold_eligible(session, route_entry=True)
                     and motion.begin_quality_wait(now, turn_control,
                         scan={**self.scan, 'received_at': self.scan_at})):
+                # Trial44: bounded front_sparse (front unknown <= limit) may also
+                # use the single neutral wait after handover, not only scans
+                # with missing returns elsewhere.
                 session['phase'] = report['phase'] = 'quality_wait'
                 session['quality_wait_neutral_sequence'] = None
                 session['quality_resume_sequence'] = None
+                session['quality_wait_kind'] = 'orbit_wait'
+                session['quality_wait_front_sparse_entry'] = 'front_sparse' in report['quality_issues']
                 report['quality_wait_trigger'] = {
                     'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
                     'quality_issues': list(report['quality_issues']), 'adopted_servo': control['servo'],
                     'control_tick': control['tick'], 'control_seq': control['seq'],
                     'motor_command': 1500, 'existing_arm_sequence': self.arm_sequence}
                 report['quality_wait_snapshot'] = self.turn_quality_snapshot(session,
+                    self.turn_route_control(session, turn_control), now)
+            elif (route and session.get('phase') == motion.phase == 'drive'
+                    and control.get('seq', -1) >= self.arm_sequence
+                    and set(report.get('quality_issues', []))
+                    and set(report.get('quality_issues', [])) <= {'scan_incomplete', 'front_sparse'}
+                    and self.turn_quality_hold_eligible(session, route_entry=True)
+                    and motion.begin_left_turn_quality_pause(now, turn_control,
+                        scan={**self.scan, 'received_at': self.scan_at})):
+                # Trial44: one bounded neutral pause before target handover; the
+                # same server wait gates, neutral/resume ACKs and budgets apply.
+                session['phase'] = report['phase'] = 'quality_wait'
+                session['quality_wait_neutral_sequence'] = None
+                session['quality_resume_sequence'] = None
+                session['quality_wait_kind'] = 'left_turn_pause'
+                session['quality_wait_front_sparse_entry'] = 'front_sparse' in report['quality_issues']
+                report['left_turn_pause_trigger'] = {
+                    'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
+                    'quality_issues': list(report['quality_issues']), 'adopted_servo': control['servo'],
+                    'control_tick': control['tick'], 'control_seq': control['seq'],
+                    'motor_command': 1500, 'existing_arm_sequence': self.arm_sequence,
+                    'front_unknown_bins': list((report.get('clearance_current') or {}).get('front_unknown_bins', []))}
+                report['left_turn_pause_snapshot'] = self.turn_quality_snapshot(session,
                     self.turn_route_control(session, turn_control), now)
             elif (route and session.get('phase') == motion.phase == 'drive'
                     and control.get('seq', -1) >= self.arm_sequence
@@ -1298,9 +1332,11 @@ class Console:
         if route and decision.get('quality_resume_pending') is True and (
                 motor != TRIAL_MOTOR or servo != motion.quality_wait_servo):
             raise ValueError('invalid_turn_quality_resume_output')
+        resume_key = ('left_turn_pause_resume_snapshot' if session.get('quality_wait_kind') == 'left_turn_pause'
+                      else 'quality_resume_snapshot')
         if (route and turn_control['resume_acked'] and session.get('quality_resume_sequence') is not None
-                and 'quality_resume_snapshot' not in report and not decision.get('lock_requested')):
-            report['quality_resume_snapshot'] = self.turn_quality_snapshot(session, turn_control, now)
+                and resume_key not in report and not decision.get('lock_requested')):
+            report[resume_key] = self.turn_quality_snapshot(session, turn_control, now)
         changed = servo != session['turn_last_servo']
         if changed:
             report['steering_changes'] += 1
@@ -1336,6 +1372,7 @@ class Console:
             if session.get('continue_route') is True:
                 for key in ('continue_route', 'route_stage', 'quality_wait_active', 'quality_wait_servo',
                             'quality_wait_evidence', 'quality_wait_used', 'quality_resume_pending', 'second_target',
+                            'left_turn_pause_used', 'left_turn_pause_evidence', 'left_turn_pause_geometry_error',
                             'role_distinct_evidence', 'route_right_output_authorized',
                             'route_center_ack', 'route_alignment_evidence', 'second_center_ack',
                             'second_pass_evidence', 'second_acquisition_reason', 'route_events',

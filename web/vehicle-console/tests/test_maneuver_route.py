@@ -99,6 +99,31 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertFalse(motion.begin_quality_wait(.6, feedback(6), scan=observation(6)))
         self.assertEqual(self.step(motion, 6)['motor'], 1500)
 
+    def test_left_turn_pause_entry_is_single_use_before_handover_with_acked_left(self):
+        def fresh():
+            motion = ManeuverSequence(0., continue_route=True)
+            motion.phase, motion.drive_since = 'drive', .1
+            motion.servo = motion.steering_target = 1660
+            return motion
+        for invalid in ('ack', 'motor', 'servo', 'neutral', 'handover', 'old', 'route_off'):
+            with self.subTest(invalid=invalid):
+                motion, value, control = fresh(), observation(5), feedback(5, 1660)
+                if invalid == 'ack': control['command_acked'] = False
+                if invalid == 'motor': control['motor'] = 1500
+                if invalid == 'servo': control['servo'] = 1650
+                if invalid == 'neutral': motion.servo = control['servo'] = 1500
+                if invalid == 'handover': motion.handover_observed = True
+                if invalid == 'old': value['received_at'] = .1
+                if invalid == 'route_off': motion.continue_route = False
+                self.assertFalse(motion.begin_left_turn_quality_pause(.5, control, scan=value))
+                self.assertEqual(motion.phase, 'drive')
+        motion = fresh()
+        self.assertTrue(motion.begin_left_turn_quality_pause(.5, feedback(5, 1660), scan=observation(5)))
+        self.assertEqual((motion.phase, motion.quality_wait_servo), ('quality_wait', 1660))
+        self.assertFalse(motion.quality_wait_used)
+        motion.phase = 'drive'  # even after a resume, the pause is never reused
+        self.assertFalse(motion.begin_left_turn_quality_pause(.6, feedback(6, 1660), scan=observation(6)))
+
     def test_wait_requires_current_full_original_target_and_actual_left_ack(self):
         for invalid in ('ack', 'motor', 'servo', 'partial', 'identity', 'old', 'passed'):
             with self.subTest(invalid=invalid):

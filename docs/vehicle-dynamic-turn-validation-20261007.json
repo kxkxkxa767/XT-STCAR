@@ -16057,5 +16057,34 @@
     "not_inferred": "No claim of what object causes the dropouts; no speed/pose.",
     "completed": false,
     "competition_supported": false
+  },
+  "after44_left_turn_quality_pause_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 45,
+    "user_instruction": "2026-10-11 用户：按方案2修改然后进行第45轮；并要求 Claude 自行选择最佳方案、不要总是询问。",
+    "change": {
+      "scope": "Explicit --continue-route, first-target stage only; default sequence and turn-left unchanged.",
+      "left_turn_pause": "Before target handover (left turn), a drive frame whose quality issues are a non-empty subset of {scan_incomplete, front_sparse} with front unknown count <= FRONT_MAX_UNKNOWN 6 (consecutive gap may exceed 3), an ACKed left command and bridge servo == commanded servo enters ONE neutral pause (begin_left_turn_quality_pause; phase quality_wait, held servo, motor 1500). The server reuses the route wait gates (turn_quality_wait_eligible each tick, neutral/resume ACK sequences, output checks). The motion only validates advancing scans/control (_orbit_inputs) and refreshes left-turn geometry from the current real scan (_measurement + endpoint observation, same bookkeeping as TurnMotion); it never steers. Power resumes (resume pending: motor 1560 with the held servo, then ACK) only after clean quality (motion_ready, no issues) and a successful geometry measurement on each of >=3 fresh frames over .30 s. Budget: 5 s pause and the original drive budget, else lock. Separate single-use flag (left_turn_pause_used); the existing post-handover wait stays available.",
+      "orbit_wait_on_front_sparse": "After handover the existing single neutral wait may also start on bounded front_sparse (same count limit); previously only scan_incomplete. Target identity/full-isolation gates unchanged.",
+      "pending_neutral_tolerance": "A wait or pause entered on front_sparse tolerates front_sparse while its neutral command is still pending, with the same unknown-bin match and count <= 6; after neutral ACK the existing neutral-floor rule applies.",
+      "fallback": "If the pause/wait is used or refused, the round-43 terminal held coast applies; >6 front unknown, unACKed steps, other quality issues, body proximity, stale scans and bridge lock still halt.",
+      "records": "report left_turn_pause_trigger/snapshot/resume_snapshot (session quality_wait_kind), turn fields left_turn_pause_used/evidence/geometry_error, route event left_turn_quality_pause / left_turn_pause_resume_request."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 59 (1 new), test_route_control 31 (3 rewritten + 1 new: pause/resume with held left, no geometry -> budget expiry, orbit wait on front_sparse, >6 still halts after the pause), test_maneuver_sequence 63, compact suites: 216 passed.",
+      "default_suites": "test_turn_quality_coast/test_turn_control/test_coast_control failure set identical before and after (pre-existing)."
+    },
+    "risks_not_resolved": [
+      "During the pause the relaxed 4 cm turn-left body gate is off (8 cm applies); a pause close to the inner board end may halt.",
+      "Resume needs a unique left-turn geometry match; persistent wall ambiguity expires the pause after 5 s (lock at neutral).",
+      "The 5..17 deg right-front lidar dropout band is not physically resolved.",
+      "Coast standstill detection still reports motion_result_superseded on the car."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false
   }
 }

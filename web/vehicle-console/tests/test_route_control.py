@@ -327,8 +327,8 @@ class RouteControlTests(unittest.TestCase):
         self.assertFalse(any(row.get('motor', 1500) > 1500 for row in self.outputs[self.coast_start:]))
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
-    def test_left_turn_front_sparse_coasts_with_acked_left_before_handover(self):
-        # Trial42: front_sparse in the left turn halted and recentered at once.
+    def left_turn_pause(self):
+        # Trial44: one front_sparse frame in the left turn before handover.
         self.drive_compact_trial(continue_route=True)
         session = self.console.auto_session
         motion = session['turn_motion']
@@ -337,39 +337,85 @@ class RouteControlTests(unittest.TestCase):
         self.assertGreater(servo, 1500)
         self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 4))
         self.assertIs(self.console.auto_session, session)
-        self.assertEqual(session['phase'], 'coast')
-        trigger = session['report']['quality_coast_trigger']
+        self.assertEqual(session['phase'], 'quality_wait')
+        self.assertEqual(motion.phase, 'quality_wait')
+        self.assertTrue(motion.left_turn_pause_used)
+        self.assertFalse(motion.quality_wait_used)  # the orbit wait stays available
+        trigger = session['report']['left_turn_pause_trigger']
         self.assertEqual(trigger['quality_issues'], ['front_sparse'])
-        self.assertFalse(trigger['handover_observed'])
         self.assertEqual(trigger['front_unknown_bins'], [5, 6, 7, 8])
-        self.assertEqual(motion.quality_coast_servo, servo)
-        self.coast_start = len(self.outputs)-1
+        self.assertNotIn('quality_coast_trigger', session['report'])
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
-        # Geometry is no longer associated in the held coast: neither the
-        # remaining sparse frames nor frames without any wall recenter it.
-        frames = [self.front_sparse(self.console.scan['seq']+i, 4) for i in (1, 2)]
-        bare = self.scan(self.console.scan['seq']+3)
-        bare.update(corridor_candidates=[], wall_candidates=[], left_turn_goal=None)
-        frames.append(bare)
-        self.assert_held_coast(session, servo, frames)
+        return session, motion, servo
 
-    def test_orbit_front_sparse_coasts_and_never_waits(self):
+    def test_left_turn_front_sparse_pauses_then_resumes_with_held_left(self):
+        session, motion, servo = self.left_turn_pause()
+        pause_start = len(self.outputs)
+        resumed = None
+        for i in range(1, 9):
+            self.observe(round(self.now+.1, 6), self.scan(self.console.scan['seq']+1))
+            self.assertIs(self.console.auto_session, session, self.console.auto_result)
+            if session.get('quality_resume_sequence') is not None and resumed is None:
+                resumed = len(self.outputs)-1
+            if resumed is not None and not motion.quality_resume_pending:
+                break
+        self.assertIsNotNone(resumed)
+        # Neutral, unchanged steering until clean quality and current geometry
+        # matured; the first powered output still holds the paused command.
+        self.assertTrue(all((row['motor'], row['servo']) == (1500, servo)
+                            for row in self.outputs[pause_start:resumed]))
+        self.assertEqual((self.outputs[resumed]['motor'], self.outputs[resumed]['servo']), (1560, servo))
+        self.assertFalse(motion.quality_resume_pending)
+        self.assertEqual(motion.phase, 'drive')
+        self.assertIn('resume_ack', motion.left_turn_pause_evidence)
+        self.assertIn('left_turn_pause_resume_snapshot', session['report'])
+        self.assertNotIn('quality_resume_snapshot', session['report'])
+        self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
+        # Single use: the next bounded fault takes the existing terminal held coast.
+        held = self.console.status['control']['servo']
+        self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 4))
+        self.assertEqual(session['phase'], 'coast')
+        self.assertEqual(session['report']['quality_coast_trigger']['quality_issues'], ['front_sparse'])
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, held))
+
+    def test_left_turn_pause_never_resumes_without_geometry_and_expires_on_budget(self):
+        session, motion, servo = self.left_turn_pause()
+        start = self.now
+        while self.console.auto_session is session and self.now < start+6:
+            bare = self.scan(self.console.scan['seq']+1)
+            bare.update(corridor_candidates=[], wall_candidates=[], left_turn_goal=None)
+            self.observe(round(self.now+.1, 6), bare)
+            if self.console.auto_session is session:
+                self.assertIsNone(session.get('quality_resume_sequence'))
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.console.auto_result['reason'], 'route_left_turn_pause_original_budget_expired')
+        self.assertFalse(any(row.get('motor', 1500) > 1500 for row in self.outputs[-40:]))
+
+    def test_orbit_front_sparse_uses_single_neutral_wait(self):
         _, session = self.enter_compact_orbit(continue_route=True)
         servo = self.console.status['control']['servo']
         self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1, front_gap=5))
-        self.assertEqual(session['phase'], 'coast')
-        self.assertFalse(session['turn_motion'].quality_wait_used)
-        self.assertTrue(session['report']['quality_coast_trigger']['handover_observed'])
-        self.coast_start = len(self.outputs)-1
-        self.assert_held_coast(session, servo,
-            [self.incomplete(self.console.scan['seq']+i, front_gap=5) for i in (1, 2)])
+        self.assertEqual(session['phase'], 'quality_wait')
+        self.assertTrue(session['turn_motion'].quality_wait_used)
+        self.assertEqual(session['quality_wait_kind'], 'orbit_wait')
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
+        for i in (1, 2):
+            self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1, front_gap=5))
+            self.assertIs(self.console.auto_session, session)
+            self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
 
     def test_front_sparse_above_existing_count_limit_still_halts(self):
-        for stage in ('left_turn', 'held_coast'):
+        for stage in ('left_turn', 'after_pause_held_coast'):
             with self.subTest(stage=stage):
                 self.reset_case()
-                self.drive_compact_trial(continue_route=True)
-                if stage == 'held_coast':
+                if stage == 'left_turn':
+                    self.drive_compact_trial(continue_route=True)
+                else:
+                    session, motion, _ = self.left_turn_pause()
+                    for i in range(1, 9):
+                        self.observe(round(self.now+.1, 6), self.scan(self.console.scan['seq']+1))
+                        if session.get('quality_resume_sequence') is not None and not motion.quality_resume_pending:
+                            break
                     self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 4))
                     self.assertEqual(self.console.auto_session['phase'], 'coast')
                 self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 7))
