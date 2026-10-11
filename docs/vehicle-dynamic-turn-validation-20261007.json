@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "47 (644b861) ran once: first-target handover, then one scan_incomplete frame hid the cone edge; the orbit wait was refused and the terminal held coast circled the cone to a stop (no contact). Round-48 candidate: self-recovery holds that keep re-checking whether the task can resume.",
+  "latest_trial_status": "48 (7851562) ran once: first target with orbit wait + resume, smooth exit alignment, corridor follow at 1550, first second-target acquisition and left swing; swing too weak (bearing law ~1590) -> contact with the second cone (operator), self-recovery worked. Round-49 candidate: curvature-based second-target entry.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16276,8 +16276,8 @@
   "after47_self_recovery_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 48,
     "user_instruction": "2026-10-11 用户：加一个自恢复执行任务……位置还能继续下个任务；要一直检查是否能再次执行下一次任务。",
     "principle": "Explicit route mode: a non-protective stop becomes a neutral hold (motor 1500, ACKed steering held) that re-checks on every fresh scan whether the current task can resume, and resumes after .30 s of clean quality plus readiness. No fixed retry count; only the total deadline and cumulative drive budget bound it. Protective stops stay terminal: body proximity, stale/reordered scans or clocks, bridge lock/link loss, deadlines, feedback mismatch.",
@@ -16297,6 +16297,76 @@
       "Repeated hold/resume cycles near walls are bounded only by the deadline and drive budget.",
       "Coast standstill detection still superseded on the car (holds end by readiness, not by standstill).",
       "Round-47 light-lane turn, slow section and exit changes still physically untested."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "7851562942cdd7d897904fbfe2493589998ec5b7",
+      "archive_sha256": "8a5b8326a666dbe54c535bb8ab84d40b6d909279aa7bc96f371e0f940465a0fa",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn48-20261011-095740",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn48-20261011-095740",
+      "helper_sha256": "a7977e372cc1cfb0725263689fb952b9339ab22154cb17e7eee56351180e36f7",
+      "helper_note": "from helper 47 (--max-seconds 16, observer 34 s)",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before48-fresh.json / after48-deploy-fresh.json / pre48-run-fresh.json: six fresh locked ready samples each, 14 hashes match"
+    }
+  },
+  "turn48_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "7851562942cdd7d897904fbfe2493589998ec5b7",
+    "start_geometry": "front wall 2.19 m, board end .53 m, width 1.66 m, exit 92.1 deg, incoming .2 deg, lateral .27 m, presteer cap 1649..1655.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-48/ (7 files sha256 match trial48-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 12.44,
+    "observer_stop_requested": false,
+    "terminal": "server lock probe_obstacle_close_body (right front gap .034 m at bin 36) during a recovery hold in corridor_follow",
+    "operator_report": "用户：这一次绕第二个锥桶的时候转向的幅度不够导致撞上了，但自恢复成功了",
+    "physical_contact": true,
+    "timeline": {
+      "first_target": "handover; 471 scan_incomplete -> orbit wait entered (route_quality_wait_target_reacquiring frames tolerated), release in wait 1691->1500, front_sparse inside the wait tolerated, 485 resume with first pass (recovery 1).",
+      "exit_corridor": "exit alignment LEFT 1515..1532 converged smoothly (axis -10.1 -> -0.4 deg, damping); 494 corridor_follow (slow 1550).",
+      "second_target": "first ever second-target acquisition: seen 500 (+7 deg, 1.89 m), confirmed 504 (1.46 m) -> second_orbit left-of-support entry 1563 -> 1590 while the support stayed nearly ahead (6 -> 1 deg, .91 m); lost at 511 -> back to corridor_follow (recovery path) -> 514 recovery hold (corridor axis -23 deg) -> body gate at 3.4 cm right front -> lock."
+    },
+    "diagnosis": "Bearing law (180 PWM/rad) asked ~1590 at .9 m; reaching the .40 m bypass line needed ~1 m path radius (~1700).",
+    "exercised": {
+      "orbit_wait_anchor_hold": "yes",
+      "exit_damping": "yes (smooth)",
+      "slow_section": "yes (1550)",
+      "second_target_in_corridor": "yes",
+      "second_loss_to_corridor": "yes",
+      "recovery_hold": "yes",
+      "light_turn": "no"
+    },
+    "post_trial_lock": "after.json and after48-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500.",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after48_second_curvature_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 49,
+    "user_instruction": "2026-10-11 用户：这一次绕第二个锥桶的时候转向的幅度不够导致撞上了，但自恢复成功了。",
+    "change": {
+      "second_orbit_law": "Steer by pursuit curvature to the existing bypass point (support near face, left edge + .40 m): nominal = 1500 + 205*kappa, kappa = 2y/(x^2+y^2), clamped 1350..1720; right still needs a center ACK. 205 PWM per 1/m is the uncalibrated mapping seen in first-target orbits (~1705 at ~1 m radius). Trial48 geometry: 1.46 m -> ~1600 (was 1572), .9 m nearly ahead -> ~1695 (was 1590)."
+    },
+    "validation": {
+      "related_suites": "232 passed + new trial48 regression test (support .9 m at 1 deg -> >= 1680).",
+      "default_suites": "identical failure set (49 pre-existing)."
+    },
+    "risks_not_resolved": [
+      "Once the support is beside/behind with extra gap, the short lookahead turns right hard (clockwise around it) until the .40 m gap; may approach the support if the curvature mapping is off.",
+      "Light-lane turn still untested."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

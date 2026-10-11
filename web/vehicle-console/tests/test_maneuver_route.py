@@ -573,6 +573,22 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertNotEqual(pwm(math.cos(math.radians(25)), -math.sin(math.radians(25))),
                             pwm(math.cos(math.radians(60)), -math.sin(math.radians(60))))
 
+    def test_trial48_support_nearly_ahead_demands_strong_left_by_curvature(self):
+        # Trial48 509: second support ~.9 m at ~1 deg; the bearing law gave ~1590
+        # and the car clipped it. Pursuit curvature to the .40 m bypass line.
+        motion = self.route('second_orbit')
+        motion.second_track_id, motion.second_orbit_since = 2, .4
+        motion.second_center_ack = copy.deepcopy(motion._route_center_ack)
+        value = observation(5)
+        value['ranges'] = compact_scan(bearing=1., distance=.9, size=9)['ranges']
+        value['ranges'] = [6. if r == 3. else r for r in value['ranges']]
+        c = _candidates(value['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2))[0]
+        motion.second_target = {**c, 'track_id': 2, 'confirmed': True,
+            'source_seq': 5, 'source_at_ms': 500, 'source_received_at': .5}
+        result = motion._second_orbit_update(value, .5, feedback(5, 1500))
+        self.assertGreaterEqual(result['second_feedback']['nominal_target_pwm'], 1680)
+        self.assertGreater(result['second_feedback']['pursuit_curvature_per_m'], .8)
+
     def test_second_after_adopted_left_requires_new_center_ack(self):
         motion = self.route('second_orbit', servo=1520)
         motion.second_track_id, motion.second_orbit_since = 2, .4

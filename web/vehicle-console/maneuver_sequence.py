@@ -93,6 +93,12 @@ LIGHT_BRIDGE_MAX_BINS = 5
 # is abeam (trial43 lost the second support below .35 m) and leaves .26 m to
 # the measured body side, above the existing .08 m maneuver clearance.
 SECOND_BYPASS_SUPPORT_GAP_M = MIN_RANGE_M+.05
+# Trial48: steering by bearing (180 PWM/rad) asked only ~1590 with the second
+# support .9 m ahead, while reaching the bypass line there needs a ~1 m path
+# radius. Steer by pursuit curvature kappa = 2y/(x^2+y^2) instead, with the
+# uncalibrated PWM-per-curvature seen in the first-target orbits (~1705 at
+# ~1 m radius). Not a measured wheel angle.
+SECOND_CURVATURE_GAIN_PWM_M = 205.
 # Same-frame native wall-window pairing reuses the native corridor gates
 # (corridor.rs): parallel 12 deg, width .65..2.5 m, shared support .35 m.
 PAIR_MAX_ANGLE_RAD = math.radians(12)
@@ -1760,14 +1766,16 @@ class ManeuverSequence(TurnMotion):
         # receding point then keeps that gap while the support is abeam.
         waypoint = [max(body_length, near), left_edge+SECOND_BYPASS_SUPPORT_GAP_M]
         bearing = math.atan2(waypoint[1], waypoint[0])
+        curvature = 2*waypoint[1]/(waypoint[0]**2+waypoint[1]**2)
         # Trial43: the bypass point left of a left-front support needs left;
         # right still requires a current actual center ACK after any left.
         nominal = max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX,
-            NEUTRAL+round(LEFT_TRIAL_GAIN*bearing)))
+            NEUTRAL+round(SECOND_CURVATURE_GAIN_PWM_M*curvature)))
         self.second_feedback = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
             'current_support_left_edge_y_m': left_edge, 'current_support_frontmost_x_m': front,
             'current_support_nearest_x_m': near, 'bypass_support_gap_m': SECOND_BYPASS_SUPPORT_GAP_M,
             'relative_bypass_point_left_m': waypoint, 'bearing_left_rad': bearing,
+            'pursuit_curvature_per_m': curvature,
             'nominal_target_pwm': nominal,
             'scope': 'current_support_relative_point_trial',
             'swept_path_certified': False, 'physical_curvature_calibrated': False}
