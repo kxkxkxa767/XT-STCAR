@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "50 (bd10828) ran once: 40-step orbit entry gave a tight U-turn; a front_sparse wait (dropout band) cut power, the held 1710 curled the coasting car next to the first support (.17 m, no contact), new support IDs were not rebound and the 3 s orbit clock locked it. Round-51 candidate: no stage clocks in route waits, nearest-left rebind, steering while coasting, .15 m proximity avoidance, short front-gap tolerance.",
+  "latest_trial_status": "51 (f8a6467) ran once: first support never confirmed in the left turn (edge null bins every other scan reset the unconfirmed identity), overshoot coast centered at ~1.5 m/s -> outer board (operator). Round-52 candidate: edge-gap continuity for unconfirmed first-target identities + evidence-gated overshoot hold.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16517,8 +16517,8 @@
   "after50_never_give_up_recovery_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 51,
     "user_instruction": "2026-10-11 用户：停住第一个桶旁边了…现在你改成无论碰没碰到都继续后续的任务，毕竟撞到才扣20s，没完成就真没完成了。",
     "change": {
@@ -16544,6 +16544,77 @@
       "A wait can now last until the cumulative 16 s budget; a car stuck without a recoverable target just waits.",
       "Exit release still targets center rather than the measured exit corridor (trial49 outer-wall case).",
       "Speed 1.3-1.6 m/s at 1560 in the U-turn."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "f8a64672664e91ebb91376635d9fe2192e5f0fe2",
+      "archive_sha256": "2f33c65e2623838ade0e077bb3ff6cb7cb4238a7fca87fd439abd3074ef96e65",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn51-20261011-194340",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn51-20261011-194340",
+      "helper_sha256": "48a3a5b3f5d8d849688138e3fadcc02e8f5727a09bfe19857a6550c5e820e957",
+      "helper_note": "from helper 50 (only the output directory differs)",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before51-fresh.json (vs turn50 package) / after51-deploy-fresh.json / pre51-run-fresh.json (vs turn51 package): six fresh locked ready samples, 14 hashes match",
+      "trial_executed": "turn51_actual",
+      "new_logic_exercised": false
+    }
+  },
+  "turn51_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "f8a64672664e91ebb91376635d9fe2192e5f0fe2",
+    "start_geometry": "front wall 2.237 m, board end .599 m, width 1.638 m, exit 90.6 deg, incoming -0.4 deg, lateral .306 m, presteer cap 1637.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-51/ (7 files sha256 match trial51-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 7.49,
+    "observer_stop_requested": false,
+    "terminal": "left_turn_heading_overshoot coast at 5.76 s (steering released toward 1500), then service halt turn_perception_unavailable; car rolled on (~1.5 m/s) into the outer board of the next lane",
+    "operator_report": "用户：这次撞到锥桶右侧的挡板了",
+    "physical_contact": true,
+    "timeline": {
+      "left_turn": "3.54 drive 1560; servo 1636..1666; wall-ambiguity hold 5.05-5.59",
+      "first_target": "support at ~1.1-0.8 m, 70-76 deg left seen as track 1 (scan 356), 2 (359-361), 3 (364); never confirmed; no handover",
+      "cause": "in about every other scan the support had 1-2 null bins at one edge (scan 357 bins 291-292, 363 bin 284) - the beam split at the depth edge; the tracker accepted that only for confirmed identities and forgot the unconfirmed one",
+      "end": "5.76 heading passed the exit axis by 8 deg (heading 110 deg) -> overshoot coast centered the steering -> straight into the board where trial49 also hit"
+    },
+    "path_reconstruction": "scripts/trial-map.py: same U-turn start as trial50; after the centering the path runs straight at ~144 deg into the left board of the return lane; car rolled ~1 m after the lock",
+    "offline_replay": "saved scans (every other one) through the tracker with the new opt-in edge-gap rule: one identity throughout, confirmed at scan 364 (5.49 s), before the overshoot",
+    "exercised": {
+      "round51_logic": "none (all after handover)"
+    },
+    "post_trial_lock": "after51-trial-fresh.json: healthy, owner None, locked, unarmed, 1500/1500 (rejection probe_obstacle_close_body: car against the board).",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after51_left_turn_target_continuity_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 52,
+    "user_instruction": "2026-10-11 用户：这次撞到锥桶右侧的挡板了；要注意不能对此赛道特化，后期测试完成的片段写入自动控制程序中，让车启动后自动按照任务要求跑完全程。",
+    "change": {
+      "tracker_edge_gap": "CompactTargetTracker(unconfirmed_boundary_gap=True), used only by the route first-target tracker: the existing bounded boundary-gap rule (<= 3 null bins at one edge or one at each, real farther returns beyond, association gates, 300 ms full-isolation lease) may keep an UNCONFIRMED identity; such frames never count toward confirmation or renew full isolation. Default trackers unchanged.",
+      "overshoot_hold": "Route left turn only: when the turn passes its measured exit axis by 8 deg without a handover AND the first tracker observed an identity on the left (0..180 deg, <= 1.5 m) within .30 s, the adopted left is held at drive power (outside the left-turn geometry pipeline) for at most 1.0 s while the handover is checked every frame; then the held-left coast (no centering). Without that live evidence the original centering coast applies."
+    },
+    "not_course_specific": "Both rules use live sensor evidence (edge null bins at a depth discontinuity; a tracked object on the left) and the task rule that the first cone is passed anticlockwise; no course coordinate, length or fixed turn angle.",
+    "validation": {
+      "related_suites": "246 passed (test_maneuver_route, test_route_control, test_maneuver_sequence, test_compact_target, test_compact_target_roles); new tests for the tracker rule (with/without the flag) and the overshoot hold (evidence required, held-left coast, handover).",
+      "default_suites": "full discovery: identical failure set before/after (567 tests)."
+    },
+    "risks_not_resolved": [
+      "8 cm body-gate contact still ends the run (user request pending; classifier denial).",
+      "Exit release still targets center (trial49 case).",
+      "Speed 1.3-1.6 m/s at 1560."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

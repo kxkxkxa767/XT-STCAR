@@ -1337,6 +1337,63 @@ class RouteProximityTests(unittest.TestCase):
             self.assertEqual(motion.servo, expected)
 
 
+class RouteLeftOvershootTests(unittest.TestCase):
+    @staticmethod
+    def drive(route=True, seen_bearing_deg=72., seen_at=0.):
+        motion = ManeuverSequence(0., continue_route=route)
+        motion.phase, motion.drive_since, motion.servo, motion.steering_target = 'drive', 0., 1663, 1663
+        if seen_bearing_deg is not None:
+            # Trial51 scan364: unconfirmed first-tracker identity at 72 deg, .79 m.
+            motion._last_seen_compact = (seen_at, {'bearing_left_rad': math.radians(seen_bearing_deg),
+                                                   'range_m': .79, 'track_id': 3, 'confirmed': False})
+        return motion
+
+    def test_trial51_route_overshoot_holds_left_only_with_live_left_target_evidence(self):
+        motion = self.drive()
+        motion.begin_coast('left_turn_heading_overshoot', .1)
+        self.assertEqual((motion.phase, motion.reason), ('drive', 'route_left_turn_overshoot_hold_left'))
+        self.assertEqual(motion.steering_target, 1663)
+        self.assertEqual(motion.left_overshoot_evidence['held_servo'], 1663)
+        # No course-shaped assumption: without a live identity on the left
+        # (none, stale, or on the right) the original centering coast applies.
+        for kwargs in ({'seen_bearing_deg': None}, {'seen_at': -1.}, {'seen_bearing_deg': -72.}):
+            with self.subTest(**kwargs):
+                other = self.drive(**kwargs)
+                other.begin_coast('left_turn_heading_overshoot', .1)
+                self.assertEqual((other.phase, other.steering_target), ('coast', 1500))
+        default = self.drive(route=False)
+        default.begin_coast('left_turn_heading_overshoot', .1)
+        self.assertEqual((default.phase, default.steering_target), ('coast', 1500))
+        other = self.drive()
+        other.begin_coast('left_turn_observed_corridor_alignment', .1)
+        self.assertEqual(other.phase, 'coast')
+
+    def test_trial51_overshoot_hold_drives_held_left_then_coasts_without_centering(self):
+        motion = self.drive(seen_at=.3)
+        motion.begin_coast('left_turn_heading_overshoot', .4)
+        for seq in range(5, 15):
+            # No compact object in the first-target sector: no handover.
+            result = motion.update(observation(seq, first=200.), 0., seq/10,
+                                   feedback(seq, servo=motion.servo, motor=1560))
+            if seq < 14:
+                self.assertEqual((result['phase'], result['motor'], result['servo']), ('drive', 1560, 1663))
+                self.assertTrue(result['route_left_hold_active'])
+        self.assertEqual((result['phase'], result['servo']), ('coast', 1663))
+        self.assertEqual(motion.quality_coast_reason, 'route_left_turn_overshoot_hold_expired')
+
+    def test_trial51_overshoot_hold_hands_over_once_first_target_confirms(self):
+        motion = self.drive(seen_at=.3)
+        motion.begin_coast('left_turn_heading_overshoot', .4)
+        for seq in range(5, 12):
+            result = motion.update(observation(seq, first=80.), 0., seq/10,
+                                   feedback(seq, servo=motion.servo, motor=1560))
+            if result['handover_observed']:
+                break
+        self.assertTrue(result['handover_observed'])
+        self.assertFalse(result['route_left_hold_active'])
+        self.assertEqual(result['phase'], 'drive')
+
+
 class RouteOrbitSlewTests(unittest.TestCase):
     def test_trial49_route_orbit_left_increase_uses_route_step_release_unchanged(self):
         # Trial49: 1636 -> 1676 in .5 s while the orbit asked 1707.

@@ -153,13 +153,23 @@ class CompactTargetTracker:
     ``reason`` supplies diagnostics when update returns None.
     """
     def __init__(self, *, acquisition_bearing_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD),
-                 maintenance_bearing_rad=None, select_associated=False):
+                 maintenance_bearing_rad=None, select_associated=False, unconfirmed_boundary_gap=False):
         self._acquisition_bearing_rad = _bearing_range(acquisition_bearing_rad, 'acquisition_bearing_rad')
         self._maintenance_bearing_rad = (None if maintenance_bearing_rad is None else
                                          _bearing_range(maintenance_bearing_rad, 'maintenance_bearing_rad'))
         if type(select_associated) is not bool:
             raise ValueError('select_associated must be a bool')
+        if type(unconfirmed_boundary_gap) is not bool:
+            raise ValueError('unconfirmed_boundary_gap must be a bool')
         self._select_associated = select_associated
+        # Opt-in (explicit route first target). Trial51: the first support at
+        # ~1 m had 1-2 null bins at one edge in about every other scan (the
+        # beam split between the near support and the far board), so an
+        # unconfirmed identity was forgotten each time and three full frames
+        # in a row never occurred. The same bounded boundary-gap rule used for
+        # confirmed identities may keep an UNCONFIRMED identity alive; such a
+        # frame never counts toward confirmation or renews full isolation.
+        self._unconfirmed_boundary_gap = unconfirmed_boundary_gap
         self.reason = 'compact_target_not_observed'
         self._last_now = None
         self._last_seq = self._last_at = self._last_received = self._signature = None
@@ -215,9 +225,10 @@ class CompactTargetTracker:
             elif abs(publication_dt-receive_dt) > .15:
                 return self._forget('compact_target_clock_gap')
         old = self._target
-        allow_boundary_gap = old is not None and old['confirmed']
+        confirmed_old = old is not None and old['confirmed']
+        allow_boundary_gap = confirmed_old or (old is not None and self._unconfirmed_boundary_gap)
         bearing_range = (self._maintenance_bearing_rad
-                         if allow_boundary_gap and self._maintenance_bearing_rad is not None
+                         if confirmed_old and self._maintenance_bearing_rad is not None
                          else self._acquisition_bearing_rad)
         candidates = _candidates(ranges, allow_boundary_gap=allow_boundary_gap,
                                  bearing_range_rad=bearing_range)

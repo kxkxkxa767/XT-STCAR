@@ -113,6 +113,13 @@ ROUTE_AVOID_PWM_STEP = 40
 # demand by more than this margin (trial50: 1710 held while the support closed
 # from .9 to .37 m on the inside). A static scene never changes the hold.
 ROUTE_WAIT_INSIDE_MARGIN_PWM = 60
+# Explicit route only. Trial51: the first support never confirmed during the
+# left turn, the turn passed its 90 deg exit axis by 8 deg and the overshoot
+# coast centered the steering at ~1.5 m/s; the car rolled straight into the
+# outer board of the next lane (same spot as trial49). Instead the adopted left
+# is held at drive power while the first-target handover is checked every
+# frame; only after this long does the held-left coast (no centering) follow.
+ROUTE_LEFT_OVERSHOOT_HOLD_S = 1.0
 LIGHT_BRIDGE_MAX_BINS = 5
 # Lateral gap from the lidar origin to the support's current left edge at the
 # bypass point: keeps the support above the detector's minimum range while it
@@ -167,9 +174,12 @@ class ManeuverSequence(TurnMotion):
         self.max_presteer_s = PRESTEER_MAX_S
         self.continue_route = continue_route
         self.target_tracker = (CompactTargetTracker(maintenance_bearing_rad=(-math.pi, math.pi),
-                                                   select_associated=True)
+                                                   select_associated=True, unconfirmed_boundary_gap=True)
                                if continue_route else CompactTargetTracker())
         self.compact_target = None
+        self._route_left_hold_since = None
+        self.left_overshoot_evidence = None
+        self._last_seen_compact = None  # (receive time, copy) of the latest first-tracker observation
         self._last_confirmed_compact_target = None
         self.compact_target_error = None
         self.compact_loss_evidence = None
@@ -1175,9 +1185,53 @@ class ManeuverSequence(TurnMotion):
         return True
 
     def begin_coast(self, reason, now):
+        seen = self._last_seen_compact
+        target_on_left = (seen is not None and _number(now) and 0 <= now-seen[0] < SCAN_AGE_S
+                          and _number(seen[1].get('bearing_left_rad')) and _number(seen[1].get('range_m'))
+                          and 0 < seen[1]['bearing_left_rad'] < math.pi
+                          and seen[1]['range_m'] <= ORBIT_REBIND_MAX_RANGE_M+.3)
+        if (reason == 'left_turn_heading_overshoot' and self.continue_route and self.phase == 'drive'
+                and not self.handover_observed and self.route_stage == 'first_target'
+                and self._route_left_hold_since is None and NEUTRAL < self.servo <= SERVO_MAX
+                and target_on_left and now >= self.last_now):
+            # Trial51: a (not yet confirmed) first-target identity was just
+            # observed on the left; the rule passes it anticlockwise, so keep
+            # the adopted left while its confirmation/handover is checked.
+            # Without such live evidence the original coast applies (no
+            # course-shaped assumption that the route always keeps turning).
+            self._route_left_hold_since = now
+            self.left_overshoot_evidence = {'at': now, 'held_servo': self.servo,
+                'scan_seq': (self._current_scan or {}).get('seq'),
+                'last_seen_first_target': copy.deepcopy(seen[1]), 'last_seen_age_s': now-seen[0],
+                'tracker_reason': getattr(self.target_tracker, 'reason', None),
+                'basis': 'left_turn_past_exit_axis_with_live_first_target_identity_on_left'}
+            self.steering_target = self.servo
+            self.reason = 'route_left_turn_overshoot_hold_left'
+            return
         if self.phase not in ('coast', 'locked') and _number(now) and now >= self.last_now:
             self.coast_since = now
         super().begin_coast(reason, now)
+
+    def _route_left_hold_update(self, scan, lidar_age_s, now, control, safe, presteer_wait):
+        """Held left at drive power after a route left-turn overshoot (trial51)."""
+        advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, presteer_wait)
+        if self.phase == 'locked':
+            return self._result(self.last_now)
+        held = self.left_overshoot_evidence['held_servo']
+        if (now-self.drive_since+1e-9 >= self.max_drive_s
+                or now-self._route_left_hold_since+1e-9 >= ROUTE_LEFT_OVERSHOOT_HOLD_S):
+            reason = ('maneuver_cumulative_drive_timeout' if now-self.drive_since >= self.max_drive_s
+                      else 'route_left_turn_overshoot_hold_expired')
+            self._route_left_hold_since = None
+            if not self._begin_adopted_left_coast(reason, now, control, require_handover=False):
+                self.begin_coast(reason, now)
+            self._slew(now)
+            return self._result(now)
+        if advancing:
+            self.steering_target = held
+            self.reason = 'route_left_turn_overshoot_hold_left'
+            self._slew(now)
+        return self._result(now)
 
     def _exit_width_change_limit(self, previous_width):
         # Operator permits moderate changes in the live exit-width estimate.
@@ -1367,6 +1421,8 @@ class ManeuverSequence(TurnMotion):
             neutral_pause_kind=self.neutral_pause_kind,
             recovery_count=self.recovery_count,
             recovery_evidence=copy.deepcopy(self.recovery_evidence),
+            route_left_hold_active=self._route_left_hold_since is not None,
+            left_overshoot_evidence=copy.deepcopy(self.left_overshoot_evidence),
             route_avoid=copy.deepcopy(self._avoid), avoid_count=self.avoid_count,
             avoid_evidence=copy.deepcopy(self.avoid_evidence),
             wait_steering_changes=self.wait_steering_changes,
@@ -2424,6 +2480,7 @@ class ManeuverSequence(TurnMotion):
                     self.reason = 'compact_handover_waiting_adopted_left'
                 return self._result(now)
             self.handover_observed = True
+            self._route_left_hold_since = None
             just_handed_over = True
             self.orbit_since = now
             self.orbit_reference_range_m = self.compact_target['range_m']
@@ -2502,6 +2559,8 @@ class ManeuverSequence(TurnMotion):
         except (ValueError, TypeError, KeyError) as error:
             self.compact_target = None
             self.compact_target_error = type(error).__name__
+        if isinstance(self.compact_target, dict) and _number(now):
+            self._last_seen_compact = (now, copy.deepcopy(self.compact_target))
         if entry_stop is not None:
             # The new trial is target tracking, not the old optional stop input.
             self.lock('unsupported_maneuver_entry_stop')
@@ -2518,9 +2577,13 @@ class ManeuverSequence(TurnMotion):
                 or (self.phase == 'coast' and (self.wall_ambiguity_hold
                                                or self.quality_coast_servo is not None))
                 or (self.phase == 'drive' and self._usable_target(self.compact_target, scan))):
+            if self.handover_observed:
+                self._route_left_hold_since = None
             return self._orbit_update(scan, lidar_age_s, now, control,
                                       safe=safe, presteer_wait=presteer_wait,
                                       quality_clear=quality_clear, quality_resume_ready=quality_resume_ready)
+        if self._route_left_hold_since is not None and self.phase == 'drive':
+            return self._route_left_hold_update(scan, lidar_age_s, now, control, safe, presteer_wait)
         self.wall_ambiguity_hold = False
         feedback_tick = control.get('tick') if isinstance(control, dict) else None
         self._presteer_adoption_context = {

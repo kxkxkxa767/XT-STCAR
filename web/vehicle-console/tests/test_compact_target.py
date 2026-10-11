@@ -39,6 +39,37 @@ def projected_gap_scan(seq=4, published=400, received=.4, *, gap_count=4, side=1
     return scan
 
 
+class UnconfirmedBoundaryGapTests(unittest.TestCase):
+    @staticmethod
+    def edge_gap_scan(seq):
+        # Trial51 scan357: two null bins at one support edge (beam split).
+        value = compact_scan(seq, seq*100, seq/10)
+        middle = round(-90.) % 360
+        value['ranges'][(middle+5) % 360] = value['ranges'][(middle+6) % 360] = None
+        return value
+
+    def run_frames(self, flag):
+        tracker = MODULE.CompactTargetTracker(maintenance_bearing_rad=(-math.pi, math.pi),
+                                              select_associated=True, unconfirmed_boundary_gap=flag)
+        return [tracker.update(compact_scan(seq, seq*100, seq/10) if seq % 2 else self.edge_gap_scan(seq), seq/10)
+                for seq in (1, 2, 3, 4, 5)]
+
+    def test_trial51_opt_in_keeps_unconfirmed_identity_through_edge_gap_frames(self):
+        results = self.run_frames(True)
+        self.assertEqual([r['track_id'] for r in results], [1]*5)
+        self.assertEqual([r['confirmation_count'] for r in results], [1, 1, 2, 2, 3])
+        self.assertEqual([r['tracking_only_boundary_gap'] for r in results], [False, True, False, True, False])
+        self.assertEqual([r['confirmed'] for r in results], [False]*4+[True])
+        self.assertEqual(results[1]['last_full_isolation_seq'], 1)  # a gap frame never renews isolation
+
+    def test_default_tracker_still_forgets_unconfirmed_identity_on_edge_gap(self):
+        results = self.run_frames(False)
+        self.assertEqual([r and r['track_id'] for r in results], [1, None, 2, None, 3])
+        self.assertFalse(any(r and r['confirmed'] for r in results))
+        with self.assertRaises(ValueError):
+            MODULE.CompactTargetTracker(unconfirmed_boundary_gap=1)
+
+
 class CompactTargetTests(unittest.TestCase):
     def confirmed(self, *, distance=1., size=9):
         tracker = MODULE.CompactTargetTracker()
