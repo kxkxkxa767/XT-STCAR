@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "46 (a15115a) ran once: left turn, first target, orbit wait, observed-side exit alignment; the pursuit oscillated, passed the second support on the correct (right) side without a handover, then stopped at the board ahead. Operator: both cones passed; next, keep turning left to the traffic light and end facing it.",
+  "latest_trial_status": "47 (644b861) ran once: first-target handover, then one scan_incomplete frame hid the cone edge; the orbit wait was refused and the terminal held coast circled the cone to a stop (no contact). Round-48 candidate: self-recovery holds that keep re-checking whether the task can resume.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16204,8 +16204,8 @@
   "after46_light_lane_turn_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 47,
     "user_instruction": "2026-10-11 用户：这一次你可以加上绕桶后转弯的任务了，注意要让摄像头能识别出红绿灯，而且这个地方车速要慢，因为红绿灯是由车身碰到红外传感器而触发读秒的；红绿灯与人行横道识别由YOLO负责（本改动不做灯识别）。",
     "change": {
@@ -16226,6 +16226,77 @@
       "Unknown whether 1550 keeps the car moving through tight turns (stall would end the run at neutral).",
       "Alignment uses scan symmetry, not the light itself; YOLO must confirm the light is visible.",
       "No stop at the light zone yet (needs YOLO red/green); the run ends with a coast once aligned."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "644b861a81345ee758baef37ac145c70274022a2",
+      "archive_sha256": "a8add9a09378a1cdc472af098cce426c68d992fd9bf19ada6fa189828726e8b6",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn47-20261011-094304",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn47-20261011-094304",
+      "helper_sha256": "ad69079afe6b9537805037e2994bc1de530eff49b6dfa757d251b95278f24e41",
+      "helper_changes": "--max-seconds 16 (route budget) and observer cutoff 34 s; otherwise helper 46",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before47-fresh.json / after47-deploy-fresh.json / pre47-run-fresh.json: six fresh locked ready samples each, 14 hashes match"
+    }
+  },
+  "turn47_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "644b861a81345ee758baef37ac145c70274022a2",
+    "start_geometry": "front wall 2.15 m, board end .51 m, width 1.64 m, exit 90.1 deg, incoming -1.6 deg, lateral .29 m, presteer cap 1660.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-47/ (7 files sha256 match trial47-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 12.57,
+    "observer_stop_requested": false,
+    "terminal": "route quality coast (turn_perception_unavailable, held 1685) then coast_standstill_unconfirmed at the 5 s coast limit",
+    "operator_report": "用户：这一次第一个锥桶都没绕过去，但没碰到墙；希望加入自恢复：很多时候没碰挡板但因各种原因停下，位置仍能继续下个任务；要一直检查是否能再次执行下一次任务",
+    "physical_contact": false,
+    "timeline": {
+      "left_turn": "normal; front nulls 9..12 bridged (round-46 bridging active); handover 395 (track 1, 1.09 m, 75 deg); orbit entry 1655->1685.",
+      "fault": "scan 401 (not saved) scan_incomplete -> orbit wait refused: target_not_fully_isolated (support edge hidden in that frame) -> terminal held coast 1685. Same failure class as trial41.",
+      "after": "tracker forgot track 1 and re-acquired the same support as track 2 at 403 (.16 m from the last full sighting); coasting with held left the car circled at ~.7 m and stopped (min gap .15 m); standstill detector superseded -> 5 s limit."
+    },
+    "round47_changes_exercised": {
+      "bridging": "yes (front nulls bridged, no front_sparse)",
+      "slow_section/exit/second/light": "no (never reached the first pass)"
+    },
+    "post_trial_lock": "after.json and after47-trial-fresh.json: six fresh samples healthy, owner None, locked, unarmed, 1500/1500.",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after47_self_recovery_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 48,
+    "user_instruction": "2026-10-11 用户：加一个自恢复执行任务……位置还能继续下个任务；要一直检查是否能再次执行下一次任务。",
+    "principle": "Explicit route mode: a non-protective stop becomes a neutral hold (motor 1500, ACKed steering held) that re-checks on every fresh scan whether the current task can resume, and resumes after .30 s of clean quality plus readiness. No fixed retry count; only the total deadline and cumulative drive budget bound it. Protective stops stay terminal: body proximity, stale/reordered scans or clocks, bridge lock/link loss, deadlines, feedback mismatch.",
+    "change": {
+      "orbit_wait": "Entry no longer needs the cone fully isolated in the trigger frame if the same orbit support was last fully isolated < .30 s ago (anchor). Missing/partial support inside the wait only holds (no lock). A new identity whose first sighting lies within .30 m (tracker association gate) of the last full sighting, seen within .60 s, is re-bound once it confirms. Resume still needs the confirmed, fully isolated orbit support. Orbit target loss/identity change now enters this wait instead of a terminal coast.",
+      "repeatable_pauses": "Left-turn pause and orbit wait are no longer single-use (recovery_count reported).",
+      "post_pass_pause": "After the first pass, quality faults (scan_incomplete / bounded front_sparse) pause at neutral holding the ACKed command (right allowed, 1350..1720) instead of halting; resume in the same stage when quality is clean and the stage input is observed again.",
+      "recovery_hold": "After the first pass, exit/corridor losses beyond their lease (missing, ambiguous, identity change, invalid), exit budget, corridor body-margin rule, light-stage budget and missing free space enter a neutral recovery hold. Readiness: a valid forward corridor with body gap >= .08 m (exit/corridor), free space (light). Stage clocks restart on resume; budgets never renew.",
+      "second_target_loss": "Second-target loss or second-entry timeout returns to corridor_follow (re-acquires), instead of a terminal coast.",
+      "server": "post-pass pause branch; motion-initiated waits/holds detected (drive -> quality_wait) and given fresh neutral/resume sequences; eligibility accepts held right commands for post-pass pauses/recovery holds and a pending neutral while the bridge still reports 1550."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route 74, test_route_control 33, test_maneuver_sequence 63, compact 46+17: 232 passed (11 terminal-semantics tests rewritten to recovery semantics; new: anchor entry, reacquire+rebind+resume, post-pass pause, server post-pass pause, orbit target loss recovery).",
+      "default_suites": "test_turn_quality_coast/test_turn_control/test_coast_control/test_autonomy_live failure set identical (49 pre-existing)."
+    },
+    "risks_not_resolved": [
+      "Repeated hold/resume cycles near walls are bounded only by the deadline and drive budget.",
+      "Coast standstill detection still superseded on the car (holds end by readiness, not by standstill).",
+      "Round-47 light-lane turn, slow section and exit changes still physically untested."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

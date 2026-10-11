@@ -1063,7 +1063,9 @@ class Console:
                 or type(clearance.get('scan_seq')) is not int or clearance['scan_seq'] != scan['seq']
                 or set(clearance.get('quality_issues', [])) != issues
                 or not issues <= {'scan_incomplete', 'front_sparse'}
-                or type(held) is not int or not 1500 <= held <= SERVO_MAX
+                or type(held) is not int
+                or not (RIGHT_EXIT_MIN_PWM if session.get('quality_wait_kind') in ('post_pass_pause', 'recovery_hold')
+                        else 1500) <= held <= SERVO_MAX
                 or control.get('armed') is not True or not self.turn_wait_servo_matches(session, control)
                 or control.get('seq', -1) < self.arm_sequence):
             return False
@@ -1071,7 +1073,7 @@ class Console:
                        and control.get('motor') == 1500)
         # Pending neutral is tolerated only before its first ACK. Once ACKed,
         # positive motor feedback cannot be relabeled as continued waiting.
-        pending_neutral = (control.get('motor') == TRIAL_MOTOR
+        pending_neutral = (control.get('motor') in DRIVE_MOTORS  # 1550 after the first pass
                            and (neutral_seq is None or control.get('seq', -1) < neutral_seq))
         if not neutral_ack and not pending_neutral:
             return False
@@ -1220,6 +1222,24 @@ class Console:
                     and set(report.get('quality_issues', []))
                     and set(report.get('quality_issues', [])) <= {'scan_incomplete', 'front_sparse'}
                     and self.turn_quality_hold_eligible(session, route_entry=True)
+                    and motion.begin_post_pass_quality_pause(now, turn_control,
+                        scan={**self.scan, 'received_at': self.scan_at})):
+                # Self-recovery after the first pass: pause at neutral holding
+                # the ACKed command, re-check, resume; no halt on one bad frame.
+                session['phase'] = report['phase'] = 'quality_wait'
+                session['quality_wait_neutral_sequence'] = None
+                session['quality_resume_sequence'] = None
+                session['quality_wait_kind'] = 'post_pass_pause'
+                session['quality_wait_front_sparse_entry'] = 'front_sparse' in report['quality_issues']
+                report['post_pass_pause_trigger'] = {
+                    'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
+                    'quality_issues': list(report['quality_issues']), 'adopted_servo': control['servo'],
+                    'route_stage': motion.route_stage, 'control_seq': control['seq']}
+            elif (route and session.get('phase') == motion.phase == 'drive'
+                    and control.get('seq', -1) >= self.arm_sequence
+                    and set(report.get('quality_issues', []))
+                    and set(report.get('quality_issues', [])) <= {'scan_incomplete', 'front_sparse'}
+                    and self.turn_quality_hold_eligible(session, route_entry=True)
                     and motion.begin_route_quality_coast(now, turn_control)):
                 # Trial41/42: a refused wait or front_sparse halted and centered
                 # while rolling, in orbit entry and in the left turn. Cut motor,
@@ -1302,6 +1322,18 @@ class Console:
             self.begin_coast(decision['reason'], now)
             self.coast_tick(session, now, True, decision['servo'])
             return
+        if route and session.get('phase') == 'drive' and decision['phase'] == 'quality_wait':
+            # Motion-initiated self-recovery (target lost in the orbit, or a
+            # recoverable stop after the first pass): the same neutral wait
+            # gates, ACK sequences and output checks apply from this tick.
+            session['quality_wait_neutral_sequence'] = None
+            session['quality_resume_sequence'] = None
+            session['quality_wait_kind'] = ('recovery_hold' if getattr(motion, 'neutral_pause_kind', None) == 'recovery'
+                                            else 'orbit_wait')
+            session['quality_wait_front_sparse_entry'] = False
+            report['recovery_hold_trigger'] = {'scan_seq': self.scan['seq'], 'reason': decision.get('reason'),
+                'route_stage': decision.get('route_stage'), 'held_servo': decision['servo'],
+                'recovery_count': decision.get('recovery_count')}
         session['phase'] = report['phase'] = decision['phase']
         motor, servo = decision['motor'], decision['servo']
         right_exit = (session.get('maneuver_sequence') is True and isinstance(motion, ManeuverSequence)
@@ -1340,8 +1372,10 @@ class Console:
         if route and decision.get('quality_resume_pending') is True and (
                 motor != TRIAL_MOTOR or servo != motion.quality_wait_servo):
             raise ValueError('invalid_turn_quality_resume_output')
-        resume_key = ('left_turn_pause_resume_snapshot' if session.get('quality_wait_kind') == 'left_turn_pause'
-                      else 'quality_resume_snapshot')
+        resume_key = {'left_turn_pause': 'left_turn_pause_resume_snapshot',
+                      'post_pass_pause': 'post_pass_pause_resume_snapshot',
+                      'recovery_hold': 'recovery_hold_resume_snapshot'}.get(session.get('quality_wait_kind'),
+                                                                            'quality_resume_snapshot')
         if (route and turn_control['resume_acked'] and session.get('quality_resume_sequence') is not None
                 and resume_key not in report and not decision.get('lock_requested')):
             report[resume_key] = self.turn_quality_snapshot(session, turn_control, now)

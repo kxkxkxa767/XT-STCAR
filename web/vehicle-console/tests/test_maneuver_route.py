@@ -122,8 +122,34 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertTrue(motion.begin_left_turn_quality_pause(.5, feedback(5, 1660), scan=observation(5)))
         self.assertEqual((motion.phase, motion.quality_wait_servo), ('quality_wait', 1660))
         self.assertFalse(motion.quality_wait_used)
-        motion.phase = 'drive'  # even after a resume, the pause is never reused
-        self.assertFalse(motion.begin_left_turn_quality_pause(.6, feedback(6, 1660), scan=observation(6)))
+        motion.phase, motion.neutral_pause_kind = 'drive', None  # after a resume it may pause again
+        self.assertTrue(motion.begin_left_turn_quality_pause(.6, feedback(6, 1660), scan=observation(6)))
+        self.assertEqual(motion.recovery_count, 2)
+
+    def test_post_pass_quality_pause_holds_right_command_then_resumes_same_stage(self):
+        motion = self.route('right_align', servo=1460)
+        self.assertTrue(motion.begin_post_pass_quality_pause(.5, feedback(5, 1460, motor=1550),
+                                                             scan=observation(5)))
+        self.assertEqual((motion.phase, motion.quality_wait_servo, motion.neutral_pause_kind),
+                         ('quality_wait', 1460, 'post_pass'))
+        for seq in range(6, 12):
+            result = self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
+            self.assertEqual(result['servo'], 1460)
+            if result['quality_resume_pending']:
+                break
+        self.assertEqual((result['motor'], result['route_stage']), (1560, 'right_align'))
+        result = self.step(motion, seq+1, motor=1560, resume_acked=True)
+        self.assertFalse(result['quality_resume_pending'])
+        result = self.step(motion, seq+2)
+        self.assertEqual(result['motor'], ROUTE_SLOW_MOTOR)  # back to the slow section
+        self.assertIsNotNone(result['post_pass_pause_evidence'])
+
+    def test_post_pass_pause_refused_before_first_pass_or_unacked(self):
+        motion = self.route('right_align', servo=1460)
+        self.assertFalse(motion.begin_post_pass_quality_pause(
+            .5, feedback(5, 1460, command_acked=False), scan=observation(5)))
+        motion.first_pass_evidence = None
+        self.assertFalse(motion.begin_post_pass_quality_pause(.5, feedback(5, 1460), scan=observation(5)))
 
     def test_wait_requires_current_full_original_target_and_actual_left_ack(self):
         for invalid in ('ack', 'motor', 'servo', 'partial', 'identity', 'old', 'passed'):
@@ -137,6 +163,12 @@ class ManeuverRouteTests(unittest.TestCase):
                 if invalid == 'identity': value = observation(5, first=120.)
                 if invalid == 'old': value['received_at'] = .1
                 if invalid == 'passed': motion.first_pass_evidence = {'track_id': 1}
+                if invalid in ('partial', 'identity'):
+                    # Trial41/47: anchored on the fresh previous full sighting;
+                    # resuming still needs the orbit support back (see below).
+                    self.assertTrue(motion.begin_quality_wait(.5, control, scan=value))
+                    self.assertEqual(motion.quality_wait_anchor['basis'], 'previous_fresh_full_isolation')
+                    continue
                 self.assertFalse(motion.begin_quality_wait(.5, control, scan=value))
 
     def test_quality_wait_matures_new_frames_then_holds_until_actual_resume_ack(self):
@@ -155,7 +187,9 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertEqual(result['servo'], 1670)
         self.assertFalse(result['quality_resume_pending'])
         self.assertEqual((motion.drive_since, motion.orbit_since), (.4, .4))
-        self.assertFalse(motion.begin_quality_wait(1., feedback(10), scan=observation(10)))
+        # Self-recovery: another fault may wait again (budgets still bound it).
+        self.assertTrue(motion.begin_quality_wait(1., feedback(10), scan=observation(10)))
+        self.assertEqual(motion.recovery_count, 2)
 
     def test_bad_quality_resets_maturity_and_service_permission_is_required(self):
         motion = self.begin_wait()
@@ -224,19 +258,65 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertEqual(result['right_exit_geometry']['source_seq'], 12)
         self.assertLess(result['servo'], 1670)
 
-    def test_wait_hard_fault_partial_or_identity_loss_cannot_resume(self):
-        for invalid in ('partial', 'missing', 'identity', 'servo', 'unsafe'):
+    def test_wait_hard_faults_lock_but_target_loss_only_holds_without_resume(self):
+        for invalid in ('servo', 'unsafe'):
             with self.subTest(invalid=invalid):
                 motion = self.begin_wait()
                 value, control = observation(5), feedback(5, motor=1500, neutral_acked=True)
-                if invalid == 'partial': value['ranges'][265] = None
-                if invalid == 'missing': value['ranges'] = [3.]*360
-                if invalid == 'identity': value = observation(5, first=120.)
                 if invalid == 'servo': control['servo'] = 1660
                 result = motion.update(value, 0., .5, control, safe=invalid!='unsafe',
                                        quality_clear=True, quality_resume_ready=True)
                 self.assertTrue(result['lock_requested'])
                 self.assertEqual(result['motor'], 1500)
+        # Trial41/47: a partial/missing support or another object far from the
+        # last full sighting only holds the neutral wait; power never resumes.
+        for invalid in ('partial', 'missing', 'identity'):
+            with self.subTest(invalid=invalid):
+                motion = self.begin_wait()
+                for seq in (5, 6, 7, 8, 9):
+                    value, control = observation(seq), feedback(seq, motor=1500, neutral_acked=True)
+                    if invalid == 'partial': value['ranges'][265] = None
+                    if invalid == 'missing': value['ranges'] = [3.]*360
+                    if invalid == 'identity': value = observation(seq, first=120.)
+                    result = motion.update(value, 0., seq/10, control,
+                                           quality_clear=True, quality_resume_ready=True)
+                    self.assertFalse(result['lock_requested'])
+                    self.assertEqual((result['phase'], result['motor']), ('quality_wait', 1500))
+                    self.assertFalse(result['quality_resume_pending'])
+                self.assertIsNone(result['quality_wait_rebind'])
+
+    def test_wait_entry_uses_fresh_full_anchor_when_trigger_frame_is_partial(self):
+        motion = self.seeded()
+        value = observation(5, first=self.bearing)
+        value['ranges'][self.edge()] = None  # trial47 scan401: edge return missing
+        self.assertTrue(motion.begin_quality_wait(.5, feedback(5), scan=value))
+        self.assertEqual(motion.quality_wait_anchor['basis'], 'previous_fresh_full_isolation')
+        stale = self.seeded()
+        stale.compact_target = dict(stale.compact_target, last_full_isolation_received_at=.1)
+        value = observation(5, first=self.bearing)
+        value['ranges'][self.edge()] = None
+        self.assertFalse(stale.begin_quality_wait(.5, feedback(5), scan=value))
+        self.assertEqual(stale.quality_wait_refusal['reason'], 'target_not_fully_isolated')
+
+    def test_wait_rebinds_reacquired_support_near_last_full_sighting_then_resumes(self):
+        self.bearing = self.HOLD_BEARING
+        motion = self.begin_wait()
+        old_id = motion.orbit_track_id
+        control = lambda seq: feedback(seq, motor=1500, neutral_acked=True)
+        # Support vanishes (tracker forgets the identity), then returns in place.
+        missing = observation(5, first=self.bearing)
+        for i in range(275, 290): missing['ranges'][i] = 3.
+        result = motion.update(missing, 0., .5, control(5), quality_clear=True, quality_resume_ready=True)
+        self.assertEqual(result['reason'], 'route_quality_wait_target_reacquiring')
+        for seq in range(6, 14):
+            result = self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
+            if result['quality_resume_pending']:
+                break
+        self.assertIsNotNone(result['quality_wait_rebind'])
+        self.assertEqual(result['quality_wait_rebind']['old_track_id'], old_id)
+        self.assertNotEqual(motion.orbit_track_id, old_id)
+        self.assertTrue(result['quality_resume_pending'])
+        self.assertIn('quality_wait_target_rebind', result['route_events'])
 
     def test_neutral_and_resume_ack_deadlines_and_original_orbit_budget(self):
         self.bearing = self.HOLD_BEARING
@@ -310,14 +390,27 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertEqual(result['motor'], ROUTE_SLOW_MOTOR)  # slow section after the first pass
         self.assertFalse(result['second_target_handover_observed'])
 
-    def test_ambiguous_corridor_and_right_budget_still_stop(self):
+    def test_ambiguous_corridor_or_exit_budget_holds_then_resumes_when_corridor_returns(self):
+        # Self-recovery: a recoverable stop holds at neutral and keeps checking.
         for failure in ('ambiguous', 'budget'):
-            motion = self.route()
-            value = observation(5)
-            if failure == 'ambiguous': value['corridor_candidates'].append(corridor(-24.))
-            else: motion.right_exit_since = -2.5
-            result = motion.update(value, 0., .5, feedback(5, 1500))
-            self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+            with self.subTest(failure=failure):
+                motion = self.route()
+                value = observation(5)
+                if failure == 'ambiguous': value['corridor_candidates'].append(corridor(-24.))
+                else: motion.right_exit_since = -2.5
+                result = motion.update(value, 0., .5, feedback(5, 1500))
+                self.assertEqual((result['phase'], result['motor']), ('quality_wait', 1500))
+                self.assertEqual(result['neutral_pause_kind'], 'recovery')
+                for seq in range(6, 12):
+                    result = self.step(motion, seq, quality=True, ready=True, neutral_acked=True)
+                    if result['quality_resume_pending']:
+                        break
+                self.assertTrue(result['quality_resume_pending'])
+                self.assertEqual(result['motor'], 1560)
+                result = self.step(motion, seq+1, motor=1560, resume_acked=True)
+                self.assertFalse(result['quality_resume_pending'])
+                self.assertIsNone(result['neutral_pause_kind'])
+                self.assertGreater(motion.right_exit_since, .5)  # fresh stage clock
 
     def test_corridor_left_then_right_requires_new_actual_center_ack(self):
         motion = self.route('corridor_follow')
@@ -497,12 +590,16 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertEqual(result['second_center_ack']['seq'], 7)
         self.assertEqual(result['servo'], 1500-ROUTE_POST_PASS_PWM_STEP)
 
-    def test_second_loss_is_terminal_and_does_not_reacquire(self):
+    def test_second_loss_returns_to_corridor_follow_and_reacquires(self):
         motion, _ = self.second_handover()
         result = self.step(motion, 9, heading=0.)
-        self.assertEqual(result['reason'], 'second_target_lost_or_identity_changed')
-        result = self.step(motion, 10, second=-45., heading=0.)
-        self.assertEqual(result['motor'], 1500)
+        self.assertEqual(result['reason'], 'second_target_lost_back_to_corridor')
+        self.assertEqual((result['phase'], result['route_stage']), ('drive', 'corridor_follow'))
+        for seq in range(10, 16):
+            result = self.step(motion, seq, second=-45., heading=0.)
+            if result['route_stage'] == 'second_orbit':
+                break
+        self.assertEqual(result['route_stage'], 'second_orbit')
         self.assertFalse(result['two_target_observed_pass_complete'])
 
     def test_second_complete_observed_support_requires_three_frames_and_rear(self):
@@ -1048,7 +1145,7 @@ class ManeuverRouteTests(unittest.TestCase):
         value = observation(8)
         value['corridor_candidates'] = []
         result = motion.update(value, 0., .8, feedback(8, 1500))
-        self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+        self.assertEqual((result['phase'], result['motor']), ('quality_wait', 1500))  # recovery hold
         self.assertGreaterEqual(result['servo'], 1500)
 
     def test_first_pass_frame_lease_only_releases_until_a_current_corridor_exists(self):
@@ -1067,7 +1164,9 @@ class ManeuverRouteTests(unittest.TestCase):
         value = observation(8)
         value['corridor_candidates'] = []
         result = motion.update(value, 0., .8, feedback(8, 1534))
-        self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
+        # After the lease: a recovery hold (keeps re-checking), not a terminal coast.
+        self.assertEqual((result['phase'], result['motor']), ('quality_wait', 1500))
+        self.assertEqual(result['neutral_pause_kind'], 'recovery')
 
     def test_real39_actual_frames_release_inside_wait_before_resume(self):
         """Actual saved 466..489 ranges/publication; ACKs/receipt/wait entry MOCKED.
@@ -1268,7 +1367,10 @@ class LightLaneTests(unittest.TestCase):
         while result['phase'] == 'drive' and seq < 5+int(LIGHT_STAGE_MAX_S*10)+5:
             seq += 1
             result = self.step(motion, seq, junction(-1.))
-        self.assertEqual(result['reason'], 'light_stage_timeout')
+        # The light stage budget leads to a recovery hold that keeps checking.
+        self.assertEqual(result['reason'], 'route_recovery_hold_neutral')
+        self.assertEqual(result['recovery_evidence']['cause'], 'light_stage_timeout')
+        self.assertEqual((result['phase'], result['motor']), ('quality_wait', 1500))
         self.assertLess(seq/10-.4, LIGHT_STAGE_MAX_S+.2)
 
     def test_exit_alignment_also_acquires_the_second_target(self):

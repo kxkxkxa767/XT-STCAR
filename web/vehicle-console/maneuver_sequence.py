@@ -79,6 +79,14 @@ LIGHT_HEADINGS_DEG = tuple(range(-100, 101, 2))
 # or unbracketed run blocks at this short range so no heading or alignment
 # is chosen through it.
 LIGHT_UNKNOWN_BLOCK_M = .60
+# Trial41/47: the scan_incomplete frame that triggers the orbit wait can hide
+# the first support's edge, and the tracker may then re-acquire the same
+# support under a new ID. The wait may start from the last FULL isolation of
+# the orbit support if it is fresh, holds through missing frames, and re-binds
+# a new identity only if its first sighting lies within the tracker's own
+# association gate of that last full sighting and it then confirms.
+QUALITY_WAIT_REBIND_M = .30
+QUALITY_WAIT_REBIND_WINDOW_S = .60
 LIGHT_BRIDGE_MAX_BINS = 5
 # Lateral gap from the lidar origin to the support's current left edge at the
 # bypass point: keeps the support above the detector's minimum range while it
@@ -156,6 +164,13 @@ class ManeuverSequence(TurnMotion):
         self.left_turn_pause_used = False
         self.left_turn_pause_evidence = None
         self.left_turn_pause_geometry_error = None
+        # Self-recovery (trial47 operator): recoverable stops hold at neutral
+        # and keep re-checking whether the current task can resume; only the
+        # total deadline and cumulative drive budget bound how often.
+        self.neutral_pause_kind = None
+        self.recovery_count = 0
+        self.recovery_evidence = None
+        self.post_pass_pause_evidence = None
         self.quality_coast_reason = None
         self.entry_bearing_required = False
         self.entry_bearing_released = False
@@ -178,6 +193,9 @@ class ManeuverSequence(TurnMotion):
         self.quality_wait_release = None
         self.quality_wait_previous_servo = None
         self._wait_release_history = []
+        self.quality_wait_anchor = None
+        self.quality_wait_rebind = None
+        self._wait_rebind_candidate = None
         self.first_exit_prepare_evidence = None
         self.right_exit_since = None
         self.right_exit_center_ack = None
@@ -379,7 +397,7 @@ class ManeuverSequence(TurnMotion):
                 'control_servo': control.get('servo'), 'command_acked': control.get('command_acked'),
                 'servo': self.servo, 'scan_seq': scan.get('seq') if isinstance(scan, dict) else None}
             return False
-        if (not self.continue_route or self.quality_wait_used or self.phase != 'drive'
+        if (not self.continue_route or self.phase != 'drive'
                 or not self.handover_observed or self.first_pass_evidence is not None
                 or self.right_exit_since is not None or self.route_stage != 'first_target'
                 or not _number(now) or now < self.last_now):
@@ -392,10 +410,27 @@ class ManeuverSequence(TurnMotion):
         if (not isinstance(scan, dict) or not _number(scan.get('received_at'))
                 or not 0 <= now-scan['received_at'] < SCAN_AGE_S):
             return refuse('scan_stale')
+        previous = self.compact_target  # the last frame's target, before this scan
         observed = self.target_tracker.update(scan, now, acquire=True)
-        if self._full_target_points(observed, scan, self.orbit_track_id) is None:
-            return refuse('target_not_fully_isolated')
+        if self._full_target_points(observed, scan, self.orbit_track_id) is not None:
+            anchor = {'track_id': observed['track_id'], 'point_left_m': list(observed['point_left_m']),
+                      'received_at': scan['received_at'], 'basis': 'trigger_frame_full_isolation'}
+        else:
+            last = (previous if isinstance(previous, dict) and previous.get('confirmed') is True
+                    else self._last_confirmed_compact_target)
+            if not (isinstance(last, dict) and last.get('track_id') == self.orbit_track_id
+                    and _number(last.get('last_full_isolation_received_at'))
+                    and 0 <= now-last['last_full_isolation_received_at'] < SCAN_AGE_S):
+                return refuse('target_not_fully_isolated')
+            anchor = {'track_id': last['track_id'], 'point_left_m': list(last['point_left_m']),
+                      'received_at': last['last_full_isolation_received_at'],
+                      'basis': 'previous_fresh_full_isolation'}
         self.compact_target = observed
+        self.neutral_pause_kind = None
+        self.recovery_count += 1
+        self.quality_wait_anchor = anchor
+        self.quality_wait_rebind = None
+        self._wait_rebind_candidate = None
         self._current_scan = scan
         self.quality_wait_used = True
         self.quality_wait_since, self.quality_wait_servo = now, self.servo
@@ -420,6 +455,29 @@ class ManeuverSequence(TurnMotion):
         self.steering_target = self.servo
         self._route_event('quality_wait', scan, control, self.quality_wait_evidence)
         return True
+
+    def _quality_wait_rebind(self, scan, control):
+        target, anchor = self.compact_target, self.quality_wait_anchor
+        if (not isinstance(target, dict) or anchor is None or target.get('track_id') == self.orbit_track_id
+                or not isinstance(target.get('point_left_m'), list) or not _number(target.get('source_received_at'))):
+            return None
+        if target.get('confirmation_count') == 1:
+            if (math.dist(target['point_left_m'], anchor['point_left_m']) <= QUALITY_WAIT_REBIND_M
+                    and 0 <= target['source_received_at']-anchor['received_at'] < QUALITY_WAIT_REBIND_WINDOW_S):
+                self._wait_rebind_candidate = target['track_id']
+            return None
+        if target.get('confirmed') is not True or target['track_id'] != self._wait_rebind_candidate:
+            return None
+        points = self._full_target_points(target, scan, target['track_id'])
+        if points is None:
+            return None
+        self.quality_wait_rebind = {'old_track_id': self.orbit_track_id, 'new_track_id': target['track_id'],
+            'source_seq': scan['seq'], 'anchor': copy.deepcopy(anchor),
+            'basis': 'new_identity_first_seen_within_association_gate_of_last_full_orbit_support',
+            'physical_identity_verified': False}
+        self.orbit_track_id = target['track_id']
+        self._route_event('quality_wait_target_rebind', scan, control, self.quality_wait_rebind)
+        return points
 
     def _quality_wait_update(self, scan, now, control, advancing, quality_clear, resume_ready):
         self.steering_target = self.quality_wait_servo
@@ -447,9 +505,18 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         points = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
         if points is None:
+            points = self._quality_wait_rebind(scan, control)
+        if points is None:
+            # Missing/partial support only holds the ACKed neutral wait; power
+            # never resumes without the confirmed, fully isolated orbit support.
             self._clear_exit_prepare_window()
-            self.lock('route_quality_wait_target_unconfirmed')
+            self._quality_good_history.clear()
+            self.steering_target = self.quality_wait_servo
+            self.reason = 'route_quality_wait_target_reacquiring'
             return self._result(now)
+        self.quality_wait_anchor = {'track_id': self.orbit_track_id,
+                                    'point_left_m': list(self.compact_target['point_left_m']),
+                                    'received_at': scan['received_at'], 'basis': 'wait_frame_full_isolation'}
         if quality_clear is not True or not neutral:
             self._clear_exit_prepare_window()
             self._quality_good_history.clear()
@@ -792,7 +859,7 @@ class ManeuverSequence(TurnMotion):
         original drive budget keeps running; nothing here steers.
         """
         scan = self._current_scan if scan is None else scan
-        if (not self.continue_route or self.left_turn_pause_used or self.phase != 'drive'
+        if (not self.continue_route or self.phase != 'drive'
                 or self.handover_observed or self.route_stage != 'first_target'
                 or self.first_pass_evidence is not None or self.right_exit_since is not None
                 or self.quality_resume_pending
@@ -804,19 +871,67 @@ class ManeuverSequence(TurnMotion):
                 or not 0 <= now-scan['received_at'] < SCAN_AGE_S):
             return False
         self.left_turn_pause_used = True
+        self.left_turn_pause_geometry_error = None
+        self._enter_neutral_pause('left_turn', 'route_left_turn_quality_pause_neutral', now, scan, control,
+                                  'quality', 'clean quality over .30 s and current left-turn geometry')
+        return True
+
+    def begin_post_pass_quality_pause(self, now, control, *, scan=None):
+        """Explicit route after the first pass: quality faults pause, not halt."""
+        scan = self._current_scan if scan is None else scan
+        if (not self.continue_route or self.phase != 'drive' or self.first_pass_evidence is None
+                or self.route_stage not in POST_PASS_STAGES or self.quality_resume_pending
+                or not _number(now) or now < self.last_now
+                or control.get('armed') is not True or control.get('motor') not in DRIVE_MOTORS
+                or control.get('command_acked') is not True
+                or not RIGHT_EXIT_MIN_PWM <= control.get('servo', 0) == self.servo <= SERVO_MAX
+                or not isinstance(scan, dict) or not _number(scan.get('received_at'))
+                or not 0 <= now-scan['received_at'] < SCAN_AGE_S):
+            return False
+        self._enter_neutral_pause('post_pass', 'route_post_pass_quality_pause_neutral', now, scan, control,
+                                  'quality', 'clean quality over .30 s and the stage input observed again')
+        return True
+
+    def _begin_recovery_hold(self, cause, now, control):
+        """Explicit route after the first pass: a recoverable stop holds at
+        neutral and keeps re-checking whether the stage can resume. Anything
+        else (or an un-ACKed command) keeps the previous coast."""
+        scan = self._current_scan
+        if (self.continue_route and self.phase == 'drive' and self.first_pass_evidence is not None
+                and self.route_stage in POST_PASS_STAGES and not self.quality_resume_pending
+                and control.get('armed') is True and control.get('command_acked') is True
+                and control.get('servo') == self.servo and RIGHT_EXIT_MIN_PWM <= self.servo <= SERVO_MAX
+                and isinstance(scan, dict) and _number(scan.get('received_at'))
+                and 0 <= self.last_now-scan['received_at'] < SCAN_AGE_S):
+            # The corridor identity restarts from the next fresh observation.
+            self.right_exit_geometry = None
+            self._right_exit_last_receive = self._right_exit_last_publication = None
+            self._route_alignment_history.clear()
+            self._enter_neutral_pause('recovery', 'route_recovery_hold_neutral', now, scan, control,
+                                      cause, 'clean quality over .30 s and the stage input observed again')
+            return True
+        self.begin_coast(cause, now)
+        return False
+
+    def _enter_neutral_pause(self, kind, reason, now, scan, control, cause, resume_requires):
+        self.neutral_pause_kind = kind
+        self.recovery_count += 1
         self.quality_wait_since, self.quality_wait_servo = now, self.servo
         self.quality_wait_previous_servo = None
         self.quality_wait_release = None
         self._quality_good_history.clear()
-        self.left_turn_pause_geometry_error = None
-        self.left_turn_pause_evidence = {'entry_seq': scan['seq'], 'entry_at_ms': scan['at_ms'],
-            'entry_received_at': scan['received_at'], 'held_servo': self.servo,
-            'stage': 'left_turn_before_target_handover', 'maximum_resumes': 1,
-            'resume_requires': 'clean quality over .30 s and current left-turn geometry'}
-        self.phase, self.reason = 'quality_wait', 'route_left_turn_quality_pause_neutral'
+        evidence = {'kind': kind, 'cause': cause, 'stage': self.route_stage, 'entry_seq': scan['seq'],
+                    'entry_at_ms': scan['at_ms'], 'entry_received_at': scan['received_at'],
+                    'held_servo': self.servo, 'recovery_count': self.recovery_count,
+                    'resume_requires': resume_requires}
+        if kind == 'left_turn':
+            self.left_turn_pause_evidence = evidence
+        elif kind == 'post_pass':
+            self.post_pass_pause_evidence = evidence
+        self.recovery_evidence = evidence
+        self.phase, self.reason = 'quality_wait', reason
         self.steering_target = self.servo
-        self._route_event('left_turn_quality_pause', scan, control, self.left_turn_pause_evidence)
-        return True
+        self._route_event('neutral_pause_'+kind, scan, control, evidence)
 
     def _left_turn_pause_geometry(self, scan, now):
         """Refresh left-turn geometry from this real scan; never steers."""
@@ -842,49 +957,77 @@ class ManeuverSequence(TurnMotion):
         self.left_turn_pause_geometry_error = None
         return True
 
-    def _left_turn_pause_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait,
-                                quality_clear, resume_ready):
+    def _pause_stage_ready(self, scan, now):
+        """Whether the paused task can be executed again from this frame."""
+        kind, stage = self.neutral_pause_kind, self.route_stage
+        if kind == 'left_turn':
+            return self._left_turn_pause_geometry(scan, now)
+        if stage in ('right_align', 'corridor_follow'):
+            _, rejection = self._right_exit_target(scan, now)
+            if rejection is not None:
+                self.right_exit_geometry = None  # restart identity on the next frame
+                self.recovery_evidence['last_readiness_rejection'] = rejection
+                return False
+            return self._corridor_body_gap(self.right_exit_geometry) >= MANEUVER_BODY_CLEARANCE_M
+        if stage == 'light_turn':
+            return self._free_space(scan, self._light_heading) is not None
+        if stage == 'second_orbit':
+            target = self.second_target
+            return (isinstance(target, dict) and target.get('confirmed') is True
+                    and target.get('track_id') == self.second_track_id
+                    and self._full_target_points(target, scan, self.second_track_id) is not None)
+        return False
+
+    def _neutral_pause_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait,
+                              quality_clear, resume_ready):
         advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, presteer_wait)
         if self.phase == 'locked':
             return self._result(self.last_now)
         self.steering_target = self.quality_wait_servo
+        kind = self.neutral_pause_kind
         if (now-self.quality_wait_since >= COAST_MAX_S
                 or now-self.drive_since >= self.max_drive_s):
-            self.lock('route_left_turn_pause_original_budget_expired')
+            self.lock(f'route_{kind}_pause_original_budget_expired')
             return self._result(now)
         if (control.get('servo') != self.quality_wait_servo
-                or control.get('motor') not in (NEUTRAL, TRIAL_MOTOR)):
-            self.lock('route_left_turn_pause_feedback_changed')
+                or control.get('motor') not in (NEUTRAL,)+DRIVE_MOTORS):
+            self.lock(f'route_{kind}_pause_feedback_changed')
             return self._result(now)
         if self.quality_resume_pending:
             if (control.get('resume_acked') is True and control['motor'] == TRIAL_MOTOR
                     and control.get('command_acked') is True):
                 self.quality_resume_pending = False
-                self.left_turn_pause_evidence['resume_ack'] = {k: control.get(k) for k in
-                    ('motor', 'servo', 'seq', 'tick')}
+                self.recovery_evidence['resume_ack'] = {k: control.get(k) for k in ('motor', 'servo', 'seq', 'tick')}
+                # Resume the same task with fresh stage clocks; the total
+                # deadline and cumulative drive budget are never renewed.
+                if self.route_stage == 'right_align' and kind != 'left_turn':
+                    self.right_exit_since = now
+                if self.route_stage == 'light_turn':
+                    self.light_since = now
+                self.neutral_pause_kind = None
             elif now-self.quality_resume_since >= SCAN_AGE_S:
-                self.lock('route_left_turn_pause_resume_ack_timeout')
+                self.lock(f'route_{kind}_pause_resume_ack_timeout')
             # Even the ACK observation keeps the held command on this output.
             return self._result(now)
         if control.get('neutral_acked') is True and control['motor'] != NEUTRAL:
-            self.lock('route_left_turn_pause_feedback_changed')
+            self.lock(f'route_{kind}_pause_feedback_changed')
             return self._result(now)
         neutral = control.get('neutral_acked') is True and control['motor'] == NEUTRAL
         if not neutral and now-self.quality_wait_since >= SCAN_AGE_S:
-            self.lock('route_left_turn_pause_neutral_ack_timeout')
+            self.lock(f'route_{kind}_pause_neutral_ack_timeout')
             return self._result(now)
         if not advancing:
             return self._result(now)
-        if quality_clear is not True or not neutral or not self._left_turn_pause_geometry(scan, now):
+        if quality_clear is not True or not neutral or not self._pause_stage_ready(scan, now):
             self._quality_good_history.clear()
             return self._result(now)
         if not self._mature_observation(self._quality_good_history, scan, .30) or resume_ready is not True:
             return self._result(now)
-        self.phase, self.reason = 'drive', 'route_left_turn_pause_resume_waiting_ack'
+        self.phase, self.reason = 'drive', f'route_{kind}_pause_resume_waiting_ack'
         self.quality_resume_pending, self.quality_resume_since = True, now
-        self.left_turn_pause_evidence.update(resume_seq=scan['seq'], resume_at_ms=scan['at_ms'],
+        self.recovery_evidence.update(resume_seq=scan['seq'], resume_at_ms=scan['at_ms'],
             resume_received_at=scan['received_at'], good_frame_count=len(self._quality_good_history))
-        self._route_event('left_turn_pause_resume_request', scan, control, self.left_turn_pause_evidence)
+        self._route_event(f'{kind}_pause_resume_request', scan, control, self.recovery_evidence)
         return self._result(now)
 
     def begin_route_quality_coast(self, now, control):
@@ -1062,7 +1205,13 @@ class ManeuverSequence(TurnMotion):
             quality_wait_active=self.phase == 'quality_wait',
             quality_wait_servo=self.quality_wait_servo,
             quality_wait_used=self.quality_wait_used,
+            quality_wait_anchor=copy.deepcopy(self.quality_wait_anchor),
+            quality_wait_rebind=copy.deepcopy(self.quality_wait_rebind),
             left_turn_pause_used=self.left_turn_pause_used,
+            neutral_pause_kind=self.neutral_pause_kind,
+            recovery_count=self.recovery_count,
+            recovery_evidence=copy.deepcopy(self.recovery_evidence),
+            post_pass_pause_evidence=copy.deepcopy(self.post_pass_pause_evidence),
             left_turn_pause_evidence=copy.deepcopy(self.left_turn_pause_evidence),
             left_turn_pause_geometry_error=self.left_turn_pause_geometry_error,
             quality_wait_evidence=copy.deepcopy(self.quality_wait_evidence),
@@ -1345,7 +1494,10 @@ class ManeuverSequence(TurnMotion):
 
     def _right_exit_update(self, scan, now, control):
         if now-self.right_exit_since+1e-9 >= RIGHT_EXIT_MAX_S:
-            self.begin_coast('first_target_right_exit_trial_timeout', now)
+            if self.continue_route:
+                self._begin_recovery_hold('first_target_right_exit_trial_timeout', now, control)
+            else:
+                self.begin_coast('first_target_right_exit_trial_timeout', now)
             self._slew(now)
             return self._result(now)
         target, rejection = self._right_exit_target(scan, now)
@@ -1376,6 +1528,9 @@ class ManeuverSequence(TurnMotion):
             elif held:
                 self.steering_target = self.servo
                 self.reason = 'right_exit_corridor_missing_hold'
+            elif self.continue_route:
+                self._begin_recovery_hold(rejection, now, control)
+                self._slew(now)
             else:
                 self.begin_coast(rejection, now)
                 self._slew(now)
@@ -1508,11 +1663,11 @@ class ManeuverSequence(TurnMotion):
                 self.steering_target = self.servo
                 self.reason = 'route_corridor_' + rejection.rsplit('_', 1)[1] + '_hold'
                 return self._result(now)
-            self.begin_coast(rejection, now)
+            self._begin_recovery_hold(rejection, now, control)
             self._slew(now)
             return self._result(now)
         if self._corridor_body_gap(self.right_exit_geometry) < MANEUVER_BODY_CLEARANCE_M:
-            self.begin_coast('route_corridor_body_margin_unavailable', now)
+            self._begin_recovery_hold('route_corridor_body_margin_unavailable', now, control)
             return self._result(now)
         if not self._route_adopted(control, now):
             return self._result(now)
@@ -1546,14 +1701,22 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     def _second_orbit_update(self, scan, now, control):
-        if now-self.second_orbit_since >= ORBIT_ENTRY_MAX_S:
-            self.begin_coast('second_target_entry_trial_timeout', now)
-            self._slew(now)
-            return self._result(now)
         target = self.second_target
-        if target is None or target.get('track_id') != self.second_track_id or not target.get('confirmed'):
-            self.begin_coast('second_target_lost_or_identity_changed', now)
-            self._slew(now)
+        lost = (target is None or target.get('track_id') != self.second_track_id
+                or not target.get('confirmed'))
+        if now-self.second_orbit_since >= ORBIT_ENTRY_MAX_S or lost:
+            # Self-recovery: go back to corridor following, which re-acquires
+            # the second support (or continues) from the current position.
+            self.route_stage = 'corridor_follow'
+            self.second_tracker = self._new_second_tracker()
+            self.second_target = None
+            self.second_center_ack = None
+            self.second_target_handover_observed = False
+            self.reason = ('second_target_entry_timeout_back_to_corridor' if not lost
+                           else 'second_target_lost_back_to_corridor')
+            self.steering_target = self.servo
+            self._route_event('second_target_recovery', scan, control,
+                              {'source_seq': scan['seq'], 'reason': self.reason})
             return self._result(now)
         if not self._route_adopted(control, now):
             return self._result(now)
@@ -1710,12 +1873,14 @@ class ManeuverSequence(TurnMotion):
 
     def _light_update(self, scan, now, control):
         if now-self.light_since+1e-9 >= LIGHT_STAGE_MAX_S:
-            return self._end_light_stage('light_stage_timeout', now, control)
+            self._begin_recovery_hold('light_stage_timeout', now, control)
+            return self._result(now)
         if not self._route_adopted(control, now):
             return self._result(now)
         space = self._free_space(scan, self._light_heading)
         if space is None:
-            return self._end_light_stage('light_free_space_unavailable', now, control)
+            self._begin_recovery_hold('light_free_space_unavailable', now, control)
+            return self._result(now)
         best = space['best_heading_rad']
         self._light_heading = best
         center = space['center_error_m']
@@ -2074,7 +2239,10 @@ class ManeuverSequence(TurnMotion):
             # Losing object identity removes the drive request, not the
             # already adopted left steering. Keep that command only in the
             # existing bounded neutral coast; never reacquire powered motion.
-            if not self._begin_adopted_left_coast('compact_target_lost_or_ambiguous', now, control):
+            if self.continue_route and self.begin_quality_wait(now, control, scan=scan):
+                # Self-recovery: hold at neutral and re-find the same support.
+                self.reason = 'route_orbit_target_recovery_wait'
+            elif not self._begin_adopted_left_coast('compact_target_lost_or_ambiguous', now, control):
                 self.begin_coast('compact_target_lost_or_ambiguous', now)
             self._slew(now)
             return self._result(now)
@@ -2113,7 +2281,9 @@ class ManeuverSequence(TurnMotion):
         elif self.compact_target['track_id'] != self.orbit_track_id:
             self._clear_exit_prepare_window()
             self._capture_compact_loss(scan, now, control, 'compact_target_identity_changed')
-            if not self._begin_adopted_left_coast('compact_target_identity_changed', now, control):
+            if self.continue_route and self.begin_quality_wait(now, control, scan=scan):
+                self.reason = 'route_orbit_target_recovery_wait'
+            elif not self._begin_adopted_left_coast('compact_target_identity_changed', now, control):
                 self.begin_coast('compact_target_identity_changed', now)
             self._slew(now)
             return self._result(now)
@@ -2170,9 +2340,9 @@ class ManeuverSequence(TurnMotion):
             # The new trial is target tracking, not the old optional stop input.
             self.lock('unsupported_maneuver_entry_stop')
             return self._result(self.last_now)
-        if (self.continue_route and not self.handover_observed
+        if (self.continue_route and self.neutral_pause_kind is not None
                 and (self.phase == 'quality_wait' or self.quality_resume_pending)):
-            return self._left_turn_pause_update(scan, lidar_age_s, now, control, safe=safe,
+            return self._neutral_pause_update(scan, lidar_age_s, now, control, safe=safe,
                 presteer_wait=presteer_wait, quality_clear=quality_clear,
                 resume_ready=quality_resume_ready)
         # A held quality coast (route mode may start one in the left turn)

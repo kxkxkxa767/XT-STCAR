@@ -143,40 +143,32 @@ class RouteControlTests(unittest.TestCase):
         self.assertFalse(session['report']['completed'])
         self.assertFalse(session['report']['competition_supported'])
 
-    def test_second_quality_loss_coasts_with_acked_left_without_rearming_or_new_wait(self):
-        # Trial41: a refused wait no longer halts/centers while rolling.
+    def test_second_quality_loss_starts_another_neutral_wait_without_rearming(self):
+        # Self-recovery: no single-use limit; budgets/deadline still bound it.
         session, held = self.resume()
         self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
-        snapshot = copy.deepcopy(session['report']['quality_wait_snapshot'])
         servo = self.console.status['control']['servo']
         self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1))
         self.assertIs(self.console.auto_session, session)
-        self.assertEqual(session['phase'], 'coast')
+        self.assertEqual(session['phase'], 'quality_wait')
+        self.assertEqual(session['turn_motion'].recovery_count, 2)
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
-        self.assertEqual(session['turn_motion'].quality_wait_refusal['reason'], 'route_state')
-        self.assertEqual(session['report']['quality_wait_snapshot'], snapshot)
-        self.assertFalse(session['report']['quality_coast_trigger']['positive_motor_restore_allowed'])
-        for _ in range(4):
-            self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
-            self.assertFalse(any(row.get('motor', 1500) > 1500 for row in self.outputs[-1:]))
+        self.assertNotIn('quality_coast_trigger', session['report'])
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
-    def test_refused_first_wait_on_partial_target_coasts_with_acked_left(self):
+    def test_partial_target_trigger_frame_still_starts_the_neutral_wait(self):
+        # Trial41/47: the incomplete trigger frame hid the support edge; the
+        # previous fresh full isolation anchors the wait instead of a coast.
         _, session = self.enter_compact_orbit(continue_route=True)
         servo = self.console.status['control']['servo']
         value = self.incomplete(self.console.scan['seq']+1)
-        value['ranges'][self.target_bins.start-1] = None  # Trial41 1356: return beside target missing.
+        value['ranges'][self.target_bins.start-1] = None
         self.observe(round(self.now+.1, 6), value)
         self.assertIs(self.console.auto_session, session)
-        self.assertEqual(session['phase'], 'coast')
-        self.assertEqual(session['turn_motion'].quality_wait_refusal['reason'], 'target_not_fully_isolated')
-        self.assertEqual(session['report']['quality_coast_trigger']['route_wait_refusal']['reason'],
-                         'target_not_fully_isolated')
+        self.assertEqual(session['phase'], 'quality_wait')
+        self.assertEqual(session['turn_motion'].quality_wait_anchor['basis'], 'previous_fresh_full_isolation')
+        self.assertNotIn('quality_coast_trigger', session['report'])
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
-        coast_start = len(self.outputs)
-        for _ in range(4):
-            self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
-        self.assertTrue(all(row.get('motor', 1500) <= 1500 for row in self.outputs[coast_start:]))
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
     def test_refused_wait_with_unacked_step_still_halts(self):
@@ -373,11 +365,11 @@ class RouteControlTests(unittest.TestCase):
         self.assertIn('left_turn_pause_resume_snapshot', session['report'])
         self.assertNotIn('quality_resume_snapshot', session['report'])
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
-        # Single use: the next bounded fault takes the existing terminal held coast.
+        # Self-recovery: the next bounded fault pauses again (no single use).
         held = self.console.status['control']['servo']
         self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 4))
-        self.assertEqual(session['phase'], 'coast')
-        self.assertEqual(session['report']['quality_coast_trigger']['quality_issues'], ['front_sparse'])
+        self.assertEqual(session['phase'], 'quality_wait')
+        self.assertEqual(motion.recovery_count, 2)
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, held))
 
     def test_left_turn_pause_never_resumes_without_geometry_and_expires_on_budget(self):
@@ -407,22 +399,11 @@ class RouteControlTests(unittest.TestCase):
             self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
 
     def test_front_sparse_above_existing_count_limit_still_halts(self):
-        for stage in ('left_turn', 'after_pause_held_coast'):
-            with self.subTest(stage=stage):
-                self.reset_case()
-                if stage == 'left_turn':
-                    self.drive_compact_trial(continue_route=True)
-                else:
-                    session, motion, _ = self.left_turn_pause()
-                    for i in range(1, 9):
-                        self.observe(round(self.now+.1, 6), self.scan(self.console.scan['seq']+1))
-                        if session.get('quality_resume_sequence') is not None and not motion.quality_resume_pending:
-                            break
-                    self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 4))
-                    self.assertEqual(self.console.auto_session['phase'], 'coast')
-                self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 7))
-                self.assertIsNone(self.console.auto_session)
-                self.assertEqual(self.outputs[-1]['op'], 'stop')
+        # Entry from drive with more than the front-count limit stays a halt.
+        self.drive_compact_trial(continue_route=True)
+        self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 7))
+        self.assertIsNone(self.console.auto_session)
+        self.assertEqual(self.outputs[-1]['op'], 'stop')
 
     def test_default_sequence_front_sparse_in_drive_still_halts(self):
         self.drive_compact_trial()
@@ -530,18 +511,23 @@ class RouteControlTests(unittest.TestCase):
         self.assertTrue(all(row['servo'] == held for row in self.outputs[before:] if row['op'] == 'drive'))
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
-    def test_current_target_identity_and_full_boundary_are_required_during_wait(self):
+    def test_current_target_identity_and_full_boundary_are_required_to_resume(self):
+        # A missing/changed/partial support holds the neutral wait (no halt,
+        # no recentering) and never restores power while it lasts.
         for fault in ('missing', 'changed', 'partial'):
             with self.subTest(fault=fault):
                 self.reset_case()
-                self.wait()
-                value = self.compact_scan(self.console.scan['seq']+1,
-                    observed=fault != 'missing', distance=2. if fault == 'changed' else 1.)
-                if fault == 'partial': value['ranges'][self.target_bins.start-1] = None
+                session, held = self.wait()
                 before = len(self.outputs)
-                self.observe(round(self.now+.1, 6), value)
-                self.assertIsNone(self.console.auto_session)
-                self.assertFalse(any(row['motor'] > 1500 for row in self.outputs[before:]))
+                for _ in range(4):
+                    value = self.compact_scan(self.console.scan['seq']+1,
+                        observed=fault != 'missing', distance=2. if fault == 'changed' else 1.)
+                    if fault == 'partial': value['ranges'][self.target_bins.start-1] = None
+                    self.observe(round(self.now+.1, 6), value)
+                    self.assertIs(self.console.auto_session, session)
+                    self.assertEqual(session['phase'], 'quality_wait')
+                self.assertIsNone(session.get('quality_resume_sequence'))
+                self.assertTrue(all((row['motor'], row['servo']) == (1500, held) for row in self.outputs[before:]))
 
     def test_duplicate_reordered_or_old_received_scans_cannot_mature_recovery(self):
         for fault in ('duplicate', 'reordered', 'old_received'):
@@ -563,15 +549,22 @@ class RouteControlTests(unittest.TestCase):
                     self.assertIsNone(self.console.auto_session)
                 self.assertFalse(any(row['motor'] > 1500 for row in self.outputs[before:]))
 
-    def test_target_loss_terminal_coast_cannot_reopen_even_with_route_enabled(self):
+    def test_target_loss_in_orbit_holds_neutral_then_resumes_once_reacquired(self):
+        # Self-recovery: the orbit target vanishes for a frame; hold at neutral,
+        # re-bind the same support (new ID at the same place), then resume once.
         _, session = self.enter_compact_orbit(continue_route=True)
+        held = self.console.status['control']['servo']
         self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1, observed=False))
-        self.assertEqual(session['phase'], 'coast')
-        before = len(self.outputs)
-        for _ in range(7):
+        self.assertEqual(session['phase'], 'quality_wait')
+        self.assertEqual(session['quality_wait_kind'], 'orbit_wait')
+        self.assertEqual(session['turn_motion'].reason, 'route_orbit_target_recovery_wait')
+        self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, held))
+        for _ in range(12):
             self.observe(round(self.now+.1, 6), self.compact_scan(self.console.scan['seq']+1))
-        self.assertFalse(any(row['motor'] > 1500 for row in self.outputs[before:]))
-        self.assertNotIn('quality_wait_snapshot', session['report'])
+            if session.get('quality_resume_sequence') is not None:
+                break
+        self.assertIsNotNone(session.get('quality_resume_sequence'))
+        self.assertIsNotNone(session['turn_motion'].quality_wait_rebind)
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
     def test_route_right_permission_needs_phase_and_continuous_actual_center_proof(self):
@@ -630,6 +623,19 @@ class RouteControlTests(unittest.TestCase):
                 else:
                     self.assertIsNone(self.console.auto_session)
                     self.assertEqual([row['op'] for row in self.outputs[before:]], ['stop'])
+
+    def test_post_pass_scan_incomplete_pauses_instead_of_halting(self):
+        _, session = self.enter_compact_orbit(continue_route=True)
+        motion = session['turn_motion']
+        motion.first_pass_evidence = {'source_seq': self.console.scan['seq']}
+        motion.right_exit_center_ack = {'servo': 1500}
+        motion.route_stage, motion.right_exit_since = 'right_align', self.now
+        self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'quality_wait')
+        self.assertEqual(session['quality_wait_kind'], 'post_pass_pause')
+        self.assertEqual(self.outputs[-1]['motor'], 1500)
+        self.assertIn('post_pass_pause_trigger', session['report'])
 
     def test_route_later_stage_and_resume_pending_use_full_eight_cm_body_gate(self):
         for stage in ('right_align', 'corridor_follow', 'second_orbit', 'resume_pending'):
