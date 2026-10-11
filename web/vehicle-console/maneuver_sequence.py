@@ -48,6 +48,12 @@ ROUTE_ENTRY_RELEASE_FRAMES = 2
 # trial45 needed a quick left away from a right wall .22 m from the body.
 # Center crossing and the right-after-center-ACK rule are unchanged.
 ROUTE_POST_PASS_PWM_STEP = 40
+# Explicit continue_route only: after the first-target handover, LEFT increases
+# also use 40 PWM/100 ms. Trial49 (path rebuilt from saved scans): the left turn
+# had released to 1636 just before handover, the orbit asked 1707 but the 10
+# PWM step reached only 1676 in .5 s; the U-turn radius grew from ~.95 to
+# ~1.1 m and put the body .08 m from the outer wall. Releases are unchanged.
+ROUTE_ORBIT_LEFT_PWM_STEP = ROUTE_POST_PASS_PWM_STEP
 # Explicit continue_route only. After the first-target pass the motor uses the
 # operator's manual forward PWM instead of 1560: trial43 reached ~1.8 m/s at
 # the second target, and the traffic-light section must be driven slowly
@@ -1097,9 +1103,12 @@ class ManeuverSequence(TurnMotion):
             post_pass = (self.continue_route and self.phase == 'drive'
                          and self.first_pass_evidence is not None
                          and self.route_stage in ('right_align', 'corridor_follow', 'second_orbit'))
+            orbit_left = (self.continue_route and self.phase == 'drive' and self.handover_observed
+                          and self.route_stage == 'first_target' and self.first_pass_evidence is None
+                          and target > self.servo >= NEUTRAL)
             step = PRESTEER_PWM_STEP if self.phase == 'presteer' else ROUTE_POST_PASS_PWM_STEP if post_pass else (
                 (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
-                if reducing_left else PWM_STEP)
+                if reducing_left else ROUTE_ORBIT_LEFT_PWM_STEP if orbit_left else PWM_STEP)
             if reducing_left and target < NEUTRAL:
                 target = NEUTRAL  # First release to center; a later right step stays at 10.
             delta = max(-step, min(step, target-self.servo))
@@ -1191,6 +1200,7 @@ class ManeuverSequence(TurnMotion):
                           'reduce_left': LEFT_RELEASE_PWM_STEP,
                           'route_exit_reduce_left': ROUTE_EXIT_RELEASE_PWM_STEP if self.continue_route else None,
                           'route_post_pass': ROUTE_POST_PASS_PWM_STEP if self.continue_route else None,
+                          'route_orbit_increase_left': ROUTE_ORBIT_LEFT_PWM_STEP if self.continue_route else None,
                           'increase_left': PWM_STEP,
                           'center_to_right': PWM_STEP, 'interval_s': PWM_INTERVAL_S},
                       object_semantic_verified=False, passed_cones=None,

@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "48 (7851562) ran once: first target with orbit wait + resume, smooth exit alignment, corridor follow at 1550, first second-target acquisition and left swing; swing too weak (bearing law ~1590) -> contact with the second cone (operator), self-recovery worked. Round-49 candidate: curvature-based second-target entry.",
+  "latest_trial_status": "49 (6891fcd) ran once: left turn, handover, orbit entry slew-limited (1636->1676 while 1707 asked); scan_incomplete wait at 5.94 cut power but the car kept rolling ~1.5 m/s and the wait centered the steering -> outer wall contact (operator), second target never reached. Round-50 candidate: route orbit left step 40 + route scan_incomplete tolerance after handover.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16353,8 +16353,8 @@
   "after48_second_curvature_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 49,
     "user_instruction": "2026-10-11 用户：这一次绕第二个锥桶的时候转向的幅度不够导致撞上了，但自恢复成功了。",
     "change": {
@@ -16367,6 +16367,91 @@
     "risks_not_resolved": [
       "Once the support is beside/behind with extra gap, the short lookahead turns right hard (clockwise around it) until the .40 m gap; may approach the support if the curvature mapping is off.",
       "Light-lane turn still untested."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "deployment": {
+      "date": "2026-10-11",
+      "source_commit": "6891fcd1a3ac33fd5e2bf4ad5f99c60d09e135c6",
+      "archive_sha256": "e9f90757ce614762681f7db1cb60a19919728fcc563728bd6e60f60bfa58b0e7",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn49-20261011-100214",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn49-20261011-100214",
+      "helper_sha256": "50adcf292e531df427da30abc3731ff34ae7995782c3acc5df9b900b93283c0a",
+      "helper_note": "from helper 48 (--max-seconds 16, observer 34 s)",
+      "runtime_settings": [
+        1550,
+        1450,
+        1650,
+        1350
+      ],
+      "fresh_checks": "before49-fresh.json / after49-deploy-fresh.json / pre49-run-fresh.json: six fresh locked ready samples each, 14 hashes match",
+      "second_target_law_exercised": false
+    }
+  },
+  "turn49_actual": {
+    "date": "2026-10-11",
+    "executor": "Claude",
+    "vehicle_source_commit": "6891fcd1a3ac33fd5e2bf4ad5f99c60d09e135c6",
+    "start_geometry": "front wall 2.153 m, board end .506 m, width 1.647 m, exit 90.1 deg, incoming -1.6 deg, lateral .273 m, presteer cap 1655.",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261011-49/ (7 files sha256 match trial49-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 8.32,
+    "observer_stop_requested": false,
+    "terminal": "server lock probe_obstacle_close_body during the first-target orbit wait (route_stage first_target); rest scan gap 0 at bin 35 (right front corner)",
+    "operator_report": "用户：这一次绕第一个锥桶的时候撞上了锥桶右侧的墙，在绕第一个锥桶的时候后续左转不够还是提前识别到第二个锥桶开始右转",
+    "answer_to_operator": "Left turn insufficient, not an early right turn: route_stage stayed first_target, no second target was ever acquired, and the servo never went below 1500.",
+    "physical_contact": true,
+    "path_reconstruction": {
+      "tool": "scripts/trial-map.py (new, ICP over the saved scans)",
+      "course_shape": "the first target sits just inside the return lane after a ~180 deg left U-turn around the end of the board between the incoming and return lanes",
+      "u_turn": "lidar path radius ~1.07 m; passing the target the lidar was ~.78 m from it and the right body side ~.08 m from the outer wall; a ~.95 m radius would have centered the car in the ~.9 m gap",
+      "speed": "1560: 1.3-1.6 m/s through the U-turn; motor cut at 5.89 s but the car kept ~1.4-1.8 m/s (scan-skew noise) and was still at 1.4 m/s at the lock, then rolled ~1 m more (0.6 m/s at the last after.json scan); rolling decel only ~.5 m/s^2",
+      "curvature_vs_servo": "measured path curvature ~1.0-1.1 1/m at 1655-1665, ~.75-.9 at 1636-1645 (1.3-1.5 m/s); ~150-200 ms command-to-path lag",
+      "round48_slow_motor_speed": "1550 post-pass: .6-1.1 m/s"
+    },
+    "timeline": {
+      "left_turn": "3.60 drive 1560; servo 1648..1665 then the left-turn law released to 1636 by 5.16 (it aims at a 90 deg exit)",
+      "handover": "5.31 handover kept 1636; orbit entry asked 1707/1708 (boost to 1720 limited by the inside-point rule) but left increases were 10 PWM/100 ms: 1656, 1666, 1676 by 5.79",
+      "wait": "5.94 scan_incomplete (336 returns; open runs 9 and 11 bins at 53-74 deg left = far end of the return lane) -> orbit wait, motor 1500, servo held 1676 (target_reacquiring, support edge neighbour null)",
+      "release": "6.28 neutral_wait_current_support_at_body_front release 1676->1596->1556->1500 while the car still rolled ~1.5 m/s; heading 172 deg (lane axis 180), ~6 deg into the outer wall",
+      "lock": "6.79 body gate (right front) -> locked; car slid along the wall"
+    },
+    "diagnosis": [
+      "Steering dip at the left-turn/orbit junction (1665 -> 1636) recovered too slowly (10 PWM/100 ms), widening the U-turn into the outer wall.",
+      "A scan_incomplete wait cuts power but the car does not stop (~.5 m/s^2); the wait then centered the steering while rolling ~2 m, removing any correction."
+    ],
+    "exercised": {
+      "second_curvature_law": "no (never reached)",
+      "orbit_wait": "yes",
+      "light_turn": "no"
+    },
+    "post_trial_lock": "after49-trial-fresh.json: healthy, owner None, locked, unarmed, 1500/1500.",
+    "completed": false,
+    "competition_supported": false
+  },
+  "after49_orbit_slew_and_scan_tolerance_correction": {
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 50,
+    "user_instruction": "2026-10-11 用户：这一次绕第一个锥桶的时候撞上了锥桶右侧的墙…；用户：轨迹图分析方法本轮后写进agent.md教gpt；用户：5小时额度不够，这轮先构建好，五小时后再测试。",
+    "change": {
+      "route_orbit_left_step": "continue_route only: after the first-target handover (first_target, drive, before the first pass) LEFT increases use 40 PWM/100 ms (ROUTE_ORBIT_LEFT_PWM_STEP = ROUTE_POST_PASS_PWM_STEP); releases and the left turn before handover keep their steps.",
+      "route_scan_incomplete_tolerance": "probe_clearance (maneuver profile) reports valid_returns, longest_null_run_bins and scan_incomplete_tolerable (324 <= valid < 342 and no circular null run > 12 bins). The service drops scan_incomplete only for an explicit route session after the first-target handover; front_sparse, stale data, deadlines and the known-return body gate are unchanged. Trial49 scans 403/407 qualify.",
+      "analysis_tool": "scripts/trial-map.py: rebuilds the driven path from saved scans (ICP), prints t/x/y/heading/speed/yaw/curvature/phase/servo and draws a top-down PNG and car-frame panels; documented in agent.md."
+    },
+    "validation": {
+      "related_suites": "test_maneuver_route + test_route_control 109 passed (new: route orbit step, tolerable incomplete scan keeps orbit drive / 13-bin run still waits); ManeuverClearance trial49 test passes.",
+      "default_suites": "identical failure set before/after (34 unique pre-existing failing tests)."
+    },
+    "risks_not_resolved": [
+      "Speed 1.3-1.6 m/s at 1560 in the U-turn and the car barely decelerates when the motor is cut; waits still center the steering while rolling (front_sparse / target-loss waits).",
+      "Faster left steps may cut closer to the first target; the inside-point limit still applies.",
+      "Curvature-based second-target entry (round 49) has not been exercised.",
+      "Light-lane turn untested."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,

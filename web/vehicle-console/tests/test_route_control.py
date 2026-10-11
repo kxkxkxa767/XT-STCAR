@@ -39,6 +39,28 @@ class RouteControlTests(unittest.TestCase):
             value['ranges'][5:5+front_gap] = [None]*front_gap
         return value
 
+    def test_trial49_tolerable_incomplete_scan_keeps_orbit_drive_after_handover(self):
+        # Trial49: 336/337 returns from 9-11 bin open runs started a coasting
+        # wait mid-orbit; after handover such a scan keeps the stage steering.
+        _, session = self.enter_compact_orbit(continue_route=True)
+        value = self.compact_scan(self.console.scan['seq']+1)
+        value['ranges'][150:161] = [None]*11
+        value['ranges'][200:211] = [None]*11
+        self.observe(round(self.now+.1, 6), value)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'drive')
+        self.assertEqual(session['report']['quality_issues'], [])
+        self.assertTrue(session['report']['clearance_current']['scan_incomplete_tolerated'])
+        self.assertEqual(session['report']['scan_incomplete_tolerated_count'], 1)
+        self.assertEqual(self.outputs[-1]['motor'], 1560)
+        # A 13-bin unknown run is still incomplete and takes the existing wait.
+        value = self.compact_scan(self.console.scan['seq']+1)
+        value['ranges'][150:163] = [None]*13
+        value['ranges'][200:206] = [None]*6
+        self.observe(round(self.now+.1, 6), value)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'quality_wait')
+
     def wait(self):
         _, session = self.enter_compact_orbit(continue_route=True)
         held = self.console.status['control']['servo']

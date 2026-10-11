@@ -895,6 +895,20 @@ class Console:
                                         rear_launch=rear_active, camera_required=not turn_trial,
                                         clearance_profile='maneuver' if turn_trial else 'straight',
                                         relaxed_turn_left=relaxed_turn_left)
+            route_motion = session.get('turn_motion')
+            if (turn_trial and session.get('continue_route') is True and isinstance(route_motion, ManeuverSequence)
+                    and getattr(route_motion, 'continue_route', False) is True
+                    and getattr(route_motion, 'handover_observed', False) is True
+                    and 'scan_incomplete' in clearance['quality_issues']
+                    and clearance.get('scan_incomplete_tolerable') is True):
+                # Route mode after the first-target handover only: a scan with
+                # >= 90% returns and no unknown run over 12 bins keeps the
+                # stage's own steering instead of a coasting wait (trial49).
+                clearance['quality_issues'] = [i for i in clearance['quality_issues'] if i != 'scan_incomplete']
+                clearance['scan_incomplete_tolerated'] = True
+                clearance['motion_ready'] = not any(i in clearance['quality_issues']
+                                                    for i in ('camera_unavailable', 'lidar_late', 'front_sparse'))
+                report['scan_incomplete_tolerated_count'] = report.get('scan_incomplete_tolerated_count', 0)+1
             report['clearance_current'] = clearance
             report['relaxed_turn_left_clearance_active'] = relaxed_turn_left
             if not (self.turn_healthy() if turn_trial else self.autonomy_healthy()):

@@ -529,6 +529,24 @@ class ManeuverClearanceTests(unittest.TestCase):
         self.assertIn('front_sparse', straight['quality_issues'])
         self.assertEqual(straight['front_bridged_bins'], [])
 
+    def test_trial49_open_runs_up_to_12_bins_are_tolerable_but_still_reported(self):
+        # Trial49 scan403: 336 returns; open runs of 9 and 11 bins at the left front.
+        scan = {**self.scan, 'ranges': [1.6]*360}
+        for start, length in ((5, 3), (283, 1), (286, 9), (297, 11)):
+            scan['ranges'][start:start+length] = [None]*length
+        result = self.probe(scan)
+        self.assertIn('scan_incomplete', result['quality_issues'])  # only the route service may waive it
+        self.assertEqual((result['valid_returns'], result['longest_null_run_bins']), (336, 11))
+        self.assertTrue(result['scan_incomplete_tolerable'])
+        straight = MODULE.probe_clearance(scan, self.ages, camera_required=False)
+        self.assertFalse(straight['scan_incomplete_tolerable'])
+        scan['ranges'][297:310] = [None]*13
+        longer = self.probe(scan)
+        self.assertEqual(longer['longest_null_run_bins'], 13)
+        self.assertFalse(longer['scan_incomplete_tolerable'])
+        sparse = {**self.scan, 'ranges': [1.6 if a % 9 else None for a in range(360)]}
+        self.assertFalse(self.probe(sparse)['scan_incomplete_tolerable'])  # 320 returns
+
     def test_gap_at_range_step_or_longer_than_bridge_stays_unknown(self):
         for case in ('step', 'long', 'edge_null'):
             with self.subTest(case=case):

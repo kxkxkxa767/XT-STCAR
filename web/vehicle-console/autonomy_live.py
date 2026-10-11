@@ -23,6 +23,15 @@ FRONT_MAX_GAP = 3
 # step between the neighbours stay unknown; all nulls are still reported.
 FRONT_BRIDGE_MAX_BINS = 5
 FRONT_BRIDGE_MAX_STEP_M = .15
+# Maneuver profile diagnostic only; the service applies it solely in route mode
+# after the first-target handover. Trial49: two scan_incomplete frames (336/337
+# of 360) came from 9-11 bin runs into the open far end of the next lane. The
+# orbit wait cut power, but the car (rebuilt from its saved scans: ~1.5 m/s,
+# only ~.5 m/s^2 rolling decel) kept rolling ~2 m while the wait centered the
+# steering, into the outer wall. >= 90% returns with no unknown run longer than
+# 12 bins is usable there; front_sparse and the known-return body gate stay.
+MANEUVER_TOLERABLE_MIN_VALID = 324
+MANEUVER_TOLERABLE_MAX_NULL_RUN = 12
 CORRIDOR_HALF_WIDTH_M = .30
 CORRIDOR_LOOKAHEAD_M = 1.0
 # Operator's revised rough measurement, explicitly resolved to 28 cm total
@@ -501,6 +510,12 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
         raise ValueError('probe_obstacle_in_straight_corridor')
     if len(valid) < 342:
         issues.append('scan_incomplete')
+    longest_null_run = run = 0
+    for r in bins+bins:
+        run = run+1 if r is None else 0
+        longest_null_run = max(longest_null_run, min(run, 360))
+    incomplete_tolerable = (maneuver and MANEUVER_TOLERABLE_MIN_VALID <= len(valid) < 342
+                            and longest_null_run <= MANEUVER_TOLERABLE_MAX_NULL_RUN)
     front = [bins[i % 360] for i in range(-30, 31)]
     unknown = [i - 30 for i, r in enumerate(front) if r is None]
     run = largest_gap = 0
@@ -585,6 +600,8 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
             'front_unknown_bins': unknown, 'largest_gap_deg': largest_gap,
             'front_bridged_bins': bridged, 'largest_open_gap_deg': largest_open_gap,
             'quality_issues': issues,
+            'valid_returns': len(valid), 'longest_null_run_bins': longest_null_run,
+            'scan_incomplete_tolerable': incomplete_tolerable,
             'motion_ready': not body_stop_requested and not any(
                 i in issues for i in ['camera_unavailable', 'lidar_late', 'scan_incomplete', 'front_sparse']),
             'corridor_half_width_m': half_width,

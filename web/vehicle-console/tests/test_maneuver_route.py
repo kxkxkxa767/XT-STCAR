@@ -1229,6 +1229,24 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertTrue(all(not r['route_right_output_authorized'] for r in outputs.values()))
         self.assertTrue(all(r['first_pass_evidence'] is None for r in outputs.values()))
 
+class RouteOrbitSlewTests(unittest.TestCase):
+    def test_trial49_route_orbit_left_increase_uses_route_step_release_unchanged(self):
+        # Trial49: 1636 -> 1676 in .5 s while the orbit asked 1707.
+        for route, step in ((True, 40), (False, 10)):
+            with self.subTest(route=route):
+                motion = ManeuverSequence(0., continue_route=route)
+                motion.phase, motion.handover_observed, motion.route_stage = 'drive', True, 'first_target'
+                motion.servo, motion.steering_target, motion.last_change = 1636, 1707, -1.
+                motion._slew(0.)
+                self.assertEqual(motion.servo, 1636+step)
+                motion.steering_target, motion.last_change = 1500, -1.
+                motion._slew(0.)
+                self.assertEqual(motion.servo, 1636+step-20)
+                motion.handover_observed, motion.steering_target, motion.last_change = False, 1707, -1.
+                motion._slew(0.)  # before handover the left turn keeps 10
+                self.assertEqual(motion.servo, 1636+step-20+10)
+
+
 class RouteEntryReleaseTests(unittest.TestCase):
     """Trial40: two fresh permitting endpoint bearings, then the opening vanished."""
 
