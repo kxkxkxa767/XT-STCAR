@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "54 (c6bdf75) ran once: first cone handed over, released correctly and physically passed, then a wait could not re-find the support behind-left and timed out (no contact). Round-55 candidate (not deployed): rear-left re-acquisition after handover; open-loop replay of 54 completes the pass and resumes.",
+  "latest_trial_status": "54 (c6bdf75) remains the last recorded vehicle trial. Round-55 candidate control code 856e6c3 is not built/deployed/tried. Codex repeated required offline gates successfully on 2026-10-11, but found existing G-class path-intent reversal and A/C-class second-target wait identity-recovery gaps to resolve before deployment. User deferred vehicle reconnection to 2026-10-12.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16824,6 +16824,115 @@
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,
-    "competition_supported": false
+    "competition_supported": false,
+    "preflight_review_20261011": {
+      "date": "2026-10-11",
+      "executor": "Codex",
+      "user_instruction": "明天再连接车，你先弄懂你要干嘛",
+      "candidate_code_commit": "856e6c33bb6545ae9bda645bbb95676b944a7c27",
+      "previous_code_commit": "c6bdf75c6bc0bf62dc808a2c5a8a8e4f1b9794cf",
+      "scope": "Local preparation only. No vehicle connection, package build, deployment, or physical trial. Existing SSH control socket absent; user deferred reconnection to 2026-10-12.",
+      "git_sync": "main and origin/main both 856e6c3 before preparation; fetch returned 0 0.",
+      "required_offline_gates_passed": true,
+      "ready_to_deploy": false,
+      "unit_tests": {
+        "related_passed": 256,
+        "candidate_discovered": 577,
+        "baseline_discovered": 576,
+        "failures_each": 48,
+        "errors_each": 1,
+        "failure_sets_identical": true,
+        "comparison": "Temporarily reverse the committed candidate delta to c6bdf75, run baseline discovery, git stash the reversed delta, then run candidate related suites and full discovery. Compared complete FAIL/ERROR lines including subtests. No tracked control-code changes remain.",
+        "baseline_stash_commit": "9ebcb70bfb1c577721e5e450d33db8a22601fa8a",
+        "baseline_stash_note": "Preserved verification-only inverse delta, not pending user work; do not pop onto current code.",
+        "evidence_directory": "work/turn55-preflight-tests-20261011-204824"
+      },
+      "detector_replay": {
+        "trial_count": 36,
+        "trials": "19-54",
+        "logs_identical": true,
+        "totals": {
+          "first/strict(51)": {
+            "seen": 480,
+            "conf": 386,
+            "ids": 51
+          },
+          "first/gap(52)": {
+            "seen": 483,
+            "conf": 390,
+            "ids": 49
+          },
+          "first/tolerant": {
+            "seen": 506,
+            "conf": 426,
+            "ids": 42
+          },
+          "ahead/strict(51)": {
+            "seen": 266,
+            "conf": 173,
+            "ids": 58
+          },
+          "ahead/gap(52)": {
+            "seen": 266,
+            "conf": 176,
+            "ids": 51
+          },
+          "ahead/tolerant": {
+            "seen": 296,
+            "conf": 213,
+            "ids": 43
+          }
+        },
+        "caveat": "Detector tool uses fixed acquisition sectors; route54 covers the new post-handover widening."
+      },
+      "route_replay": {
+        "route_51_gate": "PASS: first_relative_object_handover_keep_adopted_left at rec 1.70 s (scan 361)",
+        "route_52_gate": "PASS: second_orbit at rec 5.19 s (scan 427), left steering 1525 at rec 5.39 s (scan 429), then 1557/1597/1637/1677",
+        "route_54_gate": "PASS: quality_wait ID2 reacquired rec 3.00 s (scan 333), confirmed rec 3.29 s (scan 336), pass/resume drive/right_align rec 3.70 s (scan 340), motor1550 servo1614 at rec 3.90 s (scan 342)"
+      },
+      "replay_evidence_directory": "work/turn55-offline-verification-givny5y2",
+      "replay_caveat": "Open-loop saved scans with instant ACKs: after candidate commands differ, old scans do not certify the new physical trajectory.",
+      "pre_deployment_findings": [
+        {
+          "failure_class": "G",
+          "status": "confirmed_existing_gap_not_fixed",
+          "location": "web/vehicle-console/maneuver_sequence.py::_route_path_target",
+          "finding": "With right steering already authorized and only an opposite-direction arc clear, the path layer reverses the stage intent. Synthetic geometry derived from the existing wall test: natural/stage target 1610 -> chosen 1350 in right_align, corridor_follow, second_orbit and light_turn. Existing no-clear-arc and pending-center-ACK guards do not cover this case.",
+          "evidence": "work/turn55-preflight-tests-20261011-204824/path-intent-review.py and path-intent-review.json",
+          "physical_trial": false
+        },
+        {
+          "failure_class": "A/C",
+          "status": "confirmed_existing_gap_not_fixed",
+          "location": "web/vehicle-console/maneuver_sequence.py::update / _pause_stage_ready",
+          "finding": "In second_orbit quality_wait, target tracking uses acquire=False. After identity loss beyond the 300ms lease, even the original support reappearing ahead cannot establish an ID. The wait requires the original confirmed ID and returns before the drive branch that falls back to corridor acquisition. Synthetic review reproduced continued waiting with quality/resume readiness and neutral ACK true.",
+          "evidence": "work/turn55-preflight-tests-20261011-204824/second-wait-identity-review.py and second-wait-identity-review.json",
+          "physical_trial": false
+        },
+        {
+          "failure_class": "A/C",
+          "status": "design_review_needed",
+          "finding": "Second-target drive-loss recovery returns to corridor acquisition in the front half-plane; rear-right reacquisition is not implemented. Do not infer full-stage coverage from the first-target-only widening."
+        }
+      ],
+      "deployment_script_notes": [
+        "Before build, independently reject pre-existing new-label bundle/archive, deploy script, helper, package, stdout/stderr/result. Scripts do not guard every overwrite.",
+        "Once helper creates its output directory, that attempt is consumed even if later admission fails. Preserve it and do not rerun.",
+        "If deployment SSH times out, inspect result and fresh state before any further action; do not blindly rerun.",
+        "After deployment and before execution, check both autonomy.continue_route and turn_preview.continue_route; validate-fresh.py does not check them.",
+        "After trial, independently verify six fresh locked samples, owner/active null, unarmed, 1500/1500, control age<.2, lidar age<.3, same boot and increasing tick/seq/at_ms, settings and 14 installed hashes. Do not require turn_ready at the end position.",
+        "Before motion, obtain the requested single physical placement confirmation from the user. Neutral lock does not establish physical standstill."
+      ],
+      "next_action": "Resolve the documented G and second-target quality-wait A/C gaps across stages with regression coverage; rerun relevant/full failure-set comparison and 51/52/54 replay before deployment. Resume vehicle work only after user reconnects and placement is confirmed.",
+      "evidence_sha256": {
+        "work/turn55-preflight-tests-20261011-204824/summary.json": "87a1dde7e2a0f1220d84639e6fa062d1eae52a0d8bfc1eb025d958b2392a4b8e",
+        "work/turn55-preflight-tests-20261011-204824/baseline-c6bdf75-full-failures.txt": "e20af394ba6580c9d52d8372c75ac36171db8a709743d73c1ea6b14b3d7b65e6",
+        "work/turn55-preflight-tests-20261011-204824/candidate-856e6c3-full-failures.txt": "e20af394ba6580c9d52d8372c75ac36171db8a709743d73c1ea6b14b3d7b65e6",
+        "work/turn55-preflight-tests-20261011-204824/path-intent-review.json": "e90369fad480a87d756af31976f0f8260377ffbdc0b27ec6c1fd7cba18283293",
+        "work/turn55-offline-verification-givny5y2/result.json": "4eb9981dc15243c28c755d95ac127c8c522d4d0dab60097c2c490f4ce22a0f0a",
+        "work/turn55-preflight-tests-20261011-204824/second-wait-identity-review.json": "b21797e6184cc3b62fded66488a84a463fa440482a26402a58fedc2f58777175",
+        "work/turn55-preflight-tests-20261011-204824/second-wait-identity-review.py": "b2fa593b4dc1a6b3d9ef506a7accaff9305e3220868f9aca43600c5c2669909a"
+      }
+    }
   }
 }
