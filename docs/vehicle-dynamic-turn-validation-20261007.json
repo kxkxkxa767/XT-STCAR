@@ -18177,8 +18177,8 @@
     "date": "2026-10-12",
     "source_base_commit": "de8e1d3",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 60,
     "user_instruction": "还是撞到左侧的墙了",
     "root_cause": "The exit alignment and corridor following steered to the lane CENTER line, where the second support sits; the support is confirmed only ~1.4-1.8 m ahead (first seen ~2.1 m) and at ~1.27 m/s the remaining ~.30 m bypass offset needed a late S (1611-1639) whose ~.3 s steering lag left the car ~30-40 deg left of the lane at the separator board end (~.9 m left of the support). trial-map fit over 55-59: lag ~.15-.3 s, ~160 PWM per 1/m (lagfit.log).",
@@ -18200,6 +18200,53 @@
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,
     "competition_supported": false,
-    "next_step": "build-matched.py claude-turn59 claude-turn60 60 after59_approach_line_correction (helper inherits --max-seconds 24); car back at the start, run once"
+    "next_step": "build-matched.py claude-turn59 claude-turn60 60 after59_approach_line_correction (helper inherits --max-seconds 24); car back at the start, run once",
+    "deployment": {
+      "source_commit": "5f7f251b272128d27163b9623e541d4b8afbf2d7",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn60-5f7f251.tar.gz",
+      "archive_sha256": "73c134678b2cf92cd20e184e3dd67b5a242e15702d7ae942bf067e6c534ed8a1",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn60-20261012-162904",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn60-20261012-162904",
+      "helper_sha256": "0d55835cf2b1e4f7e17b3d901804a11b5a43692b28b6f75bae9864d815d93259",
+      "helper_edit": "none (diff vs 59 only the output dir; --max-seconds 24 inherited)",
+      "settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "access_token_preserved": true,
+      "launch_command_preserved": true,
+      "checks": {
+        "before60-fresh.json": "six fresh locked ready; 14 hashes (turn59 package)",
+        "after60-deploy-fresh.json": "six fresh locked ready; 14 hashes (turn60 package); continue_route true; turn_ready true",
+        "pre60-run-fresh.json": "no trial60 dir; stage helper sha equal; no autonomy-control; six fresh locked ready",
+        "after60-trial-fresh.json": "6 samples owner None, inactive, unarmed, 1500/1500, fresh ages, same boot, tick/seq increasing"
+      }
+    }
+  },
+  "turn60_actual": {
+    "date": "2026-10-12",
+    "executor": "Claude",
+    "vehicle_source_commit": "5f7f251b272128d27163b9623e541d4b8afbf2d7",
+    "operator_placement": "用户：“开始吧”（放回起点后）",
+    "start_geometry": "front wall 2.179 m, board end .539 m, width 1.640 m, exit 88.5 deg, incoming -2.4 deg (.7 deg beyond the reference; before deploy -2.8), presteer cap 1643",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261012-60/ (7 files sha256 match trial60-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 17.164,
+    "observer_stop_requested": false,
+    "operator_report": "用户：“这次可以”",
+    "events": {
+      "first_target": "wall-ambiguity hold 418-421, handover 423, orbit 1696-1707, route quality wait 432-436 (neutral, release left), resume 438, first pass + right_align 443",
+      "approach_line": "right_align 443-452 at 1494-1514 (HEAD law would have turned right toward the center): corridor heading -16..-17 deg, car .35 -> .00 m right of center while drifting toward the left approach line",
+      "second_target": "seen 452 at 2.65 m (-14 deg), confirmed/handover 454 at 2.45 m; return prepared at once (support already right of the bypass line), 1500 -> 1470 -> 1442-1459 around the support (no left S), support behind right 479-482 (-117 .. -140 deg), second pass, light turn 485",
+      "light_turn": "right 1350 from 479 to 502, heading ~155 -> 0 deg (trial-map), free space released 1409 -> 1545 by 517; car in the light lane",
+      "terminal": "autonomy_control_gap at 14.98 s: one control interval 0.12003 s > 0.12 s limit (max tick compute .087 s); a host scheduling stop, not an obstacle; locked 1500/1500 and the car rolled ~1.7 m in the light lane (trial-map 519-534); rest nearest body gap .264 m"
+    },
+    "result": "first complete route through both cones and the right turn into the light lane; no board contact reported; did not reach light_lane stage / finish stop because of the control-gap lock",
+    "analysis": "work/turn60-analysis-20261012/ (timeline, map.png opened)",
+    "completed": false,
+    "competition_supported": false
   }
 }
