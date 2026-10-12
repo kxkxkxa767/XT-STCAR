@@ -298,6 +298,8 @@ class ManeuverSequence(TurnMotion):
         self.second_orbit_since = None
         self.second_pass_evidence = None
         self.second_feedback = None
+        self.second_return_preparing = False
+        self.second_return_evidence = None
         self.route_end_coast_servo = None
         self.light_since = None
         self._light_history = []
@@ -1325,11 +1327,17 @@ class ManeuverSequence(TurnMotion):
             self._quality_full_streak = 0
             if not (quality_clear is True and neutral and self._pause_stage_held):
                 self._quality_good_history.clear()
-            self._wait_steer(now, servo_feedback, neutral, self.quality_wait_servo)
+            base = (min(self.quality_wait_servo, NEUTRAL)
+                    if self.route_stage == 'second_orbit' and self.second_return_preparing
+                    else self.quality_wait_servo)
+            self._wait_steer(now, servo_feedback, neutral, base)
             return self._result(now)
         if (not self._mature_recovery_observation(scan) or resume_ready is not True
                 or servo_feedback != self.quality_wait_servo or self.quality_wait_previous_servo is not None):
-            self._wait_steer(now, servo_feedback, neutral, self.quality_wait_servo)
+            base = (min(self.quality_wait_servo, NEUTRAL)
+                    if self.route_stage == 'second_orbit' and self.second_return_preparing
+                    else self.quality_wait_servo)
+            self._wait_steer(now, servo_feedback, neutral, base)
             return self._result(now)
         self.phase, self.reason = 'drive', f'route_{kind}_pause_resume_waiting_ack'
         self.quality_resume_pending, self.quality_resume_since = True, now
@@ -1516,6 +1524,11 @@ class ManeuverSequence(TurnMotion):
         become a renewed left boost. These are task-relative bounds, with no
         assumption about where the support or exit lies on the course.
         """
+        if self.route_stage == 'second_orbit' and self.second_return_preparing:
+            # The stage already checks each return arc against the entire
+            # support and the current boards. Another arc has not passed that
+            # check. In particular, keep its neutral ACK request at neutral.
+            return target, target
         if self.route_stage in TASK_LEFT_BYPASS_STAGES:
             return (RIGHT_EXIT_MIN_PWM if target < NEUTRAL else NEUTRAL), SERVO_MAX
         if target == NEUTRAL:
@@ -1750,6 +1763,8 @@ class ManeuverSequence(TurnMotion):
             second_center_ack=copy.deepcopy(self.second_center_ack),
             second_pass_evidence=copy.deepcopy(self.second_pass_evidence),
             second_feedback=copy.deepcopy(self.second_feedback),
+            second_return_preparing=self.second_return_preparing,
+            second_return_evidence=copy.deepcopy(self.second_return_evidence),
             route_end_coast_servo=self.route_end_coast_servo,
             light_feedback=copy.deepcopy(self.light_feedback),
             light_alignment_evidence=copy.deepcopy(self.light_alignment_evidence),
@@ -2145,6 +2160,7 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     def _start_second_identity_recovery(self):
+        self._clear_second_return()
         if self._second_role_anchor is None:
             return
         self._second_recovering = True
@@ -2219,6 +2235,7 @@ class ManeuverSequence(TurnMotion):
         self._second_role_anchor = copy.deepcopy(target)
         self.second_orbit_since = now  # new confirmed attempt; cumulative deadline is unchanged
         self._clear_target_recovery_history()
+        self._clear_second_return()
         self.second_center_ack = None
         self.second_rebind_evidence = {
             'old_track_id': old_id, 'new_track_id': target['track_id'],
@@ -2358,7 +2375,96 @@ class ManeuverSequence(TurnMotion):
             self._route_center_ack = None
         return self._result(now)
 
+    def _clear_second_return(self):
+        self.second_return_preparing = False
+        self.second_return_evidence = None
+
+    @staticmethod
+    def _second_return_support_clear(points, servo):
+        """Keep the complete support to the RIGHT of the proposed forward arc.
+
+        Unlike the short all-obstacle path check, this checks every target
+        point, including a target beyond that horizon. An arc passing on its
+        wrong side is not a clockwise bypass, even if it misses the target.
+        This uses the existing uncalibrated path model, not a physical proof.
+        """
+        curvature = (servo-NEUTRAL)/ROUTE_PWM_PER_CURVATURE
+        if curvature > 0:
+            return False
+        half = SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M
+        for x, y in points:
+            if abs(curvature) < 1e-9:
+                along, right = x, -y
+            else:
+                radius = -1/curvature
+                along = radius*math.atan2(x, radius+y)
+                right = radius-math.hypot(x, radius+y)
+            if along+REAR_BODY_EXTENT_M >= 0 and right < half:
+                return False
+        return True
+
+    def _second_return_target(self, scan, now, points, bypass_target):
+        """Prepare from present support/corridor geometry, before final pass.
+
+        A confirmed support already clear of the right flank can stop asking
+        for a left waypoint ahead of the car. Measure the current corridor
+        without renewing or inheriting the older first-exit corridor lease.
+        Missing geometry may release left, but cannot create a new right step.
+        """
+        if min(-p[1] for p in points)-SIDE_BODY_EXTENT_M < MANEUVER_BODY_CLEARANCE_M:
+            self._clear_second_return()
+            return None
+        saved = (self.right_exit_geometry, self._right_exit_last_receive,
+                 self._right_exit_last_publication)
+        self.right_exit_geometry = None
+        self._right_exit_last_receive = self._right_exit_last_publication = None
+        try:
+            native, _ = self._right_exit_target(scan, now)
+            corridor = copy.deepcopy(self.right_exit_geometry)
+        finally:
+            (self.right_exit_geometry, self._right_exit_last_receive,
+             self._right_exit_last_publication) = saved
+        if native is not None and native > NEUTRAL:
+            # A different live layout still calls for left; no memorized
+            # turn direction or permanent release latch overrides it.
+            self._clear_second_return()
+            return None
+        candidates = []
+        if native is not None:
+            # Preserve a valid clockwise request already made by the support
+            # pursuit law. A straight corridor must not suppress that orbit.
+            requested = min(native, bypass_target)
+            all_points = self._path_points(scan)
+            candidates = [pwm for pwm in {*ROUTE_PATH_RIGHT_CANDIDATES, requested, NEUTRAL}
+                          if requested <= pwm <= NEUTRAL
+                          and self._second_return_support_clear(points, pwm)
+                          and all_points
+                          and self._path_free_distance(all_points, pwm) >= ROUTE_PATH_LOOKAHEAD_M]
+        if not candidates:
+            # Do not reuse old geometry to increase right steering. The
+            # existing near-body and stale-frame gates remain authoritative.
+            if self.second_return_preparing:
+                return min(self.servo, NEUTRAL)
+            return None
+        choice = min(candidates, key=lambda pwm: abs(pwm-requested))
+        self.second_return_preparing = True
+        self.second_return_evidence = {
+            'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'received_at': scan['received_at'], 'track_id': self.second_track_id,
+            'support_bins': list(self.second_target['support_bins']),
+            'observed_frontmost_x_m': max(p[0] for p in points),
+            'observed_right_body_gap_m': min(-p[1] for p in points)-SIDE_BODY_EXTENT_M,
+            'corridor': corridor, 'corridor_target_pwm': native,
+            'support_bypass_target_pwm': bypass_target, 'requested_target_pwm': requested,
+            'selected_target_pwm': choice, 'clear_candidates': sorted(candidates),
+            'all_obstacle_lookahead_m': ROUTE_PATH_LOOKAHEAD_M,
+            'basis': 'current_complete_support_right_of_current_corridor_return_arc',
+            'pass_proven': False, 'swept_path_certified': False,
+            'physical_curvature_calibrated': False}
+        return choice
+
     def _begin_second_orbit(self, scan, now, control):
+        self._clear_second_return()
         self.second_track_id = self.second_target['track_id']
         self.second_tracker.enable_close_maintenance(self.second_track_id)
         self._second_role_anchor = copy.deepcopy(self.second_target)
@@ -2380,14 +2486,19 @@ class ManeuverSequence(TurnMotion):
         if (target is None and isinstance(held, dict) and held.get('track_id') == self.second_track_id
                 and now-self.second_orbit_since < ORBIT_ENTRY_MAX_S):
             # Tolerant tracker kept the identity through a missing frame:
-            # keep the selected command for this frame only.
-            self.steering_target = self.servo
+            # keep the selected command, or continue an adopted left release.
+            if self.second_return_preparing and not self._route_adopted(control, now):
+                return self._result(now)
+            self.steering_target = (min(self.servo, NEUTRAL)
+                                    if self.second_return_preparing else self.servo)
+            self.natural_steering_target = self.steering_target
             self.reason = 'second_target_missing_frame_hold'
             self._slew(now)
             return self._result(now)
         lost = (target is None or target.get('track_id') != self.second_track_id
                 or not target.get('confirmed'))
         if now-self.second_orbit_since >= ORBIT_ENTRY_MAX_S or lost:
+            self._clear_second_return()
             # Self-recovery: go back to corridor following, which re-acquires
             # the second support (or continues) from the current position.
             self.route_stage = 'corridor_follow'
@@ -2429,6 +2540,7 @@ class ManeuverSequence(TurnMotion):
             # Trial46 operator: after the second target turn on toward the
             # traffic light and end facing it. Direction comes from free space.
             self.route_stage, self.light_since = 'light_turn', now
+            self.second_return_preparing = False
             self._light_history.clear()
             self._light_heading = None
             self.steering_target = self.servo
@@ -2440,8 +2552,12 @@ class ManeuverSequence(TurnMotion):
         if points is None:
             # Partial boundaries maintain only the already selected command;
             # they cannot define a new bypass point or prove a pass.
-            self.steering_target = self.servo
+            self.steering_target = (min(self.servo, NEUTRAL)
+                                    if self.second_return_preparing else self.servo)
+            self.natural_steering_target = self.steering_target
             self.reason = 'second_target_partial_support_hold'
+            if self.second_return_preparing:
+                self._slew(now)
             return self._result(now)
         body_length = FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M
         front = max(p[0] for p in points)
@@ -2465,6 +2581,12 @@ class ManeuverSequence(TurnMotion):
             'nominal_target_pwm': nominal,
             'scope': 'current_support_relative_point_trial',
             'swept_path_certified': False, 'physical_curvature_calibrated': False}
+        was_preparing = self.second_return_preparing
+        returning = self._second_return_target(scan, now, points, nominal)
+        if returning is not None:
+            nominal = returning
+            if not was_preparing:
+                self._route_event('second_return_prepare', scan, control, self.second_return_evidence)
         self.natural_steering_target = nominal
         if nominal < NEUTRAL and (self.second_center_ack is None or self.servo > NEUTRAL):
             self.steering_target = NEUTRAL
@@ -2473,6 +2595,12 @@ class ManeuverSequence(TurnMotion):
             self.steering_target = nominal
             self.reason = ('second_target_left_of_support_entry' if nominal > NEUTRAL
                            else 'second_target_clockwise_bounded_entry')
+        if self.second_return_preparing:
+            self.reason = ('second_target_return_waiting_center_ack'
+                           if nominal < NEUTRAL and self.steering_target == NEUTRAL
+                           else 'second_target_return_current_geometry'
+                           if self.second_return_evidence['source_seq'] == scan['seq']
+                           else 'second_target_return_geometry_hold')
         self._slew(now)
         return self._result(now)
 

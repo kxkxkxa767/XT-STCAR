@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "55 executed once on 2026-10-12 with claude-turn55/32743e6. First-target handover, continuous first identity, first pass, center ACK/right exit and second-target acquisition succeeded without quality wait. Second ID1 stayed confirmed; the support-relative waypoint kept requesting LEFT instead of preparing the clockwise return. Left-front board triggered body gate at scan701 before second-pass proof matured; operator confirms left-board collision. 7 evidence hashes and post-trial6 fresh locked samples/14 installed hashes verified. Vehicle remains turn55,1500/1500 locked. No56 code/package/run. Fix stage exit preparation, not cone contact exemption; route55 replay incomplete because saved302ms gap trips stale gate.",
+  "latest_trial_status": "Latest actual55 remains claude-turn55/32743e6, left-board collision despite continuous second ID.56 source candidate implemented: current-support/corridor early return, actual center ACK, unchanged board and final-pass protection. Related329/full652 pass; stashed baseline637 pass, identical empty failure sets.37 detector and51–54 route outputs unchanged;55 conditional692 neutral/694 right with missing-frame limits retained.56 not yet built/deployed/driven. User now authorizes Codex to continue56 testing, no handoff unless explicitly requested. Vehicle last verified55 locked1500/1500; fresh start placement must be checked.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -17475,5 +17475,164 @@
       "terminal_rec_s": 6.291,
       "first_locked_observer_elapsed_s": 10.366252
     }
+  },
+  "after55_second_orbit_exit_correction": {
+    "author": "Codex",
+    "date": "2026-10-12",
+    "source_base_commit": "a3a85f37b128c13678d4687956419b77b3f9c168",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 56,
+    "user_instruction": "修二桶不及时右转，不特化赛道，保留中位ACK和挡板保护，测试后推送；后续问题直接修改。追加：直接由Codex继续实车测试，用户明确交给Claude之前不主动交接。",
+    "failure_classes": [
+      "D 转向准备缺失",
+      "E 响应滞后加剧",
+      "G 覆盖层与ACK一致性",
+      "H 非赛道特化"
+    ],
+    "root_cause": "55二桶ID1始终确认，但前置追踪点一直偏左；阶段未及时请求中位/右转，700才开始最终通过证明，701挡板门先触发。中位ACK为空是未请求回中的结果。",
+    "change": {
+      "geometry": "二桶完整当前支撑（含未知边缘保守投影）全部在右侧且侧隙>=8cm后，测量本帧唯一前方通道，不继承或续租旧首桶出口通道。通道需请求中位/右转，结合原绕桶法已有的右转意图，避免直通道压住合法顺时针绕行。",
+      "whole_support_arc": "逐个检查中位/右候选：不可强于实时通道与绕桶法的组合请求；整个桶支撑必须留在前进弧右侧且>=8cm，远于普通.7m路径前视的点也参与；再检查原.7m全回波路径。没有可用候选时不能由新层创造右转。采用原未标定弧模型，不是物理扫掠安全认证。",
+      "ack_and_pass": "提前减左、实际中位ACK、再右转；每步须前命令已采用。转向准备独立于最终二过；整簇越车尾、右隙8cm、>=3帧/双时钟.25s才记录通过。",
+      "override": "second_return_preparing中路径/近距覆盖只能保持阶段已核验目标，不能重新加左或挤掉中位ACK。尚未准备的通道/二桶保留Claude恢复的向左避桶规则。",
+      "continuity": "held/partial/缺通道仅继续已采用命令后的减左或保持已右，不增长右、不续证明；断电质量等待同样只减左。真失ID、改绑、超时清准备，进入灯区清活动准备。未准备partial保持旧策略。",
+      "unchanged": "桶状精确回波接触例外、服务原扫描核对、挡板/板端门、旧帧/时钟/桥锁/ACK期限/累计预算不改；crates不改。",
+      "all_stage_audit": "首桶已有提前减左，出口/通道依据当前几何，灯区依据实时自由空间。本次补二桶缺失的提前准备及drive/held/partial/wait一致性，旧共用协议与路径回归仍全过。",
+      "generalization": "无固定赛道坐标、长度、拐点时间或总向右。当前左向/缺失/歧义通道不触发准备；布局和桶距可变，远桶不可被提前切到错误一侧；默认模式与首桶直道场景不受二桶角色准备影响。"
+    },
+    "verification": {
+      "unit_and_stash": {
+        "related-final": {
+          "tests": 329,
+          "seconds": 7.965,
+          "failure_error_identities": [],
+          "log": "work/turn56-second-exit-verification-20261012/related-final.log"
+        },
+        "full-candidate-final": {
+          "tests": 652,
+          "seconds": 32.168,
+          "failure_error_identities": [],
+          "log": "work/turn56-second-exit-verification-20261012/full-candidate-final.log"
+        },
+        "full-stashed-baseline": {
+          "tests": 637,
+          "seconds": 32.076,
+          "failure_error_identities": [],
+          "log": "work/turn56-second-exit-verification-20261012/full-stashed-baseline.log"
+        },
+        "stash": {
+          "new_retained_stash": "24f6832661673dad1567a770a9036d6591521a9d",
+          "restored_hashes_match": true,
+          "old_stashes_untouched": true,
+          "used_pop": false
+        }
+      },
+      "tests_changed_and_why": {
+        "old_tests_modified": false,
+        "new_test_count": 15,
+        "new_test_file": "web/vehicle-console/tests/test_second_orbit_exit_preparation.py",
+        "coverage": "55真实扫描/698 held；中位与上步ACK、held超时；不同布局及刚体变换；直通道保留合法绕桶右弧；远桶整弧不能绕错侧；左桶/缺失/歧义通道；不续旧证/不增加右舵；等待采用后减左/覆盖不加左；原通过成熟窗口；旧帧和真实704挡板硬停。"
+      },
+      "fixture": {
+        "path": "web/vehicle-console/tests/fixtures/route-55-second-exit-board.json",
+        "source": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261012-55/feedback.jsonl",
+        "sequences": [
+          680,
+          682,
+          684,
+          686,
+          688,
+          690,
+          692,
+          694,
+          696,
+          698,
+          700,
+          702,
+          704
+        ],
+        "raw_scans_unchanged": true
+      },
+      "detector_37_trials": {
+        "exact_output_match": true,
+        "trials": "19–55",
+        "totals": {
+          "first/strict(51)": {
+            "seen": 489,
+            "conf": 392,
+            "ids": 53
+          },
+          "first/gap(52)": {
+            "seen": 492,
+            "conf": 396,
+            "ids": 51
+          },
+          "first/tolerant": {
+            "seen": 530,
+            "conf": 450,
+            "ids": 42
+          },
+          "ahead/strict(51)": {
+            "seen": 276,
+            "conf": 176,
+            "ids": 63
+          },
+          "ahead/gap(52)": {
+            "seen": 275,
+            "conf": 179,
+            "ids": 55
+          },
+          "ahead/tolerant": {
+            "seen": 317,
+            "conf": 232,
+            "ids": 44
+          }
+        }
+      },
+      "route_exact_matches": {
+        "51": true,
+        "52": true,
+        "53": true,
+        "54": true,
+        "55": true
+      },
+      "route_key_behavior": "51 rec1.70s handover；52 rec5.19s second_orbit、5.39s左舵1525；54等待同ID，3.29s首过恢复，51–54整份日志逐字节一致。",
+      "route55_incomplete": "整轮仍在645→648保存间隔302ms触300ms旧帧门；真实运行有中间帧。不能写整轮通过，不插扫描不放宽门。",
+      "second55_conditional": {
+        "tool": "scripts/second-orbit-replay.py",
+        "comparison": "work/turn56-final-replay-20261012-142902/comparison.json",
+        "model": "真实680/682/684自然跟踪器确认；原实测舵量与已完成首过/二桶交接条件初始化，全部字段/来源记录；后续瞬时模拟ACK，不借用旧命令的旧回复。发布间隔映射接收时钟，每20ms只重复原扫描。",
+        "new_sequence": "690 rec5.194s减左；692 rec5.393s中位1500；随后模拟反馈采用中位；694 rec5.591s有ACK发1460；696发1420。基线仍偏左。",
+        "protocol_violations": [],
+        "board_reference": "保守8cm参考门仍在702/704挡板停车；不模拟服务左舵条件4cm放宽；701没有完整raw。",
+        "limitation": "698因保存5Hz跳帧held，只保持696证据/舵量；700丢失退回通道，原样结束。旧扫描不证明修改后物理轨迹，不能称闭环或整轮通过。"
+      },
+      "integrity": "259个原始证据文件未变。固定回放快照runtime和工具hash与最终相同；测试/fixture元数据在快照后完成，最终哈希单列。所有旧测试未改。",
+      "source_sha256": {
+        "web/vehicle-console/maneuver_sequence.py": "7a162ad162d1d7c9f182503d04367adba7bdb697f6327f7ab087edec1c57f20f",
+        "scripts/second-orbit-replay.py": "029dfd1d8b66e58614909d3ee1d7e0344ad319ba7803efdbe30d3163bda1b46b",
+        "web/vehicle-console/tests/test_second_orbit_exit_preparation.py": "acb29d7790d7753afe9481d51fc3e5dc720d4d07b39e405a20d43cf680bdef85",
+        "web/vehicle-console/tests/fixtures/route-55-second-exit-board.json": "e7bea364428f6571ac0ca8a414234eb7f134d9b5812c2d050bc2681b111b35d5"
+      },
+      "independent_review": "work/turn56-second-exit-verification-20261012/independent-review.json",
+      "evidence_directories": [
+        "work/turn56-second-exit-verification-20261012",
+        "work/turn56-replay-baseline-20261012-141325",
+        "work/turn56-final-replay-20261012-142902"
+      ]
+    },
+    "risks_not_resolved": [
+      "56尚未实车；旧录像命令分叉后的点云不能预测新物理轨迹。",
+      "PWM曲率模型/瞬时ACK不是转向延迟和车速标定。",
+      "55录像缺帧及局部关联丢失如实保留。",
+      "挡板仍停车；整场及灯区/人行横道仍未物理验证。"
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "retained_new_stash": "24f6832661673dad1567a770a9036d6591521a9d，已apply一次恢复候选，未pop，禁止重复恢复；全部旧stash未动。",
+    "next_step": "用户追加由Codex直接测试。先提交推送，再build-matched.py claude-turn55 claude-turn56 56 after55_second_orbit_exit_correction；确认56产物不存在，完成部署前后/跑前新鲜核验；本轮动力前确认车已重新静止在起点且朝原直道，然后仅跑一次。"
   }
 }
