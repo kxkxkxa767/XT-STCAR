@@ -8,7 +8,13 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from maneuver_sequence import (ManeuverSequence, ROUTE_POST_PASS_PWM_STEP, SECOND_BYPASS_SUPPORT_GAP_M,
-                               ROUTE_SLOW_MOTOR, ROUTE_MAX_DRIVE_S, LIGHT_STAGE_MAX_S)
+                               ROUTE_SLOW_MOTOR, ROUTE_MAX_DRIVE_S, LIGHT_STAGE_MAX_S, SECOND_APPROACH_LEFT_M)
+
+# Round 60: after the first pass the exit alignment/corridor law steers toward
+# the line SECOND_APPROACH_LEFT_M left of the lane center (2.4 m test corridors
+# have room for the full offset). Offsets below that are written as
+# `x-APPROACH` describe the car relative to that steered line.
+APPROACH = SECOND_APPROACH_LEFT_M
 from compact_target import _candidates
 from test_compact_target import compact_scan
 from test_compact_target_roles import add_object
@@ -410,13 +416,16 @@ class ManeuverRouteTests(unittest.TestCase):
 
     def test_exit_alignment_pursues_observed_center_line_either_side(self):
         # The exit side is observed, never assumed (trial43 right, trial45 left).
+        # Round 60: the steered line is APPROACH left of the observed center.
         def expected(heading, offset, width=2.4):
             lookahead = min(2., width)  # about one corridor width (trial46 damping)
-            return max(1350, min(1720, 1500+round(180*(math.radians(heading)+math.atan2(offset, lookahead)))))
-        # Axis 23 deg right, center .54 m left: already converging -> gentle right.
+            return max(1350, min(1720, 1500+round(180*(math.radians(heading)
+                                                       + math.atan2(offset+APPROACH, lookahead)))))
+        # Axis 23 deg right, steered line .54 m left: already converging -> gentle right.
         motion = self.route()
-        result = self.step(motion, 5, heading=-23., offset=.54)
-        self.assertEqual(result['right_exit_geometry']['steering_target_pwm'], expected(-23., .54))
+        result = self.step(motion, 5, heading=-23., offset=.54-APPROACH)
+        self.assertEqual(result['right_exit_geometry']['approach_offset_left_m'], APPROACH)
+        self.assertEqual(result['right_exit_geometry']['steering_target_pwm'], expected(-23., .54-APPROACH))
         self.assertLess(result['steering_target'], 1500)
         # Trial45: axis 9.4 deg left, center .66 m left -> left at once, no center ACK needed.
         motion = self.route()
@@ -426,9 +435,9 @@ class ManeuverRouteTests(unittest.TestCase):
         self.assertGreater(result['steering_target'], 1550)
         self.assertEqual(result['servo'], 1500+ROUTE_POST_PASS_PWM_STEP)
         self.assertEqual(result['reason'], 'first_target_exit_alignment_left')
-        # Axis and center both right: right, after the existing center ACK.
+        # Axis and steered line both right: right, after the existing center ACK.
         motion = self.route()
-        result = self.step(motion, 5, heading=-10., offset=-.4)
+        result = self.step(motion, 5, heading=-10., offset=-.4-APPROACH)
         self.assertLess(result['steering_target'], 1500)
         self.assertEqual(result['servo'], 1500-ROUTE_POST_PASS_PWM_STEP)
         self.assertTrue(result['route_right_output_authorized'])
@@ -487,17 +496,17 @@ class ManeuverRouteTests(unittest.TestCase):
 
     def test_corridor_left_then_right_requires_new_actual_center_ack(self):
         motion = self.route('corridor_follow')
-        first = self.step(motion, 5, heading=4., offset=.3)
+        first = self.step(motion, 5, heading=4., offset=.3-APPROACH)
         self.assertGreater(first['servo'], 1500)
         self.assertEqual(first['servo'], min(first['steering_target'], 1500+ROUTE_POST_PASS_PWM_STEP))
         self.assertIsNone(first['route_center_ack'])
         # Stay inside existing offset association gate while changing correction.
-        self.step(motion, 6, heading=-4., offset=.01)
-        result = self.step(motion, 7, heading=-4., offset=-.1, servo=1500+ROUTE_POST_PASS_PWM_STEP,
+        self.step(motion, 6, heading=-4., offset=.01-APPROACH)
+        result = self.step(motion, 7, heading=-4., offset=-.1-APPROACH, servo=1500+ROUTE_POST_PASS_PWM_STEP,
                            command_acked=False)
         self.assertGreaterEqual(result['servo'], 1500)
         self.assertFalse(result['route_right_output_authorized'])
-        result = self.step(motion, 8, heading=-4., offset=-.1, servo=1500)
+        result = self.step(motion, 8, heading=-4., offset=-.1-APPROACH, servo=1500)
         self.assertEqual(result['servo'], max(result['steering_target'], 1500-ROUTE_POST_PASS_PWM_STEP))
         self.assertLess(result['servo'], 1500)
         self.assertEqual(result['route_center_ack']['seq'], 8)
@@ -560,8 +569,8 @@ class ManeuverRouteTests(unittest.TestCase):
 
     def test_trial43_left_front_second_support_gets_left_bypass_then_right_after_center_ack(self):
         motion = self.route('corridor_follow')
-        for seq in (5, 6, 7, 8):
-            result = self.step(motion, seq, second=15., heading=0.)
+        for seq in (5, 6, 7, 8):  # car on the steered approach line: neutral corridor command
+            result = self.step(motion, seq, second=15., heading=0., offset=-APPROACH)
         self.assertTrue(result['second_target_handover_observed'])
         self.assertEqual(result['role_distinct_evidence']['second_side'], 'left')
         self.assertEqual(result['servo'], 1500)
@@ -621,8 +630,8 @@ class ManeuverRouteTests(unittest.TestCase):
     def second_handover(self, servo=1500):
         motion = self.route('corridor_follow', servo=servo)
         if servo > 1500: motion._route_center_ack = None
-        for seq in (5, 6, 7, 8):
-            result = self.step(motion, seq, second=-45., heading=0.)
+        for seq in (5, 6, 7, 8):  # car on the steered approach line (round 60)
+            result = self.step(motion, seq, second=-45., heading=0., offset=-APPROACH)
         self.assertTrue(result['second_target_handover_observed'])
         return motion, result
 

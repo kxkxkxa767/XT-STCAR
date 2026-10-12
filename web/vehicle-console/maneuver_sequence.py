@@ -230,6 +230,28 @@ SECOND_STEER_LAG_S = .3
 # isolation, association, corridor uniqueness and 3-frame confirmation stay.
 SECOND_ACQUISITION_MIN_POINTS = 3
 SECOND_MAX_HEADING_RATE_RAD_S = math.radians(150)
+# Round 60 (Claude): after the first pass, the exit alignment and corridor
+# following steer toward a line this far LEFT of the measured lane center
+# instead of the center itself (task rule: the second support is passed
+# clockwise, i.e. on the car's left side). Trial59: the car followed the
+# center (.10 m left of it), the second support was confirmed at ~1.4-1.8 m
+# about on the center line, and the remaining .30 m bypass offset at 1.27 m/s
+# took 1611-1639 and ~40 deg of heading toward the separator board, whose end
+# is ~.9 m left of that support. The line is the bypass offset for a support
+# whose left edge is on the center; it is bounded by the measured width (body
+# side + maneuver clearance + SECOND_APPROACH_WALL_MARGIN_M to the left wall).
+# The second-support bypass law itself (lane frame + pursuit) is unchanged.
+SECOND_APPROACH_LEFT_M = SECOND_BYPASS_SUPPORT_GAP_M
+SECOND_APPROACH_WALL_MARGIN_M = .15
+# Round 60 (Claude): stage bound of the second orbit (handover -> matured
+# pass), separate from the first orbit's ORBIT_ENTRY_MAX_S. The second
+# support is acquired up to MAX_RANGE_M (3 m) ahead and the pass needs it
+# behind the rear plus .25 s: at the slowest measured 1550 speed (~.6 m/s)
+# that is ~5.5 s. Trial57 used 2.79 s of the old 3.0 s from 2.49 m at
+# ~.9 m/s; the round-59 3-return acquisition confirms earlier (up to ~2.5 m)
+# and a timeout there drops back to corridor following with the support
+# already beside the car. The cumulative route drive budget still applies.
+SECOND_ORBIT_MAX_S = 6.0
 # Releasing left toward center while the second return is being prepared
 # (round 57): trial56 needed ~.25 s per adopted 40-PWM step, 1720 -> 1600 in
 # .53 s, still not centered at the board .7 s after preparing. Release only;
@@ -1807,7 +1829,7 @@ class ManeuverSequence(TurnMotion):
                       left_turn_feedback=copy.deepcopy(self.left_turn_feedback),
                       handover_control=copy.deepcopy(self.handover_control),
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
-                      orbit_entry_max_s=ORBIT_ENTRY_MAX_S,
+                      orbit_entry_max_s=ORBIT_ENTRY_MAX_S, second_orbit_max_s=SECOND_ORBIT_MAX_S,
                       presteer_max_s=self.max_presteer_s,
                       left_turn_servo_cap=SERVO_MAX,
                       steering_step_policy={'presteer': PRESTEER_PWM_STEP,
@@ -2098,7 +2120,8 @@ class ManeuverSequence(TurnMotion):
             # observed corridor-heading rate (the car yawing left makes it fall).
             heading_rate = (_wrap(c['heading_left_rad']-previous['heading_left_rad'])
                             / ((scan['at_ms']-previous['source_at_ms'])/1000))
-        error = (c['heading_left_rad']+math.atan2(c['center_offset_left_m'], lookahead)
+        approach = self._approach_offset(c)
+        error = (c['heading_left_rad']+math.atan2(c['center_offset_left_m']+approach, lookahead)
                  + ROUTE_ALIGN_DAMPING_S*heading_rate)
         # Trial45: after the first pass the corridor axis was 9.4 deg LEFT and
         # its center .66 m left (trial43: axis 10 deg right). The exit side is
@@ -2109,9 +2132,24 @@ class ManeuverSequence(TurnMotion):
         self.right_exit_geometry = {**copy.deepcopy(c), 'source_seq': scan['seq'],
             'source_at_ms': scan['at_ms'], 'received_at': scan['received_at'],
             'lookahead_m': lookahead, 'steering_target_pwm': target, 'heading_rate_rad_s': heading_rate,
+            'approach_offset_left_m': approach,
             'source': 'current_native_corridor', 'second_target_confirmed': False}
         self._right_exit_last_receive, self._right_exit_last_publication = scan['received_at'], scan['at_ms']
         return target, None
+
+    def _approach_offset(self, corridor):
+        """Left offset of the steered line from the lane center (round 60).
+
+        Only in route mode between the first pass and the second handover
+        (exit alignment, corridor following); zero everywhere else, including
+        the second orbit's lane measurement and return target.
+        """
+        if not (self.continue_route and self.first_pass_evidence is not None
+                and self.route_stage in ('right_align', 'corridor_follow')):
+            return 0.
+        room = (corridor['width_m']/2-(SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M)
+                - SECOND_APPROACH_WALL_MARGIN_M)
+        return max(0., min(SECOND_APPROACH_LEFT_M, room))
 
     @staticmethod
     def _corridor_body_gap(candidate):
@@ -2471,7 +2509,8 @@ class ManeuverSequence(TurnMotion):
             return self._begin_second_orbit(scan, now, control)
         c = self.right_exit_geometry
         self._lane_left_limit(scan, c['heading_left_rad'], c.get('heading_rate_rad_s'))
-        error = (c['heading_left_rad']+math.atan2(c['center_offset_left_m'], c['lookahead_m'])
+        error = (c['heading_left_rad']
+                 + math.atan2(c['center_offset_left_m']+c.get('approach_offset_left_m', 0.), c['lookahead_m'])
                  + ROUTE_ALIGN_DAMPING_S*c.get('heading_rate_rad_s', 0.))
         target = max(NEUTRAL-55, min(NEUTRAL+55, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
         natural = target
@@ -2655,7 +2694,7 @@ class ManeuverSequence(TurnMotion):
         target = self.second_target
         held = getattr(self.second_tracker, 'held', None)
         if (target is None and isinstance(held, dict) and held.get('track_id') == self.second_track_id
-                and now-self.second_orbit_since < ORBIT_ENTRY_MAX_S):
+                and now-self.second_orbit_since < SECOND_ORBIT_MAX_S):
             # Tolerant tracker kept the identity through a missing frame:
             # keep the selected command, or continue an adopted left release.
             if self.second_return_preparing and not self._route_adopted(control, now):
@@ -2668,7 +2707,7 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         lost = (target is None or target.get('track_id') != self.second_track_id
                 or not target.get('confirmed'))
-        if now-self.second_orbit_since >= ORBIT_ENTRY_MAX_S or lost:
+        if now-self.second_orbit_since >= SECOND_ORBIT_MAX_S or lost:
             self._clear_second_return()
             # Self-recovery: go back to corridor following, which re-acquires
             # the second support (or continues) from the current position.
