@@ -214,6 +214,22 @@ SECOND_LANE_MAX_HEADING_RAD = math.radians(45)
 # the pursuit needs (limit 1712).
 SECOND_BYPASS_MAX_HEADING_RAD = math.radians(30)
 SECOND_HEADING_HOLD_GAIN = 450.
+# Round 59 (Claude): the heading limit acts on the heading predicted one
+# steering lag ahead (lane-heading rate over consecutive fresh frames).
+# Trial58: 445 at 12 deg left with 72 deg/s yaw was still allowed 1646; the
+# car reached 35 deg left of the lane (left board) before the return acted.
+# trial-map: commands act on the trajectory ~.2-.3 s later.
+SECOND_STEER_LAG_S = .3
+# Round 59 (Claude): the second role (corridor proof, its tracker and identity
+# recovery) acquires a 3-return support. At 2.5-2.9 m a ~.17 m support spans
+# ~3.5 one-degree bins, so frames alternate 3/4 returns and an unconfirmed
+# identity kept restarting (trial58: confirmed only at 1.79 m, the near
+# pursuit then turned the car into the left board). Saved trials 47-58, ahead
+# sector: first confirmation 52 1.72->2.28 m, 55 1.75->2.01, 56 1.20->2.04,
+# 57 2.20->2.40, 58 1.68->2.46; no extra identities on boards. Size,
+# isolation, association, corridor uniqueness and 3-frame confirmation stay.
+SECOND_ACQUISITION_MIN_POINTS = 3
+SECOND_MAX_HEADING_RATE_RAD_S = math.radians(150)
 # Releasing left toward center while the second return is being prepared
 # (round 57): trial56 needed ~.25 s per adopted 40-PWM step, 1720 -> 1600 in
 # .53 s, still not centered at the board .7 s after preparing. Release only;
@@ -392,7 +408,8 @@ class ManeuverSequence(TurnMotion):
         # the rear, where the pass is matured over .25 s.
         return CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, math.pi/2),
             maintenance_bearing_rad=(-math.pi, math.pi/2), select_associated=True,
-            unconfirmed_boundary_gap=True, tolerant=True)
+            unconfirmed_boundary_gap=True, tolerant=True,
+            acquisition_min_points=SECOND_ACQUISITION_MIN_POINTS)
 
     def _route_event(self, name, scan, control, evidence=None):
         # One snapshot per transition, never an unbounded in-control log.
@@ -1595,7 +1612,15 @@ class ManeuverSequence(TurnMotion):
             # check. In particular, keep its neutral ACK request at neutral.
             return target, target
         if self.route_stage in TASK_LEFT_BYPASS_STAGES:
-            return (RIGHT_EXIT_MIN_PWM if target < NEUTRAL else NEUTRAL), SERVO_MAX
+            lower = RIGHT_EXIT_MIN_PWM if target < NEUTRAL else NEUTRAL
+            upper = SERVO_MAX
+            cap = getattr(self, '_task_left_upper', None)
+            scan = self._current_scan
+            if cap is not None and isinstance(scan, dict) and cap[0] == scan.get('seq'):
+                # Never turn the car past the lane-heading limit to dodge an
+                # obstacle: a cone contact continues, a board contact ends.
+                upper = max(target, min(SERVO_MAX, cap[1]))
+            return lower, max(lower, upper)
         if target == NEUTRAL:
             return NEUTRAL, NEUTRAL
         if target < NEUTRAL:
@@ -2270,7 +2295,8 @@ class ManeuverSequence(TurnMotion):
         reference = (previous if isinstance(previous, dict)
                      and self._observation_lease(scan, now, previous.get('source_at_ms'),
                                                  previous.get('source_received_at')) else anchor)
-        candidates = _candidates(scan['ranges'], bearing_range_rad=(-math.pi, math.pi/2), tolerant=True)
+        candidates = _candidates(scan['ranges'], bearing_range_rad=(-math.pi, math.pi/2), tolerant=True,
+                                 min_points=SECOND_ACQUISITION_MIN_POINTS)
         first = self.compact_target
         first_bins = (set(first['support_bins']) if isinstance(first, dict)
                       and first.get('track_id') == self.orbit_track_id
@@ -2360,7 +2386,8 @@ class ManeuverSequence(TurnMotion):
             heading = c['heading_left_rad']
             bound = c['width_m']/2-MANEUVER_BODY_CLEARANCE_M
             ahead = []
-            for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True):
+            for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True,
+                                      min_points=SECOND_ACQUISITION_MIN_POINTS):
                 x, y = target['point_left_m']
                 along = math.cos(heading)*x+math.sin(heading)*y
                 normal = -math.sin(heading)*x+math.cos(heading)*y
@@ -2443,6 +2470,7 @@ class ManeuverSequence(TurnMotion):
         if self.second_target is not None and self.second_target.get('confirmed') is True:
             return self._begin_second_orbit(scan, now, control)
         c = self.right_exit_geometry
+        self._lane_left_limit(scan, c['heading_left_rad'], c.get('heading_rate_rad_s'))
         error = (c['heading_left_rad']+math.atan2(c['center_offset_left_m'], c['lookahead_m'])
                  + ROUTE_ALIGN_DAMPING_S*c.get('heading_rate_rad_s', 0.))
         target = max(NEUTRAL-55, min(NEUTRAL+55, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
@@ -2484,6 +2512,18 @@ class ManeuverSequence(TurnMotion):
                 return False
         return True
 
+    def _lane_left_limit(self, scan, heading, rate):
+        """Left PWM allowed by the lane-heading limit, predicted one lag ahead.
+
+        Round 59 (Claude). Also bounds a task-left path correction in this
+        frame (trial58 442/445: the path check raised 1612/1625 to 1632/1646
+        while the car was already yawing 72 deg/s toward the left board).
+        """
+        predicted = heading+(rate*SECOND_STEER_LAG_S if rate is not None and rate < 0 else 0.)
+        limit = NEUTRAL+round(SECOND_HEADING_HOLD_GAIN*(predicted+SECOND_BYPASS_MAX_HEADING_RAD))
+        self._task_left_upper = (scan.get('seq'), limit)
+        return predicted, limit
+
     def _current_lane(self, scan, now):
         """This frame's corridor measurement, without keeping its identity."""
         saved = (self.right_exit_geometry, self._right_exit_last_receive,
@@ -2502,6 +2542,17 @@ class ManeuverSequence(TurnMotion):
         """Lane-frame bypass target left of the second support, or None."""
         _, lane = self._current_lane(scan, now)
         self._second_lane_heading = None if lane is None else lane['heading_left_rad']
+        previous = getattr(self, '_second_lane_previous', None)
+        self._second_lane_rate = None
+        if lane is not None:
+            row = (scan['at_ms']/1000, scan['received_at'], lane['heading_left_rad'])
+            if previous is not None and .05 <= row[0]-previous[0] <= SCAN_AGE_S and .05 <= row[1]-previous[1] <= SCAN_AGE_S:
+                rate = _wrap(row[2]-previous[2])/(row[0]-previous[0])
+                if abs(rate) <= SECOND_MAX_HEADING_RATE_RAD_S:
+                    self._second_lane_rate = rate
+            self._second_lane_previous = row
+        else:
+            self._second_lane_previous = None
         if lane is None or abs(lane['heading_left_rad']) > SECOND_LANE_MAX_HEADING_RAD:
             return None
         heading, offset, width = lane['heading_left_rad'], lane['center_offset_left_m'], lane['width_m']
@@ -2712,7 +2763,8 @@ class ManeuverSequence(TurnMotion):
             self.second_feedback['scope'] = 'max_of_support_pursuit_and_lane_frame_bypass'
         lane_heading = getattr(self, '_second_lane_heading', None)
         if lane_heading is not None and nominal > NEUTRAL:
-            limit = NEUTRAL+round(SECOND_HEADING_HOLD_GAIN*(lane_heading+SECOND_BYPASS_MAX_HEADING_RAD))
+            predicted, limit = self._lane_left_limit(scan, lane_heading, getattr(self, '_second_lane_rate', None))
+            self.second_feedback['predicted_lane_heading_rad'] = predicted
             if nominal > limit:
                 nominal = max(RIGHT_EXIT_MIN_PWM, limit)
                 self.second_feedback['heading_limited_target_pwm'] = nominal

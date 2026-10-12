@@ -187,7 +187,7 @@ def _tolerant_edges(ranges, group, values, diameter, allow_boundary_gap, mainten
 
 def _candidates(ranges, *, allow_boundary_gap=False,
                 bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD), tolerant=False,
-                min_range_m=MIN_RANGE_M, maintenance=False):
+                min_range_m=MIN_RANGE_M, maintenance=False, min_points=None):
     bearing_min, bearing_max = _bearing_range(bearing_range_rad, 'bearing_range_rad')
     if type(allow_boundary_gap) is not bool or type(tolerant) is not bool or type(maintenance) is not bool:
         raise ValueError('allow_boundary_gap, tolerant and maintenance must be bools')
@@ -200,7 +200,8 @@ def _candidates(ranges, *, allow_boundary_gap=False,
     points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
     result = []
     for group in (_clusters_bridged(points, TOLERANT_INTERNAL_NULLS) if tolerant else _clusters(points)):
-        minimum = (TOLERANT_MAINTENANCE_MIN_POINTS if maintenance
+        minimum = (min_points if min_points is not None
+                   else TOLERANT_MAINTENANCE_MIN_POINTS if maintenance
                    else TOLERANT_MIN_POINTS if tolerant else MIN_POINTS)
         if not minimum <= len(group) <= 128:
             continue
@@ -340,7 +341,7 @@ class CompactTargetTracker:
     """
     def __init__(self, *, acquisition_bearing_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD),
                  maintenance_bearing_rad=None, select_associated=False, unconfirmed_boundary_gap=False,
-                 tolerant=False):
+                 tolerant=False, acquisition_min_points=None):
         self._acquisition_bearing_rad = _bearing_range(acquisition_bearing_rad, 'acquisition_bearing_rad')
         self._maintenance_bearing_rad = (None if maintenance_bearing_rad is None else
                                          _bearing_range(maintenance_bearing_rad, 'maintenance_bearing_rad'))
@@ -349,6 +350,10 @@ class CompactTargetTracker:
         if type(unconfirmed_boundary_gap) is not bool or type(tolerant) is not bool:
             raise ValueError('unconfirmed_boundary_gap and tolerant must be bools')
         self._tolerant = tolerant
+        if acquisition_min_points is not None and (type(acquisition_min_points) is not int
+                or not TOLERANT_MAINTENANCE_MIN_POINTS <= acquisition_min_points <= MIN_POINTS or not tolerant):
+            raise ValueError('acquisition_min_points must be a tolerant 3..5 return count')
+        self._acquisition_min_points = acquisition_min_points
         self.held = None  # tolerant: identity kept through this missing/ambiguous frame
         self._select_associated = select_associated
         # Opt-in (explicit route first target). Trial51: the first support at
@@ -450,7 +455,8 @@ class CompactTargetTracker:
         candidates = _candidates(ranges, allow_boundary_gap=allow_boundary_gap,
                                  bearing_range_rad=bearing_range, tolerant=self._tolerant,
                                  maintenance=maintenance,
-                                 min_range_m=CLOSE_MAINTENANCE_MIN_RANGE_M if close_bound else MIN_RANGE_M)
+                                 min_range_m=CLOSE_MAINTENANCE_MIN_RANGE_M if close_bound else MIN_RANGE_M,
+                                 min_points=None if maintenance else self._acquisition_min_points)
         candidates = [{**candidate, 'close_maintenance_observation':
                        any(ranges[i] < MIN_RANGE_M for i in candidate['support_bins'])}
                       for candidate in candidates]
