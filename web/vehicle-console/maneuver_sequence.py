@@ -301,6 +301,124 @@ PAIR_MIN_SHARED_SUPPORT_M = .35
 # different physical axis (corner/T) differs far more and stays ambiguous.
 PAIR_MERGE_HEADING_RAD = PAIR_MAX_ANGLE_RAD
 PAIR_MERGE_OFFSET_M = .15
+# Round 64 (Claude, layout_3p2_route_redesign_20261012). The course is laid
+# with 3.2 m side straights (user; construction document: two half dividers
+# of about half the length): the first U-turn opening is ~L-3.2 m and the
+# dividers do not overlap, so the native left junction (front wall <= 3 m,
+# opening <= 2.25 m) and the native corridor (<= 2.5 m) do not exist where the
+# narrow practice course had them. Every run starts in the start zone.
+#
+# Wall compass: the car heading relative to the start-lane axis, tracked from
+# the native finite walls of every scan. The course is a board rectangle with
+# dividers parallel to its sides (rules), so each long straight wall votes its
+# direction modulo 90 deg around the predicted heading; the span-weighted
+# median corrects the prediction. Trials 57-62 (work/layout-3p2-analysis-
+# 20261012/compass-real.log): against every frame with one native corridor
+# the error was p50 .7-1.0, p90 1.4-2.0, max 2.7 deg, through both U-turns.
+COMPASS_MIN_SPAN_M = .5
+COMPASS_MAX_FIT_M = .04
+COMPASS_MIN_POINTS = 20
+COMPASS_GATE_RAD = math.radians(30)
+COMPASS_MIN_SUPPORT_M = 1.
+COMPASS_MAX_RATE_RAD_S = 2.5
+COMPASS_MAX_PREDICT_S = .3
+COMPASS_RATE_WINDOW_S = (.05, .5)
+COMPASS_MAX_STALE_S = 1.
+# Start lane (stage start_lane): admitted in a measured straight lane with no
+# native left opening ahead; follows the lane walls with the start-straight
+# law (autonomy_live.CorridorSteering), else holds the compass heading.
+LANE_START_MAX_HEADING_RAD = math.radians(15)
+LANE_START_WIDTH_M = (.65, 2.2)
+LANE_START_MIN_FRONT_M = 1.
+LANE_START_SETTLE_S = .3
+LANE_START_HOLD_PWM = 55
+# First support from the lane (task rule: first support anticlockwise, i.e. on
+# the car's left). It is acquired ahead-left (the course places it past the
+# start divider's open end, in the obstacle area left of the start lane) and
+# approached by pursuit of the point FIRST_APPROACH_GAP_M right of its
+# nearest (right) edge, the mirror of the second-support bypass point. Within
+# the handover window (45-135 deg, <= 3 m) the existing first-target orbit
+# takes over once the support is this far round and a left command is adopted.
+FIRST_ACQUIRE_BEARING_RAD = (math.radians(10), math.radians(135))
+FIRST_APPROACH_MAX_RANGE_M = 3.5
+FIRST_APPROACH_GAP_M = SECOND_BYPASS_SUPPORT_GAP_M
+FIRST_HANDOVER_BEARING_RAD = math.radians(70)
+# Without a first support, stop in front of a board with the measured rolling
+# decel (agent.md section 5) plus a reaction allowance.
+LANE_START_STOP_DECEL_MPS2 = .5
+
+
+def _wrap90(angle):
+    quarter = math.pi/2
+    return (angle+quarter/2) % quarter-quarter/2
+
+
+class WallCompass:
+    """Car heading relative to the start-lane axis, from native finite walls.
+
+    The heading is continuous (never wrapped): the first U-turn reads about
+    +pi, the second (clockwise) back about 0. A frame without enough wall
+    support only predicts with the last measured rate; ``current`` reports
+    no heading once the last measurement is older than COMPASS_MAX_STALE_S.
+    No coordinate, course size or turn time is involved.
+    """
+    def __init__(self):
+        self.heading = None
+        self.rate = 0.
+        self.at_s = None
+        self.measured_at_s = None
+        self._last_measurement = None
+        self.evidence = None
+
+    def update(self, scan):
+        at = scan['at_ms']/1000
+        if self.at_s is not None and at <= self.at_s:
+            return self.heading
+        predicted = 0. if self.heading is None else self.heading+self.rate*min(at-self.at_s, COMPASS_MAX_PREDICT_S)
+        votes = []
+        for wall in scan.get('wall_candidates') or []:
+            if (not _valid_wall(wall) or wall['support_span_m'] < COMPASS_MIN_SPAN_M
+                    or wall['fit_error_m'] > COMPASS_MAX_FIT_M or wall['points'] < COMPASS_MIN_POINTS):
+                continue
+            residual = _wrap90(predicted+wall['heading_left_rad'])
+            if abs(residual) <= COMPASS_GATE_RAD:
+                votes.append((residual, wall['support_span_m']))
+        support = sum(span for _, span in votes)
+        median = None
+        if support >= COMPASS_MIN_SUPPORT_M:
+            votes.sort()
+            accumulated = 0.
+            for residual, span in votes:
+                accumulated += span
+                if accumulated >= support/2:
+                    median = residual
+                    break
+            heading = predicted-median
+            if self._last_measurement is not None:
+                dt = at-self._last_measurement[1]
+                if COMPASS_RATE_WINDOW_S[0] <= dt <= COMPASS_RATE_WINDOW_S[1]:
+                    self.rate = max(-COMPASS_MAX_RATE_RAD_S, min(COMPASS_MAX_RATE_RAD_S,
+                                                                 (heading-self._last_measurement[0])/dt))
+            self._last_measurement = (heading, at)
+            self.heading, self.measured_at_s = heading, at
+        elif self.heading is not None:
+            self.heading = predicted
+        self.at_s = at
+        self.evidence = {'source_at_ms': scan['at_ms'], 'heading_rad': self.heading, 'rate_rad_s': self.rate,
+                         'predicted_rad': predicted, 'votes': len(votes), 'support_m': support,
+                         'median_residual_rad': median, 'measured': median is not None,
+                         'basis': 'native_wall_directions_mod_90_vs_start_lane_axis'}
+        return self.heading
+
+    def current(self, scan):
+        """Heading for this scan's publication, or None when stale/uninitialised."""
+        if (self.heading is None or self.measured_at_s is None or not isinstance(scan, dict)
+                or type(scan.get('at_ms')) is not int):
+            return None
+        at = scan['at_ms']/1000
+        if not 0 <= at-self.measured_at_s <= COMPASS_MAX_STALE_S:
+            return None
+        return self.heading+self.rate*min(max(0., at-self.at_s), COMPASS_MAX_PREDICT_S)
 
 
 def validate_maneuver_initial_pwm(value):
@@ -460,6 +578,16 @@ class ManeuverSequence(TurnMotion):
         self.avoid_count = 0
         self.avoid_evidence = []
         self.wait_steering_changes = 0
+        # Round 64 (Claude): wall compass (route mode) and the start-lane entry.
+        self.compass = WallCompass()
+        self.entry_kind = None  # 'junction' (native left opening at the start) or 'lane'
+        self._lane_start_steering = CorridorSteering()
+        self._lane_start_settle_since = None
+        self._lane_start_ticks = 0
+        self._lane_start_slow = False
+        self.start_lane_feedback = None
+        self._lane_start_ok = False
+        self.first_approach = None
 
     @staticmethod
     def _new_second_tracker():
@@ -1773,12 +1901,16 @@ class ManeuverSequence(TurnMotion):
             orbit_left = (self.continue_route and self.phase == 'drive' and self.handover_observed
                           and self.route_stage == 'first_target' and self.first_pass_evidence is None
                           and target > self.servo >= NEUTRAL)
+            # Round 64: the first-support approach from the start lane uses the
+            # route step both ways (the orbit it hands over to uses 40 too).
+            lane_approach = (self.continue_route and self.phase == 'drive'
+                             and self.route_stage == 'start_lane' and self._lane_start_slow)
             if (post_pass and reducing_left and self.route_stage == 'second_orbit'
                     and self.second_return_preparing):
                 post_step = ROUTE_RETURN_RELEASE_PWM_STEP
             else:
                 post_step = ROUTE_POST_PASS_PWM_STEP
-            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else post_step if post_pass else (
+            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else post_step if post_pass or lane_approach else (
                 (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
                 if reducing_left else ROUTE_ORBIT_LEFT_PWM_STEP if orbit_left else PWM_STEP)
             if avoid_target != self.steering_target:
@@ -1933,13 +2065,18 @@ class ManeuverSequence(TurnMotion):
             route_events=copy.deepcopy(self.route_events),
             two_target_observed_pass_complete=self.second_pass_evidence is not None,
             route_right_output_authorized=(self.continue_route and self.phase == 'drive'
-                and not self.quality_resume_pending and self.first_pass_evidence is not None
-                and self._route_center_ack is not None
-                and ((self.route_stage in ('right_align', 'corridor_follow')
-                      and self.right_exit_center_ack is not None)
-                     or (self.route_stage == 'second_orbit' and self.second_center_ack is not None)
-                     or self.route_stage in ('light_turn', 'light_lane'))),
-            route_center_ack=copy.deepcopy(self._route_center_ack))
+                and not self.quality_resume_pending and self._route_center_ack is not None
+                and ((self.first_pass_evidence is not None
+                      and ((self.route_stage in ('right_align', 'corridor_follow')
+                            and self.right_exit_center_ack is not None)
+                           or (self.route_stage == 'second_orbit' and self.second_center_ack is not None)
+                           or self.route_stage in ('light_turn', 'light_lane')))
+                     # Round 64: start-lane wall corrections, after an actual center ACK.
+                     or (self.route_stage == 'start_lane' and self.entry_kind == 'lane'))),
+            route_center_ack=copy.deepcopy(self._route_center_ack),
+            entry_kind=self.entry_kind, start_lane_feedback=copy.deepcopy(self.start_lane_feedback),
+            first_approach=copy.deepcopy(self.first_approach),
+            compass=copy.deepcopy(self.compass.evidence) if self.continue_route else None)
         if self.continue_route and self.phase == 'drive' and self.route_stage != 'first_target':
             result['turn_stage'] = self.route_stage
         if self.continue_route:
@@ -2101,6 +2238,214 @@ class ManeuverSequence(TurnMotion):
                 self.route_stage = 'right_align'
                 self._route_event('first_pass', scan, control, self.first_pass_evidence)
 
+    # ---- Round 64 (Claude): start-zone entry -------------------------------
+    def _decide_entry(self, scan):
+        """A native left opening at the start keeps the original entry; a
+        measured straight lane without one starts in the start lane."""
+        if not isinstance(scan, dict):
+            return
+        if scan.get('left_turn_goal') is not None:
+            self.entry_kind = 'junction'
+            return
+        ok, evidence = self._lane_start_geometry(scan)
+        self.start_lane_feedback = evidence
+        if ok:
+            self.entry_kind, self.route_stage = 'lane', 'start_lane'
+            # Ahead-left as well as abeam: the support past the divider's open
+            # end is seen long before it is abeam (still left of the lane).
+            self.target_tracker.widen_acquisition(FIRST_ACQUIRE_BEARING_RAD)
+
+    def _lane_start_geometry(self, scan):
+        """One forward native lane around the car, nearly aligned, room ahead."""
+        values = scan.get('corridor_candidates') if isinstance(scan, dict) else None
+        ranges = scan.get('ranges') if isinstance(scan, dict) else None
+        if (not isinstance(values, list) or len(values) > 24 or not isinstance(ranges, list)
+                or len(ranges) != 360):
+            return False, {'reason': 'start_lane_invalid_scan'}
+        if scan.get('left_turn_goal') is not None:
+            return False, {'reason': 'start_lane_native_left_opening_present'}
+        forward = [c for c in values if _valid_candidate(c) and abs(c['heading_left_rad']) < math.pi/2]
+        if len(forward) > 1:
+            base = forward[0]
+            if all(abs(_wrap(c['heading_left_rad']-base['heading_left_rad'])) <= PAIR_MERGE_HEADING_RAD
+                   and abs(c['center_offset_left_m']-base['center_offset_left_m']) <= PAIR_MERGE_OFFSET_M
+                   and abs(c['width_m']-base['width_m']) <= .15 for c in forward[1:]):
+                forward = [max(forward, key=lambda c: c['left_wall_points']+c['right_wall_points'])]
+        if len(forward) != 1:
+            return False, {'reason': 'start_lane_unique_lane_missing', 'forward_lanes': len(forward)}
+        lane = forward[0]
+        front = [ranges[i % 360] for i in range(-10, 11) if _number(ranges[i % 360])]
+        evidence = {'source_seq': scan.get('seq'), 'source_at_ms': scan.get('at_ms'),
+                    'heading_left_rad': lane['heading_left_rad'],
+                    'center_offset_left_m': lane['center_offset_left_m'], 'width_m': lane['width_m'],
+                    'body_gap_m': self._corridor_body_gap(lane), 'front_m': min(front) if front else None,
+                    'compass_heading_rad': self.compass.current(scan)}
+        if abs(lane['heading_left_rad']) > LANE_START_MAX_HEADING_RAD:
+            return False, {**evidence, 'reason': 'start_lane_heading_too_large'}
+        if not LANE_START_WIDTH_M[0] <= lane['width_m'] <= LANE_START_WIDTH_M[1]:
+            return False, {**evidence, 'reason': 'start_lane_width_out_of_range'}
+        if evidence['body_gap_m'] < MANEUVER_BODY_CLEARANCE_M:
+            return False, {**evidence, 'reason': 'start_lane_body_gap'}
+        if evidence['front_m'] is None or evidence['front_m'] < LANE_START_MIN_FRONT_M:
+            return False, {**evidence, 'reason': 'start_lane_front_blocked'}
+        if evidence['compass_heading_rad'] is None:
+            return False, {**evidence, 'reason': 'start_lane_compass_unavailable'}
+        return True, {**evidence, 'reason': None}
+
+    def _start_lane_presteer(self, scan, lidar_age_s, now, control, *, safe, presteer_wait):
+        """Neutral start: adopt 1500 for three fresh feedback ticks and .3 s."""
+        self.presteer_waiting = False
+        if not (isinstance(control, dict) and control.get('armed') is True):
+            # Neutral preview before arming: admission from this scan only.
+            self.last_now = now
+            ok, evidence = self._lane_start_geometry(scan)
+            self.start_lane_feedback = evidence
+            self.start_ready, self.steering_target = ok, NEUTRAL
+            self.reason = 'start_lane_neutral_preview' if ok else evidence['reason']
+            return self._result(now)
+        if now-self.started_at+1e-9 >= self.max_presteer_s:
+            self.lock('left_turn_presteer_timeout')
+            return self._result(now)
+        new_feedback = type(control.get('tick')) is int and (self.last_control_tick is None
+                                                             or control['tick'] > self.last_control_tick)
+        advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, False)
+        if self.phase == 'locked':
+            return self._result(self.last_now)
+        if advancing:
+            ok, evidence = self._lane_start_geometry(scan)
+            self.start_lane_feedback = evidence
+            self._lane_start_ok = ok
+        ok = getattr(self, '_lane_start_ok', False)
+        self.steering_target = NEUTRAL
+        if presteer_wait or not ok:
+            self._lane_start_settle_since, self._lane_start_ticks = None, 0
+            self.presteer_waiting = presteer_wait
+            self.start_ready = False
+            self.reason = ('start_lane_presteer_quality_hold' if presteer_wait
+                           else self.start_lane_feedback.get('reason') or 'start_lane_geometry_missing')
+            return self._result(now)
+        self.start_ready = True
+        adopted = (self.servo == NEUTRAL and control['servo'] == NEUTRAL and control['motor'] == NEUTRAL
+                   and control.get('command_acked', True) is True)
+        if not adopted:
+            self._lane_start_settle_since, self._lane_start_ticks = None, 0
+            self.reason = 'start_lane_waiting_neutral_adoption'
+            return self._result(now)
+        if new_feedback:
+            if self._lane_start_settle_since is None:
+                self._lane_start_settle_since = now
+            self._lane_start_ticks += 1
+        self.reason = 'start_lane_neutral_allowance'
+        if (new_feedback and self._lane_start_ticks >= 3
+                and now-self._lane_start_settle_since+1e-9 >= LANE_START_SETTLE_S):
+            self.phase, self.drive_since, self.presteer_ended_at = 'drive', now, now
+            self.reason = 'start_lane_drive'
+            self._route_event('start_lane', scan, control, self.start_lane_feedback)
+        return self._result(now)
+
+    def _first_approach(self, scan):
+        """Pursuit point FIRST_APPROACH_GAP_M right of the first support's near edge."""
+        target = self.compact_target
+        if (not isinstance(target, dict) or target.get('confirmed') is not True
+                or target.get('track_id') is None or not _number(target.get('range_m'))
+                or not _number(target.get('bearing_left_rad'))
+                or not 0 < target['bearing_left_rad'] <= FIRST_ACQUIRE_BEARING_RAD[1]
+                or target['range_m'] > FIRST_APPROACH_MAX_RANGE_M):
+            return None
+        points = self._full_target_points(target, scan, target['track_id'])
+        if points is None:
+            return None
+        near = min(p[0] for p in points)
+        right_edge = min(p[1] for p in points)
+        waypoint = [max(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M, near), right_edge-FIRST_APPROACH_GAP_M]
+        curvature = 2*waypoint[1]/(waypoint[0]**2+waypoint[1]**2)
+        pwm = max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX, NEUTRAL+round(SECOND_CURVATURE_GAIN_PWM_M*curvature)))
+        return {'source_seq': scan['seq'], 'track_id': target['track_id'],
+                'range_m': target['range_m'], 'bearing_left_rad': target['bearing_left_rad'],
+                'support_right_edge_y_m': right_edge, 'support_nearest_x_m': near,
+                'relative_waypoint_left_m': waypoint, 'pursuit_curvature_per_m': curvature,
+                'target_pwm': pwm, 'gap_m': FIRST_APPROACH_GAP_M,
+                'basis': 'first_support_left_of_car_anticlockwise_rule', 'swept_path_certified': False}
+
+    def _start_lane_handover_ready(self, scan, control):
+        target = self.compact_target
+        return (isinstance(scan, dict) and scan.get('seq') != self.last_seq
+                and self._usable_target(target, scan)
+                and target['bearing_left_rad'] >= FIRST_HANDOVER_BEARING_RAD
+                and isinstance(control, dict) and control.get('command_acked') is True
+                and control.get('motor') in DRIVE_MOTORS and control.get('servo') == self.servo > NEUTRAL)
+
+    def _start_lane_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait):
+        """Start lane: wall law (else compass hold), then the first approach."""
+        if self.phase == 'presteer':
+            return self._start_lane_presteer(scan, lidar_age_s, now, control, safe=safe,
+                                             presteer_wait=presteer_wait)
+        advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, presteer_wait)
+        if self.phase == 'locked':
+            return self._result(self.last_now)
+        if self.phase == 'drive' and now-self.drive_since+1e-9 >= self.max_drive_s:
+            self.begin_coast('maneuver_cumulative_drive_timeout', now)
+        if self.phase == 'coast':
+            if self.coast_since is not None and now-self.coast_since+1e-9 >= COAST_MAX_S:
+                self.lock('coast_standstill_unconfirmed')
+            else:
+                self._slew(now)
+            return self._result(now)
+        if self.phase != 'drive':
+            return self._result(now)
+        if not advancing:
+            self._slew(now)
+            return self._result(now)
+        if not self._route_adopted(control, now):
+            return self._result(now)
+        heading = self.compass.current(scan)
+        approach = self._first_approach(scan)
+        held = getattr(self.target_tracker, 'held', None)
+        walls = None
+        if approach is not None:
+            self.first_approach, self._lane_start_slow = approach, True
+            natural, source = approach['target_pwm'], 'first_support_approach'
+        elif (self.first_approach is not None and isinstance(held, dict)
+              and held.get('track_id') == self.first_approach['track_id']):
+            natural, source = self.servo, 'first_support_missing_frame_hold'
+        else:
+            walls = corridor_walls(scan)
+            if walls is not None:
+                self._lane_start_steering.servo = max(NEUTRAL-LANE_START_HOLD_PWM,
+                                                      min(NEUTRAL+LANE_START_HOLD_PWM, self.servo))
+                natural = self._lane_start_steering.update(walls, scan['seq'], now, True, scan['at_ms'])
+                source = 'lane_walls'
+            elif heading is not None:
+                natural = NEUTRAL+max(-LANE_START_HOLD_PWM, min(LANE_START_HOLD_PWM,
+                                                               round(LEFT_TRIAL_GAIN*(-heading))))
+                source = 'compass_heading_hold'
+            else:
+                natural, source = NEUTRAL, 'no_geometry_center'
+        target = natural
+        if target < NEUTRAL and (self._route_center_ack is None or self.servo > NEUTRAL):
+            target = NEUTRAL  # right only after a current actual center ACK
+        ahead = self._lane_front_range(scan)
+        speed = self._lane_speed(scan, ahead)
+        stop_at = None
+        if approach is None and source != 'first_support_missing_frame_hold':
+            v = speed if speed is not None else LANE_SPEED_UNKNOWN_MPS
+            stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)
+                       + v*LANE_REACTION_S)
+        self.start_lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
+            'nominal_target_pwm': natural, 'walls': walls, 'compass_heading_rad': heading,
+            'first_approach': approach, 'front_range_m': ahead, 'speed_mps': speed,
+            'front_stop_range_m': stop_at, 'slow': self._lane_start_slow, 'swept_path_certified': False}
+        if stop_at is not None and ahead is not None and ahead <= stop_at:
+            self.begin_coast('start_lane_board_ahead_without_first_support', now)
+            self._slew(now)
+            return self._result(now)
+        self.steering_target, self.natural_steering_target = target, natural
+        self.reason = 'start_lane_' + source
+        self._slew(now)
+        if self.servo > NEUTRAL:
+            self._route_center_ack = None
+        return self._result(now)
+
     def _right_exit_target(self, scan, now):
         """Use a current native forward corridor, never a guessed second cone."""
         values = scan.get('corridor_candidates')
@@ -2210,6 +2555,9 @@ class ManeuverSequence(TurnMotion):
         if (self.continue_route and self.phase == 'drive' and self.route_stage == 'light_lane'
                 and not self.quality_resume_pending):
             return self.lane_motor  # slow light lane: 1550 / neutral coast / 1560 restart
+        if self.continue_route and self.phase == 'drive' and self.route_stage == 'start_lane':
+            # Round 64: the start lane at 1560; slow from the first approach on.
+            return ROUTE_SLOW_MOTOR if self._lane_start_slow else TRIAL_MOTOR
         return (ROUTE_SLOW_MOTOR if (self.continue_route and self.phase == 'drive' and slow_stage
                                      and not self.quality_resume_pending)
                 else TRIAL_MOTOR)
@@ -3612,6 +3960,9 @@ class ManeuverSequence(TurnMotion):
         if not _number(now) or now < self.last_now:
             self.lock('invalid_turn_receive_clock')
             return self._result(self.last_now)
+        if self.continue_route and isinstance(scan, dict) and type(scan.get('at_ms')) is int:
+            # Round 64: one compass step per newly published scan (repeats ignored).
+            self.compass.update(scan)
         if self.compact_target is not None and self.compact_target.get('confirmed') is True:
             self._last_confirmed_compact_target = self.compact_target
         self.compact_target_error = None
@@ -3640,6 +3991,16 @@ class ManeuverSequence(TurnMotion):
             return self._neutral_pause_update(scan, lidar_age_s, now, control, safe=safe,
                 presteer_wait=presteer_wait, quality_clear=quality_clear,
                 resume_ready=quality_resume_ready)
+        if self.continue_route and self.entry_kind is None and self.phase == 'presteer':
+            self._decide_entry(scan)
+        if self.continue_route and self.route_stage == 'start_lane':
+            if not (self.phase == 'drive' and self._start_lane_handover_ready(scan, control)):
+                return self._start_lane_update(scan, lidar_age_s, now, control, safe=safe,
+                                               presteer_wait=presteer_wait)
+            # The support is round on the left with an adopted left command:
+            # the existing first-target orbit takes over on this same frame.
+            self.route_stage = 'first_target'
+            self._route_event('first_approach_handover', scan, control, self.first_approach)
         # A held quality coast (route mode may start one in the left turn)
         # only validates advancing scans/control and keeps its ACKed servo;
         # no geometry association can recenter it while still rolling.

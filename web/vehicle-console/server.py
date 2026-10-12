@@ -1453,14 +1453,18 @@ class Console:
             and decision.get('route_right_output_authorized') is True
             and decision.get('quality_resume_pending') is False
             and type(control.get('servo')) is int and control['servo'] <= 1500
-            and motion.first_pass_evidence is not None and isinstance(route_center, dict)
+            and isinstance(route_center, dict)
             and route_center.get('servo') == 1500 and route_center.get('motor') in DRIVE_MOTORS
             and type(route_center.get('seq')) is int
             and self.arm_sequence <= route_center['seq'] <= control.get('seq', -1)
             and type(route_center.get('tick')) is int and 0 <= route_center['tick'] <= control.get('tick', -1)
-            and ((route_stage in ('right_align', 'corridor_follow') and motion.right_exit_center_ack is not None)
-                 or (route_stage == 'second_orbit' and getattr(motion, 'second_center_ack', None) is not None)
-                 or route_stage in ('light_turn', 'light_lane')))
+            and ((motion.first_pass_evidence is not None
+                  and ((route_stage in ('right_align', 'corridor_follow') and motion.right_exit_center_ack is not None)
+                       or (route_stage == 'second_orbit' and getattr(motion, 'second_center_ack', None) is not None)
+                       or route_stage in ('light_turn', 'light_lane')))
+                 # Round 64: start-lane wall corrections (start-zone entry only).
+                 or (route_stage == 'start_lane' and getattr(motion, 'entry_kind', None) == 'lane'
+                     and motion.first_pass_evidence is None and not motion.handover_observed)))
         # New route output always uses its current continuous center proof;
         # the legacy first-exit ACK cannot authorize a later phase on its own.
         right_exit = route_right if route else right_exit
@@ -1473,7 +1477,8 @@ class Console:
         # forward PWM (slow section); every other output keeps 1500/1560.
         slow_allowed = (route and decision['phase'] == 'drive'
                         and ((route_stage in POST_PASS_STAGES and motion.first_pass_evidence is not None)
-                             or (route_stage == 'first_target' and motion.handover_observed is True))
+                             or (route_stage == 'first_target' and motion.handover_observed is True)
+                             or (route_stage == 'start_lane' and getattr(motion, 'entry_kind', None) == 'lane'))
                         and decision.get('quality_resume_pending') is False)
         if (motor not in ((1500, TRIAL_MOTOR, ROUTE_SLOW_MOTOR) if slow_allowed else (1500, TRIAL_MOTOR))
                 or not minimum_servo <= servo <= SERVO_MAX):

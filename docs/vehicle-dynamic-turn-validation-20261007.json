@@ -18401,6 +18401,25 @@
       },
       "open_physical_questions": "the traffic-light stand posts and the infrared sensor 1 m before the light may stand inside or at the side of the light lane (wall/compact-object interference); cone size at lidar height not given (rules: 630 x 280 x 280 mm)",
       "use": "simulation parameters only; no example coordinate, distance or order is a control condition (user: 不能针对赛道特化)"
+    },
+    "wip_round64_20261012_2230": {
+      "status": "partial implementation, NOT deployable, not built, not on the car",
+      "done": {
+        "WallCompass": "maneuver_sequence.WallCompass (route mode, every newly published scan): continuous heading vs the start-lane axis from native wall_candidates (mod 90 deg, span-weighted median, +-30 deg gate, rate from consecutive measurements, current() None after 1 s without measurement); result field 'compass'",
+        "entry_decision": "_decide_entry: native left_turn_goal at the start -> entry_kind 'junction' (original path unchanged); else a unique forward native lane (|heading|<=15 deg, width .65-2.2, body gap >= .08, front >= 1 m, compass ready) -> entry_kind 'lane', route_stage 'start_lane', first tracker acquisition widened to 10-135 deg",
+        "start_lane": "_start_lane_presteer (neutral adoption, 3 fresh ticks + .3 s) and _start_lane_update: CorridorSteering on corridor_walls, else compass heading hold (+-55), right only after an actual center ACK; 1560, 1550 from the first approach on; fail-safe coast when no first support and the board ahead is within .35 + v^2/(2*.5) + .2v",
+        "first_approach": "_first_approach: pursuit of the point .40 m right of the confirmed first support's near edge (gain 205/curvature); handover to the existing first-target orbit when usable (45-135 deg, <=3 m), bearing >= 70 deg and a left command adopted (_start_lane_handover_ready, route event first_approach_handover)",
+        "server": "turn_tick: start_lane may use 1550 (slow_allowed) and right corrections with the route center ACK (route_right, entry_kind lane only)",
+        "tests": "full suite 695 OK (4 expected failures = round-63 light-lane WIP); no new unit tests yet"
+      },
+      "simulation_finding_doc8x4": "scripts/course-sim.py --layout doc8x4 -v: start zone -> start_lane walls to the divider end -> compass hold -> first support confirmed at ~3.9 m x (bearing low) -> approach steers left but only to ~39 deg heading; the waypoint .40 m right of the support makes the car pass the support with it on the LEFT but never orbit: at 6.1 s handover, the support is already beside/behind -> immediate first pass -> right_align -> no corridor -> recovery hold, car stops (8.5 s). Cause: the approach aims to pass beside the support, so by the time the bearing reaches 70 deg the support is abeam and the orbit law has no time; the orbit should start earlier (bearing ~45-60 deg) or the approach should aim at a point beyond the support so the U-turn arc wraps it",
+      "next_steps": [
+        "first U-turn from the lane: start the orbit earlier (handover at the usable window's 45 deg once the left arc clears the divider end, or approach a point past the support) and verify in course-sim doc8x4/user8/short5/wide8x6 that the car loops the first support anticlockwise",
+        "exit release / post-pass without a corridor: compass target heading pi (reverse of the start axis) in _exit_release_target and an axis geometry fallback in _right_exit_target (width None: no approach offset, body gap inf, identity check only on heading; light stages use target 0)",
+        "second acquisition without a corridor: forward band (lateral ~1.5 m, <=3 m); second orbit lane frame = compass axis, left room from measured returns",
+        "light turn: clockwise to compass heading 0, lateral line along the outer boundary (start-lane measured width as prior until the light lane walls are measured), light_lane only on a real two-wall lane; finish distance from front_boundary_m / along-axis range (course-sim showed the current cut fires early when the car enters the lane angled because the +-3 deg front ray hits a side board)",
+        "finish stop model (round-63 WIP), unit tests for every new branch, course-sim --range, full suite, detector/route replays, then a new round"
+      ]
     }
   }
 }
