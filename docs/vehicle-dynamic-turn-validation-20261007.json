@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded vehicle version and physical trial; not connected in this session. Round55 claude-turn55/32743e6 locally built and verified on 2026-10-12; NOT deployed or physically tried. Independent related 314/full 637 tests pass; 36-trial detector and 51-54 replays exactly reproduce Claude candidate; package 16 file hashes and 19 archive members verified; helper differs only in output directory. User chose local build only. Resume section 1 step 6 using the existing package; never rerun build-matched or overwrite round55 artifacts. All stashes untouched.",
+  "latest_trial_status": "55 executed once on 2026-10-12 with claude-turn55/32743e6. First-target handover, continuous first identity, first pass, center ACK/right exit and second-target acquisition succeeded without quality wait. Second ID1 stayed confirmed; the support-relative waypoint kept requesting LEFT instead of preparing the clockwise return. Left-front board triggered body gate at scan701 before second-pass proof matured; operator confirms left-board collision. 7 evidence hashes and post-trial6 fresh locked samples/14 installed hashes verified. Vehicle remains turn55,1500/1500 locked. No56 code/package/run. Fix stage exit preparation, not cone contact exemption; route55 replay incomplete because saved302ms gap trips stale gate.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16806,8 +16806,8 @@
   "after54_rear_reacquisition_correction": {
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 55,
     "user_instruction": "2026-10-11 用户：绕过第一个桶将要撞到右侧挡板的时候停下来了，就到这吧，推送仓库，给一份给gpt的命令。",
     "change": {
@@ -16947,8 +16947,8 @@
     "route_continuity_correction_20261012": {
       "author": "Codex",
       "implemented": true,
-      "deployed": false,
-      "physical_trial_executed": false,
+      "deployed": true,
+      "physical_trial_executed": true,
       "next_trial": 55,
       "baseline_commit": "03c13608699ee2212b7dbc5c81ac3e09e37629c7",
       "user_instructions": [
@@ -17058,13 +17058,14 @@
         "work/turn55-route-continuity-20261012-082923/baseline-failures.txt": "e20af394ba6580c9d52d8372c75ac36171db8a709743d73c1ea6b14b3d7b65e6",
         "work/turn55-route-continuity-20261012-082923/candidate-failures.txt": "e20af394ba6580c9d52d8372c75ac36171db8a709743d73c1ea6b14b3d7b65e6",
         "work/turn55-route-continuity-20261012-082923/replays/summary.json": "45b94d9196ec0fc9828dad5e42f095e4e370ee717334bdbd2d8f2131176dd7e7"
-      }
+      },
+      "deployment_record": "Included as revised by Claude in32743e6: after54_rear_reacquisition_correction.deployment and turn55_actual. Original3002f7d/db8c71e were not separately deployed or physically run; no competition completion."
     },
     "legacy_test_repair_20261012": {
       "author": "Codex",
       "implemented": true,
-      "deployed": false,
-      "physical_trial_executed": false,
+      "deployed": true,
+      "physical_trial_executed": true,
       "next_trial": 55,
       "user_instruction": "这些失败和错误你有办法修改吗",
       "handoff_instruction": "改好推送上传后给我行文字告诉claude，我让他核验",
@@ -17191,13 +17192,14 @@
       "future_test_gate": "Full suite must have zero failures/errors; old48+1 baseline was explicitly repaired at user request and must not be treated as acceptable going forward.",
       "completed": false,
       "competition_supported": false,
-      "next_action": "Commit/push main and give the user a copyable Claude verification handoff. No vehicle connection, build, deployment or trial performed; any later powered trial still needs existing SSH socket and the single physical placement confirmation."
+      "next_action": "Commit/push main and give the user a copyable Claude verification handoff. No vehicle connection, build, deployment or trial performed; any later powered trial still needs existing SSH socket and the single physical placement confirmation.",
+      "deployment_record": "Included as revised by Claude in32743e6: after54_rear_reacquisition_correction.deployment and turn55_actual. Original3002f7d/db8c71e were not separately deployed or physically run; no competition completion."
     },
     "claude_review_and_cone_contact_correction_20261012": {
       "author": "Claude",
       "implemented": true,
-      "deployed": false,
-      "physical_trial_executed": false,
+      "deployed": true,
+      "physical_trial_executed": true,
       "next_trial": 55,
       "baseline_commit": "db8c71ef77634c4ea12e6f64f86a8d2c36395b57",
       "user_instruction": [
@@ -17274,7 +17276,8 @@
         "Unknown edge projection at the nearest range is a heuristic bound, not a measured cone shape."
       ],
       "competition_supported": false,
-      "completed": false
+      "completed": false,
+      "deployment_record": "after54_rear_reacquisition_correction.deployment; turn55_actual (not competition-complete)"
     },
     "local_build_verification_20261012": {
       "author": "Codex",
@@ -17329,7 +17332,148 @@
         "documentation_commit_note": "This build record is appended after packaging; package source remains 32743e6, and its validation-record.json is the committed pre-build snapshot. Later documentation-only commits do not change the packaged runtime.",
         "trial55_actual": "Absent until the real one-shot trial is executed; deployed and physical_trial_executed remain false.",
         "fixed_trial_directory": "Helper output directory is fixed to left-cone-trial-20261012-55 even if resumed on a later date. Do not regenerate or edit the helper for a new date."
-      }
+      },
+      "status_scope": "Historical snapshot before deployment; current vehicle/trial status is in parent deployment and turn55_actual."
+    },
+    "deployment": {
+      "date": "2026-10-12",
+      "source_commit": "32743e66058df7a1df468707cfb6e1f05c7555e1",
+      "label": "claude-turn55",
+      "archive_sha256": "96ae7362ada33af8e75bb5c8a4c9dfd23f3ba5cb49cea75f6d8776ba0e962c20",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn55-20261012-105716",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn55-20261012-105716",
+      "helper_sha256": "9a3c62c58adcf4973cb59796a2e75dbf7c6af09b64efc5b9f2b8ac36fe7fa53d",
+      "runtime_settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "fresh_checks": "before55-fresh.json vs turn54; after55-deploy-fresh.json and pre55-run-fresh.json vs turn55: 6 fresh locked ready samples, exact14 hashes, double continue_route true. after55-trial-fresh.json:6 fresh locked samples and14 hashes, no start-readiness requirement.",
+      "deployment_result": "work/vehicle-dynamic-deploy-20261008/claude-turn55-deployment-result.json",
+      "trial_executed": "turn55_actual",
+      "executions": 1
+    }
+  },
+  "turn55_actual": {
+    "date": "2026-10-12",
+    "executor": "Codex",
+    "vehicle_source_commit": "32743e66058df7a1df468707cfb6e1f05c7555e1",
+    "vehicle_label": "claude-turn55",
+    "executions": 1,
+    "launch_at": "2026-10-12T14:01:47.507227+08:00",
+    "operator_placement_confirmed": "用户确认：已静止在原起点（斑马线后面）且车头朝原直道。",
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261012-55",
+    "analysis_directory": "work/turn55-analysis-20261012",
+    "evidence_sha256": {
+      "after.json": "ee4d7610c731e7caedfa0361c6758a53208acdb51b51bff779d79d7a07f02b16",
+      "before-lidar.json": "4cbf66834ae191f97be9fbfa166f1d0a7234f59658cc004664ce9f0dff89847d",
+      "before.json": "3bbca558a32789c5456413a1357e23df0edfdedec3ce6b2aef911f7ea9e4e894",
+      "cli-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "cli-result.json": "97df45503d710b319b4a0df9ced8b392f8a83b9eb1bd49cb4df57cf0c900f9f7",
+      "feedback.jsonl": "7d46e86c590111c768a979094dcedef4941a7742cb22ab1abeac303847f7547b",
+      "summary.json": "a5548c259b24c6ad1fe014b57f261407dc2ea4a54e8f78c4f7b68cf7294e8ece"
+    },
+    "all_seven_hashes_match": true,
+    "cli_exit_code": 1,
+    "helper_exit_code": 0,
+    "elapsed_s": 12.141104508000012,
+    "observer_stop_requested": false,
+    "start_geometry": {
+      "front_wall_m": 2.1292198772734405,
+      "incoming_board_end_m": 0.468454781093164,
+      "exit_width_m": 1.6607650961802765,
+      "exit_heading_deg": 89.44988165077893,
+      "incoming_heading_deg": -2.782983986804845,
+      "entry_lateral_gap_m": 0.23537396333933575,
+      "presteer_cap_pwm": 1656,
+      "turn_ready": true
+    },
+    "terminal": "probe_obstacle_close_body in second_orbit at scan701, after successful first pass and second handover; left-front board contact.",
+    "operator_report": "你绕到第二个桩的时候还没绕完就不右转了，然后撞到了左侧的挡板上，你可以根据雷达点云的轨迹图看看",
+    "physical_contact": true,
+    "contact_object": "left-side board (operator report, left-front trigger point and reconstructed cloud agree)",
+    "timeline_clock": "elapsed_s from feedback.jsonl, approximately helper-relative; map times are lidar-relative and differ by up to one saved frame. Event scan IDs are exact.",
+    "timeline": [
+      "4.00s: drive begins with motor1560 and servo1647.",
+      "5.69s recorded handover: first target ID1 confirmed, motor1550, servo1636; first identity stays continuous.",
+      "First release event scan664; 6.68/6.89/7.09s recorded steering1656/1576/1500. First-pass event scan670; 7.27s right_align at center, then7.51s right1476. No quality_wait was entered.",
+      "Second handover event scan680; 8.35s recorded second_orbit with ID1 confirmed, range2.128m. A held frame at scan689 preserves identity and following observations recover the same ID.",
+      "9.75s (turn scan695): second target frontmost x=.494m; bypass point [.38,+.04877], natural1636. 9.96s (697): natural1568, path selects1500 but adopted servo is still1596 while slewing.",
+      "10.17s (699): frontmost x=-.14195m has not crossed rear=-.18m; natural1511 and adopted1556. Next scan700: entire target is behind rear (xmax=-.31153m), right body gap=.23672m; first geometric pass sample but .25s maturity not reached.",
+      "Final turn update scan700: confirmed second ID1/count22, relative center[-.35105,-.41108]; virtual waypoint [.38,+.023279] still generates natural1566 LEFT. No waiting_center_ack or requested right command occurred. All path candidates fail .7m lookahead, so phase target remains.",
+      "Scan701 about100ms later: left-front board point bin325/range.258m is only.013869m from body; body gate stops. Second cone-like support136-149 remains at rear-right and is not the trigger. 10.37s recorded locked1500/1500."
+    ],
+    "diagnosis": {
+      "failure_classes": [
+        "D: second-orbit steering/exit preparation",
+        "E: speed and response lag contribute",
+        "G: integration check needed, but no right-stage command was reversed"
+      ],
+      "root_cause": "Second-orbit pursuit keeps max(body_length=.38, support_near_x) as forward waypoint x and support_left_edge_y+.40 as y, even after the support moves beside/behind the vehicle. All stored valid second observations still have positive waypoint y, so the stage never requests its clockwise/right return. At scan700 near_x=-.41839 is projected forward to+.38 and y=.023279 gives curvature+.321225 and nominal1566.",
+      "ack_and_overlay": "second_center_ack=null is the consequence of never requesting a new neutral/right transition after left output, not a rejected center ACK. At697 path correctly requests neutral; at699/700 no legal clear arc remains and it preserves the upstream stage intent. Do not fix by allowing arbitrary safety-layer direction reversal or reverting Claude corridor-left avoidance.",
+      "pass_window": "Only scan700 first satisfies full support behind rear and right clearance. Need >=3 distinct observations spanning.25s; scan701 hits board before that proof can mature. Merely shortening/removing proof is not an established repair.",
+      "contact_policy": "Cone bypass remains limited to exact current cone-like returns. Trigger bin325 is left-front board; the cone support is rear-right136-149. Board stop is correct. This run does not validate physical cone collision continuation because the contacted object was a board.",
+      "perception": "No terminal identity loss. First ID1 continuous, second ID1/count22 at final controller update; only a short held frame earlier. No quality wait, no loop-gap/stale-data terminal.",
+      "path_reconstruction": "map.png and map-panels.png were opened and visually inspected. ICP shows first U-turn then return-lane travel, second target remains on vehicle right, vehicle bends left into left board. At1550 second approach speed about1.27-1.39m/s; heading grows from~179deg at8.99s to211deg at10.19s. Post-contact fit at10.79/10.98s is<.6, so the later red drift is not a reliable physical trajectory.",
+      "terminal_scan_limit": "Raw scan701 is not saved in the 7-file observer record (raw700 then702). Its exact body-trigger point and cone witness are retained in clearance_current; do not claim full scan701 was replayed offline."
+    },
+    "offline_checks": {
+      "pre_deployment": "Independent related314/full637 passed; detector36 trials and route51-54 reproduced Claude candidate before packaging; runtime source unchanged since those checks.",
+      "detector55": "59 saved scans: first/tolerant seen20 confirmed18 ids1; ahead/tolerant seen17 confirmed13 ids2. Ahead covers both physical supports, not evidence of second role ID reset.",
+      "route55": "Unmodified route-replay exits early at rec1.00s, scan648, turn_perception_unavailable. Saved645->648 scan publication gap302ms trips lidar_late at age0.30000000000000027 before next saved scan is fed. Actual vehicle had intervening frames and continued. This is an incomplete open-loop replay, not a reproduction of the terminal second-orbit failure; stale threshold was not relaxed and scans were not fabricated.",
+      "diagnostic_evidence": [
+        "route55.log",
+        "route55-halt-diagnostic.json",
+        "route55-diagnostic.py",
+        "detector55.log",
+        "timeline.log",
+        "map.log",
+        "map.png",
+        "map-panels.png",
+        "second-steering-actual.json",
+        "target-and-stop-analysis.json",
+        "contact-stop-and-second-orbit-review.json"
+      ]
+    },
+    "post_trial_lock": {
+      "fresh_file": "work/vehicle-dynamic-deploy-20261008/after55-trial-fresh.json",
+      "six_fresh_samples": true,
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500,
+      "owner": null,
+      "active": null,
+      "installed_hashes_match": 14,
+      "settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "physical_standstill_verified": false
+    },
+    "next_work": [
+      "Repair the class of missing exit preparation: use current support extents, corridor/board geometry and the second clockwise task rule to start reducing left and obtaining neutral ACK before the final pass maturity window, then request a currently feasible right arc. Keep pass proof separate from steering preparation; do not hardcode position/time or simply remove the board gate.",
+      "Add meaningful actual55 frame regression coverage for late second support, left board, neutral ACK and right intent, including first-support-on-straight and varied layouts; preserve51/52/53/54 behavior and Claude tests.",
+      "Address the sparse-recording limitation explicitly when validating replay55; do not call this incomplete replay a pass or loosen runtime stale gates to make it pass.",
+      "No runtime changes, round56 package, or second powered attempt were made in this session."
+    ],
+    "completed": false,
+    "competition_supported": false,
+    "precise_event_timing": {
+      "reference": "rec=seconds since first saved positive motor scan638 at_ms63744; observer elapsed is a separate clock",
+      "first_positive_motor_scan": 638,
+      "first_positive_observer_elapsed_s": 3.995534,
+      "second_handover_scan": 680,
+      "second_handover_rec_s": 4.196,
+      "first_geometric_second_pass_scan": 700,
+      "first_geometric_second_pass_rec_s": 6.191,
+      "terminal_scan": 701,
+      "terminal_rec_s": 6.291,
+      "first_locked_observer_elapsed_s": 10.366252
     }
   }
 }
