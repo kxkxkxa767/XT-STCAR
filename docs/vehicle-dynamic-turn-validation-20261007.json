@@ -18279,5 +18279,36 @@
     "analysis": "work/turn61-analysis-20261012/",
     "completed": false,
     "competition_supported": false
+  },
+  "turn62_actual": {
+    "date": "2026-10-12",
+    "executor": "Claude",
+    "purpose": "用户：“可以，再来一次”（同代码第二次拍视频复跑）",
+    "vehicle_source_commit": "8a4055bb8f5488aff531b88deef9d70cb3e3338f",
+    "code_identity": "runtime payload identical to claude-turn60/5f7f251 (only support/validation-record.json differs)",
+    "deployment": {
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn62-8a4055b.tar.gz",
+      "archive_sha256": "71d4be554817901906ff8d8e1784b049072c1ccb7cc8cd48763228b71b0471c0",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn62-20261012-163639",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn62-20261012-163639",
+      "helper_sha256": "8ade8e047b967ab0ab00b431dc5bf4ef57ce43c3099ff4303e7764dccc5e23bc",
+      "checks": "before62 (turn61 package), after62-deploy, pre62-run (no trial dir, helper sha equal, no autonomy-control), after62-trial (6 locked samples) all passed"
+    },
+    "start_geometry": "front wall 2.192 m, board end .549 m, width 1.643 m, exit 90.5 deg, incoming -1.2 deg, presteer cap 1640 (inside the reference)",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261012-62/ (7 files sha256 match trial62-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 21.281,
+    "operator_report": null,
+    "events": {
+      "first_target": "scan_incomplete quality wait 333-337, resume 339, first pass",
+      "second_target": "both cones passed again (second pass, light turn started)",
+      "light_turn": "right U-turn at the bottom, then free-space target did not take the left (west) light lane: heading (trial-map) -23 deg at 415 -> recovery neutral hold 425-428 -> -40 deg -> -79 deg, car crossed the middle diagonally toward the top-right pocket (map registration in the open area drifts; direction is clear)",
+      "terminal": "autonomy_control_gap at 18.95 s: control interval 0.1293 s > 0.12 s (max tick compute 0.095 s); locked while ~1.3 m/s, coasted ~.4 m; rest scan: return .165 m straight ahead (bin 0, body gap 0) -> very likely front board contact after the lock (operator confirmation pending)"
+    },
+    "open_issues": "three consecutive runs (60/61/62) ended on the 0.12 s control-gap protection in light_turn (tick compute up to .095 s on the car); light_turn free-space heading is not anchored to the right U-turn into the light lane (61 swung left/right, 62 left the course diagonally); light_lane never reached; the protection is correct and must stay",
+    "analysis": "work/turn62-analysis-20261012/ (timeline, map.png opened)",
+    "completed": false,
+    "competition_supported": false
   }
 }
