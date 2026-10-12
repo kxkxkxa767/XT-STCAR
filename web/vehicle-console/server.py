@@ -26,10 +26,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
 from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, FRONT_BOUNDARY_LOSS_S, CONTROL_AGE_LIMIT_S, AUTO_CONTROL_HEALTH_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
-                           FRONT_MAX_UNKNOWN, corridor_walls, probe_clearance, probe_parameters)
+                           FRONT_MAX_UNKNOWN, corridor_walls, front_gap_evidence, probe_clearance, probe_parameters)
 from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
-from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S
+from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
                                DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S)
@@ -891,22 +891,29 @@ class Console:
                          and not getattr(session.get('turn_motion'), 'quality_resume_pending', False)))
                 and control.get('armed') is True and control.get('motor') in DRIVE_MOTORS
                 and type(control.get('servo')) is int and 1500 < control['servo'] <= SERVO_MAX)
-            clearance = probe_clearance(self.scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
+            route_motion = session.get('turn_motion')
+            contact_target = None
+            clearance_scan = self.scan
+            if (turn_trial and session.get('continue_route') is True
+                    and isinstance(route_motion, ManeuverSequence) and route_motion.continue_route is True):
+                clearance_scan = {**self.scan, 'received_at': self.scan_at} if isinstance(self.scan, dict) else self.scan
+                contact_target = route_motion.current_contact_target(clearance_scan, now)
+            clearance = probe_clearance(clearance_scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
                                         rear_launch=rear_active, camera_required=not turn_trial,
                                         clearance_profile='maneuver' if turn_trial else 'straight',
-                                        relaxed_turn_left=relaxed_turn_left)
-            route_motion = session.get('turn_motion')
-            tolerated = ([issue for issue in ('scan_incomplete', 'front_sparse')
-                          if issue in clearance['quality_issues'] and clearance.get(issue+'_tolerable') is True]
-                         if (turn_trial and session.get('continue_route') is True
-                             and isinstance(route_motion, ManeuverSequence)
-                             and getattr(route_motion, 'continue_route', False) is True
-                             and getattr(route_motion, 'handover_observed', False) is True) else [])
+                                        relaxed_turn_left=relaxed_turn_left,
+                                        body_contact_target=contact_target)
+            if clearance['body_proximity']['target_contact_tolerated']:
+                report['target_contact_tolerated_count'] = report.get('target_contact_tolerated_count', 0)+1
+            tolerable = [issue for issue in ('scan_incomplete', 'front_sparse')
+                        if issue in clearance['quality_issues'] and clearance.get(issue+'_tolerable') is True]
+            tolerance_scope = self.turn_route_quality_scope(session, now) if turn_trial and tolerable else None
+            tolerated = tolerable if tolerance_scope else []
             if tolerated:
-                # Route mode after the first-target handover only: a scan with
-                # >= 90% returns and no unknown run over 12 bins (trial49), or
-                # front unknown runs of <= 5 bins (trial50), keeps the stage's
-                # own steering instead of a coasting wait.
+                # Reuse the existing bounded route envelope. Before handover
+                # only an already-started left turn with current associated
+                # geometry qualifies; preview/presteer admission stays strict.
+                clearance['quality_tolerance_scope'] = tolerance_scope
                 clearance['quality_issues'] = [i for i in clearance['quality_issues'] if i not in tolerated]
                 for issue in tolerated:
                     clearance[issue+'_tolerated'] = True
@@ -1005,11 +1012,68 @@ class Console:
                 session['report']['clearance_current'] = obstacle_clearance
             self.halt(str(error))
 
+    def turn_route_quality_scope(self, session, now):
+        """Current evidence for the route-only quality allowance, without state updates."""
+        motion = session.get('turn_motion')
+        if (session.get('continue_route') is not True or not isinstance(motion, ManeuverSequence)
+                or motion.continue_route is not True):
+            return None
+        if motion.handover_observed is True:
+            return 'post_handover'
+        if (motion.drive_since is None or motion.route_stage != 'first_target'
+                or session.get('phase') != motion.phase
+                or not (motion.phase == 'drive' or (motion.phase == 'quality_wait'
+                        and motion.neutral_pause_kind == 'left_turn'))):
+            return None
+        scan = self.scan
+        if (not isinstance(scan, dict) or scan.get('frame_id') != 'lidar_origin_coarse_body_heading'
+                or type(scan.get('seq')) is not int or scan['seq'] < 0
+                or type(scan.get('at_ms')) is not int or scan['at_ms'] < 0
+                or not 0 <= now-self.scan_at < SCAN_AGE_S):
+            return None
+        candidates = scan.get('corridor_candidates')
+        if (not isinstance(candidates, list) or len(candidates) > 24
+                or any(not _valid_candidate(candidate) for candidate in candidates)):
+            return None
+        if (motion.last_geometry_seq is not None and scan['seq'] < motion.last_geometry_seq
+                or motion.last_geometry_publication is not None
+                and scan['at_ms'] < motion.last_geometry_publication):
+            return None
+        dt = (0 if motion.last_geometry_publication is None
+              else (scan['at_ms']-motion.last_geometry_publication)/1000)
+        try:
+            # _measurement uses the existing native-ray and wall/corridor
+            # association gates. Run it on an isolated adapter so this quality
+            # check cannot refresh a live geometry lease or steering history.
+            probe = copy.copy(motion)
+            for field in ('corridor', 'outer_wall', 'turn_goal', 'exit_width_change'):
+                setattr(probe, field, copy.deepcopy(getattr(motion, field)))
+            probe._measurement(scan, candidates, dt)
+        except (ValueError, KeyError, TypeError):
+            return None
+        return 'left_turn_current_geometry'
+
+    @staticmethod
+    def turn_neutral_scan_bounded(scan):
+        """The existing neutral-wait floor also applies while requesting neutral."""
+        ranges = scan.get('ranges')
+        return (isinstance(ranges, list) and len(ranges) == 360
+                and not any(r is not None and (type(r) not in (int, float)
+                    or not math.isfinite(r) or not .02 <= r <= 12) for r in ranges)
+                and sum(r is not None for r in ranges) >= COAST_MIN_VALID_POINTS)
+
+    @staticmethod
+    def turn_front_evidence_matches(scan, clearance):
+        evidence = front_gap_evidence(scan['ranges'], bridge=True)
+        return evidence if all(clearance.get(key) == value for key, value in evidence.items()) else None
+
     def turn_quality_hold_eligible(self, session, *, route_entry=False):
         """Quality may permit neutral steering continuity, never powered motion.
 
         A front gap may exceed the existing consecutive-gap limit only while
-        its total unknown count still meets the existing front-count limit.
+        its unbridged count meets the existing neutral-entry count limit.
+        Default mode retains its original raw-count rule. Powered route quality
+        separately permits at most 8 unbridged bins in runs of at most 5.
         Keep the failed quality report and motion_ready unchanged.
         """
         report = session['report']
@@ -1022,6 +1086,11 @@ class Console:
                 or not issues <= {'scan_incomplete', 'front_sparse'}
                 or clearance.get('scan_seq') != scan.get('seq')
                 or set(clearance.get('quality_issues', [])) != issues):
+            return False
+        motion = session.get('turn_motion')
+        route = (session.get('continue_route') is True and isinstance(motion, ManeuverSequence)
+                 and motion.continue_route is True)
+        if route and not self.turn_neutral_scan_bounded(scan):
             return False
         if 'front_sparse' in issues:
             control = self.status.get('control', {})
@@ -1041,9 +1110,16 @@ class Console:
             ranges = scan.get('ranges')
             if not isinstance(ranges, list) or len(ranges) != 360:
                 return False
-            unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
-            if (unknown != clearance.get('front_unknown_bins')
-                    or len(unknown) > FRONT_MAX_UNKNOWN):
+            if route:
+                evidence = self.turn_front_evidence_matches(scan, clearance)
+                if evidence is None:
+                    return False
+                unknown = evidence['front_open_unknown_bins']
+            else:
+                unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
+                if unknown != clearance.get('front_unknown_bins'):
+                    return False
+            if len(unknown) > FRONT_MAX_UNKNOWN:
                 return False
         return True
 
@@ -1096,27 +1172,20 @@ class Console:
                            and (neutral_seq is None or control.get('seq', -1) < neutral_seq))
         if not neutral_ack and not pending_neutral:
             return False
-        ranges = scan.get('ranges')
-        if neutral_ack:
-            # Reuse the existing neutral-observation floor, not the powered
-            # front-gap gate. Nulls remain unknown; quality_clear stays false.
-            # Count current ranges rather than trusting scan metadata.
-            if (not isinstance(ranges, list) or len(ranges) != 360
-                    or any(r is not None and (type(r) not in (int, float)
-                           or not math.isfinite(r) or not .02 <= r <= 12) for r in ranges)
-                    or sum(r is not None for r in ranges) < COAST_MIN_VALID_POINTS):
-                return False
+        # The same raw-return floor applies before and after neutral ACK.
+        # Nulls remain unknown; neither this floor nor a bridge restores drive.
+        if not self.turn_neutral_scan_bounded(scan):
+            return False
         if 'front_sparse' in issues:
-            if not isinstance(ranges, list) or len(ranges) != 360:
-                return False
-            unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
-            if unknown != clearance.get('front_unknown_bins'):
+            evidence = self.turn_front_evidence_matches(scan, clearance)
+            if evidence is None:
                 return False
             # Trial44: a wait entered on bounded front_sparse keeps the same
             # front-count limit while its neutral command is still pending;
             # halting instead would be the same pending neutral but recentered.
             if not neutral_ack and not (session.get('quality_wait_front_sparse_entry') is True
-                                        and pending_neutral and len(unknown) <= FRONT_MAX_UNKNOWN):
+                                        and pending_neutral
+                                        and len(evidence['front_open_unknown_bins']) <= FRONT_MAX_UNKNOWN):
                 return False
         return True
 

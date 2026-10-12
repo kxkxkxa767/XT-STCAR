@@ -7,7 +7,8 @@ The service retains fresh body-clearance checks, ownership, heartbeat and ACKs.
 import copy
 import math
 
-from compact_target import CompactTargetTracker, _candidates, MAX_DIAMETER_M, MIN_RANGE_M, TOLERANT_MIN_POINTS
+from compact_target import (CompactTargetTracker, _associated, _candidates, _close_candidates, MAX_DIAMETER_M,
+                            MIN_RANGE_M, TOLERANT_MIN_POINTS)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
@@ -271,6 +272,7 @@ class ManeuverSequence(TurnMotion):
         self.quality_resume_pending = False
         self.quality_resume_since = None
         self._quality_good_history = []
+        self._quality_full_streak = 0
         self._quality_pass_history = []
         self._route_alignment_history = []
         self.route_alignment_evidence = None
@@ -293,6 +295,11 @@ class ManeuverSequence(TurnMotion):
         self.second_acquisition_reason = None
         self._second_proof_at = None
         self._second_pass_history = []
+        self._second_role_anchor = None
+        self._second_recovering = False
+        self._second_recovery_last = None
+        self.second_rebind_evidence = None
+        self._pause_stage_held = False
         # Route: current-scan proximity avoidance and steering inside waits.
         self._avoid = None
         self._exit_release_cache = None
@@ -333,7 +340,46 @@ class ManeuverSequence(TurnMotion):
                 or not isinstance(ranges, list) or len(ranges) != 360
                 or any(type(i) is not int or not 0 <= i < 360 or not _number(ranges[i]) for i in bins)):
             return None
+        if target.get('close_maintenance_observation') is True:
+            # Close-contact permission never relies on the normal tolerant
+            # detector's unknown boundaries. Recheck these exact current bins.
+            strict = _close_candidates(ranges, bearing_range_rad=(-math.pi, math.pi))
+            if not any(set(candidate['support_bins']) == set(bins)
+                       and candidate['tracking_only_boundary_gap'] is False for candidate in strict):
+                return None
         return [(ranges[i]*math.cos(math.radians(i)), -ranges[i]*math.sin(math.radians(i))) for i in bins]
+
+    def current_contact_target(self, scan, now):
+        """Read-only exact returns for the bound orbit role in this fresh scan.
+
+        A shadow update avoids the service's one-frame lag without advancing
+        the actual tracker. This certifies observed role support, not cone
+        semantics; loss, ambiguity, a new ID, or partial boundaries give none.
+        """
+        if not self.continue_route or self.phase not in ('drive', 'quality_wait'):
+            return None
+        if (self.route_stage == 'first_target' and self.handover_observed
+                and self.first_pass_evidence is None):
+            tracker, identity, role = self.target_tracker, self.orbit_track_id, 'first_target'
+        elif (self.route_stage == 'second_orbit' and self.second_target_handover_observed
+                and self.second_pass_evidence is None):
+            tracker, identity, role = self.second_tracker, self.second_track_id, 'second_target'
+        else:
+            return None
+        if type(identity) is not int or identity <= 0:
+            return None
+        try:
+            target = copy.deepcopy(tracker).update(scan, now, acquire=False)
+            if (not isinstance(target, dict) or target.get('close_maintenance_observation') is not True
+                    or self._full_target_points(target, scan, identity) is None):
+                return None
+            bins = list(target['support_bins'])
+            return {'role': role, 'track_id': identity, 'confirmed': True, 'full_observation': True,
+                    'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                    'source_received_at': scan['received_at'], 'support_bins': bins,
+                    'support_ranges_m': [scan['ranges'][i] for i in bins], 'semantic_class': 'unknown'}
+        except (ValueError, TypeError, KeyError):
+            return None
 
     @staticmethod
     def _mature_observation(history, scan, duration):
@@ -350,6 +396,42 @@ class ManeuverSequence(TurnMotion):
         del history[:-6]
         return (len(history) >= 3 and (row[1]-history[0][1])/1000+1e-9 >= duration
                 and row[2]-history[0][2]+1e-9 >= duration)
+
+    @staticmethod
+    def _observation_lease(scan, now, published, received):
+        """A missing frame may preserve history, never count or renew a lease."""
+        if not (_number(published) and _number(received) and isinstance(scan, dict)
+                and _number(scan.get('at_ms')) and _number(scan.get('received_at'))):
+            return False
+        dt, rt = (scan['at_ms']-published)/1000, scan['received_at']-received
+        return (0 <= dt < SCAN_AGE_S and 0 <= rt < SCAN_AGE_S
+                and 0 <= now-received < SCAN_AGE_S and abs(dt-rt) <= .15)
+
+    def _target_gap_held(self, tracker, identity, scan, now):
+        held = getattr(tracker, 'held', None)
+        return (isinstance(held, dict) and held.get('confirmed') is True
+                and held.get('track_id') == identity
+                and self._observation_lease(scan, now, held.get('last_full_isolation_at_ms'),
+                                            held.get('last_full_isolation_received_at')))
+
+    def _clear_target_recovery_history(self):
+        # A new ID cannot inherit another identity's readiness or pass window.
+        self._quality_good_history.clear()
+        self._quality_full_streak = 0
+        self._quality_pass_history.clear()
+        self._first_pass_history.clear()
+        self._second_pass_history.clear()
+
+    def _mature_recovery_observation(self, scan):
+        previous = self._quality_good_history[-1][0] if self._quality_good_history else None
+        mature = self._mature_observation(self._quality_good_history, scan, .30)
+        if scan['seq'] != previous:
+            self._quality_full_streak = (1 if len(self._quality_good_history) == 1
+                                         else self._quality_full_streak+1)
+        # A retained window is not evidence that the missing frame was good.
+        # Require two current full frames after any held gap; alternating
+        # isolated good/missing frames cannot trigger powered recovery.
+        return mature and self._quality_full_streak >= 2
 
     @staticmethod
     def _consecutive_fresh(history, scan, count=ROUTE_EXIT_PREPARE_FRAMES, max_gap_s=SCAN_AGE_S):
@@ -555,6 +637,8 @@ class ManeuverSequence(TurnMotion):
             'basis': 'nearest_confirmed_full_compact_on_left_within_1.2m_during_first_target_wait',
             'physical_identity_verified': False}
         self.orbit_track_id = target['track_id']
+        self.target_tracker.enable_close_maintenance(self.orbit_track_id)
+        self._clear_target_recovery_history()
         self._route_event('quality_wait_target_rebind', scan, control, self.quality_wait_rebind)
         return points
 
@@ -580,6 +664,8 @@ class ManeuverSequence(TurnMotion):
             'basis': 'new_identity_first_seen_within_association_gate_of_last_full_orbit_support',
             'physical_identity_verified': False}
         self.orbit_track_id = target['track_id']
+        self.target_tracker.enable_close_maintenance(self.orbit_track_id)
+        self._clear_target_recovery_history()
         self._route_event('quality_wait_target_rebind', scan, control, self.quality_wait_rebind)
         return points
 
@@ -670,7 +756,11 @@ class ManeuverSequence(TurnMotion):
             # steering may only release left for close inside returns or move
             # away from close known returns.
             self._clear_exit_prepare_window()
-            self._quality_good_history.clear()
+            self._quality_full_streak = 0
+            if not (quality_clear is True and neutral
+                    and self._target_gap_held(self.target_tracker, self.orbit_track_id, scan, now)):
+                self._quality_good_history.clear()
+                self._quality_pass_history.clear()
             # Round 54 (trial53): a support last fully seen at/behind the body
             # front (or a release latched before the wait) keeps releasing
             # toward the exit while the car coasts; otherwise hold, releasing
@@ -736,7 +826,7 @@ class ManeuverSequence(TurnMotion):
                 self._first_exit_prepare_history, scan, .25)
         else:
             self._clear_exit_prepare_window()
-        good = self._mature_observation(self._quality_good_history, scan, .30)
+        good = self._mature_recovery_observation(scan)
         if (not good or resume_ready is not True
                 or servo_feedback != self.quality_wait_servo or self.quality_wait_previous_servo is not None):
             # Resume only on an ACKed, unchanged neutral-wait steering command.
@@ -746,7 +836,13 @@ class ManeuverSequence(TurnMotion):
                 return hold()
             _, rejection = self._right_exit_target(scan, now)
             if rejection is not None:
-                self.lock('route_quality_wait_pass_corridor_unavailable')
+                # The target pass is current, but it does not manufacture an
+                # exit corridor. Keep neutral and retry from fresh geometry.
+                self.right_exit_geometry = None
+                self._right_exit_last_receive = self._right_exit_last_publication = None
+                self.quality_wait_evidence['last_corridor_rejection'] = rejection
+                hold()
+                self.reason = 'route_quality_wait_pass_corridor_unavailable'
                 return self._result(now)
             self.first_pass_preparing = True
             self.first_pass_evidence = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
@@ -1126,12 +1222,24 @@ class ManeuverSequence(TurnMotion):
     def _pause_stage_ready(self, scan, now):
         """Whether the paused task can be executed again from this frame."""
         kind, stage = self.neutral_pause_kind, self.route_stage
+        self._pause_stage_held = False
         if kind == 'left_turn':
             return self._left_turn_pause_geometry(scan, now)
+        if (stage == 'corridor_follow' and self.second_target_handover_observed
+                and self._full_target_points(self.second_target, scan, self.second_track_id) is not None):
+            # A drive loss can return to corridor following. Its recovery uses
+            # the same role proof as an orbit pause, including right-rear support.
+            self.route_stage = stage = 'second_orbit'
+            self.second_orbit_since = now
         if stage in ('right_align', 'corridor_follow'):
             _, rejection = self._right_exit_target(scan, now)
             if rejection is not None:
-                self.right_exit_geometry = None  # restart identity on the next frame
+                self._pause_stage_held = (
+                    rejection in ('right_exit_corridor_missing', 'right_exit_corridor_ambiguous')
+                    and self._observation_lease(scan, now, self._right_exit_last_publication,
+                                                self._right_exit_last_receive))
+                if not self._pause_stage_held:
+                    self.right_exit_geometry = None  # restart identity after lease expiry
                 self.recovery_evidence['last_readiness_rejection'] = rejection
                 return False
             # The service body gate (8 cm, raw returns) still stops a real
@@ -1142,6 +1250,7 @@ class ManeuverSequence(TurnMotion):
             return self._free_space(scan, self._light_heading) is not None
         if stage == 'second_orbit':
             target = self.second_target
+            self._pause_stage_held = self._target_gap_held(self.second_tracker, self.second_track_id, scan, now)
             return (isinstance(target, dict) and target.get('confirmed') is True
                     and target.get('track_id') == self.second_track_id
                     and self._full_target_points(target, scan, self.second_track_id) is not None)
@@ -1194,11 +1303,14 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         if not advancing:
             return self._result(now)
-        if quality_clear is not True or not neutral or not self._pause_stage_ready(scan, now):
-            self._quality_good_history.clear()
+        stage_ready = self._pause_stage_ready(scan, now) if quality_clear is True and neutral else False
+        if quality_clear is not True or not neutral or not stage_ready:
+            self._quality_full_streak = 0
+            if not (quality_clear is True and neutral and self._pause_stage_held):
+                self._quality_good_history.clear()
             self._wait_steer(now, servo_feedback, neutral, self.quality_wait_servo)
             return self._result(now)
-        if (not self._mature_observation(self._quality_good_history, scan, .30) or resume_ready is not True
+        if (not self._mature_recovery_observation(scan) or resume_ready is not True
                 or servo_feedback != self.quality_wait_servo or self.quality_wait_previous_servo is not None):
             self._wait_steer(now, servo_feedback, neutral, self.quality_wait_servo)
             return self._result(now)
@@ -1378,6 +1490,25 @@ class ManeuverSequence(TurnMotion):
                      or (self.route_stage == 'second_orbit' and self.second_center_ack is not None)
                      or self.route_stage == 'light_turn'))
 
+    def _route_override_bounds(self, target):
+        """An obstacle correction may release a turn, never invent its opposite.
+
+        The stage target has already passed its center-ACK gate. In particular
+        a neutral target is a command, not permission for this layer to choose
+        a new direction. During the first orbit, a hold/release must also not
+        become a renewed left boost. These are task-relative bounds, with no
+        assumption about where the support or exit lies on the course.
+        """
+        if target == NEUTRAL:
+            return NEUTRAL, NEUTRAL
+        if target < NEUTRAL:
+            return RIGHT_EXIT_MIN_PWM, NEUTRAL
+        upper = SERVO_MAX
+        if (self.handover_observed and self.route_stage == 'first_target'
+                and self.first_pass_evidence is None and target <= self.servo):
+            upper = target
+        return NEUTRAL, upper
+
     def _route_path_target(self, target):
         """Stage target, or the nearest candidate whose arc is clear (round 53).
 
@@ -1387,13 +1518,15 @@ class ManeuverSequence(TurnMotion):
         so the center ACK that must precede the right turn never came and the
         car turned into the board. The check therefore never overrides when
         no candidate is clear, and never while the stage waits for its center
-        ACK before steering right; it may only pick a clear arc.
+        ACK before steering right; it may only pick a clear arc consistent
+        with the stage's direction and first-target hold/release intention.
         """
         scan = self._current_scan
         natural = self.natural_steering_target
         pending_right = _number(natural) and natural < NEUTRAL and not self._route_right_authorized()
+        lower, upper = self._route_override_bounds(target)
         key = (scan.get('seq') if isinstance(scan, dict) else None, target, self.route_stage,
-               self._route_right_authorized(), pending_right)
+               self._route_right_authorized(), pending_right, lower, upper)
         if self._path_cache is not None and self._path_cache[0] == key:
             return self._path_cache[1]
         points = self._path_points(scan)
@@ -1404,6 +1537,9 @@ class ManeuverSequence(TurnMotion):
                 candidates = list(ROUTE_PATH_LEFT_CANDIDATES)
                 if key[3]:
                     candidates += list(ROUTE_PATH_RIGHT_CANDIDATES)
+                # Filter before scoring: clamping a clear opposite arc would
+                # produce a different arc which has never been checked.
+                candidates = [c for c in candidates if lower <= c <= upper]
                 scored = {c: self._path_free_distance(points, c) for c in candidates}
                 clear = [c for c, f in scored.items() if f >= ROUTE_PATH_LOOKAHEAD_M]
                 prefer_left = self.route_stage in ('corridor_follow', 'second_orbit')
@@ -1411,11 +1547,12 @@ class ManeuverSequence(TurnMotion):
                     above = [c for c in clear if c >= target]
                     pool = above if prefer_left and above else clear
                     choice = min(pool, key=lambda c: (abs(c-target), -c))
-                    self.path_override_count += 1
+                    self.path_override_count += int(choice != target)
                 self.path_evidence = {'source_seq': key[0], 'stage': self.route_stage, 'stage_target': target,
                     'stage_free_m': free, 'chosen': choice,
                     'chosen_free_m': scored.get(choice, free), 'clear_candidates': len(clear),
                     'overridden': choice != target, 'right_authorized': key[3],
+                    'stage_override_bounds': [lower, upper],
                     'pwm_per_curvature': ROUTE_PWM_PER_CURVATURE, 'swept_path_certified': False}
         self._path_cache = (key, choice)
         return choice
@@ -1425,8 +1562,11 @@ class ManeuverSequence(TurnMotion):
         if avoid is None:
             return target
         if avoid['side'] in ('left', 'front_right_open'):
-            return min(target, NEUTRAL)
-        return max(target, ROUTE_AVOID_LEFT_PWM)
+            choice = min(target, NEUTRAL)
+        else:
+            choice = max(target, ROUTE_AVOID_LEFT_PWM)
+        lower, upper = self._route_override_bounds(target)
+        return max(lower, min(upper, choice))
 
     def _slew(self, now):
         if (self.continue_route and self.phase == 'drive' and self.handover_observed
@@ -1583,6 +1723,8 @@ class ManeuverSequence(TurnMotion):
             quality_wait_previous_servo=self.quality_wait_previous_servo,
             route_alignment_evidence=copy.deepcopy(self.route_alignment_evidence),
             second_target=copy.deepcopy(self.second_target),
+            second_rebind_evidence=copy.deepcopy(self.second_rebind_evidence),
+            second_identity_recovering=self._second_recovering,
             second_center_ack=copy.deepcopy(self.second_center_ack),
             second_pass_evidence=copy.deepcopy(self.second_pass_evidence),
             second_feedback=copy.deepcopy(self.second_feedback),
@@ -1612,6 +1754,10 @@ class ManeuverSequence(TurnMotion):
             return False
         if not isinstance(target, dict) or target.get('confirmed') is not True:
             return False
+        close_bound_role = (self.continue_route and self.handover_observed
+                            and self.first_pass_evidence is None
+                            and target.get('close_maintenance_observation') is True
+                            and self._full_target_points(target, scan, self.orbit_track_id) is not None)
         point = target.get('point_left_m')
         return (target.get('kind') == 'lidar_compact_object'
                 and target.get('semantic_class') == 'unknown'
@@ -1619,7 +1765,8 @@ class ManeuverSequence(TurnMotion):
                 and type(target.get('source_seq')) is int and target['source_seq'] == scan.get('seq')
                 and type(target.get('source_at_ms')) is int and target['source_at_ms'] == scan.get('at_ms')
                 and isinstance(point, list) and len(point) == 2 and all(_number(v) for v in point)
-                and _number(target.get('range_m')) and .35 <= target['range_m'] <= 3.0
+                and _number(target.get('range_m'))
+                and (.02 if close_bound_role else MIN_RANGE_M) <= target['range_m'] <= 3.0
                 and _number(target.get('bearing_left_rad'))
                 and math.radians(45) <= target['bearing_left_rad'] <= math.radians(135)
                 and abs(math.hypot(*point)-target['range_m']) <= 1e-6
@@ -1972,6 +2119,91 @@ class ManeuverSequence(TurnMotion):
         self._slew(now)
         return self._result(now)
 
+    def _start_second_identity_recovery(self):
+        if self._second_role_anchor is None:
+            return
+        self._second_recovering = True
+        self._second_recovery_last = None
+        # Acquisition after role handover includes the right rear, not the
+        # passed first target's left-rear sector. Role proof below is still
+        # required; this does not acquire any arbitrary right-side object.
+        self.second_tracker.widen_acquisition((-math.pi, math.pi/2))
+
+    def _second_recovery_observation(self, scan, now):
+        """Fresh reconfirmation shared by drive loss and neutral-wait loss.
+
+        The last full second observation is an identity prior, not current
+        support. Its fixed association gates never grow with time. A new ID
+        needs the tracker's original multi-frame confirmation, with every
+        current candidate distinct from any currently observed first support.
+        """
+        anchor = self._second_role_anchor
+        if not self._second_recovering or anchor is None or self.first_pass_evidence is None:
+            return
+        previous = self._second_recovery_last
+        reference = (previous if isinstance(previous, dict)
+                     and self._observation_lease(scan, now, previous.get('source_at_ms'),
+                                                 previous.get('source_received_at')) else anchor)
+        candidates = _candidates(scan['ranges'], bearing_range_rad=(-math.pi, math.pi/2), tolerant=True)
+        first = self.compact_target
+        first_bins = (set(first['support_bins']) if isinstance(first, dict)
+                      and first.get('track_id') == self.orbit_track_id
+                      and first.get('source_seq') == scan.get('seq') else set())
+        first_points = [(scan['ranges'][i]*math.cos(math.radians(i)),
+                         -scan['ranges'][i]*math.sin(math.radians(i))) for i in first_bins]
+        def proven(candidate):
+            if not _associated(candidate, reference) or first_bins.intersection(candidate['support_bins']):
+                return False
+            points = [(scan['ranges'][i]*math.cos(math.radians(i)),
+                       -scan['ranges'][i]*math.sin(math.radians(i))) for i in candidate['support_bins']]
+            return not first_points or min(math.dist(a, b) for a in first_points for b in points) > MAX_DIAMETER_M
+        matches = [candidate for candidate in candidates if proven(candidate)]
+        if len(matches) != 1:
+            if candidates:
+                # An unrelated/ambiguous current object cannot advance a new
+                # identity, even if acquire=False would keep associating it.
+                self.second_tracker._forget('second_role_recovery_unproven')
+                self._second_recovery_last = None
+            self.second_tracker.update(scan, now, acquire=False)
+            self.second_target = None
+            self.second_acquisition_reason = 'second_role_recovery_current_support_unproven'
+            return
+        target = self.second_tracker.update(scan, now, acquire=True)
+        self.second_target = target
+        if target is not None and not target['tracking_only_boundary_gap']:
+            self._second_recovery_last = copy.deepcopy(target)
+        self.second_acquisition_reason = self.second_tracker.reason
+        if (target is None or set(target['support_bins']) != set(matches[0]['support_bins'])
+                or self._full_target_points(target, scan, target['track_id']) is None):
+            return
+        old_id = self.second_track_id
+        self.second_track_id = target['track_id']
+        self.second_tracker.enable_close_maintenance(self.second_track_id)
+        self._second_recovering = False
+        self.second_target_handover_observed = True
+        self._second_role_anchor = copy.deepcopy(target)
+        self.second_orbit_since = now  # new confirmed attempt; cumulative deadline is unchanged
+        self._clear_target_recovery_history()
+        self.second_center_ack = None
+        self.second_rebind_evidence = {
+            'old_track_id': old_id, 'new_track_id': target['track_id'],
+            'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'source_received_at': scan['received_at'], 'anchor_source_seq': anchor['source_seq'],
+            'support_bins': list(target['support_bins']),
+            'basis': 'current_confirmed_support_associated_with_last_complete_second_observation',
+            'physical_identity_verified': False, 'observed_rear_pass': False}
+
+    def _update_second_tracking(self, scan, now):
+        if self._second_recovering:
+            self._second_recovery_observation(scan, now)
+            return
+        self.second_target = self.second_tracker.update(scan, now, acquire=False)
+        if self._full_target_points(self.second_target, scan, self.second_track_id) is not None:
+            self._second_role_anchor = copy.deepcopy(self.second_target)
+        elif self.second_target is None and not self._target_gap_held(
+                self.second_tracker, self.second_track_id, scan, now):
+            self._start_second_identity_recovery()
+
     def _second_role_observation(self, scan, now):
         """One distinct compact support ahead inside the current corridor.
 
@@ -1982,6 +2214,9 @@ class ManeuverSequence(TurnMotion):
         front inside that corridor is a different object. If the first support
         is still fully visible it must also share no bins and be separated.
         """
+        if self._second_recovering:
+            self._second_recovery_observation(scan, now)
+            return
         c = self.right_exit_geometry
         proof = None
         if self.first_pass_evidence is not None and isinstance(c, dict):
@@ -2041,6 +2276,9 @@ class ManeuverSequence(TurnMotion):
         self.second_acquisition_reason = self.second_tracker.reason
 
     def _corridor_follow_update(self, scan, now, control):
+        if (self.second_target_handover_observed
+                and self._full_target_points(self.second_target, scan, self.second_track_id) is not None):
+            return self._begin_second_orbit(scan, now, control)
         _, rejection = self._right_exit_target(scan, now)
         if rejection is not None:
             # Trial45: a single missing/ambiguous corridor frame only keeps the
@@ -2071,9 +2309,10 @@ class ManeuverSequence(TurnMotion):
         error = (c['heading_left_rad']+math.atan2(c['center_offset_left_m'], c['lookahead_m'])
                  + ROUTE_ALIGN_DAMPING_S*c.get('heading_rate_rad_s', 0.))
         target = max(NEUTRAL-55, min(NEUTRAL+55, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
+        natural = target
         if target < NEUTRAL and self._route_center_ack is None:
             target = NEUTRAL
-        self.steering_target = self.natural_steering_target = target
+        self.steering_target, self.natural_steering_target = target, natural
         self.reason = 'route_corridor_follow_current_geometry'
         self._slew(now)
         if self.servo > NEUTRAL:
@@ -2082,6 +2321,9 @@ class ManeuverSequence(TurnMotion):
 
     def _begin_second_orbit(self, scan, now, control):
         self.second_track_id = self.second_target['track_id']
+        self.second_tracker.enable_close_maintenance(self.second_track_id)
+        self._second_role_anchor = copy.deepcopy(self.second_target)
+        self._second_recovering = False
         self.second_target_handover_observed = True
         self.second_orbit_since, self.route_stage = now, 'second_orbit'
         # An uninterrupted right command may retain its actual center ACK.
@@ -2115,7 +2357,11 @@ class ManeuverSequence(TurnMotion):
             # rejection and recovery pause on return).
             self.right_exit_geometry = None
             self._right_exit_last_receive = self._right_exit_last_publication = None
-            self.second_tracker = self._new_second_tracker()
+            if lost:
+                self._start_second_identity_recovery()
+            else:
+                self.second_tracker = self._new_second_tracker()
+                self._second_recovering = False
             self.second_target = None
             self.second_center_ack = None
             self.second_target_handover_observed = False
@@ -2709,6 +2955,8 @@ class ManeuverSequence(TurnMotion):
             self.handover_control.update(command_acked=True, physical_steering_confirmed=False,
                 target_source_seq=scan['seq'], target_source_at_ms=scan['at_ms'])
             self.orbit_track_id = self.compact_target['track_id']
+            if self.continue_route:
+                self.target_tracker.enable_close_maintenance(self.orbit_track_id)
             self.wall_ambiguity_hold = False
             self.geometry_missing = True
             self.alignment_count = 0
@@ -2773,8 +3021,8 @@ class ManeuverSequence(TurnMotion):
         try:
             self.compact_target = (self.target_tracker.update(scan, now, acquire=self.first_pass_evidence is None)
                                    if self.continue_route else self.target_tracker.update(scan, now))
-            if self.continue_route and self.route_stage == 'second_orbit':
-                self.second_target = self.second_tracker.update(scan, now, acquire=False)
+            if self.continue_route and (self.route_stage == 'second_orbit' or self._second_recovering):
+                self._update_second_tracking(scan, now)
         except (ValueError, TypeError, KeyError) as error:
             self.compact_target = None
             self.compact_target_error = type(error).__name__

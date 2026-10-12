@@ -24,7 +24,8 @@ FRONT_MAX_GAP = 3
 FRONT_BRIDGE_MAX_BINS = 5
 FRONT_BRIDGE_MAX_STEP_M = .15
 # Maneuver profile diagnostic only; the service applies it solely in route mode
-# after the first-target handover. Trial49: two scan_incomplete frames (336/337
+# after handover, or in an already-started left turn with current native geometry.
+# Trial49: two scan_incomplete frames (336/337
 # of 360) came from 9-11 bin runs into the open far end of the next lane. The
 # orbit wait cut power, but the car (rebuilt from its saved scans: ~1.5 m/s,
 # only ~.5 m/s^2 rolling decel) kept rolling ~2 m while the wait centered the
@@ -428,8 +429,75 @@ class ProbeClearanceError(ValueError):
         self.clearance = clearance
 
 
+def front_gap_evidence(bins, *, bridge=False):
+    """Measure current front nulls; a bridged surface is occupied, never free.
+
+    Callers validate the 360 finite-or-null ranges before using this evidence.
+    Sharing the calculation prevents drive and neutral-wait entry from counting
+    the same short surface gap differently.
+    """
+    unknown = [angle for angle in range(-30, 31) if bins[angle % 360] is None]
+    run = largest_gap = 0
+    for angle in range(-30, 31):
+        run = run+1 if angle in unknown else 0
+        largest_gap = max(largest_gap, run)
+    bridged = []
+    if bridge:
+        start = None
+        for angle in range(-30, 32):
+            missing = angle <= 30 and bins[angle % 360] is None
+            if missing and start is None:
+                start = angle
+            elif not missing and start is not None:
+                left, right = bins[(start-1) % 360], bins[angle % 360]
+                if (angle-start <= FRONT_BRIDGE_MAX_BINS and left is not None and right is not None
+                        and abs(left-right) <= FRONT_BRIDGE_MAX_STEP_M):
+                    bridged.extend(range(start, angle))
+                start = None
+    open_unknown = [angle for angle in unknown if angle not in bridged]
+    run = largest_open_gap = 0
+    for angle in range(-30, 31):
+        run = run+1 if angle in open_unknown else 0
+        largest_open_gap = max(largest_open_gap, run)
+    return {'front_unknown_bins': unknown, 'largest_gap_deg': largest_gap,
+            'front_bridged_bins': bridged, 'front_open_unknown_bins': open_unknown,
+            'largest_open_gap_deg': largest_open_gap}
+
+
+def _body_contact_bins(target, scan, ages, maneuver):
+    """Bind an internal confirmed-role witness to exact returns in this scan."""
+    if target is None:
+        return set()
+    if (not maneuver or not isinstance(target, dict)
+            or scan.get('frame_id') != 'lidar_origin_coarse_body_heading'
+            or target.get('role') not in ('first_target', 'second_target')
+            or type(target.get('track_id')) is not int or target['track_id'] <= 0
+            or target.get('confirmed') is not True or target.get('full_observation') is not True
+            or target.get('semantic_class') != 'unknown'
+            or type(target.get('source_seq')) is not int or target['source_seq'] < 0
+            or target['source_seq'] != scan['seq']
+            or type(target.get('source_at_ms')) is not int or target['source_at_ms'] < 0
+            or type(scan.get('at_ms')) is not int
+            or target['source_at_ms'] != scan.get('at_ms')
+            or type(target.get('source_received_at')) not in (int, float)
+            or not math.isfinite(target['source_received_at']) or target['source_received_at'] < 0
+            or type(scan.get('received_at')) not in (int, float)
+            or target['source_received_at'] != scan.get('received_at')
+            or not 0 <= ages['lidar'] < LIDAR_LATE_S):
+        raise ValueError('probe_invalid_body_contact_target')
+    support, observed = target.get('support_bins'), target.get('support_ranges_m')
+    if (not isinstance(support, list) or not 4 <= len(support) <= 360
+            or any(type(i) is not int or not 0 <= i < 360 for i in support)
+            or len(set(support)) != len(support)
+            or not isinstance(observed, list) or len(observed) != len(support)
+            or any(type(r) not in (int, float) or not math.isfinite(r) or not .02 <= r <= 12
+                   or scan['ranges'][i] != r for i, r in zip(support, observed))):
+        raise ValueError('probe_invalid_body_contact_target')
+    return set(support)
+
+
 def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True,
-                    clearance_profile='straight', relaxed_turn_left=False):
+                    clearance_profile='straight', relaxed_turn_left=False, body_contact_target=None):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
     if clearance_profile not in ('straight', 'maneuver') or type(clearance_profile) is not str:
         raise ValueError('invalid_clearance_profile')
@@ -469,6 +537,8 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     corridor = []
     side_clearances = []
     maneuver = clearance_profile == 'maneuver'
+    contact_bins = _body_contact_bins(body_contact_target, scan, ages, maneuver)
+    tolerated_contacts = []
     half_width = CORRIDOR_HALF_WIDTH_M + (.02 if centering else 0)
     nearest_body_point = None
     stop_trigger_point = None
@@ -495,10 +565,13 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
             # Equality is allowed; tolerate only floating point roundoff at that boundary.
             if body_distance < point_stop_m and not math.isclose(
                     body_distance, point_stop_m, rel_tol=0, abs_tol=1e-12):
-                body_stop_requested = True
-                if (stop_trigger_point is None or body_distance-point_stop_m <
-                        stop_trigger_point['body_distance_m']-stop_trigger_point['stop_distance_m']):
-                    stop_trigger_point = body_point
+                if angle in contact_bins:
+                    tolerated_contacts.append(body_point)
+                else:
+                    body_stop_requested = True
+                    if (stop_trigger_point is None or body_distance-point_stop_m <
+                            stop_trigger_point['body_distance_m']-stop_trigger_point['stop_distance_m']):
+                        stop_trigger_point = body_point
             if abs(y) > abs(x):
                 side_clearances.append(abs(y))
         elif rear_launch and 115 <= angle <= 245:
@@ -523,29 +596,9 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     incomplete_tolerable = (maneuver and MANEUVER_TOLERABLE_MIN_VALID <= len(valid) < 342
                             and longest_null_run <= MANEUVER_TOLERABLE_MAX_NULL_RUN)
     front = [bins[i % 360] for i in range(-30, 31)]
-    unknown = [i - 30 for i, r in enumerate(front) if r is None]
-    run = largest_gap = 0
-    for r in front:
-        run = run + 1 if r is None else 0
-        largest_gap = max(largest_gap, run)
-    bridged = []
-    if maneuver:
-        start = None
-        for angle in range(-30, 32):
-            missing = angle <= 30 and bins[angle % 360] is None
-            if missing and start is None:
-                start = angle
-            elif not missing and start is not None:
-                left, right = bins[(start-1) % 360], bins[angle % 360]
-                if (angle-start <= FRONT_BRIDGE_MAX_BINS and left is not None and right is not None
-                        and abs(left-right) <= FRONT_BRIDGE_MAX_STEP_M):
-                    bridged.extend(range(start, angle))
-                start = None
-    open_unknown = [angle for angle in unknown if angle not in bridged]
-    run = largest_open_gap = 0
-    for angle in range(-30, 31):
-        run = run + 1 if angle in open_unknown else 0
-        largest_open_gap = max(largest_open_gap, run)
+    front_evidence = front_gap_evidence(bins, bridge=maneuver)
+    open_unknown = front_evidence['front_open_unknown_bins']
+    largest_open_gap = front_evidence['largest_open_gap_deg']
     if len(open_unknown) > FRONT_MAX_UNKNOWN or largest_open_gap > FRONT_MAX_GAP:
         issues.append('front_sparse')
     front_sparse_tolerable = (maneuver and 'front_sparse' in issues
@@ -587,6 +640,9 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
                                                  if nearest_body_point is not None else None),
                 'nearest_point': nearest_body_point,
                 'stop_trigger_point': stop_trigger_point,
+                'target_contact_tolerated': bool(tolerated_contacts),
+                'target_contact_points': tolerated_contacts,
+                'target_contact_evidence': body_contact_target,
                 'axis_stop_thresholds_m': ({'front': FRONT_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
                                            'rear': REAR_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
                                            'left': SIDE_BODY_EXTENT_M+(TURNING_LEFT_BODY_CLEARANCE_M
@@ -606,8 +662,7 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
             'side_body_extent_m': SIDE_BODY_EXTENT_M,
             'side_min_net_m': MANEUVER_MIN_NET_M if maneuver else SIDE_MIN_NET_M,
             'lidar_range_allowance_m': LIDAR_RANGE_ALLOWANCE_M,
-            'front_unknown_bins': unknown, 'largest_gap_deg': largest_gap,
-            'front_bridged_bins': bridged, 'largest_open_gap_deg': largest_open_gap,
+            **front_evidence,
             'quality_issues': issues,
             'valid_returns': len(valid), 'longest_null_run_bins': longest_null_run,
             'scan_incomplete_tolerable': incomplete_tolerable,

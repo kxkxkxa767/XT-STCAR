@@ -1358,7 +1358,7 @@ class RouteProximityTests(unittest.TestCase):
         # Head-on: toward the more open front quarter.
         motion._avoid = motion._route_proximity(self.scan_with([(0, .30), (45, .8)]))
         self.assertEqual(motion._avoid['side'], 'front_left_open')
-        self.assertEqual(motion._avoid_target(1500), 1650)
+        self.assertEqual(motion._avoid_target(1500), 1500)  # preserve stage neutral / center ACK
         motion._avoid = motion._route_proximity(self.scan_with([(0, .30), (315, .8)]))
         self.assertEqual(motion._avoid['side'], 'front_right_open')
         self.assertEqual(motion._avoid_target(1600), 1500)
@@ -1391,16 +1391,18 @@ class RoutePathCheckTests(unittest.TestCase):
             ranges[index % 360] = value
         return {'seq': seq, 'ranges': ranges}
 
-    def test_trial52_support_ahead_right_of_path_is_passed_on_its_left(self):
+    def test_trial52_path_correction_keeps_the_stage_direction(self):
         # Trial52 scan436: second support at -11 deg, .72 m (bins 6-16).
         motion = self.motion(right=True)
         motion._current_scan = self.scan(436, {i: .70 for i in range(6, 17)})
         self.assertLess(motion._path_free_distance(motion._path_points(motion._current_scan), 1494), .7)
         choice = motion._route_path_target(1494)
-        self.assertGreater(choice, 1494)  # left of the support (task rule), not right
+        self.assertEqual(choice, 1494)  # the stage must first request the left bypass
+        choice = motion._route_path_target(1520)
+        self.assertGreaterEqual(choice, 1500)
         points = motion._path_points(motion._current_scan)
         self.assertGreaterEqual(motion._path_free_distance(points, choice), .7)
-        self.assertEqual(motion.path_evidence['stage_target'], 1494)
+        self.assertEqual(motion.path_evidence['stage_target'], 1520)
 
     def test_clear_path_and_returns_beside_the_body_keep_the_stage_target(self):
         motion = self.motion()
@@ -1419,7 +1421,12 @@ class RoutePathCheckTests(unittest.TestCase):
         for right, expect_right in ((False, False), (True, True)):
             motion = self.motion('right_align', right=right)
             motion._current_scan = self.scan(3, wall)
-            choice = motion._route_path_target(1500)
+            self.assertEqual(motion._route_path_target(1500), 1500)
+            # A clear right arc is usable only after the stage requests right
+            # and has actually received its center ACK.
+            target = 1450 if right else 1500
+            motion.natural_steering_target = 1450
+            choice = motion._route_path_target(target)
             self.assertEqual(choice < 1500, expect_right)
             if right:
                 points = motion._path_points(motion._current_scan)

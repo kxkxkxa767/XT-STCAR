@@ -20,6 +20,16 @@ MIN_DIAMETER_M = .06
 MAX_DIAMETER_M = .35
 MIN_RANGE_M = .35
 MAX_RANGE_M = 3.
+# Only an explicitly bound, already confirmed role may maintain its original
+# identity below the acquisition range. This is the existing valid lidar
+# lower bound, not an added near-object acquisition or a semantic cone claim.
+CLOSE_MAINTENANCE_MIN_RANGE_M = .02
+# Same coarse 3 cm range reference as autonomy_live.LIDAR_RANGE_ALLOWANCE_M.
+# Two neighboring measurements may each carry that allowance; add their 1-deg
+# angular spacing below. This stricter, near-only continuity check rejects
+# abrupt mixed-return spikes that the general 18 cm component link can join.
+# It may reject real grazing/occluded contours; it is not a calibrated bound.
+CLOSE_MAINTENANCE_RANGE_ALLOWANCE_M = .03
 MIN_BEARING_RAD = math.radians(45)
 MAX_BEARING_RAD = math.radians(135)
 # Opt-in ``tolerant`` detection (explicit route). Trials 41/47/50/51/52: a
@@ -145,10 +155,13 @@ def _tolerant_edges(ranges, group, values, diameter, allow_boundary_gap):
 
 
 def _candidates(ranges, *, allow_boundary_gap=False,
-                bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD), tolerant=False):
+                bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD), tolerant=False,
+                min_range_m=MIN_RANGE_M):
     bearing_min, bearing_max = _bearing_range(bearing_range_rad, 'bearing_range_rad')
     if type(allow_boundary_gap) is not bool or type(tolerant) is not bool:
         raise ValueError('allow_boundary_gap and tolerant must be bools')
+    if not _number(min_range_m) or not CLOSE_MAINTENANCE_MIN_RANGE_M <= min_range_m <= MIN_RANGE_M:
+        raise ValueError('min_range_m must be within the valid lidar and acquisition bounds')
     # Build components BEFORE range/sector filtering. Filtering first would
     # manufacture a small object from the end of an extended wall.
     points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
@@ -157,7 +170,7 @@ def _candidates(ranges, *, allow_boundary_gap=False,
         if not (TOLERANT_MIN_POINTS if tolerant else MIN_POINTS) <= len(group) <= 128:
             continue
         values = [ranges[i] for i in group]
-        if min(values) < MIN_RANGE_M or max(values) > MAX_RANGE_M:
+        if min(values) < min_range_m or max(values) > MAX_RANGE_M:
             continue
         support = [points[i] for i in group]
         if (max(p[0] for p in support)-min(p[0] for p in support) > MAX_DIAMETER_M
@@ -173,7 +186,7 @@ def _candidates(ranges, *, allow_boundary_gap=False,
             unknown, background, gap_counts, tracking_only = edges
             center = [sum(p[axis] for p in support)/len(support) for axis in (0, 1)]
             distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
-            if MIN_RANGE_M <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
+            if min_range_m <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
                 internal = [i for i in range(group[0], group[0]+(group[-1]-group[0]) % 360+1)
                             if i % 360 not in group]
                 result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
@@ -216,12 +229,40 @@ def _candidates(ranges, *, allow_boundary_gap=False,
                 continue
         center = [sum(p[axis] for p in support)/len(support) for axis in (0, 1)]
         distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
-        if MIN_RANGE_M <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
+        if min_range_m <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
             result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
                            'diameter_m': diameter, 'point_count': len(group), 'support_bins': list(group),
                            'boundary_unknown_bins': unknown, 'boundary_far_returns': background,
                            'boundary_gap_projected_span_m': projected_gap,
                            'tracking_only_boundary_gap': bool(unknown)})
+    return result
+
+
+def _close_candidates(ranges, *, bearing_range_rad=(-math.pi, math.pi)):
+    """Current strictly isolated near supports with no holes or sharp jumps.
+
+    This only measures supports. The tracker must separately require an
+    explicitly bound, already confirmed original ID and strict association.
+    """
+    result = []
+    for candidate in _candidates(ranges, bearing_range_rad=bearing_range_rad,
+                                 min_range_m=CLOSE_MAINTENANCE_MIN_RANGE_M):
+        bins = candidate['support_bins']
+        if not any(ranges[i] < MIN_RANGE_M for i in bins):
+            continue
+        continuous = True
+        for a, b in zip(bins, bins[1:]):
+            if (b-a) % 360 != 1:
+                continuous = False
+                break
+            p, q = ([ranges[i]*axis for axis in _DIRECTIONS[i]] for i in (a, b))
+            limit = (2*CLOSE_MAINTENANCE_RANGE_ALLOWANCE_M
+                     + 2*max(ranges[a], ranges[b])*math.sin(math.radians(.5)))
+            if math.dist(p, q) > limit:
+                continuous = False
+                break
+        if continuous:
+            result.append(candidate)
     return result
 
 
@@ -272,14 +313,33 @@ class CompactTargetTracker:
         self._target = None
         self._next_id = 1
         self._first_at = self._first_received = None
+        self._close_maintenance_track_id = None
 
     def widen_acquisition(self, bearing_range_rad):
         """Replace the acquisition sector (route first target after handover)."""
         self._acquisition_bearing_rad = _bearing_range(bearing_range_rad, 'acquisition_bearing_rad')
 
+    def enable_close_maintenance(self, track_id):
+        """Bind near-range maintenance to a caller-selected confirmed role ID.
+
+        Acquisition remains at MIN_RANGE_M. Near observations require a full
+        strictly isolated current component and the original association gates;
+        they never create or rebind an identity. A caller must select the role
+        before enabling this, and must separately verify current support when
+        using it for a contact exception.
+        """
+        target = self._target
+        if (type(track_id) is not int or not isinstance(target, dict)
+                or target['track_id'] != track_id or target['confirmed'] is not True
+                or target['tracking_only_boundary_gap'] is not False):
+            return False
+        self._close_maintenance_track_id = track_id
+        return True
+
     def _forget(self, reason):
         self.reason, self._target = reason, None
         self._first_at = self._first_received = None
+        self._close_maintenance_track_id = None
         return None
 
     def update(self, scan, now, *, acquire=True):
@@ -341,6 +401,17 @@ class CompactTargetTracker:
             # Confirmed role trackers must not switch to an unrelated object
             # merely because it is the only component left in their sector.
             candidates = [candidate for candidate in candidates if _associated(candidate, old, slack)]
+        if (confirmed_old and old['track_id'] == self._close_maintenance_track_id
+                and old['tracking_only_boundary_gap'] is False):
+            # Far-range tolerant detection is unchanged. The additional near
+            # branch does not bridge nulls, skip mixed edge returns, use held
+            # support, or widen association with elapsed time. If a competing
+            # far/near component also associates, the normal ambiguity path
+            # returns no current target rather than choosing one for contact.
+            close = _close_candidates(ranges, bearing_range_rad=bearing_range)
+            candidates += [{**candidate, 'close_maintenance_observation': True}
+                           for candidate in close
+                           if _associated(candidate, old)]
         self.held = None
         if len(candidates) != 1:
             reason = 'compact_target_ambiguous' if candidates else 'compact_target_missing'
@@ -355,7 +426,8 @@ class CompactTargetTracker:
         current = candidates[0]
         # These bounded association gates are not speed, odometry or static
         # object certification. A jump creates a new, unconfirmed identity.
-        associated = _associated(current, old, slack)
+        close_observation = current.get('close_maintenance_observation') is True
+        associated = _associated(current, old, 0. if close_observation else slack)
         boundary_gap = current['tracking_only_boundary_gap']
         if boundary_gap and not associated:
             return self._forget('compact_target_boundary_gap_unassociated')
@@ -374,12 +446,14 @@ class CompactTargetTracker:
             track_id, count = self._next_id, 1
             self._next_id += 1
             self._first_at, self._first_received = published, received
+            self._close_maintenance_track_id = None
         confirmed = (count >= 3 and published-self._first_at >= round(MIN_CONFIRM_S*1000)
                      and received-self._first_received+1e-9 >= MIN_CONFIRM_S)
         self.reason = ('compact_target_tracked_with_boundary_gap' if boundary_gap else
                        'compact_target_confirmed' if confirmed else 'compact_target_unconfirmed')
         self._target = {**current, 'source_seq': seq, 'source_at_ms': published,
                         'source_received_at': received, 'confirmed': confirmed,
+                        'close_maintenance_observation': close_observation,
                         'confirmation_count': count, 'semantic_class': 'unknown',
                         'kind': 'lidar_compact_object', 'track_id': track_id,
                         'last_full_isolation_seq': old['last_full_isolation_seq'] if boundary_gap else seq,

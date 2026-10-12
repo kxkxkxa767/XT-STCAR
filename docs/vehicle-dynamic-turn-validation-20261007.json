@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "54 (c6bdf75) remains the last recorded vehicle trial. Round-55 candidate control code 856e6c3 is not built/deployed/tried. Codex repeated required offline gates successfully on 2026-10-11, but found existing G-class path-intent reversal and A/C-class second-target wait identity-recovery gaps to resolve before deployment. User deferred vehicle reconnection to 2026-10-12.",
+  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded physical trial. Round55 candidate now includes Codex 2026-10-12 A/B/C/F/G fixes and explicitly authorized exact-support contact continuation. All required offline gates passed; not built, deployed or physically tried. Await vehicle connection and one physical start-placement confirmation before the documented round55 workflow.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16811,16 +16811,21 @@
     "next_trial": 55,
     "user_instruction": "2026-10-11 用户：绕过第一个桶将要撞到右侧挡板的时候停下来了，就到这吧，推送仓库，给一份给gpt的命令。",
     "change": {
-      "rear_left_reacquisition": "After the first-target handover (route only) the first tracker acquisition sector widens from 45-135 deg to 45-180 deg (CompactTargetTracker.widen_acquisition), so a passed support re-found behind-left can be confirmed, rebound by the nearest-left rule and complete the pass from the wait. Before handover the sector is unchanged (no locking onto objects behind during the left turn)."
+      "rear_left_reacquisition": "After the first-target handover (route only) the first tracker acquisition sector widens from 45-135 deg to 45-180 deg (CompactTargetTracker.widen_acquisition), so a passed support re-found behind-left can be confirmed, rebound by the nearest-left rule and complete the pass from the wait. Before handover the sector is unchanged (no locking onto objects behind during the left turn).",
+      "route_continuity_20261012": "See route_continuity_correction_20261012: role-bound near maintenance, shared second identity recovery, bounded wait continuity, left-turn quality allowance, exact-support contact exception and phase-intent preservation."
     },
     "verification": {
       "unit": "route suites 256 passed; full discovery 577 tests, failure set identical to before round 53.",
-      "route_replay_54": "open loop on trial54 scans: wait re-acquires the support (ID 2) at 3.0 s, confirms 3.29 s, pass and resume at 3.70 s, right_align steers left (~1615) away from the right board."
+      "route_replay_54": "open loop on trial54 scans: wait re-acquires the support (ID 2) at 3.0 s, confirms 3.29 s, pass and resume at 3.70 s, right_align steers left (~1615) away from the right board.",
+      "latest_20261012": "Related 311 pass; full 632 vs577 identical 48 failures/1 error; detector36 trials identical; route51/52/53/54 gates pass. See route_continuity_correction_20261012."
     },
     "risks_not_resolved": [
       "A different compact object behind-left within 1.2 m could be rebound as the first support.",
       "The wait started from an untolerable 11-bin front null run; coasting still ends near boards.",
-      "Body-contact stop still terminal (operator decision pending)."
+      "User accepts current confirmed compact route target as cone proxy; semantic class and physical identity remain unverified. Only exact current strict support may bypass body-close termination.",
+      "Near identity loss cannot acquire a new object inside 0.35m; occlusion/sharp mixed contours/strict association can still revoke the exception.",
+      "Rebound second identity may match a similar object after a long loss; fixed association gates do not establish physical identity.",
+      "Contact continuation does not waive rear-pass geometry or the original cumulative drive budget."
     ],
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,
@@ -16932,6 +16937,126 @@
         "work/turn55-offline-verification-givny5y2/result.json": "4eb9981dc15243c28c755d95ac127c8c522d4d0dab60097c2c490f4ce22a0f0a",
         "work/turn55-preflight-tests-20261011-204824/second-wait-identity-review.json": "b21797e6184cc3b62fded66488a84a463fa440482a26402a58fedc2f58777175",
         "work/turn55-preflight-tests-20261011-204824/second-wait-identity-review.py": "b2fa593b4dc1a6b3d9ef506a7accaff9305e3220868f9aca43600c5c2669909a"
+      }
+    },
+    "contributors": [
+      "Claude",
+      "Codex"
+    ],
+    "route_continuity_correction_20261012": {
+      "author": "Codex",
+      "implemented": true,
+      "deployed": false,
+      "physical_trial_executed": false,
+      "next_trial": 55,
+      "baseline_commit": "03c13608699ee2212b7dbc5c81ac3e09e37629c7",
+      "user_instructions": [
+        "按照你说的开始修吧",
+        "左转和绕桶的限制还是放开吧，不然总莫名其妙的停车",
+        "碰到也继续吧，比赛的时候碰到扣20s，卡死了就啥也没有了，仅限锥桶",
+        "接受以当前已确认绕桶目标为准，严格限定目标回波",
+        "锥桶识别经常丢失，为什么，你解决下"
+      ],
+      "failure_classes": [
+        "A",
+        "B",
+        "C",
+        "F",
+        "G"
+      ],
+      "changes": {
+        "A_near_maintenance": "Normal acquisition stays >=0.35m. A confirmed bound active role may maintain the same ID below that with a full isolated current component, no null/unknown edges, bounded adjacent return continuity, original 0.30m/20deg association and no ambiguity. Controller duplicate range gate follows this same proof.",
+        "A_C_recovery": "First/second target and exit/corridor recovery history survives a missing observation only within both original 300ms clock leases. Missing frames neither count nor renew. At least two consecutive full observations are needed after a gap. Second wait/drive loss share fresh multi-frame role reconfirmation ahead or right-rear; pass/readiness history clears on ID rebind. First pass with temporarily absent corridor retries fresh geometry.",
+        "B_quality": "Explicit route already-started left turn can reuse the existing post-handover envelope only with current native geometry association. Presteer/default remain unchanged. Wait entry validates shared unbridged front counts and >=324 actual returns both before/after neutral ACK.",
+        "F_contact": "Read-only shadow tracker proves current active role before the service body gate. Only exact current source seq/publication/receive and support bins/ranges bypass body-close termination. Raw ranges/distances/contact evidence remain logged; every unrelated point is still checked. No stale/held/new-ID/whole-sector exemption.",
+        "G_intent": "Both path and proximity overrides obey stage direction, neutral center ACK and first-orbit hold/release intent. Path choices are filtered before scoring; natural corridor steering remains distinct from temporary ACK-neutral command."
+      },
+      "dropout_evidence": [
+        "Current ordinary candidates require every support range>=0.35m; genuine trial52 scan440 support contains0.283..0.378m, so it was rejected despite a compact full contour. New opt-in confirmed-role near maintenance retains ID1 at this frame.",
+        "Trial54 scan329 has actual complete support0.282..0.377m; candidate retains original ID1 there. Scan331 bearing changes from82.8 to105.9deg, exceeding strict20deg near association, so near evidence is withheld instead of widening it.",
+        "Historical turn52_actual/after52_holistic_robustness_correction record edge/internal nulls and mixed-edge dropout in the right-forward5..17deg band; existing tolerant edges<=2/internal<=2 and300ms identity holds remain unchanged for ordinary far-range sensing.",
+        "Historical turn54_actual documents reacquisition behind-left outside the former45..135deg acquisition interval; existing post-handover45..180deg rule remains, with the new near maintenance reducing one identity reset in replay54."
+      ],
+      "validation": {
+        "unit": {
+          "baseline_commit": "03c13608699ee2212b7dbc5c81ac3e09e37629c7",
+          "baseline_tests": 577,
+          "candidate_tests": 632,
+          "failures_each": 48,
+          "errors_each": 1,
+          "complete_failure_lines_identical": true,
+          "failure_lines_count": 49,
+          "restored_files_sha256_match": true,
+          "candidate_stash_preserved": "301c34d56d4880b9da469579f52247fab06d3851",
+          "related_tests_passed": 311,
+          "new_regression_tests": 55
+        },
+        "detector_trial_count": 36,
+        "detector_logs_identical": true,
+        "detector_totals": {
+          "first/strict(51)": {
+            "seen": 480,
+            "conf": 386,
+            "ids": 51
+          },
+          "first/gap(52)": {
+            "seen": 483,
+            "conf": 390,
+            "ids": 49
+          },
+          "first/tolerant": {
+            "seen": 506,
+            "conf": 426,
+            "ids": 42
+          },
+          "ahead/strict(51)": {
+            "seen": 266,
+            "conf": 173,
+            "ids": 58
+          },
+          "ahead/gap(52)": {
+            "seen": 266,
+            "conf": 176,
+            "ids": 51
+          },
+          "ahead/tolerant": {
+            "seen": 296,
+            "conf": 213,
+            "ids": 43
+          }
+        },
+        "route_gates": {
+          "51": "PASS: rec1.70s handover; log identical to baseline",
+          "52": "PASS: rec5.19s second_orbit; rec5.39s servo1525 then1557/1597/1637/1677; rec6.49s scan440 keeps confirmed role ID1 and1550/1717 instead of old close-body termination; scan443 continues1550/1720",
+          "53": "PASS: full log identical to baseline; rec4.59s servo1500 waiting centerACK, rec4.79s1460 then1420/1380; board contact at rec5.49s still terminates",
+          "54": "PASS: close maintenance retains original ID1 at rec2.60s/scan329; rec2.80s scan331 returnsNone rather than widened25deg near association; rec3.00s scan333 observed original ID1 again; first pass/resume rec3.50s (baseline3.70s ID2), left1615 rec3.70s"
+        },
+        "code_review": "Two independent read-only cross-reviews found no reproducible blocking issue; real service close-approach stays drive/1550 and separate wall point still stops.",
+        "crates_unchanged_from_deployed_c6bdf75": true
+      },
+      "evidence_directory": "work/turn55-route-continuity-20261012-082923",
+      "replay_evidence_directory": "work/turn55-route-continuity-20261012-082923/replays",
+      "caveats": [
+        "Open-loop saved scans approximately5Hz, instant-ACK harness: rows after changed commands do not validate a physical path.",
+        "Detector replay does not bind route roles or enable close maintenance, so its exact equality verifies unchanged ordinary sensing; near behavior is covered by dedicated tests and full server route52/54 replay.",
+        "Near contact permission still identifies a confirmed route compact support (semantic_class unknown, physical_identity_verified false), not a proved semantic cone.",
+        "Near continuity gate is a conservative filter from two3cm coarse range allowances plus1deg beam separation; it is not a measured physical shape/error guarantee and can reject grazing/occluded true targets.",
+        "Trial54 later timeout behavior observes old stationary recordings after command divergence and is not a new physical-trial result.",
+        "Second-role recovery excludes visible first support but cannot prove physical identity after the first identity is lost.",
+        "Passed status still needs the complete support behind the rear and the original 8cm side gap; continuous contact cannot fake a pass."
+      ],
+      "no_fixed_course_coordinate_or_length": true,
+      "completed": false,
+      "competition_supported": false,
+      "next_action": "After commit/push, reconnect the existing SSH socket and obtain the single physical start-placement confirmation; build matched claude-turn55 from claude-turn54, perform fresh checks and one physical trial per agent.md. No package or turn55_actual yet.",
+      "evidence_sha256": {
+        "work/turn55-route-continuity-20261012-082923/test-summary.json": "e27e70c67cfde46d4625a39fba0efe8038b7c0e2eca00953c97ad4befd48d2e3",
+        "work/turn55-route-continuity-20261012-082923/candidate-related-final.log": "ccac59d14198e05df7e021d96a82bc3d6bdacd64ea6253d821eb8058bc2f71bc",
+        "work/turn55-route-continuity-20261012-082923/baseline-full.log": "d146465945f399e0c0fee376eec60ad9769b167e257ace20ec1584d91a1f5ff0",
+        "work/turn55-route-continuity-20261012-082923/candidate-full.log": "d467db381bbf842487855ef394202d82f45bf45169d492e022c0d5d32173d6ed",
+        "work/turn55-route-continuity-20261012-082923/baseline-failures.txt": "e20af394ba6580c9d52d8372c75ac36171db8a709743d73c1ea6b14b3d7b65e6",
+        "work/turn55-route-continuity-20261012-082923/candidate-failures.txt": "e20af394ba6580c9d52d8372c75ac36171db8a709743d73c1ea6b14b3d7b65e6",
+        "work/turn55-route-continuity-20261012-082923/replays/summary.json": "45b94d9196ec0fc9828dad5e42f095e4e370ee717334bdbd2d8f2131176dd7e7"
       }
     }
   }

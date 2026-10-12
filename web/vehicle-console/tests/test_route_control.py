@@ -381,14 +381,14 @@ class RouteControlTests(unittest.TestCase):
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
     def left_turn_pause(self):
-        # Trial44: one front_sparse frame in the left turn before handover.
+        # A six-bin gap exceeds bounded live-geometry tolerance before handover.
         self.drive_compact_trial(continue_route=True)
         session = self.console.auto_session
         motion = session['turn_motion']
         self.assertFalse(motion.handover_observed)
         servo = self.console.status['control']['servo']
         self.assertGreater(servo, 1500)
-        self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 4))
+        self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 6))
         self.assertIs(self.console.auto_session, session)
         self.assertEqual(session['phase'], 'quality_wait')
         self.assertEqual(motion.phase, 'quality_wait')
@@ -396,7 +396,7 @@ class RouteControlTests(unittest.TestCase):
         self.assertFalse(motion.quality_wait_used)  # the orbit wait stays available
         trigger = session['report']['left_turn_pause_trigger']
         self.assertEqual(trigger['quality_issues'], ['front_sparse'])
-        self.assertEqual(trigger['front_unknown_bins'], [5, 6, 7, 8])
+        self.assertEqual(trigger['front_unknown_bins'], [5, 6, 7, 8, 9, 10])
         self.assertNotIn('quality_coast_trigger', session['report'])
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
         return session, motion, servo
@@ -426,7 +426,7 @@ class RouteControlTests(unittest.TestCase):
         self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
         # Self-recovery: the next bounded fault pauses again (no single use).
         held = self.console.status['control']['servo']
-        self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 4))
+        self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 6))
         self.assertEqual(session['phase'], 'quality_wait')
         self.assertEqual(motion.recovery_count, 2)
         self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, held))
