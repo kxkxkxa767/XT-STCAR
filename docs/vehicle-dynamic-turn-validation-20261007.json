@@ -18248,5 +18248,36 @@
     "analysis": "work/turn60-analysis-20261012/ (timeline, map.png opened)",
     "completed": false,
     "competition_supported": false
+  },
+  "turn61_actual": {
+    "date": "2026-10-12",
+    "executor": "Claude",
+    "purpose": "用户：“我放回去你再来一次我拍个视频”（同代码复跑；60的helper不重跑）",
+    "vehicle_source_commit": "c7624e8dad9e59f1144a216ceb8927720a3099d1",
+    "code_identity": "runtime payload identical to claude-turn60/5f7f251 (manifest source_sha256 differ only in support/validation-record.json)",
+    "deployment": {
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn61-c7624e8.tar.gz",
+      "archive_sha256": "ae91fd38994e32ed9c1be0909e306495253ebe70be3fe911906f52607c8404c3",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn61-20261012-163349",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn61-20261012-163349",
+      "helper_sha256": "369e8ab1a8396c6517d9c87fcf34f6e15f3df333937283465f81b9e17bb7d459",
+      "checks": "before61 (turn60 package), after61-deploy, pre61-run (no trial dir, helper sha equal, no autonomy-control), after61-trial (6 locked samples) all passed"
+    },
+    "start_geometry": "front wall 2.153 m, board end .505 m, width 1.648 m, exit 90.1 deg, incoming -1.5 deg, presteer cap 1655 (inside the reference)",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261012-61/ (7 files sha256 match trial61-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 20.686,
+    "operator_report": "用户：“可以，再来一次”",
+    "events": {
+      "first_target": "front_sparse quality wait 328-332, resume 334, first pass, post-pass quality pause 339-342 in right_align",
+      "second_target": "handover 349 at 2.69 m (-9 deg), return prepared at once (support right of the approach line), 1500 straight past it, second pass, light turn",
+      "light_turn": "1350 from 386 to 404 (heading 183 -> 99 deg), released to 1565 left by 421 (heading ~16 deg), route recovery neutral hold 427-429, resume, right 1424-1407 (443), never matured light-lane alignment",
+      "terminal": "autonomy_control_gap at 18.15 s: control interval 0.1266 s > 0.12 s; locked 1500/1500 in the light lane, rolled ~1.9 m; rest nearest body gap .25 m"
+    },
+    "open_issues": "rounds 60 and 61 both ended on the 0.12 s control-gap protection during light_turn (60: .12003 s, max tick compute .087 s); light-turn free-space target swings left/right and the light_lane stage (slow lane + finish stop) was not reached; not changed for the video rerun",
+    "analysis": "work/turn61-analysis-20261012/",
+    "completed": false,
+    "competition_supported": false
   }
 }
