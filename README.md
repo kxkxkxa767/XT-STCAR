@@ -1,6 +1,6 @@
 # XT-STCAR
 
-2026-10-12：第60–62轮（标签good-turn60-full-route，已推送）两桶都过并右转进灯区。第63轮灯区直道修改进行中、未完成、不可上车（after62_light_lane_straight_wip）；来不及修完就用好版本。好版本标签good-turn60-full-route、good-turn57-both-cones。
+2026-10-12 21:40：赛道改为正确铺法（两侧直道3.2m、外框约8m、从发车区出发）。现有所有版本（含good-turn60-full-route）依赖旧窄赛道几何，在正确铺法上左转不会开始（turn_ready=false）、避障区测不到通道；路线按罗盘+实测几何重新设计中，不可上车（layout_3p2_route_redesign_20261012，见agent.md顶部）。好版本标签good-turn60-full-route、good-turn57-both-cones保留。
 
 下方日期条目保留历史结果，当前参数与部署状态以`agent.md`为准。
 

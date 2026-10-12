@@ -18347,5 +18347,44 @@
     "next_step": "fix the slow-zone push overshoot and the two steering tests until test_route_63 passes without expectedFailure, re-run full suite + detector + replays, then build claude-turn63 from claude-turn62 and test tonight; if short on time, deploy good-turn60-full-route instead",
     "completed": false,
     "competition_supported": false
+  },
+  "layout_3p2_route_redesign_20261012": {
+    "author": "Claude",
+    "date": "2026-10-12",
+    "source_base_commit": "78c43f6",
+    "status": "analysis_and_plan_recorded; implementation in progress; not ready for vehicle",
+    "user_instruction": [
+      "你好好想想怎么改再继续，之前的赛道铺错了，两侧直道应该是3.2m但铺成了6.4m，按照正确的铺设理论上转弯余量更多",
+      "一定要认真思考后修改",
+      "（场地）约8m，只把隔板缩短；（出发）发车区",
+      "一直都是从发车区开始的，只是我直道测试通过了，实验下个片段",
+      "现在5小时额度采用了0.09，慢慢改，改不完保存好后继续，一定要认真思考",
+      "不能针对赛道特化"
+    ],
+    "practice_layout_measured_from_trial60_map": "outer ~8.1 x ~4.2 m; start lane ~1.05 m; cone corridor ~2.0 m; light lane ~1.05 m; side dividers 6.4 m, so both U-turn openings were only ~1.7 m (start reference: front wall 2.12-2.28 m, divider end .48-.64 m)",
+    "correct_layout": "same outer frame (user), both side dividers 3.2 m: the first U-turn opening becomes ~L-3.2 (~4.9 m) and the two dividers no longer overlap along the field (open obstacle area); the run starts in the 80 cm start zone (previous turn tests started at the divider end only because the straight segment had passed)",
+    "impact_evidence": {
+      "tool": "work/layout-3p2-analysis-20261012/ (track.py ray caster + the Mac copy of the vehicle bridge geometry tools/scan-geometry; gates.log). Practice layout reproduces the real start geometry (front 2.25 / end .53 / opening 1.72 vs real 2.2 / .5 / 1.65)",
+      "native_left_junction": "Rust detect_left_junction requires front wall .6-3.0 m, divider end -.3..1.0 m, opening .75-2.25 m. With 3.2 m straights it exists only for field length <= ~5.4 m; at 6.4/7.0/8.1 m there is no left_junction/left_turn_goal -> turn_ready=false (the turn-cone run cannot start) and the straight's JunctionStop never fires",
+      "native_corridor": "two side walls .65-2.5 m apart: for field length >= 6.4 m no forward corridor exists anywhere in the obstacle area -> right_align/corridor_follow/second acquisition fall into recovery holds",
+      "light_lane": "corridor present (1.04 m) at every length: lane following itself unaffected",
+      "conclusion": "every released version (incl. good-turn60-full-route) is bound to the narrow practice geometry; the correct course needs a route that does not depend on an opening <= 2.25 m or a corridor <= 2.5 m"
+    },
+    "wall_compass_validation": {
+      "method": "car heading relative to the start-lane axis, tracked from the native wall_candidates of every scan: each wall (span >= .5 m, fit <= .04 m, >= 20 points) votes its direction modulo 90 deg against the predicted heading (span-weighted median, +-30 deg gate, rate from consecutive measurements); no coordinates, only the rules' rectangular board structure",
+      "result": "trials 57-62, every frame with one native forward corridor (start lane, cone corridor after the first U-turn, light lane after the second): |compass - corridor axis| p50 .7-1.0 deg, p90 1.4-2.0 deg, max 2.7 deg; no 90 deg slips through both U-turns (corridor axis 180 deg in the cone corridor, 0 deg in the light lane). ICP disagreements (up to 100 deg) are ICP failures after contacts/along featureless lanes. Log work/layout-3p2-analysis-20261012/compass-real.log",
+      "caveat": "during fast yaw (60-100 deg/s) single-scan wall fits spread 10-15 deg (rotation within the 100 ms scan); precision is needed at the end of turns where yaw is low"
+    },
+    "plan": [
+      "1 compass module (pure, tested on real frames) and its state in ManeuverSequence",
+      "2 lane start entry: admission in a measured straight lane with no junction; stage start_lane (CorridorSteering wall law, 1560; right corrections only after an actual center ACK)",
+      "3 cone-led first U-turn: hand over from the lane when the first support is usable on the left (45-135 deg, <= 3 m) and the left arc clears every known return (divider end); left boost/orbit law unchanged; the head-line release targets the measured corridor if any, else the compass heading back along the start-lane axis (task rule: first support anticlockwise = U-turn)",
+      "4 open-area post-pass: without a corridor hold the reversed axis heading; second-support acquisition in the forward band instead of 'inside the corridor'",
+      "5 second orbit: the compass axis replaces the missing lane frame (bypass line left of the support, 30 deg heading limit)",
+      "6 light turn: clockwise toward the start-axis heading, entering the lane that runs along the outer boundary (parallel wall pair ahead), then the light-lane wall law and the finish stop (round-63 WIP to finish)",
+      "7 server admission/output rules for the new stage; every hard protection unchanged (8 cm body gate with the cone-contact exception, stale data/clocks, bridge lock, deadlines, ACKs, .12 s control gap)",
+      "8 validation: closed-loop simulator on synthetic rules layouts (lengths 5-8 m, widths 4-6 m, varied cone positions) plus the practice layout, full unit suite, detector/route replays; then a new round on the car"
+    ],
+    "not_specialized": "no field length, coordinates or turn times: transitions use the measured lane, the tracked supports, the compass relative to the measured start-lane axis and the task rules (first anticlockwise, second clockwise, right turn into the light lane, stop at the lane end)"
   }
 }
