@@ -547,6 +547,11 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
         if r is None:
             continue
         x, y = r * math.cos(math.radians(angle)), r * math.sin(math.radians(angle))
+        # These bins are exactly lateral. cos(pi/2) rounds positive while
+        # cos(3*pi/2) rounds negative; neither is a forward-corridor return.
+        # Adjacent 89/271-degree rays retain their real forward component.
+        if angle in (90, 270):
+            x = 0.
         # Euclidean distance to the measured rectangle includes all four corners.
         # It describes current known returns, not unobserved space or a future sweep.
         dx = max(-REAR_BODY_EXTENT_M-x, 0, x-FRONT_BODY_EXTENT_M)

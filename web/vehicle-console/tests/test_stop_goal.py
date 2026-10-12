@@ -383,12 +383,24 @@ class StopGoalConsoleTests(unittest.TestCase):
             self.assertFalse(status['probe_ready'])
             self.assertTrue(status['formal_ready'])
             self.assertEqual((consumer.hold_observations, consumer.hold_since, consumer.last_pose, consumer.neutral_latched), before)
-            for angle, distance in [(0, .8), (90, .29)]:
+            # The measured 14 cm half-width gives a 27 cm straight-side
+            # boundary. Test a genuinely close point on each side; 29 cm
+            # used to be rejected on the right only by cos(pi/2) roundoff.
+            for angle, distance in [(0, .8), (90, .26), (270, .26)]:
                 self.console.scan = room_scan(1, half_width=.6)
                 self.console.scan['ranges'][180] = .35
                 self.console.scan['ranges'][angle] = distance
                 with self.subTest(angle=angle):
                     self.assertFalse(self.console.autonomy_status()['formal_ready'])
+            for angle in (90, 270):
+                for distance in (.27, .29):
+                    self.console.scan = room_scan(1, half_width=.6)
+                    self.console.scan['ranges'][180] = .35
+                    self.console.scan['ranges'][angle] = distance
+                    with self.subTest(angle=angle, distance=distance):
+                        self.assertTrue(self.console.autonomy_status()['formal_ready'])
+            self.assertEqual((consumer.hold_observations, consumer.hold_since,
+                              consumer.last_pose, consumer.neutral_latched), before)
 
     def test_formal_start_does_not_read_native_test_junction_and_deadline_is_failure(self):
         class NoJunction(dict):

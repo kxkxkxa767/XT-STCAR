@@ -3,11 +3,16 @@ import importlib.util
 import json
 import math
 from pathlib import Path
+import sys
 import unittest
 
 SPEC = importlib.util.spec_from_file_location('turn_motion', Path(__file__).parents[1]/'turn_motion.py')
 MODULE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(MODULE)
+sys.path.insert(0, str(Path(__file__).parents[1]))
+try:
+    SPEC.loader.exec_module(MODULE)
+finally:
+    sys.path.pop(0)
 
 
 def corridor(heading=60., offset=0., width=1.2):
@@ -430,7 +435,11 @@ class TurnMotionTests(unittest.TestCase):
         self.assertEqual(result['terminal_reason'], 'invalid_native_corridor_candidates')
 
     def test_narrow_turn_corridor_uses_body_clearance_and_range_allowance(self):
-        self.assertAlmostEqual(MODULE.TURN_LATERAL_MARGIN_M, .25)
+        self.assertAlmostEqual(MODULE.SIDE_BODY_EXTENT_M, .14)
+        self.assertAlmostEqual(MODULE.MANEUVER_BODY_CLEARANCE_M, .08)
+        self.assertEqual(MODULE.TURN_LATERAL_MARGIN_M,
+                         MODULE.SIDE_BODY_EXTENT_M+MODULE.MANEUVER_BODY_CLEARANCE_M)
+        self.assertAlmostEqual(MODULE.TURN_LATERAL_MARGIN_M, .22)
         available = .6/2-MODULE.TURN_LATERAL_MARGIN_M
         for sign in (-1, 1):
             for offset, accepted in [(available-1e-6, True), (available, False),
@@ -448,10 +457,13 @@ class TurnMotionTests(unittest.TestCase):
                         self.assertEqual(result['reason'], 'invalid_native_corridor_candidates')
 
     def test_narrow_turn_corridor_presteers_then_confirms_alignment_at_new_margin(self):
+        # 7 cm offset leaves 23 cm to the nearer wall: the revised 14 cm
+        # half-width plus the unchanged 8 cm clearance fits; the old 17 cm
+        # half-width did not. This is current geometry, not a swept-path claim.
         motion, previous, outputs = MODULE.TurnMotion(0.), {'servo': 1500}, []
         for seq in range(1, 49):
             now = (seq-1)*.1
-            previous = motion.update(scan(seq, heading=20., offset=.04, width=.6), .01,
+            previous = motion.update(scan(seq, heading=20., offset=.07, width=.6), .01,
                                      now, control(seq, previous['servo']))
             outputs.append(previous)
             if previous['phase'] == 'drive':
@@ -462,7 +474,7 @@ class TurnMotionTests(unittest.TestCase):
         self.assertGreaterEqual(previous['steering_settle_feedback_ticks'], 3)
         self.assertGreaterEqual(previous['steering_settle_elapsed_s'], 1.2-1e-9)
         for i, heading in enumerate((12., 4., 3., 2., 1.), start=1):
-            previous = motion.update(scan(seq+i, heading=heading, offset=.04, width=.6), .01,
+            previous = motion.update(scan(seq+i, heading=heading, offset=.07, width=.6), .01,
                                      now+i*.1, control(seq+i, previous['servo'], motor=1560))
         self.assertTrue(previous['observed_alignment'])
         self.assertEqual((previous['phase'], previous['motor']), ('coast', 1500))

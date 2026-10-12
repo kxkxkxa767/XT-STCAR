@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded physical trial. Round55 candidate now includes Codex 2026-10-12 A/B/C/F/G fixes and explicitly authorized exact-support contact continuation. All required offline gates passed; not built, deployed or physically tried. Await vehicle connection and one physical start-placement confirmation before the documented round55 workflow.",
+  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded physical trial. Round55 candidate includes3002f7d route/near-contact fixes plus measured turn-margin/lateral-coordinate repairs; full634 tests now pass with no failures/errors/skips, all required offline replay gates pass. Not built/deployed/tried. User requests committed/pushed code and a text handoff for Claude verification before continuing.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -16812,12 +16812,13 @@
     "user_instruction": "2026-10-11 用户：绕过第一个桶将要撞到右侧挡板的时候停下来了，就到这吧，推送仓库，给一份给gpt的命令。",
     "change": {
       "rear_left_reacquisition": "After the first-target handover (route only) the first tracker acquisition sector widens from 45-135 deg to 45-180 deg (CompactTargetTracker.widen_acquisition), so a passed support re-found behind-left can be confirmed, rebound by the nearest-left rule and complete the pass from the wait. Before handover the sector is unchanged (no locking onto objects behind during the left turn).",
-      "route_continuity_20261012": "See route_continuity_correction_20261012: role-bound near maintenance, shared second identity recovery, bounded wait continuity, left-turn quality allowance, exact-support contact exception and phase-intent preservation."
+      "route_continuity_20261012": "See route_continuity_correction_20261012: role-bound near maintenance, shared second identity recovery, bounded wait continuity, left-turn quality allowance, exact-support contact exception and phase-intent preservation.",
+      "legacy_test_repair_20261012": "Shared current measured turn lateral margin and exact lateral-ray coordinate fix; evidence-based legacy test repair. Full suite is now634 passing, no skips."
     },
     "verification": {
       "unit": "route suites 256 passed; full discovery 577 tests, failure set identical to before round 53.",
       "route_replay_54": "open loop on trial54 scans: wait re-acquires the support (ID 2) at 3.0 s, confirms 3.29 s, pass and resume at 3.70 s, right_align steers left (~1615) away from the right board.",
-      "latest_20261012": "Related 311 pass; full 632 vs577 identical 48 failures/1 error; detector36 trials identical; route51/52/53/54 gates pass. See route_continuity_correction_20261012."
+      "latest_20261012": "Related route suites311 pass; after explicitly requested legacy repair, full634 pass with zero failures/errors/skips. Stash baseline3002f7d reproduces632 tests48 failures1error; restored file hashes exact. Detector36 and route51/52/53/54 full logs identical to3002f7d."
     },
     "risks_not_resolved": [
       "A different compact object behind-left within 1.2 m could be rebound as the first support.",
@@ -17058,6 +17059,139 @@
         "work/turn55-route-continuity-20261012-082923/candidate-failures.txt": "e20af394ba6580c9d52d8372c75ac36171db8a709743d73c1ea6b14b3d7b65e6",
         "work/turn55-route-continuity-20261012-082923/replays/summary.json": "45b94d9196ec0fc9828dad5e42f095e4e370ee717334bdbd2d8f2131176dd7e7"
       }
+    },
+    "legacy_test_repair_20261012": {
+      "author": "Codex",
+      "implemented": true,
+      "deployed": false,
+      "physical_trial_executed": false,
+      "next_trial": 55,
+      "user_instruction": "这些失败和错误你有办法修改吗",
+      "handoff_instruction": "改好推送上传后给我行文字告诉claude，我让他核验",
+      "baseline_commit": "3002f7d40b222a6e32efed65c67c5529b4d2eb60",
+      "failure_classes": [
+        "I",
+        "J"
+      ],
+      "production_fixes": [
+        {
+          "file": "web/vehicle-console/turn_motion.py",
+          "finding": "f00a834 revised body half-width17->14cm but did not update the turn adapter, which retained .17+.05+.03.",
+          "change": "TURN_LATERAL_MARGIN_M now shares SIDE_BODY_EXTENT_M + MANEUVER_BODY_CLEARANCE_M, yielding .22m. Original8cm margin and other hard gates remain unchanged.",
+          "regression": "Both corridor sides, exact boundary rejection, newly fitting7cm offset in60cm corridor, neutral coast boundary; shared module equality retained."
+        },
+        {
+          "file": "web/vehicle-console/autonomy_live.py",
+          "finding": "cos90deg rounds slightly positive and cos270deg negative; exact right-lateral returns were incorrectly classified as forward while mirrored left returns were not.",
+          "change": "Normalize x=0 only for exact90/270deg bins. Side/body checks remain; neighboring89/271deg rays still invoke forward corridor checks.",
+          "regression": "Both sides at.269/.27/.271m and formal stop-goal readiness at.26/.27/.29m with no status-history mutation."
+        }
+      ],
+      "test_repairs": [
+        "Update old measured rectangle expectations to front.20/rear.18/side.14. Preserve original actual05 raw fixture and historical annotations; add independently computed current-geometry reference tied to its SHA256 and measurement config.",
+        "Same corridor and12cm offset now leave11cm beyond the straight side envelope, so normal15PWM rather than urgent20PWM is correct; preserve both rate modes, mirror, coast hard-stop, ACK, timeout and no-reacceleration checks.",
+        "Use distinct corridor hypotheses to test ambiguity; identical aliases are already deduplicated. Keep the original inner-wall scene and verify current-support steering limitation below nominal1720, adoption/slew and later release.",
+        "Avoid cascading assertAlmostEqual argument error after a failed corner subtest; preserve mirror distance assertions.",
+        "Make CLI dynamic-import fixture use the executable module directory, so isolated tests do not rely on another test importing dependencies first.",
+        "Full discovery exposed one previously false-passing stop-goal test relying on the lateral floating-point bug; correct its old29cm close input and test both allowed and blocked sides."
+      ],
+      "baseline_failure_entries_by_module": {
+        "test_autonomy_live": 22,
+        "test_coast_control": 15,
+        "test_turn_control": 12
+      },
+      "tests": {
+        "baseline_commit": "3002f7d40b222a6e32efed65c67c5529b4d2eb60",
+        "baseline_tests": 632,
+        "baseline_failures": 48,
+        "baseline_errors": 1,
+        "baseline_full_failure_lines_verified_under_stash": 49,
+        "candidate_tests": 634,
+        "candidate_failures": 0,
+        "candidate_errors": 0,
+        "candidate_skipped": 0,
+        "candidate_file_hashes_restored_exactly": true,
+        "candidate_stash_preserved": "8e98b1c5f5ca8096e1966a1fc9ed184f4b33654e",
+        "failure_set_change_explicitly_requested_by_user": true,
+        "new_failures": [],
+        "original_turn05_sha256": "a67cbf7910b7d963809b1b4d2b0c2a7ef86ba8f29a635fb76faa383971ab890e"
+      },
+      "detector_replay": {
+        "trial_count": 36,
+        "logs_identical": true,
+        "totals": {
+          "first/strict(51)": {
+            "seen": 480,
+            "conf": 386,
+            "ids": 51
+          },
+          "first/gap(52)": {
+            "seen": 483,
+            "conf": 390,
+            "ids": 49
+          },
+          "first/tolerant": {
+            "seen": 506,
+            "conf": 426,
+            "ids": 42
+          },
+          "ahead/strict(51)": {
+            "seen": 266,
+            "conf": 173,
+            "ids": 58
+          },
+          "ahead/gap(52)": {
+            "seen": 266,
+            "conf": 176,
+            "ids": 51
+          },
+          "ahead/tolerant": {
+            "seen": 296,
+            "conf": 213,
+            "ids": 43
+          }
+        }
+      },
+      "route_replay": {
+        "logs_identical": {
+          "51": true,
+          "52": true,
+          "53": true,
+          "54": true
+        },
+        "gates": {
+          "51_handover_1p70": true,
+          "52_second_orbit_5p19": true,
+          "52_left_5p39": true,
+          "53_center_ack_4p59": true,
+          "53_right_4p79": true,
+          "53_board_remains_hard_stop": true,
+          "54_wait_target_observed_again_3p00": true,
+          "54_first_pass_resume_3p50": true
+        }
+      },
+      "replay_final_source_and_harness_verified": true,
+      "final_tested_source_snapshot_sha256": "dfa18cc05b63d75bbb65a328d36a7886a93dc964ccb73bb63cc65ca7315cda21",
+      "original_raw_evidence_unchanged": true,
+      "crates_unchanged_from_deployed_c6bdf75": true,
+      "independent_review": "Cross-review verified shared dimensions and no import cycle; original package already includes both modules. Regression intent and raw evidence preserved. Independent point-to-segment recalculation agrees with new reference.",
+      "evidence_directory": "work/legacy-test-repair-20261012-084929",
+      "evidence_sha256": {
+        "work/legacy-test-repair-20261012-084929/test-summary.json": "58e7ec6cad6023b3c7b328f37e478016619a6d53ac0bd0368cb714fb8ec5680b",
+        "work/legacy-test-repair-20261012-084929/baseline-stashed-full.log": "8dc46f3fdd2840129fdb61abe9917f72ec92a6eacd4109059dd4c480a831d1e3",
+        "work/legacy-test-repair-20261012-084929/candidate-full-final.log": "4338e3ff553cd420097b734964356b3d2a6a43c8da8e6eef634c229235b09805",
+        "work/legacy-test-repair-20261012-084929/failure-resolution-map.json": "5c0b8dcfd716771390ac4e3f3ecb7df4402d6fe12969346c3b9a29ca3e98358f",
+        "work/legacy-test-repair-20261012-084929/independent-point-to-polygon-check.json": "d8644c4138dc97813e9d51180ca3ab926221907485f265b0917e7b6f82625cf5",
+        "work/legacy-test-repair-20261012-084929/review-evidence.json": "09c84ab860517b8025c1a1931eb952ae6daea653b7789acfe50e3fd01002f687",
+        "work/legacy-test-repair-20261012-084929/final-tested-files.json": "f1ae24e06e68766ec0bbb50de650f1a97ed5b8ea12120d9e225e7414fa68994b",
+        "work/legacy-test-repair-20261012-084929/candidate-final-source-manifest.json": "6b6b00ce5b7d5ba30749a7df8108d5ab97ce44002d84c9d345a61c6adb907ec3",
+        "work/legacy-test-repair-20261012-084929/replays/summary.json": "4a575d9e1e2ec3096eb14c768557c146bf52ed6fdcf64e3f7ee324d950245356",
+        "work/legacy-test-repair-20261012-084929/replays/final-source-harness-verification.json": "2434820f0385de8cf0fed754f7abeaac498dee239b0de61f86aef87c279b7cf4"
+      },
+      "future_test_gate": "Full suite must have zero failures/errors; old48+1 baseline was explicitly repaired at user request and must not be treated as acceptable going forward.",
+      "completed": false,
+      "competition_supported": false,
+      "next_action": "Commit/push main and give the user a copyable Claude verification handoff. No vehicle connection, build, deployment or trial performed; any later powered trial still needs existing SSH socket and the single physical placement confirmation."
     }
   }
 }

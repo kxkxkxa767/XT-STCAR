@@ -1,0 +1,26 @@
+{
+  "original_fixture": "observed-turn05-body-20261007.json",
+  "original_fixture_sha256": "a67cbf7910b7d963809b1b4d2b0c2a7ef86ba8f29a635fb76faa383971ab890e",
+  "measurement_source": "config/vehicle-geometry-measured-20261006.json, revised operator rough measurement on 2026-10-07",
+  "body_extents_m": {"front_m": 0.20, "rear_m": 0.18, "left_m": 0.14, "right_m": 0.14},
+  "historical_fixture_body_extents_m": {"front_m": 0.21, "rear_m": 0.20, "left_m": 0.17, "right_m": 0.17},
+  "calculation": "Independently project each unchanged return onto all four finite edges of the measured rectangle; take the minimum point-to-segment distance (zero for an interior point), then the minimum across known returns. Historical fixture annotations retain their original dimensions. Neither reference certifies free space, a swept path, or stopping distance.",
+  "scans": {
+    "4214": {
+      "ray_bin": 312,
+      "range_m": 0.474,
+      "forward_x_m": 0.31716790741409856,
+      "left_y_m": 0.352250647276285,
+      "distance_to_measured_rectangle_m": 0.24244309806014425,
+      "minimum_lateral_distance_m": 0.352250647276285
+    },
+    "4216": {
+      "ray_bin": 308,
+      "range_m": 0.345,
+      "forward_x_m": 0.21240320898735218,
+      "left_y_m": 0.271863709994319,
+      "distance_to_measured_rectangle_m": 0.1324457534489113,
+      "minimum_lateral_distance_m": 0.271863709994319
+    }
+  }
+}

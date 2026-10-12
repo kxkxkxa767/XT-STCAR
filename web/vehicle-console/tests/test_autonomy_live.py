@@ -1,5 +1,6 @@
 """No physical devices: clearance faults and session fencing regression checks."""
 import importlib.util
+import hashlib
 import io
 import json
 import math
@@ -229,8 +230,10 @@ class CorridorSteeringTests(unittest.TestCase):
         steering = MODULE.CorridorSteering()
         left = MODULE.corridor_walls(wall_scan(-.12))
         centre = MODULE.corridor_walls(wall_scan())
-        self.assertEqual(steering.update(left, 1, 0, scan_at_ms=100), 1520)
-        self.assertEqual(steering.update(centre, 2, .099, scan_at_ms=199), 1508)
+        # With the revised 14 cm side extent, this offset is non-urgent:
+        # (.5 - .27) - .12 = .11 m, above the 10 cm urgency threshold.
+        self.assertEqual(steering.update(left, 1, 0, scan_at_ms=100), 1515)
+        self.assertEqual(steering.update(centre, 2, .099, scan_at_ms=199), 1503)
         self.assertEqual(steering.update(centre, 3, .198, scan_at_ms=298), 1500)
 
     def test_cli_front_margin_is_incomplete_and_never_rearms(self):
@@ -293,13 +296,13 @@ class CorridorSteeringTests(unittest.TestCase):
             walls = MODULE.corridor_walls(wall_scan(.06+(.002 if i%2 else -.002), .01))
             self.assertEqual(centred.update(walls, i, i*.05), 1500)
         left = MODULE.CorridorSteering()
-        self.assertEqual(left.update(MODULE.corridor_walls(wall_scan(-.12)), 1, 0), 1520)
+        self.assertEqual(left.update(MODULE.corridor_walls(wall_scan(-.12)), 1, 0), 1515)
 
     def test_hysteresis_no_same_frame_renewal_and_bad_wall_fit(self):
         steering = MODULE.CorridorSteering()
         walls = MODULE.corridor_walls(wall_scan(.12))
-        self.assertEqual(steering.update(walls, 1, 0), 1480)
-        self.assertEqual(steering.update(walls, 1, 1), 1480)
+        self.assertEqual(steering.update(walls, 1, 0), 1485)
+        self.assertEqual(steering.update(walls, 1, 1), 1485)
         middle = MODULE.corridor_walls(wall_scan(.06))
         steering.update(middle, 2, 1)
         self.assertTrue(steering.correcting)
@@ -326,15 +329,32 @@ class CorridorSteeringTests(unittest.TestCase):
         self.assertFalse(steering.correcting)
 
     def test_side_threshold_uses_body_extent_plus_net_and_range_allowance(self):
-        self.assertAlmostEqual(MODULE.SIDE_CLEARANCE_M, .30)
+        self.assertAlmostEqual(MODULE.SIDE_CLEARANCE_M, .27)
         scan = wall_scan()
-        scan['ranges'][90] = .299
+        scan['ranges'][90] = .269
         with self.assertRaisesRegex(ValueError, 'close_side'):
             MODULE.probe_clearance(scan, {'camera': .01, 'lidar': .01, 'control': .01})
-        scan['ranges'][90] = .301
+        scan['ranges'][90] = .271
         result = MODULE.probe_clearance(scan, {'camera': .01, 'lidar': .01, 'control': .01})
-        self.assertEqual(result['side_body_extent_m'], .17)
+        self.assertEqual(result['side_body_extent_m'], .14)
         self.assertEqual(result['side_min_net_m'], .1)
+
+    def test_current_width_selects_normal_and_urgent_rates_symmetrically(self):
+        # Same 1 m corridor: 12 cm offset leaves 11 cm; 15 cm leaves 8 cm.
+        # Only the latter uses the existing urgent 20 PWM / 150 ms rate.
+        for offset, first_step, next_time in [(.12, 15, .25), (.15, 20, .15)]:
+            outputs = []
+            for sign in (-1, 1):
+                steering = MODULE.CorridorSteering()
+                walls = MODULE.corridor_walls(wall_scan(sign*offset))
+                first = steering.update(walls, 1, 0)
+                self.assertEqual(first, 1500-sign*first_step)
+                self.assertEqual(steering.update(walls, 2, next_time-.01), first)
+                second = steering.update(walls, 3, next_time)
+                self.assertGreater(abs(second-1500), abs(first-1500))
+                self.assertLessEqual(abs(second-first), first_step)
+                outputs.append((first, second))
+            self.assertEqual(tuple(a+b for a, b in zip(*outputs)), (3000, 3000))
 
     def test_real_close_left_wall_and_converging_boards_keep_correction(self):
         scan = {'seq': 1, 'ranges': json.loads((Path(__file__).parent/'observed-near-left-20261005.json').read_text())}
@@ -365,12 +385,12 @@ class CorridorSteeringTests(unittest.TestCase):
         steering = MODULE.CorridorSteering()
         right = MODULE.corridor_walls(wall_scan(.12))
         left = MODULE.corridor_walls(wall_scan(-.12))
-        self.assertEqual(steering.update(right, 1, 0), 1480)
-        self.assertLess(steering.update(right, 2, .16), 1480)
+        self.assertEqual(steering.update(right, 1, 0), 1485)
+        self.assertLess(steering.update(right, 2, .26), 1485)
         last = steering.servo
         values = []
         for seq in range(3, 9):
-            value = steering.update(left, seq, (seq-1)*.16)
+            value = steering.update(left, seq, (seq-1)*.26)
             self.assertTrue(0 <= value-last <= 20)
             self.assertTrue(1445 <= value <= 1555)
             last = value
@@ -430,11 +450,30 @@ class ProbeClearanceTests(unittest.TestCase):
         self.ages = {'camera': .01, 'lidar': .01, 'control': .01}
 
     def test_known_near_obstacle_still_blocks_motion(self):
-        for index, value in [(359, .99), (270, .29), (25, .7)]:
+        for index, value in [(359, .99), (270, .26), (25, .7)]:
             with self.subTest(index=index):
                 self.scan['ranges'][index] = value
                 with self.assertRaises(ValueError): MODULE.probe_clearance(self.scan, self.ages)
                 self.scan['ranges'][index] = 3.
+
+    def test_exact_side_rays_preserve_mirrors_at_the_current_side_boundary(self):
+        for distance in (.269, .27, .271):
+            for angle in (90, 270):
+                with self.subTest(angle=angle, distance=distance):
+                    scan = {**self.scan, 'ranges': [3.]*360}
+                    scan['ranges'][angle] = distance
+                    if distance < .27:
+                        with self.assertRaisesRegex(ValueError, 'close_side'):
+                            MODULE.probe_clearance(scan, self.ages)
+                    else:
+                        self.assertTrue(MODULE.probe_clearance(scan, self.ages)['motion_ready'])
+        # One degree forward has a real positive longitudinal component and
+        # stays in the forward corridor; the exact-axis fix must not waive it.
+        for angle in (89, 271):
+            scan = {**self.scan, 'ranges': [3.]*360}
+            scan['ranges'][angle] = .271
+            with self.subTest(angle=angle), self.assertRaisesRegex(ValueError, 'straight_corridor'):
+                MODULE.probe_clearance(scan, self.ages)
 
     def test_bounded_holes_are_kept_unknown_and_large_holes_pause(self):
         for angle in [5, 6, 7, 12, 13, 14]: self.scan['ranges'][angle] = None
@@ -561,8 +600,8 @@ class ManeuverClearanceTests(unittest.TestCase):
 
     def test_all_four_faces_use_five_cm_net_plus_three_cm_allowance(self):
         # The measured front/rear asymmetry matters even after rotating an axial obstacle.
-        for angle, body_extent, axis_threshold in [(0, .21, .29), (90, .17, .25),
-                                                   (180, .20, .28), (270, .17, .25)]:
+        for angle, body_extent, axis_threshold in [(0, .20, .28), (90, .14, .22),
+                                                   (180, .18, .26), (270, .14, .22)]:
             with self.subTest(angle=angle):
                 for net_distance in [.05, .079]:
                     with self.assertRaisesRegex(MODULE.ProbeClearanceError, 'probe_obstacle_close_body'):
@@ -576,8 +615,8 @@ class ManeuverClearanceTests(unittest.TestCase):
 
     def test_all_corners_use_euclidean_distance_and_preserve_left_right_mirrors(self):
         # A box enlarged by 8 cm would wrongly stop these passing diagonal points.
-        for angles, extent, close_xy, clear_xy in [((45, 315), .21, .240, .244),
-                                                   ((135, 225), .20, .237, .241)]:
+        for angles, extent, close_xy, clear_xy in [((45, 315), .20, .217, .219),
+                                                   ((135, 225), .18, .212, .214)]:
             distances = []
             for angle in angles:
                 with self.subTest(angle=angle):
@@ -585,12 +624,15 @@ class ManeuverClearanceTests(unittest.TestCase):
                         self.probe(self.point_scan(angle, math.sqrt(2)*close_xy))
                     result = self.probe(self.point_scan(angle, math.sqrt(2)*clear_xy))
                     distance = result['body_proximity']['current_known_min_distance_m']
-                    self.assertAlmostEqual(distance, math.hypot(clear_xy-extent, clear_xy-.17))
+                    self.assertAlmostEqual(distance, math.hypot(clear_xy-extent, clear_xy-.14))
                     self.assertGreater(distance, .08)
                     self.assertLess(clear_xy, extent+.08)
-                    self.assertLess(clear_xy, .25)
+                    self.assertLess(clear_xy, .22)
                     distances.append(distance)
-            self.assertAlmostEqual(*distances)
+            # A failed subtest should report its actual geometry assertion,
+            # not mask it with an argument-count error in the mirror check.
+            if len(distances) == 2:
+                self.assertAlmostEqual(distances[0], distances[1])
 
     def test_points_inside_the_body_stop_in_every_direction(self):
         for angle in range(0, 360, 45):
@@ -604,8 +646,8 @@ class ManeuverClearanceTests(unittest.TestCase):
 
     def test_nearby_maneuver_points_do_not_reuse_straight_rectangle_or_radial_gate(self):
         for angle, distance, old_reason in [(0, .8, 'straight_corridor'), (0, .35, 'obstacle_close'),
-                                            (180, .35, 'obstacle_close'), (90, .27, 'close_side'),
-                                            (270, .27, 'close_side')]:
+                                            (180, .35, 'obstacle_close'), (90, .26, 'close_side'),
+                                            (270, .26, 'close_side')]:
             with self.subTest(angle=angle, distance=distance):
                 scan = self.point_scan(angle, distance)
                 self.assertTrue(self.probe(scan)['motion_ready'])
@@ -613,7 +655,7 @@ class ManeuverClearanceTests(unittest.TestCase):
                     MODULE.probe_clearance(scan, self.ages)
 
     def test_maneuver_rear_has_no_launch_exemption(self):
-        scan = self.point_scan(180, .27)
+        scan = self.point_scan(180, .25)
         self.assertTrue(MODULE.probe_clearance(scan, self.ages, rear_launch=True)['motion_ready'])
         with self.assertRaises(MODULE.ProbeClearanceError) as stopped:
             self.probe(scan, rear_launch=True)
@@ -636,13 +678,24 @@ class ManeuverClearanceTests(unittest.TestCase):
         self.assertEqual(set(result['quality_issues']), {'scan_incomplete', 'front_sparse', 'lidar_late'})
 
     def test_actual05_raw_scans_pass_current_body_margin_without_certifying_a_sweep(self):
-        fixture = json.loads((Path(__file__).parent/'observed-turn05-body-20261007.json').read_text())
+        fixture_path = Path(__file__).parent/'observed-turn05-body-20261007.json'
+        fixture = json.loads(fixture_path.read_text())
+        reference = json.loads((Path(__file__).parent/
+            'observed-turn05-body-current-geometry-reference.json').read_text())
+        # Preserve the original recording and its historical measurement
+        # reference. Revised dimensions have a separate, independently
+        # calculated point-to-polygon reference, not replacement scan data.
+        self.assertEqual(hashlib.sha256(fixture_path.read_bytes()).hexdigest(),
+                         reference['original_fixture_sha256'])
+        measurement = json.loads((Path(__file__).parents[3]/
+            'config/vehicle-geometry-measured-20261006.json').read_text())
+        self.assertEqual(reference['body_extents_m'], measurement['straight_footprint'])
         for scan in fixture['scans']:
             original = json.dumps(scan, sort_keys=True)
             with self.subTest(seq=scan['seq']):
                 result = self.probe(scan)
                 self.assertTrue(result['motion_ready'])
-                expected = scan['closest_measured_body_point']
+                expected = reference['scans'][str(scan['seq'])]
                 body = result['body_proximity']
                 self.assertAlmostEqual(body['current_known_min_distance_m'],
                                        expected['distance_to_measured_rectangle_m'])
@@ -655,8 +708,11 @@ class ManeuverClearanceTests(unittest.TestCase):
                     self.assertIs(body[key], False)
         scan = fixture['scans'][-1]
         self.assertAlmostEqual(self.probe(scan)['body_proximity']['current_known_min_distance_m'],
-                               .10189205477976984)
-        with self.assertRaisesRegex(ValueError, 'close_side'):
+                               .1324457534489113)
+        # The recorded nearest lateral return is now outside the .27 m side
+        # gate, but still inside the 1 m forward corridor. It remains stopped.
+        self.assertGreater(reference['scans'][str(scan['seq'])]['minimum_lateral_distance_m'], .27)
+        with self.assertRaisesRegex(ValueError, 'straight_corridor'):
             MODULE.probe_clearance(scan, self.ages)
 
     def test_profiles_keep_identical_quality_and_missing_data_rules(self):
@@ -711,21 +767,25 @@ class ManeuverClearanceTests(unittest.TestCase):
         self.assertEqual(result['clearance_profile'], 'maneuver')
         self.assertEqual(result['clearance_gates'], {'straight_corridor_active': False,
                          'side_lateral_active': False, 'radial_active': False,
+                         'relaxed_turn_left_active': False,
                          'current_body_proximity_active': True, 'rear_launch_exemption_active': False})
         body = result['body_proximity']
         self.assertEqual(body['scope'], 'current_known_lidar_returns_only')
         self.assertEqual(body['coordinate_convention'], 'x_forward_y_left')
         self.assertEqual(body['ray_bin_convention'], 'clockwise_from_forward')
         self.assertEqual(body['body_extents_source'], 'user_measured_lidar_to_front_rear_and_outer_tyre_edges')
-        self.assertEqual(body['body_extents_m'], {'front': .21, 'rear': .20, 'left': .17, 'right': .17})
-        self.assertEqual(body['body_rectangle_m'], {'x_min': -.20, 'x_max': .21, 'y_min': -.17, 'y_max': .17})
+        self.assertEqual(body['body_extents_m'], {'front': .20, 'rear': .18, 'left': .14, 'right': .14})
+        self.assertEqual(body['body_rectangle_m'], {'x_min': -.18, 'x_max': .20, 'y_min': -.14, 'y_max': .14})
+        self.assertEqual(body['body_extents_measurement_date'], '2026-10-07')
+        self.assertEqual(body['body_extents_measurement_quality'], 'operator_rough_measurement')
+        self.assertIsNone(body['body_extents_error_bound_m'])
         self.assertEqual(body['min_net_clearance_m'], .05)
         self.assertEqual(body['min_net_clearance_source'], 'operator_selected_maneuver_5cm')
         self.assertEqual(body['lidar_range_allowance_m'], .03)
         self.assertEqual(body['stop_distance_m'], .08)
-        for direction, expected in [('front', .29), ('rear', .28), ('left', .25), ('right', .25)]:
+        for direction, expected in [('front', .28), ('rear', .26), ('left', .22), ('right', .22)]:
             self.assertAlmostEqual(body['axis_stop_thresholds_m'][direction], expected)
-        self.assertAlmostEqual(result['side_stop_threshold_m'], .25)
+        self.assertAlmostEqual(result['side_stop_threshold_m'], .22)
         self.assertEqual(result['side_min_net_m'], .05)
         self.assertIn('corridor_lookahead_m', result['legacy_diagnostic_only_fields'])
         self.assertIn('side_stop_threshold_m', result['legacy_diagnostic_only_fields'])
@@ -736,7 +796,7 @@ class ManeuverClearanceTests(unittest.TestCase):
         self.assertEqual(implicit, explicit)
         self.assertEqual(implicit['clearance_profile'], 'straight')
         self.assertEqual(implicit['legacy_diagnostic_only_fields'], [])
-        self.assertAlmostEqual(implicit['side_stop_threshold_m'], .30)
+        self.assertAlmostEqual(implicit['side_stop_threshold_m'], .27)
         self.assertEqual(implicit['side_min_net_m'], .10)
         self.assertEqual(implicit['corridor_lookahead_m'], 1.)
         self.assertEqual(implicit['corridor_half_width_m'], .32)
@@ -959,7 +1019,7 @@ class QualityRecoveryTests(unittest.TestCase):
         session['steering'] = MODULE.CorridorSteering()
         session['wall_scan_seq'] = None
         self.tick(0)
-        self.assertEqual(self.output[-1], ('drive', 1560, 1480))
+        self.assertEqual(self.output[-1], ('drive', 1560, 1485))
         self.console.scan['ranges'][5:12] = [None] * 7
         self.console.scan['seq'] += 1
         for i in range(1, 126): self.tick(i*.02)
@@ -974,10 +1034,11 @@ class QualityRecoveryTests(unittest.TestCase):
         self.tick(2.84)
         self.assertIs(self.console.auto_session, session)
         self.assertEqual(self.output[-1], ('drive', 1560, 1500))
-        for i in range(1, 11):
+        # This geometry uses the non-urgent 250 ms steering interval.
+        for i in range(1, 15):
             self.console.scan['seq'] += 1
             self.tick(2.84+i*.02)
-        self.assertEqual(self.output[-1], ('drive', 1560, 1480))
+        self.assertEqual(self.output[-1], ('drive', 1560, 1485))
         self.assertNotIn('arm', [op for op, _, _ in self.output])
 
     def test_control_feedback_fault_still_locks_during_quality_wait(self):
@@ -1027,8 +1088,8 @@ class QualityRecoveryTests(unittest.TestCase):
             self.console.scan['seq'] += 1
             self.tick(i*.02)
         servos = [servo for op, _, servo in self.output if op == 'drive']
-        self.assertEqual(servos[0], 1480)
-        self.assertEqual(servos[6], 1480)
+        self.assertEqual(servos[0], 1485)
+        self.assertEqual(servos[6], 1485)
         self.assertLess(servos[-1], servos[0])
         self.assertEqual(session['report']['steering_changes'], 2)
 

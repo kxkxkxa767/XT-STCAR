@@ -39,7 +39,9 @@ class CoastControlTests(unittest.TestCase):
         session['junction'] = self.server.JunctionStop()
         self.console.scan = room_scan(1, y=-.12, half_width=.5)
         self.tick(0)
-        self.assertEqual(self.output[-1], ('drive', 1560, 1480))
+        # The measured 28 cm body leaves 11 cm beyond the side-clearance
+        # envelope here: normal 15 PWM correction, not the urgent 20 PWM step.
+        self.assertEqual(self.output[-1], ('drive', 1560, 1485))
         self.console.begin_coast(reason, .02)
         self.tick(.02)
         return session
@@ -54,7 +56,7 @@ class CoastControlTests(unittest.TestCase):
 
     def test_normal_stop_keeps_neutral_motor_and_steering_until_lidar_still(self):
         session = self.prepare()
-        self.assertEqual(self.output[-1], ('drive', 1500, 1480))
+        self.assertEqual(self.output[-1], ('drive', 1500, 1485))
         self.advance(scan_factory=lambda seq: room_scan(seq, y=-.12, half_width=.5))
         self.assertIsNone(self.console.auto_session)
         self.assertTrue(self.console.auto_result['standstill_confirmed'])
@@ -62,7 +64,7 @@ class CoastControlTests(unittest.TestCase):
         self.assertEqual(self.output[-1], ('stop', 1500, 1500))
         coast = [row for row in self.output[1:] if row[0] == 'drive']
         self.assertTrue(all(motor == 1500 for _, motor, _ in coast))
-        self.assertTrue(any(servo < 1480 for _, _, servo in coast))
+        self.assertTrue(any(servo < 1485 for _, _, servo in coast))
         self.assertGreater(session['report']['coast_ticks'], 5)
         self.assertNotIn('arm', [row[0] for row in self.output])
 
@@ -524,7 +526,10 @@ class CliStopFeedbackTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         spec = importlib.util.spec_from_file_location('coast_cli', root/'autonomy-control.py')
         cli = importlib.util.module_from_spec(spec)
-        with patch.dict(sys.modules, {'autonomy_live': live_tests.MODULE, 'turn_motion': turn_module}):
+        # Match direct CLI execution's module path without depending on another
+        # test having imported maneuver_sequence first.
+        with patch.object(sys, 'path', [str(root), *sys.path]), patch.dict(
+                sys.modules, {'autonomy_live': live_tests.MODULE, 'turn_motion': turn_module}):
             spec.loader.exec_module(cli)
         original = {'boot': 'boot', 'autonomy': {'epoch': 0}, 'status': {'control': {'tick': 100}}}
         reads, calls = [], []

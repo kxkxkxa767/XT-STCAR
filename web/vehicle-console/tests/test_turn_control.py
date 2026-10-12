@@ -2,6 +2,7 @@
 import importlib.util
 import io
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -505,7 +506,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(session['report']['clearance_current']['clearance_profile'], 'maneuver')
         self.assertEqual(session['deadline'], 18.)
         near = self.scan(self.console.scan['seq']+1)
-        near['ranges'][90] = .24
+        near['ranges'][90] = .21  # 7 cm from the current 14 cm body side.
         self.tick(round(drive_since+.02, 6), near)
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
@@ -559,7 +560,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[:-1]))
         self.assertEqual(len([row for row in self.outputs if row['op'] == 'arm']), 1)
 
-    def test_compact_initial_1670_matures_then_slews_up_to_1720_and_releases_from_geometry(self):
+    def test_compact_initial_1670_matures_then_slews_within_1720_and_releases_from_geometry(self):
         drive_since = self.drive_compact_trial()
         session = self.console.auto_session
         first_positive = next(row for row in self.outputs if row['motor'] > 1500)
@@ -580,8 +581,22 @@ class TurnControlTests(unittest.TestCase):
             self.assertIs(self.console.auto_session, session)
             self.assertLessEqual(session['report']['turn']['steering_target'], 1720)
             self.assertLessEqual(self.outputs[-1]['servo'], 1720)
-        self.assertEqual(session['report']['turn']['steering_target'], 1720)
-        self.assertEqual(session['report']['servo'], 1720)
+        # The cap bounds the nominal heading demand; current inner returns
+        # may release it. This original narrow-corridor scene must exercise
+        # that constraint rather than demand saturation despite the wall.
+        inner = session['report']['turn']['inner_clearance']
+        self.assertTrue(inner['active'])
+        self.assertEqual(inner['source_seq'], self.console.scan['seq'])
+        self.assertEqual(inner['nominal_target_pwm'], 1720)
+        self.assertGreater(inner['limited_target_pwm'], 1500)
+        self.assertLess(inner['limited_target_pwm'], inner['nominal_target_pwm'])
+        self.assertEqual(session['report']['turn']['steering_target'], inner['limited_target_pwm'])
+        self.assertGreater(session['report']['servo'], 1670)
+        self.assertEqual(session['report']['servo'], inner['limited_target_pwm'])
+        point = inner['limiting_return']
+        self.assertEqual(point['range_m'], self.console.scan['ranges'][point['index']])
+        self.assertGreater(point['point_left_m']['y_m'], 0.)
+        self.assertFalse(inner['swept_path_certified'])
         for index in range(1, 21):
             self.observe(round(drive_since+.8+index*.1, 6),
                          self.scan(self.console.scan['seq']+1, heading=100-index*4.5))
@@ -834,7 +849,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(state['turn_rejection'], 'left_corridor_unknown')
         self.assertEqual(state['turn_clearance']['clearance_profile'], 'maneuver')
         self.assertFalse(state['turn_clearance']['body_proximity']['stop_requested'])
-        self.console.scan['ranges'][90] = .24
+        self.console.scan['ranges'][90] = .21
         with patch.object(self.server.time, 'monotonic', return_value=0.):
             state = self.console.autonomy_status()
         self.assertEqual(state['turn_rejection'], 'probe_obstacle_close_body')
@@ -847,15 +862,15 @@ class TurnControlTests(unittest.TestCase):
         live_module = importlib.import_module(self.server.probe_clearance.__module__)
         self.assertAlmostEqual(turn_module.TURN_LATERAL_MARGIN_M,
                                live_module.SIDE_BODY_EXTENT_M+live_module.MANEUVER_BODY_CLEARANCE_M)
-        self.assertAlmostEqual(turn_module.TURN_LATERAL_MARGIN_M, .25)
-        self.assertAlmostEqual(live_module.SIDE_CLEARANCE_M, .30)
+        self.assertAlmostEqual(turn_module.TURN_LATERAL_MARGIN_M, .22)
+        self.assertAlmostEqual(live_module.SIDE_CLEARANCE_M, .27)
 
     def test_turn_profile_diagnostics_follow_preview_presteer_drive_and_coast(self):
         def nearby_scan(seq):
             value = self.scan(seq)
-            # These are outside the current body envelope but inside each old
+            # These are outside the current body envelope but inside each
             # straight gate. They do not certify any future steering sweep.
-            for angle, distance in [(0, .8), (90, .29), (180, .35)]:
+            for angle, distance in [(0, .8), (90, .26), (180, .35)]:
                 value['ranges'][angle] = distance
             return value
 
@@ -871,7 +886,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(session['report']['clearance_profile_source'], 'bounded_left_turn_trial')
         self.assertEqual(session['report']['clearance_start']['clearance_profile'], 'maneuver')
         body = session['report']['clearance_start']['body_proximity']
-        self.assertEqual(body['body_extents_m'], {'front': .21, 'rear': .20, 'left': .17, 'right': .17})
+        self.assertEqual(body['body_extents_m'], {'front': .20, 'rear': .18, 'left': .14, 'right': .14})
         self.assertEqual((body['min_net_clearance_m'], body['lidar_range_allowance_m']), (.05, .03))
         self.assertEqual(body['min_net_clearance_source'], 'operator_selected_maneuver_5cm')
         self.assertAlmostEqual(body['stop_distance_m'], .08)
@@ -897,7 +912,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertEqual(session['report']['clearance_current']['clearance_profile'], 'maneuver')
         self.assertTrue(all(row['motor'] == 1500 for row in self.outputs[before_coast:]))
         value = nearby_scan(self.console.scan['seq']+1)
-        value['ranges'][90] = .24
+        value['ranges'][90] = .21
         self.tick(round(self.now+.02, 6), value)
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
@@ -946,6 +961,13 @@ class TurnControlTests(unittest.TestCase):
         records = json.loads((Path(__file__).with_name('observed-turn05-body-20261007.json')).read_text())
         recorded = records['scans'][-1]
         self.assertEqual(recorded['seq'], 4216)
+        closest = recorded['closest_measured_body_point']
+        # Keep the original scan and its old 34 cm-body calculation intact.
+        # Re-evaluate its recorded nearest return against the operator's
+        # revised 28 cm body, independently of the production clearance code.
+        current_distance = math.hypot(max(0., closest['forward_x_m']-.20),
+                                      max(0., closest['left_y_m']-.14))
+        self.assertAlmostEqual(current_distance, .1324457534489113)
 
         def service_scan(seq):
             # Full unchanged actual05 ranges exercise the obstacle policy. The
@@ -964,7 +986,7 @@ class TurnControlTests(unittest.TestCase):
             current = report['clearance_current']
             self.assertEqual(current['clearance_profile'], 'maneuver')
             self.assertAlmostEqual(current['body_proximity']['current_known_min_distance_m'],
-                                   recorded['closest_measured_body_point']['distance_to_measured_rectangle_m'])
+                                   current_distance)
             self.assertEqual(current['body_proximity']['nearest_point']['angle_deg'], 308)
             self.assertAlmostEqual(current['body_proximity']['nearest_point']['left_y_m'],
                                    recorded['closest_measured_body_point']['left_y_m'])
@@ -977,7 +999,7 @@ class TurnControlTests(unittest.TestCase):
         self.assertGreaterEqual(report['turn']['steering_settle_elapsed_s']+1e-9, 1.2)
         self.assertGreaterEqual(report['turn']['steering_settle_feedback_ticks'], 3)
         value = service_scan(self.console.scan['seq']+1)
-        value['ranges'][90] = .24
+        value['ranges'][90] = .21
         self.tick(round(self.now+.02, 6), value)
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.console.auto_result['reason'], 'probe_obstacle_close_body')
@@ -990,9 +1012,11 @@ class TurnControlTests(unittest.TestCase):
 
     def test_no_left_geometry_ambiguity_and_rear_obstacle_refuse_start(self):
         values = [dict(self.scan(1), corridor_candidates=[]), self.scan(1)]
-        values[1]['corridor_candidates'].append(dict(values[1]['corridor_candidates'][0]))
+        # An identical copy is a deduplicated alias; use a distinct, valid
+        # second left corridor to exercise unresolved geometric ambiguity.
+        values[1]['corridor_candidates'].append(corridor_scan(1, heading=62.)['corridor_candidates'][0])
         rear = self.scan(1)
-        rear['ranges'][180] = .27
+        rear['ranges'][180] = .25
         values.append(rear)
         for scan in values:
             with self.subTest(scan=scan.get('corridor_candidates')):
@@ -1420,7 +1444,9 @@ class TurnControlTests(unittest.TestCase):
         self.assertLessEqual(self.now-drive_since, 1.02)
 
     def test_front_and_side_obstacle_prioritize_immediate_neutral_lock(self):
-        for angle, distance in [(0, .28), (90, .24), (180, .27), (270, .24)]:
+        # Every return is 7 cm from that face of the revised body, strictly
+        # inside the unchanged 8 cm maneuver stopping boundary.
+        for angle, distance in [(0, .27), (90, .21), (180, .25), (270, .21)]:
             with self.subTest(angle=angle):
                 if self.outputs:
                     self.tearDown()

@@ -7,6 +7,8 @@ slew, the settling allowance and trial deadlines. No device or actuator API.
 import copy
 import math
 
+from autonomy_live import SIDE_BODY_EXTENT_M, MANEUVER_BODY_CLEARANCE_M
+
 SERVO_MIN = 1270
 SERVO_MAX = 1720
 INITIAL_PRESTEER_MIN = 1650
@@ -20,7 +22,7 @@ PWM_INTERVAL_S = .10
 SCAN_AGE_S = .30
 COAST_SERVO_DELTA = 55
 # Turn-only lidar-to-wall margin: measured half-width + clearance + range allowance.
-TURN_LATERAL_MARGIN_M = .17+.05+.03
+TURN_LATERAL_MARGIN_M = SIDE_BODY_EXTENT_M + MANEUVER_BODY_CLEARANCE_M
 _FRAME = 'lidar_origin_coarse_body_heading'
 _FIELDS = ('heading_left_rad', 'center_offset_left_m', 'width_m',
            'left_wall_points', 'right_wall_points', 'support_span_m',
