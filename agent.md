@@ -292,6 +292,10 @@
 - 正常运行优先于eMMC寿命：减少无用落盘，不降感知/控制频率或因可选日志额度触发故障。必要诊断和全部失败证据保留。
 - 源码/配置/必要记录进Git；密码、私钥、access文件、原始影像、模型、工具链、环境、构建产物与部署包不进Git。保留队友原有SUMMARY、ZIP、文本与比赛PDF，不暂存无关文件。
 
+## 必须保留的绕桶好版本（第57轮，两个锥桶都绕过）
+
+- 源码 `9e01bc9`（git标签 `good-turn57-both-cones`），包 `work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn57-9e01bc9.tar.gz`（sha256 17f5d1cd…b7），车端安装来源 `/home/bianbu/xt-stcar-console/stage-claude-turn57-20261012-151954`；车端 `backup-claude-turn57-20261012-151954` 是部署57前的56整套。实车记录 `turn57_actual`：首桶逆时针、二桶顺时针都完成，灯区右转太慢撞左前挡板。用户：“第二个桶终于绕过去了”“记录下这个版本”。**以后改坏了可回到这个版本，绝不能删。**
+
 ## 必须保留的直道好版本
 
 - 用户认可的直道源码 `8efc47b`：本机 `work/vehicle-junction-coast-test-20261006/release-process/` 及完整 `run04/`；车端 `/home/bianbu/xt-stcar-console/backup-dynamic-turn-20261007-102438`。**绝不能删。**
