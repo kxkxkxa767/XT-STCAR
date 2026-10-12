@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "Latest actual55 remains claude-turn55/32743e6, left-board collision despite continuous second ID.56 source candidate implemented: current-support/corridor early return, actual center ACK, unchanged board and final-pass protection. Related329/full652 pass; stashed baseline637 pass, identical empty failure sets.37 detector and51–54 route outputs unchanged;55 conditional692 neutral/694 right with missing-frame limits retained.56 not yet built/deployed/driven. User now authorizes Codex to continue56 testing, no handoff unless explicitly requested. Vehicle last verified55 locked1500/1500; fresh start placement must be checked.",
+  "latest_trial_status": "56 executed once with claude-turn56/b92400a. First pass recovered from quality wait; second ID1 lost on sparse3-point support, rebound ID2. New return preparation DID trigger2242 but actual servo was1720; later close-support angle association failed, held/recovery continued neutral request, and left-front board stopped2249 before center ACK or second pass.7 raw files hash-matched;6 fresh locked1500/1500 samples and14 installed hashes verified. User explicitly stops further code changes and requests records/instructions for Claude. No57 build/run; vehicle remains56. See turn56_actual and after55_second_orbit_exit_correction.deployment.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -17481,8 +17481,8 @@
     "date": "2026-10-12",
     "source_base_commit": "a3a85f37b128c13678d4687956419b77b3f9c168",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 56,
     "user_instruction": "修二桶不及时右转，不特化赛道，保留中位ACK和挡板保护，测试后推送；后续问题直接修改。追加：直接由Codex继续实车测试，用户明确交给Claude之前不主动交接。",
     "failure_classes": [
@@ -17633,6 +17633,251 @@
     "completed": false,
     "competition_supported": false,
     "retained_new_stash": "24f6832661673dad1567a770a9036d6591521a9d，已apply一次恢复候选，未pop，禁止重复恢复；全部旧stash未动。",
-    "next_step": "用户追加由Codex直接测试。先提交推送，再build-matched.py claude-turn55 claude-turn56 56 after55_second_orbit_exit_correction；确认56产物不存在，完成部署前后/跑前新鲜核验；本轮动力前确认车已重新静止在起点且朝原直道，然后仅跑一次。"
+    "next_step": "第56轮已执行，不得重跑build/helper/覆盖产物。用户明确要求停止代码修改，将问题记录交Claude修下一候选。",
+    "deployment": {
+      "source_commit": "b92400a04319eb512327e628bfeeb8c375312f30",
+      "archive_sha256": "9815ea341e31ca153409bec7f6c9923c80ef3429c772c880bb38901746beb322",
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn56-b92400a.tar.gz",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn56-20261012-143904",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn56-20261012-143904",
+      "helper_sha256": "d657bde520bb07dada83c69a83193e807b211865145446f920b4c78b1cbfe1b5",
+      "settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "local_build_verification": "work/vehicle-dynamic-deploy-20261008/trial56-local-build-verification.json",
+      "start_geometry_review": "work/vehicle-dynamic-deploy-20261008/trial56-start-geometry-review.json",
+      "fresh_verification_files": [
+        "work/vehicle-dynamic-deploy-20261008/before56-fresh.json",
+        "work/vehicle-dynamic-deploy-20261008/after56-deploy-fresh.json",
+        "work/vehicle-dynamic-deploy-20261008/pre56-run-fresh.json",
+        "work/vehicle-dynamic-deploy-20261008/pre56-run-recheck-fresh.json",
+        "work/vehicle-dynamic-deploy-20261008/after56-trial-fresh.json"
+      ],
+      "before_after_pre_samples": 6,
+      "installed_hashes_verified_each": 14,
+      "continue_route_both_previews_true": true,
+      "rollback": null,
+      "physical_result": "turn56_actual; preparation observed but left-board collision remains, not a successful fix."
+    }
+  },
+  "turn56_actual": {
+    "date": "2026-10-12",
+    "author": "Codex",
+    "source_commit": "b92400a04319eb512327e628bfeeb8c375312f30",
+    "deployed_label": "claude-turn56",
+    "trial_executed_once": true,
+    "candidate_key": "after55_second_orbit_exit_correction",
+    "user_placement_confirmation": "确认，已静止在原起点且朝原直道，开始第56轮。",
+    "operator_report": "还是和上次一样，你看看轨迹图，为什么第二个锥桶一直都识别有问题。",
+    "final_user_instruction": "你不要修改了，直接记录问题给我命令，我让clade去改。此前要求由Codex自行测试已由本条明确交接给Claude；本轮后不改运行源码、不构建57。",
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261012-56",
+    "retrieval_verification": {
+      "trial": 56,
+      "evidence_hashes": {
+        "after.json": "8ae97a906e9a3d35d807ff512b3c868d5d3a574ca646f51fde9a4f9eefa5ee36",
+        "before-lidar.json": "7e08832d849a434d8bb997d6e65c05fdbdc7c316e105f506e8cdff209ad3e564",
+        "before.json": "efeff50adb088beb87ec41c57065bb729b859ca996f22d034c80cce91d27e8c1",
+        "cli-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "cli-result.json": "4d453b529f3a96620891e8c8c2713c298d2356b200a15d1a7060974ba6a81e3c",
+        "feedback.jsonl": "84ecf24a4f8dd4a0631706c67ed864193d9740e475d6a4030e2667286789e33f",
+        "summary.json": "399b5b47c7808250c1092d59f2144d9ebd3435c9455e630d88fabf6f89dcdf5e"
+      },
+      "seven_files_match": true,
+      "post_trial_six_fresh_locked_samples": true,
+      "post_trial_installed_hashes": 14,
+      "settings_preserved": true,
+      "physical_standstill_verified": false
+    },
+    "helper_elapsed_s": 13.422693051999886,
+    "cli_exit_code": 1,
+    "observer_stop_requested": false,
+    "terminal_reason": "probe_obstacle_close_body",
+    "quality_issues_at_stop": [],
+    "final_locked_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "operator_stop",
+      "seq": 185,
+      "servo": 1500,
+      "tick": 226294
+    },
+    "owner": null,
+    "active": null,
+    "physical_standstill_verified": false,
+    "completed": false,
+    "competition_supported": false,
+    "actual_sequence": [
+      "首桶已交接；2202 scan_incomplete断电等待，2205减左，2206申请恢复，2207首过准备，2211首过；实际回中ACK后出口右对齐。",
+      "2224首次二桶交接ID1；2227首次二桶丢失退通道；2231重新确认/改绑ID2，随后再次进入second_orbit。",
+      "2232–2241向左绕入，实际采样舵1539→1579→1619→1659，最终到1720。",
+      "2242(rec6.288s)确实触发second_return_prepare：实际舵1720，目标1500；当前桶右隙.0916m，通道目标1421，但当帧只有中位通过全桶弧侧别/8cm条件，不可直接右切。2243仍有完整观测并更新准备。",
+      "实际决策2245仍held，采用舵1640且目标1500；最早保存的2247决策已corridor_follow，采用1600、自然1445但目标1500，继续减左。没有证据显示清准备后重新加左。",
+      "最后运行turn命令1560，第二桶中位ACK及二过均未建立；2249(rec6.987s)左前挡板近距终止。停后status1500是锁定回中，不能冒充运行中位ACK。"
+    ],
+    "clock_definition": "rec_s=(decision/source_at_ms-217605)/1000; first saved positive motor scan2179. Map t starts earlier at scan2137. State decision scan and accompanying lidar raw scan often differ; records preserve both.",
+    "root_findings": {
+      "far_sparse_support": "A类：2223/2225/2227的桶状紧凑簇只有3个真实回波，尺寸及两侧远背景检查可通过，但被TOLERANT_MIN_POINTS=4过滤。首次交接后身份连续性被打断，2231才重获ID2。",
+      "near_angular_association": "A/C类：最后完整2243为22点、.378m、-52.5°；原raw2246仍21点、.399m、-121.8°，位置差.442306<=.603m，直径差.001373<=.12m，角差69.331°却超过40.2°门；2249角差110.525°>70°也阻恢复。当前角门随时间放宽仍不适应近桶快速方位变化。",
+      "steering_preparation_and_response": "D/E类：新准备实际触发并持续减左，但发中位目标时已经满左1720。明确反馈tick224098:1720→224376:1640(278ms)→224627:1600(251ms)，距触板约.699s仍未到中位。保存间隔缺帧，不把所有慢响应都断言为ACK延迟；不能仅修识别就宣称解决碰撞。",
+      "what_not_to_misdiagnose": "与55不同，56不是从未准备，也不是中位ACK拒绝或安全覆盖层把减左改回加左。2242右弧全桶侧别/8cm门尚不满足，仅中位合法；保留先减左到中位的协议。"
+    },
+    "stop_clearance": {
+      "scope": "current_known_lidar_returns_only",
+      "coordinate_convention": "x_forward_y_left",
+      "ray_bin_convention": "clockwise_from_forward",
+      "body_extents_source": "user_measured_lidar_to_front_rear_and_outer_tyre_edges",
+      "body_extents_measurement_date": "2026-10-07",
+      "body_extents_measurement_quality": "operator_rough_measurement",
+      "body_extents_error_bound_m": null,
+      "body_extents_m": {
+        "front": 0.2,
+        "rear": 0.18,
+        "left": 0.14,
+        "right": 0.14
+      },
+      "body_rectangle_m": {
+        "x_min": -0.18,
+        "x_max": 0.2,
+        "y_min": -0.14,
+        "y_max": 0.14
+      },
+      "min_net_clearance_m": 0.05,
+      "min_net_clearance_source": "operator_selected_maneuver_5cm",
+      "lidar_range_allowance_m": 0.03,
+      "stop_distance_m": 0.08,
+      "default_stop_distance_m": 0.08,
+      "relaxed_turn_left_active": false,
+      "turning_left_stop_distance_m": null,
+      "stop_requested": true,
+      "current_known_min_distance_m": 0.015868926478772864,
+      "nearest_point": {
+        "angle_deg": 325,
+        "range_m": 0.26,
+        "forward_x_m": 0.21297953151513782,
+        "left_y_m": 0.1491298734512721,
+        "body_distance_m": 0.015868926478772864,
+        "stop_distance_m": 0.08,
+        "relaxed_turn_left": false
+      },
+      "stop_trigger_point": {
+        "angle_deg": 325,
+        "range_m": 0.26,
+        "forward_x_m": 0.21297953151513782,
+        "left_y_m": 0.1491298734512721,
+        "body_distance_m": 0.015868926478772864,
+        "stop_distance_m": 0.08,
+        "relaxed_turn_left": false
+      },
+      "target_contact_tolerated": false,
+      "target_contact_points": [],
+      "target_contact_evidence": {
+        "role": "cone_like_support",
+        "track_id": null,
+        "confirmed": false,
+        "full_observation": true,
+        "source_seq": 2249,
+        "source_at_ms": 224592,
+        "source_received_at": 3137.902510762,
+        "support_bins": [
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169
+        ],
+        "support_ranges_m": [
+          0.709,
+          0.692,
+          0.6769999999999999,
+          0.6769999999999999,
+          0.6769999999999999,
+          0.6769999999999999,
+          0.6769999999999999,
+          0.6769999999999999,
+          0.692,
+          0.692,
+          0.709,
+          0.709,
+          0.709
+        ],
+        "semantic_class": "unknown",
+        "objects": [
+          {
+            "support_bins": [
+              157,
+              158,
+              159,
+              160,
+              161,
+              162,
+              163,
+              164,
+              165,
+              166,
+              167,
+              168,
+              169
+            ],
+            "range_m": 0.6888161274066134,
+            "bearing_left_rad": -2.8454475524176197,
+            "diameter_m": 0.1482213609135325
+          }
+        ],
+        "orbit_track_id": 1,
+        "second_track_id": 2
+      },
+      "axis_stop_thresholds_m": {
+        "front": 0.28,
+        "rear": 0.26,
+        "left": 0.22000000000000003,
+        "right": 0.22000000000000003
+      },
+      "free_space_certified": false,
+      "swept_path_certified": false,
+      "standstill_certified": false
+    },
+    "map_review": {
+      "timeline": "work/turn56-analysis-20261012/timeline.log",
+      "map": "work/turn56-analysis-20261012/map.png",
+      "second_panels": "work/turn56-analysis-20261012/map-second-panels.png",
+      "images_opened_and_visually_reviewed": true,
+      "observation": "二桶前长直近似对准，接近时才明显加左，近桶急弯后车头左前贴左挡板；与用户称同上轮吻合。接触后ICP/单墙滑移不用于精确碰撞速度结论。"
+    },
+    "offline": {
+      "detector56": "容错首桶9seen/5conf/2ids；前方15/10/3；这是5Hz保存录像统计，不等于实时全部观察。",
+      "route56": "原回放在2220→2223保存间隔恰300ms触turn_scan_clock_gap，未到二桶；不能称完整复现或修改成功。",
+      "exact_gate_recomputations": "work/turn56-detector-analysis-20261012/actual-tracker-diagnosis.json",
+      "missing_raw_scans": [
+        2244,
+        2245,
+        2247,
+        2248
+      ],
+      "limits": "2244/2245/2247/2248完整原始扫描均未保存。第二次真实身份丢失只能界定为2245 held到2247 corridor间，无法逐帧复算第一拒绝帧。2246相对最后完整2243的角门拒绝可直接复算。"
+    },
+    "next_owner_recommendations": [
+      "审查已确认身份的三点稀疏支撑维持，保留孤立/尺寸/空间/同ID/歧义规则，勿直接全局降低新获取或桶接触门。",
+      "近距关联应结合距离、相对运动尺度和当前完整支撑，不只固定/线性角门；首桶、二桶、行驶/等待/重新获取一起检查，不能无界放宽认错桶。",
+      "把晚加左、满左开始准备、真实命令采用/扫描节奏纳入控制设计和测试；准备允许提前释放左舵，新增右转仍需实时几何+完整支撑+实际中位ACK，挡板门保留。",
+      "用56真实帧和布局变化回归，不写赛道坐标/特定序号/固定拐点时间，不篡改已恢复的43/52避桶测试。全量基线652无失败；下一修改跑19–56全部detector、51–56适用route及真实帧局部回归，记录录像缺口。"
+    ],
+    "evidence_reviews": [
+      "work/turn56-analysis-20261012/state-machine-review.json",
+      "work/turn56-detector-analysis-20261012/handoff-findings.json"
+    ],
+    "next_trial": 57,
+    "post_trial_runtime_code_modified": false,
+    "new_trial57_built": false
   }
 }
