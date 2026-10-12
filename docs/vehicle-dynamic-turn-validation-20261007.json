@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "56 (claude-turn56/b92400a) is the last physical trial (second support lost twice, late hard left, left board). Round 57 candidate (Claude): 3-return maintenance + range-dependent association gate (all trackers), lane-frame second bypass with heading limit, faster return release. Full 662 tests pass; detector 38 trials not worse; replays recorded with saved-scan limits. Not built/deployed/tried.",
+  "latest_trial_status": "57 (claude-turn57/9e01bc9): first and second cones both passed (second ID kept from 2.49 m). Light turn after the second pass was too slow (10-PWM right steps) after the second return re-aligned with the old lane; left-front board stop at 11.68 s.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -17885,8 +17885,8 @@
     "date": "2026-10-12",
     "source_base_commit": "e4cd1e45",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "next_trial": 57,
     "user_instruction": "gpt改了后第二个锥桶老是丢失交还给你了（GPT交接：识别连续性与转向准备/执行余量一起解决，首桶二桶同类一起查，不写死赛道/帧号/拐点时间）",
     "failure_classes": [
@@ -17934,6 +17934,54 @@
     "no_fixed_course_coordinate_or_length": true,
     "completed": false,
     "competition_supported": false,
-    "next_step": "build-matched.py claude-turn56 claude-turn57 57 after56_second_continuity_and_lane_bypass_correction; user confirms the car is stationary at the start, one run only."
+    "next_step": "build-matched.py claude-turn56 claude-turn57 57 after56_second_continuity_and_lane_bypass_correction; user confirms the car is stationary at the start, one run only.",
+    "deployment": {
+      "source_commit": "9e01bc94b615586429f88f82902b617d3c5e3154",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn57-9e01bc9.tar.gz",
+      "archive_sha256": "17f5d1cdc5eaa4f3ec25c723629ccecad61195a5c20ea7e76ccd604a7db083b7",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn57-20261012-151954",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn57-20261012-151954",
+      "helper_sha256": "4fe0da24a42683d572a7042c4fe8d18534d8250493de2c3fdfcf3ad873338f3c",
+      "settings": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "access_token_preserved": true,
+      "launch_command_preserved": true,
+      "checks": {
+        "before57-fresh.json": "six fresh locked ready samples; 14 hashes and settings match (turn56 package)",
+        "after57-deploy-fresh.json": "six fresh locked ready; 14 hashes match turn57 package; continue_route preview true; turn_ready true",
+        "pre57-run-fresh.json": "six fresh locked ready; no trial57 dir; stage trial57.py sha256 equals local helper; no autonomy-control process",
+        "after57-trial-fresh.json": "validate-fresh asserts start readiness and fails at the end position (probe_obstacle_close_body), as documented; independently: 6 samples owner None, active none, unarmed, 1500/1500, fresh ages, same boot, tick/seq increasing"
+      }
+    }
+  },
+  "turn57_actual": {
+    "date": "2026-10-12",
+    "executor": "Claude",
+    "vehicle_source_commit": "9e01bc94b615586429f88f82902b617d3c5e3154",
+    "operator_placement": "用户：“车我重新连上并放好了，你开始测试吧”",
+    "start_geometry": "front wall 2.144 m, board end .491 m, width 1.653 m, exit 94.4 deg, incoming 1.7 deg, lateral .325 m, presteer cap 1686 (exit .4 deg above the 87.9-94.0 reference, judged noise)",
+    "executions": 1,
+    "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261012-57/ (7 files sha256 match trial57-remote-sha256.txt)",
+    "cli_exit_code": 1,
+    "elapsed_s": 13.705,
+    "observer_stop_requested": false,
+    "operator_report": "用户：“第二个桶终于绕过去了”",
+    "events": {
+      "first_target": "handover 526 (5.26 s), orbit 1550, release 535, front_sparse wait 537 (quality), resume + first pass 544 (7.10 s), center ACK 546, corridor 551",
+      "second_target": "confirmed ID1 at 553 (2.49 m, +1 deg) and kept the same ID through the pass (no loss, round-57 fix); lane/pursuit bypass 1592-1596; return preparing from 562 (1.64 m, -10 deg) -> 1500, center ACK, right 1470 -> 1413 (571-574) around the support; support -142 deg behind rear; second_pass at 581 (frontmost x -.572, right gap .294)",
+      "after_pass": "second-orbit return target released back toward the current (old) lane axis 1413 -> 1486 (576-581) while the old lane ends in a board; light_turn from 584 (11.00 s) with free-space target 1350 but servo 1476 -> 1456 -> 1446 in .46 s (light_turn used the 10-PWM generic step, not the 40-PWM post-pass step)",
+      "terminal": "scan 588 body gate: bin 327, range .306 m, point (x .257, y left .167), body gap .063 < .08; left-front board; cone-like support only at rear-right bins 154-158, board correctly not exempt"
+    },
+    "failure_classes": [
+      "D",
+      "E"
+    ],
+    "analysis": "work/turn57-analysis-20261012/ (timeline.log, map.png, map-panels.png opened and checked)",
+    "completed": false,
+    "competition_supported": false
   }
 }
