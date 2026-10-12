@@ -10,7 +10,7 @@ import math
 from compact_target import (CompactTargetTracker, _associated, _candidates, contact_supports, MAX_DIAMETER_M,
                             MIN_RANGE_M, TOLERANT_MIN_POINTS, TOLERANT_MAINTENANCE_MIN_POINTS)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
-                           MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM)
+                           MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM, CorridorSteering, corridor_walls)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
                          PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number, _valid_candidate,
                          _valid_wall, _wrap, _surface_supports, _same_surface)
@@ -142,27 +142,61 @@ ROUTE_PATH_RIGHT_CANDIDATES = (1350, 1390, 1430, 1470)
 _DIRECTION_COS = tuple(math.cos(math.radians(i)) for i in range(360))
 _DIRECTION_SIN = tuple(math.sin(math.radians(i)) for i in range(360))
 LIGHT_BRIDGE_MAX_BINS = 5
+# Round 63 (Claude): _free_space tables. The same expressions as the former
+# per-call math, evaluated once (bitwise identical results); trials 60-62
+# light-turn ticks took .087-.095 s on the car, ~60% of it in _free_space,
+# against the .12 s control-interval limit.
+_FREE_BEARING_DEG = tuple(math.degrees(_wrap(-math.radians(i))) for i in range(360))
+_FREE_POINT_COS = tuple(math.cos(math.radians(b)) for b in _FREE_BEARING_DEG)
+_FREE_POINT_SIN = tuple(math.sin(math.radians(b)) for b in _FREE_BEARING_DEG)
+_FREE_COS = tuple(tuple(math.cos(math.radians(h-b)) for h in LIGHT_HEADINGS_DEG) for b in _FREE_BEARING_DEG)
+_FREE_SIN = tuple(tuple(math.sin(math.radians(h-b)) for h in LIGHT_HEADINGS_DEG) for b in _FREE_BEARING_DEG)
 # Round 58 (Claude): light lane to the finish, no vision yet (user: run the
-# whole route first). The lane is driven slowly so that, once the light is
-# recognized, the car can stop inside the 1 m stop area with neutral coasting
-# only (no reverse braking; measured coast decel ~.5 m/s^2; 1550 cruises at
-# ~.6-1.3 m/s; nothing below 1550 starts the car). Speed is the closing rate
-# of the board straight ahead (median of 3 scan-to-scan rates): coast above
-# LANE_SPEED_HIGH_MPS, 1550 below LANE_SPEED_LOW_MPS, a 1560 restart below
+# whole route first). Neutral coasting only (no reverse braking; nothing below
+# 1550 starts the car). Speed is the closing rate of the board straight ahead
+# (median of 3 scan-to-scan rates); a 1560 restart below
 # LANE_SPEED_RESTART_MPS (rules: stopping > 10 s outside light/crosswalk fails).
 # Finish (rules: stop inside the 80 cm zone at the lane end, board contact
 # +10 s): cut power once the board ahead is within body front + gap + the
 # neutral coasting distance v^2/(2a) + v*reaction. Unknown speed uses the
 # fastest measured 1550 speed.
-LANE_SPEED_HIGH_MPS = .70
-LANE_SPEED_LOW_MPS = .45
+# Round 63 (Claude). User: "后续直道的部分可以参考发车区直道的，快一点，但要
+# 保证能不撞板" / "红绿灯后的直道，到尽头就停下". The straight is driven at
+# 1550 (~.9-1.3 m/s; round 58 regulated the whole lane to .45-.70). Once the
+# board ahead is within the current speed's cut plus LANE_SLOW_TRAVEL_M, a
+# latched slow zone keeps the round-58 band (coast above LANE_SLOW_HIGH_MPS,
+# 1550 below LANE_SLOW_LOW_MPS), so the final cut happens from a low speed and
+# the uncertain decel acts on a short coast only. A smooth coasting profile
+# was tried first: with only 1550/neutral and a median-of-3 speed, a 1550 push
+# overshot to ~1.2 m/s and the cut fired from there (closed-loop test). The
+# cut uses LANE_STOP_DECEL_MPS2, below the ~.5 m/s^2 rolling decel measured
+# from rebuilt paths (trials 49-51): at .6 m/s the coast is .51 m at .35 vs
+# .36 m at .5 m/s^2. A speed missing for one frame (front range jump) uses the
+# last measured one (+.1 m/s) for .5 s before the 1.3 m/s fallback. Trial62
+# entered the lane end at 1.14-1.27 m/s without any cut (still in the light
+# turn) and touched the board after the control-gap lock.
 LANE_SPEED_RESTART_MPS = .15
 LANE_SPEED_UNKNOWN_MPS = 1.3
 LANE_COAST_DECEL_MPS2 = .5
+LANE_STOP_DECEL_MPS2 = .35
+LANE_SLOW_TRAVEL_M = .60
+LANE_SLOW_HIGH_MPS = .70
+LANE_SLOW_LOW_MPS = .45
+LANE_SPEED_HOLD_S = .5
+LANE_SPEED_HOLD_MARGIN_MPS = .1
 LANE_REACTION_S = .2
 LANE_FINISH_GAP_M = .15
 LANE_FRONT_HALF_BINS = 3
 LANE_ALIGNED_HEADING_RAD = math.radians(8)
+# Round 63 (Claude): the light turn hands over to the light lane as soon as
+# a lane is measured within this heading, once the turn has run at least
+# LIGHT_TURN_MIN_S (the old corridor can still be near straight ahead when
+# the turn starts). Trials 60-62: the light lane (~1.05 m wide) was measured
+# at 8-18 deg for seconds while the free-space law weaved 1408-1571 and the
+# 8 deg / .3 s alignment never matured; the car reached the lane end still in
+# the light turn.
+LIGHT_LANE_ENTRY_HEADING_RAD = math.radians(20)
+LIGHT_TURN_MIN_S = 1.0
 # Lateral gap from the lidar origin to the support's current left edge at the
 # bypass point: keeps the support above the detector's minimum range while it
 # is abeam (trial43 lost the second support below .35 m) and leaves .26 m to
@@ -395,6 +429,10 @@ class ManeuverSequence(TurnMotion):
         self.second_return_evidence = None
         self.route_end_coast_servo = None
         self.light_since = None
+        self.light_turn_started = None  # second pass time; not renewed by a pause
+        self._lane_steering = CorridorSteering()
+        self._lane_speed_last = None
+        self._lane_slow_zone = False
         self._light_history = []
         self._light_heading = None
         self.light_feedback = None
@@ -2750,6 +2788,7 @@ class ManeuverSequence(TurnMotion):
             # Trial46 operator: after the second target turn on toward the
             # traffic light and end facing it. Direction comes from free space.
             self.route_stage, self.light_since = 'light_turn', now
+            self.light_turn_started = now
             self.second_return_preparing = False
             self._light_history.clear()
             self._light_heading = self._exit_heading  # continue the next-lane window
@@ -2882,8 +2921,8 @@ class ManeuverSequence(TurnMotion):
         for index, r in enumerate(ranges):
             if r is None:
                 continue
-            bearing = math.degrees(_wrap(-math.radians(index)))  # left positive
-            x, y = r*math.cos(math.radians(bearing)), r*math.sin(math.radians(bearing))
+            bearing = _FREE_BEARING_DEG[index]  # left positive
+            x, y = r*_FREE_POINT_COS[index], r*_FREE_POINT_SIN[index]
             if -REAR_BODY_EXTENT_M <= x <= 1.:
                 if y > SIDE_BODY_EXTENT_M:
                     left_clear = y if left_clear is None else min(left_clear, y)
@@ -2894,10 +2933,10 @@ class ManeuverSequence(TurnMotion):
             spread = 90. if r <= half else math.degrees(math.asin(half/r))
             first = max(0, math.ceil((bearing-spread-LIGHT_HEADINGS_DEG[0])/step))
             last = min(len(LIGHT_HEADINGS_DEG)-1, math.floor((bearing+spread-LIGHT_HEADINGS_DEG[0])/step))
+            cos_row, sin_row = _FREE_COS[index], _FREE_SIN[index]
             for k in range(first, last+1):
-                delta = math.radians(LIGHT_HEADINGS_DEG[k]-bearing)
-                along = r*math.cos(delta)
-                if along > 0 and abs(r*math.sin(delta)) <= half and along < free[k]:
+                along = r*cos_row[k]
+                if along > 0 and abs(r*sin_row[k]) <= half and along < free[k]:
                     free[k] = along
         if not usable:
             return None
@@ -2978,23 +3017,39 @@ class ManeuverSequence(TurnMotion):
         self._route_event('light_aligned', scan, control, evidence)
         self.route_stage = 'light_lane'
         self.lane_motor = ROUTE_SLOW_MOTOR  # speed history from the aligned frames is kept
+        self._lane_steering = CorridorSteering()
+        self._lane_slow_zone = False
         self._route_event('light_lane', scan, control, {'source_seq': scan['seq']})
         self.steering_target = self.servo
         self.reason = 'light_lane_started_keep_adopted_command'
         return self._result(now)
 
-    def _light_lane_update(self, scan, now, control):
-        """Follow the light lane slowly, then stop inside the finish zone.
+    def _lane_stop_range(self, speed):
+        """Board range at which a neutral coast from ``speed`` stops at the finish gap."""
+        return (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M
+                + speed*speed/(2*LANE_STOP_DECEL_MPS2)+speed*LANE_REACTION_S)
 
-        Round 58 (Claude). No traffic-light vision yet: the lane is only driven
-        slowly. Steering follows the measured lane (corridor law, +-55 PWM like
-        corridor following), else the free-space law. Right needs a center ACK.
+    def _light_lane_update(self, scan, now, control):
+        """Follow the light-lane straight, then stop inside the finish zone.
+
+        Round 58 (Claude); round 63 (Claude): steering is the start-straight
+        wall law (autonomy_live.CorridorSteering: two fitted side boards,
+        hysteresis, trend damping, +-55 PWM, slow steps, release before
+        reversing), else the measured-lane corridor law, else free space.
+        Right still needs a current actual center ACK. No traffic-light vision.
         """
         if not self._route_adopted(control, now):
             return self._result(now)
         _, lane = self._current_lane(scan, now)
         space = None
-        if lane is not None and abs(lane['heading_left_rad']) <= SECOND_LANE_MAX_HEADING_RAD:
+        walls = corridor_walls(scan)
+        if walls is not None:
+            # Continue from the actually commanded servo (inside the law's own
+            # +-55 range; the post-pass slew moves a larger turn there).
+            self._lane_steering.servo = max(NEUTRAL-55, min(NEUTRAL+55, self.servo))
+            natural = self._lane_steering.update(walls, scan['seq'], now, True, scan['at_ms'])
+            source = 'straight_lane_walls'
+        elif lane is not None and abs(lane['heading_left_rad']) <= SECOND_LANE_MAX_HEADING_RAD:
             lookahead = max(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M, min(ROUTE_ALIGN_LOOKAHEAD_MAX_M, lane['width_m']))
             error = lane['heading_left_rad']+math.atan2(lane['center_offset_left_m'], lookahead)
             natural = max(NEUTRAL-55, min(NEUTRAL+55, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
@@ -3012,14 +3067,23 @@ class ManeuverSequence(TurnMotion):
             target = NEUTRAL  # right only after a current actual center ACK
         ahead = self._lane_front_range(scan)
         speed = self._lane_speed(scan, ahead)
-        v = LANE_SPEED_UNKNOWN_MPS if speed is None else speed
-        stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M
-                   + v*v/(2*LANE_COAST_DECEL_MPS2)+v*LANE_REACTION_S)
+        held = getattr(self, '_lane_speed_last', None)
+        if speed is not None:
+            self._lane_speed_last = (now, speed)
+            v = speed
+        elif held is not None and 0 <= now-held[0] <= LANE_SPEED_HOLD_S:
+            v = held[1]+LANE_SPEED_HOLD_MARGIN_MPS
+        else:
+            v = LANE_SPEED_UNKNOWN_MPS
+        stop_at = self._lane_stop_range(v)
+        if ahead is not None and ahead <= stop_at+LANE_SLOW_TRAVEL_M:
+            self._lane_slow_zone = True  # latched: the final approach stays slow
         self.lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
-            'nominal_target_pwm': natural, 'lane': lane, 'free_space': space,
-            'front_range_m': ahead, 'speed_mps': speed, 'speed_basis': 'closing_rate_on_board_ahead',
-            'finish_cut_range_m': stop_at, 'motor_before': self.lane_motor,
-            'swept_path_certified': False, 'traffic_light_vision': False}
+            'nominal_target_pwm': natural, 'lane': lane, 'free_space': space, 'walls': walls,
+            'front_range_m': ahead, 'speed_mps': speed, 'speed_for_cut_mps': v,
+            'speed_basis': 'closing_rate_on_board_ahead',
+            'finish_cut_range_m': stop_at, 'slow_zone': self._lane_slow_zone, 'stop_decel_mps2': LANE_STOP_DECEL_MPS2,
+            'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': False}
         if ahead is not None and ahead <= stop_at:
             self.finish_evidence = {**self.lane_feedback, 'received_at': scan['received_at'],
                 'basis': 'board_ahead_within_body_gap_plus_neutral_coast_distance',
@@ -3030,13 +3094,15 @@ class ManeuverSequence(TurnMotion):
             self.lane_motor = ROUTE_SLOW_MOTOR
         elif speed < LANE_SPEED_RESTART_MPS:
             self.lane_motor = TRIAL_MOTOR
-        elif speed < LANE_SPEED_LOW_MPS:
-            self.lane_motor = ROUTE_SLOW_MOTOR
-        elif speed > LANE_SPEED_HIGH_MPS:
+        elif not self._lane_slow_zone:
+            self.lane_motor = ROUTE_SLOW_MOTOR  # the straight itself: 1550
+        elif speed > LANE_SLOW_HIGH_MPS:
             self.lane_motor = NEUTRAL
+        elif speed < LANE_SLOW_LOW_MPS:
+            self.lane_motor = ROUTE_SLOW_MOTOR
         self.lane_feedback['motor'] = self.lane_motor
         self.steering_target, self.natural_steering_target = target, natural
-        self.reason = 'light_lane_follow_slow'
+        self.reason = 'light_lane_follow_straight'
         self._slew(now)
         return self._result(now)
 
@@ -3054,7 +3120,13 @@ class ManeuverSequence(TurnMotion):
         self._light_heading = best
         center = space['center_error_m']
         _, lane = self._current_lane(scan, now)
-        lane_aligned = (lane is not None and abs(lane['heading_left_rad']) <= LANE_ALIGNED_HEADING_RAD
+        # Round 63: a measured lane within LIGHT_LANE_ENTRY_HEADING_RAD hands
+        # over once the turn has run LIGHT_TURN_MIN_S; the lane stage then
+        # straightens the car (trials 60-62 weaved at 8-18 deg here).
+        turned = (self.light_turn_started is not None
+                  and now-self.light_turn_started+1e-9 >= LIGHT_TURN_MIN_S)
+        lane_aligned = (turned and lane is not None
+                        and abs(lane['heading_left_rad']) <= LIGHT_LANE_ENTRY_HEADING_RAD
                         and self._corridor_body_gap(lane) >= MANEUVER_BODY_CLEARANCE_M)
         aligned = lane_aligned or (abs(best) <= LIGHT_ALIGNED_HEADING_RAD
                                    and space['free_ahead_m'] >= LIGHT_ALIGNED_FREE_M
@@ -3065,7 +3137,7 @@ class ManeuverSequence(TurnMotion):
             self._lane_speed(scan, self._lane_front_range(scan))
         else:
             self._lane_ranges.clear()
-        if aligned and self._mature_observation(self._light_history, scan, .30):
+        if aligned and self._mature_observation(self._light_history, scan, .20):
             # Round 58: aligned with the light lane -> drive it slowly to the
             # finish (was: terminal coast here).
             return self._begin_light_lane(scan, now, control, {**space,

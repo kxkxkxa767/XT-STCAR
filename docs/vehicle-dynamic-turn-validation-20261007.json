@@ -18310,5 +18310,42 @@
     "analysis": "work/turn62-analysis-20261012/ (timeline, map.png opened)",
     "completed": false,
     "competition_supported": false
+  },
+  "after62_light_lane_straight_wip": {
+    "author": "Claude",
+    "date": "2026-10-12",
+    "source_base_commit": "7b8ce22",
+    "implemented": "partial",
+    "ready_for_vehicle": false,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user_instruction": [
+      "后面红绿灯后的直道，到尽头就停下吧",
+      "后续直道的部分可以参考发车区直道的，快一点，但要保证能不撞板，这次红绿灯后的直道没跑直",
+      "上一个版本标记下，别丢了，你现在修改的先上传仓库晚上再测",
+      "五小时额度快不够了你抓紧时间，改不完就先记录上传"
+    ],
+    "previous_good_version": "tag good-turn60-full-route = 5f7f251 (code of rounds 60-62), on the remote; agent.md 必须保留的全路线好版本",
+    "diagnosis_trials_60_62": {
+      "light_lane_reached_but_not_followed": "per-frame lane fit: the ~1.05 m light lane was measured from 509 (60) / 412 (62) at 8-18 deg; light_turn stayed on the free-space law (servo 1408-1571 weave) because entry needed |heading| <= 8 deg for .3 s; the trial-map diagonal in 62 is ICP drift along the featureless lane",
+      "end": "trial62 entered the lane end at 1.14-1.27 m/s (front 1.52 -> .31 m) with no finish logic (still light_turn), locked by the control gap at front .31 m and touched the board (rest front .165 m)",
+      "control_gap": "light_turn ticks .087-.095 s on the car (Mac profile: _free_space ~60% of the light update)"
+    },
+    "done_and_tested": {
+      "free_space_tables": "_free_space uses precomputed bearing/cos/sin tables of the same expressions: bitwise identical output (test against the verbatim round-58 implementation on 64 real light frames + synthetic), ~1.8x faster on the Mac; not yet enough margin proven for the car",
+      "light_turn_entry": "light_turn hands over to light_lane when a lane is measured within 20 deg after the turn has run LIGHT_TURN_MIN_S 1.0 s (light_turn_started set at the second pass, not renewed by a pause), maturity .2 s; real trial62 frames 409-417 enter by 417 (trial62 stayed in light_turn to 460)",
+      "straight_lane_steering": "light_lane steers with autonomy_live.CorridorSteering (the start-straight wall law, +-55, hysteresis, damping, release before reversing) on corridor_walls(scan), else measured-lane law, else free space; center ACK unchanged",
+      "speed_design_current": "straight at 1550; latched slow zone once the board is within the current speed cut + .6 m with the round-58 band (coast > .70, 1550 < .45, 1560 < .15); finish cut with conservative decel .35 (measured ~.5); last measured speed held .5 s (+.1) before the 1.3 m/s fallback"
+    },
+    "known_failing_expected_failure_tests": {
+      "test_lane_end_stop_inside_the_finish_zone_without_contact / test_weaker_or_stronger_decel_still_never_reaches_the_board": "closed-loop model: inside the slow zone a 1550 push from ~.40 m/s overshoots to ~1.0 m/s within 4 frames (median-of-3 speed lag) and the cut then coasts into the board at true decel .35; first tried smooth coasting profile also failed (cut from ~1.2 m/s). Needs: no 1550 push close to the cut (e.g. push only while ahead > cut(.70)+travel, else coast-only with a 1560 crawl restart), or pulse-limited pushes, then re-run the model at decel .25-.7",
+      "test_real_lane_frames_use_the_wall_law_bounded_and_without_direct_reversal (trial 62)": "not yet analysed (wall-law output on real frames)",
+      "test_off_center_straight_steers_back_and_centered_holds": "TypeError: lane_feedback None on the synthetic shifted lane (not yet analysed)"
+    },
+    "tests": "695 run: OK with 4 expected failures (marked ROUND 63 WIP); new files test_route_63_light_lane.py, fixtures/route-60-62-light-lane.json; test_route_58_light_lane.py and one test_maneuver_route assertion updated to the new law/reason name",
+    "not_done": "detector/route replays and the second-orbit replays not re-run for this WIP; no package built; no vehicle action",
+    "next_step": "fix the slow-zone push overshoot and the two steering tests until test_route_63 passes without expectedFailure, re-run full suite + detector + replays, then build claude-turn63 from claude-turn62 and test tonight; if short on time, deploy good-turn60-full-route instead",
+    "completed": false,
+    "competition_supported": false
   }
 }

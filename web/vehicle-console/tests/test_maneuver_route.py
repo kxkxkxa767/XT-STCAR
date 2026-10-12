@@ -1705,7 +1705,7 @@ class LightLaneTests(unittest.TestCase):
         self.assertIsNotNone(result['light_alignment_evidence'])
         self.assertFalse(result['light_alignment_evidence']['camera_facing_certified'])
         result = self.step(motion, seq+1, lane())
-        self.assertEqual(result['reason'], 'light_lane_follow_slow')
+        self.assertEqual(result['reason'], 'light_lane_follow_straight')  # round 63 name
         self.assertFalse(result['lane_feedback']['traffic_light_vision'])
 
     def test_off_center_lane_is_not_aligned_and_steers_back_to_center(self):

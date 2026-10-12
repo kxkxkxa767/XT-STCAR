@@ -1,12 +1,13 @@
-"""Round 58 (Claude): next-lane turn after the second support, slow light lane
-and finish stop. Synthetic scans; no traffic-light vision; no physical claim."""
+"""Round 58 (Claude): next-lane turn after the second support, light lane and
+finish stop (round 63: straight law and coasting profile replace the .45-.70
+m/s slow band). Synthetic scans; no traffic-light vision; no physical claim."""
 import copy
 import math
 import unittest
 
 import test_maneuver_route as route
-from maneuver_sequence import (ManeuverSequence, LANE_SPEED_HIGH_MPS, LANE_SPEED_LOW_MPS,
-                               LANE_SPEED_RESTART_MPS, ROUTE_POST_PASS_PWM_STEP, ROUTE_SLOW_MOTOR,
+from maneuver_sequence import (ManeuverSequence, LANE_SPEED_RESTART_MPS, LANE_STOP_DECEL_MPS2,
+                               LANE_SLOW_HIGH_MPS, ROUTE_POST_PASS_PWM_STEP, ROUTE_SLOW_MOTOR,
                                ROUTE_MAX_DRIVE_S, FRONT_BODY_EXTENT_M, LANE_FINISH_GAP_M)
 from turn_motion import TRIAL_MOTOR
 
@@ -58,31 +59,37 @@ class LightLaneTests(unittest.TestCase):
                 break
         return results
 
-    def test_fast_lane_coasts_slow_lane_drives_and_a_near_stop_restarts(self):
+    def test_far_lane_drives_slow_zone_coasts_slow_drives_and_a_near_stop_restarts(self):
+        # Round 63: far from the end 1.0 m/s keeps 1550 (was coasted above .70).
         motion = self.lane_motion()
-        fast = self.drive(motion, [1.0]*5)
-        self.assertEqual(fast[0]['motor'], ROUTE_SLOW_MOTOR)  # speed not yet known
-        self.assertEqual(fast[-1]['motor'], 1500)             # > high: neutral coast
-        self.assertGreater(fast[-1]['lane_feedback']['speed_mps'], LANE_SPEED_HIGH_MPS)
-        mid = self.drive(motion, [.55]*4, start=fast[-1]['lane_feedback']['front_range_m'], seq0=10)
-        self.assertEqual(mid[-1]['motor'], 1500)              # inside the band: hold
-        slow = self.drive(motion, [.3]*4, start=mid[-1]['lane_feedback']['front_range_m'], seq0=14)
+        far = self.drive(motion, [1.0]*5, start=5.)
+        self.assertEqual(far[0]['motor'], ROUTE_SLOW_MOTOR)   # speed not yet known
+        self.assertEqual(far[-1]['motor'], ROUTE_SLOW_MOTOR)  # the straight: 1550
+        self.assertFalse(far[-1]['lane_feedback']['slow_zone'])
+        # Within cut + .6 m the slow zone latches: above .70 coasts (the speed
+        # is re-measured after the range jump; the last one holds meanwhile).
+        near = self.drive(motion, [1.0]*3, start=2.5, seq0=10)
+        self.assertTrue(near[-1]['lane_feedback']['slow_zone'])
+        self.assertEqual(near[-1]['motor'], 1500)
+        self.assertGreater(near[-1]['lane_feedback']['speed_mps'], LANE_SLOW_HIGH_MPS)
+        # Latched slow zone, below .45: 1550 again.
+        slow = self.drive(motion, [.3]*4, start=3.5, seq0=14)
         self.assertEqual(slow[-1]['motor'], ROUTE_SLOW_MOTOR)
-        crawl = self.drive(motion, [.05]*4, start=slow[-1]['lane_feedback']['front_range_m'], seq0=18)
+        crawl = self.drive(motion, [.05]*4, start=3.4, seq0=18)
         self.assertEqual(crawl[-1]['motor'], TRIAL_MOTOR)     # < restart: 1560 kick
-        self.assertTrue(all(r['phase'] == 'drive' for r in fast+mid+slow+crawl))
-        self.assertTrue(all(r['reason'] == 'light_lane_follow_slow' for r in mid+slow+crawl))
+        self.assertTrue(all(r['phase'] == 'drive' for r in far+near+slow+crawl))
+        self.assertTrue(all(r['reason'] == 'light_lane_follow_straight' for r in near+slow+crawl))
 
     def test_finish_cut_uses_body_gap_and_neutral_coast_distance(self):
         motion = self.lane_motion()
-        results = self.drive(motion, [.6]*40, start=2.5)
+        results = self.drive(motion, [.6]*60, start=4.)
         last = results[-1]
         self.assertEqual(last['phase'], 'coast')
         self.assertEqual(last['reason'], 'route_finish_zone_stop')
         evidence = last['finish_evidence']
         v = evidence['speed_mps']
         self.assertAlmostEqual(v, .6, delta=.05)
-        expected = FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*.5)+v*.2
+        expected = FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_STOP_DECEL_MPS2)+v*.2
         self.assertAlmostEqual(evidence['finish_cut_range_m'], expected, places=6)
         self.assertLessEqual(evidence['front_range_m'], expected)
         self.assertGreater(evidence['front_range_m'], expected-.6*.1-1e-9)  # first frame inside
@@ -101,6 +108,7 @@ class LightLaneTests(unittest.TestCase):
         helper.setUp()
         motion = helper.route('second_orbit')
         motion.route_stage, motion.light_since = 'light_turn', .4
+        motion.light_turn_started = -.6  # the turn already ran (round 63 entry)
         motion.second_pass_evidence = {'track_id': 2, 'source_seq': 4}
         ahead = 3.2
         for seq in range(5, 12):
@@ -125,16 +133,26 @@ class LightLaneTests(unittest.TestCase):
         motion.update(self.scan(6, 3.9), 0., .6, route.feedback(6, 1500, ROUTE_SLOW_MOTOR))
         self.assertEqual(motion._route_center_ack['motor'], ROUTE_SLOW_MOTOR)
 
-    def test_lane_steering_follows_the_measured_lane_and_falls_back_to_free_space(self):
+    def test_lane_steering_walls_then_measured_lane_then_free_space(self):
+        # Round 63: two fitted side boards -> the start-straight wall law;
+        # without them the measured lane (+-55), else free space.
+        motion = self.lane_motion()
+        result = motion.update(self.scan(5, 4.), 0., .5, route.feedback(5, motion.servo, ROUTE_SLOW_MOTOR))
+        self.assertEqual(result['lane_feedback']['steering_source'], 'straight_lane_walls')
+        self.assertEqual(result['lane_feedback']['nominal_target_pwm'], 1500)  # centered, aligned
         motion = self.lane_motion()
         value = self.scan(5, 4.)
+        for i in range(225, 316):
+            value['ranges'][i] = None  # no left board fit
         value['corridor_candidates'][0].update(center_offset_left_m=.3)
         result = motion.update(value, 0., .5, route.feedback(5, motion.servo, ROUTE_SLOW_MOTOR))
         self.assertEqual(result['lane_feedback']['steering_source'], 'measured_lane')
         self.assertGreater(result['lane_feedback']['nominal_target_pwm'], 1500)
         self.assertLessEqual(result['lane_feedback']['nominal_target_pwm'], 1555)
-        result = motion.update(self.scan(6, 3.9, corridor=False), 0., .6,
-                               route.feedback(6, motion.servo, ROUTE_SLOW_MOTOR))
+        value = self.scan(6, 3.9, corridor=False)
+        for i in range(225, 316):
+            value['ranges'][i] = None
+        result = motion.update(value, 0., .6, route.feedback(6, motion.servo, ROUTE_SLOW_MOTOR))
         self.assertEqual(result['lane_feedback']['steering_source'], 'free_space')
 
     def test_route_budget_covers_the_whole_route(self):

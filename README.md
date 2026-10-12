@@ -1,6 +1,6 @@
 # XT-STCAR
 
-2026-10-12：第60–62轮（同一代码）实车两个锥桶都绕过并右转进灯区（用户：“这次可以”），但灯区转弯三次都因控制间隔超0.12s锁定，62轮灯区方向跑偏、锁定后疑似滑碰挡板。下一步修灯区转弯计算耗时与方向。好版本标签good-turn60-full-route、good-turn57-both-cones。
+2026-10-12：第60–62轮（标签good-turn60-full-route，已推送）两桶都过并右转进灯区。第63轮灯区直道修改进行中、未完成、不可上车（after62_light_lane_straight_wip）；来不及修完就用好版本。好版本标签good-turn60-full-route、good-turn57-both-cones。
 
 下方日期条目保留历史结果，当前参数与部署状态以`agent.md`为准。
 
