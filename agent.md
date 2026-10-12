@@ -1,6 +1,12 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-12：Claude核验GPT两次提交并修正，全量637项通过；未构建、未部署、未实车）
+## 当前接手入口（2026-10-12：第55轮已本地构建并校验，源码32743e6；未部署、未实车）
+
+**2026-10-12 本地构建完成（最新状态）**：用户选择“今天先完成本地构建”。已拉取并核对main/origin为 `32743e6`；独立复测相关314项、全量637项全过，36轮detector与51–54路线输出均与Claude候选逐字节一致，两处倒退复现和47帧接触审计也一致。已执行第1节第5步，包为 `work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn55-32743e6.tar.gz`，SHA256 `96ae7362ada33af8e75bb5c8a4c9dfd23f3ba5cb49cea75f6d8776ba0e962c20`。16个源文件哈希、19个归档成员均核对通过，Rust/桥与turn54一致；55 helper仅将输出目录改为 `left-cone-trial-20261012-55`，SHA256 `9a3c62c58adcf4973cb59796a2e75dbf7c6af09b64efc5b9f2b8ac36fe7fa53d`。
+
+**下次从第1节第6步继续，禁止重跑build-matched或覆盖任何55产物。** 使用已有 `claude-turn55-package.json`，其预定stage为 `/home/bianbu/xt-stcar-console/stage-claude-turn55-20261012-105716`（尚未在车上创建）。先请用户自己终端恢复SSH，再做turn54部署前新鲜核验；动力前只确认一次“车已静止在起点、车头朝原直道”。本次未连接车辆、未部署、未启动电机，车上最后记录仍是 `claude-turn54/c6bdf75`，不能写 `turn55_actual`；所有stash和旧证据未动。证据 `work/turn55-prebuild-check-20261012-105048/`，机器记录 `after54_rear_reacquisition_correction.local_build_verification_20261012`。本次后续提交只更新文档，包固定引用源码32743e6及其构建前机器记录，不因文档提交改变或重建包。
+
+下方Claude修正说明是当前行为依据；其“下一步构建”已由上述本地构建完成。更早3002f7d/db8c71e条目只作历史，若与Claude新口径冲突，以Claude修正说明为准。
 
 **2026-10-12 Claude核验与修正（最新，先读这段）**：记录键 `after54_rear_reacquisition_correction.claude_review_and_cone_contact_correction_20261012`，证据 `work/claude-review-cone-contact-20261012-104349/`（测试日志、detector/四轮回放的前后对照、两个复现脚本、丢桶原因统计、接触审计、补丁）。
 - **用户新口径**：“桶撞到了也继续比赛，仅限于桶”。不只是正在绕的那个桶：任何阶段、确认与否，只要是“桶状”目标的本帧回波，碰到都不停车；挡板仍停车。
@@ -64,7 +70,7 @@
 ### 0. 必须遵守的原则
 
 1. **不针对练习赛道特化。** 比赛赛道是一个范围（规则：场地约长5–8m、宽4–6m，人行道和红绿灯位置随机；示意图在仓库规则PDF第3页）。转向和阶段切换只能用实时激光几何（原生通道的轴线角/中心偏移/宽度、开口、真实支撑点）和任务规则（首桶逆时针、二桶顺时针、红绿灯停走、到终点）。禁止写赛道坐标、长度、固定角度，或按时间猜拐点。反例：第34轮的“首桶出口总向右”就是特化，第45轮因此撞墙；第46轮改成按实测通道决定方向。
-2. **自行决策，不要反复询问用户。** 用户已允许“适度放宽安全规则”，但要保留旧帧/时钟门、桥锁/失联、期限预算；车身近距门仅有2026-10-12用户明确授权的当前已确认绕桶角色精确回波例外，其余点仍停车。任何放宽都要有数据依据，并写进机器记录。
+2. **自行决策，不要反复询问用户。** 用户已允许“适度放宽安全规则”，但要保留旧帧/时钟门、桥锁/失联、期限预算；车身近距门按2026-10-12用户新口径，例外为任意路线阶段本帧桶状支撑的精确回波（孤立紧凑、点列与雷达射线夹角≥45°，不要求确认身份；服务端原始扫描重算）；挡板、板端及其余点仍停车。任何放宽都要有数据依据，并写进机器记录。
 3. **每轮流程固定**：修改→相关测试→记录→提交推送→构建部署→新鲜核验→跑一次→取回校验→分析→记录→推送。helper每轮只跑一次；不覆盖旧轮目录；保留所有备份、失败证据和队友文件；直接在main开发，不强推。
 4. **只在确实受阻时问用户**：SSH失效、校验失败、turn_ready=false（车不在起点，请用户放回）、凭据问题。
 5. **最终目标是整场自动跑完。** 现在的 `turn-cone --continue-route` 是分段试验入口。每个片段（左转、首桶逆时针、二桶顺时针、转入灯区正对红绿灯、灯区慢速、人行横道/红绿灯停走由YOLO负责、到终点）在实车验证后，要合并进比赛用的自动控制程序：车启动后不需人工干预，按任务规则依次执行全部片段。合并时仍不得特化赛道（比赛赛道是一个范围），阶段切换只能依据实时感知和任务规则。
@@ -76,7 +82,7 @@
 
 1. 同步：`git fetch origin && git rev-list --left-right --count HEAD...origin/main`，必须是 `0 0`；远端有新提交时先 `git pull --ff-only origin main`。
 2. 改代码：路线逻辑在 `web/vehicle-console/maneuver_sequence.py`，服务端门控/输出校验在 `server.py`，质量与车身近距在 `autonomy_live.py`。新行为只放在 `continue_route=True` 路径，默认模式不变。
-3. 测试（必须全过）：`cd web/vehicle-console/tests && python3 -m unittest test_maneuver_route test_route_control test_maneuver_sequence test_compact_target test_compact_target_roles test_route_path_intent test_route_identity_recovery test_route_quality_continuity test_route_contact_control test_compact_target_contact`（当前311项）。再跑 `python3 -m unittest discover -s . -p 'test_*.py'`，当前634项全部通过。修改前后仍用 `git stash` 保留候选并对照基线，逐条比较完整FAIL/ERROR（含subtest），不能只比较数量；此后不得增加失败，也不能再把原48个失败+1错误当作可忽略基线。本日按用户明确要求清零旧失败的前后证据见顶部。
+3. 测试（必须全过）：`cd web/vehicle-console/tests && python3 -m unittest test_maneuver_route test_route_control test_maneuver_sequence test_compact_target test_compact_target_roles test_route_path_intent test_route_identity_recovery test_route_quality_continuity test_route_contact_control test_compact_target_contact`（当前314项）。再跑 `python3 -m unittest discover -s . -p 'test_*.py'`，当前637项全部通过。修改前后仍用 `git stash` 保留候选并对照基线，逐条比较完整FAIL/ERROR（含subtest），不能只比较数量；此后不得增加失败，也不能再把原48个失败+1错误当作可忽略基线。本日按用户明确要求清零旧失败的前后证据见顶部。
 3b. **离线验证（必须，见第7节）**：`detector-replay.py` 全部轮次的总数不能比上一版差；`route-replay.py` 回放51和52，关键行必须出现（51：开车后≈1.7s内 handover；52：second_orbit且舵量开始向左）。任何一项变差就不要上车。
 4. 记录：在 `docs/vehicle-dynamic-turn-validation-20261007.json` 新增键K（implemented=true、deployed=false、physical_trial_executed=false，写change/validation/risks），改写本文件顶部入口；`git add` 只加本次文件，`git commit`（结尾加 `Co-Authored-By` 行），`git push origin main`（已配置gh凭据）。
 5. 构建：`python3 $W/build-matched.py claude-turnN claude-turnM M K`。它要求工作区与HEAD一致，所以必须先提交。输出里有stage路径和helper；`diff $W/left-cone-trial-once-N.py $W/left-cone-trial-once-M.py` 应该只差输出目录。
@@ -96,7 +102,7 @@
 - **首桶绕行（first_target）**：电机1550；左boost到正横，加左步长40；内侧近点限制减左；车头线到达（2帧，可隔一帧≤.45s）后减左到“实测出口通道追踪目标”（≥1500、≤当前舵）；支撑到车尾后且持续 → 首过 → right_align。单帧漏检：桶最后在车头线前则保持舵量，在车头线或之后（或已决定减左）则继续减左；漏检超过.30s → 交接后等待（自恢复：最近左侧确认目标改绑、滑行中逐步转向——锚点在车头线或之后时向出口减左、只受累计预算约束）。
 - **出口对齐（right_align）**：1500+180×(通道轴线角+atan(中心偏移/前视≈通道宽≤2m)+.30×轴线角速度)，1350..1720；向右须实际回中ACK；对齐成熟后 → corridor_follow。期间也会获取第二桶。
 - **通道跟随（corridor_follow）**：±55追踪中心线；获取第二桶＝前方通道内唯一紧凑支撑（容错检测；证明缺口.30s内保留）；确认后 → second_orbit。
-- **第二桶（second_orbit）**：绕行点=(max(.38, 支撑最近x), 支撑左缘+.40m)，舵=1500+205×追踪曲率；单帧漏检保持；丢失超过.30s → 回通道并用最后完整二桶观测的固定关联门重新确认（前方/右后方）；等待态同样可恢复；3s入口超时仍回通道重新获取；支撑到车尾后且右侧余量≥8cm、持续.25s → 通过 → light_turn。
+- **第二桶（second_orbit）**：绕行点=(max(.38, 支撑最近x), 支撑左缘+.40m)，舵=1500+205×追踪曲率；单帧漏检保持；丢失超过.30s → 回通道，以最后完整二桶观测为锚点按经过时间放宽关联门（封顶.6s，前方/右后方），行驶中锚点未找到时仍允许通道前方唯一支撑重新获取；等待态同样可恢复；3s入口超时仍回通道重新获取；支撑到车尾后且右侧余量≥8cm、持续.25s → 通过 → light_turn。
 - **灯区转弯（light_turn）**：按前方自由空间转入下一车道并正对（未实车验证）。红绿灯/人行横道识别由YOLO负责，不在这里。
 - **全程（交接后）**：路径检查只在阶段目标的弧会碰到已知回波、且存在同阶段方向的可通过弧时才换成最近弧；不得发明右转或撤销首桶减左；出口对齐/灯区不得反转、中位不转弯，没有可通过的弧或正等中位ACK准备右转时不干预；通道跟随/第二桶允许从中位或偏右改向左（二桶顺时针规则，Claude 10-12）；质量问题：交接后、或已开始左转且当前原生几何有效时，可容忍的scan_incomplete（≥324、空段≤12）和front_sparse（未桥接空段≤5、未知≤8）不停车；其它可恢复问题中性保持并持续检查，只受累计drive预算（16s）与总期限约束。
 - **硬保护**：8cm车身近距门（保留原drive左侧4cm）仍终止，例外只有本帧“桶状”支撑（孤立紧凑、正对雷达，任何阶段）的精确回波——用户“桶撞到了也继续比赛，仅限于桶”。路线模式前方空洞再大也只进断电等待。旧帧/时钟、桥锁/失联、期限、反馈不符仍终止。
@@ -104,8 +110,8 @@
 
 ### 3. 下一步（按优先级；2026-10-12修复验证后）
 
-1. **连接和现场确认后跑第55轮**。本日离线门槛已通过，按顶部与第1节继续；重点观察近距原ID保持、首桶等待恢复、二桶右后重新确认，以及真实出口方向。
-2. **已授权的限定接触继续**：只对当前已确认绕桶目标的严格本帧回波生效；本次未实车，需结合用户口述和原始间隙核对是否误绑，不再重复索要该功能许可。
+1. **连接和现场确认后跑第55轮**。本日离线门槛与本地构建已通过，按顶部从第1节第6步继续，不重建55；重点观察近距原ID保持、首桶等待恢复、二桶右后重新确认，以及真实出口方向。
+2. **已授权的限定接触继续**：按用户新口径对任何路线阶段本帧桶状支撑的精确回波生效，不要求目标已确认；本次未实车，需结合用户口述和原始间隙核对，挡板和板端仍停车，不再重复索要该功能许可。
 3. **第二桶曲率律**：开环回放显示1.4m处只要约1525，逐渐加到1677；闭环是否够早要看实车。不够就把路径检查的前视加长或让绕行点更早偏左。
 4. **闭环仿真**（`scripts/route-sim.py`）：几何工具已与车上完全一致，但重建的世界模型（墙段、桶）还不准，不能当门槛。改进方向：只用拟合度好的帧、把同一块板两面合并、去掉板端误判的“桶”。
 5. **整场自动程序**（原则5）：片段都在实车稳定后再做。
@@ -203,7 +209,7 @@
 2. 13至18原始目录在`work/vehicle-dynamic-deploy-20261007/left-cone-trial-20261007-{13,14,15,16,17,18}/`；19至29在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261008-{19,20,21,22,23,24,25,26,27,28,29}/`。30至39在`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261009-{30,31,32,33,34,35,36,37,38,39}/`；40–43在同目录 `left-cone-trial-20261010-{40,41,42,43}/`，44–46为 `left-cone-trial-20261011-{44,45,46}/`。原helper/摘要/完整记录均保留；车端原目录在base下。
 3. 旧完整部署记录在`work/vehicle-dynamic-deploy-20261007/resume-after14/`。19至30部署及逐帧分析在`work/vehicle-dynamic-deploy-20261008/`；29为`target-evidence-deployment-result.json`，stage为base下`stage-target-evidence-20261008-212120`。
 4. 18分析仍在旧目录`trial18-analysis.json`/`trial18-target-components.json`，回归材料在`web/vehicle-console/tests/fixtures/left-cone-18-boundary-null.json`。18的最终drive/orbit计数含coast；区分各自scan序号、PWM/物理轮角、计数器/动力时长。
-5. 第54轮已执行（一次），第55轮未构建/未部署/未实车；新一轮按顶部待处理项及《接手指南》第1节。不要沿旧条目重跑已用的旧轮helper。
+5. 第54轮已执行（一次）；第55轮已本地构建（claude-turn55/32743e6）、未部署、未实车。使用现有包从《接手指南》第1节第6步继续，禁止重建或覆盖55产物。55 helper已固定输出目录 `left-cone-trial-20261012-55`，恢复日期不同也沿用此目录名，不按当天日期重写helper。不要沿旧条目重跑已用的旧轮helper。
 6. 每次修改更新本文件的当前入口及机器记录；按上传规范提交并推送main，不强推。文档整理不改变车端代码或运动结果。
 
 ## 连接与部署

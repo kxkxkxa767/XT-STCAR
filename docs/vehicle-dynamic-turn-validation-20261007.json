@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded physical trial. Round55 candidate = 3002f7d/db8c71e (GPT) plus Claude 2026-10-12 review fixes: cone-like contact continues in any stage (boards stop), bounded edge-null and near maintenance (cone loss causes), task-left path correction in corridor/second stages, moving second recovery, route front-gap waits instead of halts. Full 637 tests pass; detector not worse; replays 51-54 recorded. Not built/deployed/tried.",
+  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded vehicle version and physical trial; not connected in this session. Round55 claude-turn55/32743e6 locally built and verified on 2026-10-12; NOT deployed or physically tried. Independent related 314/full 637 tests pass; 36-trial detector and 51-54 replays exactly reproduce Claude candidate; package 16 file hashes and 19 archive members verified; helper differs only in output directory. User chose local build only. Resume section 1 step 6 using the existing package; never rerun build-matched or overwrite round55 artifacts. All stashes untouched.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -17275,6 +17275,61 @@
       ],
       "competition_supported": false,
       "completed": false
+    },
+    "local_build_verification_20261012": {
+      "author": "Codex",
+      "source_commit": "32743e66058df7a1df468707cfb6e1f05c7555e1",
+      "built": true,
+      "deployed": false,
+      "physical_trial_executed": false,
+      "user_scope": "2026-10-12: 今天先完成本地构建。No SSH connection, deployment, or motor action was performed.",
+      "evidence_directory": "work/turn55-prebuild-check-20261012-105048",
+      "package": {
+        "source_commit": "32743e66058df7a1df468707cfb6e1f05c7555e1",
+        "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn55-32743e6.tar.gz",
+        "archive_sha256": "96ae7362ada33af8e75bb5c8a4c9dfd23f3ba5cb49cea75f6d8776ba0e962c20",
+        "bundle": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/claude-turn55-delivery-32743e6",
+        "deploy_script": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/deploy-claude-turn55.py",
+        "files": 16,
+        "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn55-20261012-105716"
+      },
+      "helper": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-once-55.py",
+      "helper_sha256": "9a3c62c58adcf4973cb59796a2e75dbf7c6af09b64efc5b9f2b8ac36fe7fa53d",
+      "expected_remote_trial_directory": "/home/bianbu/xt-stcar-console/left-cone-trial-20261012-55",
+      "build_command": "python3 work/vehicle-dynamic-deploy-20261008/build-matched.py claude-turn54 claude-turn55 55 after54_rear_reacquisition_correction",
+      "verification": {
+        "related_tests": "314 tests, 0 failures, 0 errors",
+        "full_tests": "637 tests, 0 failures, 0 errors",
+        "detector": "36 trials; all 216 per-trial rows and 6 TOTAL rows not worse than db8c71e; full output byte-identical to Claude candidate. first/tolerant conf 432 ids 41; ahead/tolerant conf 219 ids 42.",
+        "route_replays": "51/52/53/54 outputs byte-identical to Claude candidate. 51 rec1.70 handover; 52 rec5.19 second_orbit, rec5.39 left1525 and contact continues; 53 center ACK then right; 54 same-ID first-pass/resume rec3.29, left1614 at rec3.90.",
+        "regression_reproductions": "Trial52 scans436/438 with neutral/right stage target and either ACK state choose left1580/1700; second recovery after car movement 0/.2/.35/.5m returns to second_orbit.",
+        "contact_audit": "47 saved near-body frames: only trial48 scans516/518 and trial52 scans440/443 continue; other43 stop. Exact witness raw-scan recomputation and subset-forgery rejection reproduced; raw evidence hashes unchanged.",
+        "build_checks": {
+          "bundle_source_files": 16,
+          "archive_members_equal_bundle": 19,
+          "payload_source_matches_commit": true,
+          "unchanged_bridge_and_starter_match_turn54": true,
+          "rust_source_matches_turn54": true,
+          "deployment_previous_hashes_match_turn54": true,
+          "archive_digest": "96ae7362ada33af8e75bb5c8a4c9dfd23f3ba5cb49cea75f6d8776ba0e962c20",
+          "helper": "9a3c62c58adcf4973cb59796a2e75dbf7c6af09b64efc5b9f2b8ac36fe7fa53d",
+          "package": "734ddbf497694c25460baaf197a53d07c9b9c63b5c93d83d98735958405bb590",
+          "deploy_script": "4ea3d9290be63969b9eca96f3840120c01082bd53b48353b60bce48b5217332c",
+          "manifest": "af6acd1c698ae8fd2a58682e2bf5ec85a1dccdc4e85f3d4c22e9da24dd9443e4"
+        },
+        "helper_diff": "left-cone-trial-20261011-54 -> left-cone-trial-20261012-55",
+        "python_compile_files": 11,
+        "stash_actions": "None: committed candidate was tested without source changes; all three retained stashes remain untouched.",
+        "preexisting_turn55_outputs": "No turn55 bundle, archive, package, deploy script, helper, trial output or result path existed before build; no old path overwritten."
+      },
+      "resume": {
+        "next_step": "Section 1 step 6: use the existing immutable claude-turn55/32743e6 package; do not rebuild or overwrite any round55 artifact. Obtain user SSH reconnection, then fresh pre-deploy verification against turn54.",
+        "placement_confirmation": "Before any powered trial obtain once: 车已静止在起点、车头朝原直道。Not obtained during this local-only session.",
+        "runtime_last_recorded": "claude-turn54/c6bdf75; not queried this session.",
+        "documentation_commit_note": "This build record is appended after packaging; package source remains 32743e6, and its validation-record.json is the committed pre-build snapshot. Later documentation-only commits do not change the packaged runtime.",
+        "trial55_actual": "Absent until the real one-shot trial is executed; deployed and physical_trial_executed remain false.",
+        "fixed_trial_directory": "Helper output directory is fixed to left-cone-trial-20261012-55 even if resumed on a later date. Do not regenerate or edit the helper for a new date."
+      }
     }
   }
 }
