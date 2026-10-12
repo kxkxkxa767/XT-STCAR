@@ -221,7 +221,8 @@ class RouteControlTests(unittest.TestCase):
         _, session = self.enter_compact_orbit(continue_route=True)
         servo = self.console.status['control']['servo']
         value = self.incomplete(self.console.scan['seq']+1)
-        value['ranges'][self.target_bins.start-3:self.target_bins.start] = [None]*3
+        # Nine edge nulls: beyond the confirmed-maintenance allowance (8, round 55).
+        value['ranges'][self.target_bins.start-9:self.target_bins.start] = [None]*9
         self.observe(round(self.now+.1, 6), value)
         self.assertIs(self.console.auto_session, session)
         self.assertEqual(session['phase'], 'quality_wait')
@@ -282,14 +283,21 @@ class RouteControlTests(unittest.TestCase):
         before = len(self.outputs)
         self.assertTrue(self.console.turn_quality_wait_eligible(session))
         self.assertEqual(len(self.outputs), before)
-        for fault in ('old_clearance', 'false_unknowns', 'pending_neutral', 'drive'):
+        # Round 55 (Claude): a still-pending neutral may keep waiting on any
+        # evidence-matched front gap (the alternative halt is the same neutral,
+        # recentered); power after the neutral ACK never counts as waiting.
+        control['motor'] = 1560
+        session['quality_wait_neutral_sequence'] = control['seq']+1
+        self.assertTrue(self.console.turn_quality_wait_eligible(session))
+        control['motor'] = 1500
+        session['quality_wait_neutral_sequence'] = control['seq']
+        for fault in ('old_clearance', 'false_unknowns', 'power_after_neutral_ack', 'drive'):
             with self.subTest(fault=fault):
                 original = copy.deepcopy(clearance)
                 if fault == 'old_clearance': clearance['scan_seq'] -= 1
                 if fault == 'false_unknowns': clearance['front_unknown_bins'] = []
-                if fault == 'pending_neutral':
+                if fault == 'power_after_neutral_ack':
                     control['motor'] = 1560
-                    session['quality_wait_neutral_sequence'] = control['seq']+1
                 if fault == 'drive': session['phase'] = 'drive'
                 self.assertFalse(self.console.turn_quality_wait_eligible(session))
                 clearance.clear(); clearance.update(original)
@@ -462,12 +470,19 @@ class RouteControlTests(unittest.TestCase):
             self.assertIs(self.console.auto_session, session)
             self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
 
-    def test_front_sparse_above_existing_count_limit_still_halts(self):
-        # Entry from drive with more than the front-count limit stays a halt.
+    def test_route_front_sparse_above_count_limit_waits_without_power(self):
+        # Round 55 (Claude): explicit route, trial52 scan399 class. A front gap
+        # above the old count limit enters the neutral wait (power off, steering
+        # held) instead of a recentering halt; it never powers until clean.
         self.drive_compact_trial(continue_route=True)
-        self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 7))
-        self.assertIsNone(self.console.auto_session)
-        self.assertEqual(self.outputs[-1]['op'], 'stop')
+        session = self.console.auto_session
+        servo = self.console.status['control']['servo']
+        for _ in range(4):
+            self.observe(round(self.now+.1, 6), self.front_sparse(self.console.scan['seq']+1, 7))
+            self.assertIs(self.console.auto_session, session)
+            self.assertEqual(session['phase'], 'quality_wait')
+            self.assertEqual((self.outputs[-1]['motor'], self.outputs[-1]['servo']), (1500, servo))
+        self.assertEqual(sum(row['op'] == 'arm' for row in self.outputs), 1)
 
     def test_default_sequence_front_sparse_in_drive_still_halts(self):
         self.drive_compact_trial()
@@ -586,7 +601,8 @@ class RouteControlTests(unittest.TestCase):
                 for _ in range(4):
                     value = self.compact_scan(self.console.scan['seq']+1,
                         observed=fault != 'missing', distance=2. if fault == 'changed' else 1.)
-                    if fault == 'partial': value['ranges'][self.target_bins.start-3:self.target_bins.start] = [None]*3
+                    if fault == 'partial':  # beyond the 8-bin maintenance allowance (round 55)
+                        value['ranges'][self.target_bins.start-9:self.target_bins.start] = [None]*9
                     self.observe(round(self.now+.1, 6), value)
                     self.assertIs(self.console.auto_session, session)
                     self.assertEqual(session['phase'], 'quality_wait')

@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded physical trial. Round55 candidate includes3002f7d route/near-contact fixes plus measured turn-margin/lateral-coordinate repairs; full634 tests now pass with no failures/errors/skips, all required offline replay gates pass. Not built/deployed/tried. User requests committed/pushed code and a text handoff for Claude verification before continuing.",
+  "latest_trial_status": "54 (claude-turn54/c6bdf75) remains the last recorded physical trial. Round55 candidate = 3002f7d/db8c71e (GPT) plus Claude 2026-10-12 review fixes: cone-like contact continues in any stage (boards stop), bounded edge-null and near maintenance (cone loss causes), task-left path correction in corridor/second stages, moving second recovery, route front-gap waits instead of halts. Full 637 tests pass; detector not worse; replays 51-54 recorded. Not built/deployed/tried.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -17192,6 +17192,89 @@
       "completed": false,
       "competition_supported": false,
       "next_action": "Commit/push main and give the user a copyable Claude verification handoff. No vehicle connection, build, deployment or trial performed; any later powered trial still needs existing SSH socket and the single physical placement confirmation."
+    },
+    "claude_review_and_cone_contact_correction_20261012": {
+      "author": "Claude",
+      "implemented": true,
+      "deployed": false,
+      "physical_trial_executed": false,
+      "next_trial": 55,
+      "baseline_commit": "db8c71ef77634c4ea12e6f64f86a8d2c36395b57",
+      "user_instruction": [
+        "我和他说的撞到桶也继续任务，仅限于桶",
+        "我的意思是桶撞到了也继续比赛，为什么会频繁出现桶丢失的情况，你改好后并补测，然后告诉gpt你干了啥"
+      ],
+      "independent_review_of_3002f7d_db8c71e": {
+        "reproduced": "full 634 tests OK; detector 36 trials byte-identical to 03c1360; route 51 1.70s handover, 52 continues at 6.49 with same ID, 53 center ACK then right, 54 same-ID resume 3.50s; no fixture or work/ raw scan changed; db8c71e boundary test edits only move each strictly-inside point to the revised 14/20/18 cm body.",
+        "regression_1_G_overcorrection": "Trial52 real scans 436/438, corridor_follow target 1494/1500 (second support not yet confirmed, free .43/.25 m): 03c1360 chose 1580/1700, db8c71e kept 1494/1500 (straight into the support). The original test asserting a left choice was rewritten to assert the blocked arc. Also pending_right disabled the path check in corridor_follow because the natural target is now kept.",
+        "regression_2_second_recovery": "After a drive loss the recovery used a fixed .30 m/20 deg gate around the last car-frame observation and disabled the corridor proof: a support re-seen after the car moved .35/.50 m stayed in corridor_follow forever (03c1360 re-acquired). GPT tests kept the support stationary."
+      },
+      "why_cones_were_lost": {
+        "method": "Every saved scan of trials 40-54 through the route trackers; at the first missing frame after a confirmed observation, which detector gate the raw cluster near the last position failed (script loss_causes2.py).",
+        "before_first_tracker_12_losses": {
+          "edge_null_run_longer_than_2_3_bins_no_farther_return_beside": 5,
+          "closer_than_35cm": 2,
+          "ambiguous_with_other_object": 2,
+          "no_return_near_last_position": 2,
+          "too_few_points": 1
+        },
+        "before_ahead_tracker_real_losses_12": {
+          "edge_null_run": 5,
+          "closer_than_35cm": 5,
+          "ambiguous": 1,
+          "merged_into_board_cluster": 1
+        },
+        "examples": [
+          "trial51 scan366: cone .64-.69 m bins 279-288, nulls 289-292 then 4.72 m",
+          "trial54 scan328: cone .33-.38 m, null 292, mixed .42-.49 m edge, strict near rule failed",
+          "trial52 scan399: not a detector loss but a 7-bin open front gap; halted once the cone was kept"
+        ],
+        "cause": "The lidar drops beams at the depth step between a near cone and the far background (3-5+ nulls at the silhouette). Isolation needed a farther return within 2-3 bins, and near maintenance required no null/mixed edge at all, so the cone vanished exactly when it was close or beside the car; then the stage dropped into a wait whose identity rules were stricter.",
+        "after": {
+          "first_tracker_losses": 7,
+          "first_closer_than_35cm": 0,
+          "ahead_real_losses": 8
+        }
+      },
+      "change": [
+        "compact_target: confirmed tolerant identities use TOLERANT_MAINTENANCE_EDGE_BINS=8 per edge, still bounded by diameter+unknown arc <= .35 m and a real farther return beyond; such frames are full observations. Acquisition unchanged.",
+        "compact_target: bound near maintenance (<.35 m) uses the same tolerant rules and elapsed-time gate as far maintenance (strict near continuity removed).",
+        "maneuver_sequence._full_target_points: unknown edge bins are counted at the nearest support range, so release/pass/bypass extents stay conservative; _observe_first_pass uses these extents in route mode.",
+        "Cone contact (user 2026-10-12): compact_target.contact_supports = every current isolated compact support whose principal axis faces the sensor (>=45 deg to the ray). Route body gate exempts exactly their returns in drive/quality_wait, any stage, confirmed or not; the service recomputes them from the raw scan (forgery rejected). Board ends (straight piece along the ray, 4-8 deg) and all other returns still stop.",
+        "Path check: corridor_follow/second_orbit may correct a neutral or right stage target to the LEFT (task rule: second support clockwise) and are not blocked by a pending right center ACK; never invents right; right_align/light_turn keep the strict bounds.",
+        "Second recovery: anchor gate widens with time since the last full observation at tolerant rates, capped .6 s (<=1.2 m/80 deg); while driving in corridor_follow the corridor role proof runs when the anchored recovery proves nothing.",
+        "Server (route only): a front_sparse gap above the old 6-bin count may enter or continue the neutral wait instead of a recentering halt (trial52 scan399); power returns only after clean quality; 324-return floor, stale data, body gate unchanged. Default mode unchanged."
+      ],
+      "tests_changed_and_why": [
+        "test_maneuver_route: trial52 path test restored to the round-53 purpose (left of the support) for targets 1494/1500/1520 with and without center ACK; partial() now 9 edge nulls (beyond the new bound).",
+        "test_route_path_intent: corridor_follow/second_orbit may turn left (never right); exit/light unchanged.",
+        "test_compact_target_contact: near edge/internal gaps now keep the bound identity (trial54 scan328 class); new test: 9-bin edge gap is not maintained; near association uses the elapsed-time gate.",
+        "test_route_identity_recovery: contact witness is cone_like_support in every stage; board-end shape gives none; new moved-support recovery test (shift 0/.2/.35/.5 m); anchor gate growth capped test.",
+        "test_route_contact_control: new service test: unconfirmed cone contact continues, board end and forged witness stop.",
+        "test_route_control / test_route_quality_continuity: route front gap >6 enters neutral wait without power (default mode still halts); partial constructs widened to 9 bins."
+      ],
+      "verification": {
+        "full_tests": "637 tests, 0 failures, 0 errors (634 + 3 new)",
+        "detector_replay": "no tolerant row worse in any trial; TOTAL first/tolerant conf 426->432 ids 42->41, ahead/tolerant conf 213->219 ids 43->42; strict/gap rows identical",
+        "route_replay_open_loop": {
+          "51": "1.70 s handover unchanged; cone no longer missed at 366, release starts one frame earlier",
+          "52": "same first ID throughout; 4.70 untolerable front gap enters wait (db8c71e identity loss at 4.39); resume, pass, right_align; second confirmed 5.19 s, 5.39 s 1525; 6.49/6.79 cone contact continues",
+          "53": "no wait; same ID, release 2.99, right_align 3.49, center ACK then right to 1350",
+          "54": "same ID, release before the 2.50 wait, pass/resume 3.29 s (db8c71e 3.50), exit alignment left ~1615"
+        },
+        "repro_path_trial52_436_438": "1494/1500 -> 1580/1700 (clear 1.88/1.24 m)",
+        "repro_second_moved_support": "shift 0/.2/.35/.5 m all re-enter second_orbit",
+        "contact_audit_all_saved_frames": "only trials 48 (scans 516/518) and 52 (440/443) exempt, both user-reported second-cone hits; 43 other near-body frames (boards and board ends 23/25/29/32/34/49) still stop",
+        "evidence_directory": "work/claude-review-cone-contact-20261012-104349"
+      },
+      "risks_not_resolved": [
+        "Open-loop replays after the first divergence are not new physical trajectories.",
+        "A compact isolated object facing the sensor that is not a cone would also be exempt; no such case in saved trials.",
+        "Second recovery gate up to 1.2 m may bind a different compact object if the real support is invisible; uniqueness and first-support separation still required.",
+        "Unknown edge projection at the nearest range is a heuristic bound, not a measured cone shape."
+      ],
+      "competition_supported": false,
+      "completed": false
     }
   }
 }

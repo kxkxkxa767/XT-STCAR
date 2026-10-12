@@ -105,11 +105,15 @@ class RouteQualityContinuityTests(unittest.TestCase):
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.outputs[-1]['op'], 'stop')
 
-    def test_long_unbridged_gap_and_known_body_point_still_stop(self):
+    def test_long_unbridged_gap_waits_but_known_body_point_and_stale_scan_stop(self):
+        # Round 55 (Claude): a long front gap is not powered drive; it enters
+        # the neutral wait (trial52 scan399 class). Known close returns that
+        # are not a cone-like support, and stale data, still stop.
         for fault in ('seven_unknown', 'body_close', 'stale_scan'):
             with self.subTest(fault=fault):
                 self.reset_case()
                 self.drive_compact_trial(continue_route=True)
+                session = self.console.auto_session
                 value = self.short_gap(self.console.scan['seq']+1)
                 if fault == 'seven_unknown':
                     value['ranges'][5:12] = [None]*7
@@ -118,8 +122,13 @@ class RouteQualityContinuityTests(unittest.TestCase):
                 else:
                     self.console.scan, self.console.scan_at = value, self.now-.31
                 self.tick(round(self.now+.02, 6), value)
-                self.assertIsNone(self.console.auto_session)
-                self.assertEqual(self.outputs[-1]['op'], 'stop')
+                if fault == 'seven_unknown':
+                    self.assertIs(self.console.auto_session, session)
+                    self.assertEqual(session['phase'], 'quality_wait')
+                    self.assertEqual(self.outputs[-1]['motor'], 1500)
+                else:
+                    self.assertIsNone(self.console.auto_session)
+                    self.assertEqual(self.outputs[-1]['op'], 'stop')
 
     def test_bridge_accounting_admits_neutral_wait_across_route_stages(self):
         for stage in ('left_turn', 'first_target', 'right_align', 'corridor_follow',

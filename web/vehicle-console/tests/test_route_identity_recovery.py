@@ -1,5 +1,6 @@
 """Route recovery from current evidence; synthetic scans, no physical claims."""
 import copy
+import math
 import unittest
 
 import test_maneuver_route as route
@@ -72,18 +73,49 @@ class RouteIdentityRecoveryTests(unittest.TestCase):
         self.assertNotEqual(motion.second_track_id, original)
         self.assertIsNone(result['second_pass_evidence'])
 
-    def test_anchor_is_only_prior_and_does_not_expire_while_stopped_or_expand(self):
+    def test_anchor_is_only_prior_and_its_gate_growth_is_capped(self):
+        # Round 55 (Claude): the gate widens with time since the last full
+        # observation (the car keeps moving) but stops at
+        # SECOND_RECOVERY_MAX_SLACK_S (<= 1.2 m / 80 deg); far objects never bind.
         motion, start, bearing = self.enter_second_wait()
         for seq in range(start, start+15):
             self.update(motion, seq)
         for seq in range(start+15, start+19):
-            result, _ = self.update(motion, seq, second=-100.)
+            result, _ = self.update(motion, seq, second=-170.)
             self.assertIsNone(motion.second_rebind_evidence)
             self.assertEqual(result['motor'], 1500)
         for seq in range(start+19, start+24):
             result, _ = self.update(motion, seq, second=bearing)
         self.assertIsNotNone(motion.second_rebind_evidence)
         self.assertIsNone(result['second_pass_evidence'])
+
+    def moved_second(self, shift):
+        """Second support at -45 deg/1 m, lost for 4 frames while driving, then
+        seen again where it would be after the car moved ``shift`` m forward."""
+        motion, _ = self.helper.second_handover()
+        for seq in range(9, 13):
+            scan = route.observation(seq, first=90., heading=0.)
+            motion.update(scan, 0., seq/10, route.feedback(seq, motion.servo, 1550),
+                          quality_clear=True, quality_resume_ready=True)
+        x, y = .7071-shift, -.7071
+        return motion, math.degrees(math.atan2(y, x)), math.hypot(x, y)
+
+    def test_drive_loss_recovers_a_support_the_car_has_moved_past(self):
+        # Round 55 (Claude): with a fixed .30 m/20 deg gate and the corridor
+        # proof disabled during recovery, a support re-seen after >~.3 m of
+        # travel was never recovered (shift .35/.50 m stayed corridor_follow).
+        for shift in (0., .2, .35, .5):
+            with self.subTest(shift=shift):
+                motion, bearing, distance = self.moved_second(shift)
+                self.assertTrue(motion._second_recovering)
+                for seq in range(13, 25):
+                    scan = route.observation(seq, first=90., heading=0.)
+                    route.add_object(scan, bearing=bearing, distance=distance)
+                    result = motion.update(scan, 0., seq/10, route.feedback(seq, motion.servo, 1550),
+                                           quality_clear=True, quality_resume_ready=True)
+                self.assertEqual(result['route_stage'], 'second_orbit')
+                self.assertFalse(motion._second_recovering)
+                self.assertIsNone(result['second_pass_evidence'])
 
     def test_recovery_cannot_take_current_first_target_even_when_anchor_matches(self):
         motion, seq, _ = self.second()
@@ -243,13 +275,16 @@ class RouteIdentityRecoveryTests(unittest.TestCase):
         return motion, scan
 
     def test_contact_evidence_uses_current_exact_returns_without_advancing_real_tracker(self):
+        # User 2026-10-12: a cone may be hit and the run continues (round 55,
+        # Claude): every cone-like support in the fresh scan is a witness.
         motion, scan = self.contact_motion()
         before = copy.deepcopy(motion.target_tracker.__dict__)
         evidence = motion.current_contact_target(scan, 1.)
         self.assertIsNotNone(evidence)
-        self.assertEqual(evidence['role'], 'first_target')
+        self.assertEqual(evidence['role'], 'cone_like_support')
+        self.assertIsNone(evidence['track_id'])
         self.assertEqual(evidence['source_seq'], 10)
-        self.assertEqual(evidence['track_id'], motion.orbit_track_id)
+        self.assertEqual(evidence['orbit_track_id'], motion.orbit_track_id)
         self.assertEqual(evidence['semantic_class'], 'unknown')
         self.assertEqual(evidence['support_ranges_m'], [scan['ranges'][i] for i in evidence['support_bins']])
         self.assertEqual(motion.target_tracker.__dict__, before)
@@ -258,15 +293,22 @@ class RouteIdentityRecoveryTests(unittest.TestCase):
         self.assertEqual(decision['motor'], 1550)
         motion.phase = 'quality_wait'
         self.assertIsNotNone(motion.current_contact_target(scan, 1.))
-        motion.first_pass_evidence = {'source_seq': 9}
-        self.assertIsNone(motion.current_contact_target(scan, 1.))
+        motion.first_pass_evidence = {'source_seq': 9}  # a cone is still a cone after its pass
+        self.assertIsNotNone(motion.current_contact_target(scan, 1.))
 
-    def test_contact_permission_excludes_partial_stale_default_and_completed_role(self):
+    def test_contact_permission_excludes_stale_default_inactive_phases_and_board_ends(self):
         motion, scan = self.contact_motion()
         partial = copy.deepcopy(scan)
-        partial['ranges'][259] = None
-        self.assertIsNone(motion.current_contact_target(partial, 1.))
+        partial['ranges'][259] = None  # a bounded edge null keeps the witness, never as support
+        evidence = motion.current_contact_target(partial, 1.)
+        self.assertNotIn(259, evidence['support_bins'])
         self.assertIsNone(motion.current_contact_target(scan, 1.31))
+        board = copy.deepcopy(scan)
+        # Incoming board end seen past the rear-left corner (trial32 scan546
+        # shape): a straight piece receding along the line of sight.
+        board['ranges'] = [3.]*360
+        board['ranges'][228:234] = [6.77, .29, .30, .43, .56, 4.29]
+        self.assertIsNone(motion.current_contact_target(board, 1.))
         for phase in ('coast', 'locked', 'presteer'):
             motion.phase = phase
             self.assertIsNone(motion.current_contact_target(scan, 1.))
@@ -274,7 +316,7 @@ class RouteIdentityRecoveryTests(unittest.TestCase):
         motion.continue_route = False
         self.assertIsNone(motion.current_contact_target(scan, 1.))
 
-    def test_second_contact_role_ends_at_pass_or_stage_exit(self):
+    def test_second_contact_witness_in_every_post_pass_stage(self):
         motion, seq, bearing = self.second()
         for seq, distance, size in ((9, .8, 9), (10, .6, 11), (11, .4, 15), (12, .3, 21)):
             scan = route.observation(seq, heading=0.)
@@ -284,10 +326,10 @@ class RouteIdentityRecoveryTests(unittest.TestCase):
         route.add_object(scan, bearing=bearing, distance=.2, size=21)
         evidence = motion.current_contact_target(scan, 1.3)
         self.assertIsNotNone(evidence)
-        self.assertEqual(evidence['role'], 'second_target')
-        self.assertEqual(evidence['track_id'], motion.second_track_id)
+        self.assertEqual(evidence['second_track_id'], motion.second_track_id)
+        self.assertEqual(evidence['role'], 'cone_like_support')
         motion.second_pass_evidence = {'source_seq': 12}
-        self.assertIsNone(motion.current_contact_target(scan, 1.3))
+        self.assertIsNotNone(motion.current_contact_target(scan, 1.3))
         motion.second_pass_evidence = None
         motion.route_stage = 'corridor_follow'
-        self.assertIsNone(motion.current_contact_target(scan, 1.3))
+        self.assertIsNotNone(motion.current_contact_target(scan, 1.3))

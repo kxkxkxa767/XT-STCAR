@@ -465,14 +465,18 @@ def front_gap_evidence(bins, *, bridge=False):
 
 
 def _body_contact_bins(target, scan, ages, maneuver):
-    """Bind an internal confirmed-role witness to exact returns in this scan."""
+    """Bind an internal witness (confirmed role, or every cone-like support) to exact returns in this scan."""
     if target is None:
         return set()
+    role = target.get('role') if isinstance(target, dict) else None
+    cone_like = role == 'cone_like_support'
     if (not maneuver or not isinstance(target, dict)
             or scan.get('frame_id') != 'lidar_origin_coarse_body_heading'
-            or target.get('role') not in ('first_target', 'second_target')
-            or type(target.get('track_id')) is not int or target['track_id'] <= 0
-            or target.get('confirmed') is not True or target.get('full_observation') is not True
+            or role not in ('first_target', 'second_target', 'cone_like_support')
+            or (not cone_like and (type(target.get('track_id')) is not int or target['track_id'] <= 0
+                                   or target.get('confirmed') is not True))
+            or (cone_like and (target.get('track_id') is not None or type(target.get('confirmed')) is not bool))
+            or target.get('full_observation') is not True
             or target.get('semantic_class') != 'unknown'
             or type(target.get('source_seq')) is not int or target['source_seq'] < 0
             or target['source_seq'] != scan['seq']
@@ -493,6 +497,13 @@ def _body_contact_bins(target, scan, ages, maneuver):
             or any(type(r) not in (int, float) or not math.isfinite(r) or not .02 <= r <= 12
                    or scan['ranges'][i] != r for i, r in zip(support, observed))):
         raise ValueError('probe_invalid_body_contact_target')
+    if cone_like:
+        # User 2026-10-12: cone contact continues, boards stop. Recompute the
+        # cone-like supports from this raw scan; the witness must name them all.
+        from compact_target import contact_supports
+        current = {i for candidate in contact_supports(scan['ranges']) for i in candidate['support_bins']}
+        if set(support) != current:
+            raise ValueError('probe_invalid_body_contact_target')
     return set(support)
 
 

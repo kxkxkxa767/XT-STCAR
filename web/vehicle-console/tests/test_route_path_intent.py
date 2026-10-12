@@ -8,6 +8,10 @@ import test_maneuver_route as route
 
 class RoutePathIntentTests(unittest.TestCase):
     STAGES = ('right_align', 'corridor_follow', 'second_orbit', 'light_turn')
+    # Round 55 (Claude): where the task keeps the obstacle on the car's right
+    # (second support clockwise), a correction may add left from a neutral or
+    # right stage target; it never invents right anywhere.
+    TASK_LEFT = ('corridor_follow', 'second_orbit')
 
     def motion(self, stage, target, *, authorized=True):
         motion = route.RoutePathCheckTests.motion(stage, right=authorized)
@@ -28,8 +32,15 @@ class RoutePathIntentTests(unittest.TestCase):
                     if target < 1500:
                         motion._current_scan['ranges'] = [
                             motion._current_scan['ranges'][-i % 360] for i in range(360)]
-                    self.assertEqual(motion._route_path_target(target), target)
-                    self.assertFalse(motion.path_evidence['overridden'])
+                    choice = motion._route_path_target(target)
+                    if target < 1500 and stage in self.TASK_LEFT:
+                        # Left of the obstacle is the task side here.
+                        self.assertGreaterEqual(choice, 1500)
+                        self.assertGreaterEqual(motion._path_free_distance(
+                            motion._path_points(motion._current_scan), choice), .7)
+                    else:
+                        self.assertEqual(choice, target)
+                        self.assertFalse(motion.path_evidence['overridden'])
 
     def test_neutral_stage_cannot_be_turned_by_path_or_proximity(self):
         for stage in self.STAGES:
@@ -37,10 +48,12 @@ class RoutePathIntentTests(unittest.TestCase):
                 with self.subTest(stage=stage, authorized=authorized):
                     motion = self.motion(stage, 1500, authorized=authorized)
                     motion.natural_steering_target = 1350
+                    # Only the right arcs are clear here: never invented.
                     self.assertEqual(motion._route_path_target(1500), 1500)
                     for side in ('right', 'left', 'front_left_open', 'front_right_open'):
                         motion._avoid = {'side': side}
-                        self.assertEqual(motion._avoid_target(1500), 1500)
+                        escape_left = stage in self.TASK_LEFT and side in ('right', 'front_left_open')
+                        self.assertEqual(motion._avoid_target(1500), 1650 if escape_left else 1500)
 
     def test_clear_same_direction_arc_still_corrects_a_stage(self):
         for stage in self.STAGES:
@@ -57,7 +70,13 @@ class RoutePathIntentTests(unittest.TestCase):
                 motion = self.motion(stage, 1420)
                 motion.phase, motion.neutral_pause_kind = 'quality_wait', 'post_pass'
                 motion._avoid = {'side': 'right'}
-                self.assertLessEqual(motion._avoid_target(1420), 1500)
+                if stage in self.TASK_LEFT:
+                    self.assertEqual(motion._avoid_target(1420), 1650)  # away, task side
+                else:
+                    self.assertLessEqual(motion._avoid_target(1420), 1500)
+                motion._avoid = {'side': 'left'}
+                self.assertLessEqual(motion._avoid_target(1420), 1500)  # never more right
+                self.assertGreaterEqual(motion._avoid_target(1420), 1350)
                 motion._avoid = None
                 self.assertEqual(motion._avoid_target(1420), 1420)
 

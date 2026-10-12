@@ -1,4 +1,9 @@
-"""Exact current-role contact exemptions; all unrelated returns remain hard stops."""
+"""Exact cone-like contact exemptions; all other returns remain hard stops.
+
+User 2026-10-12: a cone may be hit and the run continues; boards stop.
+Round 55 (Claude): any current isolated compact support facing the sensor is
+exempt, recomputed by the service from the raw scan (not only the role target).
+"""
 import copy
 import math
 import unittest
@@ -153,7 +158,8 @@ class RouteContactControlTests(unittest.TestCase):
             self.assertEqual(session['turn_motion'].orbit_track_id, original_id)
         body = session['report']['clearance_current']['body_proximity']
         self.assertTrue(body['target_contact_tolerated'])
-        self.assertEqual(body['target_contact_evidence']['track_id'], original_id)
+        self.assertEqual(body['target_contact_evidence']['role'], 'cone_like_support')
+        self.assertEqual(body['target_contact_evidence']['orbit_track_id'], original_id)
         self.assertLess(body['current_known_min_distance_m'], .04)
         value = copy.deepcopy(value)
         value['seq'] += 1
@@ -162,6 +168,41 @@ class RouteContactControlTests(unittest.TestCase):
         self.tick(round(self.now+.02, 6), value)
         self.assertIsNone(self.console.auto_session)
         self.assertEqual(self.outputs[-1]['op'], 'stop')
+
+
+    def test_unconfirmed_cone_contact_continues_but_board_end_and_forgery_stop(self):
+        live = __import__('autonomy_live')
+        for case in ('cone', 'board_end', 'forged'):
+            with self.subTest(case=case):
+                value = self.scan(10)
+                value['ranges'] = [3.]*360
+                value['received_at'] = self.now
+                if case == 'board_end':
+                    # Trial32 scan546: incoming board end past the rear-left corner.
+                    value['ranges'][228:234] = [6.77, .26, .27, .40, .53, 4.29]  # ~5 cm from the body
+                else:
+                    # A cone touching the right front (~2 cm), never confirmed.
+                    value['ranges'][20:46] = [.27]*26
+                supports = live_contact = __import__('compact_target').contact_supports(value['ranges'])
+                bins = sorted({i for c in supports for i in c['support_bins']})
+                if case == 'forged':
+                    bins = bins[:-1]
+                witness = None if not bins else {
+                    'role': 'cone_like_support', 'track_id': None, 'confirmed': False,
+                    'full_observation': True, 'source_seq': value['seq'], 'source_at_ms': value['at_ms'],
+                    'source_received_at': value['received_at'], 'support_bins': bins,
+                    'support_ranges_m': [value['ranges'][i] for i in bins], 'semantic_class': 'unknown'}
+                if case == 'cone':
+                    body = self.clearance(value, witness)['body_proximity']
+                    self.assertTrue(body['target_contact_tolerated'])
+                    self.assertFalse(body['stop_requested'])
+                elif case == 'board_end':
+                    self.assertEqual(supports, [])
+                    with self.assertRaisesRegex(ValueError, 'probe_obstacle_close_body'):
+                        self.clearance(value, witness)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'probe_invalid_body_contact_target'):
+                        self.clearance(value, witness)
 
 
 if __name__ == '__main__':

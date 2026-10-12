@@ -7,7 +7,7 @@ The service retains fresh body-clearance checks, ownership, heartbeat and ACKs.
 import copy
 import math
 
-from compact_target import (CompactTargetTracker, _associated, _candidates, _close_candidates, MAX_DIAMETER_M,
+from compact_target import (CompactTargetTracker, _associated, _candidates, contact_supports, MAX_DIAMETER_M,
                             MIN_RANGE_M, TOLERANT_MIN_POINTS)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM)
@@ -151,6 +151,19 @@ SECOND_BYPASS_SUPPORT_GAP_M = MIN_RANGE_M+.05
 # uncalibrated PWM-per-curvature seen in the first-target orbits (~1705 at
 # ~1 m radius). Not a measured wheel angle.
 SECOND_CURVATURE_GAIN_PWM_M = 205.
+# Round 55 (Claude): stages whose task rule is to keep the obstacle on the
+# car's right (second support clockwise). An obstacle correction there may add
+# left from a neutral or slightly right stage target (trial52 scans 436/438:
+# corridor target ~1494-1500 straight at the unconfirmed second support; the
+# round-53 check chose 1580/1700, the first round-55 bounds kept 1494/1500).
+# It never invents right. Exit/light turns keep the strict bounds.
+TASK_LEFT_BYPASS_STAGES = ('corridor_follow', 'second_orbit')
+# Second-role recovery after an identity loss: the last full observation is a
+# car-frame prior, and the car keeps moving (~1 m/s at 1550, up to ~100 deg/s
+# yaw). Its association gate widens at the tolerant tracker rates with the
+# time since that observation, capped here (gate <= 1.2 m / 80 deg). With a
+# fixed gate a support re-seen after >~.3 m of travel was never recovered.
+SECOND_RECOVERY_MAX_SLACK_S = .6
 # Same-frame native wall-window pairing reuses the native corridor gates
 # (corridor.rs): parallel 12 deg, width .65..2.5 m, shared support .35 m.
 PAIR_MAX_ANGLE_RAD = math.radians(12)
@@ -340,46 +353,50 @@ class ManeuverSequence(TurnMotion):
                 or not isinstance(ranges, list) or len(ranges) != 360
                 or any(type(i) is not int or not 0 <= i < 360 or not _number(ranges[i]) for i in bins)):
             return None
-        if target.get('close_maintenance_observation') is True:
-            # Close-contact permission never relies on the normal tolerant
-            # detector's unknown boundaries. Recheck these exact current bins.
-            strict = _close_candidates(ranges, bearing_range_rad=(-math.pi, math.pi))
-            if not any(set(candidate['support_bins']) == set(bins)
-                       and candidate['tracking_only_boundary_gap'] is False for candidate in strict):
-                return None
-        return [(ranges[i]*math.cos(math.radians(i)), -ranges[i]*math.sin(math.radians(i))) for i in bins]
+        points = [(ranges[i]*math.cos(math.radians(i)), -ranges[i]*math.sin(math.radians(i))) for i in bins]
+        unknown = target.get('boundary_unknown_bins') or []
+        if any(type(i) is not int or not 0 <= i < 360 for i in unknown):
+            return None
+        # Size-bounded unknown edge bins (compact_target maintenance rule) may
+        # hide part of the support. Count them at the nearest observed support
+        # range: forward/lateral extents used for release, pass and bypass
+        # decisions can then only be conservative, never optimistic.
+        near = min(ranges[i] for i in bins)
+        points += [(near*math.cos(math.radians(i)), -near*math.sin(math.radians(i))) for i in unknown]
+        return points
 
     def current_contact_target(self, scan, now):
-        """Read-only exact returns for the bound orbit role in this fresh scan.
+        """Exact current returns of every cone-like support, for the body gate.
 
-        A shadow update avoids the service's one-frame lag without advancing
-        the actual tracker. This certifies observed role support, not cone
-        semantics; loss, ambiguity, a new ID, or partial boundaries give none.
+        User 2026-10-12: a cone may be hit and the run continues; boards
+        still stop. Any isolated compact support facing the sensor in this
+        fresh scan (compact_target.contact_supports) is a witness, whether or
+        not it is the support being orbited or already confirmed. The service
+        recomputes the same supports from the raw scan before exempting them.
+        Read-only: no tracker or stage state changes.
         """
-        if not self.continue_route or self.phase not in ('drive', 'quality_wait'):
-            return None
-        if (self.route_stage == 'first_target' and self.handover_observed
-                and self.first_pass_evidence is None):
-            tracker, identity, role = self.target_tracker, self.orbit_track_id, 'first_target'
-        elif (self.route_stage == 'second_orbit' and self.second_target_handover_observed
-                and self.second_pass_evidence is None):
-            tracker, identity, role = self.second_tracker, self.second_track_id, 'second_target'
-        else:
-            return None
-        if type(identity) is not int or identity <= 0:
+        if (not self.continue_route or self.phase not in ('drive', 'quality_wait')
+                or self.drive_since is None or not isinstance(scan, dict)
+                or not _number(now) or not _number(scan.get('received_at'))
+                or not 0 <= now-scan['received_at'] < SCAN_AGE_S
+                or type(scan.get('seq')) is not int or type(scan.get('at_ms')) is not int
+                or not isinstance(scan.get('ranges'), list) or len(scan['ranges']) != 360):
             return None
         try:
-            target = copy.deepcopy(tracker).update(scan, now, acquire=False)
-            if (not isinstance(target, dict) or target.get('close_maintenance_observation') is not True
-                    or self._full_target_points(target, scan, identity) is None):
-                return None
-            bins = list(target['support_bins'])
-            return {'role': role, 'track_id': identity, 'confirmed': True, 'full_observation': True,
-                    'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
-                    'source_received_at': scan['received_at'], 'support_bins': bins,
-                    'support_ranges_m': [scan['ranges'][i] for i in bins], 'semantic_class': 'unknown'}
+            supports = contact_supports(scan['ranges'])
         except (ValueError, TypeError, KeyError):
             return None
+        if not supports:
+            return None
+        bins = sorted({i for support in supports for i in support['support_bins']})
+        return {'role': 'cone_like_support', 'track_id': None, 'confirmed': False, 'full_observation': True,
+                'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                'source_received_at': scan['received_at'], 'support_bins': bins,
+                'support_ranges_m': [scan['ranges'][i] for i in bins], 'semantic_class': 'unknown',
+                'objects': [{'support_bins': list(support['support_bins']), 'range_m': support['range_m'],
+                             'bearing_left_rad': support['bearing_left_rad'],
+                             'diameter_m': support['diameter_m']} for support in supports],
+                'orbit_track_id': self.orbit_track_id, 'second_track_id': self.second_track_id}
 
     @staticmethod
     def _mature_observation(history, scan, duration):
@@ -1499,6 +1516,8 @@ class ManeuverSequence(TurnMotion):
         become a renewed left boost. These are task-relative bounds, with no
         assumption about where the support or exit lies on the course.
         """
+        if self.route_stage in TASK_LEFT_BYPASS_STAGES:
+            return (RIGHT_EXIT_MIN_PWM if target < NEUTRAL else NEUTRAL), SERVO_MAX
         if target == NEUTRAL:
             return NEUTRAL, NEUTRAL
         if target < NEUTRAL:
@@ -1523,7 +1542,10 @@ class ManeuverSequence(TurnMotion):
         """
         scan = self._current_scan
         natural = self.natural_steering_target
-        pending_right = _number(natural) and natural < NEUTRAL and not self._route_right_authorized()
+        # A right turn waiting for its center ACK is left alone (trial53),
+        # except where the task side of an obstacle is left anyway.
+        pending_right = (_number(natural) and natural < NEUTRAL and not self._route_right_authorized()
+                         and self.route_stage not in TASK_LEFT_BYPASS_STAGES)
         lower, upper = self._route_override_bounds(target)
         key = (scan.get('seq') if isinstance(scan, dict) else None, target, self.route_stage,
                self._route_right_authorized(), pending_right, lower, upper)
@@ -1828,10 +1850,13 @@ class ManeuverSequence(TurnMotion):
             self._clear_exit_prepare_window()
             return
         points = [(ranges[i]*math.cos(math.radians(i)), -ranges[i]*math.sin(math.radians(i))) for i in bins]
+        x = sum(p[0] for p in points)/len(points)
+        if self.continue_route:
+            # Route: extents include size-bounded unknown edges (conservative).
+            points = self._full_target_points(target, scan, self.orbit_track_id) or points
         # Always derive extents from current raw support, never a cone radius.
         front = max(p[0] for p in points)
         side = min(p[1] for p in points)-SIDE_BODY_EXTENT_M
-        x = sum(p[0] for p in points)/len(points)
         row = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
                'received_at': scan['received_at'], 'center_x_m': x}
         history = self._first_pass_history
@@ -2129,17 +2154,21 @@ class ManeuverSequence(TurnMotion):
         # required; this does not acquire any arbitrary right-side object.
         self.second_tracker.widen_acquisition((-math.pi, math.pi/2))
 
-    def _second_recovery_observation(self, scan, now):
+    def _second_recovery_observation(self, scan, now, *, fallback=False):
         """Fresh reconfirmation shared by drive loss and neutral-wait loss.
 
         The last full second observation is an identity prior, not current
-        support. Its fixed association gates never grow with time. A new ID
-        needs the tracker's original multi-frame confirmation, with every
-        current candidate distinct from any currently observed first support.
+        support. Its association gate widens with the time since it, capped
+        (SECOND_RECOVERY_MAX_SLACK_S). A new ID needs the tracker's original
+        multi-frame confirmation, with every current candidate distinct from
+        any currently observed first support. Returns True when exactly one
+        proven support advanced the tracker this frame. With ``fallback`` a
+        frame without one leaves the tracker untouched for the caller's own
+        corridor role proof (driving: the support may now be ahead again).
         """
         anchor = self._second_role_anchor
         if not self._second_recovering or anchor is None or self.first_pass_evidence is None:
-            return
+            return False
         previous = self._second_recovery_last
         reference = (previous if isinstance(previous, dict)
                      and self._observation_lease(scan, now, previous.get('source_at_ms'),
@@ -2151,13 +2180,19 @@ class ManeuverSequence(TurnMotion):
                       and first.get('source_seq') == scan.get('seq') else set())
         first_points = [(scan['ranges'][i]*math.cos(math.radians(i)),
                          -scan['ranges'][i]*math.sin(math.radians(i))) for i in first_bins]
+        slack = min(SECOND_RECOVERY_MAX_SLACK_S,
+                    max(0., (scan['at_ms']-reference['source_at_ms'])/1000-.1))
         def proven(candidate):
-            if not _associated(candidate, reference) or first_bins.intersection(candidate['support_bins']):
+            if (not _associated(candidate, reference, slack)
+                    or first_bins.intersection(candidate['support_bins'])):
                 return False
             points = [(scan['ranges'][i]*math.cos(math.radians(i)),
                        -scan['ranges'][i]*math.sin(math.radians(i))) for i in candidate['support_bins']]
             return not first_points or min(math.dist(a, b) for a in first_points for b in points) > MAX_DIAMETER_M
         matches = [candidate for candidate in candidates if proven(candidate)]
+        if len(matches) != 1 and fallback:
+            self.second_acquisition_reason = 'second_role_recovery_unproven_corridor_proof_next'
+            return False
         if len(matches) != 1:
             if candidates:
                 # An unrelated/ambiguous current object cannot advance a new
@@ -2167,7 +2202,7 @@ class ManeuverSequence(TurnMotion):
             self.second_tracker.update(scan, now, acquire=False)
             self.second_target = None
             self.second_acquisition_reason = 'second_role_recovery_current_support_unproven'
-            return
+            return False
         target = self.second_tracker.update(scan, now, acquire=True)
         self.second_target = target
         if target is not None and not target['tracking_only_boundary_gap']:
@@ -2175,7 +2210,7 @@ class ManeuverSequence(TurnMotion):
         self.second_acquisition_reason = self.second_tracker.reason
         if (target is None or set(target['support_bins']) != set(matches[0]['support_bins'])
                 or self._full_target_points(target, scan, target['track_id']) is None):
-            return
+            return True
         old_id = self.second_track_id
         self.second_track_id = target['track_id']
         self.second_tracker.enable_close_maintenance(self.second_track_id)
@@ -2192,6 +2227,7 @@ class ManeuverSequence(TurnMotion):
             'support_bins': list(target['support_bins']),
             'basis': 'current_confirmed_support_associated_with_last_complete_second_observation',
             'physical_identity_verified': False, 'observed_rear_pass': False}
+        return True
 
     def _update_second_tracking(self, scan, now):
         if self._second_recovering:
@@ -2214,8 +2250,10 @@ class ManeuverSequence(TurnMotion):
         front inside that corridor is a different object. If the first support
         is still fully visible it must also share no bins and be separated.
         """
-        if self._second_recovering:
-            self._second_recovery_observation(scan, now)
+        # Driving after a second-role loss: the anchored recovery first; when
+        # it proves nothing this frame, the original corridor proof below may
+        # acquire the support again ahead (trial52 class: the car moved on).
+        if self._second_recovering and self._second_recovery_observation(scan, now, fallback=True):
             return
         c = self.right_exit_geometry
         proof = None
@@ -2265,7 +2303,8 @@ class ManeuverSequence(TurnMotion):
             # acquire=False alone would still mature an existing unconfirmed
             # association. No role proof means discard that entire interval.
             self._second_proof_at = None
-            self.second_tracker = self._new_second_tracker()
+            if not self._second_recovering:
+                self.second_tracker = self._new_second_tracker()
             self.second_target = None
             self.role_distinct_evidence = None
             self.second_acquisition_reason = 'second_role_current_distinct_support_missing'
@@ -3021,7 +3060,13 @@ class ManeuverSequence(TurnMotion):
         try:
             self.compact_target = (self.target_tracker.update(scan, now, acquire=self.first_pass_evidence is None)
                                    if self.continue_route else self.target_tracker.update(scan, now))
-            if self.continue_route and (self.route_stage == 'second_orbit' or self._second_recovering):
+            # Corridor following while driving runs its own recovery plus
+            # corridor proof on this scan (_second_role_observation); feeding
+            # the tracker here first would consume the frame.
+            corridor_drive = (self.route_stage == 'corridor_follow' and self.phase == 'drive'
+                              and not self.quality_resume_pending)
+            if self.continue_route and (self.route_stage == 'second_orbit'
+                                        or (self._second_recovering and not corridor_drive)):
                 self._update_second_tracking(scan, now)
         except (ValueError, TypeError, KeyError) as error:
             self.compact_target = None

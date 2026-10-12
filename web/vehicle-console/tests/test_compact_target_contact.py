@@ -1,4 +1,9 @@
-"""Explicit role-bound near maintenance, never near acquisition or cone semantics."""
+"""Explicit role-bound near maintenance, never near acquisition or cone semantics.
+
+Round 55 (Claude): near maintenance uses the tolerant rules (see
+compact_target._close_candidates); cone-like contact supports are tested in
+test_route_contact_control.
+"""
 import copy
 import math
 import unittest
@@ -74,7 +79,12 @@ class CompactTargetContactTests(unittest.TestCase):
                     self.assertEqual(len(current['support_bins']), size)
                     self.assertTrue(all(scan['ranges'][i] == distance for i in current['support_bins']))
 
-    def test_near_boundaries_and_internal_nulls_never_produce_contact_support(self):
+    def test_near_bounded_edge_and_internal_gaps_keep_the_bound_identity(self):
+        # Round 55 (Claude): the real cone in trial54 scan328 (.33-.38 m) had
+        # one internal null and .42-.49 m mixed edge returns; the earlier
+        # strict near rule dropped it. Near maintenance now uses the tolerant
+        # rules: bridged internal nulls, size-bounded unknown edges with a
+        # real farther return beyond. Null bins are never support.
         for fault in ('left_edge_null', 'right_edge_null', 'internal_null', 'mixed_edge', 'mixed_internal'):
             with self.subTest(fault=fault):
                 tracker, old = self.bound()
@@ -82,9 +92,25 @@ class CompactTargetContactTests(unittest.TestCase):
                 index = {'left_edge_null': 259, 'right_edge_null': 281,
                          'internal_null': 270, 'mixed_edge': 259, 'mixed_internal': 270}[fault]
                 scan['ranges'][index] = .40 if fault.startswith('mixed') else None
-                self.assertIsNone(tracker.update(scan, .41, acquire=False))
-                # A held diagnostic is the OLD observation, never current bins.
-                self.assertEqual(tracker.held['source_seq'], old['source_seq'])
+                current = tracker.update(scan, .41, acquire=False)
+                self.assertIsNotNone(current)
+                self.assertEqual(current['track_id'], old['track_id'])
+                self.assertTrue(current['close_maintenance_observation'])
+                self.assertFalse(current['tracking_only_boundary_gap'])
+                self.assertTrue(all(scan['ranges'][i] is not None for i in current['support_bins']))
+                if fault.startswith('mixed'):
+                    # A real return within the 18 cm link is support, not unknown.
+                    self.assertIn(index, current['support_bins'])
+                if fault in ('left_edge_null', 'right_edge_null', 'internal_null'):
+                    self.assertNotIn(index, current['support_bins'])
+
+    def test_near_edge_gap_beyond_the_maintenance_bound_is_not_maintained(self):
+        tracker, old = self.bound()
+        scan = self.near()
+        for index in range(251, 260):  # nine unknown bins at one edge
+            scan['ranges'][index] = None
+        self.assertIsNone(tracker.update(scan, .41, acquire=False))
+        self.assertEqual(tracker.held['source_seq'], old['source_seq'])
 
     def test_recorded52_near_contour_keeps_its_full_support_and_real_edge_depths(self):
         # Trial52 scan440: these are the exact support ranges at bins9..33
@@ -104,8 +130,8 @@ class CompactTargetContactTests(unittest.TestCase):
         target = candidates[0]
         self.assertEqual(target['support_bins'], list(range(9, 34)))
         self.assertEqual(target['boundary_unknown_bins'], [])
-        # Genuine measured curvature/depth changes (largest radial step47mm)
-        # pass; the artificial150mm mixed-return spike above does not.
+        # Genuine measured curvature/depth changes (largest radial step 47 mm)
+        # stay inside the support.
         self.assertGreater(max(ranges[i] for i in target['support_bins']), .35)
         self.assertLess(min(ranges[i] for i in target['support_bins']), .30)
 
@@ -124,13 +150,19 @@ class CompactTargetContactTests(unittest.TestCase):
         self.assertIsNone(tracker.update(scan, .41, acquire=False))
         self.assertEqual(tracker.reason, 'compact_target_ambiguous_held')
 
-    def test_near_association_never_uses_tolerant_elapsed_time_slack(self):
+    def test_near_association_uses_the_same_elapsed_time_gate_as_far(self):
+        # Round 55 (Claude): the car keeps moving while a near support is
+        # passed; a fixed gate dropped it after one missed frame.
         tracker, old = self.bound()
         scan = self.near(at=.5, bearing=115.)
         candidate = MODULE._candidates(scan['ranges'], min_range_m=.02)[0]
         self.assertTrue(MODULE._associated(candidate, old, .1))
         self.assertFalse(MODULE._associated(candidate, old))
-        self.assertIsNone(tracker.update(scan, .51, acquire=False))
+        current = tracker.update(scan, .51, acquire=False)
+        self.assertEqual(current['track_id'], old['track_id'])
+        self.assertTrue(current['close_maintenance_observation'])
+        far = self.near(5, .6, bearing=-90.)  # far outside even the widened gate
+        self.assertIsNone(tracker.update(far, .61, acquire=False))
 
     def test_near_support_cannot_be_cut_out_of_a_wall(self):
         tracker, _ = self.bound()

@@ -1119,7 +1119,13 @@ class Console:
                 unknown = [angle for angle in range(-30, 31) if ranges[angle % 360] is None]
                 if unknown != clearance.get('front_unknown_bins'):
                     return False
-            if len(unknown) > FRONT_MAX_UNKNOWN:
+            # Round 55 (Claude), explicit route only: entering a neutral wait
+            # is not powered motion. Trial52 scan399 (7 open front bins, 13-bin
+            # run, 333 returns) halted here once the orbited support was no
+            # longer lost: the halt cuts the same power but recenters while
+            # rolling and never recovers. The wait keeps power off until
+            # quality is clean again; the 324-return floor still applies.
+            if not route and len(unknown) > FRONT_MAX_UNKNOWN:
                 return False
         return True
 
@@ -1180,13 +1186,10 @@ class Console:
             evidence = self.turn_front_evidence_matches(scan, clearance)
             if evidence is None:
                 return False
-            # Trial44: a wait entered on bounded front_sparse keeps the same
-            # front-count limit while its neutral command is still pending;
-            # halting instead would be the same pending neutral but recentered.
-            if not neutral_ack and not (session.get('quality_wait_front_sparse_entry') is True
-                                        and pending_neutral
-                                        and len(evidence['front_open_unknown_bins']) <= FRONT_MAX_UNKNOWN):
-                return False
+            # Trial44: halting instead of a pending neutral would be the same
+            # neutral but recentered while rolling. Round 55 (Claude): any
+            # evidence-matched front gap may continue the wait (no power until
+            # clean quality), entered on front_sparse or not.
         return True
 
     def turn_wait_servo_matches(self, session, control):

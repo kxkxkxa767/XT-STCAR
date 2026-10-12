@@ -46,9 +46,10 @@ class ManeuverRouteTests(unittest.TestCase):
         return (round(-self.bearing) % 360)-5
 
     def partial(self, value):
-        # Three unknown bins at one edge: still partial under the tolerant
-        # detector (<= 2 edge bins now count as a full observation, trial51/52).
-        for offset in range(3):
+        # Nine unknown bins at one edge: beyond the confirmed-maintenance edge
+        # allowance (compact_target.TOLERANT_MAINTENANCE_EDGE_BINS = 8, round
+        # 55), so no full observation. Shorter size-bounded edge runs are full.
+        for offset in range(9):
             value['ranges'][(self.edge()-offset) % 360] = None
         return value
 
@@ -1391,18 +1392,24 @@ class RoutePathCheckTests(unittest.TestCase):
             ranges[index % 360] = value
         return {'seq': seq, 'ranges': ranges}
 
-    def test_trial52_path_correction_keeps_the_stage_direction(self):
+    def test_trial52_support_ahead_right_of_path_is_passed_on_its_left(self):
         # Trial52 scan436: second support at -11 deg, .72 m (bins 6-16).
-        motion = self.motion(right=True)
-        motion._current_scan = self.scan(436, {i: .70 for i in range(6, 17)})
-        self.assertLess(motion._path_free_distance(motion._path_points(motion._current_scan), 1494), .7)
-        choice = motion._route_path_target(1494)
-        self.assertEqual(choice, 1494)  # the stage must first request the left bypass
-        choice = motion._route_path_target(1520)
-        self.assertGreaterEqual(choice, 1500)
-        points = motion._path_points(motion._current_scan)
-        self.assertGreaterEqual(motion._path_free_distance(points, choice), .7)
-        self.assertEqual(motion.path_evidence['stage_target'], 1520)
+        # Round 53 purpose, restored in round 55 (Claude): before the second
+        # support is confirmed the corridor target is ~1494-1500; the path
+        # check must take the clear arc LEFT of the support (task rule:
+        # second support clockwise), with or without a center ACK.
+        for right in (False, True):
+            for target in (1494, 1500, 1520):
+                with self.subTest(right=right, target=target):
+                    motion = self.motion(right=right)
+                    motion.natural_steering_target = target
+                    motion._current_scan = self.scan(436, {i: .70 for i in range(6, 17)})
+                    points = motion._path_points(motion._current_scan)
+                    self.assertLess(motion._path_free_distance(points, target), .7)
+                    choice = motion._route_path_target(target)
+                    self.assertGreater(choice, max(target, 1500))  # left of the support, never right
+                    self.assertGreaterEqual(motion._path_free_distance(points, choice), .7)
+                    self.assertEqual(motion.path_evidence['stage_target'], target)
 
     def test_clear_path_and_returns_beside_the_body_keep_the_stage_target(self):
         motion = self.motion()
