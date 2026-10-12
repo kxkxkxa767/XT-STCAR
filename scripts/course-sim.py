@@ -48,20 +48,46 @@ TOOL = ROOT/'tools'/'scan-geometry'/'target'/'release'/'xt-stcar-scan-geometry'
 FRONT, REAR, SIDE = .20, .18, .14
 BOARD = .02
 
+def layout(L, W, lane, divider, *, first=None, second=None, start=None):
+    """A course of the construction document's shape (sizes are parameters).
+
+    Document text (赛道搭建细节): boards around a rectangle 5-8 m x 4-6 m, two
+    half dividers of about half the length, the lower one attached to the
+    start-end wall and the upper one to the finish-end wall; worked example
+    8 x 4 m, dividers 3.2 m, lanes .9 m, cones on the middle line 2 m from the
+    left/right walls. The cone default scales that example (L/4, 3L/4 on the
+    middle line); the first cone in route order is the one nearer the finish
+    end. Figure proportions are never used as dimensions.
+    """
+    return dict(L=L, W=W, start_lane=lane, light_lane=lane, start_divider=divider, light_divider=divider,
+                cones=[first or (.75*L, W/2), second or (.25*L, W/2)], start=start)
+
+
 LAYOUTS = {
-    # Practice course laid with 6.4 m side straights (trials up to 62).
+    # Practice course laid with 6.4 m side straights (trials up to 62),
+    # cones where the trial-60 map shows them, start at the divider end.
     'practice': dict(L=8.1, W=4.15, start_lane=1.05, light_lane=1.05, start_divider=6.4, light_divider=6.4,
                      cones=[(6.0, 2.0), (2.0, 1.95)], start=(5.85, .52, 0.)),
-    # The rules' shape with 3.2 m side straights.
-    'rules8': dict(L=8.1, W=4.15, start_lane=1.05, light_lane=1.05, start_divider=3.2, light_divider=3.2,
-                   cones=[(4.4, 2.1), (2.2, 2.05)]),
-    'rules64': dict(L=6.4, W=4.15, start_lane=1.05, light_lane=1.05, start_divider=3.2, light_divider=3.2,
-                    cones=[(4.2, 2.1), (1.9, 2.05)]),
-    'rules5': dict(L=5.0, W=4.0, start_lane=1.0, light_lane=1.0, start_divider=3.2, light_divider=3.2,
-                   cones=[(3.6, 2.0), (1.45, 2.0)]),
-    'rules8w6': dict(L=8.0, W=6.0, start_lane=1.2, light_lane=1.2, start_divider=3.2, light_divider=3.2,
-                     cones=[(4.6, 2.8), (2.4, 3.2)]),
+    # The construction document's worked example (nominal, not official coordinates).
+    'doc8x4': layout(8., 4., .9, 3.2),
+    # The user's re-laid course: practice outer frame and lanes, 3.2 m dividers.
+    'user8': layout(8.1, 4.15, 1.05, 3.2),
+    'mid64': layout(6.4, 5., 1., 3.2),
+    'short5': layout(5., 4., .9, 2.5),
+    'wide8x6': layout(8., 6., 1.2, 4.),
 }
+
+
+def variations():
+    """The rules' range: lengths, widths, lanes, divider fractions, cone offsets."""
+    for L in (5., 6.4, 8.):
+        for W in (4., 5., 6.):
+            for lane in (.9, 1.05):
+                for fraction in (.4, .5):
+                    for dx, dy in ((0., 0.), (-.4, .3), (.4, -.3)):
+                        yield (f'L{L}W{W}lane{lane}div{fraction}cone{dx:+}{dy:+}',
+                               layout(L, W, lane, round(fraction*L, 2),
+                                      first=(.75*L+dx, W/2+dy), second=(.25*L-dx, W/2-dy)))
 
 
 def load(name, path):
@@ -360,7 +386,7 @@ def render(course, log, path, scale=90):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('--layout', default='rules8', choices=sorted(LAYOUTS))
+    parser.add_argument('--layout', default='doc8x4', choices=sorted(LAYOUTS))
     parser.add_argument('--cones', help='x1,y1,x2,y2 override')
     parser.add_argument('--start', help='x,y,heading_deg override')
     parser.add_argument('--speed-scale', type=float, default=1.)
@@ -371,16 +397,26 @@ def main():
     parser.add_argument('--png')
     parser.add_argument('--log')
     parser.add_argument('-v', '--verbose', action='store_true')
-    parser.add_argument('--matrix', action='store_true', help='run every layout with a few vehicle variations')
+    parser.add_argument('--matrix', action='store_true', help='run every named layout with vehicle variations')
+    parser.add_argument('--range', action='store_true', help='run the rules-range variations (nominal vehicle)')
     args = parser.parse_args()
+    keys = ('success', 'start_error', 'end_reason', 'contacts', 'min_board_gap_m', 'min_cone_gap_m', 'final', 'time_s')
     if args.matrix:
         for name in sorted(LAYOUTS):
             for speed, decel, delay in ((1., .5, .15), (1.2, .35, .3), (.8, .7, .15)):
                 summary, _, _ = run(Course(**LAYOUTS[name]), speed_scale=speed, decel=decel, delay=delay,
                                     max_s=args.max_s, seed=args.seed)
-                print(name, f'speed{speed} decel{decel} delay{delay}', json.dumps(
-                    {k: summary[k] for k in ('success', 'start_error', 'end_reason', 'contacts', 'min_board_gap_m',
-                                             'min_cone_gap_m', 'final', 'time_s')}, ensure_ascii=False), flush=True)
+                print(name, f'speed{speed} decel{decel} delay{delay}',
+                      json.dumps({k: summary[k] for k in keys}, ensure_ascii=False), flush=True)
+        return
+    if args.range:
+        passed = total = 0
+        for name, spec in variations():
+            summary, _, _ = run(Course(**spec), max_s=args.max_s, seed=args.seed)
+            total += 1
+            passed += summary['success']
+            print(name, json.dumps({k: summary[k] for k in keys}, ensure_ascii=False), flush=True)
+        print(f'success {passed}/{total}')
         return
     spec = dict(LAYOUTS[args.layout])
     if args.cones:

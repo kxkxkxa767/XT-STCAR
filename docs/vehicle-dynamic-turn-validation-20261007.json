@@ -18385,6 +18385,22 @@
       "7 server admission/output rules for the new stage; every hard protection unchanged (8 cm body gate with the cone-contact exception, stale data/clocks, bridge lock, deadlines, ACKs, .12 s control gap)",
       "8 validation: closed-loop simulator on synthetic rules layouts (lengths 5-8 m, widths 4-6 m, varied cone positions) plus the practice layout, full unit suite, detector/route replays; then a new round on the car"
     ],
-    "not_specialized": "no field length, coordinates or turn times: transitions use the measured lane, the tracked supports, the compass relative to the measured start-lane axis and the task rules (first anticlockwise, second clockwise, right turn into the light lane, stop at the lane end)"
+    "not_specialized": "no field length, coordinates or turn times: transitions use the measured lane, the tracked supports, the compass relative to the measured start-lane axis and the task rules (first anticlockwise, second clockwise, right turn into the light lane, stop at the lane end)",
+    "construction_document_check": {
+      "source": "赛道三-RISC-V 轻量无人车赛-赛道搭建细节.doc (repository root, user-supplied 2026-10-12; text read with textutil, the six figures read by GPT and relayed by the user)",
+      "text_requirements": "boards around a rectangle 5-8 m x 4-6 m plus two half dividers of about half the length; boards are 80 x 40 cm panels taped together; crosswalk strips 10.5 x 29.7 cm, gaps 10.5 cm, middle strip on the lane center line; cones in the middle of the course; traffic-light crossbeam .9 m (the text's '0.9cm' is a typo, the figure says 0.9m)",
+      "worked_example_not_fixed_size": "8 x 4 m, dividers 3.2 m, lanes .9 m (divider to the adjacent outer boundary)",
+      "figure_facts": "lower divider attached to the start-end (left) wall, open end toward the finish end; upper divider attached to the finish-end (right) wall, open end toward the start end; start zone lower-left driving toward the finish end; crosswalk zone in the start lane before the lower divider's open end (strips near that end); light zone in the upper lane from near its open end; finish zone upper-right driving toward the finish end; cone figure: each cone 2 m from its end wall, the left one 2 m above the lower OUTER wall (not the divider), both on the middle line; route order: the right cone (nearer the finish end) first anticlockwise, the left cone second clockwise, then around the upper divider's open end into the upper lane",
+      "figure_vs_text": "the figures draw both dividers longer than half and overlapping; the text example (3.2 of 8 m) does not overlap; figure proportions are not used as dimensions",
+      "check_of_this_analysis": {
+        "divider_attachment_and_lane_directions": "scripts/course-sim.py already built the lower divider from the start-end wall and the upper one from the finish-end wall, start and finish both heading toward the finish end: consistent; the light-lane heading equals the start-lane heading (compass target 0 deg)",
+        "cone_order": "control never assumes an order or a position; the simulator now names the first cone the one nearer the finish end",
+        "correction": "the earlier native-gate check placed test cones at 68%/27% of the length (figure proportions). They were test placements only and entered no conclusion; the simulator now uses the document's worked example scaled (L/4, 3L/4 on the middle line) plus a rules-range set (length 5/6.4/8 m, width 4/5/6 m, lanes .9/1.05 m, divider .4/.5 of the length, cone offsets up to .4 m along and .3 m across)",
+        "recheck_native_geometry": "document example 8x4 (.9 m lanes, 3.2 m dividers), the user's 8.1 x 4.15 re-lay, 6.4 x 5, 5 x 4 (2.5 m dividers), 8 x 6: no left_junction/left_turn_goal even .55 m before the divider end, no forward corridor in the obstacle area after either cone; the lanes themselves measure .89/.99/1.04/1.19 m. The conclusion of impact_evidence holds for the whole document range",
+        "new_constraint": ".9 m lanes leave ~.31 m per side for the .28 m body: the light-lane entry around the upper divider's open end needs ~.2 m lateral accuracy"
+      },
+      "open_physical_questions": "the traffic-light stand posts and the infrared sensor 1 m before the light may stand inside or at the side of the light lane (wall/compact-object interference); cone size at lidar height not given (rules: 630 x 280 x 280 mm)",
+      "use": "simulation parameters only; no example coordinate, distance or order is a control condition (user: 不能针对赛道特化)"
+    }
   }
 }
