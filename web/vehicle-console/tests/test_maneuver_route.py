@@ -664,7 +664,10 @@ class ManeuverRouteTests(unittest.TestCase):
         motion = self.route('second_orbit')
         motion.second_track_id, motion.second_orbit_since = 2, .4
         motion.second_center_ack = copy.deepcopy(motion._route_center_ack)
-        value = observation(5)
+        # Round 57: the lane is the recorded trial48 one (-3 deg, car aligned);
+        # the old synthetic default (-25 deg: car already 25 deg left of the
+        # lane) now meets the bypass heading limit, tested separately.
+        value = observation(5, heading=-3.)
         value['ranges'] = compact_scan(bearing=1., distance=.9, size=9)['ranges']
         value['ranges'] = [6. if r == 3. else r for r in value['ranges']]
         c = _candidates(value['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2))[0]

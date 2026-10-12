@@ -57,6 +57,12 @@ TOLERANT_GATE_RAD_PER_S = math.radians(100)
 # the object would still be compact and isolated: such a frame counts as a
 # full observation. Acquisition keeps TOLERANT_EDGE_BINS.
 TOLERANT_MAINTENANCE_EDGE_BINS = 8
+# Round 57 (Claude): the same confirmed-maintenance rule accepts a 3-return
+# support. Trial56 scans 2223/2225/2227: the confirmed second support at
+# 2.3-2.8 m kept only 3 returns (diameter and farther background on both
+# sides valid); MIN 4 dropped the identity, it was re-confirmed only at
+# 1.43 m. Acquisition still needs 4 (tolerant) / 5 (strict) returns.
+TOLERANT_MAINTENANCE_MIN_POINTS = 3
 # Body-contact exemption: only a support that faces the sensor (its principal
 # axis at >= 45 deg to the line of sight). Audit of every saved trial frame
 # with a compact support within 12 cm of the body: real cones (trials 46, 48,
@@ -88,8 +94,19 @@ def _associated(current, old, slack_s=0.):
     if bearing_delta > math.pi:
         bearing_delta = 2*math.pi-bearing_delta
     slack_s = max(0., slack_s)
-    return (math.dist(current['point_left_m'], old['point_left_m']) <= .30+TOLERANT_GATE_M_PER_S*slack_s
-            and bearing_delta <= math.radians(20)+TOLERANT_GATE_RAD_PER_S*slack_s
+    distance_gate = .30+TOLERANT_GATE_M_PER_S*slack_s
+    # Range-dependent bearing gate (round 57, Claude). A displacement within
+    # distance_gate changes the bearing of a support at range r by up to
+    # asin(distance_gate/r) (any angle once r <= distance_gate). Far away the
+    # rotation gate is the larger one and is unchanged; near the sensor the
+    # fixed angle alone rejected the same support passing the body: trial56
+    # 2243 -> 2246, .378 -> .399 m, moved .442 m (gate .603 m) but 69.3 deg.
+    near = min(math.hypot(*current['point_left_m']), math.hypot(*old['point_left_m']))
+    translation_bearing = (math.pi if near <= distance_gate
+                           else math.asin(distance_gate/near))
+    bearing_gate = max(math.radians(20)+TOLERANT_GATE_RAD_PER_S*slack_s, translation_bearing)
+    return (math.dist(current['point_left_m'], old['point_left_m']) <= distance_gate
+            and bearing_delta <= bearing_gate
             and abs(current['diameter_m']-old['diameter_m']) <= .12)
 
 
@@ -183,7 +200,9 @@ def _candidates(ranges, *, allow_boundary_gap=False,
     points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
     result = []
     for group in (_clusters_bridged(points, TOLERANT_INTERNAL_NULLS) if tolerant else _clusters(points)):
-        if not (TOLERANT_MIN_POINTS if tolerant else MIN_POINTS) <= len(group) <= 128:
+        minimum = (TOLERANT_MAINTENANCE_MIN_POINTS if maintenance
+                   else TOLERANT_MIN_POINTS if tolerant else MIN_POINTS)
+        if not minimum <= len(group) <= 128:
             continue
         values = [ranges[i] for i in group]
         if min(values) < min_range_m or max(values) > MAX_RANGE_M:

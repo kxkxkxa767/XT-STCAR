@@ -130,12 +130,13 @@ class SecondOrbitExitPreparationTests(unittest.TestCase):
         self.assertLess(decisions[698]['servo'], 1500)
         self.assertIsNotNone(decisions[698]['second_center_ack'])
         self.assertTrue(decisions[698]['route_right_output_authorized'])
-        # The saved stream is 5 Hz. Its missing intermediate scan makes the
-        # 696 -> 698 bearing jump exceed identity association: 698 may only
-        # hold the right command already earned from current support at 696.
-        self.assertIsNone(decisions[698]['second_target'])
-        self.assertEqual(decisions[698]['second_return_evidence']['source_seq'], 696)
-        self.assertEqual(decisions[698]['servo'], decisions[696]['servo'])
+        # The saved stream is 5 Hz. Before round 57 the 696 -> 698 bearing jump
+        # beside the body exceeded the fixed 20 deg+ gate and 698 could only
+        # hold. The range-dependent gate (round 57, Claude) keeps the same ID
+        # there: the support stays current and the right return continues.
+        self.assertEqual(decisions[698]['second_target']['track_id'], decisions[696]['second_target']['track_id'])
+        self.assertTrue(decisions[698]['second_return_preparing'])
+        self.assertLessEqual(decisions[698]['servo'], decisions[696]['servo'])
         self.assertTrue(all(r['second_pass_evidence'] is None for r in decisions.values()))
         self.assertEqual(motion.first_pass_evidence, first_pass)
 

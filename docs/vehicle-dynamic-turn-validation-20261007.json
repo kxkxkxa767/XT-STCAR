@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "56 executed once with claude-turn56/b92400a. First pass recovered from quality wait; second ID1 lost on sparse3-point support, rebound ID2. New return preparation DID trigger2242 but actual servo was1720; later close-support angle association failed, held/recovery continued neutral request, and left-front board stopped2249 before center ACK or second pass.7 raw files hash-matched;6 fresh locked1500/1500 samples and14 installed hashes verified. User explicitly stops further code changes and requests records/instructions for Claude. No57 build/run; vehicle remains56. See turn56_actual and after55_second_orbit_exit_correction.deployment.",
+  "latest_trial_status": "56 (claude-turn56/b92400a) is the last physical trial (second support lost twice, late hard left, left board). Round 57 candidate (Claude): 3-return maintenance + range-dependent association gate (all trackers), lane-frame second bypass with heading limit, faster return release. Full 662 tests pass; detector 38 trials not worse; replays recorded with saved-scan limits. Not built/deployed/tried.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -17879,5 +17879,61 @@
     "next_trial": 57,
     "post_trial_runtime_code_modified": false,
     "new_trial57_built": false
+  },
+  "after56_second_continuity_and_lane_bypass_correction": {
+    "author": "Claude",
+    "date": "2026-10-12",
+    "source_base_commit": "e4cd1e45",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 57,
+    "user_instruction": "gpt改了后第二个锥桶老是丢失交还给你了（GPT交接：识别连续性与转向准备/执行余量一起解决，首桶二桶同类一起查，不写死赛道/帧号/拐点时间）",
+    "failure_classes": [
+      "A",
+      "C",
+      "D",
+      "E",
+      "G"
+    ],
+    "root_cause": {
+      "identity": "Trial56: confirmed second ID1 (2224, ~2.3 m) lost because far frames 2223/2225/2227 had 3 returns (maintenance needed 4); re-confirmed ID2 only at 1.43 m (2234). Near 2243->2246 the support moved .44 m (within the .60 m gate) but its bearing changed 69 deg > fixed 40 deg gate.",
+      "steering": "Support stayed 3.5-7 deg ahead from 2.3 to .87 m. The support-relative pursuit asks little while far and 1720 when near; with ~.2-.3 s steering lag (trial-map: kappa follows commands ~2 frames later) and a residual right yaw from the exit, the car turned hard left late and faced the far board; return release then took ~.25 s per 40-PWM adopted step.",
+      "measured_response": "trial56 map table: servo 1619 -> kappa .67 two frames later (model (s-1500)/160 = .74); no deadband evidence, lag dominates."
+    },
+    "change": [
+      "compact_target: confirmed tolerant maintenance accepts 3 returns (TOLERANT_MAINTENANCE_MIN_POINTS); acquisition still 4/5; size, isolation and association unchanged. Shared by first and second trackers.",
+      "compact_target._associated: bearing gate = max(rotation gate 20 deg + 100 deg/s*slack, asin(distance_gate/near range)) -- the bearing change any displacement inside the distance gate can produce; far association unchanged (rotation gate larger beyond ~.86 m). Shared by all trackers and recovery.",
+      "maneuver_sequence: _full_target_points / first-pass support minimum follows the maintenance minimum.",
+      "Second orbit: with a measured current lane (|heading| <= 45 deg), command = max(support pursuit, lane-frame bypass toward the line .40 m left of the support left edge, limited by the lane left wall less body clearance, lookahead <= 1 m). No lane: pursuit only (unchanged).",
+      "Second orbit: heading limit -- no more left once the car is >30 deg left of the measured lane (gain 450/rad); aligned car keeps the pursuit (trial48 1680 case).",
+      "Second return preparing: release toward center in 80-PWM steps (was 40), each still after adoption; right still only after actual center ACK."
+    ],
+    "tests_changed_and_why": [
+      "test_second_orbit_exit_preparation real55: 698 previously asserted identity loss caused by the 696->698 bearing jump (the defect class fixed here); now asserts the same ID continues with the return preparing and no larger servo. Other assertions unchanged.",
+      "test_compact_target_contact near association: .20 m near motion with 25 deg bearing change now associates without slack (range-dependent gate).",
+      "test_maneuver_route trial48 strong-left: synthetic lane changed from the arbitrary -25 deg default to the recorded trial48 lane (-3 deg, timeline scan509); assertion >= 1680 unchanged. The turned-car case is tested separately.",
+      "New test_route_57_second_continuity (10): real trial56 3-return frames keep a confirmed ID but never acquire; real 2243->2246 near gate; far gate unchanged; lane bypass early/near/parallel/no-lane/room; heading limit; release step; synthetic closed loop (passes parallel, late start turns far less).",
+      "Unchanged: Claude 43/52 left-avoid path tests, center ACK tests, board/board-end stops, cone-like contact exception tests."
+    ],
+    "verification": {
+      "full_tests": "baseline e4cd1e4 652 OK (run on the clean tree before edits, instead of a stash round-trip); candidate 662 OK, failure sets both empty",
+      "detector_19_56_38_trials": "no row worse; TOTAL first/tolerant conf 455->456, ahead/tolerant 242->250, ahead/strict 182->185 ids 66->65, ahead/gap 185->188; 55 ahead/tolerant 13->17, 46 ahead/tolerant 9->13. Saved-scan replay cannot show trial56 ID1 kept: ID1 confirmed at unsaved 2224 and 2243->2246 has a .30 s saved gap.",
+      "route_replay": "51/53/54 identical; 52 only keeps the first ID one more frame behind (no decision change); 55/56 whole-run replays still stop at the saved-scan clock gap (648 / 2223), limitation kept, thresholds not changed.",
+      "second_orbit_replay": "55: lane bypass raises 684 to 1564, center ACK one cycle earlier, ID kept through 698/700 (old run then hits the board in the OLD scans at 702: open loop). 56: heading limit 2241 1622 (was 1720), 2243 1542 when the return starts (was 1619).",
+      "synthetic_closed_loop": "lane model, .3 s lag, residual right turn: start 2.3 m abeam heading 21 -> 6 deg; start 1.8 m max heading 55 -> 44; start 1.43 m 120 -> 71 (cone contact allowed). Model only.",
+      "evidence_directory": "work/claude-turn57-second-continuity-20261012-151205"
+    },
+    "risks_not_resolved": [
+      "If the second support is still confirmed only <~1.5 m the car may touch it (allowed) and turn ~70 deg; the board may still be reached. Earlier confirmation is the real fix; 3-return maintenance targets this.",
+      "Lane-frame bypass relies on the native corridor near the lane end; without it the old pursuit runs.",
+      "Range-dependent gate could bind a different near object within the distance gate; uniqueness/ambiguity rules unchanged.",
+      "Heading limit gain/cap and synthetic model are not calibrated on the car.",
+      "First target: shares identity fixes; its orbit/release laws unchanged (completed in trials 54-56)."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "next_step": "build-matched.py claude-turn56 claude-turn57 57 after56_second_continuity_and_lane_bypass_correction; user confirms the car is stationary at the start, one run only."
   }
 }

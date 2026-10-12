@@ -8,7 +8,7 @@ import copy
 import math
 
 from compact_target import (CompactTargetTracker, _associated, _candidates, contact_supports, MAX_DIAMETER_M,
-                            MIN_RANGE_M, TOLERANT_MIN_POINTS)
+                            MIN_RANGE_M, TOLERANT_MIN_POINTS, TOLERANT_MAINTENANCE_MIN_POINTS)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
@@ -164,6 +164,38 @@ TASK_LEFT_BYPASS_STAGES = ('corridor_follow', 'second_orbit')
 # time since that observation, capped here (gate <= 1.2 m / 80 deg). With a
 # fixed gate a support re-seen after >~.3 m of travel was never recovered.
 SECOND_RECOVERY_MAX_SLACK_S = .6
+# Round 57 (Claude): second-support bypass in the current lane frame. Trial56:
+# the confirmed second support stayed 3.5-7 deg from straight ahead from 2.3 m
+# to .87 m. The support-relative pursuit point sits at the support's own
+# distance, so it asked only ~1540-1620 while far and 1720 at .65 m: the car
+# reached the support turned hard left, pointing at the far board, and could
+# not swing back in time. With a measured lane, steer toward the line
+# SECOND_BYPASS_SUPPORT_GAP_M left of the support's left edge (limited by the
+# lane's left wall less the body clearance), reached within at most this
+# lookahead along the lane: the offset is taken early and the car passes
+# parallel to the lane. Same corridor gain as exit/corridor following. The
+# command is the larger of this and the support pursuit (trial48: a near
+# support whose offset is not yet taken still needs the pursuit's strong
+# left). No measured lane (or a lane at more than SECOND_LANE_MAX_HEADING_RAD):
+# the support-relative pursuit alone, unchanged.
+SECOND_LANE_LOOKAHEAD_M = 1.0
+SECOND_LANE_MAX_HEADING_RAD = math.radians(45)
+# While bypassing the second support, do not turn the car more than this
+# left of the measured lane: a cone contact continues (user rule), a board
+# contact ends the run. Trial56 re-confirmed the support only at 1.43 m and
+# the pursuit then drove 1720 until the car faced the far board. Synthetic
+# lane model with .3 s steering lag (work/claude-turn57-*/bypass_sim*):
+# start 1.8 m -> max heading 55 -> 44 deg, 1.43 m -> 120 -> 71 deg; a start
+# at 2.3 m is unchanged. Gain chosen so that a car aligned with the lane
+# (trial48 scan509, lane -3 deg, support .9 m ahead) keeps the >= 1680 left
+# the pursuit needs (limit 1712).
+SECOND_BYPASS_MAX_HEADING_RAD = math.radians(30)
+SECOND_HEADING_HOLD_GAIN = 450.
+# Releasing left toward center while the second return is being prepared
+# (round 57): trial56 needed ~.25 s per adopted 40-PWM step, 1720 -> 1600 in
+# .53 s, still not centered at the board .7 s after preparing. Release only;
+# each step still waits for the previous command's adoption.
+ROUTE_RETURN_RELEASE_PWM_STEP = 80
 # Same-frame native wall-window pairing reuses the native corridor gates
 # (corridor.rs): parallel 12 deg, width .65..2.5 m, shared support .35 m.
 PAIR_MAX_ANGLE_RAD = math.radians(12)
@@ -351,7 +383,7 @@ class ManeuverSequence(TurnMotion):
                 or target.get('source_received_at') != scan.get('received_at')):
             return None
         bins, ranges = target.get('support_bins'), scan.get('ranges')
-        if (not isinstance(bins, list) or len(bins) < TOLERANT_MIN_POINTS or len(set(bins)) != len(bins)
+        if (not isinstance(bins, list) or len(bins) < TOLERANT_MAINTENANCE_MIN_POINTS or len(set(bins)) != len(bins)
                 or not isinstance(ranges, list) or len(ranges) != 360
                 or any(type(i) is not int or not 0 <= i < 360 or not _number(ranges[i]) for i in bins)):
             return None
@@ -1620,7 +1652,12 @@ class ManeuverSequence(TurnMotion):
             orbit_left = (self.continue_route and self.phase == 'drive' and self.handover_observed
                           and self.route_stage == 'first_target' and self.first_pass_evidence is None
                           and target > self.servo >= NEUTRAL)
-            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else ROUTE_POST_PASS_PWM_STEP if post_pass else (
+            if (post_pass and reducing_left and self.route_stage == 'second_orbit'
+                    and self.second_return_preparing):
+                post_step = ROUTE_RETURN_RELEASE_PWM_STEP
+            else:
+                post_step = ROUTE_POST_PASS_PWM_STEP
+            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else post_step if post_pass else (
                 (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
                 if reducing_left else ROUTE_ORBIT_LEFT_PWM_STEP if orbit_left else PWM_STEP)
             if avoid_target != self.steering_target:
@@ -1854,7 +1891,7 @@ class ManeuverSequence(TurnMotion):
             return
         if (target is None or target.get('track_id') != self.orbit_track_id
                 or not target.get('confirmed') or target.get('tracking_only_boundary_gap') is not False
-                or not isinstance(bins, list) or len(bins) < TOLERANT_MIN_POINTS
+                or not isinstance(bins, list) or len(bins) < TOLERANT_MAINTENANCE_MIN_POINTS
                 or any(type(i) is not int or not 0 <= i < 360 for i in bins)):
             self._first_pass_history = []
             self._clear_exit_prepare_window()
@@ -2403,6 +2440,45 @@ class ManeuverSequence(TurnMotion):
                 return False
         return True
 
+    def _current_lane(self, scan, now):
+        """This frame's corridor measurement, without keeping its identity."""
+        saved = (self.right_exit_geometry, self._right_exit_last_receive,
+                 self._right_exit_last_publication)
+        self.right_exit_geometry = None
+        self._right_exit_last_receive = self._right_exit_last_publication = None
+        try:
+            target, rejection = self._right_exit_target(scan, now)
+            corridor = copy.deepcopy(self.right_exit_geometry)
+        finally:
+            (self.right_exit_geometry, self._right_exit_last_receive,
+             self._right_exit_last_publication) = saved
+        return (None, None) if rejection is not None else (target, corridor)
+
+    def _second_lane_bypass(self, scan, now, points):
+        """Lane-frame bypass target left of the second support, or None."""
+        _, lane = self._current_lane(scan, now)
+        self._second_lane_heading = None if lane is None else lane['heading_left_rad']
+        if lane is None or abs(lane['heading_left_rad']) > SECOND_LANE_MAX_HEADING_RAD:
+            return None
+        heading, offset, width = lane['heading_left_rad'], lane['center_offset_left_m'], lane['width_m']
+        c, s = math.cos(heading), math.sin(heading)
+        along = [c*x+s*y for x, y in points]
+        normal = [-s*x+c*y for x, y in points]
+        wanted = max(normal)+SECOND_BYPASS_SUPPORT_GAP_M
+        room = offset+width/2-(SIDE_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M)
+        desired = min(wanted, room)
+        ahead = min(along)
+        lookahead = (max(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M, min(SECOND_LANE_LOOKAHEAD_M, ahead))
+                     if ahead > 0 else SECOND_LANE_LOOKAHEAD_M)
+        error = heading+math.atan2(desired, lookahead)
+        target = max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*error)))
+        return {'source_seq': scan['seq'], 'lane_heading_left_rad': heading,
+                'lane_center_offset_left_m': offset, 'lane_width_m': width,
+                'support_left_normal_m': max(normal), 'support_nearest_along_m': ahead,
+                'wanted_offset_m': wanted, 'lane_room_left_m': room, 'desired_offset_m': desired,
+                'lookahead_m': lookahead, 'heading_error_rad': error, 'nominal_target_pwm': target,
+                'scope': 'current_lane_frame_bypass', 'swept_path_certified': False}
+
     def _second_return_target(self, scan, now, points, bypass_target):
         """Prepare from present support/corridor geometry, before final pass.
 
@@ -2581,6 +2657,22 @@ class ManeuverSequence(TurnMotion):
             'nominal_target_pwm': nominal,
             'scope': 'current_support_relative_point_trial',
             'swept_path_certified': False, 'physical_curvature_calibrated': False}
+        lane = self._second_lane_bypass(scan, now, points)
+        self.second_feedback['lane_bypass'] = lane
+        if lane is not None:
+            # Early offset from the lane frame; the support pursuit still
+            # governs a near support whose offset is not yet taken (trial48:
+            # .9 m ahead needs >= 1680). Both relax once the car is on the line.
+            nominal = max(nominal, lane['nominal_target_pwm'])
+            self.second_feedback['nominal_target_pwm'] = nominal
+            self.second_feedback['scope'] = 'max_of_support_pursuit_and_lane_frame_bypass'
+        lane_heading = getattr(self, '_second_lane_heading', None)
+        if lane_heading is not None and nominal > NEUTRAL:
+            limit = NEUTRAL+round(SECOND_HEADING_HOLD_GAIN*(lane_heading+SECOND_BYPASS_MAX_HEADING_RAD))
+            if nominal > limit:
+                nominal = max(RIGHT_EXIT_MIN_PWM, limit)
+                self.second_feedback['heading_limited_target_pwm'] = nominal
+                self.second_feedback['nominal_target_pwm'] = nominal
         was_preparing = self.second_return_preparing
         returning = self._second_return_target(scan, now, points, nominal)
         if returning is not None:

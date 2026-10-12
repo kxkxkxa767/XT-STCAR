@@ -157,7 +157,10 @@ class CompactTargetContactTests(unittest.TestCase):
         scan = self.near(at=.5, bearing=115.)
         candidate = MODULE._candidates(scan['ranges'], min_range_m=.02)[0]
         self.assertTrue(MODULE._associated(candidate, old, .1))
-        self.assertFalse(MODULE._associated(candidate, old))
+        # Round 57 (Claude): .20 m of motion near the sensor (.25-.40 m) is a
+        # 25 deg bearing change; the range-dependent bearing gate accepts it.
+        self.assertLess(math.dist(candidate['point_left_m'], old['point_left_m']), .30)
+        self.assertTrue(MODULE._associated(candidate, old))
         current = tracker.update(scan, .51, acquire=False)
         self.assertEqual(current['track_id'], old['track_id'])
         self.assertTrue(current['close_maintenance_observation'])
