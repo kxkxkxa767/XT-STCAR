@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "57 (claude-turn57/9e01bc9): first and second cones both passed (second ID kept from 2.49 m). Light turn after the second pass was too slow (10-PWM right steps) after the second return re-aligned with the old lane; left-front board stop at 11.68 s.",
+  "latest_trial_status": "57 (claude-turn57/9e01bc9, good version tag good-turn57-both-cones): both cones passed; light turn too slow. Round 58 candidate: next-lane right turn after the second support, light lane slow drive + finish stop, budget 24 s. 674 tests pass. Not built/deployed/tried.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -17983,5 +17983,56 @@
     "analysis": "work/turn57-analysis-20261012/ (timeline.log, map.png, map-panels.png opened and checked)",
     "completed": false,
     "competition_supported": false
+  },
+  "after57_light_lane_finish_correction": {
+    "author": "Claude",
+    "date": "2026-10-12",
+    "source_base_commit": "bf50f17",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "next_trial": 58,
+    "user_instruction": [
+      "记录下这个版本，后续左转等待红绿灯，你加上注意这个时候要慢一点不然刚出发红绿的就直接跑过去了",
+      "现在还没有接入视觉模型 先跑通整个路程再说",
+      "用户确认：绕过第二个桶后右转进入灯区（左转是进入锥桶通道绕第一个桶）"
+    ],
+    "failure_classes": [
+      "D",
+      "E"
+    ],
+    "root_cause": "Trial57: after the second support was beside/behind, the return target re-aligned with the old lane (1413 -> 1486, frames 576-581) while that lane ends in a board; real-frame free space already asked 1350 right from 576. The light turn then stepped right at the generic 10 PWM/100 ms (1476 -> 1446 in .46 s) and hit the left-front board.",
+    "change": [
+      "Second orbit: support beside/behind the body front with 8 cm right clearance -> take the next-lane free-space target when further right (min); support clearance, path check and center ACK unchanged; never forces right when free space is left.",
+      "Light turn and new light lane use the post-pass 40-PWM step.",
+      "Light turn alignment: also by measured lane (|heading| <= 8 deg, body gap >= 8 cm); aligned now starts the light lane (was a terminal coast).",
+      "New light_lane stage: corridor law +-55 PWM (else free space); speed = median closing rate on the board straight ahead; motor coast >.70 m/s, 1550 <.45, 1560 restart <.15; finish: cut power when board ahead <= .20 + .15 + v^2/(2*.5) + .2*v (unknown speed -> 1.3 m/s), coast to standstill holding the ACKed servo (reason route_finish_zone_stop). Speed history starts during the aligned light-turn frames.",
+      "Coasting pulses: light-lane adoption accepts motor 1500; center ACK only recorded under drive power; post-pass pause may begin during a pulse; service treats 1500 as pending neutral only for a wait it recorded as entered during a light-lane coast.",
+      "ROUTE_MAX_DRIVE_S 16 -> 24 s (session total 32 s < helper observer 34 s); helper --max-seconds 24 for round 58.",
+      "No traffic-light vision: the light zone is only driven slowly; red/green stop to be added when the model is integrated."
+    ],
+    "tests_changed_and_why": [
+      "test_maneuver_route LightLaneTests: scans no longer carry a stale heading-0 native corridor that contradicted their own segment ranges (opt-in now); the aligned case asserts the light lane starts instead of the old terminal coast.",
+      "New test_route_58_light_lane (12): speed bands incl. restart, finish cut formula, unknown speed cuts early, speed known at lane start, coasting adoption without center ACK, lane/free-space steering, budget 24 s, light-turn 40 step, next-lane free space beside/behind only and never forcing right, service accepts 1500/1550/1560 in the lane, wait during a coasting pulse.",
+      "Unchanged: 43/52 left-avoid, center ACK, board/board-end stops, cone-like contact exception, forged/unACKed neutral wait stop test (still stops)."
+    ],
+    "verification": {
+      "full_tests": "candidate 674 OK (baseline bf50f17 = 662 OK in the main tree; a temporary worktree lacked the built Rust bridge for 2 console tests, environment only)",
+      "detector_38_trials": "byte-identical (compact_target unchanged)",
+      "route_replay_51_57": "byte-identical; whole-run replays stop before the changed stages (55/56/57 saved-scan clock gaps at 648/2223/567), limitation kept",
+      "second_orbit_replay_55_56_57": "identical up to the 57 stop at 567 (saved 564->567 gap)",
+      "trial57_real_frames": "free space from 576 (support -92 deg beside) to 588 asked 1350 while the car commanded 1427 -> 1476; new rule would turn right from 576 (~.8 s before the light turn started); light turn 40 steps reach 1350 within .3 s (recorded 1446 after .46 s). Per-frame law evaluation only.",
+      "evidence_directory": "work/claude-turn58-light-lane-20261012-154115"
+    },
+    "risks_not_resolved": [
+      "Lane speed control and finish cut use an uncalibrated .5 m/s^2 coast and 1550 speeds; first car run will calibrate.",
+      "Light lane needs a board straight ahead to measure speed; without it the car drives at 1550 (not slow).",
+      "The traffic light gantry posts or the photoelectric sensor could appear ahead and be read as the finish board.",
+      "No red/green stop yet (vision not integrated)."
+    ],
+    "no_fixed_course_coordinate_or_length": true,
+    "completed": false,
+    "competition_supported": false,
+    "next_step": "build-matched.py claude-turn57 claude-turn58 58 after57_light_lane_finish_correction; set the new helper --max-seconds 24; car back at the start, one run."
   }
 }

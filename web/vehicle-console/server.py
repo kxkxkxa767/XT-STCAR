@@ -1174,7 +1174,12 @@ class Console:
                        and control.get('motor') == 1500)
         # Pending neutral is tolerated only before its first ACK. Once ACKed,
         # positive motor feedback cannot be relabeled as continued waiting.
-        pending_neutral = (control.get('motor') in DRIVE_MOTORS  # 1550 after the first pass
+        # Round 58: a light-lane wait recorded by this service as entered
+        # during a neutral coasting pulse already reads 1500 before its own
+        # neutral command is ACKed; no other wait may use 1500 as pending.
+        pending_motors = ((1500,)+DRIVE_MOTORS if session.get('quality_wait_entry_neutral') is True
+                          else DRIVE_MOTORS)
+        pending_neutral = (control.get('motor') in pending_motors  # 1550 after the first pass
                            and (neutral_seq is None or control.get('seq', -1) < neutral_seq))
         if not neutral_ack and not pending_neutral:
             return False
@@ -1282,6 +1287,7 @@ class Console:
                 session['quality_wait_neutral_sequence'] = None
                 session['quality_resume_sequence'] = None
                 session['quality_wait_kind'] = 'orbit_wait'
+                session['quality_wait_entry_neutral'] = False
                 session['quality_wait_front_sparse_entry'] = 'front_sparse' in report['quality_issues']
                 report['quality_wait_trigger'] = {
                     'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
@@ -1303,6 +1309,7 @@ class Console:
                 session['quality_wait_neutral_sequence'] = None
                 session['quality_resume_sequence'] = None
                 session['quality_wait_kind'] = 'left_turn_pause'
+                session['quality_wait_entry_neutral'] = False
                 session['quality_wait_front_sparse_entry'] = 'front_sparse' in report['quality_issues']
                 report['left_turn_pause_trigger'] = {
                     'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
@@ -1325,6 +1332,8 @@ class Console:
                 session['quality_wait_neutral_sequence'] = None
                 session['quality_resume_sequence'] = None
                 session['quality_wait_kind'] = 'post_pass_pause'
+                session['quality_wait_entry_neutral'] = (motion.route_stage == 'light_lane'
+                                                         and control.get('motor') == 1500)
                 session['quality_wait_front_sparse_entry'] = 'front_sparse' in report['quality_issues']
                 report['post_pass_pause_trigger'] = {
                     'scan_seq': self.scan['seq'], 'source_at_ms': self.scan['at_ms'],
@@ -1425,6 +1434,8 @@ class Console:
             session['quality_resume_sequence'] = None
             session['quality_wait_kind'] = ('recovery_hold' if getattr(motion, 'neutral_pause_kind', None) == 'recovery'
                                             else 'orbit_wait')
+            session['quality_wait_entry_neutral'] = (getattr(motion, 'route_stage', None) == 'light_lane'
+                                                     and control.get('motor') == 1500)
             session['quality_wait_front_sparse_entry'] = False
             report['recovery_hold_trigger'] = {'scan_seq': self.scan['seq'], 'reason': decision.get('reason'),
                 'route_stage': decision.get('route_stage'), 'held_servo': decision['servo'],
@@ -1449,7 +1460,7 @@ class Console:
             and type(route_center.get('tick')) is int and 0 <= route_center['tick'] <= control.get('tick', -1)
             and ((route_stage in ('right_align', 'corridor_follow') and motion.right_exit_center_ack is not None)
                  or (route_stage == 'second_orbit' and getattr(motion, 'second_center_ack', None) is not None)
-                 or route_stage == 'light_turn'))
+                 or route_stage in ('light_turn', 'light_lane')))
         # New route output always uses its current continuous center proof;
         # the legacy first-exit ACK cannot authorize a later phase on its own.
         right_exit = route_right if route else right_exit

@@ -1651,9 +1651,13 @@ class LightLaneTests(unittest.TestCase):
         motion.second_pass_evidence = {'track_id': 2, 'source_seq': 4}
         return motion
 
-    def step(self, motion, seq, segments):
+    def step(self, motion, seq, segments, corridor=False):
         value = observation(seq, heading=0.)
         value['ranges'] = segment_ranges(segments)
+        if not corridor:
+            # Round 58: only the segment ranges are modeled here; a native
+            # corridor candidate (now also an alignment input) is opt-in.
+            value['corridor_candidates'] = []
         return motion.update(value, 0., seq/10, feedback(seq, motion.servo))
 
     def test_free_space_turns_toward_the_open_side_either_way(self):
@@ -1675,7 +1679,7 @@ class LightLaneTests(unittest.TestCase):
         for index in (358, 359, 0, 1): ranges[index] = None
         self.assertEqual(ManeuverSequence._free_space({'ranges': ranges})['free_ahead_m'], 3.)
 
-    def test_light_turn_follows_open_side_then_holds_once_lane_aligned(self):
+    def test_light_turn_follows_open_side_then_enters_the_light_lane_once_aligned(self):
         motion = self.light()
         result = self.step(motion, 5, junction(1.))
         self.assertEqual(result['reason'], 'light_turn_follow_free_space')
@@ -1684,16 +1688,16 @@ class LightLaneTests(unittest.TestCase):
         # A long free lane straight ahead with balanced sides: aligned after .30 s.
         for seq in (6, 7, 8, 9):
             result = self.step(motion, seq, lane())
-            if result['phase'] == 'coast':
+            if result['route_stage'] == 'light_lane':
                 break
-        self.assertEqual(result['phase'], 'coast')
-        self.assertEqual(result['reason'], 'light_lane_aligned')
+        # Round 58: alignment starts the slow light lane (was a terminal coast).
+        self.assertEqual(result['route_stage'], 'light_lane')
+        self.assertEqual(result['phase'], 'drive')
         self.assertIsNotNone(result['light_alignment_evidence'])
         self.assertFalse(result['light_alignment_evidence']['camera_facing_certified'])
-        held = result['route_end_coast_servo']
-        self.assertEqual((result['motor'], result['servo']), (1500, held))
         result = self.step(motion, seq+1, lane())
-        self.assertEqual((result['motor'], result['servo']), (1500, held))
+        self.assertEqual(result['reason'], 'light_lane_follow_slow')
+        self.assertFalse(result['lane_feedback']['traffic_light_vision'])
 
     def test_off_center_lane_is_not_aligned_and_steers_back_to_center(self):
         motion = self.light()
