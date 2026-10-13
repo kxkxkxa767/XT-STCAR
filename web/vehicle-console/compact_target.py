@@ -110,6 +110,22 @@ def _associated(current, old, slack_s=0.):
             and abs(current['diameter_m']-old['diameter_m']) <= .12)
 
 
+def rotated_observation(observation, rotation_rad):
+    """An observation as it appears after the car yawed ``rotation_rad`` (left +).
+
+    Round 64 (Claude): association reference only. A fixed support's car-frame
+    position turns by -rotation; on the open course the car yaws ~70 deg/s in
+    a loop, which moved a support 2.4 m away by ~.27 m between two scans and
+    broke the .30 m gate. Nothing else of the observation changes.
+    """
+    if observation is None or not _number(rotation_rad):
+        return observation
+    c, s = math.cos(-rotation_rad), math.sin(-rotation_rad)
+    x, y = observation['point_left_m']
+    point = [c*x-s*y, s*x+c*y]
+    return {**observation, 'point_left_m': point, 'bearing_left_rad': math.atan2(point[1], point[0])}
+
+
 def _clusters_bridged(points, bridge_nulls):
     """Components over returns only; <= bridge_nulls null bins between two
     returns within MAX_POINT_GAP_M do not split a component (nulls are never
@@ -398,10 +414,18 @@ class CompactTargetTracker:
         self._close_maintenance_track_id = None
         return None
 
-    def update(self, scan, now, *, acquire=True):
-        """Use only current support; ``acquire=False`` cannot create a new ID."""
+    def update(self, scan, now, *, acquire=True, heading_rad=None):
+        """Use only current support; ``acquire=False`` cannot create a new ID.
+
+        ``heading_rad`` (round 64, open course only): the compass heading of
+        this scan. Association then compares with the previous observation
+        turned by the heading change since it (rotated_observation); without
+        it the behaviour is unchanged.
+        """
         if type(acquire) is not bool:
             raise ValueError('acquire must be a bool')
+        if heading_rad is not None and not _number(heading_rad):
+            raise ValueError('heading_rad must be a number')
         self.held = None
         if not _number(now) or now < 0 or (self._last_now is not None and now < self._last_now):
             return self._forget('compact_target_invalid_receive_clock')
@@ -464,10 +488,13 @@ class CompactTargetTracker:
         # observed beyond one nominal scan period (held frames in between).
         slack = (max(0., (published-old['source_at_ms'])/1000-.1)
                  if self._tolerant and old is not None else 0.)
+        reference = old
+        if heading_rad is not None and old is not None and _number(old.get('compass_heading_rad')):
+            reference = rotated_observation(old, heading_rad-old['compass_heading_rad'])
         if self._select_associated and allow_boundary_gap:
             # Confirmed role trackers must not switch to an unrelated object
             # merely because it is the only component left in their sector.
-            candidates = [candidate for candidate in candidates if _associated(candidate, old, slack)]
+            candidates = [candidate for candidate in candidates if _associated(candidate, reference, slack)]
         self.held = None
         if len(candidates) != 1:
             reason = 'compact_target_ambiguous' if candidates else 'compact_target_missing'
@@ -483,7 +510,7 @@ class CompactTargetTracker:
         # These bounded association gates are not speed, odometry or static
         # object certification. A jump creates a new, unconfirmed identity.
         close_observation = current.get('close_maintenance_observation') is True
-        associated = _associated(current, old, slack)
+        associated = _associated(current, reference, slack)
         boundary_gap = current['tracking_only_boundary_gap']
         if boundary_gap and not associated:
             return self._forget('compact_target_boundary_gap_unassociated')
@@ -516,4 +543,6 @@ class CompactTargetTracker:
                         'last_full_isolation_at_ms': old['last_full_isolation_at_ms'] if boundary_gap else published,
                         'last_full_isolation_received_at': old['last_full_isolation_received_at'] if boundary_gap else received,
                         'candidate_only': True, 'physical_identity_verified': False}
+        if heading_rad is not None:
+            self._target['compass_heading_rad'] = heading_rad
         return copy.deepcopy(self._target)

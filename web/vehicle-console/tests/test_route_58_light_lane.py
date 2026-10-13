@@ -156,10 +156,10 @@ class LightLaneTests(unittest.TestCase):
         self.assertEqual(result['lane_feedback']['steering_source'], 'free_space')
 
     def test_route_budget_covers_the_whole_route(self):
-        self.assertEqual(ROUTE_MAX_DRIVE_S, 24.)
-        ManeuverSequence(0., max_drive_s=24., continue_route=True)
+        self.assertEqual(ROUTE_MAX_DRIVE_S, 40.)  # round 64: whole lap from the start zone
+        ManeuverSequence(0., max_drive_s=40., continue_route=True)
         with self.assertRaises(ValueError):
-            ManeuverSequence(0., max_drive_s=24.1, continue_route=True)
+            ManeuverSequence(0., max_drive_s=40.1, continue_route=True)
 
 
 class NextLaneTurnTests(unittest.TestCase):

@@ -8,7 +8,8 @@ import copy
 import math
 
 from compact_target import (CompactTargetTracker, _associated, _candidates, contact_supports, MAX_DIAMETER_M,
-                            MIN_RANGE_M, TOLERANT_MIN_POINTS, TOLERANT_MAINTENANCE_MIN_POINTS)
+                            MIN_RANGE_M, TOLERANT_MIN_POINTS, TOLERANT_MAINTENANCE_MIN_POINTS,
+                            rotated_observation)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM, CorridorSteering, corridor_walls)
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
@@ -61,13 +62,18 @@ ROUTE_ORBIT_LEFT_PWM_STEP = ROUTE_POST_PASS_PWM_STEP
 # because the countdown starts when the body crosses the infrared sensor.
 ROUTE_SLOW_MOTOR = MIN_FORWARD_PWM
 DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR)
-POST_PASS_STAGES = ('right_align', 'corridor_follow', 'second_orbit', 'light_turn', 'light_lane')
+POST_PASS_STAGES = ('right_align', 'corridor_follow', 'second_orbit', 'light_turn', 'light_lane',
+                    'open_transfer', 'second_loop', 'light_entry')
 # Route mode alone may extend the cumulative drive budget (user permitted a
 # measured relaxation): the light-lane turn follows the two targets. The
 # total deadline, coast and every stage budget still apply.
 # Round 58 (Claude): the route now continues through the light lane to the
 # finish zone (trial57 reached the light turn after ~7.7 s of drive).
-ROUTE_MAX_DRIVE_S = 24.0
+# Round 64 (Claude): with 3.2 m side straights the run starts in the start
+# zone and covers the whole lap (~22 m; simulation 22-24 s at the 1550
+# speed model of 1.0 m/s, and 1550 measured .6-1.1 m/s), so 24 s cannot
+# finish. The budget is a ceiling; total deadline, coast and holds remain.
+ROUTE_MAX_DRIVE_S = 40.0
 # Exit alignment / corridor pursuit: lookahead about one corridor width plus a
 # heading-rate damping term (trial46 oscillated with a 1 m lookahead).
 ROUTE_ALIGN_LOOKAHEAD_MAX_M = 2.0
@@ -177,6 +183,9 @@ _FREE_SIN = tuple(tuple(math.sin(math.radians(h-b)) for h in LIGHT_HEADINGS_DEG)
 # turn) and touched the board after the control-gap lock.
 LANE_SPEED_RESTART_MPS = .15
 LANE_SPEED_UNKNOWN_MPS = 1.3
+# Round 64: above any measured speed (1560: 1.3-1.6 m/s); a larger closing
+# rate is a different return on the ray (turning car), not speed.
+LANE_MAX_CLOSING_MPS = 2.
 LANE_COAST_DECEL_MPS2 = .5
 LANE_STOP_DECEL_MPS2 = .35
 LANE_SLOW_TRAVEL_M = .60
@@ -214,7 +223,7 @@ SECOND_CURVATURE_GAIN_PWM_M = 205.
 # corridor target ~1494-1500 straight at the unconfirmed second support; the
 # round-53 check chose 1580/1700, the first round-55 bounds kept 1494/1500).
 # It never invents right. Exit/light turns keep the strict bounds.
-TASK_LEFT_BYPASS_STAGES = ('corridor_follow', 'second_orbit')
+TASK_LEFT_BYPASS_STAGES = ('corridor_follow', 'second_orbit', 'open_transfer', 'second_loop')
 # Second-role recovery after an identity loss: the last full observation is a
 # car-frame prior, and the car keeps moving (~1 m/s at 1550, up to ~100 deg/s
 # yaw). Its association gate widens at the tolerant tracker rates with the
@@ -333,19 +342,79 @@ LANE_START_MIN_FRONT_M = 1.
 LANE_START_SETTLE_S = .3
 LANE_START_HOLD_PWM = 55
 # First support from the lane (task rule: first support anticlockwise, i.e. on
-# the car's left). It is acquired ahead-left (the course places it past the
-# start divider's open end, in the obstacle area left of the start lane) and
-# approached by pursuit of the point FIRST_APPROACH_GAP_M right of its
-# nearest (right) edge, the mirror of the second-support bypass point. Within
-# the handover window (45-135 deg, <= 3 m) the existing first-target orbit
-# takes over once the support is this far round and a left command is adopted.
+# the car's left). It is acquired ahead-left (past the start divider's open
+# end, left of the start lane) and approached on its planned loop (see the
+# open-course loops below) once the approach strip is clear; the first-target
+# stage takes over inside the usable window (from 45 deg, <= 3 m) with an
+# adopted left command.
 FIRST_ACQUIRE_BEARING_RAD = (math.radians(10), math.radians(135))
 FIRST_APPROACH_MAX_RANGE_M = 3.5
-FIRST_APPROACH_GAP_M = SECOND_BYPASS_SUPPORT_GAP_M
-FIRST_HANDOVER_BEARING_RAD = math.radians(70)
+FIRST_HANDOVER_BEARING_RAD = math.radians(45)
 # Without a first support, stop in front of a board with the measured rolling
 # decel (agent.md section 5) plus a reaction allowance.
 LANE_START_STOP_DECEL_MPS2 = .5
+# Open-course loops (round 64, entry_kind 'lane' only). Without overlapping
+# dividers there is no corridor round a support, so each support is looped
+# on a planned circle: the task side (first support on the left,
+# anticlockwise; second on the right, clockwise), the loop radius and the
+# circle centre's offset from the support are chosen from the free distance
+# measured from the support centre along five directions of the loop half
+# (approach side, diagonals, far side, return side; compass frame), keeping
+# the body as far as possible inside [support edge + inner gap, other return -
+# outer gap] in every direction. Radii: left .80-.95 m (model 1/1.375 m at
+# 1720); right 1.10-1.30 m because the route's right bound is 1350 (model
+# .94/m). The car follows the tangent line plus that circle by pure pursuit
+# (agent.md section 5: (servo-1500)/160 per m); a loop ends once the compass
+# shows the heading reversed against its approach axis (first: start-lane
+# axis 0 -> pi; second: pi -> 0). No course length, coordinate or time.
+OPEN_LEFT_RADIUS_M = (.80, .95)
+OPEN_RIGHT_RADIUS_M = (1.10, 1.30)
+OPEN_RADIUS_STEP_M = .05
+OPEN_OFFSET_STEPS = tuple(k*.05 for k in range(-10, 11))
+OPEN_INNER_GAP_M = .15
+OPEN_OUTER_GAP_M = .15
+OPEN_PROBE_HALF_WIDTH_M = SIDE_BODY_EXTENT_M+.10
+OPEN_PROBE_REACH_M = 3.
+OPEN_PROBE_DIRECTIONS_RAD = tuple(math.radians(a) for a in (-90, -45, 0, 45, 90))
+OPEN_PROBE_QUANTUM_M = .05
+# Free-space probes run from the support across other bearings; a scan taken
+# while yawing fast is distorted (each bin from a different heading), so only
+# frames below this compass rate refine them (a direction never probed yet
+# takes the first frame).
+OPEN_PROBE_MAX_RATE_RAD_S = .6
+OPEN_SUPPORT_SKIP_M = .08
+OPEN_LOOKAHEAD_M = 1.1
+OPEN_EXIT_MARGIN_RAD = math.radians(25)
+# A support lost this close to the reversed heading ends its loop (the next
+# law steers by the compass); earlier the usual recovery applies.
+OPEN_LATE_EXIT_RAD = math.radians(60)
+OPEN_APPROACH_MARGIN_M = .05
+OPEN_APPROACH_CHECK_M = 1.2
+OPEN_LOST_HOLD_S = .5
+# After the first loop: hold the reversed axis until one distinct support is
+# ahead inside this band (lateral half width, along-axis reach).
+OPEN_SECOND_BAND_HALF_M = 1.6
+OPEN_SECOND_BAND_REACH_M = 3.2
+OPEN_SECOND_BEYOND_FIRST_M = .8
+# The second support is looked for from this first-loop progress on, and the
+# first loop may hand over to the second loop's tangent from the next.
+OPEN_SECOND_LOOKOUT_RAD = math.pi/2
+OPEN_HANDOFF_MIN_PROGRESS_RAD = 2*math.pi/3
+OPEN_HEADING_HOLD_PWM = 120
+# Steering step of the open-course pursuit (approach, loops, transfer, light
+# entry). Simulation (rotation-compensated tracking): 40 completed all named
+# courses; 80 overshot the 5 m course's crossing into the start divider.
+OPEN_PWM_STEP = 40
+# Light lane entry: the lane between the outermost wall on the left and the
+# next parallel wall inside it; without that inner wall the start lane's
+# measured width is the prior. Pursuit point at the divider's open end
+# (bounded) on the lane centre line.
+OPEN_LANE_PARALLEL_RAD = math.radians(12)
+OPEN_LANE_MIN_SPAN_M = .5
+OPEN_LANE_LOOKAHEAD_M = (.8, 1.6)
+OPEN_LANE_WIDTH_M = (.65, 2.2)
+OPEN_LANE_ENTRY_HEADING_RAD = math.radians(20)
+OPEN_STAGES = ('open_transfer', 'second_loop', 'light_entry')
 
 
 def _wrap90(angle):
@@ -419,6 +488,131 @@ class WallCompass:
         if not 0 <= at-self.measured_at_s <= COMPASS_MAX_STALE_S:
             return None
         return self.heading+self.rate*min(max(0., at-self.at_s), COMPASS_MAX_PREDICT_S)
+
+
+def _axis_frame(axis, heading, side=1):
+    """Approach axis e1 and the turn-side normal e2 in the car frame (left +)."""
+    angle = axis-heading
+    e1 = (math.cos(angle), math.sin(angle))
+    return e1, (-side*e1[1], side*e1[0])
+
+
+def _scan_points(ranges, reach):
+    return [(r*_DIRECTION_COS[i], -r*_DIRECTION_SIN[i]) for i, r in enumerate(ranges)
+            if _number(r) and .02 <= r <= reach]
+
+
+def _support_center(ranges, bins, diameter):
+    """Centre and radius of a round support from its visible arc (car frame).
+
+    The visible half of a circle has its centroid 2r/pi in front of the
+    centre, so the centre lies that far beyond the arc centroid on its ray.
+    """
+    points = [(ranges[i]*_DIRECTION_COS[i], -ranges[i]*_DIRECTION_SIN[i]) for i in bins]
+    x, y = sum(p[0] for p in points)/len(points), sum(p[1] for p in points)/len(points)
+    radius = max(.05, min(MAX_DIAMETER_M/2, (diameter if _number(diameter) else .2)/2))
+    distance = math.hypot(x, y)
+    if distance > 1e-6:
+        x, y = x+2*radius/math.pi*x/distance, y+2*radius/math.pi*y/distance
+    return (x, y), radius
+
+
+def _probe_free(points, origin, direction, skip):
+    """Free distance from origin along direction to the first return in a body-wide strip."""
+    ox, oy = origin
+    ux, uy = direction
+    best = math.inf
+    for x, y in points:
+        dx, dy = x-ox, y-oy
+        if dx*dx+dy*dy <= skip*skip:
+            continue
+        along = dx*ux+dy*uy
+        if 0 < along < best and along <= OPEN_PROBE_REACH_M and abs(dy*ux-dx*uy) <= OPEN_PROBE_HALF_WIDTH_M:
+            best = along
+    return best
+
+
+def _loop_extent(a, b, radius, theta):
+    """Distance from the support centre along axis-frame direction theta to a
+    loop circle of this radius whose centre is offset (a, b) from it."""
+    projection = a*math.cos(theta)+b*math.sin(theta)
+    return projection+math.sqrt(max(0., projection*projection-(a*a+b*b)+radius*radius))
+
+
+def _plan_loop(free, support_radius, radii):
+    """Loop radius and centre offset (a along the approach axis, b toward the
+    turn side) maximising the smallest clearance slack over the probes.
+
+    ``free`` holds (theta, free distance) in the approach-axis frame. A body
+    centre inside [lo, hi] keeps the inner gap to the support and the outer
+    gap to the probed return; a gap narrower than the body is centred.
+    """
+    lo = support_radius+SIDE_BODY_EXTENT_M+OPEN_INNER_GAP_M
+    bands = [(theta, distance-SIDE_BODY_EXTENT_M-OPEN_OUTER_GAP_M) for theta, distance in free]
+
+    def score(radius, a, b):
+        if math.hypot(a, b) > radius-lo:
+            return -math.inf
+        worst = math.inf
+        for theta, hi in bands:
+            t = _loop_extent(a, b, radius, theta)
+            worst = min(worst, min(t-lo, hi-t) if hi >= lo else -abs(t-(lo+hi)/2))
+        return worst-.01*math.hypot(a, b)-.02*(radii[1]-radius)
+
+    best = None
+    radius = radii[0]
+    while radius <= radii[1]+1e-9:
+        a = b = 0.
+        for _ in range(2):
+            b = max(OPEN_OFFSET_STEPS, key=lambda v: score(radius, a, v))
+            a = max(OPEN_OFFSET_STEPS, key=lambda v: score(radius, v, b))
+        value = score(radius, a, b)
+        if best is None or value > best[0]:
+            best = (value, radius, a, b)
+        radius += OPEN_RADIUS_STEP_M
+    value, radius, a, b = best
+    return {'radius_m': round(radius, 3), 'offset_axis_m': round(a, 3), 'offset_side_m': round(b, 3),
+            'min_slack_m': value, 'inner_bound_m': lo,
+            'extents_m': [round(_loop_extent(a, b, radius, theta), 3) for theta, _ in free]}
+
+
+def _loop_carrot(center, radius, side, lookahead):
+    """Pure-pursuit point on the tangent line plus the loop circle (car at the
+    origin heading +x; side +1 anticlockwise, -1 clockwise)."""
+    ox, oy = center
+    distance = math.hypot(ox, oy)
+    if distance > radius+1e-6:
+        tangent = math.sqrt(distance*distance-radius*radius)
+        theta = math.atan2(oy, ox)-side*math.asin(radius/distance)
+        if tangent >= lookahead:
+            return (lookahead*math.cos(theta), lookahead*math.sin(theta)), tangent, theta
+        tx, ty = tangent*math.cos(theta), tangent*math.sin(theta)
+        phi = math.atan2(ty-oy, tx-ox)+side*(lookahead-tangent)/radius
+    else:
+        tangent, theta = 0., None
+        phi = math.atan2(-oy, -ox)+side*lookahead/radius
+    return (ox+radius*math.cos(phi), oy+radius*math.sin(phi)), tangent, theta
+
+
+def _pursuit_pwm(point):
+    curvature = 2*point[1]/max(1e-6, point[0]**2+point[1]**2)
+    return curvature, max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX, NEUTRAL+round(ROUTE_PWM_PER_CURVATURE*curvature)))
+
+
+def _strip_clear(points, end, skip_center, skip_radius):
+    """No return in the body-wide strip from the lidar to ``end`` (plus the front)."""
+    length = math.hypot(*end)
+    if length < 1e-6:
+        return True
+    ux, uy = end[0]/length, end[1]/length
+    half = SIDE_BODY_EXTENT_M+OPEN_APPROACH_MARGIN_M
+    for x, y in points:
+        if skip_center is not None and math.dist((x, y), skip_center) <= skip_radius:
+            continue
+        along = x*ux+y*uy
+        if -REAR_BODY_EXTENT_M < along <= length+FRONT_BODY_EXTENT_M and abs(y*ux-x*uy) <= half:
+            return False
+    return True
 
 
 def validate_maneuver_initial_pwm(value):
@@ -588,6 +782,13 @@ class ManeuverSequence(TurnMotion):
         self.start_lane_feedback = None
         self._lane_start_ok = False
         self.first_approach = None
+        self._start_lane_width = None
+        # Open-course loops (entry_kind 'lane').
+        self._open_slots = {}  # loop side (+1 first, -1 second) -> probes and plan
+        self._open_lost_since = None
+        self.open_loop = None
+        self.open_next_loop = None
+        self.open_feedback = None
 
     @staticmethod
     def _new_second_tracker():
@@ -1532,6 +1733,18 @@ class ManeuverSequence(TurnMotion):
             # contact; a model-margin deficit alone must not keep a stopped car
             # waiting forever. Resume once the corridor model does not overlap.
             return self._corridor_body_gap(self.right_exit_geometry) >= 0.
+        if stage == 'open_transfer':
+            return self.compass.current(scan) is not None
+        if stage == 'second_loop':
+            target = self.second_target
+            self._pause_stage_held = self._target_gap_held(self.second_tracker, self.second_track_id, scan, now)
+            return (isinstance(target, dict) and target.get('confirmed') is True
+                    and target.get('track_id') == self.second_track_id
+                    and self._full_target_points(target, scan, self.second_track_id) is not None
+                    and self.compass.current(scan) is not None)
+        if stage == 'light_entry':
+            heading = self.compass.current(scan)
+            return heading is not None and self._open_lane_target(scan, heading) is not None
         if stage == 'light_turn':
             return self._free_space(scan, self._light_heading) is not None
         if stage == 'light_lane':
@@ -1783,7 +1996,7 @@ class ManeuverSequence(TurnMotion):
                 and self.first_pass_evidence is not None and self._route_center_ack is not None
                 and ((self.route_stage in ('right_align', 'corridor_follow') and self.right_exit_center_ack is not None)
                      or (self.route_stage == 'second_orbit' and self.second_center_ack is not None)
-                     or self.route_stage in ('light_turn', 'light_lane')))
+                     or self.route_stage in ('light_turn', 'light_lane') or self.route_stage in OPEN_STAGES))
 
     def _route_override_bounds(self, target):
         """An obstacle correction may release a turn, never invent its opposite.
@@ -1809,6 +2022,11 @@ class ManeuverSequence(TurnMotion):
                 # obstacle: a cone contact continues, a board contact ends.
                 upper = max(target, min(SERVO_MAX, cap[1]))
             return lower, max(lower, upper)
+        if (self.entry_kind == 'lane' and self.route_stage in ('start_lane', 'first_target')
+                and self.first_pass_evidence is None):
+            # Round 64 open first loop/approach: any clear arc between center
+            # and full left (no right before the first pass).
+            return NEUTRAL, SERVO_MAX
         if target == NEUTRAL:
             return NEUTRAL, NEUTRAL
         if target < NEUTRAL:
@@ -1855,7 +2073,7 @@ class ManeuverSequence(TurnMotion):
                 candidates = [c for c in candidates if lower <= c <= upper]
                 scored = {c: self._path_free_distance(points, c) for c in candidates}
                 clear = [c for c, f in scored.items() if f >= ROUTE_PATH_LOOKAHEAD_M]
-                prefer_left = self.route_stage in ('corridor_follow', 'second_orbit')
+                prefer_left = self.route_stage in TASK_LEFT_BYPASS_STAGES
                 if clear:
                     above = [c for c in clear if c >= target]
                     pool = above if prefer_left and above else clear
@@ -1882,8 +2100,9 @@ class ManeuverSequence(TurnMotion):
         return max(lower, min(upper, choice))
 
     def _slew(self, now):
-        if (self.continue_route and self.phase == 'drive' and self.handover_observed
-                and not self.quality_resume_pending):
+        if (self.continue_route and self.phase == 'drive' and not self.quality_resume_pending
+                and (self.handover_observed or (self.route_stage == 'start_lane'
+                                                and self.first_approach is not None))):
             avoid_target = self._route_path_target(self.steering_target)
         elif self.continue_route and self.phase in ('drive', 'quality_wait'):
             avoid_target = self._avoid_target(self.steering_target)
@@ -1896,18 +2115,21 @@ class ManeuverSequence(TurnMotion):
             # generic 10 PWM/100 ms and hit the left-front board).
             post_pass = (self.continue_route and self.phase == 'drive'
                          and self.first_pass_evidence is not None
-                         and self.route_stage in ('right_align', 'corridor_follow', 'second_orbit',
-                                                  'light_turn', 'light_lane'))
+                         and self.route_stage in POST_PASS_STAGES)
             orbit_left = (self.continue_route and self.phase == 'drive' and self.handover_observed
                           and self.route_stage == 'first_target' and self.first_pass_evidence is None
                           and target > self.servo >= NEUTRAL)
             # Round 64: the first-support approach from the start lane uses the
             # route step both ways (the orbit it hands over to uses 40 too).
             lane_approach = (self.continue_route and self.phase == 'drive'
-                             and self.route_stage == 'start_lane' and self._lane_start_slow)
+                             and ((self.route_stage == 'start_lane' and self._lane_start_slow)
+                                  or (self.route_stage == 'first_target' and self.entry_kind == 'lane'
+                                      and self.handover_observed)))
             if (post_pass and reducing_left and self.route_stage == 'second_orbit'
                     and self.second_return_preparing):
                 post_step = ROUTE_RETURN_RELEASE_PWM_STEP
+            elif lane_approach or (post_pass and self.route_stage in OPEN_STAGES):
+                post_step = OPEN_PWM_STEP
             else:
                 post_step = ROUTE_POST_PASS_PWM_STEP
             step = PRESTEER_PWM_STEP if self.phase == 'presteer' else post_step if post_pass or lane_approach else (
@@ -2070,12 +2292,15 @@ class ManeuverSequence(TurnMotion):
                       and ((self.route_stage in ('right_align', 'corridor_follow')
                             and self.right_exit_center_ack is not None)
                            or (self.route_stage == 'second_orbit' and self.second_center_ack is not None)
-                           or self.route_stage in ('light_turn', 'light_lane')))
+                           or self.route_stage in ('light_turn', 'light_lane')
+                           or self.route_stage in OPEN_STAGES))
                      # Round 64: start-lane wall corrections, after an actual center ACK.
                      or (self.route_stage == 'start_lane' and self.entry_kind == 'lane'))),
             route_center_ack=copy.deepcopy(self._route_center_ack),
             entry_kind=self.entry_kind, start_lane_feedback=copy.deepcopy(self.start_lane_feedback),
             first_approach=copy.deepcopy(self.first_approach),
+            open_loop=copy.deepcopy(self.open_loop), open_next_loop=copy.deepcopy(self.open_next_loop),
+            open_feedback=copy.deepcopy(self.open_feedback),
             compass=copy.deepcopy(self.compass.evidence) if self.continue_route else None)
         if self.continue_route and self.phase == 'drive' and self.route_stage != 'first_target':
             result['turn_stage'] = self.route_stage
@@ -2251,6 +2476,7 @@ class ManeuverSequence(TurnMotion):
         self.start_lane_feedback = evidence
         if ok:
             self.entry_kind, self.route_stage = 'lane', 'start_lane'
+            self._start_lane_width = evidence['width_m']
             # Ahead-left as well as abeam: the support past the divider's open
             # end is seen long before it is abeam (still left of the lane).
             self.target_tracker.widen_acquisition(FIRST_ACQUIRE_BEARING_RAD)
@@ -2343,34 +2569,11 @@ class ManeuverSequence(TurnMotion):
             self._route_event('start_lane', scan, control, self.start_lane_feedback)
         return self._result(now)
 
-    def _first_approach(self, scan):
-        """Pursuit point FIRST_APPROACH_GAP_M right of the first support's near edge."""
-        target = self.compact_target
-        if (not isinstance(target, dict) or target.get('confirmed') is not True
-                or target.get('track_id') is None or not _number(target.get('range_m'))
-                or not _number(target.get('bearing_left_rad'))
-                or not 0 < target['bearing_left_rad'] <= FIRST_ACQUIRE_BEARING_RAD[1]
-                or target['range_m'] > FIRST_APPROACH_MAX_RANGE_M):
-            return None
-        points = self._full_target_points(target, scan, target['track_id'])
-        if points is None:
-            return None
-        near = min(p[0] for p in points)
-        right_edge = min(p[1] for p in points)
-        waypoint = [max(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M, near), right_edge-FIRST_APPROACH_GAP_M]
-        curvature = 2*waypoint[1]/(waypoint[0]**2+waypoint[1]**2)
-        pwm = max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX, NEUTRAL+round(SECOND_CURVATURE_GAIN_PWM_M*curvature)))
-        return {'source_seq': scan['seq'], 'track_id': target['track_id'],
-                'range_m': target['range_m'], 'bearing_left_rad': target['bearing_left_rad'],
-                'support_right_edge_y_m': right_edge, 'support_nearest_x_m': near,
-                'relative_waypoint_left_m': waypoint, 'pursuit_curvature_per_m': curvature,
-                'target_pwm': pwm, 'gap_m': FIRST_APPROACH_GAP_M,
-                'basis': 'first_support_left_of_car_anticlockwise_rule', 'swept_path_certified': False}
-
     def _start_lane_handover_ready(self, scan, control):
         target = self.compact_target
         return (isinstance(scan, dict) and scan.get('seq') != self.last_seq
-                and self._usable_target(target, scan)
+                and self.first_approach is not None and self._usable_target(target, scan)
+                and target['track_id'] == self.first_approach.get('track_id')
                 and target['bearing_left_rad'] >= FIRST_HANDOVER_BEARING_RAD
                 and isinstance(control, dict) and control.get('command_acked') is True
                 and control.get('motor') in DRIVE_MOTORS and control.get('servo') == self.servo > NEUTRAL)
@@ -2399,7 +2602,7 @@ class ManeuverSequence(TurnMotion):
         if not self._route_adopted(control, now):
             return self._result(now)
         heading = self.compass.current(scan)
-        approach = self._first_approach(scan)
+        approach = self._open_first_approach(scan)
         held = getattr(self.target_tracker, 'held', None)
         walls = None
         if approach is not None:
@@ -2444,6 +2647,448 @@ class ManeuverSequence(TurnMotion):
         self._slew(now)
         if self.servo > NEUTRAL:
             self._route_center_ack = None
+        return self._result(now)
+
+    # ---- Round 64 (Claude): open-course loops, transfer and light-lane entry --
+    def _open_loop_geometry(self, scan, target, identity, side, axis):
+        """Plan the loop round this support and its pursuit command, or None.
+
+        One state per loop (side +1 first/anticlockwise, -1 second/clockwise),
+        so the second loop can be planned while the first still steers. The
+        free distances are kept as their running minimum from low-yaw frames
+        (boards do not move; a direction once seen blocked stays blocked), so
+        the plan changes only when new evidence narrows it.
+        """
+        heading = self.compass.current(scan)
+        if heading is None or self._full_target_points(target, scan, identity) is None:
+            return None
+        slot = self._open_slots.setdefault(side, {'free': {}, 'plan': None, 'key': None, 'radius': None})
+        ranges = scan['ranges']
+        center, radius = _support_center(ranges, target['support_bins'], target.get('diameter_m'))
+        slot['radius'] = radius = max(radius, slot['radius'] or 0.)
+        e1, e2 = _axis_frame(axis, heading, side)
+        points = _scan_points(ranges, math.hypot(*center)+OPEN_PROBE_REACH_M)
+        skip = radius+OPEN_SUPPORT_SKIP_M
+        free_memory, changed = slot['free'], False
+        for theta in OPEN_PROBE_DIRECTIONS_RAD:
+            known = theta in free_memory
+            if known and abs(self.compass.rate) > OPEN_PROBE_MAX_RATE_RAD_S:
+                continue
+            c, s = math.cos(theta), math.sin(theta)
+            free = _probe_free(points, center, (c*e1[0]+s*e2[0], c*e1[1]+s*e2[1]), skip)
+            if free != math.inf:
+                free = math.floor(free/OPEN_PROBE_QUANTUM_M)*OPEN_PROBE_QUANTUM_M
+            if not known or free < free_memory[theta]:
+                free_memory[theta], changed = free, True
+        key = (identity, round(radius, 2))
+        if changed or slot['plan'] is None or slot['key'] != key:
+            slot['plan'] = _plan_loop([(t, free_memory.get(t, math.inf)) for t in OPEN_PROBE_DIRECTIONS_RAD],
+                                      radius, OPEN_LEFT_RADIUS_M if side > 0 else OPEN_RIGHT_RADIUS_M)
+            slot['key'] = key
+        plan = slot['plan']
+        a, b = plan['offset_axis_m'], plan['offset_side_m']
+        loop_center = (center[0]+a*e1[0]+b*e2[0], center[1]+a*e1[1]+b*e2[1])
+        carrot, tangent, tangent_heading = _loop_carrot(loop_center, plan['radius_m'], side, OPEN_LOOKAHEAD_M)
+        curvature, pwm = _pursuit_pwm(carrot)
+        return {'source_seq': scan['seq'], 'track_id': identity,
+            'direction': 'anticlockwise' if side > 0 else 'clockwise', 'axis_rad': axis,
+            'compass_heading_rad': heading, 'progress_rad': side*(heading-axis),
+            'support_center_left_m': [round(v, 3) for v in center], 'support_radius_m': round(radius, 3),
+            'free_m': {round(math.degrees(t)): (None if v == math.inf else v) for t, v in free_memory.items()},
+            'plan': {k: (None if v == -math.inf else v) for k, v in plan.items()},
+            'loop_center_left_m': [round(v, 3) for v in loop_center], 'tangent_m': round(tangent, 3),
+            'tangent_heading_left_rad': tangent_heading, 'carrot_left_m': [round(v, 3) for v in carrot],
+            'pursuit_curvature_per_m': curvature, 'target_pwm': pwm,
+            'basis': 'support_loop_planned_from_probed_free_space', 'swept_path_certified': False}
+
+    def _tracking_heading(self, scan):
+        """Compass heading for rotation-compensated association (open course only)."""
+        return self.compass.current(scan) if self.entry_kind == 'lane' else None
+
+    @staticmethod
+    def _open_target_usable(target, scan, identity, side):
+        """Current confirmed support of this identity anywhere on the task side.
+
+        The orbit window of the narrow course (45-135 deg) does not hold on an
+        open loop: a support 2.4 m to the side (wide course) is at 44 deg on
+        the tangent approach, which ended the loop in a recovery wait.
+        """
+        return (isinstance(target, dict) and target.get('confirmed') is True
+                and target.get('track_id') == identity and identity is not None
+                and target.get('kind') == 'lidar_compact_object'
+                and type(target.get('source_seq')) is int and target['source_seq'] == scan.get('seq')
+                and type(target.get('source_at_ms')) is int and target['source_at_ms'] == scan.get('at_ms')
+                and _number(target.get('bearing_left_rad'))
+                and 0 <= side*target['bearing_left_rad'] <= math.pi)
+
+    def _open_reset_loop(self, side=None):
+        if side is None:
+            self._open_slots = {}
+        else:
+            self._open_slots.pop(side, None)
+        self._open_lost_since = None
+
+    def _open_first_approach(self, scan):
+        """First-support pursuit from the start lane (anticlockwise loop plan).
+
+        It starts only once the body-wide strip along the planned tangent is
+        clear of every return (the start divider is still beside the car
+        before its open end), then continues until the handover.
+        """
+        target = self.compact_target
+        if (not isinstance(target, dict) or target.get('confirmed') is not True
+                or target.get('track_id') is None or not _number(target.get('range_m'))
+                or not _number(target.get('bearing_left_rad'))
+                or not 0 < target['bearing_left_rad'] <= FIRST_ACQUIRE_BEARING_RAD[1]
+                or target['range_m'] > FIRST_APPROACH_MAX_RANGE_M):
+            return None
+        if self.first_approach is not None and self.first_approach.get('track_id') != target['track_id']:
+            self._open_reset_loop(1)
+        loop = self._open_loop_geometry(scan, target, target['track_id'], 1, 0.)
+        if loop is None:
+            return None
+        clear = True
+        if self.first_approach is None:
+            theta = loop['tangent_heading_left_rad']
+            if theta is not None:
+                length = min(loop['tangent_m'], OPEN_APPROACH_CHECK_M)
+                end = (length*math.cos(theta), length*math.sin(theta))
+            else:
+                end = tuple(loop['carrot_left_m'])
+            clear = _strip_clear(_scan_points(scan['ranges'], OPEN_APPROACH_CHECK_M+1.), end,
+                                 tuple(loop['support_center_left_m']), loop['support_radius_m']+OPEN_SUPPORT_SKIP_M)
+        self.open_loop = loop
+        approach = {**loop, 'range_m': target['range_m'], 'bearing_left_rad': target['bearing_left_rad'],
+                    'approach_strip_clear': clear,
+                    'basis': 'first_support_left_of_car_anticlockwise_rule_loop_plan'}
+        return approach if clear else None
+
+    def _open_confirmed_second(self, scan):
+        """The second support when confirmed with its complete support this frame."""
+        target = self.second_target
+        if not isinstance(target, dict) or target.get('confirmed') is not True:
+            return None
+        identity = self.second_track_id if self.second_track_id is not None else target.get('track_id')
+        return target if self._full_target_points(target, scan, identity) is not None else None
+
+    def _open_first_loop_update(self, scan, now, control):
+        """First loop after the handover (anticlockwise).
+
+        It ends when the compass shows the heading reversed, or earlier once
+        the second support is confirmed and the car already points along the
+        second loop's tangent (left arc - straight - right arc: continuing
+        left past that tangent only steepens the crossing; simulation, 5 m
+        course: the second loop then ran into the start divider).
+        """
+        heading = self.compass.current(scan)
+        progress = None if heading is None else heading
+        if progress is not None and progress >= OPEN_SECOND_LOOKOUT_RAD and self.second_track_id is None:
+            self._open_second_observation(scan, now, heading)
+        if progress is not None and progress >= math.pi-OPEN_EXIT_MARGIN_RAD:
+            return self._open_first_pass(scan, now, control, 'compass_heading_reversed_in_loop')
+        target = self.compact_target
+        held = getattr(self.target_tracker, 'held', None)
+        if (target is None and isinstance(held, dict) and held.get('track_id') == self.orbit_track_id
+                and progress is not None):
+            self.steering_target = self.natural_steering_target = self.servo
+            self.reason = 'open_first_loop_missing_frame_hold'
+            self._slew(now)
+            return self._result(now)
+        if not self._open_target_usable(target, scan, self.orbit_track_id, 1):
+            if progress is not None and progress >= math.pi-OPEN_LATE_EXIT_RAD:
+                return self._open_first_pass(scan, now, control, 'support_lost_near_heading_reversal')
+            self._capture_compact_loss(scan, now, control, 'compact_target_lost_or_ambiguous')
+            if self.begin_quality_wait(now, control, scan=scan):
+                self.reason = 'route_orbit_target_recovery_wait'
+            elif not self._begin_adopted_left_coast('compact_target_lost_or_ambiguous', now, control):
+                self.begin_coast('compact_target_lost_or_ambiguous', now)
+            self._slew(now)
+            return self._result(now)
+        loop = self._open_loop_geometry(scan, target, self.orbit_track_id, 1, 0.)
+        if loop is None:
+            # No compass or incomplete support this frame: keep the command.
+            self.steering_target = self.natural_steering_target = self.servo
+            self.reason = 'open_first_loop_geometry_hold'
+            self._slew(now)
+            return self._result(now)
+        self.open_loop = loop
+        second = self._open_confirmed_second(scan)
+        if second is not None and progress >= OPEN_HANDOFF_MIN_PROGRESS_RAD:
+            following = self._open_loop_geometry(scan, second, second['track_id'], -1, math.pi)
+            self.open_next_loop = following
+            if (following is not None and following['tangent_heading_left_rad'] is not None
+                    and following['tangent_heading_left_rad'] <= 0.):
+                return self._open_first_pass(scan, now, control, 'second_loop_tangent_reached')
+        # No right before the first pass (service rule); a release is allowed.
+        self.natural_steering_target = loop['target_pwm']
+        self.steering_target = max(NEUTRAL, loop['target_pwm'])
+        self.reason = 'open_first_loop'
+        self._slew(now)
+        return self._result(now)
+
+    def _open_first_pass(self, scan, now, control, basis):
+        self.first_pass_evidence = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'received_at': scan['received_at'], 'track_id': self.orbit_track_id, 'basis': basis,
+            'compass': copy.deepcopy(self.compass.evidence), 'loop': copy.deepcopy(self.open_loop),
+            'next_loop': copy.deepcopy(self.open_next_loop),
+            'semantic_class': 'unknown', 'physical_cone_pass_certified': False, 'swept_path_certified': False}
+        self.right_exit_since = now
+        self._open_reset_loop(1)
+        self._route_event('first_pass', scan, control, self.first_pass_evidence)
+        if self._open_confirmed_second(scan) is not None:
+            self._open_begin_second_loop(scan, now, control)
+            return self._open_second_loop_update(scan, now, control, adopted=True)
+        self.route_stage = 'open_transfer'
+        self.steering_target = self.natural_steering_target = self.servo
+        self.reason = 'open_first_pass_keep_command'
+        return self._result(now)
+
+    def _open_begin_second_loop(self, scan, now, control):
+        target = self.second_target
+        self.second_track_id = target['track_id']
+        self.second_tracker.enable_close_maintenance(self.second_track_id)
+        self._second_role_anchor = copy.deepcopy(target)
+        self._second_recovering = False
+        self.second_target_handover_observed = True
+        self.second_orbit_since, self.route_stage = now, 'second_loop'
+        self._open_lost_since = None
+        self.open_next_loop = None
+        self._route_event('second_handover', scan, control, self.role_distinct_evidence)
+
+    def _open_heading_hold(self, heading, axis):
+        error = _wrap(axis-heading)
+        return NEUTRAL+max(-OPEN_HEADING_HOLD_PWM, min(OPEN_HEADING_HOLD_PWM, round(LEFT_TRIAL_GAIN*error)))
+
+    def _open_right_gate(self, target):
+        if target < NEUTRAL and (self._route_center_ack is None or self.servo > NEUTRAL):
+            return NEUTRAL  # right only after a current actual center ACK
+        return target
+
+    def _open_front_stop(self, scan):
+        """Board straight ahead along the axis and its coast distance.
+
+        A fallback only: while the car turns the axis ray samples different
+        returns and the closing-rate estimate is meaningless (simulation:
+        2.3 m/s at 1550), so the conservative nominal speed is used.
+        """
+        ahead = self._lane_front_range(scan)
+        speed = self._lane_speed(scan, ahead)  # history only: the light lane continues it
+        v = LANE_SPEED_UNKNOWN_MPS
+        stop_at = FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)+v*LANE_REACTION_S
+        return ahead, speed, stop_at
+
+    def _open_first_center(self, scan):
+        """First support position in this car frame (current or tracker-held), or None."""
+        target = self.compact_target
+        if (isinstance(target, dict) and target.get('track_id') == self.orbit_track_id
+                and target.get('source_seq') == scan.get('seq') and isinstance(target.get('point_left_m'), list)):
+            return target['point_left_m']
+        held = getattr(self.target_tracker, 'held', None)
+        if isinstance(held, dict) and held.get('track_id') == self.orbit_track_id:
+            return held.get('point_left_m')
+        return None
+
+    def _open_second_observation(self, scan, now, heading):
+        """One distinct compact support ahead inside the band along the reversed axis.
+
+        It must also lie OPEN_SECOND_BEYOND_FIRST_M farther along that axis
+        than the first support (task order: the second is passed after
+        returning from the first), so a flickering first track can never
+        become the second role.
+        """
+        e1, _ = _axis_frame(math.pi, heading)
+        first = self._full_target_points(self.compact_target, scan, self.orbit_track_id)
+        first_center = self._open_first_center(scan)
+        first_along = (None if not isinstance(first_center, list) or len(first_center) != 2
+                       else e1[0]*first_center[0]+e1[1]*first_center[1])
+        ahead = []
+        for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True,
+                                  min_points=SECOND_ACQUISITION_MIN_POINTS):
+            x, y = target['point_left_m']
+            along, lateral = e1[0]*x+e1[1]*y, e1[0]*y-e1[1]*x
+            if (x > FRONT_BODY_EXTENT_M and FRONT_BODY_EXTENT_M < along <= OPEN_SECOND_BAND_REACH_M
+                    and abs(lateral) <= OPEN_SECOND_BAND_HALF_M
+                    and (first_along is None or along >= first_along+OPEN_SECOND_BEYOND_FIRST_M)):
+                ahead.append((target, along, lateral))
+        proof = None
+        if len(ahead) == 1:
+            target, along, lateral = ahead[0]
+            bins = target['support_bins']
+            points = [(scan['ranges'][i]*math.cos(math.radians(i)),
+                       -scan['ranges'][i]*math.sin(math.radians(i))) for i in bins]
+            separation = None if first is None else min(math.dist(a, b) for a in first for b in points)
+            if first is None or (not set(bins).intersection(self.compact_target['support_bins'])
+                                 and separation > MAX_DIAMETER_M):
+                proof = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+                    'source_received_at': scan['received_at'], 'first_track_id': self.orbit_track_id,
+                    'first_support_visible': first is not None, 'second_support_bins': list(bins),
+                    'actual_support_separation_m': separation, 'compass_heading_rad': heading,
+                    'second_along_axis_m': along, 'second_lateral_m': lateral,
+                    'first_along_axis_m': first_along, 'route_stage': self.route_stage,
+                    'basis': 'single_support_ahead_in_band_along_reversed_axis_beyond_first',
+                    'physical_identity_verified': False}
+        if proof is None and self._second_proof_at is not None and 0 <= now-self._second_proof_at < SCAN_AGE_S:
+            self.second_target = None
+            self.second_acquisition_reason = 'second_role_proof_gap_held'
+            return
+        if proof is None:
+            self._second_proof_at = None
+            self.second_tracker = self._new_second_tracker()
+            self.second_target = None
+            self.role_distinct_evidence = None
+            self.second_acquisition_reason = 'second_role_band_support_missing'
+            return
+        self._second_proof_at = now
+        tracked = scan
+        if self.first_pass_evidence is None:
+            # Lookout inside the first loop: the first support is still within
+            # the second tracker's own +-90 deg window and made it ambiguous
+            # (simulation, 5 m course: four frames lost). The proof above has
+            # already singled out the candidate; the tracker gets this frame
+            # without the first support's own returns, or none at all.
+            if first is None:
+                self.second_acquisition_reason = 'second_lookout_first_support_not_current'
+                return
+            hidden = set(self.compact_target['support_bins'])
+            hidden.update(self.compact_target.get('boundary_unknown_bins') or [])
+            tracked = {**scan, 'ranges': [None if i in hidden else r for i, r in enumerate(scan['ranges'])]}
+        self.second_target = self.second_tracker.update(tracked, now, acquire=True, heading_rad=heading)
+        self.role_distinct_evidence = proof
+        self.second_acquisition_reason = self.second_tracker.reason
+
+    def _open_transfer_update(self, scan, now, control):
+        """After the first loop: reversed axis until the second support is confirmed."""
+        if not self._route_adopted(control, now):
+            return self._result(now)
+        heading = self.compass.current(scan)
+        if heading is None:
+            self._begin_recovery_hold('open_compass_unavailable', now, control)
+            return self._result(now)
+        self._open_second_observation(scan, now, heading)
+        if self._open_confirmed_second(scan) is not None:
+            self._open_begin_second_loop(scan, now, control)
+            return self._open_second_loop_update(scan, now, control, adopted=True)
+        natural = self._open_heading_hold(heading, math.pi)
+        ahead, speed, stop_at = self._open_front_stop(scan)
+        self.open_feedback = {'source_seq': scan['seq'], 'stage': 'open_transfer', 'compass_heading_rad': heading,
+            'nominal_target_pwm': natural, 'front_range_m': ahead, 'speed_mps': speed,
+            'front_stop_range_m': stop_at, 'second_acquisition_reason': self.second_acquisition_reason}
+        if ahead is not None and ahead <= stop_at:
+            self._begin_recovery_hold('open_board_ahead_without_second_support', now, control)
+            return self._result(now)
+        self.natural_steering_target = natural
+        self.steering_target = self._open_right_gate(natural)
+        self.reason = 'open_transfer_reversed_axis_hold'
+        self._slew(now)
+        return self._result(now)
+
+    def _open_second_loop_update(self, scan, now, control, *, adopted=False):
+        """Second loop (clockwise, the support on the right); ends on the compass."""
+        if not adopted and not self._route_adopted(control, now):
+            return self._result(now)
+        heading = self.compass.current(scan)
+        progress = None if heading is None else math.pi-heading
+        if progress is not None and progress >= math.pi-OPEN_EXIT_MARGIN_RAD:
+            return self._open_second_pass(scan, now, control, 'compass_heading_reversed_in_loop')
+        target = self.second_target
+        loop = (None if self._full_target_points(target, scan, self.second_track_id) is None
+                else self._open_loop_geometry(scan, target, self.second_track_id, -1, math.pi))
+        if loop is None:
+            if progress is not None and progress >= math.pi-OPEN_LATE_EXIT_RAD:
+                return self._open_second_pass(scan, now, control, 'support_lost_near_heading_reversal')
+            if self._open_lost_since is None:
+                self._open_lost_since = now
+            if now-self._open_lost_since < OPEN_LOST_HOLD_S:
+                self.steering_target = self.natural_steering_target = self.servo
+                self.reason = 'open_second_loop_missing_frame_hold'
+                self._slew(now)
+                return self._result(now)
+            self._begin_recovery_hold('open_second_support_lost', now, control)
+            return self._result(now)
+        self._open_lost_since = None
+        self.open_loop = loop
+        self.natural_steering_target = loop['target_pwm']
+        self.steering_target = self._open_right_gate(loop['target_pwm'])
+        self.reason = 'open_second_loop'
+        self._slew(now)
+        return self._result(now)
+
+    def _open_second_pass(self, scan, now, control, basis):
+        self.second_pass_evidence = {'source_seq': scan['seq'], 'source_at_ms': scan['at_ms'],
+            'received_at': scan['received_at'], 'track_id': self.second_track_id, 'basis': basis,
+            'compass': copy.deepcopy(self.compass.evidence), 'loop': copy.deepcopy(self.open_loop),
+            'semantic_class': 'unknown', 'physical_cone_pass_certified': False, 'swept_path_certified': False}
+        self.route_stage = 'light_entry'
+        self.light_since = self.light_turn_started = now
+        self._open_reset_loop()
+        self._route_event('second_pass', scan, control, self.second_pass_evidence)
+        self.steering_target = self.natural_steering_target = self.servo
+        self.reason = 'open_second_pass_keep_command'
+        return self._result(now)
+
+    def _open_lane_target(self, scan, heading):
+        """Light-lane centre line (lateral, left +) from walls parallel to the axis."""
+        u = (math.cos(-heading), math.sin(-heading))
+        n = (-u[1], u[0])
+        walls = []
+        for wall in scan.get('wall_candidates') or []:
+            if (not _valid_wall(wall) or wall['support_span_m'] < OPEN_LANE_MIN_SPAN_M
+                    or abs((wall['heading_left_rad']+heading+math.pi/2) % math.pi-math.pi/2) > OPEN_LANE_PARALLEL_RAD):
+                continue
+            ends = [(p['x_m'], p['y_m']) for p in (wall['support_start_left_m'], wall['support_end_left_m'])]
+            walls.append({'lateral_m': sum(n[0]*p[0]+n[1]*p[1] for p in ends)/2,
+                          'along_m': sorted(u[0]*p[0]+u[1]*p[1] for p in ends),
+                          'span_m': wall['support_span_m']})
+        outer = max((w for w in walls if w['lateral_m'] > SIDE_BODY_EXTENT_M and w['along_m'][1] > FRONT_BODY_EXTENT_M),
+                    key=lambda w: w['lateral_m'], default=None)
+        if outer is None:
+            return None
+        inner = max((w for w in walls if outer['lateral_m']-OPEN_LANE_WIDTH_M[1] <= w['lateral_m']
+                     <= outer['lateral_m']-OPEN_LANE_WIDTH_M[0] and w['along_m'][1] > FRONT_BODY_EXTENT_M),
+                    key=lambda w: w['lateral_m'], default=None)
+        prior = self._start_lane_width if _number(self._start_lane_width) else OPEN_LANE_WIDTH_M[0]
+        width = outer['lateral_m']-inner['lateral_m'] if inner is not None else prior
+        return {'outer_lateral_m': outer['lateral_m'], 'inner_lateral_m': None if inner is None else inner['lateral_m'],
+                'inner_start_along_m': None if inner is None else inner['along_m'][0],
+                'width_m': width, 'width_source': 'measured' if inner is not None else 'start_lane_prior',
+                'center_lateral_m': outer['lateral_m']-width/2, 'walls': len(walls)}
+
+    def _open_light_entry_update(self, scan, now, control):
+        """Turn onto the light-lane centre line along the outer boundary."""
+        if not self._route_adopted(control, now):
+            return self._result(now)
+        heading = self.compass.current(scan)
+        lane = None if heading is None else self._open_lane_target(scan, heading)
+        if lane is None:
+            self._begin_recovery_hold('open_light_lane_unmeasured', now, control)
+            return self._result(now)
+        walls = corridor_walls(scan)
+        if (walls is not None and abs(heading) <= OPEN_LANE_ENTRY_HEADING_RAD
+                and OPEN_LANE_WIDTH_M[0] <= walls['width_m'] <= OPEN_LANE_WIDTH_M[1]
+                and abs(lane['center_lateral_m']) <= walls['width_m']/2-SIDE_BODY_EXTENT_M):
+            return self._begin_light_lane(scan, now, control, {'source_seq': scan['seq'], 'walls': walls,
+                'lane_target': lane, 'compass_heading_rad': heading,
+                'basis': 'two_parallel_boards_round_car_on_light_lane_line'})
+        start = lane['inner_start_along_m']
+        along = (OPEN_LANE_LOOKAHEAD_M[1] if start is None or start <= FRONT_BODY_EXTENT_M
+                 else max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], start)))
+        u = (math.cos(-heading), math.sin(-heading))
+        lateral = lane['center_lateral_m']
+        point = (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
+        curvature, natural = _pursuit_pwm(point)
+        ahead, speed, stop_at = self._open_front_stop(scan)
+        self.light_feedback = {'source_seq': scan['seq'], 'stage': 'light_entry', 'compass_heading_rad': heading,
+            'lane_target': lane, 'pursuit_point_left_m': [round(v, 3) for v in point],
+            'pursuit_curvature_per_m': curvature, 'nominal_target_pwm': natural, 'walls': walls,
+            'front_range_m': ahead, 'speed_mps': speed, 'front_stop_range_m': stop_at,
+            'swept_path_certified': False}
+        if ahead is not None and ahead <= stop_at:
+            self._begin_recovery_hold('open_board_ahead_before_light_lane', now, control)
+            return self._result(now)
+        self.natural_steering_target = natural
+        self.steering_target = self._open_right_gate(natural)
+        self.reason = 'open_light_entry'
+        self._slew(now)
         return self._result(now)
 
     def _right_exit_target(self, scan, now):
@@ -2729,6 +3374,10 @@ class ManeuverSequence(TurnMotion):
                          -scan['ranges'][i]*math.sin(math.radians(i))) for i in first_bins]
         slack = min(SECOND_RECOVERY_MAX_SLACK_S,
                     max(0., (scan['at_ms']-reference['source_at_ms'])/1000-.1))
+        heading = self._tracking_heading(scan)
+        if heading is not None and _number(reference.get('compass_heading_rad')):
+            # Open course: the prior turned with the car (round 64).
+            reference = rotated_observation(reference, heading-reference['compass_heading_rad'])
         def proven(candidate):
             if (not _associated(candidate, reference, slack)
                     or first_bins.intersection(candidate['support_bins'])):
@@ -2746,11 +3395,11 @@ class ManeuverSequence(TurnMotion):
                 # identity, even if acquire=False would keep associating it.
                 self.second_tracker._forget('second_role_recovery_unproven')
                 self._second_recovery_last = None
-            self.second_tracker.update(scan, now, acquire=False)
+            self.second_tracker.update(scan, now, acquire=False, heading_rad=heading)
             self.second_target = None
             self.second_acquisition_reason = 'second_role_recovery_current_support_unproven'
             return False
-        target = self.second_tracker.update(scan, now, acquire=True)
+        target = self.second_tracker.update(scan, now, acquire=True, heading_rad=heading)
         self.second_target = target
         if target is not None and not target['tracking_only_boundary_gap']:
             self._second_recovery_last = copy.deepcopy(target)
@@ -2781,7 +3430,8 @@ class ManeuverSequence(TurnMotion):
         if self._second_recovering:
             self._second_recovery_observation(scan, now)
             return
-        self.second_target = self.second_tracker.update(scan, now, acquire=False)
+        self.second_target = self.second_tracker.update(scan, now, acquire=False,
+                                                        heading_rad=self._tracking_heading(scan))
         if self._full_target_points(self.second_target, scan, self.second_track_id) is not None:
             self._second_role_anchor = copy.deepcopy(self.second_target)
         elif self.second_target is None and not self._target_gap_held(
@@ -3335,7 +3985,21 @@ class ManeuverSequence(TurnMotion):
         return max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*(best+center_term))))
 
     def _lane_front_range(self, scan):
-        """Nearest return straight ahead (+-LANE_FRONT_HALF_BINS deg), or None."""
+        """Nearest return straight ahead (+-LANE_FRONT_HALF_BINS deg), or None.
+
+        Round 64 (lane entry): measured along the compass axis instead, as
+        the distance along that axis. An angled car's own straight-ahead ray
+        meets a side board long before the end board (round-63 simulation:
+        the finish cut fired early on an angled lane entry).
+        """
+        heading = self.compass.current(scan) if self.entry_kind == 'lane' else None
+        if heading is not None:
+            axis = math.pi if self.route_stage == 'open_transfer' else 0.
+            center = round(math.degrees(_wrap(heading-axis)))
+            values = [scan['ranges'][i % 360]*math.cos(math.radians(i-center))
+                      for i in range(center-LANE_FRONT_HALF_BINS, center+LANE_FRONT_HALF_BINS+1)
+                      if _number(scan['ranges'][i % 360])]
+            return min(values) if values else None
         values = [scan['ranges'][i % 360] for i in range(-LANE_FRONT_HALF_BINS, LANE_FRONT_HALF_BINS+1)]
         values = [r for r in values if _number(r)]
         return min(values) if values else None
@@ -3351,7 +4015,7 @@ class ManeuverSequence(TurnMotion):
             dt = row[0]-history[-1][0]
             rate = (history[-1][2]-ahead)/dt if dt > 0 else None
             if (not .05 <= dt <= SCAN_AGE_S+.05 or not .05 <= row[1]-history[-1][1] <= SCAN_AGE_S+.05
-                    or rate is None or not -.4 <= rate <= 3.):
+                    or rate is None or not -.4 <= rate <= LANE_MAX_CLOSING_MPS):
                 history.clear()
         history.append(row)
         del history[:-4]
@@ -3831,8 +4495,17 @@ class ManeuverSequence(TurnMotion):
             return self._corridor_follow_update(scan, now, control)
         if self.continue_route and self.route_stage == 'second_orbit':
             return self._second_orbit_update(scan, now, control)
+        if self.continue_route and self.route_stage == 'open_transfer':
+            return self._open_transfer_update(scan, now, control)
+        if self.continue_route and self.route_stage == 'second_loop':
+            return self._open_second_loop_update(scan, now, control)
+        if self.continue_route and self.route_stage == 'light_entry':
+            return self._open_light_entry_update(scan, now, control)
         if self.first_pass_evidence is not None:
             return self._right_exit_update(scan, now, control)
+        if (self.continue_route and self.entry_kind == 'lane' and self.handover_observed
+                and self.route_stage == 'first_target'):
+            return self._open_first_loop_update(scan, now, control)
         held = getattr(self.target_tracker, 'held', None)
         if (self.continue_route and self.compact_target is None and self.handover_observed
                 and isinstance(held, dict) and held.get('track_id') == self.orbit_track_id):
@@ -3967,14 +4640,15 @@ class ManeuverSequence(TurnMotion):
             self._last_confirmed_compact_target = self.compact_target
         self.compact_target_error = None
         try:
-            self.compact_target = (self.target_tracker.update(scan, now, acquire=self.first_pass_evidence is None)
+            self.compact_target = (self.target_tracker.update(scan, now, acquire=self.first_pass_evidence is None,
+                                                              heading_rad=self._tracking_heading(scan))
                                    if self.continue_route else self.target_tracker.update(scan, now))
             # Corridor following while driving runs its own recovery plus
             # corridor proof on this scan (_second_role_observation); feeding
             # the tracker here first would consume the frame.
             corridor_drive = (self.route_stage == 'corridor_follow' and self.phase == 'drive'
                               and not self.quality_resume_pending)
-            if self.continue_route and (self.route_stage == 'second_orbit'
+            if self.continue_route and (self.route_stage in ('second_orbit', 'second_loop')
                                         or (self._second_recovering and not corridor_drive)):
                 self._update_second_tracking(scan, now)
         except (ValueError, TypeError, KeyError) as error:

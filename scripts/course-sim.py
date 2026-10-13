@@ -233,7 +233,7 @@ def make_console(server):
 
 
 def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1., noise=.008, seed=0,
-        verbose=False, initial_presteer_pwm=None, max_drive_s=24.):
+        verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None):
     sys.path.insert(0, str(CONSOLE))
     server = load('course_sim_server', CONSOLE/'server.py')
     console = make_console(server)
@@ -294,6 +294,7 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
     t = 0.
     stage_seen = []
     min_wall = min_cone = math.inf
+    min_wall_at = min_cone_at = None
     while start_error is None and t < max_s:
         t = round(t+dt, 6)
         clock['now'] = t
@@ -321,6 +322,10 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         if not stage_seen or stage_seen[-1][1:] != (stage, phase):
             stage_seen.append((t, stage, phase))
         wall, cone = course.body_gaps(car.x, car.y, car.psi)
+        if wall < min_wall:
+            min_wall_at = (round(t, 2), round(car.x, 3), round(car.y, 3), round(car.psi, 4))
+        if cone < min_cone:
+            min_cone_at = (round(t, 2), round(car.x, 3), round(car.y, 3), round(car.psi, 4))
         min_wall, min_cone = min(min_wall, wall), min(min_cone, cone)
         if wall <= 0 and not any(c[1] == 'board' for c in contacts):
             contacts.append((t, 'board', round(car.x, 2), round(car.y, 2)))
@@ -331,6 +336,9 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
             log.append(row)
             if verbose:
                 print('%6.2f x %5.2f y %5.2f psi %7.1f v %4.2f m %d s %d %-14s %-12s %-44s wall %.3f cone %.3f' % row)
+            if trace and motion is not None:
+                values = {key: getattr(motion, key, None) for key in trace}
+                print('       ', json.dumps(values, ensure_ascii=False, default=str))
         if session is None and car.v < .01:
             break
         if any(c[1] == 'board' for c in contacts) and car.v < .01:
@@ -344,6 +352,7 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
     summary = {'start_error': start_error, 'end_reason': result.get('reason'),
                'stages': [(round(a, 2), b, c) for a, b, c in stage_seen],
                'contacts': contacts, 'min_board_gap_m': round(min_wall, 3), 'min_cone_gap_m': round(min_cone, 3),
+               'min_board_gap_at': min_wall_at, 'min_cone_gap_at': min_cone_at,
                'final': (round(car.x, 2), round(car.y, 2), round(math.degrees(car.psi), 1)),
                'final_front_x': round(front_x, 2), 'in_finish_zone': in_finish, 'time_s': t,
                'success': in_finish and not any(c[1] == 'board' for c in contacts)}
@@ -351,28 +360,103 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
     return summary, log, history
 
 
-def render(course, log, path, scale=90):
+# Glyphs the trial-map bitmap font lacks (dimension labels).
+EXTRA_GLYPHS = {'X': ('101', '101', '010', '101', '101'), ',': ('000', '000', '000', '010', '100'),
+                ':': ('000', '010', '000', '010', '000'), '=': ('000', '111', '000', '111', '000'),
+                '(': ('010', '100', '100', '100', '010'), ')': ('010', '001', '001', '001', '010'),
+                '/': ('001', '001', '010', '100', '100'), '+': ('000', '010', '111', '010', '000'),
+                'J': ('001', '001', '001', '101', '010')}
+STAGE_COLORS = {'drive': (0, 150, 0), 'presteer': (40, 90, 230), 'quality_wait': (240, 140, 0),
+                'coast': (150, 60, 200), 'ended': (220, 0, 0)}
+
+
+def render(course, log, path, *, name='', summary=None, scale=90):
+    """Top view with a 1 m grid and the course dimensions (metres)."""
     tm = load('course_sim_map', ROOT/'scripts'/'trial-map.py')
-    pad = .3
-    w, h = int((course.L+2*pad)*scale), int((course.W+2*pad)*scale)
+    tm.FONT.update(EXTRA_GLYPHS)
+    left, right, top, bottom = 1.25, 1.05, 1.4, 1.05
+    right = max(right, 960/scale-course.L-left)  # header and legend fit on narrow courses
+    w, h = int((course.L+left+right)*scale), int((course.W+top+bottom)*scale)
     img = tm.Image(w, h)
+    dim_color, grid_color, label_color = (200, 30, 30), (228, 228, 228), (90, 90, 90)
+    char_w = 8  # text scale 2: 4*2 px per character
 
     def uv(x, y):
-        return int((x+pad)*scale), int((course.W+pad-y)*scale)
+        return int((x+left)*scale), int((course.W+top-y)*scale)
+
+    def label(x, y, text, color=dim_color, anchor='center'):
+        u, v = uv(x, y)
+        text = text.upper()
+        width = len(text)*char_w
+        u = u-width//2 if anchor == 'center' else u-width if anchor == 'right' else u
+        img.text(u, v-5, text, color)
+
+    def dimension(a, b, offset, text, side=None):
+        """Dimension line parallel to a-b, shifted by offset, with end ticks."""
+        (ax, ay), (bx, by), (ox, oy) = a, b, offset
+        pa, pb = (ax+ox, ay+oy), (bx+ox, by+oy)
+        img.line(uv(*a), uv(*pa), (235, 170, 170))
+        img.line(uv(*b), uv(*pb), (235, 170, 170))
+        img.line(uv(*pa), uv(*pb), dim_color)
+        length = math.dist(a, b)
+        tx, ty = ((bx-ax)/length, (by-ay)/length) if length else (1, 0)
+        for px, py in (pa, pb):
+            img.line(uv(px-.05*(tx+ty*0), py-.05*(ty)), uv(px+.05*tx, py+.05*ty), dim_color)
+            img.line(uv(px-.06*ty, py+.06*tx), uv(px+.06*ty, py-.06*tx), dim_color)
+        mx, my = (pa[0]+pb[0])/2, (pa[1]+pb[1])/2
+        if side == 'left':
+            label(mx-.08, my, text, anchor='right')
+        elif side == 'right':
+            label(mx+.08, my, text, anchor='left')
+        elif side == 'below':
+            label(mx, my-.14, text)
+        else:
+            label(mx, my+.14, text)
+
+    # 1 m grid with coordinates from the start-end wall (x) and the start-lane outer wall (y).
+    for k in range(int(math.floor(course.L))+1):
+        img.line(uv(k, 0), uv(k, course.W), grid_color)
+        label(k, -.15, str(k), label_color)
+    for k in range(int(math.floor(course.W))+1):
+        img.line(uv(0, k), uv(course.L, k), grid_color)
+        label(-.1, k, str(k), label_color, anchor='right')
+    label(course.L+.12, -.15, 'X M', label_color, anchor='left')
+    label(-.1, course.W+.15, 'Y M', label_color, anchor='right')
     for (x1, y1), (x2, y2) in course.segments:
-        img.line(uv(x1, y1), uv(x2, y2), (60, 60, 60))
-    for cx, cy, r in course.cones:
+        img.line(uv(x1, y1), uv(x2, y2), (40, 40, 40))
+    # Overall size, lanes, dividers.
+    # Dimensions outside the field: dividers in their own rows (the lower one
+    # is attached to the start-end wall, the upper one to the finish-end wall).
+    sl, ll = course.start_lane, course.light_lane
+    start_div = max(x for (x1, _), (x, _) in course.segments[4:8] for x in (x1, x))
+    light_div = course.L-min(x for (x1, _), (x, _) in course.segments[8:12] for x in (x1, x))
+    dimension((0, sl), (start_div, sl), (0, -sl-.42), f'START DIVIDER {start_div:.2f}', side='below')
+    dimension((0, 0), (course.L, 0), (0, -.8), f'L {course.L:.2f}', side='below')
+    dimension((0, 0), (0, course.W), (-1.05, 0), f'W {course.W:.2f}', side='right')
+    dimension((course.L, 0), (course.L, sl), (.15, 0), f'LANE {sl:.2f}', side='right')
+    dimension((course.L, course.W-ll), (course.L, course.W), (.15, 0), f'LANE {ll:.2f}', side='right')
+    dimension((course.L-light_div, course.W-ll), (course.L, course.W-ll), (0, ll+.25),
+              f'LIGHT DIVIDER {light_div:.2f}')
+    # Cones with coordinates and their distance to the nearer end wall.
+    for index, (cx, cy, r) in enumerate(course.cones, 1):
         img.dot(*uv(cx, cy), (30, 60, 220), r=max(2, int(r*scale)))
+        label(cx, cy+r+.17, f'C{index} ({cx:.2f},{cy:.2f})', (30, 60, 220))
+        label(cx, cy-r-.17, f'R {r:.2f}', (30, 60, 220))
+    # Start zone (first .8 m of the start lane).
+    img.line(uv(.8, 0), uv(.8, sl), (40, 90, 230))
+    u, v = uv(.83, sl-.08)
+    img.text(u, v, 'START ZONE 0.80', (40, 90, 230), scale=1)
+    # Finish zone (last .8 m of the light lane).
     fx = course.finish_x
-    img.line(uv(fx, course.W-course.light_lane), uv(fx, course.W), (0, 160, 0))
-    colors = {'drive': (0, 150, 0), 'presteer': (40, 90, 230), 'quality_wait': (240, 140, 0),
-              'coast': (150, 60, 200), 'ended': (220, 0, 0)}
+    img.line(uv(fx, course.W-ll), uv(fx, course.W), (0, 160, 0))
+    dimension((fx, course.W), (course.L, course.W), (0, .62), f'FINISH {course.L-fx:.2f}')
+    # Path (colour = service phase), body box every .5 s, time every 1 s.
     previous = None
     for k, row in enumerate(log):
         t, x, y, psi = row[:4]
         point = uv(x, y)
         if previous:
-            img.line(previous, point, colors.get(row[8], (120, 120, 120)))
+            img.line(previous, point, STAGE_COLORS.get(row[8], (120, 120, 120)))
         previous = point
         if k % 5 == 0:
             c, s = math.cos(math.radians(psi)), math.sin(math.radians(psi))
@@ -381,6 +465,29 @@ def render(course, log, path, scale=90):
                 img.line(uv(*a), uv(*b), (170, 170, 170))
         if k % 10 == 0:
             img.text(point[0]+4, point[1]-12, f'{t:.0f}', (0, 0, 0), scale=1)
+    if summary:
+        for key, gap_key, color, tag in (('min_board_gap_at', 'min_board_gap_m', (220, 0, 0), 'MIN BOARD'),
+                                         ('min_cone_gap_at', 'min_cone_gap_m', (30, 60, 220), 'MIN CONE')):
+            at = summary.get(key)
+            if at:
+                _, x, y, psi = at
+                u, v = uv(x, y)
+                for d in range(-6, 7):
+                    img.put(u+d, v+d, color)
+                    img.put(u+d, v-d, color)
+                img.text(u+8, v+6, f'{tag} {summary[gap_key]:.3f}', color, scale=1)
+        head = (f"{name} {'SUCCESS' if summary.get('success') else 'FAIL'}  "
+                f"BOARD MIN {summary['min_board_gap_m']:.3f}  CONE MIN {summary['min_cone_gap_m']:.3f}  "
+                f"T {summary['time_s']:.1f}S  END {summary.get('end_reason') or summary.get('start_error')}")
+        img.text(8, 8, head.upper().replace('_', '-'), (0, 0, 0))
+    u = 8
+    for phase, color in STAGE_COLORS.items():
+        for a in range(10):
+            for b in range(10):
+                img.put(u+a, 28+b, color)
+        img.text(u+14, 28, phase.upper().replace('_', '-'), color)
+        u += 14+len(phase)*char_w+16
+    img.text(u+8, 28, 'UNIT M  GRID 1 M  TIME LABELS S', label_color)
     img.save(path)
 
 
@@ -397,6 +504,7 @@ def main():
     parser.add_argument('--png')
     parser.add_argument('--log')
     parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('--trace', action='append', help='print this motion attribute every 100 ms (repeatable)')
     parser.add_argument('--matrix', action='store_true', help='run every named layout with vehicle variations')
     parser.add_argument('--range', action='store_true', help='run the rules-range variations (nominal vehicle)')
     args = parser.parse_args()
@@ -427,13 +535,13 @@ def main():
         spec['start'] = (v[0], v[1], math.radians(v[2]))
     course = Course(**spec)
     summary, log, _ = run(course, max_s=args.max_s, speed_scale=args.speed_scale, decel=args.decel,
-                          delay=args.delay, seed=args.seed, verbose=args.verbose)
+                          delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace)
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     if args.log:
         Path(args.log).write_text(''.join('\t'.join(str(round(v, 3)) if isinstance(v, float) else str(v)
                                                     for v in row)+'\n' for row in log))
     if args.png:
-        render(course, log, args.png)
+        render(course, log, args.png, name=args.layout, summary=summary)
 
 
 if __name__ == '__main__':

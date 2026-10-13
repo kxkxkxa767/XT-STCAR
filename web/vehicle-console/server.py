@@ -32,7 +32,8 @@ from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoa
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
-                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S)
+                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
+                               OPEN_STAGES)
 
 ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
@@ -1461,7 +1462,9 @@ class Console:
             and ((motion.first_pass_evidence is not None
                   and ((route_stage in ('right_align', 'corridor_follow') and motion.right_exit_center_ack is not None)
                        or (route_stage == 'second_orbit' and getattr(motion, 'second_center_ack', None) is not None)
-                       or route_stage in ('light_turn', 'light_lane')))
+                       or route_stage in ('light_turn', 'light_lane')
+                       # Round 64: open-course stages after the first loop.
+                       or (route_stage in OPEN_STAGES and getattr(motion, 'entry_kind', None) == 'lane')))
                  # Round 64: start-lane wall corrections (start-zone entry only).
                  or (route_stage == 'start_lane' and getattr(motion, 'entry_kind', None) == 'lane'
                      and motion.first_pass_evidence is None and not motion.handover_observed)))
@@ -1472,6 +1475,12 @@ class Console:
         # held bounds, which already include the route's right range.
         right_hold = (route and decision['phase'] == 'quality_wait'
                       and session.get('quality_wait_kind') in ('post_pass_pause', 'recovery_hold'))
+        # Round 64: the resume ACK step of such a pause keeps that same held
+        # command (checked below against quality_wait_servo with 1560); a held
+        # right command must not turn a valid resume into a halt.
+        right_hold = right_hold or (route and decision.get('quality_resume_pending') is True
+                                    and session.get('quality_wait_kind') in ('post_pass_pause', 'recovery_hold')
+                                    and servo == getattr(motion, 'quality_wait_servo', None))
         minimum_servo = RIGHT_EXIT_MIN_PWM if right_exit or right_hold else 1500
         # Route mode after the first pass drives at the operator's manual
         # forward PWM (slow section); every other output keeps 1500/1560.

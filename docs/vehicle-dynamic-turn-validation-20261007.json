@@ -18420,6 +18420,52 @@
         "light turn: clockwise to compass heading 0, lateral line along the outer boundary (start-lane measured width as prior until the light lane walls are measured), light_lane only on a real two-wall lane; finish distance from front_boundary_m / along-axis range (course-sim showed the current cut fires early when the car enters the lane angled because the +-3 deg front ray hits a side board)",
         "finish stop model (round-63 WIP), unit tests for every new branch, course-sim --range, full suite, detector/route replays, then a new round"
       ]
+    },
+    "wip_round64_open_loops_20261013": {
+      "status": "partial implementation, NOT deployable, not built, not on the car; simulation only",
+      "user_instruction": "继续修改吧 / 你的仿真轨迹图可以把尺寸标注一下 / 你继续代码修改吧，不打扰你了",
+      "design": {
+        "scope": "entry_kind 'lane' only (start zone without a native left opening); the junction path and all hard protections unchanged",
+        "loop_plan": "_plan_loop: for each support a loop circle (radius left .80-.95 m, right 1.10-1.30 m because the route right bound is 1350 ~ .94/m) whose centre is offset (a along the approach axis, b toward the turn side) from the support centre; chosen to maximise the smallest clearance slack over five probe directions (-90,-45,0,45,90 deg in the compass frame) between [support edge+side+.15] and [probed return-side-.15]; probes from the support centre along body-wide strips (_probe_free), running minimum per loop, refreshed only below .6 rad/s compass rate (scan rotation distortion)",
+        "pursuit": "_loop_carrot: tangent line from the car plus the circle, lookahead 1.1 m (.65 overshot the crossing), curvature 2y/d^2, PWM 1500+160*curvature (agent.md section 5, trial 60-62: 1350 measured -.92..-1.01/m vs model -.94)",
+        "start_lane_approach": "_open_first_approach replaces the old .40 m bypass point: the first loop plan steers from the start lane once the body-wide strip along the planned tangent (<=1.2 m) is clear of every return; handover to first_target at 45 deg (usable window) with an adopted left command and the same identity; path check now also active during the approach",
+        "first_loop": "_open_first_loop_update (first_target after handover, entry lane): left-only pursuit; usable = confirmed same identity anywhere on the left (old 45-135 window lost a support 2.4 m aside at 44 deg); ends when the compass heading >= pi-25 deg, or when the second support is confirmed and the car already points along the second loop's tangent (progress >= 120 deg); a support lost after progress >= 120 deg also ends it",
+        "second_lookout": "_open_second_observation from first-loop progress 90 deg: exactly one compact support ahead in a band along the reversed axis (|lateral|<=1.6 m, along<=3.2 m) at least .8 m beyond the first support along that axis, distinct from the visible first support; inside the first loop the second tracker gets the frame without the first support's own returns (it made the tracker ambiguous)",
+        "rotation_compensated_tracking": "compact_target.CompactTargetTracker.update(heading_rad=...) and rotated_observation: association compares with the previous observation turned by the compass heading change (a support 2.4 m away moved ~.27 m between scans at ~70 deg/s, beyond the .30 m gate); only the open course passes a heading, old behaviour unchanged otherwise; also used by the second identity recovery prior",
+        "transfer": "open_transfer: compass hold of heading pi (+-120 PWM) until the second support is confirmed; board ahead along the axis within the 1.3 m/s coast distance -> recovery hold",
+        "second_loop": "second_loop: clockwise pursuit; right only after an actual center ACK (_open_right_gate); ends at compass heading <= 25 deg or support lost after progress >= 120 deg; a missing support is held .5 s then recovery hold (resume needs the confirmed same support)",
+        "light_entry": "light_entry: lane centre from native walls parallel to the axis (outermost wall on the left, next parallel wall inside it, else the start-lane width as prior); pursuit point at the inner wall's open end (bounded .8-1.6 m ahead) on that centre line; enters light_lane when corridor_walls finds the two boards round the car with heading <= 20 deg",
+        "finish_axis": "_lane_front_range for entry lane: the board ahead measured along the compass axis (an angled car's own ray met a side board, round-63 early cut); _lane_speed rejects closing rates > 2 m/s",
+        "slew": "open stages, approach and first loop: OPEN_PWM_STEP 40 (80 overshot the 5 m crossing in simulation)",
+        "budget": "ROUTE_MAX_DRIVE_S 24 -> 40 s: the whole lap from the start zone is ~22 m (simulation 22-28 s at the 1.0 m/s 1550 model; 1550 measured .6-1.1 m/s). The round-64 helper's --max-seconds must be changed to 40 (one value, hash recorded)",
+        "server": "route_right: OPEN_STAGES after the first pass with the route center ACK (entry lane only); minimum servo: the resume ACK step of a post-pass/recovery pause may keep the same held right command (it halted a valid resume with a held 1468); slow 1550 via POST_PASS_STAGES"
+      },
+      "simulation": {
+        "tool": "scripts/course-sim.py (real Console + ManeuverSequence, Rust geometry); renders now carry dimensions (1 m grid, L/W, lane widths, divider lengths, finish/start zones, cone coordinates, min-gap marks); --trace ATTR prints motion attributes",
+        "named_layouts": {
+          "doc8x4": "success, min board .153, min cone .308, 23.7 s",
+          "user8": "success, .168/.308, 24.2 s",
+          "wide8x6": "success, .131/.656, 27.9 s",
+          "mid64": "success, .118/.524, 22.7 s",
+          "short5": "success, .193/.303, 16.2 s",
+          "practice": "old narrow course (junction entry, old path) stops early in the light lane (round-63 issue, unchanged)"
+        },
+        "rules_range": "work/round64-sim/range/range-v1.log: 24/108 success",
+        "range_failure_classes": [
+          "L=5 (esp. W 5-6): first support acquired late, start-lane board-ahead fail-safe (1.3 m/s coast distance) stops the car at the divider end",
+          "narrow channel between the second support and the start divider (cone offsets put it .55-.85 m above the divider): the second loop clips the divider",
+          "wide courses (W 5-6): after the second loop the light entry cannot climb to the lane before the light divider's open end (contacts at the divider end)",
+          "some first-loop recovery holds stall until the drive budget"
+        ]
+      },
+      "tests": "full suite 695 OK (4 expected failures = round-63 WIP), budget test updated to 40 s; no unit tests yet for the open-course code",
+      "next_steps": [
+        "second loop -> light entry handover by geometry (leave the loop once the light-entry pursuit asks for less right than the loop, progress >= 90 deg) for wide courses",
+        "start lane: speed-aware board-ahead fail-safe and earlier first acquisition on short courses; review the strip-clear rule",
+        "narrow second channel: plan/check the approach side against the start divider, slower crossing if needed",
+        "unit tests for every new function/branch, --range again, full suite, detector/route replays, then build round 64 (helper --max-seconds 40) and test on the car after SSH and placement are confirmed",
+        "question for the user (not changed): right steering bound 1350 vs protocol 1270; real data only at 1350"
+      ]
     }
   }
 }
