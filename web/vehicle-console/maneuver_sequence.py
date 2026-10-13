@@ -30,7 +30,7 @@ LEFT_TRIAL_GAIN = 180.0
 MAX_TREND_RELEASE_FRACTION = .20
 MAX_INNER_RELEASE_FRACTION = .20
 MAX_EXIT_WIDTH_CHANGE_FRACTION = .10
-RIGHT_EXIT_MIN_PWM = 1350  # Existing manual right bound; no measured curvature implied.
+RIGHT_EXIT_MIN_PWM = 1200  # Operator-accepted static endpoint; dynamic curvature NOT calibrated.
 RIGHT_EXIT_MAX_S = 3.0
 # Explicit continue_route only: once the current first-target support is back
 # at the measured body front, every further left step only extends the orbit.
@@ -144,7 +144,7 @@ ROUTE_PATH_LOOKAHEAD_M = .70
 ROUTE_PATH_MARGIN_M = .04
 ROUTE_PATH_RANGE_M = 2.
 ROUTE_PATH_LEFT_CANDIDATES = tuple(range(NEUTRAL, SERVO_MAX, 20))+(SERVO_MAX,)
-ROUTE_PATH_RIGHT_CANDIDATES = (1350, 1390, 1430, 1470)
+ROUTE_PATH_RIGHT_CANDIDATES = (1200, 1250, 1300, 1350, 1390, 1430, 1470)
 _DIRECTION_COS = tuple(math.cos(math.radians(i)) for i in range(360))
 _DIRECTION_SIN = tuple(math.sin(math.radians(i)) for i in range(360))
 LIGHT_BRIDGE_MAX_BINS = 5
@@ -404,20 +404,18 @@ LANE_START_STOP_DECEL_MPS2 = .5
 # (approach side, diagonals, far side, return side; compass frame), keeping
 # the body as far as possible inside [support edge + inner gap, other return -
 # outer gap] in every direction. Radii: left .80-.95 m (model 1/1.375 m at
-# 1720); right 1.10-1.30 m because the route's right bound is 1350 (model
-# .94/m). The car follows the tangent line plus that circle by pure pursuit
+# 1720); right .75-1.40 m with the statically accepted1200 endpoint (nominal
+# 1.875/m, NOT dynamically measured). The car follows the tangent line plus that circle by pure pursuit
 # (agent.md section 5: (servo-1500)/160 per m); a loop ends once the compass
 # shows the heading reversed against its approach axis (first: start-lane
 # axis 0 -> pi; second: pi -> 0). No course length, coordinate or time.
 OPEN_LEFT_RADIUS_M = (.80, .95)
-OPEN_RIGHT_RADIUS_M = (1.10, 1.40)
+OPEN_RIGHT_RADIUS_M = (.75, 1.40)
 OPEN_RADIUS_STEP_M = .05
 # Slack (m) traded per metre of loop radius: a larger loop keeps steering
-# authority (a right loop at 1.10 m is only 3% above the 1350 bound's radius;
-# simulation: wide right loops ran into the start-end wall).
+# authority. This preference is soft; it does not establish physical curvature.
 OPEN_RADIUS_PREFERENCE = .10
 OPEN_APPROACH_SLOPE = 1.5
-OPEN_OFFSET_STEPS = tuple(k*.05 for k in range(-15, 16))
 OPEN_INNER_GAP_M = .15
 OPEN_OUTER_GAP_M = .15
 OPEN_PROBE_HALF_WIDTH_M = SIDE_BODY_EXTENT_M+.10
@@ -614,7 +612,10 @@ def _plan_loop(free, support_radius, radii, approach=None):
 
     ``free`` holds (theta, free distance) in the approach-axis frame. A body
     centre inside [lo, hi] keeps the inner gap to the support and the outer
-    gap to the probed return; a gap narrower than the body is centred.
+    gap to the probed return. If both comfort margins do not fit, reduce
+    cone comfort first instead of centring the violation against the board;
+    the circle still encloses the support plus the body side. Offsets are
+    bounded by this circle, not an arbitrary fixed displacement.
     ``approach`` (the car's (along, lateral) from the support in that frame)
     penalises an approach line the car cannot reach before its tangent point
     at a descent of at most 1/OPEN_APPROACH_SLOPE (simulation: a line 1.5 m
@@ -623,14 +624,17 @@ def _plan_loop(free, support_radius, radii, approach=None):
     """
     lo = support_radius+SIDE_BODY_EXTENT_M+OPEN_INNER_GAP_M
     bands = [(theta, distance-SIDE_BODY_EXTENT_M-OPEN_OUTER_GAP_M) for theta, distance in free]
+    inner_floor = support_radius+SIDE_BODY_EXTENT_M if any(hi < lo for _, hi in bands) else lo
 
     def score(radius, a, b):
-        if math.hypot(a, b) > radius-lo:
+        if math.hypot(a, b) > radius-inner_floor:
             return -math.inf
         worst = math.inf
         for theta, hi in bands:
             t = _loop_extent(a, b, radius, theta)
-            worst = min(worst, min(t-lo, hi-t) if hi >= lo else -abs(t-(lo+hi)/2))
+            # Cone comfort is soft; a board must not be traded for it when
+            # both comfort margins do not fit. The raw body gate is unchanged.
+            worst = min(worst, min(t-lo, hi-t) if hi >= lo else -abs(t-hi))
         if approach is not None and a-approach[0] > 0:
             worst -= max(0., OPEN_APPROACH_SLOPE*abs(approach[1]-(b-radius))-(a-approach[0]))
         return worst-.01*math.hypot(a, b)-OPEN_RADIUS_PREFERENCE*(radii[1]-radius)
@@ -639,9 +643,10 @@ def _plan_loop(free, support_radius, radii, approach=None):
     radius = radii[0]
     while radius <= radii[1]+1e-9:
         a = b = 0.
+        offsets = tuple(k*.05 for k in range(-math.ceil(radius/.05), math.ceil(radius/.05)+1))
         for _ in range(2):
-            b = max(OPEN_OFFSET_STEPS, key=lambda v: score(radius, a, v))
-            a = max(OPEN_OFFSET_STEPS, key=lambda v: score(radius, v, b))
+            b = max(offsets, key=lambda v: score(radius, a, v))
+            a = max(offsets, key=lambda v: score(radius, v, b))
         value = score(radius, a, b)
         if best is None or value > best[0]:
             best = (value, radius, a, b)
@@ -649,6 +654,8 @@ def _plan_loop(free, support_radius, radii, approach=None):
     value, radius, a, b = best
     return {'radius_m': round(radius, 3), 'offset_axis_m': round(a, 3), 'offset_side_m': round(b, 3),
             'min_slack_m': value, 'inner_bound_m': lo,
+            'inner_floor_m': inner_floor,
+            'board_slack_m': min(hi-_loop_extent(a, b, radius, theta) for theta, hi in bands),
             'extents_m': [round(_loop_extent(a, b, radius, theta), 3) for theta, _ in free]}
 
 
@@ -1897,7 +1904,9 @@ class ManeuverSequence(TurnMotion):
             ahead, _, stop_at = self._open_front_stop(scan)
             board_ahead = ahead is not None and ahead <= stop_at
             if stage == 'light_entry':
-                return not board_ahead and self._open_lane_target(scan, heading) is not None
+                lane = self._open_lane_target(scan, heading)
+                return (lane is not None and (not board_ahead
+                        or self._open_light_lane_entry(scan, heading, lane) is not None))
             return not board_ahead or self._open_confirmed_second(scan) is not None
         if stage == 'second_loop':
             target = self.second_target
@@ -2796,6 +2805,11 @@ class ManeuverSequence(TurnMotion):
             v = speed if speed is not None else LANE_SPEED_UNKNOWN_MPS
             stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)
                        + v*LANE_REACTION_S)
+            # Decelerate before the terminal coast boundary is reached while
+            # the divider still occludes the first support. This uses the
+            # current front range and speed, not the divider/course length.
+            if walls is not None and ahead is not None and ahead <= stop_at+v*(SECOND_STEER_LAG_S+LANE_REACTION_S):
+                self._lane_start_slow = True
         self.start_lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
             'nominal_target_pwm': natural, 'walls': walls, 'compass_heading_rad': heading,
             'first_approach': approach, 'front_range_m': ahead, 'speed_mps': speed,
@@ -2863,7 +2877,7 @@ class ManeuverSequence(TurnMotion):
             'compass_heading_rad': heading, 'progress_rad': side*(heading-axis),
             'support_center_left_m': [round(v, 3) for v in center], 'support_radius_m': round(radius, 3),
             'free_m': {round(math.degrees(t)): (None if v == math.inf else v) for t, v in free_memory.items()},
-            'plan': {k: (None if v == -math.inf else v) for k, v in plan.items()},
+            'plan': {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in plan.items()},
             'loop_center_left_m': [round(v, 3) for v in loop_center], 'pursuit_mode': mode,
             'before_tangent_point_m': round(before, 3), 'carrot_left_m': [round(v, 3) for v in carrot],
             'pursuit_curvature_per_m': curvature, 'target_pwm': pwm,
@@ -3209,8 +3223,19 @@ class ManeuverSequence(TurnMotion):
             # car below the lane it must climb to (simulation, wide courses:
             # the light divider's open end was hit after a full loop).
             pursuit = self._open_light_pursuit(scan, heading)
-            if pursuit is not None and pursuit[3] >= loop['target_pwm']:
-                return self._open_second_pass(scan, now, control, 'light_lane_pursuit_needs_less_right')
+            if pursuit is not None:
+                # Also hand over when continuing the adopted right arc would
+                # carry us beyond the measured lane centre before heading is
+                # aligned. Waiting only for "less right" misses the opposite
+                # failure: a tighter entry is needed before the outer board.
+                kappa = (NEUTRAL-self.servo)/ROUTE_PWM_PER_CURVATURE
+                remaining_lateral = ((1-math.cos(heading))/kappa
+                                     if kappa > 0 and 0 <= heading <= math.pi/2 else None)
+                reaches_lane = (remaining_lateral is not None
+                                and remaining_lateral >= pursuit[0]['center_lateral_m'])
+                if pursuit[3] >= loop['target_pwm'] or reaches_lane:
+                    return self._open_second_pass(scan, now, control,
+                        'adopted_arc_reaches_light_lane' if reaches_lane else 'light_lane_pursuit_needs_less_right')
         self.natural_steering_target = loop['target_pwm']
         self.steering_target = self._open_right_gate(loop['target_pwm'])
         self.reason = 'open_second_loop'
@@ -3276,9 +3301,32 @@ class ManeuverSequence(TurnMotion):
                  else max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], start)))
         u = (math.cos(-heading), math.sin(-heading))
         lateral = lane['center_lateral_m']
+        # As the line is approached, shorten the pursuit horizon so the
+        # remaining cross-lane motion is removed before releasing the turn.
+        along = min(along, max(OPEN_LANE_LOOKAHEAD_M[0], OPEN_LOOKAHEAD_M+abs(lateral)))
         point = (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
         curvature, pwm = _pursuit_pwm(point)
         return lane, point, curvature, pwm
+
+    def _open_light_lane_entry(self, scan, heading, lane):
+        """The same measured lane admission for driving and paused recovery."""
+        walls = corridor_walls(scan)
+        # Inside the lane: the outer board on the left, the inner board (the
+        # divider) on the right and within the near pursuit horizon, nearly
+        # aligned. Requiring the divider alongside can deadlock before its
+        # open end when the end-board stopping distance is reached first.
+        inside = (lane['inner_lateral_m'] is not None
+                  and lane['inner_lateral_m'] <= -(SIDE_BODY_EXTENT_M+OPEN_LANE_INSIDE_MARGIN_M)
+                  and lane['outer_lateral_m'] >= SIDE_BODY_EXTENT_M+OPEN_LANE_INSIDE_MARGIN_M
+                  and lane['inner_start_along_m'] <= OPEN_LANE_LOOKAHEAD_M[0])
+        fitted = (walls is not None and OPEN_LANE_WIDTH_M[0] <= walls['width_m'] <= OPEN_LANE_WIDTH_M[1]
+                  and abs(lane['center_lateral_m']) <= walls['width_m']/2-SIDE_BODY_EXTENT_M)
+        if abs(heading) <= OPEN_LANE_ENTRY_HEADING_RAD and (inside or fitted):
+            return {'source_seq': scan['seq'], 'walls': walls,
+                'lane_target': lane, 'compass_heading_rad': heading,
+                'basis': ('car_between_outer_board_and_near_divider_lines' if inside
+                          else 'two_parallel_boards_round_car_on_light_lane_line')}
+        return None
 
     def _open_light_entry_update(self, scan, now, control):
         """Turn onto the light-lane centre line along the outer boundary."""
@@ -3290,21 +3338,10 @@ class ManeuverSequence(TurnMotion):
             self._begin_recovery_hold('open_light_lane_unmeasured', now, control)
             return self._result(now)
         lane, point, curvature, natural = pursuit
+        entry = self._open_light_lane_entry(scan, heading, lane)
+        if entry is not None:
+            return self._begin_light_lane(scan, now, control, entry)
         walls = corridor_walls(scan)
-        # Inside the lane: the outer board on the left, the inner board (the
-        # divider) on the right and already alongside, nearly aligned. The
-        # two-board fit alone missed a 2.5 m lane (simulation, 5 m course).
-        inside = (lane['inner_lateral_m'] is not None
-                  and lane['inner_lateral_m'] <= -(SIDE_BODY_EXTENT_M+OPEN_LANE_INSIDE_MARGIN_M)
-                  and lane['outer_lateral_m'] >= SIDE_BODY_EXTENT_M+OPEN_LANE_INSIDE_MARGIN_M
-                  and lane['inner_start_along_m'] <= FRONT_BODY_EXTENT_M)
-        fitted = (walls is not None and OPEN_LANE_WIDTH_M[0] <= walls['width_m'] <= OPEN_LANE_WIDTH_M[1]
-                  and abs(lane['center_lateral_m']) <= walls['width_m']/2-SIDE_BODY_EXTENT_M)
-        if abs(heading) <= OPEN_LANE_ENTRY_HEADING_RAD and (inside or fitted):
-            return self._begin_light_lane(scan, now, control, {'source_seq': scan['seq'], 'walls': walls,
-                'lane_target': lane, 'compass_heading_rad': heading,
-                'basis': ('car_between_outer_board_and_divider_alongside' if inside
-                          else 'two_parallel_boards_round_car_on_light_lane_line')})
         ahead, speed, stop_at = self._open_front_stop(scan)
         self.light_feedback = {'source_seq': scan['seq'], 'stage': 'light_entry', 'compass_heading_rad': heading,
             'lane_target': lane, 'pursuit_point_left_m': [round(v, 3) for v in point],
@@ -4300,7 +4337,12 @@ class ManeuverSequence(TurnMotion):
         _, lane = self._current_lane(scan, now)
         space = None
         walls = corridor_walls(scan)
-        if walls is not None:
+        heading = self.compass.current(scan) if self.entry_kind == 'lane' else None
+        open_pursuit = None if heading is None else self._open_light_pursuit(scan, heading)
+        if open_pursuit is not None:
+            natural = open_pursuit[3]
+            source = 'open_lane_axis_pursuit'
+        elif walls is not None:
             # Continue from the actually commanded servo (inside the law's own
             # +-55 range; the post-pass slew moves a larger turn there).
             self._lane_steering.servo = max(NEUTRAL-55, min(NEUTRAL+55, self.servo))
@@ -4644,7 +4686,7 @@ class ManeuverSequence(TurnMotion):
                 or type(control.get('motor')) is not int or type(control.get('servo')) is not int
                 or type(control.get('tick')) is not int or control['tick'] < 0
                 or type(control.get('seq')) is not int or control['seq'] < 0
-                or not SERVO_MIN <= control['servo'] <= SERVO_MAX):
+                or not min(SERVO_MIN, RIGHT_EXIT_MIN_PWM) <= control['servo'] <= SERVO_MAX):
             self.lock('invalid_turn_adoption_feedback')
             return False
         if self.last_control_tick is not None and (control['tick'] < self.last_control_tick

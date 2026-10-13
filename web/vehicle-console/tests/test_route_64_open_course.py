@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 import maneuver_sequence as ms  # noqa: E402
@@ -130,6 +131,20 @@ class GeometryTests(unittest.TestCase):
         self.assertAlmostEqual(plan['radius_m'], OPEN_RIGHT_RADIUS_M[1])
         self.assertLessEqual(math.hypot(plan['offset_axis_m'], plan['offset_side_m']), .05+1e-9)
 
+    def test_tight_support_board_gap_gives_up_cone_comfort_before_board_clearance(self):
+        # Only .50 m from support centre to board: .15 m comfort on both
+        # sides does not fit. Preserve body space round the support and more
+        # than the hard .08 m board margin instead of splitting the violation.
+        free = [(t, .5 if abs(t+math.pi/2) < 1e-9 else 2.5)
+                for t in OPEN_PROBE_DIRECTIONS_RAD]
+        plan = _plan_loop(free, .1, OPEN_RIGHT_RADIUS_M)
+        extent = _loop_extent(plan['offset_axis_m'], plan['offset_side_m'],
+                              plan['radius_m'], -math.pi/2)
+        self.assertLess(extent, .1+SIDE_BODY_EXTENT_M+OPEN_INNER_GAP_M)
+        self.assertGreaterEqual(extent, .1+SIDE_BODY_EXTENT_M)
+        self.assertGreater(.5-extent-SIDE_BODY_EXTENT_M, .08)
+        self.assertFalse(plan['board_slack_m'] >= 0)  # comfort infeasibility stays visible
+
     def test_carrot_on_the_approach_line_then_on_the_circle(self):
         e1, e2 = (1., 0.), (0., 1.)
         # Circle (anticlockwise) centred 3 m ahead, .5 m left: approach line y = -.4.
@@ -243,6 +258,46 @@ class RotationCompensationTests(unittest.TestCase):
 
 
 class StageWiringTests(unittest.TestCase):
+    def test_open_right_endpoint_waits_for_actual_center_ack(self):
+        motion = ManeuverSequence(0., continue_route=True)
+        motion.servo = 1540
+        self.assertEqual(motion._open_right_gate(1200), NEUTRAL)
+        motion.servo = NEUTRAL
+        self.assertEqual(motion._open_right_gate(1200), NEUTRAL)
+        self.assertTrue(motion._route_adopted(
+            {'motor': 1550, 'servo': NEUTRAL, 'command_acked': True, 'tick': 2, 'seq': 3}, .1))
+        self.assertEqual(motion._open_right_gate(1200), 1200)
+        # A later adopted left command invalidates that permission.
+        motion.servo = 1540
+        self.assertTrue(motion._route_adopted(
+            {'motor': 1550, 'servo': 1540, 'command_acked': True}, .2))
+        motion.servo = NEUTRAL
+        self.assertEqual(motion._open_right_gate(1200), NEUTRAL)
+
+    def test_light_lane_entry_requires_body_between_measured_boards_and_alignment(self):
+        motion = ManeuverSequence(0., continue_route=True)
+        scan = {'seq': 8}
+        lane = {'inner_lateral_m': -.45, 'outer_lateral_m': .45,
+                'inner_start_along_m': .6, 'center_lateral_m': 0.}
+        with patch.object(ms, 'corridor_walls', return_value=None):
+            self.assertIsNotNone(motion._open_light_lane_entry(scan, math.radians(15), lane))
+            self.assertIsNone(motion._open_light_lane_entry(scan, math.radians(30), lane))
+            self.assertIsNone(motion._open_light_lane_entry(scan, 0., {**lane, 'inner_lateral_m': .1}))
+            self.assertIsNone(motion._open_light_lane_entry(scan, 0., {**lane, 'inner_start_along_m': 2.}))
+
+    def test_paused_light_entry_uses_same_lane_admission_before_end_board_wait(self):
+        motion = ManeuverSequence(0., continue_route=True)
+        motion.route_stage, motion.neutral_pause_kind = 'light_entry', 'recovery'
+        lane = {'inner_lateral_m': -.45, 'outer_lateral_m': .45,
+                'inner_start_along_m': .6, 'center_lateral_m': 0.}
+        with patch.object(motion.compass, 'current', return_value=math.radians(15)), \
+             patch.object(motion, '_open_front_stop', return_value=(1., 0., 2.)), \
+             patch.object(motion, '_open_lane_target', return_value=lane), \
+             patch.object(ms, 'corridor_walls', return_value=None):
+            self.assertTrue(motion._pause_stage_ready({'seq': 9}, 1.))
+            lane['inner_lateral_m'] = .2  # still outside the divider: keep waiting
+            self.assertFalse(motion._pause_stage_ready({'seq': 10}, 1.1))
+
     def test_open_stages_are_post_pass_and_task_left_bypass(self):
         for stage in OPEN_STAGES:
             self.assertIn(stage, POST_PASS_STAGES)
@@ -307,6 +362,20 @@ class CourseSimulationTests(unittest.TestCase):
             with self.subTest(layout=name):
                 self.assertTrue(summary['success'], summary)
                 self.assertEqual(summary['contacts'], [])
+
+    def test_close_second_divider_and_light_entry_regressions(self):
+        variants = dict(self.sim.variations())
+        for name in ('L8.0W4.0lane1.05div0.4cone-0.4+0.3',
+                     'L8.0W4.0lane1.05div0.4cone+0.4-0.3',
+                     'L6.4W6.0lane0.9div0.4cone+0.0+0.0',
+                     'L6.4W6.0lane0.9div0.5cone+0.0+0.0',
+                     'L5.0W6.0lane0.9div0.4cone+0.0+0.0'):
+            summary, _, _ = self.sim.run(self.sim.Course(**variants[name]))
+            with self.subTest(variant=name):
+                self.assertTrue(summary['success'], summary)
+                self.assertEqual(summary['end_reason'], 'route_finish_zone_stop')
+                self.assertEqual(summary['contacts'], [])
+                self.assertGreaterEqual(summary['min_board_gap_m'], .08)
 
 
 if __name__ == '__main__':

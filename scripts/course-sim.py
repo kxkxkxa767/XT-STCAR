@@ -188,11 +188,15 @@ class Geometry:
 
 
 class Vehicle:
-    def __init__(self, x, y, psi, *, speed_scale=1., decel=.5, delay=.15, steer_tau=.1, seed=0):
+    def __init__(self, x, y, psi, *, speed_scale=1., decel=.5, delay=.15, steer_tau=.1, seed=0,
+                 right_curvature_max=1.875):
+        if not math.isfinite(right_curvature_max) or right_curvature_max <= 0:
+            raise ValueError('right_curvature_max must be finite and positive')
         self.x, self.y, self.psi, self.v = x, y, psi, 0.
         self.speed_scale, self.decel, self.delay, self.steer_tau = speed_scale, decel, delay, steer_tau
         self.servo_queue = []  # (time, servo) commands, applied after the delay
         self.servo_phys = 1500.
+        self.right_curvature_max = right_curvature_max
         self.rng = random.Random(seed)
 
     def target_speed(self, motor):
@@ -206,7 +210,9 @@ class Vehicle:
             self._delayed = applied
         target = getattr(self, '_delayed', 1500)
         self.servo_phys += (target-self.servo_phys)*min(1., dt/self.steer_tau)
-        kappa = max(-.94, min(1.375, (self.servo_phys-1500)/160))
+        # Nominal extension of the existing PWM model to the static1200
+        # endpoint. This is not a measured right-turn calibration.
+        kappa = max(-self.right_curvature_max, min(1.375, (self.servo_phys-1500)/160))
         vt = self.target_speed(motor)
         if vt > 0 and (self.v > .05 or motor >= 1560):
             self.v += max(-2., min(2., (vt-self.v)/.35))*dt
@@ -233,13 +239,14 @@ def make_console(server):
 
 
 def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1., noise=.008, seed=0,
-        verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None):
+        verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None, right_curvature_max=1.875):
     sys.path.insert(0, str(CONSOLE))
     server = load('course_sim_server', CONSOLE/'server.py')
     console = make_console(server)
     geometry = Geometry()
     rng = random.Random(seed)
-    car = Vehicle(*course.start, speed_scale=speed_scale, decel=decel, delay=delay, seed=seed)
+    car = Vehicle(*course.start, speed_scale=speed_scale, decel=decel, delay=delay, seed=seed,
+                  right_curvature_max=right_curvature_max)
     history = [(0., car.x, car.y, car.psi)]
     clock = {'now': 0.}
     outputs = []
@@ -355,7 +362,13 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                'min_board_gap_at': min_wall_at, 'min_cone_gap_at': min_cone_at,
                'final': (round(car.x, 2), round(car.y, 2), round(math.degrees(car.psi), 1)),
                'final_front_x': round(front_x, 2), 'in_finish_zone': in_finish, 'time_s': t,
-               'success': in_finish and not any(c[1] == 'board' for c in contacts)}
+               'success': in_finish and not any(c[1] == 'board' for c in contacts),
+               # Keep the historical position-based score for comparisons,
+               # but do not count a safety stop in the zone as route completion.
+               'route_completed': (in_finish and not any(c[1] == 'board' for c in contacts)
+                                   and result.get('reason') == 'route_finish_zone_stop'),
+               'vehicle_model': {'right_curvature_max_per_m': right_curvature_max,
+                                 'right_1200_dynamically_calibrated': False}}
     sys.path.remove(str(CONSOLE))
     return summary, log, history
 
@@ -499,6 +512,8 @@ def main():
     parser.add_argument('--speed-scale', type=float, default=1.)
     parser.add_argument('--decel', type=float, default=.5)
     parser.add_argument('--delay', type=float, default=.15)
+    parser.add_argument('--right-curvature-max', type=float, default=1.875,
+                        help='unmeasured nominal1200 limit (1/m); use .94 for old-cap sensitivity')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max-s', type=float, default=45.)
     parser.add_argument('--png')
@@ -511,12 +526,13 @@ def main():
     parser.add_argument('--png-dir', help='with --range: write each variation\'s picture here')
     parser.add_argument('--only-failures', action='store_true', help='with --png-dir: pictures of failures only')
     args = parser.parse_args()
-    keys = ('success', 'start_error', 'end_reason', 'contacts', 'min_board_gap_m', 'min_cone_gap_m', 'final', 'time_s')
+    keys = ('success', 'route_completed', 'start_error', 'end_reason', 'contacts', 'min_board_gap_m', 'min_cone_gap_m', 'final', 'time_s',
+            'vehicle_model')
     if args.matrix:
         for name in sorted(LAYOUTS):
             for speed, decel, delay in ((1., .5, .15), (1.2, .35, .3), (.8, .7, .15)):
                 summary, _, _ = run(Course(**LAYOUTS[name]), speed_scale=speed, decel=decel, delay=delay,
-                                    max_s=args.max_s, seed=args.seed)
+                                    max_s=args.max_s, seed=args.seed, right_curvature_max=args.right_curvature_max)
                 print(name, f'speed{speed} decel{decel} delay{delay}',
                       json.dumps({k: summary[k] for k in keys}, ensure_ascii=False), flush=True)
         return
@@ -524,7 +540,8 @@ def main():
         passed = total = 0
         for name, spec in variations():
             course = Course(**spec)
-            summary, log, _ = run(course, max_s=args.max_s, seed=args.seed)
+            summary, log, _ = run(course, max_s=args.max_s, seed=args.seed,
+                                  right_curvature_max=args.right_curvature_max)
             if args.png_dir and not (args.only_failures and summary['success']):
                 Path(args.png_dir).mkdir(parents=True, exist_ok=True)
                 render(course, log, str(Path(args.png_dir)/f'{name}.png'), name=name, summary=summary)
@@ -546,7 +563,8 @@ def main():
         spec['start'] = (v[0], v[1], math.radians(v[2]))
     course = Course(**spec)
     summary, log, _ = run(course, max_s=args.max_s, speed_scale=args.speed_scale, decel=args.decel,
-                          delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace)
+                          delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace,
+                          right_curvature_max=args.right_curvature_max)
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     if args.log:
         Path(args.log).write_text(''.join('\t'.join(str(round(v, 3)) if isinstance(v, float) else str(v)

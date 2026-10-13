@@ -13,14 +13,14 @@ class RoutePathIntentTests(unittest.TestCase):
     # right stage target; it never invents right anywhere.
     TASK_LEFT = ('corridor_follow', 'second_orbit')
 
-    def motion(self, stage, target, *, authorized=True):
+    def motion(self, stage, target, *, authorized=True, wall_distance=.8):
         motion = route.RoutePathCheckTests.motion(stage, right=authorized)
         if stage == 'second_orbit' and authorized:
             motion.second_center_ack = {'servo': 1500}
         motion.steering_target = motion.natural_steering_target = target
         motion.servo = 1500
-        wall = {i: .8/math.cos(math.radians(i)) for i in range(-60 % 360, 360)}
-        wall.update({i: .8/math.cos(math.radians(i)) for i in range(0, 6)})
+        wall = {i: wall_distance/math.cos(math.radians(i)) for i in range(-60 % 360, 360)}
+        wall.update({i: wall_distance/math.cos(math.radians(i)) for i in range(0, 6)})
         motion._current_scan = route.RoutePathCheckTests.scan(3, wall)
         return motion
 
@@ -28,10 +28,17 @@ class RoutePathIntentTests(unittest.TestCase):
         for stage in self.STAGES:
             for target in (1610, 1420):
                 with self.subTest(stage=stage, target=target):
-                    motion = self.motion(stage, target)
+                    # At .8 m the newly allowed1200 right arc is clear too.
+                    # .7 m preserves this fixture's "only opposite clear"
+                    # premise at the new endpoint; keep all intent assertions.
+                    motion = self.motion(stage, target, wall_distance=.7)
                     if target < 1500:
                         motion._current_scan['ranges'] = [
                             motion._current_scan['ranges'][-i % 360] for i in range(360)]
+                    points = motion._path_points(motion._current_scan)
+                    same = (1200, 1250, 1300, 1350, 1390, 1430, 1470) if target < 1500 else range(1500, 1721, 20)
+                    self.assertTrue(all(motion._path_free_distance(points, pwm) < .7 for pwm in same))
+                    self.assertGreaterEqual(motion._path_free_distance(points, 1720 if target < 1500 else 1200), .7)
                     choice = motion._route_path_target(target)
                     if target < 1500 and stage in self.TASK_LEFT:
                         # Left of the obstacle is the task side here.

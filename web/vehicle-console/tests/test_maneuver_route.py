@@ -1227,7 +1227,7 @@ class ManeuverRouteTests(unittest.TestCase):
         pwm, reason = motion._right_exit_target(value, value['received_at'])
         self.assertIsNone(reason)
         self.assertEqual(motion.right_exit_geometry['source_kind'], 'native_wall_window_pair')
-        self.assertTrue(1350 <= pwm < 1500)
+        self.assertTrue(1200 <= pwm < 1500)
         self.assertFalse(motion.right_exit_geometry['turn_path_certified'])
         # Actual 478 has no pair with enough shared support: still missing.
         value = {**frames[478], 'received_at': frames[478]['at_ms']/1000}

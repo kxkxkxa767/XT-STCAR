@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "2026-10-13: latest numbered physical route trial remains 62 (claude-turn62/8a4055b). Manual steering patch afff7a9 deployed on turn62 runtime; 1800/1200 each ~10s completed with motor1500 and final lock. Ground return-to-center hysteresis reported; no dynamic1200 curvature or compensation. Turn64/1f4ce71 open-course WIP now passes detector44-trial and route51/52 compatibility replay; 718 Python tests (2 existing expected failures) and full Rust build passed; range baseline reproduced70/108,38 failures remain, NOT built/deployed/road-tested.",
+  "latest_trial_status": "2026-10-13 local candidate after ae7c743: manual/bridge1200..1800 already statically tested on turn62; ManeuverSequence right candidate now1200, left1720, centre1500 unchanged. No dynamic1200 calibration or hysteresis compensation. Python725 OK (2 existing expected failures); detector44 and route51/52 byte-identical. Nominal range95/108 by historical position score, only79/108 normal route completion; old .94/m cap sensitivity73/108. Remaining failures prevent turn64 build/deployment. User explicitly requested no connection this turn; last actual route remains62 with manual patch, no new fresh vehicle lock claim.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -18465,7 +18465,8 @@
         "narrow second channel: plan/check the approach side against the start divider, slower crossing if needed",
         "unit tests for every new function/branch, --range again, full suite, detector/route replays, then build round 64 (helper --max-seconds 40) and test on the car after SSH and placement are confirmed",
         "question for the user (not changed): right steering bound 1350 vs protocol 1270; real data only at 1350"
-      ]
+      ],
+      "later_status_record": "layout_3p2_route_redesign_20261012.codex_offline_correction_20261013"
     },
     "wip_round64_finish_range_20261013": {
       "status": "partial implementation, NOT deployable, not built, not on the car; simulation only",
@@ -18495,7 +18496,8 @@
         "joint plan of the second loop with the first (internal tangent must exist: centre distance >= R1+R2+margin) and the approach-side band against the start divider",
         "unit tests for the open-course functions (plan, carrot, axis lines, lane target, lookout, finish)",
         "range again, replays, then round-64 build (helper --max-seconds 40) after SSH/placement"
-      ]
+      ],
+      "later_status_record": "layout_3p2_route_redesign_20261012.codex_offline_correction_20261013"
     },
     "wip_round64_approach_line_20261013": {
       "status": "partial implementation, NOT deployable, not built, not on the car; simulation only",
@@ -18532,7 +18534,8 @@
         "narrow second channel (.55 m): consider slower approach / planned straight segment in the channel before the right loop",
         "with the user's answer on the right bound: if allowed, set RIGHT_EXIT_MIN_PWM/OPEN_RIGHT_RADIUS_M and re-run --range",
         "build round 64 only after replays, full suite, --range; SSH reconnect and placement confirmation by the user before power"
-      ]
+      ],
+      "later_status_record": "layout_3p2_route_redesign_20261012.codex_offline_correction_20261013"
     },
     "static_steering300_20261013": {
       "record": "docs/vehicle-steering300-validation-20261013.json",
@@ -19507,6 +19510,1437 @@
         "light-baseline.log": "2bbc347df499029af547f34b5ba2f981fb935813842b2445de9c4f5051c12559",
         "light-baseline.png": "dc6be616bece51880cc8dfb5f71e9524848bd24b5e40739ec1b8993da15a3b86"
       }
+    },
+    "codex_offline_correction_20261013": {
+      "status": "local candidate saved for Claude review; partial route work, NOT deployable; no SSH, package, deployment or powered trial this turn",
+      "source_base": "ae7c7431f0d47c5c2fdd5e22845a06c5cf9b4bb6",
+      "latest_user_scope": "已静态接受±300，先不连车，按交接要求本地修改保存上传后给Claude核验；记得保存上传",
+      "evidence_directory": "work/round64-offline-20261013-120958",
+      "limits": {
+        "manual_and_bridge_pwm": [
+          1200,
+          1800
+        ],
+        "maneuver_sequence_right_min_before": 1350,
+        "maneuver_sequence_right_min_after": 1200,
+        "route_left_max_unchanged": 1720,
+        "legacy_turn_motion_range_unchanged": [
+          1270,
+          1720
+        ],
+        "neutral_unchanged": 1500,
+        "open_right_radius_before_m": [
+          1.1,
+          1.4
+        ],
+        "open_right_radius_candidate_m": [
+          0.75,
+          1.4
+        ],
+        "right_1200_dynamic_curvature_measured": false,
+        "hysteresis_compensation_added": false
+      },
+      "failure_classes": [
+        "D: loop/entry overshoot and unreachable second approach",
+        "E: speed and steering lag",
+        "C: light-entry recovery admission",
+        "C: first support not acquired before terminal front-board stop on some wide short layouts"
+      ],
+      "changes": [
+        "ManeuverSequence right exits now accept1200; matching feedback/coast validators and right-path candidates follow it. Manual/UI/Rust limits were already1200..1800 in afff7a9 and are unchanged here. Actual center ACK, first-pass authorization, deadline, stale/clock gates, bridge lock, 8cm raw-body gate and0.12s loop gate remain.",
+        "Loop planner: when board and cone comfort margins cannot both fit, reduce cone comfort first; keep support+body inside circle, prefer board-side bound. Offset search derives from each circle radius instead of a fixed+-.75m box. Board slack is reported separately from penalized score; neither is a swept-path certificate.",
+        "Second-loop/light-entry handover also checks the remaining lateral displacement of the adopted nominal right arc against the currently measured light-lane centre. Close-to-line pursuit shortens its horizon. No course coordinates, course lengths or timed turns added.",
+        "Open-course light_lane continues the same compass/parallel-board centre pursuit as entry, avoiding a switch to a wrong generic wall pair. Lane admission and paused recovery share the same body-between-boards/alignment test; a nearby divider endpoint is sufficient, with actual resume ACK unchanged.",
+        "Before first-support acquisition, slow1560 to1550 using current front range and speed only while two measured boards still form the start lane; terminal stopping threshold unchanged. An unqualified version regressed two6.4m wide courses and was rejected.",
+        "Simulator exposes --right-curvature-max: default1.875/m is an UNMEASURED extension of the existing160PWM/(1/m) model; .94 sensitivity is retained. Added route_completed beside historical position-only success so a standstill-confirmation timeout is not reported as completion."
+      ],
+      "validation": {
+        "python": {
+          "tests": 725,
+          "failures": 0,
+          "errors": 0,
+          "expected_failures": 2,
+          "log": "python-final-v3.log",
+          "expected_failure_scope": "unchanged round63 StraightLaneSteeringTests: real_lane_frames wall law and off_center_straight; do not remove these annotations to claim full completion"
+        },
+        "baseline_failure_comparison": {
+          "baseline_tests": 718,
+          "baseline_expected_failures": 2,
+          "baseline_fail_error_set": [],
+          "candidate_fail_error_set": [],
+          "same": true,
+          "method": "Previous immutable1f4ce71/afff7a9 baseline audit; ae7c743 since afff7a9 only updates docs. Missing private run08 fixture in archive was independently rerun against the same read-only recording. No stash pop/apply."
+        },
+        "focused": "35 tests passed before adding two extra6.4m subcases; final full725 includes both added cases",
+        "detector": {
+          "trials": 44,
+          "range": "19..62",
+          "all_lines_identical_to_baseline": true,
+          "TOTAL": "first/strict(51): seen 558 conf 433 ids 69\n    first/gap(52): seen 566 conf 439 ids 66\n    first/tolerant: seen 618 conf 513 ids 55\n    ahead/strict(51): seen 360 conf 205 ids 99\n    ahead/gap(52): seen 362 conf 210 ids 88\n    ahead/tolerant: seen 446 conf 306 ids 76"
+        },
+        "route51": {
+          "byte_identical_to_baseline": true,
+          "handover_recorded_s": 1.7
+        },
+        "route52": {
+          "byte_identical_to_baseline": true,
+          "second_orbit_recorded_s": 4.79,
+          "left_entry_recorded_s": 5.39,
+          "left_pwm": 1540
+        },
+        "rust": {
+          "source_changed_this_turn": false,
+          "previous_full_build_passed": true,
+          "tests_passed": 653,
+          "ignored": 3,
+          "fmt_test_clippy_riscv_and_elf_passed": true,
+          "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+          "evidence": "work/round64-resume-20261013-111945/"
+        },
+        "nominal_simulation": {
+          "log": "work/round64-offline-20261013-120958/range-final-v2.log",
+          "total": 108,
+          "historical_position_score": 95,
+          "route_completed": 79,
+          "score_definition": "Historical success means final pose in finish zone and no board contact; route_completed additionally requires route_finish_zone_stop. Do not call coast_standstill_unconfirmed a completed run.",
+          "by_length": {
+            "L5.0": {
+              "position_success": 23,
+              "route_completed": 19,
+              "total": 36
+            },
+            "L6.4": {
+              "position_success": 36,
+              "route_completed": 29,
+              "total": 36
+            },
+            "L8.0": {
+              "position_success": 36,
+              "route_completed": 31,
+              "total": 36
+            }
+          },
+          "successful_end_reasons": {
+            "route_finish_zone_stop": 79,
+            "coast_standstill_unconfirmed": 16
+          },
+          "baseline70_regressions": [],
+          "remaining_failures": [
+            {
+              "variant": "L5.0W4.0lane0.9div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.4,
+                  "board",
+                  1.95,
+                  1.15
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.16,
+              "final": [
+                1.27,
+                0.44,
+                223.7
+              ],
+              "time_s": 10.4,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane0.9div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.52,
+                  "board",
+                  1.99,
+                  1.13
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.138,
+              "final": [
+                1.35,
+                0.41,
+                226.5
+              ],
+              "time_s": 10.5,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane1.05div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.34,
+                  "board",
+                  1.67,
+                  1.28
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.05,
+              "final": [
+                0.91,
+                0.88,
+                207.6
+              ],
+              "time_s": 10.2,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane1.05div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.3,
+                  "board",
+                  1.7,
+                  1.29
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.05,
+              "final": [
+                0.92,
+                0.86,
+                207.7
+              ],
+              "time_s": 10.2,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  9.46,
+                  "board",
+                  1.86,
+                  1.27
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.298,
+              "final": [
+                1.08,
+                0.97,
+                201.0
+              ],
+              "time_s": 11.3,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  9.78,
+                  "board",
+                  1.91,
+                  1.27
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.33,
+              "final": [
+                1.16,
+                0.95,
+                203.0
+              ],
+              "time_s": 11.6,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "start_lane_board_ahead_without_first_support",
+              "contacts": [],
+              "min_board_gap_m": 0.22,
+              "min_cone_gap_m": 2.01,
+              "final": [
+                4.45,
+                0.45,
+                -0.1
+              ],
+              "time_s": 5.62,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.5cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.065,
+              "min_cone_gap_m": 0.14,
+              "final": [
+                3.63,
+                5.78,
+                3.3
+              ],
+              "time_s": 17.64,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  15.78,
+                  "board",
+                  2.4,
+                  4.93
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.404,
+              "final": [
+                2.69,
+                5.89,
+                73.6
+              ],
+              "time_s": 17.78,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "start_lane_board_ahead_without_first_support",
+              "contacts": [],
+              "min_board_gap_m": 0.22,
+              "min_cone_gap_m": 1.935,
+              "final": [
+                4.45,
+                0.52,
+                -0.0
+              ],
+              "time_s": 5.62,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.089,
+              "min_cone_gap_m": 0.347,
+              "final": [
+                4.73,
+                2.86,
+                91.9
+              ],
+              "time_s": 7.0,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "maneuver_cumulative_drive_timeout",
+              "contacts": [],
+              "min_board_gap_m": 0.22,
+              "min_cone_gap_m": 0.247,
+              "final": [
+                3.69,
+                4.07,
+                34.9
+              ],
+              "time_s": 40.32,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.038,
+              "min_cone_gap_m": 0.421,
+              "final": [
+                4.81,
+                2.77,
+                87.6
+              ],
+              "time_s": 7.0,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 1.875,
+                "right_1200_dynamically_calibrated": false
+              }
+            }
+          ]
+        },
+        "old_right_cap_sensitivity": {
+          "log": "work/round64-offline-20261013-120958/range-old-cap-sensitivity-v2.log",
+          "total": 108,
+          "historical_position_score": 73,
+          "route_completed": 54,
+          "score_definition": "Historical success means final pose in finish zone and no board contact; route_completed additionally requires route_finish_zone_stop. Do not call coast_standstill_unconfirmed a completed run.",
+          "by_length": {
+            "L5.0": {
+              "position_success": 5,
+              "route_completed": 3,
+              "total": 36
+            },
+            "L6.4": {
+              "position_success": 35,
+              "route_completed": 26,
+              "total": 36
+            },
+            "L8.0": {
+              "position_success": 33,
+              "route_completed": 25,
+              "total": 36
+            }
+          },
+          "successful_end_reasons": {
+            "route_finish_zone_stop": 54,
+            "coast_standstill_unconfirmed": 19
+          },
+          "baseline70_regressions": [
+            "L5.0W6.0lane0.9div0.5cone+0.4-0.3",
+            "L5.0W6.0lane1.05div0.5cone+0.0+0.0",
+            "L6.4W4.0lane1.05div0.5cone+0.4-0.3",
+            "L8.0W4.0lane0.9div0.5cone+0.4-0.3",
+            "L8.0W4.0lane1.05div0.5cone+0.4-0.3"
+          ],
+          "remaining_failures": [
+            {
+              "variant": "L5.0W4.0lane0.9div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.4,
+                  "board",
+                  1.95,
+                  1.15
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.16,
+              "final": [
+                1.34,
+                0.37,
+                230.1
+              ],
+              "time_s": 10.4,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane0.9div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.36,
+                  "board",
+                  0.21,
+                  2.11
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.226,
+              "final": [
+                -0.11,
+                2.88,
+                112.5
+              ],
+              "time_s": 12.2,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane0.9div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.52,
+                  "board",
+                  1.99,
+                  1.13
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.138,
+              "final": [
+                1.43,
+                0.34,
+                233.0
+              ],
+              "time_s": 10.5,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane0.9div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.084,
+              "min_cone_gap_m": 0.218,
+              "final": [
+                0.26,
+                3.3,
+                88.7
+              ],
+              "time_s": 12.5,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane1.05div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.32,
+                  "board",
+                  1.68,
+                  1.29
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.05,
+              "final": [
+                0.93,
+                0.84,
+                210.3
+              ],
+              "time_s": 10.2,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane1.05div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.091,
+              "min_cone_gap_m": 0.206,
+              "final": [
+                0.29,
+                3.35,
+                86.4
+              ],
+              "time_s": 12.7,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W4.0lane1.05div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  8.3,
+                  "board",
+                  1.7,
+                  1.29
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.05,
+              "final": [
+                0.94,
+                0.82,
+                210.4
+              ],
+              "time_s": 10.2,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane0.9div0.4cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.78,
+                  "board",
+                  0.19,
+                  2.64
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.295,
+              "final": [
+                -0.03,
+                3.34,
+                107.3
+              ],
+              "time_s": 12.5,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane0.9div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  9.84,
+                  "board",
+                  1.87,
+                  1.14
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.362,
+              "final": [
+                1.15,
+                0.67,
+                212.2
+              ],
+              "time_s": 11.7,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane0.9div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.7,
+                  "board",
+                  0.2,
+                  2.58
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.165,
+              "final": [
+                -0.07,
+                3.33,
+                109.9
+              ],
+              "time_s": 12.5,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane0.9div0.5cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.94,
+                  "board",
+                  0.18,
+                  2.57
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.316,
+              "final": [
+                -0.0,
+                3.31,
+                104.1
+              ],
+              "time_s": 12.7,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane0.9div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.24,
+                  "board",
+                  1.57,
+                  1.11
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.322,
+              "final": [
+                0.75,
+                0.86,
+                196.6
+              ],
+              "time_s": 12.1,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane0.9div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.58,
+                  "board",
+                  0.23,
+                  2.35
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.175,
+              "final": [
+                -0.21,
+                3.15,
+                117.7
+              ],
+              "time_s": 12.5,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.4cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.18,
+                  "board",
+                  0.16,
+                  3.1
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.339,
+              "final": [
+                0.11,
+                3.52,
+                97.7
+              ],
+              "time_s": 12.5,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  9.36,
+                  "board",
+                  1.98,
+                  1.3
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.298,
+              "final": [
+                1.3,
+                0.66,
+                222.0
+              ],
+              "time_s": 11.3,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.44,
+                  "board",
+                  0.24,
+                  2.29
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.206,
+              "final": [
+                -0.28,
+                3.09,
+                121.6
+              ],
+              "time_s": 12.4,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.5cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.48,
+                  "board",
+                  0.17,
+                  3.11
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.297,
+              "final": [
+                0.11,
+                3.47,
+                98.7
+              ],
+              "time_s": 12.7,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  9.68,
+                  "board",
+                  2.03,
+                  1.29
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.33,
+              "final": [
+                1.39,
+                0.65,
+                224.0
+              ],
+              "time_s": 11.6,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W5.0lane1.05div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.14,
+                  "board",
+                  0.17,
+                  2.97
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.167,
+              "final": [
+                0.08,
+                3.49,
+                99.9
+              ],
+              "time_s": 12.6,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.4cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.96,
+                  "board",
+                  0.24,
+                  2.77
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.143,
+              "final": [
+                -0.37,
+                3.48,
+                128.9
+              ],
+              "time_s": 13.9,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "start_lane_board_ahead_without_first_support",
+              "contacts": [],
+              "min_board_gap_m": 0.22,
+              "min_cone_gap_m": 2.01,
+              "final": [
+                4.45,
+                0.45,
+                -0.1
+              ],
+              "time_s": 5.62,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.24,
+                  "board",
+                  0.22,
+                  2.81
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.193,
+              "final": [
+                -0.23,
+                3.53,
+                121.1
+              ],
+              "time_s": 13.1,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.5cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  12.0,
+                  "board",
+                  0.24,
+                  2.82
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.141,
+              "final": [
+                -0.34,
+                3.5,
+                129.0
+              ],
+              "time_s": 13.9,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  18.44,
+                  "board",
+                  2.75,
+                  5.76
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.404,
+              "final": [
+                2.86,
+                5.91,
+                53.0
+              ],
+              "time_s": 19.28,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane0.9div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.48,
+                  "board",
+                  0.19,
+                  3.32
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.201,
+              "final": [
+                0.01,
+                4.03,
+                103.8
+              ],
+              "time_s": 13.2,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.4cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  10.88,
+                  "board",
+                  0.22,
+                  2.78
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.3,
+              "final": [
+                -0.13,
+                3.62,
+                111.3
+              ],
+              "time_s": 12.8,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.4cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "start_lane_board_ahead_without_first_support",
+              "contacts": [],
+              "min_board_gap_m": 0.22,
+              "min_cone_gap_m": 1.935,
+              "final": [
+                4.45,
+                0.52,
+                -0.0
+              ],
+              "time_s": 5.62,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.089,
+              "min_cone_gap_m": 0.347,
+              "final": [
+                4.73,
+                2.86,
+                91.9
+              ],
+              "time_s": 7.0,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.5cone+0.0+0.0",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.08,
+                  "board",
+                  0.21,
+                  2.9
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.305,
+              "final": [
+                -0.08,
+                3.66,
+                110.3
+              ],
+              "time_s": 12.9,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.5cone-0.4+0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  11.3,
+                  "board",
+                  1.85,
+                  1.27
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.401,
+              "final": [
+                1.11,
+                0.95,
+                202.6
+              ],
+              "time_s": 13.1,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L5.0W6.0lane1.05div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.038,
+              "min_cone_gap_m": 0.421,
+              "final": [
+                4.81,
+                2.77,
+                87.6
+              ],
+              "time_s": 7.0,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L6.4W4.0lane1.05div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  15.3,
+                  "board",
+                  1.96,
+                  3.84
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.334,
+              "final": [
+                2.11,
+                3.86,
+                6.4
+              ],
+              "time_s": 16.1,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L8.0W4.0lane0.9div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [],
+              "min_board_gap_m": 0.088,
+              "min_cone_gap_m": 0.435,
+              "final": [
+                2.43,
+                3.76,
+                -0.2
+              ],
+              "time_s": 18.3,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L8.0W4.0lane1.05div0.4cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  16.44,
+                  "board",
+                  1.66,
+                  3.83
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.368,
+              "final": [
+                2.25,
+                3.93,
+                10.0
+              ],
+              "time_s": 18.0,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            },
+            {
+              "variant": "L8.0W4.0lane1.05div0.5cone+0.4-0.3",
+              "success": false,
+              "route_completed": false,
+              "start_error": null,
+              "end_reason": "probe_obstacle_close_body",
+              "contacts": [
+                [
+                  16.44,
+                  "board",
+                  1.64,
+                  3.83
+                ]
+              ],
+              "min_board_gap_m": 0.0,
+              "min_cone_gap_m": 0.37,
+              "final": [
+                2.23,
+                3.93,
+                9.1
+              ],
+              "time_s": 18.0,
+              "vehicle_model": {
+                "right_curvature_max_per_m": 0.94,
+                "right_1200_dynamically_calibrated": false
+              }
+            }
+          ]
+        },
+        "reviewed_pngs": [
+          "narrow-final.png",
+          "light-final.png",
+          "doc8x4-final.png",
+          "first-stop-v5.png",
+          "range-final-v2/L5.0W4.0lane0.9div0.5cone-0.4+0.3.png",
+          "range-final-v2/L5.0W6.0lane0.9div0.4cone-0.4+0.3.png"
+        ],
+        "named_courses": "Full725 includes doc8x4 seeds0/1; user8,wide8x6,mid64,short5 seed0; all pass. The two original8m narrow/light variants plus two6.4m regressions and5m-wide entry variant require route_finish_zone_stop, no contacts and >=.08m board gap.",
+        "planner_timing": {
+          "scope": "Mac pure planner only, concurrent simulations; not vehicle full control-loop timing",
+          "samples": 80,
+          "median_ms": 2.114624992827885,
+          "p95_ms": 2.3772089916747063,
+          "max_ms": 2.7113330143038183,
+          "vehicle_120ms_budget_verified": false
+        },
+        "final_replay_confirmation": "route51-last-check.log and route52-last-check.log rerun after the final two-board slow-condition change, byte-identical to route51-final.log/route52-final.log"
+      },
+      "tests_changed_and_why": {
+        "test_turn_control.py": "Reject1199 instead of old1340; add1200 accepted only with first-pass/current centre-ACK proof, and1200 rejected without centre ACK. Physical angle remains uncertified.",
+        "test_maneuver_sequence.py": "Old1350 saturated result is now1249 for the same exit geometry; add more lateral demand to prove the new1200 clamp. Drive-budget assertions unchanged.",
+        "test_maneuver_route.py": "Real39 wall-window exit still must steer right; lower endpoint1350 becomes1200. Missing/ambiguous/native-source assertions unchanged.",
+        "test_route_path_intent.py": "Keep original direction, no-override, left-of-second and centre-ACK assertions. Synthetic wall at.8m leaves new1200 right arc clear, so the opposite-only fixture moves to.7m and explicitly verifies every same-direction candidate blocked and the opposite arc clear. No recorded scan edited.",
+        "test_route_64_open_course.py": "Add tight board/cone-margin geometry, actual-centre-ACK lifecycle, measured lane-entry boundaries, paused-entry admission consistency, five closed-loop regression variants. Existing Claude assertions retained."
+      },
+      "rejected_experiments": [
+        "v1 multiplied all board penalties, causing ordinary wide-course regressions; final code changes priority only when the two comfort bands cannot fit.",
+        "v5/v6 added the corridor30deg heading cap to open_transfer/second_loop; it reduced yaw but could put the support on the wrong side and break acquisition. v6 score76/108; patch/logs retained, cap NOT present in final source.",
+        "First range-final93/108 included two6.4m regressions from slowing after the divider had ended. Final limits early slowing to a currently measured two-board lane and reruns all108.",
+        "First full-run attempt had an indentation typo in the modified real39 assertion (8 import errors); fixed, evidence retained. Next run had two opposite-only fixture failures due to newly clear1200 arc; geometry premise corrected without weakening the assertions."
+      ],
+      "not_done": [
+        "Full108-range success is NOT achieved; remaining failures and strict completion counts are above. Do not build/deploy round64.",
+        "Some5m second approaches begin inside/above an unreachable loop, then dive toward the start divider; a simple heading cap causes wrong-side passage. Need a generic reachable connection from first loop to second, not course-specific constants.",
+        "Some wide5m layouts still cannot acquire the first support before the terminal front-board stop. Final early-slowing is intentionally limited to a measured two-board start lane to avoid regressing the open approach; do not remove the front-stop guard.",
+        "Some wide short layouts still fail light-entry/recovery; inspect final failure PNGs and traces. The existing standstill-confirmation ambiguity also remains (position success is not route completion).",
+        "1200 rolling curvature and left/right-to1500 residual curvature not measured. Static endpoint acceptance does not establish wheel angle, dynamic curvature or hysteresis compensation.",
+        "Vehicle CPU timing, current bridge lock/hash freshness, and all road-test gates remain unverified this turn. No helper run, no package generated."
+      ],
+      "next_steps": [
+        "Claude: git pull --ff-only, read this record and agent.md top, inspect source/test diffs; rerun full tests, detector19..62, route51/52, nominal and .94 sensitivity ranges before accepting changes.",
+        "Repair the remaining generic reachable-loop/entry failure classes; preserve original opposite-direction and actual-neutral-ACK tests. Do not weaken the8cm gate or invent course coordinates/times.",
+        "When user later permits vehicle work: use only existing SSH socket, get placement confirmation before power; measure low-speed1200 curvature plus neutral1500 trajectories after left/right/straight. Keep1500 neutral until data supports compensation.",
+        "Only after all gates pass: a new matched builder must use steering300 full manifest/bridge as source-hash baseline or completely rebuild and inspect bridge. Never weaken old build-matched crates assertion or reuse old62 bridge. New64 helper max-seconds40, once only; preserve all old directories/backups."
+      ],
+      "runtime_source_sha256": {
+        "web/vehicle-console/maneuver_sequence.py": "dc6ace4a8c7017284379a5a093dee5e3d6b3a7e36d1a8f03092a223dec41ac13",
+        "web/vehicle-console/server.py": "b1e4b89f38e24ebc2462dc9eab307bfac0407ecfb813a5bd19d28bf48ec058a5",
+        "scripts/course-sim.py": "8e9f99ea770bfae06f158ea2dda3b228a536503813b77790935e77901a657c64",
+        "web/vehicle-console/tests/test_maneuver_route.py": "a520525cd6974348131f20993b3a49b1538c3a88a61efe357da874eec0e3e98f",
+        "web/vehicle-console/tests/test_maneuver_sequence.py": "6d71bddcc866e046263847cdf081c05a41185fd1b1926090067e67774f649379",
+        "web/vehicle-console/tests/test_turn_control.py": "8a3a29a2ffaea660d35aa275fead9fe828ea2d2779b86e6736cca463c353b72c",
+        "web/vehicle-console/tests/test_route_64_open_course.py": "183720b958ffce0668fab50905485fe0b0efefd864f7900047fd0da488cb7626",
+        "web/vehicle-console/tests/test_route_path_intent.py": "0dd3370ff6d234934e9281bb070a37ef750fdf652129b79ff8cfcd67592823dd"
+      },
+      "evidence_sha256": {
+        "python-final-v3.log": "3de0533c96962a5854b07dd96952a59684e16fa05b5a6bfbbd55333c2b9ade01",
+        "focused-final.log": "e0ce8c394b2f1c9af4545cc3d207775b8d906295d3967e1594ca50de10003430",
+        "detector-final.log": "36c818c708b2ae5c3be1492fa48dbda44f95725bdf539db4d0ecdd986d87631e",
+        "route51-final.log": "d97d009a81fb80afe61f285b56aa6cb965ac4d6bcc994b466711683b4c398395",
+        "route52-final.log": "6c144111b6b3d7bb3010a052e3514c944c5e2572d2429855132f4b5ddccc738d",
+        "range-final-v2.log": "2950eae4c30b75358d7ae371df1cf1af296494ac59e2a3e437524942de325ac7",
+        "range-old-cap-sensitivity-v2.log": "4b8843f3619806ee4a2626ea774e9114c374f0fea88068fc371c102c33b1cf37",
+        "narrow-final.png": "9702166f210797d036de54e546e01e62d79e387ba705d6089ae0aba5c55a9fdf",
+        "light-final.png": "77dc7c1b048a0e12569dd56eb7bafe1e4989346fb8e9f523f81be69822988d33",
+        "doc8x4-final.png": "fb4d6086a46d64d42b7af16cc3684497aa53f93bc17e908570ab319c9cca0097",
+        "planner-timing.json": "a8e8e01c0ce56eee6bc803a1b43d92790bba0ed8501311604e83aebc856e7ff7"
+      },
+      "vehicle_state_this_turn": "not connected or inspected; last historical runtime turn62 complete Python group plus afff7a9 manual/UI patch and rebuilt bridge; historical locked status is not fresh confirmation",
+      "static_test_reference": "docs/vehicle-steering300-validation-20261013.json (full build/package/backup/deploy hashes and locked verification already saved and pushed)"
     }
   }
 }

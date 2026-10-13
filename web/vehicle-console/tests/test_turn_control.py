@@ -491,8 +491,18 @@ class TurnControlTests(unittest.TestCase):
         self.right_exit_output(stage='orbit_entry')
         self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
 
-    def test_right_output_below_1350_is_rejected(self):
-        self.right_exit_output(servo=1340)
+    def test_right_output_below_static_1200_endpoint_is_rejected(self):
+        self.right_exit_output(servo=1199)
+        self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
+
+    def test_static_1200_endpoint_still_requires_pass_and_center_ack(self):
+        session = self.right_exit_output(servo=1200)
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(self.outputs[-1]['servo'], 1200)
+        self.assertFalse(session['report']['physical_steering_confirmed'])
+
+    def test_static_1200_endpoint_without_center_ack_is_rejected(self):
+        self.right_exit_output(servo=1200, centered=False)
         self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
 
     def test_compact_trial_preserves_1700_adoption_body_stop_and_no_rearm(self):

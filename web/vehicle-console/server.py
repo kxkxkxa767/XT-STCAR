@@ -410,6 +410,7 @@ class Console:
                 'turn_steering_allowance_s': STEERING_ALLOWANCE_S,
                 'turn_requires_operator_placement_confirmation': True,
                 'steering_candidate_bounds': {'min': SERVO_MIN, 'max': SERVO_MAX, 'right_physically_validated': False},
+                'right_exit_min_pwm': RIGHT_EXIT_MIN_PWM,
                 'trial_goal': trial_goal,
                 'active': dict(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
@@ -785,7 +786,9 @@ class Console:
             if decision['lock_requested']:
                 self.halt(decision['reason'])
                 return
-            if decision['motor'] != 1500 or not SERVO_MIN <= decision['servo'] <= SERVO_MAX:
+            coast_min = (min(SERVO_MIN, RIGHT_EXIT_MIN_PWM)
+                         if session.get('maneuver_sequence') else SERVO_MIN)
+            if decision['motor'] != 1500 or not coast_min <= decision['servo'] <= SERVO_MAX:
                 raise ValueError('invalid_turn_coast_output')
             servo = decision['servo']
         if (session['coast_reason'] == 'left_junction_reached'
