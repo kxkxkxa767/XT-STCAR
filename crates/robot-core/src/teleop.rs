@@ -73,9 +73,9 @@ impl Guard {
         self.status.seq = req.seq;
         if req.motor > 1620
             || req.motor < if self.reverse { 1350 } else { 1500 }
-            // Candidate output range requested after the static left check.
-            // This does not claim the right endpoint or moving sweep verified.
-            || !(1270..=1720).contains(&req.servo)
+            // Candidate manual range authorized for static endpoint observation.
+            // Acceptance does not establish mechanical limits or a moving sweep.
+            || !(1200..=1800).contains(&req.servo)
         {
             self.stop("pwm_out_of_range");
             return;
@@ -118,11 +118,13 @@ mod tests {
     #[test]
     fn candidate_manual_limits_are_enforced_without_claiming_calibration() {
         for (motor, servo, allowed) in [
+            (1500, 1200, true),
+            (1500, 1800, true),
             (1350, 1270, true),
             (1350, 1720, true),
             (1349, 1500, false),
-            (1500, 1269, false),
-            (1500, 1721, false),
+            (1500, 1199, false),
+            (1500, 1801, false),
         ] {
             let mut g = Guard::new(true);
             g.apply(req(1, 0, "arm", 1500), 0);
@@ -130,8 +132,11 @@ mod tests {
             command.servo = servo;
             g.apply(command, 50);
             assert_eq!(g.status.armed, allowed);
-            if !allowed {
+            if allowed {
+                assert_eq!((g.status.motor, g.status.servo), (motor, servo));
+            } else {
                 assert_eq!((g.status.motor, g.status.servo), (1500, 1500));
+                assert_eq!(g.status.reason, "pwm_out_of_range");
             }
         }
         let mut g = Guard::new(false);
@@ -141,7 +146,7 @@ mod tests {
     }
     #[test]
     fn wider_candidate_steering_does_not_bypass_arm_or_fault_fences() {
-        for servo in [1270, 1720] {
+        for servo in [1200, 1270, 1720, 1800] {
             for (op, tick, now) in [("drive", 100, 100), ("arm", 100, 100)] {
                 let mut g = Guard::new(false);
                 let mut command = req(1, tick, op, 1500);
@@ -186,6 +191,34 @@ mod tests {
         assert_eq!(g.status.motor, 1550);
         g.apply(req(102, 10100, "drive", 1500), 10100);
         assert_eq!(g.status.motor, 1500);
+    }
+    #[test]
+    fn static_endpoints_hold_with_heartbeats_and_return_to_neutral_on_stop_or_timeout() {
+        for servo in [1200, 1800] {
+            for operator_stop in [false, true] {
+                let mut g = Guard::new(false);
+                g.apply(req(1, 0, "arm", 1500), 0);
+                for i in 1..=100 {
+                    let mut command = req(i + 1, i * 100, "drive", 1500);
+                    command.servo = servo;
+                    g.apply(command, i * 100);
+                    assert!(g.status.armed);
+                    assert_eq!((g.status.motor, g.status.servo), (1500, servo));
+                }
+                if operator_stop {
+                    g.apply(req(102, 10100, "stop", 1500), 10100);
+                    assert_eq!(g.status.reason, "operator_stop");
+                } else {
+                    // Keep the control loop alive so this checks heartbeat expiry.
+                    for now in [10100, 10200, 10300] {
+                        g.advance(now);
+                    }
+                    assert_eq!(g.status.reason, "heartbeat_timeout");
+                }
+                assert!(!g.status.armed);
+                assert_eq!((g.status.motor, g.status.servo), (1500, 1500));
+            }
+        }
     }
     #[test]
     fn stale_reordered_reverse_and_bounds_stop() {

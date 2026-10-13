@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-13",
+  "user_request": "把左右舵机的偏移量改成300的上限，然后各10s我看看",
+  "scope": "manual steering settings/UI and Rust bridge range only; motor-neutral static check; route WIP not deployed",
+  "neutral_pwm": 1500,
+  "manual_min_pwm": 1200,
+  "manual_max_pwm": 1800,
+  "autonomous_candidate_range_unchanged": [
+    1270,
+    1720
+  ],
+  "route_right_min_unchanged": 1350,
+  "base_main_commit": "1f4ce71",
+  "vehicle_base_label": "claude-turn62",
+  "vehicle_base_commit": "8a4055bb8f5488aff531b88deef9d70cb3e3338f",
+  "implemented": true,
+  "deployed": false,
+  "physical_trial_executed": false,
+  "evidence_directory": "work/steering300-20261013",
+  "checks": {
+    "preinstalled_13_hashes_match_turn62": true,
+    "baseline_python_tests": 718,
+    "baseline_expected_failures": 2,
+    "baseline_failures": 0,
+    "baseline_errors": 0,
+    "rust_teleop_tests": 8,
+    "rust_teleop_failures": 0,
+    "fmt": "passed",
+    "candidate_python_tests": 718,
+    "candidate_expected_failures": 2,
+    "candidate_failures": 0,
+    "candidate_errors": 0,
+    "stash_failure_sets_identical": true,
+    "stash_retained": "1589264b8db92939cee6453e026f293b10753d4e",
+    "candidate_hashes_restored": true,
+    "route51_52_byte_identical": true,
+    "clippy": "passed",
+    "riscv_glibc_2p38_elf_check": "passed",
+    "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498"
+  },
+  "physical_angle_measured": false,
+  "mechanical_limit_measured": false,
+  "notes": [
+    "1200/1800 are user-selected software limits, not mechanical-angle or dynamic-curvature calibration.",
+    "Manual default key settings remain1650/1350 at service startup; static check selects1800/1200 while locked.",
+    "Preserve current route WIP and all old trials/backups/stashes.",
+    "Next matched deployment must use the new bridge source hashes; old claude-turn62 bridge reuse will correctly fail after this Rust change."
+  ],
+  "tests_changed_and_why": [
+    "Rust and two Python settings tests now accept authorized manual1200/1800 and reject1199/1801; old1270/1720 remains accepted.",
+    "Added motor1500 endpoint hold/stop/heartbeat checks; autonomous limits and unvalidated-right assertions unchanged.",
+    "Initial candidate run exposed one remaining old1721/1269 settings assertion, then corrected only its manual endpoints. Final full baseline/candidate both718 OK with same2 pre-existing expected failures."
+  ]
+}

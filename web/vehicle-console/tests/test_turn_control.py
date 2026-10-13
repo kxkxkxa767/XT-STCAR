@@ -1464,7 +1464,8 @@ class TurnControlTests(unittest.TestCase):
     def test_candidate_settings_bounds_and_defaults_preserve_unvalidated_right_label(self):
         self.assertEqual((self.console.settings['left'], self.console.settings['right']), (1650, 1350))
         self.console.configure({'forward': 1550, 'reverse': 1450, 'left': 1720, 'right': 1270})
-        for key, value in [('left', 1721), ('right', 1269)]:
+        self.console.configure({'forward': 1550, 'reverse': 1450, 'left': 1800, 'right': 1200})
+        for key, value in [('left', 1801), ('right', 1199)]:
             with self.assertRaises(ValueError):
                 self.console.configure({**self.console.settings, key: value})
         with patch.object(self.server.time, 'monotonic', return_value=0.):

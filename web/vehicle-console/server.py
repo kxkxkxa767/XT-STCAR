@@ -39,6 +39,9 @@ ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
 CONTROL_LOOP_LIMIT_S = .08
 MANEUVER_CONTROL_LOOP_LIMIT_S = .12
+# User-authorized manual endpoints; autonomous candidate limits stay separate.
+MANUAL_SERVO_MIN = 1200
+MANUAL_SERVO_MAX = 1800
 
 
 class Console:
@@ -1550,7 +1553,7 @@ class Console:
         with self.lock:
             if self.owner or self.status.get('control', {}).get('armed'):
                 raise ValueError('stop and lock before editing PWM')
-            ranges = {'forward': (1500, 1620), 'reverse': (1350, 1500), 'left': (1500, SERVO_MAX), 'right': (SERVO_MIN, 1500)}
+            ranges = {'forward': (1500, 1620), 'reverse': (1350, 1500), 'left': (1500, MANUAL_SERVO_MAX), 'right': (MANUAL_SERVO_MIN, 1500)}
             if set(data) != set(ranges):
                 raise ValueError('four PWM settings required')
             for k, (lo, hi) in ranges.items():

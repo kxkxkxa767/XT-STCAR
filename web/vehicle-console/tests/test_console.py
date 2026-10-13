@@ -95,10 +95,17 @@ class ConsoleTests(unittest.TestCase):
         self.assertIsNone(state['owner']);self.assertEqual(state['status']['control']['motor'],1500)
 
     def test_settings_candidate_software_limits(self):
-        valid={'forward':1550,'reverse':1350,'left':1720,'right':1270}
+        valid={'forward':1550,'reverse':1350,'left':1800,'right':1200}
         self.post('/api/settings',valid)
-        for key,value in [('reverse',1349),('left',1721),('right',1269)]:
+        for key,value in [('reverse',1349),('left',1801),('right',1199)]:
             with self.assertRaises(urllib.error.HTTPError):self.post('/api/settings',{**valid,key:value})
+        for direction, servo in [('left',1800),('right',1200)]:
+            self.drive('arm');time.sleep(.05)
+            self.drive('drive',[direction]);time.sleep(.06)
+            control=self.get('/api/state')['status']['control']
+            self.assertTrue(control['armed'])
+            self.assertEqual((control['motor'],control['servo']),(1500,servo))
+            self.post('/api/control',{'op':'stop'});time.sleep(.06)
         self.post('/api/settings',{'forward':1550,'reverse':1450,'left':1650,'right':1350})
 
     def test_single_owner_and_reverse_disabled(self):
