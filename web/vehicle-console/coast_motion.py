@@ -3,9 +3,11 @@
 at_ms is the bridge whole-scan publication clock, not a point acquisition clock.
 At least two associated nonparallel extended planes must support a rigid motion.
 Parallel corridor walls cannot observe along-corridor translation. Unknown
-geometry, stale/reordered data, ambiguous plane identity or inconsistent fits
-never certify stationary. This assumes static planes and fixed lidar extrinsics;
-it does not establish braking distance or compensate scan acquisition distortion.
+geometry, stale/reordered data, a lost long plane or inconsistent fits never
+certify stationary; a plane whose identity is ambiguous is left out of the fit,
+never resolved by a nearest choice. This assumes static planes and fixed lidar
+extrinsics; it does not establish braking distance or compensate scan
+acquisition distortion.
 """
 import json
 import math
@@ -33,6 +35,10 @@ SOFTWARE_THRESHOLDS = {
     'max_stable_total_translation_m': .02,
     'max_stable_total_rotation_rad': .02,
 }
+# A plane at least this long must keep its identity from scan to scan; a
+# shorter one may come and go at the fit thresholds. Recorded at-rest scans
+# (trials 19-62 after.json) change their short-plane count between scans.
+PLANE_IDENTITY_REQUIRED_SPAN_M = 1.5
 
 
 def _finite(value):
@@ -90,34 +96,44 @@ def _planes(ranges):
                 if (line['span'] >= .35 and line['rmse'] <= .015
                         and max(map(abs, line['residuals'])) <= .035):
                     lines.append(line)
-    merged = []
+    merged, owned = [], []
     for line in sorted(lines, key=lambda p: len(p['points']), reverse=True):
         for index, old in enumerate(merged):
             if abs(_wrap(line['angle']-old['angle'])) < math.radians(2) and abs(line['rho']-old['rho']) < .035:
                 joined = _fit(list(dict.fromkeys(old['points']+line['points'])))
                 if joined['rmse'] <= .015 and max(map(abs, joined['residuals'])) <= .035:
-                    merged[index] = joined
+                    merged[index], owned[index] = joined, set(joined['points'])
                     break
         else:
-            merged.append(line)
+            # A window made mostly of points another plane already holds is a
+            # sub-window of that plane that failed the joined fit on a noisy
+            # point, not a second plane (recorded at-rest scans: such copies
+            # pushed most rooms past the limit below or made identities ambiguous).
+            if not any(sum(p in points for p in line['points']) > len(line['points'])/2 for points in owned):
+                merged.append(line)
+                owned.append(set(line['points']))
     # Many local tangents on a smooth curve are not stable plane identities.
     # Never truncate an ambiguous cloud into a convenient apparent room.
     return merged if len(merged) <= 12 else []
 
 
 def _register(previous, current, dt):
+    def near(old, line):
+        return (abs(_wrap(old['angle']-line['angle'])) <= .15
+                and abs(old['rho']-line['rho']) <= min(.80, 5*dt+.035))
+
+    # One-to-one identity, rather than a convenient nearest-line match: a pair
+    # is used only if each side has exactly one candidate; ambiguous planes are
+    # left out. A long plane with no candidate at all means the scene changed.
     matches = []
     for line in current:
-        candidates = [old for old in previous
-                      if abs(_wrap(old['angle']-line['angle'])) <= .15
-                      and abs(old['rho']-line['rho']) <= min(.80, 5*dt+.035)]
-        if len(candidates) == 1:
+        candidates = [old for old in previous if near(old, line)]
+        if len(candidates) == 1 and sum(near(candidates[0], other) for other in current) == 1:
             matches.append((candidates[0], line))
-    # One-to-one identity, rather than a convenient nearest-line match.
-    ids = [id(old) for old, _ in matches]
-    if len(ids) != len(set(ids)):
-        return None, 'ambiguous_plane_identity'
-    if len(matches) != len(previous) or len(matches) != len(current):
+    if (any(line['span'] >= PLANE_IDENTITY_REQUIRED_SPAN_M and not any(near(old, line) for old in previous)
+            for line in current)
+            or any(old['span'] >= PLANE_IDENTITY_REQUIRED_SPAN_M and not any(near(old, line) for line in current)
+                   for old in previous)):
         return None, 'plane_identity_unmatched'
     if len(matches) < 2:
         return None, 'insufficient_associated_planes'

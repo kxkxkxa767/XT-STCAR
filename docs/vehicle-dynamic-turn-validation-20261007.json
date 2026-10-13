@@ -20941,6 +20941,161 @@
       },
       "vehicle_state_this_turn": "not connected or inspected; last historical runtime turn62 complete Python group plus afff7a9 manual/UI patch and rebuilt bridge; historical locked status is not fresh confirmation",
       "static_test_reference": "docs/vehicle-steering300-validation-20261013.json (full build/package/backup/deploy hashes and locked verification already saved and pushed)"
+    },
+    "claude_review_20261013": {
+      "author": "Claude",
+      "date": "2026-10-13",
+      "status": "offline review plus standstill-evidence fix and steering-play sensitivity; NOT deployable; no SSH, package, deployment or powered run this turn",
+      "source_base": "9b4a41d (Codex codex_offline_correction_20261013)",
+      "user_instruction": "user pasted the Codex handoff (verify source and tests_changed_and_why, continue first-support acquisition, second approach, light lane and standstill confirmation; keep the actual centre ACK and board protections; no stash pop/apply)",
+      "evidence_directory": "work/round64-claude-review-20261013",
+      "codex_review": {
+        "full_tests": "725 OK, 2 expected failures (same as Codex), full-tests.log",
+        "range_nominal": "95/108 position, 79 route_finish_zone_stop; success set identical to Codex range-final-v2.log (range-v0.log)",
+        "detector_19_62_and_route51_52": "byte-identical to Codex detector-final/route51-final/route52-final logs",
+        "source_notes": [
+          "RIGHT_EXIT_MIN_PWM=1200 also lowers the clamp of the older lane/exit laws (max(RIGHT_EXIT_MIN_PWM, ...)); replays unchanged, so recorded behaviour is unaffected, but those laws may now command below 1350 when their error is large.",
+          "Open-course light_lane now follows _open_light_pursuit without the old +-55 clamp; bounded by pursuit geometry and the slew; passes in simulation.",
+          "Second-loop handover remaining_lateral uses the commanded servo with the nominal 160 PWM per 1/m gain: uncalibrated for 1200 and for steering play.",
+          "scripts/static-steering-check.py leaves the manual settings at 1800/1200 (recorded in vehicle-steering300-validation-20261013.json manual_settings_after_test); service restart defaults remain 1650/1350."
+        ],
+        "tests_changed_and_why_checked": "consistent with the diffs; original direction, no-override, centre-ACK and recorded-scan assertions kept"
+      },
+      "standstill_confirmation_fix": {
+        "problem": "coast_standstill_unconfirmed: in simulation 16/95 finish-zone stops were never certified; on recorded real at-rest scans (after.json, trials 19-62) the old estimator registered 0/220 consecutive pairs and 0 driving pairs.",
+        "cause": [
+          "A wall window that failed the joined fit on one noisy point stayed as a second line made mostly of the same points (simulation: divider at -90.1 deg plus a .4-.65 m copy at -88..-89.5 deg sharing 16-88 of its points). Real scenes collected many such copies and exceeded the 12-plane limit, so _planes returned none.",
+          "Registration required every plane of both scans to match one-to-one; one copy made the pair ambiguous, and a short plane appearing at the fit thresholds made it unmatched."
+        ],
+        "change": [
+          "coast_motion._planes: a candidate line with more than half of its points already held by a merged plane is dropped as a sub-window of that plane (the 12-plane limit for curved clouds is unchanged; synthetic circles of radius .5-11.9 m, centred or off-centre, still give no planes).",
+          "coast_motion._register: a pair is used only when each side has exactly one candidate (ambiguous planes are left out, never resolved by nearest choice); any plane at least PLANE_IDENTITY_REQUIRED_SPAN_M=1.5 m long without any candidate still means a changed scene (plane_identity_unmatched); >=2 nonparallel matched planes, rotation consistency, conditioning, rigid residual, support overlap, motion-jump limits, 5 pairs, .5 s on both clocks and the total-motion limits are unchanged."
+        ],
+        "real_data_evaluation": {
+          "script": "work/round64-claude-review-20261013/coast-real-eval.py",
+          "before": {
+            "static_pairs": 220,
+            "static_registered": 0,
+            "static_translation_m_median": null,
+            "moving_compared_with_icp": 0,
+            "median_abs_speed_error_mps": null,
+            "low_motion_claimed_while_icp_over_015": [],
+            "low_motion_claimed_while_icp_over_030": []
+          },
+          "after": {
+            "static_pairs": 220,
+            "static_registered": 114,
+            "static_translation_m_median": 0.0049233544925667404,
+            "moving_compared_with_icp": 500,
+            "median_abs_speed_error_mps": 0.01045922026175633,
+            "low_motion_claimed_while_icp_over_015": [
+              [
+                "28",
+                686,
+                0.32,
+                0.043
+              ],
+              [
+                "54",
+                369,
+                0.29,
+                0.017
+              ]
+            ],
+            "low_motion_claimed_while_icp_over_030": [
+              [
+                "28",
+                686,
+                0.32,
+                0.043
+              ]
+            ]
+          },
+          "notes": "ICP speeds from scripts/trial-map.py tables (tmaps/) for trials 19 25 27 28 31 44 47 54 60 61 62. The two single low-motion pairs are at the stopping instant (28 seq686: ICP .32 then .01 at 688) and a quality-wait creep where the ICP step itself is doubtful (54 seq369, neighbours .15/.01); stationary needs 5 pairs over .5 s. Several after.json sequences show .1-.34 m per pair decaying: the car still rolling after the lock (as noted for trial 49), measured as motion."
+        },
+        "tests_added_and_why": {
+          "test_long_plane_without_counterpart_is_a_changed_scene": "keeps the old conservative result for a 2 m front wall that jumps .6 m (explicit unmatched reason)",
+          "test_short_plane_coming_and_going_does_not_block_evidence": "a .4 m panel present on alternate scans; old estimator never certified (fails on the old code)",
+          "test_ambiguous_parallel_copy_is_left_out_not_resolved": "panel .4 m before the front wall: both front candidates left out, 3 matched planes; the same scene moved .05 m is measured as .05 m (fails on the old code)",
+          "test_recorded_at_rest_room_with_duplicate_fragments_certifies_low_motion": "trial 54 after.json at rest certifies; skipped without private recordings (fails on the old code)",
+          "test_recorded_moving_trial_never_claims_stationary_before_stop": "trial 62: certified at rest before driving, never stationary from the first motion (309) until the car is at rest (470); skipped without private recordings"
+        },
+        "existing_tests_changed": "none",
+        "validation": {
+          "full_tests": "730 OK, 2 expected failures unchanged (full-tests-v1.log)",
+          "detector_19_62_route51_52": "byte-identical to Codex logs (detector.log, route51.log, route52.log)",
+          "range_nominal": "95/108 position as before, route_finish_zone_stop 79 -> 95 (range-v1.log); no position change in any variant",
+          "mac_planes_timing": "about 1.5 ms per real scan before and after (no slowdown measured on Mac; vehicle not measured)",
+          "simulator_default_reproduction": "range-v2.log with the final course-sim (play model added, default 0) is identical to range-v1.log in all 108 variants apart from the new vehicle_model fields",
+          "full_tests_final": "732 OK, 2 expected failures unchanged (full-tests-final.log; 725 + 5 coast_motion + 2 simulation)"
+        }
+      },
+      "steering_play_sensitivity": {
+        "reason": "user 2026-10-13: after a turn, commanding 1500 on the ground leaves the wheels toward that turn; lifted they are straight",
+        "simulator_model": "scripts/course-sim.py --steer-backlash B (PWM, default 0 = previous model, identical output): wheel PWM follows the servo with play +-B; PWM per 1/m scaled to 160*(150-B)/150 so the measured steady 1350 right turn (~.94/m) is kept. Hypothesis only; B is not measured.",
+        "rejected_first_model": "play without gain matching (range-backlash30.log, 57/108) under-turned every steady turn, contradicting the 1350 measurement; kept as evidence only",
+        "results_rules_range": {
+          "play_0": "95/108 completed (range-v1.log)",
+          "play_15": "88/108 completed (L5 24, L6.4 32, L8 32 of 36); 12 regressions (range-play15.log)",
+          "play_30": "31/108 completed (L5 9, L6.4 9, L8 13); 66 regressions: light-lane entry into the outer board, first-loop cone contacts, second-loop timeouts (range-play30.log)"
+        },
+        "results_named_layouts_seeds_0_2": "doc8x4, user8 (re-laid practice course), wide8x6: all complete at play 0/15/30; mid64 one timeout at play 30 seed 1; short5 seed 2 fails at play 15/30; practice (old 6.4 m dividers, obsolete layout) fails at play 0 as before (named-play.log)",
+        "right_pwm_used_on_practice_size": "user8/doc8x4 seed 0: nominal minimum 1327-1337 (second loop, close to the measured 1350); with play 30 down to 1238-1256 briefly",
+        "conclusion": "steering play is a first-order risk for the rules range (not for the re-laid practice course in simulation). No compensation added: the play size, its dependence on speed/load and the 1200 curvature must be measured first."
+      },
+      "measurement_tool_not_run": {
+        "script": "scripts/steering-arc-check.py",
+        "what": "vehicle-side one-shot manual-path run: centre .3 s, forward (1540-1560) with one steering PWM for turn-s, then forward at 1500 for center-s, stop, 6 fresh locked samples with lidar; trial-map-compatible evidence; restores the PWM settings in force before the run",
+        "protections": "requires --placement-confirmed with --execute; forward key only; powered time <= 4.5 s; front +-60 deg lidar guard 1.4 m (and >= 1.9 m clear before start); 12 s deadline; ownership/boot/freshness asserted every loop; stop always sent. Manual path: the route autonomy gates do not apply, so the operator clears about 3 m and watches.",
+        "proposed_runs": [
+          "--steer straight (reference)",
+          "--steer left --pwm 1720 (route left maximum) then 1500",
+          "--steer right --pwm 1200 then 1500",
+          "--steer right --pwm 1350 then 1500 (compare with the earlier .92-1.01/m)"
+        ],
+        "analysis": "copy ~/xt-stcar-console/<run-id> back, python3 -I scripts/trial-map.py <dir> --png ...; curvature during turn and during the 1500 phase gives gain and play (residual curvature sign should follow the turn side)"
+      },
+      "not_done": [
+        "L5 failures unchanged (13): W6 first support beyond the 3 m compact-target range while the start-lane stop distance at 1.34 m/s ends the run (compact_target never reported); W4/W5 second approach dives toward the start divider (pursuit to an approach line 1.5 m below needs a full-lock S; slew 40 PWM/frame and lag); W6 light-entry body-gate stops.",
+        "No steering-play compensation, no change to the 160 PWM per 1/m model, 1200 curvature still nominal.",
+        "Round 64 not built; vehicle state not checked this turn."
+      ],
+      "next_steps": [
+        "With the user present: run scripts/steering-arc-check.py (placement confirmed, area clear) for straight, left 1720, right 1200 and right 1350; reconstruct with trial-map; fit gain and play; record.",
+        "Set course-sim --steer-backlash and --right-curvature-max from the measurement; rerun range and named layouts; then decide on compensation (e.g. play inverse on direction change) and on RIGHT_EXIT_MIN_PWM/OPEN_RIGHT_RADIUS_M.",
+        "Then the remaining L5 classes with the measured model; then the round-64 build per agent.md section 1 (helper --max-seconds 40, once)."
+      ],
+      "source_sha256": {
+        "web/vehicle-console/coast_motion.py": "35ea9a70141d844122101140d70e25bf69138710370fe3f448729b00b7659bd4",
+        "web/vehicle-console/tests/test_coast_motion.py": "e86c57a7c8bf8140fec295dce5cd496f98c76dc61dbf158d4238d8ca998cd591",
+        "scripts/course-sim.py": "33c8ffc651b64d7db200a9e528bdac530d0c28aa780d054d8bd87cf76104a912",
+        "scripts/steering-arc-check.py": "c768b05f4ff568db3e9af69ec660aed35b307e9f84c03f1e1fbf0cdd59204ec1",
+        "web/vehicle-console/maneuver_sequence.py": "dc6ace4a8c7017284379a5a093dee5e3d6b3a7e36d1a8f03092a223dec41ac13",
+        "web/vehicle-console/server.py": "b1e4b89f38e24ebc2462dc9eab307bfac0407ecfb813a5bd19d28bf48ec058a5",
+        "web/vehicle-console/tests/test_route_64_open_course.py": "9d6bb53642167c70c659c0d86d848118b30b64f7ce155458656ce40928ca0550"
+      },
+      "evidence_sha256": {
+        "full-tests.log": "e4e233fd75e31b141ca0dee723215cd7fd305b26b23b57ff519bebd16f7396cc",
+        "full-tests-v1.log": "f07b0b24f59cd9b111220ef13105582e49dffa3c30753fcc5b6b820878343c97",
+        "range-v0.log": "2950eae4c30b75358d7ae371df1cf1af296494ac59e2a3e437524942de325ac7",
+        "range-v1.log": "68de66d907fadad70185e6b12088e3c75b7993a876c1648343589a5de3e90065",
+        "range-v2.log": "39281982828f8bb28dbd4c4ecbcb488dc0cf4f3df4ab55c6cdbdf1dc4bc60ef1",
+        "range-play15.log": "8cb43ffb2cfb3a9481576204b33c9021e7bdf8faa663c8360c660b0a114edc37",
+        "range-play30.log": "5881dc54eed7eb54d384c7e371ec33a747adbab6b81826c9175ddf0f8eea89a6",
+        "range-backlash30.log": "f369bf4d242c39a2d3c51429e604c3d5c43a9f6228207c80f85525e6820a934a",
+        "named-play.log": "0f4e0e2089e2210240468b98d52326d1ada7013bd2ebb4fac8b051a5e28ff834",
+        "detector.log": "36c818c708b2ae5c3be1492fa48dbda44f95725bdf539db4d0ecdd986d87631e",
+        "route51.log": "d97d009a81fb80afe61f285b56aa6cb965ac4d6bcc994b466711683b4c398395",
+        "route52.log": "6c144111b6b3d7bb3010a052e3514c944c5e2572d2429855132f4b5ddccc738d",
+        "coast-real-before.json": "e1e1e974d73e7bca733b426c8f77859c5e5000046959561b96648d0c3b69ac6a",
+        "coast-real-after.json": "110114f17bd4c6f9167b433461f2a750170894c8ee2634ca35f49ddd12233e3e",
+        "coast-real-eval.py": "ac8992f25805a6e9568c27ced2e4a4a558c0db28f55676bb5a05eb2208256f9d",
+        "full-tests-final.log": "dcc4f8aed710b079e902378f2dc6d6d72945c8df08c38a105197441990a3ce9e"
+      },
+      "simulation_tests_added": {
+        "test_steering_play_model_keeps_wheels_toward_the_last_turn": "Vehicle play model: after 1650 then 1500 the wheel stays at 1500+B; B=0 unchanged; negative play rejected",
+        "test_re_laid_practice_course_completes_with_hypothetical_steering_play": "user8 and doc8x4 with B=30: route_finish_zone_stop, no contact, board and cone gap > .1 m"
+      }
     }
   }
 }

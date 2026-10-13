@@ -27,6 +27,30 @@ def room_scan(seq, x=0., y=0., yaw=0., at_ms=None, front=4., rear=-3., half_widt
             'frame_id': 'lidar_origin_coarse_body_heading', 'ranges': ranges}
 
 
+def with_panel(scan, first, last, distance):
+    """A short flat panel across bearings first..last, three empty bins each side."""
+    ranges = list(scan['ranges'])
+    centre = math.radians((first+last)/2)
+    for angle in range(first-3, last+4):
+        ranges[angle % 360] = (distance/math.cos(math.radians(angle)-centre)
+                               if first <= angle <= last else None)
+    return dict(scan, ranges=ranges)
+
+
+def recorded_scans(trial, *names):
+    base = ROOT/'work/vehicle-dynamic-deploy-20261008'/trial
+    if not all((base/name).exists() for name in names):
+        return None
+    scans = []
+    for name in names:
+        if name.endswith('.jsonl'):
+            rows = [json.loads(line) for line in (base/name).read_text().splitlines()]
+        else:
+            rows = json.loads((base/name).read_text())
+        scans.extend(row['lidar']['scan'] for row in rows if row.get('lidar') and row['lidar'].get('scan'))
+    return scans
+
+
 def parallel_scan(seq):
     ranges = []
     for angle in range(360):
@@ -207,6 +231,69 @@ class CoastMotionTests(unittest.TestCase):
         self.assertTrue(result['observable'])
         self.assertFalse(result['stationary'])
         self.assertEqual(result['stable_pairs'], 0)
+
+    def test_long_plane_without_counterpart_is_a_changed_scene(self):
+        self.motion.update(room_scan(1, half_width=2.), .01, .1)
+        result = self.motion.update(room_scan(2, half_width=2., front=3.4), .01, .2)
+        self.assertFalse(result['observable'])
+        self.assertEqual(result['reason'], 'plane_identity_unmatched')
+
+    def test_short_plane_coming_and_going_does_not_block_evidence(self):
+        gaps = set(range(11, 14))|set(range(27, 30))
+        for seq in range(1, 8):
+            scan = room_scan(seq, half_width=2.)
+            # A .4 m panel 2 m away on odd scans; the same empty bins otherwise.
+            scan = (with_panel(scan, 14, 26, 2.) if seq % 2 else
+                    dict(scan, ranges=[None if a in gaps else r for a, r in enumerate(scan['ranges'])]))
+            result = self.motion.update(scan, .01, seq*.1)
+        self.assertTrue(result['observable'])
+        self.assertTrue(result['stationary'])
+
+    def test_ambiguous_parallel_copy_is_left_out_not_resolved(self):
+        # A panel .4 m before the front wall: both lines are candidates of the
+        # one previous front wall, so neither is used.
+        self.motion.update(room_scan(1, half_width=2.), .01, .1)
+        result = self.motion.update(with_panel(room_scan(2, half_width=2.), -8, 8, 3.6), .01, .2)
+        self.assertTrue(result['observable'])
+        self.assertTrue(result['low_motion'])
+        self.assertEqual(result['matched_planes'], 3)
+        moved = MODULE.CoastMotion()
+        moved.update(room_scan(1, half_width=2.), .01, .1)
+        result = moved.update(with_panel(room_scan(2, x=.05, half_width=2.), -8, 8, 3.55), .01, .2)
+        self.assertTrue(result['observable'])
+        self.assertFalse(result['low_motion'])
+        self.assertAlmostEqual(result['translation_m'], .05, delta=.005)
+
+    def test_recorded_at_rest_room_with_duplicate_fragments_certifies_low_motion(self):
+        # Trial 54 after.json: the car locked at rest (trial-map .00-.02 m/s).
+        # Before duplicate-fragment removal and one-to-one partial association
+        # these real scans never registered (plane limit or unmatched copies).
+        scans = recorded_scans('left-cone-trial-20261011-54', 'after.json')
+        if scans is None:
+            self.skipTest('Private recorded scans are not part of the source checkout')
+        for scan in scans:
+            result = self.motion.update(scan, .01, scan['at_ms']/1000)
+        self.assertTrue(result['observable'], result)
+        self.assertTrue(result['stationary'], result)
+        self.assertLess(result['stable_translation_m'], .02)
+
+    def test_recorded_moving_trial_never_claims_stationary_before_stop(self):
+        # Trial 62 by trial-map: at rest through scan 308 (locked, presteer,
+        # first drive frames), moving from 309, locked but still rolling (.63
+        # then .19 m/s) until 468, at rest from 470.
+        scans = recorded_scans('left-cone-trial-20261012-62', 'feedback.jsonl', 'after.json')
+        if scans is None:
+            self.skipTest('Private recorded scans are not part of the source checkout')
+        at_rest_certified = moving_observed = 0
+        for scan in sorted({s['seq']: s for s in scans}.values(), key=lambda s: s['seq']):
+            result = self.motion.update(scan, .01, scan['at_ms']/1000)
+            if scan['seq'] < 309:
+                at_rest_certified += result['stationary']
+            elif scan['seq'] <= 470:
+                moving_observed += result['observable']
+                self.assertFalse(result['stationary'], (scan['seq'], result))
+        self.assertGreater(at_rest_certified, 5)
+        self.assertGreater(moving_observed, 10)
 
     def test_recorded_run08_never_claims_early_stationary(self):
         path = ROOT/'work/vehicle-upload-20261005/straight-start-08/after/junction-run.json'

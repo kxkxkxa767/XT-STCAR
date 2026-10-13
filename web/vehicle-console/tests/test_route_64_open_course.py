@@ -363,6 +363,32 @@ class CourseSimulationTests(unittest.TestCase):
                 self.assertTrue(summary['success'], summary)
                 self.assertEqual(summary['contacts'], [])
 
+    def test_steering_play_model_keeps_wheels_toward_the_last_turn(self):
+        # User, 2026-10-13: after a turn, 1500 on the ground leaves the wheels
+        # toward that turn. Hypothetical play only; B=0 is the old model.
+        for play in (0., 30.):
+            car = self.sim.Vehicle(0., 0., 0., steer_backlash=play)
+            t = 0.
+            for servo in [1650]*50+[1500]*50:
+                t = round(t+.02, 6)
+                car.step(t, .02, 1500, servo)
+            with self.subTest(play=play):
+                self.assertAlmostEqual(car.wheel_pwm, 1500+play, delta=.5)
+                self.assertAlmostEqual(car.pwm_per_curvature, 160*(150-play)/150)
+        with self.assertRaises(ValueError):
+            self.sim.Vehicle(0., 0., 0., steer_backlash=-1.)
+
+    def test_re_laid_practice_course_completes_with_hypothetical_steering_play(self):
+        # Robustness only: the rules range degrades with play (record
+        # claude_review_20261013); the re-laid practice size must not.
+        for name in ('user8', 'doc8x4'):
+            summary, _, _ = self.sim.run(self.sim.Course(**self.sim.LAYOUTS[name]), steer_backlash=30.)
+            with self.subTest(layout=name):
+                self.assertTrue(summary['route_completed'], summary)
+                self.assertEqual(summary['contacts'], [])
+                self.assertGreater(summary['min_board_gap_m'], .1)
+                self.assertGreater(summary['min_cone_gap_m'], .1)
+
     def test_close_second_divider_and_light_entry_regressions(self):
         variants = dict(self.sim.variations())
         for name in ('L8.0W4.0lane1.05div0.4cone-0.4+0.3',

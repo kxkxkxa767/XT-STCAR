@@ -189,14 +189,25 @@ class Geometry:
 
 class Vehicle:
     def __init__(self, x, y, psi, *, speed_scale=1., decel=.5, delay=.15, steer_tau=.1, seed=0,
-                 right_curvature_max=1.875):
+                 right_curvature_max=1.875, steer_backlash=0.):
         if not math.isfinite(right_curvature_max) or right_curvature_max <= 0:
             raise ValueError('right_curvature_max must be finite and positive')
+        if not math.isfinite(steer_backlash) or not 0 <= steer_backlash < 100:
+            raise ValueError('steer_backlash must be finite and non-negative')
         self.x, self.y, self.psi, self.v = x, y, psi, 0.
         self.speed_scale, self.decel, self.delay, self.steer_tau = speed_scale, decel, delay, steer_tau
         self.servo_queue = []  # (time, servo) commands, applied after the delay
         self.servo_phys = 1500.
         self.right_curvature_max = right_curvature_max
+        # Steering play (PWM): on the ground the wheels stay where they were
+        # until the servo has moved through the play (user, 2026-10-13: after
+        # a turn, 1500 leaves the wheels toward that turn; lifted, straight).
+        # A hypothesis for robustness runs; the real play is not measured.
+        self.steer_backlash = steer_backlash
+        self.wheel_pwm = 1500.
+        # Keep the measured steady right turn (1350 -> about .94/m, agent.md
+        # section 5) when the wheels lag the servo by the play while turning.
+        self.pwm_per_curvature = 160*(150-steer_backlash)/150
         self.rng = random.Random(seed)
 
     def target_speed(self, motor):
@@ -212,7 +223,9 @@ class Vehicle:
         self.servo_phys += (target-self.servo_phys)*min(1., dt/self.steer_tau)
         # Nominal extension of the existing PWM model to the static1200
         # endpoint. This is not a measured right-turn calibration.
-        kappa = max(-self.right_curvature_max, min(1.375, (self.servo_phys-1500)/160))
+        self.wheel_pwm = min(self.servo_phys+self.steer_backlash, max(self.servo_phys-self.steer_backlash,
+                                                                       self.wheel_pwm))
+        kappa = max(-self.right_curvature_max, min(1.375, (self.wheel_pwm-1500)/self.pwm_per_curvature))
         vt = self.target_speed(motor)
         if vt > 0 and (self.v > .05 or motor >= 1560):
             self.v += max(-2., min(2., (vt-self.v)/.35))*dt
@@ -239,14 +252,15 @@ def make_console(server):
 
 
 def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1., noise=.008, seed=0,
-        verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None, right_curvature_max=1.875):
+        verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None, right_curvature_max=1.875,
+        steer_backlash=0.):
     sys.path.insert(0, str(CONSOLE))
     server = load('course_sim_server', CONSOLE/'server.py')
     console = make_console(server)
     geometry = Geometry()
     rng = random.Random(seed)
     car = Vehicle(*course.start, speed_scale=speed_scale, decel=decel, delay=delay, seed=seed,
-                  right_curvature_max=right_curvature_max)
+                  right_curvature_max=right_curvature_max, steer_backlash=steer_backlash)
     history = [(0., car.x, car.y, car.psi)]
     clock = {'now': 0.}
     outputs = []
@@ -368,7 +382,9 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                'route_completed': (in_finish and not any(c[1] == 'board' for c in contacts)
                                    and result.get('reason') == 'route_finish_zone_stop'),
                'vehicle_model': {'right_curvature_max_per_m': right_curvature_max,
-                                 'right_1200_dynamically_calibrated': False}}
+                                 'right_1200_dynamically_calibrated': False,
+                                 'steer_backlash_pwm': steer_backlash,
+                                 'pwm_per_curvature': car.pwm_per_curvature}}
     sys.path.remove(str(CONSOLE))
     return summary, log, history
 
@@ -514,6 +530,8 @@ def main():
     parser.add_argument('--delay', type=float, default=.15)
     parser.add_argument('--right-curvature-max', type=float, default=1.875,
                         help='unmeasured nominal1200 limit (1/m); use .94 for old-cap sensitivity')
+    parser.add_argument('--steer-backlash', type=float, default=0.,
+                        help='hypothetical steering play (PWM) for robustness runs; not measured')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max-s', type=float, default=45.)
     parser.add_argument('--png')
@@ -532,7 +550,8 @@ def main():
         for name in sorted(LAYOUTS):
             for speed, decel, delay in ((1., .5, .15), (1.2, .35, .3), (.8, .7, .15)):
                 summary, _, _ = run(Course(**LAYOUTS[name]), speed_scale=speed, decel=decel, delay=delay,
-                                    max_s=args.max_s, seed=args.seed, right_curvature_max=args.right_curvature_max)
+                                    max_s=args.max_s, seed=args.seed, right_curvature_max=args.right_curvature_max,
+                                    steer_backlash=args.steer_backlash)
                 print(name, f'speed{speed} decel{decel} delay{delay}',
                       json.dumps({k: summary[k] for k in keys}, ensure_ascii=False), flush=True)
         return
@@ -541,7 +560,8 @@ def main():
         for name, spec in variations():
             course = Course(**spec)
             summary, log, _ = run(course, max_s=args.max_s, seed=args.seed,
-                                  right_curvature_max=args.right_curvature_max)
+                                  right_curvature_max=args.right_curvature_max,
+                                  steer_backlash=args.steer_backlash)
             if args.png_dir and not (args.only_failures and summary['success']):
                 Path(args.png_dir).mkdir(parents=True, exist_ok=True)
                 render(course, log, str(Path(args.png_dir)/f'{name}.png'), name=name, summary=summary)
@@ -564,7 +584,8 @@ def main():
     course = Course(**spec)
     summary, log, _ = run(course, max_s=args.max_s, speed_scale=args.speed_scale, decel=args.decel,
                           delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace,
-                          right_curvature_max=args.right_curvature_max)
+                          right_curvature_max=args.right_curvature_max,
+                          steer_backlash=args.steer_backlash)
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     if args.log:
         Path(args.log).write_text(''.join('\t'.join(str(round(v, 3)) if isinstance(v, float) else str(v)
