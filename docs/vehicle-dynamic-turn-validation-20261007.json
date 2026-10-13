@@ -18496,6 +18496,43 @@
         "unit tests for the open-course functions (plan, carrot, axis lines, lane target, lookout, finish)",
         "range again, replays, then round-64 build (helper --max-seconds 40) after SSH/placement"
       ]
+    },
+    "wip_round64_approach_line_20261013": {
+      "status": "partial implementation, NOT deployable, not built, not on the car; simulation only",
+      "user_instruction": "v9跑完以后记录上传吧额度快不够了，你再给个命令我让gpt继续你的工作",
+      "changes_since_finish_range_save": {
+        "approach_line": "_loop_carrot: pursue the line parallel to the approach axis that touches the loop circle on its approach side, then the circle; if the straight way to that carrot passes the support closer than radius+side+.10 the tangent from the car is used (never enters the circle)",
+        "plan_approach_term": "_plan_loop(approach=(along, lateral of the car from the support)): penalty max(0, 1.5*|lateral to the approach line| - distance to its tangent point); re-planned every frame while the car is before the tangent point; offsets +-.75 m; radius preference .10 m slack per m (OPEN_RADIUS_PREFERENCE); right radius 1.10-1.40 m",
+        "loop1_to_loop2": "first loop hands over when the second loop's pursuit asks for less left than the first (progress >= 120 deg), or at heading >= pi-25 deg",
+        "transfer_channel": "open_transfer aims at the start divider's open end (raw axis line on the left, open end ahead, lateral <= 3.5 m) half a start-lane width inside it, pursuit point >= 1.5x its lateral offset ahead; heading hold pi otherwise",
+        "first_acquisition": "FIRST_ACQUIRE_BEARING_RAD 10-100 deg and the support not more than 1.2 m behind along the start axis (the second support behind-left had been looped first)",
+        "axis_lines": "lateral groups split into runs contiguous along the axis (gap max(.3, .03*along^2/|lateral|)); a stray crossing-board return had stretched the light divider behind the car",
+        "light_entry": "enters light_lane when the car is between the outer board (left) and the divider (right, alongside), |heading|<=20 deg, or the old two-board fit",
+        "resume_readiness": "open_transfer/light_entry resume only if the stage would not stop again (board ahead outside the stop range); failed resumes had pulsed 1560 with the held command and crept the car in circles",
+        "finish": "near the end (front gap <= .75+.6 m) power only in pulses (<=2 powered frames, then >=2 neutral); the cut is decided only while coasting, with the front inside the zone, speed <= .60, at the nominal-decel mid-zone gap from speed+margin; outside the zone the car coasts and is pushed on if it stops short. Round-63 closed-loop matrix (decel .25-1.0, start 3.5-6 m, cruise .9/1.27): 0 failures"
+      },
+      "simulation": {
+        "named": "doc8x4, user8, wide8x6, mid64, short5 succeed (seed 0; doc8x4/user8/wide8x6/mid64/short5 also seed 1 before the last fixes)",
+        "rules_range_v9": "70/108: L8 33/36, L6.4 34/36, L5 3/36; successes min board gap .096 m, min cone gap .122 m, max time 30.1 s; log work/round64-sim/range/range-v9.log, failure pictures work/round64-sim/range-v9/",
+        "remaining_failures": [
+          "L5 (33): with the 1350 right bound (radius >= ~1.07 m) the two loops overlap on a 5 m course; far side of the second loop reaches the start-end wall or the start divider",
+          "W4 with 1.05 m lanes and the second support .3 m lower (channel .55 m to the start divider): the second loop touches the divider (4 cases)",
+          "L8W4lane1.05 cone+0.4-0.3: body gate near the light lane entry (1 case)"
+        ]
+      },
+      "tests": "full suite 718 OK (expected failures 2: round-63 light-lane wall-law steering); new web/vehicle-console/tests/test_route_64_open_course.py (compass, geometry, loop plan/carrot, axis lines, rotation compensation, axis front range, closed-loop course simulations; skipped if tools/scan-geometry is not built)",
+      "not_done": [
+        "detector-replay and route-replay (51/52) for this code (agent.md section 7) not run yet",
+        "round-64 build (build-matched.py, helper --max-seconds 40) and car test",
+        "user decision: right steering bound 1350 vs protocol 1270 (needed for L=5 courses); real data only at 1350",
+        "known: coast standstill confirmation often ambiguous at the light-lane end (car stopped in zone, lock after 5 s); recovery holds keep the held steering while rolling"
+      ],
+      "next_steps": [
+        "run detector-replay and route-replay 51/52 (old junction path must be unchanged), record results",
+        "narrow second channel (.55 m): consider slower approach / planned straight segment in the channel before the right loop",
+        "with the user's answer on the right bound: if allowed, set RIGHT_EXIT_MIN_PWM/OPEN_RIGHT_RADIUS_M and re-run --range",
+        "build round 64 only after replays, full suite, --range; SSH reconnect and placement confirmation by the user before power"
+      ]
     }
   }
 }

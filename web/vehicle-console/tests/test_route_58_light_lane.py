@@ -9,7 +9,8 @@ import test_maneuver_route as route
 from maneuver_sequence import (ManeuverSequence, LANE_SPEED_RESTART_MPS, LANE_STOP_DECEL_MPS2,
                                LANE_SLOW_HIGH_MPS, ROUTE_POST_PASS_PWM_STEP, ROUTE_SLOW_MOTOR,
                                ROUTE_MAX_DRIVE_S, FRONT_BODY_EXTENT_M, LANE_FINISH_GAP_M,
-                               LANE_FINISH_TARGET_GAP_M, LANE_REACTION_S, LANE_STOP_DECEL_MIN_MPS2)
+                               LANE_FINISH_TARGET_GAP_M, LANE_REACTION_S, LANE_STOP_DECEL_MIN_MPS2,
+                               LANE_SPEED_CUT_MARGIN_MPS)
 from turn_motion import TRIAL_MOTOR
 
 HALF = 1.0  # lane half width (m)
@@ -28,6 +29,11 @@ def box(ahead, *, half=HALF):
             best = min(best, half/abs(dy))
         ranges.append(round(best, 3))
     return ranges
+
+
+def ms_zone():
+    import maneuver_sequence
+    return maneuver_sequence.LANE_FINISH_ZONE_GAP_M
 
 
 class LightLaneTests(unittest.TestCase):
@@ -84,9 +90,10 @@ class LightLaneTests(unittest.TestCase):
         self.assertTrue(all(r['reason'] == 'light_lane_follow_straight' for r in near+slow+crawl))
 
     def test_finish_cut_uses_body_gap_and_neutral_coast_distance(self):
-        # Round 64: the cut is where a coast at the nominal decel stops the
-        # front LANE_FINISH_TARGET_GAP_M from the board (mid finish zone), at
-        # no more than the slow-zone ceiling.
+        # Round 64: the cut is decided while coasting, with the front inside
+        # the zone, at no more than the slow-zone ceiling, once a coast at the
+        # nominal decel from the speed plus its margin stops the front
+        # LANE_FINISH_TARGET_GAP_M from the board (mid finish zone).
         motion = self.lane_motion()
         results = self.drive(motion, [.55]*60, start=4.)
         last = results[-1]
@@ -96,10 +103,12 @@ class LightLaneTests(unittest.TestCase):
         v = evidence['speed_mps']
         self.assertAlmostEqual(v, .55, delta=.05)
         self.assertLessEqual(v, LANE_SLOW_HIGH_MPS)
-        expected = LANE_FINISH_TARGET_GAP_M+v*LANE_REACTION_S+v*v/(2*LANE_STOP_DECEL_MPS2)
+        u = v+LANE_SPEED_CUT_MARGIN_MPS
+        expected = LANE_FINISH_TARGET_GAP_M+u*LANE_REACTION_S+u*u/(2*LANE_STOP_DECEL_MPS2)
         self.assertAlmostEqual(evidence['finish_cut_gap_m'], expected, places=6)
-        self.assertLessEqual(evidence['front_gap_m'], expected)
-        self.assertGreater(evidence['front_gap_m'], expected-.55*.1-1e-9)  # first frame inside
+        self.assertLessEqual(evidence['front_gap_m'], min(expected, ms_zone()))
+        self.assertGreater(evidence['front_gap_m'], min(expected, ms_zone())-2*.55*.1-1e-9)  # within two frames
+        self.assertEqual(evidence['motor_before'], 1500)
         self.assertEqual(evidence['front_gap_m'], evidence['front_range_m']-FRONT_BODY_EXTENT_M)
         self.assertEqual(last['motor'], 1500)
         self.assertEqual(last['servo'], last['route_end_coast_servo'])
