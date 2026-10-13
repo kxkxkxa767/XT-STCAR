@@ -19399,7 +19399,114 @@
         "New loaded-center and stronger-right curvature measurements; no neutral/right-limit/model change yet.",
         "Resolve 38 range failures (including two actual simulated divider contacts); do not label 70/108 a release pass.",
         "After fixes repeat tests/replays/range, then create a new Rust-matched full bundle and one-shot40s helper; no reuse/overwrite of old helpers."
-      ]
+      ],
+      "failure_diagnosis": {
+        "failure_classes": [
+          "D: steering authority/approach and handoff overshoot",
+          "E: steering response delay plus continued powered motion and post-lock coast",
+          "F: unchanged8cm body gate is the terminal consequence, not a detector failure"
+        ],
+        "evidence_scope": "Closed-loop simulation on current source with existing -0.94/m right curvature model; not a new physical trial. Both PNGs opened and visually inspected.",
+        "narrow_channel": {
+          "variant": "L8.0W4.0lane1.05div0.4cone-0.4+0.3",
+          "files": [
+            "narrow-baseline.log",
+            "narrow-baseline.png"
+          ],
+          "at_8p8s": {
+            "stage": "second_loop",
+            "heading_deg": 209.6,
+            "speed_mps": 1.0,
+            "command_pwm": 1563,
+            "planned_radius_m": 1.2,
+            "planned_axis_offset_m": -0.3,
+            "planned_side_offset_m": 0.75,
+            "approach_side_free_probe_m": 0.5,
+            "planned_approach_side_extent_m": 0.412,
+            "planned_outer_center_bound_m": 0.21,
+            "outer_bound_calculation": ".50 free minus .14 body side minus .15 planned board gap",
+            "min_slack_score_m": -0.14369090636606757,
+            "score_caveat": "min_slack score also includes approach/radius penalties; explicit extent>outer bound, not score sign alone, proves violation of the planned clearance band."
+          },
+          "at_9p6s": {
+            "heading_deg": 220.5,
+            "command_pwm": 1463,
+            "reason": "open_second_loop"
+          },
+          "body_gate_at_s": 10.4,
+          "body_gap_at_gate_m": 0.09,
+          "first_simulated_board_contact_s": 10.92,
+          "mechanism": "Approach descends steeply toward the divider while the planned approach-side circle already violates its own board-clearance band. Right correction arrives as the car is still moving toward the board. After body-gate lock and neutral1500, coast crosses the board. Not fixed by allowing tighter contact or declaring cone tracking successful.",
+          "counterexample": "L6.4 versions also hit the body gate without physical simulated contact; cover the whole geometry/approach class rather than only the L8 collision."
+        },
+        "light_entry": {
+          "variant": "L8.0W4.0lane1.05div0.4cone+0.4-0.3",
+          "files": [
+            "light-baseline.log",
+            "light-baseline.png"
+          ],
+          "handoff_at_s": 15.4,
+          "heading_at_handoff_deg": 41.3,
+          "command_at_handoff_pwm": 1363,
+          "at_16s": {
+            "heading_deg": 13.7,
+            "speed_mps": 1.0,
+            "command_pwm": 1410,
+            "body_gap_m": 0.1,
+            "lane_target_source": "start_lane_prior",
+            "desired_center_lateral_m": -0.22969390822836472,
+            "nominal_target_pwm": 1420
+          },
+          "body_gate_at_s": 16.2,
+          "body_gap_at_gate_m": 0.086,
+          "simulated_board_contact": false,
+          "mechanism": "Second-loop to lane pursuit reduces right steering before lateral motion toward the outer wall has settled. With existing curvature cap and actuator lag it reaches the body gate outside the divider. This is entry/handoff overshoot, not loss of second-target recognition."
+        },
+        "next_fix_scope": "After measuring actual right curvature and loaded-center residuals, update the physical model first. Then audit feasibility of planned clearance bands, approach reachability and turn-to-lane transition together for first loop, second loop and light entry, including retained real center ACK and phase-intent bounds. Re-run every range combination and named layout; do not add variant names, coordinates, course lengths or timed turns to production logic.",
+        "protection_change": false,
+        "control_logic_changed_in_this_resume": false
+      },
+      "measurement_plan": {
+        "status": "Pending vehicle reconnection, live clearance checks and one placement confirmation per powered run; no powered helper consumed.",
+        "neutral_pwm": 1500,
+        "order": [
+          "Initially straight -> actual1500 ACK -> low-speed short straight record.",
+          "Ground left1800 -> actual1500 ACK -> same low-speed straight record.",
+          "Ground right1200 -> actual1500 ACK -> same low-speed straight record.",
+          "Low-speed1200 right-arc record after live geometry supports the entire bounded maneuver."
+        ],
+        "per_trial": [
+          "New unique one-shot helper and directory; preserve all previous artifacts.",
+          "Fresh locked state/hash/clock/geometry check; ask user stationary in start zone before power.",
+          "Preserve server body gate, scan and control freshness, bridge ownership/heartbeat, deadline, actual adoption/center ACK and <=.12s control interval.",
+          "Record full lidar plus control state, retrieve hashes and fresh final locked state.",
+          "trial-map reconstruction and PNG inspection; compare curvature only in actually adopted constant-output segments after response transient; check ICP fit and hallway observability."
+        ],
+        "acceptance": "No limit/model/neutral/compensation change on static endpoint acceptance alone; if displacement or ICP observability is insufficient mark inconclusive and plan a new separately authorized trial rather than reusing a consumed helper.",
+        "possible_compensation_after_data": [
+          "Brief opposite-direction return pulse",
+          "Previous-turn-dependent neutral offset"
+        ],
+        "compensation_chosen": null,
+        "right_curvature_at_1200_per_m": null,
+        "residual_center_curvatures_per_m": null
+      },
+      "evidence_hashes": {
+        "python-full.log": "cdb2c30ea7b1134949496586dfb057ee2941bb283e71a94ba28d560a4b5a0de9",
+        "python-claude-baseline.log": "e244804053d9f826fc2aa4a78ead3f046c417c8bf16b645358dcacaa6651b883",
+        "python-claude-private-fixture.log": "b3863de40bdc191d8cc001e14a618e30d250c9733ba0897709962f097e9e0f0a",
+        "build-riscv.log": "6d75a5f85534d2905fc1bbead238afe1cb2cf6d9e82f4804514a412159899fd4",
+        "vehicle-bridge.elf.json": "d1f1f0b12a4bb2c597778993234b90dd4a759d0970c3df54c005bead7d3128ce",
+        "detector-current.log": "36c818c708b2ae5c3be1492fa48dbda44f95725bdf539db4d0ecdd986d87631e",
+        "route51-current.log": "d97d009a81fb80afe61f285b56aa6cb965ac4d6bcc994b466711683b4c398395",
+        "route52-current.log": "6c144111b6b3d7bb3010a052e3514c944c5e2572d2429855132f4b5ddccc738d",
+        "doc8x4.png": "ba4d5751e34afbb1facc1a68814a3de6a89ce367d3c2da244744e73319edb04c",
+        "range-baseline.log": "b708f76fc0980ed73b35b1369fd4dded68fc46e31e5d78a6d3870c241b75d841",
+        "narrow-baseline.log": "577735b307f82d74c333b43ee3177f1e2562e8df5900439e2ce86ff65d250aef",
+        "narrow-baseline.png": "89b591484bebe90e560209a135f90c6898ea957df139c9ad257f375296c0b548",
+        "light-baseline.log": "2bbc347df499029af547f34b5ba2f981fb935813842b2445de9c4f5051c12559",
+        "light-baseline.png": "dc6be616bece51880cc8dfb5f71e9524848bd24b5e40739ec1b8993da15a3b86"
+      }
     }
   }
 }
