@@ -12,15 +12,17 @@ This drives through the manual control path, so the route's autonomy gates
 (8 cm body gate, bridge lock checks of the route, ...) do not apply. Hence:
 the operator clears about 3 m round the car, watches, and confirms placement
 with --placement-confirmed; forward only (no reverse key); powered time at most
-4.5 s; any lidar return closer than the guard in the front +-60 deg stops the
-run; deadline and Ctrl-C stop; the PWM settings in force before the run are
-restored afterwards. Run on the vehicle (stdin over the SSH socket):
+4.5 s; any lidar return in the body-wide band ahead stops the run (straight
+ahead, plus the nominal arc while turning); deadline and Ctrl-C stop; the PWM
+settings in force before the run are restored afterwards. A +-60 deg sector
+(first run, 2026-10-13) also fired on marker posts the path clears by .7 m. Run on the vehicle (stdin over the SSH socket):
     python3 - --run-id steer-arc-YYYYMMDD-N --steer right --pwm 1200 \
         --placement-confirmed --execute < scripts/steering-arc-check.py
 Without --execute it only prints a read-only state check.
 """
 import argparse
 import json
+import math
 from pathlib import Path
 import re
 import secrets
@@ -29,9 +31,31 @@ import time
 import urllib.request
 
 MANUAL_LIMITS = {'left': (1520, 1800), 'right': (1200, 1480)}
-FORWARD_RANGE = (1540, 1560)
-GUARD_M = 1.4          # ~1 m coasting at 1 m/s and .5 m/s^2, plus the .2 m front
-GUARD_HALF_DEG = 60
+FORWARD_RANGE = (1540, 1600)  # user raised the cap to 1600 (2026-10-13)
+GUARD_M = 2.0          # 1560 reached ~2 m/s on tile (run 3, 2026-10-13); stop plus coast
+GUARD_HALF_WIDTH_M = .14+.25  # body side plus margin
+NOMINAL_PWM_PER_CURVATURE = 160  # agent.md section 5; only shapes the guard band
+
+
+def guard_hit(ranges, turn, reach):
+    """First return in the band the body sweeps within ``reach`` (car frame).
+
+    Straight ahead always; while turning also the nominal arc (turn =
+    (side +1 left / -1 right, radius)). The real radius lies between the two.
+    """
+    for i, r in enumerate(ranges):
+        if not isinstance(r, (int, float)) or not .02 < r < 12:
+            continue
+        x, y = r*math.cos(math.radians(i)), -r*math.sin(math.radians(i))
+        if .05 < x <= reach and abs(y) <= GUARD_HALF_WIDTH_M:
+            return round(x, 3), round(y, 3)
+        if turn is not None:
+            side, radius = turn
+            d = math.hypot(x, y-side*radius)
+            ahead = (side*(math.atan2(y-side*radius, x)-math.atan2(-side*radius, 0.))) % (2*math.pi)
+            if abs(d-radius) <= GUARD_HALF_WIDTH_M and ahead*radius <= reach:
+                return round(x, 3), round(y, 3)
+    return None
 
 
 def main():
@@ -80,22 +104,20 @@ def main():
         assert not c['armed'] and (c['motor'], c['servo']) == (1500, 1500)
         assert 0 <= s['ages']['control'] < .2 and 0 <= s['ages']['lidar'] < .3
 
-    def front_min(lidar):
-        ranges = lidar['scan']['ranges']
-        values = [ranges[i % 360] for i in range(-GUARD_HALF_DEG, GUARD_HALF_DEG+1)]
-        values = [r for r in values if isinstance(r, (int, float)) and r > .02]
-        return min(values) if values else None
-
     before = request('/api/state')
     locked(before)
     lidar = request('/api/lidar')
-    front = front_min(lidar)
+    global GUARD_M
+    GUARD_M += max(0, args.forward-1560)*.0125  # 2.5 m at 1600: faster, longer stop
+    turn = (None if args.steer == 'straight' else
+            ({'left': 1, 'right': -1}[args.steer], NOMINAL_PWM_PER_CURVATURE/abs(args.pwm-1500)))
+    blocked = guard_hit(lidar['scan']['ranges'], turn, GUARD_M+.5)
     print(json.dumps({'read_only': not args.execute, 'settings': before['settings'],
-                      'front_min_m': front, 'guard_m': GUARD_M}), flush=True)
+                      'start_band_return': blocked, 'guard_m': GUARD_M, 'turn_band': turn}), flush=True)
     if not args.execute:
         return
-    if front is None or front < GUARD_M+.5:
-        raise RuntimeError('front sector not clear before start; nothing sent')
+    if blocked is not None:
+        raise RuntimeError('swept band not clear before start; nothing sent')
     output = base/args.run_id
     output.mkdir(mode=0o700)  # Existing directory means this run is consumed.
     (output/'before.json').write_text(json.dumps(before, indent=2)+'\n')
@@ -132,7 +154,7 @@ def main():
         assert 0 <= s['ages']['control'] < .2 and 0 <= s['ages']['lidar'] < .3
         return s, scan
 
-    def hold(name, keys, motor, servo, seconds, allow_arm_pending=False):
+    def hold(name, keys, motor, servo, seconds, allow_arm_pending=False, band=None):
         begin = time.monotonic()
         adopted_at = None
         while True:
@@ -141,9 +163,9 @@ def main():
             c = s['status']['control']
             assert c['armed'] or (allow_arm_pending and now-begin < .25), 'bridge disarmed'
             if 'up' in keys:
-                near = front_min(scan)
-                if near is None or near < GUARD_M:
-                    raise RuntimeError('front guard: return at %s m' % near)
+                hit = guard_hit(scan['scan']['ranges'], band, GUARD_M)
+                if hit is not None:
+                    raise RuntimeError('swept-band guard: return at %s' % (hit,))
             if c['armed'] and c['servo'] == servo and c['motor'] == motor:
                 if adopted_at is None:
                     adopted_at = now
@@ -172,7 +194,7 @@ def main():
         assert fresh['boot'] == boot, 'server restarted before arm'
         command('arm', fresh)
         hold('initial_center', (), 1500, 1500, .3, allow_arm_pending=True)
-        hold('turn', turn_keys, args.forward, servo_turn, args.turn_s)
+        hold('turn', turn_keys, args.forward, servo_turn, args.turn_s, band=turn)
         hold('center_rolling', ['up'], args.forward, 1500, args.center_s)
         result['completed'] = True
     except BaseException as error:

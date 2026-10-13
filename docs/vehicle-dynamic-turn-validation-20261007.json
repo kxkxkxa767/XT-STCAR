@@ -21096,6 +21096,27 @@
         "test_steering_play_model_keeps_wheels_toward_the_last_turn": "Vehicle play model: after 1650 then 1500 the wheel stays at 1500+B; B=0 unchanged; negative play rejected",
         "test_re_laid_practice_course_completes_with_hypothetical_steering_play": "user8 and doc8x4 with B=30: route_finish_zone_stop, no contact, board and cone gap > .1 m"
       }
+    },
+    "steering_arc_measurements_20261013": {
+      "author": "Claude",
+      "date": "2026-10-13",
+      "evidence_directory": "work/steering-arc-20261013",
+      "setup": "tiled indoor floor, room about 12 x 10 m, four marker posts on a 3 x 3 m square; manual-path runs with scripts/steering-arc-check.py; operator confirmed each placement; trial-map ICP reconstruction (fits mostly .6-.95, frames after the lock unusable)",
+      "runs": {
+        "1 straight 1550": "starts moving ~.7 s after the command; ~1.0 m/s; straight heading change .1 deg over .56 m (no straight bias)",
+        "2 left 1720 at 1560": "curvature 1.6-1.7 /m; stopped by the swept-band guard at ~76 deg (rear-left post on the nominal arc band), no centre phase",
+        "3 left 1720 then 1500 at 1560": "turn 1.5-1.7 /m; after the 1500 command ~.3 s lag still turning left, then a small right overshoot (to about -.3 /m) decaying to ~0 within 1 s: no residual toward the turn side while rolling; straight speed reached ~2 m/s; coasted 2-3 m after the stop",
+        "4 right 1200 then 1500 at 1560": "turn only about -1.0 to -1.15 /m (nominal model 1.875; similar to the earlier 1350 measurement), so the right side appears to saturate near 1350; after the 1500 command the car kept turning right about 70 deg (mean about -.9 /m over the centre phase, still -.15 /m at its end); after the stop it coasted into the room wall (operator report) - the guard covered only the powered phases",
+        "5 right 1350 then 1500 at 1550": "turn -.4 to -.8 /m while ramping at ~.5 m/s; after the 1500 command it kept -.75 to -.98 /m for ~.6 s, then nearly stopped while ICP still showed rotation (low fits; uncertain)"
+      },
+      "conclusions": [
+        "Strong left/right asymmetry: returning to 1500 from a right turn leaves a large right curvature for about a second or more while rolling; from a left turn it returns at once. Matches the operator static observation for the right side; points to a mechanical right-side return problem (linkage play, servo saver, horn/screw) or a servo issue, not only tyre scrub.",
+        "Right PWM below ~1350 gives little extra curvature: RIGHT_EXIT_MIN_PWM 1200 and the nominal 1.875 /m right model are not supported; the left 1720 curvature (1.6-1.7 /m) is above the 1.375 model.",
+        "1560 on tile reaches ~2 m/s straight and coasts 2-3 m after a stop; the route finish/coast models (.5 m/s^2, 1.35 m/s) need re-measurement on the race surface.",
+        "ICP in this room is noisy; repeat with better-defined geometry before fitting numbers."
+      ],
+      "script_changes_this_session": "swept-band guard instead of the +-60 deg sector (posts beside the path); guard 2.0 m at 1560, +.0125 m per PWM above; forward cap 1600 per user; still no protection during the coast after stop",
+      "not_done": "no software compensation; RIGHT_EXIT_MIN_PWM/simulator right model unchanged pending mechanical check and cleaner data"
     }
   }
 }
