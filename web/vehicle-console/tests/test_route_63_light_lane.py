@@ -234,8 +234,11 @@ class FinishStopTests(unittest.TestCase):
         motion = lane_motion()
         motion.servo = motion.steering_target = 1500
         ahead, v, motor, seq, coasted = start, cruise, ROUTE_SLOW_MOTOR, 5, False
-        log = []
-        while v > 0 and seq < 400:
+        log, still = [], 0
+        # Round 64: the service keeps observing a car that has stopped; a few
+        # standstill frames let the controller see it (stopped inside the zone).
+        while (v > 0 or (still < 5 and not coasted)) and seq < 400:
+            still = still+1 if v <= 0 else 0
             value = route.observation(seq, heading=0.)
             value['ranges'] = box(ahead, half=.525)
             value['corridor_candidates'][0].update(center_offset_left_m=0., width_m=1.05)
@@ -257,8 +260,9 @@ class FinishStopTests(unittest.TestCase):
             seq += 1
         return ahead-FRONT_BODY_EXTENT_M, coasted, log, motion
 
-    @unittest.expectedFailure  # ROUND 63 WIP (not deployable): see agent.md top / after62_light_lane_straight_wip
     def test_lane_end_stop_inside_the_finish_zone_without_contact(self):
+        # Round 64: passes with the closed-loop finish (weakest-coast no-power
+        # guard, slow band, nominal mid-zone cut).
         # Measured rolling decel ~.5 m/s^2 (rebuilt paths, trials 49-51).
         for true_decel in (.35, .5, .6):
             for start in (3.5, 4.5, 6.):
@@ -271,7 +275,6 @@ class FinishStopTests(unittest.TestCase):
                         self.assertLess(gap, .80)      # inside the 80 cm finish zone
                         self.assertLessEqual(motion.finish_evidence['speed_for_cut_mps'], LANE_SLOW_HIGH_MPS+.25)
 
-    @unittest.expectedFailure  # ROUND 63 WIP (not deployable): see agent.md top / after62_light_lane_straight_wip
     def test_weaker_or_stronger_decel_still_never_reaches_the_board(self):
         for true_decel in (.25, .7, 1.):
             for cruise in (.9, 1.27):
@@ -281,16 +284,24 @@ class FinishStopTests(unittest.TestCase):
                     self.assertGreater(gap, 0.)
 
     def test_far_part_is_driven_at_1550_not_slow_regulated(self):
-        gap, coasted, log, motion = self.stop(.5, start=6.)
-        far = [m for a, v, m in log if a > 4.]
-        self.assertTrue(far and all(m == ROUTE_SLOW_MOTOR for m in far[3:]))
+        # Round 64: "far" = beyond the weakest-coast distance from the speed
+        # plus its margins (no power is ever given inside it).
+        gap, coasted, log, motion = self.stop(.5, start=6., cruise=.9)
+        guard = (FRONT_BODY_EXTENT_M+motion._lane_safe_gap(.9+ms.LANE_SPEED_CUT_MARGIN_MPS
+                                                           + ms.LANE_SPEED_POWER_MARGIN_MPS))
+        far = [m for a, v, m in log if a > guard+.1]
+        self.assertTrue(len(far) > 3 and all(m == ROUTE_SLOW_MOTOR for m in far[3:]))
 
     def test_slow_zone_latches_before_the_cut_at_cruise_speed(self):
+        # Round 64: the first coast is the weakest-coast guard, well before the cut.
         gap, coasted, log, motion = self.stop(.5, start=6., cruise=1.27)
         first_coast = next(i for i, (a, v, m) in enumerate(log) if m == 1500)
-        self.assertLess(log[first_coast][0], motion._lane_stop_range(1.27)+LANE_SLOW_TRAVEL_M+.2)
+        guard = (FRONT_BODY_EXTENT_M+motion._lane_safe_gap(1.27+ms.LANE_SPEED_CUT_MARGIN_MPS
+                                                           + ms.LANE_SPEED_POWER_MARGIN_MPS))
+        self.assertLessEqual(log[first_coast][0], guard+.15)
         self.assertGreater(log[first_coast][0], motion._lane_stop_range(1.27))
-        self.assertLess(LANE_STOP_DECEL_MPS2, ms.LANE_COAST_DECEL_MPS2)
+        self.assertLess(ms.LANE_STOP_DECEL_MIN_MPS2, LANE_STOP_DECEL_MPS2)
+        self.assertLessEqual(LANE_STOP_DECEL_MPS2, ms.LANE_COAST_DECEL_MPS2)
 
 
 if __name__ == '__main__':

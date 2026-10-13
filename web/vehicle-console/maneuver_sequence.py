@@ -187,14 +187,39 @@ LANE_SPEED_UNKNOWN_MPS = 1.3
 # rate is a different return on the ray (turning car), not speed.
 LANE_MAX_CLOSING_MPS = 2.
 LANE_COAST_DECEL_MPS2 = .5
-LANE_STOP_DECEL_MPS2 = .35
+LANE_STOP_DECEL_MPS2 = .5
 LANE_SLOW_TRAVEL_M = .60
-LANE_SLOW_HIGH_MPS = .70
-LANE_SLOW_LOW_MPS = .45
+LANE_SLOW_HIGH_MPS = .60
+LANE_SLOW_LOW_MPS = .40
 LANE_SPEED_HOLD_S = .5
 LANE_SPEED_HOLD_MARGIN_MPS = .1
 LANE_REACTION_S = .2
 LANE_FINISH_GAP_M = .15
+# Round 64 (Claude): finish. A cut from cruise speed cannot land inside the
+# .8 m zone over the plausible coast decels (simulation: a scan-seam jump read
+# 1.15 m/s at 1.0 and the car stopped 1.2 m short; the round-63 closed-loop
+# tests failed). Now: (1) never power within the distance the weakest coast
+# (LANE_STOP_DECEL_MIN_MPS2) needs from the estimated speed plus a margin
+# (more while powered: the estimate lags a push); (2) in the slow zone hold
+# LANE_SLOW_LOW..HIGH with neutral/1550 (no push within LANE_PUSH_CLEAR_M of
+# the cut); (3) end only at <= LANE_SLOW_HIGH where a coast at the nominal
+# decel (the measured ~.5 m/s^2) stops LANE_FINISH_TARGET_GAP_M from the board,
+# or when stopped with the front inside the zone. Parameters chosen on the
+# round-63 closed-loop model (decel .25-1.0, start 3.5-6 m, cruise .9/1.27).
+LANE_STOP_DECEL_MIN_MPS2 = .25
+LANE_FINISH_ZONE_GAP_M = .75
+LANE_FINISH_MIN_GAP_M = .05
+LANE_FINISH_TARGET_GAP_M = .45
+LANE_PUSH_CLEAR_M = .2
+
+LANE_SPEED_CUT_MARGIN_MPS = .15
+# While powered the speed rises faster than the ~.3 s estimate follows.
+LANE_SPEED_POWER_MARGIN_MPS = .15
+# Speed: closing rate over ~.2 s baselines (median), so one scan-seam jump of
+# the ray ahead (~.1 m at 1 m/s) moves it by ~.5 m/s instead of ~1 m/s and
+# the median drops it; longer baselines lagged too much while coasting.
+LANE_SPEED_BASELINE = 2
+LANE_SPEED_HISTORY = 7
 LANE_FRONT_HALF_BINS = 3
 LANE_ALIGNED_HEADING_RAD = math.radians(8)
 # Round 63 (Claude): the light turn hands over to the light lane as soon as
@@ -350,6 +375,12 @@ LANE_START_HOLD_PWM = 55
 FIRST_ACQUIRE_BEARING_RAD = (math.radians(10), math.radians(135))
 FIRST_APPROACH_MAX_RANGE_M = 3.5
 FIRST_HANDOVER_BEARING_RAD = math.radians(45)
+# The loop stage's loss handling stops the car; hand over only once the support
+# is well inside the 3 m compact-target range (simulation, 6 m wide course:
+# handed over at ~2.9 m, lost at 3.0 m, stopped 3.07 m away and never
+# re-acquired). Before that the start lane keeps steering the same loop plan
+# and tolerates a lost frame.
+OPEN_HANDOVER_MAX_RANGE_M = 2.5
 # Without a first support, stop in front of a board with the measured rolling
 # decel (agent.md section 5) plus a reaction allowance.
 LANE_START_STOP_DECEL_MPS2 = .5
@@ -400,6 +431,9 @@ OPEN_SECOND_BEYOND_FIRST_M = .8
 # first loop may hand over to the second loop's tangent from the next.
 OPEN_SECOND_LOOKOUT_RAD = math.pi/2
 OPEN_HANDOFF_MIN_PROGRESS_RAD = 2*math.pi/3
+# The second loop may hand over to the light-lane entry from this progress on
+# (the second support abeam or behind on the right).
+OPEN_LIGHT_HANDOFF_PROGRESS_RAD = math.pi/2
 OPEN_HEADING_HOLD_PWM = 120
 # Steering step of the open-course pursuit (approach, loops, transfer, light
 # entry). Simulation (rotation-compensated tracking): 40 completed all named
@@ -414,6 +448,9 @@ OPEN_LANE_MIN_SPAN_M = .5
 OPEN_LANE_LOOKAHEAD_M = (.8, 1.6)
 OPEN_LANE_WIDTH_M = (.65, 2.2)
 OPEN_LANE_ENTRY_HEADING_RAD = math.radians(20)
+OPEN_LINE_BAND_M = .06
+OPEN_LINE_MIN_POINTS = 8
+OPEN_LINE_REACH_M = 6.
 OPEN_STAGES = ('open_transfer', 'second_loop', 'light_entry')
 
 
@@ -615,6 +652,36 @@ def _strip_clear(points, end, skip_center, skip_radius):
     return True
 
 
+def _axis_lines(points, heading):
+    """Boards parallel to the compass axis from raw returns: (lateral, along span).
+
+    The native finite walls miss a divider seen at a grazing angle from the
+    open area (simulation, 8x6 course: never reported), so returns are
+    grouped by their lateral offset in the axis frame. A line needs
+    OPEN_LINE_MIN_POINTS within OPEN_LINE_BAND_M and OPEN_LANE_MIN_SPAN_M
+    along the axis; a compact support is far shorter and never qualifies.
+    """
+    c, s = math.cos(-heading), math.sin(-heading)
+    rows = sorted((-s*x+c*y, c*x+s*y) for x, y in points)
+    lines, start = [], 0
+    for end in range(len(rows)):
+        while rows[end][0]-rows[start][0] > OPEN_LINE_BAND_M:
+            start += 1
+        group = rows[start:end+1]
+        if len(group) >= OPEN_LINE_MIN_POINTS:
+            along = [a for _, a in group]
+            if max(along)-min(along) >= OPEN_LANE_MIN_SPAN_M:
+                lateral = sorted(l for l, _ in group)[len(group)//2]
+                if lines and abs(lines[-1]['lateral_m']-lateral) <= OPEN_LINE_BAND_M:
+                    if len(group) > lines[-1]['points']:
+                        lines[-1] = {'lateral_m': lateral, 'along_m': [min(along), max(along)],
+                                     'points': len(group), 'source': 'raw_returns'}
+                else:
+                    lines.append({'lateral_m': lateral, 'along_m': [min(along), max(along)],
+                                  'points': len(group), 'source': 'raw_returns'})
+    return lines
+
+
 def validate_maneuver_initial_pwm(value):
     if type(value) is not int or not INITIAL_PWM_MIN <= value <= SERVO_MAX:
         raise ValueError('invalid_maneuver_initial_presteer_pwm')
@@ -789,6 +856,7 @@ class ManeuverSequence(TurnMotion):
         self.open_loop = None
         self.open_next_loop = None
         self.open_feedback = None
+        self._open_lookout_seq = None
 
     @staticmethod
     def _new_second_tracker():
@@ -2574,6 +2642,7 @@ class ManeuverSequence(TurnMotion):
         return (isinstance(scan, dict) and scan.get('seq') != self.last_seq
                 and self.first_approach is not None and self._usable_target(target, scan)
                 and target['track_id'] == self.first_approach.get('track_id')
+                and target['range_m'] <= OPEN_HANDOVER_MAX_RANGE_M
                 and target['bearing_left_rad'] >= FIRST_HANDOVER_BEARING_RAD
                 and isinstance(control, dict) and control.get('command_acked') is True
                 and control.get('motor') in DRIVE_MOTORS and control.get('servo') == self.servo > NEUTRAL)
@@ -2952,6 +3021,7 @@ class ManeuverSequence(TurnMotion):
             hidden = set(self.compact_target['support_bins'])
             hidden.update(self.compact_target.get('boundary_unknown_bins') or [])
             tracked = {**scan, 'ranges': [None if i in hidden else r for i, r in enumerate(scan['ranges'])]}
+            self._open_lookout_seq = scan['seq']
         self.second_target = self.second_tracker.update(tracked, now, acquire=True, heading_rad=heading)
         self.role_distinct_evidence = proof
         self.second_acquisition_reason = self.second_tracker.reason
@@ -3007,6 +3077,14 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         self._open_lost_since = None
         self.open_loop = loop
+        if progress is not None and progress >= OPEN_LIGHT_HANDOFF_PROGRESS_RAD:
+            # Right arc - straight - right arc: once the light-lane pursuit asks
+            # for less right than the loop, continuing the loop only lowers the
+            # car below the lane it must climb to (simulation, wide courses:
+            # the light divider's open end was hit after a full loop).
+            pursuit = self._open_light_pursuit(scan, heading)
+            if pursuit is not None and pursuit[3] >= loop['target_pwm']:
+                return self._open_second_pass(scan, now, control, 'light_lane_pursuit_needs_less_right')
         self.natural_steering_target = loop['target_pwm']
         self.steering_target = self._open_right_gate(loop['target_pwm'])
         self.reason = 'open_second_loop'
@@ -3027,7 +3105,14 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     def _open_lane_target(self, scan, heading):
-        """Light-lane centre line (lateral, left +) from walls parallel to the axis."""
+        """Light-lane centre line (lateral, left +) from boards parallel to the axis.
+
+        Boards: native finite walls parallel to the axis plus raw-return lines
+        (_axis_lines). Outer = the leftmost board reaching ahead; inner = the
+        next parallel board inside it within the lane-width range (its near
+        end is the divider's open end); without one the start lane's measured
+        width is the prior.
+        """
         u = (math.cos(-heading), math.sin(-heading))
         n = (-u[1], u[0])
         walls = []
@@ -3037,8 +3122,8 @@ class ManeuverSequence(TurnMotion):
                 continue
             ends = [(p['x_m'], p['y_m']) for p in (wall['support_start_left_m'], wall['support_end_left_m'])]
             walls.append({'lateral_m': sum(n[0]*p[0]+n[1]*p[1] for p in ends)/2,
-                          'along_m': sorted(u[0]*p[0]+u[1]*p[1] for p in ends),
-                          'span_m': wall['support_span_m']})
+                          'along_m': sorted(u[0]*p[0]+u[1]*p[1] for p in ends), 'source': 'native_wall'})
+        walls += _axis_lines(_scan_points(scan['ranges'], OPEN_LINE_REACH_M), heading)
         outer = max((w for w in walls if w['lateral_m'] > SIDE_BODY_EXTENT_M and w['along_m'][1] > FRONT_BODY_EXTENT_M),
                     key=lambda w: w['lateral_m'], default=None)
         if outer is None:
@@ -3048,20 +3133,37 @@ class ManeuverSequence(TurnMotion):
                     key=lambda w: w['lateral_m'], default=None)
         prior = self._start_lane_width if _number(self._start_lane_width) else OPEN_LANE_WIDTH_M[0]
         width = outer['lateral_m']-inner['lateral_m'] if inner is not None else prior
-        return {'outer_lateral_m': outer['lateral_m'], 'inner_lateral_m': None if inner is None else inner['lateral_m'],
+        return {'outer_lateral_m': outer['lateral_m'], 'outer_source': outer['source'],
+                'inner_lateral_m': None if inner is None else inner['lateral_m'],
+                'inner_source': None if inner is None else inner['source'],
                 'inner_start_along_m': None if inner is None else inner['along_m'][0],
                 'width_m': width, 'width_source': 'measured' if inner is not None else 'start_lane_prior',
                 'center_lateral_m': outer['lateral_m']-width/2, 'walls': len(walls)}
+
+    def _open_light_pursuit(self, scan, heading):
+        """Pursuit of the light-lane centre line: (lane, point, curvature, pwm) or None."""
+        lane = self._open_lane_target(scan, heading)
+        if lane is None:
+            return None
+        start = lane['inner_start_along_m']
+        along = (OPEN_LANE_LOOKAHEAD_M[1] if start is None or start <= FRONT_BODY_EXTENT_M
+                 else max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], start)))
+        u = (math.cos(-heading), math.sin(-heading))
+        lateral = lane['center_lateral_m']
+        point = (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
+        curvature, pwm = _pursuit_pwm(point)
+        return lane, point, curvature, pwm
 
     def _open_light_entry_update(self, scan, now, control):
         """Turn onto the light-lane centre line along the outer boundary."""
         if not self._route_adopted(control, now):
             return self._result(now)
         heading = self.compass.current(scan)
-        lane = None if heading is None else self._open_lane_target(scan, heading)
-        if lane is None:
+        pursuit = None if heading is None else self._open_light_pursuit(scan, heading)
+        if pursuit is None:
             self._begin_recovery_hold('open_light_lane_unmeasured', now, control)
             return self._result(now)
+        lane, point, curvature, natural = pursuit
         walls = corridor_walls(scan)
         if (walls is not None and abs(heading) <= OPEN_LANE_ENTRY_HEADING_RAD
                 and OPEN_LANE_WIDTH_M[0] <= walls['width_m'] <= OPEN_LANE_WIDTH_M[1]
@@ -3069,13 +3171,6 @@ class ManeuverSequence(TurnMotion):
             return self._begin_light_lane(scan, now, control, {'source_seq': scan['seq'], 'walls': walls,
                 'lane_target': lane, 'compass_heading_rad': heading,
                 'basis': 'two_parallel_boards_round_car_on_light_lane_line'})
-        start = lane['inner_start_along_m']
-        along = (OPEN_LANE_LOOKAHEAD_M[1] if start is None or start <= FRONT_BODY_EXTENT_M
-                 else max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], start)))
-        u = (math.cos(-heading), math.sin(-heading))
-        lateral = lane['center_lateral_m']
-        point = (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
-        curvature, natural = _pursuit_pwm(point)
         ahead, speed, stop_at = self._open_front_stop(scan)
         self.light_feedback = {'source_seq': scan['seq'], 'stage': 'light_entry', 'compass_heading_rad': heading,
             'lane_target': lane, 'pursuit_point_left_m': [round(v, 3) for v in point],
@@ -3427,6 +3522,11 @@ class ManeuverSequence(TurnMotion):
         return True
 
     def _update_second_tracking(self, scan, now):
+        if self._open_lookout_seq is not None and scan.get('seq') == self._open_lookout_seq:
+            # Round 64: this publication already went to the tracker without the
+            # first support's returns (first-loop lookout); the same seq with
+            # different content would read as a changed duplicate and drop it.
+            return
         if self._second_recovering:
             self._second_recovery_observation(scan, now)
             return
@@ -4005,7 +4105,7 @@ class ManeuverSequence(TurnMotion):
         return min(values) if values else None
 
     def _lane_speed(self, scan, ahead):
-        """Closing speed on the board ahead: median of 3 consecutive scan rates."""
+        """Closing speed on the board ahead: median rate over ~.3 s baselines."""
         history = self._lane_ranges
         if ahead is None:
             history.clear()
@@ -4018,10 +4118,11 @@ class ManeuverSequence(TurnMotion):
                     or rate is None or not -.4 <= rate <= LANE_MAX_CLOSING_MPS):
                 history.clear()
         history.append(row)
-        del history[:-4]
+        del history[:-LANE_SPEED_HISTORY]
         if len(history) < 3:
             return None
-        rates = sorted((a[2]-b[2])/(b[0]-a[0]) for a, b in zip(history, history[1:]))
+        step = min(LANE_SPEED_BASELINE, len(history)-2)
+        rates = sorted((a[2]-b[2])/(b[0]-a[0]) for a, b in zip(history, history[step:]))
         return max(0., rates[len(rates)//2])
 
     def _begin_light_lane(self, scan, now, control, evidence):
@@ -4037,9 +4138,18 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     def _lane_stop_range(self, speed):
-        """Board range at which a neutral coast from ``speed`` stops at the finish gap."""
-        return (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M
-                + speed*speed/(2*LANE_STOP_DECEL_MPS2)+speed*LANE_REACTION_S)
+        """Board range of the finish cut at ``speed`` (nominal coast to mid zone)."""
+        return FRONT_BODY_EXTENT_M+self._lane_cut_gap(speed)
+
+    @staticmethod
+    def _lane_cut_gap(speed):
+        """Front gap at which a neutral coast at the nominal decel stops mid-zone."""
+        return LANE_FINISH_TARGET_GAP_M+speed*LANE_REACTION_S+speed*speed/(2*LANE_STOP_DECEL_MPS2)
+
+    @staticmethod
+    def _lane_safe_gap(speed):
+        """Front gap at which even the weakest coast only just keeps the minimum gap."""
+        return LANE_FINISH_MIN_GAP_M+speed*LANE_REACTION_S+speed*speed/(2*LANE_STOP_DECEL_MIN_MPS2)
 
     def _light_lane_update(self, scan, now, control):
         """Follow the light-lane straight, then stop inside the finish zone.
@@ -4080,29 +4190,42 @@ class ManeuverSequence(TurnMotion):
         ahead = self._lane_front_range(scan)
         speed = self._lane_speed(scan, ahead)
         held = getattr(self, '_lane_speed_last', None)
+        speed_known = True
         if speed is not None:
             self._lane_speed_last = (now, speed)
             v = speed
         elif held is not None and 0 <= now-held[0] <= LANE_SPEED_HOLD_S:
             v = held[1]+LANE_SPEED_HOLD_MARGIN_MPS
         else:
-            v = LANE_SPEED_UNKNOWN_MPS
-        stop_at = self._lane_stop_range(v)
-        if ahead is not None and ahead <= stop_at+LANE_SLOW_TRAVEL_M:
+            v, speed_known = LANE_SPEED_UNKNOWN_MPS, False
+        v_cut = v+LANE_SPEED_CUT_MARGIN_MPS+(LANE_SPEED_POWER_MARGIN_MPS if self.lane_motor in DRIVE_MOTORS else 0.)
+        gap = None if ahead is None else ahead-FRONT_BODY_EXTENT_M
+        cut_gap = self._lane_cut_gap(v)
+        safe_gap = self._lane_safe_gap(v_cut)
+        if gap is not None and gap <= self._lane_cut_gap(v_cut)+LANE_SLOW_TRAVEL_M:
             self._lane_slow_zone = True  # latched: the final approach stays slow
+        stopped = speed is not None and speed < LANE_SPEED_RESTART_MPS
+        in_zone = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M
+        cut = speed_known and gap is not None and ((gap <= cut_gap and v <= LANE_SLOW_HIGH_MPS)
+                                                   or (in_zone and stopped))
         self.lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
             'nominal_target_pwm': natural, 'lane': lane, 'free_space': space, 'walls': walls,
-            'front_range_m': ahead, 'speed_mps': speed, 'speed_for_cut_mps': v,
-            'speed_basis': 'closing_rate_on_board_ahead',
-            'finish_cut_range_m': stop_at, 'slow_zone': self._lane_slow_zone, 'stop_decel_mps2': LANE_STOP_DECEL_MPS2,
+            'front_range_m': ahead, 'front_gap_m': gap, 'speed_mps': speed, 'speed_for_cut_mps': v,
+            'speed_known': speed_known, 'speed_basis': 'closing_rate_on_board_ahead_axis',
+            'finish_cut_gap_m': cut_gap, 'weakest_coast_gap_m': safe_gap, 'in_finish_zone': in_zone,
+            'nominal_decel_mps2': LANE_STOP_DECEL_MPS2, 'weakest_decel_mps2': LANE_STOP_DECEL_MIN_MPS2,
+            'slow_zone': self._lane_slow_zone,
             'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': False}
-        if ahead is not None and ahead <= stop_at:
+        if cut:
             self.finish_evidence = {**self.lane_feedback, 'received_at': scan['received_at'],
-                'basis': 'board_ahead_within_body_gap_plus_neutral_coast_distance',
+                'basis': ('nominal_coast_lands_mid_finish_zone' if gap <= cut_gap
+                          else 'body_front_in_finish_zone_and_stopped'),
                 'finish_zone_certified': False}
             self._route_event('finish_stop', scan, control, self.finish_evidence)
             return self._end_light_stage('route_finish_zone_stop', now, control)
-        if speed is None:
+        if gap is not None and gap <= safe_gap:
+            self.lane_motor = NEUTRAL  # within the weakest coast distance: never power here
+        elif speed is None:
             self.lane_motor = ROUTE_SLOW_MOTOR
         elif speed < LANE_SPEED_RESTART_MPS:
             self.lane_motor = TRIAL_MOTOR
@@ -4110,7 +4233,8 @@ class ManeuverSequence(TurnMotion):
             self.lane_motor = ROUTE_SLOW_MOTOR  # the straight itself: 1550
         elif speed > LANE_SLOW_HIGH_MPS:
             self.lane_motor = NEUTRAL
-        elif speed < LANE_SLOW_LOW_MPS:
+        elif (speed < LANE_SLOW_LOW_MPS and gap is not None
+              and gap > self._lane_cut_gap(v_cut)+LANE_PUSH_CLEAR_M):
             self.lane_motor = ROUTE_SLOW_MOTOR
         self.lane_feedback['motor'] = self.lane_motor
         self.steering_target, self.natural_steering_target = target, natural

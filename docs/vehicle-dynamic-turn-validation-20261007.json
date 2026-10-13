@@ -18466,6 +18466,36 @@
         "unit tests for every new function/branch, --range again, full suite, detector/route replays, then build round 64 (helper --max-seconds 40) and test on the car after SSH and placement are confirmed",
         "question for the user (not changed): right steering bound 1350 vs protocol 1270; real data only at 1350"
       ]
+    },
+    "wip_round64_finish_range_20261013": {
+      "status": "partial implementation, NOT deployable, not built, not on the car; simulation only",
+      "changes": {
+        "lane_walls_raw": "_axis_lines: boards parallel to the compass axis from raw returns (lateral band .06 m, >=8 points, >=.5 m along); the native finite walls never reported the light divider seen at a grazing angle from the open area (8x6 course) and dropped the outer wall mid-turn",
+        "second_to_light_handover": "second loop ends early (progress >= 90 deg) once the light-lane pursuit asks for less right than the loop (right arc - straight - right arc); wide courses no longer hit the light divider's open end",
+        "lookout_duplicate": "the second tracker got the masked (first support hidden) publication during the first-loop lookout; the regular update on the next 20 ms tick saw the same seq with other content (compact_target_duplicate_changed) and dropped the identity; _update_second_tracking now skips a seq the lookout already fed",
+        "handover_range": "OPEN_HANDOVER_MAX_RANGE_M 2.5: hand over to the loop stage only well inside the 3 m compact range (6 m wide course: handed over at ~2.9 m, lost at 3.0 m, recovery wait stopped the car 3.07 m away for good)",
+        "finish": "light_lane closed-loop finish: speed = median closing rate over 0.2 s baselines (history 7); (1) no power within the weakest-coast distance (.25 m/s^2) from speed+.15 (+.15 while powered); (2) slow zone (cut gap+.6 m) holds .40-.60 m/s with neutral/1550, no push within .2 m of the cut; (3) end only at speed <= .60 where a coast at the nominal decel .5 m/s^2 (measured) stops the front .45 m from the board (mid zone), or stopped with the front inside the zone; unknown speed inside the guard coasts and decides once measured. Finish distance along the compass axis (lane entry). Round-63 closed-loop tests now pass (decel .35-.6 in the zone, .25-1.0 no contact); round-58 tests updated to the new semantics (far part = beyond the guard; cut formula; unknown speed coasts)",
+        "budget": "ROUTE_MAX_DRIVE_S 40 (unchanged since the previous save)"
+      },
+      "simulation": {
+        "named": "doc8x4/user8/wide8x6/mid64 succeed over seeds 0-2 (min board .11-.22, min cone .31-.67, 21-30 s); short5 fails (see limitations)",
+        "rules_range": "range-v2/v3: 61/108 (was 24/108); v4 with the handover range limit: see work/round64-sim/range/range-v4.log",
+        "failure_classes": [
+          "L=5: the second loop cannot be planned through: with the right bound 1350 (radius >= ~1.07 m) the two loop circles overlap (short5: centre distance 1.98 m < 2.05 m sum), no left-arc/straight/right-arc path exists; the crossing dives steeply into the start divider",
+          "W=4 with cone offsets: the second support only .55-.85 m above the start divider; the second loop's bottom passes too close to the divider (contacts at its open end)",
+          "a few first-loop/transfer stalls"
+        ]
+      },
+      "known_limitations": [
+        "coast standstill confirmation (existing coast_motion plane matching) is often ambiguous at the light-lane end (symmetric side boards): the run ends after 5 s with coast_standstill_unconfirmed and the bridge locked at neutral while the car already stands in the finish zone; not changed",
+        "right steering bound 1350 (protocol 1270): short courses (cones ~2.5 m apart) need a smaller right radius; real data only at 1350 (trials 60-62: -.92..-1.01/m). Question for the user, not changed"
+      ],
+      "tests": "full suite 695 OK (expected failures 2: round-63 light-lane wall-law steering tests)",
+      "next_steps": [
+        "joint plan of the second loop with the first (internal tangent must exist: centre distance >= R1+R2+margin) and the approach-side band against the start divider",
+        "unit tests for the open-course functions (plan, carrot, axis lines, lane target, lookout, finish)",
+        "range again, replays, then round-64 build (helper --max-seconds 40) after SSH/placement"
+      ]
     }
   }
 }

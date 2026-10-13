@@ -507,6 +507,9 @@ def main():
     parser.add_argument('--trace', action='append', help='print this motion attribute every 100 ms (repeatable)')
     parser.add_argument('--matrix', action='store_true', help='run every named layout with vehicle variations')
     parser.add_argument('--range', action='store_true', help='run the rules-range variations (nominal vehicle)')
+    parser.add_argument('--variant', help='run one --range variation by name (e.g. L8.0W6.0lane0.9div0.5cone+0.0+0.0)')
+    parser.add_argument('--png-dir', help='with --range: write each variation\'s picture here')
+    parser.add_argument('--only-failures', action='store_true', help='with --png-dir: pictures of failures only')
     args = parser.parse_args()
     keys = ('success', 'start_error', 'end_reason', 'contacts', 'min_board_gap_m', 'min_cone_gap_m', 'final', 'time_s')
     if args.matrix:
@@ -520,13 +523,21 @@ def main():
     if args.range:
         passed = total = 0
         for name, spec in variations():
-            summary, _, _ = run(Course(**spec), max_s=args.max_s, seed=args.seed)
+            course = Course(**spec)
+            summary, log, _ = run(course, max_s=args.max_s, seed=args.seed)
+            if args.png_dir and not (args.only_failures and summary['success']):
+                Path(args.png_dir).mkdir(parents=True, exist_ok=True)
+                render(course, log, str(Path(args.png_dir)/f'{name}.png'), name=name, summary=summary)
             total += 1
             passed += summary['success']
             print(name, json.dumps({k: summary[k] for k in keys}, ensure_ascii=False), flush=True)
         print(f'success {passed}/{total}')
         return
-    spec = dict(LAYOUTS[args.layout])
+    if args.variant:
+        spec = dict(dict(variations())[args.variant])
+        args.layout = args.variant
+    else:
+        spec = dict(LAYOUTS[args.layout])
     if args.cones:
         v = [float(a) for a in args.cones.split(',')]
         spec['cones'] = [(v[0], v[1]), (v[2], v[3])]
