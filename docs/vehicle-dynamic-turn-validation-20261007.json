@@ -782,7 +782,7 @@
       "evidence_directory": "work/vehicle-dynamic-deploy-20261007/left-turn-trial-20261007-06"
     }
   ],
-  "latest_trial_status": "58 (claude-turn58/a158ead): second support confirmed late (1.79 m), over-rotated left into the board. Round 59 candidate: 3-return second acquisition, lag-predicted heading limit that also bounds the task-left path correction. 674 tests pass. Not built/deployed.",
+  "latest_trial_status": "2026-10-13: latest numbered physical route trial remains 62 (claude-turn62/8a4055b). Manual steering patch afff7a9 deployed on turn62 runtime; 1800/1200 each ~10s completed with motor1500 and final lock. Ground return-to-center hysteresis reported; no dynamic1200 curvature or compensation. Turn64/1f4ce71 open-course WIP now passes detector44-trial and route51/52 compatibility replay; 718 Python tests (2 existing expected failures) and full Rust build passed; range baseline reproduced70/108,38 failures remain, NOT built/deployed/road-tested.",
   "latest_user_proposal": "2026-10-10 Claude round40: 用户恢复，要求修改后直接上传到车并测试；不要对这个赛道硬编码。",
   "assessment_of_proposal": {
     "actual_first_halt": "forward1m rectangle, not the30cm lidar-side threshold",
@@ -18532,6 +18532,873 @@
         "narrow second channel (.55 m): consider slower approach / planned straight segment in the channel before the right loop",
         "with the user's answer on the right bound: if allowed, set RIGHT_EXIT_MIN_PWM/OPEN_RIGHT_RADIUS_M and re-run --range",
         "build round 64 only after replays, full suite, --range; SSH reconnect and placement confirmation by the user before power"
+      ]
+    },
+    "static_steering300_20261013": {
+      "record": "docs/vehicle-steering300-validation-20261013.json",
+      "source_commit": "afff7a97dc749afaf17b22a0494f012db19e6065",
+      "deployed": true,
+      "physical_static_trial_executed": true,
+      "motor_always_1500": true,
+      "bridge_and_manual_range": [
+        1200,
+        1800
+      ],
+      "autonomous_candidate_range_unchanged": [
+        1270,
+        1720
+      ],
+      "route_right_min_unchanged": 1350,
+      "vehicle_runtime": "claude-turn62/8a4055b complete file group plus manual server/UI patch and rebuilt bridge from afff7a9; NOT turn64",
+      "archive_sha256": "7a4cfcb1310488fa6df290e0ba10bc5ffa910bf4c1380c28a02add3e8aaae509",
+      "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+      "backup": "/home/bianbu/xt-stcar-console/backup-codex-steering300-20261013-110523",
+      "actual_left_s": 10.039103571000169,
+      "actual_right_s": 10.059788672999957,
+      "feedback_samples": 339,
+      "four_returned_hashes_verified": true,
+      "postcheck_14_installed_hashes_match": true,
+      "postcheck_fresh_locked_samples": 6,
+      "prior_static_operator_report": {
+        "source": "2026-10-13 user现场补述; no raw test artifact located in this audit",
+        "motor_pwm": 1500,
+        "tests": [
+          {
+            "servo": 1350,
+            "hold_s": 2
+          },
+          {
+            "servo": 1350,
+            "hold_s": 4
+          },
+          {
+            "servo": 1270,
+            "hold_s": 10
+          }
+        ],
+        "feedback_reported_normal": true,
+        "operator_reported_1270_has_travel_remaining": true,
+        "independently_reverified_from_raw_log": false
+      },
+      "loaded_center_hysteresis": {
+        "observation": "Ground return-to-1500 retains bias toward previous steering; lifted wheels return straight.",
+        "working_hypothesis": "Ground friction/load plus steering linkage backlash or hysteresis; this does not establish a shifted servo neutral. Mechanism not isolated by measurement.",
+        "neutral_pwm_unchanged": 1500,
+        "dynamic_measurement_done": false,
+        "compensation_implemented": false,
+        "required_measurements": [
+          "Ground: initially straight -> 1500, short low-speed run with saved lidar/control.",
+          "Ground: left 1800 -> actual 1500 ACK -> short low-speed run.",
+          "Ground: right 1200 -> actual 1500 ACK -> short low-speed run.",
+          "Stronger right at low speed: lidar-reconstructed curvature and uncertainty, compare 1350 historical -0.92..-1.01/m."
+        ],
+        "analysis": "Use trial-map and inspect PNG, reject poorly observable ICP motion; compare residual curvature after both steering histories and straight baseline before choosing overshoot or direction-dependent offset. No guessed neutral change."
+      },
+      "build_workflow": "Old build-matched.py compares crates sources with the previous manifest. Do not rerun or weaken that check. A new builder must accept the verified steering300 bundle/manifest as the matched bridge baseline, prove all current Rust source hashes and bridge SHA equal it, or rebuild the bridge using scripts/build-riscv.sh then inspect vehicle-bridge ELF and create a fresh complete manifest. Keep turn62 Python baseline distinct from main turn64 source. Preserve all old packages/backups/helpers."
+    },
+    "codex_resume_validation_20261013": {
+      "source_commit": "afff7a97dc749afaf17b22a0494f012db19e6065",
+      "evidence_directory": "work/round64-resume-20261013-111945",
+      "status": "offline baseline reproduced; new calibration blocked on SSH reconnect and placement confirmation; turn64 remains not ready",
+      "git_main_and_origin_equal_at_start": true,
+      "tracked_dirty_at_start": false,
+      "claude_round64_test_file_unchanged": true,
+      "baseline_method": "Read-only git archive snapshots of 1f4ce71 and 8a4055b; no stash pop/apply",
+      "detector_trials": 44,
+      "detector_trial_range": "19..62",
+      "detector_all_lines_identical_to_both_baselines": true,
+      "detector_TOTAL": "first/strict(51): seen 558 conf 433 ids 69\n    first/gap(52): seen 566 conf 439 ids 66\n    first/tolerant: seen 618 conf 513 ids 55\n    ahead/strict(51): seen 360 conf 205 ids 99\n    ahead/gap(52): seen 362 conf 210 ids 88\n    ahead/tolerant: seen 446 conf 306 ids 76",
+      "route51": {
+        "handover_recorded_s": 1.7,
+        "gate_passed": true,
+        "byte_identical_to_both_baselines": true
+      },
+      "route52": {
+        "second_orbit_recorded_s": 4.79,
+        "left_entry_recorded_s": 5.39,
+        "left_pwm": 1540,
+        "gate_passed": true,
+        "byte_identical_to_both_baselines": true
+      },
+      "python_current": {
+        "tests": 718,
+        "failures": 0,
+        "errors": 0,
+        "expected_failures": 2
+      },
+      "rust_full_build": {
+        "command": "scripts/build-riscv.sh",
+        "exit": 0,
+        "tests_passed": 653,
+        "tests_failed": 0,
+        "tests_ignored": 3,
+        "fmt": "passed",
+        "clippy": "passed",
+        "riscv_cross_build": "passed",
+        "bridge_elf_extra_inspection": "passed",
+        "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+        "bridge_identical_to_installed_static_patch": true
+      },
+      "sim_range": {
+        "total": 108,
+        "success": 70,
+        "by_length": {
+          "L5.0": 3,
+          "L6.4": 34,
+          "L8.0": 33
+        },
+        "failures": [
+          {
+            "variant": "L5.0W4.0lane0.9div0.4cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "maneuver_cumulative_drive_timeout",
+            "contacts": [],
+            "min_board_gap_m": 0.151,
+            "min_cone_gap_m": 0.315,
+            "final": [
+              3.67,
+              3.45,
+              -8.4
+            ],
+            "time_s": 40.32
+          },
+          {
+            "variant": "L5.0W4.0lane0.9div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                8.44,
+                "board",
+                1.84,
+                1.14
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.133,
+            "final": [
+              1.29,
+              0.37,
+              233.1
+            ],
+            "time_s": 10.4
+          },
+          {
+            "variant": "L5.0W4.0lane0.9div0.4cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.28,
+                "board",
+                0.23,
+                1.72
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.226,
+            "final": [
+              -0.31,
+              2.46,
+              125.5
+            ],
+            "time_s": 12.2
+          },
+          {
+            "variant": "L5.0W4.0lane0.9div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "coast_standstill_unconfirmed",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 1.01,
+            "final": [
+              4.45,
+              0.45,
+              0.0
+            ],
+            "time_s": 7.4
+          },
+          {
+            "variant": "L5.0W4.0lane0.9div0.5cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [],
+            "min_board_gap_m": 0.02,
+            "min_cone_gap_m": 0.209,
+            "final": [
+              0.17,
+              3.26,
+              94.1
+            ],
+            "time_s": 12.4
+          },
+          {
+            "variant": "L5.0W4.0lane1.05div0.4cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "maneuver_cumulative_drive_timeout",
+            "contacts": [],
+            "min_board_gap_m": 0.19,
+            "min_cone_gap_m": 0.237,
+            "final": [
+              3.75,
+              3.39,
+              -4.4
+            ],
+            "time_s": 40.32
+          },
+          {
+            "variant": "L5.0W4.0lane1.05div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                8.04,
+                "board",
+                1.82,
+                1.3
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.119,
+            "final": [
+              1.13,
+              0.64,
+              222.2
+            ],
+            "time_s": 10.0
+          },
+          {
+            "variant": "L5.0W4.0lane1.05div0.4cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                9.46,
+                "board",
+                1.17,
+                1.24
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.206,
+            "final": [
+              0.52,
+              1.1,
+              191.9
+            ],
+            "time_s": 11.1
+          },
+          {
+            "variant": "L5.0W4.0lane1.05div0.5cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                11.92,
+                "board",
+                1.46,
+                3.81
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.194,
+            "final": [
+              2.14,
+              3.99,
+              15.0
+            ],
+            "time_s": 13.6
+          },
+          {
+            "variant": "L5.0W4.0lane1.05div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                8.1,
+                "board",
+                1.83,
+                1.3
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.117,
+            "final": [
+              1.18,
+              0.68,
+              223.0
+            ],
+            "time_s": 10.0
+          },
+          {
+            "variant": "L5.0W4.0lane1.05div0.5cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.64,
+                "board",
+                0.2,
+                2.11
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.205,
+            "final": [
+              -0.05,
+              2.84,
+              108.6
+            ],
+            "time_s": 12.4
+          },
+          {
+            "variant": "L5.0W5.0lane0.9div0.4cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "maneuver_cumulative_drive_timeout",
+            "contacts": [],
+            "min_board_gap_m": 0.141,
+            "min_cone_gap_m": 0.217,
+            "final": [
+              3.74,
+              4.49,
+              -5.2
+            ],
+            "time_s": 40.32
+          },
+          {
+            "variant": "L5.0W5.0lane0.9div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                9.84,
+                "board",
+                1.82,
+                1.14
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.345,
+            "final": [
+              1.0,
+              0.66,
+              209.6
+            ],
+            "time_s": 11.8
+          },
+          {
+            "variant": "L5.0W5.0lane0.9div0.4cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.78,
+                "board",
+                0.19,
+                2.75
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.165,
+            "final": [
+              -0.04,
+              3.44,
+              108.6
+            ],
+            "time_s": 12.5
+          },
+          {
+            "variant": "L5.0W5.0lane0.9div0.5cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.66,
+                "board",
+                0.21,
+                2.53
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.293,
+            "final": [
+              -0.09,
+              3.32,
+              110.1
+            ],
+            "time_s": 12.5
+          },
+          {
+            "variant": "L5.0W5.0lane0.9div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "coast_standstill_unconfirmed",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 1.51,
+            "final": [
+              4.45,
+              0.45,
+              0.0
+            ],
+            "time_s": 7.4
+          },
+          {
+            "variant": "L5.0W5.0lane0.9div0.5cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                11.64,
+                "board",
+                0.16,
+                3.31
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.196,
+            "final": [
+              0.12,
+              3.64,
+              97.0
+            ],
+            "time_s": 12.8
+          },
+          {
+            "variant": "L5.0W5.0lane1.05div0.4cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.88,
+                "board",
+                0.17,
+                3.02
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.284,
+            "final": [
+              0.06,
+              3.58,
+              101.6
+            ],
+            "time_s": 12.4
+          },
+          {
+            "variant": "L5.0W5.0lane1.05div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                9.38,
+                "board",
+                2.0,
+                1.27
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.298,
+            "final": [
+              1.52,
+              0.49,
+              237.9
+            ],
+            "time_s": 11.3
+          },
+          {
+            "variant": "L5.0W5.0lane1.05div0.4cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.48,
+                "board",
+                0.23,
+                2.15
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.206,
+            "final": [
+              -0.35,
+              2.86,
+              128.9
+            ],
+            "time_s": 12.4
+          },
+          {
+            "variant": "L5.0W5.0lane1.05div0.5cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.86,
+                "board",
+                0.18,
+                2.95
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.219,
+            "final": [
+              0.02,
+              3.59,
+              104.1
+            ],
+            "time_s": 12.5
+          },
+          {
+            "variant": "L5.0W5.0lane1.05div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "coast_standstill_unconfirmed",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 1.435,
+            "final": [
+              4.45,
+              0.53,
+              0.0
+            ],
+            "time_s": 7.4
+          },
+          {
+            "variant": "L5.0W5.0lane1.05div0.5cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.68,
+                "board",
+                0.2,
+                2.8
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.201,
+            "final": [
+              -0.05,
+              3.58,
+              107.5
+            ],
+            "time_s": 12.5
+          },
+          {
+            "variant": "L5.0W6.0lane0.9div0.4cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                12.16,
+                "board",
+                0.24,
+                2.44
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.331,
+            "final": [
+              -0.44,
+              3.08,
+              135.7
+            ],
+            "time_s": 14.1
+          },
+          {
+            "variant": "L5.0W6.0lane0.9div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "start_lane_board_ahead_without_first_support",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 2.01,
+            "final": [
+              4.45,
+              0.45,
+              -0.1
+            ],
+            "time_s": 5.62
+          },
+          {
+            "variant": "L5.0W6.0lane0.9div0.4cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                11.2,
+                "board",
+                0.23,
+                2.63
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.193,
+            "final": [
+              -0.35,
+              3.32,
+              129.4
+            ],
+            "time_s": 13.1
+          },
+          {
+            "variant": "L5.0W6.0lane0.9div0.5cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "coast_standstill_unconfirmed",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 2.31,
+            "final": [
+              4.45,
+              0.45,
+              0.0
+            ],
+            "time_s": 7.4
+          },
+          {
+            "variant": "L5.0W6.0lane0.9div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "start_lane_board_ahead_without_first_support",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 2.01,
+            "final": [
+              4.45,
+              0.45,
+              0.0
+            ],
+            "time_s": 5.62
+          },
+          {
+            "variant": "L5.0W6.0lane1.05div0.4cone+0.0+0.0",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                11.14,
+                "board",
+                0.18,
+                3.31
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.3,
+            "final": [
+              0.01,
+              3.97,
+              104.5
+            ],
+            "time_s": 12.8
+          },
+          {
+            "variant": "L5.0W6.0lane1.05div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "start_lane_board_ahead_without_first_support",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 1.935,
+            "final": [
+              4.45,
+              0.52,
+              -0.0
+            ],
+            "time_s": 5.62
+          },
+          {
+            "variant": "L5.0W6.0lane1.05div0.4cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [],
+            "min_board_gap_m": 0.089,
+            "min_cone_gap_m": 0.347,
+            "final": [
+              4.73,
+              2.86,
+              91.9
+            ],
+            "time_s": 7.0
+          },
+          {
+            "variant": "L5.0W6.0lane1.05div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "start_lane_board_ahead_without_first_support",
+            "contacts": [],
+            "min_board_gap_m": 0.22,
+            "min_cone_gap_m": 1.935,
+            "final": [
+              4.45,
+              0.53,
+              0.0
+            ],
+            "time_s": 5.62
+          },
+          {
+            "variant": "L5.0W6.0lane1.05div0.5cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [],
+            "min_board_gap_m": 0.091,
+            "min_cone_gap_m": 0.346,
+            "final": [
+              4.73,
+              2.86,
+              91.8
+            ],
+            "time_s": 7.0
+          },
+          {
+            "variant": "L6.4W4.0lane1.05div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [],
+            "min_board_gap_m": 0.088,
+            "min_cone_gap_m": 0.128,
+            "final": [
+              1.08,
+              1.35,
+              176.7
+            ],
+            "time_s": 11.6
+          },
+          {
+            "variant": "L6.4W4.0lane1.05div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [],
+            "min_board_gap_m": 0.089,
+            "min_cone_gap_m": 0.123,
+            "final": [
+              1.18,
+              1.3,
+              180.2
+            ],
+            "time_s": 11.3
+          },
+          {
+            "variant": "L8.0W4.0lane1.05div0.4cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                10.92,
+                "board",
+                2.65,
+                1.24
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.137,
+            "final": [
+              2.12,
+              1.12,
+              192.6
+            ],
+            "time_s": 12.4
+          },
+          {
+            "variant": "L8.0W4.0lane1.05div0.4cone+0.4-0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [],
+            "min_board_gap_m": 0.086,
+            "min_cone_gap_m": 0.283,
+            "final": [
+              3.15,
+              3.77,
+              0.2
+            ],
+            "time_s": 18.2
+          },
+          {
+            "variant": "L8.0W4.0lane1.05div0.5cone-0.4+0.3",
+            "success": false,
+            "start_error": null,
+            "end_reason": "probe_obstacle_close_body",
+            "contacts": [
+              [
+                11.46,
+                "board",
+                2.32,
+                1.22
+              ]
+            ],
+            "min_board_gap_m": 0.0,
+            "min_cone_gap_m": 0.126,
+            "final": [
+              2.05,
+              1.19,
+              187.1
+            ],
+            "time_s": 12.5
+          }
+        ]
+      },
+      "right_limit_change_blocked_on_measurement": true,
+      "right_curvature_measured_at_1200": false,
+      "new_powered_trial_executed": false,
+      "turn64_built": false,
+      "turn64_deployed": false,
+      "python_claude_baseline": {
+        "tests": 718,
+        "failures": 0,
+        "errors": 0,
+        "expected_failures": 2,
+        "initial_skipped": 1,
+        "skip_reason": "private run08 lidar fixture absent in git archive",
+        "skipped_test_rerun_with_same_private_fixture": "passed; python-claude-private-fixture.log"
+      },
+      "python_failure_sets_identical": true,
+      "geometry_build": {
+        "command": "cargo build --release -q --manifest-path tools/scan-geometry/Cargo.toml",
+        "exit": 0
+      },
+      "sim_named": {
+        "layout": "doc8x4",
+        "success": true,
+        "time_s": 24.22,
+        "png_visually_inspected": true,
+        "min_board_gap_m": 0.141,
+        "min_cone_gap_m": 0.301
+      },
+      "all_turn64_release_gates_passed": false,
+      "not_done": [
+        "New loaded-center and stronger-right curvature measurements; no neutral/right-limit/model change yet.",
+        "Resolve 38 range failures (including two actual simulated divider contacts); do not label 70/108 a release pass.",
+        "After fixes repeat tests/replays/range, then create a new Rust-matched full bundle and one-shot40s helper; no reuse/overwrite of old helpers."
       ]
     }
   }

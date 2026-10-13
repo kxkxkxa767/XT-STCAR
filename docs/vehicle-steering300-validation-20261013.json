@@ -14,8 +14,8 @@
   "vehicle_base_label": "claude-turn62",
   "vehicle_base_commit": "8a4055bb8f5488aff531b88deef9d70cb3e3338f",
   "implemented": true,
-  "deployed": false,
-  "physical_trial_executed": false,
+  "deployed": true,
+  "physical_trial_executed": true,
   "evidence_directory": "work/steering300-20261013",
   "checks": {
     "preinstalled_13_hashes_match_turn62": true,
@@ -36,7 +36,28 @@
     "route51_52_byte_identical": true,
     "clippy": "passed",
     "riscv_glibc_2p38_elf_check": "passed",
-    "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498"
+    "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+    "full_rust_build_resume": {
+      "command": "scripts/build-riscv.sh",
+      "exit": 0,
+      "tests_passed": 653,
+      "tests_failed": 0,
+      "tests_ignored": 3,
+      "fmt": "passed",
+      "clippy": "passed",
+      "riscv_cross_build": "passed",
+      "bridge_elf_extra_inspection": "passed",
+      "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+      "bridge_identical_to_installed_static_patch": true
+    },
+    "full_python_resume": {
+      "tests": 718,
+      "failures": 0,
+      "errors": 0,
+      "expected_failures": 2
+    },
+    "immutable_baseline_failure_sets_identical": true,
+    "immutable_baseline_private_fixture_rerun": "passed"
   },
   "physical_angle_measured": false,
   "mechanical_limit_measured": false,
@@ -50,5 +71,162 @@
     "Rust and two Python settings tests now accept authorized manual1200/1800 and reject1199/1801; old1270/1720 remains accepted.",
     "Added motor1500 endpoint hold/stop/heartbeat checks; autonomous limits and unvalidated-right assertions unchanged.",
     "Initial candidate run exposed one remaining old1721/1269 settings assertion, then corrected only its manual endpoints. Final full baseline/candidate both718 OK with same2 pre-existing expected failures."
-  ]
+  ],
+  "source_commit": "afff7a97dc749afaf17b22a0494f012db19e6065",
+  "changed_files": {
+    "crates/robot-core/src/teleop.rs": "Bridge accepted steering 1270..1720 -> 1200..1800; motor bounds, lock, deadlines, heartbeat and ACK unchanged.",
+    "web/vehicle-console/server.py": "Manual settings left 1500..1720 -> 1500..1800, right 1270..1500 -> 1200..1500; autonomous SERVO_MIN/MAX and route right minimum unchanged.",
+    "web/vehicle-console/index.html": "Manual input min/max and software-limit label.",
+    "web/vehicle-console/tests/test_console.py": "Manual bounds and motor-neutral key-output checks.",
+    "web/vehicle-console/tests/test_turn_control.py": "Only manual settings boundary assertions; autonomous restrictions unchanged.",
+    "scripts/static-steering-check.py": "One-shot motor-neutral static endpoint check.",
+    "web/vehicle-console/tests/test_route_64_open_course.py": "Unchanged from Claude 1f4ce71."
+  },
+  "prior_static_operator_report": {
+    "source": "2026-10-13 user现场补述; no raw test artifact located in this audit",
+    "motor_pwm": 1500,
+    "tests": [
+      {
+        "servo": 1350,
+        "hold_s": 2
+      },
+      {
+        "servo": 1350,
+        "hold_s": 4
+      },
+      {
+        "servo": 1270,
+        "hold_s": 10
+      }
+    ],
+    "feedback_reported_normal": true,
+    "operator_reported_1270_has_travel_remaining": true,
+    "independently_reverified_from_raw_log": false
+  },
+  "deployment": {
+    "runtime_base_commit": "8a4055bb8f5488aff531b88deef9d70cb3e3338f",
+    "runtime_base_label": "claude-turn62",
+    "source_commit": "afff7a97dc749afaf17b22a0494f012db19e6065",
+    "runtime_changed": [
+      "server.py",
+      "index.html",
+      "vehicle-bridge"
+    ],
+    "turn64_route_deployed": false,
+    "method": "Once-only deploy-codex-steering300.py stages a complete turn62 file group plus manual server/UI patch and rebuilt bridge, verifies old hashes, backs up installed runtime/start/config/unit, quiesces sole serial owner, dry-runs bridge, installs and restarts console, restores settings, checks new hashes and fresh locked feedback. No arm during deployment.",
+    "local_package_record": "work/steering300-20261013/codex-steering300-package.json",
+    "archive_sha256": "7a4cfcb1310488fa6df290e0ba10bc5ffa910bf4c1380c28a02add3e8aaae509",
+    "bridge_sha256": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+    "backup": "/home/bianbu/xt-stcar-console/backup-codex-steering300-20261013-110523",
+    "stage": "/home/bianbu/xt-stcar-console/stage-codex-steering300-20261013-110523",
+    "installed_directory": "/home/bianbu/xt-stcar-console/20260917",
+    "installed_sha256": {
+      "app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+      "autonomy-control.py": "a6b259f97e0a77bc8800aac5915be8a0a8292c4c55d94de9d6138110e271ef9c",
+      "autonomy_live.py": "381753bd6a0c5547b56331a48a8745a6b12997d1806db95a862703a7d33224ba",
+      "coast_motion.py": "fe392fdc7c31a420c651e4a19bb50953ada27f28126a26c61b78d869769667e1",
+      "compact_target.py": "404d8e09aabdc63abb77a7c660aeae6df9d1f09f0715416560a65ee9964d8a56",
+      "index.html": "086a21a4ae4170630bc77cb1c6c3a3284545a51ca3b81ca1365a682aff118700",
+      "maneuver_sequence.py": "c4b9bdbc8027f6d5420744404f2c1efec08e4d7085d0b94508f685fc6b6b1872",
+      "server.py": "ac052f1d55e3a684e006801c5b3ef22a0d5b1d57bbbe1d6d384eef3741ae1a33",
+      "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+      "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+      "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+      "turn_motion.py": "75ecd8855da6385b18baad32c79b9d942ee8cab5c3fa9abc526499d7650e07b9",
+      "vehicle-bridge": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+      "start-console.py": "8193cdd48e94a6aaba31d450518e08bf7e68d81a71b28fac98d655803134298b"
+    },
+    "preflight_samples": 6,
+    "post_restart_samples": 3,
+    "final_fresh_locked_samples": 10,
+    "access_token_preserved": true,
+    "launch_command_preserved": true,
+    "arm_or_drive_requests": 0
+  },
+  "static_trial": {
+    "directory": "work/steering300-20261013/static-steering300-20261013-110523",
+    "helper_sha256": "f74b3967c3abf1871346660a7582c74b9e19dbbe67eac493cd49824a8205f8c6",
+    "executed_once": true,
+    "result": {
+      "completed": true,
+      "motor_pwm": 1500,
+      "left_pwm": 1800,
+      "right_pwm": 1200,
+      "seconds_each": 10,
+      "phases": [
+        {
+          "name": "initial_center",
+          "servo": 1500,
+          "adopted_duration_s": 0.3137728879999031,
+          "fresh_ticks": 6
+        },
+        {
+          "name": "left_10s",
+          "servo": 1800,
+          "adopted_duration_s": 10.039103571000169,
+          "fresh_ticks": 155
+        },
+        {
+          "name": "center_between",
+          "servo": 1500,
+          "adopted_duration_s": 1.0382977660001416,
+          "fresh_ticks": 17
+        },
+        {
+          "name": "right_10s",
+          "servo": 1200,
+          "adopted_duration_s": 10.059788672999957,
+          "fresh_ticks": 150
+        },
+        {
+          "name": "final_center",
+          "servo": 1500,
+          "adopted_duration_s": 0.3423353370001223,
+          "fresh_ticks": 6
+        }
+      ],
+      "physical_wheel_angle_measured": false,
+      "fresh_locked_samples": 6
+    },
+    "feedback_samples": 339,
+    "all_feedback_motor_1500": true,
+    "retrieved_file_sha256": {
+      "before.json": "5db36338471de70d1f719b98609f670b8778d074df14af35dd61c7c2411717c8",
+      "feedback.jsonl": "343ce1f2ef8df19271a100a5510d5605222f3aca20d5ed95ee0f4911105fb42b",
+      "summary.json": "451b6c9da640f07b357e4c5f826e9a0029017fecbd97037d83f494a2ceeb2347",
+      "after.json": "0ced61d7c59d18b59ef3507bbc5b78ccdc98190e435fe3a6b1e6eecdd7c49e96"
+    },
+    "all_four_hashes_verified": true,
+    "independent_postcheck": "work/steering300-20261013/post-static-fresh.json",
+    "independent_postcheck_fresh_locked_samples": 6,
+    "installed_14_hashes_match": true,
+    "manual_settings_after_test": {
+      "forward": 1550,
+      "reverse": 1450,
+      "left": 1800,
+      "right": 1200
+    },
+    "operator_static_endpoint_accepted": true,
+    "operator_report": "往哪侧打舵，地上回中后就往哪侧偏；提起来回中是正的。",
+    "operator_stop_followed": true
+  },
+  "loaded_center_hysteresis": {
+    "observation": "Ground return-to-1500 retains bias toward previous steering; lifted wheels return straight.",
+    "working_hypothesis": "Ground friction/load plus steering linkage backlash or hysteresis; this does not establish a shifted servo neutral. Mechanism not isolated by measurement.",
+    "neutral_pwm_unchanged": 1500,
+    "dynamic_measurement_done": false,
+    "compensation_implemented": false,
+    "required_measurements": [
+      "Ground: initially straight -> 1500, short low-speed run with saved lidar/control.",
+      "Ground: left 1800 -> actual 1500 ACK -> short low-speed run.",
+      "Ground: right 1200 -> actual 1500 ACK -> short low-speed run.",
+      "Stronger right at low speed: lidar-reconstructed curvature and uncertainty, compare 1350 historical -0.92..-1.01/m."
+    ],
+    "analysis": "Use trial-map and inspect PNG, reject poorly observable ICP motion; compare residual curvature after both steering histories and straight baseline before choosing overshoot or direction-dependent offset. No guessed neutral change."
+  },
+  "next_build_requirement": "Old build-matched.py compares crates sources with the previous manifest. Do not rerun or weaken that check. A new builder must accept the verified steering300 bundle/manifest as the matched bridge baseline, prove all current Rust source hashes and bridge SHA equal it, or rebuild the bridge using scripts/build-riscv.sh then inspect vehicle-bridge ELF and create a fresh complete manifest. Keep turn62 Python baseline distinct from main turn64 source. Preserve all old packages/backups/helpers.",
+  "resume_readonly_20261013": {
+    "evidence_directory": "work/round64-resume-20261013-111945",
+    "fresh_vehicle_verification": "unavailable: existing SSH master broke; read-only request returned Broken pipe and connect timeout; no new arm/drive/deploy. Last verified lock is historical post-static evidence, not current live state."
+  }
 }
