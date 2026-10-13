@@ -21116,7 +21116,8 @@
         "ICP in this room is noisy; repeat with better-defined geometry before fitting numbers."
       ],
       "script_changes_this_session": "swept-band guard instead of the +-60 deg sector (posts beside the path); guard 2.0 m at 1560, +.0125 m per PWM above; forward cap 1600 per user; still no protection during the coast after stop",
-      "not_done": "no software compensation; RIGHT_EXIT_MIN_PWM/simulator right model unchanged pending mechanical check and cleaner data"
+      "not_done": "no software compensation; RIGHT_EXIT_MIN_PWM/simulator right model unchanged pending mechanical check and cleaner data",
+      "operator_mechanical_check": "用户确认：右前轮存在所述机械问题（转向松旷/回位不良）。修复前不做软件补偿、不再做动力测试；修复后低速1550各复测一次左/右回中与直行，再定右舵下限和仿真模型。"
     }
   }
 }
