@@ -216,7 +216,16 @@ def main():
         signal.setitimer(signal.ITIMER_REAL, 0)
         try:
             request('/api/control', {'op': 'stop'})
-            time.sleep(1.5)  # let it coast to rest before the at-rest samples
+            # Keep recording the coast to rest (decel for the simulator model).
+            coast_end = time.monotonic()+1.8
+            while time.monotonic() < coast_end:
+                try:
+                    log.write(json.dumps({'elapsed_s': time.monotonic()-started, 'state': request('/api/state'),
+                                          'lidar': request('/api/lidar'), 'after_stop': True})+'\n')
+                    log.flush()
+                except Exception as error:
+                    log.write(json.dumps({'elapsed_s': time.monotonic()-started, 'observer_error': type(error).__name__})+'\n')
+                time.sleep(.05)
             after = []
             for _ in range(6):
                 time.sleep(.18)

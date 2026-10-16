@@ -21128,12 +21128,20 @@
         "1 right 1350 1.4 s then 1500": "turn only about -.13 /m (inside the centre deadband); straight after",
         "2 right 1200 1.4 s then 1500": "turn about -1.3 /m (ICP alternating frames, noisy); about .25 s lag after the 1500 command, then straight (|k| < .1 /m)",
         "3 right 1200 + kick": "aborted before any forward command: swept-band guard saw the operator 1.45 m right while the car was being placed (Claude started it before an explicit placement confirmation; corrected: power only after an explicit placed-and-clear reply)",
-        "4 right 1200 1.4 s, 1585 .2 s, then 1500": "heading kept turning right during the kick (lag), then +.15..+.2 /m LEFT for the whole 1 s centre phase: the 1585/.2 s kick over-corrects"
+        "4 right 1200 1.4 s, 1585 .2 s, then 1500": "heading kept turning right during the kick (lag), then +.15..+.2 /m LEFT for the whole 1 s centre phase: the 1585/.2 s kick over-corrects",
+        "5 left 1600 1.4 s then 1500 (1550)": "turn about +.1 /m (deadband edge) at ~.6 m/s; after stop the speed rose .6 -> ~1.05 m/s for ~.5 s, then ~.8 m/s^2 to rest; 1.27 m travelled after the stop",
+        "6 left 1650 (1550)": "turn +.35..+.45 /m; guard stopped it (front post 1.85 m); after stop again ~1.1 m/s for ~.5 s",
+        "7 straight 1560 2.5 s": "starts ~.4 s after the command, ~.6 m/s at 1 s, 1.5 m/s at 2 s, ~2.0-2.4 m/s at 2.6 s (ICP speeds noisy); at servo 1500 it curved RIGHT about -.17 /m throughout (centre moved after the repair); after the stop ~2.0 m/s held for ~.5 s, then about .6 m/s^2; >3.2 m after the stop and still ~1 m/s when the 1.8 s coast log ended"
       },
       "conclusions": [
         "After the repair the large right turn returns like the left one (~.25 s lag, no lasting residual); a 1585/.2 s kick is not needed and over-corrects.",
         "A centre deadband now exists: right 1350 hardly turns (left deadband to 1580 per user); the 160 PWM per 1/m linear model is invalid near centre; right 1200 about 1.3 /m, left 1720 about 1.6 /m (before repair).",
         "Next: fit a deadband + gain model from cleaner runs (left 1600/1650/1720, right 1400/1300/1200), then update ROUTE_PWM_PER_CURVATURE use, RIGHT_EXIT_MIN_PWM and the simulator."
+      ],
+      "additional_conclusions": [
+        "Throttle lags the command both ways by ~.4-.7 s (start and stop); the bridge sends 1500 every 20 ms after stop (vehicle-bridge.rs), so the lag is in the ESC/chassis (ramp or neutral setting). Coast after that ~.6-.8 m/s^2 on tile. The simulator has neither the lag nor 2 m/s at 1560.",
+        "After the repair 1500 is not straight: about -.17 /m right at 1560; the left deadband readings are relative to this bias (1600 ~ +.27, 1650 ~ +.57 /m relative to 1500).",
+        "Recommend: check the ESC programming (drag/neutral brake, throttle ramp/punch); re-trim the steering centre; measure 1580/1600 only with >= 8 m clear or outdoors."
       ]
     }
   },
