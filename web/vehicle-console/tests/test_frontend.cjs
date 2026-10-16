@@ -61,10 +61,114 @@ test('unlock samples fresh state and cancellation during sampling cannot arm',as
 });
 test('manual takeover stops automatic output without silently unlocking again',async()=>{
  for(const mode of ['auto_probe','auto_goal','auto_turn_trial']){
-  const f=fixture();f.run(`var requests=[];api=async(p,data)=>{requests.push({p,data});return p==="/api/state"?{healthy:${mode!=='auto_turn_trial'},owner:"auto-session",autonomy:{mode:${JSON.stringify(mode)}}}:{ok:true}};$("arm").onclick()`);
+  const f=fixture();f.ctx.takeoverState={...stateSample('takeover-boot',900),healthy:mode!=='auto_turn_trial',owner:'auto-session',autonomy:{mode}};
+  f.run('var requests=[];api=async(p,data)=>{requests.push({p,data});return p==="/api/state"?takeoverState:{ok:true}};$("arm").onclick()');
   await new Promise(setImmediate);
   assert.equal(f.run('requests.length'),2);
   assert.equal(f.run('requests[1].data.op'),'takeover');
   assert.equal(f.run('active'),false);
  }
+});
+
+function clockFixture(){
+ const f=fixture();
+ f.run('var now=1000,requests=[],resolvers=[],rejectors=[];performance.now=()=>now;api=(p,data)=>{requests.push({p,data});return new Promise((r,j)=>{resolvers.push(r);rejectors.push(j)})}');
+ return f;
+}
+function stateSample(boot,tick){
+ return {boot,healthy:true,owner:null,status:{control:{tick,seq:0,armed:false,motor:1500,servo:1500}},
+  settings:{forward:1550,reverse:1450,left:1650,right:1350},ages:{camera:0,lidar:0,control:0},
+  errors:{},files:[],autonomy:{mode:'locked'}};
+}
+async function respond(f,index,at,value){
+ f.ctx.now=at;f.ctx.resolvers[index](value);await new Promise(setImmediate);
+}
+test('older overlapping poll cannot rewind the fresh unlock clock or first heartbeat',async()=>{
+ const f=clockFixture();f.run('poll();$("arm").onclick()');
+ assert.equal(f.ctx.requests[0].p,'/api/state');assert.equal(f.ctx.requests[1].p,'/api/state');
+ await respond(f,1,1030,stateSample('same-boot',1000));
+ assert.equal(f.ctx.requests[2].data.op,'arm');
+ await respond(f,0,1110,stateSample('same-boot',920));
+ assert.equal(f.run('tick'),1000);assert.equal(f.run('pollAt'),1030);
+ await respond(f,2,1130,{bridge_seq:1});
+ assert.equal(f.ctx.requests[3].data.op,'drive');assert.equal(f.ctx.requests[3].data.tick,1100);
+});
+test('duplicate and lower bridge ticks do not renew sample freshness',async()=>{
+ const f=clockFixture();f.run('poll()');await respond(f,0,1030,stateSample('same-boot',1000));
+ f.run('poll()');await respond(f,1,1100,stateSample('same-boot',1000));
+ assert.equal(f.run('pollAt'),1030);
+ f.run('poll()');await respond(f,2,1200,stateSample('same-boot',999));
+ assert.equal(f.run('tick'),1000);assert.equal(f.run('pollAt'),1030);
+ f.run('now=1281;active=true;send()');
+ assert.equal(f.ctx.requests[3].data.op,'stop');assert.equal(f.run('active'),false);
+});
+test('late pre-unlock response cannot revive a boot superseded by polling',async()=>{
+ const f=clockFixture();f.run('poll()');await respond(f,0,1010,stateSample('old-boot',1000));
+ f.run('$("arm").onclick();poll()');
+ await respond(f,2,1050,stateSample('new-boot',20));
+ await respond(f,1,1080,stateSample('old-boot',1050));
+ assert.equal(f.run('boot'),'new-boot');assert.equal(f.run('tick'),20);
+ assert.equal(f.ctx.requests.some(r=>r.data?.op==='arm'),false);
+ assert.equal(f.run('active'),false);
+});
+test('slow state response cannot arm or turn an old sample into a fresh clock',async()=>{
+ const f=clockFixture();f.run('$("arm").onclick()');
+ await respond(f,0,1251,stateSample('same-boot',1000));
+ assert.equal(f.ctx.requests.some(r=>r.data?.op==='arm'),false);
+ assert.equal(f.run('pollAt'),0);assert.equal(f.run('active'),false);
+});
+test('request time counts toward the existing sample lifetime without advancing command time',async()=>{
+ const f=clockFixture();f.run('poll()');await respond(f,0,1200,stateSample('same-boot',1100));
+ f.run('now=1230;active=true;send()');
+ assert.equal(f.ctx.requests[1].data.op,'drive');assert.equal(f.ctx.requests[1].data.tick,1130);
+ await respond(f,1,1251,{});f.run('send()');
+ assert.equal(f.ctx.requests[2].data.op,'stop');assert.equal(f.run('active'),false);
+ assert.equal(f.ctx.requests[1].data.tick,1130);
+});
+test('server restart during pending unlock acknowledgement cancels the first drive',async()=>{
+ const f=clockFixture();f.run('$("arm").onclick()');
+ await respond(f,0,1010,stateSample('old-boot',1000));
+ assert.equal(f.ctx.requests[1].data.op,'arm');
+ f.run('poll()');await respond(f,2,1050,stateSample('new-boot',20));
+ await respond(f,1,1080,{bridge_seq:1});
+ assert.equal(f.run('boot'),'new-boot');assert.equal(f.run('active'),false);
+ assert.equal(f.ctx.requests.filter(r=>r.data?.op==='arm').length,1);
+ assert.equal(f.ctx.requests.some(r=>r.data?.op==='drive'),false);
+ assert.equal(f.ctx.requests.some(r=>r.data?.op==='stop'),true);
+});
+test('server restart locks an active page and cannot inherit its queued keys',async()=>{
+ const f=clockFixture();f.run('poll()');await respond(f,0,1010,stateSample('old-boot',1000));
+ f.run('active=true;keys.add("up");poll()');
+ await respond(f,1,1050,stateSample('new-boot',20));f.run('send()');
+ assert.equal(f.run('active'),false);assert.equal(f.run('keys.size'),0);
+ assert.equal(f.ctx.requests.filter(r=>r.data).length,1);
+ assert.equal(f.ctx.requests[2].data.op,'stop');
+});
+test('healthy locked recovery clears only the generic disconnect notice without unlocking',async()=>{
+ const f=clockFixture();f.run('poll()');f.ctx.rejectors[0](Error('network error'));await new Promise(setImmediate);
+ assert.equal(f.run('$("notice").textContent'),'连接已断开，旧画面已停止；控制已锁定。');
+ f.run('now=1100;poll()');await respond(f,1,1120,stateSample('same-boot',1100));
+ assert.equal(f.run('$("notice").textContent'),'连接已恢复，控制保持锁定。');
+ assert.equal(f.run('active'),false);assert.equal(f.ctx.requests.some(r=>r.data),false);
+});
+test('healthy state preserves a specific lock cause',async()=>{
+ const f=clockFixture();f.run('notice("控制请求延迟或乱序；请重新解锁");poll()');
+ await respond(f,0,1030,stateSample('same-boot',1000));
+ assert.equal(f.run('$("notice").textContent'),'控制请求延迟或乱序；请重新解锁');
+ assert.equal(f.run('active'),false);
+});
+test('late failed poll cannot overwrite a newer unlock sample or its notice',async()=>{
+ const f=clockFixture();f.run('poll();$("arm").onclick()');
+ await respond(f,1,1030,stateSample('same-boot',1000));
+ f.ctx.rejectors[0](Error('late network error'));await new Promise(setImmediate);
+ assert.equal(f.run('$("notice").textContent'),'正在解锁…');
+ assert.equal(f.run('tick'),1000);assert.equal(f.run('pollAt'),1030);
+ assert.equal(f.ctx.requests.some(r=>r.data?.op==='stop'),false);
+});
+test('late unlock rejection cannot overwrite an explicit cancellation notice',async()=>{
+ const f=clockFixture();f.run('$("arm").onclick()');
+ await respond(f,0,1030,stateSample('same-boot',1000));
+ f.run('stop("已取消本次解锁")');f.ctx.rejectors[1](Error('late arm rejection'));await new Promise(setImmediate);
+ assert.equal(f.run('$("notice").textContent'),'已取消本次解锁');assert.equal(f.run('active'),false);
+ assert.equal(f.ctx.requests.some(r=>r.data?.op==='drive'),false);
 });

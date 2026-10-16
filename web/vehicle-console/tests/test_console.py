@@ -1,5 +1,6 @@
 """Integration checks use simulation and PTYs only; never physical devices."""
 import importlib.util
+import http.client
 import json
 import os
 from pathlib import Path
@@ -60,6 +61,124 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(e.exception.code,403)
         with self.assertRaises(urllib.error.HTTPError):self.post('/api/settings',{'forward':2500,'reverse':1480,'left':1550,'right':1450})
         self.assertEqual(self.get('/api/state')['settings']['forward'],1550)
+
+    def test_http_keepalive_reuses_socket_for_state_stop_and_static(self):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+        self.addCleanup(connection.close)
+        connection.connect()
+        original_socket = connection.sock
+        requests = [
+            ('GET', '/api/state', None),
+            ('POST', '/api/control', json.dumps({'op': 'stop'})),
+            ('GET', '/app.js', None),
+        ]
+        for method, path, body in requests:
+            with self.subTest(path=path):
+                headers = {'X-Control-Token': self.token, 'Content-Type': 'application/json'}
+                connection.request(method, path, body=body, headers=headers)
+                response = connection.getresponse()
+                data = response.read()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(int(response.getheader('Content-Length')), len(data))
+                self.assertEqual(response.version, 11)
+                self.assertFalse(response.will_close)
+                self.assertIs(connection.sock, original_socket)
+
+    def test_http_keepalive_framed_errors_and_download_reuse_socket(self):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+        self.addCleanup(connection.close)
+        connection.connect()
+        original_socket = connection.sock
+        image = self.post('/api/photo', {'kind': 'camera'})['file']
+        requests = [
+            ('GET', '/api/state?trial_mode=invalid', None, self.token, 400),
+            ('GET', '/api/state', None, '', 403),
+            ('GET', '/missing', None, self.token, 404),
+            ('POST', '/missing', '{}', self.token, 400),
+            ('GET', '/download/' + image, None, self.token, 200),
+            ('GET', '/camera.jpg', None, self.token, 200),
+        ]
+        for method, path, body, token, status in requests:
+            with self.subTest(path=path, status=status):
+                connection.request(method, path, body=body,
+                    headers={'X-Control-Token': token, 'Content-Type': 'application/json'})
+                response = connection.getresponse()
+                data = response.read()
+                self.assertEqual(response.status, status)
+                self.assertEqual(int(response.getheader('Content-Length')), len(data))
+                self.assertFalse(response.will_close)
+                self.assertIs(connection.sock, original_socket)
+
+    def assert_raw_response_closes(self, request, status, shutdown_write=False):
+        with socket.create_connection(('127.0.0.1', self.port), timeout=3) as connection:
+            connection.sendall(request)
+            if shutdown_write:
+                connection.shutdown(socket.SHUT_WR)
+            response = http.client.HTTPResponse(connection)
+            response.begin()
+            body = response.read()
+            self.assertEqual(response.status, status)
+            self.assertEqual(int(response.getheader('Content-Length')), len(body))
+            self.assertEqual(response.getheader('Connection'), 'close')
+            self.assertTrue(response.will_close)
+            # No bytes from a second response: an unread body cannot become a request.
+            try:
+                remaining = connection.recv(4096)
+            except ConnectionResetError:
+                remaining = b''
+            self.assertEqual(remaining, b'')
+
+    def test_http_unread_or_ambiguous_post_body_cannot_be_next_request(self):
+        auth = f'X-Control-Token: {self.token}\r\n'
+        content = 'Content-Type: application/json\r\n'
+        cases = [
+            (content + 'Content-Length: 2\r\n', 403),
+            (auth + content + 'Content-Length: 2\r\nOrigin: http://other\r\n', 403),
+            (auth + 'Content-Type: text/plain\r\nContent-Length: 2\r\n', 400),
+            (auth + content + 'Content-Length: 2049\r\n', 400),
+            (auth + content + 'Content-Length: -1\r\n', 400),
+            (auth + content + 'Content-Length: invalid\r\n', 400),
+            (auth + content, 400),
+            (auth + content + 'Content-Length: 2\r\nContent-Length: 2\r\n', 400),
+            (auth + content + 'Content-Length: 2\r\nTransfer-Encoding: chunked\r\n', 400),
+        ]
+        tail = f'GET /api/state HTTP/1.1\r\nHost: localhost\r\n{auth}\r\n'
+        for index, (headers, status) in enumerate(cases):
+            with self.subTest(case=index):
+                request = 'POST /api/control HTTP/1.1\r\nHost: localhost\r\n' + headers
+                self.assert_raw_response_closes((request + '\r\n{}' + tail).encode(), status)
+
+    def test_http_get_body_closes_without_parsing_body_as_request(self):
+        request = (f'GET /app.js HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\n{{}}'
+                   f'GET /api/state HTTP/1.1\r\nHost: localhost\r\nX-Control-Token: {self.token}\r\n\r\n')
+        self.assert_raw_response_closes(request.encode(), 200)
+
+    def test_http_truncated_post_body_is_rejected_and_closed(self):
+        request = (f'POST /api/control HTTP/1.1\r\nHost: localhost\r\n'
+                   f'X-Control-Token: {self.token}\r\nContent-Type: application/json\r\n'
+                   'Content-Length: 100\r\n\r\n{"op":"stop"}')
+        self.assert_raw_response_closes(request.encode(), 400, shutdown_write=True)
+
+    def test_http_persistent_readers_leave_capacity_for_stop(self):
+        readers = []
+        for _ in range(12):
+            connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+            self.addCleanup(connection.close)
+            connection.request('GET', '/app.js')
+            response = connection.getresponse()
+            response.read()
+            self.assertFalse(response.will_close)
+            readers.append(connection)
+        self.post('/api/control', {'op': 'stop'})
+        state = self.get('/api/state')
+        self.assertFalse(state['status']['control']['armed'])
+        self.assertIsNone(state['owner'])
+        for connection in readers:
+            original_socket = connection.sock
+            connection.request('GET', '/app.js')
+            response = connection.getresponse()
+            response.read()
+            self.assertIs(connection.sock, original_socket)
     def test_held_over_two_seconds_release_and_timeout(self):
         self.drive('arm');time.sleep(.04)
         start=time.monotonic()

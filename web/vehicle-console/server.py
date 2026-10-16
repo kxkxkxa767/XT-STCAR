@@ -1834,6 +1834,10 @@ def serve(args):
     limiter = threading.BoundedSemaphore(12)
 
     class Handler(BaseHTTPRequestHandler):
+        # Reuse browser connections; a new TCP handshake must not be required
+        # between a fresh state sample and its bounded control request.
+        protocol_version = 'HTTP/1.1'
+
         def log_message(self, *_):
             pass  # URLs may contain the access token; never log them.
 
@@ -1848,6 +1852,8 @@ def serve(args):
             self.send_response(status)
             self.send_header('Content-Type', content)
             self.send_header('Content-Length', str(len(body)))
+            if self.close_connection:
+                self.send_header('Connection', 'close')
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
@@ -1860,6 +1866,10 @@ def serve(args):
             return hmac.compare_digest(supplied, app.token)
 
         def do_GET(self):
+            # GET has no body reader. Never parse an unexpected body as the
+            # next request on a persistent connection.
+            if self.headers.get('Transfer-Encoding') is not None or self.headers.get('Content-Length') is not None:
+                self.close_connection = True
             if not limiter.acquire(False):
                 self.reply(503, {'error': 'busy'})
                 return
@@ -1927,6 +1937,8 @@ def serve(args):
                     self.send_response(200)
                     self.send_header('Content-Type', {'.zip':'application/zip', '.jpg':'image/jpeg', '.png':'image/png', '.svg':'image/svg+xml'}[file.suffix])
                     self.send_header('Content-Length', str(file.stat().st_size))
+                    if self.close_connection:
+                        self.send_header('Connection', 'close')
                     self.send_header('Content-Disposition', 'attachment; filename="' + name + '"')
                     self.send_header('Cache-Control', 'no-store')
                     self.end_headers()
@@ -1935,11 +1947,15 @@ def serve(args):
                 else:
                     self.reply(404, {'error': 'not found'})
             except (BrokenPipeError, ConnectionResetError, TimeoutError):
-                pass
+                self.close_connection = True
             finally:
                 limiter.release()
 
         def do_POST(self):
+            # Rejecting before consuming the entire body must also close the
+            # stream, otherwise its remaining bytes become a second request.
+            requested_close = self.close_connection
+            self.close_connection = True
             if not self.authorized():
                 self.reply(403, {'error': 'access token required'})
                 return
@@ -1948,12 +1964,19 @@ def serve(args):
                 self.reply(403, {'error': 'cross-origin request rejected'})
                 return
             try:
-                size = int(self.headers.get('Content-Length', '0'))
+                lengths = self.headers.get_all('Content-Length', [])
+                if self.headers.get('Transfer-Encoding') is not None or len(lengths) != 1:
+                    raise ValueError('one Content-Length and no Transfer-Encoding required')
+                size = int(lengths[0])
                 if not 0 < size <= 2048 or self.headers.get('Content-Type') != 'application/json':
                     raise ValueError('bounded JSON body required')
-                data = json.loads(self.rfile.read(size))
+                body = self.rfile.read(size)
+                if len(body) != size:
+                    raise ValueError('incomplete JSON body')
+                data = json.loads(body)
                 if not isinstance(data, dict):
                     raise ValueError('JSON object required')
+                self.close_connection = requested_close
                 path = urlsplit(self.path).path
                 if path == '/api/control': result = app.command(data)
                 elif path == '/api/autonomy': result = app.autonomy_command(data)

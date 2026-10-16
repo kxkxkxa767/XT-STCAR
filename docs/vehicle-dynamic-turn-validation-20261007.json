@@ -21120,5 +21120,229 @@
       "operator_mechanical_check": "用户确认：右前轮存在所述机械问题（转向松旷/回位不良）。修复前不做软件补偿、不再做动力测试；修复后低速1550各复测一次左/右回中与直行，再定右舵下限和仿真模型。",
       "mechanical_cause_20261014": "用户拆下转向传动件：上下两半以斜面缝隙相接，转向时缝隙处相对转动；受力稍大两半分离后才带动下部，必然有迟滞；拧松间隙大、拧紧转不动。用户计划更换。换件后需重新实测左右曲率、回中与延迟，再定右舵下限、160增益与仿真模型。"
     }
+  },
+  "console_unlock_timeout_20261016": {
+    "date": "2026-10-16",
+    "base_commit": "41164df",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "status": "local_candidate_tested; user reports original vehicle service recovered before any deployment",
+    "user_request": "排查网页电机解锁超时；用户指定查看Chrome并确认车辆悬空、允许点解锁；后续报告现在好了。保留当前可用服务，保存上传本地修复。",
+    "evidence_directory": "work/console-unlock-timeout-20261016/",
+    "observations": {
+      "initial_readonly": {
+        "local_date": "2026-10-16",
+        "base_commit": "41164df",
+        "scope": "read-only diagnosis; no arm/drive/stop/restart sent",
+        "live_state": {
+          "samples": 6,
+          "healthy_all": true,
+          "armed_all": false,
+          "motor_all": 1500,
+          "servo_all": 1500,
+          "control_seq": 5,
+          "last_stop": "bridge_stale_request",
+          "control_reason": "operator_stop",
+          "errors": {},
+          "localhost_state_rtt_ms": [
+            49.1,
+            25.0,
+            28.0,
+            28.1,
+            24.4,
+            25.5
+          ]
+        },
+        "lan_authenticated_state_rtt_ms": [
+          1125.4,
+          43.2,
+          44.7,
+          64.5,
+          53.3,
+          105.3,
+          46.8,
+          36.1,
+          70,
+          47.2,
+          113.7,
+          47.5,
+          106.6,
+          60.6,
+          1060.8,
+          49.3,
+          49.5,
+          112.3,
+          86.8,
+          46.7,
+          59.1,
+          55.4,
+          68.3,
+          45
+        ],
+        "lan_static_tcp_connect_seconds": [
+          0.018993,
+          0.017427,
+          1.010405,
+          0.023608,
+          0.021835,
+          0.015457,
+          0.018067,
+          0.019083,
+          1.028483,
+          0.068978,
+          0.044832,
+          1.016453
+        ],
+        "lan_static_total_seconds": [
+          0.048266,
+          0.031238,
+          1.02683,
+          0.038316,
+          0.050264,
+          0.037694,
+          0.033358,
+          0.030957,
+          1.066114,
+          0.3155,
+          0.076504,
+          1.07643
+        ],
+        "host": {
+          "cores": 8,
+          "memory_available_mb": 7233,
+          "wifi_signal_percent": 99,
+          "wifi_rate": "130 Mbit/s",
+          "service_active": true,
+          "restarts": 8,
+          "restart_reason": "boot network not ready: ip route get 1.1.1.1 failed; service currently active",
+          "tcp_counters_cumulative_not_per_probe": {
+            "RetransSegs": 4257,
+            "TCPTimeouts": 547,
+            "TCPSynRetrans": 2200,
+            "ListenOverflows": 0,
+            "ListenDrops": 0,
+            "TCPBacklogDrop": 0
+          }
+        },
+        "installed_hashes_before": {
+          "server.py": "ac052f1d55e3a684e006801c5b3ef22a0d5b1d57bbbe1d6d384eef3741ae1a33",
+          "app.js": "8cc4b8cef9c86a4c4475d621097642984d8c8c90ca64e6b87cec24a12bc24c44",
+          "vehicle-bridge": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498"
+        },
+        "limits": [
+          "Live first-fault log identifies stale request but does not retain rejected request tick; exact cause of last unlock cannot be reconstructed.",
+          "TCP connection delays directly measured; no proof of specific radio/router/driver root cause.",
+          "Packet retransmission counters are cumulative.",
+          "Board wall clock differs from Mac; monotonic clocks used for safety."
+        ]
+      },
+      "chrome_url": "http://192.168.0.156:8081/",
+      "chrome_before_unlock": "传感器在线，同时仍显示连接已断开，旧画面已停止；控制已锁定。",
+      "authorized_suspended_unlock_check": {
+        "executed_on_original_installed_code": true,
+        "arm_clicks": 1,
+        "direction_keys_pressed": false,
+        "result": "解锁请求已过期，请重试",
+        "bridge_sequence_unchanged": 5,
+        "observed_motor_pwm": 1500,
+        "observed_servo_pwm": 1500,
+        "observed_armed": false,
+        "stop_button_clicked_after_check": true
+      },
+      "user_followup": "现在好了",
+      "recovery_preceded_deployment": true
+    },
+    "diagnosis": [
+      "实际Chrome解锁请求被Python原180ms时效门拒绝，非电机硬件ACK等待。初次last_stop=bridge_stale_request是更早故障，不可混同为本次点击的首故障。",
+      "静态网页实测三次TCP建连约1s，证明至少一层延迟发生在HTTP计算之前；原HTTP/1.0每请求重建连接，放大网络握手抖动影响。未定位具体路由器/驱动原因。",
+      "普通poll与解锁专用GET可并发，旧响应晚到覆盖新tick/pollAt；离线真实异步测试证明可导致新命令携带过旧时标，尚不能归因现场每次故障。",
+      "通用断线提示在恢复后未清理，造成传感器在线和连接已断开同时出现。"
+    ],
+    "changes": [
+      "HTTP/1.1保留连接；正常响应均明确Content-Length；未消费/多Content-Length/Transfer-Encoding/截断请求体关闭连接；完整body的应用拒绝可复用。",
+      "前端统一状态请求顺序、同boot单调tick；重复tick不续龄；请求耗时计入原250ms样本寿命，不用于猜测或前移桥时标。",
+      "新boot取消原会话；迟到响应/异常不覆盖新状态或取消提示；健康且锁定时仅清通用断线文案，保留具体停止原因，不自动解锁。"
+    ],
+    "unchanged": [
+      "180ms解锁时效",
+      "250ms旧指令与前端样本门",
+      "300ms桥心跳",
+      "350ms浏览器心跳",
+      "3s socket超时",
+      "20连接线程槽/12 GET工作槽",
+      "Rust桥/PWM/1500中位",
+      "路线算法/中位ACK/8cm挡板门/0.12s控制间隔"
+    ],
+    "validation": {
+      "git_fetch_before_change": "main=origin/main=41164df, 0/0",
+      "baseline_python": {
+        "tests": 732,
+        "failures": 0,
+        "errors": 0,
+        "expected_failures": 2,
+        "log": "python-suite.log"
+      },
+      "frontend": {
+        "tests": 19,
+        "failures": 0,
+        "initial_seven_regressions_on_old_code": "7失败，原8项通过",
+        "ui_regressions_before": "新增4项中3失败，1个保留行为通过",
+        "logs": [
+          "frontend-bsh_tm9_/before-final.log",
+          "frontend-bsh_tm9_/after-final.log",
+          "frontend-ui-mgd6c5cs/before.log",
+          "frontend-ui-mgd6c5cs/after-final.log"
+        ]
+      },
+      "http": {
+        "tests": 6,
+        "failures": 0,
+        "old_server_comparison_failed_subassertions": 21,
+        "related_control_integration_tests": 137,
+        "capacity_test": "12个保持连接的GET读者下，独立stop请求可达",
+        "directory": "http-keepalive-20261016-1740/"
+      },
+      "final_python": {
+        "tests": 738,
+        "failures": 0,
+        "errors": 0,
+        "expected_failures": 2,
+        "seconds": 60.751,
+        "log": "python-final.log"
+      },
+      "rust_and_route_replay": "未改Rust/路线模块，本次未重复构建或回放；第64轮仍不可构建/上车。"
+    },
+    "tests_changed_and_why": {
+      "frontend_existing": "只给原自动接管fixture补真实响应已有的boot/control.tick字段，旧安全断言保留。",
+      "frontend_new": "11项异步时序/样本寿命/boot切换/提示恢复回归；测试DOM与网络替身，不访问实车。",
+      "http_new": "6项真实回环HTTP测试，覆盖同socket GET/POST/GET、响应定界、错误/截断body关闭及stop容量；原控制测试未删改。"
+    },
+    "source_sha256": {
+      "web/vehicle-console/app.js": "4afe4cf1036dd8d8983358715a2085ef43ef80fb5cc36808e8c08373ccb5b817",
+      "web/vehicle-console/server.py": "dc76c791fffafb0b6b4a03928bdf89fc42e2be3112a726105e7e06332ea7324d",
+      "web/vehicle-console/tests/test_frontend.cjs": "6e6dd75eac0ee9f3c420b46d40442350d9624b2080137c806ca6fe1356d8029d",
+      "web/vehicle-console/tests/test_console.py": "d8f4af2df9f92e8cc82c2dc8d496da4230e4eec1c283ff72a90ee67f37ea2973"
+    },
+    "deployment": {
+      "executed": false,
+      "service_restarted": false,
+      "vehicle_files_changed": false,
+      "candidate_suspended_unlock_check_executed": false,
+      "vehicle_runtime": "原62文件组+±300静态补丁与新桥；仅现场独立读取并核对server/app/bridge三项哈希，本轮未重核其余11项。",
+      "next_steps": "需部署时，先完整14文件与新鲜锁定核验；将独立HTTP Handler补丁严格匹配到车端旧server，并替换app.js，备份与保留访问/启动配置；不得直接部署main第64轮WIP。"
+    },
+    "risks": [
+      "用户当前恢复为原服务网络暂时恢复，不是补丁验证。",
+      "连接复用减少握手，但持续断网/高延迟仍应锁定，不能承诺消除所有超时。",
+      "本次未抓到拒绝命令的原始tick/网络包，未精确量化每次失败的各段延迟。",
+      "车端墙上时钟与Mac不一致；实测采用单调时钟，不使用板端日期命名新证据。"
+    ],
+    "preservation": {
+      "stash_pop_or_apply": false,
+      "old_helpers_or_deploy_scripts_rerun": false,
+      "protected_teammate_files_untouched": true,
+      "credentials_or_artifacts_committed": false
+    }
   }
 }
