@@ -21159,6 +21159,16 @@
         "units": "1/m at about .6 m/s on tile; ICP noise about +-.1 /m"
       },
       "final_conclusion": "The 1500 drift is not a fixed bias but backlash: after a right turn 1500 keeps about -.2 /m, after a left turn about +.25 /m (operator: structural). Deadband about 1350..1590. Model for the route and simulator: wheel follows the servo with play of roughly +-100 PWM, then a steep gain outside it. Software compensation is now justified by data: jump across the play when the steering direction changes, then the measured gain; fit and validate in simulation before any route change."
+    },
+    "reverse_brake_test_20261016": {
+      "author": "Claude",
+      "user_permission": "用户同意在直道空地测反向刹车（只准直行）；车端 reverse_enabled 本来为 true，未改服务",
+      "evidence": "work/steering-arc-20261013/steer-arc-20261016-11, -12",
+      "runs": {
+        "11": "1560 for 2 s (speed rising to ~1.9-2.0 m/s), then 1450 for .3 s, 1500 armed 1.2 s: no decel during the pulse; ~1.5 m/s^2 for ~.2 s after it, then ~.7 m/s^2; ~3.4 m from the pulse start to rest; no reverse motion",
+        "12": "same with 1400 for .5 s: no decel during the pulse; ~2 m/s^2 for ~.2 s about .6 s after its start (as at a plain cut), then .3-.7 m/s^2; ~3.1 m to rest; no reverse motion"
+      },
+      "conclusion": "A reverse pulse while rolling forward neither brakes usefully nor reverses: stopping is the ESC cut lag (~.5 s) plus coast (~.5-.7 m/s^2 on tile, a short ~1.5-2 m/s^2 phase right after the cut). At ~2 m/s that is about 3-3.5 m, at ~1.4 m/s about 2 m. 1560 is a power level, not a speed: speed keeps rising for >2 s (1.2 -> 1.9 m/s). Speed planning must use cut-early-and-coast; no brake in the route."
     }
   },
   "console_unlock_timeout_20261016": {

@@ -71,6 +71,8 @@ def main():
     parser.add_argument('--center-s', type=float, default=1.5)
     parser.add_argument('--kick-pwm', type=int, help='right runs only: brief opposite servo before 1500')
     parser.add_argument('--kick-s', type=float, default=0.)
+    parser.add_argument('--brake-pwm', type=int, help='straight runs only: short reverse-key pulse after driving')
+    parser.add_argument('--brake-s', type=float, default=0.)
     parser.add_argument('--placement-confirmed', action='store_true')
     parser.add_argument('--execute', action='store_true')
     args = parser.parse_args()
@@ -88,6 +90,9 @@ def main():
     if args.kick_pwm is not None and not (args.steer == 'right' and 1500 < args.kick_pwm <= 1650
                                           and .05 <= args.kick_s <= .5):
         parser.error('kick: right runs only, 1501-1650, .05-.5 s (user: left deadband ends at 1580)')
+    if args.brake_pwm is not None and not (args.steer == 'straight' and 1400 <= args.brake_pwm < 1500
+                                           and .1 <= args.brake_s <= .5):
+        parser.error('brake: straight runs only, 1400-1499, .1-.5 s')
     if args.turn_s+args.center_s+args.kick_s > 4.5:
         parser.error('powered total <= 4.5 s')
     if args.execute and not args.placement_confirmed:
@@ -138,11 +143,14 @@ def main():
         settings[args.steer] = args.pwm
     if args.kick_pwm is not None:
         settings['left'] = args.kick_pwm
+    if args.brake_pwm is not None:
+        settings['reverse'] = args.brake_pwm
     servo_turn = args.pwm if args.steer != 'straight' else 1500
     turn_keys = ['up'] if args.steer == 'straight' else ['up', args.steer]
     result = {'completed': False, 'steer': args.steer, 'servo_turn': servo_turn, 'motor': args.forward,
               'turn_s': args.turn_s, 'center_s': args.center_s, 'kick_pwm': args.kick_pwm,
-              'kick_s': args.kick_s if args.kick_pwm is not None else 0., 'phases': [],
+              'kick_s': args.kick_s if args.kick_pwm is not None else 0., 'brake_pwm': args.brake_pwm,
+              'brake_s': args.brake_s if args.brake_pwm is not None else 0., 'phases': [],
               'curvature_measured_here': False, 'analysis': 'scripts/trial-map.py on this directory'}
     client = 'steer-arc-'+secrets.token_hex(12)
     boot = before['boot']
@@ -152,7 +160,8 @@ def main():
 
     def command(op, s, keys=()):
         nonlocal seq
-        assert set(keys) <= {'up', 'left', 'right'}  # never the reverse key
+        # The reverse key only for the bounded brake pulse while rolling forward.
+        assert set(keys) <= {'up', 'left', 'right'} or (args.brake_pwm is not None and list(keys) == ['down'])
         seq += 1
         return request('/api/control', {'op': op, 'boot': boot, 'client': client,
                        'seq': seq, 'tick': s['status']['control']['tick'], 'keys': list(keys)})
@@ -211,6 +220,9 @@ def main():
         if args.kick_pwm is not None:
             hold('kick', ['up', 'left'], args.forward, args.kick_pwm, args.kick_s)
         hold('center_rolling', ['up'], args.forward, 1500, args.center_s)
+        if args.brake_pwm is not None:
+            hold('brake', ['down'], args.brake_pwm, 1500, args.brake_s)
+            hold('neutral_armed', [], 1500, 1500, 1.2)
         result['completed'] = True
     except BaseException as error:
         result['error'] = type(error).__name__+': '+str(error)
