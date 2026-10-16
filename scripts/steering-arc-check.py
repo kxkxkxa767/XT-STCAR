@@ -34,6 +34,9 @@ MANUAL_LIMITS = {'left': (1520, 1800), 'right': (1200, 1480)}
 FORWARD_RANGE = (1540, 1600)  # user raised the cap to 1600 (2026-10-13)
 GUARD_M = 2.0          # 1560 reached ~2 m/s on tile (run 3, 2026-10-13); stop plus coast
 GUARD_HALF_WIDTH_M = .14+.25  # body side plus margin
+# Along the arc only: turning speed is ~.6 m/s at 1550 (2026-10-16), and a 2 m arc
+# look-ahead reached posts half a circle ahead that a short turn never meets.
+ARC_REACH_M = 1.2
 NOMINAL_PWM_PER_CURVATURE = 160  # agent.md section 5; only shapes the guard band
 
 
@@ -53,7 +56,7 @@ def guard_hit(ranges, turn, reach):
             side, radius = turn
             d = math.hypot(x, y-side*radius)
             ahead = (side*(math.atan2(y-side*radius, x)-math.atan2(-side*radius, 0.))) % (2*math.pi)
-            if abs(d-radius) <= GUARD_HALF_WIDTH_M and ahead*radius <= reach:
+            if abs(d-radius) <= GUARD_HALF_WIDTH_M and ahead*radius <= min(reach, ARC_REACH_M):
                 return round(x, 3), round(y, 3)
     return None
 

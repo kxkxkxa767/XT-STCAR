@@ -21131,7 +21131,10 @@
         "4 right 1200 1.4 s, 1585 .2 s, then 1500": "heading kept turning right during the kick (lag), then +.15..+.2 /m LEFT for the whole 1 s centre phase: the 1585/.2 s kick over-corrects",
         "5 left 1600 1.4 s then 1500 (1550)": "turn about +.1 /m (deadband edge) at ~.6 m/s; after stop the speed rose .6 -> ~1.05 m/s for ~.5 s, then ~.8 m/s^2 to rest; 1.27 m travelled after the stop",
         "6 left 1650 (1550)": "turn +.35..+.45 /m; guard stopped it (front post 1.85 m); after stop again ~1.1 m/s for ~.5 s",
-        "7 straight 1560 2.5 s": "starts ~.4 s after the command, ~.6 m/s at 1 s, 1.5 m/s at 2 s, ~2.0-2.4 m/s at 2.6 s (ICP speeds noisy); at servo 1500 it curved RIGHT about -.17 /m throughout (centre moved after the repair); after the stop ~2.0 m/s held for ~.5 s, then about .6 m/s^2; >3.2 m after the stop and still ~1 m/s when the 1.8 s coast log ended"
+        "7 straight 1560 2.5 s": "starts ~.4 s after the command, ~.6 m/s at 1 s, 1.5 m/s at 2 s, ~2.0-2.4 m/s at 2.6 s (ICP speeds noisy); at servo 1500 it curved RIGHT about -.17 /m throughout (centre moved after the repair); after the stop ~2.0 m/s held for ~.5 s, then about .6 m/s^2; >3.2 m after the stop and still ~1 m/s when the 1.8 s coast log ended",
+        "8 right 1400 (1550)": "turn about -.13 /m (inside the deadband, same as the 1500 right drift); centre -.15..-.2 /m; guard stopped it at the end (front-right post)",
+        "9 right 1300 (1550)": "turn -.35..-.42 /m; after 1500 -.2..-.33 /m decaying to about -.15 /m, still right after the stop",
+        "10 left 1720 1.1 s (1550)": "only ~.4 s of motion in the turn phase (about +.6 /m while ramping, ICP glitches); after 1500 it kept about +.25 /m LEFT for >1 s, also after the stop"
       },
       "conclusions": [
         "After the repair the large right turn returns like the left one (~.25 s lag, no lasting residual); a 1585/.2 s kick is not needed and over-corrects.",
@@ -21142,7 +21145,20 @@
         "Throttle lags the command both ways by ~.4-.7 s (start and stop); the bridge sends 1500 every 20 ms after stop (vehicle-bridge.rs), so the lag is in the ESC/chassis (ramp or neutral setting). Coast after that ~.6-.8 m/s^2 on tile. The simulator has neither the lag nor 2 m/s at 1560.",
         "After the repair 1500 is not straight: about -.17 /m right at 1560; the left deadband readings are relative to this bias (1600 ~ +.27, 1650 ~ +.57 /m relative to 1500).",
         "Recommend: check the ESC programming (drag/neutral brake, throttle ramp/punch); re-trim the steering centre; measure 1580/1600 only with >= 8 m clear or outdoors."
-      ]
+      ],
+      "steering_table_after_repair": {
+        "right_1200": -1.3,
+        "right_1300": -0.38,
+        "right_1350": -0.13,
+        "right_1400": -0.13,
+        "left_1600": 0.1,
+        "left_1650": 0.4,
+        "left_1720_before_repair": 1.6,
+        "centre_1500_after_right_turn": "-.15..-.3",
+        "centre_1500_after_left_turn": "+.25",
+        "units": "1/m at about .6 m/s on tile; ICP noise about +-.1 /m"
+      },
+      "final_conclusion": "The 1500 drift is not a fixed bias but backlash: after a right turn 1500 keeps about -.2 /m, after a left turn about +.25 /m (operator: structural). Deadband about 1350..1590. Model for the route and simulator: wheel follows the servo with play of roughly +-100 PWM, then a steep gain outside it. Software compensation is now justified by data: jump across the play when the steering direction changes, then the measured gain; fit and validate in simulation before any route change."
     }
   },
   "console_unlock_timeout_20261016": {
