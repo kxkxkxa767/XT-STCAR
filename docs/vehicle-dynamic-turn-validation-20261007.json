@@ -21119,6 +21119,22 @@
       "not_done": "no software compensation; RIGHT_EXIT_MIN_PWM/simulator right model unchanged pending mechanical check and cleaner data",
       "operator_mechanical_check": "用户确认：右前轮存在所述机械问题（转向松旷/回位不良）。修复前不做软件补偿、不再做动力测试；修复后低速1550各复测一次左/右回中与直行，再定右舵下限和仿真模型。",
       "mechanical_cause_20261014": "用户拆下转向传动件：上下两半以斜面缝隙相接，转向时缝隙处相对转动；受力稍大两半分离后才带动下部，必然有迟滞；拧松间隙大、拧紧转不动。用户计划更换。换件后需重新实测左右曲率、回中与延迟，再定右舵下限、160增益与仿真模型。"
+    },
+    "steering_arc_after_repair_20261016": {
+      "author": "Claude",
+      "evidence_directory": "work/steering-arc-20261013 (steer-arc-20261016-*)",
+      "setup": "same tiled room and 3 x 3 m posts; user replaced the split helical steering coupling (play now equal both sides); user: left deadband ends at 1580; all runs 1550",
+      "runs": {
+        "1 right 1350 1.4 s then 1500": "turn only about -.13 /m (inside the centre deadband); straight after",
+        "2 right 1200 1.4 s then 1500": "turn about -1.3 /m (ICP alternating frames, noisy); about .25 s lag after the 1500 command, then straight (|k| < .1 /m)",
+        "3 right 1200 + kick": "aborted before any forward command: swept-band guard saw the operator 1.45 m right while the car was being placed (Claude started it before an explicit placement confirmation; corrected: power only after an explicit placed-and-clear reply)",
+        "4 right 1200 1.4 s, 1585 .2 s, then 1500": "heading kept turning right during the kick (lag), then +.15..+.2 /m LEFT for the whole 1 s centre phase: the 1585/.2 s kick over-corrects"
+      },
+      "conclusions": [
+        "After the repair the large right turn returns like the left one (~.25 s lag, no lasting residual); a 1585/.2 s kick is not needed and over-corrects.",
+        "A centre deadband now exists: right 1350 hardly turns (left deadband to 1580 per user); the 160 PWM per 1/m linear model is invalid near centre; right 1200 about 1.3 /m, left 1720 about 1.6 /m (before repair).",
+        "Next: fit a deadband + gain model from cleaner runs (left 1600/1650/1720, right 1400/1300/1200), then update ROUTE_PWM_PER_CURVATURE use, RIGHT_EXIT_MIN_PWM and the simulator."
+      ]
     }
   },
   "console_unlock_timeout_20261016": {

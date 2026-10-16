@@ -66,6 +66,8 @@ def main():
     parser.add_argument('--forward', type=int, default=1550)
     parser.add_argument('--turn-s', type=float, default=1.2)
     parser.add_argument('--center-s', type=float, default=1.5)
+    parser.add_argument('--kick-pwm', type=int, help='right runs only: brief opposite servo before 1500')
+    parser.add_argument('--kick-s', type=float, default=0.)
     parser.add_argument('--placement-confirmed', action='store_true')
     parser.add_argument('--execute', action='store_true')
     args = parser.parse_args()
@@ -80,6 +82,11 @@ def main():
         parser.error('--forward outside %s' % (FORWARD_RANGE,))
     if not (.3 <= args.turn_s <= 2.5 and .5 <= args.center_s <= 2. and args.turn_s+args.center_s <= 4.5):
         parser.error('turn .3-2.5 s, centre .5-2 s, powered total <= 4.5 s')
+    if args.kick_pwm is not None and not (args.steer == 'right' and 1500 < args.kick_pwm <= 1650
+                                          and .05 <= args.kick_s <= .5):
+        parser.error('kick: right runs only, 1501-1650, .05-.5 s (user: left deadband ends at 1580)')
+    if args.turn_s+args.center_s+args.kick_s > 4.5:
+        parser.error('powered total <= 4.5 s')
     if args.execute and not args.placement_confirmed:
         parser.error('--execute needs --placement-confirmed (operator: area clear, watching)')
     base = Path.home()/'xt-stcar-console'
@@ -126,10 +133,13 @@ def main():
     settings = dict(original, forward=args.forward)
     if args.steer != 'straight':
         settings[args.steer] = args.pwm
+    if args.kick_pwm is not None:
+        settings['left'] = args.kick_pwm
     servo_turn = args.pwm if args.steer != 'straight' else 1500
     turn_keys = ['up'] if args.steer == 'straight' else ['up', args.steer]
     result = {'completed': False, 'steer': args.steer, 'servo_turn': servo_turn, 'motor': args.forward,
-              'turn_s': args.turn_s, 'center_s': args.center_s, 'phases': [],
+              'turn_s': args.turn_s, 'center_s': args.center_s, 'kick_pwm': args.kick_pwm,
+              'kick_s': args.kick_s if args.kick_pwm is not None else 0., 'phases': [],
               'curvature_measured_here': False, 'analysis': 'scripts/trial-map.py on this directory'}
     client = 'steer-arc-'+secrets.token_hex(12)
     boot = before['boot']
@@ -195,6 +205,8 @@ def main():
         command('arm', fresh)
         hold('initial_center', (), 1500, 1500, .3, allow_arm_pending=True)
         hold('turn', turn_keys, args.forward, servo_turn, args.turn_s, band=turn)
+        if args.kick_pwm is not None:
+            hold('kick', ['up', 'left'], args.forward, args.kick_pwm, args.kick_s)
         hold('center_rolling', ['up'], args.forward, 1500, args.center_s)
         result['completed'] = True
     except BaseException as error:
