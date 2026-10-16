@@ -21168,7 +21168,8 @@
         "11": "1560 for 2 s (speed rising to ~1.9-2.0 m/s), then 1450 for .3 s, 1500 armed 1.2 s: no decel during the pulse; ~1.5 m/s^2 for ~.2 s after it, then ~.7 m/s^2; ~3.4 m from the pulse start to rest; no reverse motion",
         "12": "same with 1400 for .5 s: no decel during the pulse; ~2 m/s^2 for ~.2 s about .6 s after its start (as at a plain cut), then .3-.7 m/s^2; ~3.1 m to rest; no reverse motion"
       },
-      "conclusion": "A reverse pulse while rolling forward neither brakes usefully nor reverses: stopping is the ESC cut lag (~.5 s) plus coast (~.5-.7 m/s^2 on tile, a short ~1.5-2 m/s^2 phase right after the cut). At ~2 m/s that is about 3-3.5 m, at ~1.4 m/s about 2 m. 1560 is a power level, not a speed: speed keeps rising for >2 s (1.2 -> 1.9 m/s). Speed planning must use cut-early-and-coast; no brake in the route."
+      "conclusion": "A reverse pulse while rolling forward neither brakes usefully nor reverses: stopping is the ESC cut lag (~.5 s) plus coast (~.5-.7 m/s^2 on tile, a short ~1.5-2 m/s^2 phase right after the cut). At ~2 m/s that is about 3-3.5 m, at ~1.4 m/s about 2 m. 1560 is a power level, not a speed: speed keeps rising for >2 s (1.2 -> 1.9 m/s). Speed planning must use cut-early-and-coast; no brake in the route.",
+      "run_13_straight_1580": "starts ~.4 s after the command, 1.5 m/s at +.3 s, ~2.4-2.5 m/s at +1.3 s (still rising); after the stop ~2.7 m/s held ~.5 s, then ~.6 m/s^2; at +1.7 s after the stop it was at ~6.5 m and still ~1.8 m/s, then ICP broke (likely contact with an object the lidar did not see: no returns ahead within 12 m). Coast stop ~ .5 s*v + v^2/1.2 on tile: ~2 m at 1.4, ~3.5 m at 2, ~6-7 m at 2.5 m/s. Indoor high-speed tests stopped."
     }
   },
   "console_unlock_timeout_20261016": {
