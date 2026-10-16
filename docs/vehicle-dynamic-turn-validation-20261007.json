@@ -21171,6 +21171,70 @@
       "conclusion": "A reverse pulse while rolling forward neither brakes usefully nor reverses: stopping is the ESC cut lag (~.5 s) plus coast (~.5-.7 m/s^2 on tile, a short ~1.5-2 m/s^2 phase right after the cut). At ~2 m/s that is about 3-3.5 m, at ~1.4 m/s about 2 m. 1560 is a power level, not a speed: speed keeps rising for >2 s (1.2 -> 1.9 m/s). Speed planning must use cut-early-and-coast; no brake in the route.",
       "run_13_straight_1580": "starts ~.4 s after the command, 1.5 m/s at +.3 s, ~2.4-2.5 m/s at +1.3 s (still rising); after the stop ~2.7 m/s held ~.5 s, then ~.6 m/s^2; at +1.7 s after the stop it was at ~6.5 m and still ~1.8 m/s, then ICP broke (likely contact with an object the lidar did not see: no returns ahead within 12 m). Coast stop ~ .5 s*v + v^2/1.2 on tile: ~2 m at 1.4, ~3.5 m at 2, ~6-7 m at 2.5 m/s. Indoor high-speed tests stopped.",
       "fast_straight_left_drift": "用户：车速快时舵机会往左偏，快速直道可稍向右打。数据：1560第11次 +.02..+.1/m、1580第13次 +.02..+.05/m（左），第12次近直；第7次在右转后为−.17/m（回差）。偏差小于±.1/m但在约1350–1590死区内，小幅连续修正无效；方案：直道律按死区边缘跳过+慢积分在线学习配平（按车速分档的先验），必要时在1500与死区外右舵之间按占空比交替。"
+    },
+    "measured_car_route_20261016": {
+      "author": "Claude",
+      "date": "2026-10-16",
+      "status": "offline: route adapted to the measured car; NOT built, NOT deployed; vehicle not driven by the route",
+      "user_instruction": "用户：按实测改，改完给我看仿真结果；要最终可以跑的，而且不是针对赛道特化的；计时赛希望快点",
+      "not_specialized": "no course coordinates, lengths or times; the new constants are vehicle calibration (steering table/play, ESC lag, push gains) or stopping physics from measured speed and ranges",
+      "changes": {
+        "steer_calibration.py (new, deploy with the Python group)": "nominal route servo (curvature=(pwm-1500)/160) -> physical servo: measured wheel table (right -1.2 /m at 1250, left +1.6 /m at 1670) and +-50 PWM play compensation with its own wheel estimate; a held target keeps the overshoot command (releasing it after one frame left the wheels short: first loop too wide, the single biggest fix, measured range 50 -> 80/108)",
+        "server.py": "continue_route sessions emit the physical command and translate bridge feedback (seq, physical) back to nominal, so every existing ACK, bound and centre check keeps working on nominal values; any other feedback stays raw and fails those checks",
+        "ESC lag": "ESC_LAG_S .45 (car kept pushing ~.5 s after any command). LANE_REACTION_S = .2 + lag where no push time is known; the start lane and light lane use the lag left since the last push (reaction .2-.65 s) and the speed still rising after a 1560 push",
+        "start lane": "one stopping-based governor replaces the fixed 1560/1550 patches: highest speed that still stops LANE_START_SEARCH_M (1.6 m) short of the stopping range, max 1.5 m/s; above it coast, well below 1560, else 1550 (short courses: the occluded first support is seen only after the divider end)",
+        "light lane": "restart kicks and end pushes are pulses with LANE_REST_FRAMES 5 (>= lag) between them (a stopped car got 1 s of 1560 and hit the end board); a 1550 push also needs the weakest coast after the push plus its lag gain to stop short of the board",
+        "light entry": "the board-ahead hold checks the pursuit path (arc to the pursuit point, then the lane line) instead of the axis ray or a straight convergence; holds no longer deadlock below the divider end",
+        "supports": "a compact return on an axis-parallel board run (or past its end) or deeper than .15 m in range is not a support (the start divider seen at a grazing angle became the second support)",
+        "motors": "open course: every push after an unpowered output launches at 1560 for lag+.4 s (1550 does not start a car at rest; a one-tick resume ACK then 1550 left it standing)",
+        "limits": "RIGHT_EXIT_MIN_PWM = nominal 1308 (the -1.2 /m the wheels reach; 1200 is manual only), OPEN_RIGHT_RADIUS_M (.90, 1.40), LANE_MAX_CLOSING_MPS 3.5",
+        "simulator": "course-sim --vehicle measured [--vehicle-param k=v]: play, table gain, ESC lag both ways, first-order speed per PWM (1550 1.1, 1560 2.2, 1580 3.2 m/s on tiles), turn drag, coast .7 m/s^2, slight left drift with speed; the measured car receives the console physical command; nominal model unchanged",
+        "scripts/start-vehicle-console.py": "requires steer_calibration.py in the release"
+      },
+      "tests_changed_and_why": {
+        "test_maneuver_sequence right exit bound": "clamps at RIGHT_EXIT_MIN_PWM (measured nominal limit) instead of 1249/1200",
+        "test_turn_control 1200 endpoint tests": "renamed to the measured right limit; RIGHT_EXIT_MIN_PWM accepted with pass + centre ACK, rejected without ACK, -1 rejected",
+        "test_route_58 finish cut formula": "uses the reaction the motion recorded (lag-aware, asserted within .2-.65 s)",
+        "test_route_63 lane harness": "max_drive_s = ROUTE_MAX_DRIVE_S (the helper 10 s trial default was not the route budget; the finish now waits out the lag between pushes); all decel .25-1.0 cases stop in the zone without contact",
+        "test_route_64 robustness": "the uncompensated hypothetical play test replaced by the measured car with calibration errors (play 30/70, gain 1.15, lag .3/.6, coast .5/.9) on user8 and doc8x4"
+      },
+      "validation": {
+        "full_tests": "738 OK, 2 expected failures unchanged",
+        "detector_19_62_route51_52": "byte-identical",
+        "rules_range_measured_car": "96/108 completed (L5 25, L6.4 36, L8 35); before these changes 50/108",
+        "rules_range_nominal_model": "95/108 completed",
+        "robustness_named_layouts": "117/130 (5 layouts x 2 seeds x 13 calibration cases); all nominal measured cases complete",
+        "named_layouts_measured": {
+          "user8": "32.0 s, board .22, cone .25",
+          "doc8x4": "29.4 s",
+          "wide8x6": "31.8 s",
+          "mid64": "28.8 s",
+          "short5": "25.0 s"
+        }
+      },
+      "not_done": [
+        "measured range failures: second loop near the start divider (7, mostly 5 m), transfer holds that time out (4), one first loop",
+        "robustness gaps: 15 % weaker steering than calibrated at the light entry; 20 % slower car in the transfer; 20 % faster car or .6 s lag on short start lanes",
+        "speed: the finish creeps in pulses (user8: ~8 s for the last 1.5 m); start lane capped at 1.5 m/s; loops at 1550",
+        "deployment: steer_calibration.py added to the Python group (agent.md section 1: 9 modules, 15 install hashes); round 64 not built"
+      ],
+      "source_sha256": {
+        "web/vehicle-console/steer_calibration.py": "f95cd7348f2e322ccac2c0747d77d1af9ab891a83231835d7e83204943c6cbf3",
+        "web/vehicle-console/maneuver_sequence.py": "a08498210f5be96c292701ac23292637584f087ed0755b3c22dfd5ed8fc8923c",
+        "web/vehicle-console/server.py": "1c3b6c6bb5f2ab92fa45cdd2553e9efb866c3ced745561a8256e235f895437cb",
+        "scripts/course-sim.py": "45db8c39f72a392711ff57e27812822a1916ce571a75cd6ae15ea37ceeed92d0",
+        "scripts/start-vehicle-console.py": "3ff2709624edb2363286a698998f6200a6249e9a6509a15e8d5337ffe54f65fc"
+      },
+      "evidence_sha256": {
+        "full-tests-cal5.log": "c187730e8adcd6f6f26faffd1c62371b4a071461368eb862bb9f973e5dcd9715",
+        "range-measured-final.log": "e5036524a0bea272aa0dc2faec3c446cfb9d35a585763d7431a8f57d244f535f",
+        "range-nominal-final.log": "375a282d3ca3cb3c7c37da9ed654601eee7616f8c31040554633866e49918002",
+        "robust-final.log": "5ac62461c31acd5e80f85b9ec32516458ce773eecf52b76cc76c2668507134b1",
+        "detector-cal.log": "36c818c708b2ae5c3be1492fa48dbda44f95725bdf539db4d0ecdd986d87631e",
+        "route51-cal.log": "d97d009a81fb80afe61f285b56aa6cb965ac4d6bcc994b466711683b4c398395",
+        "route52-cal.log": "6c144111b6b3d7bb3010a052e3514c944c5e2572d2429855132f4b5ddccc738d"
+      },
+      "evidence_directory": "work/round64-claude-review-20261013"
     }
   },
   "console_unlock_timeout_20261016": {

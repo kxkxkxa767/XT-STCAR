@@ -107,6 +107,9 @@ def lane_motion(stage='light_lane'):
     motion = helper.route('second_orbit')
     motion.route_stage, motion.light_since = stage, 1.
     motion.second_pass_evidence = {'track_id': 2, 'source_seq': 4}
+    # The route's own budget (the helper's 10 s trial default is not it): the
+    # finish waits out the ESC lag between pushes (2026-10-16 measured car).
+    motion.max_drive_s = ms.ROUTE_MAX_DRIVE_S
     return motion
 
 

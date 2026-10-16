@@ -12,6 +12,7 @@ from compact_target import (CompactTargetTracker, _associated, _candidates, cont
                             rotated_observation)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM, CorridorSteering, corridor_walls)
+from steer_calibration import NOMINAL_RIGHT_LIMIT_PWM
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
                          PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number, _valid_candidate,
                          _valid_wall, _wrap, _surface_supports, _same_surface)
@@ -30,7 +31,9 @@ LEFT_TRIAL_GAIN = 180.0
 MAX_TREND_RELEASE_FRACTION = .20
 MAX_INNER_RELEASE_FRACTION = .20
 MAX_EXIT_WIDTH_CHANGE_FRACTION = .10
-RIGHT_EXIT_MIN_PWM = 1200  # Operator-accepted static endpoint; dynamic curvature NOT calibrated.
+# Nominal right limit the wheels reach (steer_calibration: -1.2 /m measured,
+# 2026-10-16); the console maps nominal commands to physical servo PWM.
+RIGHT_EXIT_MIN_PWM = NOMINAL_RIGHT_LIMIT_PWM
 RIGHT_EXIT_MAX_S = 3.0
 # Explicit continue_route only: once the current first-target support is back
 # at the measured body front, every further left step only extends the orbit.
@@ -144,7 +147,7 @@ ROUTE_PATH_LOOKAHEAD_M = .70
 ROUTE_PATH_MARGIN_M = .04
 ROUTE_PATH_RANGE_M = 2.
 ROUTE_PATH_LEFT_CANDIDATES = tuple(range(NEUTRAL, SERVO_MAX, 20))+(SERVO_MAX,)
-ROUTE_PATH_RIGHT_CANDIDATES = (1200, 1250, 1300, 1350, 1390, 1430, 1470)
+ROUTE_PATH_RIGHT_CANDIDATES = (RIGHT_EXIT_MIN_PWM, 1350, 1390, 1430, 1470)
 _DIRECTION_COS = tuple(math.cos(math.radians(i)) for i in range(360))
 _DIRECTION_SIN = tuple(math.sin(math.radians(i)) for i in range(360))
 LIGHT_BRIDGE_MAX_BINS = 5
@@ -183,9 +186,10 @@ _FREE_SIN = tuple(tuple(math.sin(math.radians(h-b)) for h in LIGHT_HEADINGS_DEG)
 # turn) and touched the board after the control-gap lock.
 LANE_SPEED_RESTART_MPS = .15
 LANE_SPEED_UNKNOWN_MPS = 1.3
-# Round 64: above any measured speed (1560: 1.3-1.6 m/s); a larger closing
-# rate is a different return on the ray (turning car), not speed.
-LANE_MAX_CLOSING_MPS = 2.
+# Above any speed this car reaches in the route (straight 1560 on tiles keeps
+# rising to ~2-2.4 m/s, 1580 ~2.7, 2026-10-16); a larger closing rate is a
+# different return on the ray (turning car), not speed.
+LANE_MAX_CLOSING_MPS = 3.5
 LANE_COAST_DECEL_MPS2 = .5
 LANE_STOP_DECEL_MPS2 = .5
 LANE_SLOW_TRAVEL_M = .60
@@ -193,7 +197,21 @@ LANE_SLOW_HIGH_MPS = .60
 LANE_SLOW_LOW_MPS = .40
 LANE_SPEED_HOLD_S = .5
 LANE_SPEED_HOLD_MARGIN_MPS = .1
-LANE_REACTION_S = .2
+# Control/perception reaction plus the ESC lag: the car keeps its last motor
+# command ~.4-.5 s after any new one, also after a cut (2026-10-16 tiles; the
+# bridge already sends 1500 every 20 ms then).
+ESC_LAG_S = .45
+LANE_REACTION_BASE_S = .2
+LANE_REACTION_S = LANE_REACTION_BASE_S+ESC_LAG_S  # where the last push time is not tracked
+# Speed still rising while a cut waits out the ESC lag (1560 straight on tiles:
+# about 1 m/s^2 at 1-1.5 m/s).
+LANE_POWER_ACCEL_MPS2 = 1.
+# 1550 settles near 1.1 m/s on tiles: a slow car gains about this much over
+# the ESC lag after a 1550 push (the 1560 rate overstated it).
+LANE_SLOW_PUSH_GAIN_MPS = .3
+# Near the end pushes are LANE_PULSE_FRAMES pulses: about half that gain.
+LANE_SLOW_PULSE_GAIN_MPS = .15
+LANE_LAUNCH_S = .4
 LANE_FINISH_GAP_M = .15
 # Round 64 (Claude): finish. A cut from cruise speed cannot land inside the
 # .8 m zone over the plausible coast decels (simulation: a scan-seam jump read
@@ -216,7 +234,12 @@ LANE_PUSH_CLEAR_M = .2
 # push, and a 1560 restart held until it read .15 m/s had reached .93 m/s
 # (simulation, 8x6 course: then cut late and hit the end board).
 LANE_PULSE_FRAMES = 2
-LANE_REST_FRAMES = 2
+# Rest at least the ESC lag between pushes, so the speed a push produces is
+# measured before the next one (2026-10-16 measured car: a stopped car got
+# 1560 for 1 s before it moved, then ran into the end board at 1.2 m/s).
+LANE_REST_FRAMES = 5
+# A restart kick at 1560 anywhere in the lane is a pulse too.
+LANE_KICK_FRAMES = 3
 
 LANE_SPEED_CUT_MARGIN_MPS = .15
 # While powered the speed rises faster than the ~.3 s estimate follows.
@@ -395,6 +418,18 @@ OPEN_HANDOVER_MAX_RANGE_M = 2.5
 # Without a first support, stop in front of a board with the measured rolling
 # decel (agent.md section 5) plus a reaction allowance.
 LANE_START_STOP_DECEL_MPS2 = .5
+# 1560 is a power level, not a speed: on tiles the straight speed keeps rising
+# past 2 m/s (2026-10-16). Once the measured lane speed reaches this cruise
+# the start lane continues at 1550 (steady ~1.1 m/s on tiles).
+# Until the first support is approached the start lane drives at the speed
+# that still stops (reaction, ESC lag, nominal coast) LANE_START_SEARCH_M short
+# of the stopping range, at most LANE_START_MAX_MPS: fast on a long lane,
+# creeping near the end of a short one while the support is searched for.
+# Above it the car coasts, well below it 1560, else 1550 (short courses: with
+# the ESC lag a fixed cruise reached the stopping range before any support).
+LANE_START_MAX_MPS = 1.5
+LANE_START_SEARCH_M = 1.6
+LANE_START_PUSH_BAND_MPS = .4
 # Open-course loops (round 64, entry_kind 'lane' only). Without overlapping
 # dividers there is no corridor round a support, so each support is looped
 # on a planned circle: the task side (first support on the left,
@@ -410,7 +445,7 @@ LANE_START_STOP_DECEL_MPS2 = .5
 # shows the heading reversed against its approach axis (first: start-lane
 # axis 0 -> pi; second: pi -> 0). No course length, coordinate or time.
 OPEN_LEFT_RADIUS_M = (.80, .95)
-OPEN_RIGHT_RADIUS_M = (.75, 1.40)
+OPEN_RIGHT_RADIUS_M = (.90, 1.40)  # measured right limit 1.2 /m (.83 m) plus margin
 OPEN_RADIUS_STEP_M = .05
 # Slack (m) traded per metre of loop radius: a larger loop keeps steering
 # authority. This preference is soft; it does not establish physical curvature.
@@ -774,6 +809,33 @@ def _axis_lines(points, heading):
     return lines
 
 
+# A compact return lying on an axis-parallel board run (or just beyond its end)
+# is that board's end face, not a support (simulation, measured car on the
+# re-laid course: the start divider's open end, seen end-on, became the
+# second support at 2.9 m and was lost as the view changed).
+OPEN_BOARD_END_LATERAL_M = .15
+OPEN_BOARD_END_ALONG_M = .5
+# A round support's visible arc spans at most about its radius in range; four
+# returns receding .09 m per bin (.27 m) were a board face at a grazing angle
+# next to its open end (same simulation). Cones here are ~.1 m in radius.
+OPEN_SUPPORT_MAX_DEPTH_M = .15
+
+
+def _support_depth(ranges, bins):
+    values = [ranges[i % 360] for i in bins if _number(ranges[i % 360])]
+    return max(values)-min(values) if values else 0.
+
+
+def _on_board_run(point, lines, heading):
+    """Whether a car-frame point lies on (or just past the end of) an _axis_lines run."""
+    c, s = math.cos(-heading), math.sin(-heading)
+    x, y = point
+    lateral, along = -s*x+c*y, c*x+s*y
+    return any(abs(line['lateral_m']-lateral) <= OPEN_BOARD_END_LATERAL_M
+               and line['along_m'][0]-OPEN_BOARD_END_ALONG_M <= along <= line['along_m'][1]+OPEN_BOARD_END_ALONG_M
+               for line in lines)
+
+
 def validate_maneuver_initial_pwm(value):
     if type(value) is not int or not INITIAL_PWM_MIN <= value <= SERVO_MAX:
         raise ValueError('invalid_maneuver_initial_presteer_pwm')
@@ -939,6 +1001,11 @@ class ManeuverSequence(TurnMotion):
         self._lane_start_settle_since = None
         self._lane_start_ticks = 0
         self._lane_start_slow = False
+        # Searching for the first support near the start lane's stopping range.
+        self._start_motor = TRIAL_MOTOR
+        self._power_cmd_at = None  # last output frame with a drive motor (ESC lag)
+        self._power_cmd_motor = None
+        self._launch_until = None
         self.start_lane_feedback = None
         self._lane_start_ok = False
         self.first_approach = None
@@ -1904,9 +1971,13 @@ class ManeuverSequence(TurnMotion):
             ahead, _, stop_at = self._open_front_stop(scan)
             board_ahead = ahead is not None and ahead <= stop_at
             if stage == 'light_entry':
-                lane = self._open_lane_target(scan, heading)
-                return (lane is not None and (not board_ahead
-                        or self._open_light_lane_entry(scan, heading, lane) is not None))
+                pursuit = self._open_light_pursuit(scan, heading)
+                if pursuit is None:
+                    return False
+                lane, point, _, _ = pursuit
+                hit = self._open_entry_path_hit(scan, point, heading, stop_at, ahead)
+                return ((hit is None or hit > stop_at)
+                        or self._open_light_lane_entry(scan, heading, lane) is not None)
             return not board_ahead or self._open_confirmed_second(scan) is not None
         if stage == 'second_loop':
             target = self.second_target
@@ -2364,6 +2435,20 @@ class ManeuverSequence(TurnMotion):
         result = super()._result(now)
         if result['motor'] == TRIAL_MOTOR:
             result['motor'] = self._route_motor()
+        if result['motor'] not in DRIVE_MOTORS:
+            self._launch_until = None  # the next push is a launch again
+        elif self._launch_until is None:
+            self._launch_until = now+ESC_LAG_S+LANE_LAUNCH_S
+        if (result['motor'] == ROUTE_SLOW_MOTOR and self.continue_route and self.entry_kind == 'lane'
+                and now < self._launch_until
+                and self.route_stage in ('first_target', 'open_transfer', 'second_loop', 'light_entry')):
+            # 1550 does not start a car at rest (2026-10-16: ~.7 s before it
+            # moved; in simulation never; a one-tick 1560 resume ACK then 1550
+            # left it standing). Every push after an unpowered output launches
+            # at 1560 for the ESC lag plus LANE_LAUNCH_S.
+            result['motor'] = TRIAL_MOTOR
+        if result['motor'] in DRIVE_MOTORS:
+            self._power_cmd_at, self._power_cmd_motor = now, result['motor']
         stage = ('orbit_entry' if self.handover_observed and self.phase == 'drive'
                  else 'left_turn' if self.phase == 'drive' else result['turn_stage'])
         if self.phase == 'drive' and self.first_pass_preparing:
@@ -2800,20 +2885,29 @@ class ManeuverSequence(TurnMotion):
             target = NEUTRAL  # right only after a current actual center ACK
         ahead = self._lane_front_range(scan)
         speed = self._lane_speed(scan, ahead)
-        stop_at = None
+        stop_at = allowed = None
         if approach is None and source != 'first_support_missing_frame_hold':
-            v = speed if speed is not None else LANE_SPEED_UNKNOWN_MPS
+            # A cut now still pushes for the rest of the ESC lag, the speed
+            # rising meanwhile; once coasting that long, neither applies.
+            reaction = self._reaction_s(now)
+            # Only 1560 still accelerates through the lag; 1550 holds ~1.1 m/s
+            # and slows a faster car.
+            rise = (LANE_POWER_ACCEL_MPS2*(reaction-LANE_REACTION_BASE_S)
+                    if self._power_cmd_motor == TRIAL_MOTOR else 0.)
+            v = (speed if speed is not None else LANE_SPEED_UNKNOWN_MPS)+rise
             stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)
-                       + v*LANE_REACTION_S)
-            # Decelerate before the terminal coast boundary is reached while
-            # the divider still occludes the first support. This uses the
-            # current front range and speed, not the divider/course length.
-            if walls is not None and ahead is not None and ahead <= stop_at+v*(SECOND_STEER_LAG_S+LANE_REACTION_S):
-                self._lane_start_slow = True
+                       + v*reaction)
+            allowed = self._start_allowed_speed(ahead)
+            self._start_motor = self._start_governor(speed, rise, allowed)
+        else:
+            # The approach drives on at 1550 (a stopped car restarts at 1560).
+            self._start_motor = (TRIAL_MOTOR if speed is not None and speed < LANE_SPEED_RESTART_MPS
+                                 else ROUTE_SLOW_MOTOR)
         self.start_lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
             'nominal_target_pwm': natural, 'walls': walls, 'compass_heading_rad': heading,
             'first_approach': approach, 'front_range_m': ahead, 'speed_mps': speed,
-            'front_stop_range_m': stop_at, 'slow': self._lane_start_slow, 'swept_path_certified': False}
+            'front_stop_range_m': stop_at, 'allowed_speed_mps': allowed, 'slow': self._lane_start_slow,
+            'motor': self._start_motor, 'swept_path_certified': False}
         if stop_at is not None and ahead is not None and ahead <= stop_at:
             self.begin_coast('start_lane_board_ahead_without_first_support', now)
             self._slew(now)
@@ -2930,6 +3024,9 @@ class ManeuverSequence(TurnMotion):
             x, y = target['point_left_m']
             if e1[0]*x+e1[1]*y < OPEN_FIRST_MIN_ALONG_M:
                 return None  # behind along the start axis: not the first support
+            if (_on_board_run((x, y), _axis_lines(_scan_points(scan['ranges'], OPEN_LINE_REACH_M), heading), heading)
+                    or _support_depth(scan['ranges'], target.get('support_bins', [])) > OPEN_SUPPORT_MAX_DEPTH_M):
+                return None  # a board's end or grazing face, not a support
         if self.first_approach is not None and self.first_approach.get('track_id') != target['track_id']:
             self._open_reset_loop(1)
         loop = self._open_loop_geometry(scan, target, target['track_id'], 1, 0.)
@@ -3089,10 +3186,14 @@ class ManeuverSequence(TurnMotion):
         first_along = (None if not isinstance(first_center, list) or len(first_center) != 2
                        else e1[0]*first_center[0]+e1[1]*first_center[1])
         ahead = []
+        boards = _axis_lines(_scan_points(scan['ranges'], OPEN_LINE_REACH_M), heading)
         for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True,
                                   min_points=SECOND_ACQUISITION_MIN_POINTS):
             x, y = target['point_left_m']
             along, lateral = e1[0]*x+e1[1]*y, e1[0]*y-e1[1]*x
+            if (_on_board_run((x, y), boards, heading)
+                    or _support_depth(scan['ranges'], target['support_bins']) > OPEN_SUPPORT_MAX_DEPTH_M):
+                continue
             if (x > FRONT_BODY_EXTENT_M and FRONT_BODY_EXTENT_M < along <= OPEN_SECOND_BAND_REACH_M
                     and abs(lateral) <= OPEN_SECOND_BAND_HALF_M
                     and (first_along is None or along >= first_along+OPEN_SECOND_BEYOND_FIRST_M)):
@@ -3308,6 +3409,51 @@ class ManeuverSequence(TurnMotion):
         curvature, pwm = _pursuit_pwm(point)
         return lane, point, curvature, pwm
 
+    def _open_entry_path_hit(self, scan, point, heading, reach, fallback=None):
+        """Nearest return on the pursuit's own path, as path length, or None.
+
+        The axis ray from a car still below the lane line meets the divider's
+        open end that the pursuit is about to pass above; with the ESC lag in
+        the stopping range that held the car short of the lane for good
+        (simulation, measured car). The path is the pure-pursuit arc to its
+        point on the lane line, then that line along the axis; a return counts
+        inside the body strip (side + margin) round it, up to ``reach``
+        beyond the body front. Without raw returns: ``fallback`` (axis ray).
+        """
+        if not isinstance(scan.get('ranges'), list):
+            return fallback
+        half = SIDE_BODY_EXTENT_M+OPEN_APPROACH_MARGIN_M
+        limit = reach+FRONT_BODY_EXTENT_M
+        px, py = point
+        curvature = 2*py/max(1e-6, px*px+py*py)
+        if abs(curvature) < 1e-3:
+            arc_to_point = math.hypot(px, py)
+        else:
+            radius = 1/curvature
+            arc_to_point = abs(radius)*((math.atan2(px, radius-py) if curvature > 0
+                                         else math.atan2(px, py-radius)) % (2*math.pi))
+        u = (math.cos(-heading), math.sin(-heading))
+        best = None
+        for x, y in _scan_points(scan['ranges'], limit+1.):
+            hit = None
+            if abs(curvature) < 1e-3:
+                along, offset = x, y
+            else:
+                radius = 1/curvature
+                offset = abs(radius)-math.hypot(x, y-radius)
+                along = abs(radius)*((math.atan2(x, radius-y) if curvature > 0
+                                      else math.atan2(x, y-radius)) % (2*math.pi))
+            if 0 < along <= min(limit, arc_to_point) and abs(offset) <= half:
+                hit = along
+            else:
+                dx, dy = x-px, y-py
+                along = dx*u[0]+dy*u[1]
+                if 0 <= along <= limit-arc_to_point and abs(dy*u[0]-dx*u[1]) <= half:
+                    hit = arc_to_point+along
+            if hit is not None:
+                best = hit if best is None else min(best, hit)
+        return best
+
     def _open_light_lane_entry(self, scan, heading, lane):
         """The same measured lane admission for driving and paused recovery."""
         walls = corridor_walls(scan)
@@ -3342,12 +3488,13 @@ class ManeuverSequence(TurnMotion):
         if entry is not None:
             return self._begin_light_lane(scan, now, control, entry)
         walls = corridor_walls(scan)
-        ahead, speed, stop_at = self._open_front_stop(scan)
+        axis_ahead, speed, stop_at = self._open_front_stop(scan)
+        ahead = self._open_entry_path_hit(scan, point, heading, stop_at, axis_ahead)
         self.light_feedback = {'source_seq': scan['seq'], 'stage': 'light_entry', 'compass_heading_rad': heading,
             'lane_target': lane, 'pursuit_point_left_m': [round(v, 3) for v in point],
             'pursuit_curvature_per_m': curvature, 'nominal_target_pwm': natural, 'walls': walls,
-            'front_range_m': ahead, 'speed_mps': speed, 'front_stop_range_m': stop_at,
-            'swept_path_certified': False}
+            'front_range_m': ahead, 'axis_front_range_m': axis_ahead, 'speed_mps': speed,
+            'front_stop_range_m': stop_at, 'swept_path_certified': False}
         if ahead is not None and ahead <= stop_at:
             self._begin_recovery_hold('open_board_ahead_before_light_lane', now, control)
             return self._result(now)
@@ -3468,7 +3615,7 @@ class ManeuverSequence(TurnMotion):
             return self.lane_motor  # slow light lane: 1550 / neutral coast / 1560 restart
         if self.continue_route and self.phase == 'drive' and self.route_stage == 'start_lane':
             # Round 64: the start lane at 1560; slow from the first approach on.
-            return ROUTE_SLOW_MOTOR if self._lane_start_slow else TRIAL_MOTOR
+            return self._start_motor
         return (ROUTE_SLOW_MOTOR if (self.continue_route and self.phase == 'drive' and slow_stage
                                      and not self.quality_resume_pending)
                 else TRIAL_MOTOR)
@@ -3480,7 +3627,8 @@ class ManeuverSequence(TurnMotion):
             if self.servo < NEUTRAL:
                 self.lock('route_actual_steering_crossed_center')
                 return False
-        motors = (NEUTRAL,)+DRIVE_MOTORS if self.route_stage == 'light_lane' else DRIVE_MOTORS
+        motors = ((NEUTRAL,)+DRIVE_MOTORS if self.route_stage in ('light_lane', 'start_lane')
+                  else DRIVE_MOTORS)
         adopted = (control.get('motor') in motors and control.get('servo') == self.servo
                    and control.get('command_acked') is True)
         if not adopted:
@@ -4314,14 +4462,43 @@ class ManeuverSequence(TurnMotion):
         return FRONT_BODY_EXTENT_M+self._lane_cut_gap(speed)
 
     @staticmethod
-    def _lane_cut_gap(speed):
-        """Front gap at which a neutral coast at the nominal decel stops mid-zone."""
-        return LANE_FINISH_TARGET_GAP_M+speed*LANE_REACTION_S+speed*speed/(2*LANE_STOP_DECEL_MPS2)
+    def _start_allowed_speed(ahead):
+        """Highest speed that still stops LANE_START_SEARCH_M short of the board ahead."""
+        if ahead is None:
+            return None
+        room = ahead-FRONT_BODY_EXTENT_M-LANE_FINISH_GAP_M-LANE_START_SEARCH_M
+        if room <= 0:
+            return 0.
+        a, r = LANE_START_STOP_DECEL_MPS2, LANE_REACTION_S
+        return min(LANE_START_MAX_MPS, -r*a+math.sqrt((r*a)**2+2*a*room))
 
     @staticmethod
-    def _lane_safe_gap(speed):
+    def _start_governor(speed, rise, allowed):
+        """Start-lane motor for the measured speed against the allowed speed."""
+        cap = LANE_START_MAX_MPS if allowed is None else allowed
+        if speed is None:
+            return TRIAL_MOTOR if cap >= LANE_SPEED_UNKNOWN_MPS*.6 else NEUTRAL  # launch
+        if speed+rise >= cap:
+            return NEUTRAL
+        if speed < LANE_SPEED_RESTART_MPS or speed+rise < cap-LANE_START_PUSH_BAND_MPS:
+            return TRIAL_MOTOR
+        return ROUTE_SLOW_MOTOR
+
+    def _reaction_s(self, now):
+        """Reaction plus what is left of the ESC lag after the last push."""
+        if self._power_cmd_at is None:
+            return LANE_REACTION_BASE_S
+        return LANE_REACTION_BASE_S+max(0., min(ESC_LAG_S, ESC_LAG_S-(now-self._power_cmd_at)))
+
+    @staticmethod
+    def _lane_cut_gap(speed, reaction=LANE_REACTION_S):
+        """Front gap at which a neutral coast at the nominal decel stops mid-zone."""
+        return LANE_FINISH_TARGET_GAP_M+speed*reaction+speed*speed/(2*LANE_STOP_DECEL_MPS2)
+
+    @staticmethod
+    def _lane_safe_gap(speed, reaction=LANE_REACTION_S):
         """Front gap at which even the weakest coast only just keeps the minimum gap."""
-        return LANE_FINISH_MIN_GAP_M+speed*LANE_REACTION_S+speed*speed/(2*LANE_STOP_DECEL_MIN_MPS2)
+        return LANE_FINISH_MIN_GAP_M+speed*reaction+speed*speed/(2*LANE_STOP_DECEL_MIN_MPS2)
 
     def _light_lane_update(self, scan, now, control):
         """Follow the light-lane straight, then stop inside the finish zone.
@@ -4377,9 +4554,10 @@ class ManeuverSequence(TurnMotion):
             v, speed_known = LANE_SPEED_UNKNOWN_MPS, False
         v_cut = v+LANE_SPEED_CUT_MARGIN_MPS+(LANE_SPEED_POWER_MARGIN_MPS if self.lane_motor in DRIVE_MOTORS else 0.)
         gap = None if ahead is None else ahead-FRONT_BODY_EXTENT_M
-        cut_gap = self._lane_cut_gap(v_cut)
-        safe_gap = self._lane_safe_gap(v_cut)
-        if gap is not None and gap <= self._lane_cut_gap(v_cut)+LANE_SLOW_TRAVEL_M:
+        reaction = self._reaction_s(now)
+        cut_gap = self._lane_cut_gap(v_cut, reaction)
+        safe_gap = self._lane_safe_gap(v_cut, reaction)
+        if gap is not None and gap <= cut_gap+LANE_SLOW_TRAVEL_M:
             self._lane_slow_zone = True  # latched: the final approach stays slow
         stopped = speed is not None and speed < LANE_SPEED_RESTART_MPS
         in_zone = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M
@@ -4393,6 +4571,7 @@ class ManeuverSequence(TurnMotion):
             'front_range_m': ahead, 'front_gap_m': gap, 'speed_mps': speed, 'speed_for_cut_mps': v,
             'speed_known': speed_known, 'speed_basis': 'closing_rate_on_board_ahead_axis',
             'finish_cut_gap_m': cut_gap, 'weakest_coast_gap_m': safe_gap, 'in_finish_zone': in_zone,
+            'reaction_s': reaction,
             'nominal_decel_mps2': LANE_STOP_DECEL_MPS2, 'weakest_decel_mps2': LANE_STOP_DECEL_MIN_MPS2,
             'slow_zone': self._lane_slow_zone,
             'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': False}
@@ -4414,12 +4593,19 @@ class ManeuverSequence(TurnMotion):
         elif speed > LANE_SLOW_HIGH_MPS:
             self.lane_motor = NEUTRAL
         elif (speed < LANE_SLOW_LOW_MPS and gap is not None
-              and gap > self._lane_cut_gap(v_cut)+LANE_PUSH_CLEAR_M):
+              and gap > self._lane_cut_gap(v_cut, reaction)+LANE_PUSH_CLEAR_M
+              # The push itself, and the ESC lag after it, add speed: even the
+              # weakest coast from there must still stop short of the board.
+              and gap > self._lane_safe_gap(v+LANE_SPEED_CUT_MARGIN_MPS+LANE_SPEED_POWER_MARGIN_MPS
+                                            + (LANE_SLOW_PULSE_GAIN_MPS
+                                               if gap <= LANE_FINISH_ZONE_GAP_M+LANE_SLOW_TRAVEL_M
+                                               else LANE_SLOW_PUSH_GAIN_MPS), LANE_REACTION_S)):
             self.lane_motor = ROUTE_SLOW_MOTOR
         near_end = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M+LANE_SLOW_TRAVEL_M
-        if near_end and self.lane_motor in DRIVE_MOTORS:
-            if self._lane_rest > 0 or self._lane_pulse >= LANE_PULSE_FRAMES:
-                if self._lane_pulse >= LANE_PULSE_FRAMES:
+        pulse_frames = LANE_PULSE_FRAMES if near_end else LANE_KICK_FRAMES
+        if (near_end and self.lane_motor in DRIVE_MOTORS) or self.lane_motor == TRIAL_MOTOR:
+            if self._lane_rest > 0 or self._lane_pulse >= pulse_frames:
+                if self._lane_pulse >= pulse_frames:
                     self._lane_rest, self._lane_pulse = LANE_REST_FRAMES, 0
                 self._lane_rest -= 1
                 self.lane_motor = NEUTRAL

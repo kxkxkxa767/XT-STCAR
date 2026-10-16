@@ -28,6 +28,7 @@ import zipfile
 from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, FRONT_BOUNDARY_LOSS_S, CONTROL_AGE_LIMIT_S, AUTO_CONTROL_HEALTH_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
                            FRONT_MAX_UNKNOWN, corridor_walls, front_gap_evidence, probe_clearance, probe_parameters)
 from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
+from steer_calibration import SteerOutput
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
@@ -66,6 +67,8 @@ class Console:
         self.auto_session = None
         self.auto_result = None
         self.coast_worker = None
+        # Route steering calibration: bridge seq -> (nominal, physical) servo.
+        self.steer_sent = {}
         self.stop_goal_source = getattr(args, 'stop_goal_source', None)
         self.stop_goal_contract = None
         self.stop_goal_registry = None
@@ -156,7 +159,7 @@ class Console:
                 value = json.loads(line)
                 with self.lock:
                     if kind == 'control':
-                        self.status = value
+                        self.status = value = self.nominal_status(value)
                         self.control_at = time.monotonic()
                         control = value.get('control', {})
                         if self.owner and not control.get('armed') and control.get('seq', -1) >= self.arm_sequence:
@@ -215,10 +218,36 @@ class Console:
                     except ValueError:
                         pass  # A hard fault is not evidence of perception recovery.
 
+    def output_servo(self, op, servo, sequence):
+        """Physical servo for a route drive command; records the pair for feedback."""
+        steer = (self.auto_session or {}).get('steer_output')
+        if op != 'drive' or steer is None:
+            return servo
+        physical = steer.physical(servo)
+        self.steer_sent[sequence] = (servo, physical)
+        for old in [k for k in self.steer_sent if k < sequence-64]:
+            del self.steer_sent[old]
+        return physical
+
+    def nominal_status(self, value):
+        """Bridge feedback of a calibrated route command, in nominal servo PWM.
+
+        Only an exact (seq, physical) pair this console sent is translated; any
+        other feedback stays as reported, so a mismatch still fails the checks.
+        """
+        control = value.get('control') if isinstance(value, dict) else None
+        if not isinstance(control, dict) or not self.steer_sent:
+            return value
+        sent = self.steer_sent.get(control.get('seq'))
+        if sent is None or control.get('servo') != sent[1]:
+            return value
+        return {**value, 'control': {**control, 'servo': sent[0], 'physical_servo': sent[1]}}
+
     def emit(self, op, motor=1500, servo=1500, tick=0):
         # Nonblocking writes: a blocked/killed bridge must never block the web watchdog.
         with self.send_lock:
             self.sequence += 1
+            servo = self.output_servo(op, servo, self.sequence)
             row = {'op': op, 'seq': self.sequence, 'tick': tick, 'motor': motor, 'servo': servo}
             data = (json.dumps(row) + '\n').encode()
             try:
@@ -250,6 +279,7 @@ class Console:
                 if formal_complete:
                     self.stop_goal_processed.add(self.auto_session['goal_consumer'].goal.identity)
             self.auto_session = None
+            self.steer_sent = {}
             if self.coast_worker is not None:
                 self.coast_worker.reset()
             self.owner = None
@@ -524,6 +554,10 @@ class Console:
         if compact_target_trial:
             self.auto_session['maneuver_sequence'] = True
             self.auto_session['continue_route'] = continue_route
+            if continue_route:
+                # The route reasons in nominal servo PWM; the bridge gets the
+                # measured physical command (steer_calibration.py).
+                self.auto_session['steer_output'] = SteerOutput()
         self.auto_result = None
         self.owner, self.owner_at = 'auto-turn-'+run_id, now
         self.control_mode, self.stop_latched = ('auto_turn_cone_trial' if compact_target_trial else 'auto_turn_trial'), False

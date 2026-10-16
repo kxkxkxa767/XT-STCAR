@@ -12,6 +12,7 @@ from maneuver_sequence import (ManeuverSequence, LANE_SPEED_RESTART_MPS, LANE_ST
                                LANE_FINISH_TARGET_GAP_M, LANE_REACTION_S, LANE_STOP_DECEL_MIN_MPS2,
                                LANE_SPEED_CUT_MARGIN_MPS)
 from turn_motion import TRIAL_MOTOR
+import maneuver_sequence as ms
 
 HALF = 1.0  # lane half width (m)
 
@@ -104,7 +105,10 @@ class LightLaneTests(unittest.TestCase):
         self.assertAlmostEqual(v, .55, delta=.05)
         self.assertLessEqual(v, LANE_SLOW_HIGH_MPS)
         u = v+LANE_SPEED_CUT_MARGIN_MPS
-        expected = LANE_FINISH_TARGET_GAP_M+u*LANE_REACTION_S+u*u/(2*LANE_STOP_DECEL_MPS2)
+        # Reaction plus what is left of the ESC lag after the last push.
+        reaction = evidence['reaction_s']
+        self.assertTrue(ms.LANE_REACTION_BASE_S <= reaction <= LANE_REACTION_S)
+        expected = LANE_FINISH_TARGET_GAP_M+u*reaction+u*u/(2*LANE_STOP_DECEL_MPS2)
         self.assertAlmostEqual(evidence['finish_cut_gap_m'], expected, places=6)
         self.assertLessEqual(evidence['front_gap_m'], min(expected, ms_zone()))
         self.assertGreater(evidence['front_gap_m'], min(expected, ms_zone())-2*.55*.1-1e-9)  # within two frames

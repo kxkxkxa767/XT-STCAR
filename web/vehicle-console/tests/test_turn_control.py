@@ -491,18 +491,21 @@ class TurnControlTests(unittest.TestCase):
         self.right_exit_output(stage='orbit_entry')
         self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
 
-    def test_right_output_below_static_1200_endpoint_is_rejected(self):
-        self.right_exit_output(servo=1199)
+    def test_right_output_below_measured_right_limit_is_rejected(self):
+        self.right_exit_output(servo=self.server.RIGHT_EXIT_MIN_PWM-1)
         self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
 
-    def test_static_1200_endpoint_still_requires_pass_and_center_ack(self):
-        session = self.right_exit_output(servo=1200)
+    def test_measured_right_limit_still_requires_pass_and_center_ack(self):
+        # The route's nominal right limit is the measured one the wheels reach
+        # (steer_calibration, 2026-10-16); the static 1200 endpoint is manual only.
+        limit = self.server.RIGHT_EXIT_MIN_PWM
+        session = self.right_exit_output(servo=limit)
         self.assertIs(self.console.auto_session, session)
-        self.assertEqual(self.outputs[-1]['servo'], 1200)
+        self.assertEqual(self.outputs[-1]['servo'], limit)
         self.assertFalse(session['report']['physical_steering_confirmed'])
 
-    def test_static_1200_endpoint_without_center_ack_is_rejected(self):
-        self.right_exit_output(servo=1200, centered=False)
+    def test_measured_right_limit_without_center_ack_is_rejected(self):
+        self.right_exit_output(servo=self.server.RIGHT_EXIT_MIN_PWM, centered=False)
         self.assertEqual(self.console.auto_result['reason'], 'invalid_turn_trial_output')
 
     def test_compact_trial_preserves_1700_adoption_body_stop_and_no_rearm(self):

@@ -378,16 +378,22 @@ class CourseSimulationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.sim.Vehicle(0., 0., 0., steer_backlash=-1.)
 
-    def test_re_laid_practice_course_completes_with_hypothetical_steering_play(self):
-        # Robustness only: the rules range degrades with play (record
-        # claude_review_20261013); the re-laid practice size must not.
+    def test_re_laid_practice_course_completes_on_the_measured_car_with_calibration_errors(self):
+        # Measured car (2026-10-16 tiles: steering play ~50 PWM, table gain,
+        # ESC lag, coast); the console compensates a 50 PWM play. The real play,
+        # gain, lag and coast differ. Known open gaps (record): 15 % weaker
+        # steering at the light entry, 20 % slower or faster car.
+        cases = ({}, {'play_pwm': 30.}, {'play_pwm': 70.}, {'gain_scale': 1.15},
+                 {'esc_lag_s': .3}, {'esc_lag_s': .6}, {'decel': .5}, {'decel': .9})
         for name in ('user8', 'doc8x4'):
-            summary, _, _ = self.sim.run(self.sim.Course(**self.sim.LAYOUTS[name]), steer_backlash=30.)
-            with self.subTest(layout=name):
-                self.assertTrue(summary['route_completed'], summary)
-                self.assertEqual(summary['contacts'], [])
-                self.assertGreater(summary['min_board_gap_m'], .1)
-                self.assertGreater(summary['min_cone_gap_m'], .1)
+            for params in cases:
+                summary, _, _ = self.sim.run(self.sim.Course(**self.sim.LAYOUTS[name]), vehicle='measured',
+                                             vehicle_params=params)
+                with self.subTest(layout=name, params=params):
+                    self.assertTrue(summary['route_completed'], summary)
+                    self.assertEqual(summary['contacts'], [])
+                    self.assertGreater(summary['min_board_gap_m'], .08)
+                    self.assertGreater(summary['min_cone_gap_m'], .08)
 
     def test_close_second_divider_and_light_entry_regressions(self):
         variants = dict(self.sim.variations())

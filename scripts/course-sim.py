@@ -238,6 +238,73 @@ class Vehicle:
             self.y += self.v*math.sin(self.psi)*dt/n
 
 
+# Car on tiles, measured 2026-10-13/16 (docs/vehicle-dynamic-turn-validation-
+# 20261007.json: steering_arc_after_repair_20261016, reverse_brake_test_20261016).
+# Wheel PWM -> curvature (1/m) after the steering play; right saturates near
+# 1250, left near 1670. Values between points are interpolated.
+MEASURED_STEER_TABLE = ((1200, -1.35), (1250, -1.2), (1350, -.38), (1450, -.16), (1500, 0.),
+                        (1550, .18), (1600, .4), (1670, 1.6), (1720, 1.7))
+# Steady speed (m/s) per motor PWM on tiles, straight; speed keeps rising for
+# seconds (1560: 1.2 -> 1.9 m/s over 1.3 s), so a first-order lag.
+MEASURED_TARGET_SPEED = {1550: 1.1, 1560: 2.2, 1570: 2.7, 1580: 3.2}
+
+
+def _interp(table, x):
+    if x <= table[0][0]:
+        return table[0][1]
+    for (x0, y0), (x1, y1) in zip(table, table[1:]):
+        if x <= x1:
+            return y0+(y1-y0)*(x-x0)/(x1-x0)
+    return table[-1][1]
+
+
+class MeasuredVehicle(Vehicle):
+    """Measured car: steering play, table gain, ESC lag both ways, slow coast.
+
+    play_pwm: wheels follow the servo only outside +-play (after a right turn
+    1500 keeps about -.2 /m, after a left one +.2 /m). esc_lag_s: the motor
+    responds that much later to any command, also to the cut (the car kept
+    pushing ~.5 s after a stop). coast_decel: on tiles ~.6-.7 m/s^2 after the
+    lag. drift_per_mps: slight left drift at speed (user and runs 11-13).
+    turn_drag: steady speed divided by (1 + turn_drag*|curvature|).
+    """
+    def __init__(self, x, y, psi, *, speed_scale=1., decel=.7, delay=.15, steer_tau=.1, seed=0,
+                 play_pwm=50., gain_scale=1., esc_lag_s=.45, drift_per_mps=.025, turn_drag=.5,
+                 speed_tau_s=1.1, **_):
+        super().__init__(x, y, psi, speed_scale=speed_scale, decel=decel, delay=delay, steer_tau=steer_tau,
+                         seed=seed)
+        self.play_pwm, self.gain_scale, self.esc_lag_s = play_pwm, gain_scale, esc_lag_s
+        self.drift_per_mps, self.turn_drag, self.speed_tau_s = drift_per_mps, turn_drag, speed_tau_s
+        self.motor_queue = []
+        self.motor_phys = 1500
+        self.kappa = 0.
+
+    def target_speed(self, motor):
+        return MEASURED_TARGET_SPEED.get(motor, 0.)*self.speed_scale
+
+    def step(self, t, dt, motor, servo):
+        self.servo_queue.append((t, servo))
+        while self.servo_queue and self.servo_queue[0][0] <= t-self.delay:
+            self._delayed = self.servo_queue.pop(0)[1]
+        target = getattr(self, '_delayed', 1500)
+        self.servo_phys += (target-self.servo_phys)*min(1., dt/self.steer_tau)
+        self.wheel_pwm = min(self.servo_phys+self.play_pwm, max(self.servo_phys-self.play_pwm, self.wheel_pwm))
+        self.kappa = _interp(MEASURED_STEER_TABLE, self.wheel_pwm)*self.gain_scale+self.drift_per_mps*self.v
+        self.motor_queue.append((t, motor))
+        while self.motor_queue and self.motor_queue[0][0] <= t-self.esc_lag_s:
+            self.motor_phys = self.motor_queue.pop(0)[1]
+        vt = self.target_speed(self.motor_phys)/(1+self.turn_drag*abs(self.kappa))
+        if vt > 0 and (self.v > .05 or self.motor_phys >= 1560):
+            self.v += max(-self.decel, min(2.5, (vt-self.v)/self.speed_tau_s))*dt
+        else:
+            self.v = max(0., self.v-self.decel*dt)
+        n = 4
+        for _ in range(n):
+            self.psi += self.kappa*self.v*dt/n
+            self.x += self.v*math.cos(self.psi)*dt/n
+            self.y += self.v*math.sin(self.psi)*dt/n
+
+
 def make_console(server):
     temp = tempfile.TemporaryDirectory()
     console = server.Console(types.SimpleNamespace(access_file=str(Path(temp.name)/'access.json'),
@@ -253,14 +320,21 @@ def make_console(server):
 
 def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1., noise=.008, seed=0,
         verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None, right_curvature_max=1.875,
-        steer_backlash=0.):
+        steer_backlash=0., vehicle='nominal', vehicle_params=None):
     sys.path.insert(0, str(CONSOLE))
     server = load('course_sim_server', CONSOLE/'server.py')
     console = make_console(server)
     geometry = Geometry()
     rng = random.Random(seed)
-    car = Vehicle(*course.start, speed_scale=speed_scale, decel=decel, delay=delay, seed=seed,
-                  right_curvature_max=right_curvature_max, steer_backlash=steer_backlash)
+    if vehicle == 'measured':
+        params = dict(vehicle_params or {})
+        speed_scale = params.pop('speed_scale', speed_scale)
+        car = MeasuredVehicle(*course.start, speed_scale=speed_scale, delay=delay, seed=seed, **params)
+    elif vehicle == 'nominal':
+        car = Vehicle(*course.start, speed_scale=speed_scale, decel=decel, delay=delay, seed=seed,
+                      right_curvature_max=right_curvature_max, steer_backlash=steer_backlash)
+    else:
+        raise ValueError('vehicle must be nominal or measured')
     history = [(0., car.x, car.y, car.psi)]
     clock = {'now': 0.}
     outputs = []
@@ -274,6 +348,10 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         elif op == 'stop':
             control.update(armed=False, motor=1500, servo=1500)
         control['servo'] = servo
+        # The console's steering calibration (nominal -> physical) as the real
+        # emit applies it; the bridge feedback is translated back to nominal.
+        control['physical_servo'] = (console.output_servo(op, servo, console.sequence)
+                                     if op == 'drive' else servo)
         console.control_at = clock['now']
         outputs.append((clock['now'], op, motor, servo))
     console.emit = emit
@@ -321,7 +399,8 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         clock['now'] = t
         control = console.status['control']
         motor = control['motor'] if control.get('armed') else 1500
-        servo = control['servo'] if control.get('armed') else 1500
+        servo = ((control.get('physical_servo', control['servo']) if vehicle == 'measured' else control['servo'])
+                 if control.get('armed') else 1500)
         car.step(t, dt, motor, servo)
         history.append((t, car.x, car.y, car.psi))
         del history[:-40]
@@ -384,7 +463,8 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                'vehicle_model': {'right_curvature_max_per_m': right_curvature_max,
                                  'right_1200_dynamically_calibrated': False,
                                  'steer_backlash_pwm': steer_backlash,
-                                 'pwm_per_curvature': car.pwm_per_curvature}}
+                                 'pwm_per_curvature': car.pwm_per_curvature,
+                                 'vehicle': vehicle, 'vehicle_params': vehicle_params or {}}}
     sys.path.remove(str(CONSOLE))
     return summary, log, history
 
@@ -530,6 +610,10 @@ def main():
     parser.add_argument('--delay', type=float, default=.15)
     parser.add_argument('--right-curvature-max', type=float, default=1.875,
                         help='unmeasured nominal1200 limit (1/m); use .94 for old-cap sensitivity')
+    parser.add_argument('--vehicle', choices=('nominal', 'measured'), default='nominal',
+                        help='measured: tile measurements of 2026-10-13/16 (play, gain table, ESC lag, coast)')
+    parser.add_argument('--vehicle-param', action='append', default=[], metavar='NAME=VALUE',
+                        help='measured model parameter, e.g. play_pwm=70 esc_lag_s=.6 (repeatable)')
     parser.add_argument('--steer-backlash', type=float, default=0.,
                         help='hypothetical steering play (PWM) for robustness runs; not measured')
     parser.add_argument('--seed', type=int, default=0)
@@ -544,6 +628,7 @@ def main():
     parser.add_argument('--png-dir', help='with --range: write each variation\'s picture here')
     parser.add_argument('--only-failures', action='store_true', help='with --png-dir: pictures of failures only')
     args = parser.parse_args()
+    vehicle = {'vehicle': args.vehicle, 'vehicle_params': {k: float(v) for k, v in (a.split('=', 1) for a in args.vehicle_param)}}
     keys = ('success', 'route_completed', 'start_error', 'end_reason', 'contacts', 'min_board_gap_m', 'min_cone_gap_m', 'final', 'time_s',
             'vehicle_model')
     if args.matrix:
@@ -551,7 +636,7 @@ def main():
             for speed, decel, delay in ((1., .5, .15), (1.2, .35, .3), (.8, .7, .15)):
                 summary, _, _ = run(Course(**LAYOUTS[name]), speed_scale=speed, decel=decel, delay=delay,
                                     max_s=args.max_s, seed=args.seed, right_curvature_max=args.right_curvature_max,
-                                    steer_backlash=args.steer_backlash)
+                                    steer_backlash=args.steer_backlash, **vehicle)
                 print(name, f'speed{speed} decel{decel} delay{delay}',
                       json.dumps({k: summary[k] for k in keys}, ensure_ascii=False), flush=True)
         return
@@ -561,7 +646,7 @@ def main():
             course = Course(**spec)
             summary, log, _ = run(course, max_s=args.max_s, seed=args.seed,
                                   right_curvature_max=args.right_curvature_max,
-                                  steer_backlash=args.steer_backlash)
+                                  steer_backlash=args.steer_backlash, **vehicle)
             if args.png_dir and not (args.only_failures and summary['success']):
                 Path(args.png_dir).mkdir(parents=True, exist_ok=True)
                 render(course, log, str(Path(args.png_dir)/f'{name}.png'), name=name, summary=summary)
@@ -585,7 +670,7 @@ def main():
     summary, log, _ = run(course, max_s=args.max_s, speed_scale=args.speed_scale, decel=args.decel,
                           delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace,
                           right_curvature_max=args.right_curvature_max,
-                          steer_backlash=args.steer_backlash)
+                          steer_backlash=args.steer_backlash, **vehicle)
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     if args.log:
         Path(args.log).write_text(''.join('\t'.join(str(round(v, 3)) if isinstance(v, float) else str(v)

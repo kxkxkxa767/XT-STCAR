@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S, DEFAULT_INITIAL_PWM,
                                validate_maneuver_initial_pwm)
 from turn_motion import TurnMotion
+import maneuver_sequence as ms
 
 
 def corridor(heading):
@@ -200,10 +201,12 @@ class ManeuverSequenceTests(unittest.TestCase):
         h.motion.right_exit_geometry = None
         value = scan(h.seq+1, h.now+.1)
         value['corridor_candidates'] = [corridor(-80)]
-        self.assertEqual(h.motion._right_exit_target(value, h.now+.1)[0], 1249)
+        # The exit geometry asks for about 1249; the route's right limit is now
+        # the measured nominal limit the wheels reach (steer_calibration).
+        self.assertEqual(h.motion._right_exit_target(value, h.now+.1)[0], ms.RIGHT_EXIT_MIN_PWM)
         h.motion.right_exit_geometry = None
         value['corridor_candidates'][0]['center_offset_left_m'] = -.35
-        self.assertEqual(h.motion._right_exit_target(value, h.now+.1)[0], 1200)
+        self.assertEqual(h.motion._right_exit_target(value, h.now+.1)[0], ms.RIGHT_EXIT_MIN_PWM)
         h.motion.max_drive_s = h.now-h.motion.drive_since
         result = self.pass_step(h, -.3)
         self.assertEqual((result['phase'], result['motor']), ('coast', 1500))
