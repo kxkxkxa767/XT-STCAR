@@ -21772,9 +21772,19 @@
       "user_placement": "已经摆好",
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-68 (7 OK); work/round65-compute-20261017/t68-map.png",
       "result": "turn_perception_unavailable in start_lane after ~2.3 s of drive (44 drive ticks, 1.42 m, <=.75 m/s); start-lane allowance used twice; max tick .048 s, max gap .069 s",
-      "cause": "scan 574: 12 consecutive unbridged front bins 6..17 (right front) -> run limit 5 exceeded (correctly not tolerated). Matches the long-known right-front 5-17 deg empty-return band; pre-run static scans also lose bin 4 almost always and 5-16 sporadically. Suspected obstruction/dirty window at the lidar right front (like the left-rear obstruction found today); user asked to inspect.",
+      "cause": "scan 574: 12 consecutive unbridged front bins 6..17 (right front) -> run limit 5 exceeded (correctly not tolerated). Revised analysis: at that moment the heading was about +6 deg (start-lane weave), so rays 6-17 deg right of the nose ran 0-11 deg to the right board of the .93 m lane: grazing incidence, no return (wall intersections 2.7 m to beyond the lane). Heading 0 statics lose only 1-3 bins there; the left front (343-350) drops the same way when the car yaws right. Not an obstruction (earlier message to the user withdrawn).",
       "post_lock_veer": "last commands nominal 1490 -> physical 1430 (play compensation); lock sends physical 1500 so the wheels stay right of centre (play); the ESC lag kept the 1560 push from 3.80 s, speed rose .68 -> 1.15 m/s after the lock; coasted ~1.4 m curving at about -.4 /m to heading -12.7 deg (car at ~2.8 m)",
-      "start_lane_weave": "heading -3 .. +7.8 deg: start-lane corrections nominal 1490-1520 become physical 1430-1585 because every direction change is compensated as a full 50 PWM play crossing (SteerOutput) -> limit cycle near centre; to be fixed (small corrections near centre should not cross the full play)"
+      "start_lane_weave": "heading -3 .. +7.8 deg: start-lane corrections nominal 1490-1520 become physical 1430-1585 because every direction change is compensated as a full 50 PWM play crossing (SteerOutput) -> limit cycle near centre; to be fixed (small corrections near centre should not cross the full play) Real near-centre response is stronger than STEER_TABLE: physical 1585 gave about +.4 /m at .72 m/s (table: wheel 1535 -> .11 /m), and heading kept rising for ~.3 s after the command went to 1471/1452 (steering lag). course-sim (measured) does not reproduce it: start-lane heading stays within +-3 deg for play 20-70 and steering delay .15-.35 s."
     }
+  },
+  "handoff_gpt_20261017": {
+    "date": "2026-10-17",
+    "user_request": "你给我段指令我给gpt，让他来吧，后来让他把结果再告诉你",
+    "car_state": "round 68 installed (claude-turn68, 095bcbc runtime; 15 hashes); car locked ~2.8 m ahead of the start, heading about -13 deg; SSH socket was live",
+    "open_tasks": [
+      "start-lane weave: refit the near-centre steering response from rounds 64/66/67/68 (trial-map), make course-sim reproduce +-8 deg, then fix SteerOutput / start-lane law without track specifics",
+      "front_sparse in lanes: rays of a null run that hit the current measured native lane side wall within ~6 m count as wall surface; rays that do not stay unknown; run limit 5, base gate 6/3 and the body gate unchanged",
+      "light-entry dropout sensitivity (course-sim --edge-dropout .05 user8 seed 0: board contact at 19.5 s)"
+    ]
   }
 }
