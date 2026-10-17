@@ -1,11 +1,11 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-17 Claude：第64轮构建部署；雷达左后盲区阻塞起步）
+## 当前接手入口（2026-10-17 Claude：第64轮实车因单拍计算超时停车；第65轮提速+测试时屏蔽网页，待上车）
 
-用户：“我放到赛道上了，你测试吧”。机器键 `turn64_measured_car_route_20261017`。路线代码即5967c25（实测车况改造），本次不改路线。
-- **构建**：新构建器 `work/vehicle-dynamic-deploy-20261008/build-turn64.py`（只跑一次）以 steering300 包（afff7a9，桥 f39a7930…）为桥基线；Rust自afff7a9未改，复用同一ELF；9个Python模块（含 `steer_calibration.py`）+启动器+前端+配置取HEAD，共15个安装哈希。部署脚本由 deploy-codex-steering300.py 派生（OLD=steering300安装哈希，归档清单加新模块，其余备份/回滚/中性检查不变）；helper由62派生，仅改证据目录、`--max-seconds 24→40`、观察上限34→58s。新鲜核验用 `read-fresh-route-64.py`/`validate-fresh-64.py`（15哈希；旧62路线不认发车直道，部署前不要求turn_ready）。
-- **部署前只读发现（`before64-fresh.json`）**：①雷达左后约210–232格（自正前顺时针；车尾往左30–50°）自10-16换件后每帧为空（13次steer-arc与今天都有，10-13与62轮没有）；今天车后挡板就在.30–.38m处仍无回波→车身固定遮挡或雷达受扰。桥 `validate_full_scan` 要求缺口≤5°，所以 wall/corridor/left_turn_goal/front_boundary 每帧都空，start_lane 无法起步。**不做软件屏蔽**，已请用户检查遮挡。②车尾离后挡板约6cm（bin160净距.049<.08），请用户前挪约10cm。
-- **下一步**：用户回复“已摆好”后先只读确认盲区消失、turn_ready=true，再按第1节第8–12步跑一次并分析。
+机器键 `turn64_measured_car_route_20261017`（构建/部署/实车）与 `turn65_compute_budget_20261017`（提速），证据 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-64/`、`work/round65-compute-20261017/`。
+- **第64轮**：新构建器 `build-turn64.py` 以 steering300 桥为基线（Rust 自 afff7a9 未改，同一ELF），15个安装哈希，helper `--max-seconds 40`、观察上限58s。部署前发现雷达左后（发布格215–230）自10-16换件后一直无回波（车身遮挡），桥几何全空；用户清除遮挡并前挪后 turn_ready=true（直道宽.911m居中）。实车：发车直道驱动3.3s（约1.5m，≤1.2m/s，航向±8°摆动），4.75s首桶确认（2.73m/左40°）后下一拍首桶进近（墙线提取+绕行规划）在车上算了**.242s**，占住控制锁超过300ms心跳租约，CLI心跳请求(.15s)超时退出、服务端按 `autonomy_heartbeat_timeout` 锁定；断电后滑行到2.8m、航向23°。保护全部按设计工作，不是感知或保护故障。当时网页每秒约30个请求、视觉进程约180%CPU、负载9.4/8核。
+- **第65轮（已验证，未构建/未上车）**：只提速、不改决策——`_axis_lines` 增量窗口（结果逐项相同，约8倍）、同一帧墙线/近距结果缓存、`route_events` 不再每拍深拷贝、绕行规划打分记忆化与内联、`probe_clearance` 只在需要时建点记录（输出与报错在4.1万次调用中逐项相同，门限与逻辑不变）；服务端**自动运行期间局域网GET一律503**（用户“你跑脚本测试的时候可以屏蔽驾驶台”），本机CLI/记录程序不受影响，所有POST（含网页停止）照常。Mac 单拍最慢：发车直道4.4→1.8ms、过渡段5.9→1.9ms、灯区5.2→1.6ms、二桶4.7→2.7ms。全量746 OK（2项原有预期失败），新增8项；20次仿真、51/52/64回放与改前逐字节相同。
+- **下一步**：车开机→用户自己终端重建SSH套接字→先在车上跑纯计算基准（`bench.py`，只算数）定车机/Mac倍数；`python3 work/vehicle-dynamic-deploy-20261008/build-next.py claude-turn64 claude-turn65 65 turn65_compute_budget_20261017`→`deploy-matched.py claude-turn65 65`→`read-fresh-route-64.py`/`validate-fresh-64.py ... --require-ready`→用户回复“已摆好”后跑一次。若二桶新帧仍可能超.12s，再处理绕行规划（不放宽任何门）。
 
 ## 当前接手入口（2026-10-16 驾驶台解锁过期排查；修复仅本地，未部署）
 

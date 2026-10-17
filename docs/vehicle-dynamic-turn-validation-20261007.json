@@ -21466,7 +21466,7 @@
     "user_request": "我放到赛道上了，你测试吧",
     "implemented": true,
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "route_source": "5967c25 measured-car route (layout_3p2_route_redesign_20261012.measured_car_route_20261016); no route code change in this key",
     "pre_build_validation": {
       "python_full_suite": "Ran 738, OK (expected failures=2) on HEAD 5967c25",
@@ -21541,6 +21541,64 @@
       "launch_command_preserved": true,
       "arm_or_drive_requests": 0,
       "post_deploy_fresh": "after64-deploy-fresh.json: six fresh locked samples, 15 installed hashes match, continue_route preview true; turn_ready=false (left_corridor_unknown / turn_sensor_unavailable) because the rear-left null band (published bins 215-230, raw 211-225 with walls at .52-.73 m on both sides of the gap) still empties all bridge geometry"
+    },
+    "turn64_actual": {
+      "user_placement": "已经摆好了 (after removing the rear-left lidar obstruction)",
+      "pre_run": "pre64-run-fresh.json: six fresh locked samples, 15 hashes, turn_ready=true, continue_route preview true; null band gone (walls 6, corridors 2); entry lane, width .911 m, offset -.003 m, heading -.26 deg, back wall .64 m behind, 7.35 m clear ahead, left divider ends ~2.5 m ahead",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-64 (7 files sha256 OK vs trial64-remote-sha256.txt); trial64-stdout.json; t64-map.png",
+      "result": "stopped after 3.3 s of drive in start_lane by autonomy_heartbeat_timeout; cli exit 1 (CONTROL ERROR: TimeoutError timed out); locked 1500/1500, owner none, not armed",
+      "trajectory": "trial-map: 1.47 m powered (1560 then 1550, <=1.2 m/s) along the lane, heading oscillating +6/-8 deg (lane walls law, then compass hold); coasted to x 2.79 m, y .35 m, heading 23 deg after the lock (physical servo 1590 at lock, then 1500 with left residual)",
+      "cause": "At 4.75 s the first support was confirmed (2.73 m, 40.5 deg left). The next tick started the first approach (_axis_lines + loop plan in one tick) and took .242 s on the car (other start-lane ticks .018-.048 s, max .068). It held the control lock past the 300 ms heartbeat lease: the CLI heartbeat request (.15 s client timeout) timed out and the CLI exited; the server handled the late heartbeat at >=.3 s and halted (autonomy_heartbeat_timeout). Not a sensing or protection fault.",
+      "contention": "During the run the operator web page (192.168.0.103, 4 connections) polled state/lidar/camera ~30/s; an idle state reply took .06-.12 s on the car; vision-shadow ~180% CPU, load average 9.4 on 8 cores. Car/Mac tick ratio for this run about 40-55x (start-lane ticks).",
+      "protections": "unchanged and correct: heartbeat lease, control gap .12 s, body gate, deadlines"
     }
+  },
+  "turn65_compute_budget_20261017": {
+    "date": "2026-10-17",
+    "user_request": "为什么停下来了 / 你跑脚本测试的时候可以屏蔽驾驶台",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "cause_addressed": "turn64_measured_car_route_20261017.turn64_actual: a .242 s start-lane tick (first approach: _axis_lines + loop plan) held the control lock past the 300 ms heartbeat lease; the operator page polled ~30 requests/s meanwhile.",
+    "changes": {
+      "maneuver_sequence._axis_lines": "same algorithm, incremental: the window keeps its along values sorted (bisect) and tracks only gaps > OPEN_LINE_GAP_M (the smallest possible split); median from the lateral-sorted rows. Identical output on 2241 recorded and 879 simulated inputs and in the new test; ~3 ms -> ~.35 ms per call on simulated scans (Mac).",
+      "maneuver_sequence._scan_axis_lines": "per-scan cache (seq, at_ms, ranges content, heading) for the four callers (first approach, second observation, channel target, light-lane walls); read-only results.",
+      "maneuver_sequence._route_proximity": "per-scan cache (seq, at_ms, ranges content, first-pass flag).",
+      "maneuver_sequence._result": "route_events shallow-copied (events are deep snapshots written once by _route_event and never changed) instead of deep-copied every 20 ms tick.",
+      "maneuver_sequence._plan_loop": "score memoised per (radius, a, b), _loop_extent inlined with the probe directions cos/sin computed once, outside-circle offsets skipped in the sweeps (first maximum kept); identical plans on random inputs vs the verbatim old implementation.",
+      "autonomy_live.probe_clearance": "per-bin point records built only when kept (nearest, contact, stop trigger) and bin cos/sin from tables equal to math.cos/sin(math.radians(bin)); outputs and raised errors identical on 14848 recorded-scan calls and 26784 calls with injected close board/cone returns (all flag combinations); gate thresholds and logic unchanged.",
+      "server.lan_read_paused": "while an autonomy session is active, GETs from non-loopback clients (the web page) get 503 console_paused_during_autonomy without touching the control lock; loopback (CLI, evidence observer) unaffected; every POST, including the page stop button, still served. User-authorized."
+    },
+    "unchanged": "route behaviour (decisions), heartbeat 300 ms lease, CLI .15 s request timeout, .12 s control gap, 8 cm body gate, contact exemption, deadlines, ACK checks, bridge",
+    "timing_mac_sim_user8_measured": {
+      "note": "whole console.autonomy_tick wall time, Mac, no profiler; fresh = first tick on a new scan",
+      "before": {
+        "start_lane_fresh_max_ms": 4.4,
+        "open_transfer_fresh_max_ms": 5.9,
+        "light_lane_fresh_max_ms": 5.17,
+        "second_loop_fresh_max_ms": 4.71,
+        "non_fresh_p50_ms": "0.46-0.78"
+      },
+      "after": {
+        "start_lane_fresh_max_ms": 1.81,
+        "open_transfer_fresh_max_ms": 1.9,
+        "light_lane_fresh_max_ms": 1.6,
+        "second_loop_fresh_max_ms": 2.72,
+        "non_fresh_p50_ms": "0.35-0.55"
+      },
+      "car_ratio": "round 64 run implied ~40-55x (car/Mac) with the page polling; unmeasured without it; a car-side pure-CPU benchmark is prepared (scratch bench.py) to run once the car is back"
+    },
+    "validation": {
+      "python_full": "work/round65-compute-20261017/python-final.log",
+      "new_tests": "tests/test_route_64_compute_budget.py (8)",
+      "sim_identical": "5 layouts x seeds 0-1 x measured/nominal: logs and summaries byte-identical HEAD vs working tree (sim-compare-final.txt)",
+      "route_replay_identical": "51, 52, 64 byte-identical vs HEAD",
+      "probe_clearance_compare": "probe-clearance-compare.json, probe-clearance-stress.json (0 mismatches)"
+    },
+    "evidence": "work/round65-compute-20261017/",
+    "risks": [
+      "If the car is slower than ~35x Mac under load, second-loop fresh ticks (2.7 ms Mac) may still approach the .12 s gap; tick timing is in every run report (max_tick_compute_s)",
+      "vision-shadow (~180% CPU) still runs during trials"
+    ]
   }
 }

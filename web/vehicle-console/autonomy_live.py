@@ -507,6 +507,11 @@ def _body_contact_bins(target, scan, ages, maneuver):
     return set(support)
 
 
+# Same values as math.cos/sin(math.radians(bin)) at each call.
+_BIN_COS = tuple(math.cos(math.radians(angle)) for angle in range(360))
+_BIN_SIN = tuple(math.sin(math.radians(angle)) for angle in range(360))
+
+
 def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True,
                     clearance_profile='straight', relaxed_turn_left=False, body_contact_target=None):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
@@ -557,7 +562,7 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     for angle, r in enumerate(bins):
         if r is None:
             continue
-        x, y = r * math.cos(math.radians(angle)), r * math.sin(math.radians(angle))
+        x, y = r * _BIN_COS[angle], r * _BIN_SIN[angle]
         # These bins are exactly lateral. cos(pi/2) rounds positive while
         # cos(3*pi/2) rounds negative; neither is a forward-corridor return.
         # Adjacent 89/271-degree rays retain their real forward component.
@@ -572,15 +577,23 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
         # Front-center, right and non-turn observations retain their old gate.
         relaxed_point = relaxed_turn_left and -y >= SIDE_BODY_EXTENT_M
         point_stop_m = TURNING_LEFT_BODY_CLEARANCE_M if relaxed_point else MANEUVER_BODY_CLEARANCE_M
-        body_point = {'angle_deg': angle, 'range_m': r, 'forward_x_m': x, 'left_y_m': -y,
-                      'body_distance_m': body_distance, 'stop_distance_m': point_stop_m,
-                      'relaxed_turn_left': relaxed_point}
+        # The point record is built only where it is kept (nearest, contact or
+        # stop trigger); building one for each of the 360 bins every 20 ms
+        # tick was the largest per-tick cost on the car (round 64).
+        body_point = None
         if nearest_body_point is None or body_distance < nearest_body_point['body_distance_m']:
+            body_point = {'angle_deg': angle, 'range_m': r, 'forward_x_m': x, 'left_y_m': -y,
+                          'body_distance_m': body_distance, 'stop_distance_m': point_stop_m,
+                          'relaxed_turn_left': relaxed_point}
             nearest_body_point = body_point
         if maneuver:
             # Equality is allowed; tolerate only floating point roundoff at that boundary.
             if body_distance < point_stop_m and not math.isclose(
                     body_distance, point_stop_m, rel_tol=0, abs_tol=1e-12):
+                if body_point is None:
+                    body_point = {'angle_deg': angle, 'range_m': r, 'forward_x_m': x, 'left_y_m': -y,
+                                  'body_distance_m': body_distance, 'stop_distance_m': point_stop_m,
+                                  'relaxed_turn_left': relaxed_point}
                 if angle in contact_bins:
                     tolerated_contacts.append(body_point)
                 else:

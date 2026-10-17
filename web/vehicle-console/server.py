@@ -1863,6 +1863,23 @@ class Console:
             pass
 
 
+def lan_read_paused(client_host, auto_session):
+    """While an autonomous run owns the car, reads from LAN clients wait.
+
+    User 2026-10-17 ("你跑脚本测试的时候可以屏蔽驾驶台"): the web page polls
+    state/lidar/camera about 30 times a second; on the car one state reply
+    takes 60-120 ms and shares the control lock and interpreter with the
+    20 ms control ticks, which starved the run's heartbeat in round 64.
+    Loopback clients (the run's CLI and evidence observer) are unaffected,
+    and every POST (the page's stop button) is still served.
+    """
+    try:
+        loopback = ipaddress.ip_address(client_host).is_loopback
+    except ValueError:
+        loopback = False
+    return auto_session is not None and not loopback
+
+
 def serve(args):
     app = Console(args)
     limiter = threading.BoundedSemaphore(12)
@@ -1916,6 +1933,10 @@ def serve(args):
                     return
                 if not self.authorized():
                     self.reply(403, {'error': 'access token required'})
+                    return
+                # A handler without a peer address counts as remote (paused).
+                if lan_read_paused(getattr(self, 'client_address', ('',))[0], app.auto_session):
+                    self.reply(503, {'error': 'console_paused_during_autonomy'})
                     return
                 if path == '/api/state':
                     query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)

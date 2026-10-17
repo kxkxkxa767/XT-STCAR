@@ -4,6 +4,7 @@ The compact object's semantic identity is unknown. This module observes no
 global pose, speed, physical steering angle, passed cone count or complete lap.
 The service retains fresh body-clearance checks, ownership, heartbeat and ACKs.
 """
+from bisect import bisect_left
 import copy
 import math
 
@@ -661,18 +662,50 @@ def _plan_loop(free, support_radius, radii, approach=None):
     bands = [(theta, distance-SIDE_BODY_EXTENT_M-OPEN_OUTER_GAP_M) for theta, distance in free]
     inner_floor = support_radius+SIDE_BODY_EXTENT_M if any(hi < lo for _, hi in bands) else lo
 
+    # The coordinate search revisits the same (radius, a, b); _loop_extent is
+    # inlined with the probe directions' cos/sin computed once, and offsets
+    # outside the circle (score -inf) are skipped in the sweeps. Same
+    # arithmetic, so the same plan. Round 64 car run: ~2000 evaluations per
+    # scan were the slowest step of the second loop.
+    trig = [(math.cos(theta), math.sin(theta), hi, hi >= lo) for theta, hi in bands]
+    memo = {}
+
     def score(radius, a, b):
+        key = (radius, a, b)
+        value = memo.get(key)
+        if value is not None:
+            return value
         if math.hypot(a, b) > radius-inner_floor:
+            memo[key] = -math.inf
             return -math.inf
         worst = math.inf
-        for theta, hi in bands:
-            t = _loop_extent(a, b, radius, theta)
+        ab, rr = a*a+b*b, radius*radius
+        for c, s, hi, comfort in trig:
+            projection = a*c+b*s
+            t = projection+math.sqrt(max(0., projection*projection-ab+rr))
             # Cone comfort is soft; a board must not be traded for it when
             # both comfort margins do not fit. The raw body gate is unchanged.
-            worst = min(worst, min(t-lo, hi-t) if hi >= lo else -abs(t-hi))
+            margin = min(t-lo, hi-t) if comfort else -abs(t-hi)
+            if margin < worst:
+                worst = margin
         if approach is not None and a-approach[0] > 0:
             worst -= max(0., OPEN_APPROACH_SLOPE*abs(approach[1]-(b-radius))-(a-approach[0]))
-        return worst-.01*math.hypot(a, b)-OPEN_RADIUS_PREFERENCE*(radii[1]-radius)
+        value = memo[key] = worst-.01*math.hypot(a, b)-OPEN_RADIUS_PREFERENCE*(radii[1]-radius)
+        return value
+
+    def sweep(radius, offsets, a=None, b=None):
+        """max(offsets, key=score) over the free coordinate (first maximum);
+        offsets with an infinite (outside) score cannot be it unless all are."""
+        limit = radius-inner_floor
+        choice, top = offsets[0], None
+        for v in offsets:
+            pa, pb = (v, b) if a is None else (a, v)
+            if math.hypot(pa, pb) > limit:
+                continue
+            value = score(radius, pa, pb)
+            if top is None or value > top:
+                choice, top = v, value
+        return choice
 
     best = None
     radius = radii[0]
@@ -680,8 +713,8 @@ def _plan_loop(free, support_radius, radii, approach=None):
         a = b = 0.
         offsets = tuple(k*.05 for k in range(-math.ceil(radius/.05), math.ceil(radius/.05)+1))
         for _ in range(2):
-            b = max(offsets, key=lambda v: score(radius, a, v))
-            a = max(offsets, key=lambda v: score(radius, v, b))
+            b = sweep(radius, offsets, a=a)
+            a = sweep(radius, offsets, b=b)
         value = score(radius, a, b)
         if best is None or value > best[0]:
             best = (value, radius, a, b)
@@ -779,32 +812,61 @@ def _axis_lines(points, heading):
     """
     c, s = math.cos(-heading), math.sin(-heading)
     rows = sorted((-s*x+c*y, c*x+s*y) for x, y in points)
+    # Round 64 car run: the plain form (every window re-sorted and re-split,
+    # quadratic in a board's points) took ~3 ms per call in simulation, about
+    # .1 s on the car. The window's along values are kept sorted as rows enter
+    # and leave it, and only gaps wider than OPEN_LINE_GAP_M (the smallest
+    # possible split) are tracked; the splits, medians and the replacement
+    # rule are unchanged (identical output on 2241 recorded and 879 simulated
+    # scans).
     lines, start = [], 0
+    window = []   # along values of rows[start:end+1], sorted
+    wide = set()  # adjacent (a, b) in window with b-a > OPEN_LINE_GAP_M
     for end in range(len(rows)):
+        value = rows[end][1]
+        j = bisect_left(window, value)
+        if 0 < j < len(window) and window[j]-window[j-1] > OPEN_LINE_GAP_M:
+            wide.discard((window[j-1], window[j]))
+        if j > 0 and value-window[j-1] > OPEN_LINE_GAP_M:
+            wide.add((window[j-1], value))
+        if j < len(window) and window[j]-value > OPEN_LINE_GAP_M:
+            wide.add((value, window[j]))
+        window.insert(j, value)
         while rows[end][0]-rows[start][0] > OPEN_LINE_BAND_M:
+            value = rows[start][1]
+            j = bisect_left(window, value)
+            left = window[j-1] if j > 0 else None
+            right = window[j+1] if j+1 < len(window) else None
+            if left is not None and value-left > OPEN_LINE_GAP_M:
+                wide.discard((left, value))
+            if right is not None and right-value > OPEN_LINE_GAP_M:
+                wide.discard((value, right))
+            if left is not None and right is not None and right-left > OPEN_LINE_GAP_M:
+                wide.add((left, right))
+            del window[j]
             start += 1
-        group = rows[start:end+1]
-        if len(group) < OPEN_LINE_MIN_POINTS:
+        count = end+1-start
+        if count < OPEN_LINE_MIN_POINTS or window[-1]-window[0] < OPEN_LANE_MIN_SPAN_M:
             continue
-        lateral = sorted(l for l, _ in group)[len(group)//2]
-        along = sorted(a for _, a in group)
-        runs, run = [], [along[0]]
-        for a, b in zip(along, along[1:]):
-            gap = max(OPEN_LINE_GAP_M, OPEN_LINE_GAP_SCALE*max(a*a, b*b)/max(abs(lateral), .3))
-            if b-a > gap:
-                runs.append(run)
-                run = []
-            run.append(b)
-        runs.append(run)
-        for run in runs:
-            if len(run) < OPEN_LINE_MIN_POINTS or run[-1]-run[0] < OPEN_LANE_MIN_SPAN_M:
+        lateral = rows[start+count//2][0]  # rows are sorted by lateral first
+        scale = max(abs(lateral), .3)
+        runs, first = [], 0
+        for a, b in sorted(wide):
+            if b-a > max(OPEN_LINE_GAP_M, OPEN_LINE_GAP_SCALE*max(a*a, b*b)/scale):
+                k = bisect_left(window, b)
+                runs.append((first, k-1))
+                first = k
+        runs.append((first, len(window)-1))
+        for i0, i1 in runs:
+            n = i1-i0+1
+            if n < OPEN_LINE_MIN_POINTS or window[i1]-window[i0] < OPEN_LANE_MIN_SPAN_M:
                 continue
-            line = {'lateral_m': lateral, 'along_m': [run[0], run[-1]], 'points': len(run), 'source': 'raw_returns'}
+            line = {'lateral_m': lateral, 'along_m': [window[i0], window[i1]], 'points': n, 'source': 'raw_returns'}
             same = [i for i, old in enumerate(lines) if abs(old['lateral_m']-lateral) <= OPEN_LINE_BAND_M
-                    and old['along_m'][0] <= run[-1] and run[0] <= old['along_m'][1]]
+                    and old['along_m'][0] <= window[i1] and window[i0] <= old['along_m'][1]]
             if not same:
                 lines.append(line)
-            elif len(run) > lines[same[0]]['points']:
+            elif n > lines[same[0]]['points']:
                 lines[same[0]] = line
     return lines
 
@@ -987,6 +1049,11 @@ class ManeuverSequence(TurnMotion):
         self._pause_stage_held = False
         # Route: current-scan proximity avoidance and steering inside waits.
         self._avoid = None
+        # Per-scan results reused by the 20 ms ticks of one scan (round 64 car
+        # run: repeated per-tick work held the control lock long enough to
+        # starve the heartbeat). Keyed by seq/at_ms and the ranges' content.
+        self._proximity_cache = None
+        self._axis_cache = None
         self._exit_release_cache = None
         self._path_cache = None
         self.path_evidence = None
@@ -2168,11 +2235,32 @@ class ManeuverSequence(TurnMotion):
         # wall. No new-width target is adopted. Current body gates stay outside.
         return self.phase == 'drive'
 
+    def _scan_axis_lines(self, scan, heading):
+        """_axis_lines of this scan's returns, once per scan and heading (read-only)."""
+        ranges = scan['ranges']
+        key = (scan.get('seq'), scan.get('at_ms'))
+        cache = self._axis_cache
+        if cache is None or cache[0] != key or cache[1] != ranges:
+            cache = self._axis_cache = (key, list(ranges), {})
+        lines = cache[2].get(heading)
+        if lines is None:
+            lines = cache[2][heading] = _axis_lines(_scan_points(ranges, OPEN_LINE_REACH_M), heading)
+        return lines
+
     def _route_proximity(self, scan):
         """Nearest known return within ROUTE_AVOID_GAP_M of the body box, or None."""
         ranges = scan.get('ranges') if isinstance(scan, dict) else None
         if not isinstance(ranges, list) or len(ranges) != 360:
             return None
+        key = (scan.get('seq'), scan.get('at_ms'), self.first_pass_evidence is None)
+        cache = self._proximity_cache
+        if cache is not None and cache[0] == key and cache[1] == ranges:
+            return cache[2]
+        result = self._route_proximity_scan(scan, ranges)
+        self._proximity_cache = (key, list(ranges), result)
+        return result
+
+    def _route_proximity_scan(self, scan, ranges):
         best = None
         for index, distance in enumerate(ranges):
             if not _number(distance) or not .02 <= distance <= 12:
@@ -2539,7 +2627,9 @@ class ManeuverSequence(TurnMotion):
             finish_evidence=copy.deepcopy(self.finish_evidence),
             second_acquisition_reason=self.second_acquisition_reason,
             role_distinct_evidence=copy.deepcopy(self.role_distinct_evidence),
-            route_events=copy.deepcopy(self.route_events),
+            # Each event is a deep snapshot taken once (_route_event) and never
+            # changed; re-copying them every 20 ms tick cost ~.2 ms (Mac).
+            route_events=dict(self.route_events),
             two_target_observed_pass_complete=self.second_pass_evidence is not None,
             route_right_output_authorized=(self.continue_route and self.phase == 'drive'
                 and not self.quality_resume_pending and self._route_center_ack is not None
@@ -3024,7 +3114,7 @@ class ManeuverSequence(TurnMotion):
             x, y = target['point_left_m']
             if e1[0]*x+e1[1]*y < OPEN_FIRST_MIN_ALONG_M:
                 return None  # behind along the start axis: not the first support
-            if (_on_board_run((x, y), _axis_lines(_scan_points(scan['ranges'], OPEN_LINE_REACH_M), heading), heading)
+            if (_on_board_run((x, y), self._scan_axis_lines(scan, heading), heading)
                     or _support_depth(scan['ranges'], target.get('support_bins', [])) > OPEN_SUPPORT_MAX_DEPTH_M):
                 return None  # a board's end or grazing face, not a support
         if self.first_approach is not None and self.first_approach.get('track_id') != target['track_id']:
@@ -3186,7 +3276,7 @@ class ManeuverSequence(TurnMotion):
         first_along = (None if not isinstance(first_center, list) or len(first_center) != 2
                        else e1[0]*first_center[0]+e1[1]*first_center[1])
         ahead = []
-        boards = _axis_lines(_scan_points(scan['ranges'], OPEN_LINE_REACH_M), heading)
+        boards = self._scan_axis_lines(scan, heading)
         for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True,
                                   min_points=SECOND_ACQUISITION_MIN_POINTS):
             x, y = target['point_left_m']
@@ -3248,7 +3338,7 @@ class ManeuverSequence(TurnMotion):
     def _open_channel_target(self, scan, heading):
         """Pursuit point at the start divider's open end on the channel line, or None."""
         reverse = heading-math.pi
-        lines = [line for line in _axis_lines(_scan_points(scan['ranges'], OPEN_LINE_REACH_M), reverse)
+        lines = [line for line in self._scan_axis_lines(scan, reverse)
                  if SIDE_BODY_EXTENT_M < line['lateral_m'] <= OPEN_CHANNEL_MAX_LATERAL_M
                  and line['along_m'][0] > FRONT_BODY_EXTENT_M]
         if not lines:
@@ -3375,7 +3465,7 @@ class ManeuverSequence(TurnMotion):
             ends = [(p['x_m'], p['y_m']) for p in (wall['support_start_left_m'], wall['support_end_left_m'])]
             walls.append({'lateral_m': sum(n[0]*p[0]+n[1]*p[1] for p in ends)/2,
                           'along_m': sorted(u[0]*p[0]+u[1]*p[1] for p in ends), 'source': 'native_wall'})
-        walls += _axis_lines(_scan_points(scan['ranges'], OPEN_LINE_REACH_M), heading)
+        walls += self._scan_axis_lines(scan, heading)
         outer = max((w for w in walls if w['lateral_m'] > SIDE_BODY_EXTENT_M and w['along_m'][1] > FRONT_BODY_EXTENT_M),
                     key=lambda w: w['lateral_m'], default=None)
         if outer is None:
