@@ -21599,6 +21599,27 @@
     "risks": [
       "If the car is slower than ~35x Mac under load, second-loop fresh ticks (2.7 ms Mac) may still approach the .12 s gap; tick timing is in every run report (max_tick_compute_s)",
       "vision-shadow (~180% CPU) still runs during trials"
-    ]
+    ],
+    "build_and_deploy_attempt": {
+      "built": true,
+      "builder": "build-next.py claude-turn64 claude-turn65 65 (once)",
+      "source_commit": "5ff2f71fe5c6b0939a696d6fe99ae2195792f96c",
+      "archive_sha256": "7a5024d04ce076b2c7d4b8b15b22dc385e32d7a1231d63691709dc84bce72c56",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn65-20261017-193212",
+      "car_bench_20261017": "pure-Python benchmark on the car (round 64 installed _axis_lines, 52 simulated inputs): 110-111 ms/call vs Mac 2.94 ms (38x); plain loop 326-330 ms vs 11.2 ms (29x); load average ~9 (vision-shadow running)",
+      "pre_deploy": "camera had re-enumerated after boot (server held the vanished /dev/video20; healthy=false, camera only); console service restarted once while locked to reopen it; then six fresh locked samples, 15 hashes = turn64, turn_ready=true",
+      "deploy_result": "refused at preflight before any change: RuntimeError active launcher changed since audit (the derived deploy script still audited the steering300 launcher hash 8193cdd...; round 64 installed 3ff27096...). No backup, no service stop, installed files still turn64 (after65-refused-fresh.json). Stage consumed; not re-run.",
+      "deployed": false
+    }
+  },
+  "turn66_compute_budget_redeploy_20261017": {
+    "date": "2026-10-17",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "runtime_code": "identical to turn65_compute_budget_20261017 (5ff2f71 runtime files); new label only because claude-turn65 deploy script was consumed",
+    "builder_fix": "build-next.py now rewrites the deploy script launcher audit hash to the baseline installed launcher (old manifest support/start-console.py)",
+    "expected_car_ticks": "with the measured 29-38x ratio: start lane / transfer / light lane fresh ticks ~60-75 ms; second-loop approach fresh ticks up to ~2.7 ms Mac (~80-105 ms) may still trip the .12 s gap; real per-stage timing will come from this run",
+    "helper": "derived from left-cone-trial-once-65.py with only the evidence directory renamed (--max-seconds 40, observer 58 s)"
   }
 }
