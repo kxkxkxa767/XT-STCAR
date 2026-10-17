@@ -21729,8 +21729,8 @@
     "date": "2026-10-17",
     "user_request": "为什么又停下来了",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "change": "autonomy_live.MANEUVER_TOLERABLE_FRONT_UNKNOWN 8 -> 15 (route tolerance only; base front_sparse thresholds 6/3, the 5-bin run limit, the bridge rule and the body gate unchanged)",
     "rationale": "An object hides only inside one null run; a 5-bin run cannot hide a .2 m cone closer than ~2.3 m (3 bins: ~3.8 m), and it reappears as the car approaches. The total count only detects a degraded sensor. Recorded scans: old narrow course open unknown mostly 0-3; open course (rounds 64/66/67) p50 2-3, p95 5-7, max 7 saved, 9 in the failing scan, runs <=3. 15 = a quarter of the 61-bin window.",
     "validation": {
@@ -21742,6 +21742,39 @@
     "risks": [
       "Relaxation of a quality total (user allows moderate relaxation with data); run limit unchanged",
       "Light-entry dropout sensitivity (one simulated contact)"
-    ]
+    ],
+    "deployment": {
+      "source_commit": "095bcbc347c6b9493a8db61b67e6e91898c3af43",
+      "archive_sha256": "000c1bd779c34cdd8c0a7785cb24f248aae10cccc5d58b7a5202595c6cf9ec6c",
+      "deploy_script_sha256": "97791bb344c271443c8f30e433e2944241524abf6830e4b88cac4167afb2649e",
+      "helper_sha256": "a56a7b07628510b0021d6599b50a5f7fd26837a2505642e78e1b2d8b42d6b388",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn68-20261017-200125",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn68-20261017-200125",
+      "installed_sha256": {
+        "app.js": "4afe4cf1036dd8d8983358715a2085ef43ef80fb5cc36808e8c08373ccb5b817",
+        "autonomy-control.py": "a6b259f97e0a77bc8800aac5915be8a0a8292c4c55d94de9d6138110e271ef9c",
+        "autonomy_live.py": "ba5f45ea095012262ac42fdf61876483d4c74d8af1d8d4848661f88f7baf8214",
+        "coast_motion.py": "35ea9a70141d844122101140d70e25bf69138710370fe3f448729b00b7659bd4",
+        "compact_target.py": "384fa66a5f9a40bb83c7baa59f0860cbb08f0b0efa09c123f2e87d7d40963240",
+        "index.html": "086a21a4ae4170630bc77cb1c6c3a3284545a51ca3b81ca1365a682aff118700",
+        "maneuver_sequence.py": "40310497f0e4a3ff0fadf974fe21bcde58308244aa12afbda3e95c7b67fc9c05",
+        "server.py": "7cacf5160b1a31729dde16c59027e5ed8f892320f453ede026b474e7bb34a969",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "75ecd8855da6385b18baad32c79b9d942ee8cab5c3fa9abc526499d7650e07b9",
+        "vehicle-bridge": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+        "steer_calibration.py": "f95cd7348f2e322ccac2c0747d77d1af9ab891a83231835d7e83204943c6cbf3",
+        "start-console.py": "3ff2709624edb2363286a698998f6200a6249e9a6509a15e8d5337ffe54f65fc"
+      }
+    },
+    "turn68_actual": {
+      "user_placement": "已经摆好",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-68 (7 OK); work/round65-compute-20261017/t68-map.png",
+      "result": "turn_perception_unavailable in start_lane after ~2.3 s of drive (44 drive ticks, 1.42 m, <=.75 m/s); start-lane allowance used twice; max tick .048 s, max gap .069 s",
+      "cause": "scan 574: 12 consecutive unbridged front bins 6..17 (right front) -> run limit 5 exceeded (correctly not tolerated). Matches the long-known right-front 5-17 deg empty-return band; pre-run static scans also lose bin 4 almost always and 5-16 sporadically. Suspected obstruction/dirty window at the lidar right front (like the left-rear obstruction found today); user asked to inspect.",
+      "post_lock_veer": "last commands nominal 1490 -> physical 1430 (play compensation); lock sends physical 1500 so the wheels stay right of centre (play); the ESC lag kept the 1560 push from 3.80 s, speed rose .68 -> 1.15 m/s after the lock; coasted ~1.4 m curving at about -.4 /m to heading -12.7 deg (car at ~2.8 m)",
+      "start_lane_weave": "heading -3 .. +7.8 deg: start-lane corrections nominal 1490-1520 become physical 1430-1585 because every direction change is compensated as a full 50 PWM play crossing (SteerOutput) -> limit cycle near centre; to be fixed (small corrections near centre should not cross the full play)"
+    }
   }
 }
