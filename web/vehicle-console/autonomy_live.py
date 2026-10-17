@@ -38,7 +38,13 @@ MANEUVER_TOLERABLE_MAX_NULL_RUN = 12
 # run where they are seen. Trial50: a 4-bin run beside a wall edge in the
 # recurring 5-17 deg right dropout band started the wait that ended the run.
 MANEUVER_TOLERABLE_FRONT_RUN = FRONT_BRIDGE_MAX_BINS
-MANEUVER_TOLERABLE_FRONT_UNKNOWN = 8
+# Round 67 car run (2026-10-17): in a .93 m lane with a 7 m view, a scan had 9
+# unbridged front bins in runs of at most 3 (grazing side board, far end wall,
+# depth edges; recorded open-course scans p50 2-3, p95 5-7). An object hides
+# only inside one run, so the run limit (5 bins: a .2 m cone only beyond
+# ~2.3 m) is what bounds hidden obstacles; the total only flags a degraded
+# sensor, now at a quarter of the 61-bin window (was 8).
+MANEUVER_TOLERABLE_FRONT_UNKNOWN = 15
 CORRIDOR_HALF_WIDTH_M = .30
 CORRIDOR_LOOKAHEAD_M = 1.0
 # Operator's revised rough measurement, explicitly resolved to 28 cm total

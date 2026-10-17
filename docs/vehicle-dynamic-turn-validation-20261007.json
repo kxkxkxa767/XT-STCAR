@@ -21670,8 +21670,8 @@
     "date": "2026-10-17",
     "user_request": "为什么刚启动就停了",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "change": {
       "server.turn_route_quality_scope": "new scope start_lane_current_geometry: open-course entry, start_lane, session and motion in drive, fresh scan, and ManeuverSequence.start_lane_quality_geometry(scan)",
       "ManeuverSequence.start_lane_quality_geometry": "read-only: this scan has exactly one valid forward native lane (same uniqueness/merge rule as the start-lane admission, now _forward_lanes) or its native walls would measure the compass heading (WallCompass.measurable, the same votes/gate/support as update, no state change)",
@@ -21688,6 +21688,60 @@
     "risks": [
       "Light-entry sensitivity to dropouts (one simulated board contact at P .05)",
       "Second-loop fresh ticks remain the slowest (Mac ~2.7 ms; car ratio 29-38x)"
+    ],
+    "deployment": {
+      "source_commit": "21998f3f9e30b610588190733a857b1de79bd336",
+      "archive_sha256": "4402b4177ecaf4aba7dabebd54dcb8fca0aa1fa7073dfd2074ab2ea776fa3836",
+      "deploy_script_sha256": "301b739189930d8adc919c935ebf172ab016af7b9094effdf78ebf728cedbe49",
+      "helper_sha256": "db21e5ca87a594c5e6f733726ff8d2c8d14b07b765b35b04ef70d90435c06f91",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn67-20261017-195145",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn67-20261017-195145",
+      "installed_sha256": {
+        "app.js": "4afe4cf1036dd8d8983358715a2085ef43ef80fb5cc36808e8c08373ccb5b817",
+        "autonomy-control.py": "a6b259f97e0a77bc8800aac5915be8a0a8292c4c55d94de9d6138110e271ef9c",
+        "autonomy_live.py": "881886bcb25a69ce4819c623d08870fbff4887cbb5db2d847794e0ac2eaf295a",
+        "coast_motion.py": "35ea9a70141d844122101140d70e25bf69138710370fe3f448729b00b7659bd4",
+        "compact_target.py": "384fa66a5f9a40bb83c7baa59f0860cbb08f0b0efa09c123f2e87d7d40963240",
+        "index.html": "086a21a4ae4170630bc77cb1c6c3a3284545a51ca3b81ca1365a682aff118700",
+        "maneuver_sequence.py": "40310497f0e4a3ff0fadf974fe21bcde58308244aa12afbda3e95c7b67fc9c05",
+        "server.py": "7cacf5160b1a31729dde16c59027e5ed8f892320f453ede026b474e7bb34a969",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "75ecd8855da6385b18baad32c79b9d942ee8cab5c3fa9abc526499d7650e07b9",
+        "vehicle-bridge": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+        "steer_calibration.py": "f95cd7348f2e322ccac2c0747d77d1af9ab891a83231835d7e83204943c6cbf3",
+        "start-console.py": "3ff2709624edb2363286a698998f6200a6249e9a6509a15e8d5337ffe54f65fc"
+      }
+    },
+    "turn67_actual": {
+      "user_placement": "已摆好",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-67 (7 OK); t67-map.png",
+      "result": "turn_perception_unavailable in start_lane after ~1.0 s of drive (drive_ticks 19); start-lane allowance used 3 times (front_sparse_tolerated_count 3); moved ~.6 m, heading -10 deg at rest, no contact",
+      "timing": {
+        "max_tick_compute_s": 0.03882466600020962,
+        "max_actual_gap_s": 0.05986591600003521
+      },
+      "cause": "scan 1114 (not saved): 9 unbridged front bins (-16..-14, -12..-10, 2, 8, 9), largest run 3: base front_sparse (>6) and over the tolerable total (8). Holes: grazing right board at 10-13 deg (adjacent ranges differ ~.3 m so never bridged), far end wall 7-8.6 m, depth edges (divider open end / far wall, far wall / right board). Native walls only span ~1 m near the car, so they cannot explain the holes."
+    }
+  },
+  "turn68_front_unknown_total_20261017": {
+    "date": "2026-10-17",
+    "user_request": "为什么又停下来了",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": "autonomy_live.MANEUVER_TOLERABLE_FRONT_UNKNOWN 8 -> 15 (route tolerance only; base front_sparse thresholds 6/3, the 5-bin run limit, the bridge rule and the body gate unchanged)",
+    "rationale": "An object hides only inside one null run; a 5-bin run cannot hide a .2 m cone closer than ~2.3 m (3 bins: ~3.8 m), and it reappears as the car approaches. The total count only detects a degraded sensor. Recorded scans: old narrow course open unknown mostly 0-3; open course (rounds 64/66/67) p50 2-3, p95 5-7, max 7 saved, 9 in the failing scan, runs <=3. 15 = a quarter of the 61-bin window.",
+    "validation": {
+      "python_full": "752 OK (2 expected failures), python-r68.log",
+      "new_test": "ScatteredFrontGaps in test_route_66_start_lane_quality (round-67 pattern tolerable; one 6-bin run or 16 scattered bins not)",
+      "sim_identical_default": "20 runs byte-identical (sim-compare-r68.txt)",
+      "dropout_matrix": "unchanged 11/12 finish (dropout-matrix-r68.txt)"
+    },
+    "risks": [
+      "Relaxation of a quality total (user allows moderate relaxation with data); run limit unchanged",
+      "Light-entry dropout sensitivity (one simulated contact)"
     ]
   }
 }

@@ -61,6 +61,34 @@ class StartLaneEvidence(unittest.TestCase):
         self.assertFalse(motion.start_lane_quality_geometry(scan))
 
 
+class ScatteredFrontGaps(unittest.TestCase):
+    """Round 67: 9 unbridged front bins in runs <=3 (grazing board, far wall)."""
+    def clearance(self, nulls):
+        import autonomy_live
+        ranges = [3.]*360
+        for i in nulls:
+            ranges[i % 360] = None
+        left = None
+        for i in range(-31, 32):  # a 1 m range step across every run: never a bridged surface
+            if ranges[i % 360] is None:
+                continue
+            if left is not None and ranges[(i-1) % 360] is None:
+                ranges[i % 360] = ranges[left % 360]+1.
+            left = i
+        scan = {'seq': 1, 'at_ms': 100, 'frame_id': 'lidar_origin_coarse_body_heading', 'ranges': ranges}
+        return autonomy_live.probe_clearance(scan, {'camera': .01, 'lidar': .01, 'control': .01},
+                                             camera_required=False, clearance_profile='maneuver')
+
+    def test_scattered_short_runs_are_tolerable_but_a_long_run_or_many_are_not(self):
+        nine = [-16, -15, -14, -12, -11, -10, 2, 8, 9]  # scan 1114 of round 67
+        current = self.clearance(nine)
+        self.assertIn('front_sparse', current['quality_issues'])
+        self.assertTrue(current['front_sparse_tolerable'])
+        self.assertFalse(self.clearance(list(range(-26, -20)))['front_sparse_tolerable'])  # one 6-bin run
+        sixteen = [-29, -28, -26, -25, -23, -22, -20, -19, -17, -16, -14, -13, -11, -10, 10, 12]
+        self.assertFalse(self.clearance(sixteen)['front_sparse_tolerable'])
+
+
 @unittest.skipUnless(TOOL.exists(), 'tools/scan-geometry not built')
 class StartLaneDropoutClosedLoop(unittest.TestCase):
     @classmethod
