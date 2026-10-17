@@ -21465,7 +21465,7 @@
     "date": "2026-10-17",
     "user_request": "我放到赛道上了，你测试吧",
     "implemented": true,
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "route_source": "5967c25 measured-car route (layout_3p2_route_redesign_20261012.measured_car_route_20261016); no route code change in this key",
     "pre_build_validation": {
@@ -21493,6 +21493,54 @@
       "First real run of the measured-car route; light lane / finish stop untested on the car",
       "Steering table and play are fixed tile-floor calibrations (no online adaptation)",
       "0.12 s control-gap hard stop unchanged"
-    ]
+    ],
+    "deployment": {
+      "source_commit": "05426b3f24de20f1dad26f067ae2d9e7f0ae103c",
+      "archive_sha256": "9971c8b09b443d6e27b711697b41af8dc6e8c57cffe17da8a9d65d8308ee6b9f",
+      "deploy_script_sha256": "c5f3b887f498451d18801cab8418d5318bc0b78b700f980d7e1a07e730f84f36",
+      "helper_sha256": "3aca6034a8e0b0ec1aeba69dbb0c0793f427e3f517c155079dcbbf26a4e05208",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn64-20261017-185651",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn64-20261017-185651",
+      "runtime_changed": [
+        "payload/app.js",
+        "payload/coast_motion.py",
+        "payload/compact_target.py",
+        "payload/maneuver_sequence.py",
+        "payload/server.py",
+        "payload/steer_calibration.py"
+      ],
+      "installed_sha256": {
+        "app.js": "4afe4cf1036dd8d8983358715a2085ef43ef80fb5cc36808e8c08373ccb5b817",
+        "autonomy-control.py": "a6b259f97e0a77bc8800aac5915be8a0a8292c4c55d94de9d6138110e271ef9c",
+        "autonomy_live.py": "381753bd6a0c5547b56331a48a8745a6b12997d1806db95a862703a7d33224ba",
+        "coast_motion.py": "35ea9a70141d844122101140d70e25bf69138710370fe3f448729b00b7659bd4",
+        "compact_target.py": "384fa66a5f9a40bb83c7baa59f0860cbb08f0b0efa09c123f2e87d7d40963240",
+        "index.html": "086a21a4ae4170630bc77cb1c6c3a3284545a51ca3b81ca1365a682aff118700",
+        "maneuver_sequence.py": "a08498210f5be96c292701ac23292637584f087ed0755b3c22dfd5ed8fc8923c",
+        "server.py": "1c3b6c6bb5f2ab92fa45cdd2553e9efb866c3ced745561a8256e235f895437cb",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "75ecd8855da6385b18baad32c79b9d942ee8cab5c3fa9abc526499d7650e07b9",
+        "vehicle-bridge": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+        "steer_calibration.py": "f95cd7348f2e322ccac2c0747d77d1af9ab891a83231835d7e83204943c6cbf3",
+        "start-console.py": "3ff2709624edb2363286a698998f6200a6249e9a6509a15e8d5337ffe54f65fc"
+      },
+      "serial_owners": {
+        "/dev/car": 10801,
+        "/dev/laser": 10805
+      },
+      "runtime_settings_preserved": {
+        "forward": 1570,
+        "reverse": 1356,
+        "left": 1650,
+        "right": 1350
+      },
+      "settings_note": "manual-drive settings read at preflight were 1570/1356/1650/1350 (changed from the web page after the 18:50 read-only check; not used by turn-cone) and were restored unchanged",
+      "access_token_preserved": true,
+      "launch_command_preserved": true,
+      "arm_or_drive_requests": 0,
+      "post_deploy_fresh": "after64-deploy-fresh.json: six fresh locked samples, 15 installed hashes match, continue_route preview true; turn_ready=false (left_corridor_unknown / turn_sensor_unavailable) because the rear-left null band (published bins 215-230, raw 211-225 with walls at .52-.73 m on both sides of the gap) still empties all bridge geometry"
+    }
   }
 }
