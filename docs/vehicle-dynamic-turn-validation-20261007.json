@@ -21782,9 +21782,15 @@
     "user_request": "你给我段指令我给gpt，让他来吧，后来让他把结果再告诉你",
     "car_state": "round 68 installed (claude-turn68, 095bcbc runtime; 15 hashes); car locked ~2.8 m ahead of the start, heading about -13 deg; SSH socket was live",
     "open_tasks": [
-      "start-lane weave: refit the near-centre steering response from rounds 64/66/67/68 (trial-map), make course-sim reproduce +-8 deg, then fix SteerOutput / start-lane law without track specifics",
+      "start-lane weave (user direction, replaces the refit plan): in lane-wall feedback (start_lane lane_walls / compass_heading_hold, light_lane) send the small correction directly as the physical command (identity, no STEER_TABLE and no play compensation), keep the SteerOutput wheel estimate updated from what was sent, keep play compensation for the loops; correction proportional to offset/heading with heading-rate lead of about the measured .3 s lag, small cap, existing hysteresis and release-before-reverse; centre ACK before right unchanged; prove in course-sim across play 0-70, gain x0.5-x3 and delay .15-.35 that the weave shrinks and no stage regresses",
       "front_sparse in lanes: rays of a null run that hit the current measured native lane side wall within ~6 m count as wall surface; rays that do not stay unknown; run limit 5, base gate 6/3 and the body gate unchanged",
       "light-entry dropout sensitivity (course-sim --edge-dropout .05 user8 seed 0: board contact at 19.5 s)"
-    ]
+    ],
+    "user_direction_start_lane": {
+      "quote": "改成直道的时候往左偏就向右修正，往右偏就向左修正，而不是用模型拟合这辆车会不会适应性强点",
+      "finding": "CorridorSteering already corrects by sign (offset/heading feedback); the weave comes from the SteerOutput model layer between it and the bridge. Round 68 feedback: nominal 1510/1520 (left) became physical 1567/1585; heading -3.7 -> +5.5 deg from 3.13 to 3.65 s; then nominal 1512 (still left) became physical 1471 (right), 1501 -> 1452, 1500 -> 1450, 1490 -> 1430, because the open-loop wheel estimate assumed +-50 play the wheels did not have near centre. A model error can flip the correction direction; closed-loop feedback on the lidar heading cannot, gain or play errors only change convergence speed.",
+      "caveat": "a fixed-size bang-bang correction would still limit-cycle with the ~.3 s steering lag and .45 s ESC lag, so the correction stays proportional, small, and leads by the heading rate; loops still need the table and play compensation to reach 1.2-1.6 /m",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-68/feedback.jsonl (status.control.physical_servo, start_lane_feedback.walls)"
+    }
   }
 }
