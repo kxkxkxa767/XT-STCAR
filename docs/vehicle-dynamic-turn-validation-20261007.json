@@ -21460,5 +21460,39 @@
       "protected_teammate_files_untouched": true,
       "credentials_or_artifacts_committed": false
     }
+  },
+  "turn64_measured_car_route_20261017": {
+    "date": "2026-10-17",
+    "user_request": "我放到赛道上了，你测试吧",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "route_source": "5967c25 measured-car route (layout_3p2_route_redesign_20261012.measured_car_route_20261016); no route code change in this key",
+    "pre_build_validation": {
+      "python_full_suite": "Ran 738, OK (expected failures=2) on HEAD 5967c25",
+      "rust_changed_since_steering300": false
+    },
+    "build": {
+      "builder": "work/vehicle-dynamic-deploy-20261008/build-turn64.py (new, once)",
+      "bridge_baseline": "codex-steering300 bundle afff7a9 (vehicle-bridge f39a7930...), Rust sources unchanged since afff7a9 so the same ELF is reused",
+      "payload": "9 Python modules incl. new steer_calibration.py, launcher, front-end, configs from HEAD (git show == working tree); 15 install hashes",
+      "deploy_script": "derived from deploy-codex-steering300.py: new ARCHIVE_SHA/SOURCE, OLD=steering300 installed hashes, steer_calibration.py added to the archive list; same backup/rollback/neutral checks",
+      "helper": "derived from left-cone-trial-once-62.py: evidence dir left-cone-trial-<date>-64, --max-seconds 24->40, observer limit 34->58 s; nothing else",
+      "fresh_tools": "read-fresh-route-64.py / validate-fresh-64.py (15 hashes; readiness required only after install)"
+    },
+    "pre_deploy_readonly_20261017": {
+      "evidence": "work/vehicle-dynamic-deploy-20261008/before64-fresh.json",
+      "installed": "14 hashes equal the steering300 manifest; steer_calibration.py absent; settings 1550/1450/1650/1350; locked 1500/1500",
+      "turn_ready": false,
+      "turn_rejection": "probe_obstacle_close_body",
+      "close_body": "start-zone back wall at x=-0.24 m (body rear -0.18): nearest bin160 net 0.049 m < 0.08 m gate; car must move forward ~10 cm",
+      "lidar_rear_left_null_band": "bins ~210-232 (clockwise from forward; left-rear 30-50 deg off the tail) null in every scan since the 10-16 steering repair (all 13 steer-arc-20261016 runs and today) and never on 10-13 or in round 62; today the back wall lies there at 0.30-0.38 m yet the bins stay null -> body-fixed occlusion or lidar disturbance. The bridge validate_full_scan requires max missing arc 5 deg, so wall_candidates, corridor_candidates, left_turn_goal and front_boundary are empty on every scan and the route cannot start (start_lane needs a native lane). User asked to inspect/remove the obstruction; no software masking of bins.",
+      "lane_seen": "raw returns: right wall y=-0.47, left wall y=+0.44 (about 0.91 m lane), 7.98 m clear ahead"
+    },
+    "risks": [
+      "First real run of the measured-car route; light lane / finish stop untested on the car",
+      "Steering table and play are fixed tile-floor calibrations (no online adaptation)",
+      "0.12 s control-gap hard stop unchanged"
+    ]
   }
 }
