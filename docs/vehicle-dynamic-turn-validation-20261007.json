@@ -21615,11 +21615,79 @@
   "turn66_compute_budget_redeploy_20261017": {
     "date": "2026-10-17",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "runtime_code": "identical to turn65_compute_budget_20261017 (5ff2f71 runtime files); new label only because claude-turn65 deploy script was consumed",
     "builder_fix": "build-next.py now rewrites the deploy script launcher audit hash to the baseline installed launcher (old manifest support/start-console.py)",
     "expected_car_ticks": "with the measured 29-38x ratio: start lane / transfer / light lane fresh ticks ~60-75 ms; second-loop approach fresh ticks up to ~2.7 ms Mac (~80-105 ms) may still trip the .12 s gap; real per-stage timing will come from this run",
-    "helper": "derived from left-cone-trial-once-65.py with only the evidence directory renamed (--max-seconds 40, observer 58 s)"
+    "helper": "derived from left-cone-trial-once-65.py with only the evidence directory renamed (--max-seconds 40, observer 58 s)",
+    "deployment": {
+      "source_commit": "f0dbcc73b76af44a710f0df054d826edecf4d6fe",
+      "archive_sha256": "c22135a7746c84a202ae46826e3efc503a9c1cc0db72c03b8543bb5cd5be0b47",
+      "deploy_script_sha256": "786e803dc48ebc35dc3c5aa810b12760f037cedea9c6042c68ad140517a59ef4",
+      "helper_sha256": "5cc8f4e753470fe00cab7b990755a59bfb609f79b0881468730acdd921ba0ba9",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn66-20261017-194010",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn66-20261017-194010",
+      "installed_sha256": {
+        "app.js": "4afe4cf1036dd8d8983358715a2085ef43ef80fb5cc36808e8c08373ccb5b817",
+        "autonomy-control.py": "a6b259f97e0a77bc8800aac5915be8a0a8292c4c55d94de9d6138110e271ef9c",
+        "autonomy_live.py": "881886bcb25a69ce4819c623d08870fbff4887cbb5db2d847794e0ac2eaf295a",
+        "coast_motion.py": "35ea9a70141d844122101140d70e25bf69138710370fe3f448729b00b7659bd4",
+        "compact_target.py": "384fa66a5f9a40bb83c7baa59f0860cbb08f0b0efa09c123f2e87d7d40963240",
+        "index.html": "086a21a4ae4170630bc77cb1c6c3a3284545a51ca3b81ca1365a682aff118700",
+        "maneuver_sequence.py": "460c6f18fce259aadcce2918de3ee2accb743f98d22cdc33bae11adfd0321eba",
+        "server.py": "31325d82a81107d3113038e53b613fc9f5b13507c398aa8bfd37c1267027a334",
+        "stop_goal.py": "58e1d626257443f2ed39d545369899af9b431641320cc2d83deb90fc7fa44a7f",
+        "style.css": "1a596a3364d83976bfbac111de629ee3418320872b950e3c4201064d52769fe2",
+        "trial-goal-turn-exit-example.json": "c5d880ea327ba5843e453b565fee91b87126785c70ef11090c2ce075fba22c92",
+        "turn_motion.py": "75ecd8855da6385b18baad32c79b9d942ee8cab5c3fa9abc526499d7650e07b9",
+        "vehicle-bridge": "f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498",
+        "steer_calibration.py": "f95cd7348f2e322ccac2c0747d77d1af9ab891a83231835d7e83204943c6cbf3",
+        "start-console.py": "3ff2709624edb2363286a698998f6200a6249e9a6509a15e8d5337ffe54f65fc"
+      },
+      "runtime_settings_preserved": {
+        "forward": 1550,
+        "reverse": 1450,
+        "left": 1650,
+        "right": 1350
+      },
+      "post_deploy_fresh": "pre66-run-fresh.json: six fresh locked, 15 hashes, turn_ready=true; lane .933 m, offset +.052 m, heading -1.0 deg, rear wall .51 m"
+    },
+    "turn66_actual": {
+      "user_placement": "已经连上了，车也摆好了",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-66 (7 files sha256 OK); trial66-stdout.json; work/round65-compute-20261017/t66-map.png",
+      "result": "turn_perception_unavailable in start_lane after ~.4 s of drive (drive_ticks 8); moved .19 m, heading -.9 deg, no contact",
+      "timing": {
+        "max_tick_compute_s": 0.03200575000005301,
+        "max_actual_gap_s": 0.05250262499998826,
+        "max_lock_wait_s": 0.000947042000007059,
+        "note": "round 65 speedups + LAN pause: max tick .032 s (round 64 .068 s before its .242 s tick), max gap .053 s"
+      },
+      "cause": "scan 392 (not saved by the observer): front_sparse, open unknown bins -11..-7 (5 bins, the edge between the divider open end and the end wall ~7.3 m; static scans also dropped 1-2 bins there). The bounded allowance (open gap <=5, unknown <=8) was granted only after the handover or in a started left turn with current geometry, not in the start lane, so the server halted."
+    }
+  },
+  "turn67_start_lane_quality_20261017": {
+    "date": "2026-10-17",
+    "user_request": "为什么刚启动就停了",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": {
+      "server.turn_route_quality_scope": "new scope start_lane_current_geometry: open-course entry, start_lane, session and motion in drive, fresh scan, and ManeuverSequence.start_lane_quality_geometry(scan)",
+      "ManeuverSequence.start_lane_quality_geometry": "read-only: this scan has exactly one valid forward native lane (same uniqueness/merge rule as the start-lane admission, now _forward_lanes) or its native walls would measure the compass heading (WallCompass.measurable, the same votes/gate/support as update, no state change)",
+      "unchanged": "the allowance itself (open gap <=5 bins, unknown <=8; scan_incomplete >=324 valid, null run <=12), body gate 8 cm, all other gates; larger gaps still stop"
+    },
+    "simulator": "course-sim --edge-dropout P (run(edge_dropout=)): at each depth step >1 m with the far side >2 m, chance P of losing 1-5 returns on the far side; separate RNG; default 0 leaves every existing simulation byte-identical",
+    "validation": {
+      "python_full": "751 OK (2 expected failures) work/round65-compute-20261017/python-r66.log",
+      "new_tests": "tests/test_route_66_start_lane_quality.py (5; closed loop fails without the allowance)",
+      "sim_identical_default": "20 runs byte-identical vs the round 64 source (sim-compare-r66.txt)",
+      "route_replay_identical": "51, 52, 64",
+      "dropout_matrix": "work/round65-compute-20261017/dropout-matrix.txt: user8/doc8x4/wide8x6 x seeds 0-1 x P .05/.1: without the allowance 10/12 stop in the start lane at .4-4.8 s (turn_perception_unavailable), with it 11/12 finish; user8 seed0 P.05 touches a board at 19.5 s at the light entry with or without it (separate dropout sensitivity, not addressed)"
+    },
+    "risks": [
+      "Light-entry sensitivity to dropouts (one simulated board contact at P .05)",
+      "Second-loop fresh ticks remain the slowest (Mac ~2.7 ms; car ratio 29-38x)"
+    ]
   }
 }

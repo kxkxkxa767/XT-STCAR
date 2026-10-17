@@ -547,14 +547,7 @@ class WallCompass:
         if self.at_s is not None and at <= self.at_s:
             return self.heading
         predicted = 0. if self.heading is None else self.heading+self.rate*min(at-self.at_s, COMPASS_MAX_PREDICT_S)
-        votes = []
-        for wall in scan.get('wall_candidates') or []:
-            if (not _valid_wall(wall) or wall['support_span_m'] < COMPASS_MIN_SPAN_M
-                    or wall['fit_error_m'] > COMPASS_MAX_FIT_M or wall['points'] < COMPASS_MIN_POINTS):
-                continue
-            residual = _wrap90(predicted+wall['heading_left_rad'])
-            if abs(residual) <= COMPASS_GATE_RAD:
-                votes.append((residual, wall['support_span_m']))
+        votes = self._votes(scan, predicted)
         support = sum(span for _, span in votes)
         median = None
         if support >= COMPASS_MIN_SUPPORT_M:
@@ -581,6 +574,25 @@ class WallCompass:
                          'median_residual_rad': median, 'measured': median is not None,
                          'basis': 'native_wall_directions_mod_90_vs_start_lane_axis'}
         return self.heading
+
+    @staticmethod
+    def _votes(scan, predicted):
+        votes = []
+        for wall in scan.get('wall_candidates') or []:
+            if (not _valid_wall(wall) or wall['support_span_m'] < COMPASS_MIN_SPAN_M
+                    or wall['fit_error_m'] > COMPASS_MAX_FIT_M or wall['points'] < COMPASS_MIN_POINTS):
+                continue
+            residual = _wrap90(predicted+wall['heading_left_rad'])
+            if abs(residual) <= COMPASS_GATE_RAD:
+                votes.append((residual, wall['support_span_m']))
+        return votes
+
+    def measurable(self, scan):
+        """Read-only: this scan's native walls would measure the heading (as update does)."""
+        if self.heading is None or self.at_s is None or not isinstance(scan, dict) or type(scan.get('at_ms')) is not int:
+            return False
+        predicted = self.heading+self.rate*min(max(0., scan['at_ms']/1000-self.at_s), COMPASS_MAX_PREDICT_S)
+        return sum(span for _, span in self._votes(scan, predicted)) >= COMPASS_MIN_SUPPORT_M
 
     def current(self, scan):
         """Heading for this scan's publication, or None when stale/uninitialised."""
@@ -2826,6 +2838,40 @@ class ManeuverSequence(TurnMotion):
             # end is seen long before it is abeam (still left of the lane).
             self.target_tracker.widen_acquisition(FIRST_ACQUIRE_BEARING_RAD)
 
+    @staticmethod
+    def _forward_lanes(values):
+        """Valid native lanes ahead; near-duplicates of one lane merge into it."""
+        forward = [c for c in values if _valid_candidate(c) and abs(c['heading_left_rad']) < math.pi/2]
+        if len(forward) > 1:
+            base = forward[0]
+            if all(abs(_wrap(c['heading_left_rad']-base['heading_left_rad'])) <= PAIR_MERGE_HEADING_RAD
+                   and abs(c['center_offset_left_m']-base['center_offset_left_m']) <= PAIR_MERGE_OFFSET_M
+                   and abs(c['width_m']-base['width_m']) <= .15 for c in forward[1:]):
+                forward = [max(forward, key=lambda c: c['left_wall_points']+c['right_wall_points'])]
+        return forward
+
+    def start_lane_quality_geometry(self, scan):
+        """Read-only: driving the start lane with current native lane geometry.
+
+        Round 66 car run: 0.4 s after the start a 5-bin front gap (returns lost
+        at the edge between the divider's open end and the far end wall, ~7 m)
+        stopped the run, because the bounded-gap allowance the route already
+        grants after the handover (or in a started left turn with current
+        geometry) did not cover the start lane. The server uses this as the
+        same allowance's evidence; the body gate and every limit are unchanged.
+        """
+        if (not self.continue_route or self.entry_kind != 'lane' or self.route_stage != 'start_lane'
+                or self.phase != 'drive' or self.drive_since is None or not isinstance(scan, dict)):
+            return False
+        values = scan.get('corridor_candidates')
+        if (not isinstance(values, list) or len(values) > 24
+                or any(not _valid_candidate(candidate) for candidate in values)):
+            return False
+        # Either the start-lane law's own lane, or (lane briefly unreported,
+        # e.g. returns also lost on a side board) the side boards still
+        # measuring the compass heading in this scan.
+        return len(self._forward_lanes(values)) == 1 or self.compass.measurable(scan)
+
     def _lane_start_geometry(self, scan):
         """One forward native lane around the car, nearly aligned, room ahead."""
         values = scan.get('corridor_candidates') if isinstance(scan, dict) else None
@@ -2835,13 +2881,7 @@ class ManeuverSequence(TurnMotion):
             return False, {'reason': 'start_lane_invalid_scan'}
         if scan.get('left_turn_goal') is not None:
             return False, {'reason': 'start_lane_native_left_opening_present'}
-        forward = [c for c in values if _valid_candidate(c) and abs(c['heading_left_rad']) < math.pi/2]
-        if len(forward) > 1:
-            base = forward[0]
-            if all(abs(_wrap(c['heading_left_rad']-base['heading_left_rad'])) <= PAIR_MERGE_HEADING_RAD
-                   and abs(c['center_offset_left_m']-base['center_offset_left_m']) <= PAIR_MERGE_OFFSET_M
-                   and abs(c['width_m']-base['width_m']) <= .15 for c in forward[1:]):
-                forward = [max(forward, key=lambda c: c['left_wall_points']+c['right_wall_points'])]
+        forward = self._forward_lanes(values)
         if len(forward) != 1:
             return False, {'reason': 'start_lane_unique_lane_missing', 'forward_lanes': len(forward)}
         lane = forward[0]

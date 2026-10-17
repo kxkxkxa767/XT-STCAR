@@ -320,12 +320,13 @@ def make_console(server):
 
 def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1., noise=.008, seed=0,
         verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None, right_curvature_max=1.875,
-        steer_backlash=0., vehicle='nominal', vehicle_params=None):
+        steer_backlash=0., vehicle='nominal', vehicle_params=None, edge_dropout=0.):
     sys.path.insert(0, str(CONSOLE))
     server = load('course_sim_server', CONSOLE/'server.py')
     console = make_console(server)
     geometry = Geometry()
     rng = random.Random(seed)
+    edge_rng = random.Random(seed*7919+13)
     if vehicle == 'measured':
         params = dict(vehicle_params or {})
         speed_scale = params.pop('speed_scale', speed_scale)
@@ -372,6 +373,19 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                 ranges.append(None)
             else:
                 ranges.append(round(r+rng.gauss(0, noise), 4))
+        if edge_dropout:
+            # The real lidar loses runs of returns at depth steps (a near edge
+            # against a far wall; round 66: 5 bins between the divider's open
+            # end and the end wall 7 m away). Separate generator: the other
+            # noise is the same with or without this model.
+            raw = list(ranges)
+            for i in range(360):
+                a, b = raw[i], raw[(i+1) % 360]
+                if (a is not None and b is not None and abs(a-b) > 1. and max(a, b) > 2.
+                        and edge_rng.random() < edge_dropout):
+                    run = edge_rng.randint(1, 5)
+                    for k in range(run):  # on the far side of the step
+                        ranges[((i+1+k) if b > a else (i-k)) % 360] = None
         return geometry({'seq': seq, 'at_ms': round(t*1000), 'frame_id': 'lidar_origin_coarse_body_heading',
                          'ranges': ranges})
 
@@ -616,6 +630,8 @@ def main():
                         help='measured model parameter, e.g. play_pwm=70 esc_lag_s=.6 (repeatable)')
     parser.add_argument('--steer-backlash', type=float, default=0.,
                         help='hypothetical steering play (PWM) for robustness runs; not measured')
+    parser.add_argument('--edge-dropout', type=float, default=0.,
+                        help='chance per depth step (>1 m, far side >2 m) of losing 1-5 returns there (real lidar; default off)')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max-s', type=float, default=45.)
     parser.add_argument('--png')
@@ -670,7 +686,7 @@ def main():
     summary, log, _ = run(course, max_s=args.max_s, speed_scale=args.speed_scale, decel=args.decel,
                           delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace,
                           right_curvature_max=args.right_curvature_max,
-                          steer_backlash=args.steer_backlash, **vehicle)
+                          steer_backlash=args.steer_backlash, edge_dropout=args.edge_dropout, **vehicle)
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     if args.log:
         Path(args.log).write_text(''.join('\t'.join(str(round(v, 3)) if isinstance(v, float) else str(v)

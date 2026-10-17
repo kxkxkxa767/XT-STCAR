@@ -1061,6 +1061,17 @@ class Console:
             return None
         if motion.handover_observed is True:
             return 'post_handover'
+        if motion.entry_kind == 'lane' and motion.route_stage == 'start_lane':
+            # Round 66: the start lane's own current native lane is the
+            # evidence (open course; no left-turn geometry to probe).
+            scan = self.scan
+            if (session.get('phase') != 'drive' or not isinstance(scan, dict)
+                    or scan.get('frame_id') != 'lidar_origin_coarse_body_heading'
+                    or type(scan.get('seq')) is not int or scan['seq'] < 0
+                    or type(scan.get('at_ms')) is not int or scan['at_ms'] < 0
+                    or not 0 <= now-self.scan_at < SCAN_AGE_S):
+                return None
+            return 'start_lane_current_geometry' if motion.start_lane_quality_geometry(scan) else None
         if (motion.drive_since is None or motion.route_stage != 'first_target'
                 or session.get('phase') != motion.phase
                 or not (motion.phase == 'drive' or (motion.phase == 'quality_wait'
