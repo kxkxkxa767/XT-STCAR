@@ -22635,5 +22635,32 @@
       "replay_round73_scan_gap_widened_offline": "before: wait 1587->1547, resume 1507, loop 1500-1580; after: wait holds 1587, loop 1627 -> 1720 held (scripts/route-replay.py via work/round69-claude-a-20261018/replay-gap.py; open loop on recorded scans, the recorded path still meets the board)",
       "simulation": "not run (user)"
     }
+  },
+  "turn74_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 74,
+    "source_commit": "2c5aa546b7a9c2ef91741717a985f63efe0cd3a5",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-74",
+    "evidence_sha256_files_ok": 7,
+    "result": "start lane -> side wall -> first cone 2.77 m / 35.5 deg -> approach -> handover 6.43 s -> open_first_loop servo 1555 -> 1715 within .6 s and held 1673-1715 -> first pass (PASS1) 9.10 s -> open_transfer_channel_entry; recovery hold 10.40-11.03; second cone seen (2.50 m, -35 deg); stopped 11.4 s autonomy_control_gap (actual gap .121 s > .12; tick .100 s + fixed 20 ms wait). No contact (rest gap .24 m). User: 绕过第一个桶了，但是停在了第二个那里",
+    "tick_times_car": "open_transfer ticks .061-.100 s (max tick .100, max gap .121)"
+  },
+  "turn75_transfer_compute_20261018": {
+    "date": "2026-10-18",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": {
+      "component_cache": "compact_target._scan_groups: points + components cached per tolerant flag for an equal range list (about five searches per frame before: both trackers, contact supports x2, second lookout); outputs identical (tested on all recorded fixture scans).",
+      "lazy_boards": "_open_second_observation: the band test first, the board lines only for band candidates (same accepted set).",
+      "loop_pacing": "server.autonomy_watch: the next wait = max(5 ms, 20 ms - previous tick wall time) instead of a fixed 20 ms; .12 s control gap, 300 ms heartbeat and all checks unchanged."
+    },
+    "validation": {
+      "tests": "817 OK (2 expected failures), 3 new (test_route_74_compute.py)",
+      "tick_time_mac_ms_user8": "open_transfer p50 .50 -> .38, p95 1.66 -> 1.09, max 2.50 -> 2.32; first_target p95 1.22 -> .75 (course-sim used only as a compute harness)",
+      "expected_car": "gap ~= tick + 5 ms: the round-74 .100 s tick would give ~.105 s instead of .121 s"
+    }
   }
 }

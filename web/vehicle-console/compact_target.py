@@ -204,6 +204,26 @@ def _tolerant_edges(ranges, group, values, diameter, allow_boundary_gap, mainten
     return unknown, background, gap_counts, not maintenance and max(gap_counts) > TOLERANT_EDGE_BINS
 
 
+_GROUP_CACHE = {}  # tolerant -> (ranges copy, points, groups)
+
+
+def _scan_groups(ranges, tolerant):
+    """Points and components of exactly these ranges, once per content.
+
+    Round 74: one tick ran the component search about five times on the same
+    frame (both trackers, contact supports, the second-support lookout) and
+    the open transfer passed the 120 ms control gap. Reused only for an equal
+    range list; never mutated by callers.
+    """
+    cached = _GROUP_CACHE.get(tolerant)
+    if cached is not None and cached[0] == ranges:
+        return cached[1], cached[2]
+    points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
+    groups = _clusters_bridged(points, TOLERANT_INTERNAL_NULLS) if tolerant else _clusters(points)
+    _GROUP_CACHE[tolerant] = (list(ranges), points, groups)
+    return points, groups
+
+
 def _candidates(ranges, *, allow_boundary_gap=False,
                 bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD), tolerant=False,
                 min_range_m=MIN_RANGE_M, maintenance=False, min_points=None, max_range_m=MAX_RANGE_M):
@@ -218,9 +238,9 @@ def _candidates(ranges, *, allow_boundary_gap=False,
         raise ValueError('max_range_m must be within the acquisition bounds')
     # Build components BEFORE range/sector filtering. Filtering first would
     # manufacture a small object from the end of an extended wall.
-    points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
+    points, groups = _scan_groups(ranges, tolerant)
     result = []
-    for group in (_clusters_bridged(points, TOLERANT_INTERNAL_NULLS) if tolerant else _clusters(points)):
+    for group in groups:
         minimum = (min_points if min_points is not None
                    else TOLERANT_MAINTENANCE_MIN_POINTS if maintenance
                    else TOLERANT_MIN_POINTS if tolerant else MIN_POINTS)

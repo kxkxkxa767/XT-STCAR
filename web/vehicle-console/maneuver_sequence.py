@@ -3530,18 +3530,23 @@ class ManeuverSequence(TurnMotion):
         first_along = (None if not isinstance(first_center, list) or len(first_center) != 2
                        else e1[0]*first_center[0]+e1[1]*first_center[1])
         ahead = []
-        boards = self._scan_axis_lines(scan, heading)
+        boards = None
         for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True,
                                   min_points=SECOND_ACQUISITION_MIN_POINTS):
             x, y = target['point_left_m']
             along, lateral = e1[0]*x+e1[1]*y, e1[0]*y-e1[1]*x
+            # Cheap band test first; the board lines (the costliest part of a
+            # transfer tick on the car, round 74) only for band candidates.
+            if not (x > FRONT_BODY_EXTENT_M and FRONT_BODY_EXTENT_M < along <= OPEN_SECOND_BAND_REACH_M
+                    and abs(lateral) <= OPEN_SECOND_BAND_HALF_M
+                    and (first_along is None or along >= first_along+OPEN_SECOND_BEYOND_FIRST_M)):
+                continue
+            if boards is None:
+                boards = self._scan_axis_lines(scan, heading)
             if (_on_board_run((x, y), boards, heading)
                     or _support_depth(scan['ranges'], target['support_bins']) > OPEN_SUPPORT_MAX_DEPTH_M):
                 continue
-            if (x > FRONT_BODY_EXTENT_M and FRONT_BODY_EXTENT_M < along <= OPEN_SECOND_BAND_REACH_M
-                    and abs(lateral) <= OPEN_SECOND_BAND_HALF_M
-                    and (first_along is None or along >= first_along+OPEN_SECOND_BEYOND_FIRST_M)):
-                ahead.append((target, along, lateral))
+            ahead.append((target, along, lateral))
         proof = None
         if len(ahead) == 1:
             target, along, lateral = ahead[0]

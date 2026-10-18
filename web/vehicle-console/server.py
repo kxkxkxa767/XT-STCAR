@@ -45,6 +45,10 @@ MANUAL_SERVO_MIN = 1200
 MANUAL_SERVO_MAX = 1800
 
 
+# Autonomy control loop pacing (the .12 s control gap limit is unchanged).
+AUTONOMY_TICK_S = .02
+AUTONOMY_MIN_IDLE_S = .005
+
 class Console:
     def __init__(self, args):
         self.args = args
@@ -744,7 +748,13 @@ class Console:
             return {'ok': True, 'run_id': run_id, 'epoch': self.control_epoch}
 
     def autonomy_watch(self):
-        while not self.stop.wait(.02):
+        # Ticks start every 20 ms; a long tick is followed by at least 5 ms
+        # (other threads, e.g. the heartbeat, get the lock) instead of a full
+        # 20 ms more (round 74: a .100 s tick + 20 ms gave a .121 s gap). The
+        # wait comes from the previous tick's own measured wall time.
+        wait = AUTONOMY_TICK_S
+        while not self.stop.wait(wait):
+            wait = AUTONOMY_TICK_S
             lock_requested_at = time.monotonic()
             with self.lock:
                 session = self.auto_session
@@ -754,7 +764,9 @@ class Console:
                 try:
                     self.autonomy_tick(now)
                 finally:
-                    self.record_tick_timing(session, now-lock_requested_at, time.monotonic()-now)
+                    ended = time.monotonic()
+                    self.record_tick_timing(session, now-lock_requested_at, ended-now)
+                    wait = max(AUTONOMY_MIN_IDLE_S, AUTONOMY_TICK_S-(ended-lock_requested_at))
 
     def record_tick_timing(self, session, lock_wait_s, tick_wall_s):
         """Host wall timing includes scheduling/GIL waits, never a CPU benchmark."""
