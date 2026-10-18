@@ -30,7 +30,7 @@ from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STAB
 from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
 from steer_calibration import SteerOutput
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
-from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate
+from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate, _number
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S, LANE_WALL_PLAY_PWM,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
                                DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
@@ -48,6 +48,8 @@ MANUAL_SERVO_MAX = 1800
 # Autonomy control loop pacing (the .12 s control gap limit is unchanged).
 AUTONOMY_TICK_S = .02
 AUTONOMY_MIN_IDLE_S = .005
+# A post-pass quality pause may wait this long for an in-flight steering ACK.
+QUALITY_PAUSE_ACK_GRACE_S = .1
 
 class Console:
     def __init__(self, args):
@@ -906,6 +908,7 @@ class Console:
         self.emit('drive', 1500, servo, self.status['control']['tick'])
         if session.get('turn_motion') is not None and servo != session['turn_last_servo']:
             session['turn_last_servo'], session['turn_servo_sequence'] = servo, self.sequence
+            session['turn_servo_sent_at'] = now
         if session['coast_neutral_sequence'] is None:
             session['coast_neutral_sequence'] = self.sequence
         report['coast_ticks'] += 1
@@ -1509,6 +1512,23 @@ class Console:
                     'adopted_servo': control['servo'], 'control_tick': control['tick'],
                     'control_seq': control['seq'], 'motor_command': 1500,
                     'hold_max_s': COAST_MAX_S, 'positive_motor_restore_allowed': False}
+            elif (route and session.get('phase') == motion.phase == 'drive'
+                    and motion.route_stage in POST_PASS_STAGES and motion.first_pass_evidence is not None
+                    and turn_control.get('command_acked') is not True
+                    and _number(session.get('turn_servo_sent_at'))
+                    and 0 <= now-session['turn_servo_sent_at'] < QUALITY_PAUSE_ACK_GRACE_S
+                    and set(report.get('quality_issues', []))
+                    and set(report.get('quality_issues', [])) <= {'scan_incomplete', 'front_sparse'}
+                    and self.turn_quality_hold_eligible(session, route_entry=True)):
+                # Round 76: the post-pass pause needs the steering command
+                # ACKed; the bad frame came while the last 40 PWM step was in
+                # flight and the route halted. Wait for that ACK (no new
+                # command, no halt) up to the grace, then pause or halt.
+                report['quality_pause_ack_wait'] = {'scan_seq': self.scan['seq'],
+                    'pending_sequence': session.get('turn_servo_sequence'),
+                    'pending_age_s': now-session['turn_servo_sent_at'],
+                    'quality_issues': list(report['quality_issues'])}
+                return
             elif not self.turn_quality_coast_active(session):
                 self.halt('turn_perception_unavailable')
                 return
@@ -1651,6 +1671,7 @@ class Console:
             report['quality_resume_ack'] = turn_control['resume_acked']
         if changed:
             session['turn_last_servo'], session['turn_servo_sequence'] = servo, self.sequence
+            session['turn_servo_sent_at'] = now
         if neutral_wait:
             report['recovery_ticks'] += 1
         if decision['phase'] == 'presteer':

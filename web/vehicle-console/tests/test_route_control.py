@@ -730,6 +730,24 @@ class RouteControlTests(unittest.TestCase):
         self.assertEqual(self.outputs[-1]['motor'], 1500)
         self.assertIn('post_pass_pause_trigger', session['report'])
 
+    def test_post_pass_pause_waits_briefly_for_an_in_flight_steering_ack(self):
+        # Round 76: the bad frame arrived while the last 40 PWM step was
+        # pending; the pause needs an ACKed command and the route halted.
+        _, session = self.enter_compact_orbit(continue_route=True)
+        motion = session['turn_motion']
+        motion.first_pass_evidence = {'source_seq': self.console.scan['seq']}
+        motion.right_exit_center_ack = {'servo': 1500}
+        motion.route_stage, motion.right_exit_since = 'right_align', self.now
+        session['turn_servo_sequence'] = self.console.sequence+1000  # never ACKed here
+        session['turn_servo_sent_at'] = round(self.now+.05, 6)
+        self.observe(round(self.now+.1, 6), self.incomplete(self.console.scan['seq']+1))
+        self.assertIs(self.console.auto_session, session)
+        self.assertEqual(session['phase'], 'drive')
+        self.assertIn('quality_pause_ack_wait', session['report'])
+        self.observe(round(self.now+.2, 6), self.incomplete(self.console.scan['seq']+1))
+        self.assertIsNone(self.console.auto_session)  # grace over, still un-ACKed: the old halt
+        self.assertEqual(self.console.auto_result['reason'], 'turn_perception_unavailable')
+
     def test_route_later_stage_and_resume_pending_use_full_eight_cm_body_gate(self):
         for stage in ('right_align', 'corridor_follow', 'second_orbit', 'resume_pending'):
             with self.subTest(stage=stage):

@@ -22684,5 +22684,27 @@
       "round75_frames": "old motion_ready false on 1 of 9 (open 6-10); new true on 9 of 9 (8-10 projected onto the right board)",
       "tests": "818 OK (1 new, fixture route-75-start-grazing.json)"
     }
+  },
+  "turn76_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 76,
+    "source_commit": "a54d118dd44735332c8611ff045c37ad15350668",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-76",
+    "evidence_sha256_files_ok": 7,
+    "result": "start (side-wall start check) -> start lane -> first cone 3.38 m -> loop 1645-1703 -> PASS1 8.83 s -> open transfer -> recovery hold 10.0-10.3 s (open_board_ahead_without_second_support) -> second cone confirmed and handed over (second_loop) -> 10.7 s turn_perception_unavailable. Max tick .104 s, max gap .110 s (pacing fix held). No contact (rest gap .22 m). User: 为什么又和上次一样",
+    "cause": "scan 843: 11 contiguous nulls at 7-17 deg right-front between the second cone (1.6 m) and an oblique far wall corner (4.3 m) - a transient grazing dropout (neighbouring frames clean). Second loop is a post-pass stage, whose quality fault should pause at neutral, but begin_post_pass_quality_pause requires an ACKed steering command and the last 40 PWM step (1540 -> 1580) was still in flight: refused -> halt. No side board fits there (open area)."
+  },
+  "turn77_pause_ack_grace_20261018": {
+    "date": "2026-10-18",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": "server.turn_tick: in a post-pass route stage after the first pass, when a scan_incomplete/front_sparse frame is eligible for the neutral pause but the latest steering command is not yet ACKed and was sent < .1 s ago (QUALITY_PAUSE_ACK_GRACE_S), wait for the ACK (no new command, no halt; report quality_pause_ack_wait) and enter the pause on a following tick; after the grace the original halt applies. turn_servo_sent_at is recorded with each steering change.",
+    "safety": "at most .1 s more at the last ACKed-or-pending drive command on a degraded frame (~.1 m at 1 m/s); the 8 cm body gate, heartbeat, gap, deadlines and every other check run on each of those ticks.",
+    "validation": {
+      "tests": "819 OK (1 new in test_route_control.py)"
+    }
   }
 }
