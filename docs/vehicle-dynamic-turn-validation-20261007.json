@@ -22611,5 +22611,29 @@
       "The single board is extrapolated up to 6 m; an object exactly in the grazing sector that returns nothing would be counted as board surface (real cones and boards return; the 8 cm body gate is unchanged).",
       "Following the right board after the divider end assumes the lane centre continues; the first-support approach takes over once the cone is confirmed."
     ]
+  },
+  "turn73_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 73,
+    "source_commit": "8c76278febfb1c71aaeec9818891966a1e4647d2",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-73",
+    "evidence_sha256_files_ok": 7,
+    "result": "start lane -> start_lane_side_wall after the divider end (right board followed, no front_sparse stop) -> first cone acquired 3.10 m / 32.5 deg at 4.87 s, confirmed, first-support approach, handover 6.81 s -> open_first_loop; quality wait 7.21-7.45 (front_sparse x2), resume; loop never reached full left (servo 1520-1607 vs target 1720), radius ~1.6-2 m; body gate at 9.05 s with front gap 0 -> contact with the outer board left of the cone (user: 后续没有继续左转撞到锥桶右侧的挡板了); car slid ~0.8 m after the lock (ESC lag).",
+    "cause": "lane-route pass preparation acting inside the open first loop: in the neutral wait the support at the body front (normal while orbiting) set quality_wait_release and released left (1607 -> 1567); at the resume ACK that latched first_pass_preparing; then every repeated-frame tick stepped toward neutral (first_target_pass_preparing_neutral, target 1500) against the fresh-frame loop command 1720, and the path override also started from 1500.",
+    "map": "work/round69-claude-a-20261018/t73-map.png"
+  },
+  "turn74_open_loop_hold_20261018": {
+    "date": "2026-10-18",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": "ManeuverSequence._open_loop_orbit() (route, lane entry, handover observed, first_target, before the first pass): the lane-route pass preparation does not act in the open loop: no quality_wait_release / anchored-front release in the neutral wait, no exit-prepare latch at the resume ACK, no repeated-frame release step; instead a repeated frame may take one 100 ms slew step toward the latest fresh frame's open_first_loop command (ACKed, fresh lease). The open loop ends on its own compass/second-loop rules as before.",
+    "validation": {
+      "tests": "814 OK",
+      "replay_round73_scan_gap_widened_offline": "before: wait 1587->1547, resume 1507, loop 1500-1580; after: wait holds 1587, loop 1627 -> 1720 held (scripts/route-replay.py via work/round69-claude-a-20261018/replay-gap.py; open loop on recorded scans, the recorded path still meets the board)",
+      "simulation": "not run (user)"
+    }
   }
 }

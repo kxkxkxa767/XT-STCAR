@@ -1397,6 +1397,17 @@ class ManeuverSequence(TurnMotion):
                 return None, True
         return {**base, 'source_kind': 'native_wall_window_pair', 'pair_count': len(pairs)}, False
 
+    def _open_loop_orbit(self):
+        """Open-course first loop after the handover, before its pass.
+
+        Round 73: the loop ends on its own compass rule; the lane-route pass
+        preparation (support at the body front -> release left, latched again
+        at a quality resume and stepped on repeated frames) pulled the loop's
+        1720 back toward 1500 and the car ran wide into a board.
+        """
+        return (self.continue_route and self.entry_kind == 'lane' and self.handover_observed
+                and self.route_stage == 'first_target' and self.first_pass_evidence is None)
+
     def _clear_exit_prepare_window(self):
         self._first_exit_prepare_history.clear()
         self._quality_exit_prepare_ready = False
@@ -1650,7 +1661,8 @@ class ManeuverSequence(TurnMotion):
             anchor = self.quality_wait_anchor
             anchored_front = (isinstance(anchor, dict) and isinstance(anchor.get('point_left_m'), list)
                               and anchor['point_left_m'][0] <= FRONT_BODY_EXTENT_M)
-            base = (self._exit_release_target(scan, now) if self.quality_wait_release is not None or anchored_front
+            base = (self._exit_release_target(scan, now)
+                    if (self.quality_wait_release is not None or anchored_front) and not self._open_loop_orbit()
                     else self._wait_inside_base(1.))
             self._wait_steer(now, servo_feedback, neutral, base)
             self.reason = 'route_quality_wait_target_reacquiring'
@@ -1665,7 +1677,7 @@ class ManeuverSequence(TurnMotion):
         # Release-only decision in the neutral wait. Degraded scan quality does
         # not hide this complete, isolated same-ID support; it never advances a
         # pass, authorizes right steering or restores motor power.
-        if advancing and neutral and self.quality_wait_release is None:
+        if advancing and neutral and self.quality_wait_release is None and not self._open_loop_orbit():
             if front <= FRONT_BODY_EXTENT_M and side >= MANEUVER_BODY_CLEARANCE_M:
                 if self._consecutive_fresh(self._wait_release_history, scan):
                     self.quality_wait_release = {'basis': 'neutral_wait_current_support_at_body_front',
@@ -5338,11 +5350,13 @@ class ManeuverSequence(TurnMotion):
                 self.quality_resume_pending = False
                 self.quality_wait_evidence['resume_ack'] = {k: control.get(k) for k in
                     ('motor', 'servo', 'seq', 'tick')}
-                if self._quality_exit_prepare_ready and self.first_pass_evidence is None:
+                if (self._quality_exit_prepare_ready and self.first_pass_evidence is None
+                        and not self._open_loop_orbit()):
                     self._latch_exit_prepare(scan, control,
                         basis='healthy_neutral_wait_body_front_support_rechecked_at_resume_ack')
                     self._quality_exit_prepare_ready = False
-                if self.quality_wait_release is not None and self.first_pass_evidence is None:
+                if (self.quality_wait_release is not None and self.first_pass_evidence is None
+                        and not self._open_loop_orbit()):
                     # The wait already released left; resumed power must not
                     # restart the orbit demand. Release-only, no right PWM.
                     if not self.first_pass_preparing:
@@ -5364,7 +5378,15 @@ class ManeuverSequence(TurnMotion):
             # A repeated fresh observation cannot establish preparation or a
             # pass. It may execute ONE already-authorized release step once
             # the previous actual command is ACKed and its 100 ms is due.
-            if (self.continue_route and self.phase == 'drive'
+            loop_step = (self._open_loop_orbit() and self.phase == 'drive' and self.reason == 'open_first_loop'
+                         and 0 <= now-scan['received_at'] < SCAN_AGE_S
+                         and control.get('command_acked') is True
+                         and control.get('motor') in DRIVE_MOTORS and control.get('servo') == self.servo)
+            if loop_step:
+                # The latest fresh frame's loop command, one step per 100 ms,
+                # so the left build-up does not wait for a fresh-frame phase.
+                self._slew(now)
+            elif (self.continue_route and self.phase == 'drive' and not self._open_loop_orbit()
                     and self.handover_observed and self.route_stage == 'first_target'
                     and self.first_pass_preparing and self.first_pass_evidence is None
                     and NEUTRAL <= self.servo <= SERVO_MAX
