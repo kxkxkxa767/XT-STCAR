@@ -20,6 +20,9 @@ MIN_DIAMETER_M = .06
 MAX_DIAMETER_M = .35
 MIN_RANGE_M = .35
 MAX_RANGE_M = 3.
+# Opt-in (route start lane, round 72): the first cone's approach begins at
+# 3.5 m; size, isolation and return-count rules are unchanged.
+EXTENDED_MAX_RANGE_M = 3.5
 # Only an explicitly bound, already confirmed role may maintain its original
 # identity below the acquisition range. This is the existing valid lidar
 # lower bound, not an added near-object acquisition or a semantic cone claim.
@@ -203,7 +206,7 @@ def _tolerant_edges(ranges, group, values, diameter, allow_boundary_gap, mainten
 
 def _candidates(ranges, *, allow_boundary_gap=False,
                 bearing_range_rad=(MIN_BEARING_RAD, MAX_BEARING_RAD), tolerant=False,
-                min_range_m=MIN_RANGE_M, maintenance=False, min_points=None):
+                min_range_m=MIN_RANGE_M, maintenance=False, min_points=None, max_range_m=MAX_RANGE_M):
     bearing_min, bearing_max = _bearing_range(bearing_range_rad, 'bearing_range_rad')
     if type(allow_boundary_gap) is not bool or type(tolerant) is not bool or type(maintenance) is not bool:
         raise ValueError('allow_boundary_gap, tolerant and maintenance must be bools')
@@ -211,6 +214,8 @@ def _candidates(ranges, *, allow_boundary_gap=False,
         raise ValueError('maintenance edges are a tolerant-detection rule')
     if not _number(min_range_m) or not CLOSE_MAINTENANCE_MIN_RANGE_M <= min_range_m <= MIN_RANGE_M:
         raise ValueError('min_range_m must be within the valid lidar and acquisition bounds')
+    if not _number(max_range_m) or not MAX_RANGE_M <= max_range_m <= EXTENDED_MAX_RANGE_M:
+        raise ValueError('max_range_m must be within the acquisition bounds')
     # Build components BEFORE range/sector filtering. Filtering first would
     # manufacture a small object from the end of an extended wall.
     points = [None if r is None else (r*d[0], r*d[1]) for r, d in zip(ranges, _DIRECTIONS)]
@@ -222,7 +227,7 @@ def _candidates(ranges, *, allow_boundary_gap=False,
         if not minimum <= len(group) <= 128:
             continue
         values = [ranges[i] for i in group]
-        if min(values) < min_range_m or max(values) > MAX_RANGE_M:
+        if min(values) < min_range_m or max(values) > max_range_m:
             continue
         support = [points[i] for i in group]
         if (max(p[0] for p in support)-min(p[0] for p in support) > MAX_DIAMETER_M
@@ -238,7 +243,7 @@ def _candidates(ranges, *, allow_boundary_gap=False,
             unknown, background, gap_counts, tracking_only = edges
             center = [sum(p[axis] for p in support)/len(support) for axis in (0, 1)]
             distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
-            if min_range_m <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
+            if min_range_m <= distance <= max_range_m and bearing_min <= bearing <= bearing_max:
                 internal = [i for i in range(group[0], group[0]+(group[-1]-group[0]) % 360+1)
                             if i % 360 not in group]
                 result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
@@ -281,7 +286,7 @@ def _candidates(ranges, *, allow_boundary_gap=False,
                 continue
         center = [sum(p[axis] for p in support)/len(support) for axis in (0, 1)]
         distance, bearing = math.hypot(*center), math.atan2(center[1], center[0])
-        if min_range_m <= distance <= MAX_RANGE_M and bearing_min <= bearing <= bearing_max:
+        if min_range_m <= distance <= max_range_m and bearing_min <= bearing <= bearing_max:
             result.append({'point_left_m': center, 'range_m': distance, 'bearing_left_rad': bearing,
                            'diameter_m': diameter, 'point_count': len(group), 'support_bins': list(group),
                            'boundary_unknown_bins': unknown, 'boundary_far_returns': background,
@@ -370,6 +375,7 @@ class CompactTargetTracker:
                 or not TOLERANT_MAINTENANCE_MIN_POINTS <= acquisition_min_points <= MIN_POINTS or not tolerant):
             raise ValueError('acquisition_min_points must be a tolerant 3..5 return count')
         self._acquisition_min_points = acquisition_min_points
+        self._acquisition_max_range_m = MAX_RANGE_M
         self.held = None  # tolerant: identity kept through this missing/ambiguous frame
         self._select_associated = select_associated
         # Opt-in (explicit route first target). Trial51: the first support at
@@ -387,6 +393,12 @@ class CompactTargetTracker:
         self._next_id = 1
         self._first_at = self._first_received = None
         self._close_maintenance_track_id = None
+
+    def extend_acquisition_range(self, max_range_m):
+        """Opt-in farther acquisition (route first target from the start lane)."""
+        if not _number(max_range_m) or not MAX_RANGE_M <= max_range_m <= EXTENDED_MAX_RANGE_M:
+            raise ValueError('max_range_m must be within the acquisition bounds')
+        self._acquisition_max_range_m = max_range_m
 
     def widen_acquisition(self, bearing_range_rad):
         """Replace the acquisition sector (route first target after handover)."""
@@ -480,7 +492,8 @@ class CompactTargetTracker:
                                  bearing_range_rad=bearing_range, tolerant=self._tolerant,
                                  maintenance=maintenance,
                                  min_range_m=CLOSE_MAINTENANCE_MIN_RANGE_M if close_bound else MIN_RANGE_M,
-                                 min_points=None if maintenance else self._acquisition_min_points)
+                                 min_points=None if maintenance else self._acquisition_min_points,
+                                 max_range_m=self._acquisition_max_range_m)
         candidates = [{**candidate, 'close_maintenance_observation':
                        any(ranges[i] < MIN_RANGE_M for i in candidate['support_bins'])}
                       for candidate in candidates]

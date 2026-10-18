@@ -12,7 +12,8 @@ from compact_target import (CompactTargetTracker, _associated, _candidates, cont
                             MIN_RANGE_M, TOLERANT_MIN_POINTS, TOLERANT_MAINTENANCE_MIN_POINTS,
                             rotated_observation)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
-                           MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM, CorridorSteering, corridor_walls)
+                           MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM, CorridorSteering, corridor_walls,
+                           side_wall_fit)
 from steer_calibration import NOMINAL_RIGHT_LIMIT_PWM
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
                          PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number, _valid_candidate,
@@ -416,6 +417,8 @@ LANE_WALL_CAP_PWM = 33
 LANE_WALL_HISTORY = 3
 LANE_WALL_GAP_S = .35  # older publications are not one trend
 LANE_TRACK_SPEED_POINTS = 5
+# A single side board standing in for the lane must run along the compass axis.
+LANE_SIDE_WALL_HEADING_RAD = math.radians(5)
 # Play crossed by the start-lane wall law's commands (the measured +-50 is
 # kept for the loops). Chosen over real play 0-70 in simulation: see
 # turn69_start_lane_law_20261018.
@@ -1166,6 +1169,7 @@ class ManeuverSequence(TurnMotion):
         self._start_motor = TRIAL_MOTOR
         self._start_speed_measured = False
         self.start_lane_coast_steering = None
+        self.start_side_wall = None
         self._front_track = None
         self._track_history = []
         self._power_cmd_at = None  # last output frame with a drive motor (ESC lag)
@@ -2552,7 +2556,8 @@ class ManeuverSequence(TurnMotion):
             # behind a .35 s steering delay made the old law overshoot).
             lane_approach = (self.continue_route and self.phase == 'drive'
                              and ((self.route_stage == 'start_lane'
-                                   and (self._lane_start_slow or self.reason == 'start_lane_lane_walls'))
+                                   and (self._lane_start_slow
+                                        or self.reason in ('start_lane_lane_walls', 'start_lane_side_wall')))
                                   or (self.route_stage == 'first_target' and self.entry_kind == 'lane'
                                       and self.handover_observed)))
             if (post_pass and reducing_left and self.route_stage == 'second_orbit'
@@ -2926,6 +2931,9 @@ class ManeuverSequence(TurnMotion):
             # Ahead-left as well as abeam: the support past the divider's open
             # end is seen long before it is abeam (still left of the lane).
             self.target_tracker.widen_acquisition(FIRST_ACQUIRE_BEARING_RAD)
+            # Round 72: the first cone had 4 returns at 3.03 m (beyond the 3 m
+            # acquisition) when the car stopped; its approach starts at 3.5 m.
+            self.target_tracker.extend_acquisition_range(FIRST_APPROACH_MAX_RANGE_M)
 
     @staticmethod
     def _forward_lanes(values, *, validated=False):
@@ -3058,10 +3066,32 @@ class ManeuverSequence(TurnMotion):
                 and isinstance(control, dict) and control.get('command_acked') is True
                 and control.get('motor') in DRIVE_MOTORS and control.get('servo') == self.servo > NEUTRAL)
 
+    def _start_side_wall(self, scan, heading):
+        """Lane walls from one side board when the corridor fit fails.
+
+        The board comes from this frame (side_wall_fit); the lane centre is
+        half the start lane's width (measured at admission in this run) from
+        it. It must run along the compass axis (within 5 deg) when the compass
+        is measured. The output has corridor_walls' shape for the wall law.
+        """
+        width = getattr(self, '_start_lane_width', None)
+        if not _number(width):
+            return None
+        fits = [f for f in (side_wall_fit(scan['ranges'], side) for side in ('right', 'left')) if f is not None]
+        if heading is not None:
+            fits = [f for f in fits if abs(math.atan(f['slope'])-heading) <= LANE_SIDE_WALL_HEADING_RAD]
+        if not fits:
+            return None
+        fit = max(fits, key=lambda f: f['points'])
+        centre = fit['intercept_m']-width/2 if fit['side'] == 'right' else fit['intercept_m']+width/2
+        self.start_side_wall = {'source_seq': scan['seq'], **fit, 'lane_width_m': width}
+        return {'offset_right_m': centre, 'heading_right_deg': math.degrees(math.atan(fit['slope'])),
+                'slope': fit['slope'], 'width_m': width, 'side_wall': fit['side']}
+
     def lane_wall_output_active(self):
         """The current command comes from the start-lane wall law (drive or coast)."""
         return (self.continue_route and self.route_stage == 'start_lane'
-                and (self.phase == 'drive' and self.reason == 'start_lane_lane_walls'
+                and (self.phase == 'drive' and self.reason in ('start_lane_lane_walls', 'start_lane_side_wall')
                      or self.phase == 'coast' and self.start_lane_coast_steering is not None))
 
     def _start_lane_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait):
@@ -3116,6 +3146,13 @@ class ManeuverSequence(TurnMotion):
                                                       min(NEUTRAL+LANE_START_HOLD_PWM, self.servo))
                 natural = self._lane_start_steering.update(walls, scan['seq'], now, True, scan['at_ms'])
                 source = 'lane_walls'
+            elif (walls := self._start_side_wall(scan, heading)) is not None:
+                # Round 72: the left divider ended; keep the lane centre from
+                # the right board (or the left one) measured in this frame.
+                self._lane_start_steering.servo = max(NEUTRAL-LANE_START_HOLD_PWM,
+                                                      min(NEUTRAL+LANE_START_HOLD_PWM, self.servo))
+                natural = self._lane_start_steering.update(walls, scan['seq'], now, True, scan['at_ms'])
+                source = 'side_wall'
             elif heading is not None:
                 natural = NEUTRAL+max(-LANE_START_HOLD_PWM, min(LANE_START_HOLD_PWM,
                                                                round(LEFT_TRIAL_GAIN*(-heading))))

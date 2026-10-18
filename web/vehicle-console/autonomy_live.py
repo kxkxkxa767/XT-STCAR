@@ -27,6 +27,18 @@ FRONT_BRIDGE_MAX_STEP_M = .15
 # side-wall planes, bounded in range. This is occupied projection, not a new
 # return, free space, or evidence that the finite board continues indefinitely.
 FRONT_LANE_WALL_MAX_RANGE_M = 6.
+# Round 72 (user: “左侧的挡板没了可以参考右侧的”): leaving the start lane
+# the left divider ends, the native corridor (both walls, gaps <= 5 deg) is
+# gone, and the right-front rays meet the right board at grazing incidence
+# (12 nulls at 6-17 deg). One side board fitted from this frame's own returns
+# may then stand in for the native lane, on its own side only.
+SIDE_WALL_SECTORS = {'right': range(20, 161), 'left': range(200, 341)}
+SIDE_WALL_REACH_M = 6.
+SIDE_WALL_INLIER_M = .03
+SIDE_WALL_MIN_POINTS = 30
+SIDE_WALL_MIN_FRACTION = .6
+SIDE_WALL_MIN_SPAN_M = 1.
+SIDE_WALL_LATERAL_M = (.15, 1.5)
 # Maneuver profile diagnostic only; the service applies it solely in route mode
 # after handover, or in an already-started left turn with current native geometry.
 # Trial49: two scan_incomplete frames (336/337
@@ -490,7 +502,85 @@ def _front_lane_wall_projection(bins, unknown, lane):
             'known_opening_limit_along_lane_m': limits, 'lane': dict(lane), 'hits': hits}
 
 
-def front_gap_evidence(bins, *, bridge=False, front_lane=None):
+def side_wall_fit(bins, side):
+    """One straight side board from this frame's returns, or None.
+
+    Bin frame: x forward, y right; the board is y = slope*x + intercept
+    (intercept > 0 right, < 0 left). Robust slope (median of spaced pairwise
+    slopes), median intercept, then a least-squares refit of the inliers.
+    Mixed returns (an opening, far walls) fail the inlier fraction.
+    """
+    points = [(r*_BIN_COS[a], r*_BIN_SIN[a]) for a in SIDE_WALL_SECTORS[side]
+              if (r := bins[a]) is not None and r <= SIDE_WALL_REACH_M]
+    if len(points) < SIDE_WALL_MIN_POINTS:
+        return None
+    slopes = sorted((points[j][1]-y1)/(points[j][0]-x1) for i, (x1, y1) in enumerate(points)
+                    for j in range(i+8, len(points), 8) if abs(points[j][0]-x1) >= .3)
+    if not slopes:
+        return None
+    slope = slopes[len(slopes)//2]
+    intercept = sorted(y-slope*x for x, y in points)[len(points)//2]
+    inliers = [(x, y) for x, y in points if abs(y-slope*x-intercept) <= SIDE_WALL_INLIER_M]
+    if len(inliers) < SIDE_WALL_MIN_POINTS or len(inliers) < SIDE_WALL_MIN_FRACTION*len(points):
+        return None
+    n = len(inliers)
+    mx, my = sum(x for x, _ in inliers)/n, sum(y for _, y in inliers)/n
+    sxx = sum((x-mx)**2 for x, _ in inliers)
+    if sxx <= 0:
+        return None
+    slope = sum((x-mx)*(y-my) for x, y in inliers)/sxx
+    intercept = my-slope*mx
+    xs = [x for x, _ in inliers]
+    if (abs(slope) > math.tan(math.radians(15)) or max(xs)-min(xs) < SIDE_WALL_MIN_SPAN_M
+            or not SIDE_WALL_LATERAL_M[0] <= (intercept if side == 'right' else -intercept) <= SIDE_WALL_LATERAL_M[1]):
+        return None
+    error = max(abs(y-slope*x-intercept) for x, y in inliers)/math.hypot(1., slope)
+    return {'side': side, 'slope': slope, 'intercept_m': intercept, 'points': n,
+            'support_x_m': [min(xs), max(xs)], 'fit_error_m': error,
+            'basis': 'current_frame_side_board_returns'}
+
+
+def _front_side_wall_projection(bins, unknown):
+    """Project missing front rays onto side boards fitted from this frame.
+
+    Each fitted board explains only rays heading toward it, within 6 m; any
+    real return beyond the board's line ahead (an opening or its end) stops
+    the extension there. Raw returns are never altered.
+    """
+    fits = {side: side_wall_fit(bins, side) for side in ('right', 'left')}
+    limits, hits = {}, []
+    for side, fit in fits.items():
+        if fit is None:
+            continue
+        s, c = fit['slope'], fit['intercept_m']
+        sign = 1 if side == 'right' else -1
+        margin = max(MANEUVER_BODY_CLEARANCE_M, 2*fit['fit_error_m'])
+        limit = FRONT_LANE_WALL_MAX_RANGE_M
+        for i, r in enumerate(bins):
+            if r is None:
+                continue
+            x, y = r*_BIN_COS[i], r*_BIN_SIN[i]
+            toward = sign*(_BIN_SIN[i]-s*_BIN_COS[i])
+            if x > 0 and toward > 1e-9 and sign*(y-s*x-c) > margin:
+                hit = c/(_BIN_SIN[i]-s*_BIN_COS[i])
+                if 0 < hit <= FRONT_LANE_WALL_MAX_RANGE_M:
+                    limit = min(limit, hit*_BIN_COS[i])
+        limits[side] = limit
+        for angle in unknown:
+            i = angle % 360
+            toward = sign*(_BIN_SIN[i]-s*_BIN_COS[i])
+            if toward <= 1e-9:
+                continue
+            hit = c/(_BIN_SIN[i]-s*_BIN_COS[i])
+            along = hit*_BIN_COS[i]
+            if 0 < hit <= FRONT_LANE_WALL_MAX_RANGE_M and along > 0 and along < limit:
+                hits.append({'angle_deg': angle, 'side': side, 'range_m': hit, 'forward_m': along})
+    return {'basis': 'current_frame_side_board_projection', 'occupied_projection': True,
+            'free_space_certified': False, 'max_range_m': FRONT_LANE_WALL_MAX_RANGE_M,
+            'fits': fits, 'known_opening_limit_forward_m': limits, 'hits': hits}
+
+
+def front_gap_evidence(bins, *, bridge=False, front_lane=None, side_walls=False):
     """Measure current front nulls; a bridged surface is occupied, never free.
 
     Callers validate the 360 finite-or-null ranges before using this evidence.
@@ -520,8 +610,14 @@ def front_gap_evidence(bins, *, bridge=False, front_lane=None):
     bridged_set = set(bridged)
     open_unknown = [angle for angle in unknown if angle not in bridged_set]
     wall_evidence = None
+    if front_lane is not None and side_walls:
+        raise ValueError('probe_invalid_front_lane')
     if front_lane is not None and open_unknown:
         wall_evidence = _front_lane_wall_projection(bins, open_unknown, front_lane)
+        projected = {hit['angle_deg'] for hit in wall_evidence['hits']}
+        open_unknown = [angle for angle in open_unknown if angle not in projected]
+    elif side_walls and open_unknown:
+        wall_evidence = _front_side_wall_projection(bins, open_unknown)
         projected = {hit['angle_deg'] for hit in wall_evidence['hits']}
         open_unknown = [angle for angle in open_unknown if angle not in projected]
     run = largest_open_gap = 0
@@ -589,7 +685,7 @@ _BIN_SIN = tuple(math.sin(math.radians(angle)) for angle in range(360))
 
 def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True,
                     clearance_profile='straight', relaxed_turn_left=False, body_contact_target=None,
-                    front_lane=None, rear_start=False):
+                    front_lane=None, rear_start=False, front_side_walls=False):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
     if clearance_profile not in ('straight', 'maneuver') or type(clearance_profile) is not str:
         raise ValueError('invalid_clearance_profile')
@@ -720,8 +816,11 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     front = [bins[i % 360] for i in range(-30, 31)]
     if front_lane is not None and (not maneuver or front_lane not in scan.get('corridor_candidates', [])):
         raise ValueError('probe_invalid_front_lane')
-    front_evidence = front_gap_evidence(bins, bridge=maneuver,
-        front_lane=front_lane if ages['lidar'] < LIDAR_LATE_S else None)
+    if front_side_walls is not False and (front_side_walls is not True or not maneuver or front_lane is not None):
+        raise ValueError('probe_invalid_front_lane')
+    fresh = ages['lidar'] < LIDAR_LATE_S
+    front_evidence = front_gap_evidence(bins, bridge=maneuver, front_lane=front_lane if fresh else None,
+                                        side_walls=front_side_walls and fresh)
     open_unknown = front_evidence['front_open_unknown_bins']
     largest_open_gap = front_evidence['largest_open_gap_deg']
     if len(open_unknown) > FRONT_MAX_UNKNOWN or largest_open_gap > FRONT_MAX_GAP:

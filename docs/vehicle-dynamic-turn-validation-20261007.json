@@ -22575,5 +22575,41 @@
     "coast_standstill": "coast_motion stayed motion_result_superseded on the car: the ICP worker result never matches the current scan (fit slower than a scan period). Ends the run as a lock anyway; not changed in this round.",
     "user": "怎么又停下来了，在挡板没了的地方，那个地方按轨迹不应该稍稍往左打一下方向，前进后开始绕桩吗 / 雷达的点云图上能清楚的看到两个点啊 / 不要跑仿真了，车都在跑道上能实测肯定比方针好啊",
     "change_for_72": "start-lane speed = median of pairwise slopes of the last 5 track values (.4 s) instead of the least-squares slope of 4; unit tests 804 OK; no simulation run (user)."
+  },
+  "turn72_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 72,
+    "source_commit": "3c374df99f1fbea9c78940af7c1db0e7395957b1",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-72",
+    "evidence_sha256_files_ok": 7,
+    "result": "start lane 3 s, ~2.7 m at ~1.25 m/s, heading within about +-3.4 deg, speed estimate sane (1.1-1.27); at the divider end the native lane vanished (scan 1545, compass hold) and scan 1547 had 12 null bins 6-17 deg right-front (grazing on the right board) -> front_sparse, turn_perception_unavailable. First cone 4 returns at 3.03 m / 31.5 deg left (beyond 3 m acquisition). No contact.",
+    "user": "怎么跑出直道没有往左打舵机又停了，左侧的挡板没了可以参考右侧的啊，你好好思考后给出方案吧"
+  },
+  "turn73_side_wall_exit_20261018": {
+    "date": "2026-10-18",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user_request": "左侧的挡板没了可以参考右侧的啊，你好好思考后给出方案吧; 不要跑仿真了（实测）",
+    "change": {
+      "side_wall_fit": "autonomy_live.side_wall_fit(bins, side): one straight board from this frame (right bins 20-160 / left 200-340, <= 6 m), robust median slope + LS refit of inliers (+-3 cm), >= 30 inliers and >= 60 % of the sector, span >= 1 m, |slope| <= 15 deg, lateral .15-1.5 m.",
+      "gap_projection": "front_gap_evidence(side_walls=True) / probe_clearance(front_side_walls=True): when the route lane scope holds (start_lane/light_lane, drive/quality_wait, fresh scan) but there is no unique native lane, null front rays heading toward a fitted board within 6 m count as occupied surface; a real return beyond the board line ahead limits it (opening). Native lane keeps precedence; never a remembered lane. Run limit 5, total 15, base gate 6/3, short bridge, body gate unchanged.",
+      "start_lane_steering": "when corridor_walls fails, the start-lane wall law follows the lane centre half the start width (measured at admission in this run) from a fitted side board that runs within 5 deg of the compass axis (source start_lane_side_wall, same 40 PWM step and play handling as lane walls); else compass hold as before.",
+      "first_cone_range": "route first-target tracker acquires up to 3.5 m from start-lane admission (FIRST_APPROACH_MAX_RANGE_M); tolerant 4-return minimum, size and isolation rules unchanged."
+    },
+    "offline_check_round72": {
+      "1547": "right board 141 points, intercept .481 m, error 1.3 cm; nulls 6-17 all projected, open gap 0; side-wall lane offset .017 m heading -2.56 deg; first cone candidate 3.03 m / 31.5 deg / 4 returns",
+      "1545": "right board fitted; a real return beyond its line at 2.58 m ahead limits the projection (nulls 7-8 remain unknown, 2 bins)"
+    },
+    "validation": {
+      "tests": "814 OK (2 expected failures), 10 new (test_route_72_side_wall.py, fixture route-72-start-lane-exit.json from round 72 ranges)",
+      "simulation": "not run (user)"
+    },
+    "risks": [
+      "The single board is extrapolated up to 6 m; an object exactly in the grazing sector that returns nothing would be counted as board surface (real cones and boards return; the 8 cm body gate is unchanged).",
+      "Following the right board after the divider end assumes the lane centre continues; the first-support approach takes over once the cone is confirmed."
+    ]
   }
 }

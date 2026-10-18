@@ -944,12 +944,13 @@ class Console:
                     and isinstance(route_motion, ManeuverSequence) and route_motion.continue_route is True):
                 clearance_scan = {**self.scan, 'received_at': self.scan_at} if isinstance(self.scan, dict) else self.scan
                 contact_target = route_motion.current_contact_target(clearance_scan, now)
+            front_lane, front_side_walls = self.turn_front_walls(session, now) if turn_trial else (None, False)
             clearance = probe_clearance(clearance_scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
                                         rear_launch=rear_active, camera_required=not turn_trial,
                                         clearance_profile='maneuver' if turn_trial else 'straight',
                                         relaxed_turn_left=relaxed_turn_left,
                                         body_contact_target=contact_target,
-                                        front_lane=self.turn_front_lane(session, now) if turn_trial else None,
+                                        front_lane=front_lane, front_side_walls=front_side_walls,
                                         rear_start=self.turn_rear_start(session))
             if clearance['body_proximity']['target_contact_tolerated']:
                 report['target_contact_tolerated_count'] = report.get('target_contact_tolerated_count', 0)+1
@@ -1068,11 +1069,24 @@ class Console:
                 and isinstance(motion, ManeuverSequence) and motion.continue_route is True
                 and motion.route_stage == 'start_lane' and motion.phase in ('presteer', 'drive', 'coast'))
 
-    def turn_front_lane(self, session, now):
+    def turn_front_walls(self, session, now):
+        """(native lane, side-wall flag) for route-lane grazing-return accounting.
+
+        The current unique native lane when there is one; otherwise, in the
+        same route lanes and freshness scope, this frame's own side boards
+        (autonomy_live.side_wall_fit, round 72). Never a remembered lane.
+        """
+        lane = self.turn_front_lane(session, now)
+        if lane is not None:
+            return lane, False
+        return None, self.turn_front_lane(session, now, scope_only=True)
+
+    def turn_front_lane(self, session, now, scope_only=False):
         """Current unique native lane for route-lane grazing-return accounting.
 
         No remembered lane, compass-only estimate, or open-course approach
         qualifies. Raw returns and all body/freshness gates remain unchanged.
+        ``scope_only``: True when only the stage/freshness scope holds.
         """
         motion, scan = session.get('turn_motion'), self.scan
         if (session.get('turn_trial') is not True or session.get('continue_route') is not True
@@ -1086,7 +1100,9 @@ class Console:
                 or not 0 <= now-self.scan_at < SCAN_AGE_S
                 or motion.last_seq is not None and scan['seq'] < motion.last_seq
                 or motion.last_publication is not None and scan['at_ms'] < motion.last_publication):
-            return None
+            return False if scope_only else None
+        if scope_only:
+            return True
         candidates = scan.get('corridor_candidates')
         if (not isinstance(candidates, list) or len(candidates) > 24
                 or any(not _valid_candidate(candidate) for candidate in candidates)):
@@ -1158,8 +1174,8 @@ class Console:
                 and sum(r is not None for r in ranges) >= COAST_MIN_VALID_POINTS)
 
     @staticmethod
-    def turn_front_evidence_matches(scan, clearance, front_lane=None):
-        evidence = front_gap_evidence(scan['ranges'], bridge=True, front_lane=front_lane)
+    def turn_front_evidence_matches(scan, clearance, front_lane=None, side_walls=False):
+        evidence = front_gap_evidence(scan['ranges'], bridge=True, front_lane=front_lane, side_walls=side_walls)
         if any(key in clearance and key not in evidence
                for key in ('front_wall_projected_bins', 'front_wall_projection')):
             return None
@@ -1210,7 +1226,7 @@ class Console:
                 return False
             if route:
                 evidence = self.turn_front_evidence_matches(scan, clearance,
-                    self.turn_front_lane(session, time.monotonic()))
+                    *self.turn_front_walls(session, time.monotonic()))
                 if evidence is None:
                     return False
                 unknown = evidence['front_open_unknown_bins']
@@ -1288,7 +1304,7 @@ class Console:
             return False
         if 'front_sparse' in issues:
             evidence = self.turn_front_evidence_matches(scan, clearance,
-                self.turn_front_lane(session, time.monotonic()))
+                *self.turn_front_walls(session, time.monotonic()))
             if evidence is None:
                 return False
             # Trial44: halting instead of a pending neutral would be the same
