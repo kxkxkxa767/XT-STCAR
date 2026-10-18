@@ -22732,5 +22732,27 @@
     "validation": {
       "tests": "821 OK (2 new in test_route_control.py)"
     }
+  },
+  "turn78_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 78,
+    "source_commit": "ec4e35bc04919894270811b899f4d198a6f81e05",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-78",
+    "evidence_sha256_files_ok": 7,
+    "map": "work/round69-claude-a-20261018/t78-map.png",
+    "result": "start lane -> first loop -> PASS1 8.75 s -> a 13-null frame paused and resumed (.5 s) -> second support first seen 9.81 s at 3.12 m / -29.5 deg, confirmed 10.10 s (2.84 m) -> second_loop with right steering to 1373-1413 (physical 1350-1380, targets 1308-1339) -> the second support moved from -56 deg to -14 deg at 1.77 m (the car turned onto it instead of keeping it on its right), a missing frame at 11.31 s, a 12-null right-front frame at 11.57 s -> post-pass pause -> the car coasted ~1-1.5 m (ESC lag) and stood from ~13.2 s (front .95 m); the pause never resumed (its second_loop readiness needs the second support; the second tracker had lost it and nothing re-acquired it) until maneuver_cumulative_drive_timeout at ~44 s. Max tick .088 s, max gap .113 s (no compute stop). No contact (rest gap .75 m). The trial-map path drawn during the pause is ICP drift (ranges constant from 13.2 s).",
+    "user": "还是没有识别到第二个桩吧 / 这次测试完后记录，明天继续吧"
+  },
+  "next_20261019": {
+    "car_state": "round 78 installed (claude-turn78, ec4e35b, 15 hashes), locked at rest in the second-loop area; SSH socket was live at 21:30.",
+    "todo": [
+      "1. Second-loop pause: when the second support is lost during the pause, re-acquire it (nearest compact support near its last fresh position, like the first-target wait rebind) and bound the pause (e.g. 3 s) with an explicit terminal reason instead of using up the 40 s drive budget.",
+      "2. Second-loop entry steering: the car turned onto the cone (bearing -56 -> -14 deg at 1.77 m) with max right; review _open_second_loop_update against the round-78 frames (real right curvature at 1350-1380 physical vs the plan), cap the right demand or plan from the measured gain.",
+      "3. Right-front grazing nulls in open stages (12-13 bins at 6-17 deg after the first pass and in the second loop): extend the current-frame side-board projection where a board fits; transient frames now pause and resume (post-pass pause + ACK grace).",
+      "4. Coast standstill confirmation never completes on the car (coast_motion result always superseded: the ICP worker is slower than one scan period).",
+      "5. Keep testing on the car (user: 不要跑仿真了); simulation only as a compute harness."
+    ],
+    "today_progress": "start-lane weave fixed (rounds 71+); right-board reference after the divider end; first cone acquired at 3-3.5 m; full first loop (PASS1) since round 74; second support recognised and second loop entered (rounds 76-78); compute stops fixed by caching, loop pacing and the GC pause."
   }
 }
