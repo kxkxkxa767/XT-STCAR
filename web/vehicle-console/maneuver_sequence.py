@@ -10,7 +10,7 @@ import math
 
 from compact_target import (CompactTargetTracker, _associated, _candidates, contact_supports, MAX_DIAMETER_M,
                             MIN_RANGE_M, TOLERANT_MIN_POINTS, TOLERANT_MAINTENANCE_MIN_POINTS,
-                            rotated_observation)
+                            rotated_observation, EXTENDED_MAX_RANGE_M)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM, CorridorSteering, corridor_walls,
                            side_wall_fit)
@@ -1192,10 +1192,14 @@ class ManeuverSequence(TurnMotion):
         # Trial43: the second support first appears ahead on either side;
         # once confirmed it moves from the front through the right to behind
         # the rear, where the pass is matured over .25 s.
-        return CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, math.pi/2),
+        tracker = CompactTargetTracker(acquisition_bearing_rad=(-math.pi/2, math.pi/2),
             maintenance_bearing_rad=(-math.pi, math.pi/2), select_associated=True,
             unconfirmed_boundary_gap=True, tolerant=True,
             acquisition_min_points=SECOND_ACQUISITION_MIN_POINTS)
+        # Round 77: the second cone was first seen at 2.81 m (a 3 m limit) and
+        # confirmed too late; acquire from 3.5 m as the first one does.
+        tracker.extend_acquisition_range(EXTENDED_MAX_RANGE_M)
+        return tracker
 
     def _route_event(self, name, scan, control, evidence=None):
         # One snapshot per transition, never an unbounded in-control log.
@@ -2159,6 +2163,10 @@ class ManeuverSequence(TurnMotion):
                 hit = self._open_entry_path_hit(scan, point, heading, stop_at, ahead)
                 return ((hit is None or hit > stop_at)
                         or self._open_light_lane_entry(scan, heading, lane) is not None)
+            if stage == 'open_transfer' and self.second_track_id is None:
+                # Round 77: the hold waited for a confirmed second support but
+                # never observed it (the tracker froze at its first sighting).
+                self._open_second_observation(scan, now, heading)
             return not board_ahead or self._open_confirmed_second(scan) is not None
         if stage == 'second_loop':
             target = self.second_target
@@ -3532,7 +3540,7 @@ class ManeuverSequence(TurnMotion):
         ahead = []
         boards = None
         for target in _candidates(scan['ranges'], bearing_range_rad=(-math.pi/2, math.pi/2), tolerant=True,
-                                  min_points=SECOND_ACQUISITION_MIN_POINTS):
+                                  min_points=SECOND_ACQUISITION_MIN_POINTS, max_range_m=EXTENDED_MAX_RANGE_M):
             x, y = target['point_left_m']
             along, lateral = e1[0]*x+e1[1]*y, e1[0]*y-e1[1]*x
             # Cheap band test first; the board lines (the costliest part of a

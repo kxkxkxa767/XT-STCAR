@@ -22706,5 +22706,31 @@
     "validation": {
       "tests": "819 OK (1 new in test_route_control.py)"
     }
+  },
+  "turn77_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 77,
+    "source_commit": "635dec9a8ec0498aedc4c4fca535c32679d46da9",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-77",
+    "evidence_sha256_files_ok": 7,
+    "result": "first loop and PASS1; a 13-null frame after the pass entered the post-pass pause and resumed after .5 s; open transfer heading back toward the start end (by design, second support); recovery hold 9.74-10.3 s (open_board_ahead_without_second_support); second support confirmed only ~11.0 s; the second-loop entry tick took .115 s -> gap .1208 s > .12 -> lock; the car then rolled ~1.5 m (ESC lag) toward the start end, rest gap .085 m. User: 你怎么回去了 / 第二个桶貌似没有识别到",
+    "second_support": "a compact object (4-6 returns) moved consistently right -40.5 deg 2.6 m -> -74.5 deg 2.0 m while the car turned: the second support. Tracker id 1 froze at its first sighting (2.81 m) through the hold (the pause did not observe it), expired, id 2 confirmed late.",
+    "ticks": "typical .01-.04 s; spikes .076 (first approach), .092 (transfer), .115 (second-loop entry)"
+  },
+  "turn78_second_support_gc_20261018": {
+    "date": "2026-10-18",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": {
+      "pause_observes_second": "open_transfer pause readiness runs the second-support observation before testing for a confirmed second support (the hold waited for a confirmation it never observed).",
+      "second_range": "second tracker and lookout candidates acquire from 3.5 m (EXTENDED_MAX_RANGE_M), return-count and isolation rules unchanged; the along-axis band reach 3.2 m unchanged.",
+      "gc_pause": "route run: gc.freeze()+gc.disable() at the route session start, gc.unfreeze()+gc.enable() at the halt (session end). Mac: a full collection of the sim console ~1.6 ms (x30-40 on the car). Reference counting still frees per-tick objects; runs <= 40 s."
+    },
+    "validation": {
+      "tests": "821 OK (2 new in test_route_control.py)"
+    }
   }
 }

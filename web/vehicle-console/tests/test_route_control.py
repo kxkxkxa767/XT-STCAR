@@ -748,6 +748,23 @@ class RouteControlTests(unittest.TestCase):
         self.assertIsNone(self.console.auto_session)  # grace over, still un-ACKed: the old halt
         self.assertEqual(self.console.auto_result['reason'], 'turn_perception_unavailable')
 
+    def test_route_run_pauses_cyclic_gc_until_the_halt(self):
+        # Round 77: occasional .08-.115 s ticks; automatic collection is
+        # paused for the route run and restored when it ends.
+        import gc
+        gc.enable()  # other cases may end with a session open (no halt)
+        self.console._gc_paused = False
+        _, session = self.enter_compact_orbit(continue_route=True)
+        self.assertFalse(gc.isenabled())
+        self.console.halt('test_stop')
+        self.assertIsNone(self.console.auto_session)
+        self.assertTrue(gc.isenabled())
+
+    def test_second_tracker_acquires_from_three_and_a_half_metres(self):
+        import compact_target as ct
+        tracker = self.server.ManeuverSequence._new_second_tracker()
+        self.assertEqual(tracker._acquisition_max_range_m, ct.EXTENDED_MAX_RANGE_M)
+
     def test_route_later_stage_and_resume_pending_use_full_eight_cm_body_gate(self):
         for stage in ('right_align', 'corridor_follow', 'second_orbit', 'resume_pending'):
             with self.subTest(stage=stage):

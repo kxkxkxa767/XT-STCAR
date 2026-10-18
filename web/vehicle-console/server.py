@@ -5,6 +5,7 @@ import base64
 import collections
 import copy
 import fcntl
+import gc
 import hashlib
 import hmac
 import ipaddress
@@ -287,6 +288,7 @@ class Console:
                 if formal_complete:
                     self.stop_goal_processed.add(self.auto_session['goal_consumer'].goal.identity)
             self.auto_session = None
+            self.autonomy_gc_resume()
             self.steer_sent = {}
             if self.coast_worker is not None:
                 self.coast_worker.reset()
@@ -573,6 +575,7 @@ class Console:
                 # The route reasons in nominal servo PWM; the bridge gets the
                 # measured physical command (steer_calibration.py).
                 self.auto_session['steer_output'] = SteerOutput()
+                self.autonomy_gc_pause()
         self.auto_result = None
         self.owner, self.owner_at = 'auto-turn-'+run_id, now
         self.control_mode, self.stop_latched = ('auto_turn_cone_trial' if compact_target_trial else 'auto_turn_trial'), False
@@ -752,6 +755,22 @@ class Console:
                 raise
             self.arm_sequence = self.sequence
             return {'ok': True, 'run_id': run_id, 'epoch': self.control_epoch}
+
+    def autonomy_gc_pause(self):
+        """Route run: no automatic cyclic collection (round 77: occasional
+        .076-.115 s ticks against .01-.04 s typical; a full collection of the
+        console's objects is ~1.6 ms on the Mac, tens of ms on the car).
+        Reference counting still frees almost everything; runs last <= 40 s."""
+        if not getattr(self, '_gc_paused', False):
+            gc.freeze()
+            gc.disable()
+            self._gc_paused = True
+
+    def autonomy_gc_resume(self):
+        if getattr(self, '_gc_paused', False):
+            self._gc_paused = False
+            gc.unfreeze()
+            gc.enable()
 
     def autonomy_watch(self):
         # Ticks start every 20 ms; a long tick is followed by at least 5 ms
