@@ -153,3 +153,124 @@ class ClosedLoopWeave(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StartLaneSpeedTrack(unittest.TestCase):
+    """The nearest return can switch surfaces; the speed follows directions."""
+    def scan(self, k, ranges):
+        return {'seq': k, 'at_ms': 1000+100*k, 'received_at': 10.+.1*k, 'ranges': ranges}
+
+    def wall(self, distance, near=None):
+        # A board ahead perpendicular to the axis; optionally bins -1/-2 meet a
+        # nearer surface (a depth step) that may or may not be in the sector.
+        ranges = [None]*360
+        for i in range(-6, 7):
+            ranges[i % 360] = distance/math.cos(math.radians(i))
+        if near is not None:
+            for i in (-2, -1):
+                ranges[i % 360] = near/math.cos(math.radians(i))
+        return ranges
+
+    def motion(self):
+        motion = ManeuverSequence(0., continue_route=True, max_drive_s=40.)
+        motion.compass.current = lambda scan: 0.
+        return motion
+
+    def test_track_ignores_the_nearest_return_switching_surface(self):
+        motion = self.motion()
+        values = []
+        for k in range(6):
+            d = 7.-.1*k
+            near = d-.15 if k % 2 else None  # the step flickers in and out
+            ranges = self.wall(d, near)
+            ahead = min(r for r in ranges[-3:]+ranges[:4] if r is not None)
+            values.append(motion._lane_front_track(self.scan(k, ranges), ahead))
+        steps = [a-b for a, b in zip(values, values[1:])]
+        for step in steps:
+            self.assertAlmostEqual(step, .1, places=6)
+
+    def test_least_squares_speed_after_four_points(self):
+        motion = self.motion()
+        speeds = [motion._track_speed(self.scan(k, []), 7.-.12*k) for k in range(6)]
+        self.assertEqual(speeds[:3], [None]*3)
+        self.assertAlmostEqual(speeds[3], 1.2)
+        self.assertAlmostEqual(speeds[5], 1.2)
+        self.assertIsNone(motion._track_speed(self.scan(6, []), None))  # lost: restart
+
+    def test_unknown_speed_after_a_measured_one_cruises(self):
+        gov = ManeuverSequence._start_governor
+        self.assertEqual(gov(None, 0., 1.5), ms.TRIAL_MOTOR)  # launch
+        self.assertEqual(gov(None, 0., 1.5, True), ms.ROUTE_SLOW_MOTOR)
+        self.assertEqual(gov(None, 0., .5, True), NEUTRAL)
+
+
+class LaneWallPlay(unittest.TestCase):
+    def test_play_override_bounds_and_default(self):
+        import steer_calibration as sc
+        a, b = sc.SteerOutput(), sc.SteerOutput()
+        for nominal in (1500, 1520, 1510, 1490, 1500):
+            self.assertEqual(a.physical(nominal), b.physical(nominal, sc.STEER_PLAY_PWM))
+        with self.assertRaises(ValueError):
+            sc.SteerOutput().physical(1520, sc.STEER_PLAY_PWM+1)
+        c = sc.SteerOutput()
+        self.assertEqual(c.physical(1520, 0), round(sc.wheel_for_curvature(20/160)))
+
+    def test_only_wall_law_commands_are_marked(self):
+        motion = ManeuverSequence(0., continue_route=True, max_drive_s=40.)
+        motion.route_stage, motion.phase, motion.reason = 'start_lane', 'drive', 'start_lane_lane_walls'
+        self.assertTrue(motion.lane_wall_output_active())
+        motion.reason = 'start_lane_first_support_approach'
+        self.assertFalse(motion.lane_wall_output_active())
+        motion.phase, motion.start_lane_coast_steering = 'coast', {'target_pwm': 1500}
+        self.assertTrue(motion.lane_wall_output_active())
+        motion.route_stage = 'first_target'
+        self.assertFalse(motion.lane_wall_output_active())
+
+
+class CoastKeepsTheLane(unittest.TestCase):
+    """A start-lane coast (board ahead forced at scan 18) on a car whose real
+    play is smaller than the calibration's: the old coast held the calibrated
+    'neutral' (physical 1450 after a left correction) into the right board."""
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('course_sim_69_coast', ROOT/'scripts/course-sim.py')
+        cls.cs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.cs)
+
+    def run_coast(self, steer):
+        cs = self.cs
+        orig_range, orig_update = ms.ManeuverSequence._lane_front_range, ms.ManeuverSequence._start_lane_update
+
+        def front(self, scan):
+            value = orig_range(self, scan)
+            return 1.2 if self.route_stage == 'start_lane' and scan['seq'] >= 18 and value is not None else value
+
+        def update(self, scan, *a, **k):
+            if self.phase == 'coast' and not steer:
+                saved = ms.corridor_walls
+                ms.corridor_walls = lambda scan: None
+                try:
+                    return orig_update(self, scan, *a, **k)
+                finally:
+                    ms.corridor_walls = saved
+            return orig_update(self, scan, *a, **k)
+        course = cs.Course(**cs.layout(8.1, 4.15, .94, 3.2))
+        x, y, psi = course.start
+        course.start = (x, y-.04, psi+math.radians(2))
+        try:
+            ms.ManeuverSequence._lane_front_range, ms.ManeuverSequence._start_lane_update = front, update
+            summary, log, _ = cs.run(course, max_s=6., vehicle='measured', delay=.25,
+                                     vehicle_params={'play_pwm': 0., 'near_center_gain': 2.})
+        finally:
+            ms.ManeuverSequence._lane_front_range, ms.ManeuverSequence._start_lane_update = orig_range, orig_update
+        coast = [r for r in log if r[8] == 'coast']
+        return summary, coast
+
+    def test_coast_follows_the_walls(self):
+        summary, coast = self.run_coast(True)
+        self.assertTrue(coast)
+        self.assertEqual(summary['contacts'], [])
+        heading = [abs(r[3]) for r in coast]
+        held_summary, held = self.run_coast(False)
+        self.assertLess(max(heading), max(abs(r[3]) for r in held))
+        self.assertGreater(min(r[10] for r in coast), min(r[10] for r in held))

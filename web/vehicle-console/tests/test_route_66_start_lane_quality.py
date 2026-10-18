@@ -98,8 +98,11 @@ class StartLaneDropoutClosedLoop(unittest.TestCase):
         spec.loader.exec_module(cls.sim)
 
     def run_user8(self):
+        # Seed 1 (was 0): with the 2026-10-18 start-lane wall law the seed-0
+        # car weaves less and meets no intolerable dropout frame even without
+        # the allowance; seeds 0-3 at .1/.2 still stop without it in 7 of 8.
         summary, _, _ = self.sim.run(self.sim.Course(**self.sim.LAYOUTS['user8']), vehicle='measured',
-                                     seed=0, edge_dropout=.1)
+                                     seed=1, edge_dropout=.1)
         return summary
 
     def test_start_lane_continues_through_bounded_dropouts(self):

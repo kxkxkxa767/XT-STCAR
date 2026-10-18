@@ -410,6 +410,11 @@ LANE_WALL_GAIN_PWM_PER_RAD = 150.
 LANE_WALL_CAP_PWM = 40
 LANE_WALL_HISTORY = 3
 LANE_WALL_GAP_S = .35  # older publications are not one trend
+LANE_TRACK_SPEED_POINTS = 4
+# Play crossed by the start-lane wall law's commands (the measured +-50 is
+# kept for the loops). Chosen over real play 0-70 in simulation: see
+# turn69_start_lane_law_20261018.
+LANE_WALL_PLAY_PWM = 50
 
 
 class LaneWallSteering:
@@ -1154,6 +1159,10 @@ class ManeuverSequence(TurnMotion):
         self._lane_start_slow = False
         # Searching for the first support near the start lane's stopping range.
         self._start_motor = TRIAL_MOTOR
+        self._start_speed_measured = False
+        self.start_lane_coast_steering = None
+        self._front_track = None
+        self._track_history = []
         self._power_cmd_at = None  # last output frame with a drive motor (ESC lag)
         self._power_cmd_motor = None
         self._launch_until = None
@@ -3044,6 +3053,12 @@ class ManeuverSequence(TurnMotion):
                 and isinstance(control, dict) and control.get('command_acked') is True
                 and control.get('motor') in DRIVE_MOTORS and control.get('servo') == self.servo > NEUTRAL)
 
+    def lane_wall_output_active(self):
+        """The current command comes from the start-lane wall law (drive or coast)."""
+        return (self.continue_route and self.route_stage == 'start_lane'
+                and (self.phase == 'drive' and self.reason == 'start_lane_lane_walls'
+                     or self.phase == 'coast' and self.start_lane_coast_steering is not None))
+
     def _start_lane_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait):
         """Start lane: wall law (else compass hold), then the first approach."""
         if self.phase == 'presteer':
@@ -3058,6 +3073,18 @@ class ManeuverSequence(TurnMotion):
             if self.coast_since is not None and now-self.coast_since+1e-9 >= COAST_MAX_S:
                 self.lock('coast_standstill_unconfirmed')
             else:
+                if advancing:
+                    # 2026-10-18: the car rolls on for the ESC lag and more;
+                    # keep following the current lane walls (no walls: centre)
+                    # instead of holding one command into a side board.
+                    walls = corridor_walls(scan)
+                    target = (NEUTRAL if walls is None else
+                              self._lane_start_steering.update(walls, scan['seq'], now, True, scan['at_ms']))
+                    if target < NEUTRAL and (self._route_center_ack is None or self.servo > NEUTRAL):
+                        target = NEUTRAL  # right only after a current actual center ACK
+                    self.steering_target = target
+                    self.start_lane_coast_steering = {'source_seq': scan['seq'], 'walls': walls,
+                                                      'target_pwm': target, 'reason': self.reason}
                 self._slew(now)
             return self._result(now)
         if self.phase != 'drive':
@@ -3098,7 +3125,7 @@ class ManeuverSequence(TurnMotion):
         # the far ray ahead (2026-10-18 simulation, .94 m lane: rates 2.7/-.3
         # gave 2.65 m/s at .9 m/s and cut the lane); unknown speed meanwhile
         # is the conservative LANE_SPEED_UNKNOWN_MPS.
-        speed = self._lane_speed(scan, ahead, min_rates=3)
+        speed = self._track_speed(scan, self._lane_front_track(scan, ahead))
         stop_at = allowed = None
         if approach is None and source != 'first_support_missing_frame_hold':
             # A cut now still pushes for the rest of the ESC lag, the speed
@@ -3112,7 +3139,9 @@ class ManeuverSequence(TurnMotion):
             stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)
                        + v*reaction)
             allowed = self._start_allowed_speed(ahead)
-            self._start_motor = self._start_governor(speed, rise, allowed)
+            if speed is not None:
+                self._start_speed_measured = True
+            self._start_motor = self._start_governor(speed, rise, allowed, self._start_speed_measured)
         else:
             # The approach drives on at 1550 (a stopped car restarts at 1560).
             self._start_motor = (TRIAL_MOTOR if speed is not None and speed < LANE_SPEED_RESTART_MPS
@@ -4684,6 +4713,59 @@ class ManeuverSequence(TurnMotion):
         values = [r for r in values if _number(r)]
         return min(values) if values else None
 
+    def _lane_front_track(self, scan, ahead):
+        """Start-lane distance to go for the speed estimate only.
+
+        The nearest return of the +-LANE_FRONT_HALF_BINS sector can switch
+        between surfaces from one frame to the next (2026-10-18 simulation: a
+        .15 m depth step 6-7 m ahead, or a side board met at grazing incidence
+        at the sector edge), so the minimum jumps and the closing speed went
+        unknown or read 2+ m/s. Each direction of the sector (relative to the
+        compass axis) is compared with the same direction on the previous frame
+        and the median change moves the track. Stopping still uses `ahead`.
+        """
+        heading = self.compass.current(scan)
+        previous, self._front_track = self._front_track, None
+        if heading is None or ahead is None:
+            return ahead
+        center = round(math.degrees(_wrap(heading)))
+        sector = {}
+        for j in range(-LANE_FRONT_HALF_BINS, LANE_FRONT_HALF_BINS+1):
+            r = scan['ranges'][(center+j) % 360]
+            if _number(r):
+                sector[j] = r*math.cos(math.radians(center+j)-heading)
+        value = ahead
+        if previous is not None and 0 < scan['at_ms']-previous[0] <= (SCAN_AGE_S+.05)*1000:
+            deltas = sorted(previous[1][j]-sector[j] for j in sector.keys() & previous[1].keys())
+            if len(deltas) >= 3:
+                value = previous[2]-(deltas[(len(deltas)-1)//2]+deltas[len(deltas)//2])/2
+        self._front_track = (scan['at_ms'], sector, value)
+        return value
+
+    def _track_speed(self, scan, track):
+        """Start-lane closing speed: least-squares slope of the last
+        LANE_TRACK_SPEED_POINTS track values (.3 s; the median of .2 s
+        baselines lagged ~.3 s and read .6 m/s low while accelerating)."""
+        history = self._track_history
+        if track is None:
+            history.clear()
+            return None
+        row = (scan['at_ms']/1000, scan['received_at'], track)
+        if history:
+            dt = row[0]-history[-1][0]
+            rate = (history[-1][2]-track)/dt if dt > 0 else None
+            if (not .05 <= dt <= SCAN_AGE_S+.05 or not .05 <= row[1]-history[-1][1] <= SCAN_AGE_S+.05
+                    or rate is None or not -.4 <= rate <= LANE_MAX_CLOSING_MPS):
+                history.clear()
+        history.append(row)
+        del history[:-LANE_TRACK_SPEED_POINTS]
+        if len(history) < LANE_TRACK_SPEED_POINTS:
+            return None
+        mt = sum(h[0] for h in history)/len(history)
+        md = sum(h[2] for h in history)/len(history)
+        slope = (sum((h[0]-mt)*(h[2]-md) for h in history)/sum((h[0]-mt)**2 for h in history))
+        return max(0., -slope)
+
     def _lane_speed(self, scan, ahead, *, min_rates=2):
         """Closing speed on the board ahead: median rate over ~.3 s baselines."""
         history = self._lane_ranges
@@ -4734,11 +4816,16 @@ class ManeuverSequence(TurnMotion):
         return min(LANE_START_MAX_MPS, -r*a+math.sqrt((r*a)**2+2*a*room))
 
     @staticmethod
-    def _start_governor(speed, rise, allowed):
+    def _start_governor(speed, rise, allowed, measured_before=False):
         """Start-lane motor for the measured speed against the allowed speed."""
         cap = LANE_START_MAX_MPS if allowed is None else allowed
         if speed is None:
-            return TRIAL_MOTOR if cap >= LANE_SPEED_UNKNOWN_MPS*.6 else NEUTRAL  # launch
+            if cap < LANE_SPEED_UNKNOWN_MPS*.6:
+                return NEUTRAL
+            # Launch at 1560; once a speed was measured, an unknown one cruises
+            # at 1550 (2026-10-18 simulation: the speed stayed unknown behind a
+            # jumping range ahead and 1560 drove the car past the 1.5 m/s cap).
+            return ROUTE_SLOW_MOTOR if measured_before else TRIAL_MOTOR
         if speed+rise >= cap:
             return NEUTRAL
         if speed < LANE_SPEED_RESTART_MPS or speed+rise < cap-LANE_START_PUSH_BAND_MPS:

@@ -61,20 +61,25 @@ class SteerOutput:
         self.wheel = float(NEUTRAL)  # estimated wheel position (servo PWM units)
         self.last = NEUTRAL
 
-    def physical(self, nominal):
+    def physical(self, nominal, play=None):
+        """``play``: the play to cross for this command (default the measured
+        one); the wheel estimate follows the same assumption."""
         if type(nominal) is not int:
             raise ValueError('nominal servo must be an int PWM')
+        play = self.play if play is None else play
+        if not 0 <= play <= self.play:
+            raise ValueError('steering play out of range')
         target = wheel_for_curvature((nominal-NEUTRAL)/NOMINAL_PWM_PER_CURVATURE)
         if target > self.wheel+.5:
-            command = target+self.play
+            command = target+play
         elif target < self.wheel-.5:
-            command = target-self.play
+            command = target-play
         else:
             # Wheels already there: keep pushing with the same command (the
             # servo lags; releasing to the target after one frame of the
             # overshoot left the wheels short of it). Rounding allowance 1 PWM.
-            command = self.last if abs(self.last-target) <= self.play+1 else target
+            command = self.last if abs(self.last-target) <= play+1 else target
         command = int(round(max(PHYSICAL_RANGE[0], min(PHYSICAL_RANGE[1], command))))
-        self.wheel = min(command+self.play, max(command-self.play, self.wheel))
+        self.wheel = min(command+play, max(command-play, self.wheel))
         self.last = command
         return command

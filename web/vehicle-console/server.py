@@ -31,7 +31,7 @@ from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
 from steer_calibration import SteerOutput
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate
-from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S,
+from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S, LANE_WALL_PLAY_PWM,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
                                DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
                                OPEN_STAGES)
@@ -223,7 +223,9 @@ class Console:
         steer = (self.auto_session or {}).get('steer_output')
         if op != 'drive' or steer is None:
             return servo
-        physical = steer.physical(servo)
+        motion = (self.auto_session or {}).get('turn_motion')
+        lane = isinstance(motion, ManeuverSequence) and motion.lane_wall_output_active()
+        physical = steer.physical(servo, LANE_WALL_PLAY_PWM if lane else None)
         self.steer_sent[sequence] = (servo, physical)
         for old in [k for k in self.steer_sent if k < sequence-64]:
             del self.steer_sent[old]

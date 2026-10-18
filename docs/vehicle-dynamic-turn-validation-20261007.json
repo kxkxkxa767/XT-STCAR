@@ -22463,10 +22463,48 @@
       }
     },
     "risks": [
-      "Real near-centre play may be smaller than 50 on some days; then the calibrated reversals over-correct (sim play 0/20 halts 10 vs 0).",
-      "The start-lane front range (+-3 deg along the compass axis) still jitters at 6-8 m in simulation; speed unknown for long lets the car pass 1.5 m/s and then coast with the steering held (body-gate stops in sim).",
-      "Simulation only; no physical trial of the new law yet."
+      "Real near-centre play much smaller than 50 still over-corrects on reversals (sim play 0: p2p 7.1 deg, no halt); an online play/gain estimate is the next step.",
+      "Full-route sim totals are about neutral (308 -> 309); short 5 m courses lose a few late-stage runs to a different start-lane exit.",
+      "Simulation only; no physical trial of the new start-lane law yet."
     ],
-    "hard_guards_unchanged": true
+    "hard_guards_unchanged": true,
+    "risk_fixes": {
+      "user_request": "（两条风险）这俩你能先改吗",
+      "findings": {
+        "coast": "not frozen: begin_coast sets nominal 1500, but after a left correction the calibration crosses the play and keeps pushing physical 1450; on a car with less real play the wheels then turn right for the whole coast (sim play 0: 17 deg, board contact).",
+        "speed": "the +-3 deg sector minimum switches surfaces (grazing side board at the edge in a .94 m lane, a .15 m depth step 6-7 m ahead), so the range jumped, the speed went unknown and 1560 drove past 1.5 m/s, or two rates read 2+ m/s; the median-of-baselines estimate also lagged ~.3 s (read .6 m/s low while accelerating).",
+        "rejected_corridor_filter": "keeping only returns within +-.24 m of the car path moved the boundary onto a depth step and made the minimum flicker (user8 speed 1.2, mid64 play 70 stopped); withdrawn."
+      },
+      "changes": {
+        "coast_wall_steering": "start-lane coast keeps the wall law on fresh frames (no walls: 1500; right only after the existing centre ACK); evidence start_lane_coast_steering.",
+        "speed_track": "start lane: distance-to-go track moved by the median per-direction change of the +-3 deg sector (same axis-relative direction on consecutive frames); speed = least-squares slope of the last 4 track values (.3 s); same plausibility/clock clearing as the old estimate; stopping still uses the raw minimum ahead.",
+        "unknown_speed_cruise": "once a start-lane speed was measured, an unknown speed cruises at 1550 instead of 1560 (launch unchanged).",
+        "lane_play_hook": "SteerOutput.physical(nominal, play) and LANE_WALL_PLAY_PWM for wall-law commands; kept at the measured 50 after the sweep."
+      },
+      "lane_play_sweep": {
+        "grid": "324 start-lane cases; p2p/halts by real play 0/20/35/50/70",
+        "50": "7.1/0 5.2/1 5.3/0 3.7/0 5.4/0 (halts 1)",
+        "35": "5.8/0 4.4/1 2.7/0 4.7/0 6.8/2 (halts 3)",
+        "25": "4.7/0 3.2/0 3.5/0 5.6/0 8.1/11",
+        "15": "3.8/0 2.8/0 3.9/0 6.6/1 7.8/50",
+        "decision": "50: smaller compensation helps small real play but fails large play badly; adapting it online is the next step (user asked for floor-adaptive behaviour)."
+      },
+      "validation": {
+        "start_lane_grid": "324 cases: start-lane halts old law 67 -> 7e0bbac 13 -> now 0; contacts 0; p2p mean 4.86 (old 9.70); play 0 halts 7 -> 0 (old law 0)",
+        "full_suite": "vs b907cd4: named 20/20; range measured 96 -> 96 (lost 3/new 3), nominal 95 -> 92 (lost 5/new 2); robust 117 -> 121 (lost 1/new 5); dropout 12/12; total 308 -> 309; lost cases are later-stage events (10-40 s, 5 m courses, one L8W4) after a different start-lane exit",
+        "coast_test": "forced start-lane coast, real play 0: held calibration 17 deg / gap .10 m / board contact -> wall law 6 deg / gap .21 m / none",
+        "tests": "793 + 6 new = 799 OK (2 expected failures)",
+        "old_test_changed": "test_route_66 StartLaneDropoutClosedLoop: seed 0 -> 1. With the new law the seed-0 car weaves less and meets no intolerable dropout frame even without the allowance; across seeds 0-3 x dropout .1/.2 the allowance still decides 7 of 8 (without it they stop in the start lane).",
+        "replays": "51/52 byte-identical; 64 only the start-lane micro corrections",
+        "tick_ms_mac": "start lane fresh max 1.66-1.68 (unchanged)",
+        "files": [
+          "work/round69-claude-a-20261018/v6-lp50.json",
+          "work/round69-claude-a-20261018/v8.json",
+          "work/round69-claude-a-20261018/suite-after4/results.json",
+          "work/round69-claude-a-20261018/suite-compare4.json",
+          "work/round69-claude-a-20261018/toggle2.py"
+        ]
+      }
+    }
   }
 }
