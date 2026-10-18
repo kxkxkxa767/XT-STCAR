@@ -23,6 +23,10 @@ FRONT_MAX_GAP = 3
 # step between the neighbours stay unknown; all nulls are still reported.
 FRONT_BRIDGE_MAX_BINS = 5
 FRONT_BRIDGE_MAX_STEP_M = .15
+# Only a currently measured native lane may explain grazing null rays by its
+# side-wall planes, bounded in range. This is occupied projection, not a new
+# return, free space, or evidence that the finite board continues indefinitely.
+FRONT_LANE_WALL_MAX_RANGE_M = 6.
 # Maneuver profile diagnostic only; the service applies it solely in route mode
 # after handover, or in an already-started left turn with current native geometry.
 # Trial49: two scan_incomplete frames (336/337
@@ -435,7 +439,58 @@ class ProbeClearanceError(ValueError):
         self.clearance = clearance
 
 
-def front_gap_evidence(bins, *, bridge=False):
+def _front_lane_wall_projection(bins, unknown, lane):
+    """Project missing rays onto the current lane's two measured wall planes.
+
+    Native corridor fits have short support windows, not physical board ends.
+    Allow their planes out to 6 m, but stop at any current real ray that sees
+    through the putative plane (an opening or end). Never alter raw returns.
+    """
+    from turn_motion import _valid_candidate
+    if not _valid_candidate(lane) or abs(lane['heading_left_rad']) >= math.pi/2:
+        raise ValueError('probe_invalid_front_lane')
+    heading = lane['heading_left_rad']
+    c, s = math.cos(heading), math.sin(heading)
+    left_rho = lane['center_offset_left_m']+lane['width_m']/2
+    right_rho = lane['center_offset_left_m']-lane['width_m']/2
+    # Test in the wall-normal direction, rather than range: at grazing angles
+    # a small fitting error otherwise looks like a large false range step.
+    through_margin = max(MANEUVER_BODY_CLEARANCE_M, 2*lane['fit_error_m'])
+    limits = {'left': FRONT_LANE_WALL_MAX_RANGE_M, 'right': FRONT_LANE_WALL_MAX_RANGE_M}
+    hits = []
+    for angle in unknown:
+        i = angle % 360
+        normal = -s*_BIN_COS[i]-c*_BIN_SIN[i]
+        if abs(normal) <= 1e-12:
+            continue
+        side, rho = ('left', left_rho) if normal > 0 else ('right', right_rho)
+        hit = rho/normal
+        along = c*_BIN_COS[i]-s*_BIN_SIN[i]
+        if 0 < hit <= FRONT_LANE_WALL_MAX_RANGE_M and along > 0 and hit*along < limits[side]:
+            hits.append({'angle_deg': angle, 'side': side, 'range_m': hit,
+                         'forward_along_lane_m': hit*along})
+    # A ray from an origin inside the lane can cross only one side plane.
+    # An opening can be seen outside the front-quality sector, so examine
+    # every real ray pointing forward along this lane, not only +/-30 deg.
+    for i, r in enumerate(bins):
+        if r is None:
+            continue
+        normal = -s*_BIN_COS[i]-c*_BIN_SIN[i]
+        side, rho, sign = ('left', left_rho, 1) if normal > 0 else ('right', right_rho, -1)
+        if sign*normal <= 1e-12 or sign*(r*normal-rho) <= through_margin:
+            continue
+        hit = rho/normal
+        along = c*_BIN_COS[i]-s*_BIN_SIN[i]
+        if 0 < hit <= FRONT_LANE_WALL_MAX_RANGE_M and along > 0:
+            limits[side] = min(limits[side], hit*along)
+    hits = [hit for hit in hits if hit['forward_along_lane_m'] < limits[hit['side']]]
+    return {'basis': 'current_native_lane_side_wall_plane_projection',
+            'occupied_projection': True, 'free_space_certified': False,
+            'max_range_m': FRONT_LANE_WALL_MAX_RANGE_M,
+            'known_opening_limit_along_lane_m': limits, 'lane': dict(lane), 'hits': hits}
+
+
+def front_gap_evidence(bins, *, bridge=False, front_lane=None):
     """Measure current front nulls; a bridged surface is occupied, never free.
 
     Callers validate the 360 finite-or-null ranges before using this evidence.
@@ -443,10 +498,12 @@ def front_gap_evidence(bins, *, bridge=False):
     the same short surface gap differently.
     """
     unknown = [angle for angle in range(-30, 31) if bins[angle % 360] is None]
+    unknown_set = set(unknown)
     run = largest_gap = 0
     for angle in range(-30, 31):
-        run = run+1 if angle in unknown else 0
-        largest_gap = max(largest_gap, run)
+        run = run+1 if angle in unknown_set else 0
+        if run > largest_gap:
+            largest_gap = run
     bridged = []
     if bridge:
         start = None
@@ -460,14 +517,26 @@ def front_gap_evidence(bins, *, bridge=False):
                         and abs(left-right) <= FRONT_BRIDGE_MAX_STEP_M):
                     bridged.extend(range(start, angle))
                 start = None
-    open_unknown = [angle for angle in unknown if angle not in bridged]
+    bridged_set = set(bridged)
+    open_unknown = [angle for angle in unknown if angle not in bridged_set]
+    wall_evidence = None
+    if front_lane is not None and open_unknown:
+        wall_evidence = _front_lane_wall_projection(bins, open_unknown, front_lane)
+        projected = {hit['angle_deg'] for hit in wall_evidence['hits']}
+        open_unknown = [angle for angle in open_unknown if angle not in projected]
     run = largest_open_gap = 0
+    open_unknown_set = set(open_unknown)
     for angle in range(-30, 31):
-        run = run+1 if angle in open_unknown else 0
-        largest_open_gap = max(largest_open_gap, run)
-    return {'front_unknown_bins': unknown, 'largest_gap_deg': largest_gap,
+        run = run+1 if angle in open_unknown_set else 0
+        if run > largest_open_gap:
+            largest_open_gap = run
+    result = {'front_unknown_bins': unknown, 'largest_gap_deg': largest_gap,
             'front_bridged_bins': bridged, 'front_open_unknown_bins': open_unknown,
             'largest_open_gap_deg': largest_open_gap}
+    if wall_evidence is not None:
+        result['front_wall_projected_bins'] = [hit['angle_deg'] for hit in wall_evidence['hits']]
+        result['front_wall_projection'] = wall_evidence
+    return result
 
 
 def _body_contact_bins(target, scan, ages, maneuver):
@@ -519,7 +588,8 @@ _BIN_SIN = tuple(math.sin(math.radians(angle)) for angle in range(360))
 
 
 def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True,
-                    clearance_profile='straight', relaxed_turn_left=False, body_contact_target=None):
+                    clearance_profile='straight', relaxed_turn_left=False, body_contact_target=None,
+                    front_lane=None):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
     if clearance_profile not in ('straight', 'maneuver') or type(clearance_profile) is not str:
         raise ValueError('invalid_clearance_profile')
@@ -627,11 +697,15 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     longest_null_run = run = 0
     for r in bins+bins:
         run = run+1 if r is None else 0
-        longest_null_run = max(longest_null_run, min(run, 360))
+        if run > longest_null_run:
+            longest_null_run = min(run, 360)
     incomplete_tolerable = (maneuver and MANEUVER_TOLERABLE_MIN_VALID <= len(valid) < 342
                             and longest_null_run <= MANEUVER_TOLERABLE_MAX_NULL_RUN)
     front = [bins[i % 360] for i in range(-30, 31)]
-    front_evidence = front_gap_evidence(bins, bridge=maneuver)
+    if front_lane is not None and (not maneuver or front_lane not in scan.get('corridor_candidates', [])):
+        raise ValueError('probe_invalid_front_lane')
+    front_evidence = front_gap_evidence(bins, bridge=maneuver,
+        front_lane=front_lane if ages['lidar'] < LIDAR_LATE_S else None)
     open_unknown = front_evidence['front_open_unknown_bins']
     largest_open_gap = front_evidence['largest_open_gap_deg']
     if len(open_unknown) > FRONT_MAX_UNKNOWN or largest_open_gap > FRONT_MAX_GAP:

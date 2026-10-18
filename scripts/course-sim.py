@@ -114,9 +114,15 @@ class Course:
         self.start = start or (.40, start_lane/2, 0.)
         self.finish_x = L-.8
 
-    def cast(self, ox, oy, angle):
+    def cast(self, ox, oy, angle, *, surface=False):
+        """Ray range; optionally the acute ray-to-wall tangent angle (0 = grazing).
+
+        Circular cone hits have no planar angle and are never subject to the
+        optional grazing-wall dropout. The default follows the old arithmetic.
+        """
         dx, dy = math.cos(angle), math.sin(angle)
         best = None
+        grazing_angle = None
         for (x1, y1), (x2, y2) in self.segments:
             ex, ey = x2-x1, y2-y1
             den = dx*ey-dy*ex
@@ -126,6 +132,8 @@ class Course:
             u = ((x1-ox)*dy-(y1-oy)*dx)/den
             if t > 1e-6 and -1e-9 <= u <= 1+1e-9 and (best is None or t < best):
                 best = t
+                if surface:
+                    grazing_angle = math.degrees(math.asin(min(1., abs(den)/math.hypot(ex, ey))))
         for cx, cy, r in self.cones:
             fx, fy = ox-cx, oy-cy
             b = fx*dx+fy*dy
@@ -134,7 +142,8 @@ class Course:
                 t = -b-math.sqrt(disc)
                 if t > 1e-6 and (best is None or t < best):
                     best = t
-        return best
+                    grazing_angle = None
+        return (best, grazing_angle) if surface else best
 
     def body_gaps(self, x, y, psi):
         """Smallest distance from the body box to a board/wall and to a cone."""
@@ -270,11 +279,17 @@ class MeasuredVehicle(Vehicle):
     """
     def __init__(self, x, y, psi, *, speed_scale=1., decel=.7, delay=.15, steer_tau=.1, seed=0,
                  play_pwm=50., gain_scale=1., esc_lag_s=.45, drift_per_mps=.025, turn_drag=.5,
-                 speed_tau_s=1.1, **_):
+                 speed_tau_s=1.1, near_center_gain=1., near_center_width_pwm=100., **_):
         super().__init__(x, y, psi, speed_scale=speed_scale, decel=decel, delay=delay, steer_tau=steer_tau,
                          seed=seed)
         self.play_pwm, self.gain_scale, self.esc_lag_s = play_pwm, gain_scale, esc_lag_s
         self.drift_per_mps, self.turn_drag, self.speed_tau_s = drift_per_mps, turn_drag, speed_tau_s
+        if not math.isfinite(near_center_gain) or near_center_gain <= 0:
+            raise ValueError('near_center_gain must be finite and positive')
+        if not math.isfinite(near_center_width_pwm) or near_center_width_pwm <= 0:
+            raise ValueError('near_center_width_pwm must be finite and positive')
+        self.near_center_gain = near_center_gain
+        self.near_center_width_pwm = near_center_width_pwm
         self.motor_queue = []
         self.motor_phys = 1500
         self.kappa = 0.
@@ -289,7 +304,19 @@ class MeasuredVehicle(Vehicle):
         target = getattr(self, '_delayed', 1500)
         self.servo_phys += (target-self.servo_phys)*min(1., dt/self.steer_tau)
         self.wheel_pwm = min(self.servo_phys+self.play_pwm, max(self.servo_phys-self.play_pwm, self.wheel_pwm))
-        self.kappa = _interp(MEASURED_STEER_TABLE, self.wheel_pwm)*self.gain_scale+self.drift_per_mps*self.v
+        steering_curvature = _interp(MEASURED_STEER_TABLE, self.wheel_pwm)
+        if self.near_center_gain != 1.:
+            # Hypothesis, not a fitted calibration: monotonically warp wheel
+            # position near centre, keeping both endpoint table values. Unlike
+            # multiplying curvature by a taper, this cannot invert the slope.
+            # Play remains real play: commands within it do NOT move the wheel.
+            offset = self.wheel_pwm-1500
+            u = abs(offset)/self.near_center_width_pwm
+            if u < 1.:
+                warped = self.near_center_gain*u/(1.+(self.near_center_gain-1.)*u)
+                wheel = 1500+math.copysign(self.near_center_width_pwm*warped, offset)
+                steering_curvature = _interp(MEASURED_STEER_TABLE, wheel)
+        self.kappa = steering_curvature*self.gain_scale+self.drift_per_mps*self.v
         self.motor_queue.append((t, motor))
         while self.motor_queue and self.motor_queue[0][0] <= t-self.esc_lag_s:
             self.motor_phys = self.motor_queue.pop(0)[1]
@@ -303,6 +330,18 @@ class MeasuredVehicle(Vehicle):
             self.psi += self.kappa*self.v*dt/n
             self.x += self.v*math.cos(self.psi)*dt/n
             self.y += self.v*math.sin(self.psi)*dt/n
+
+
+def grazing_dropouts(ranges, surface_angles, *, angle_deg, probability, rng):
+    """Drop only planar hits at an acute ray-to-wall angle below the threshold.
+
+    A dedicated RNG avoids changing range noise or depth-edge dropout draws.
+    This acts after ray casting and ordinary noise; it never invents a return.
+    """
+    for i, angle in enumerate(surface_angles):
+        if (ranges[i] is not None and angle is not None and angle < angle_deg
+                and rng.random() < probability):
+            ranges[i] = None
 
 
 def make_console(server):
@@ -320,13 +359,19 @@ def make_console(server):
 
 def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1., noise=.008, seed=0,
         verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None, right_curvature_max=1.875,
-        steer_backlash=0., vehicle='nominal', vehicle_params=None, edge_dropout=0.):
+        steer_backlash=0., vehicle='nominal', vehicle_params=None, edge_dropout=0.,
+        grazing_angle_deg=0., grazing_dropout=1.):
+    if not math.isfinite(grazing_angle_deg) or not 0 <= grazing_angle_deg <= 90:
+        raise ValueError('grazing_angle_deg must be finite and in 0..90')
+    if not math.isfinite(grazing_dropout) or not 0 <= grazing_dropout <= 1:
+        raise ValueError('grazing_dropout must be finite and in 0..1')
     sys.path.insert(0, str(CONSOLE))
     server = load('course_sim_server', CONSOLE/'server.py')
     console = make_console(server)
     geometry = Geometry()
     rng = random.Random(seed)
     edge_rng = random.Random(seed*7919+13)
+    grazing_rng = random.Random(seed*104729+29)
     if vehicle == 'measured':
         params = dict(vehicle_params or {})
         speed_scale = params.pop('speed_scale', speed_scale)
@@ -366,9 +411,14 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
 
     def make_scan(seq, t):
         ranges = []
+        surface_angles = []
         for i in range(360):
             x, y, psi = pose_at(t-distortion*(359-i)/360*.1)
-            r = course.cast(x, y, psi-math.radians(i))
+            if grazing_angle_deg:
+                r, angle = course.cast(x, y, psi-math.radians(i), surface=True)
+                surface_angles.append(angle)
+            else:
+                r = course.cast(x, y, psi-math.radians(i))
             if r is None or r > 12 or r < .02 or rng.random() < .002:
                 ranges.append(None)
             else:
@@ -386,6 +436,9 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                     run = edge_rng.randint(1, 5)
                     for k in range(run):  # on the far side of the step
                         ranges[((i+1+k) if b > a else (i-k)) % 360] = None
+        if grazing_angle_deg:
+            grazing_dropouts(ranges, surface_angles, angle_deg=grazing_angle_deg,
+                             probability=grazing_dropout, rng=grazing_rng)
         return geometry({'seq': seq, 'at_ms': round(t*1000), 'frame_id': 'lidar_origin_coarse_body_heading',
                          'ranges': ranges})
 
@@ -479,6 +532,9 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                                  'steer_backlash_pwm': steer_backlash,
                                  'pwm_per_curvature': car.pwm_per_curvature,
                                  'vehicle': vehicle, 'vehicle_params': vehicle_params or {}}}
+    if grazing_angle_deg:
+        summary['grazing_model'] = {'angle_deg': grazing_angle_deg, 'probability': grazing_dropout,
+                                    'angle_definition': 'acute ray-to-planar-wall tangent; 0 = parallel'}
     sys.path.remove(str(CONSOLE))
     return summary, log, history
 
@@ -632,6 +688,10 @@ def main():
                         help='hypothetical steering play (PWM) for robustness runs; not measured')
     parser.add_argument('--edge-dropout', type=float, default=0.,
                         help='chance per depth step (>1 m, far side >2 m) of losing 1-5 returns there (real lidar; default off)')
+    parser.add_argument('--grazing-angle-deg', type=float, default=0.,
+                        help='lose planar wall returns below this ray-to-wall tangent angle; 0 disables (default)')
+    parser.add_argument('--grazing-dropout', type=float, default=1.,
+                        help='probability per grazing planar return; independent RNG, default 1')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--max-s', type=float, default=45.)
     parser.add_argument('--png')
@@ -645,6 +705,8 @@ def main():
     parser.add_argument('--only-failures', action='store_true', help='with --png-dir: pictures of failures only')
     args = parser.parse_args()
     vehicle = {'vehicle': args.vehicle, 'vehicle_params': {k: float(v) for k, v in (a.split('=', 1) for a in args.vehicle_param)}}
+    sensors = {'edge_dropout': args.edge_dropout, 'grazing_angle_deg': args.grazing_angle_deg,
+               'grazing_dropout': args.grazing_dropout}
     keys = ('success', 'route_completed', 'start_error', 'end_reason', 'contacts', 'min_board_gap_m', 'min_cone_gap_m', 'final', 'time_s',
             'vehicle_model')
     if args.matrix:
@@ -652,7 +714,7 @@ def main():
             for speed, decel, delay in ((1., .5, .15), (1.2, .35, .3), (.8, .7, .15)):
                 summary, _, _ = run(Course(**LAYOUTS[name]), speed_scale=speed, decel=decel, delay=delay,
                                     max_s=args.max_s, seed=args.seed, right_curvature_max=args.right_curvature_max,
-                                    steer_backlash=args.steer_backlash, **vehicle)
+                                    steer_backlash=args.steer_backlash, **sensors, **vehicle)
                 print(name, f'speed{speed} decel{decel} delay{delay}',
                       json.dumps({k: summary[k] for k in keys}, ensure_ascii=False), flush=True)
         return
@@ -662,7 +724,7 @@ def main():
             course = Course(**spec)
             summary, log, _ = run(course, max_s=args.max_s, seed=args.seed,
                                   right_curvature_max=args.right_curvature_max,
-                                  steer_backlash=args.steer_backlash, **vehicle)
+                                  steer_backlash=args.steer_backlash, **sensors, **vehicle)
             if args.png_dir and not (args.only_failures and summary['success']):
                 Path(args.png_dir).mkdir(parents=True, exist_ok=True)
                 render(course, log, str(Path(args.png_dir)/f'{name}.png'), name=name, summary=summary)
@@ -686,7 +748,7 @@ def main():
     summary, log, _ = run(course, max_s=args.max_s, speed_scale=args.speed_scale, decel=args.decel,
                           delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace,
                           right_curvature_max=args.right_curvature_max,
-                          steer_backlash=args.steer_backlash, edge_dropout=args.edge_dropout, **vehicle)
+                          steer_backlash=args.steer_backlash, **sensors, **vehicle)
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     if args.log:
         Path(args.log).write_text(''.join('\t'.join(str(round(v, 3)) if isinstance(v, float) else str(v)

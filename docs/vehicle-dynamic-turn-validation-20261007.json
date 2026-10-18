@@ -21790,7 +21790,583 @@
       "quote": "改成直道的时候往左偏就向右修正，往右偏就向左修正，而不是用模型拟合这辆车会不会适应性强点",
       "finding": "CorridorSteering already corrects by sign (offset/heading feedback); the weave comes from the SteerOutput model layer between it and the bridge. Round 68 feedback: nominal 1510/1520 (left) became physical 1567/1585; heading -3.7 -> +5.5 deg from 3.13 to 3.65 s; then nominal 1512 (still left) became physical 1471 (right), 1501 -> 1452, 1500 -> 1450, 1490 -> 1430, because the open-loop wheel estimate assumed +-50 play the wheels did not have near centre. A model error can flip the correction direction; closed-loop feedback on the lidar heading cannot, gain or play errors only change convergence speed.",
       "caveat": "a fixed-size bang-bang correction would still limit-cycle with the ~.3 s steering lag and .45 s ESC lag, so the correction stays proportional, small, and leads by the heading rate; loops still need the table and play compensation to reach 1.2-1.6 /m",
-      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-68/feedback.jsonl (status.control.physical_servo, start_lane_feedback.walls)"
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261017-68/feedback.jsonl (status.control.physical_servo, start_lane_feedback.walls)",
+      "followup_user_authorization_20261017": {
+        "quote": "允许按实时偏差逐步增大小舵上限，仍不查表、不补回差；先用数据验证",
+        "reason_for_clarification": "Fixed physical +/-30 PWM cannot move a centered wheel with true +/-50 or +/-70 PWM play. Direct feedback alone does not guarantee adequate correction authority or delayed closed-loop stability.",
+        "scope": "Increase the direct lane correction bound from observed offset/heading and correction response; no calibration-table lookup or backlash compensation for lane feedback. Keep neutral-before-reversal, actual center ACK and every hard guard.",
+        "validation_required": "Separate actual convergence and lateral clearance from reduced heading motion caused by an immobile wheel; retain rejected candidate evidence. No deployment before regression and timing acceptance."
+      }
+    },
+    "latest_user_direction_20261018": {
+      "quote": "你继续，在历史的记录里面应该有直道的，你看看那个，然后继续修改，先不连车，多跑几轮，跑完后告诉claude你完成了什么",
+      "scope": "Local development, historical straight-driving evidence, repeated offline validation and a handoff report for Claude.",
+      "vehicle_connection_authorized": false,
+      "deployment_authorized_this_round": false,
+      "physical_trial_authorized_this_round": false,
+      "prior_scope_override": "Do not connect to the vehicle or follow the earlier turn69 build/deploy/trial sequence during this round."
+    },
+    "historical_straight_review_20261018": {
+      "evidence": "work/round69-lane-20261018/history/historical-straight-evidence.json",
+      "recognized_release": "8efc47b6e83874f08ab8c4437d029246577bc282",
+      "run_record": "docs/vehicle-junction-coast-validation-20261006.json: runs.run04",
+      "operator_quote": "这次完成的非常好，你把这套直道的逻辑写进自动驾驶里面吧。写好后再测试左转+绕桩",
+      "saved_drive_samples": 13,
+      "saved_drive_samples_all_physical_servo": 1500,
+      "interpretation": "The operator-approved overall run is real, but saved powered-drive samples were already nearly straight. Most steering corrections occurred while coasting; fitted heading later reached -8.91 degrees before walls were lost. This is not evidence that the old +/-55 controller eliminated weave.",
+      "reused_structure": [
+        "live wall offset/heading feedback",
+        "hysteresis",
+        "trend anticipation",
+        "center before reversal"
+      ],
+      "limits": [
+        "run04 completed=false and standstill unconfirmed remain unchanged",
+        "physical mechanism repaired on 2026-10-16; do not copy earlier steering gain or PWM values as current calibration",
+        "direct output removes model-induced sign changes but does not itself guarantee delayed closed-loop stability or sufficient correction authority"
+      ],
+      "vehicle_connection_made": false
+    }
+  },
+  "turn69_lane_gaps_loop_continuity_20261018": {
+    "date": "2026-10-18",
+    "scope": "Offline iteration for turn69: accepted B lane-wall gap accounting and C loop-plan continuity only; task A straight oscillation remains unresolved.",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "vehicle_connected": false,
+    "build_executed": false,
+    "source_base_commit": "785a7f04bdebfa3fd7dd48a8efa0980be4de0d0c",
+    "user_direction": {
+      "latest": "先不连车，多跑几轮，跑完后告诉claude你完成了什么",
+      "adaptive_cap_authorization": "允许按实时偏差逐步增大小舵上限，仍不查表、不补回差；先用数据验证"
+    },
+    "change": {
+      "B": {
+        "implemented": true,
+        "details": [
+          "Only explicit open-course route start_lane/light_lane with a fresh unique native forward corridor can project front null rays onto measured side-wall planes within 6m.",
+          "Real returns anywhere forward along the lane that pass through a proposed wall plane bound its extension, including returns outside the ±30deg quality sector.",
+          "Known returns, raw nulls, 8cm body gate, base quality6/3, route run<=5/total<=15, original short bridge, all freshness/ACK/clock protections unchanged.",
+          "Same lane witness and full raw bins are recomputed when validating neutral wait/hold evidence; no cache or previous-frame geometry reuse.",
+          "Set membership and equivalent max-loop simplifications reduce some accounting cost without changing legacy outputs.",
+          "B3opt: _forward_lanes gains internal validated flag; server skips a duplicate validation only after validating every candidate in the same invocation. No cache; all scope/frame/clock/age and candidate validation guards still run every time."
+        ],
+        "scope": [
+          "start_lane",
+          "light_lane"
+        ],
+        "max_wall_intersection_m": 6,
+        "raw_returns_modified": false,
+        "old_gap_thresholds_modified": false
+      },
+      "C": {
+        "implemented": true,
+        "problem": "A tiny planner score change could shift the loop center by0.5m after the car had entered its arc, making a clockwise task command left steering; subsequent light-entry maximum right curvature was already insufficient for the outer board.",
+        "rule": "Only reject a new plan that reverses the task turn direction while the same tracked support is already being circled, the old pursuit still follows the task direction, and the old circle still satisfies every existing inner/outer margin against the accepted conservative probe memory. Otherwise use the original replanning result.",
+        "current_evidence": "Full current support identity/scan/publication/receive validation remains before planning. Probe memory retains its existing low-yaw admission and running minima; it is not represented as all newly observed this frame.",
+        "diagnostics": "Selection-time optimizer metrics/source_seq are distinguished from the current reuse check, current margin values and checked_source_seq; swept_path_certified stays false.",
+        "failure_frame_regression": {
+          "fixture": "web/vehicle-console/tests/fixtures/route-69-loop-plan-jump.json",
+          "kind": "synthetic closed-loop simulation, not physical evidence",
+          "before_nominal_pwm": 1538,
+          "after_nominal_pwm": 1347,
+          "before_curvature_per_m": 0.2364,
+          "after_curvature_per_m": -0.9584,
+          "planner_and_pursuit_mocked": false
+        }
+      },
+      "simulation_models": {
+        "grazing_angle_dropout": "Optional planar grazing angle sensor model; cones excluded, nearest occlusion retained; default angle0 disables it and uses a separate RNG.",
+        "near_center_gain": "Optional monotonic wheel-coordinate warp inside configured width; true play still applied, gain1 preserves old arithmetic. Initial non-monotonic v1 rejected.",
+        "default_behavior_changed": false
+      }
+    },
+    "task_A": {
+      "implemented": false,
+      "enabled": false,
+      "accepted": false,
+      "withdrawn_from_main": true,
+      "summary": "Direct output identity and required mapping/ACK transitions were implemented and tested as candidates, but no tested controller simultaneously reduced oscillation at the measured parameters and preserved whole-route behavior. Failed runtime changes and25 candidate tests were saved under work then removed from main.",
+      "actual_parameter_regression": "A7 play50/gain1/delay.25,8 initial/disturbance poses, width1.05: baseline mean heading swing6.53deg ->14.22deg and mean max offset.084m->.135m; near-center gain3:8.34->19.62deg. No service ACK/hardstop in this isolated controller+plant experiment.",
+      "rejected_candidates": {
+        "A6": "Full796 failed2 legacy user8 subtests (default and decel.9), existing expectedfail2 unchanged; named19/20; robust117->118 aggregate but5 lost successes, contacts3->6. Aggregate improvement is not acceptance.",
+        "A7": "Route64 module30 tests has3 failing subtests, all user8 light_entry ({}, esc_lag.3, decel.9); 25 new A unit tests pass. Main A7 not acceptable.",
+        "actual_vehicle_parameter_local": "A7 play50/gain1/delay.25,8 initial/disturbance poses, width1.05: baseline mean heading swing6.53deg ->14.22deg and mean max offset.084m->.135m; near-center gain3:8.34->19.62deg. No service ACK/hardstop in this isolated controller+plant experiment.",
+        "aggregate_local": "A7 core288 at width1.05: boundary crossings22->0, potential8cm29->3; with5mm/.2deg noise23->0 and29->5. These large aggregate gains do not cancel actual-parameter swing regression; baseline extreme gain cases were much worse than normal measured parameters.",
+        "full_service_perturbations": "A7 start offset±8cm, heading±3deg service20: nominal4->2 route completions, measured1->1 exchanging the single successful case; start-lane front-stop and later light-entry sensitivity remain. See sim/perturbed-a7-compare.json."
+      },
+      "trace_findings": {
+        "file": "work/round69-lane-20261018/control/trace-a7.json",
+        "hysteresis_issue": "t3.2: actual heading-.11deg, offset-.024m meets old position/heading exit hysteresis, but measured yaw+7.35deg/s and wheel1525.6; correcting false holds1500 through3.6, restarts3.7 at3.5deg. Position centered is not yaw settled.",
+        "counter_command_delay": "Opposite prediction at3.3 sends1500, then1518/1532/1547 at3.4/.5/.6; actual wheel remains old right1440 through3.5, only crosses1500 at4.1. Small growing reverse request plus plant delay causes.8s;40PWM slew cap is not active in those18/14/15PWM changes.",
+        "rate_exit_diagnostic": "Require trustworthy measured |yawrate|<=2deg/s as well as existing position/heading exit: actual parameter swing14.22->11.21, near-center3 19.62->14.05; core crossings0 and8cm3->1. Necessary improvement, still worse than baseline actual parameters; work-only, not main.",
+        "lead_ablation": "Rate-exit plus .45/.6 lead lowers actual parameter swing to8.82/8.64 but introduces2/16 new core boundary crossings; rejected, main remains.3.",
+        "yaw_rate_inner_loop": "Linear and sqrt PI on observed yawrate error tested without model/plant state input. None simultaneously beat actual parameter swing and broad cases; rejected, never in main.",
+        "rate_growth_diagnostic": "Boost error-amplitude growth only when current yawrate points along predicted error: gain400 makes normal11.2->11.9, near-center3 14.1->23.8 and1 new local boundary crossing; higher gains destabilize. Rejected and not expanded to full matrix."
+      },
+      "source_and_tests": "work/round69-lane-20261018/control/a7-source",
+      "patch": "work/round69-lane-20261018/control/a7-only-rejected.patch",
+      "handoff": "work/round69-lane-20261018/control/a-rejected-handoff.json",
+      "runtime_steering": "CorridorSteering and steer_calibration.py restored byte-for-byte to785a7f0. The turn68 model-induced lane-output issue remains; B/C do not solve it."
+    },
+    "validation": {
+      "status": "Final B+C functional regression passed offline; A rejected and disabled. Timing shows no repeatable overall computation regression in follow-up samples, but a first-pass wall-time outlier remains unexplained and vehicle WCET is not certified.",
+      "baseline": {
+        "unit_tests": 752,
+        "expected_failures": 2,
+        "named_measured": "10/10",
+        "named_nominal": "10/10",
+        "range_measured": "96/108",
+        "range_nominal": "95/108",
+        "calibration_robustness": "117/130",
+        "edge_dropout": "11/12"
+      },
+      "old_tests_changed": false,
+      "new_tests": {
+        "lane_gaps": 15,
+        "sim_models": 7,
+        "loop_continuity": 9
+      },
+      "B_isolated": {
+        "sim_cases": 378,
+        "byte_identical_summary_and_trajectory_files": 756,
+        "semantic_random_cases": 30000,
+        "legacy_probe_cases": 2000,
+        "scope_mutation_cases": 225,
+        "new_tests": 15,
+        "saved_turn68_scans": 25,
+        "saved_scans_with_explained_bins": 19,
+        "explained_raw_unbridged_bins": 44,
+        "exact_failing_scan_saved": false,
+        "synthetic_injection": "17 front nulls in bounded runs with actual native geometry: oldturn_perception_unavailable, Broute_finish_zone_stop. This is not replayed physical vehicle motion."
+      },
+      "C_isolated": {
+        "sim_cases": 378,
+        "groups": {
+          "named/measured": {
+            "n": 10,
+            "before_completed": 10,
+            "after_completed": 10,
+            "before_contacts": 0,
+            "after_contacts": 0,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 9
+          },
+          "named/nominal": {
+            "n": 10,
+            "before_completed": 10,
+            "after_completed": 10,
+            "before_contacts": 0,
+            "after_contacts": 0,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 10
+          },
+          "range/measured": {
+            "n": 108,
+            "before_completed": 96,
+            "after_completed": 96,
+            "before_contacts": 5,
+            "after_contacts": 5,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 108
+          },
+          "range/nominal": {
+            "n": 108,
+            "before_completed": 95,
+            "after_completed": 95,
+            "before_contacts": 8,
+            "after_contacts": 8,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 108
+          },
+          "robust/measured": {
+            "n": 130,
+            "before_completed": 117,
+            "after_completed": 117,
+            "before_contacts": 3,
+            "after_contacts": 3,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 129
+          },
+          "dropout/measured": {
+            "n": 12,
+            "before_completed": 11,
+            "after_completed": 12,
+            "before_contacts": 1,
+            "after_contacts": 0,
+            "lost_success": 0,
+            "new_success": 1,
+            "new_contacts": 0,
+            "identical_summary": 10
+          }
+        },
+        "byte_identical_files": 748,
+        "total_files": 756,
+        "lost_old_successes": 0,
+        "new_contacts": 0,
+        "H2_rejected": "Keeping every feasible circle caused12 lost old successes and4 new successes across378; the final rule is narrower and preserves normal replanning.",
+        "H5_diagnostics": "H4 decisions retained, current/selection diagnostic provenance added;9 unit tests and oldroute6430 tests all pass. Final combined source is validated separately."
+      },
+      "preservation": "Six user files and all five initial stash refs unchanged; no stash pop/apply, no SSH, no build/deploy/helper/motor operation.",
+      "full_suite": {
+        "command": "cd web/vehicle-console/tests && python3 -m unittest discover -s . -p 'test_*.py'",
+        "before_count": 752,
+        "after_count": 783,
+        "new_tests": 31,
+        "failures": 0,
+        "errors": 0,
+        "existing_expected_failures": 2,
+        "elapsed_s": 105.977,
+        "log": "work/round69-lane-20261018/review/python-final-full.log",
+        "sha256": "349fad9ffcb8eb63a5b231ee8c5dcc54b490d4233f8df9826450df72ed708b77",
+        "runtime_test_manifest_unchanged_during_run": true
+      },
+      "final_combined_simulation": {
+        "total_cases": 428,
+        "main_matrix_cases": 378,
+        "groups": {
+          "named/measured": {
+            "n": 10,
+            "before_completed": 10,
+            "after_completed": 10,
+            "before_contacts": 0,
+            "after_contacts": 0,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 9
+          },
+          "named/nominal": {
+            "n": 10,
+            "before_completed": 10,
+            "after_completed": 10,
+            "before_contacts": 0,
+            "after_contacts": 0,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 10
+          },
+          "range/measured": {
+            "n": 108,
+            "before_completed": 96,
+            "after_completed": 96,
+            "before_contacts": 5,
+            "after_contacts": 5,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 108
+          },
+          "range/nominal": {
+            "n": 108,
+            "before_completed": 95,
+            "after_completed": 95,
+            "before_contacts": 8,
+            "after_contacts": 8,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 108
+          },
+          "robust/measured": {
+            "n": 130,
+            "before_completed": 117,
+            "after_completed": 117,
+            "before_contacts": 3,
+            "after_contacts": 3,
+            "lost_success": 0,
+            "new_success": 0,
+            "new_contacts": 0,
+            "identical_summary": 129
+          },
+          "dropout/measured": {
+            "n": 12,
+            "before_completed": 11,
+            "after_completed": 12,
+            "before_contacts": 1,
+            "after_contacts": 0,
+            "lost_success": 0,
+            "new_success": 1,
+            "new_contacts": 0,
+            "identical_summary": 10
+          }
+        },
+        "lost_prior_successes": 0,
+        "new_contact_cases": 0,
+        "byte_comparison": {
+          "785a7f0": {
+            "compared_files": 756,
+            "byte_identical_files": 748,
+            "different_files": [
+              "named-user8-1-412e77146e.json",
+              "named-user8-1-412e77146e.log",
+              "robust-user8-1-8852227126.json",
+              "robust-user8-1-8852227126.log",
+              "dropout-user8-0-f10f6c827f.json",
+              "dropout-user8-0-f10f6c827f.log",
+              "dropout-user8-1-f10f6c827f.json",
+              "dropout-user8-1-f10f6c827f.log"
+            ],
+            "range_all_432_files_identical": true
+          },
+          "C_H4_only": {
+            "compared_files": 756,
+            "byte_identical_files": 756,
+            "different_files": [],
+            "range_all_432_files_identical": true
+          }
+        },
+        "extra_named_seeds_2_3_4": {
+          "n": 30,
+          "before_completed": 30,
+          "after_completed": 30,
+          "before_contacts": 0,
+          "after_contacts": 0,
+          "lost_success": 0,
+          "new_contact": 0,
+          "identical_files": 60,
+          "compared_files": 60,
+          "different_files": []
+        },
+        "nonzero_start_pressure": {
+          "measured": {
+            "n": 16,
+            "before": {
+              "route_completed": 1,
+              "first_target_handover": 10,
+              "contact_cases": 13,
+              "board_contact_cases": 11,
+              "mean_start_max_heading_deg": 11.359948107117292,
+              "mean_start_max_offset_m": 0.14039929369999565
+            },
+            "after": {
+              "route_completed": 1,
+              "first_target_handover": 10,
+              "contact_cases": 13,
+              "board_contact_cases": 11,
+              "mean_start_max_heading_deg": 11.359948107117292,
+              "mean_start_max_offset_m": 0.14039929369999565
+            },
+            "lost_start_handover": [],
+            "lost_route_success": [],
+            "new_board_contacts": []
+          },
+          "nominal": {
+            "n": 4,
+            "before": {
+              "route_completed": 4,
+              "first_target_handover": 4,
+              "contact_cases": 0,
+              "board_contact_cases": 0,
+              "mean_start_max_heading_deg": 5.934498113451472,
+              "mean_start_max_offset_m": 0.10682426152061147
+            },
+            "after": {
+              "route_completed": 4,
+              "first_target_handover": 4,
+              "contact_cases": 0,
+              "board_contact_cases": 0,
+              "mean_start_max_heading_deg": 5.934498113451472,
+              "mean_start_max_offset_m": 0.10682426152061147
+            },
+            "lost_start_handover": [],
+            "lost_route_success": [],
+            "new_board_contacts": []
+          }
+        },
+        "nonzero_start_files": {
+          "compared_files": 40,
+          "identical_files": 40,
+          "different_files": []
+        },
+        "notes": [
+          "The16 measured nonzero-start pressure cases include combined0.5/3gain,0/70play and0.15/0.35delay extremes;1/16 full routes completed before and after, with13 contact cases. These are preserved old pressure failures, not20 successful route runs.",
+          "Case summaries and trajectories were generated by equivalent fixed-source copies of the existing comparison workflow; old round65 outputs/scripts were not overwritten."
+        ],
+        "comparison": "work/round69-lane-20261018/sim/final-bc-model-compare.json",
+        "frozen_source_manifest": "work/round69-lane-20261018/sim/final-bc-model-source-manifest.json"
+      },
+      "replay": {
+        "51": {
+          "byte_identical": true,
+          "last_line": "  4.90  2.60   370 drive        first_target    1550 1542 1/8c     -        first_target_pass_preparing_neutral"
+        },
+        "52": {
+          "byte_identical": true,
+          "last_line": "  9.09  6.79   443 drive        second_orbit    1550 1720 -        1/12c    second_target_left_of_support_entry"
+        },
+        "64": {
+          "byte_identical": true,
+          "last_line": "  1.10  0.50  1745 ENDED turn_perception_unavailable"
+        },
+        "interpretation_64": "Saved turn64 data is sparse; unchanged replay ends turn_perception_unavailable at recorded0.50s, not a completed physical route."
+      },
+      "timing": {
+        "method": "Two separate32-run serial campaigns, each4 alternating-order baseline/candidate pairs across user8s0,short5s0,user8s1,user8s0 edge_dropout.05; no other agent computations running. First campaign matches round65 whole Console.autonomy_tick wall timer; second additionally records thread CPU andGC per tick.",
+        "first_campaign_wall_max_ms": {
+          "before": 2.743332996033132,
+          "after": 6.281000009039417
+        },
+        "followup_wall_max_ms": {
+          "before": 2.758917,
+          "after": 2.713875
+        },
+        "followup_thread_cpu_max_ms": {
+          "before": 2.73525,
+          "after": 2.7135
+        },
+        "interpretation": [
+          "First-pass after6.281ms wall peak was not reproduced in the detailed follow-up. First pass did not record CPU/GC, so its cause is unconfirmed, not attributed definitively to scheduling.",
+          "Most per-stage medians andp95 are stable or slightly lower. Some individual stage maxima are higher; timings are samples, not a proof of every possible tick being no slower.",
+          "The original helper labels the stage after a tick; a second-loop handoff can therefore be charged tolight_entry. Raw labels are retained alongside reconstructed stage-entry attribution.",
+          "C causes7 additional optimizer evaluations on the repaired dropout path,1 onuser8seed1 and0 onshort5. Exact optimizer-input caching hits0 times on these moving paths and was not adopted.",
+          "The physical vehicle29–38x pure-Python multiplier and20ms loop wait are unchanged. Conservative extrapolation of the largest CPU sample at38x plus20ms slightly exceeds120ms for both baseline andcandidate; no vehicle worst-case timing certification is claimed. The0.12s and300ms hard guards are unchanged."
+        ],
+        "first_campaign": "work/round69-lane-20261018/review/whole-tick-final-summary.json",
+        "followup": "work/round69-lane-20261018/review/tick-detail/summary.json",
+        "stage_entry_attribution": "work/round69-lane-20261018/review/tick-stage-entry-summary.json",
+        "optimizer_counts": "work/round69-lane-20261018/control/c-review/moving-counts/summary.json",
+        "cache_experiment_not_applied": "work/round69-lane-20261018/control/c-review/cache-experiment/summary.json",
+        "fresh_tick_per_phase_ms": {
+          "first_target": {
+            "before": {
+              "cpu_p50": 1.114166,
+              "cpu_p95": 1.460084,
+              "cpu_max": 2.73525,
+              "wall_max": 2.735625
+            },
+            "after": {
+              "cpu_p50": 1.104709,
+              "cpu_p95": 1.453458,
+              "cpu_max": 2.7135,
+              "wall_max": 2.713875
+            }
+          },
+          "light_entry": {
+            "before": {
+              "cpu_p50": 1.340541,
+              "cpu_p95": 1.442291,
+              "cpu_max": 1.669583,
+              "wall_max": 1.769458
+            },
+            "after": {
+              "cpu_p50": 1.33425,
+              "cpu_p95": 1.429916,
+              "cpu_max": 2.091541,
+              "wall_max": 2.091875
+            }
+          },
+          "light_lane": {
+            "before": {
+              "cpu_p50": 1.303833,
+              "cpu_p95": 1.40075,
+              "cpu_max": 1.802959,
+              "wall_max": 1.847167
+            },
+            "after": {
+              "cpu_p50": 1.295458,
+              "cpu_p95": 1.400208,
+              "cpu_max": 1.522208,
+              "wall_max": 1.550833
+            }
+          },
+          "open_transfer": {
+            "before": {
+              "cpu_p50": 1.546875,
+              "cpu_p95": 1.836333,
+              "cpu_max": 2.636625,
+              "wall_max": 2.758917
+            },
+            "after": {
+              "cpu_p50": 1.532,
+              "cpu_p95": 1.818708,
+              "cpu_max": 1.977625,
+              "wall_max": 2.0315
+            }
+          },
+          "second_loop": {
+            "before": {
+              "cpu_p50": 1.807792,
+              "cpu_p95": 2.129625,
+              "cpu_max": 2.593833,
+              "wall_max": 2.623584
+            },
+            "after": {
+              "cpu_p50": 1.804542,
+              "cpu_p95": 2.119292,
+              "cpu_max": 2.561458,
+              "wall_max": 2.561875
+            }
+          },
+          "start_lane": {
+            "before": {
+              "cpu_p50": 0.755084,
+              "cpu_p95": 1.585875,
+              "cpu_max": 1.869291,
+              "wall_max": 1.969208
+            },
+            "after": {
+              "cpu_p50": 0.740542,
+              "cpu_p95": 1.562291,
+              "cpu_max": 1.759709,
+              "wall_max": 1.774917
+            }
+          }
+        }
+      },
+      "unchanged_steering_contracts": "work/round69-lane-20261018/review/unchanged-steering-contracts.json",
+      "independent_reviews": [
+        "work/round69-lane-20261018/control/c-review/review.json",
+        "work/round69-lane-20261018/history/c-study/c-final-handoff.json"
+      ],
+      "plots_reviewed": [
+        "work/round69-lane-20261018/history/c-study/baseline-dropout.png",
+        "work/round69-lane-20261018/history/c-study/h4-baseline-dropout.png"
+      ]
+    },
+    "risks": [
+      "A is unresolved. No accepted direct lane feedback implementation remains enabled; do not deploy rejected candidates.",
+      "A12-bin contiguous missing span clears the native Rust corridor candidates before B can use them. Native coverage and5deg gates are unchanged; B never substitutes a remembered lane or compass-only fit.",
+      "Projection onto current native wall planes is occupied-surface accounting, not free-space or swept-path certification; finite wall ends/hidden obstacles remain uncertainty, and real through-wall returns cut extension.",
+      "C preserves an already feasible circle against one direction-reversing replan; it does not certify the continuous swept path. Existing range and calibration failures remain.",
+      "Only offline evidence was collected. The vehicle last recorded turn68/runtime095bcbc was not freshly queried; no claim is made about its current status or deployed behavior.",
+      "An unreproduced6.281ms Mac wall-time outlier and higher individual phase maxima remain in the timing record. Follow-up CPU/global peaks improved slightly, but this is not a car WCET certificate; no timing guard was relaxed."
+    ],
+    "hard_guards_unchanged": [
+      "8cm body gate with existing cone-support exception",
+      "base front gates6/3",
+      "route consecutive unknown<=5 and total<=15",
+      "original short-gap bridge",
+      "old-frame and clock guards",
+      "bridge lock",
+      "deadline budgets",
+      "exact sequence/physical command matching and adopted nominal center ACK",
+      "0.12s control interval",
+      "300ms heartbeat"
+    ],
+    "evidence_dirs": [
+      "work/round69-lane-20261017",
+      "work/round69-lane-20261018"
+    ],
+    "next": "Continue A from preserved traces and rejected-source evidence; resolve remaining timing uncertainty before any future vehicle validation. No reconnect/build/deploy under the current offline-only instruction.",
+    "source_sha256": {
+      "scripts/course-sim.py": "73d36556a2ba5e42fcc4352588d271e59ad152a2502a55819c9adb9c32fb8f6f",
+      "web/vehicle-console/autonomy_live.py": "09e03d03152920eccad84c2649d51d351befe349b4670935b5de8c96f97cb063",
+      "web/vehicle-console/maneuver_sequence.py": "63bae4f672398527b873423d65fafaacc8fb6ef5772df6e11e9d6cb248b577b3",
+      "web/vehicle-console/server.py": "4f9463ebdeec7de0c52dc45904bd9935f5449cf2cf03ff023f5fef2efa94abf0",
+      "web/vehicle-console/steer_calibration.py": "f95cd7348f2e322ccac2c0747d77d1af9ab891a83231835d7e83204943c6cbf3"
     }
   }
 }

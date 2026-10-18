@@ -943,7 +943,8 @@ class Console:
                                         rear_launch=rear_active, camera_required=not turn_trial,
                                         clearance_profile='maneuver' if turn_trial else 'straight',
                                         relaxed_turn_left=relaxed_turn_left,
-                                        body_contact_target=contact_target)
+                                        body_contact_target=contact_target,
+                                        front_lane=self.turn_front_lane(session, now) if turn_trial else None)
             if clearance['body_proximity']['target_contact_tolerated']:
                 report['target_contact_tolerated_count'] = report.get('target_contact_tolerated_count', 0)+1
             tolerable = [issue for issue in ('scan_incomplete', 'front_sparse')
@@ -1053,6 +1054,34 @@ class Console:
                 session['report']['clearance_current'] = obstacle_clearance
             self.halt(str(error))
 
+    def turn_front_lane(self, session, now):
+        """Current unique native lane for route-lane grazing-return accounting.
+
+        No remembered lane, compass-only estimate, or open-course approach
+        qualifies. Raw returns and all body/freshness gates remain unchanged.
+        """
+        motion, scan = session.get('turn_motion'), self.scan
+        if (session.get('turn_trial') is not True or session.get('continue_route') is not True
+                or not isinstance(motion, ManeuverSequence) or motion.continue_route is not True
+                or motion.entry_kind != 'lane' or motion.route_stage not in ('start_lane', 'light_lane')
+                or session.get('phase') not in ('drive', 'quality_wait')
+                or session.get('phase') != motion.phase or motion.drive_since is None
+                or not isinstance(scan, dict) or scan.get('frame_id') != 'lidar_origin_coarse_body_heading'
+                or type(scan.get('seq')) is not int or scan['seq'] < 0
+                or type(scan.get('at_ms')) is not int or scan['at_ms'] < 0
+                or not 0 <= now-self.scan_at < SCAN_AGE_S
+                or motion.last_seq is not None and scan['seq'] < motion.last_seq
+                or motion.last_publication is not None and scan['at_ms'] < motion.last_publication):
+            return None
+        candidates = scan.get('corridor_candidates')
+        if (not isinstance(candidates, list) or len(candidates) > 24
+                or any(not _valid_candidate(candidate) for candidate in candidates)):
+            return None
+        # Every candidate was validated above in this invocation. Avoid
+        # repeating the same validation; no geometry or scope result is cached.
+        forward = motion._forward_lanes(candidates, validated=True)
+        return forward[0] if len(forward) == 1 else None
+
     def turn_route_quality_scope(self, session, now):
         """Current evidence for the route-only quality allowance, without state updates."""
         motion = session.get('turn_motion')
@@ -1115,8 +1144,11 @@ class Console:
                 and sum(r is not None for r in ranges) >= COAST_MIN_VALID_POINTS)
 
     @staticmethod
-    def turn_front_evidence_matches(scan, clearance):
-        evidence = front_gap_evidence(scan['ranges'], bridge=True)
+    def turn_front_evidence_matches(scan, clearance, front_lane=None):
+        evidence = front_gap_evidence(scan['ranges'], bridge=True, front_lane=front_lane)
+        if any(key in clearance and key not in evidence
+               for key in ('front_wall_projected_bins', 'front_wall_projection')):
+            return None
         return evidence if all(clearance.get(key) == value for key, value in evidence.items()) else None
 
     def turn_quality_hold_eligible(self, session, *, route_entry=False):
@@ -1163,7 +1195,8 @@ class Console:
             if not isinstance(ranges, list) or len(ranges) != 360:
                 return False
             if route:
-                evidence = self.turn_front_evidence_matches(scan, clearance)
+                evidence = self.turn_front_evidence_matches(scan, clearance,
+                    self.turn_front_lane(session, time.monotonic()))
                 if evidence is None:
                     return False
                 unknown = evidence['front_open_unknown_bins']
@@ -1240,7 +1273,8 @@ class Console:
         if not self.turn_neutral_scan_bounded(scan):
             return False
         if 'front_sparse' in issues:
-            evidence = self.turn_front_evidence_matches(scan, clearance)
+            evidence = self.turn_front_evidence_matches(scan, clearance,
+                self.turn_front_lane(session, time.monotonic()))
             if evidence is None:
                 return False
             # Trial44: halting instead of a pending neutral would be the same

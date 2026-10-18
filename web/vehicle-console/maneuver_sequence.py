@@ -2839,9 +2839,14 @@ class ManeuverSequence(TurnMotion):
             self.target_tracker.widen_acquisition(FIRST_ACQUIRE_BEARING_RAD)
 
     @staticmethod
-    def _forward_lanes(values):
-        """Valid native lanes ahead; near-duplicates of one lane merge into it."""
-        forward = [c for c in values if _valid_candidate(c) and abs(c['heading_left_rad']) < math.pi/2]
+    def _forward_lanes(values, *, validated=False):
+        """Valid native lanes ahead; near-duplicates of one lane merge into it.
+
+        ``validated`` is only for internal callers that have just validated
+        every candidate with _valid_candidate, without changing the inputs.
+        """
+        forward = [c for c in values if (validated or _valid_candidate(c))
+                   and abs(c['heading_left_rad']) < math.pi/2]
         if len(forward) > 1:
             base = forward[0]
             if all(abs(_wrap(c['heading_left_rad']-base['heading_left_rad'])) <= PAIR_MERGE_HEADING_RAD
@@ -3058,6 +3063,11 @@ class ManeuverSequence(TurnMotion):
         free distances are kept as their running minimum from low-yaw frames
         (boards do not move; a direction once seen blocked stays blocked), so
         the plan changes only when new evidence narrows it.
+
+        Once following a circle, a small score change must not move its centre
+        across the support and reverse the task turn while the prior circle
+        remains feasible. Approach replanning and genuinely narrower bounds
+        retain their existing behavior. This is not a swept-path certificate.
         """
         heading = self.compass.current(scan)
         if heading is None or self._full_target_points(target, scan, identity) is None:
@@ -3082,13 +3092,53 @@ class ManeuverSequence(TurnMotion):
                 free_memory[theta], changed = free, True
         key = (identity, round(radius, 2))
         approach = (-(center[0]*e1[0]+center[1]*e1[1]), -(center[0]*e2[0]+center[1]*e2[1]))
+        plan_update = None
         if changed or slot['plan'] is None or slot['key'] != key or slot.get('approaching', True):
             # While the car is still before the tangent point the plan also
             # depends on where the car is (approach term), so it is redone.
-            slot['plan'] = _plan_loop([(t, free_memory.get(t, math.inf)) for t in OPEN_PROBE_DIRECTIONS_RAD],
+            candidate = _plan_loop([(t, free_memory.get(t, math.inf)) for t in OPEN_PROBE_DIRECTIONS_RAD],
                                       radius, OPEN_LEFT_RADIUS_M if side > 0 else OPEN_RIGHT_RADIUS_M,
                                       approach=approach)
-            slot['key'] = key
+            # Test the existing circle against the latest conservative probe
+            # memory, not its old optimizer score. Those distances can include
+            # earlier low-yaw observations; they are not all current-frame rays.
+            old_plan = slot['plan']
+            reject_reversal = False
+            plan_update = {'checked_source_seq': scan['seq'],
+                'constraint_basis': 'existing_low_yaw_probe_history_running_minimum',
+                'prior_plan_margins_m': None, 'candidate_curvature_per_m': None,
+                'prior_curvature_per_m': None, 'rejected_task_direction_reversal': False,
+                'swept_path_certified': False}
+            if (old_plan is not None and slot['key'] is not None and slot['key'][0] == identity
+                    and not slot.get('approaching', True)):
+                old_r = old_plan['radius_m']
+                old_a, old_b = old_plan['offset_axis_m'], old_plan['offset_side_m']
+                inner = radius+SIDE_BODY_EXTENT_M+OPEN_INNER_GAP_M
+                extents = [(t, _loop_extent(old_a, old_b, old_r, t)) for t in OPEN_PROBE_DIRECTIONS_RAD]
+                margins = {'enclosing_support_margin_m': old_r-math.hypot(old_a, old_b)-inner,
+                    'minimum_inner_probe_margin_m': min(extent-inner for _, extent in extents),
+                    'minimum_outer_probe_margin_m': min(free_memory.get(t, math.inf)-SIDE_BODY_EXTENT_M
+                                                       -OPEN_OUTER_GAP_M-extent for t, extent in extents)}
+                plan_update['prior_plan_margins_m'] = {
+                    k: (value if math.isfinite(value) else None) for k, value in margins.items()}
+                old_feasible = (old_r-math.hypot(old_a, old_b) >= inner
+                    and all(inner <= extent <= free_memory.get(t, math.inf)-SIDE_BODY_EXTENT_M-OPEN_OUTER_GAP_M
+                            for t, extent in extents))
+                if old_feasible:
+                    def plan_carrot(value):
+                        pa, pb = value['offset_axis_m'], value['offset_side_m']
+                        pc = (center[0]+pa*e1[0]+pb*e2[0], center[1]+pa*e1[1]+pb*e2[1])
+                        return _loop_carrot(pc, value['radius_m'], side, OPEN_LOOKAHEAD_M, e1, e2,
+                            support=(center, radius+SIDE_BODY_EXTENT_M+OPEN_CARROT_SUPPORT_GAP_M))[0]
+                    candidate_carrot, prior_carrot = plan_carrot(candidate), plan_carrot(old_plan)
+                    reject_reversal = side*candidate_carrot[1] < 0 <= side*prior_carrot[1]
+                    plan_update.update(candidate_curvature_per_m=_pursuit_pwm(candidate_carrot)[0],
+                                       prior_curvature_per_m=_pursuit_pwm(prior_carrot)[0])
+            plan_update['rejected_task_direction_reversal'] = reject_reversal
+            if not reject_reversal:
+                slot['plan'] = candidate
+                slot['key'] = key
+                slot['plan_source_seq'] = scan['seq']
         plan = slot['plan']
         a, b = plan['offset_axis_m'], plan['offset_side_m']
         loop_center = (center[0]+a*e1[0]+b*e2[0], center[1]+a*e1[1]+b*e2[1])
@@ -3102,6 +3152,8 @@ class ManeuverSequence(TurnMotion):
             'support_center_left_m': [round(v, 3) for v in center], 'support_radius_m': round(radius, 3),
             'free_m': {round(math.degrees(t)): (None if v == math.inf else v) for t, v in free_memory.items()},
             'plan': {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in plan.items()},
+            'plan_metrics_basis': 'selection_time_optimizer_score_and_probe_margins',
+            'plan_selection_source_seq': slot.get('plan_source_seq'), 'plan_update': plan_update,
             'loop_center_left_m': [round(v, 3) for v in loop_center], 'pursuit_mode': mode,
             'before_tangent_point_m': round(before, 3), 'carrot_left_m': [round(v, 3) for v in carrot],
             'pursuit_curvature_per_m': curvature, 'target_pwm': pwm,
