@@ -22522,6 +22522,43 @@
       "full_suite_378": "all 378 summaries identical to the previous source (no default start within 8 cm of a wall)",
       "sim_rear_gap": ".94 m lane: rear 4 cm completes the route; rear 0-3 cm now pass the gate but the native lane is not detected (left_corridor_unknown); 1.05 m lane fails up to >= 5 cm"
     },
-    "open": "native corridor candidates (Rust detect_corridor_candidates, side sectors 45-135 deg) lose the side walls when the start-end wall hides the rear-side rays; needs a start-lane lane fit from returns ahead of the rear face (next)."
+    "open": "native corridor candidates (Rust detect_corridor_candidates, side sectors 45-135 deg) lose the side walls when the start-end wall hides the rear-side rays; needs a start-lane lane fit from returns ahead of the rear face (next).",
+    "start_lane_gain_change": {
+      "change": "LANE_WALL_GAIN_PWM_PER_RAD 150 -> 100, LANE_WALL_CAP_PWM 40 -> 33 (fixed)",
+      "reason": "the fitted real plant (play 40, ~2x table) is past the old gain's stability: simulation of the fitted family (play 30-50, scale 1.5-2.5, delay .15-.35, wheels 1460/1500/1535, round-70 start pose, .91 m lane) reproduces the weave with 150 (p2p mean 8.4, max 27 deg); 75 fixes it (4.7) but drifts into a board on the 1x family (21 start-lane halts).",
+      "results": {
+        "fitted_family": "p2p 8.38 -> 5.35 deg, max 27.2 -> 16.3, start-lane halts 3 -> 0",
+        "old_family_1x": "p2p 4.86 -> 4.11, halts 0 -> 2 (both play 70, wheel 1550, delay .35)",
+        "full_suite_vs_b907cd4": "named 20/20; range measured 96 -> 96, nominal 95 -> 92; robust 117 -> 122; dropout 12/12; total 308 -> 310 (lost cases: 5 m courses, later stages)",
+        "tests": "803 OK"
+      },
+      "rejected_online_gain": "recursive least squares of heading rate on lagged nominal command (b, bias): with the noise scale it moved but swung .75-3 within one start lane (backlash bias jumps at each reversal, ~3 s of data); grids old 5.24 / fitted 6.04 deg (max 22) vs fixed 100: 4.11 / 5.35. Not adopted. Proposed instead: refit the plant from each run's log (as above) and use it for the next run.",
+      "files": [
+        "work/round69-claude-a-20261018/vc-old.json",
+        "work/round69-claude-a-20261018/vc-real.json",
+        "work/round69-claude-a-20261018/suite-after6/results.json",
+        "work/round69-claude-a-20261018/suite-compare6.json",
+        "work/round69-claude-a-20261018/plant-fit2.py",
+        "work/round69-claude-a-20261018/matlab/plantfit2.m"
+      ]
+    }
+  },
+  "turn70_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 70,
+    "source_commit": "7265f6414e2563ba002dbce38bdd344e62300a52",
+    "label": "claude-turn70",
+    "operator_confirmation": "以摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-70",
+    "evidence_sha256_files_ok": 7,
+    "pre": "turn_ready true (rear-start exemption active, 67 exempt rear returns, nearest 5 cm behind); lane .91 m, heading -1.6 deg, car 6 cm left of centre, front 7.98 m",
+    "result": "start-lane drive ~2.0 s (~1.5 m, up to 1.23 m/s); stopped turn_perception_unavailable at scan 959: front_sparse with open unknown bins -17..-12 (6 contiguous, run limit 5). No contact (rest nearest body gap .26 m).",
+    "cause": "weave: heading +1.9 -> -1.2 -> +1.7 -> -7.9 deg (nose right) in 1.5 s; left-front rays 12-17 deg grazed the left board. The 6-bin hole also invalidates the Rust native corridor candidates (scan validation max missing arc 5 deg), so the lane-wall projection (B) had no lane in that frame.",
+    "steering": "nominal corrections were small (1476-1534) but the play crossing made physical 1403-1564: e.g. nominal 1476 -> 1488 (still right) went physical 1403 -> 1527 (left).",
+    "plant_fit": {
+      "method": "logged physical servo through backlash + table x scale + delay/tau against wall heading; Python grid and MATLAB fminsearch (work/round69-claude-a-20261018/matlab/plantfit2.m, 23 s)",
+      "rounds": "64, 68, 70",
+      "result": "play 40, curvature scale 1.8-2.0 x table, delay .15 s (+ tau .1), initial wheel 1531/1481/1460; rms 1.59 deg (play 0: 2.82, play 50: 1.84)"
+    }
   }
 }

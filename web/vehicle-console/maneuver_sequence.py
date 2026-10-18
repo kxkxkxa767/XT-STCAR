@@ -406,8 +406,13 @@ LANE_START_HOLD_PWM = 55
 # gain is small enough to stay stable over gain 1-3 and delay .15-.35 s.
 LANE_WALL_LOOKAHEAD_M = 1.2  # offset weight: 1/LANE_WALL_LOOKAHEAD_M rad per m
 LANE_WALL_LEAD_S = .45  # steering + scan delay the trend is extrapolated over
-LANE_WALL_GAIN_PWM_PER_RAD = 150.
-LANE_WALL_CAP_PWM = 40
+# Rounds 64/68/70 fit ~2x the table's curvature near centre, the 10-16 floor
+# ~1x; 100 PWM/rad (cap 33) is the fixed gain that stays stable and corrects
+# drift over 1-2.5x in simulation (150 weaved at 2x, 75 drifted into a board
+# at 1x). An online estimate from ~3 s of start lane behind the play was too
+# noisy and was not adopted (turn70 record).
+LANE_WALL_GAIN_PWM_PER_RAD = 100.
+LANE_WALL_CAP_PWM = 33
 LANE_WALL_HISTORY = 3
 LANE_WALL_GAP_S = .35  # older publications are not one trend
 LANE_TRACK_SPEED_POINTS = 4
