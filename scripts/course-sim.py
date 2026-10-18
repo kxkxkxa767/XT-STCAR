@@ -279,9 +279,15 @@ class MeasuredVehicle(Vehicle):
     """
     def __init__(self, x, y, psi, *, speed_scale=1., decel=.7, delay=.15, steer_tau=.1, seed=0,
                  play_pwm=50., gain_scale=1., esc_lag_s=.45, drift_per_mps=.025, turn_drag=.5,
-                 speed_tau_s=1.1, near_center_gain=1., near_center_width_pwm=100., **_):
+                 speed_tau_s=1.1, near_center_gain=1., near_center_width_pwm=100., initial_wheel_pwm=1500.,
+                 **_):
         super().__init__(x, y, psi, speed_scale=speed_scale, decel=decel, delay=delay, steer_tau=steer_tau,
                          seed=seed)
+        # Where the wheels sit inside the play at the start (round 68: 1500
+        # kept the last turn's side, about -.17 /m); default centred as before.
+        if not math.isfinite(initial_wheel_pwm) or abs(initial_wheel_pwm-1500) > play_pwm:
+            raise ValueError('initial_wheel_pwm must lie inside the play')
+        self.wheel_pwm = float(initial_wheel_pwm)
         self.play_pwm, self.gain_scale, self.esc_lag_s = play_pwm, gain_scale, esc_lag_s
         self.drift_per_mps, self.turn_drag, self.speed_tau_s = drift_per_mps, turn_drag, speed_tau_s
         if not math.isfinite(near_center_gain) or near_center_gain <= 0:

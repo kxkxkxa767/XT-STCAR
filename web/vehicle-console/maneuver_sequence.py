@@ -396,6 +396,78 @@ LANE_START_WIDTH_M = (.65, 2.2)
 LANE_START_MIN_FRONT_M = 1.
 LANE_START_SETTLE_S = .3
 LANE_START_HOLD_PWM = 55
+# Start-lane wall law (2026-10-18, replaces CorridorSteering in this stage).
+# Rounds 64/66/67/68 weaved +-8 deg: the real wheels answer a near-centre
+# command 1.5-3x the table and ~.35 s late, so the old law (about 200 nominal
+# PWM per rad, slow 10 PWM ramps, no lead) is beyond its stability limit there
+# (MATLAB margins: unstable at gain 3 / delay .35 / 1.5 m/s). This law corrects
+# toward the lane by the sign and size of the measured error and leads it by
+# the measured wall-heading trend, so it needs no model of the steering; its
+# gain is small enough to stay stable over gain 1-3 and delay .15-.35 s.
+LANE_WALL_LOOKAHEAD_M = 1.2  # offset weight: 1/LANE_WALL_LOOKAHEAD_M rad per m
+LANE_WALL_LEAD_S = .45  # steering + scan delay the trend is extrapolated over
+LANE_WALL_GAIN_PWM_PER_RAD = 150.
+LANE_WALL_CAP_PWM = 40
+LANE_WALL_HISTORY = 3
+LANE_WALL_GAP_S = .35  # older publications are not one trend
+
+
+class LaneWallSteering:
+    """Start lane: nominal servo from the current lane walls, led by their trend.
+
+    error = wall heading (rad, + = lane turns right of the nose) + offset/L
+    (+ = lane centre to the right); the command turns toward the lane in
+    proportion to error + LANE_WALL_LEAD_S * d(heading)/dt. The trend is the
+    median of the last segments of consecutive fresh publications; a clock,
+    width, offset or heading discontinuity restarts it. Output stays a nominal
+    command (the console's steering calibration still applies).
+    """
+    def __init__(self):
+        self.servo = NEUTRAL
+        self.history = []
+        self.last_scan = self.last_publication = None
+        self.evidence = None
+
+    def _reset(self):
+        self.history, self.servo = [], NEUTRAL
+        return self.servo
+
+    def update(self, walls, scan_seq, now, motion_ready=True, scan_at_ms=None):
+        if not motion_ready or walls is None or type(scan_seq) is not int:
+            self.last_scan = scan_seq if type(scan_seq) is int else None
+            return self._reset()
+        if self.last_scan is not None and scan_seq < self.last_scan:
+            self.last_scan = scan_seq
+            return self._reset()
+        if scan_seq == self.last_scan:
+            return self.servo
+        published = scan_at_ms/1000 if type(scan_at_ms) is int and scan_at_ms >= 0 else now
+        if self.last_publication is not None and published <= self.last_publication:
+            self.last_scan, self.last_publication = scan_seq, published
+            return self._reset()
+        self.last_scan, self.last_publication = scan_seq, published
+        heading = math.radians(walls['heading_right_deg'])
+        offset, width = walls['offset_right_m'], walls['width_m']
+        previous = self.history[-1] if self.history else None
+        if previous and (published-previous[0] > LANE_WALL_GAP_S or abs(width-previous[3]) > .1
+                         or abs(offset-previous[2]) > .15 or abs(heading-previous[1]) > math.radians(8)):
+            self.history = []
+        self.history.append((published, heading, offset, width))
+        del self.history[:-LANE_WALL_HISTORY]
+        rates = [(b[1]-a[1])/(b[0]-a[0]) for a, b in zip(self.history, self.history[1:]) if b[0]-a[0] >= .05]
+        rates.sort()
+        trend = ((rates[(len(rates)-1)//2]+rates[len(rates)//2])/2
+                 if len(self.history) == LANE_WALL_HISTORY and rates else 0.)
+        error = heading+offset/LANE_WALL_LOOKAHEAD_M
+        predicted = error+LANE_WALL_LEAD_S*trend
+        correction = max(-LANE_WALL_CAP_PWM, min(LANE_WALL_CAP_PWM, round(LANE_WALL_GAIN_PWM_PER_RAD*predicted)))
+        # Positive y is right; lower PWM turns right.
+        self.servo = NEUTRAL-correction
+        self.evidence = {'error_rad': error, 'trend_rad_s': trend, 'predicted_rad': predicted,
+                         'correction_pwm': correction, 'history': len(self.history)}
+        return self.servo
+
+
 # First support from the lane (task rule: first support anticlockwise, i.e. on
 # the car's left). It is acquired ahead-left (past the start divider's open
 # end, left of the start lane) and approached on its planned loop (see the
@@ -1076,7 +1148,7 @@ class ManeuverSequence(TurnMotion):
         # Round 64 (Claude): wall compass (route mode) and the start-lane entry.
         self.compass = WallCompass()
         self.entry_kind = None  # 'junction' (native left opening at the start) or 'lane'
-        self._lane_start_steering = CorridorSteering()
+        self._lane_start_steering = LaneWallSteering()
         self._lane_start_settle_since = None
         self._lane_start_ticks = 0
         self._lane_start_slow = False
@@ -2462,8 +2534,11 @@ class ManeuverSequence(TurnMotion):
                           and target > self.servo >= NEUTRAL)
             # Round 64: the first-support approach from the start lane uses the
             # route step both ways (the orbit it hands over to uses 40 too).
+            # 2026-10-18: the start-lane wall law too (a 10 PWM/100 ms ramp
+            # behind a .35 s steering delay made the old law overshoot).
             lane_approach = (self.continue_route and self.phase == 'drive'
-                             and ((self.route_stage == 'start_lane' and self._lane_start_slow)
+                             and ((self.route_stage == 'start_lane'
+                                   and (self._lane_start_slow or self.reason == 'start_lane_lane_walls'))
                                   or (self.route_stage == 'first_target' and self.entry_kind == 'lane'
                                       and self.handover_observed)))
             if (post_pass and reducing_left and self.route_stage == 'second_orbit'
@@ -3019,7 +3094,11 @@ class ManeuverSequence(TurnMotion):
         if target < NEUTRAL and (self._route_center_ack is None or self.servo > NEUTRAL):
             target = NEUTRAL  # right only after a current actual center ACK
         ahead = self._lane_front_range(scan)
-        speed = self._lane_speed(scan, ahead)
+        # Start lane: at least three rates, so the median rejects one jump of
+        # the far ray ahead (2026-10-18 simulation, .94 m lane: rates 2.7/-.3
+        # gave 2.65 m/s at .9 m/s and cut the lane); unknown speed meanwhile
+        # is the conservative LANE_SPEED_UNKNOWN_MPS.
+        speed = self._lane_speed(scan, ahead, min_rates=3)
         stop_at = allowed = None
         if approach is None and source != 'first_support_missing_frame_hold':
             # A cut now still pushes for the rest of the ESC lag, the speed
@@ -4605,7 +4684,7 @@ class ManeuverSequence(TurnMotion):
         values = [r for r in values if _number(r)]
         return min(values) if values else None
 
-    def _lane_speed(self, scan, ahead):
+    def _lane_speed(self, scan, ahead, *, min_rates=2):
         """Closing speed on the board ahead: median rate over ~.3 s baselines."""
         history = self._lane_ranges
         if ahead is None:
@@ -4620,7 +4699,7 @@ class ManeuverSequence(TurnMotion):
                 history.clear()
         history.append(row)
         del history[:-LANE_SPEED_HISTORY]
-        if len(history) < 3:
+        if len(history) < 3 or len(history)-min(LANE_SPEED_BASELINE, len(history)-2) < min_rates:
             return None
         step = min(LANE_SPEED_BASELINE, len(history)-2)
         rates = sorted((a[2]-b[2])/(b[0]-a[0]) for a, b in zip(history, history[step:]))
