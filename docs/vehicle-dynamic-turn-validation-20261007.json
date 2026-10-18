@@ -22506,5 +22506,22 @@
         ]
       }
     }
+  },
+  "turn70_rear_start_zone_20261018": {
+    "date": "2026-10-18",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user_request": "你改一改，发车区无限制，不然到时候比赛场地发车区就那么靠后呢",
+    "trigger": "round 69 installed (4679c58, 15 hashes, helper sha matched) but turn_ready=false probe_obstacle_close_body: start-end wall 0.223 m behind the lidar, 4 cm behind the rear bumper (gate 8 cm); native lane present (width .896, heading -1.7 deg, car 6 cm left of centre, front 7.96 m).",
+    "change": "probe_clearance(rear_start=True) (maneuver profile only, bool): returns with x < -REAR_BODY_EXTENT_M + LIDAR_RANGE_ALLOWANCE_M (-.15 m) never request the body stop; listed in body_proximity.rear_start_exempt_points; clearance_gates.rear_start_exemption_active. Server: route turn_preview admission (compact target + continue_route) and autonomy ticks while the route motion is in start_lane (presteer/drive/coast).",
+    "justification": "Forward-only route start with Ackermann steering (turn radius >= .625 m > half width .14 m, heading change in the start lane <= 15 deg): every body point x in the current frame only increases, so a static return behind the rear face is never reached; the 3 cm allowance covers range noise / the rough rear extent (a rear corner moves sideways < 4 mm while advancing 3 cm). Sides and front keep the 8 cm gate; all other protections unchanged.",
+    "validation": {
+      "tests": "803 OK (2 expected failures); 4 new RearStartZone tests; old test_autonomy_live gate-dict test gets the new key rear_start_exemption_active False (schema extension only)",
+      "full_suite_378": "all 378 summaries identical to the previous source (no default start within 8 cm of a wall)",
+      "sim_rear_gap": ".94 m lane: rear 4 cm completes the route; rear 0-3 cm now pass the gate but the native lane is not detected (left_corridor_unknown); 1.05 m lane fails up to >= 5 cm"
+    },
+    "open": "native corridor candidates (Rust detect_corridor_candidates, side sectors 45-135 deg) lose the side walls when the start-end wall hides the rear-side rays; needs a start-lane lane fit from returns ahead of the rear face (next)."
   }
 }

@@ -768,7 +768,8 @@ class ManeuverClearanceTests(unittest.TestCase):
         self.assertEqual(result['clearance_gates'], {'straight_corridor_active': False,
                          'side_lateral_active': False, 'radial_active': False,
                          'relaxed_turn_left_active': False,
-                         'current_body_proximity_active': True, 'rear_launch_exemption_active': False})
+                         'current_body_proximity_active': True, 'rear_launch_exemption_active': False,
+                         'rear_start_exemption_active': False})
         body = result['body_proximity']
         self.assertEqual(body['scope'], 'current_known_lidar_returns_only')
         self.assertEqual(body['coordinate_convention'], 'x_forward_y_left')

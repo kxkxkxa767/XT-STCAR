@@ -453,8 +453,11 @@ class Console:
         if type(continue_route) is not bool or (continue_route and not compact_target_trial):
             raise ValueError('invalid_continue_route')
         ages = self.sensor_ages(now)
+        # A route starts forward from the start zone: returns behind the rear
+        # face (the start-end wall) do not block it (user 2026-10-18).
         clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False,
-                                    camera_required=False, clearance_profile='maneuver')
+                                    camera_required=False, clearance_profile='maneuver',
+                                    rear_start=compact_target_trial and continue_route)
         try:
             if not self.turn_healthy() or not clearance['motion_ready']:
                 raise ValueError('turn_sensor_unavailable')
@@ -946,7 +949,8 @@ class Console:
                                         clearance_profile='maneuver' if turn_trial else 'straight',
                                         relaxed_turn_left=relaxed_turn_left,
                                         body_contact_target=contact_target,
-                                        front_lane=self.turn_front_lane(session, now) if turn_trial else None)
+                                        front_lane=self.turn_front_lane(session, now) if turn_trial else None,
+                                        rear_start=self.turn_rear_start(session))
             if clearance['body_proximity']['target_contact_tolerated']:
                 report['target_contact_tolerated_count'] = report.get('target_contact_tolerated_count', 0)+1
             tolerable = [issue for issue in ('scan_incomplete', 'front_sparse')
@@ -1055,6 +1059,14 @@ class Console:
             if obstacle_clearance is not None:
                 session['report']['clearance_current'] = obstacle_clearance
             self.halt(str(error))
+
+    @staticmethod
+    def turn_rear_start(session):
+        """Route start lane (presteer, drive, coast): rear returns do not stop it."""
+        motion = session.get('turn_motion')
+        return (session.get('turn_trial') is True and session.get('continue_route') is True
+                and isinstance(motion, ManeuverSequence) and motion.continue_route is True
+                and motion.route_stage == 'start_lane' and motion.phase in ('presteer', 'drive', 'coast'))
 
     def turn_front_lane(self, session, now):
         """Current unique native lane for route-lane grazing-return accounting.

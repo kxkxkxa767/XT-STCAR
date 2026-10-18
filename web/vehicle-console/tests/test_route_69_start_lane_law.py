@@ -274,3 +274,61 @@ class CoastKeepsTheLane(unittest.TestCase):
         held_summary, held = self.run_coast(False)
         self.assertLess(max(heading), max(abs(r[3]) for r in held))
         self.assertGreater(min(r[10] for r in coast), min(r[10] for r in held))
+
+
+class RearStartZone(unittest.TestCase):
+    """User 2026-10-18: the start zone may put the car against the start-end
+    wall; returns behind the rear face do not block a forward route start."""
+    def scan(self, extra):
+        import autonomy_live as al  # noqa: F401
+        ranges = [2.]*360
+        for angle, r in extra.items():
+            ranges[angle] = r
+        return {'seq': 7, 'at_ms': 700, 'frame_id': 'lidar_origin_coarse_body_heading', 'ranges': ranges}
+
+    def probe(self, scan, **kw):
+        from autonomy_live import probe_clearance
+        return probe_clearance(scan, {'lidar': .05, 'control': .01, 'camera': 0.}, camera_required=False,
+                               clearance_profile='maneuver', **kw)
+
+    def test_wall_behind_blocks_only_without_the_start_exemption(self):
+        from autonomy_live import ProbeClearanceError
+        wall = {a: .223/abs(math.cos(math.radians(a))) for a in range(160, 201)}  # 4 cm behind the rear
+        with self.assertRaises(ProbeClearanceError):
+            self.probe(self.scan(wall))
+        result = self.probe(self.scan(wall), rear_start=True)
+        self.assertTrue(result['motion_ready'])
+        self.assertTrue(result['clearance_gates']['rear_start_exemption_active'])
+        self.assertTrue(result['body_proximity']['rear_start_exempt_points'])
+        self.assertTrue(all(p['forward_x_m'] < -.15 for p in result['body_proximity']['rear_start_exempt_points']))
+        touching = {a: .182/abs(math.cos(math.radians(a)))+(-.004 if a % 2 else .004) for a in range(150, 211)}
+        self.assertTrue(self.probe(self.scan(touching), rear_start=True)['motion_ready'])  # bumper on the wall
+        # Behind and beside the rear corner (x < -.18): still behind the rear face.
+        self.assertTrue(self.probe(self.scan({135: .27}), rear_start=True)['motion_ready'])
+
+    def test_sides_and_front_keep_the_gate(self):
+        from autonomy_live import ProbeClearanceError
+        for extra in ({90: .19}, {270: .19}, {0: .25}, {110: .2}):  # right, left, front, beside the rear
+            with self.subTest(extra=extra), self.assertRaises(ProbeClearanceError):
+                self.probe(self.scan(extra), rear_start=True)
+
+    def test_only_the_maneuver_profile_and_a_bool(self):
+        from autonomy_live import probe_clearance
+        with self.assertRaises(ValueError):
+            probe_clearance(self.scan({}), {'lidar': .05, 'control': .01, 'camera': 0.}, camera_required=False,
+                            rear_start=True)
+        with self.assertRaises(ValueError):
+            self.probe(self.scan({}), rear_start=1)
+
+    def test_server_scope_is_the_route_start_lane(self):
+        import server
+        motion = ManeuverSequence(0., continue_route=True, max_drive_s=40.)
+        session = {'turn_trial': True, 'continue_route': True, 'turn_motion': motion}
+        motion.route_stage, motion.phase = 'start_lane', 'drive'
+        self.assertTrue(server.Console.turn_rear_start(session))
+        motion.phase = 'coast'
+        self.assertTrue(server.Console.turn_rear_start(session))
+        motion.route_stage = 'first_target'
+        self.assertFalse(server.Console.turn_rear_start(session))
+        motion.route_stage = 'start_lane'
+        self.assertFalse(server.Console.turn_rear_start({**session, 'continue_route': False}))

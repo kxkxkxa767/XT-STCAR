@@ -589,7 +589,7 @@ _BIN_SIN = tuple(math.sin(math.radians(angle)) for angle in range(360))
 
 def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, camera_required=True,
                     clearance_profile='straight', relaxed_turn_left=False, body_contact_target=None,
-                    front_lane=None):
+                    front_lane=None, rear_start=False):
     """Keep nulls explicit; permit bounded holes, never ignore a known close return."""
     if clearance_profile not in ('straight', 'maneuver') or type(clearance_profile) is not str:
         raise ValueError('invalid_clearance_profile')
@@ -629,7 +629,10 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
     corridor = []
     side_clearances = []
     maneuver = clearance_profile == 'maneuver'
+    if rear_start is not False and (rear_start is not True or not maneuver):
+        raise ValueError('probe_invalid_rear_start')
     contact_bins = _body_contact_bins(body_contact_target, scan, ages, maneuver)
+    rear_start_exempt = []
     tolerated_contacts = []
     half_width = CORRIDOR_HALF_WIDTH_M + (.02 if centering else 0)
     nearest_body_point = None
@@ -672,6 +675,19 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
                                   'relaxed_turn_left': relaxed_point}
                 if angle in contact_bins:
                     tolerated_contacts.append(body_point)
+                elif rear_start and x < -REAR_BODY_EXTENT_M+LIDAR_RANGE_ALLOWANCE_M:
+                    # User 2026-10-18: the start zone may put the car against
+                    # the start-end wall. The route start is forward only; with
+                    # Ackermann steering (turn radius >= .625 m > half width
+                    # .14 m) and heading change well below 90 deg (start lane
+                    # <= 15 deg), every body point's x in this frame only
+                    # increases, so a static return behind the rear face is
+                    # never reached. The lidar range allowance (3 cm) is kept
+                    # around the roughly measured rear face: a wall touching
+                    # the bumper reads partly inside it, and a rear corner
+                    # swings sideways < 4 mm while advancing 3 cm. Reported,
+                    # never a stop; returns further forward keep the full gate.
+                    rear_start_exempt.append(body_point)
                 else:
                     body_stop_requested = True
                     if (stop_trigger_point is None or body_distance-point_stop_m <
@@ -722,7 +738,8 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
                                 'side_lateral_active': not maneuver, 'radial_active': not maneuver,
                                 'current_body_proximity_active': maneuver,
                                 'relaxed_turn_left_active': relaxed_turn_left,
-                                'rear_launch_exemption_active': bool(rear_launch) and not maneuver},
+                                'rear_launch_exemption_active': bool(rear_launch) and not maneuver,
+                                'rear_start_exemption_active': rear_start},
             'body_proximity': {
                 'scope': 'current_known_lidar_returns_only',
                 'coordinate_convention': 'x_forward_y_left',
@@ -752,6 +769,7 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
                 'target_contact_tolerated': bool(tolerated_contacts),
                 'target_contact_points': tolerated_contacts,
                 'target_contact_evidence': body_contact_target,
+                'rear_start_exempt_points': rear_start_exempt,
                 'axis_stop_thresholds_m': ({'front': FRONT_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
                                            'rear': REAR_BODY_EXTENT_M+MANEUVER_BODY_CLEARANCE_M,
                                            'left': SIDE_BODY_EXTENT_M+(TURNING_LEFT_BODY_CLEARANCE_M
