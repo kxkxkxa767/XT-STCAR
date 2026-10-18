@@ -22662,5 +22662,27 @@
       "tick_time_mac_ms_user8": "open_transfer p50 .50 -> .38, p95 1.66 -> 1.09, max 2.50 -> 2.32; first_target p95 1.22 -> .75 (course-sim used only as a compute harness)",
       "expected_car": "gap ~= tick + 5 ms: the round-74 .100 s tick would give ~.105 s instead of .121 s"
     }
+  },
+  "turn75_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 75,
+    "source_commit": "31e2cf41ee5f0e4ea6f65639a9f01ebcd2746d16",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-75",
+    "evidence_sha256_files_ok": 6,
+    "result": "no motion: the CLI start was refused (CONTROL ERROR turn_sensor_unavailable); the car stayed locked at the start. The helper then raised (last_result None) after saving its evidence; stdout empty.",
+    "cause": "route start clearance: heading -2 deg, the right-front rays graze the right board; 2 of 9 frames had 4-5 contiguous nulls at 6-10 deg (> base run 3 -> front_sparse, motion_ready false) and the start request hit one. Offline route preview on the same 9 frames: lane admission ready in all; the feedback turn_ready field is the default left-turn preview (left_corridor_unknown), not the route."
+  },
+  "turn76_start_side_walls_20261018": {
+    "date": "2026-10-18",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": "route start preview (turn_preview, compact target + continue_route) and start-lane presteer ticks use the current-frame side-board projection (front_side_walls) for front gaps, as the start-lane drive already does; build-next derives helpers that tolerate last_result None.",
+    "validation": {
+      "round75_frames": "old motion_ready false on 1 of 9 (open 6-10); new true on 9 of 9 (8-10 projected onto the right board)",
+      "tests": "818 OK (1 new, fixture route-75-start-grazing.json)"
+    }
   }
 }

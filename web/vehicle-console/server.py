@@ -459,9 +459,13 @@ class Console:
         ages = self.sensor_ages(now)
         # A route starts forward from the start zone: returns behind the rear
         # face (the start-end wall) do not block it (user 2026-10-18).
+        # Round 75: the right-front rays graze the right board at the start
+        # (heading -2 deg: 4-5 nulls at 6-10 deg in 2 of 9 frames) and one
+        # such frame refused the start; this frame's side boards explain them.
+        route = compact_target_trial and continue_route
         clearance = probe_clearance(self.scan, ages, self.args.demo, centering=True, rear_launch=False,
                                     camera_required=False, clearance_profile='maneuver',
-                                    rear_start=compact_target_trial and continue_route)
+                                    rear_start=route, front_side_walls=route)
         try:
             if not self.turn_healthy() or not clearance['motion_ready']:
                 raise ValueError('turn_sensor_unavailable')
@@ -1104,8 +1108,9 @@ class Console:
         if (session.get('turn_trial') is not True or session.get('continue_route') is not True
                 or not isinstance(motion, ManeuverSequence) or motion.continue_route is not True
                 or motion.entry_kind != 'lane' or motion.route_stage not in ('start_lane', 'light_lane')
-                or session.get('phase') not in ('drive', 'quality_wait')
-                or session.get('phase') != motion.phase or motion.drive_since is None
+                or not (session.get('phase') in ('drive', 'quality_wait') and motion.drive_since is not None
+                        or scope_only and session.get('phase') == 'presteer' and motion.route_stage == 'start_lane')
+                or session.get('phase') != motion.phase
                 or not isinstance(scan, dict) or scan.get('frame_id') != 'lidar_origin_coarse_body_heading'
                 or type(scan.get('seq')) is not int or scan['seq'] < 0
                 or type(scan.get('at_ms')) is not int or scan['at_ms'] < 0

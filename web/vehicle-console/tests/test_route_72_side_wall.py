@@ -135,3 +135,18 @@ class FirstConeRange(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RouteStartGrazing(unittest.TestCase):
+    """Round 75: the start (heading -2 deg) had 5 right-front nulls in one
+    frame; the route start check refused motion on it."""
+    def test_start_clearance_uses_the_side_board(self):
+        frames = json.loads((Path(__file__).parent/'fixtures/route-75-start-grazing.json').read_text())['frames']
+        scan = {'seq': 511, 'at_ms': frames['511']['at_ms'], 'frame_id': 'lidar_origin_coarse_body_heading',
+                'ranges': frames['511']['ranges']}
+        ages = {'lidar': .05, 'control': .01, 'camera': 0.}
+        kw = dict(centering=True, camera_required=False, clearance_profile='maneuver', rear_start=True)
+        self.assertFalse(al.probe_clearance(scan, ages, **kw)['motion_ready'])
+        clearance = al.probe_clearance(scan, ages, front_side_walls=True, **kw)
+        self.assertTrue(clearance['motion_ready'])
+        self.assertEqual(clearance['front_wall_projected_bins'], [8, 9, 10])
