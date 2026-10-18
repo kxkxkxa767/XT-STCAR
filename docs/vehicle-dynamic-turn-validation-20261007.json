@@ -22560,5 +22560,20 @@
       "rounds": "64, 68, 70",
       "result": "play 40, curvature scale 1.8-2.0 x table, delay .15 s (+ tau .1), initial wheel 1531/1481/1460; rms 1.59 deg (play 0: 2.82, play 50: 1.84)"
     }
+  },
+  "turn71_actual_20261018": {
+    "date": "2026-10-18",
+    "trial": 71,
+    "source_commit": "5525322898cc32bc9d20e958793144039b85d142",
+    "label": "claude-turn71",
+    "operator_confirmation": "以摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261018-71",
+    "evidence_sha256_files_ok": 7,
+    "result": "no weave: nominal 1489-1516, wall heading within +-2.3 deg, centred within 1.5 cm; drive 2.1 s (~1.8 m, ~1.2 m/s) then coast start_lane_board_ahead_without_first_support at scan 828 with a reported speed 2.11 m/s (stop 6.11 m >= front 6.02 m); rolled ~1.1 m, stood ~3 s, coast_standstill_unconfirmed after 5 s. No contact.",
+    "cause": "speed: the least-squares slope over 4 track points took one stale frame (scan 825: every sector bin 6.54 m, farther than scan 823 at 6.49 m while driving 1.2 m/s; scan 826 6.18 m) as a 3.5 m/s step. Offline replay of the saved (every other) frames gives 1.2-1.5 m/s.",
+    "first_support": "compact_target_missing throughout; at rest the first cone is clearly in the scan (bins 326-328, 3.15 m, 33 deg left, 2.63 m ahead / 1.71 m left) but only 3 returns and beyond MAX_RANGE_M 3.0 (strict needs 5): it would be acquired ~0.5 m later (round 64 confirmed at 2.73 m). The stop came first.",
+    "coast_standstill": "coast_motion stayed motion_result_superseded on the car: the ICP worker result never matches the current scan (fit slower than a scan period). Ends the run as a lock anyway; not changed in this round.",
+    "user": "怎么又停下来了，在挡板没了的地方，那个地方按轨迹不应该稍稍往左打一下方向，前进后开始绕桩吗 / 雷达的点云图上能清楚的看到两个点啊 / 不要跑仿真了，车都在跑道上能实测肯定比方针好啊",
+    "change_for_72": "start-lane speed = median of pairwise slopes of the last 5 track values (.4 s) instead of the least-squares slope of 4; unit tests 804 OK; no simulation run (user)."
   }
 }

@@ -415,7 +415,7 @@ LANE_WALL_GAIN_PWM_PER_RAD = 100.
 LANE_WALL_CAP_PWM = 33
 LANE_WALL_HISTORY = 3
 LANE_WALL_GAP_S = .35  # older publications are not one trend
-LANE_TRACK_SPEED_POINTS = 4
+LANE_TRACK_SPEED_POINTS = 5
 # Play crossed by the start-lane wall law's commands (the measured +-50 is
 # kept for the loops). Chosen over real play 0-70 in simulation: see
 # turn69_start_lane_law_20261018.
@@ -4748,9 +4748,12 @@ class ManeuverSequence(TurnMotion):
         return value
 
     def _track_speed(self, scan, track):
-        """Start-lane closing speed: least-squares slope of the last
-        LANE_TRACK_SPEED_POINTS track values (.3 s; the median of .2 s
-        baselines lagged ~.3 s and read .6 m/s low while accelerating)."""
+        """Start-lane closing speed: median of the pairwise slopes of the last
+        LANE_TRACK_SPEED_POINTS track values (.4 s). The median of .2 s
+        baselines lagged ~.3 s; a least-squares slope read 2.11 m/s at
+        1.2 m/s in round 71 from one stale frame (all sector bins .35 m too
+        far for one scan) and cut the start lane; one bad frame of five
+        cannot move the pairwise median."""
         history = self._track_history
         if track is None:
             history.clear()
@@ -4766,9 +4769,8 @@ class ManeuverSequence(TurnMotion):
         del history[:-LANE_TRACK_SPEED_POINTS]
         if len(history) < LANE_TRACK_SPEED_POINTS:
             return None
-        mt = sum(h[0] for h in history)/len(history)
-        md = sum(h[2] for h in history)/len(history)
-        slope = (sum((h[0]-mt)*(h[2]-md) for h in history)/sum((h[0]-mt)**2 for h in history))
+        slopes = sorted((b[2]-a[2])/(b[0]-a[0]) for i, a in enumerate(history) for b in history[i+1:])
+        slope = (slopes[(len(slopes)-1)//2]+slopes[len(slopes)//2])/2
         return max(0., -slope)
 
     def _lane_speed(self, scan, ahead, *, min_rates=2):

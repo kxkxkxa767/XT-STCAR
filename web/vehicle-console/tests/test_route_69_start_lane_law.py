@@ -189,13 +189,21 @@ class StartLaneSpeedTrack(unittest.TestCase):
         for step in steps:
             self.assertAlmostEqual(step, .1, places=6)
 
-    def test_least_squares_speed_after_four_points(self):
+    def test_median_slope_speed_after_five_points(self):
         motion = self.motion()
-        speeds = [motion._track_speed(self.scan(k, []), 7.-.12*k) for k in range(6)]
-        self.assertEqual(speeds[:3], [None]*3)
-        self.assertAlmostEqual(speeds[3], 1.2)
-        self.assertAlmostEqual(speeds[5], 1.2)
-        self.assertIsNone(motion._track_speed(self.scan(6, []), None))  # lost: restart
+        speeds = [motion._track_speed(self.scan(k, []), 7.-.12*k) for k in range(7)]
+        self.assertEqual(speeds[:4], [None]*4)
+        self.assertAlmostEqual(speeds[4], 1.2)
+        self.assertAlmostEqual(speeds[6], 1.2)
+        self.assertIsNone(motion._track_speed(self.scan(7, []), None))  # lost: restart
+
+    def test_one_stale_frame_does_not_read_high(self):
+        # Round 71: one scan repeated old ranges, the next caught up; a
+        # least-squares slope read 2.11 m/s at 1.2 m/s and cut the start lane.
+        motion = self.motion()
+        values = [7., 6.88, 6.76, 6.64, 6.64, 6.40, 6.28, 6.16]
+        speeds = [motion._track_speed(self.scan(k, []), v) for k, v in enumerate(values)]
+        self.assertTrue(all(s is None or abs(s-1.2) < .15 for s in speeds), speeds)
 
     def test_unknown_speed_after_a_measured_one_cruises(self):
         gov = ManeuverSequence._start_governor
