@@ -22984,5 +22984,24 @@
     "not_changed": "the light-lane admission (heading <= 20 deg): a stricter one could deadlock a stopped misaligned car in a hold.",
     "simulation": "five regression variants and eight measured-car cases complete (unchanged).",
     "tests": "full discover 835 OK (2 expected failures)."
+  },
+  "turn84_actual_20261019": {
+    "date": "2026-10-19",
+    "trial": 84,
+    "source_commit": "39ebb7e42887f7bc88799dc9bafcdae417505d1e",
+    "operator_confirmation": "你改完直接测试吧 (car read in the start lane, ready)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261019-84",
+    "evidence_sha256_files_ok": 7,
+    "map": "work/round69-claude-a-20261018/t84-map.png",
+    "result": "second loop and second pass (12.40 s, heading 85 deg) fine; light entry turned right (1374-1384), board-ahead hold 13.21-13.75 s at heading 23 deg: the steering stayed 1397 (the hold was ready and waiting for mature frames: that branch still held the old command), the coasting car turned 23 -> -8 deg and -21/-28 deg after the resume (right of the light-lane divider line, outer board ~1.2 m left); resume asked 1623, second hold 14.40 s (heading-hold steering 1540 -> 1563 correct), left front reached the divider open end: body gate 15.15 s, rest gap 0 (contact). Compute: max tick .091 s, gap .101 s. User: 你跑偏了，最后一个区域."
+  },
+  "turn85_pause_steer_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "change": "_pause_wait_base: both wait-steer branches of a route neutral pause (stage not ready yet, and ready but waiting for mature frames / resume) use the same base: the lane-axis heading hold for a light-entry recovery hold (round 84 applied it only to the first branch).",
+    "simulation": "five regression variants and eight measured-car cases complete (unchanged).",
+    "tests": "full discover 835 OK (2 expected failures)."
   }
 }

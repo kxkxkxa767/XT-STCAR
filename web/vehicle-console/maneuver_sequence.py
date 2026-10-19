@@ -2279,6 +2279,14 @@ class ManeuverSequence(TurnMotion):
                     and self._full_target_points(target, scan, self.second_track_id) is not None)
         return False
 
+    def _pause_wait_base(self, kind):
+        """Where the wait steering steps while the paused car may still roll."""
+        if self.route_stage == 'second_orbit' and self.second_return_preparing:
+            return min(self.quality_wait_servo, NEUTRAL)
+        if kind == 'recovery' and self.route_stage == 'light_entry' and self._pause_steer_target is not None:
+            return self._pause_steer_target  # lane-axis heading hold (rounds 81/84/85)
+        return self.quality_wait_servo
+
     def _neutral_pause_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait,
                               quality_clear, resume_ready):
         advancing = self._orbit_inputs(scan, lidar_age_s, now, control, safe, presteer_wait)
@@ -2331,19 +2339,13 @@ class ManeuverSequence(TurnMotion):
             self._quality_full_streak = 0
             if not (quality_clear is True and neutral and self._pause_stage_held):
                 self._quality_good_history.clear()
-            base = (min(self.quality_wait_servo, NEUTRAL)
-                    if self.route_stage == 'second_orbit' and self.second_return_preparing
-                    else self._pause_steer_target
-                    if kind == 'recovery' and self.route_stage == 'light_entry' and self._pause_steer_target is not None
-                    else self.quality_wait_servo)
-            self._wait_steer(now, servo_feedback, neutral, base)
+            self._wait_steer(now, servo_feedback, neutral, self._pause_wait_base(kind))
             return self._result(now)
         if (not self._mature_recovery_observation(scan) or resume_ready is not True
                 or servo_feedback != self.quality_wait_servo or self.quality_wait_previous_servo is not None):
-            base = (min(self.quality_wait_servo, NEUTRAL)
-                    if self.route_stage == 'second_orbit' and self.second_return_preparing
-                    else self.quality_wait_servo)
-            self._wait_steer(now, servo_feedback, neutral, base)
+            # Round 85 (car run 84): this branch too (it held 1397 while the
+            # car turned 23 -> -8 deg past the light-lane axis).
+            self._wait_steer(now, servo_feedback, neutral, self._pause_wait_base(kind))
             return self._result(now)
         self.phase, self.reason = 'drive', f'route_{kind}_pause_resume_waiting_ack'
         self.quality_resume_pending, self.quality_resume_since = True, now
