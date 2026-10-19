@@ -539,7 +539,18 @@ LANE_START_PUSH_BAND_MPS = .4
 # (agent.md section 5: (servo-1500)/160 per m); a loop ends once the compass
 # shows the heading reversed against its approach axis (first: start-lane
 # axis 0 -> pi; second: pi -> 0). No course length, coordinate or time.
-OPEN_LEFT_RADIUS_M = (.80, .95)
+# Round 81 (Claude): with the track calibration the left wheels reach ~1.16 /m
+# at the physical 1720 (radius ~.86 m), so a .80 m circle was not drivable;
+# the lower bound is .90. A larger upper bound (1.10) chose 1.05 m on the
+# round-80 free space but hit the start-end wall on the 5 m simulation course.
+OPEN_LEFT_RADIUS_M = (.90, .95)
+# Round 81: first loop after the handover, until the car is on the circle,
+# the pursuit leads by this fraction of _response_pose (round 80: the plan
+# turned in on time, the wheels reached the circle's lock ~.5 s later, a
+# near right-angle turn beside the support). Simulation: .5/.75 complete the
+# five regression variants and the eight measured-car cases (x1/x1.3 speed,
+# delay .15/.3); the full lead (1.) failed user8 x1.3/.3.
+OPEN_TURN_IN_LEAD = .75
 OPEN_RIGHT_RADIUS_M = (.90, 1.40)  # measured right limit 1.2 /m (.83 m) plus margin
 OPEN_RADIUS_STEP_M = .05
 # Slack (m) traded per metre of loop radius: a larger loop keeps steering
@@ -1202,6 +1213,7 @@ class ManeuverSequence(TurnMotion):
         self.second_recovery_prior = None
         self.second_rebind_evidence = None
         self._pause_stage_held = False
+        self._pause_steer_target = None
         # Route: current-scan proximity avoidance and steering inside waits.
         self._avoid = None
         # Per-scan results reused by the 20 ms ticks of one scan (round 64 car
@@ -2135,6 +2147,10 @@ class ManeuverSequence(TurnMotion):
 
     def _enter_neutral_pause(self, kind, reason, now, scan, control, cause, resume_requires):
         self.neutral_pause_kind = kind
+        # Round 81 (car run 80): a light-entry hold steps toward the current
+        # light-lane pursuit while the car still rolls (holding the second
+        # loop's full right turned it ~70 deg past the lane).
+        self._pause_steer_target = None
         self.recovery_count += 1
         self.quality_wait_since, self.quality_wait_servo = now, self.servo
         self.quality_wait_previous_servo = None
@@ -2217,7 +2233,7 @@ class ManeuverSequence(TurnMotion):
                 pursuit = self._open_light_pursuit(scan, heading)
                 if pursuit is None:
                     return False
-                lane, point, _, _ = pursuit
+                lane, point, _, self._pause_steer_target = pursuit
                 hit = self._open_entry_path_hit(scan, point, heading, stop_at, ahead)
                 return ((hit is None or hit > stop_at)
                         or self._open_light_lane_entry(scan, heading, lane) is not None)
@@ -2300,6 +2316,8 @@ class ManeuverSequence(TurnMotion):
                 self._quality_good_history.clear()
             base = (min(self.quality_wait_servo, NEUTRAL)
                     if self.route_stage == 'second_orbit' and self.second_return_preparing
+                    else self._pause_steer_target
+                    if kind == 'recovery' and self.route_stage == 'light_entry' and self._pause_steer_target is not None
                     else self.quality_wait_servo)
             self._wait_steer(now, servo_feedback, neutral, base)
             return self._result(now)
@@ -3290,12 +3308,15 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     # ---- Round 64 (Claude): open-course loops, transfer and light-lane entry --
-    def _open_loop_geometry(self, scan, target, identity, side, axis, pose=None):
+    def _open_loop_geometry(self, scan, target, identity, side, axis, pose=None, turn_in=False):
         """Plan the loop round this support and its pursuit command, or None.
 
-        ``pose`` (round 79, _response_pose): the command pursues from that
-        predicted pose; the plan and its approach state stay those of the
-        current pose.
+        ``pose`` (round 79, _response_pose): on the approach line the command
+        may pursue from that predicted pose (_overshoot_guard); the plan and
+        its approach state stay those of the current pose. ``turn_in`` (round
+        81, first loop after the handover): until the car is on the circle the
+        command always pursues from the predicted pose, so the turn-in starts
+        before the steering lag would let it.
 
         One state per loop (side +1 first/anticlockwise, -1 second/clockwise),
         so the second loop can be planned while the first still steers. The
@@ -3385,8 +3406,15 @@ class ManeuverSequence(TurnMotion):
             support=(center, radius+SIDE_BODY_EXTENT_M+OPEN_CARROT_SUPPORT_GAP_M))
         slot['approaching'] = before > 0
         curvature, pwm = _pursuit_pwm(carrot)
+        current_pose_pwm = pwm
         command = None
-        if pose is not None and mode == 'approach_line':
+        if pose is not None and turn_in and mode != 'circle':
+            lead = tuple(v*OPEN_TURN_IN_LEAD for v in pose[:3])
+            command = _loop_carrot(_in_pose(loop_center, lead), plan['radius_m'], side, OPEN_LOOKAHEAD_M,
+                _turned(e1, lead[2]), _turned(e2, lead[2]),
+                support=(_in_pose(center, lead), radius+SIDE_BODY_EXTENT_M+OPEN_CARROT_SUPPORT_GAP_M))[0]
+            curvature, pwm = _pursuit_pwm(command)
+        elif pose is not None and mode == 'approach_line':
             # Only on the approach line: on the circle the support is close and
             # the current-pose carrot keeps its clearance check (simulation:
             # a predicted carrot there cut into the support).
@@ -3408,7 +3436,7 @@ class ManeuverSequence(TurnMotion):
             'before_tangent_point_m': round(before, 3), 'carrot_left_m': [round(v, 3) for v in carrot],
             'response_pose': None if pose is None else [round(v, 3) for v in pose],
             'response_carrot_left_m': None if command is None else [round(v, 3) for v in command],
-            'pursuit_curvature_per_m': curvature, 'target_pwm': pwm,
+            'pursuit_curvature_per_m': curvature, 'target_pwm': pwm, 'current_pose_pwm': current_pose_pwm,
             'basis': 'support_loop_planned_from_probed_free_space', 'swept_path_certified': False}
 
     def _tracking_heading(self, scan):
@@ -3521,7 +3549,7 @@ class ManeuverSequence(TurnMotion):
                 self.begin_coast('compact_target_lost_or_ambiguous', now)
             self._slew(now)
             return self._result(now)
-        loop = self._open_loop_geometry(scan, target, self.orbit_track_id, 1, 0.)
+        loop = self._open_loop_geometry(scan, target, self.orbit_track_id, 1, 0., self._response_pose(), turn_in=True)
         if loop is None:
             # No compass or incomplete support this frame: keep the command.
             self.steering_target = self.natural_steering_target = self.servo
@@ -3533,7 +3561,9 @@ class ManeuverSequence(TurnMotion):
         if second is not None and progress >= OPEN_HANDOFF_MIN_PROGRESS_RAD:
             following = self._open_loop_geometry(scan, second, second['track_id'], -1, math.pi)
             self.open_next_loop = following
-            if following is not None and following['target_pwm'] <= loop['target_pwm']:
+            # Round 81: compare the current-pose pursuits (the first loop's
+            # command may lead its turn-in).
+            if following is not None and following['current_pose_pwm'] <= loop['current_pose_pwm']:
                 # Left arc - straight - right arc: the second loop now asks for
                 # less left than the first; turning on only steepens the crossing.
                 return self._open_first_pass(scan, now, control, 'second_loop_needs_less_left')
@@ -5200,6 +5230,18 @@ class ManeuverSequence(TurnMotion):
         else:
             self._lane_pulse = 0
             self._lane_rest = max(0, self._lane_rest-1)
+        if (natural < NEUTRAL and target == NEUTRAL == self.servo and self._route_center_ack is None
+                and self.lane_motor == NEUTRAL
+                and (gap is None or gap > self._lane_safe_gap(v+LANE_SPEED_CUT_MARGIN_MPS+LANE_SPEED_POWER_MARGIN_MPS
+                                                               + LANE_SLOW_PULSE_GAIN_MPS, LANE_REACTION_S))):
+            # Round 81 (car run 80): right needs a current centre ACK, recorded
+            # only under drive power; the slow lane coasted at 1500 for 2.8 s
+            # with right blocked and drifted to ~.08 m from the left board.
+            # One drive pulse at centre (only where even the weakest coast
+            # after it still stops short) lets the ACK arrive; the ACK rule
+            # itself is unchanged.
+            self.lane_motor = ROUTE_SLOW_MOTOR
+            self.lane_feedback['center_ack_pulse'] = True
         self.lane_feedback['motor'] = self.lane_motor
         self.steering_target, self.natural_steering_target = target, natural
         self.reason = 'light_lane_follow_straight'
