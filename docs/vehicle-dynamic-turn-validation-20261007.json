@@ -23046,5 +23046,23 @@
       "the board-ahead hold fired by 2 cm with the second support seen but unconfirmed: review that stop distance (1.3 m/s assumed) only with data",
       "after any lock the car rolls ~1.5-2 m with the steering centred (halt): known; not changed"
     ]
+  },
+  "turn87_load_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": "你改吧 (after the round-86 record: 先记录，后续再改)",
+    "why": "control-gap stops in rounds 60-62, 74, 77, 82, 86 (gap .120-.131 s against .12 s); max gaps .10-.13 s in every run since 73. Round 86: max tick .088 s, so at least .03 s of its .1305 s gap was waiting (late wake-up or lock). Sampled car ticks (rounds 79-86, 409 polls): median .021 s, p90 .056 s, max .083 s; about 3 control ticks per 10 Hz scan (232 drive ticks in ~7.5 s), i.e. two of every three ticks re-check an unchanged scan.",
+    "change": {
+      "clearance_reuse": "autonomy_live.ClearanceReuse: the route tick hands out the last probe_clearance result again (a shallow copy; the service sets top-level fields) only for a scan equal to a deep copy taken when it was checked, arguments equal with equal types (True, 1 and 1.0 differ), and the same side of every sensor-age limit the probe uses (control .20 s, lidar .30 s, camera .50/1 s when required). A check that raised (body gate, sensor age, invalid input) is never reused; it runs again. report.clearance_reused_count counts reuses.",
+      "result_copy_reuse": "ManeuverSequence._snap: _result deep-copied ~45 evidence values every tick; the copy is handed out again while the live value still equals it (C-level compare, same type); any change, in place or not, takes a new copy. Results only read these copies (server consumers checked).",
+      "tick_telemetry": "autonomy_watch now records per tick the control thread's CPU time (last/max_tick_cpu_s, time.thread_time) and, for the largest gap, its exact split: previous tick wall + planned idle + late wake-up + lock wait (max_gap_breakdown, max_wake_late_s), plus control_thread_native_id. Telemetry only; the .12 s gap check is unchanged.",
+      "helper_cpu_snapshot": "build-next.py: from trial 87 the helper writes cpu.json, read-only /proc counters (per process; per thread of the console) just before the run starts and just after it ends. Its polling is unchanged, so the counters show what it costs."
+    },
+    "not_changed": "every hard protection: .12 s control gap, 300 ms heartbeat, 8 cm body gate (cone-support exception), stale/clock checks, bridge lock, deadlines, centre ACK; the tick period (20 ms) and the helper's polling.",
+    "simulation": "course-sim as a harness: all six layouts plus the measured-car cases (user8, doc8x4 at x1.0/.3, x1.3/.15, x1.3/.3) give byte-identical logs and paths with and without the reuse (sha256 of log+history); 1158 of 1456 checks reused in user8. Mac wall per tick: unchanged scan .26 -> .10 ms, new scan 1.02 -> 1.08 ms (the scan copy); per scan with ~2 unchanged ticks as on the car about -15 %.",
+    "tests": "test_route_87_load: reuse equal copy; every changed input (lidar age limit, relaxed gate, rear start, side walls, in-place scan change) checks again; types compared; refused checks never reused; camera limits only when required; gap breakdown sums exactly. Full discover 841 OK (2 expected failures).",
+    "next": "car run 87: read max_gap_breakdown (late wake-up vs tick CPU) and cpu.json (which processes/threads load the car) before reducing anything else."
   }
 }

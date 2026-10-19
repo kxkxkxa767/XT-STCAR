@@ -27,7 +27,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 import zipfile
 from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STABLE_S, COAST_MAX_S, COAST_TIME_MARGIN_S, FRONT_BOUNDARY_LOSS_S, CONTROL_AGE_LIMIT_S, AUTO_CONTROL_HEALTH_S, QualityLatch, QualityRecovery, CorridorSteering, JunctionStop, RearLaunch, ApproachRamp,
-                           FRONT_MAX_UNKNOWN, corridor_walls, front_gap_evidence, probe_clearance, probe_parameters)
+                           FRONT_MAX_UNKNOWN, ClearanceReuse, corridor_walls, front_gap_evidence, probe_clearance,
+                           probe_parameters)
 from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
 from steer_calibration import SteerOutput
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
@@ -778,28 +779,52 @@ class Console:
         # 20 ms more (round 74: a .100 s tick + 20 ms gave a .121 s gap). The
         # wait comes from the previous tick's own measured wall time.
         wait = AUTONOMY_TICK_S
+        previous = None
         while not self.stop.wait(wait):
             wait = AUTONOMY_TICK_S
             lock_requested_at = time.monotonic()
             with self.lock:
                 session = self.auto_session
                 if session is None:
+                    previous = None
                     continue
                 now = time.monotonic()
+                cpu = time.thread_time()
                 try:
                     self.autonomy_tick(now)
                 finally:
                     ended = time.monotonic()
-                    self.record_tick_timing(session, now-lock_requested_at, ended-now)
+                    cpu = time.thread_time()-cpu
+                    # Round 86: a .1305 s gap after a tick of at most .088 s.
+                    # The gap from the previous tick's start splits exactly into
+                    # its wall time, the planned idle, the late wake-up and this
+                    # lock wait; the thread CPU time separates computing from
+                    # waiting for the GIL or a core.
+                    breakdown = None
+                    if previous is not None and previous[0] is session:
+                        _, start0, end0, idle0, cpu0 = previous
+                        breakdown = {'gap_s': now-start0, 'previous_tick_wall_s': end0-start0,
+                                     'previous_tick_cpu_s': cpu0, 'planned_idle_s': idle0,
+                                     'wake_late_s': lock_requested_at-(end0+idle0),
+                                     'lock_wait_s': now-lock_requested_at}
+                    self.record_tick_timing(session, now-lock_requested_at, ended-now, cpu, breakdown)
                     wait = max(AUTONOMY_MIN_IDLE_S, AUTONOMY_TICK_S-(ended-lock_requested_at))
+                    previous = (session, now, ended, wait, cpu)
 
-    def record_tick_timing(self, session, lock_wait_s, tick_wall_s):
+    def record_tick_timing(self, session, lock_wait_s, tick_wall_s, tick_cpu_s=None, breakdown=None):
         """Host wall timing includes scheduling/GIL waits, never a CPU benchmark."""
         report = session['report']
         timing = {'last_lock_wait_s': max(0., lock_wait_s), 'last_tick_compute_s': max(0., tick_wall_s),
             'max_lock_wait_s': max(report.get('max_lock_wait_s', 0.), lock_wait_s),
             'max_tick_compute_s': max(report.get('max_tick_compute_s', 0.), tick_wall_s),
             'control_tick_timing_basis': 'host_monotonic_wall_including_scheduling_and_waits'}
+        if tick_cpu_s is not None:
+            timing.update(last_tick_cpu_s=tick_cpu_s, max_tick_cpu_s=max(report.get('max_tick_cpu_s', 0.), tick_cpu_s),
+                          tick_cpu_basis='control_thread_cpu_time', control_thread_native_id=threading.get_native_id())
+        if breakdown is not None:
+            timing['max_wake_late_s'] = max(report.get('max_wake_late_s', 0.), breakdown['wake_late_s'])
+            if breakdown['gap_s'] > report.get('max_gap_breakdown', {}).get('gap_s', -1.):
+                timing['max_gap_breakdown'] = breakdown
         report.update(timing)
         # halt snapshots the report before this finally block runs. Preserve
         # the final measured tick only on the same terminated run.
@@ -983,13 +1008,18 @@ class Console:
                 clearance_scan = {**self.scan, 'received_at': self.scan_at} if isinstance(self.scan, dict) else self.scan
                 contact_target = route_motion.current_contact_target(clearance_scan, now)
             front_lane, front_side_walls = self.turn_front_walls(session, now) if turn_trial else (None, False)
-            clearance = probe_clearance(clearance_scan, report['sensor_ages'], self.args.demo, report.get('centering', False),
-                                        rear_launch=rear_active, camera_required=not turn_trial,
-                                        clearance_profile='maneuver' if turn_trial else 'straight',
-                                        relaxed_turn_left=relaxed_turn_left,
-                                        body_contact_target=contact_target,
-                                        front_lane=front_lane, front_side_walls=front_side_walls,
-                                        rear_start=self.turn_rear_start(session))
+            # Round 87: an unchanged scan with unchanged inputs is not re-checked
+            # every 20 ms (ClearanceReuse); a raised check always runs again.
+            reuse = session.setdefault('clearance_reuse', ClearanceReuse())
+            clearance = reuse.probe(probe_clearance, clearance_scan, report['sensor_ages'], self.args.demo,
+                                    report.get('centering', False),
+                                    rear_launch=rear_active, camera_required=not turn_trial,
+                                    clearance_profile='maneuver' if turn_trial else 'straight',
+                                    relaxed_turn_left=relaxed_turn_left,
+                                    body_contact_target=contact_target,
+                                    front_lane=front_lane, front_side_walls=front_side_walls,
+                                    rear_start=self.turn_rear_start(session))
+            report['clearance_reused_count'] = reuse.reused
             if clearance['body_proximity']['target_contact_tolerated']:
                 report['target_contact_tolerated_count'] = report.get('target_contact_tolerated_count', 0)+1
             tolerable = [issue for issue in ('scan_incomplete', 'front_sparse')

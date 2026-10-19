@@ -2745,6 +2745,19 @@ class ManeuverSequence(TurnMotion):
             return
         super().lock(reason)
 
+    def _snap(self, key, value):
+        """Round 87: _result deep-copied ~45 evidence values every 20 ms tick
+        (~.05 ms on the Mac, a third of a tick on an unchanged scan once the
+        clearance check is reused). The copy is handed out again while the
+        live value still equals it (C-level compare, same type); any change,
+        in place or not, takes a new copy. Results only read these copies."""
+        memo = self.__dict__.setdefault('_snapshots', {})
+        old = memo.get(key, memo)
+        if old is not memo and type(old) is type(value) and old == value:
+            return old
+        memo[key] = new = copy.deepcopy(value)
+        return new
+
     def _result(self, now):
         if self.phase == 'drive' and self.adopted_presteer_pwm is None:
             self.adopted_presteer_pwm = self.servo
@@ -2770,15 +2783,15 @@ class ManeuverSequence(TurnMotion):
         if self.phase == 'drive' and self.first_pass_preparing:
             stage = 'right_exit' if self.first_pass_evidence is not None else 'first_pass_prepare'
         result.update(turn_stage=stage, trial_scope='first_lidar_compact_target_orbit_entry',
-                      compact_target=copy.deepcopy(self.compact_target),
+                      compact_target=self._snap('compact_target', self.compact_target),
                       compact_target_reason=getattr(self.target_tracker, 'reason', None),
-                      compact_loss_evidence=copy.deepcopy(self.compact_loss_evidence),
+                      compact_loss_evidence=self._snap('compact_loss_evidence', self.compact_loss_evidence),
                       first_pass_preparing=self.first_pass_preparing,
-                      first_pass_progress=copy.deepcopy(self.first_pass_progress),
-                      first_exit_prepare_evidence=copy.deepcopy(self.first_exit_prepare_evidence),
-                      first_pass_evidence=copy.deepcopy(self.first_pass_evidence),
-                      right_exit_center_ack=copy.deepcopy(self.right_exit_center_ack),
-                      right_exit_geometry=copy.deepcopy(self.right_exit_geometry),
+                      first_pass_progress=self._snap('first_pass_progress', self.first_pass_progress),
+                      first_exit_prepare_evidence=self._snap('first_exit_prepare_evidence', self.first_exit_prepare_evidence),
+                      first_pass_evidence=self._snap('first_pass_evidence', self.first_pass_evidence),
+                      right_exit_center_ack=self._snap('right_exit_center_ack', self.right_exit_center_ack),
+                      right_exit_geometry=self._snap('right_exit_geometry', self.right_exit_geometry),
                       right_exit_min_pwm=RIGHT_EXIT_MIN_PWM,
                       right_exit_elapsed_s=0 if self.right_exit_since is None else max(0, now-self.right_exit_since),
                       right_exit_max_s=RIGHT_EXIT_MAX_S,
@@ -2787,10 +2800,10 @@ class ManeuverSequence(TurnMotion):
                       handover_observed=self.handover_observed,
                       orbit_reference_range_m=self.orbit_reference_range_m,
                       orbit_bias_pwm=self.orbit_bias_pwm,
-                      orbit_feedback=copy.deepcopy(self.orbit_feedback),
+                      orbit_feedback=self._snap('orbit_feedback', self.orbit_feedback),
                       orbit_left_entry_boost=self.orbit_left_entry_boost,
-                      left_turn_feedback=copy.deepcopy(self.left_turn_feedback),
-                      handover_control=copy.deepcopy(self.handover_control),
+                      left_turn_feedback=self._snap('left_turn_feedback', self.left_turn_feedback),
+                      handover_control=self._snap('handover_control', self.handover_control),
                       orbit_entry_elapsed_s=0 if self.orbit_since is None else max(0, now-self.orbit_since),
                       orbit_entry_max_s=ORBIT_ENTRY_MAX_S, second_orbit_max_s=SECOND_ORBIT_MAX_S,
                       presteer_max_s=self.max_presteer_s,
@@ -2805,13 +2818,13 @@ class ManeuverSequence(TurnMotion):
                       object_semantic_verified=False, passed_cones=None,
                       competition_supported=False, completed=False,
                       test_sequence_finished=False,
-                      inner_clearance=copy.deepcopy(self.inner_clearance),
-                      entry_bearing=copy.deepcopy(self.entry_bearing),
+                      inner_clearance=self._snap('inner_clearance', self.inner_clearance),
+                      entry_bearing=self._snap('entry_bearing', self.entry_bearing),
                       entry_bearing_required=self.entry_bearing_required,
                       entry_bearing_released=self.entry_bearing_released,
                       adopted_presteer_pwm=self.adopted_presteer_pwm,
                       quality_coast_servo=self.quality_coast_servo,
-                      quality_wait_refusal=copy.deepcopy(self.quality_wait_refusal),
+                      quality_wait_refusal=self._snap('quality_wait_refusal', self.quality_wait_refusal),
                       quality_coast_reason=self.quality_coast_reason,
                       quality_coast_hold_active=(self.phase == 'coast'
                                                 and self.quality_coast_servo is not None),
@@ -2820,42 +2833,42 @@ class ManeuverSequence(TurnMotion):
             quality_wait_active=self.phase == 'quality_wait',
             quality_wait_servo=self.quality_wait_servo,
             quality_wait_used=self.quality_wait_used,
-            quality_wait_anchor=copy.deepcopy(self.quality_wait_anchor),
-            quality_wait_rebind=copy.deepcopy(self.quality_wait_rebind),
+            quality_wait_anchor=self._snap('quality_wait_anchor', self.quality_wait_anchor),
+            quality_wait_rebind=self._snap('quality_wait_rebind', self.quality_wait_rebind),
             left_turn_pause_used=self.left_turn_pause_used,
             neutral_pause_kind=self.neutral_pause_kind,
             recovery_count=self.recovery_count,
-            recovery_evidence=copy.deepcopy(self.recovery_evidence),
+            recovery_evidence=self._snap('recovery_evidence', self.recovery_evidence),
             route_left_hold_active=self._route_left_hold_since is not None,
-            left_overshoot_evidence=copy.deepcopy(self.left_overshoot_evidence),
-            route_avoid=copy.deepcopy(self._avoid), avoid_count=self.avoid_count,
-            path_evidence=copy.deepcopy(self.path_evidence), path_override_count=self.path_override_count,
-            avoid_evidence=copy.deepcopy(self.avoid_evidence),
+            left_overshoot_evidence=self._snap('left_overshoot_evidence', self.left_overshoot_evidence),
+            route_avoid=self._snap('_avoid', self._avoid), avoid_count=self.avoid_count,
+            path_evidence=self._snap('path_evidence', self.path_evidence), path_override_count=self.path_override_count,
+            avoid_evidence=self._snap('avoid_evidence', self.avoid_evidence),
             wait_steering_changes=self.wait_steering_changes,
-            post_pass_pause_evidence=copy.deepcopy(self.post_pass_pause_evidence),
-            left_turn_pause_evidence=copy.deepcopy(self.left_turn_pause_evidence),
+            post_pass_pause_evidence=self._snap('post_pass_pause_evidence', self.post_pass_pause_evidence),
+            left_turn_pause_evidence=self._snap('left_turn_pause_evidence', self.left_turn_pause_evidence),
             left_turn_pause_geometry_error=self.left_turn_pause_geometry_error,
-            quality_wait_evidence=copy.deepcopy(self.quality_wait_evidence),
+            quality_wait_evidence=self._snap('quality_wait_evidence', self.quality_wait_evidence),
             quality_resume_pending=self.quality_resume_pending,
-            quality_wait_release=copy.deepcopy(self.quality_wait_release),
+            quality_wait_release=self._snap('quality_wait_release', self.quality_wait_release),
             quality_wait_previous_servo=self.quality_wait_previous_servo,
-            route_alignment_evidence=copy.deepcopy(self.route_alignment_evidence),
-            second_target=copy.deepcopy(self.second_target),
-            second_rebind_evidence=copy.deepcopy(self.second_rebind_evidence),
+            route_alignment_evidence=self._snap('route_alignment_evidence', self.route_alignment_evidence),
+            second_target=self._snap('second_target', self.second_target),
+            second_rebind_evidence=self._snap('second_rebind_evidence', self.second_rebind_evidence),
             second_identity_recovering=self._second_recovering,
-            second_center_ack=copy.deepcopy(self.second_center_ack),
-            second_pass_evidence=copy.deepcopy(self.second_pass_evidence),
-            second_feedback=copy.deepcopy(self.second_feedback),
+            second_center_ack=self._snap('second_center_ack', self.second_center_ack),
+            second_pass_evidence=self._snap('second_pass_evidence', self.second_pass_evidence),
+            second_feedback=self._snap('second_feedback', self.second_feedback),
             second_return_preparing=self.second_return_preparing,
-            second_return_evidence=copy.deepcopy(self.second_return_evidence),
+            second_return_evidence=self._snap('second_return_evidence', self.second_return_evidence),
             route_end_coast_servo=self.route_end_coast_servo,
-            light_feedback=copy.deepcopy(self.light_feedback),
-            light_alignment_evidence=copy.deepcopy(self.light_alignment_evidence),
-            lane_feedback=copy.deepcopy(self.lane_feedback), lane_motor=self.lane_motor,
-            finish_evidence=copy.deepcopy(self.finish_evidence),
+            light_feedback=self._snap('light_feedback', self.light_feedback),
+            light_alignment_evidence=self._snap('light_alignment_evidence', self.light_alignment_evidence),
+            lane_feedback=self._snap('lane_feedback', self.lane_feedback), lane_motor=self.lane_motor,
+            finish_evidence=self._snap('finish_evidence', self.finish_evidence),
             second_acquisition_reason=self.second_acquisition_reason,
-            second_recovery_prior=copy.deepcopy(self.second_recovery_prior),
-            role_distinct_evidence=copy.deepcopy(self.role_distinct_evidence),
+            second_recovery_prior=self._snap('second_recovery_prior', self.second_recovery_prior),
+            role_distinct_evidence=self._snap('role_distinct_evidence', self.role_distinct_evidence),
             # Each event is a deep snapshot taken once (_route_event) and never
             # changed; re-copying them every 20 ms tick cost ~.2 ms (Mac).
             route_events=dict(self.route_events),
@@ -2870,12 +2883,12 @@ class ManeuverSequence(TurnMotion):
                            or self.route_stage in OPEN_STAGES))
                      # Round 64: start-lane wall corrections, after an actual center ACK.
                      or (self.route_stage == 'start_lane' and self.entry_kind == 'lane'))),
-            route_center_ack=copy.deepcopy(self._route_center_ack),
-            entry_kind=self.entry_kind, start_lane_feedback=copy.deepcopy(self.start_lane_feedback),
-            first_approach=copy.deepcopy(self.first_approach),
-            open_loop=copy.deepcopy(self.open_loop), open_next_loop=copy.deepcopy(self.open_next_loop),
-            open_feedback=copy.deepcopy(self.open_feedback),
-            compass=copy.deepcopy(self.compass.evidence) if self.continue_route else None)
+            route_center_ack=self._snap('_route_center_ack', self._route_center_ack),
+            entry_kind=self.entry_kind, start_lane_feedback=self._snap('start_lane_feedback', self.start_lane_feedback),
+            first_approach=self._snap('first_approach', self.first_approach),
+            open_loop=self._snap('open_loop', self.open_loop), open_next_loop=self._snap('open_next_loop', self.open_next_loop),
+            open_feedback=self._snap('open_feedback', self.open_feedback),
+            compass=self._snap('compass.evidence', self.compass.evidence) if self.continue_route else None)
         if self.continue_route and self.phase == 'drive' and self.route_stage != 'first_target':
             result['turn_stage'] = self.route_stage
         if self.continue_route:

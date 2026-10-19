@@ -1,4 +1,5 @@
 """Bounded physical bring-up only. No competition planner or simulated pose."""
+import copy
 import math
 import statistics
 
@@ -901,6 +902,59 @@ def probe_clearance(scan, ages, demo=False, centering=False, rear_launch=False, 
         raise ProbeClearanceError('probe_obstacle_close_body', clearance)
     return clearance
 
+
+
+def _age_sides(ages, camera_required):
+    """On which side of each probe_clearance age limit the ages lie; None
+    where the probe itself would refuse them."""
+    if type(camera_required) is not bool or not isinstance(ages, dict):
+        return None
+    names = ('camera', 'lidar', 'control') if camera_required else ('lidar', 'control')
+    if any(type(ages.get(k)) not in (int, float) or not math.isfinite(ages[k]) or ages[k] < 0 for k in names):
+        return None
+    sides = (ages['control'] >= CONTROL_AGE_LIMIT_S, ages['lidar'] >= LIDAR_LATE_S)
+    if camera_required:
+        sides += (ages['camera'] >= CAMERA_LATE_S, ages['camera'] >= 1)
+    return sides
+
+
+def _same(a, b):
+    """Equal with equal types throughout (True, 1 and 1.0 differ)."""
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(_same(v, b[k]) for k, v in a.items())
+    if isinstance(a, (list, tuple)):
+        return len(a) == len(b) and all(map(_same, a, b))
+    return a == b
+
+
+class ClearanceReuse:
+    """Round 87 (car runs 60-86: control gaps of .12-.13 s): each 10 Hz scan
+    meets about three 20 ms route ticks and every tick checked it again, about
+    half of a tick on an unchanged scan. probe_clearance is a pure function
+    of the scan, its arguments and on which side of each sensor age limit the
+    ages lie. The last result is handed out again (a shallow copy: the service
+    sets top-level fields) only for a scan equal to a deep copy taken when it
+    was checked, arguments equal with equal types, and the same side of every
+    age limit. A check that raised is never reused; it runs again. ``check``
+    is probe_clearance (the caller's own reference)."""
+
+    def __init__(self):
+        self._scan = self._inputs = self._result = None
+        self.reused = 0
+
+    def probe(self, check, scan, ages, demo=False, centering=False, **kwargs):
+        sides = _age_sides(ages, kwargs.get('camera_required', True))
+        inputs = None if sides is None else (sides, demo, centering, kwargs)
+        if inputs is not None and self._result is not None and scan == self._scan and _same(inputs, self._inputs):
+            self.reused += 1
+            return dict(self._result)
+        self._scan = self._inputs = self._result = None
+        result = check(scan, ages, demo, centering, **kwargs)
+        if inputs is not None:
+            self._scan, self._inputs, self._result = copy.deepcopy(scan), copy.deepcopy(inputs), dict(result)
+        return result
 
 def probe_parameters(data, straight=False):
     pwm, duration = data.get('pwm'), data.get('duration_ms')
