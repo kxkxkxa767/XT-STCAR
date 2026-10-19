@@ -23003,5 +23003,30 @@
     "change": "_pause_wait_base: both wait-steer branches of a route neutral pause (stage not ready yet, and ready but waiting for mature frames / resume) use the same base: the lane-axis heading hold for a light-entry recovery hold (round 84 applied it only to the first branch).",
     "simulation": "five regression variants and eight measured-car cases complete (unchanged).",
     "tests": "full discover 835 OK (2 expected failures)."
+  },
+  "turn85_actual_20261019": {
+    "date": "2026-10-19",
+    "trial": 85,
+    "source_commit": "f4948aec2b20c75307d0b0bdceb63e9f38940e67",
+    "operator_confirmation": "你改完直接测试吧 (car read in the start lane, ready)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261019-85",
+    "evidence_sha256_files_ok": 7,
+    "map": "work/round69-claude-a-20261018/t85-map.png",
+    "result": "first loop passed the first support at .060 m body gap (8.33 s, the support at .30 m / 62 deg; user: 刚刚绕第一个桶的时候轮子蹭到桶了); transfer, board-ahead hold 9.75 s; at ~9.9 s the control bridge stopped with stale_request (a request whose echoed bridge tick was >= 250 ms old or not newer; console control age 2-7 ms; bridge ticks advanced 355 ms between snapshots .19 s apart: likely a control-bridge stall on the loaded CPU, load average ~8). First stale_request stop in all recorded trials. Max tick .092 s, gap .105 s.",
+    "first_cone_gaps": "first-loop/transfer minimum body gap: round 79 .124, 80 .122, 81 .140, 82 .076, 83 .124, 84 .069, 85 .060 m (turn-in lead since 81: the lead added 25-55 PWM left in the circle entry, e.g. run 85 1529/1565/1616 vs 1505/1523/1560)."
+  },
+  "turn86_first_cone_finish_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": "这轮改完后测试，记录提交，我吃饭",
+    "change": {
+      "first_loop_turn_in_lead_removed": "the round-81 first-loop turn-in lead (OPEN_TURN_IN_LEAD .75) is removed (first support passed at .060-.076 m in 3 of 5 runs with it, .12-.14 m without); the left radius range .90-.95 stays.",
+      "coast_decel_cap": "the measured light-lane coast decel is capped at LANE_COAST_DECEL_CAP_MPS2 .375 (was the nominal .5): with .5 the measured car with 15 % stronger steering (user8) stopped .055 m from the end board on the body gate; with .375 all sixteen measured-car finish cases complete, board >= .15 m (no estimate: all complete but 1-3 s slower)."
+    },
+    "not_changed": "the bridge stale_request rule (a bridge-level protection; first occurrence).",
+    "simulation": "five regression variants and eight measured-car cases complete; sixteen finish cases with the cap.",
+    "tests": "test_route_81_smoothing: no OPEN_TURN_IN_LEAD; decel clamp to the cap; full discover 835 OK (2 expected failures)."
   }
 }

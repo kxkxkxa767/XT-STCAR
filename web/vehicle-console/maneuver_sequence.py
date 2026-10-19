@@ -228,10 +228,14 @@ LANE_FINISH_GAP_M = .15
 # round-63 closed-loop model (decel .25-1.0, start 3.5-6 m, cruise .9/1.27).
 LANE_STOP_DECEL_MIN_MPS2 = .25
 # Round 82: a coast decel measured over at least this span and speed drop
-# replaces the weakest one (clamped to [LANE_STOP_DECEL_MIN_MPS2,
-# LANE_STOP_DECEL_MPS2]).
+# replaces the weakest one, clamped to [LANE_STOP_DECEL_MIN_MPS2,
+# LANE_COAST_DECEL_CAP_MPS2]. Round 86: the cap was the nominal .5 and the
+# measured car with 15 % stronger steering (user8) stopped .055 m from the
+# end board on the body gate; at .375 (halfway) all sixteen measured-car
+# finish cases (user8/doc8x4) stop in the zone, board >= .15 m.
 LANE_COAST_MIN_SPAN_S = .4
 LANE_COAST_MIN_DROP_MPS = .1
+LANE_COAST_DECEL_CAP_MPS2 = .375
 LANE_FINISH_ZONE_GAP_M = .75
 LANE_FINISH_MIN_GAP_M = .05
 LANE_FINISH_TARGET_GAP_M = .45
@@ -549,13 +553,10 @@ LANE_START_PUSH_BAND_MPS = .4
 # the lower bound is .90. A larger upper bound (1.10) chose 1.05 m on the
 # round-80 free space but hit the start-end wall on the 5 m simulation course.
 OPEN_LEFT_RADIUS_M = (.90, .95)
-# Round 81: first loop after the handover, until the car is on the circle,
-# the pursuit leads by this fraction of _response_pose (round 80: the plan
-# turned in on time, the wheels reached the circle's lock ~.5 s later, a
-# near right-angle turn beside the support). Simulation: .5/.75 complete the
-# five regression variants and the eight measured-car cases (x1/x1.3 speed,
-# delay .15/.3); the full lead (1.) failed user8 x1.3/.3.
-OPEN_TURN_IN_LEAD = .75
+# Round 81 tried a first-loop turn-in lead (.75 of _response_pose until the
+# car is on the circle); round 86 removed it: car runs 82/84/85 passed the
+# first support at .060-.076 m body gap (the user saw the wheel touch it),
+# 79/80/81/83 at .12-.14 m: entering the circle tighter put the car inside it.
 OPEN_RIGHT_RADIUS_M = (.90, 1.40)  # measured right limit 1.2 /m (.83 m) plus margin
 OPEN_RADIUS_STEP_M = .05
 # Slack (m) traded per metre of loop radius: a larger loop keeps steering
@@ -3327,15 +3328,12 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     # ---- Round 64 (Claude): open-course loops, transfer and light-lane entry --
-    def _open_loop_geometry(self, scan, target, identity, side, axis, pose=None, turn_in=False):
+    def _open_loop_geometry(self, scan, target, identity, side, axis, pose=None):
         """Plan the loop round this support and its pursuit command, or None.
 
         ``pose`` (round 79, _response_pose): on the approach line the command
         may pursue from that predicted pose (_overshoot_guard); the plan and
-        its approach state stay those of the current pose. ``turn_in`` (round
-        81, first loop after the handover): until the car is on the circle the
-        command always pursues from the predicted pose, so the turn-in starts
-        before the steering lag would let it.
+        its approach state stay those of the current pose.
 
         One state per loop (side +1 first/anticlockwise, -1 second/clockwise),
         so the second loop can be planned while the first still steers. The
@@ -3433,13 +3431,7 @@ class ManeuverSequence(TurnMotion):
         curvature, pwm = _pursuit_pwm(carrot)
         current_pose_pwm = pwm
         command = None
-        if pose is not None and turn_in and mode != 'circle':
-            lead = tuple(v*OPEN_TURN_IN_LEAD for v in pose[:3])
-            command = _loop_carrot(_in_pose(loop_center, lead), plan['radius_m'], side, OPEN_LOOKAHEAD_M,
-                _turned(e1, lead[2]), _turned(e2, lead[2]),
-                support=(_in_pose(center, lead), radius+SIDE_BODY_EXTENT_M+OPEN_CARROT_SUPPORT_GAP_M))[0]
-            curvature, pwm = _pursuit_pwm(command)
-        elif pose is not None and mode == 'approach_line':
+        if pose is not None and mode == 'approach_line':
             # Only on the approach line: on the circle the support is close and
             # the current-pose carrot keeps its clearance check (simulation:
             # a predicted carrot there cut into the support).
@@ -3574,7 +3566,7 @@ class ManeuverSequence(TurnMotion):
                 self.begin_coast('compact_target_lost_or_ambiguous', now)
             self._slew(now)
             return self._result(now)
-        loop = self._open_loop_geometry(scan, target, self.orbit_track_id, 1, 0., self._response_pose(), turn_in=True)
+        loop = self._open_loop_geometry(scan, target, self.orbit_track_id, 1, 0.)
         if loop is None:
             # No compass or incomplete support this frame: keep the command.
             self.steering_target = self.natural_steering_target = self.servo
@@ -3586,8 +3578,7 @@ class ManeuverSequence(TurnMotion):
         if second is not None and progress >= OPEN_HANDOFF_MIN_PROGRESS_RAD:
             following = self._open_loop_geometry(scan, second, second['track_id'], -1, math.pi)
             self.open_next_loop = following
-            # Round 81: compare the current-pose pursuits (the first loop's
-            # command may lead its turn-in).
+            # Round 81: compare the current-pose pursuits of both loops.
             if following is not None and following['current_pose_pwm'] <= loop['current_pose_pwm']:
                 # Left arc - straight - right arc: the second loop now asks for
                 # less left than the first; turning on only steepens the crossing.
@@ -5144,9 +5135,9 @@ class ManeuverSequence(TurnMotion):
         """Front gap at which even the weakest coast only just keeps the minimum gap.
 
         Round 82: the weakest decel is the coast decel measured in this lane
-        when one is (_lane_coast_decel), never above the nominal one; car run
-        80 measured ~.53 m/s^2 while LANE_STOP_DECEL_MIN_MPS2 .25 made the
-        car stop .6 m short of the zone and crawl ~5 s in kicks."""
+        when one is (_lane_coast_decel), at most LANE_COAST_DECEL_CAP_MPS2;
+        car run 80 measured ~.53 m/s^2 while LANE_STOP_DECEL_MIN_MPS2 .25
+        made the car stop .6 m short of the zone and crawl ~5 s in kicks."""
         decel = LANE_STOP_DECEL_MIN_MPS2 if self._lane_coast_decel is None else self._lane_coast_decel
         return LANE_FINISH_MIN_GAP_M+speed*reaction+speed*speed/(2*decel)
 
@@ -5165,7 +5156,7 @@ class ManeuverSequence(TurnMotion):
         t0, v0 = track[0]
         t1, v1 = track[-1]
         if t1-t0 >= LANE_COAST_MIN_SPAN_S and v0-v1 >= LANE_COAST_MIN_DROP_MPS:
-            self._lane_coast_decel = max(LANE_STOP_DECEL_MIN_MPS2, min(LANE_STOP_DECEL_MPS2, (v0-v1)/(t1-t0)))
+            self._lane_coast_decel = max(LANE_STOP_DECEL_MIN_MPS2, min(LANE_COAST_DECEL_CAP_MPS2, (v0-v1)/(t1-t0)))
 
     def _light_lane_update(self, scan, now, control):
         """Follow the light-lane straight, then stop inside the finish zone.

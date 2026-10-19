@@ -16,7 +16,7 @@ class FirstLoopRadius(unittest.TestCase):
         tightest = 1/sc.curvature_for_wheel(sc.PHYSICAL_RANGE[1]-sc.STEER_PLAY_PWM)
         self.assertGreater(ms.OPEN_LEFT_RADIUS_M[0], tightest)
         self.assertLessEqual(ms.OPEN_LEFT_RADIUS_M[0], ms.OPEN_LEFT_RADIUS_M[1])
-        self.assertTrue(0 < ms.OPEN_TURN_IN_LEAD <= 1)
+        self.assertFalse(hasattr(ms, 'OPEN_TURN_IN_LEAD'))  # removed in round 86 (first-cone gaps)
 
 
 class LightLaneCenterAck(unittest.TestCase):
@@ -64,7 +64,8 @@ class LightLaneCoastDecel(unittest.TestCase):
         weakest = motion._lane_safe_gap(1.)
         for k, v in enumerate((.9, .85, .8, .74, .7, .64)):  # ~.53 m/s^2
             motion._lane_coast_observe(k*.1, v)
-        self.assertAlmostEqual(motion._lane_coast_decel, ms.LANE_STOP_DECEL_MPS2)  # clamped to nominal
+        self.assertAlmostEqual(motion._lane_coast_decel, ms.LANE_COAST_DECEL_CAP_MPS2)  # clamped to the cap
+        self.assertLess(ms.LANE_COAST_DECEL_CAP_MPS2, ms.LANE_STOP_DECEL_MPS2)
         self.assertLess(motion._lane_safe_gap(1.), weakest)
         slow = ms.ManeuverSequence(0., continue_route=True)
         slow.lane_motor, slow._power_cmd_at = ms.NEUTRAL, None
