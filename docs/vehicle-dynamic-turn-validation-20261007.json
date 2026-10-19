@@ -22871,5 +22871,24 @@
       "stress": "delay .45 x1.3/1.45 (beyond the fit): old code 0/4 (cone contacts, transfer 218-222 deg); final 0/4 (transfer 212-215 deg, fewer/later cone contacts); full lead 1/4. The real car may sit between the .3 and .45 cases."
     },
     "tests": "test_route_79_calibration_recovery SteeringResponse (3): response pose, guard, release steps; full discover 829 OK (2 expected failures)."
+  },
+  "turn80_actual_20261019": {
+    "date": "2026-10-19",
+    "trial": 80,
+    "source_commit": "cc370c3ad3c5e1b93fb19f2ca6bdcbb860fc9ed9",
+    "operator_confirmation": "你改吧，我已经摆好了，改完直接推送测试 (placement confirmed; network dropped once, reconnected by the user, fresh pre-check before deploy)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261019-80",
+    "evidence_sha256_files_ok": 7,
+    "map": "work/round69-claude-a-20261018/t80-map.png (fit < .65 at 12-13 s: drift)",
+    "result": "COMPLETED: start lane, first loop, PASS1 8.82 s, transfer, second loop with the support kept on the right (bearing -33 -> -50 -> -93 -> -145 deg, clockwise), second pass 13.51 s (adopted_arc_reaches_light_lane), light entry, light lane, route_finish_zone_stop 25.28 s; session end coast_standstill_unconfirmed (known). Max tick .095 s, max gap .115 s. Closest body gap ~.08 m (left board in the light lane, 18.9-19.6 s).",
+    "user": "这次是跑完了，但轨迹怎么这么难看 / 第一个桶你没有先左转一个角度，几乎是在与桶齐平的时候转一个直角过去的，最后一个直道你往左偏了，但也没碰到挡板走完了 / 为什么第一个赛道的逻辑要求右转，不是应该左转吗",
+    "effect_of_round80": "transfer overshoot 61 -> 24 deg (heading peak 204 deg; the left came back 1683 -> 1602 -> 1500 in .5 s with the 80 release step); second loop did not cross in front of the support.",
+    "issues": {
+      "first_loop_entry": "handover 5.52 s at 2.42 m / 45.5 deg; plan R .95 (cap of OPEN_LEFT_RADIUS_M .80-.95), centre offset .45 m to the support's near (right) side because the return side had only .95 m free (probe 90 deg); tangent line .35 m left of the car: the pursuit asked 1574 -> 1505 (straight, never right) until the support was nearly abeam, then the circle at near full lock (1703, yaw up to 125 deg/s): the right-angle turn the user saw.",
+      "stops": "two open-stage board-ahead holds (front 2.71/2.73 m < stop 2.885 m computed with LANE_SPEED_UNKNOWN_MPS 1.3): transfer 9.77-10.88 s (released when the second support was confirmed in the hold), light entry 13.79-14.35 s.",
+      "light_entry_s_curve": "the second pass handed over at full right (1308); the light-entry hold held 1308-1348 while coasting: heading 82 -> -53 deg; the light-entry pursuit then turned left to 1648 and handed over to the light lane with the nose ~14-18 deg left of the lane.",
+      "light_lane_right_blocked": "16.4-19.2 s the light-lane pursuit asked 1424-1449 but the servo stayed 1500: right needs a current centre ACK, recorded only under drive power, and the slow light-lane governor kept the motor at 1500; the car drifted to ~.08 m from the left board, then ran ~.25 m left of the lane centre to the finish."
+    },
+    "car_state": "locked in the finish zone."
   }
 }
