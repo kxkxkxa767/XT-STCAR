@@ -22754,5 +22754,31 @@
       "5. Keep testing on the car (user: 不要跑仿真了); simulation only as a compute harness."
     ],
     "today_progress": "start-lane weave fixed (rounds 71+); right-board reference after the divider end; first cone acquired at 3-3.5 m; full first loop (PASS1) since round 74; second support recognised and second loop entered (rounds 76-78); compute stops fixed by caching, loop pacing and the GC pause."
+  },
+  "round79_analysis_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": false,
+    "deployed": false,
+    "vehicle_connected": false,
+    "user": "先不连车，你继续修改下一轮的修改 / 先记录暂停一下我压缩下上下文",
+    "second_loop_failure_round78": {
+      "objects": "at rest the first cone is at -46 deg / 2.25 m (the first tracker followed it from 138 deg through -154, -130, -103, -82 to -46 while the car turned right) and the second cone at 164 deg / 1.79 m (behind-left).",
+      "sequence": "second support confirmed 10.10 s at 2.84 m / -42 deg; second-loop plan: support (2.14, -1.92) m, loop centre (2.05, -2.60), radius 1.15 m, approach_line with 3.27 m before the tangent; pursuit demanded right 1448 -> 1339 -> 1308 (max); the car turned right ~65 deg in .9 s (~-1.26 /m) at physical 1350-1380 and crossed in front of the cone (bearing -26 deg at 11.03 s -> +29 deg at 11.31 s), so the cone ended on its left. At 11.31 s the cone at -14 deg sat inside the right-front grazing null band (no isolation) -> missing; 11.57 s a 12-null frame -> post-pass pause.",
+      "pause_stuck": "second_loop readiness needs the confirmed second id in full view; _second_recovery_observation only searches bearings (-pi, pi/2) and associates with the last observation rotated by the compass but not translated for the car's coast (~1-1.5 m), so the cone behind-left (164 deg) was never re-bound: second_role_recovery_current_support_unproven until the 40 s budget."
+    },
+    "steering_fit": {
+      "method": "work/round69-claude-a-20261018/steer-real.py and steer-fit.py: trial-map rebuilt curvature (v >= .5 m/s, drive) vs logged physical servo (feedback, ~5 Hz) of rounds 70-78 (176 samples), backlash + linear gain + saturation + lag grid",
+      "binned": "physical 1360: -0.84 /m (table -0.36, x2.4); 1420: -0.26; 1440: -0.10; 1460-1540: ~0 (play); 1560: +0.22; 1580: +0.51 (x1.6); 1600: +0.75 (x1.9); 1680-1700: +1.12..1.16 (table 1.6, x0.7)",
+      "fit": "play 40 PWM, ~154 PWM per 1/m (143-167 within rms +.006), lag .3 s, rms .201 /m; current table + play 40/50: rms .245/.247",
+      "conclusion": "the real steering is close to linear (~ the route's nominal 160 PWM per 1/m) with ~40 PWM play, saturating near +-1.2-1.35 /m; the 10-16 table understates near-centre and moderate response ~2x and overstates the left extreme; SteerOutput therefore over-drives moderate commands (start-lane weave, second-loop cross-over)."
+    },
+    "planned_changes_next_round": [
+      "steer_calibration: STEER_TABLE ((1300, -1.2), (1500, 0.), (1685, 1.2), (1720, 1.25)) (right ~167, left ~154 PWM per 1/m; first point keeps NOMINAL_RIGHT_LIMIT_PWM 1308), STEER_PLAY_PWM 50 -> 40, LANE_WALL_PLAY_PWM -> 40; course-sim measured plant table to match; re-check the start-lane wall-law gain (100 was tuned against the over-driving table).",
+      "second-loop pause: bound it (e.g. 3 s) with an explicit terminal reason; re-acquire the second support over all bearings (it can be behind after an over-run), using the first support (tracked) as a landmark to translate the prior, or a unique distinct compact support near the expected position.",
+      "second-loop entry: with the corrected calibration the pursuit should not over-turn; also review the approach-line demand when the tangent needs a lateral shift larger than the forward distance (plan from the current pose).",
+      "right-front grazing nulls in open stages; coast standstill confirmation (ICP worker slower than a scan)."
+    ],
+    "car_state": "round 78 installed (ec4e35b), locked; not connected today."
   }
 }
