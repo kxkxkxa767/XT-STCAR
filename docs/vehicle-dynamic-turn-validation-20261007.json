@@ -22962,5 +22962,27 @@
     "not_changed": "the .12 s control gap limit and every other hard check.",
     "simulation": "five regression variants and eight measured-car cases complete, identical to round 82.",
     "tests": "test_route_81_smoothing LoopPlanReuse; full discover 835 OK (2 expected failures)."
+  },
+  "turn83_actual_20261019": {
+    "date": "2026-10-19",
+    "trial": 83,
+    "source_commit": "2785a12538efafee718abee2970a2f8ce625faf1",
+    "operator_confirmation": "已摆好 (after the user reconnected the network)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261019-83",
+    "evidence_sha256_files_ok": 7,
+    "map": "work/round69-claude-a-20261018/t83-map.png",
+    "result": "compute fixed (max tick .099 s, max gap .106 s, lock wait .026 s); first loop, PASS1 8.53 s, transfer, second loop clockwise (support right), second pass 12.61 s; light entry turned from 88 to 1.4 deg by 13.73 s (car ~.25 m right of the lane centre, outer board .8 m left, divider open end ~2.2 m ahead); board-ahead holds 13.13-13.73 s and 14.72-15.33 s (the second: heading 9 deg left, the left board .36-.45 m left inside the path strip); during the second hold the steering followed the pursuit (1530-1550, left) and the coasting car turned 9 -> 15 deg left; light lane started 15.33 s at 15 deg left ~.45 m from the left board, asked 1391 at 15.61 s, servo 1530 -> 1460 too late; left-front body gate ~15.8 s, rolled on, rest gap .016 m (contact). User: 最后一个直道还是撞到挡板了，绕弯第二个桶后的位置你要及时修正 / 绕弯第二个桶调整在直道前车头的朝还有个原因是，要识别红绿的 / light?你不是纯用雷达？",
+    "lane_model": "only the outer board was measured at entry (inner None, start-lane prior width .92 m; the lane measured 1.1 m once inside)."
+  },
+  "turn84_light_entry_align_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "change": "light-entry recovery hold (wait steering while the car still rolls): the target is now the lane-axis heading hold (_open_heading_hold(heading, 0): 1500 + 180 x heading error, +-120) instead of the light-lane pursuit point; keeps the car parallel to the light lane (the boards, and the camera facing along the lane for later traffic-light recognition; route navigation is lidar only, traffic_light_vision False).",
+    "expected_effect": "run 83: at 14.72 s heading +9 deg -> 1472 (right) instead of 1530 (left); run 80: at heading 82 deg -> 1380 then toward left as the heading passes 0, instead of holding 1308.",
+    "not_changed": "the light-lane admission (heading <= 20 deg): a stricter one could deadlock a stopped misaligned car in a hold.",
+    "simulation": "five regression variants and eight measured-car cases complete (unchanged).",
+    "tests": "full discover 835 OK (2 expected failures)."
   }
 }

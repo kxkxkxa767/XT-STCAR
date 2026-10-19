@@ -2154,9 +2154,9 @@ class ManeuverSequence(TurnMotion):
 
     def _enter_neutral_pause(self, kind, reason, now, scan, control, cause, resume_requires):
         self.neutral_pause_kind = kind
-        # Round 81 (car run 80): a light-entry hold steps toward the current
-        # light-lane pursuit while the car still rolls (holding the second
-        # loop's full right turned it ~70 deg past the lane).
+        # Round 81 (car run 80): a light-entry hold steps toward a current
+        # target while the car still rolls (holding the second loop's full
+        # right turned it ~70 deg past the lane); round 84: the lane axis.
         self._pause_steer_target = None
         self.recovery_count += 1
         self.quality_wait_since, self.quality_wait_servo = now, self.servo
@@ -2240,7 +2240,12 @@ class ManeuverSequence(TurnMotion):
                 pursuit = self._open_light_pursuit(scan, heading)
                 if pursuit is None:
                     return False
-                lane, point, _, self._pause_steer_target = pursuit
+                lane, point, _, _ = pursuit
+                # Round 84 (car run 83): while the car still rolls, keep it
+                # parallel to the lane axis (the light ahead must be faced,
+                # and the boards are near); steering toward the pursuit point
+                # turned the coasting car from 9 to 15 deg left into the lane.
+                self._pause_steer_target = self._open_heading_hold(heading, 0.)
                 hit = self._open_entry_path_hit(scan, point, heading, stop_at, ahead)
                 return ((hit is None or hit > stop_at)
                         or self._open_light_lane_entry(scan, heading, lane) is not None)
