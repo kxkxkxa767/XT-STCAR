@@ -227,6 +227,11 @@ LANE_FINISH_GAP_M = .15
 # or when stopped with the front inside the zone. Parameters chosen on the
 # round-63 closed-loop model (decel .25-1.0, start 3.5-6 m, cruise .9/1.27).
 LANE_STOP_DECEL_MIN_MPS2 = .25
+# Round 82: a coast decel measured over at least this span and speed drop
+# replaces the weakest one (clamped to [LANE_STOP_DECEL_MIN_MPS2,
+# LANE_STOP_DECEL_MPS2]).
+LANE_COAST_MIN_SPAN_S = .4
+LANE_COAST_MIN_DROP_MPS = .1
 LANE_FINISH_ZONE_GAP_M = .75
 LANE_FINISH_MIN_GAP_M = .05
 LANE_FINISH_TARGET_GAP_M = .45
@@ -1199,6 +1204,8 @@ class ManeuverSequence(TurnMotion):
         self.light_feedback = None
         self.light_alignment_evidence = None
         self.lane_motor = ROUTE_SLOW_MOTOR
+        self._lane_coast_track = []
+        self._lane_coast_decel = None
         self._lane_ranges = []
         self.lane_feedback = None
         self.finish_evidence = None
@@ -4163,9 +4170,13 @@ class ManeuverSequence(TurnMotion):
         self.right_exit_adoption_wait_since = None
         if self.servo > NEUTRAL:
             self._route_center_ack = None
-        elif self.servo == NEUTRAL and control.get('motor') in DRIVE_MOTORS:
-            # A center ACK is recorded only under drive power (service check);
-            # a neutral coasting pulse keeps the previous one.
+        elif self.servo == NEUTRAL and (control.get('motor') in DRIVE_MOTORS
+                                        or (self.route_stage == 'light_lane' and control.get('motor') == NEUTRAL)):
+            # A center ACK is recorded under drive power (service check); a
+            # neutral coasting pulse keeps the previous one. Round 82: in the
+            # light lane an ACKed centre while coasting counts too (car runs
+            # 80/81: the lane coasts to the finish, right stayed blocked for
+            # .6-2.8 s, the car drifted to ~.08 m from / into the left board).
             self._route_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
         return True
 
@@ -5111,10 +5122,32 @@ class ManeuverSequence(TurnMotion):
         """Front gap at which a neutral coast at the nominal decel stops mid-zone."""
         return LANE_FINISH_TARGET_GAP_M+speed*reaction+speed*speed/(2*LANE_STOP_DECEL_MPS2)
 
-    @staticmethod
-    def _lane_safe_gap(speed, reaction=LANE_REACTION_S):
-        """Front gap at which even the weakest coast only just keeps the minimum gap."""
-        return LANE_FINISH_MIN_GAP_M+speed*reaction+speed*speed/(2*LANE_STOP_DECEL_MIN_MPS2)
+    def _lane_safe_gap(self, speed, reaction=LANE_REACTION_S):
+        """Front gap at which even the weakest coast only just keeps the minimum gap.
+
+        Round 82: the weakest decel is the coast decel measured in this lane
+        when one is (_lane_coast_decel), never above the nominal one; car run
+        80 measured ~.53 m/s^2 while LANE_STOP_DECEL_MIN_MPS2 .25 made the
+        car stop .6 m short of the zone and crawl ~5 s in kicks."""
+        decel = LANE_STOP_DECEL_MIN_MPS2 if self._lane_coast_decel is None else self._lane_coast_decel
+        return LANE_FINISH_MIN_GAP_M+speed*reaction+speed*speed/(2*decel)
+
+    def _lane_coast_observe(self, now, speed):
+        """Coast decel from the measured speed while coasting past the ESC lag."""
+        coasting = (self.lane_motor == NEUTRAL and speed is not None
+                    and (self._power_cmd_at is None or now-self._power_cmd_at >= ESC_LAG_S))
+        if not coasting:
+            self._lane_coast_track = []
+            return
+        track = self._lane_coast_track
+        if track and (now <= track[-1][0] or speed > track[-1][1]+LANE_SPEED_CUT_MARGIN_MPS):
+            track.clear()  # a jump up is not a coast
+        track.append((now, speed))
+        del track[:-LANE_SPEED_HISTORY]
+        t0, v0 = track[0]
+        t1, v1 = track[-1]
+        if t1-t0 >= LANE_COAST_MIN_SPAN_S and v0-v1 >= LANE_COAST_MIN_DROP_MPS:
+            self._lane_coast_decel = max(LANE_STOP_DECEL_MIN_MPS2, min(LANE_STOP_DECEL_MPS2, (v0-v1)/(t1-t0)))
 
     def _light_lane_update(self, scan, now, control):
         """Follow the light-lane straight, then stop inside the finish zone.
@@ -5131,7 +5164,7 @@ class ManeuverSequence(TurnMotion):
         space = None
         walls = corridor_walls(scan)
         heading = self.compass.current(scan) if self.entry_kind == 'lane' else None
-        open_pursuit = None if heading is None else self._open_light_pursuit(scan, heading)
+        open_pursuit = None if heading is None else self._open_light_pursuit(scan, heading, self._response_pose())
         if open_pursuit is not None:
             natural = open_pursuit[3]
             source = 'open_lane_axis_pursuit'
@@ -5159,6 +5192,7 @@ class ManeuverSequence(TurnMotion):
             target = NEUTRAL  # right only after a current actual center ACK
         ahead = self._lane_front_range(scan)
         speed = self._lane_speed(scan, ahead)
+        self._lane_coast_observe(now, speed)
         held = getattr(self, '_lane_speed_last', None)
         speed_known = True
         if speed is not None:
@@ -5230,18 +5264,6 @@ class ManeuverSequence(TurnMotion):
         else:
             self._lane_pulse = 0
             self._lane_rest = max(0, self._lane_rest-1)
-        if (natural < NEUTRAL and target == NEUTRAL == self.servo and self._route_center_ack is None
-                and self.lane_motor == NEUTRAL
-                and (gap is None or gap > self._lane_safe_gap(v+LANE_SPEED_CUT_MARGIN_MPS+LANE_SPEED_POWER_MARGIN_MPS
-                                                               + LANE_SLOW_PULSE_GAIN_MPS, LANE_REACTION_S))):
-            # Round 81 (car run 80): right needs a current centre ACK, recorded
-            # only under drive power; the slow lane coasted at 1500 for 2.8 s
-            # with right blocked and drifted to ~.08 m from the left board.
-            # One drive pulse at centre (only where even the weakest coast
-            # after it still stops short) lets the ACK arrive; the ACK rule
-            # itself is unchanged.
-            self.lane_motor = ROUTE_SLOW_MOTOR
-            self.lane_feedback['center_ack_pulse'] = True
         self.lane_feedback['motor'] = self.lane_motor
         self.steering_target, self.natural_steering_target = target, natural
         self.reason = 'light_lane_follow_straight'

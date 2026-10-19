@@ -1626,7 +1626,11 @@ class Console:
             and decision.get('quality_resume_pending') is False
             and type(control.get('servo')) is int and control['servo'] <= 1500
             and isinstance(route_center, dict)
-            and route_center.get('servo') == 1500 and route_center.get('motor') in DRIVE_MOTORS
+            and route_center.get('servo') == 1500
+            # Round 82: the coasting light lane may prove centre at neutral
+            # (car runs 80/81: right blocked while coasting, left-board contact).
+            and (route_center.get('motor') in DRIVE_MOTORS
+                 or (route_stage == 'light_lane' and route_center.get('motor') == 1500))
             and type(route_center.get('seq')) is int
             and self.arm_sequence <= route_center['seq'] <= control.get('seq', -1)
             and type(route_center.get('tick')) is int and 0 <= route_center['tick'] <= control.get('tick', -1)

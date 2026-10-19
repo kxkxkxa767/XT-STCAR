@@ -152,14 +152,17 @@ class LightLaneTests(unittest.TestCase):
                                route.feedback(seq+1, motion.servo, ROUTE_SLOW_MOTOR))
         self.assertAlmostEqual(result['lane_feedback']['speed_mps'], .6, delta=.05)
 
-    def test_coasting_pulse_is_adopted_and_never_records_a_center_ack(self):
+    def test_coasting_pulse_is_adopted_and_records_a_light_lane_center_ack(self):
+        # Round 82 (car runs 80/81): in the light lane an ACKed centre while
+        # coasting is the centre proof too (was: only under drive power, which
+        # left right blocked while the lane coasted to the finish).
         motion = self.lane_motion()
         motion._route_center_ack = None
         motion.servo = motion.steering_target = 1500
         result = motion.update(self.scan(5, 4.), 0., .5, route.feedback(5, 1500, 1500))
         self.assertEqual(result['phase'], 'drive')
         self.assertNotEqual(result['reason'], 'route_waiting_adopted_command')
-        self.assertIsNone(motion._route_center_ack)
+        self.assertEqual(motion._route_center_ack['motor'], 1500)
         motion.update(self.scan(6, 3.9), 0., .6, route.feedback(6, 1500, ROUTE_SLOW_MOTOR))
         self.assertEqual(motion._route_center_ack['motor'], ROUTE_SLOW_MOTOR)
 

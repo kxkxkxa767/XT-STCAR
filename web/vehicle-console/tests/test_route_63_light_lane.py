@@ -290,6 +290,8 @@ class FinishStopTests(unittest.TestCase):
         # Round 64: "far" = beyond the weakest-coast distance from the speed
         # plus its margins (no power is ever given inside it).
         gap, coasted, log, motion = self.stop(.5, start=6., cruise=.9)
+        # Round 82: the guard before any coast decel is measured in the lane.
+        motion._lane_coast_decel = None
         guard = (FRONT_BODY_EXTENT_M+motion._lane_safe_gap(.9+ms.LANE_SPEED_CUT_MARGIN_MPS
                                                            + ms.LANE_SPEED_POWER_MARGIN_MPS))
         far = [m for a, v, m in log if a > guard+.1]
@@ -299,6 +301,7 @@ class FinishStopTests(unittest.TestCase):
         # Round 64: the first coast is the weakest-coast guard, well before the cut.
         gap, coasted, log, motion = self.stop(.5, start=6., cruise=1.27)
         first_coast = next(i for i, (a, v, m) in enumerate(log) if m == 1500)
+        motion._lane_coast_decel = None  # round 82: the guard in effect at the first coast
         guard = (FRONT_BODY_EXTENT_M+motion._lane_safe_gap(1.27+ms.LANE_SPEED_CUT_MARGIN_MPS
                                                            + ms.LANE_SPEED_POWER_MARGIN_MPS))
         self.assertLessEqual(log[first_coast][0], guard+.15)
