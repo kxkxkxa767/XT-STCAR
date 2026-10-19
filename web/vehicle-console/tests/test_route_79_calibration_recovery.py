@@ -140,5 +140,49 @@ class SecondRecoveryMovedWithTheCar(unittest.TestCase):
         self.assertIsNone(result['second_pass_evidence'])
 
 
+class SteeringResponse(unittest.TestCase):
+    """Round 79 car run: the open-course pursuits overshot by the steering response."""
+    def motion(self, servo, rate):
+        motion = ms.ManeuverSequence(0., continue_route=True)
+        motion.servo, motion.compass.rate = servo, rate
+        return motion
+
+    def test_response_pose_holds_the_measured_turn(self):
+        x, y, turn, horizon = self.motion(1308, -1.72)._response_pose()
+        self.assertAlmostEqual(horizon, ms.OPEN_STEER_LAG_S+192/ms.OPEN_RELEASE_PWM_PER_S/2)
+        self.assertAlmostEqual(turn, -1.72*horizon)
+        self.assertGreater(x, 0.)
+        self.assertLess(y, 0.)
+        chord = 2*abs(ms.OPEN_PREDICT_SPEED_MPS*horizon/turn)*math.sin(abs(turn)/2)
+        self.assertAlmostEqual(math.hypot(x, y), chord)
+        self.assertEqual(self.motion(1500, 0.)._response_pose(),
+                         (ms.OPEN_PREDICT_SPEED_MPS*ms.OPEN_STEER_LAG_S, 0., 0., ms.OPEN_STEER_LAG_S))
+
+    def test_guard_only_takes_a_prediction_past_the_pursuit_point(self):
+        guard = ms._overshoot_guard
+        self.assertEqual(guard(1345, 1520), 1520)  # round 79 10.78 s: release and counter-steer
+        self.assertEqual(guard(1345, 1500), 1500)
+        self.assertEqual(guard(1345, 1420), 1345)  # still the same side: unchanged
+        self.assertEqual(guard(1680, 1650), 1680)
+        self.assertEqual(guard(1500, 1400), 1500)
+
+    def test_open_stage_release_steps_80_to_centre_then_40(self):
+        motion = self.motion(1308, 0.)
+        motion.phase, motion.route_stage, motion.first_pass_evidence = 'drive', 'second_loop', {}
+        motion._route_path_target = motion._avoid_target = lambda target: target
+        motion.steering_target, motion.last_change = 1720, -1.
+        seen = []
+        for k in range(6):
+            motion._slew(k*.2)
+            seen.append(motion.servo)
+        self.assertEqual(seen, [1388, 1468, 1500, 1540, 1580, 1620])
+        motion.servo, motion.steering_target = 1600, 1700  # turning harder keeps 40
+        motion._slew(2.)
+        self.assertEqual(motion.servo, 1640)
+        motion.steering_target = 1560  # release on the same side: 80
+        motion._slew(2.2)
+        self.assertEqual(motion.servo, 1560)
+
+
 if __name__ == '__main__':
     unittest.main()

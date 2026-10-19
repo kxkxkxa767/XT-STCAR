@@ -596,6 +596,30 @@ OPEN_CHANNEL_SLOPE = 1.5
 # entry). Simulation (rotation-compensated tracking): 40 completed all named
 # courses; 80 overshot the 5 m course's crossing into the start divider.
 OPEN_PWM_STEP = 40
+# Round 79 (Claude): after the first pass (transfer, second loop approach
+# line, light entry) a pursuit command comes from the pose the car reaches
+# before a new command acts whenever, seen from there, the pursuit point lies
+# at centre or on the other side (_overshoot_guard: the turn would carry the
+# car past it even if released now); and a release toward centre moves 80 PWM
+# per adopted step (turning harder keeps OPEN_PWM_STEP; every step still waits
+# for its adoption).
+# Rounds 78/79: planned from the current pose, the second loop asked full
+# right until the car faced its approach line; the wheels then needed the .3 s
+# servo lag (rounds 70-78 fit) plus ~.13-.15 s per adopted 40-PWM step to
+# come back, and at the open stages' ~1.3 m/s (median 1.27-1.61 m/s, rounds
+# 77-79) the car turned another 60-100 deg and crossed in front of the second
+# support; after the first pass the 40-PWM release from 1713 let it turn ~60
+# deg past the transfer axis. Horizon: the lag plus half the time to release
+# the current command to centre; the measured yaw rate is held along an arc
+# at the nominal speed. Simulation (measured car x1.3 speed, delays .15/.3,
+# user8/doc8x4, and the two nominal-car regression variants): all complete;
+# a full lead (always pursuing from the predicted pose) also passed the
+# measured cases but trimmed non-overshooting turns of the faster nominal car
+# (5 m course: start-end wall), as did a guard at half the current turn.
+OPEN_STEER_LAG_S = .3
+OPEN_RELEASE_PWM_STEP = ROUTE_RETURN_RELEASE_PWM_STEP
+OPEN_RELEASE_PWM_PER_S = 550.  # 80 PWM per adopted step every ~.14 s
+OPEN_PREDICT_SPEED_MPS = 1.3
 # Light lane entry: the lane between the outermost wall on the left and the
 # next parallel wall inside it; without that inner wall the start lane's
 # measured width is the prior. Pursuit point at the divider's open end
@@ -881,6 +905,30 @@ def _loop_carrot(center, radius, side, lookahead, axis_dir, turn_normal, support
         return (ox+radius*math.cos(phi), oy+radius*math.sin(phi)), 'tangent_to_circle', max(before, 0.)
     phi = math.atan2(-oy, -ox)+side*lookahead/radius
     return (ox+radius*math.cos(phi), oy+radius*math.sin(phi)), 'circle', 0.
+
+
+def _in_pose(point, pose):
+    """A car-frame point as seen from ``pose`` (x, y, heading change, ...)."""
+    dx, dy = point[0]-pose[0], point[1]-pose[1]
+    c, s = math.cos(-pose[2]), math.sin(-pose[2])
+    return (c*dx-s*dy, s*dx+c*dy)
+
+
+def _turned(vector, turn):
+    c, s = math.cos(-turn), math.sin(-turn)
+    return (c*vector[0]-s*vector[1], s*vector[0]+c*vector[1])
+
+
+def _overshoot_guard(pwm, predicted):
+    """The command to send: ``predicted`` (pursuit from the response pose) only
+    when the turn would carry the car past its pursuit point even if released
+    now (the predicted point lies at centre or on the other side), else ``pwm``.
+    Round 79: a full lead also trimmed turns that were not overshooting
+    (simulation, 5 m course: the second loop then started too close to its
+    support and ended at the start-end wall)."""
+    if pwm != NEUTRAL and (predicted-NEUTRAL)*(pwm-NEUTRAL) <= 0:
+        return predicted
+    return pwm
 
 
 def _pursuit_pwm(point):
@@ -2590,9 +2638,15 @@ class ManeuverSequence(TurnMotion):
                                         or self.reason in ('start_lane_lane_walls', 'start_lane_side_wall')))
                                   or (self.route_stage == 'first_target' and self.entry_kind == 'lane'
                                       and self.handover_observed)))
+            crossing = (target-NEUTRAL)*(self.servo-NEUTRAL) < 0
+            releasing = self.servo != NEUTRAL and (crossing or abs(target-NEUTRAL) < abs(self.servo-NEUTRAL))
             if (post_pass and reducing_left and self.route_stage == 'second_orbit'
                     and self.second_return_preparing):
                 post_step = ROUTE_RETURN_RELEASE_PWM_STEP
+            elif post_pass and self.route_stage in OPEN_STAGES and releasing:
+                post_step = OPEN_RELEASE_PWM_STEP  # round 79: release fast, to centre first
+                if crossing:
+                    target = NEUTRAL
             elif lane_approach or (post_pass and self.route_stage in OPEN_STAGES):
                 post_step = OPEN_PWM_STEP
             else:
@@ -3236,8 +3290,12 @@ class ManeuverSequence(TurnMotion):
         return self._result(now)
 
     # ---- Round 64 (Claude): open-course loops, transfer and light-lane entry --
-    def _open_loop_geometry(self, scan, target, identity, side, axis):
+    def _open_loop_geometry(self, scan, target, identity, side, axis, pose=None):
         """Plan the loop round this support and its pursuit command, or None.
+
+        ``pose`` (round 79, _response_pose): the command pursues from that
+        predicted pose; the plan and its approach state stay those of the
+        current pose.
 
         One state per loop (side +1 first/anticlockwise, -1 second/clockwise),
         so the second loop can be planned while the first still steers. The
@@ -3327,6 +3385,17 @@ class ManeuverSequence(TurnMotion):
             support=(center, radius+SIDE_BODY_EXTENT_M+OPEN_CARROT_SUPPORT_GAP_M))
         slot['approaching'] = before > 0
         curvature, pwm = _pursuit_pwm(carrot)
+        command = None
+        if pose is not None and mode == 'approach_line':
+            # Only on the approach line: on the circle the support is close and
+            # the current-pose carrot keeps its clearance check (simulation:
+            # a predicted carrot there cut into the support).
+            command = _loop_carrot(_in_pose(loop_center, pose), plan['radius_m'], side, OPEN_LOOKAHEAD_M,
+                _turned(e1, pose[2]), _turned(e2, pose[2]),
+                support=(_in_pose(center, pose), radius+SIDE_BODY_EXTENT_M+OPEN_CARROT_SUPPORT_GAP_M))[0]
+            guarded = _overshoot_guard(pwm, _pursuit_pwm(command)[1])
+            if guarded != pwm:
+                curvature, pwm = _pursuit_pwm(command)
         return {'source_seq': scan['seq'], 'track_id': identity,
             'direction': 'anticlockwise' if side > 0 else 'clockwise', 'axis_rad': axis,
             'compass_heading_rad': heading, 'progress_rad': side*(heading-axis),
@@ -3337,6 +3406,8 @@ class ManeuverSequence(TurnMotion):
             'plan_selection_source_seq': slot.get('plan_source_seq'), 'plan_update': plan_update,
             'loop_center_left_m': [round(v, 3) for v in loop_center], 'pursuit_mode': mode,
             'before_tangent_point_m': round(before, 3), 'carrot_left_m': [round(v, 3) for v in carrot],
+            'response_pose': None if pose is None else [round(v, 3) for v in pose],
+            'response_carrot_left_m': None if command is None else [round(v, 3) for v in command],
             'pursuit_curvature_per_m': curvature, 'target_pwm': pwm,
             'basis': 'support_loop_planned_from_probed_free_space', 'swept_path_certified': False}
 
@@ -3613,8 +3684,13 @@ class ManeuverSequence(TurnMotion):
         self.role_distinct_evidence = proof
         self.second_acquisition_reason = self.second_tracker.reason
 
-    def _open_channel_target(self, scan, heading):
-        """Pursuit point at the start divider's open end on the channel line, or None."""
+    def _open_channel_target(self, scan, heading, pose=None):
+        """Pursuit point at the start divider's open end on the channel line, or None.
+
+        ``pose`` (round 79, _response_pose): the command may come from the
+        same construction ahead of that pose (_overshoot_guard); the returned
+        point is the current-pose one.
+        """
         reverse = heading-math.pi
         lines = [line for line in self._scan_axis_lines(scan, reverse)
                  if SIDE_BODY_EXTENT_M < line['lateral_m'] <= OPEN_CHANNEL_MAX_LATERAL_M
@@ -3625,14 +3701,46 @@ class ManeuverSequence(TurnMotion):
         width = self._start_lane_width if _number(self._start_lane_width) else 2*OPEN_CHANNEL_OFFSET_M[0]
         offset = max(OPEN_CHANNEL_OFFSET_M[0], min(OPEN_CHANNEL_OFFSET_M[1], width/2))
         lateral = divider['lateral_m']-offset
-        along = max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], divider['along_m'][0]),
-                    OPEN_CHANNEL_SLOPE*abs(lateral))
         u = (math.cos(-reverse), math.sin(-reverse))
-        point = (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
-        curvature, pwm = _pursuit_pwm(point)
+
+        def channel_point(moved_along=0., moved_lateral=0.):
+            along = max(OPEN_LANE_LOOKAHEAD_M[0],
+                        min(OPEN_LANE_LOOKAHEAD_M[1], divider['along_m'][0]-moved_along),
+                        OPEN_CHANNEL_SLOPE*abs(lateral-moved_lateral))+moved_along
+            return (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
+        point = channel_point()
+        curvature, pwm = self._guarded_pursuit(point, channel_point, pose, u)
         return {'divider_lateral_m': divider['lateral_m'], 'divider_open_end_along_m': divider['along_m'][0],
                 'channel_offset_m': offset, 'pursuit_point_left_m': [round(v, 3) for v in point],
+                'response_pose': None if pose is None else [round(v, 3) for v in pose],
                 'pursuit_curvature_per_m': curvature, 'target_pwm': pwm}
+
+    @staticmethod
+    def _guarded_pursuit(point, build, pose, u):
+        """(curvature, pwm) toward ``point``, or from ``pose`` toward the point
+        ``build(along, lateral)`` makes ahead of it when _overshoot_guard says so."""
+        curvature, pwm = _pursuit_pwm(point)
+        if pose is None:
+            return curvature, pwm
+        moved = (pose[0]*u[0]+pose[1]*u[1], pose[1]*u[0]-pose[0]*u[1])  # along, left of the axis
+        predicted = _pursuit_pwm(_in_pose(build(*moved), pose))
+        return predicted if _overshoot_guard(pwm, predicted[1]) != pwm else (curvature, pwm)
+
+    def _response_pose(self):
+        """(x, y, heading change, horizon s) reached before a new command acts.
+
+        Round 79: the measured yaw rate held for OPEN_STEER_LAG_S plus half the
+        time to release the current command to centre, along an arc at
+        OPEN_PREDICT_SPEED_MPS (car frame, left +).
+        """
+        rate = self.compass.rate if _number(self.compass.rate) else 0.
+        horizon = OPEN_STEER_LAG_S+abs(self.servo-NEUTRAL)/OPEN_RELEASE_PWM_PER_S/2
+        turn = rate*horizon
+        distance = OPEN_PREDICT_SPEED_MPS*horizon
+        if abs(turn) < 1e-6:
+            return (distance, 0., 0., horizon)
+        radius = distance/turn
+        return (radius*math.sin(turn), radius*(1-math.cos(turn)), turn, horizon)
 
     def _open_transfer_update(self, scan, now, control):
         """After the first loop: reversed axis until the second support is confirmed."""
@@ -3646,8 +3754,11 @@ class ManeuverSequence(TurnMotion):
         if self._open_confirmed_second(scan) is not None:
             self._open_begin_second_loop(scan, now, control)
             return self._open_second_loop_update(scan, now, control, adopted=True)
-        channel = self._open_channel_target(scan, heading)
-        natural = channel['target_pwm'] if channel is not None else self._open_heading_hold(heading, math.pi)
+        pose = self._response_pose()
+        channel = self._open_channel_target(scan, heading, pose)
+        natural = (channel['target_pwm'] if channel is not None
+                   else _overshoot_guard(self._open_heading_hold(heading, math.pi),
+                                         self._open_heading_hold(heading+pose[2], math.pi)))
         ahead, speed, stop_at = self._open_front_stop(scan)
         self.open_feedback = {'source_seq': scan['seq'], 'stage': 'open_transfer', 'compass_heading_rad': heading,
             'channel': channel, 'nominal_target_pwm': natural, 'front_range_m': ahead, 'speed_mps': speed,
@@ -3670,8 +3781,9 @@ class ManeuverSequence(TurnMotion):
         if progress is not None and progress >= math.pi-OPEN_EXIT_MARGIN_RAD:
             return self._open_second_pass(scan, now, control, 'compass_heading_reversed_in_loop')
         target = self.second_target
+        pose = self._response_pose()
         loop = (None if self._full_target_points(target, scan, self.second_track_id) is None
-                else self._open_loop_geometry(scan, target, self.second_track_id, -1, math.pi))
+                else self._open_loop_geometry(scan, target, self.second_track_id, -1, math.pi, pose))
         if loop is None:
             if progress is not None and progress >= math.pi-OPEN_LATE_EXIT_RAD:
                 return self._open_second_pass(scan, now, control, 'support_lost_near_heading_reversal')
@@ -3691,7 +3803,7 @@ class ManeuverSequence(TurnMotion):
             # for less right than the loop, continuing the loop only lowers the
             # car below the lane it must climb to (simulation, wide courses:
             # the light divider's open end was hit after a full loop).
-            pursuit = self._open_light_pursuit(scan, heading)
+            pursuit = self._open_light_pursuit(scan, heading, pose)
             if pursuit is not None:
                 # Also hand over when continuing the adopted right arc would
                 # carry us beyond the measured lane centre before heading is
@@ -3760,21 +3872,31 @@ class ManeuverSequence(TurnMotion):
                 'width_m': width, 'width_source': 'measured' if inner is not None else 'start_lane_prior',
                 'center_lateral_m': outer['lateral_m']-width/2, 'walls': len(walls)}
 
-    def _open_light_pursuit(self, scan, heading):
-        """Pursuit of the light-lane centre line: (lane, point, curvature, pwm) or None."""
+    def _open_light_pursuit(self, scan, heading, pose=None):
+        """Pursuit of the light-lane centre line: (lane, point, curvature, pwm) or None.
+
+        ``pose`` (round 79, _response_pose): the command may come from the same
+        construction ahead of that pose (_overshoot_guard); the point is the
+        current-pose one (the path check models the arc from the current pose).
+        """
         lane = self._open_lane_target(scan, heading)
         if lane is None:
             return None
-        start = lane['inner_start_along_m']
-        along = (OPEN_LANE_LOOKAHEAD_M[1] if start is None or start <= FRONT_BODY_EXTENT_M
-                 else max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], start)))
         u = (math.cos(-heading), math.sin(-heading))
         lateral = lane['center_lateral_m']
-        # As the line is approached, shorten the pursuit horizon so the
-        # remaining cross-lane motion is removed before releasing the turn.
-        along = min(along, max(OPEN_LANE_LOOKAHEAD_M[0], OPEN_LOOKAHEAD_M+abs(lateral)))
-        point = (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
-        curvature, pwm = _pursuit_pwm(point)
+
+        def lane_point(moved_along=0., moved_lateral=0.):
+            start = lane['inner_start_along_m']
+            start = None if start is None else start-moved_along
+            along = (OPEN_LANE_LOOKAHEAD_M[1] if start is None or start <= FRONT_BODY_EXTENT_M
+                     else max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], start)))
+            # As the line is approached, shorten the pursuit horizon so the
+            # remaining cross-lane motion is removed before releasing the turn.
+            along = min(along, max(OPEN_LANE_LOOKAHEAD_M[0], OPEN_LOOKAHEAD_M+abs(lateral-moved_lateral)))
+            along += moved_along
+            return (along*u[0]-lateral*u[1], along*u[1]+lateral*u[0])
+        point = lane_point()
+        curvature, pwm = self._guarded_pursuit(point, lane_point, pose, u)
         return lane, point, curvature, pwm
 
     def _open_entry_path_hit(self, scan, point, heading, reach, fallback=None):
@@ -3847,7 +3969,7 @@ class ManeuverSequence(TurnMotion):
         if not self._route_adopted(control, now):
             return self._result(now)
         heading = self.compass.current(scan)
-        pursuit = None if heading is None else self._open_light_pursuit(scan, heading)
+        pursuit = None if heading is None else self._open_light_pursuit(scan, heading, self._response_pose())
         if pursuit is None:
             self._begin_recovery_hold('open_light_lane_unmeasured', now, control)
             return self._result(now)

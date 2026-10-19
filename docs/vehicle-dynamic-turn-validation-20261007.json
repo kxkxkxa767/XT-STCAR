@@ -22851,5 +22851,25 @@
       "conclusion": "the calibration fixed how much a command turns (start lane steady) but not how fast the steering changes: the loop pursuits assume an instant steering change while a full reversal takes ~1-2 s at ~1-1.5 m/s. Round 78 was the same pattern (65 deg overshoot). Needed: delay-aware pursuit (plan from the pose predicted over the steering response), early release of the first-loop left into the transfer, and a check that the second loop keeps the support on the right."
     },
     "car_state": "locked at the left board near the start end (second-loop area)."
+  },
+  "turn80_steering_response_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": "你改吧，我已经摆好了，改完直接推送测试",
+    "cause": "turn79_actual_20261019: the open-course pursuits ignored the steering response (servo lag .3 s from the rounds 70-78 fit; ~.13-.15 s per adopted 40-PWM step; ~1.3 m/s median open-stage speed, rounds 77-79 1.27-1.61): after the first pass the car turned ~60 deg past the transfer axis, and the second-loop approach asked full right until aligned, then turned ~100 deg more and crossed in front of the support.",
+    "change": {
+      "response_pose": "ManeuverSequence._response_pose(): the measured compass yaw rate held for OPEN_STEER_LAG_S .3 plus half the time to release the current command to centre (|servo-1500|/OPEN_RELEASE_PWM_PER_S 550/2), along an arc at OPEN_PREDICT_SPEED_MPS 1.3 (car frame).",
+      "overshoot_guard": "_overshoot_guard(pwm, predicted): a pursuit command comes from the response pose only when, seen from there, the pursuit point lies at centre or on the other side (the turn would carry the car past it even if released now); otherwise the current-pose command is unchanged. Applied to the transfer channel pursuit and its heading-hold fallback, the second-loop approach line (approach_line mode only; on the circle the current-pose carrot keeps its support clearance check), and the light-entry pursuit (also used for the second-loop light handoff). The first loop and the light lane are unchanged.",
+      "release_step": "post-pass open stages: a step toward centre (or crossing it) moves OPEN_RELEASE_PWM_STEP = ROUTE_RETURN_RELEASE_PWM_STEP 80, stopping at centre; beyond centre and turning harder keep OPEN_PWM_STEP 40; every step still waits for adoption and the centre-ACK rules are unchanged.",
+      "evidence": "loop result response_pose / response_carrot_left_m; channel response_pose."
+    },
+    "simulation_checks": {
+      "matrix": "(two nominal-car regression variants L8.0W4.0lane1.05div0.4cone-0.4+0.3 and L5.0W6.0lane0.9div0.4cone+0.0+0.0; measured car user8/doc8x4 x1.3 speed delay .3, doc8x4 x1.0 delay .15): old code fails doc8x4 x1.3/.3 (front gate); final version completes all five (board >= .10 m, cone >= .05 m in the L8 variant as before .05).",
+      "rejected_variants": "always pursuing from the predicted pose: measured cases pass (also user8/doc8x4 x1.3 delay .15/.3 all complete, transfer max heading 205-215 -> 199-207 deg) but the L8 variant touched the cone (predicted carrot on the circle) and, approach line only, the 5 m variant hit the start-end wall (it trimmed a non-overshooting left turn); lag .15-.25 and speed 1.0 did not fix the 5 m case; a guard at half the current turn (fraction .5/.7) also failed it. Release 80 alone (no prediction) failed user8 x1.3/.3.",
+      "stress": "delay .45 x1.3/1.45 (beyond the fit): old code 0/4 (cone contacts, transfer 218-222 deg); final 0/4 (transfer 212-215 deg, fewer/later cone contacts); full lead 1/4. The real car may sit between the .3 and .45 cases."
+    },
+    "tests": "test_route_79_calibration_recovery SteeringResponse (3): response pose, guard, release steps; full discover 829 OK (2 expected failures)."
   }
 }
