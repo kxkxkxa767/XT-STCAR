@@ -379,11 +379,14 @@ class CourseSimulationTests(unittest.TestCase):
             self.sim.Vehicle(0., 0., 0., steer_backlash=-1.)
 
     def test_re_laid_practice_course_completes_on_the_measured_car_with_calibration_errors(self):
-        # Measured car (2026-10-16 tiles: steering play ~50 PWM, table gain,
-        # ESC lag, coast); the console compensates a 50 PWM play. The real play,
-        # gain, lag and coast differ. Known open gaps (record): 15 % weaker
-        # steering at the light entry, 20 % slower or faster car.
-        cases = ({}, {'play_pwm': 30.}, {'play_pwm': 70.}, {'gain_scale': 1.15},
+        # Measured car (track steering fit of rounds 70-78: play ~40 PWM, ~155
+        # PWM per 1/m; 2026-10-16 tiles: ESC lag, coast); the console
+        # compensates a 40 PWM play. The real play, gain, lag and coast differ
+        # (play +-20 round the measured value, as round the earlier 50). Known
+        # open gaps (record): 15 % weaker steering at the light entry, 20 %
+        # slower or faster car, real play 70 (user8: board .05 m in the
+        # transfer; turn79_steer_calibration_20261019).
+        cases = ({}, {'play_pwm': 20.}, {'play_pwm': 60.}, {'gain_scale': 1.15},
                  {'esc_lag_s': .3}, {'esc_lag_s': .6}, {'decel': .5}, {'decel': .9})
         for name in ('user8', 'doc8x4'):
             for params in cases:

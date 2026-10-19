@@ -14,7 +14,7 @@ from compact_target import (CompactTargetTracker, _associated, _candidates, cont
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                            MANEUVER_BODY_CLEARANCE_M, MIN_FORWARD_PWM, CorridorSteering, corridor_walls,
                            side_wall_fit)
-from steer_calibration import NOMINAL_RIGHT_LIMIT_PWM
+from steer_calibration import NOMINAL_RIGHT_LIMIT_PWM, STEER_PLAY_PWM
 from turn_motion import (TurnMotion, NEUTRAL, TRIAL_MOTOR, SERVO_MIN, SERVO_MAX, SCAN_AGE_S, MAX_DRIVE_S,
                          PWM_STEP, PWM_INTERVAL_S, _FRAME, _freeze, _number, _valid_candidate,
                          _valid_wall, _wrap, _surface_supports, _same_surface)
@@ -286,6 +286,13 @@ TASK_LEFT_BYPASS_STAGES = ('corridor_follow', 'second_orbit', 'open_transfer', '
 # time since that observation, capped here (gate <= 1.2 m / 80 deg). With a
 # fixed gate a support re-seen after >~.3 m of travel was never recovered.
 SECOND_RECOVERY_MAX_SLACK_S = .6
+# Round 79 (Claude): the prior also moves with the car. Round 78: the car
+# rolled ~1.2-1.5 m and turned ~57 deg in the post-pass pause, beyond that
+# rotation-only gate. When the first support (still tracked) was current in
+# the prior's own scan and is current now, the prior is its present position
+# plus the inter-support vector turned by the compass change, and the gate
+# widens by at most this slack (.6 m / 40 deg).
+SECOND_LANDMARK_SLACK_S = .2
 # Round 57 (Claude): second-support bypass in the current lane frame. Trial56:
 # the confirmed second support stayed 3.5-7 deg from straight ahead from 2.3 m
 # to .87 m. The support-relative pursuit point sits at the support's own
@@ -407,11 +414,13 @@ LANE_START_HOLD_PWM = 55
 # gain is small enough to stay stable over gain 1-3 and delay .15-.35 s.
 LANE_WALL_LOOKAHEAD_M = 1.2  # offset weight: 1/LANE_WALL_LOOKAHEAD_M rad per m
 LANE_WALL_LEAD_S = .45  # steering + scan delay the trend is extrapolated over
-# Rounds 64/68/70 fit ~2x the table's curvature near centre, the 10-16 floor
-# ~1x; 100 PWM/rad (cap 33) is the fixed gain that stays stable and corrects
-# drift over 1-2.5x in simulation (150 weaved at 2x, 75 drifted into a board
-# at 1x). An online estimate from ~3 s of start lane behind the play was too
-# noisy and was not adopted (turn70 record).
+# Rounds 64/68/70 fit ~2x the 10-16 table's curvature near centre; the
+# round-79 calibration (steer_calibration) maps that out, so the nominal gain
+# is now the real one. 100 PWM/rad (cap 33) corrected drift at 1x in
+# simulation (75 drifted into a board); with the track fit (G .8-1.4, lag
+# .3-.5 s) its worst phase margin is 66 deg, 125 26 deg, 150 unstable
+# (turn79_steer_calibration_20261019). An online estimate from ~3 s of start
+# lane behind the play was too noisy and was not adopted (turn70 record).
 LANE_WALL_GAIN_PWM_PER_RAD = 100.
 LANE_WALL_CAP_PWM = 33
 LANE_WALL_HISTORY = 3
@@ -419,10 +428,10 @@ LANE_WALL_GAP_S = .35  # older publications are not one trend
 LANE_TRACK_SPEED_POINTS = 5
 # A single side board standing in for the lane must run along the compass axis.
 LANE_SIDE_WALL_HEADING_RAD = math.radians(5)
-# Play crossed by the start-lane wall law's commands (the measured +-50 is
-# kept for the loops). Chosen over real play 0-70 in simulation: see
-# turn69_start_lane_law_20261018.
-LANE_WALL_PLAY_PWM = 50
+# Play crossed by the start-lane wall law's commands: the measured one (it
+# was the then measured 50 in turn69_start_lane_law_20261018, chosen over real
+# play 0-70 in simulation; the track fit gives 40).
+LANE_WALL_PLAY_PWM = STEER_PLAY_PWM
 
 
 class LaneWallSteering:
@@ -1142,6 +1151,7 @@ class ManeuverSequence(TurnMotion):
         self._second_role_anchor = None
         self._second_recovering = False
         self._second_recovery_last = None
+        self.second_recovery_prior = None
         self.second_rebind_evidence = None
         self._pause_stage_held = False
         # Route: current-scan proximity avoidance and steering inside waits.
@@ -2752,6 +2762,7 @@ class ManeuverSequence(TurnMotion):
             lane_feedback=copy.deepcopy(self.lane_feedback), lane_motor=self.lane_motor,
             finish_evidence=copy.deepcopy(self.finish_evidence),
             second_acquisition_reason=self.second_acquisition_reason,
+            second_recovery_prior=copy.deepcopy(self.second_recovery_prior),
             role_distinct_evidence=copy.deepcopy(self.role_distinct_evidence),
             # Each event is a deep snapshot taken once (_route_event) and never
             # changed; re-copying them every 20 ms tick cost ~.2 ms (Mac).
@@ -3483,7 +3494,7 @@ class ManeuverSequence(TurnMotion):
         target = self.second_target
         self.second_track_id = target['track_id']
         self.second_tracker.enable_close_maintenance(self.second_track_id)
-        self._second_role_anchor = copy.deepcopy(target)
+        self._second_role_anchor = self._second_prior(target, scan)
         self._second_recovering = False
         self.second_target_handover_observed = True
         self.second_orbit_since, self.route_stage = now, 'second_loop'
@@ -4146,9 +4157,25 @@ class ManeuverSequence(TurnMotion):
         slack = min(SECOND_RECOVERY_MAX_SLACK_S,
                     max(0., (scan['at_ms']-reference['source_at_ms'])/1000-.1))
         heading = self._tracking_heading(scan)
-        if heading is not None and _number(reference.get('compass_heading_rad')):
+        landmark = self._first_landmark(scan)
+        prior_landmark = reference.get('first_landmark_left_m')
+        if (heading is not None and _number(reference.get('compass_heading_rad'))
+                and landmark is not None and isinstance(prior_landmark, list)):
+            # Round 79: the car also moved; the first support is the landmark.
+            turn = -(heading-reference['compass_heading_rad'])
+            c, s = math.cos(turn), math.sin(turn)
+            dx = reference['point_left_m'][0]-prior_landmark[0]
+            dy = reference['point_left_m'][1]-prior_landmark[1]
+            point = [landmark[0]+c*dx-s*dy, landmark[1]+s*dx+c*dy]
+            reference = {**reference, 'point_left_m': point, 'bearing_left_rad': math.atan2(point[1], point[0])}
+            slack = min(slack, SECOND_LANDMARK_SLACK_S)
+            self.second_recovery_prior = {'basis': 'first_support_landmark', 'source_seq': scan['seq'],
+                                          'point_left_m': point, 'slack_s': slack}
+        elif heading is not None and _number(reference.get('compass_heading_rad')):
             # Open course: the prior turned with the car (round 64).
             reference = rotated_observation(reference, heading-reference['compass_heading_rad'])
+            self.second_recovery_prior = {'basis': 'compass_rotation', 'source_seq': scan['seq'],
+                                          'point_left_m': reference['point_left_m'], 'slack_s': slack}
         def proven(candidate):
             if (not _associated(candidate, reference, slack)
                     or first_bins.intersection(candidate['support_bins'])):
@@ -4170,10 +4197,13 @@ class ManeuverSequence(TurnMotion):
             self.second_target = None
             self.second_acquisition_reason = 'second_role_recovery_current_support_unproven'
             return False
-        target = self.second_tracker.update(scan, now, acquire=True, heading_rad=heading)
+        # Only the proven support may start or continue the identity: the
+        # first support in the same sector is not an ambiguity (round 79).
+        target = self.second_tracker.update(scan, now, acquire=True, heading_rad=heading,
+                                            only_support_bins=matches[0]['support_bins'])
         self.second_target = target
         if target is not None and not target['tracking_only_boundary_gap']:
-            self._second_recovery_last = copy.deepcopy(target)
+            self._second_recovery_last = self._second_prior(target, scan)
         self.second_acquisition_reason = self.second_tracker.reason
         if (target is None or set(target['support_bins']) != set(matches[0]['support_bins'])
                 or self._full_target_points(target, scan, target['track_id']) is None):
@@ -4183,7 +4213,7 @@ class ManeuverSequence(TurnMotion):
         self.second_tracker.enable_close_maintenance(self.second_track_id)
         self._second_recovering = False
         self.second_target_handover_observed = True
-        self._second_role_anchor = copy.deepcopy(target)
+        self._second_role_anchor = self._second_prior(target, scan)
         self.second_orbit_since = now  # new confirmed attempt; cumulative deadline is unchanged
         self._clear_target_recovery_history()
         self._clear_second_return()
@@ -4197,6 +4227,23 @@ class ManeuverSequence(TurnMotion):
             'physical_identity_verified': False, 'observed_rear_pass': False}
         return True
 
+    def _first_landmark(self, scan):
+        """Current confirmed first-support centre in this scan (left frame), or None."""
+        first = self.compact_target
+        if (self.orbit_track_id is not None and isinstance(first, dict)
+                and first.get('track_id') == self.orbit_track_id and first.get('confirmed') is True
+                and first.get('source_seq') == scan.get('seq') and isinstance(first.get('point_left_m'), list)):
+            return list(first['point_left_m'])
+        return None
+
+    def _second_prior(self, observation, scan):
+        """Copy of a second observation, with the first support seen in the same scan."""
+        prior = copy.deepcopy(observation)
+        landmark = self._first_landmark(scan)
+        if isinstance(prior, dict) and landmark is not None and prior.get('source_seq') == scan.get('seq'):
+            prior['first_landmark_left_m'] = landmark
+        return prior
+
     def _update_second_tracking(self, scan, now):
         if self._open_lookout_seq is not None and scan.get('seq') == self._open_lookout_seq:
             # Round 64: this publication already went to the tracker without the
@@ -4209,7 +4256,7 @@ class ManeuverSequence(TurnMotion):
         self.second_target = self.second_tracker.update(scan, now, acquire=False,
                                                         heading_rad=self._tracking_heading(scan))
         if self._full_target_points(self.second_target, scan, self.second_track_id) is not None:
-            self._second_role_anchor = copy.deepcopy(self.second_target)
+            self._second_role_anchor = self._second_prior(self.second_target, scan)
         elif self.second_target is None and not self._target_gap_held(
                 self.second_tracker, self.second_track_id, scan, now):
             self._start_second_identity_recovery()
@@ -4489,7 +4536,7 @@ class ManeuverSequence(TurnMotion):
         self._clear_second_return()
         self.second_track_id = self.second_target['track_id']
         self.second_tracker.enable_close_maintenance(self.second_track_id)
-        self._second_role_anchor = copy.deepcopy(self.second_target)
+        self._second_role_anchor = self._second_prior(self.second_target, scan)
         self._second_recovering = False
         self.second_target_handover_observed = True
         self.second_orbit_since, self.route_stage = now, 'second_orbit'

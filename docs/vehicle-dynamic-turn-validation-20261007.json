@@ -22758,7 +22758,7 @@
   "round79_analysis_20261019": {
     "date": "2026-10-19",
     "author": "Claude",
-    "implemented": false,
+    "implemented": "see turn79_steer_calibration_20261019",
     "deployed": false,
     "vehicle_connected": false,
     "user": "先不连车，你继续修改下一轮的修改 / 先记录暂停一下我压缩下上下文",
@@ -22780,5 +22780,44 @@
       "right-front grazing nulls in open stages; coast standstill confirmation (ICP worker slower than a scan)."
     ],
     "car_state": "round 78 installed (ec4e35b), locked; not connected today."
+  },
+  "turn79_steer_calibration_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "vehicle_connected": false,
+    "user": "先不连车，你继续修改下一轮的修改 / 好了开始改吧",
+    "steering_calibration": {
+      "data": "rounds 70-78, 176 drive samples (v >= .5 m/s): scripts/trial-map.py path curvature vs logged physical servo, wheel = backlash model of the command history with lag (work/round69-claude-a-20261018/steer-fit.py; scratch fit2: asymmetric gains, centre offset, leave-one-round-out)",
+      "fit": "play 40, lag .30 s, ~155 PWM per 1/m on both sides, centre 0, rms .201 /m (old 10-16 table with play 40/50: .245/.247); every leave-one-round-out fit: play 40, 150 PWM per 1/m; right 140-185 and left 140-155 lie within rms +.001-.005",
+      "change": "steer_calibration STEER_TABLE ((1250,-1.2),(1350,-.38),(1450,-.16),(1500,0),(1550,.18),(1600,.4),(1670,1.6)) -> ((1314,-1.2),(1500,0),(1720,1.42)) (linear 155 PWM per 1/m; right end kept at the -1.2 /m planners count on, NOMINAL_RIGHT_LIMIT_PWM 1308 unchanged; left ends at the physical 1720, wheels ~1680 after the play = 1.16 /m, track samples at physical 1680-1700 measured 1.12-1.16); STEER_PLAY_PWM 50 -> 40; LANE_WALL_PLAY_PWM = STEER_PLAY_PWM (was 50 = the then measured play).",
+      "effect_examples_from_rest": "nominal 1460 -> physical 1421 (old 1359: real ~-.66 /m for a -.25 /m command); 1380 -> 1344 (old 1255); 1530 -> 1569 (old 1602); 1605 -> 1642 (old 1665); 1700+ -> 1720 (old 1701-1707). Round 78 second-loop entry asked 1460/1339/1308 and got 1359/1255/1350 physical: the cross-over in front of the cone.",
+      "lane_gain_check": "MATLAB work/round69-claude-a-20261018/matlab/margins3.m: start-lane heading loop with G (real/nominal) .8-1.4, delay .15-.35 s +.15, v .8-1.5, lead .45 s: worst phase margin K100 66.7 deg (crossover .74 rad/s), K125 26.2, K150 unstable -> LANE_WALL_GAIN_PWM_PER_RAD stays 100 (cap 33). With the old table the same K acted ~2x.",
+      "simulation_plant": "scripts/course-sim.py MEASURED_STEER_TABLE ((1200,-1.35),(1314,-1.2),(1500,0),(1720,1.42)), default play_pwm 50 -> 40 (sim used only as a test harness).",
+      "start_lane_sweep": "test_route_69 ClosedLoopWeave harness, 108 cases (play 30/40/50, wheels at either play edge, near-centre gain 1/1.5/2, gain .8/1/1.25, delay .15/.3): play 40 all 36 pass (swing <= 6.1 deg, board gap .22); failures: play 50 with wheels at +50 (.32 /m left at start) drifts to .10-.14 m from the left board in 12 of 18 cases (test margin .15, body gate .08 not reached); play 50/30 with near-centre 2x and gain 1.25 swing 9.2-12.8 deg.",
+      "course_sim": "user8/doc8x4 measured car: play 20/30/50/60 complete (board >= .159 m, cone >= .229 m); play 70 user8 ends probe_obstacle_close_body in open_transfer (board .05 m), doc8x4 completes; gain .85 doc8x4 ends at a board (known open gap: weaker steering at the light entry); gain 1.25 completes.",
+      "tests_changed_and_why": {
+        "test_route_64_open_course re_laid_practice_course": "play cases 30/70 -> 20/60: +-20 around the measured play as before around 50; real play 70 (30 above the compensation) is recorded as a known gap.",
+        "test_route_69_start_lane_law ClosedLoopWeave": "cases (play 50, near-centre 2x/3x of the old table) -> (play 40, 1.5x, wheels -40), (play 40, 2x, wheels +40), (play 50, 1.5x, wheels -50), (default): the 2-3x near-centre gain was the old table's error, now in the table; play 50 with wheels at +50 recorded as a known gap."
+      }
+    },
+    "lidar_seam_dropout_fix": {
+      "finding": "the recurring right-front dropout band (trial50 \"5-17 deg right dropout band\", round 75 start refusal, rounds 76-78 post-pass pauses incl. the round-78 second-loop loss of the cone at -14 deg) is the lidar revolution seam, not grazing: 2797 feedback scans of all 10-xx trials: front bins 6-16 null 10-12 %, other front bins 0.3-0.7 %, bins 18-30 0.0 %; in the sensor frame (calibration clockwise_yaw_bins 5, range_offset -.02; ranges[i] = raw[i-5]) raw bins -2..+12 null 3.8-17.4 %, raw 13-30 0.0 % (575 scans 10-15..10-18). At rest in round 78 (12.68-14.35 s) the same static board appeared and vanished frame to frame (scans 853 and 867 had all of bins 6-17 null).",
+      "cause": "crates/robot-core/src/protocol/n10.rs rejected any packet with a start or end angle above 36000; the factory driver (lslidar_driver.cc:579-596) subtracts one turn from start and end angles above 360 deg, i.e. a packet crossing 0 deg may report its end unwrapped. The packet straddling the seam (~14 deg, 16 returns) was therefore dropped in the revolutions where one straddled.",
+      "change": "MAX_WIRE_ANGLE_CDEG = 36000+3600; angles in (36000, 39600] are reduced by one turn like the factory driver, larger ones are still rejected (angle_errors). Test angles_past_one_turn_wrap_like_the_factory_driver; the invalid-angle test uses 39601. docs/N10协议依据.md updated.",
+      "build": "scripts/build-riscv.sh --offline: fmt, cargo test 654 passed / 0 failed / 3 ignored, clippy -D warnings, riscv64 cross-link: exit 0. Reproducible: the original n10.rs rebuilt to f39a79302a7886207ed985c7e18f6d77c84bff9329264f8bbc0bb807731cd498 (the installed steering300 bridge), the fix to fc7028ae4392fbfc71a70feb105a41747baf248f1e34583b3721ea3b76661446 (ELF riscv64 lp64d, loader /lib/ld-linux-riscv64-lp64d.so.1, glibc <= 2.34, inspection passed).",
+      "not_verified": "no raw serial capture with angle counters exists; the next car round verifies it: front bins 6-16 should be null in about the same .3-.7 % as other front bins.",
+      "deploy": "work/vehicle-dynamic-deploy-20261008/build-next.py gained a fifth argument --rebuild-bridge (only when Rust changed since the baseline bridge): rebuilds the bridge from HEAD with the project toolchain, inspects the ELF, puts it in the bundle and records it as the new bridge_baseline (rust_unchanged_since = HEAD, rust_source_sha256 + the changed files). The deploy script already audits the old installed hashes, dry-runs the staged bridge (neutral, locked) and installs every payload file."
+    },
+    "second_role_recovery_landmark": {
+      "change": "maneuver_sequence: second observations kept as recovery priors (anchor, last recovery observation) also carry the first support centre seen in the same scan (_second_prior/_first_landmark: confirmed first track, same source_seq). In _second_recovery_observation, when the compass and a current first support exist, the prior is the first support now + the inter-support vector turned by the compass change, with slack min(time slack, SECOND_LANDMARK_SLACK_S .2) (gate .6 m / 40 deg); otherwise the unchanged rotation-only prior (slack <= .6). The proven candidate is passed to the tracker as only_support_bins (compact_target.CompactTargetTracker.update, new optional argument; default None = unchanged), so the first support in the same acquisition sector is not an ambiguity; sectors, isolation, confirmation and gates are unchanged. Diagnostic second_recovery_prior in the result.",
+      "scope_not_changed": "acquisition/maintenance sectors stay (-pi, pi/2) (a second support left-behind as at the end of round 78, 164 deg, is still not re-acquired: the first support may be there).",
+      "tests": "test_route_79_calibration_recovery: the car rolls 1.4 m and turns 30 deg right while the second support is hidden; the rotation-only prior misses by 1.43 m (> 1.2 m gate) and stays unproven; with the landmark the support is re-confirmed within .05 m. Tracker restriction removes the other support as an ambiguity; invalid arguments raise."
+    },
+    "pause_time_limit_rejected": "A 4 s limit on route neutral pauses (explicit lock reason) was implemented and removed: it contradicts the user instruction of 2026-10-11 (trial50: 现在你改成无论碰没碰到都继续后续的任务…没完成就真没完成了) recorded as no_stage_clocks_in_route_waits; test_left_turn_pause_never_resumes_without_geometry_and_only_cumulative_budget_ends_it caught it. Route pauses keep ending only on the cumulative drive budget.",
+    "python_tests": "full discover 826 OK (2 expected failures); new test_route_79_calibration_recovery (6).",
+    "next_car_round": "when the user wants a car test: commit; python3 work/vehicle-dynamic-deploy-20261008/build-next.py claude-turn78 claude-turn79 79 turn79_steer_calibration_20261019 --rebuild-bridge; usual pre-validate / deploy-matched / post-validate; power only after 已摆好. Check: front bins 6-16 null rate, start-lane swing, second-loop entry curvature vs plan.",
+    "car_state": "round 78 (ec4e35b) installed, locked; not connected today."
   }
 }

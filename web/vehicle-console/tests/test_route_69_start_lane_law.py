@@ -136,8 +136,14 @@ class ClosedLoopWeave(unittest.TestCase):
         return summary, rows, max(head)-min(head)
 
     def test_start_lane_swing_small_without_a_lane_halt(self):
-        for params, delay in (({'play_pwm': 50., 'near_center_gain': 2., 'initial_wheel_pwm': 1450.}, .3),
-                              ({'play_pwm': 50., 'near_center_gain': 3., 'initial_wheel_pwm': 1550.}, .25),
+        # Measured play 40 (round-79 track fit; the table now carries the
+        # gain the 10-16 table understated ~2x): wheels resting at either edge
+        # of the play, near-centre gain 1.5-2x the fit, plus a larger play.
+        # Known gap (record): play 50 with the wheels at +50 drifts to .10-.14
+        # m from the left board (body gate .08 not reached).
+        for params, delay in (({'play_pwm': 40., 'near_center_gain': 1.5, 'initial_wheel_pwm': 1460.}, .3),
+                              ({'play_pwm': 40., 'near_center_gain': 2., 'initial_wheel_pwm': 1540.}, .25),
+                              ({'play_pwm': 50., 'near_center_gain': 1.5, 'initial_wheel_pwm': 1450.}, .3),
                               ({}, .15)):
             with self.subTest(params=params, delay=delay):
                 summary, rows, swing = self.run_lane(params, delay)

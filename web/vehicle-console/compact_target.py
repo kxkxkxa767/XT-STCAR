@@ -446,16 +446,27 @@ class CompactTargetTracker:
         self._close_maintenance_track_id = None
         return None
 
-    def update(self, scan, now, *, acquire=True, heading_rad=None):
+    def update(self, scan, now, *, acquire=True, heading_rad=None, only_support_bins=None):
         """Use only current support; ``acquire=False`` cannot create a new ID.
 
         ``heading_rad`` (round 64, open course only): the compass heading of
         this scan. Association then compares with the previous observation
         turned by the heading change since it (rotated_observation); without
         it the behaviour is unchanged.
+
+        ``only_support_bins`` (round 79, role recovery): the caller already
+        proved exactly one current support distinct from the other role;
+        only the component with exactly these bins is considered, so that
+        other role's support in the same sector is not an ambiguity. Every
+        other rule (sector, isolation, confirmation, gates) is unchanged.
         """
         if type(acquire) is not bool:
             raise ValueError('acquire must be a bool')
+        if only_support_bins is not None and (not isinstance(only_support_bins, (list, tuple, set, frozenset))
+                                              or not only_support_bins
+                                              or any(type(i) is not int or not 0 <= i < 360
+                                                     for i in only_support_bins)):
+            raise ValueError('only_support_bins must be a non-empty set of bin indices')
         if heading_rad is not None and not _number(heading_rad):
             raise ValueError('heading_rad must be a number')
         self.held = None
@@ -517,6 +528,9 @@ class CompactTargetTracker:
         candidates = [{**candidate, 'close_maintenance_observation':
                        any(ranges[i] < MIN_RANGE_M for i in candidate['support_bins'])}
                       for candidate in candidates]
+        if only_support_bins is not None:
+            candidates = [candidate for candidate in candidates
+                          if set(candidate['support_bins']) == set(only_support_bins)]
         # Tolerant: the gate widens with the time since the identity was last
         # observed beyond one nominal scan period (held frames in between).
         slack = (max(0., (published-old['source_at_ms'])/1000-.1)

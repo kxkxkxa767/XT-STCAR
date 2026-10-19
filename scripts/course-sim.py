@@ -247,12 +247,14 @@ class Vehicle:
             self.y += self.v*math.sin(self.psi)*dt/n
 
 
-# Car on tiles, measured 2026-10-13/16 (docs/vehicle-dynamic-turn-validation-
-# 20261007.json: steering_arc_after_repair_20261016, reverse_brake_test_20261016).
-# Wheel PWM -> curvature (1/m) after the steering play; right saturates near
-# 1250, left near 1670. Values between points are interpolated.
-MEASURED_STEER_TABLE = ((1200, -1.35), (1250, -1.2), (1350, -.38), (1450, -.16), (1500, 0.),
-                        (1550, .18), (1600, .4), (1670, 1.6), (1720, 1.7))
+# Steering fitted on the track (rounds 70-78, play 40, ~155 PWM per 1/m both
+# sides; docs/vehicle-dynamic-turn-validation-20261007.json:
+# turn79_steer_calibration_20261019), the console's steer_calibration table;
+# beyond the right planning limit it saturates as on the 10-16 tiles (1200
+# -1.35 /m). Speed and coast: tiles 2026-10-13/16 (reverse_brake_test_20261016).
+# Wheel PWM -> curvature (1/m) after the steering play; values between points
+# are interpolated.
+MEASURED_STEER_TABLE = ((1200, -1.35), (1314, -1.2), (1500, 0.), (1720, 1.42))
 # Steady speed (m/s) per motor PWM on tiles, straight; speed keeps rising for
 # seconds (1560: 1.2 -> 1.9 m/s over 1.3 s), so a first-order lag.
 MEASURED_TARGET_SPEED = {1550: 1.1, 1560: 2.2, 1570: 2.7, 1580: 3.2}
@@ -270,15 +272,14 @@ def _interp(table, x):
 class MeasuredVehicle(Vehicle):
     """Measured car: steering play, table gain, ESC lag both ways, slow coast.
 
-    play_pwm: wheels follow the servo only outside +-play (after a right turn
-    1500 keeps about -.2 /m, after a left one +.2 /m). esc_lag_s: the motor
-    responds that much later to any command, also to the cut (the car kept
-    pushing ~.5 s after a stop). coast_decel: on tiles ~.6-.7 m/s^2 after the
-    lag. drift_per_mps: slight left drift at speed (user and runs 11-13).
+    play_pwm: wheels follow the servo only outside +-play (track fit 40).
+    esc_lag_s: the motor responds that much later to any command, also to the
+    cut (the car kept pushing ~.5 s after a stop). coast_decel: on tiles
+    ~.6-.7 m/s^2 after the lag. drift_per_mps: slight left drift at speed (user and runs 11-13).
     turn_drag: steady speed divided by (1 + turn_drag*|curvature|).
     """
     def __init__(self, x, y, psi, *, speed_scale=1., decel=.7, delay=.15, steer_tau=.1, seed=0,
-                 play_pwm=50., gain_scale=1., esc_lag_s=.45, drift_per_mps=.025, turn_drag=.5,
+                 play_pwm=40., gain_scale=1., esc_lag_s=.45, drift_per_mps=.025, turn_drag=.5,
                  speed_tau_s=1.1, near_center_gain=1., near_center_width_pwm=100., initial_wheel_pwm=1500.,
                  **_):
         super().__init__(x, y, psi, speed_scale=speed_scale, decel=decel, delay=delay, steer_tau=steer_tau,
@@ -687,7 +688,7 @@ def main():
     parser.add_argument('--right-curvature-max', type=float, default=1.875,
                         help='unmeasured nominal1200 limit (1/m); use .94 for old-cap sensitivity')
     parser.add_argument('--vehicle', choices=('nominal', 'measured'), default='nominal',
-                        help='measured: tile measurements of 2026-10-13/16 (play, gain table, ESC lag, coast)')
+                        help='measured: track steering fit (rounds 70-78) and 2026-10-13/16 tile ESC lag and coast')
     parser.add_argument('--vehicle-param', action='append', default=[], metavar='NAME=VALUE',
                         help='measured model parameter, e.g. play_pwm=70 esc_lag_s=.6 (repeatable)')
     parser.add_argument('--steer-backlash', type=float, default=0.,

@@ -2,15 +2,21 @@
 
 ManeuverSequence and the console checks reason in a nominal linear servo
 space (agent.md section 5: curvature = (servo-1500)/160 per m). The real
-steering (tile floor, 2026-10-13/16, docs/vehicle-dynamic-turn-validation-
-20261007.json: steering_arc_after_repair_20261016) is neither linear nor free
-of play:
+steering has play and lags:
 
 - play: the wheels follow the servo only once it has moved through about
-  +-50 PWM (after a right turn 1500 keeps about -.2 /m, after a left turn about
-  +.2 /m; a 1585 kick over-corrected);
-- gain: the wheel position maps to curvature through the measured table;
-  right saturates near 1250 (-1.2 /m), left near 1670 (+1.6 /m).
+  +-40 PWM (after a right turn 1500 keeps the wheels right of centre, after a
+  left turn left of it);
+- gain: on the track (rounds 70-78, 176 drive samples: path curvature rebuilt
+  by scripts/trial-map.py against the logged physical servo with .3 s lag;
+  docs/vehicle-dynamic-turn-validation-20261007.json round79_analysis_20261019
+  and turn79_steer_calibration_20261019) the wheel position maps to curvature
+  close to linearly, about 155 PWM per 1/m on both sides (play 40, centre 0;
+  every leave-one-round-out fit: play 40, 150). The 10-16 tile table
+  (1250 -1.2, 1350 -.38, 1450 -.16, 1550 .18, 1600 .4, 1670 1.6) understated
+  moderate turns about 2x and made SteerOutput over-drive them (start-lane
+  weave, round 78 second-loop cross-over). Right is kept at the -1.2 /m the
+  planners count on (nominal 1308); left ends where the physical range ends.
 
 SteerOutput turns each nominal command into the physical command that puts
 the wheels at the curvature the nominal command means, crossing the play in
@@ -22,14 +28,15 @@ import math
 
 NEUTRAL = 1500
 NOMINAL_PWM_PER_CURVATURE = 160.
-# Wheel PWM (servo position after the play) -> curvature, 1/m.
-STEER_TABLE = ((1250, -1.2), (1350, -.38), (1450, -.16), (1500, 0.),
-               (1550, .18), (1600, .4), (1670, 1.6))
-STEER_PLAY_PWM = 50
+# Wheel PWM (servo position after the play) -> curvature, 1/m (155 PWM per
+# 1/m, track fit).
+STEER_TABLE = ((1314, -1.2), (1500, 0.), (1720, 1.42))
+STEER_PLAY_PWM = 40
 PHYSICAL_RANGE = (1200, 1720)
 # Nominal commands beyond what the wheels reach saturate there (planners must
-# not count on more): right -1.2 /m (nominal 1308), left +1.6 /m (beyond the
-# nominal 1720 = 1.375 /m, so the nominal range is reachable on the left).
+# not count on more): right -1.2 /m (nominal 1308); left the physical 1720
+# leaves the wheels at 1680 after the play, about 1.16 /m (nominal ~1686; the
+# track samples at physical 1680-1700 measured 1.12-1.16 /m).
 NOMINAL_RIGHT_LIMIT_PWM = NEUTRAL+math.ceil(STEER_TABLE[0][1]*NOMINAL_PWM_PER_CURVATURE)
 
 

@@ -10,6 +10,13 @@ use std::collections::VecDeque;
 pub const PACKET_BYTES: usize = 58;
 pub const POINTS_PER_PACKET: usize = 16;
 pub const MAX_CHUNK_BYTES: usize = 4096;
+/// Largest wire angle accepted. The factory driver (`.cc:579-590`) subtracts
+/// one turn from start and end angles above 360 deg: a packet crossing zero may
+/// report its end unwrapped. Rejecting those dropped the packet straddling
+/// 0 deg in about 10-17 % of revolutions (vehicle rounds 64-78: raw bins -2..12
+/// were null in 10-17 % of scans, the other front bins in 0.3-0.7 %). Angles
+/// beyond one turn plus 36 deg are still rejected.
+pub const MAX_WIRE_ANGLE_CDEG: u16 = 36_000 + 3_600;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -157,11 +164,19 @@ impl N10Decoder {
                 }
                 let start = u16::from_be_bytes([frame[5], frame[6]]);
                 let end = u16::from_be_bytes([frame[55], frame[56]]);
-                if start > 36_000 || end > 36_000 {
+                if start > MAX_WIRE_ANGLE_CDEG || end > MAX_WIRE_ANGLE_CDEG {
                     batch.angle_errors += 1;
                     self.discard_one(&mut batch);
                     continue;
                 }
+                let unwrap_turn = |angle: u16| {
+                    if angle > 36_000 {
+                        angle - 36_000
+                    } else {
+                        angle
+                    }
+                };
+                let (start, end) = (unwrap_turn(start), unwrap_turn(end));
                 let points = std::array::from_fn(|i| {
                     let offset = 7 + 3 * i;
                     let raw = u16::from_be_bytes([frame[offset], frame[offset + 1]]);

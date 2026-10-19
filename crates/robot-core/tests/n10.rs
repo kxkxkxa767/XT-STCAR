@@ -1,4 +1,6 @@
-use xt_stcar_robot_core::protocol::n10::{MAX_CHUNK_BYTES, N10Config, N10Decoder};
+use xt_stcar_robot_core::protocol::n10::{
+    MAX_CHUNK_BYTES, MAX_WIRE_ANGLE_CDEG, N10Config, N10Decoder,
+};
 use xt_stcar_robot_core::{FrameId, Timestamp};
 
 // Synthetic wire fixture: 350 -> 5 degrees, sixteen 1.0..2.5 m returns.
@@ -155,7 +157,7 @@ fn unusable_packets_never_become_fresh_sensor_samples() {
             .is_none()
     );
     let mut invalid_angle = GOLDEN;
-    invalid_angle[5..7].copy_from_slice(&36001u16.to_be_bytes());
+    invalid_angle[5..7].copy_from_slice(&(MAX_WIRE_ANGLE_CDEG + 1).to_be_bytes());
     checksum(&mut invalid_angle);
     let batch = decoder.feed(&invalid_angle, Timestamp(2)).unwrap();
     assert!(batch.packets.is_empty());
@@ -163,6 +165,40 @@ fn unusable_packets_never_become_fresh_sensor_samples() {
     assert_eq!(
         decoder.feed(&GOLDEN, Timestamp(3)).unwrap().packets.len(),
         1
+    );
+}
+
+#[test]
+fn angles_past_one_turn_wrap_like_the_factory_driver() {
+    // A packet crossing zero with its end reported unwrapped (358 -> 372
+    // deg), and one whose start is past the turn: both are kept, one turn
+    // lower, so the slice at 0 deg is not lost from the revolution.
+    let mut decoder = N10Decoder::new(config()).unwrap();
+    let mut crossing = GOLDEN;
+    crossing[5..7].copy_from_slice(&35800u16.to_be_bytes());
+    crossing[55..57].copy_from_slice(&37200u16.to_be_bytes());
+    checksum(&mut crossing);
+    let batch = decoder.feed(&crossing, Timestamp(0)).unwrap();
+    assert_eq!(batch.angle_errors, 0);
+    let packet = &batch.packets[0];
+    assert_eq!(
+        (packet.start_angle_cdeg, packet.end_angle_cdeg),
+        (35800, 1200)
+    );
+    let sample = packet.packet_sample().unwrap();
+    assert!((sample.angle_increment_rad.to_degrees() + 14.0 / 15.0).abs() < 1e-12);
+    let mut past = GOLDEN;
+    past[5..7].copy_from_slice(&36050u16.to_be_bytes());
+    past[55..57].copy_from_slice(&37450u16.to_be_bytes());
+    checksum(&mut past);
+    let packet = &decoder.feed(&past, Timestamp(1)).unwrap().packets[0];
+    assert_eq!((packet.start_angle_cdeg, packet.end_angle_cdeg), (50, 1450));
+    let mut limit = GOLDEN;
+    limit[55..57].copy_from_slice(&MAX_WIRE_ANGLE_CDEG.to_be_bytes());
+    checksum(&mut limit);
+    assert_eq!(
+        decoder.feed(&limit, Timestamp(2)).unwrap().packets[0].end_angle_cdeg,
+        3600
     );
 }
 
