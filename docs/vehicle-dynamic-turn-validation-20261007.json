@@ -22832,5 +22832,24 @@
       "decoder_change": "kept: matches the factory driver and causes no regression (bins 4-5 null at rest here are the depth edge 7.7 m wall -> 4.2 m board end; the moving gap is unchanged). It was not the cause of the band.",
       "still_open": "(a) assemble by point angle (split the straddling packet at 0 deg) to remove the moving gap; (b) the rare whole-band (~14 deg) loss that triggers front_sparse pauses: cause not identified (no raw capture); next step a bridge diagnostic of packets per revolution and decoder error counts."
     }
+  },
+  "turn79_actual_20261019": {
+    "date": "2026-10-19",
+    "trial": 79,
+    "source_commit": "925a4cc6ec7ad58bd23a644eaee69ab8ad8f3e89",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261019-79",
+    "evidence_sha256_files_ok": 7,
+    "map": "work/round69-claude-a-20261018/t79-map.png (fit < .5 after 11.6 s: drift)",
+    "result": "start lane calm (nominal 1482-1518, no weave; side-wall source 4.45-5.16 s), first support 2.70 m at 5.16 s, handover 6.70 s, first loop to 1715, PASS1 8.94 s; second support seen 9.96 s (3.06 m, -55 deg), confirmed 10.19 s (2.84 m); second loop failed: probe_obstacle_close_body 13.9 s (front, gap .032 m at bin 5). Max tick .089 s, max gap .096 s. 16.0 s total.",
+    "user": "为什么车是把姿态调到正对桶后，以绕第一个桶的方式绕第二个桶",
+    "analysis": {
+      "overrotation_after_first_pass": "after PASS1 (heading 177 deg) the left came back slowly: servo 1713 (8.94) -> 1633 -> 1593 -> 1513 -> 1460 (9.96); the car kept turning left at ~70-105 deg/s to 241 deg (9.7-10.2 s, map and compass agree: compass 231 deg), i.e. ~60 deg past the transfer axis (180 deg).",
+      "second_loop_entry": "plan at 10.19: support (1.55,-2.53), loop centre (1.45,-3.26), R 1.2, approach_line 3.43 m before the tangent, carrot (.88,-.70) -> -1.12 /m -> 1321; the pursuit asked full right (1308 at 10.5) to come back 60 deg onto the line: the car turned to face the support (bearing -59.5 -> -9.5 deg by 11.08).",
+      "steering_reversal_lag": "the pursuit asked 1345 (10.78), 1504 (11.08), 1720 (11.42) but the servo went 1308 (10.78) -> 1425 (11.08) -> 1425 (11.42) -> 1505 (11.68) -> 1585 -> 1665 -> 1720 (12.55): ~.9 s from full right to centre, 1.8 s to full left (stepwise adoption, centre crossing, plus the .3 s servo lag and 40 play). Meanwhile the car turned right another ~100 deg (199 deg at 10.69 -> ~100 deg at 11.6 s, map yaw -104..-120 deg/s) and crossed in front of the support (bearing +29 deg at 11.42, +49 at 11.68, +67 at 11.99).",
+      "wrong_side_loop": "with the support on the left the clockwise loop plan put its approach line/circle to the left; the pursuit asked 1720 and the car circled the support anticlockwise (as for the first support), .26 m from it at 13.1 s, then the front body gate at 13.9 s.",
+      "conclusion": "the calibration fixed how much a command turns (start lane steady) but not how fast the steering changes: the loop pursuits assume an instant steering change while a full reversal takes ~1-2 s at ~1-1.5 m/s. Round 78 was the same pattern (65 deg overshoot). Needed: delay-aware pursuit (plan from the pose predicted over the steering response), early release of the first-loop left into the transfer, and a check that the second loop keeps the support on the right."
+    },
+    "car_state": "locked at the left board near the start end (second-loop area)."
   }
 }
