@@ -22936,5 +22936,31 @@
     "speed_request": "1560 on low-curvature segments: the service accepts only 1500/1550/1560; the start lane already uses 1560 under its speed governor; in the open stages no straight on this course has the free distance the 1.3 m/s board-ahead stop needs at a higher speed and there is no trustworthy open-stage speed estimate, so no open-stage 1560 now. The finish crawl (the largest loss, ~5 s in run 80) is addressed by the measured coast decel.",
     "simulation": "five nominal-car regression variants and eight measured-car cases complete (board >= .12 m, cone >= .21 m); measured-car times 22.2-29.3 s (round 81 code 22.5-32.0 s).",
     "tests": "test_route_58 coasting-pulse test now expects the light-lane coasting ACK; test_route_63 finish guards computed before a decel is measured; test_route_81_smoothing (5): coasting ACK then right, other stages still need power, measured decel bounds, coast restart; full discover 834 OK (2 expected failures)."
+  },
+  "turn82_actual_20261019": {
+    "date": "2026-10-19",
+    "trial": 82,
+    "source_commit": "d1bbd8e60b32d54afef3b81e839a35f6c0bd1bd6",
+    "operator_confirmation": "已摆好",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261019-82",
+    "evidence_sha256_files_ok": 7,
+    "map": "work/round69-claude-a-20261018/t82-map.png",
+    "result": "start lane, first loop, PASS1 ~8.6 s, transfer; board-ahead hold 10.15-10.68 s during which the second support was confirmed (2.32 m); at the resume into the second loop autonomy_control_gap (max tick .111 s, gap .1214 s > .12 s, max lock wait .030 s) -> lock ~10.8 s; no contact (rest gap .30 m). User: 为什么这次到了第二个桶那里就停下了.",
+    "compute": "Mac profile (course-sim user8): transfer -> second loop tick 2.19 ms (first second-loop plan from scratch, 1159 score evaluations, plus the second-support observation), steady second-loop ticks 1.6 ms; rounds 79-81 car max ticks .089-.095 s."
+  },
+  "turn83_compute_20261019": {
+    "date": "2026-10-19",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "change": {
+      "plan_reuse": "_open_loop_geometry reuses the slot plan when its inputs are unchanged (identity/radius key, the probe free memory, approach rounded to 1 cm), e.g. a stopped car; otherwise replans as before.",
+      "preplan_in_transfer_pause": "the open-transfer pause readiness, once the second support is confirmed, plans the second loop (slot -1) while stopped, so the resume tick reuses that plan.",
+      "scan_checks": "compact_target.valid_ranges caches the range validation for the very same list object while its content is unchanged (C-level compare); used by the trackers and the route input check. The route duplicate-scan signature uses tuple(ranges) (equal to the recursive freeze for the validated flat list). Same checks, same results.",
+      "rejected": "deferring the second-loop plan to the next scan after the confirmation tick: measured car x1.3/.3 user8 and doc8x4 then failed (one scan later is too late at that speed)."
+    },
+    "not_changed": "the .12 s control gap limit and every other hard check.",
+    "simulation": "five regression variants and eight measured-car cases complete, identical to round 82.",
+    "tests": "test_route_81_smoothing LoopPlanReuse; full discover 835 OK (2 expected failures)."
   }
 }

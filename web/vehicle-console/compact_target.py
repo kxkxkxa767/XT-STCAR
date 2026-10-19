@@ -82,6 +82,24 @@ def _number(value):
     return type(value) in (int, float) and math.isfinite(value)
 
 
+_VALID_RANGES = [None, None, False]  # list object, its content then, validity
+
+
+def valid_ranges(ranges):
+    """360 finite returns within .02-12 m or None. Round 83 (car run 82: a
+    .111 s tick): the console checks the same published list several times a
+    tick and at 50 Hz on a 10 Hz scan; the result is reused only while the
+    very same list object still holds the same content (C-level compare)."""
+    if not isinstance(ranges, list) or len(ranges) != 360:
+        return False
+    cache = _VALID_RANGES
+    if cache[0] is ranges and cache[1] == ranges:
+        return cache[2]
+    valid = all(r is None or (_number(r) and .02 <= r <= 12) for r in ranges)
+    cache[0], cache[1], cache[2] = ranges, list(ranges), valid
+    return valid
+
+
 def _bearing_range(value, name):
     if (not isinstance(value, (tuple, list)) or len(value) != 2
             or not all(_number(bound) for bound in value)
@@ -480,8 +498,7 @@ class CompactTargetTracker:
             return self._forget('compact_target_invalid_scan')
         seq, published, received = scan['seq'], scan['at_ms'], scan['received_at']
         ranges = scan.get('ranges')
-        valid = (isinstance(ranges, list) and len(ranges) == 360
-                 and all(r is None or (_number(r) and .02 <= r <= 12) for r in ranges))
+        valid = valid_ranges(ranges)
         signature = tuple(ranges) if valid else None
         if self._last_seq is not None and seq <= self._last_seq:
             if seq < self._last_seq:

@@ -8,7 +8,7 @@ from bisect import bisect_left
 import copy
 import math
 
-from compact_target import (CompactTargetTracker, _associated, _candidates, contact_supports, MAX_DIAMETER_M,
+from compact_target import (CompactTargetTracker, _associated, _candidates, valid_ranges, contact_supports, MAX_DIAMETER_M,
                             MIN_RANGE_M, TOLERANT_MIN_POINTS, TOLERANT_MAINTENANCE_MIN_POINTS,
                             rotated_observation, EXTENDED_MAX_RANGE_M)
 from autonomy_live import (FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
@@ -2248,7 +2248,12 @@ class ManeuverSequence(TurnMotion):
                 # Round 77: the hold waited for a confirmed second support but
                 # never observed it (the tracker froze at its first sighting).
                 self._open_second_observation(scan, now, heading)
-            return not board_ahead or self._open_confirmed_second(scan) is not None
+            second = self._open_confirmed_second(scan) if stage == 'open_transfer' else None
+            if second is not None:
+                # Round 83: plan the second loop while stopped, so the resume
+                # tick reuses it (car run 82: resume + first plan .111 s).
+                self._open_loop_geometry(scan, second, second['track_id'], -1, math.pi)
+            return not board_ahead or second is not None
         if stage == 'second_loop':
             target = self.second_target
             self._pause_stage_held = self._target_gap_held(self.second_tracker, self.second_track_id, scan, now)
@@ -3360,7 +3365,12 @@ class ManeuverSequence(TurnMotion):
         key = (identity, round(radius, 2))
         approach = (-(center[0]*e1[0]+center[1]*e1[1]), -(center[0]*e2[0]+center[1]*e2[1]))
         plan_update = None
-        if changed or slot['plan'] is None or slot['key'] != key or slot.get('approaching', True):
+        # Round 83 (car run 82: a .111 s tick): the same inputs give the same
+        # plan; a stopped car (approach within 1 cm) reuses it.
+        plan_inputs = (key, tuple(sorted(free_memory.items())), round(approach[0], 2), round(approach[1], 2))
+        if slot['plan'] is not None and slot.get('plan_inputs') == plan_inputs:
+            changed = False
+        elif changed or slot['plan'] is None or slot['key'] != key or slot.get('approaching', True):
             # While the car is still before the tangent point the plan also
             # depends on where the car is (approach term), so it is redone.
             candidate = _plan_loop([(t, free_memory.get(t, math.inf)) for t in OPEN_PROBE_DIRECTIONS_RAD],
@@ -3406,6 +3416,7 @@ class ManeuverSequence(TurnMotion):
                 slot['plan'] = candidate
                 slot['key'] = key
                 slot['plan_source_seq'] = scan['seq']
+                slot['plan_inputs'] = plan_inputs
         plan = slot['plan']
         a, b = plan['offset_axis_m'], plan['offset_side_m']
         loop_center = (center[0]+a*e1[0]+b*e2[0], center[1]+a*e1[1]+b*e2[1])
@@ -5514,8 +5525,7 @@ class ManeuverSequence(TurnMotion):
                 or type(scan.get('seq')) is not int or scan['seq'] < 0
                 or type(scan.get('at_ms')) is not int or scan['at_ms'] < 0
                 or not _number(received) or not 0 <= now-received < SCAN_AGE_S
-                or not isinstance(ranges, list) or len(ranges) != 360
-                or any(r is not None and (not _number(r) or not .02 <= r <= 12) for r in ranges)):
+                or not valid_ranges(ranges)):
             self.lock('turn_scan_stale_or_invalid')
             return False
         if (not isinstance(control, dict) or type(control.get('armed')) is not bool
@@ -5533,8 +5543,10 @@ class ManeuverSequence(TurnMotion):
         if not control['armed']:
             self.lock('turn_bridge_locked')
             return False
+        # Ranges are a validated flat list: tuple() is the same value as the
+        # recursive freeze, at C speed (round 83).
         signature = (_freeze(scan.get('corridor_candidates')), _freeze(scan.get('wall_candidates', [])),
-                     _freeze(scan.get('left_turn_goal')), _freeze(scan.get('ranges')))
+                     _freeze(scan.get('left_turn_goal')), tuple(ranges))
         seq, published = scan['seq'], scan['at_ms']
         if self.last_seq is not None and seq == self.last_seq:
             if published != self.last_publication or signature != self.last_signature:

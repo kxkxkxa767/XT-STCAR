@@ -86,5 +86,29 @@ class LightLaneCoastDecel(unittest.TestCase):
         self.assertEqual(motion._lane_coast_track, [])
 
 
+class LoopPlanReuse(unittest.TestCase):
+    """Round 83 (car run 82: a .111 s resume tick): unchanged plan inputs
+    (same support, free memory, car within 1 cm) reuse the plan."""
+    def test_second_call_with_the_same_inputs_skips_the_planner(self):
+        import copy, json, math
+        from unittest.mock import patch
+        frame = json.loads((Path(__file__).resolve().parent/'fixtures/route-69-loop-plan-jump.json').read_text())
+        slot = frame['previous_slot']
+        slot['key'] = tuple(slot['key'])
+        slot['free'] = {float(k): v for k, v in slot['free'].items()}
+        motion = ms.ManeuverSequence(0., continue_route=True)
+        motion._open_slots[frame['side']] = copy.deepcopy(slot)
+        motion._open_slots[frame['side']]['approaching'] = True  # replanned every frame
+        motion.compass.current = lambda scan: frame['compass_heading']
+        motion.compass.rate = 0.
+        real = ms._plan_loop
+        with patch.object(ms, '_plan_loop', side_effect=real) as planner:
+            first = motion._open_loop_geometry(frame['scan'], frame['target'], frame['identity'], frame['side'], frame['axis'])
+            second = motion._open_loop_geometry(frame['scan'], frame['target'], frame['identity'], frame['side'], frame['axis'])
+        self.assertEqual(planner.call_count, 1)
+        self.assertEqual(first['plan'], second['plan'])
+        self.assertEqual(first['target_pwm'], second['target_pwm'])
+
+
 if __name__ == '__main__':
     unittest.main()
