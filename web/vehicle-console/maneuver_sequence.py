@@ -211,8 +211,8 @@ LANE_POWER_ACCEL_MPS2 = 1.
 # 1550 settles near 1.1 m/s on tiles: a slow car gains about this much over
 # the ESC lag after a 1550 push (the 1560 rate overstated it).
 LANE_SLOW_PUSH_GAIN_MPS = .3
-# Near the end pushes are LANE_PULSE_FRAMES pulses: about half that gain.
-LANE_SLOW_PULSE_GAIN_MPS = .15
+# Round 94: near-end 1550 pushes are no longer 2-frame pulses (half that
+# gain, .15 m/s); they are checked with the full push gain.
 LANE_LAUNCH_S = .4
 LANE_FINISH_GAP_M = .15
 # Round 64 (Claude): finish. A cut from cruise speed cannot land inside the
@@ -246,11 +246,12 @@ LANE_FINISH_ZONE_GAP_M = .75
 LANE_FINISH_MIN_GAP_M = .05
 LANE_FINISH_TARGET_GAP_M = .45
 LANE_PUSH_CLEAR_M = .2
-# Near the end (front gap <= zone + LANE_SLOW_TRAVEL_M) power comes in pulses (at most LANE_PULSE_FRAMES powered
-# frames, then LANE_REST_FRAMES neutral): the closing-speed estimate lags a
-# push, and a 1560 restart held until it read .15 m/s had reached .93 m/s
-# (simulation, 8x6 course: then cut late and hit the end board).
-LANE_PULSE_FRAMES = 2
+# Near the end (front gap <= zone + LANE_SLOW_TRAVEL_M) power came in pulses
+# (LANE_PULSE_FRAMES = 2 powered frames, then LANE_REST_FRAMES neutral): the
+# closing-speed estimate lags a push, and a 1560 restart held until it read
+# .15 m/s had reached .93 m/s (simulation, 8x6 course: then cut late and hit
+# the end board). Round 94: every 1560 restart is a LANE_KICK_FRAMES kick and
+# a rolling 1550 push is not chopped (see _light_lane_update).
 # Rest at least the ESC lag between pushes, so the speed a push produces is
 # measured before the next one (2026-10-16 measured car: a stopped car got
 # 1560 for 1 s before it moved, then ran into the end board at 1.2 m/s).
@@ -5370,16 +5371,20 @@ class ManeuverSequence(TurnMotion):
               and gap > self._lane_cut_gap(v_cut, reaction)+LANE_PUSH_CLEAR_M
               # The push itself, and the ESC lag after it, add speed: even the
               # weakest coast from there must still stop short of the board.
+              # Round 94: an unchopped push near the end gains the full push.
               and gap > self._lane_safe_gap(v+LANE_SPEED_CUT_MARGIN_MPS+LANE_SPEED_POWER_MARGIN_MPS
-                                            + (LANE_SLOW_PULSE_GAIN_MPS
-                                               if gap <= LANE_FINISH_ZONE_GAP_M+LANE_SLOW_TRAVEL_M
-                                               else LANE_SLOW_PUSH_GAIN_MPS), LANE_REACTION_S)):
+                                            + LANE_SLOW_PUSH_GAIN_MPS, LANE_REACTION_S)):
             self.lane_motor = ROUTE_SLOW_MOTOR
         near_end = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M+LANE_SLOW_TRAVEL_M
-        pulse_frames = LANE_PULSE_FRAMES if near_end else LANE_KICK_FRAMES
-        if (near_end and self.lane_motor in DRIVE_MOTORS) or self.lane_motor == TRIAL_MOTOR:
-            if self._lane_rest > 0 or self._lane_pulse >= pulse_frames:
-                if self._lane_pulse >= pulse_frames:
+        # Round 94 (user: 最后不到半米的距离一直停车再动): near the end a 2-frame
+        # pulse barely moved the car (run 93: 1550 pulse at .86 m, then 0 m/s
+        # and .17 m in 1.1 s; run 91: 1560 pulses crept 1.04 -> .87 m in 2 s),
+        # while a 3-frame 1560 kick from rest reached .47 m/s and ~.3-.4 m (run
+        # 91). A restart from rest is that kick everywhere; a 1550 push of a
+        # car still rolling is not chopped (its safe-gap check is unchanged).
+        if self.lane_motor == TRIAL_MOTOR:
+            if self._lane_rest > 0 or self._lane_pulse >= LANE_KICK_FRAMES:
+                if self._lane_pulse >= LANE_KICK_FRAMES:
                     self._lane_rest, self._lane_pulse = LANE_REST_FRAMES, 0
                 self._lane_rest -= 1
                 self.lane_motor = NEUTRAL

@@ -278,6 +278,24 @@ class FinishStopTests(unittest.TestCase):
                         self.assertLess(gap, .80)      # inside the 80 cm finish zone
                         self.assertLessEqual(motion.finish_evidence['speed_for_cut_mps'], LANE_SLOW_HIGH_MPS+.25)
 
+    def test_restarts_near_the_end_are_full_kicks(self):
+        # Round 94 (car runs 91/93): 2-frame pulses barely moved the car; every
+        # 1560 restart is one LANE_KICK_FRAMES kick, followed by a rest.
+        for true_decel in (.5, .7, 1.):
+            gap, coasted, log, motion = self.stop(true_decel, start=1.9, cruise=.6)
+            runs, run = [], 0
+            for _, _, motor in log:
+                if motor == 1560:
+                    run += 1
+                elif run:
+                    runs.append(run)
+                    run = 0
+            with self.subTest(decel=true_decel):
+                self.assertTrue(coasted)
+                self.assertGreater(gap, .05)
+                self.assertLess(gap, .80)
+                self.assertTrue(all(r <= ms.LANE_KICK_FRAMES for r in runs), runs)
+
     def test_weaker_or_stronger_decel_still_never_reaches_the_board(self):
         for true_decel in (.25, .7, 1.):
             for cruise in (.9, 1.27):

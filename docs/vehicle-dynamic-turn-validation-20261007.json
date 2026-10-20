@@ -23199,5 +23199,24 @@
     "not_changed": "control, every hard protection, CLI (reads the final result).",
     "known_open": "second-loop entry: a sharp right command toward the planned tangent overshoots with the steering lag (run 92: support dead ahead, passed at ~.14 m).",
     "tests": "test_route_87_load ActiveReportView; full discover 844 OK (2 expected failures)."
+  },
+  "turn93_actual_20261020": {
+    "date": "2026-10-20",
+    "trial": 93,
+    "source_commit": "b178607",
+    "operator_confirmation": "car re-placed in the start lane (fresh check: front 7.46 m, rear .56 m)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261020-93",
+    "evidence_sha256_files_ok": 8,
+    "result": "complete route, no contact, finish-zone stop at 21.2 s (front gap .74 m); max gap .1023 s, max late wake .0138 s (was .0416 s): the compact live state fixed the timing. Light lane: entered coasting at 1.24 m/s, 2.89 m; 1550 push 17.6-18.6 s (.3 -> .62 m/s, 1.63 -> 1.16 m); the slow band cut it at .62 m/s; stopped at ~.86 m; a 2-frame 1550 pulse at 19.6 s gave 0 m/s and ~.17 m by 20.7 s (in zone at .74 m). User: 还是和上次一样，最后不到半米的距离一直停车再动.",
+    "note": "the stop at .74 m front gap leaves the rear wheels ~1.1 m from the end board (zone 80 cm, all four wheels required by the rules): not changed yet."
+  },
+  "turn94_finish_kicks_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "change": "light lane: every 1560 restart is one LANE_KICK_FRAMES (3-frame) kick then LANE_REST_FRAMES, also near the end (was 2-frame pulses: run 93 .17 m in 1.1 s, run 91 1.04 -> .87 m in 2 s; a 3-frame kick from rest gave .47 m/s and ~.3-.4 m in run 91); a 1550 push of a rolling car is no longer chopped into 2-frame pulses near the end and its safe-gap check uses the full push gain (LANE_SLOW_PUSH_GAIN_MPS .3; LANE_SLOW_PULSE_GAIN_MPS removed).",
+    "not_changed": "finish zone definition (.75 m front gap), all hard protections.",
+    "tests": "test_route_63 test_restarts_near_the_end_are_full_kicks; full discover 845 OK (2 expected failures)."
   }
 }
