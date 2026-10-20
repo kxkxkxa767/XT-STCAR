@@ -1,5 +1,20 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-20 Claude：第96轮路线控制改写成Rust，引擎已编译，尚未与Python对比、未部署）
+
+第96轮（`turn96_rust_route_engine_wip_20261020`）。用户要求把Python路线控制改写成Rust程序，编译后放车上跑，明天试。动机是第94轮最慢一拍79ms（CPU 67ms），离0.12s硬限只差29ms，另有GIL争用。
+- 范围：先用覆盖率统计（108个仿真布局、矩阵车况、第64–94轮全部录像回放）确认从未执行的代码只占约10%，所以整套逐行移植，不删减。移植了ManeuverSequence+TurnMotion、目标跟踪器、车道墙/单侧挡板拟合、罗盘、绕桶规划、灯区等。server.py的会话管理和全部硬保护（8cm门、旧帧、心跳、0.12s间隔、ACK）、probe_clearance、滑行工人仍留在Python。
+- 位置：`route-engine/`，独立cargo工程，不在`crates/`里，所以桥和build-next的桥源码检查不受影响；无依赖，禁止unsafe。程序通过stdin/stdout的JSON行通信，一个进程管多个会话，返回决策增量和镜像属性。
+- 为了结果与CPython逐位一致，`py.rs`复刻了以下行为：动态值和异常；hypot/dist、内置sum、round、statistics.mean；`x**2`走libm pow（macOS上0.13%与x*x不同）；max/min取第一个；小整数集合的迭代顺序。
+- 现状：约1.15万行，`cargo build --release`无错误无警告，py.rs自测通过。**还没在任何输入上与Python对比过，Python代理、对比工具、server开关、交叉编译和部署都还没做。**用户要求先记录，暂不测试。
+下一步（详见记录`next_steps`）：
+1. `web/vehicle-console/route_engine.py`：代理类RustManeuverSequence，接口同ManeuverSequence。
+2. DualManeuverSequence：Python与Rust双跑，逐调用比较结果和全部状态，在仿真和录像回放上跑到完全一致。
+3. server加`--route-engine`开关，Python保留为后备。
+4. 交叉编译RISC-V，build-next加新载荷，部署第96轮。
+5. 上车比较计时。
+约定更正：长期约束“不为统一语言无故重写”在本轮按用户明确要求例外。
+
 ## 当前接手入口（2026-10-20 Claude：第95轮进近线平缓收敛，仿真20个车况选参，未上车）
 
 第95轮（`turn95_approach_convergence_20261020`）：进近线的追踪点取 max(1.1m, min(切点前距离×0.5, 横向偏差×2.5))，原来固定1.1m。这是为了消除第92/94轮第二圈入圈时急右转过冲成的S形。参数不按本场地调，用仿真扫描选定：k 取1.6/2/2.5，上限取0.5/0.7/1，在20个车况上比较（5个回归变体、6个布局、实测车速度和滞后变化）。上限0.7和1在5m场地碰板，0.5保持基线全部通过；k=2.5时反打从17次降到12次，离板间隙≥0.16m。全量846 OK，未上车。

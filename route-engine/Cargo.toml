@@ -1,0 +1,27 @@
+# Route control engine (round 96): a line-for-line Rust port of the Python
+# route controller (web/vehicle-console: maneuver_sequence.py, turn_motion.py,
+# compact_target.py and the helpers they use from autonomy_live.py). The
+# console runs it as a subprocess per session and keeps every service-side
+# protection. Standalone, outside crates/, so the deployed bridge sources and
+# its build stay unchanged. No dependencies.
+[package]
+name = "xt-stcar-route-engine"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "route-engine"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+strip = "symbols"
+
+[lints.rust]
+unsafe_code = "forbid"
