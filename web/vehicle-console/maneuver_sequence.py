@@ -226,7 +226,12 @@ LANE_FINISH_GAP_M = .15
 # decel (the measured ~.5 m/s^2) stops LANE_FINISH_TARGET_GAP_M from the board,
 # or when stopped with the front inside the zone. Parameters chosen on the
 # round-63 closed-loop model (decel .25-1.0, start 3.5-6 m, cruise .9/1.27).
-LANE_STOP_DECEL_MIN_MPS2 = .25
+# Round 92 (user: 为什么最后那么点距离，你频繁的停车再加pwm): light-lane coasts
+# on the car stopped after v0^2/(2d) = .46 (run 91: 1.1 m/s, 1.31 m), ~.45
+# (run 80) and ~.51 m/s^2 (run 88); at .25 the cut came ~1 m early and the car
+# stopped short of the zone, then crept on in pulses (run 91: 6.5 s). .35
+# keeps ~22 % below the weakest measured coast.
+LANE_STOP_DECEL_MIN_MPS2 = .35
 # Round 82: a coast decel measured over at least this span and speed drop
 # replaces the weakest one, clamped to [LANE_STOP_DECEL_MIN_MPS2,
 # LANE_COAST_DECEL_CAP_MPS2]. Round 86: the cap was the nominal .5 and the
@@ -235,7 +240,8 @@ LANE_STOP_DECEL_MIN_MPS2 = .25
 # finish cases (user8/doc8x4) stop in the zone, board >= .15 m.
 LANE_COAST_MIN_SPAN_S = .4
 LANE_COAST_MIN_DROP_MPS = .1
-LANE_COAST_DECEL_CAP_MPS2 = .375
+# Round 92: at most the weakest coast measured on the car (~.45, see above).
+LANE_COAST_DECEL_CAP_MPS2 = .45
 LANE_FINISH_ZONE_GAP_M = .75
 LANE_FINISH_MIN_GAP_M = .05
 LANE_FINISH_TARGET_GAP_M = .45

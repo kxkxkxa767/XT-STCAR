@@ -23159,5 +23159,24 @@
     "not_changed": "all hard protections; the light-entry path-hit hold itself (it saw a real return).",
     "rules_note": "rules: the traffic light hangs centred above the track (bottom 40 cm), a photoelectric sensor 1 m before it; red 3-10 s; stopping time at the light is subtracted from the score.",
     "tests": "test_route_87_load LightEntryPauseHold; full discover 843 OK (2 expected failures). No simulation (user)."
+  },
+  "turn91_actual_20261020": {
+    "date": "2026-10-20",
+    "trial": 91,
+    "source_commit": "becab2d",
+    "operator_confirmation": "car re-placed in the start lane (fresh check: front 7.57 m, rear .43 m)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261020-91",
+    "evidence_sha256_files_ok": 8,
+    "result": "complete route, no contact: first loop, transfer (no hold), second loop, light entry (one recovery hold 15.6-16.3 s; no heading swing), light lane from 16.86 s, finish-zone stop 26.0 s (front gap .74 m), rest body gap .34 m; ended coast_standstill_unconfirmed (coast-motion results superseded, as run 88). Max gap .111 s (max tick .066 s CPU).",
+    "light_lane": "entered coasting at 1.1 m/s with 2.87 m to the board (weakest-coast guard 3.71 m at .25 m/s^2); stopped at 1.56 m (19.4 s); then 1560 kicks / 2-frame pulses crept 1.56 -> .74 m until 26.0 s. Coast decel by distance: run 91 .46, run 80 ~.45, run 88 ~.51 m/s^2.",
+    "user": "为什么最后那么点距离，你频繁的停车再加pwm"
+  },
+  "turn92_lane_decel_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "change": "LANE_STOP_DECEL_MIN_MPS2 .25 -> .35 (~22 % below the weakest coast measured on the car by distance, .45-.51 in runs 80/88/91) and LANE_COAST_DECEL_CAP_MPS2 .375 -> .45 (the weakest measured). Pulse lengths and push gains unchanged (a larger push gain would forbid pushes just outside the zone).",
+    "tests": "test_route_63 far-part test: far = beyond max(weakest-coast guard, slow-zone start); full discover 844 OK (2 expected failures). No simulation (user)."
   }
 }

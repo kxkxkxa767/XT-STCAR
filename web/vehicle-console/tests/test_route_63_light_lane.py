@@ -292,9 +292,12 @@ class FinishStopTests(unittest.TestCase):
         gap, coasted, log, motion = self.stop(.5, start=6., cruise=.9)
         # Round 82: the guard before any coast decel is measured in the lane.
         motion._lane_coast_decel = None
-        guard = (FRONT_BODY_EXTENT_M+motion._lane_safe_gap(.9+ms.LANE_SPEED_CUT_MARGIN_MPS
-                                                           + ms.LANE_SPEED_POWER_MARGIN_MPS))
-        far = [m for a, v, m in log if a > guard+.1]
+        v_cut = .9+ms.LANE_SPEED_CUT_MARGIN_MPS+ms.LANE_SPEED_POWER_MARGIN_MPS
+        guard = FRONT_BODY_EXTENT_M+motion._lane_safe_gap(v_cut)
+        # Round 92: with the measured weakest coast (.35) the slow zone
+        # (nominal cut + LANE_SLOW_TRAVEL_M) can begin before that guard.
+        slow = FRONT_BODY_EXTENT_M+motion._lane_cut_gap(v_cut)+ms.LANE_SLOW_TRAVEL_M
+        far = [m for a, v, m in log if a > max(guard, slow)+.1]
         self.assertTrue(len(far) > 3 and all(m == ROUTE_SLOW_MOTOR for m in far[3:]))
 
     def test_slow_zone_latches_before_the_cut_at_cruise_speed(self):
