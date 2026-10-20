@@ -789,6 +789,19 @@ def _loop_extent(a, b, radius, theta):
     return projection+math.sqrt(max(0., projection*projection-(a*a+b*b)+radius*radius))
 
 
+_PLAN_MARGINS = []  # (probes/support/bounds, {(radius, a, b): smallest probe margin}), last 4
+
+
+def _plan_margins(context):
+    for known, table in _PLAN_MARGINS:
+        if known == context:
+            return table
+    table = {}
+    _PLAN_MARGINS.append((context, table))
+    del _PLAN_MARGINS[:-4]
+    return table
+
+
 def _plan_loop(free, support_radius, radii, approach=None):
     """Loop radius and centre offset (a along the approach axis, b toward the
     turn side) maximising the smallest clearance slack over the probes.
@@ -814,44 +827,72 @@ def _plan_loop(free, support_radius, radii, approach=None):
     # outside the circle (score -inf) are skipped in the sweeps. Same
     # arithmetic, so the same plan. Round 64 car run: ~2000 evaluations per
     # scan were the slowest step of the second loop.
+    # Round 87 (car run 87: the second-loop entry tick took .085 s of CPU):
+    # the smallest probe margin of (radius, a, b) does not depend on the
+    # approach, so it is kept across plans with the same probes, support and
+    # bounds (_plan_margins); a repeated sweep reuses its choice; a sweep only
+    # visits offsets that can lie inside the circle (the exact test stays);
+    # max/min calls are written as the equal comparisons. Identical plans on
+    # 4606 recorded and random inputs; ~.29 instead of ~.52 ms (Mac).
     trig = [(math.cos(theta), math.sin(theta), hi, hi >= lo) for theta, hi in bands]
-    memo = {}
+    hypot, sqrt, inf = math.hypot, math.sqrt, math.inf
+    memo, sweeps = {}, {}
+    margins = _plan_margins((lo, inner_floor, tuple(trig)))
 
     def score(radius, a, b):
         key = (radius, a, b)
         value = memo.get(key)
         if value is not None:
             return value
-        if math.hypot(a, b) > radius-inner_floor:
-            memo[key] = -math.inf
-            return -math.inf
-        worst = math.inf
-        ab, rr = a*a+b*b, radius*radius
-        for c, s, hi, comfort in trig:
-            projection = a*c+b*s
-            t = projection+math.sqrt(max(0., projection*projection-ab+rr))
-            # Cone comfort is soft; a board must not be traded for it when
-            # both comfort margins do not fit. The raw body gate is unchanged.
-            margin = min(t-lo, hi-t) if comfort else -abs(t-hi)
-            if margin < worst:
-                worst = margin
+        if hypot(a, b) > radius-inner_floor:
+            memo[key] = -inf
+            return -inf
+        worst = margins.get(key)
+        if worst is None:
+            worst = inf
+            ab, rr = a*a+b*b, radius*radius
+            for c, s, hi, comfort in trig:
+                projection = a*c+b*s
+                d = projection*projection-ab+rr
+                t = projection+sqrt(d if d > 0. else 0.)
+                # Cone comfort is soft; a board must not be traded for it when
+                # both comfort margins do not fit. The raw body gate is unchanged.
+                if comfort:
+                    inner, outer = t-lo, hi-t
+                    margin = outer if outer < inner else inner
+                else:
+                    margin = -abs(t-hi)
+                if margin < worst:
+                    worst = margin
+            margins[key] = worst
         if approach is not None and a-approach[0] > 0:
-            worst -= max(0., OPEN_APPROACH_SLOPE*abs(approach[1]-(b-radius))-(a-approach[0]))
-        value = memo[key] = worst-.01*math.hypot(a, b)-OPEN_RADIUS_PREFERENCE*(radii[1]-radius)
+            descent = OPEN_APPROACH_SLOPE*abs(approach[1]-(b-radius))-(a-approach[0])
+            worst -= descent if descent > 0. else 0.
+        value = memo[key] = worst-.01*hypot(a, b)-OPEN_RADIUS_PREFERENCE*(radii[1]-radius)
         return value
 
     def sweep(radius, offsets, a=None, b=None):
         """max(offsets, key=score) over the free coordinate (first maximum);
         offsets with an infinite (outside) score cannot be it unless all are."""
+        key = (radius, a, b)
+        choice = sweeps.get(key)
+        if choice is not None:
+            return choice
         limit = radius-inner_floor
         choice, top = offsets[0], None
-        for v in offsets:
-            pa, pb = (v, b) if a is None else (a, v)
-            if math.hypot(pa, pb) > limit:
-                continue
-            value = score(radius, pa, pb)
-            if top is None or value > top:
-                choice, top = v, value
+        fixed = b if a is None else a
+        reach = limit*limit-fixed*fixed
+        if reach >= 0.:
+            middle = len(offsets)//2  # offsets[middle] == 0
+            k = int((sqrt(reach)+1e-6)/.05)+1
+            for v in offsets[max(0, middle-k):middle+k+1]:
+                pa, pb = (v, b) if a is None else (a, v)
+                if hypot(pa, pb) > limit:
+                    continue
+                value = score(radius, pa, pb)
+                if top is None or value > top:
+                    choice, top = v, value
+        sweeps[key] = choice
         return choice
 
     best = None
@@ -1260,6 +1301,7 @@ class ManeuverSequence(TurnMotion):
         # Open-course loops (entry_kind 'lane').
         self._open_slots = {}  # loop side (+1 first, -1 second) -> probes and plan
         self._open_lost_since = None
+        self._second_plan_pending = None  # (seq, at_ms) of the scan that confirmed the second support
         self.open_loop = None
         self.open_next_loop = None
         self.open_feedback = None
@@ -3812,7 +3854,14 @@ class ManeuverSequence(TurnMotion):
         self._open_second_observation(scan, now, heading)
         if self._open_confirmed_second(scan) is not None:
             self._open_begin_second_loop(scan, now, control)
-            return self._open_second_loop_update(scan, now, control, adopted=True)
+            # Round 87 (car run 87: confirmation plus the first loop plan took
+            # .085 s of CPU in one tick, the next control gap .122 s): this tick
+            # keeps the current command and the loop is planned on the next
+            # control tick of this same scan (~25 ms later on the car, one
+            # 20 ms tick in simulation); a newer scan plans it instead.
+            self._second_plan_pending = (scan['seq'], scan['at_ms'])
+            self.reason = 'open_second_loop_plan_next_tick'
+            return self._result(now)
         pose = self._response_pose()
         channel = self._open_channel_target(scan, heading, pose)
         natural = (channel['target_pwm'] if channel is not None
@@ -3833,6 +3882,7 @@ class ManeuverSequence(TurnMotion):
 
     def _open_second_loop_update(self, scan, now, control, *, adopted=False):
         """Second loop (clockwise, the support on the right); ends on the compass."""
+        self._second_plan_pending = None
         if not adopted and not self._route_adopted(control, now):
             return self._result(now)
         heading = self.compass.current(scan)
@@ -5644,6 +5694,13 @@ class ManeuverSequence(TurnMotion):
             # Even the ACK observation cannot change steering on this output.
             return self._result(now)
         if not advancing:
+            if (self._second_plan_pending == (scan.get('seq'), scan.get('at_ms'))
+                    and self.continue_route and self.phase == 'drive' and self.route_stage == 'second_loop'
+                    and not self.quality_resume_pending and 0 <= now-scan['received_at'] < SCAN_AGE_S):
+                # Round 87: the second loop's first plan, deferred from the
+                # tick that confirmed the support on this same scan (that tick
+                # had the adopted command; it sent no new one).
+                return self._open_second_loop_update(scan, now, control, adopted=True)
             # A repeated fresh observation cannot establish preparation or a
             # pass. It may execute ONE already-authorized release step once
             # the previous actual command is ACKed and its 100 ms is due.

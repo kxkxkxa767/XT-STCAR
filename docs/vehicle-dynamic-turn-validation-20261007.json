@@ -23064,5 +23064,31 @@
     "simulation": "course-sim as a harness: all six layouts plus the measured-car cases (user8, doc8x4 at x1.0/.3, x1.3/.15, x1.3/.3) give byte-identical logs and paths with and without the reuse (sha256 of log+history); 1158 of 1456 checks reused in user8. Mac wall per tick: unchanged scan .26 -> .10 ms, new scan 1.02 -> 1.08 ms (the scan copy); per scan with ~2 unchanged ticks as on the car about -15 %.",
     "tests": "test_route_87_load: reuse equal copy; every changed input (lidar age limit, relaxed gate, rear start, side walls, in-place scan change) checks again; types compared; refused checks never reused; camera limits only when required; gap breakdown sums exactly. Full discover 841 OK (2 expected failures).",
     "next": "car run 87: read max_gap_breakdown (late wake-up vs tick CPU) and cpu.json (which processes/threads load the car) before reducing anything else."
+  },
+  "turn87_actual_20261019": {
+    "date": "2026-10-20",
+    "trial": 87,
+    "source_commit": "4530546db4427054472ef62975911055c3762edf",
+    "operator_confirmation": "连上了，你测试吧 (fresh check: start lane width .89 m, heading -.8 deg, offset -.04 m, ready)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261019-87",
+    "evidence_sha256_files_ok": 8,
+    "idle_cpu": "8 cores at 1.6 GHz (performance governor), 70-74 C. Idle: vision-shadow (blue-cone ONNX shadow, never drives) 175-200 % (two cores), console 35 %, lidar bridge 13 %. Python probe benchmark 3.6-3.8 ms on any core vs .113 ms on the Mac (~33x); no core notably slower.",
+    "result": "start lane, first loop (PASS1 8.67 s), transfer channel entry; the second support confirmed at 9.73 s and that tick (confirmation + first second-loop plan) took .0999 s wall / .0855 s control-thread CPU; next gap .1219 s = .0999 tick + .005 idle + .0124 late wake + .0046 lock wait -> autonomy_control_gap lock (second_loop). Rest gap .189 m. 193 of 258 drive-tick clearance checks reused.",
+    "cpu_json": "10.2 s window: vision-shadow 178 %, console 92 % (control thread 40 %, camera thread 20 %, ended HTTP handler threads 17 %, others ~15 %), helper 13 %, lidar bridge 13 %.",
+    "conclusion": "the gap is now dominated by one heavy tick's own CPU (the second-loop entry), not by waiting; reduce that tick."
+  },
+  "turn88_entry_split_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": "这次还是在第二个桶那里停了 / 别仿真了，直接上赛道测试",
+    "change": {
+      "second_loop_entry_split": "the transfer tick that confirms the second support begins the second loop and keeps the current command; the loop is planned on the next control tick of the same scan (_second_plan_pending; ~25 ms later on the car, one 20 ms tick in simulation); a newer scan plans it instead. Halves the heaviest tick (car run 87: .0855 s CPU).",
+      "plan_margins": "_plan_loop: the smallest probe margin of (radius, a, b) is kept across plans with the same probes/support/bounds (_PLAN_MARGINS, last 4), repeated sweeps reuse their choice, sweeps visit only offsets that can lie inside the circle (exact test kept), max/min calls written as equal comparisons. Identical plans on 7606 recorded + random inputs (vs HEAD); .52 -> .29 ms per plan (Mac); every second-loop scan replans while approaching."
+    },
+    "not_changed": "all hard protections (.12 s gap, heartbeat, 8 cm gate, stale/clock, bridge lock, deadlines, centre ACK), the 20 ms tick, the helper polling.",
+    "simulation": "harness only, user asked to go to the track: 6 layouts + 6 measured cases complete (trajectories differ by the 20 ms entry delay; wide8x6 31.8 s vs 30.4 s), 5 regression variants, 8 measured cases and 16 finish cases complete.",
+    "tests": "test_route_87_load + PlanMarginReuse; full discover 841 OK before the test (2 expected failures)."
   }
 }

@@ -137,5 +137,21 @@ class TickGapBreakdown(unittest.TestCase):
         self.assertEqual(type(report['control_thread_native_id']), int)
 
 
+class PlanMarginReuse(unittest.TestCase):
+    def test_kept_margins_give_the_same_plan(self):
+        import maneuver_sequence as ms
+        free = [(t, d) for t, d in zip(ms.OPEN_PROBE_DIRECTIONS_RAD, (1.2, 2.05, math.inf, 1.6, .95))]
+        plans = []
+        for approach in (None, (-1.4, .3), (-1.3, .28), (-1.4, .3)):
+            ms._PLAN_MARGINS.clear()
+            cold = ms._plan_loop(free, .1, ms.OPEN_RIGHT_RADIUS_M, approach)
+            plans.append(cold)
+        ms._PLAN_MARGINS.clear()
+        warm = [ms._plan_loop(free, .1, ms.OPEN_RIGHT_RADIUS_M, a)
+                for a in (None, (-1.4, .3), (-1.3, .28), (-1.4, .3))]
+        self.assertEqual(warm, plans)
+        self.assertEqual(len(ms._PLAN_MARGINS), 1)
+
+
 if __name__ == '__main__':
     unittest.main()
