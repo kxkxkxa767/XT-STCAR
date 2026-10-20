@@ -6,8 +6,10 @@
 //! Response: {"ok": true, "r": result, "d": decision delta, "x": removed
 //!            decision keys, "s": changed mirrored attributes}
 //!           or {"ok": false, "exc": "ValueError", "msg": "...", "s": ...}
-//! A scan argument {"$same": 1} is the previous scan sent (equal content).
-//! Every request names its session ("sid"); {"op": "drop"} ends one.
+//! A scan argument is {"$base": scan, "$with": extra} (the scan plus extra
+//! keys, e.g. received_at) or {"$same": 1, "$with": extra} (the previous
+//! base again, equal content). Every request names its session ("sid");
+//! {"op": "drop"} ends one, and "drops": [sid, ...] ends others first.
 
 pub mod compact_target;
 pub mod dump;
@@ -66,9 +68,16 @@ impl Engine {
 
     fn handle(&mut self, req: &V) -> V {
         let sid = if req.get("sid").is_int() { req.get("sid").i() } else { 0 };
+        if req.get("drops").is_list() {
+            let drops: Vec<i64> = req.get("drops").l().iter().filter(|v| v.is_int()).map(|v| v.i()).collect();
+            self.sessions.retain(|(k, _)| !drops.contains(k));
+        }
         if req.get("op").os() == Some("drop") {
             self.sessions.retain(|(k, _)| *k != sid);
             return crate::dict! {"ok" => true, "r" => V::None};
+        }
+        if req.get("op").os() == Some("fn") {
+            return crate::dict! {"ok" => true, "r" => function(req.idx("name").s(), req.idx("args").l())};
         }
         self.session(sid).handle(req)
     }
@@ -88,13 +97,16 @@ impl Session {
     }
 
     fn scan_arg(&mut self, value: &V) -> V {
-        if value.is_dict() && value.get("$same").truthy() {
-            return self.last_scan.clone();
+        if !value.is_dict() {
+            return value.clone();
         }
-        if value.is_dict() {
-            self.last_scan = value.clone();
+        if value.has("$base") {
+            self.last_scan = value.get("$base").clone();
+        } else if !value.get("$same").truthy() {
+            return value.clone();
         }
-        value.clone()
+        let extra = value.get("$with");
+        if extra.is_dict() && !extra.items().is_empty() { self.last_scan.merged(extra) } else { self.last_scan.clone() }
     }
 
     fn mirror_delta(&mut self) -> V {
@@ -223,6 +235,19 @@ impl Session {
             response.set("x", V::list(removed));
         }
         response
+    }
+}
+
+/// Module-level functions, for checking one computation against Python.
+fn function(name: &str, args: &[V]) -> V {
+    match name {
+        "hypot" => V::Float(hypot(args[0].f(), args[1].f())),
+        "directions" => V::list(compact_target::directions().into_iter().map(V::from).collect()),
+        "scan_points" => V::list(
+            compact_target::scan_points(&compact_target::floats(&args[0])).into_iter().map(|p| p.map(V::from).unwrap_or(V::None)).collect(),
+        ),
+        "contact_supports" => V::list(compact_target::contact_supports(&args[0])),
+        _ => raise(Exc::ValueError, format!("route_engine_unknown_function_{name}")),
     }
 }
 

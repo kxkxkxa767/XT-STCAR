@@ -27,10 +27,10 @@ thread_local! {
         let headings = light_headings_deg();
         let bearing: Vec<f64> = (0..360).map(|i| degrees(wrap(-radians(i as f64)))).collect();
         FreeTables {
-            point_cos: bearing.iter().map(|b| radians(*b).cos()).collect(),
-            point_sin: bearing.iter().map(|b| radians(*b).sin()).collect(),
-            cos: bearing.iter().map(|b| headings.iter().map(|&h| radians(h as f64 - b).cos()).collect()).collect(),
-            sin: bearing.iter().map(|b| headings.iter().map(|&h| radians(h as f64 - b).sin()).collect()).collect(),
+            point_cos: bearing.iter().map(|b| radians(*b).pcos()).collect(),
+            point_sin: bearing.iter().map(|b| radians(*b).psin()).collect(),
+            cos: bearing.iter().map(|b| headings.iter().map(|&h| radians(h as f64 - b).pcos()).collect()).collect(),
+            sin: bearing.iter().map(|b| headings.iter().map(|&h| radians(h as f64 - b).psin()).collect()).collect(),
             bearing_deg: bearing,
         }
     };
@@ -159,7 +159,7 @@ impl Maneuver {
         let mut projections = Vec::new();
         for x in [-REAR_BODY_EXTENT_M, FRONT_BODY_EXTENT_M] {
             for y in [-SIDE_BODY_EXTENT_M, SIDE_BODY_EXTENT_M] {
-                projections.push(-heading.sin() * x + heading.cos() * y);
+                projections.push(-heading.psin() * x + heading.pcos() * y);
             }
         }
         let offset = candidate.idx("center_offset_left_m").f();
@@ -377,7 +377,7 @@ impl Maneuver {
         let pt = |i: i64| -> (f64, f64) {
             let r = floats[i as usize].unwrap_or_else(|| type_error("unsupported operand type(s) for *"));
             let a = radians(i as f64);
-            (r * a.cos(), -r * a.sin())
+            (r * a.pcos(), -r * a.psin())
         };
         let first_points: Vec<(f64, f64)> = first_bins.iter().map(|&i| pt(i)).collect();
         let mut slack = pmin(SECOND_RECOVERY_MAX_SLACK_S, pmax(0., (scan.idx("at_ms").f() - reference.idx("source_at_ms").f()) / 1000. - 0.1));
@@ -390,7 +390,7 @@ impl Maneuver {
             && prior_landmark.is_list()
         {
             let turn = -(h - reference.idx("compass_heading_rad").f());
-            let (c, s) = (turn.cos(), turn.sin());
+            let (c, s) = (turn.pcos(), turn.psin());
             let rp = reference.idx("point_left_m").l();
             let pl = prior_landmark.l();
             let dx = rp[0].f() - pl[0].f();
@@ -562,8 +562,8 @@ impl Maneuver {
             ) {
                 let p = target.idx("point_left_m").l();
                 let (x, y) = (p[0].f(), p[1].f());
-                let along = heading.cos() * x + heading.sin() * y;
-                let normal = -heading.sin() * x + heading.cos() * y;
+                let along = heading.pcos() * x + heading.psin() * y;
+                let normal = -heading.psin() * x + heading.pcos() * y;
                 if x > FRONT_BODY_EXTENT_M && along > FRONT_BODY_EXTENT_M && (normal - c.idx("center_offset_left_m").f()).abs() < bound {
                     ahead.push((target, along, normal));
                 }
@@ -577,7 +577,7 @@ impl Maneuver {
                     .map(|&i| {
                         let r = floats[i as usize].unwrap();
                         let a = radians(i as f64);
-                        (r * a.cos(), -r * a.sin())
+                        (r * a.pcos(), -r * a.psin())
                     })
                     .collect();
                 let separation = first.as_ref().map(|f| {
@@ -775,7 +775,7 @@ impl Maneuver {
             return V::None;
         }
         let (heading, offset, width) = (lane.idx("heading_left_rad").f(), lane.idx("center_offset_left_m").f(), lane.idx("width_m").f());
-        let (c, s) = (heading.cos(), heading.sin());
+        let (c, s) = (heading.pcos(), heading.psin());
         let along: Vec<f64> = points.iter().map(|&(x, y)| c * x + s * y).collect();
         let normal: Vec<f64> = points.iter().map(|&(x, y)| -s * x + c * y).collect();
         let max_normal = normal.iter().cloned().fold(f64::NEG_INFINITY, pmax);
@@ -1196,7 +1196,7 @@ impl Maneuver {
             for i in center - LANE_FRONT_HALF_BINS..center + LANE_FRONT_HALF_BINS + 1 {
                 let r = &list[imod(i, 360) as usize];
                 if r.is_num() {
-                    let v = r.f() * radians((i - center) as f64).cos();
+                    let v = r.f() * radians((i - center) as f64).pcos();
                     best = Some(match best {
                         None => v,
                         Some(b) => pmin(b, v),
@@ -1229,7 +1229,7 @@ impl Maneuver {
         for j in -LANE_FRONT_HALF_BINS..LANE_FRONT_HALF_BINS + 1 {
             let r = &list[imod(center + j, 360) as usize];
             if r.is_num() {
-                sector.push((j, r.f() * (radians((center + j) as f64) - heading).cos()));
+                sector.push((j, r.f() * (radians((center + j) as f64) - heading).pcos()));
             }
         }
         let mut value = ahead;

@@ -824,6 +824,27 @@ impl Parser<'_> {
 pub const PI: f64 = std::f64::consts::PI;
 pub const INF: f64 = f64::INFINITY;
 
+/// math.sin / math.cos as two separate libm calls, as CPython makes them.
+/// LLVM otherwise merges a sin and a cos of one argument into a single
+/// sincos call (macOS `__sincos_stret`), which can round the last bit
+/// differently (bins 26/27 of the direction table).
+pub trait PyTrig {
+    fn psin(self) -> f64;
+    fn pcos(self) -> f64;
+}
+
+impl PyTrig for f64 {
+    #[inline(never)]
+    fn psin(self) -> f64 {
+        std::hint::black_box(self).sin()
+    }
+
+    #[inline(never)]
+    fn pcos(self) -> f64 {
+        std::hint::black_box(self).cos()
+    }
+}
+
 /// math.radians (x * (pi/180), the constant as CPython computes it).
 #[inline]
 pub fn radians(x: f64) -> f64 {

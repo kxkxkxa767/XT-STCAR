@@ -5,6 +5,7 @@ import base64
 import collections
 import copy
 import fcntl
+import functools
 import gc
 import hashlib
 import hmac
@@ -37,6 +38,11 @@ from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRES
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
                                DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
                                OPEN_STAGES)
+from route_engine import RouteEngine, RustManeuverSequence
+
+# Either controller of a maneuver session: the Python sequence or, with
+# --route-engine, its Rust port behind the same interface (round 96).
+MANEUVER_TYPES = (ManeuverSequence, RustManeuverSequence)
 
 ROOT = Path(__file__).resolve().parent
 COMPACT_TARGET_TRIAL_SCOPE = 'first_lidar_compact_target_orbit_entry'
@@ -114,6 +120,10 @@ class Console:
         self.auto_session = None
         self.auto_result = None
         self.coast_worker = None
+        engine = getattr(args, 'route_engine', None)
+        self.route_engine = RouteEngine(engine) if engine else None
+        if self.route_engine is not None:
+            self.route_engine.warm()  # a missing or broken binary fails the console start
         # Route steering calibration: bridge seq -> (nominal, physical) servo.
         self.steer_sent = {}
         self.stop_goal_source = getattr(args, 'stop_goal_source', None)
@@ -271,7 +281,7 @@ class Console:
         if op != 'drive' or steer is None:
             return servo
         motion = (self.auto_session or {}).get('turn_motion')
-        lane = isinstance(motion, ManeuverSequence) and motion.lane_wall_output_active()
+        lane = isinstance(motion, MANEUVER_TYPES) and motion.lane_wall_output_active()
         physical = steer.physical(servo, LANE_WALL_PLAY_PWM if lane else None)
         self.steer_sent[sequence] = (servo, physical)
         for old in [k for k in self.steer_sent if k < sequence-64]:
@@ -517,7 +527,8 @@ class Console:
             if (self.control_mode != 'locked' or control.get('armed') is not False
                     or control.get('motor') != 1500 or control.get('servo') != 1500):
                 raise ValueError('turn_requires_fresh_neutral_lock')
-            controller = ManeuverSequence if compact_target_trial else TurnMotion
+            controller = (TurnMotion if not compact_target_trial else ManeuverSequence if self.route_engine is None
+                          else functools.partial(RustManeuverSequence, self.route_engine))
             if compact_target_trial and initial_presteer_pwm is None:
                 initial_presteer_pwm = DEFAULT_INITIAL_PWM
             options = {'continue_route': continue_route} if compact_target_trial else {}
@@ -1043,7 +1054,7 @@ class Console:
             contact_target = None
             clearance_scan = self.scan
             if (turn_trial and session.get('continue_route') is True
-                    and isinstance(route_motion, ManeuverSequence) and route_motion.continue_route is True):
+                    and isinstance(route_motion, MANEUVER_TYPES) and route_motion.continue_route is True):
                 clearance_scan = {**self.scan, 'received_at': self.scan_at} if isinstance(self.scan, dict) else self.scan
                 contact_target = route_motion.current_contact_target(clearance_scan, now)
             front_lane, front_side_walls = self.turn_front_walls(session, now) if turn_trial else (None, False)
@@ -1173,7 +1184,7 @@ class Console:
         """Route start lane (presteer, drive, coast): rear returns do not stop it."""
         motion = session.get('turn_motion')
         return (session.get('turn_trial') is True and session.get('continue_route') is True
-                and isinstance(motion, ManeuverSequence) and motion.continue_route is True
+                and isinstance(motion, MANEUVER_TYPES) and motion.continue_route is True
                 and motion.route_stage == 'start_lane' and motion.phase in ('presteer', 'drive', 'coast'))
 
     def turn_front_walls(self, session, now):
@@ -1197,7 +1208,7 @@ class Console:
         """
         motion, scan = session.get('turn_motion'), self.scan
         if (session.get('turn_trial') is not True or session.get('continue_route') is not True
-                or not isinstance(motion, ManeuverSequence) or motion.continue_route is not True
+                or not isinstance(motion, MANEUVER_TYPES) or motion.continue_route is not True
                 or motion.entry_kind != 'lane' or motion.route_stage not in ('start_lane', 'light_lane')
                 or not (session.get('phase') in ('drive', 'quality_wait') and motion.drive_since is not None
                         or scope_only and session.get('phase') == 'presteer' and motion.route_stage == 'start_lane')
@@ -1223,7 +1234,7 @@ class Console:
     def turn_route_quality_scope(self, session, now):
         """Current evidence for the route-only quality allowance, without state updates."""
         motion = session.get('turn_motion')
-        if (session.get('continue_route') is not True or not isinstance(motion, ManeuverSequence)
+        if (session.get('continue_route') is not True or not isinstance(motion, MANEUVER_TYPES)
                 or motion.continue_route is not True):
             return None
         if motion.handover_observed is True:
@@ -1264,10 +1275,14 @@ class Console:
             # _measurement uses the existing native-ray and wall/corridor
             # association gates. Run it on an isolated adapter so this quality
             # check cannot refresh a live geometry lease or steering history.
-            probe = copy.copy(motion)
-            for field in ('corridor', 'outer_wall', 'turn_goal', 'exit_width_change'):
-                setattr(probe, field, copy.deepcopy(getattr(motion, field)))
-            probe._measurement(scan, candidates, dt)
+            if hasattr(motion, 'probe_measurement'):
+                # The Rust engine runs the same check on a copy of its state.
+                motion.probe_measurement(scan, candidates, dt)
+            else:
+                probe = copy.copy(motion)
+                for field in ('corridor', 'outer_wall', 'turn_goal', 'exit_width_change'):
+                    setattr(probe, field, copy.deepcopy(getattr(motion, field)))
+                probe._measurement(scan, candidates, dt)
         except (ValueError, KeyError, TypeError):
             return None
         return 'left_turn_current_geometry'
@@ -1310,7 +1325,7 @@ class Console:
                 or set(clearance.get('quality_issues', [])) != issues):
             return False
         motion = session.get('turn_motion')
-        route = (session.get('continue_route') is True and isinstance(motion, ManeuverSequence)
+        route = (session.get('continue_route') is True and isinstance(motion, MANEUVER_TYPES)
                  and motion.continue_route is True)
         if route and not self.turn_neutral_scan_bounded(scan):
             return False
@@ -1379,7 +1394,7 @@ class Console:
         clearance, scan = session['report'].get('clearance_current'), self.scan
         issues = set(session['report'].get('quality_issues', []))
         neutral_seq = session.get('quality_wait_neutral_sequence')
-        if (session.get('continue_route') is not True or not isinstance(motion, ManeuverSequence)
+        if (session.get('continue_route') is not True or not isinstance(motion, MANEUVER_TYPES)
                 or getattr(motion, 'continue_route', False) is not True
                 or session.get('phase') != 'quality_wait' or motion.phase != 'quality_wait'
                 or not isinstance(clearance, dict) or not isinstance(scan, dict)
@@ -1472,7 +1487,7 @@ class Console:
         report = session['report']
         control = self.status.get('control', {})
         motion = session['turn_motion']
-        route = (session.get('continue_route') is True and isinstance(motion, ManeuverSequence)
+        route = (session.get('continue_route') is True and isinstance(motion, MANEUVER_TYPES)
                  and getattr(motion, 'continue_route', False) is True)
         if route and session.get('phase') != 'coast':
             # Waiting never starts a new segment budget or pauses the original
@@ -1683,7 +1698,7 @@ class Console:
                 'recovery_count': decision.get('recovery_count')}
         session['phase'] = report['phase'] = decision['phase']
         motor, servo = decision['motor'], decision['servo']
-        right_exit = (session.get('maneuver_sequence') is True and isinstance(motion, ManeuverSequence)
+        right_exit = (session.get('maneuver_sequence') is True and isinstance(motion, MANEUVER_TYPES)
                       and motion.first_pass_evidence is not None
                       and motion.right_exit_center_ack is not None
                       and decision['turn_stage'] == 'right_exit')
@@ -2315,6 +2330,7 @@ def main():
     p.add_argument('--output', default='./recordings')
     p.add_argument('--access-file', default='./access.json')
     p.add_argument('--demo', action='store_true')
+    p.add_argument('--route-engine', help='Rust route engine binary (route-engine/); default: the Python sequence')
     vision_group = p.add_mutually_exclusive_group()
     vision_group.add_argument('--vision-config', type=Path, help='optional persistent shadow configuration JSON')
     vision_group.add_argument('--vision-shadow', nargs=5, metavar=('BIN', 'ROAD_CONFIG', 'MODEL', 'ORT_LIB', 'MODEL_SPEC'), help='optional perception-only process; reuses camera frames, never drives')

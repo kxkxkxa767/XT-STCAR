@@ -412,7 +412,7 @@ impl Maneuver {
             if known.is_some() && rate.abs() > OPEN_PROBE_MAX_RATE_RAD_S {
                 continue;
             }
-            let (c, s) = (theta.cos(), theta.sin());
+            let (c, s) = (theta.pcos(), theta.psin());
             let mut free = probe_free(&points, center, (c * e1.0 + s * e2.0, c * e1.1 + s * e2.1), skip);
             if free != INF {
                 free = floor(free / OPEN_PROBE_QUANTUM_M) as f64 * OPEN_PROBE_QUANTUM_M;
@@ -883,7 +883,7 @@ impl Maneuver {
                 .map(|&i| {
                     let r = floats[i as usize].unwrap();
                     let a = radians(i as f64);
-                    (r * a.cos(), -r * a.sin())
+                    (r * a.pcos(), -r * a.psin())
                 })
                 .collect();
             let separation = first.as_ref().map(|f| {
@@ -968,7 +968,7 @@ impl Maneuver {
         let width = if self._start_lane_width.is_num() { self._start_lane_width.f() } else { 2. * OPEN_CHANNEL_OFFSET_M.0 };
         let offset = pmax(OPEN_CHANNEL_OFFSET_M.0, pmin(OPEN_CHANNEL_OFFSET_M.1, width / 2.));
         let lateral = divider.lateral_m - offset;
-        let u = ((-reverse).cos(), (-reverse).sin());
+        let u = ((-reverse).pcos(), (-reverse).psin());
         let channel_point = |moved_along: f64, moved_lateral: f64| -> (f64, f64) {
             let a = pmax(
                 pmax(OPEN_LANE_LOOKAHEAD_M.0, pmin(OPEN_LANE_LOOKAHEAD_M.1, divider.along_m.0 - moved_along)),
@@ -996,7 +996,7 @@ impl Maneuver {
             return (distance, 0., 0., horizon);
         }
         let radius = distance / turn;
-        (radius * turn.sin(), radius * (1. - turn.cos()), turn, horizon)
+        (radius * turn.psin(), radius * (1. - turn.pcos()), turn, horizon)
     }
 
     /// _open_transfer_update(scan, now, control).
@@ -1086,7 +1086,7 @@ impl Maneuver {
             if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose)) {
                 let kappa = (NEUTRAL - self.servo) as f64 / ROUTE_PWM_PER_CURVATURE;
                 let remaining_lateral =
-                    if kappa > 0. && 0. <= heading && heading <= PI / 2. { Some((1. - heading.cos()) / kappa) } else { None };
+                    if kappa > 0. && 0. <= heading && heading <= PI / 2. { Some((1. - heading.pcos()) / kappa) } else { None };
                 let reaches_lane = remaining_lateral.is_some_and(|r| r >= lane.idx("center_lateral_m").f());
                 if pursuit_pwm_v >= lp.idx("target_pwm").i() || reaches_lane {
                     let basis = if reaches_lane { "adopted_arc_reaches_light_lane" } else { "light_lane_pursuit_needs_less_right" };
@@ -1124,7 +1124,7 @@ impl Maneuver {
 
     /// _open_lane_target(scan, heading).
     fn open_lane_target(&mut self, scan: &V, heading: f64) -> V {
-        let u = ((-heading).cos(), (-heading).sin());
+        let u = ((-heading).pcos(), (-heading).psin());
         let n = (-u.1, u.0);
         let mut walls: Vec<Board> = Vec::new();
         let wc = scan.get("wall_candidates");
@@ -1186,7 +1186,7 @@ impl Maneuver {
         if lane.is_none() {
             return None;
         }
-        let u = ((-heading).cos(), (-heading).sin());
+        let u = ((-heading).pcos(), (-heading).psin());
         let lateral = lane.idx("center_lateral_m").f();
         let start0 = lane.idx("inner_start_along_m").of();
         let lane_point = |moved_along: f64, moved_lateral: f64| -> (f64, f64) {
@@ -1220,7 +1220,7 @@ impl Maneuver {
             let radius = 1. / curvature;
             radius.abs() * fmod(if curvature > 0. { px.atan2(radius - py) } else { px.atan2(py - radius) }, 2. * PI)
         };
-        let u = ((-heading).cos(), (-heading).sin());
+        let u = ((-heading).pcos(), (-heading).psin());
         let mut best: Option<f64> = None;
         let floats = Self::ranges_floats(scan);
         for (x, y) in scan_points(&floats, limit + 1.) {

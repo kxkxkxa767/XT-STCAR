@@ -33,6 +33,8 @@ impl Maneuver {
             "corridor" => self.corridor.clone(), "outer_wall" => self.outer_wall.clone(),
             "turn_goal" => self.turn_goal.clone(), "exit_width_change" => self.exit_width_change.clone(),
             "quality_resume_pending" => self.quality_resume_pending,
+            // Pure state predicate the console asks on every drive output.
+            "lane_wall_output_active()" => self.lane_wall_output_active(),
         }
     }
 

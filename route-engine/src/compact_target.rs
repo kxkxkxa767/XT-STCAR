@@ -46,7 +46,7 @@ thread_local! {
     pub static TABLES: Tables = Tables {
         directions: (0..360).map(|i| {
             let a = radians(i as f64);
-            (a.cos(), -a.sin())
+            (a.pcos(), -a.psin())
         }).collect(),
     };
 }
@@ -142,7 +142,7 @@ pub fn rotated_observation(observation: &V, rotation_rad: Option<f64>) -> V {
     if observation.is_none() {
         return observation.clone();
     }
-    let (c, s) = ((-rotation).cos(), (-rotation).sin());
+    let (c, s) = ((-rotation).pcos(), (-rotation).psin());
     let (x, y) = point_of(observation.idx("point_left_m"));
     let point = (c * x - s * y, s * x + c * y);
     let mut out = observation.clone();

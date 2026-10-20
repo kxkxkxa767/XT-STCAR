@@ -76,7 +76,7 @@ pub fn observation_lease(scan: &V, now: f64, published: &V, received: &V) -> boo
 fn interval(w: &V, theta: f64) -> (f64, f64) {
     let mut v: Vec<f64> = ["support_start_left_m", "support_end_left_m"]
         .iter()
-        .map(|k| theta.cos() * w.idx(k).idx("x_m").f() + theta.sin() * w.idx(k).idx("y_m").f())
+        .map(|k| theta.pcos() * w.idx(k).idx("x_m").f() + theta.psin() * w.idx(k).idx("y_m").f())
         .collect();
     sort_floats(&mut v);
     (v[0], v[1])
@@ -120,7 +120,7 @@ impl Maneuver {
                 let i = i.i() as usize;
                 let r = rl[i].f();
                 let a = radians(i as f64);
-                (r * a.cos(), -r * a.sin())
+                (r * a.pcos(), -r * a.psin())
             })
             .collect();
         let unknown = target.get("boundary_unknown_bins");
@@ -132,7 +132,7 @@ impl Maneuver {
         let near = bl.iter().map(|i| rl[i.i() as usize].f()).fold(INF, pmin);
         for i in unknown {
             let a = radians(i.i() as f64);
-            points.push((near * a.cos(), -near * a.sin()));
+            points.push((near * a.pcos(), -near * a.psin()));
         }
         Some(points)
     }
@@ -234,7 +234,7 @@ impl Maneuver {
                 if heading.abs() >= PI / 2. {
                     continue;
                 }
-                let (c, s) = (heading.cos(), heading.sin());
+                let (c, s) = (heading.pcos(), heading.psin());
                 let end = |wall: &V| -> (f64, f64, f64) {
                     let points = [wall.idx("support_start_left_m"), wall.idx("support_end_left_m")];
                     let normal: Vec<f64> = points.iter().map(|p| -s * p.idx("x_m").f() + c * p.idx("y_m").f()).collect();
@@ -727,8 +727,8 @@ impl Maneuver {
                 let theta = wall.idx("heading_left_rad").f();
                 let (a, b) = (wall.idx("support_start_left_m"), wall.idx("support_end_left_m"));
                 let point = dict! {
-                    "x_m" => (a.idx("x_m").f() + b.idx("x_m").f()) / 2. - theta.sin() * width / 2.,
-                    "y_m" => (a.idx("y_m").f() + b.idx("y_m").f()) / 2. + theta.cos() * width / 2.,
+                    "x_m" => (a.idx("x_m").f() + b.idx("x_m").f()) / 2. - theta.psin() * width / 2.,
+                    "y_m" => (a.idx("y_m").f() + b.idx("y_m").f()) / 2. + theta.pcos() * width / 2.,
                 };
                 let mut goal = self.turn_goal.clone();
                 goal.update(&dict! {
@@ -867,7 +867,7 @@ impl Maneuver {
         }
         let point = observation.idx("endpoint_return").idx("point_left_m").clone();
         let heading = observation.idx("heading_left_rad").f();
-        let (c, s) = (heading.cos(), heading.sin());
+        let (c, s) = (heading.pcos(), heading.psin());
         let (px, py) = (point.idx("x_m").f(), point.idx("y_m").f());
         let received = scan.get("received_at").clone();
         let prior = self._incoming_association.clone();
@@ -1052,7 +1052,7 @@ impl Maneuver {
     fn observed_wall_endpoint(wall: &V, ranges: &V) -> V {
         let heading = wall.idx("heading_left_rad").f();
         let end = wall.idx("support_end_left_m");
-        let (c, s) = (heading.cos(), heading.sin());
+        let (c, s) = (heading.pcos(), heading.psin());
         let along = |x: f64, y: f64| c * x + s * y;
         let normal = |x: f64, y: f64| -s * x + c * y;
         let st = wall.idx("support_start_left_m");
@@ -1072,7 +1072,7 @@ impl Maneuver {
         let point = |i: usize| -> (f64, f64) {
             let r = list[i].f();
             let a = radians(i as f64);
-            (r * a.cos(), -r * a.sin())
+            (r * a.pcos(), -r * a.psin())
         };
         let measured = point(index);
         if hypot(measured.0 - end.idx("x_m").f(), measured.1 - end.idx("y_m").f()) > 1e-6 {
@@ -1085,7 +1085,7 @@ impl Maneuver {
                 continue;
             }
             let ao = radians(outside as f64);
-            let adjacent = (distance * ao.cos(), -distance * ao.sin());
+            let adjacent = (distance * ao.pcos(), -distance * ao.psin());
             let po = point(outside);
             if along(adjacent.0, adjacent.1) <= high || along(po.0, po.1) <= high {
                 continue;
@@ -1285,7 +1285,7 @@ impl Maneuver {
             }
             let distance = distance_v.f();
             let angle = radians(index as f64);
-            let (x, y) = (distance * angle.cos(), -distance * angle.sin());
+            let (x, y) = (distance * angle.pcos(), -distance * angle.psin());
             if !(-rear < x && x <= lookahead) || y <= 0. {
                 continue;
             }
@@ -1438,7 +1438,7 @@ impl Maneuver {
                 let i = i.i() as usize;
                 let r = list[i].f();
                 let a = radians(i as f64);
-                (r * a.cos(), -r * a.sin())
+                (r * a.pcos(), -r * a.psin())
             })
             .collect();
         let x = fsum_py(points.iter().map(|p| p.0)) / points.len() as f64;

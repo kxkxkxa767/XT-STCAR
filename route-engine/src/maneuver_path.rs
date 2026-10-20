@@ -56,7 +56,7 @@ impl Maneuver {
             }
             let d = distance.f();
             let angle = radians(index as f64);
-            let (x, y) = (d * angle.cos(), -d * angle.sin());
+            let (x, y) = (d * angle.pcos(), -d * angle.psin());
             let head_on = x > FRONT_BODY_EXTENT_M && y.abs() <= SIDE_BODY_EXTENT_M / 2.;
             if y > 0. && !head_on && self.first_pass_evidence.is_none() {
                 continue;

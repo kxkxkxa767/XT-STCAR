@@ -100,8 +100,8 @@ pub struct Trig {
 
 thread_local! {
     pub static TRIG: Trig = Trig {
-        cos: (0..360).map(|i| radians(i as f64).cos()).collect(),
-        sin: (0..360).map(|i| radians(i as f64).sin()).collect(),
+        cos: (0..360).map(|i| radians(i as f64).pcos()).collect(),
+        sin: (0..360).map(|i| radians(i as f64).psin()).collect(),
     };
 }
 
@@ -131,7 +131,7 @@ pub fn corridor_walls(scan: &V) -> V {
             if r.is_some() {
                 let r = r.f();
                 let angle = radians(a as f64);
-                points.push((r * angle.cos(), r * angle.sin()));
+                points.push((r * angle.pcos(), r * angle.psin()));
             }
         }
         if points.len() < 40 {
@@ -493,16 +493,16 @@ pub fn valid_opening(goal: &V, scan: &V) -> bool {
     list[ri].is_num()
         && (list[ri].f() - ray.idx("range_m").f()).abs() <= 1e-6
         && wrap(theta + radians(ri as f64)).abs() <= 1e-6
-        && hypot(px - distance * theta.cos(), py - distance * theta.sin()) <= 0.02
+        && hypot(px - distance * theta.pcos(), py - distance * theta.psin()) <= 0.02
         && wrap(heading - wall.idx("heading_left_rad").f()).abs() <= radians(2.)
         && (offset - (wall.idx("rho_left_m").f() + goal.idx("width_m").f() / 2.)).abs() <= 0.05
-        && (-heading.sin() * px + heading.cos() * py - offset).abs() <= 0.06
+        && (-heading.psin() * px + heading.pcos() * py - offset).abs() <= 0.06
         && list[ei].is_num()
         && (list[ei].f() - end_distance).abs() <= 1e-6
         && wrap(end_angle + radians(ei as f64)).abs() <= 1e-6
-        && hypot(ex - end_distance * end_angle.cos(), ey - end_distance * end_angle.sin()) <= 1e-6
-        && (incoming.cos() * ex + incoming.sin() * ey - goal.idx("incoming_left_end_m").f()).abs() <= 1e-6
-        && -incoming.sin() * ex + incoming.cos() * ey > 0.
+        && hypot(ex - end_distance * end_angle.pcos(), ey - end_distance * end_angle.psin()) <= 1e-6
+        && (incoming.pcos() * ex + incoming.psin() * ey - goal.idx("incoming_left_end_m").f()).abs() <= 1e-6
+        && -incoming.psin() * ex + incoming.pcos() * ey > 0.
 }
 
 const CANDIDATE_FIELDS: [&str; 10] = [
@@ -601,7 +601,7 @@ pub fn surface_supports(scan: &V, walls: &[V]) -> Vec<Support> {
         .map(|i| {
             rv[i].map(|r| {
                 let a = radians(-(i as f64));
-                (r * a.cos(), r * a.sin())
+                (r * a.pcos(), r * a.psin())
             })
         })
         .collect();
@@ -658,7 +658,7 @@ pub fn surface_supports(scan: &V, walls: &[V]) -> Vec<Support> {
         let yy = syy[i + 6] - syy[i] - y * y / 6.;
         let xy = sxy[i + 6] - sxy[i] - x * y / 6.;
         let angle = 0.5 * (2. * xy).atan2(xx - yy);
-        let direction = (angle.cos(), angle.sin());
+        let direction = (angle.pcos(), angle.psin());
         let first = extended[i].unwrap_or_else(|| type_error("cannot unpack non-iterable NoneType object"));
         let last = extended[i + 5].unwrap_or_else(|| type_error("cannot unpack non-iterable NoneType object"));
         let (dx, dy) = (last.0 - first.0, last.1 - first.1);
@@ -707,7 +707,7 @@ pub fn surface_supports(scan: &V, walls: &[V]) -> Vec<Support> {
     let mut projections: Vec<(f64, Vec<(usize, f64, f64, usize, Bits)>)> = Vec::new();
     for wall in walls {
         let theta = wall.idx("heading_left_rad").f();
-        let (c, s) = (theta.cos(), theta.sin());
+        let (c, s) = (theta.pcos(), theta.psin());
         let mut ends: Vec<f64> = ["support_start_left_m", "support_end_left_m"]
             .iter()
             .map(|k| c * wall.idx(k).idx("x_m").f() + s * wall.idx(k).idx("y_m").f())
@@ -844,7 +844,9 @@ impl WallCompass {
         self.at_s = Some(at);
         self.evidence = dict! {
             "source_at_ms" => at_ms, "heading_rad" => self.heading, "rate_rad_s" => self.rate,
-            "predicted_rad" => predicted, "votes" => votes.len(), "support_m" => support,
+            "predicted_rad" => predicted, "votes" => votes.len(),
+            // sum() of no votes is the int 0.
+            "support_m" => if votes.is_empty() { V::Int(0) } else { V::Float(support) },
             "median_residual_rad" => median_residual, "measured" => median_residual.is_some(),
             "basis" => "native_wall_directions_mod_90_vs_start_lane_axis",
         };
@@ -993,7 +995,7 @@ impl LaneWallSteering {
 /// _axis_frame(axis, heading, side).
 pub fn axis_frame(axis: f64, heading: f64, side: f64) -> ((f64, f64), (f64, f64)) {
     let angle = axis - heading;
-    let e1 = (angle.cos(), angle.sin());
+    let e1 = (angle.pcos(), angle.psin());
     (e1, (-side * e1.1, side * e1.0))
 }
 
@@ -1054,7 +1056,7 @@ pub fn probe_free(points: &[(f64, f64)], origin: (f64, f64), direction: (f64, f6
 
 /// _loop_extent(a, b, radius, theta).
 pub fn loop_extent(a: f64, b: f64, radius: f64, theta: f64) -> f64 {
-    let projection = a * theta.cos() + b * theta.sin();
+    let projection = a * theta.pcos() + b * theta.psin();
     projection + sqrt(pmax(0., projection * projection - (a * a + b * b) + radius * radius))
 }
 
@@ -1065,7 +1067,7 @@ pub fn plan_loop(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), ap
         free.iter().map(|&(theta, distance)| (theta, distance - SIDE_BODY_EXTENT_M - OPEN_OUTER_GAP_M)).collect();
     let inner_floor =
         if bands.iter().any(|&(_, hi)| hi < lo) { support_radius + SIDE_BODY_EXTENT_M } else { lo };
-    let trig: Vec<(f64, f64, f64, bool)> = bands.iter().map(|&(theta, hi)| (theta.cos(), theta.sin(), hi, hi >= lo)).collect();
+    let trig: Vec<(f64, f64, f64, bool)> = bands.iter().map(|&(theta, hi)| (theta.pcos(), theta.psin(), hi, hi >= lo)).collect();
     let score = |radius: f64, a: f64, b: f64| -> f64 {
         if hypot(a, b) > radius - inner_floor {
             return f64::NEG_INFINITY;
@@ -1179,7 +1181,7 @@ pub fn loop_carrot(
             ((tx + s * ex, ty + s * ey), "approach_line")
         } else {
             let phi = (ty - oy).atan2(tx - ox) + side * s / radius;
-            ((ox + radius * phi.cos(), oy + radius * phi.sin()), "approach_line_to_circle")
+            ((ox + radius * phi.pcos(), oy + radius * phi.psin()), "approach_line_to_circle")
         };
         match support {
             None => return (point, mode, before),
@@ -1191,26 +1193,26 @@ pub fn loop_carrot(
         let tangent = sqrt(distance * distance - radius * radius);
         let theta = oy.atan2(ox) - side * asin(radius / distance);
         if tangent >= lookahead {
-            return ((lookahead * theta.cos(), lookahead * theta.sin()), "tangent", pmax(before, 0.));
+            return ((lookahead * theta.pcos(), lookahead * theta.psin()), "tangent", pmax(before, 0.));
         }
-        let (px, py) = (tangent * theta.cos(), tangent * theta.sin());
+        let (px, py) = (tangent * theta.pcos(), tangent * theta.psin());
         let phi = (py - oy).atan2(px - ox) + side * (lookahead - tangent) / radius;
-        return ((ox + radius * phi.cos(), oy + radius * phi.sin()), "tangent_to_circle", pmax(before, 0.));
+        return ((ox + radius * phi.pcos(), oy + radius * phi.psin()), "tangent_to_circle", pmax(before, 0.));
     }
     let phi = (-oy).atan2(-ox) + side * lookahead / radius;
-    ((ox + radius * phi.cos(), oy + radius * phi.sin()), "circle", 0.)
+    ((ox + radius * phi.pcos(), oy + radius * phi.psin()), "circle", 0.)
 }
 
 /// _in_pose(point, pose).
 pub fn in_pose(point: (f64, f64), pose: (f64, f64, f64, f64)) -> (f64, f64) {
     let (dx, dy) = (point.0 - pose.0, point.1 - pose.1);
-    let (c, s) = ((-pose.2).cos(), (-pose.2).sin());
+    let (c, s) = ((-pose.2).pcos(), (-pose.2).psin());
     (c * dx - s * dy, s * dx + c * dy)
 }
 
 /// _turned(vector, turn).
 pub fn turned(vector: (f64, f64), turn: f64) -> (f64, f64) {
-    let (c, s) = ((-turn).cos(), (-turn).sin());
+    let (c, s) = ((-turn).pcos(), (-turn).psin());
     (c * vector.0 - s * vector.1, s * vector.0 + c * vector.1)
 }
 
@@ -1297,7 +1299,7 @@ fn bisect_left(window: &[f64], value: f64) -> usize {
 
 /// _axis_lines(points, heading).
 pub fn axis_lines(points: &[(f64, f64)], heading: f64) -> Vec<Line> {
-    let (c, s) = ((-heading).cos(), (-heading).sin());
+    let (c, s) = ((-heading).pcos(), (-heading).psin());
     let mut rows: Vec<(f64, f64)> = points.iter().map(|&(x, y)| (-s * x + c * y, c * x + s * y)).collect();
     rows.sort_by(|a, b| OrdF(a.0).cmp(&OrdF(b.0)).then(OrdF(a.1).cmp(&OrdF(b.1))));
     let mut lines: Vec<Line> = Vec::new();
@@ -1399,7 +1401,7 @@ pub fn support_depth(ranges: &[Option<f64>], bins: &[i64]) -> f64 {
 
 /// _on_board_run(point, lines, heading).
 pub fn on_board_run(point: (f64, f64), lines: &[Line], heading: f64) -> bool {
-    let (c, s) = ((-heading).cos(), (-heading).sin());
+    let (c, s) = ((-heading).pcos(), (-heading).psin());
     let (x, y) = point;
     let (lateral, along) = (-s * x + c * y, c * x + s * y);
     lines.iter().any(|line| {
