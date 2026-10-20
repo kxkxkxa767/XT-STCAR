@@ -23218,5 +23218,20 @@
     "change": "light lane: every 1560 restart is one LANE_KICK_FRAMES (3-frame) kick then LANE_REST_FRAMES, also near the end (was 2-frame pulses: run 93 .17 m in 1.1 s, run 91 1.04 -> .87 m in 2 s; a 3-frame kick from rest gave .47 m/s and ~.3-.4 m in run 91); a 1550 push of a rolling car is no longer chopped into 2-frame pulses near the end and its safe-gap check uses the full push gain (LANE_SLOW_PUSH_GAIN_MPS .3; LANE_SLOW_PULSE_GAIN_MPS removed).",
     "not_changed": "finish zone definition (.75 m front gap), all hard protections.",
     "tests": "test_route_63 test_restarts_near_the_end_are_full_kicks; full discover 845 OK (2 expected failures)."
+  },
+  "turn94_actual_20261020": {
+    "date": "2026-10-20",
+    "trial": 94,
+    "source_commit": "f565aaf",
+    "operator_confirmation": "car re-placed in the start lane (fresh check: front 7.44 m, rear .56 m)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261020-94",
+    "evidence_sha256_files_ok": 8,
+    "result": "complete route, no contact, finish-zone stop 21.0 s (front gap .74 m); max gap .0914 s, late wake .0145 s. Light lane 15.86-21.0 s: coast from 1.46 m/s at 3.07 m, 1550 at .24 m/s (17.96 s), one 3-frame 1560 kick (18.45 s) -> .54 m/s, coast, stop at .89 m (20.47 s), one more move into the zone (.74 m). Light-entry board hold 13.26-15.39 s (2.1 s). Second loop entry (9.80 s): plan carrot right (1338) toward an approach line ~.7 m right of the car (lookahead 1.1 m), the steering lag overshot (support -42 -> -5.7 deg), counter-steer left (1570-1592), then the full right turn: an S as in run 92. First loop: release 1702 -> 1601 -> 1657 mid-loop (7.2-7.6 s).",
+    "user": "还是差不多，不过这一轮绕桶的轨迹有点奇怪",
+    "open": [
+      "light-entry hold (0.8-2.1 s in runs 88/90/91/92/94) on a ~.1 m return ~1 m inside the light-lane entrance near its centre line, which the car then always passes without contact: ask the operator what it is (traffic-light sensor/stand?)",
+      "second-loop approach line convergence (lookahead 1.1 m for ~.7 m lateral) overshoots with the steering lag",
+      "finish zone: front gap .74 m leaves the rear wheels outside an 80 cm zone (rules: all four wheels)"
+    ]
   }
 }
