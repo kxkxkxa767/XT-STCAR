@@ -53,6 +53,45 @@ AUTONOMY_MIN_IDLE_S = .005
 # A post-pass quality pause may wait this long for an in-flight steering ACK.
 QUALITY_PAUSE_ACK_GRACE_S = .1
 
+# Round 93 (car run 92): the live report carried every route event's full scan
+# twice plus the pause snapshots: /api/state was 144 KB by 14.9 s, ~25 ms of
+# json.dumps holding the GIL on the car per poll, and the control thread woke
+# .042 s late (gap .120 s). While a run is active /api/state shows these
+# evidence fields as summaries; the run's final result keeps them in full.
+ACTIVE_SUMMARY_FIELDS = ('route_events', 'quality_wait_snapshot', 'quality_resume_snapshot',
+                         'left_turn_pause_snapshot', 'left_turn_pause_resume_snapshot',
+                         'post_pass_pause_resume_snapshot', 'recovery_hold_resume_snapshot')
+
+
+def _evidence_summary(value):
+    if not isinstance(value, dict):
+        return value
+    def seq(item):
+        scan = item.get('scan') if isinstance(item, dict) else None
+        return scan.get('seq') if isinstance(scan, dict) else None
+    if all(isinstance(item, dict) and 'scan' in item for item in value.values()):  # route events
+        return {'summarized': True, 'events': {name: {'scan_seq': seq(item)} for name, item in value.items()}}
+    return {'summarized': True, 'keys': sorted(value), 'scan_seq': seq(value)}
+
+
+def active_report_view(report):
+    """Shallow view of a live report for /api/state; never mutates the report."""
+    view = dict(report)
+    for key in ACTIVE_SUMMARY_FIELDS:
+        if isinstance(view.get(key), dict):
+            view[key] = _evidence_summary(view[key])
+    turn = view.get('turn')
+    if isinstance(turn, dict):
+        turn = dict(turn)
+        if isinstance(turn.get('route_events'), dict):
+            turn['route_events'] = _evidence_summary(turn['route_events'])
+        avoid = turn.get('avoid_evidence')
+        if isinstance(avoid, list) and len(avoid) > 2:
+            turn['avoid_evidence'] = {'summarized': True, 'count': len(avoid), 'last': avoid[-2:]}
+        view['turn'] = turn
+    return view
+
+
 class Console:
     def __init__(self, args):
         self.args = args
@@ -453,7 +492,7 @@ class Console:
                 'steering_candidate_bounds': {'min': SERVO_MIN, 'max': SERVO_MAX, 'right_physically_validated': False},
                 'right_exit_min_pwm': RIGHT_EXIT_MIN_PWM,
                 'trial_goal': trial_goal,
-                'active': dict(self.auto_session['report']) if self.auto_session else None,
+                'active': active_report_view(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
 
     def turn_preview(self, now, max_drive_s=MAX_DRIVE_S, initial_presteer_pwm=None,

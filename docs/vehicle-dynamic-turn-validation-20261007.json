@@ -23178,5 +23178,26 @@
     "deployed": false,
     "change": "LANE_STOP_DECEL_MIN_MPS2 .25 -> .35 (~22 % below the weakest coast measured on the car by distance, .45-.51 in runs 80/88/91) and LANE_COAST_DECEL_CAP_MPS2 .375 -> .45 (the weakest measured). Pulse lengths and push gains unchanged (a larger push gain would forbid pushes just outside the zone).",
     "tests": "test_route_63 far-part test: far = beyond max(weakest-coast guard, slow-zone start); full discover 844 OK (2 expected failures). No simulation (user)."
+  },
+  "turn92_actual_20261020": {
+    "date": "2026-10-20",
+    "trial": 92,
+    "source_commit": "273c782",
+    "operator_confirmation": "car re-placed in the start lane (fresh check: front 7.29 m, rear .72 m: ~.3 m further forward than usual)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261020-92",
+    "evidence_sha256_files_ok": 8,
+    "result": "first loop with a front_sparse quality wait at 6.5 s (held 1642 while rolling, resumed 7.0 s); second loop entry at 9.36 s: plan carrot right (1352) toward the tangent of a circle centred .5 m right-behind the support, the steering lag turned the car ~28 deg (support bearing -44 -> -16 deg), the overshoot guard counter-steered left (1628-1645), the support came dead ahead (-1 deg, 1.06 m at 10.55 s) and was passed on the right at ~.14 m body gap; second pass 12.95 s; light-entry board hold 13.5-14.2 s; then autonomy_control_gap in light_entry: gap .1200 s = .0734 tick (.0493 CPU) + .005 idle + .0416 late wake.",
+    "cause_of_late_wake": "/api/state had grown to 144 KB by 14.9 s (route events with full scans, twice; three pause snapshots ~22 KB); json.dumps of a 75 KB state measured 12-13.5 ms on the car (GIL held throughout), so ~25 ms at 144 KB per observer poll.",
+    "user": "这次的轨迹怎么这么奇怪，不光是灯区入口，绕桶也很奇怪"
+  },
+  "turn93_live_state_view_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "change": "server.active_report_view: while a run is active, /api/state's autonomy.active shows route_events (report and turn), the pause snapshots and turn.avoid_evidence as summaries (event -> scan_seq; snapshot keys and scan_seq; last two avoid entries + count); the report itself and the final result are unchanged (full evidence). Run-92 sample: 141 KB -> 33 KB.",
+    "not_changed": "control, every hard protection, CLI (reads the final result).",
+    "known_open": "second-loop entry: a sharp right command toward the planned tangent overshoots with the steering lag (run 92: support dead ahead, passed at ~.14 m).",
+    "tests": "test_route_87_load ActiveReportView; full discover 844 OK (2 expected failures)."
   }
 }

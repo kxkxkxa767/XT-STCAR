@@ -190,5 +190,29 @@ class LightEntryPauseHold(unittest.TestCase):
         self.assertIsNone(motion._light_entry_pause_hold({}))
 
 
+class ActiveReportView(unittest.TestCase):
+    def test_live_state_summarizes_heavy_evidence_without_changing_the_report(self):
+        import copy, json
+        server = control.TurnControlTests('test_watchdog_terminal_gap_result_keeps_measured_lock_and_tick_wall_time')
+        server.setUp()
+        self.addCleanup(server.temp.cleanup)
+        scan = {'seq': 9, 'ranges': [1.]*360}
+        events = {'start_lane': {'scan': scan, 'control': {}, 'evidence': {}},
+                  'first_pass': {'scan': {**scan, 'seq': 12}, 'control': {}, 'evidence': {}}}
+        report = {'route_events': events, 'quality_wait_snapshot': {'scan': scan, 'control': {}},
+                  'turn': {'route_events': events, 'avoid_evidence': [{'k': i} for i in range(9)], 'reason': 'x'},
+                  'phase': 'drive'}
+        original = copy.deepcopy(report)
+        view = server.server.active_report_view(report)
+        self.assertEqual(report, original)
+        self.assertEqual(view['route_events'], {'summarized': True, 'events': {
+            'start_lane': {'scan_seq': 9}, 'first_pass': {'scan_seq': 12}}})
+        self.assertEqual(view['turn']['route_events'], view['route_events'])
+        self.assertEqual(view['quality_wait_snapshot'], {'summarized': True, 'keys': ['control', 'scan'], 'scan_seq': 9})
+        self.assertEqual(view['turn']['avoid_evidence'], {'summarized': True, 'count': 9, 'last': [{'k': 7}, {'k': 8}]})
+        self.assertEqual((view['phase'], view['turn']['reason']), ('drive', 'x'))
+        self.assertLess(len(json.dumps(view)), len(json.dumps(report)))
+
+
 if __name__ == '__main__':
     unittest.main()
