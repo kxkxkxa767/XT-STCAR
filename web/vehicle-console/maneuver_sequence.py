@@ -2296,7 +2296,7 @@ class ManeuverSequence(TurnMotion):
                 # parallel to the lane axis (the light ahead must be faced,
                 # and the boards are near); steering toward the pursuit point
                 # turned the coasting car from 9 to 15 deg left into the lane.
-                self._pause_steer_target = self._open_heading_hold(heading, 0.)
+                self._pause_steer_target = self._light_entry_pause_hold(scan)
                 hit = self._open_entry_path_hit(scan, point, heading, stop_at, ahead)
                 return ((hit is None or hit > stop_at)
                         or self._open_light_lane_entry(scan, heading, lane) is not None)
@@ -2334,9 +2334,27 @@ class ManeuverSequence(TurnMotion):
         """Where the wait steering steps while the paused car may still roll."""
         if self.route_stage == 'second_orbit' and self.second_return_preparing:
             return min(self.quality_wait_servo, NEUTRAL)
-        if kind == 'recovery' and self.route_stage == 'light_entry' and self._pause_steer_target is not None:
-            return self._pause_steer_target  # lane-axis heading hold (rounds 81/84/85)
+        if self.route_stage == 'light_entry' and self._pause_steer_target is not None:
+            # Lane-axis heading hold (rounds 81/84/85); round 91: any pause kind.
+            return self._pause_steer_target
         return self.quality_wait_servo
+
+    def _light_entry_pause_hold(self, scan):
+        """Lane-axis heading hold for a light-entry pause, from the response pose.
+
+        Round 91 (car runs 88/90): the paused car rolled 1.1-1.65 m at 1-1.9
+        m/s; the plain hold swung the heading from +6.6 to -16 deg (88: to -21)
+        and a quality pause in the same stage kept 1580 (90: 30 deg left at
+        the lane start, left-front contact). As in the open pursuits (round
+        79), the hold of the predicted heading is used when it already lies
+        at centre or on the other side (_overshoot_guard).
+        """
+        heading = self.compass.current(scan)
+        if heading is None:
+            return None
+        pose = self._response_pose()
+        return _overshoot_guard(self._open_heading_hold(heading, 0.),
+                                self._open_heading_hold(heading+pose[2], 0.))
 
     def _neutral_pause_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait,
                               quality_clear, resume_ready):
@@ -2385,6 +2403,12 @@ class ManeuverSequence(TurnMotion):
             return self._result(now)
         if not advancing:
             return self._result(now)
+        if self.route_stage == 'light_entry':
+            # Round 91: every pause kind in this stage, each new scan, whether
+            # or not the stage inputs are ready (quality pauses held 1580).
+            hold = self._light_entry_pause_hold(scan)
+            if hold is not None:
+                self._pause_steer_target = hold
         stage_ready = self._pause_stage_ready(scan, now) if quality_clear is True and neutral else False
         if quality_clear is not True or not neutral or not stage_ready:
             self._quality_full_streak = 0

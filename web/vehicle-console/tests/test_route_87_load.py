@@ -173,5 +173,22 @@ class SecondConfirmGrace(unittest.TestCase):
         self.assertFalse(motion._open_second_maturing(scan, None, stop))
 
 
+class LightEntryPauseHold(unittest.TestCase):
+    def test_rolling_turn_toward_the_axis_counter_steers_before_crossing_it(self):
+        import maneuver_sequence as ms
+        motion = ms.ManeuverSequence(0., continue_route=True)
+        motion.compass.current = lambda scan: math.radians(6.6)
+        motion.servo, motion.compass.rate = 1432, math.radians(-30.)  # car run 90, 15.15 s
+        plain = motion._open_heading_hold(math.radians(6.6), 0.)
+        self.assertLess(plain, ms.NEUTRAL)
+        self.assertGreaterEqual(motion._light_entry_pause_hold({}), ms.NEUTRAL)
+        motion.compass.rate = 0.
+        self.assertEqual(motion._light_entry_pause_hold({}), plain)
+        motion.route_stage, motion._pause_steer_target, motion.quality_wait_servo = 'light_entry', 1510, 1580
+        self.assertEqual(motion._pause_wait_base('post_pass'), 1510)
+        motion.compass.current = lambda scan: None
+        self.assertIsNone(motion._light_entry_pause_hold({}))
+
+
 if __name__ == '__main__':
     unittest.main()

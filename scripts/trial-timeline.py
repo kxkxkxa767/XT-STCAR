@@ -95,7 +95,7 @@ def main():
         control = row['state']['status']['control']
         active = row['state']['autonomy'].get('active')
         near = nearest(scan['ranges'])
-        head = f"{row['elapsed_s']:6.2f} scan {scan['seq']}"
+        head = f"{row['elapsed_s']:6.2f} scan {scan['seq']}"+(' ~state' if row.get('state_reused') else '')
         tail = f"| near gap {near[0]:.3f} bin {near[1]}" if near else ''
         if not isinstance(active, dict):
             print(head, 'LOCKED', 'M', control.get('motor'), 'S', control.get('servo'), control.get('reason'), tail)

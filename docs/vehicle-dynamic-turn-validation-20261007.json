@@ -23135,5 +23135,29 @@
     "deployed": false,
     "change": "trial helper (build-next.py): state+lidar polled every ~.45 s instead of ~.22 s (sleep .10 -> .35), halving its HTTP work in the control process; the CLI heartbeat (~12/s, 300 ms lease) and every console rule unchanged. Evidence: feedback.jsonl about 2 polls/s; route events and the final result unchanged.",
     "code": "no console code change (bundle = round 89)."
+  },
+  "turn90_actual_20261020": {
+    "date": "2026-10-20",
+    "trial": 90,
+    "source_commit": "2ccf821",
+    "operator_confirmation": "car re-placed in the start lane (fresh check: front 7.45 m, rear .56 m, sides .45 m)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261020-90",
+    "evidence_sha256_files_ok": 8,
+    "result": "no timing stop: max control gap .0913 s (max tick .063 s CPU; was .106-.127 s). Start lane, first loop, transfer, second loop and pass, light entry. 15.15 s light-entry recovery hold (pursuit path hit 1.07-1.23 m: a ~.1 m compact return ~1.05 m ahead near the light-lane centre line, also in run 88; the light's sensor or stand?); the rolling hold swung the heading +6.6 -> -16 deg; 16.66 s a post-pass quality pause kept 1580 (left) while rolling; 17.21 s the light lane started keeping 1580; heading ~30 deg left of the lane -> left-front body gate (bin 317, .073 m) -> probe_obstacle_close_body. User: 最后的直道撞到挡板了.",
+    "observer": "at ~.45 s per poll the path could not be rebuilt from the scans (trial-map wrong)."
+  },
+  "turn91_light_entry_hold_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": "最后的直道撞到挡板了",
+    "change": {
+      "light_entry_pause_hold": "every pause kind in light_entry (recovery hold and quality/post-pass pauses) steps toward the lane-axis heading hold, recomputed on each new scan whether or not the stage inputs are ready; the hold is that of the response-pose heading when it already lies at centre or on the other side (_overshoot_guard, as the round-79 pursuits). Car runs 88/90: the plain hold swung +6.6 -> -16/-21 deg while rolling 1-1.9 m/s, a quality pause held 1580.",
+      "observer": "lidar polled every ~.15 s again (path rebuild), state on every third poll (state_reused rows repeat the last state; trial-timeline marks them ~state)."
+    },
+    "not_changed": "all hard protections; the light-entry path-hit hold itself (it saw a real return).",
+    "rules_note": "rules: the traffic light hangs centred above the track (bottom 40 cm), a photoelectric sensor 1 m before it; red 3-10 s; stopping time at the light is subtracted from the score.",
+    "tests": "test_route_87_load LightEntryPauseHold; full discover 843 OK (2 expected failures). No simulation (user)."
   }
 }
