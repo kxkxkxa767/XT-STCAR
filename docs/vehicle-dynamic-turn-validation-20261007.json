@@ -23090,5 +23090,31 @@
     "not_changed": "all hard protections (.12 s gap, heartbeat, 8 cm gate, stale/clock, bridge lock, deadlines, centre ACK), the 20 ms tick, the helper polling.",
     "simulation": "harness only, user asked to go to the track: 6 layouts + 6 measured cases complete (trajectories differ by the 20 ms entry delay; wide8x6 31.8 s vs 30.4 s), 5 regression variants, 8 measured cases and 16 finish cases complete.",
     "tests": "test_route_87_load + PlanMarginReuse; full discover 841 OK before the test (2 expected failures)."
+  },
+  "turn88_actual_20261020": {
+    "date": "2026-10-20",
+    "trial": 88,
+    "source_commit": "607705d",
+    "operator_confirmation": "别仿真了，直接上赛道测试 (fresh check: start lane width .92 m, heading 0, centred)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261020-88",
+    "evidence_sha256_files_ok": 8,
+    "result": "first complete route on the car: start lane, first loop (PASS1 8.79 s), transfer, second loop (second pass), light entry, light lane, finish-zone stop at 19.1 s; no contact (rest body gap .30 m). Max control gap .1057 s (max tick .0915 s wall / .0691 s CPU). Ended coast_standstill_unconfirmed: the coast-motion child's every result was superseded by the next scan (the fit takes longer than one 100 ms scan on the car), so standstill was never confirmed in 5 s although the scans were static.",
+    "user": "这次完整的跑完了，但中间有明显的多次停顿",
+    "pauses": {
+      "start_lane_4.4_5.3s": "speed governor before the first support is visible: front 4.7 m, speed 1.41 > allowed 1.36 m/s -> neutral ~.9 s until the first support appeared at 2.43 m (behind the start divider until then).",
+      "transfer_9.7_10.6s": "board-ahead hold (front 2.89 m stop range) .15 s after the second support was first tracked at 3.16 m (3 points, unconfirmed); the track restarted in the hold and confirmed at 10.35 s; resume 10.64 s. Rebuilt path: the car rolled 1.1 m at 1.4 -> 1.0 m/s during the hold.",
+      "light_entry_15.3_16.0s": "pursuit path hit 1.6 m (a return ~1 m ahead slightly right in scan 373, then passing on the right): a real obstacle on the straight-line path; hold rolled 1.65 m at ~1.9 m/s with the right heading hold, overshooting heading to -21 deg before turning into the lane."
+    }
+  },
+  "turn89_second_grace_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": "这次完整的跑完了，但中间有明显的多次停顿",
+    "change": "open_transfer: the board-ahead hold waits while a second support is tracked in the current scan (unconfirmed, with this scan's role proof) and lies nearer than the board, until the board is OPEN_SECOND_CONFIRM_GRACE_M .5 m inside the 2.89 m stopping range (confirmation needs >= 3 scans over >= 250 ms, <= .48 m at 1.6 m/s; car run 88 data above). The light-entry hold and the start-lane governor are unchanged (the light-entry one saw a real return on its path).",
+    "not_changed": "all hard protections; the stopping-range model itself.",
+    "known_open": "coast-motion standstill confirmation never succeeds on the car (fit slower than one scan); finish result reads coast_standstill_unconfirmed.",
+    "tests": "test_route_87_load SecondConfirmGrace; full discover 842 OK (2 expected failures). No simulation (user)."
   }
 }

@@ -153,5 +153,25 @@ class PlanMarginReuse(unittest.TestCase):
         self.assertEqual(len(ms._PLAN_MARGINS), 1)
 
 
+class SecondConfirmGrace(unittest.TestCase):
+    def test_hold_waits_only_for_a_tracked_unconfirmed_support_nearer_than_the_board(self):
+        import maneuver_sequence as ms
+        motion = ms.ManeuverSequence(0., continue_route=True)
+        scan = {'seq': 7}
+        motion.second_target = {'confirmed': False, 'track_id': 1, 'source_seq': 7, 'range_m': 2.6}
+        motion.role_distinct_evidence = {'source_seq': 7}
+        stop = 2.89
+        self.assertTrue(motion._open_second_maturing(scan, 2.8, stop))
+        self.assertFalse(motion._open_second_maturing(scan, stop-ms.OPEN_SECOND_CONFIRM_GRACE_M, stop))
+        self.assertFalse(motion._open_second_maturing(scan, 2.5, stop))  # support behind the board
+        for change in ({'confirmed': True}, {'source_seq': 6}, {'track_id': None}):
+            motion.second_target = {'confirmed': False, 'track_id': 1, 'source_seq': 7, 'range_m': 2.6, **change}
+            self.assertFalse(motion._open_second_maturing(scan, 2.8, stop))
+        motion.second_target = {'confirmed': False, 'track_id': 1, 'source_seq': 7, 'range_m': 2.6}
+        motion.role_distinct_evidence = {'source_seq': 6}
+        self.assertFalse(motion._open_second_maturing(scan, 2.8, stop))
+        self.assertFalse(motion._open_second_maturing(scan, None, stop))
+
+
 if __name__ == '__main__':
     unittest.main()

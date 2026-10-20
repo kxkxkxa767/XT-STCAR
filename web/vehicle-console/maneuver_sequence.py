@@ -589,6 +589,14 @@ OPEN_LOST_HOLD_S = .5
 OPEN_SECOND_BAND_HALF_M = 1.6
 OPEN_SECOND_BAND_REACH_M = 3.2
 OPEN_SECOND_BEYOND_FIRST_M = .8
+# Round 88 (car run 88): the second support was first tracked at 3.16 m with
+# 3 points (the most a ~.11 m support gives at 1 deg per bin there) and the
+# board-ahead hold came .15 s later, before its confirmation (>= 3 scans over
+# >= 250 ms, the next ~.3 s: <= .48 m at the measured open-stage 1.6 m/s).
+# The hold then rolled 1.1 m at ~1 m/s and the track restarted (1 s lost).
+# While that support is tracked in the current scan and lies nearer than the
+# board, the hold waits until the board is this far inside its stopping range.
+OPEN_SECOND_CONFIRM_GRACE_M = .5
 # The second support is looked for from this first-loop progress on, and the
 # first loop may hand over to the second loop's tangent from the next.
 OPEN_SECOND_LOOKOUT_RAD = math.pi/2
@@ -3580,6 +3588,18 @@ class ManeuverSequence(TurnMotion):
                     'basis': 'first_support_left_of_car_anticlockwise_rule_loop_plan'}
         return approach if clear else None
 
+    def _open_second_maturing(self, scan, ahead, stop_at):
+        """A second support tracked in this scan, not yet confirmed, nearer than
+        the board ahead, while the board is within OPEN_SECOND_CONFIRM_GRACE_M
+        of the stopping range (see there). The body gate is unchanged."""
+        target = self.second_target
+        return (ahead is not None and ahead > stop_at-OPEN_SECOND_CONFIRM_GRACE_M
+                and isinstance(target, dict) and target.get('confirmed') is False
+                and type(target.get('track_id')) is int and target.get('source_seq') == scan.get('seq')
+                and _number(target.get('range_m')) and target['range_m'] < ahead
+                and self.role_distinct_evidence is not None
+                and self.role_distinct_evidence.get('source_seq') == scan.get('seq'))
+
     def _open_confirmed_second(self, scan):
         """The second support when confirmed with its complete support this frame."""
         target = self.second_target
@@ -3871,7 +3891,9 @@ class ManeuverSequence(TurnMotion):
         self.open_feedback = {'source_seq': scan['seq'], 'stage': 'open_transfer', 'compass_heading_rad': heading,
             'channel': channel, 'nominal_target_pwm': natural, 'front_range_m': ahead, 'speed_mps': speed,
             'front_stop_range_m': stop_at, 'second_acquisition_reason': self.second_acquisition_reason}
-        if ahead is not None and ahead <= stop_at:
+        maturing = self._open_second_maturing(scan, ahead, stop_at)
+        self.open_feedback['second_confirm_grace'] = maturing
+        if ahead is not None and ahead <= stop_at and not maturing:
             self._begin_recovery_hold('open_board_ahead_without_second_support', now, control)
             return self._result(now)
         self.natural_steering_target = natural
