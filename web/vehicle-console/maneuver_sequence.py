@@ -583,6 +583,19 @@ OPEN_PROBE_QUANTUM_M = .05
 OPEN_PROBE_MAX_RATE_RAD_S = .6
 OPEN_SUPPORT_SKIP_M = .08
 OPEN_LOOKAHEAD_M = 1.1
+# Round 95 (car runs 92/94): the second loop's approach line lay ~.7 m to the
+# side with the carrot 1.1 m ahead (.82 /m, 1338); with the ~.3 s steering lag
+# at ~1.4 m/s the car turned ~28 deg past it, the support came dead ahead and
+# the loop went round it in an S. On the approach line the carrot is at least
+# this many times the car's offset from the line ahead (convergence <= ~22
+# deg, curvature <= ~.63 /m), but at most half the way to the tangent point:
+# up to the tangent point itself the car reached it unconverged on the 5 m
+# courses and the loop touched the board (simulation). Sweep of k 1.6/2/2.5 x
+# cap .5/.7/1 over 20 layouts/variants/measured cases: only cap .5 kept every
+# case the baseline completes; 2.5/.5 cut steering reversals 17 -> 12, board
+# gaps >= .16 m (short5 .11 -> .17, doc8x4 x1.3/.3 .13 -> .20).
+OPEN_APPROACH_CONVERGE_RATIO = 2.5
+OPEN_APPROACH_CONVERGE_CAP = .5
 OPEN_CARROT_SUPPORT_GAP_M = .10
 OPEN_EXIT_MARGIN_RAD = math.radians(25)
 # A support lost this close to the reversed heading ends its loop (the next
@@ -960,6 +973,9 @@ def _loop_carrot(center, radius, side, lookahead, axis_dir, turn_normal, support
     before = tx*ex+ty*ey
     distance = math.hypot(ox, oy)
     if before > 0:
+        if before > lookahead:
+            offset = abs(ey*tx-ex*ty)  # the car's distance from the approach line
+            lookahead = max(lookahead, min(OPEN_APPROACH_CONVERGE_CAP*before, OPEN_APPROACH_CONVERGE_RATIO*offset))
         s = lookahead-before
         if s <= 0:
             point, mode = (tx+s*ex, ty+s*ey), 'approach_line'

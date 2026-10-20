@@ -23233,5 +23233,22 @@
       "second-loop approach line convergence (lookahead 1.1 m for ~.7 m lateral) overshoots with the steering lag",
       "finish zone: front gap .74 m leaves the rear wheels outside an 80 cm zone (rules: all four wheels)"
     ]
+  },
+  "turn95_approach_convergence_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": "这一轮绕桶的轨迹有点奇怪 / 换场地了很多东西不知道你只能开环 / 你先改着…好了直接推送",
+    "change": "_loop_carrot approach line: the carrot is max(OPEN_LOOKAHEAD_M, min(OPEN_APPROACH_CONVERGE_CAP .5 x distance to the tangent point, OPEN_APPROACH_CONVERGE_RATIO 2.5 x the car's offset from the line)) ahead (was always 1.1 m). Car runs 92/94: ~.7 m offset at 1.1 m (.82 /m, 1338) overshot with the steering lag into an S past the second support.",
+    "generality": "not tuned to this track: chosen by a simulation sweep (k 1.6/2.0/2.5 x cap .5/.7/1.0) over 20 cases: 5 regression variants (5-8 m courses, cone offsets), 6 layouts measured car, 6 measured-car speed/delay cases, 3 layouts nominal car. cap .7/1.0 failed the 5 m courses (unconverged at the tangent point, board contact); cap .5 keeps every case the baseline completes (19/20; practice/nominal fails also at baseline); k 2.5/.5: steering reversals in the second loop 17 -> 12, min board gap >= .16 m, cone gaps equal or larger.",
+    "not_changed": "all hard protections; the plan optimizer; the round-79 overshoot guard.",
+    "tests": "test_route_87_load ApproachConvergence; full discover 846 OK (2 expected failures). Not run on the car (user away).",
+    "open": [
+      "light-lane finish still restarts 1-2 times (entry speed after the light-entry hold; conservative margins)",
+      "light-entry hold on a ~.1 m return inside the light lane",
+      "finish zone: all four wheels in 80 cm needs the front gap <= ~.42 m",
+      "car physics measured on this floor (coast decel, steering response): measure online with bounds so another floor works"
+    ]
   }
 }

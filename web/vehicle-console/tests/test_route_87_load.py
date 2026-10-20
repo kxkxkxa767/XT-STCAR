@@ -214,5 +214,19 @@ class ActiveReportView(unittest.TestCase):
         self.assertLess(len(json.dumps(view)), len(json.dumps(report)))
 
 
+class ApproachConvergence(unittest.TestCase):
+    def test_far_approach_line_is_joined_gently_up_to_half_way(self):
+        import maneuver_sequence as ms
+        # Clockwise loop, axis straight ahead; tangent point 3 m ahead, .7 m right.
+        center, radius = (3., -1.75), 1.05
+        point, mode, before = ms._loop_carrot(center, radius, -1, ms.OPEN_LOOKAHEAD_M, (1., 0.), (0., -1.))
+        self.assertEqual(mode, 'approach_line')
+        self.assertAlmostEqual(before, 3.)
+        self.assertAlmostEqual(point[0], min(.5*before, ms.OPEN_APPROACH_CONVERGE_RATIO*.7))
+        self.assertAlmostEqual(point[1], -.7)
+        near, _, _ = ms._loop_carrot((1.6, -1.75), radius, -1, ms.OPEN_LOOKAHEAD_M, (1., 0.), (0., -1.))
+        self.assertAlmostEqual(near[0], ms.OPEN_LOOKAHEAD_M)  # never shorter than the base lookahead
+
+
 if __name__ == '__main__':
     unittest.main()
