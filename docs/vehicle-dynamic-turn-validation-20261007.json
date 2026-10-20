@@ -23116,5 +23116,24 @@
     "not_changed": "all hard protections; the stopping-range model itself.",
     "known_open": "coast-motion standstill confirmation never succeeds on the car (fit slower than one scan); finish result reads coast_standstill_unconfirmed.",
     "tests": "test_route_87_load SecondConfirmGrace; full discover 842 OK (2 expected failures). No simulation (user)."
+  },
+  "turn89_actual_20261020": {
+    "date": "2026-10-20",
+    "trial": 89,
+    "source_commit": "e53f3ac",
+    "operator_confirmation": "car re-placed in the start lane by the user (fresh check: width .92 m, front 7.45 m, rear .57 m)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261020-89",
+    "evidence_sha256_files_ok": 8,
+    "result": "start lane, first loop, transfer; the second support first tracked at 2.93 m (9.52 s); one transfer tick took .1012 s wall for .0683 s control-thread CPU (.033 s other threads under the GIL), the next wake .0175 s late -> gap .1270 s -> autonomy_control_gap lock in open_transfer. Rest body gap .35 m.",
+    "user": "这次又在第二个桶前停下了",
+    "conclusion": "with the heaviest tick at ~.07 s CPU, the contention from the console's other Python threads (run 87: ended HTTP handler threads 17 % of a core) decides the gap."
+  },
+  "turn90_observer_rate_20261020": {
+    "date": "2026-10-20",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "change": "trial helper (build-next.py): state+lidar polled every ~.45 s instead of ~.22 s (sleep .10 -> .35), halving its HTTP work in the control process; the CLI heartbeat (~12/s, 300 ms lease) and every console rule unchanged. Evidence: feedback.jsonl about 2 polls/s; route events and the final result unchanged.",
+    "code": "no console code change (bundle = round 89)."
   }
 }
