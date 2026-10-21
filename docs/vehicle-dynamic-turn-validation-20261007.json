@@ -23256,7 +23256,7 @@
     "author": "Claude",
     "implemented": "yes for the car test (engine + proxy + console selection; 156/156 simulator cases and 28/28 recorded car rounds bit-identical with Python; RISC-V binary ELF-checked; round-96 package built); not deployed, no car run",
     "deployed": false,
-    "user": "这一轮的你可以尝试把python脚本写成rust自动控制程序，编译后放车上跑 / 换成rust应该延迟会小点吧 / 好，你改吧，好了明天试试 / 这段写完先别测试先记录 / 现在的这个校验好后记录推送 / 算了，先暂停记录推送吧 / 控制台只是方便我遥控他采集图像，正式比赛的时候这个去掉，不要让这个干扰了代码执行效率 / 不不不我只是和你说一下而已，先别改，另外摄像头是有的，因为要用yolo视觉模型只是这部分还没弄好，先跑完全程再说，你记录下推送 / (10-21) 你继续修改，先不连接车，编译好就行",
+    "user": "这一轮的你可以尝试把python脚本写成rust自动控制程序，编译后放车上跑 / 换成rust应该延迟会小点吧 / 好，你改吧，好了明天试试 / 这段写完先别测试先记录 / 现在的这个校验好后记录推送 / 算了，先暂停记录推送吧 / 控制台只是方便我遥控他采集图像，正式比赛的时候这个去掉，不要让这个干扰了代码执行效率 / 不不不我只是和你说一下而已，先别改，另外摄像头是有的，因为要用yolo视觉模型只是这部分还没弄好，先跑完全程再说，你记录下推送 / (10-21) 你继续修改，先不连接车，编译好就行 / (10-21) 我先把车连上，你上车先自检一下看看有没有什么错误，先不跑下一轮",
     "why": "car run 94: slowest control tick 78.6 ms wall, 67 ms CPU, max gap 91 ms against the 120 ms hard limit; earlier timing stops came from that plus GIL contention with HTTP/heartbeat threads. Estimated Rust tick: a few ms (not measured yet). Physical lags (lidar 100 ms frame, steering ~.3 s, ESC ~.45 s) do not change.",
     "coverage_check": "sys.monitoring line coverage over course-sim --range (108 variants), --matrix and route-replay of all trials 64-94: only ~10% of maneuver_sequence.py never ran (25 functions, 547/5230 lines: quality-wait rebinds, left-turn pause, corridor_follow, second identity recovery...). Decision: port everything line for line, no pruning. Tools: scratchpad rust/cov.py, rust/covreport.py.",
     "design": {
@@ -23334,6 +23334,21 @@
       "checks": "every payload equals HEAD (git show) and the binary equals the inspected ELF; SHA256SUMS 19/19 OK; archive 22 entries; deploy script compiles; diff against deploy-claude-turn94.py = only the engine additions (names, chmod 0700, ldd, dry session, route_controller sample key, post-restart rust_engine check) plus archive/source/OLD/label.",
       "deployed": false,
       "physical_trial_executed": false
+    },
+    "car_selfcheck_20261021": {
+      "scope": "read-only on the installed release and service (nothing deployed, no restart, no arm/drive); the new code ran from a separate directory /home/bianbu/xt-stcar-console/selftest-claude-turn96-20261021-112046 (HEAD c45bb39 web/vehicle-console + parity/replay/sim scripts, the package's route-engine, a cross-built tools/scan-geometry 3a8ec87a...). Results copied to work/vehicle-dynamic-deploy-20261008/selftest-claude-turn96-20261021-112046/.",
+      "car": "riscv64, Python 3.12.3, glibc 2.39 (engine needs <= 2.34), up 1 min at the start (load ~8-13 during the checks: boot, vision shadow, the checks themselves); console service active; 42 GB free.",
+      "console_state": "check96-fresh-1.json / -2.json (read-fresh-route.py): healthy, owner none, locked, not armed, 1500/1500, control age <= .023 s, lidar age <= .1 s, advancing, settings 1550/1450/1650/1350, errors {}, 14 installed hashes = round-94 package; turn_ready false: probe_obstacle_close_body (front .334 m: the car is not in the start lane). Same console boot before and after the self-check; no self-check process left.",
+      "engine_on_car": "package binary sha256 9e1b5fc4... on the car; ldd: libm.so.6, libc.so.6, ld-linux-riscv64-lp64d.so.1 all found; dry session (new + drop) ok, phase presteer, exit 0; all 15 Python files compile on 3.12; tests/test_route_96_engine.py 7/7 OK on the car (6.7 s).",
+      "parity_on_car": "route-engine-parity.py -- route-replay.py over the car's own recordings, rounds 64-94: 28/28 bit-identical with the car's Python (glibc libm on both sides), the same call counts as on the Mac (81-1677); round 75 has no recorded drive.",
+      "timing_on_car (course-sim user8, console.autonomy_tick, car CPU under the idle console + vision shadow)": {
+        "python": "median 4.4 ms; new-scan ticks p99 55 ms, worst 66 ms (open_transfer); repeat-frame p99 8 ms",
+        "rust_engine": "median 5.5 ms; new-scan ticks p99 24.5 ms, worst 29.4 ms (light_lane; 20 ms console-thread CPU + ~9 ms waiting for the engine); repeat-frame p99 10.2 ms (one round trip)",
+        "last_tick": "both modes ~230-266 ms on the final tick only: the run has ended (coast stop -> halt, result evidence, gc re-enabled and collecting); after the stop, not a control tick",
+        "doc8x4": "same pattern (python p99 52 / max excl. last ~ as user8; rust p99 26 ms)",
+        "meaning": "worst control tick on the car ~66 -> ~29 ms in the simulator (margin to the .12 s limit ~54 -> ~90 ms); the real run 94 worst tick was 79 ms with the helper polling. The remaining worst-tick cost is the console's own probe_clearance (Python)."
+      },
+      "errors_found": "none in the new code. Tooling only: course-sim needs tools/scan-geometry (cargo is not on the car) -> cross-built for the self-check."
     }
   }
 }
