@@ -23350,5 +23350,49 @@
       },
       "errors_found": "none in the new code. Tooling only: course-sim needs tools/scan-geometry (cargo is not on the car) -> cross-built for the self-check."
     }
+  },
+  "rust_port_plan_20261021": {
+    "date": "2026-10-21",
+    "author": "Claude",
+    "implemented": false,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": "我看代码仓库里显示还有42.1%是python，哪些可以用Rust替换，以及替换的收益 / 就改a和b你先记录下需要改和已经改成rust的部分README.md里面也加上吧，我压缩下上下文，后你再开始",
+    "decision": "Port A (body-clearance check into the route engine) and then B (the whole control loop as a standalone Rust program). Recorded first; work starts after the user compacts the context.",
+    "python_inventory_20261021": {
+      "total": "about 2.0 MB of tracked .py (linguist-like byte count here: Rust 58.8 %, Python 40.3 %; GitHub shows 42.1 %)",
+      "unit_tests": "990 KB (web/vehicle-console/tests 924 KB + tests/ 67 KB), 49 %: Mac only",
+      "route_modules_already_in_rust": "426 KB, 21 %: maneuver_sequence.py 349 KB, turn_motion.py 44 KB, compact_target.py 33 KB; kept as fallback and as the parity reference",
+      "console_runtime": "313 KB, 16 %: server.py 139 KB (2373 lines), autonomy_live.py 49 KB (966), coast_motion.py 28 KB (597), autonomy-control.py 27 KB (443), stop_goal.py 27 KB (422), route_engine.py 10 KB, vision_shadow.py 7 KB, steer_calibration.py 4 KB (92)",
+      "offline_tools": "scripts/ 280 KB, 14 %: course-sim, route-replay, trial-map, trial-timeline, parity, YOLO export/validate ... (Mac only)"
+    },
+    "already_rust": {
+      "crates/runner vehicle-bridge": "chassis serial control and lidar I/O (two processes the console spawns, control/lidar), native scan geometry (corridor_candidates, wall_candidates, left_turn_goal, front boundary); deployed since the early rounds",
+      "crates/robot-core, crates/app, crates/device-io": "geometry/junction/tracking/mission libraries, protocol, device access",
+      "crates/vision + vision-shadow": "YOLO (ONNX Runtime) inference on the car, perception only (vision_shadow.py is the thin Python wrapper)",
+      "route-engine/": "round 96: the whole route decision (ManeuverSequence + TurnMotion, compact target tracker, compass, lane/side walls, loop planning, light lane), bit-identical with Python on 156 simulator cases and 28 car recordings (Mac and car); round-96 package built and self-checked on the car, not deployed yet",
+      "tools/scan-geometry": "Mac/sim build of the bridge geometry (never deployed)"
+    },
+    "still_python_on_the_control_path_with_the_engine": "per tick: server.py autonomy_tick/turn_tick/coast_tick (owner, heartbeat 300 ms, .12 s gap, deadlines, ACK, quality waits/coasts, halt), autonomy_live.probe (probe_clearance: 8 cm body gate with the cone-support exception, front-gap evidence, side-wall fits, ClearanceReuse), steer_calibration.SteerOutput, the JSON round trips to the engine; off-thread: the coast_motion standstill worker (its own Python process). Car measurement (course-sim user8 on the car): worst tick 29.4 ms = 20.2 ms console-thread CPU + ~9 ms engine; median 5.5 ms; Python controller worst 66 ms.",
+    "A_clearance_into_engine": {
+      "scope": "autonomy_live.py: probe_clearance, front_gap_evidence, _front_lane_wall_projection, side_wall_fit, _front_side_wall_projection, _body_contact_bins, _age_sides, _same, ClearanceReuse, corridor_walls and what they call (contact_supports already in the engine); server.py call sites that build its arguments (turn_front_walls, turn_front_lane, turn_front_evidence_matches, the contact-target exemption) where the result must stay identical. Exact scope from line coverage over the simulator and replay sets, as in round 96.",
+      "interface": "engine computes the clearance (same dict, same exceptions/ProbeClearanceError semantics with its clearance attached) and the current contact target in the same request as the decision; the console uses that result in place of probe_clearance; Python probe_clearance stays as fallback/reference.",
+      "expected_gain": "worst tick on the car ~29 -> ~15 ms (estimate: probe_clearance ~12-15 ms of the 20 ms console CPU); one engine round trip less per tick (current_contact_target); console stays as is.",
+      "verification": "extend route-engine-parity.py to compare probe_clearance results (and raised errors with their clearance) per call; sweep all 156 simulator cases + 28 recordings to 0 mismatches; existing clearance unit tests; then the car.",
+      "constraints": "hard protections unchanged (8 cm gate, cone exception, stale/clock, ages, ACK, .12 s gap, 300 ms heartbeat); any relaxation needs data and a record."
+    },
+    "B_standalone_control_program": {
+      "scope": "server.py tick path (autonomy_tick, turn_tick, coast_tick, begin_coast, halt, turn_healthy, turn_* quality/rear/front/lane helpers, turn_route_control, turn_quality_snapshot, record_compact_target_decision, output_servo/emit, gc pause), autonomy_live QualityLatch/QualityRecovery (and RearLaunch/ApproachRamp/JunctionStop only if the route path uses them), steer_calibration.SteerOutput, coast_motion standstill detection; A included. Only the turn-cone continue_route path; other console modes stay in Python.",
+      "architecture_to_design": "a Rust process that owns the two bridge processes (or links the bridge crates) and runs the 20 ms tick on its own thread with no Python in the loop; the web console becomes its client over a local socket (teleop/manual driving, state and scans for the page and recording, run start/stop, camera stays in the console for image collection and YOLO); in the race the console is not started and the program starts the run itself (start trigger to be decided with the user). Run evidence written by the program (low-priority thread, bounded). Device ownership: still exactly one owner of /dev/car and /dev/laser.",
+      "expected_gain": "worst tick < ~10 ms, typical < 1 ms (now 5.5 ms median, ~25 % of a core at 50 Hz); no GIL, so HTTP serialization, heartbeats and the camera thread can no longer delay a tick (the cause of the timing stops in runs 86/89/92: late wake-ups 12-42 ms); it is the race form (console removed in the competition).",
+      "verification": "line-by-line port with a dual run against the Python console tick in course-sim (same outputs/halts per tick) and the recordings; port the protection unit tests that use the public interface; deploy as a new round with backup/rollback like the console; car.",
+      "open_points": "start trigger without the console; how the console attaches (teleop while the program owns the bridges); evidence format for trial-map/trial-timeline; deploy/launch (systemd unit) and keeping the console usable for image collection."
+    },
+    "not_to_port": "console HTTP API, web page, camera capture, recording (removed in the race; camera is I/O bound; YOLO inference is already Rust); autonomy-control.py CLI; vision_shadow.py wrapper; stop_goal.py (not used by the route); the Python route modules (fallback + reference); unit tests and offline tools (Mac only); YOLO training/export (ultralytics/onnx toolchain).",
+    "order": [
+      "A (into route-engine/, new round number 97+)",
+      "B (builds on A)"
+    ],
+    "round_96": "the built claude-turn96 package (engine only) stays as built; A/B go into new rounds."
   }
 }

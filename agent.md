@@ -1,5 +1,16 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-21 Claude：用户决定把A车身间隙检查和B整个控制循环改成Rust；已记录，压缩上下文后开始）
+
+记录键`rust_port_plan_20261021`，README有“Rust化状态”一节。
+- 用户问仓库里约42% Python哪些能换成Rust、收益是什么，随后说：“就改a和b你先记录下需要改和已经改成rust的部分README.md里面也加上吧，我压缩下上下文，后你再开始”。
+- 现状（接上第96轮引擎后，车上实测仿真user8）：最慢一拍29.4ms，其中控制台Python 20.2ms，主要是probe_clearance，引擎约9ms；中位5.5ms。Python版最慢66ms。
+- A：车身间隙检查进`route-engine/`。范围是`autonomy_live.py`的probe_clearance及其调用、server里准备参数的几处，具体按覆盖率定。引擎在给出决策的同一次请求里返回间隙结果和接触目标，结果和异常与Python逐位一致，Python保留为后备。预计最慢一拍约15ms。
+- B：整个控制循环做成独立Rust程序。范围是server.py的节拍路径、QualityLatch/QualityRecovery、SteerOutput、滑行静止检测，只做turn-cone路线路径，包含A。程序独占两个桥，控制台改为客户端，负责遥控、显示和记录、摄像头和YOLO；比赛时不启动控制台。预计最慢一拍<约10ms，且不再受GIL、HTTP和摄像头线程影响。待定：启动方式、控制台怎么接入、证据格式、systemd启动。
+- 做法同第96轮：先统计覆盖率，再逐行移植，逐拍双跑到0差异，全量测试，用新编号（97起）构建部署，车上验证。硬保护不变（8cm门和桶例外、旧帧/时钟、年龄、ACK、0.12s间隔、300ms心跳）。
+- 已打好的第96轮包（只含引擎）保持原样，没有部署。
+- 不改：控制台HTTP、网页、摄像头、录制、autonomy-control、vision_shadow包装、stop_goal、Python路线模块（后备）、测试和离线工具、YOLO训练。
+
 ## 当前接手入口（2026-10-21 Claude：第96轮部署包已打好；车上自检无错误（录像28/28一致，最慢一拍66→29ms）；未部署、未跑）
 
 第96轮（`turn96_rust_route_engine_wip_20261020`，进展见`progress_20261020_parity`和`progress_20261021_build`）。用户要求把Python路线控制改写成Rust、编译后上车跑；10-21用户说“先不连接车，编译好就行”。动机：第94轮最慢一拍79ms（CPU 67ms），离0.12s硬限只差29ms，另有GIL争用。

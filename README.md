@@ -1,4 +1,33 @@
-# XT-STCAR（10-21 Claude：第96轮Rust路线引擎部署包claude-turn96已打好；车上自检无错误：车上录像28/28与Python逐位一致，车上仿真最慢一拍66→29ms；未部署、未跑）
+# XT-STCAR（10-21 Claude：第96轮Rust路线引擎部署包已打好、车上自检无错误，未部署；下一步按用户决定把车身间隙检查（A）和整个控制循环（B）改成Rust，见下方“Rust化状态”）
+
+## Rust化状态（2026-10-21）
+
+机器记录：[`rust_port_plan_20261021`](docs/vehicle-dynamic-turn-validation-20261007.json)。GitHub显示的约42% Python里，一半是单元测试，其余主要是控制台和Mac上的离线工具。
+
+**已经是Rust的部分**
+| 部分 | 做什么 | 状态 |
+| --- | --- | --- |
+| `crates/runner` vehicle-bridge | 底盘串口控制、雷达读取、原生扫描几何（通道/墙候选、左转开口、前方边界） | 早已部署 |
+| `crates/robot-core`、`crates/app`、`crates/device-io` | 几何、路口、跟踪、任务库，协议，设备访问 | 已有 |
+| `crates/vision` + vision-shadow | 车上YOLO（ONNX Runtime）推理，只做感知；`vision_shadow.py`是薄包装 | 已部署 |
+| `route-engine/` | 第96轮：整套路线决策，即ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区。与Python逐位一致：仿真156/156，录像在Mac和车上都是28/28 | 部署包已打好、车上自检通过，未部署 |
+| `tools/scan-geometry` | Mac/仿真用的桥几何（不部署） | 已有 |
+
+`maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`的Python版保留，作为后备和对比基准。
+
+**要改成Rust的部分（用户10-21决定，先A后B）**
+| | 范围 | 收益 | 验证 |
+| --- | --- | --- | --- |
+| A 车身间隙检查进引擎 | `autonomy_live.py`的probe_clearance、front_gap_evidence、side_wall_fit等，以及server里给它准备参数的地方；具体范围按覆盖率统计确定 | 车上最慢一拍约29ms→约15ms（估计），每拍少一次往返；控制台不变 | 双跑对比扩展到间隙检查的结果和异常，仿真156个用例和录像28轮跑到0差异，然后上车 |
+| B 整个控制循环做成独立Rust程序 | server.py的节拍路径（autonomy/turn/coast tick、心跳、间隔、期限、ACK、质量等待/滑行、停车），QualityLatch/QualityRecovery，SteerOutput，滑行静止检测；包含A。只做turn-cone路线路径 | 最慢一拍<约10ms，平常<1ms；没有GIL，HTTP、心跳、摄像头线程不会再拖晚控制拍（第86/89/92轮计时停车的原因）；这就是比赛形态（比赛时去掉控制台） | 与Python控制台节拍逐拍双跑，并移植保护相关的单元测试；作为新一轮部署，有备份和回滚 |
+
+B的待定设计：Rust程序独占两个桥，在自己的线程上跑20ms节拍。控制台改为它的客户端，负责遥控、显示和记录、开始/停止，摄像头继续留在控制台里用于采图和YOLO。比赛时不启动控制台，启动方式待和用户定。
+
+**不改的部分**：
+- 控制台的HTTP接口、网页、摄像头采集和录制（比赛时去掉；摄像头受I/O限制；YOLO推理已是Rust）。
+- `autonomy-control.py`、`vision_shadow.py`、`stop_goal.py`（路线不用）。
+- 单元测试、`scripts/`离线工具、YOLO训练/导出（只在Mac上跑）。
+
 
 2026-10-17（Claude）第66/67轮：66实车单拍最大.032s（提速+屏蔽网页生效），起步.4s后前方5格缺口在发车直道不被容忍而停车；67让发车直道在当前原生几何有效时使用已有的有界缺口容忍，仿真加深度突变丢回波模型验证（无容忍10/12停、有容忍11/12跑完），全量751 OK。
 
