@@ -23700,5 +23700,13 @@
     "light_lane_one_go": "user: 最后那段直道想办法让他一口气跑完不要停顿. Evidence above (light_lane_all_runs). Options: (1) cut later from the measured coast decel of this lane (_lane_coast_decel, currently clamped to .35-.375) and a lower approach speed so one coast lands in the zone; (2) a controlled brake at the finish (ESC mode kept: bidirectional with brake; needs the bridge below 1500 = brake, its own guard and tests; the race program starts the bridge without reverse); (3) avoid the latched early slow zone at 1.5 m/s.",
     "launch_1600": "finish turn100b (fix the L5.0 short-course case) or keep 1560.",
     "standstill": "runs 98/99 ended coast_standstill_unconfirmed (scan matching 1-7 mm noise in the narrow lane), run 100 confirmed."
+  },
+  "readme_code_structure_20261021": {
+    "operator": "你更新下readme.md里面的代码结构然后提交，今天到这了",
+    "change": "README.md only: code structure section rewritten for the current race path (route-engine/ files, web/vehicle-console/ files, vehicle-bridge and crates/robot-core/src/teleop.rs protections, scripts/ helper/simulation/parity/analysis tools, tools/scan-geometry, work/ as local-only), race path and console path described, missing crates/ files added (junction, lidar_cones, semantics, simulation_geometry, sweep_simulation, lidar examples, navigation replay modules); Rust status table corrected: round 96/97 packages were never deployed, their engine content went on the car with round 98, rounds 98-100 ran the full route.",
+    "code_changed": false,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "car_state": "round 100 still installed (2814359, engine 4e986aa8...), locked neutral"
   }
 }

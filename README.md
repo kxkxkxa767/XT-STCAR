@@ -1,4 +1,4 @@
-# XT-STCAR（10-21晚 Claude：独立程序`route-engine race`第98–100轮实车都跑完全程（终点停车17.4/18.2/20.1s，第100轮静止已确认）；1600起步改法进行中；下一步让最后直道一口气跑完；见下方“Rust化状态”）
+# XT-STCAR（10-21晚 Claude：独立程序`route-engine race`第98–100轮实车都跑完全程（终点停车17.4/18.2/20.1s，第100轮静止已确认）；1600起步改法进行中；下一步让最后直道一口气跑完；见下方“Rust化状态”，“代码结构”已按当前比赛路径更新）
 
 ## Rust化状态（2026-10-21）
 
@@ -10,8 +10,8 @@
 | `crates/runner` vehicle-bridge | 底盘串口控制、雷达读取、原生扫描几何（通道/墙候选、左转开口、前方边界） | 早已部署 |
 | `crates/robot-core`、`crates/app`、`crates/device-io` | 几何、路口、跟踪、任务库，协议，设备访问 | 已有 |
 | `crates/vision` + vision-shadow | 车上YOLO（ONNX Runtime）推理，只做感知；`vision_shadow.py`是薄包装 | 已部署 |
-| `route-engine/` | 第96轮：整套路线决策，即ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区。与Python逐位一致：仿真156/156，录像在Mac和车上都是28/28 | 部署包已打好、车上自检通过，未部署 |
-| `route-engine/src/clearance.rs` | 第97轮（A）：控制台每拍的车身间隙检查，即probe_clearance及其辅助函数、ClearanceReuse，和接触目标在同一次请求里算。与Python逐位一致：仿真156/156、录像28/28（共比较17.6万次间隙检查），另有真实扫描加随机参数和故障的单独对比4.5万次 | 第97轮部署包已打好，未部署 |
+| `route-engine/` | 第96轮：整套路线决策，即ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区。与Python逐位一致：仿真156/156，录像在Mac和车上都是28/28 | 随第98轮上车（第96、97轮的包没部署） |
+| `route-engine/src/clearance.rs` | 第97轮（A）：控制台每拍的车身间隙检查，即probe_clearance及其辅助函数、ClearanceReuse，和接触目标在同一次请求里算。与Python逐位一致：仿真156/156、录像28/28（共比较17.6万次间隙检查），另有真实扫描加随机参数和故障的单独对比4.5万次 | 随第98轮上车 |
 | `tools/scan-geometry` | Mac/仿真用的桥几何（不部署） | 已有 |
 
 `maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`的Python版保留，作为后备和对比基准。
@@ -19,15 +19,15 @@
 **要改成Rust的部分（用户10-21决定，先A后B）**
 | | 范围 | 收益 | 验证 |
 | --- | --- | --- | --- |
-| A 车身间隙检查进引擎（**第97轮已完成，未部署**） | `autonomy_live.py`的probe_clearance整个函数（含直道分支）及front_gap_evidence、车道墙/单侧板投影、桶接触见证、ClearanceReuse；server里的车道、起点区、左转放宽判断仍在控制台（只读引擎镜像的状态） | Mac：最慢一拍1.02→0.77ms，控制线程CPU最大0.80→0.43ms，新帧p99 0.85→0.56ms。按第96轮车/Mac比例估计车上最慢一拍约29→约22ms、新帧p99约24.5→约16ms，尚未上车实测。剩下的最慢拍主要是一拍里多次往返（如进入滑行那拍有4次），要靠B消除 | 双跑对比：仿真156/156、录像28/28；`scripts/route-engine-clearance-parity.py`对比4.5万次；新测试6项，全量860 OK |
-| B 整个控制循环做成独立Rust程序（**独立程序已写好，车上静态检查通过，未部署**） | server.py的节拍路径（autonomy/turn/coast tick、心跳、间隔、期限、ACK、质量等待/滑行、停车），QualityLatch/QualityRecovery，SteerOutput，滑行静止检测；包含A。只做turn-cone路线路径 | 最慢一拍<约10ms，平常<1ms；没有GIL，HTTP、心跳、摄像头线程不会再拖晚控制拍（第86/89/92轮计时停车的原因）；这就是比赛形态（比赛时去掉控制台） | 与Python控制台节拍逐拍双跑，并移植保护相关的单元测试；作为新一轮部署，有备份和回滚 |
+| A 车身间隙检查进引擎（**已完成，随第98轮上车**） | `autonomy_live.py`的probe_clearance整个函数（含直道分支）及front_gap_evidence、车道墙/单侧板投影、桶接触见证、ClearanceReuse；server里的车道、起点区、左转放宽判断仍在控制台（只读引擎镜像的状态） | Mac：最慢一拍1.02→0.77ms，控制线程CPU最大0.80→0.43ms，新帧p99 0.85→0.56ms。按第96轮车/Mac比例估计车上最慢一拍约29→约22ms、新帧p99约24.5→约16ms，尚未上车实测。剩下的最慢拍主要是一拍里多次往返（如进入滑行那拍有4次），要靠B消除 | 双跑对比：仿真156/156、录像28/28；`scripts/route-engine-clearance-parity.py`对比4.5万次；新测试6项，全量860 OK |
+| B 整个控制循环做成独立Rust程序（**第98–100轮实车跑完全程**） | server.py的节拍路径（autonomy/turn/coast tick、心跳、间隔、期限、ACK、质量等待/滑行、停车），QualityLatch/QualityRecovery，SteerOutput，滑行静止检测；包含A。只做turn-cone路线路径 | 最慢一拍<约10ms，平常<1ms；没有GIL，HTTP、心跳、摄像头线程不会再拖晚控制拍（第86/89/92轮计时停车的原因）；这就是比赛形态（比赛时去掉控制台） | 与Python控制台节拍逐拍双跑，并移植保护相关的单元测试；作为新一轮部署，有备份和回滚 |
 
 B的进展（`rust_control_program_wip_20261021`）：
 - `route-engine/src/coast.rs`：滑行静止判断CoastMotion及其队列。与Python在全部录像加随机改动上逐位一致，约3.3万次结果。
 - `route-engine/src/supervisor.rs`：控制台的路线监管，包括启动准入、节拍、质量等待/暂停/滑行、停车、输出检查、ACK序列、转向标定和反馈换算。用`scripts/route-engine-supervisor-parity.py`与Python控制台逐拍双跑：仿真156/156、录像28/28，共17.6万拍，每拍比较整份报告。
 - `route-engine/src/race.rs`（`route-engine race`）：独立程序本身，包括两个桥、20ms节拍线程、健康检查、证据文件和终端输出。在车的CPU上闭环仿真跑完全程，最大间隔0.026s。在真实设备上只检查不启动，通过三次，从未解锁。车上助手`scripts/race-trial.py`负责停控制台、跑一次、再恢复控制台。
 - 车上逐位对比：路线引擎28/28，监管核心28/28，间隙检查12908次，滑行11168个结果，全部一致。
-- 第98轮的包已打好（`build-race.py`，记录键`turn98_race_program_20261021`），未部署。部署和上车跑需用户同意。
+- 第98–100轮用独立程序在车上跑完全程（打包用`build-race.py`；记录键`turn98_actual_20261021`、`turn99_actual_20261021`、`turn100_actual_20261021`）。
 
 B的待定设计：Rust程序独占两个桥，在自己的线程上跑20ms节拍。控制台改为它的客户端，负责遥控、显示和记录、开始/停止，摄像头继续留在控制台里用于采图和YOLO。比赛时不启动控制台，启动方式待和用户定。
 
@@ -321,31 +321,97 @@ RollingLocal 原到达区域和零目标曲率候选均失败后，可同账尝�
 
 ## 代码结构：模块在哪、负责什么
 
+第98轮起，上车跑路线的是两个 Rust 程序：`crates/runner` 的车上桥 `vehicle-bridge`（底盘串口、雷达和原生扫描几何），以及 `route-engine/` 的独立程序 `route-engine race`（路线决策和全部控制保护）。
+Python 控制台 `web/vehicle-console/` 用于遥控、采图和录像，同时是路线控制器的参考实现；Rust 引擎与它逐位一致。比赛时不启动控制台。
+
 ```text
 XT-STCAR/
+├── route-engine/        比赛控制程序（Rust，无依赖、禁用 unsafe）：路线决策、车身间隙、滑行静止、监管，以及 `route-engine race`
+├── web/vehicle-console/ 车上控制台（Python）：网页遥控与状态、桥进程、摄像头；路线控制器的 Python 参考实现和全部单元测试
 ├── crates/
-│   ├── vision/          视觉数学与模型契约库
+│   ├── runner/          车上桥 vehicle-bridge、vision-shadow；xt-stcar-robot：自主模拟、感知/规划线程、采集与回放
+│   ├── robot-core/      任务/安全、扫描/定位/导航、路口与雷达锥桶几何、桥的遥控保护、厂商协议和标定表
+│   ├── vision/          视觉数学、模型契约与标签绑定
 │   ├── app/             xt-stcar：视觉 CLI、原生/参考推理后端
-│   ├── robot-core/      任务/安全、扫描/定位/导航、厂商协议和标定表
-│   ├── device-io/       有截止时间的串口配置与传输库
-│   └── runner/          xt-stcar-robot：自主模拟、感知/规划线程、采集与回放
+│   └── device-io/       有截止时间的串口配置与传输库
+├── tools/scan-geometry/ Mac/仿真用的桥几何，输出与车上桥相同的字段（不部署）
+├── scripts/             车上助手、闭环仿真、Python/Rust 逐位对比、实车证据分析、模型/打包/上传
+├── tests/               Python 模型/交付测试与跨实现对照工具
 ├── config/              显式配置；车辆相关示例均未经实车标定
 ├── examples/            合成 JSONL 回放输入
-├── scripts/             模型工具、构建、ELF 检查、打包和上传
-├── tests/               Python 模型/交付测试与跨实现对照工具
-├── docs/                协议依据、使用说明、验证报告
+├── docs/                协议依据、使用说明、验证报告；每轮改动和实车结果记在 vehicle-dynamic-turn-validation-20261007.json
 ├── 资料/                 来源索引、环境记录、已归档官方参考
-├── Cargo.toml/lock      Rust workspace、依赖与精确版本锁
+├── work/                本地：每轮构建/部署脚本、部署包、取回的实车证据（不进 Git）
+├── 打开车辆驾驶台.command/.html  Mac 上通过 SSH 打开车上控制台，不解锁、不发运动命令
+├── Cargo.toml/lock      Rust workspace（crates/）、依赖与精确版本锁
 ├── rust-toolchain.toml  Rust 1.97.1 工具链选择
+├── requirements-*.in/lock.txt  Mac 上的 Python 开发与模型环境
 ├── AGENTS.md            开发约定的加载入口
 ├── 上传规范.md           main 直接开发、修改前同步与提交推送流程
 ├── Mac与车端命令手册.txt   按执行机器分类的命令、参数与使用步骤
+├── agent-history-20261007.md  10-07 以前的交接记录归档
 └── agent.md             完整交接快照与长期约定
 ```
+
+`route-engine/` 和 `tools/scan-geometry/` 各有自己的 Cargo 工程，放在 `crates/` 外面：部署构建要求 `crates/`（桥的源码）与车上已装版本一致。
+
+**比赛路径（第98轮起）**：
+1. 车上助手 `scripts/race-trial.py`（每轮由 `work/…/build-race.py` 写死参数，部署后是 `trial<轮>.py`）核对已装引擎和桥的哈希、控制台的新鲜锁定中位和起点检查，然后停掉控制台。
+2. `route-engine race` 在自己的进程组里启动 `vehicle-bridge control`（底盘串口）和 `vehicle-bridge lidar`（雷达整圈和原生几何）。
+3. 控制线程每 20ms 一拍，收到新扫描立即决策（距上一拍结束至少 5ms）：监管（起步准入、质量等待/滑行、停车、输出检查、ACK 序列、转向标定）→ ManeuverSequence 路线决策 → 底盘命令。
+4. 证据写到 `left-cone-trial-<日期>-<轮>/`：助手的文件在顶层，程序的文件在 `run/`；助手结束时必定恢复控制台。
+
+**控制台路径（遥控、采图、对比）**：浏览器 ↔ `server.py`（HTTP、两个桥、摄像头、`vision_shadow.py`）。路线会话由 `route_engine.py` 为每个会话起一个 `route-engine` 子进程，按逐行 JSON 调用；Python 的 `maneuver_sequence.py` 等保留为后备和对比基准。
+
+| 比赛与控制台源码 | 职责与边界 |
+|---|---|
+| [`route-engine/src/main.rs`](route-engine/src/main.rs) | 引擎入口：默认是控制台的逐行 JSON 引擎（每会话一个 ManeuverSequence，new/call/get/dump）；`race` 子命令进入独立程序 |
+| [`route-engine/src/race.rs`](route-engine/src/race.rs) | 独立程序：两个桥、只转发的读线程、20ms 节拍加新扫描即决策、50ms 健康检查、自续 owner 租约、起点检查与启动方式（enter/ready/never）、证据写线程；summary.json 记控制间隔、scan_to_tick 和每线程/每个桥的 CPU |
+| [`route-engine/src/supervisor.rs`](route-engine/src/supervisor.rs) | server.py 路线监管的逐行移植：起步准入、节拍、质量等待/滑行、停车、输出检查（含仅起步直道允许 1600）、ACK 序列、转向标定与反馈换算、QualityLatch/QualityRecovery；保护值与 Python 相同 |
+| [`route-engine/src/maneuver.rs`](route-engine/src/maneuver.rs) | ManeuverSequence 与其 TurnMotion 基类合成一个结构体，属性名同 Python；`super()` 调用对应 `tm_*` |
+| [`route-engine/src/maneuver_open.rs`](route-engine/src/maneuver_open.rs) | 起步直道（车道几何、预打舵、起步限速）和开放赛道各段：第一圈、换桶、第二圈、光区入口 |
+| [`route-engine/src/maneuver_tm.rs`](route-engine/src/maneuver_tm.rs) | TurnMotion.update、路口进入、首个目标和首过观察 |
+| [`route-engine/src/maneuver_wait.rs`](route-engine/src/maneuver_wait.rs) | 路线等待和暂停：首目标质量等待、重绑、中位暂停及恢复规则 |
+| [`route-engine/src/maneuver_path.rs`](route-engine/src/maneuver_path.rs) | 转向变化率、近距避让、预测弧线的路径检查 |
+| [`route-engine/src/maneuver_post.rs`](route-engine/src/maneuver_post.rs) | 首过之后：出口通道、第二支撑（通道证明、恢复、绕圈）、光区转向和光区直道到终点 |
+| [`route-engine/src/clearance.rs`](route-engine/src/clearance.rs) | 第97轮：控制台每拍的车身间隙检查 probe_clearance 及 ClearanceReuse |
+| [`route-engine/src/coast.rs`](route-engine/src/coast.rs) | 滑行静止判断 CoastMotion 及其队列语义；独立程序里在自己的线程上算 |
+| [`route-engine/src/compact_target.rs`](route-engine/src/compact_target.rs) | compact_target.py 的移植：雷达小目标（桶）的提取、关联和角色 |
+| [`route-engine/src/helpers.rs`](route-engine/src/helpers.rs) | 路线用到的模块级函数：通道墙、罗盘、起步直道墙律、绕圈规划、追踪、轴线 |
+| [`route-engine/src/py.rs`](route-engine/src/py.rs)、[`dump.rs`](route-engine/src/dump.rs) | 移植依赖的 Python 语义（区分 int/float/bool 的动态值、有序 dict、异常展开与捕获）；对比用的完整状态和控制台每次调用后读取的属性 |
+| [`crates/runner/src/bin/vehicle-bridge.rs`](crates/runner/src/bin/vehicle-bridge.rs) | 车上桥：`control` 写底盘串口，`lidar` 解 N10 整圈并输出标定后的扫描和原生几何（前方边界、左路口、通道/墙候选、左转目标）；默认空跑，`--execute --device` 才打开设备 |
+| [`crates/robot-core/src/teleop.rs`](crates/robot-core/src/teleop.rs) | 桥自己的保护：300ms 命令租约、250ms 过期请求、150ms 控制间隔、电机 1500–1620（`--allow-reverse` 时下限 1350）、舵机 1200–1800，任何违规锁定中位 |
+| [`crates/runner/src/bin/support/lidar_calibration.rs`](crates/runner/src/bin/support/lidar_calibration.rs) | 控制台扫描的可选粗校正，不是导航标定 |
+| [`crates/runner/src/bin/vision-shadow.rs`](crates/runner/src/bin/vision-shadow.rs) | 有界 JPEG 进程通信 → 常驻感知 → JSON；不接触设备或运动输出 |
+| [`web/vehicle-console/server.py`](web/vehicle-console/server.py) | 车上控制台服务：HTTP 和网页、两个桥进程、遥控、路线会话的监管（独立程序的参考实现）；Rust 独占底盘串口 |
+| [`web/vehicle-console/route_engine.py`](web/vehicle-console/route_engine.py) | 控制台调用 Rust 引擎的适配层：子进程、逐行 JSON、应答超时 |
+| [`web/vehicle-console/maneuver_sequence.py`](web/vehicle-console/maneuver_sequence.py)、[`turn_motion.py`](web/vehicle-console/turn_motion.py) | 路线控制器的 Python 参考实现，引擎与它逐位一致；改路线时两边同步修改 |
+| [`web/vehicle-console/compact_target.py`](web/vehicle-console/compact_target.py) | 雷达小目标的形状/关联门限（实验值，不是实测桶尺寸） |
+| [`web/vehicle-console/autonomy_live.py`](web/vehicle-console/autonomy_live.py) | 车身间隙检查 probe_clearance、通道墙与转向、QualityLatch/QualityRecovery |
+| [`web/vehicle-console/coast_motion.py`](web/vehicle-console/coast_motion.py) | 滑行静止证据：相邻扫描的低运动配准，不用轮速 |
+| [`web/vehicle-console/steer_calibration.py`](web/vehicle-console/steer_calibration.py) | 本车实测转向：路线名义舵机 PWM → 实际舵机 PWM |
+| [`web/vehicle-console/vision_shadow.py`](web/vehicle-console/vision_shadow.py) | 摄像头帧交给 Rust vision-shadow 做 YOLO，只做感知 |
+| [`web/vehicle-console/autonomy-control.py`](web/vehicle-console/autonomy-control.py)、[`stop_goal.py`](web/vehicle-console/stop_goal.py) | 早期的车上终端入口和停车目标，路线不用 |
+| [`web/vehicle-console/index.html`](web/vehicle-console/index.html)、`app.js`、`style.css`、`systemd/` | 网页驾驶台和车上服务单元 |
+| [`web/vehicle-console/tests/`](web/vehicle-console/tests) | 控制台、路线、引擎和独立程序的单元测试（全量须 0 失败才能上车）；`fixtures/` 是实车扫描片段 |
+| [`scripts/race-trial.py`](scripts/race-trial.py) | 车上助手：先核对哈希，再查新鲜锁定中位和起点检查，停控制台跑一次 race，必定恢复控制台并要求 6 个健康锁定样本；打包后带任何参数都拒绝 |
+| [`scripts/course-sim.py`](scripts/course-sim.py)、[`route-sim.py`](scripts/route-sim.py) | 闭环赛道仿真：真实控制台服务（演示模式）加车辆模型（名义/实测）；不连车 |
+| [`scripts/route-engine-parity.py`](scripts/route-engine-parity.py)、`route-engine-parity-sweep.py`、`route-engine-supervisor-parity.py`、`route-engine-clearance-parity.py`、`route-engine-coast-parity.py` | Python 与 Rust 逐位对比：路线、监管、间隙检查、滑行；sweep 在仿真和录像上并行跑（不要和全量测试同时跑） |
+| [`scripts/sim-vehicle-bridge.py`](scripts/sim-vehicle-bridge.py)、[`fake-vehicle-bridge.py`](scripts/fake-vehicle-bridge.py) | Mac 上测 `route-engine race` 用的闭环仿真桥和假桥 |
+| [`scripts/trial-timeline.py`](scripts/trial-timeline.py)、`trial-map.py`、`route-replay.py`、`detector-replay.py`、`second-orbit-replay.py` | 实车证据分析：时间线、由扫描重建路径、用当前代码回放决策、小目标检测回放、第二圈回放 |
+| [`scripts/run-console-tests.py`](scripts/run-console-tests.py) | 按模块名跑控制台测试 |
+| [`scripts/start-vehicle-console.py`](scripts/start-vehicle-console.py)、`open-vehicle-console.py`、`run-vehicle-console-service.py` | 启动/打开车上控制台和 systemd 入口；都不解锁 |
+| [`scripts/static-steering-check.py`](scripts/static-steering-check.py)、`steering-arc-check.py` | 车上一次性的静态打舵和低速弧线检查 |
+| [`scripts/camera-preview.py`](scripts/camera-preview.py)、`check-vision-deployment.py`、`vehicle-vision.sh` | 摄像头预览、视觉部署只读检查和车上视觉入口 |
+| [`scripts/local-sim-sweep.py`](scripts/local-sim-sweep.py)、`vehicle-bluetooth-repair.py` | `crates/runner` 冻结二进制的批量仿真；车上蓝牙驱动修复 |
+| [`tools/scan-geometry/src/main.rs`](tools/scan-geometry/src/main.rs) | 在 Mac 上为扫描加上与车上桥相同的几何字段，供仿真和离线分析 |
+
+下表是 `crates/` 里的库和 xt-stcar-robot 程序（比赛路径只用到桥、`teleop.rs`、`junction` 和协议/串口部分）。
 
 | 源码位置 | 职责与边界 |
 |---|---|
 | [`crates/vision/src/lib.rs`](crates/vision/src/lib.rs) | `ModelSpec`、RGB letterbox、NCHW FP32 张量、输出契约检查、阈值过滤、坐标还原；不访问设备或加载原生库 |
+| [`crates/vision/src/semantics.rs`](crates/vision/src/semantics.rs) | 显式的模型标签绑定，不按类别编号推断语义 |
 | [`crates/app/src/main.rs`](crates/app/src/main.rs) | `xt-stcar` 命令入口：`self-check`、`preprocess`、`replay`、`infer`，参数与输出文件保护 |
 | [`crates/app/src/ort_backend.rs`](crates/app/src/ort_backend.rs) | `NativeOrtBackend`：动态加载 ORT C 库、模型 SHA/provenance/实际张量元数据验证、常驻 Session 和超时取消 |
 | [`crates/app/src/backend.rs`](crates/app/src/backend.rs) | 显式 Python 参考后端、张量文件交换、子进程超时清理与原子输出工具 |
@@ -368,6 +434,8 @@ XT-STCAR/
 | [`crates/runner/src/capture.rs`](crates/runner/src/capture.rs) | 有时间/字节/记录上限的 IMU 或 N10 采集，使用统一 `Instant` 时钟，空闲和结束写 Tick；不发送设备命令 |
 | [`crates/vision/src/road.rs`](crates/vision/src/road.rs) | 白条几何、HSV 灯色、红蓝锥桶及相机地面投影；普通 YOLO `zebra` 不用于斑马线 |
 | [`crates/robot-core/src/autonomy.rs`](crates/robot-core/src/autonomy.rs) | 米制坐标、位姿质量、车体足迹、道路观察及有向禁越线 HalfPlane 共享类型 |
+| [`crates/robot-core/src/junction.rs`](crates/robot-core/src/junction.rs)、[`junction/corridor.rs`](crates/robot-core/src/junction/corridor.rs)、[`junction/turn_goal.rs`](crates/robot-core/src/junction/turn_goal.rs) | 车上桥的原生几何：局部墙/开口证据、双墙通道朝向候选、有限墙段与左开口对齐；只给几何，不发转弯或空闲许可 |
+| [`crates/robot-core/src/lidar_cones.rs`](crates/robot-core/src/lidar_cones.rs) | 由原始扫描得到有界的几何锥桶候选；圆截面模型仅用于仿真，未在实际安装高度测定 |
 | [`crates/robot-core/src/field.rs`](crates/robot-core/src/field.rs) | 米制 `FieldSpec`、规则尺寸与组合校验、固定纸条/锥桶/发车终点几何、生成绕桶顺序及直道入口朝向；不缩放车体或控制限值 |
 | [`crates/runner/src/field.rs`](crates/runner/src/field.rs) | 赛前编译 `FieldScenario` 为冻结的任务配置，校验派生坐标一致性，限制合成灯的可见区/触发区；不把模拟灯时钟交给任务 |
 | [`crates/runner/examples/field_matrix.rs`](crates/runner/examples/field_matrix.rs) | 固定九组场地/元素布局，分别运行同步和真实 worker 的 PP/LQR 闭环；保留失败，不代表连续尺寸范围保证 |
@@ -404,19 +472,24 @@ XT-STCAR/
 | [`crates/runner/src/control_execution/diagnostics.rs`](crates/runner/src/control_execution/diagnostics.rs) | 证书失败原因、障碍/角点索引、有单位的符号余量、源时刻/期限/采用窗和历史 V/K；无逐拍文件输出 |
 | [`crates/runner/src/control_admission.rs`](crates/runner/src/control_admission.rs) | 每份源快照准备一次共享采用上下文，验证历史、时间及有限数值；准备失败明确拒绝，不能解释为关闭前置约束 |
 | [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿合成闭环；车辆速度/曲率连续渐变，以不超过 1 ms 的子步积分并检查车体碰撞/边界，含故障后制动 |
+| [`crates/runner/src/simulation_geometry.rs`](crates/runner/src/simulation_geometry.rs)、[`sweep_simulation.rs`](crates/runner/src/sweep_simulation.rs) | 离线胶囊墙（合成雷达和独立车体检查共用）；规则范围内任意真值场景 |
+| [`crates/runner/examples/lidar_matrix.rs`](crates/runner/examples/lidar_matrix.rs)、[`lidar_sweep.rs`](crates/runner/examples/lidar_sweep.rs) | 八个场景加桶偏移和测距噪声的原生流程探测；每进程一个场景，供外部批量调度 |
 | [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
 | [`crates/runner/examples/motion_profile.rs`](crates/runner/examples/motion_profile.rs) | 显式预热与重复测量完整模拟墙钟时间；记录平均/最大及完成状态，不能当作板卡时限 |
 | [`crates/robot-core/src/navigation/terminal.rs`](crates/robot-core/src/navigation/terminal.rs) | 单/双段曲率渐变末端连接、接续数值初值、共享计算额度与求解失败诊断 |
 | [`crates/robot-core/src/navigation/continuity.rs`](crates/robot-core/src/navigation/continuity.rs) | 记录末端初值的预测状态，延迟后调整初猜并重新认证；保留已恢复短连接族，计算同姿态旧剩余路线诊断；fixtures 内含原始窗口及专项实验快照 |
+| `crates/robot-core/src/navigation/` 下的 `*_arrival.rs`、`*_replay.rs`、`short_*.rs`、`terminal_continuity_region.rs`、`oriented_region_advance.rs`、`candidate_pipeline.rs`、`stopping_envelope.rs` | 用实际采到的 worker 状态做的回放测试和对应修正（短到达、首拒、连续性区域、候选顺序）；`stopping_envelope.rs` 是原停车盘拒绝后的第二个完整停车集证明 |
 | [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
 | [`crates/runner/src/navigation_diagnostics.rs`](crates/runner/src/navigation_diagnostics.rs) | 模拟首个非预期阻塞/故障的最多 17 帧内存上下文，结束随摘要输出 |
 | [`crates/runner/src/phase_statistics.rs`](crates/runner/src/phase_statistics.rs) | 各阶段实际时长/距离、Stop 次数/命令时长、路径生成、拒绝原因及终端工作总数/每拍最大值的有界内存统计；最终制动单列 |
 | [`crates/runner/src/telemetry.rs`](crates/runner/src/telemetry.rs) | 有界内存事件日志；调试预算耗尽不影响比赛控制 |
 
-原有诊断流为：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
-在线自主流为：RGB/雷达/位姿 → 元素关联与局部空间 → 任务顺序和动态局部目标 → 原规划/跟踪及安全检查 → 车辆模型 → 下一帧反馈。
-独立串口采集先生成可回放的原始字节文件；采集没有 Arm/Start/Motion 事件。
-目前没有把采集与电机发送接成实时闭环。
+`crates/runner` 的 xt-stcar-robot 有两条流程，都没有上车跑过路线：
+- 诊断流：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
+- 在线自主流：RGB/雷达/位姿 → 元素关联与局部空间 → 任务顺序和动态局部目标 → 原规划/跟踪及安全检查 → 车辆模型 → 下一帧反馈。
+- 独立串口采集先生成可回放的原始字节文件；采集没有 Arm/Start/Motion 事件。
+
+车上的实时闭环是上面的比赛路径（`route-engine race` + `vehicle-bridge`），不经过 xt-stcar-robot。
 
 ## 运动控制
 
