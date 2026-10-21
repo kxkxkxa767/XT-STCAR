@@ -9,6 +9,23 @@ use crate::maneuver_tm::{consecutive_fresh, mature_observation};
 use crate::py::*;
 
 impl Maneuver {
+    /// In-place change of recovery_evidence. Python's _enter_neutral_pause
+    /// stores ONE dict as recovery_evidence and as the left-turn or post-pass
+    /// pause evidence, so the change shows in both while neither has been
+    /// reassigned. They are assigned together only in enter_neutral_pause, so
+    /// a shared value here is exactly Python's shared object.
+    fn update_recovery_evidence(&mut self, change: &V) {
+        let left = is_same_object(&self.recovery_evidence, &self.left_turn_pause_evidence);
+        let post = is_same_object(&self.recovery_evidence, &self.post_pass_pause_evidence);
+        self.recovery_evidence.update(change);
+        if left {
+            self.left_turn_pause_evidence = self.recovery_evidence.clone();
+        }
+        if post {
+            self.post_pass_pause_evidence = self.recovery_evidence.clone();
+        }
+    }
+
     /// begin_quality_wait(now, control, scan=None).
     pub fn begin_quality_wait(&mut self, now: &V, control: &V, scan: Option<&V>) -> bool {
         let scan_v = match scan {
@@ -652,7 +669,7 @@ impl Maneuver {
                 if !self._pause_stage_held {
                     self.right_exit_geometry = V::None;
                 }
-                self.recovery_evidence.set("last_readiness_rejection", rejection);
+                self.update_recovery_evidence(&dict! {"last_readiness_rejection" => rejection});
                 return false;
             }
             return Self::corridor_body_gap(&self.right_exit_geometry) >= 0.;
@@ -766,7 +783,7 @@ impl Maneuver {
             if control.get("resume_acked").is_true() && eq_i(control.idx("motor"), TRIAL_MOTOR) && control.get("command_acked").is_true() {
                 self.quality_resume_pending = false;
                 let ack = control.pick(&["motor", "servo", "seq", "tick"]);
-                self.recovery_evidence.set("resume_ack", ack);
+                self.update_recovery_evidence(&dict! {"resume_ack" => ack});
                 if self.route_stage == "right_align" && kind != "left_turn" {
                     self.right_exit_since = Some(now);
                 }
@@ -820,7 +837,7 @@ impl Maneuver {
         self.quality_resume_pending = true;
         self.quality_resume_since = Some(now);
         let good_count = self._quality_good_history.len();
-        self.recovery_evidence.update(&dict! {
+        self.update_recovery_evidence(&dict! {
             "resume_seq" => scan.idx("seq").clone(), "resume_at_ms" => scan.idx("at_ms").clone(),
             "resume_received_at" => scan.idx("received_at").clone(), "good_frame_count" => good_count,
         });

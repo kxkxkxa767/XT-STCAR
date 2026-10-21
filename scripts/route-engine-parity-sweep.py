@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Parity sweep: course-sim cases through route-engine-parity.py, in parallel.
 
-  python3 scripts/route-engine-parity-sweep.py OUT_DIR [all|range|matrix|measured|sensors]
+  python3 scripts/route-engine-parity-sweep.py OUT_DIR [all|range|matrix|measured|sensors|replay]
+
+replay: route-replay.py over every recorded car trial from round 64 on
+(work/vehicle-dynamic-deploy-20261008/left-cone-trial-*-N, N >= 64).
 
 One line per case (OK, or FAIL with the first difference); each case's log and,
 on a mismatch, the call's arguments (JSON) are written to OUT_DIR.
@@ -33,11 +36,19 @@ if which in ('all', 'sensors'):
             cases.append((f'sensors-{n}-graze-{seed}', ['--layout', n, '--grazing-angle-deg', '25', '--grazing-dropout', '.5', '--seed', str(seed)]))
             cases.append((f'sensors-{n}-backlash-{seed}', ['--layout', n, '--steer-backlash', '30', '--seed', str(seed)]))
 
+cases = [(name, ['scripts/course-sim.py', *args]) for name, args in cases]
+if which in ('all', 'replay'):
+    trials = [p for p in (ROOT/'work/vehicle-dynamic-deploy-20261008').glob('left-cone-trial-*-*')
+              if p.is_dir() and p.name.rsplit('-', 1)[1].isdigit()]
+    for trial in sorted(trials, key=lambda p: int(p.name.rsplit('-', 1)[1])):
+        if int(trial.name.rsplit('-', 1)[1]) >= 64 and (trial/'feedback.jsonl').is_file():
+            cases.append((f'replay-{trial.name}', ['scripts/route-replay.py', str(trial)]))
+
 def one(case):
-    name, args = case
+    name, (tool, *args) = case
     t = time.time()
     p = subprocess.run([sys.executable, str(ROOT/'scripts/route-engine-parity.py'), '--dump', str(OUT/f'{name}.json'),
-                        '--', str(ROOT/'scripts/course-sim.py'), *args], capture_output=True, text=True, cwd=ROOT)
+                        '--', str(ROOT/tool), *args], capture_output=True, text=True, cwd=ROOT)
     (OUT/f'{name}.log').write_text(p.stdout+p.stderr)
     lines = [l for l in p.stderr.splitlines() if 'PARITY' in l or l.startswith('  python') or l.startswith('  rust') or 'calls compared' in l or 'Error' in l]
     return name, p.returncode, round(time.time()-t, 1), lines[-4:]

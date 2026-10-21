@@ -533,6 +533,16 @@ fn num_eq(a: &V, b: &V) -> bool {
     }
 }
 
+/// Python `a is b` for dicts and lists: the same shared value. Holds only
+/// where the port shares a value exactly where Python shares one object.
+pub fn is_same_object(a: &V, b: &V) -> bool {
+    match (a, b) {
+        (V::Dict(x), V::Dict(y)) => Rc::ptr_eq(x, y),
+        (V::List(x), V::List(y)) => Rc::ptr_eq(x, y),
+        _ => false,
+    }
+}
+
 /// Equal with equal types throughout (autonomy_live._same).
 pub fn same(a: &V, b: &V) -> bool {
     match (a, b) {

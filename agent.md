@@ -1,33 +1,25 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-20 Claude：第96轮Rust路线引擎接入控制台并与Python逐位对比，156个仿真用例155个一致；未部署）
+## 当前接手入口（2026-10-21 Claude：第96轮Rust路线引擎已逐位验证并交叉编译，待构建部署包；未连车）
 
-第96轮（`turn96_rust_route_engine_wip_20261020`，进展见其中`progress_20261020_parity`）。用户要求把Python路线控制改写成Rust、编译后上车跑。动机：第94轮最慢一拍79ms（CPU 67ms），离0.12s硬限只差29ms，另有GIL争用。
+第96轮（`turn96_rust_route_engine_wip_20261020`，进展见`progress_20261020_parity`和`progress_20261021_build`）。用户要求把Python路线控制改写成Rust、编译后上车跑；10-21用户说“先不连接车，编译好就行”。动机：第94轮最慢一拍79ms（CPU 67ms），离0.12s硬限只差29ms，另有GIL争用。
 - 引擎：`route-engine/`，独立cargo工程，不在`crates/`里，约1.15万行，逐行移植了ManeuverSequence+TurnMotion及其用到的全部模块。`py.rs`复刻CPython的数值和异常语义。
-- 代理：`web/vehicle-console/route_engine.py`。所有会话共用一个引擎进程，控制台启动时就拉起，所以缺少或损坏的二进制会让控制台启动失败。应答超时0.5s；进程退出、协议错误或超时都抛RuntimeError，由控制节拍停车。同一帧扫描只发一次，`lane_wall_output_active()`随每次应答带回。
-- server：新增`--route-engine PATH`，不给时仍用Python（行为不变）。9处isinstance改用`MANEUVER_TYPES`。质量检查的探测在引擎内对状态副本执行。**部署注意：server.py现在import route_engine.py，部署包必须带上它（build-next的载荷清单），否则控制台起不来。**
-- 对比工具：
-  - `scripts/route-engine-parity.py -- 工具 参数`：每次调用Python和Rust都跑，比较结果和全部状态。按类型和位比较，1≠1.0，0.0≠-0.0。第一处不同打印路径后退出3。
-  - `scripts/route-engine-parity-sweep.py 输出目录 all`：并行跑全部仿真用例。
-- 结果：
-  - 默认布局一致（3756次调用）。
-  - 矩阵18/18、规则范围108/108、实测车况12/12一致。
-  - 传感器噪声17/18一致。其中掠射用例都在起步检查就结束，测到的很少。
-  - 单元测试847 OK。
-- 对比中修好两处：
-  - 编译器把同一角度的sin和cos合并成一次sincos调用（macOS `__sincos_stret`），末位与CPython不同。现在全部改为分开调用（`PyTrig`）。
-  - 罗盘`support_m`在没有墙证据时Python是int 0，Rust给的是0.0。
-- **已知未修的不一致**：user8、漏回波0.15、种子1，第2744次调用。原因是Python别名：`_enter_neutral_pause`把同一个dict同时赋给`recovery_evidence`和`post_pass_pause_evidence`（或`left_turn_pause_evidence`），之后对recovery_evidence的原地修改两边都能看到；Rust复制了值，所以只改了一边。修法已写进记录，用户说先别改，尚未应用。
-- 用户方向（记录，**现在不做**）：
-  - 网页控制台只是用户遥控和采集图像的工具，比赛时去掉，不能拖累控制效率。
-  - 摄像头保留，用于YOLO视觉任务（尚未完成）。
-  - 先跑完全程。
-  - 讨论过“独立比赛程序”（引擎和硬保护放进同一个Rust进程直接接桥，控制路径上没有Python和HTTP），用户说先别改。
+- 代理：`web/vehicle-console/route_engine.py`。所有会话共用一个引擎进程，控制台启动时拉起。应答超时0.5s；进程退出、超时或协议错误都抛RuntimeError，由控制节拍停车。
+- 控制台怎么选引擎：`route-engine`二进制放在server.py旁边就用它，所以服务启动命令（run-service.py）不变；删掉这个文件或传`--route-engine python`就回到Python。仿真和测试默认仍是Python。`/api/state`的`autonomy.route_controller`和跑车报告会写明`rust_engine`或`python`。
+- 逐位对比（`scripts/route-engine-parity.py`、`scripts/route-engine-parity-sweep.py 输出目录 all|replay`）：
+  - 仿真156/156一致：默认、矩阵18、规则范围108、实测车况12、传感器噪声18。
+  - 实车录像第64–94轮28/28一致。第75轮没有行驶记录，回放工具本身在那一轮退出。
+  - 对比中修好三处：sin/cos被合并成一次sincos调用；空sum应为int 0；Python别名，即recovery与暂停证据是同一个dict，Rust用`update_recovery_evidence`按共享值同步修改。
+- 测试：`tests/test_route_96_engine.py`共7项，覆盖异常类型、只读属性、会话释放、引擎退出/卡死→停车，以及控制台选引擎后输出与Python一致。全量854 OK。
+- 计时（Mac仿真）：最慢一拍从1.6–2.2ms降到约1.0ms，控制线程CPU 0.8ms。Python的路线计算原来占一拍的65%，现在剩下的主要是控制台自己的车身间隙检查（probe_clearance）和往返通信。车上未测。
+- 交叉编译：zigbuild，RISC-V glibc2.38，1.65MB；inspect_elf通过（只依赖libc/libm，最高GLIBC_2.34）。
+- 部署工具（work/，不进git）：
+  - `build-engine.py`：build-next的后继，载荷19项（加route_engine.py和route-engine），helper取上一个包的，所以跳过从未构建的第95轮。生成的部署脚本额外做ldd检查、引擎空跑一次会话，并在重启后要求`route_controller=rust_engine`。
+  - 部署前用旧的`read-fresh-route.py`/`validate-fresh.py`配第94轮包；部署后用`read-fresh-engine.py`/`validate-fresh-engine.py`，查17个哈希加rust_engine。
 下一步：
-1. 修掉别名不一致，sweep all跑到0。
-2. 用route-replay对第64–94轮录像做对比。
-3. 测量节拍耗时。
-4. 交叉编译RISC-V，build-next加载荷（引擎二进制和route_engine.py），start-console传`--route-engine`，部署第96轮并上车。
+1. 提交后执行一次`python3 work/vehicle-dynamic-deploy-20261008/build-engine.py claude-turn94 claude-turn96 96 turn96_rust_route_engine_wip_20261020`，记录包的哈希。
+2. 用户同意连车后：部署前检查、部署、部署后检查、确认车在起点位置，跑一次；与第94轮比较计时（max_tick_cpu_s、max_gap_breakdown）和路线。
+用户方向（记录，现在不做）：网页控制台只是遥控和采图工具，比赛时去掉，不能拖累控制效率；摄像头保留给YOLO；先跑完全程。独立比赛程序的讨论，用户说先别改。
 约定更正：长期约束“不为统一语言无故重写”在本轮按用户明确要求例外。
 
 ## 当前接手入口（2026-10-20 Claude：第95轮进近线平缓收敛，仿真20个车况选参，未上车）

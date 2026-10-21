@@ -66,6 +66,11 @@ class RouteEngine:
                 proc.wait(timeout=1)
             except (OSError, subprocess.SubprocessError):
                 pass
+            for pipe in (proc.stdin, proc.stdout):
+                try:
+                    pipe.close()
+                except OSError:
+                    pass
 
     def warm(self):
         """Start the process ahead of the first session (console start)."""

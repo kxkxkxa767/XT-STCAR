@@ -491,6 +491,7 @@ class Console:
                 'formal_max_drive_ms': self.stop_goal_contract.budget['max_drive_ms'] if self.stop_goal_contract else None,
                 'turn_ready': turn_ready, 'turn_rejection': turn_rejection, 'turn_preview': turn_preview,
                 'turn_clearance': turn_clearance,
+                'route_controller': self.route_controller(),
                 'trial_mode': trial_mode,
                 'continue_route': continue_route,
                 'trial_scope': COMPACT_TARGET_TRIAL_SCOPE if compact_target_trial else 'bounded_left_turn_trial',
@@ -504,6 +505,10 @@ class Console:
                 'trial_goal': trial_goal,
                 'active': active_report_view(self.auto_session['report']) if self.auto_session else None,
                 'last_result': self.auto_result}
+
+    def route_controller(self):
+        """Which implementation decides compact-target (route) trials."""
+        return 'python' if self.route_engine is None else 'rust_engine'
 
     def turn_preview(self, now, max_drive_s=MAX_DRIVE_S, initial_presteer_pwm=None,
                      compact_target_trial=False, continue_route=False):
@@ -608,7 +613,7 @@ class Console:
             'rear_launch_active': False, 'rear_launch_max_s': 0}
         if compact_target_trial:
             report.update(endpoint='first_compact_target_orbit_entry_trial',
-                continue_route=continue_route,
+                continue_route=continue_route, route_controller=self.route_controller(),
                 left_turn_servo_cap=SERVO_MAX,
                 trial_scope=COMPACT_TARGET_TRIAL_SCOPE, semantic_class='unknown', competition_supported=False,
                 completed=False, compact_target=decision.get('compact_target'),
@@ -2330,7 +2335,8 @@ def main():
     p.add_argument('--output', default='./recordings')
     p.add_argument('--access-file', default='./access.json')
     p.add_argument('--demo', action='store_true')
-    p.add_argument('--route-engine', help='Rust route engine binary (route-engine/); default: the Python sequence')
+    p.add_argument('--route-engine', help='Rust route engine binary (route-engine/), or "python" for the Python '
+                   'sequence; default: the route-engine binary next to this file if deployed, else Python')
     vision_group = p.add_mutually_exclusive_group()
     vision_group.add_argument('--vision-config', type=Path, help='optional persistent shadow configuration JSON')
     vision_group.add_argument('--vision-shadow', nargs=5, metavar=('BIN', 'ROAD_CONFIG', 'MODEL', 'ORT_LIB', 'MODEL_SPEC'), help='optional perception-only process; reuses camera frames, never drives')
@@ -2339,6 +2345,13 @@ def main():
     p.add_argument('--stop-goal-contract', type=Path, help='Verified clock/origin/errors/measured stopping contract')
     p.add_argument('--stop-goal-vehicle-profile', type=Path, help='Explicit measured vehicle profile; current unverified profile blocks real goals')
     args = p.parse_args()
+    # Round 96: deploying the engine binary beside server.py selects it, so
+    # the service's launch command stays unchanged; removing it, or
+    # --route-engine python, returns to the Python sequence.
+    if args.route_engine is None and (ROOT/'route-engine').is_file():
+        args.route_engine = str(ROOT/'route-engine')
+    elif args.route_engine == 'python':
+        args.route_engine = None
     if args.vision_config:
         from vision_shadow import load_config
         try:
