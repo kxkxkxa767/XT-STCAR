@@ -23493,7 +23493,20 @@
       "clearance_parity_on_car": "12,908 calls identical (car Python 3.12 + glibc libm).",
       "coast_parity_on_car": "not run through: the tool sends each whole sequence in one engine request and the proxy's .5 s reply timeout (ENGINE_TIMEOUT_S) expired on the car (RuntimeError route_engine_timeout); a tool limit, not a mismatch. To do: chunk the sequence or raise the timeout in the tool, rerun.",
       "device_check": "device-check.py: console fresh locked neutral -> service stopped -> /dev/car and /dev/laser free -> `route-engine race --start never --max-wait-s 8` with the installed vehicle-bridge (no --allow-reverse): real control and lidar feedback within .2 s, start check not ready probe_obstacle_close_body front .335 m (the console reported .334 m on the table in the round-96 self-check), never armed, exit 0; bridges exited, devices free; service started again, 6 fresh locked-neutral samples, healthy, errors {}.",
-      "in_progress": "course-sim timing python/rust96/rust (console tick with A) and the race program closed loop on the car's CPU (sim bridge): results in logs/timing-*.txt, logs/race-sim.txt, race-sim/evidence (coast fit processing_ms on the car)."
+      "timing_on_car": {
+        "what": "course-sim, console.autonomy_tick on the car's CPU (idle console + vision shadow running); new-scan p99/max wall ms; the last tick (~270-370 ms) is the run's end (halt/result/gc), not a control tick",
+        "python": "user8 55.2/57.0, doc8x4 59.5/65.6; CPU p99 46-48",
+        "round96_engine": "user8 29.0/32.8, doc8x4 34.3/38.8; CPU p99 17.2-17.6",
+        "round97_A": "user8 18.2/23.9, doc8x4 21.5/26.5; CPU p99 7.3-7.5 (median 3.5)",
+        "meaning": "A on the car: worst control tick 32.8 -> 23.9 ms (user8), 38.8 -> 26.5 ms (doc8x4); console-thread CPU p99 about 17 -> 7 ms; the estimate was ~22 ms."
+      },
+      "race_program_on_car": {
+        "what": "`route-engine race` against scripts/sim-vehicle-bridge.py, both on the car (the simulator's Python and geometry tool share the CPU), real time, user8",
+        "result": "route_finish_zone_stop with standstill confirmed (coast fit thread: stable_observed_low_motion), no contact (board .22 m, cone .291 m), final x 7.31 m",
+        "timing": "max control gap .026 s (breakdown: previous tick 1.6 ms, planned idle 18.4 ms, wake late 6.2 ms), worst tick wall 11.0 ms, worst tick CPU 4.7 ms (/proc/thread-self/schedstat)",
+        "coast_fit": "13.8-16.6 ms per fit on the car on its own thread; the console's Python worker process never delivered a result for the current scan on the car (runs 91-94: motion_result_superseded at the end, so the finish ended coast_standstill_unconfirmed)",
+        "meaning": "the console on the car has had max gaps of .09-.13 s; the program's loop stays at about the 20 ms period with no Python or HTTP in it."
+      }
     }
   }
 }
