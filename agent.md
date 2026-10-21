@@ -1,6 +1,6 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-21 Claude：第96轮Rust路线引擎已逐位验证并交叉编译，待构建部署包；未连车）
+## 当前接手入口（2026-10-21 Claude：第96轮Rust路线引擎已逐位验证、交叉编译并打好部署包；未连车、未部署）
 
 第96轮（`turn96_rust_route_engine_wip_20261020`，进展见`progress_20261020_parity`和`progress_20261021_build`）。用户要求把Python路线控制改写成Rust、编译后上车跑；10-21用户说“先不连接车，编译好就行”。动机：第94轮最慢一拍79ms（CPU 67ms），离0.12s硬限只差29ms，另有GIL争用。
 - 引擎：`route-engine/`，独立cargo工程，不在`crates/`里，约1.15万行，逐行移植了ManeuverSequence+TurnMotion及其用到的全部模块。`py.rs`复刻CPython的数值和异常语义。
@@ -16,9 +16,18 @@
 - 部署工具（work/，不进git）：
   - `build-engine.py`：build-next的后继，载荷19项（加route_engine.py和route-engine），helper取上一个包的，所以跳过从未构建的第95轮。生成的部署脚本额外做ldd检查、引擎空跑一次会话，并在重启后要求`route_controller=rust_engine`。
   - 部署前用旧的`read-fresh-route.py`/`validate-fresh.py`配第94轮包；部署后用`read-fresh-engine.py`/`validate-fresh-engine.py`，查17个哈希加rust_engine。
-下一步：
-1. 提交后执行一次`python3 work/vehicle-dynamic-deploy-20261008/build-engine.py claude-turn94 claude-turn96 96 turn96_rust_route_engine_wip_20261020`，记录包的哈希。
-2. 用户同意连车后：部署前检查、部署、部署后检查、确认车在起点位置，跑一次；与第94轮比较计时（max_tick_cpu_s、max_gap_breakdown）和路线。
+- 部署包已打好（源码c45bb39，以车上第94轮为底，桥沿用不变）：
+  - `XT-STCAR-claude-turn96-c45bb39.tar.gz`（sha256 f4a9d9bd…1380）
+  - `deploy-claude-turn96.py`
+  - helper `left-cone-trial-once-96.py`，证据目录`left-cone-trial-20261021-96`
+  - 引擎sha256 9e1b5fc4…
+  - 载荷与HEAD逐字一致，19个文件校验全过。
+  - 包只构建一次，不要重建；若再改代码，用新编号（97）。
+下一步（用户同意连车后）：
+1. 部署前：`read-fresh-route.py` + `validate-fresh.py before96-fresh.json claude-turn94-package.json`。
+2. 部署：`python3 work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn96 96`。
+3. 部署后：`read-fresh-engine.py` + `validate-fresh-engine.py after96-deploy-fresh.json claude-turn96-package.json`。
+4. 确认车在起点位置后跑一次`trial96.py`；与第94轮比较计时（max_tick_cpu_s、max_gap_breakdown）和路线。
 用户方向（记录，现在不做）：网页控制台只是遥控和采图工具，比赛时去掉，不能拖累控制效率；摄像头保留给YOLO；先跑完全程。独立比赛程序的讨论，用户说先别改。
 约定更正：长期约束“不为统一语言无故重写”在本轮按用户明确要求例外。
 

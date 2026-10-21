@@ -23254,7 +23254,7 @@
   "turn96_rust_route_engine_wip_20261020": {
     "date": "2026-10-20",
     "author": "Claude",
-    "implemented": "yes for the car test (engine + proxy + console selection; 156/156 simulator cases and 28/28 recorded car rounds bit-identical with Python; RISC-V binary built and ELF-checked); deployment package not yet built at this record, not deployed, no car run",
+    "implemented": "yes for the car test (engine + proxy + console selection; 156/156 simulator cases and 28/28 recorded car rounds bit-identical with Python; RISC-V binary ELF-checked; round-96 package built); not deployed, no car run",
     "deployed": false,
     "user": "这一轮的你可以尝试把python脚本写成rust自动控制程序，编译后放车上跑 / 换成rust应该延迟会小点吧 / 好，你改吧，好了明天试试 / 这段写完先别测试先记录 / 现在的这个校验好后记录推送 / 算了，先暂停记录推送吧 / 控制台只是方便我遥控他采集图像，正式比赛的时候这个去掉，不要让这个干扰了代码执行效率 / 不不不我只是和你说一下而已，先别改，另外摄像头是有的，因为要用yolo视觉模型只是这部分还没弄好，先跑完全程再说，你记录下推送 / (10-21) 你继续修改，先不连接车，编译好就行",
     "why": "car run 94: slowest control tick 78.6 ms wall, 67 ms CPU, max gap 91 ms against the 120 ms hard limit; earlier timing stops came from that plus GIL contention with HTTP/heartbeat threads. Estimated Rust tick: a few ms (not measured yet). Physical lags (lidar 100 ms frame, steering ~.3 s, ESC ~.45 s) do not change.",
@@ -23267,8 +23267,8 @@
       "files": "route-engine/src: py.rs, compact_target.rs, helpers.rs, maneuver.rs (struct, new, result, lock, begin_coast, orbit_inputs, update, orbit_update), maneuver_tm.rs (TurnMotion.update, junction entry, first pass), maneuver_wait.rs (quality wait, pauses), maneuver_path.rs (slew, proximity, path check), maneuver_open.rs (start lane, open loops, transfer, light entry), maneuver_post.rs (right exit, second support, light turn/lane), dump.rs, main.rs. ~11.5k lines; cargo build --release clean (no errors or warnings); py.rs unit tests pass. NOT yet compared with Python on any input."
     },
     "next_steps": [
-      "Build the round-96 package once with build-engine.py (command above) and record its archive/deploy/helper hashes.",
-      "With the car connected (user decides): before96 fresh check with the round-94 tools, deploy-claude-turn96.py, after96 check with read-fresh-engine.py + validate-fresh-engine.py, start-lane position check, one run; compare tick timing (max_tick_cpu_s, max_gap_breakdown) with run 94 and the route with run 94/95 sims.",
+      "With the car connected (user decides): ssh socket; before96 fresh check: $SSH python3 - < read-fresh-route.py > before96-fresh.json && python3 validate-fresh.py before96-fresh.json claude-turn94-package.json; deploy: python3 deploy-matched.py claude-turn96 96; after96: $SSH python3 - < read-fresh-engine.py > after96-deploy-fresh.json && python3 validate-fresh-engine.py after96-deploy-fresh.json claude-turn96-package.json (17 hashes, route_controller rust_engine); continue_route preview true; start-lane position check; one run with trial96.py.",
+      "After the run: compare max_tick_cpu_s / max_gap_breakdown / max_actual_gap_s with run 94 (79 ms worst tick) and the route with run 94; report route_controller.",
       "If the car shows it is needed: avoid the per-tick current_contact_target round trip (pure function of the scan and a few mirrored fields)."
     ],
     "not_changed": "no Python control code, server.py, Rust bridge or deployment changed in this round so far; all hard protections untouched.",
@@ -23310,6 +23310,30 @@
         "read-fresh-engine.py / validate-fresh-engine.py": "after the round-96 deploy: hash the 17 installed files (adds steer_calibration.py, route_engine.py, route-engine) and require route_controller == rust_engine. BEFORE the deploy keep using read-fresh-route.py + validate-fresh.py with claude-turn94-package.json (the installed round 94)."
       },
       "command_for_round_96": "python3 work/vehicle-dynamic-deploy-20261008/build-engine.py claude-turn94 claude-turn96 96 turn96_rust_route_engine_wip_20261020 (after committing; once)."
+    },
+    "package": {
+      "built_with": "python3 work/vehicle-dynamic-deploy-20261008/build-engine.py claude-turn94 claude-turn96 96 turn96_rust_route_engine_wip_20261020 (stdout/stderr: build96-stdout.txt / build96-stderr.txt); a dry run of the same builder into the scratchpad first (same route-engine hash, identical diffs).",
+      "source_commit": "c45bb39d9e8ca78be8cb407efc7f08958a502327",
+      "runtime_base": "claude-turn94 (installed on the car, f565aaf)",
+      "bridge": "reused unchanged (baseline claude-turn79, 925a4cc; crates/ unchanged)",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn96-c45bb39.tar.gz",
+      "archive_sha256": "f4a9d9bdbde76f3f4f047ff1707a3bfd0ec29c35249055640c4e32d993fc1380",
+      "deploy_script": "work/vehicle-dynamic-deploy-20261008/deploy-claude-turn96.py",
+      "deploy_script_sha256": "a8c3eb0b3654f06c96f50ba27baec2b991052e9b9955d2488095f814c7c3efd0",
+      "helper": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-once-96.py (evidence dir left-cone-trial-20261021-96; differs from once-94 only there)",
+      "helper_sha256": "9196ba4dae00040de977f5f6f594f232582645f6bac317e08c4708f761e697f0",
+      "route_engine_sha256": "9e1b5fc4f38ca0537ddd1c1ed9f43bc13ecc7b700305d1a42c145c40002e877a",
+      "files": 19,
+      "runtime_changed": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine",
+        "payload/route_engine.py",
+        "payload/server.py"
+      ],
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn96-20261021-094713",
+      "checks": "every payload equals HEAD (git show) and the binary equals the inspected ELF; SHA256SUMS 19/19 OK; archive 22 entries; deploy script compiles; diff against deploy-claude-turn94.py = only the engine additions (names, chmod 0700, ldd, dry session, route_controller sample key, post-restart rust_engine check) plus archive/source/OLD/label.",
+      "deployed": false,
+      "physical_trial_executed": false
     }
   }
 }
