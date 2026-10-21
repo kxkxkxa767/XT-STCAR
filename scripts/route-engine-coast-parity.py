@@ -28,6 +28,10 @@ sys.path.insert(0, str(CONSOLE))
 import coast_motion  # noqa: E402
 import route_engine  # noqa: E402
 
+# One request carries a whole sequence (up to a few hundred fits, about 15 ms
+# each on the car), so the console's per-tick answer limit does not apply here.
+route_engine.ENGINE_TIMEOUT_S = 60.
+
 spec = importlib.util.spec_from_file_location('route_engine_parity', ROOT/'scripts'/'route-engine-parity.py')
 parity = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(parity)
@@ -37,7 +41,7 @@ def saved_scans(trial):
     scans, seen = [], set()
     rows = [json.loads(line) for line in (trial/'feedback.jsonl').read_text().splitlines()]
     after = trial/'after.json'
-    if after.is_file():
+    if after.is_file() and after.stat().st_size:  # the car's copy of run 78 left it empty
         rows += json.loads(after.read_text())
     for row in rows:
         scan = (row.get('lidar') or {}).get('scan')

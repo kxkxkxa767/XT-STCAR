@@ -2,14 +2,17 @@
 """One route run of the standalone program `route-engine race` on the car.
 
   python3 race-trial.py --evidence NEW_DIR --program PATH --bridge PATH [--max-drive-s 40]
-      [--initial-presteer-pwm 1670] [--ready-hold-s 1] [--check-only]
+      [--initial-presteer-pwm 1670] [--ready-hold-s 1] [--program-sha256 H] [--bridge-sha256 H]
+      [--check-only]
 
-Runs on the car, once per evidence directory (never reused). Before: the
+Runs on the car, once per evidence directory (never reused). A round's
+packaged copy has FIXED_ARGS set by its builder and takes no arguments. The
+program and bridge must match the given hashes before anything else. Before: the
 console must report a fresh locked neutral and its own (Python) start check
 for the explicit route must pass. Then the console service is stopped (the
 program needs /dev/car and /dev/laser to itself), both devices must be free,
 and the program runs with --start ready (or --start never with --check-only)
-and writes the trial helper's evidence files into NEW_DIR/; its terminal
+and writes the trial helper's evidence files into NEW_DIR/run/; its terminal
 output goes to NEW_DIR/race-stdout.txt. Afterwards the console service is
 started again whatever happened, and six fresh locked-neutral samples are
 required (state in NEW_DIR/after-console.json). The result is
@@ -17,14 +20,17 @@ NEW_DIR/helper-result.json. The console's access token is read here and
 never printed.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import time
 import urllib.request
 
 BASE = Path('/home/bianbu/xt-stcar-console')
 SERVICE = 'xt-stcar-console.service'
+FIXED_ARGS = None  # a round's packaged copy: its arguments, set by the builder
 
 
 def main():
@@ -35,8 +41,15 @@ def main():
     parser.add_argument('--max-drive-s', default='40')
     parser.add_argument('--initial-presteer-pwm', default='1670')
     parser.add_argument('--ready-hold-s', default='1')
+    parser.add_argument('--program-sha256')
+    parser.add_argument('--bridge-sha256')
     parser.add_argument('--check-only', action='store_true')
-    args = parser.parse_args()
+    if FIXED_ARGS is not None and sys.argv[1:]:
+        raise SystemExit("this round's helper takes no arguments")
+    args = parser.parse_args(FIXED_ARGS)
+    for path, expected in ((args.program, args.program_sha256), (args.bridge, args.bridge_sha256)):
+        if expected is not None and hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
+            raise SystemExit(f'{path} does not match its expected sha256; nothing started')
     out = Path(args.evidence)
     out.mkdir(mode=0o700)  # once: an existing directory is never reused
     access = json.loads((BASE/'access.json').read_text())
@@ -50,7 +63,8 @@ def main():
 
     def neutral(s):
         c = s['status']['control']
-        return (s['owner'] is None and s['autonomy']['active'] is None and s['autonomy']['mode'] == 'locked'
+        return (s['healthy'] is True and s['owner'] is None and s['autonomy']['active'] is None
+                and s['autonomy']['mode'] == 'locked'
                 and c['armed'] is False and c['motor'] == c['servo'] == 1500 and 0 <= s['ages']['control'] < .2)
 
     def busy():
@@ -61,7 +75,9 @@ def main():
     (out/'before-console.json').write_text(json.dumps(pre, indent=2)+'\n')
     if not neutral(pre):
         raise SystemExit('console not at a fresh locked neutral; nothing started')
-    if not args.check_only and not (pre['autonomy'].get('turn_ready') and pre['autonomy'].get('continue_route') is True):
+    if not args.check_only and not (pre['autonomy'].get('turn_ready') is True
+                                    and pre['autonomy'].get('continue_route') is True
+                                    and (pre['autonomy'].get('turn_preview') or {}).get('continue_route') is True):
         raise SystemExit(f"console start check not ready ({pre['autonomy'].get('turn_rejection')}); nothing started")
     result = {'evidence_dir': str(out), 'check_only': args.check_only}
     subprocess.run(['systemctl', '--user', 'stop', SERVICE], check=True, timeout=30)

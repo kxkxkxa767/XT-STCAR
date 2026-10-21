@@ -23472,7 +23472,7 @@
         "unchanged": "route-engine-parity sweep (DualManeuverSequence) re-run after these engine changes; engine tests 13/13; clearance and coast parity re-run."
       }
     },
-    "not_yet": "the standalone program itself (bridge processes, reader threads, 20 ms loop with the console's pacing and timing records, health watch, owner lease, evidence files for trial-timeline/trial-map/route-replay, terminal status, stop on Ctrl-C), its tests with fake bridges, a deploy round and the car.",
+    "not_yet": "build round 98 (build-race.py: the round-97 file group from HEAD + race-trial.py as the round helper); deploy and a car run of the standalone program only with the user's agreement and the car back at the start.",
     "open_for_user": "how the race run starts without the console (terminal command over SSH that waits for the start check, then Enter or a countdown; or automatic start after boot) and whether a dropped terminal connection stops the run (the console's owner lease stops it when the helper dies).",
     "protections": "all unchanged in value and order (owner lease .20 s, .12 s gap, total and cumulative drive deadlines, 8 cm body gate with the raw-scan cone witness, sensor ages/health, arm/lock feedback, ACK sequences, output limits).",
     "program_20261021": {
@@ -23507,6 +23507,29 @@
         "coast_fit": "13.8-16.6 ms per fit on the car on its own thread; the console's Python worker process never delivered a result for the current scan on the car (runs 91-94: motion_result_superseded at the end, so the finish ended coast_standstill_unconfirmed)",
         "meaning": "the console on the car has had max gaps of .09-.13 s; the program's loop stays at about the 20 ms period with no Python or HTTP in it."
       }
+    },
+    "car_selfcheck_20261021c": {
+      "scope": "static only, same directory /home/bianbu/xt-stcar-console/selftest-claude-b-20261021-155035 (user: 你看一下有什么需要跑在车上的你先跑完，我要睡会了，你跑完我再走). Nothing installed, round 94 still installed; never armed.",
+      "coast_parity_on_car": {
+        "tool_fixes": [
+          "scripts/route-engine-coast-parity.py sets route_engine.ENGINE_TIMEOUT_S = 60 inside the tool: one request carries a whole sequence (about 15 ms per fit on the car), the console per-tick limit .5 s does not apply to it (the run of 20261021b stopped there with route_engine_timeout).",
+          "the car's copy of run 78 has empty after.json/summary.json/cli-result.json (the Mac copy is complete; feedback.jsonl byte-identical, sha256 520e7ae2...); a zero-length after.json now contributes no scans instead of failing (the second attempt stopped there with JSONDecodeError). The trial directory was not changed."
+        ],
+        "mac": "all recordings 64-94: 11,179 results identical (31 s).",
+        "car": "the car's 29 recordings 64-94 (logs/coast-rerun2.txt): 11,168 results identical, exit 0 (about 15 min, car Python 3.12 + glibc libm). The counts differ from the Mac only because run 78's car copy has no after.json scans."
+      },
+      "race_helper_check_only": {
+        "changes_to_scripts_race_trial": [
+          "neutral() also requires healthy is True and the start check also requires turn_preview.continue_route is True, as the round-94 helper's (left-cone-trial-once-94.py) checks;",
+          "--program-sha256/--bridge-sha256: checked before anything else (refused offline with a wrong hash before the evidence directory was created);",
+          "FIXED_ARGS: a round's packaged copy has its arguments set by the builder and refuses any command-line argument."
+        ],
+        "run_1": "race-trial-check-1 (setsid, so a dropped SSH could not skip the restart): console fresh locked neutral; service stopped; /dev/car and /dev/laser free; program --start never 20 s with the installed vehicle-bridge: start check not ready probe_obstacle_close_body front .339-.340 m; the console's own check just before: not ready, same rejection, front .340 m; never armed (control locked 1500/1500, errors {}), exit 0, 24.0 s; devices free after; service active again with 6 fresh healthy locked-neutral samples.",
+        "run_2": "race-trial-check-2 with the final helper and both hashes pinned (engine 23f6eacf..., installed bridge fc7028ae...): the same result (front .338-.340 m, never armed, exit 0, 6 healthy locked-neutral samples after)."
+      },
+      "deploy_script_engine_checks_on_car": "the round-96/97 deploy script's engine checks, not yet run on the car, run on the car's copy of the same binary: ldd only libm/libc/ld-linux; the dry session (new + drop, no device) answered ok with phase presteer, route_stage first_target, continue_route true, max_drive_s 16.",
+      "binary_identity": "the engine tested on the car (23f6eacffcf20372...) is byte-identical to the local riscv64 build of the current route-engine sources (unchanged since 249efe8), i.e. the engine round 98 will carry if the build reproduces.",
+      "after": "service active; only the console and its two bridges running; state healthy, locked, owner None, not armed, 1500/1500, control age .009 s, errors {}, route_controller None (round 94, Python)."
     }
   }
 }
