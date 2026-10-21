@@ -23531,5 +23531,31 @@
       "binary_identity": "the engine tested on the car (23f6eacffcf20372...) is byte-identical to the local riscv64 build of the current route-engine sources (unchanged since 249efe8), i.e. the engine round 98 will carry if the build reproduces.",
       "after": "service active; only the console and its two bridges running; state healthy, locked, owner None, not armed, 1500/1500, control age .009 s, errors {}, route_controller None (round 94, Python)."
     }
+  },
+  "turn98_race_program_20261021": {
+    "date": "2026-10-21",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "installed round 94 (claude-turn94, f565aaf); rounds 96 and 97 were built and never deployed (98 contains both)",
+    "change": {
+      "console": "round 97's console unchanged (A: the body-clearance check in the engine; round 96: the route decisions in the engine). web/vehicle-console and the other payload sources are byte-identical to d37560d.",
+      "engine": "payload/route-engine cross-built from HEAD: the console protocol of round 97 plus additive code only (clearance.rs keeps a copy of the stored result; main.rs adds ops, nothing removed) and the standalone program `route-engine race` (coast.rs, supervisor.rs, race.rs).",
+      "helper": "the round's helper (deploy-matched.py stages it as trial98.py) is scripts/race-trial.py with FIXED_ARGS: evidence /home/bianbu/xt-stcar-console/left-cone-trial-<build date>-98 (the console helper's, so the round runs once), --program 20260917/route-engine and --bridge 20260917/vehicle-bridge with this package's hashes, --max-drive-s 40, --initial-presteer-pwm 1670, --ready-hold-s 1. Built by work/vehicle-dynamic-deploy-20261008/build-race.py (build-engine.py, then the helper replaced; the console helper's hash is kept in the package record).",
+      "run": "the helper checks the hashes, requires a fresh healthy locked neutral and the console's own start check (turn_ready, continue_route, turn_preview.continue_route), stops the console service, requires /dev/car and /dev/laser free, runs `route-engine race --start ready --ready-hold-s 1 --max-wait-s 20` (the program's own start check must pass 1 s), and afterwards always starts the console again and requires 6 fresh healthy locked-neutral samples."
+    },
+    "validation": {
+      "mac": "console tests 865 OK (2 expected failures); route-engine cargo tests OK; supervisor parity sweep 184/185 (175,836 ticks); coast parity 11,179 results; real-time closed loop with sim-vehicle-bridge.py: route_finish_zone_stop, standstill confirmed, no contact, max gap .025 s.",
+      "car_static": "rust_control_program_wip_20261021.car_selfcheck_20261021b and 20261021c: route 28/28, supervisor 28/28 (6,101 ticks), clearance 12,908 calls, coast 11,168 results identical on the car; closed loop on the car CPU: finish zone stop, standstill confirmed, no contact, max gap .026 s, worst tick 11 ms (CPU 4.7 ms); check-only on the real devices three times (device-check.py, race-trial-check-1/2), never armed; the deploy script engine checks (ldd, dry session) passed on the car with the same binary (23f6eacf..., identical to the local build of these sources)."
+    },
+    "protections": "unchanged: owner lease .20 s (renewed by the program), .12 s control gap, total and cumulative-drive deadlines, the 8 cm body gate with the raw-scan cone witness, sensor ages and health, arm/lock feedback, ACK sequences, output limits; the bridge's own 300 ms command lease, 250 ms stale-request and 150 ms gap checks; bridges in their own process group (a killed program closes their input, they hold neutral); no --allow-reverse.",
+    "risks": [
+      "first powered run of the standalone program on the real chassis; the console's route was never run with A or the round-96 engine on the car either (rounds 96/97 never deployed).",
+      "the program does not read the camera (camera age None, camera_required False): the route is lidar-only as in the console's turn-cone route; the console with YOLO is stopped during the run.",
+      "a dropped SSH session does not stop the run (no terminal; the helper and program keep running to their end, the drive budget bounds it) and the helper still restarts the console.",
+      "the car must be at the start: on the table the start check correctly refused (probe_obstacle_close_body, front .34 m)."
+    ],
+    "procedure_differences": "agent.md section 1 steps 5-12 with build-race.py instead of build-matched.py; step 8 also: no route-engine or vehicle-bridge process outside the console's; step 10: the evidence has helper files at the top (before-console.json, after-console.json, helper-result.json, race-stdout.txt) and the program's in run/ (before.json, before-lidar.json, feedback.jsonl, after.json, summary.json, cli-result.json): 10 files, check all hashes recursively; step 11: point trial-timeline.py/trial-map.py at .../run."
   }
 }
