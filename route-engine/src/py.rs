@@ -24,6 +24,8 @@ pub enum Exc {
     IndexError,
     ZeroDivisionError,
     OverflowError,
+    /// Python RuntimeError (the console's failed bridge write).
+    RuntimeError,
     RustPanic,
 }
 
@@ -36,6 +38,7 @@ impl Exc {
             Exc::IndexError => "IndexError",
             Exc::ZeroDivisionError => "ZeroDivisionError",
             Exc::OverflowError => "OverflowError",
+            Exc::RuntimeError => "RuntimeError",
             Exc::RustPanic => "RustPanic",
         }
     }
@@ -1119,6 +1122,87 @@ pub fn fsum_py<I: IntoIterator<Item = f64>>(items: I) -> f64 {
         f += c;
     }
     f
+}
+
+/// math.fsum: Shewchuk's exact partials and CPython's final half-even
+/// fix-up across partials (Modules/mathmodule.c math_fsum).
+pub fn math_fsum<I: IntoIterator<Item = f64>>(items: I) -> f64 {
+    let mut p: Vec<f64> = Vec::new();
+    let (mut special_sum, mut inf_sum) = (0.0f64, 0.0f64);
+    for xsave in items {
+        let mut x = xsave;
+        let mut i = 0;
+        for j in 0..p.len() {
+            let mut y = p[j];
+            if x.abs() < y.abs() {
+                std::mem::swap(&mut x, &mut y);
+            }
+            let hi = x + y;
+            let yr = hi - x;
+            let lo = y - yr;
+            if lo != 0.0 {
+                p[i] = lo;
+                i += 1;
+            }
+            x = hi;
+        }
+        p.truncate(i);
+        if x != 0.0 {
+            if !x.is_finite() {
+                if xsave.is_finite() {
+                    raise(Exc::OverflowError, "intermediate overflow in fsum")
+                }
+                if xsave.is_infinite() {
+                    inf_sum += xsave;
+                }
+                special_sum += xsave;
+                p.clear();
+            } else {
+                p.push(x);
+            }
+        }
+    }
+    if special_sum != 0.0 {
+        if inf_sum.is_nan() {
+            value_error("-inf + inf in fsum")
+        }
+        return special_sum;
+    }
+    let mut hi = 0.0f64;
+    let mut n = p.len();
+    if n > 0 {
+        n -= 1;
+        hi = p[n];
+        let mut lo = 0.0f64;
+        while n > 0 {
+            let x = hi;
+            n -= 1;
+            let y = p[n];
+            hi = x + y;
+            let yr = hi - x;
+            lo = y - yr;
+            if lo != 0.0 {
+                break;
+            }
+        }
+        if n > 0 && ((lo < 0.0 && p[n - 1] < 0.0) || (lo > 0.0 && p[n - 1] > 0.0)) {
+            let y = lo * 2.0;
+            let x = hi + y;
+            let yr = x - hi;
+            if y == yr {
+                hi = x;
+            }
+        }
+    }
+    hi
+}
+
+/// statistics.fmean: math.fsum(data)/len(data).
+pub fn fmean(data: &[f64]) -> f64 {
+    if data.is_empty() {
+        value_error("fmean requires at least one data point")
+    }
+    math_fsum(data.iter().copied()) / data.len() as f64
 }
 
 /// statistics.median of floats.

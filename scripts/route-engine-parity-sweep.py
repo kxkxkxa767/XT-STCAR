@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """Parity sweep: course-sim cases through route-engine-parity.py, in parallel.
 
-  python3 scripts/route-engine-parity-sweep.py OUT_DIR [all|range|matrix|measured|sensors|replay]
+  python3 scripts/route-engine-parity-sweep.py OUT_DIR [all|range|matrix|measured|sensors|replay] [--supervisor]
 
 replay: route-replay.py over every recorded car trial from round 64 on
 (work/vehicle-dynamic-deploy-20261008/left-cone-trial-*-N, N >= 64).
 
 One line per case (OK, or FAIL with the first difference); each case's log and,
-on a mismatch, the call's arguments (JSON) are written to OUT_DIR.
+on a mismatch, the call's arguments (JSON) are written to OUT_DIR. With
+--supervisor each case runs under route-engine-supervisor-parity.py (the
+console's route supervision against its Rust port) instead.
 """
 import concurrent.futures as cf, importlib.util, subprocess, sys, json, time
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
-OUT = Path(sys.argv[1]); OUT.mkdir(parents=True, exist_ok=True)
-which = sys.argv[2] if len(sys.argv) > 2 else 'all'
+supervisor = '--supervisor' in sys.argv[1:]
+argv = [a for a in sys.argv[1:] if a != '--supervisor']
+OUT = Path(argv[0]); OUT.mkdir(parents=True, exist_ok=True)
+which = argv[1] if len(argv) > 1 else 'all'
+HARNESS = ROOT/'scripts'/('route-engine-supervisor-parity.py' if supervisor else 'route-engine-parity.py')
 spec = importlib.util.spec_from_file_location('cs_par', ROOT/'scripts/course-sim.py')
 cs = importlib.util.module_from_spec(spec); spec.loader.exec_module(cs)
 cases = []
@@ -47,10 +52,11 @@ if which in ('all', 'replay'):
 def one(case):
     name, (tool, *args) = case
     t = time.time()
-    p = subprocess.run([sys.executable, str(ROOT/'scripts/route-engine-parity.py'), '--dump', str(OUT/f'{name}.json'),
+    p = subprocess.run([sys.executable, str(HARNESS), '--dump', str(OUT/f'{name}.json'),
                         '--', str(ROOT/tool), *args], capture_output=True, text=True, cwd=ROOT)
     (OUT/f'{name}.log').write_text(p.stdout+p.stderr)
-    lines = [l for l in p.stderr.splitlines() if 'PARITY' in l or l.startswith('  python') or l.startswith('  rust') or 'calls compared' in l or 'Error' in l]
+    lines = [l for l in p.stderr.splitlines() if 'PARITY' in l or 'MISMATCH' in l or l.startswith('  python')
+             or l.startswith('  rust') or 'calls compared' in l or 'Error' in l]
     return name, p.returncode, round(time.time()-t, 1), lines[-4:]
 
 bad = 0

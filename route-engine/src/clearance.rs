@@ -647,14 +647,15 @@ pub enum Probe {
 
 /// ClearanceReuse: the last result again for a scan equal to the one it was
 /// checked on, the same arguments (equal types) and the same side of every
-/// sensor age limit; a check that raised is never reused. The result itself
-/// stays with the console (it hands out a shallow copy, as Python does);
-/// `token` names the stored one.
+/// sensor age limit; a check that raised is never reused. `kept` is the
+/// stored result (handed out again as a shallow copy, as Python does; over
+/// the engine protocol the console keeps its own copy) and `token` names it.
 #[derive(Default)]
 pub struct ClearanceReuse {
     scan: V,
     inputs: V,
     stored: bool,
+    pub kept: V,
     pub reused: i64,
     pub token: i64,
 }
@@ -674,12 +675,14 @@ impl ClearanceReuse {
         self.scan = V::None;
         self.inputs = V::None;
         self.stored = false;
+        self.kept = V::None;
         let clearance = probe_clearance(scan, ages, demo, centering, kw)?;
         let stored = inputs.is_some();
         if let Some(inputs) = inputs {
             self.scan = scan.clone();
             self.inputs = inputs;
             self.stored = true;
+            self.kept = clearance.clone();
             self.token += 1;
         }
         Ok(Probe::Fresh { clearance, stored })

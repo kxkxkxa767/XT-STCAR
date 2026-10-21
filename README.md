@@ -1,4 +1,4 @@
-# XT-STCAR（10-21 Claude：第97轮完成A，车身间隙检查已移进Rust引擎，与Python逐位一致，Mac上最慢一拍1.02→0.77ms；部署包已打好，未部署；下一步做B独立控制程序，见下方“Rust化状态”）
+# XT-STCAR（10-21 Claude：第97轮完成A，车身间隙检查进Rust引擎，部署包已打好、未部署；B独立控制程序：核心（控制台的路线监管、滑行静止判断、转向标定）已移植并与Python逐拍一致，独立程序的输入输出部分还没写，见下方“Rust化状态”）
 
 ## Rust化状态（2026-10-21）
 
@@ -20,7 +20,12 @@
 | | 范围 | 收益 | 验证 |
 | --- | --- | --- | --- |
 | A 车身间隙检查进引擎（**第97轮已完成，未部署**） | `autonomy_live.py`的probe_clearance整个函数（含直道分支）及front_gap_evidence、车道墙/单侧板投影、桶接触见证、ClearanceReuse；server里的车道、起点区、左转放宽判断仍在控制台（只读引擎镜像的状态） | Mac：最慢一拍1.02→0.77ms，控制线程CPU最大0.80→0.43ms，新帧p99 0.85→0.56ms。按第96轮车/Mac比例估计车上最慢一拍约29→约22ms、新帧p99约24.5→约16ms，尚未上车实测。剩下的最慢拍主要是一拍里多次往返（如进入滑行那拍有4次），要靠B消除 | 双跑对比：仿真156/156、录像28/28；`scripts/route-engine-clearance-parity.py`对比4.5万次；新测试6项，全量860 OK |
-| B 整个控制循环做成独立Rust程序 | server.py的节拍路径（autonomy/turn/coast tick、心跳、间隔、期限、ACK、质量等待/滑行、停车），QualityLatch/QualityRecovery，SteerOutput，滑行静止检测；包含A。只做turn-cone路线路径 | 最慢一拍<约10ms，平常<1ms；没有GIL，HTTP、心跳、摄像头线程不会再拖晚控制拍（第86/89/92轮计时停车的原因）；这就是比赛形态（比赛时去掉控制台） | 与Python控制台节拍逐拍双跑，并移植保护相关的单元测试；作为新一轮部署，有备份和回滚 |
+| B 整个控制循环做成独立Rust程序（**进行中：核心已移植并验证**） | server.py的节拍路径（autonomy/turn/coast tick、心跳、间隔、期限、ACK、质量等待/滑行、停车），QualityLatch/QualityRecovery，SteerOutput，滑行静止检测；包含A。只做turn-cone路线路径 | 最慢一拍<约10ms，平常<1ms；没有GIL，HTTP、心跳、摄像头线程不会再拖晚控制拍（第86/89/92轮计时停车的原因）；这就是比赛形态（比赛时去掉控制台） | 与Python控制台节拍逐拍双跑，并移植保护相关的单元测试；作为新一轮部署，有备份和回滚 |
+
+B的进展（`rust_control_program_wip_20261021`）：
+- `route-engine/src/coast.rs`：滑行静止判断CoastMotion及其队列。与Python在全部录像加随机改动上逐位一致，约3.3万次结果。
+- `route-engine/src/supervisor.rs`：控制台的路线监管，包括启动准入、节拍、质量等待/暂停/滑行、停车、输出检查、ACK序列、转向标定和反馈换算。用`scripts/route-engine-supervisor-parity.py`与Python控制台逐拍双跑：仿真156/156、录像28/28，共17.6万拍，每拍比较整份报告。
+- 还没写的是独立程序本身：两个桥、20ms节拍线程、健康检查、证据文件、终端输出。
 
 B的待定设计：Rust程序独占两个桥，在自己的线程上跑20ms节拍。控制台改为它的客户端，负责遥控、显示和记录、开始/停止，摄像头继续留在控制台里用于采图和YOLO。比赛时不启动控制台，启动方式待和用户定。
 

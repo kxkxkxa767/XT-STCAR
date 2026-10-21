@@ -1,5 +1,27 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-21 Claude：B独立控制程序的核心已移植并与Python逐拍一致；独立程序的输入输出还没写；未部署）
+
+记录键`rust_control_program_wip_20261021`。做法同A，先移植，再与Python双跑到0差异。
+- 第1步：`route-engine/src/coast.rs`，滑行静止判断（coast_motion.CoastMotion）和它的工作队列。`py.rs`新增按CPython实现的math.fsum和fmean，以及RuntimeError异常类型。
+  - 新工具`scripts/route-engine-coast-parity.py`：全部录像加随机改动，3个种子共约3.3万次结果逐位一致。
+  - 只有ill_conditioned_plane_geometry一个分支没触发到，它需要约8个匹配平面、其中7个平行，数据里没有这种情况。
+- 第2、3步：`route-engine/src/supervisor.rs`，约1600行，内容如下：
+  - 控制台的路线监管：turn_preview、start_turn_trial（只做带continue_route的turn-cone，其他试验仍留在控制台）、autonomy_tick的转向路径（含A的间隙检查）、turn_tick、coast_tick、begin_coast、halt；
+  - emit、转向标定（SteerOutput）和反馈换算；
+  - QualityLatch和QualityRecovery。
+- 引擎新增`sup_new`、`sup_call`两个调用，供双跑使用：输入扫描、状态、时钟、年龄、租约、序号，返回发出的指令和状态，报告按增量返回。
+- 新工具`scripts/route-engine-supervisor-parity.py`：给工具创建的每个server.Console配一个Rust监管。
+  - 每次路线启动和每一拍先在Python里跑，再用同一份输入在Rust里跑。
+  - 比较内容：结果和拒绝原因（含clearance）、发出的指令（含标定后的物理舵量）、控制台字段、会话字段、整份报告、最终结果。只有滑行的processing_ms不比较，因为它是墙钟时间。去掉这个排除后，第1207次调用即报差异，说明比较是有效的。
+  - 扫描（`route-engine-parity-sweep.py 输出目录 all --supervisor`）：仿真156/156，录像28/28，共184次启动、17.6万拍，全部一致。
+  - `--keep-going`配合新的`scripts/run-console-tests.py`，可以在双跑下跑控制台的单元测试：7个模块169项，其中130项一致。不一致的14个测试函数都直接改了Python的motion或session，或者patch了motion的方法，Rust核心看不到这些改动，已逐个用AST确认。
+- 保护全部不变（租约0.20s、0.12s间隔、总期限和累计行驶期限、8cm车身门加原始扫描的桶见证、年龄和健康、上锁和反馈、ACK序列、输出上下限）。
+- 第4步还没做：独立程序本身，包括启动两个桥、读取线程、20ms节拍（沿用控制台的节奏和计时记录）、健康检查、租约、证据文件（供trial-timeline、trial-map、route-replay使用）、终端状态显示、Ctrl-C停车，以及用假桥做测试、部署新一轮、上车。
+- 需要和用户定的：
+  - 比赛时怎么启动：SSH终端命令等起点检查通过后按回车或倒计时启动，还是开机后自动启动。
+  - 终端断开时这一圈要不要停：控制台的租约在助手断开时会停车。
+
 ## 当前接手入口（2026-10-21 Claude：第97轮A已完成，车身间隙检查进Rust引擎，逐位一致；部署包已打好，未部署；下一步B）
 
 记录键`turn97_clearance_engine_20261021`。

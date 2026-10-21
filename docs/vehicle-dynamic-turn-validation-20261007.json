@@ -23394,7 +23394,7 @@
       "B (builds on A)"
     ],
     "round_96": "the built claude-turn96 package (engine only) stays as built; A/B go into new rounds.",
-    "status_20261021": "A implemented (turn97_clearance_engine_20261021): bit-identical, Mac worst tick 1.02 -> 0.77 ms; not built, not deployed. B next."
+    "status_20261021": "A implemented (turn97_clearance_engine_20261021, round-97 package built, not deployed). B: core ported and verified (rust_control_program_wip_20261021); standalone program I/O next."
   },
   "turn97_clearance_engine_20261021": {
     "date": "2026-10-21",
@@ -23444,5 +23444,36 @@
       "checks": "SHA256SUMS 19/19 OK; payload server.py, route_engine.py, maneuver_sequence.py, autonomy_live.py byte-identical to HEAD; deploy script differs from round 96's only in archive hash and source commit; helper only in its evidence directory; same harmless zig linker message as round 96.",
       "not_deployed": "built only; no car connection. Deploy when the user agrees: before read-fresh-route.py + validate-fresh.py beforeM-fresh.json claude-turn94-package.json; deploy-matched.py claude-turn97 97; after read-fresh-engine.py + validate-fresh-engine.py after97-deploy-fresh.json claude-turn97-package.json (17 hashes, route_controller rust_engine). The round-96 package stays as built and unused (97 contains all of it)."
     }
+  },
+  "rust_control_program_wip_20261021": {
+    "date": "2026-10-21",
+    "author": "Claude",
+    "implemented": "partial (core verified; standalone program I/O not written)",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "plan": "rust_port_plan_20261021, part B (A is turn97_clearance_engine_20261021)",
+    "steps": [
+      "1 coast_motion.CoastMotion + worker queue -> route-engine/src/coast.rs (done, verified)",
+      "2 steer_calibration.SteerOutput, autonomy_live.QualityLatch/QualityRecovery -> supervisor.rs (done, verified through 3)",
+      "3 server.py route supervision (start admission, tick, coast, halt, eligibility checks, emit/calibration) -> supervisor.rs (done, verified)",
+      "4 standalone program I/O: bridges, 20 ms loop thread, health watch, owner lease, evidence, terminal output, start trigger (to do; start trigger and disconnect behaviour to settle with the user)"
+    ],
+    "coast": {
+      "port": "route-engine/src/coast.rs: _fit (statistics.fmean = math.fsum/n, added to py.rs as a port of CPython's math_fsum incl. the half-even fix-up), _planes (window fits, stable descending sort, dict.fromkeys de-duplication and point sets by value, 0.0 == -0.0), _register, CoastMotion.update (all reasons), CoastMotionWorker queue (submit/result/reset; run_pending computes; processing_ms is the wall clock, fixed for offline runs).",
+      "verification": "scripts/route-engine-coast-parity.py (new): every recorded trial from round 64 (feedback.jsonl + after.json scans, about 5 Hz) through fresh estimators in Python and Rust, as recorded and with random changes (repeats, changed duplicates, reordering later, gaps, late/invalid ages and clocks, invalid ranges, missing returns, wrong frame/seq/length), synthetic stationary runs (at-rest scans again at 10 Hz with 2 mm noise), a scene turning 5 deg per 50 ms and 1 deg per 100 ms, a receive clock drifting 30 ms per scan: seeds 97/5/3 11,179/10,360/11,216 results identical (types, float bits). Every reason reached except ill_conditioned_plane_geometry (needs about 8 matched planes, 7 parallel; not in the data)."
+    },
+    "supervisor": {
+      "port": "route-engine/src/supervisor.rs (about 1,600 lines): Supervisor (owner/lease, mode, epoch, command sequence, steer_sent, shared QualityLatch, coast worker, halt result, stop latch/tick) and Session (report, motion, phase, deadlines, recovery, quality-wait and coast fields, SteerOutput, ClearanceReuse). turn_preview, start_turn_trial (turn_cone_start with continue_route only; other trials stay in the console: route_supervisor_requires_continue_route), autonomy_tick's turn path with the A clearance check (contact witness, reuse, route quality tolerance scope), turn_tick (all quality wait/pause/coast entries, ACK grace, deadlines, arm feedback, output limits incl. right-exit proof and slow motor, ACK sequences, snapshots), coast_tick (coast worker evidence, standstill halt), begin_coast, halt, emit with output_servo/steer_sent and nominal_status. Exceptions as the console: ValueError/KeyError/RuntimeError halt with str(error) (a body stop keeps its clearance); a failed bridge write raises RuntimeError('control bridge unavailable'). Unreachable straight-path reason left_junction_reached raises instead of using JunctionStop.",
+      "engine_ops": "sup_new (demo, boot, route_controller, deterministic) and sup_call {in: scan ($base/$same), scan_at, status, control_at, owner_at, errors, ages, mono, camera_at, sequence; m: start|tick|run_pending|halt|nominal_status|dump}: answers the commands sent (with the physical servo) and the console/session state with the report as a delta; the result after a halt.",
+      "verification": {
+        "harness": "scripts/route-engine-supervisor-parity.py (new): wraps every server.Console a tool creates (hook on SourceFileLoader.exec_module of server.py); each route start and tick runs in Python, then in Rust on the inputs taken before the Python call (scan, status, clocks, sensor_ages(now), owner lease, time.monotonic, sequence); the coast worker's run_pending is doubled. Compared exactly: outcome/refusal (+clearance), commands (op, seq, tick, motor, nominal servo; physical servo where Python calibrated it), console fields, session fields, the whole report every call, the final result. Not compared: coast processing_ms (wall clock); a check with it removed fails at call 1207 (coast phase), so the comparison bites.",
+        "sweep": "route-engine-parity-sweep.py OUT all --supervisor: course-sim 156/156 and recordings 28/28 identical (round 75 has no drive); 184 starts and 175,836 ticks compared.",
+        "unit_tests_under_dual_run": "route-engine-supervisor-parity.py --keep-going -- scripts/run-console-tests.py (new) over the 7 console modules that start route runs: 169 tests, 12,806 calls compared; 130 tests identical (incl. body near, stale control/lidar, control gap, heartbeat, operator stop, contact witness, waits and resumes, coasts); the 39 differing subtests (14 test functions) all set Python motion/session state directly (motion.route_stage, first_pass_evidence, session['deadline'], session['quality_wait_neutral_sequence'], ...) or patch motion methods (update, current_contact_target), which the Rust core cannot see; checked one by one with the AST.",
+        "unchanged": "route-engine-parity sweep (DualManeuverSequence) re-run after these engine changes; engine tests 13/13; clearance and coast parity re-run."
+      }
+    },
+    "not_yet": "the standalone program itself (bridge processes, reader threads, 20 ms loop with the console's pacing and timing records, health watch, owner lease, evidence files for trial-timeline/trial-map/route-replay, terminal status, stop on Ctrl-C), its tests with fake bridges, a deploy round and the car.",
+    "open_for_user": "how the race run starts without the console (terminal command over SSH that waits for the start check, then Enter or a countdown; or automatic start after boot) and whether a dropped terminal connection stops the run (the console's owner lease stops it when the helper dies).",
+    "protections": "all unchanged in value and order (owner lease .20 s, .12 s gap, total and cumulative drive deadlines, 8 cm body gate with the raw-scan cone witness, sensor ages/health, arm/lock feedback, ACK sequences, output limits)."
   }
 }

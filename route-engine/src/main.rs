@@ -14,6 +14,7 @@
 //! "ProbeClearanceError", "msg": ..., "clearance": ...}.
 
 pub mod clearance;
+pub mod coast;
 pub mod compact_target;
 pub mod dump;
 pub mod helpers;
@@ -24,6 +25,7 @@ pub mod maneuver_post;
 pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
+pub mod supervisor;
 
 use std::io::{BufRead, BufWriter, Write};
 
@@ -44,6 +46,16 @@ struct Session {
 #[derive(Default)]
 struct Engine {
     sessions: Vec<(i64, Session)>,
+    supervisors: Vec<(i64, SupervisorSession)>,
+}
+
+/// A supervisor driven step by step (scripts/route-engine-supervisor-parity.py):
+/// the caller sets the inputs, calls one method and gets the commands and
+/// the state (the report as a delta).
+struct SupervisorSession {
+    sup: supervisor::Supervisor,
+    last_scan: V,
+    last_report: V,
 }
 
 /// Top-level keys of `new` that differ from `old` (same values and types),
@@ -84,7 +96,77 @@ impl Engine {
         if req.get("op").os() == Some("fn") {
             return crate::dict! {"ok" => true, "r" => function(req.idx("name").s(), req.idx("args").l())};
         }
+        if req.get("op").os().is_some_and(|op| op.starts_with("sup_")) {
+            return self.supervisor(sid, req);
+        }
         self.session(sid).handle(req)
+    }
+
+    fn supervisor(&mut self, sid: i64, req: &V) -> V {
+        let op = req.idx("op").s().to_string();
+        if op == "sup_new" {
+            let mut sup = supervisor::Supervisor::new(req.get("demo").truthy(), req.idx("boot").s(), req.idx("route_controller").s());
+            if req.get("deterministic").truthy() {
+                sup.coast_worker.processing_ms = Some(0.);
+                sup.unix_time = || 0.;
+            }
+            self.supervisors.retain(|(k, _)| *k != sid);
+            self.supervisors.push((sid, SupervisorSession { sup, last_scan: V::None, last_report: V::dict() }));
+            return crate::dict! {"ok" => true, "r" => V::None};
+        }
+        let Some((_, st)) = self.supervisors.iter_mut().find(|(k, _)| *k == sid) else {
+            raise(Exc::ValueError, "route_engine_no_supervisor")
+        };
+        let input = req.get("in");
+        if input.is_dict() {
+            if input.has("scan") {
+                st.sup.scan = scan_value(&mut st.last_scan, input.get("scan"));
+            }
+            for (key, value) in input.items() {
+                match &**key {
+                    "scan_at" => st.sup.scan_at = value.clone(),
+                    "status" => st.sup.status = value.clone(),
+                    "control_at" => st.sup.control_at = value.f(),
+                    "owner_at" => st.sup.owner_at = value.f(),
+                    "errors" => st.sup.errors = value.clone(),
+                    "ages" => st.sup.ages_override = if value.is_none() { None } else { Some(value.clone()) },
+                    "mono" => st.sup.mono = value.f(),
+                    "camera_at" => st.sup.camera_at = value.f(),
+                    "sequence" => st.sup.sequence = value.i(),
+                    _ => {}
+                }
+            }
+        }
+        let had_session = st.sup.session.is_some();
+        let a = req.get("a").clone();
+        let method = req.get("m").os().unwrap_or("").to_string();
+        let result = match method.as_str() {
+            "start" => match st.sup.start_turn_cone(a.idx("data"), a.idx("now"), a.idx("run_id").s()) {
+                Ok(result) => result,
+                Err((error, clearance)) => {
+                    let emits = drain_emits(&mut st.sup);
+                    return crate::dict! {"ok" => false, "exc" => error.kind.name(), "msg" => error.msg,
+                                         "clearance" => clearance, "emits" => emits, "dump" => dump_supervisor(st, had_session)};
+                }
+            },
+            "tick" => {
+                st.sup.autonomy_tick(a.idx("now"));
+                V::None
+            }
+            "run_pending" => {
+                st.sup.coast_worker.run_pending();
+                V::None
+            }
+            "halt" => {
+                st.sup.halt(a.idx("reason").s());
+                V::None
+            }
+            "nominal_status" => st.sup.nominal_status(a.idx("value")),
+            "dump" => V::None,
+            other => raise(Exc::ValueError, format!("route_engine_unknown_supervisor_method_{other}")),
+        };
+        let emits = drain_emits(&mut st.sup);
+        crate::dict! {"ok" => true, "r" => result, "emits" => emits, "dump" => dump_supervisor(st, had_session)}
     }
 
     fn mirror_delta(&mut self, req: &V) -> V {
@@ -275,6 +357,80 @@ impl Session {
     }
 }
 
+/// A scan argument ({"$base"}/{"$same"}, as for sessions) against `last`.
+fn scan_value(last: &mut V, value: &V) -> V {
+    if !value.is_dict() {
+        return value.clone();
+    }
+    if value.has("$base") {
+        *last = value.get("$base").clone();
+    } else if !value.get("$same").truthy() {
+        return value.clone();
+    }
+    let extra = value.get("$with");
+    if extra.is_dict() && !extra.items().is_empty() { last.merged(extra) } else { last.clone() }
+}
+
+fn drain_emits(sup: &mut supervisor::Supervisor) -> V {
+    V::list(
+        sup.emits
+            .drain(..)
+            .map(|e| crate::dict! {"op" => e.op, "seq" => e.seq, "tick" => e.tick, "motor" => e.motor,
+                                   "servo" => e.servo, "physical" => e.physical})
+            .collect(),
+    )
+}
+
+fn opt<T: Into<V>>(value: Option<T>) -> V {
+    value.map(Into::into).unwrap_or(V::None)
+}
+
+/// The console- and session-level state a dual run compares; the report as
+/// a delta against the last one sent; the result once the session ended.
+fn dump_supervisor(st: &mut SupervisorSession, had_session: bool) -> V {
+    let sup = &st.sup;
+    let console = crate::dict! {
+        "owner" => opt(sup.owner.clone()), "control_mode" => sup.control_mode, "control_epoch" => sup.control_epoch,
+        "arm_sequence" => sup.arm_sequence, "sequence" => sup.sequence, "stopped_tick" => sup.stopped_tick.clone(),
+        "stop_latched" => sup.stop_latched, "last_stop_reason" => sup.last_stop.get("reason").clone(),
+        "steer_sent" => V::list(sup.steer_sent.iter().map(|(k, (n, p))| V::list(vec![V::Int(*k), n.clone(), p.clone()])).collect()),
+    };
+    let mut out = crate::dict! {"console" => console};
+    match &sup.session {
+        None => {
+            out.set("session", V::None);
+            st.last_report = V::dict();
+            if had_session {
+                out.set("auto_result", sup.auto_result.clone());
+            }
+        }
+        Some(s) => {
+            let session = crate::dict! {
+                "phase" => s.phase.as_str(), "deadline" => s.deadline, "last_loop" => s.last_loop,
+                "heartbeat_seq" => s.heartbeat_seq, "motion_scan_seq" => s.motion_scan_seq.clone(),
+                "turn_last_servo" => s.turn_last_servo.clone(), "turn_servo_sequence" => opt(s.turn_servo_sequence),
+                "turn_servo_sent_at" => s.turn_servo_sent_at.clone(), "coast_since" => opt(s.coast_since.clone()),
+                "coast_deadline" => opt(s.coast_deadline), "coast_reason" => opt(s.coast_reason.clone()),
+                "motion_generation" => opt(s.motion_generation), "motion_ready_for_coast" => opt(s.motion_ready_for_coast),
+                "coast_start_seq" => s.coast_start_seq.clone(), "coast_neutral_sequence" => opt(s.coast_neutral_sequence),
+                "coast_endpoint_verified" => opt(s.coast_endpoint_verified),
+                "quality_wait_neutral_sequence" => opt(s.quality_wait_neutral_sequence),
+                "quality_resume_sequence" => opt(s.quality_resume_sequence), "quality_wait_kind" => opt(s.quality_wait_kind),
+                "quality_wait_entry_neutral" => opt(s.quality_wait_entry_neutral),
+                "quality_wait_front_sparse_entry" => opt(s.quality_wait_front_sparse_entry),
+                "route_quality_coast" => opt(s.route_quality_coast),
+                "clearance_reused" => s.clearance_reuse.reused,
+            };
+            let (changed, removed) = delta(&st.last_report, &s.report);
+            st.last_report = s.report.clone();
+            out.set("session", session);
+            out.set("report_delta", changed);
+            out.set("report_removed", V::list(removed));
+        }
+    }
+    out
+}
+
 /// Module-level functions, for checking one computation against Python.
 fn function(name: &str, args: &[V]) -> V {
     match name {
@@ -284,6 +440,11 @@ fn function(name: &str, args: &[V]) -> V {
             compact_target::scan_points(&compact_target::floats(&args[0])).into_iter().map(|p| p.map(V::from).unwrap_or(V::None)).collect(),
         ),
         "contact_supports" => V::list(compact_target::contact_supports(&args[0])),
+        "coast_motion" => {
+            // One fresh CoastMotion over [[scan, lidar_age_s, now], ...].
+            let mut motion = coast::CoastMotion::new();
+            V::list(args[0].l().iter().map(|step| motion.update(step.at(0), step.at(1), step.at(2))).collect())
+        }
         "probe_clearance" => match clearance::probe_clearance(&args[0], &args[1], &args[2], &args[3], &args[4]) {
             Ok(result) => crate::dict! {"clearance" => result},
             Err(result) => crate::dict! {"body_stop" => result},
