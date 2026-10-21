@@ -23583,7 +23583,7 @@
     "deployment": {
       "operator": "好了，摆好了连上了 / 同意部署第98轮并用独立程序跑一次",
       "before": "before98-fresh.json: six fresh locked ready samples, 14 hashes and settings match round 94",
-      "deploy": "deploy-matched.py claude-turn98 98: deployed true, error/rollback null, backup /home/bianbu/xt-stcar-console/backup-claude-turn98-20261021-163951, access token and launch command preserved, route_controller rust_engine (the first attempt was refused by Claude Code's permission check before running; the second ran and deployed, but the local wrapper returned 1 with no output: the state was verified independently)",
+      "deploy": "deploy-matched.py claude-turn98 98, run by the user in the terminal (Claude Code's permission check had refused Claude's attempt before it ran): deployed true, error/rollback null, backup /home/bianbu/xt-stcar-console/backup-claude-turn98-20261021-163951, access token and launch command preserved, serial owners 3425/3429, route_controller rust_engine (deploy98-stdout.json 18:27:30). Claude's second attempt stopped at its own guard (deploy98-stdout.json already existed: exit 1, no output) and deployed nothing; corrected 2026-10-21 from the user's terminal output.",
       "after": "after98-deploy-fresh.json: six fresh locked ready samples (rust_engine), 17 hashes and settings match round 98",
       "pre_run": "pre98-run-fresh.json: the same; staged trial98.py, installed engine and bridge hashes match; only the console and its own engine and bridges running"
     }
