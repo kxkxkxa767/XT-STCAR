@@ -762,7 +762,7 @@ impl Supervisor {
         // Pending neutral only before its first ACK (round 58: a light-lane
         // wait entered during a neutral pulse may already read 1500).
         let pending_motors: Vec<i64> = if s.quality_wait_entry_neutral == Some(true) {
-            vec![NEUTRAL, DRIVE_MOTORS[0], DRIVE_MOTORS[1]]
+            vec![NEUTRAL, DRIVE_MOTORS[0], DRIVE_MOTORS[1], DRIVE_MOTORS[2]]
         } else {
             DRIVE_MOTORS.to_vec()
         };
@@ -1395,8 +1395,19 @@ impl Supervisor {
                 || (stage_is("first_target") && m.handover_observed)
                 || (stage_is("start_lane") && m.entry_kind == Some("lane")))
             && decision.get("quality_resume_pending").is_false();
-        let motors: &[i64] = if slow_allowed { &[NEUTRAL, TRIAL_MOTOR, ROUTE_SLOW_MOTOR] } else { &[NEUTRAL, TRIAL_MOTOR] };
-        if !in_motors(&motor, motors) || !(minimum_servo as f64 <= num(&servo) && num(&servo) <= SERVO_MAX as f64) {
+        // Round 100: the start-zone lane launch may use 1600, before any
+        // handover or pass and outside a resume only.
+        let launch_allowed = phase == "drive"
+            && stage_is("start_lane")
+            && m.entry_kind == Some("lane")
+            && m.first_pass_evidence.is_none()
+            && !m.handover_observed
+            && decision.get("quality_resume_pending").is_false();
+        let mut motors: Vec<i64> = if slow_allowed { vec![NEUTRAL, TRIAL_MOTOR, ROUTE_SLOW_MOTOR] } else { vec![NEUTRAL, TRIAL_MOTOR] };
+        if launch_allowed {
+            motors.push(START_LAUNCH_MOTOR);
+        }
+        if !in_motors(&motor, &motors) || !(minimum_servo as f64 <= num(&servo) && num(&servo) <= SERVO_MAX as f64) {
             value_error("invalid_turn_trial_output")
         }
         if phase == "quality_wait"

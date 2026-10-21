@@ -1353,9 +1353,10 @@ impl Maneuver {
         Some(pmin(LANE_START_MAX_MPS, -r * a + sqrt(sq(r * a) + 2. * a * room)))
     }
 
-    /// _start_governor(speed, rise, allowed, measured_before).
-    pub fn start_governor(speed: Option<f64>, rise: f64, allowed: Option<f64>, measured_before: bool) -> i64 {
+    /// _start_governor(speed, rise, allowed, measured_before, settling).
+    pub fn start_governor(speed: Option<f64>, rise: f64, allowed: Option<f64>, measured_before: bool, settling: bool) -> i64 {
         let cap = allowed.unwrap_or(LANE_START_MAX_MPS);
+        let launch_rise = START_LAUNCH_ACCEL_MPS2 * ESC_LAG_S;
         let Some(speed) = speed else {
             if cap < LANE_SPEED_UNKNOWN_MPS * 0.6 {
                 return NEUTRAL;
@@ -1364,6 +1365,12 @@ impl Maneuver {
         };
         if speed + rise >= cap {
             return NEUTRAL;
+        }
+        if settling {
+            return ROUTE_SLOW_MOTOR;
+        }
+        if speed < START_LAUNCH_MAX_MPS && speed + launch_rise < cap {
+            return START_LAUNCH_MOTOR;
         }
         if speed < LANE_SPEED_RESTART_MPS || speed + rise < cap - LANE_START_PUSH_BAND_MPS {
             return TRIAL_MOTOR;

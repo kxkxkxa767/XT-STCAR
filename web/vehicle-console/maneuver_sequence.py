@@ -66,7 +66,11 @@ ROUTE_ORBIT_LEFT_PWM_STEP = ROUTE_POST_PASS_PWM_STEP
 # the second target, and the traffic-light section must be driven slowly
 # because the countdown starts when the body crosses the infrared sensor.
 ROUTE_SLOW_MOTOR = MIN_FORWARD_PWM
-DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR)
+# Round 100 (user: 刚开始直道那一段你可以试试1600的pwm): the open start lane
+# launches at 1600 (start-zone entry, before any handover only; the server
+# allows it nowhere else). Run 99: 1560 took 1.1 s to reach 1.0 m/s.
+START_LAUNCH_MOTOR = 1600
+DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR)
 POST_PASS_STAGES = ('right_align', 'corridor_follow', 'second_orbit', 'light_turn', 'light_lane',
                     'open_transfer', 'second_loop', 'light_entry')
 # Route mode alone may extend the cumulative drive budget (user permitted a
@@ -547,6 +551,17 @@ LANE_START_STOP_DECEL_MPS2 = .5
 LANE_START_MAX_MPS = 1.8
 LANE_START_SEARCH_M = 1.6
 LANE_START_PUSH_BAND_MPS = .4
+# Round 100: 1600 only while the measured speed is below START_LAUNCH_MAX_MPS
+# and its full ESC-lag rise stays under the allowed speed; after a 1600
+# command the rise (governor and stop check) uses START_LAUNCH_ACCEL_MPS2, an
+# assumed upper bound (no 1600 straight measurement: 1560 reached ~1.4 m/s^2
+# from rest in run 99), so the cut comes early rather than late.
+START_LAUNCH_MAX_MPS = .2
+START_LAUNCH_ACCEL_MPS2 = 2.5
+# After the last 1600 frame: no 1560 for the ESC lag plus this (the closing-
+# rate estimate trails a hard launch; course-sim with a .6 s ESC lag: 1560
+# right after the burst reached 2.1 m/s and the stopping range cut the lane).
+START_LAUNCH_SETTLE_S = .3
 # Open-course loops (round 64, entry_kind 'lane' only). Without overlapping
 # dividers there is no corridor round a support, so each support is looped
 # on a planned circle: the task side (first support on the left,
@@ -1324,11 +1339,13 @@ class ManeuverSequence(TurnMotion):
         # Searching for the first support near the start lane's stopping range.
         self._start_motor = TRIAL_MOTOR
         self._start_speed_measured = False
+        self._start_speed_last = None  # round 100: (time, speed) of the last start-lane measurement
         self.start_lane_coast_steering = None
         self.start_side_wall = None
         self._front_track = None
         self._track_history = []
         self._power_cmd_at = None  # last output frame with a drive motor (ESC lag)
+        self._launch_cmd_at = None  # round 100: last output frame at START_LAUNCH_MOTOR
         self._power_cmd_motor = None
         self._launch_until = None
         self.start_lane_feedback = None
@@ -2881,6 +2898,8 @@ class ManeuverSequence(TurnMotion):
             result['motor'] = TRIAL_MOTOR
         if result['motor'] in DRIVE_MOTORS:
             self._power_cmd_at, self._power_cmd_motor = now, result['motor']
+            if result['motor'] == START_LAUNCH_MOTOR:
+                self._launch_cmd_at = now
         stage = ('orbit_entry' if self.handover_observed and self.phase == 'drive'
                  else 'left_turn' if self.phase == 'drive' else result['turn_stage'])
         if self.phase == 'drive' and self.first_pass_preparing:
@@ -3415,14 +3434,34 @@ class ManeuverSequence(TurnMotion):
             # Only 1560 still accelerates through the lag; 1550 holds ~1.1 m/s
             # and slows a faster car.
             rise = (LANE_POWER_ACCEL_MPS2*(reaction-LANE_REACTION_BASE_S)
-                    if self._power_cmd_motor == TRIAL_MOTOR else 0.)
-            v = (speed if speed is not None else LANE_SPEED_UNKNOWN_MPS)+rise
+                    if self._power_cmd_motor == TRIAL_MOTOR else
+                    START_LAUNCH_ACCEL_MPS2*(reaction-LANE_REACTION_BASE_S)
+                    if self._power_cmd_motor == START_LAUNCH_MOTOR else 0.)
+            if self._launch_cmd_at is not None:
+                # Round 100: a 1600 frame still in the ESC lag keeps adding its
+                # rise after a later 1560/1550 command.
+                rise = max(rise, START_LAUNCH_ACCEL_MPS2*max(0., min(ESC_LAG_S, ESC_LAG_S-(now-self._launch_cmd_at))))
+            held = self._start_speed_last
+            if speed is not None:
+                base = speed
+            elif (self._power_cmd_motor == START_LAUNCH_MOTOR and held is not None
+                  and 0 <= now-held[0] <= LANE_SPEED_HOLD_S):
+                # Round 100: within a 1600 launch's ESC lag an unknown speed
+                # is its last measurement (1.3 m/s plus the 1600 rise would
+                # put the stopping range past most start lanes).
+                base = held[1]+LANE_SPEED_HOLD_MARGIN_MPS
+            else:
+                base = LANE_SPEED_UNKNOWN_MPS
+            v = base+rise
             stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)
                        + v*reaction)
             allowed = self._start_allowed_speed(ahead)
             if speed is not None:
                 self._start_speed_measured = True
-            self._start_motor = self._start_governor(speed, rise, allowed, self._start_speed_measured)
+                self._start_speed_last = (now, speed)
+            settling = (self._launch_cmd_at is not None
+                        and now-self._launch_cmd_at < ESC_LAG_S+START_LAUNCH_SETTLE_S)
+            self._start_motor = self._start_governor(speed, rise, allowed, self._start_speed_measured, settling)
         else:
             # The approach drives on at 1550 (a stopped car restarts at 1560).
             self._start_motor = (TRIAL_MOTOR if speed is not None and speed < LANE_SPEED_RESTART_MPS
@@ -5242,9 +5281,10 @@ class ManeuverSequence(TurnMotion):
         return min(LANE_START_MAX_MPS, -r*a+math.sqrt((r*a)**2+2*a*room))
 
     @staticmethod
-    def _start_governor(speed, rise, allowed, measured_before=False):
+    def _start_governor(speed, rise, allowed, measured_before=False, settling=False):
         """Start-lane motor for the measured speed against the allowed speed."""
         cap = LANE_START_MAX_MPS if allowed is None else allowed
+        launch_rise = START_LAUNCH_ACCEL_MPS2*ESC_LAG_S
         if speed is None:
             if cap < LANE_SPEED_UNKNOWN_MPS*.6:
                 return NEUTRAL
@@ -5254,6 +5294,12 @@ class ManeuverSequence(TurnMotion):
             return ROUTE_SLOW_MOTOR if measured_before else TRIAL_MOTOR
         if speed+rise >= cap:
             return NEUTRAL
+        if settling:
+            return ROUTE_SLOW_MOTOR  # round 100: just after a 1600 burst
+        # Round 100: 1600 once a speed is measured, while slow and while its
+        # full ESC-lag rise stays under the allowed speed.
+        if speed < START_LAUNCH_MAX_MPS and speed+launch_rise < cap:
+            return START_LAUNCH_MOTOR
         if speed < LANE_SPEED_RESTART_MPS or speed+rise < cap-LANE_START_PUSH_BAND_MPS:
             return TRIAL_MOTOR
         return ROUTE_SLOW_MOTOR

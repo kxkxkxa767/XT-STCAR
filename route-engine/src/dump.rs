@@ -135,7 +135,7 @@ impl Maneuver {
             "compass" => self.compass.dump(), "entry_kind" => self.entry_kind,
             "_lane_start_steering" => self._lane_start_steering.dump(), "_lane_start_settle_since" => self._lane_start_settle_since,
             "_lane_start_ticks" => self._lane_start_ticks, "_lane_start_slow" => self._lane_start_slow,
-            "_start_motor" => self._start_motor, "_start_speed_measured" => self._start_speed_measured,
+            "_start_motor" => self._start_motor, "_start_speed_measured" => self._start_speed_measured, "_start_speed_last" => opt_pair(&self._start_speed_last),
             "start_lane_coast_steering" => self.start_lane_coast_steering.clone(), "start_side_wall" => self.start_side_wall.clone(),
             "_front_track" => self._front_track.as_ref().map(|(at, sector, value)| {
                 let mut s = V::dict();
@@ -145,7 +145,7 @@ impl Maneuver {
                 V::list(vec![V::Int(*at), s, V::Float(*value)])
             }),
             "_track_history" => V::list(self._track_history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect()),
-            "_power_cmd_at" => self._power_cmd_at, "_power_cmd_motor" => self._power_cmd_motor,
+            "_power_cmd_at" => self._power_cmd_at, "_launch_cmd_at" => self._launch_cmd_at, "_power_cmd_motor" => self._power_cmd_motor,
             "_launch_until" => self._launch_until, "start_lane_feedback" => self.start_lane_feedback.clone(),
             "_lane_start_ok" => self._lane_start_ok, "first_approach" => self.first_approach.clone(),
             "_start_lane_width" => self._start_lane_width.clone(),

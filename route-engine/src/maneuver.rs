@@ -37,7 +37,9 @@ pub const ROUTE_ENTRY_RELEASE_FRAMES: usize = 2;
 pub const ROUTE_POST_PASS_PWM_STEP: i64 = 40;
 pub const ROUTE_ORBIT_LEFT_PWM_STEP: i64 = ROUTE_POST_PASS_PWM_STEP;
 pub const ROUTE_SLOW_MOTOR: i64 = MIN_FORWARD_PWM;
-pub const DRIVE_MOTORS: [i64; 2] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR];
+// Round 100: the open start lane launches at 1600 (Python's comment).
+pub const START_LAUNCH_MOTOR: i64 = 1600;
+pub const DRIVE_MOTORS: [i64; 3] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR];
 pub const POST_PASS_STAGES: [&str; 8] =
     ["right_align", "corridor_follow", "second_orbit", "light_turn", "light_lane", "open_transfer", "second_loop", "light_entry"];
 pub const ROUTE_MAX_DRIVE_S: f64 = 40.0;
@@ -122,6 +124,9 @@ pub const LANE_START_STOP_DECEL_MPS2: f64 = 0.5;
 pub const LANE_START_MAX_MPS: f64 = 1.8; // round 99 (Python's comment)
 pub const LANE_START_SEARCH_M: f64 = 1.6;
 pub const LANE_START_PUSH_BAND_MPS: f64 = 0.4;
+pub const START_LAUNCH_MAX_MPS: f64 = 0.2;
+pub const START_LAUNCH_ACCEL_MPS2: f64 = 2.5;
+pub const START_LAUNCH_SETTLE_S: f64 = 0.3;
 pub const OPEN_LEFT_RADIUS_M: (f64, f64) = (0.90, 0.95);
 pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.90, 1.40);
 pub const OPEN_PROBE_QUANTUM_M: f64 = 0.05;
@@ -477,11 +482,13 @@ pub struct Maneuver {
     pub _lane_start_slow: bool,
     pub _start_motor: i64,
     pub _start_speed_measured: bool,
+    pub _start_speed_last: Option<(f64, f64)>,
     pub start_lane_coast_steering: V,
     pub start_side_wall: V,
     pub _front_track: Option<(i64, Vec<(i64, f64)>, f64)>,
     pub _track_history: Vec<(f64, f64, f64)>,
     pub _power_cmd_at: Option<f64>,
+    pub _launch_cmd_at: Option<f64>,
     pub _power_cmd_motor: Option<i64>,
     pub _launch_until: Option<f64>,
     pub start_lane_feedback: V,
@@ -744,11 +751,13 @@ impl Maneuver {
             _lane_start_slow: false,
             _start_motor: TRIAL_MOTOR,
             _start_speed_measured: false,
+            _start_speed_last: None,
             start_lane_coast_steering: V::None,
             start_side_wall: V::None,
             _front_track: None,
             _track_history: Vec::new(),
             _power_cmd_at: None,
+            _launch_cmd_at: None,
             _power_cmd_motor: None,
             _launch_until: None,
             start_lane_feedback: V::None,
@@ -1007,6 +1016,9 @@ impl Maneuver {
         if DRIVE_MOTORS.contains(&motor) {
             self._power_cmd_at = Some(now);
             self._power_cmd_motor = Some(motor);
+            if motor == START_LAUNCH_MOTOR {
+                self._launch_cmd_at = Some(now);
+            }
         }
         let mut stage: V = if self.handover_observed && self.phase == "drive" {
             "orbit_entry".into()

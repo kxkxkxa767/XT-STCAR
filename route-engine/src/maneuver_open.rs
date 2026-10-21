@@ -350,14 +350,37 @@ impl Maneuver {
         let mut allowed = None;
         if approach.is_none() && source != "first_support_missing_frame_hold" {
             let reaction = self.reaction_s(now);
-            let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) { LANE_POWER_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S) } else { 0. };
-            let v = speed.unwrap_or(LANE_SPEED_UNKNOWN_MPS) + rise;
+            let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) {
+                LANE_POWER_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S)
+            } else if self._power_cmd_motor == Some(START_LAUNCH_MOTOR) {
+                START_LAUNCH_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S)
+            } else {
+                0.
+            };
+            let rise = match self._launch_cmd_at {
+                Some(at) => pmax(rise, START_LAUNCH_ACCEL_MPS2 * pmax(0., pmin(ESC_LAG_S, ESC_LAG_S - (now - at)))),
+                None => rise,
+            };
+            let held = self._start_speed_last;
+            let base = if let Some(s) = speed {
+                s
+            } else if let Some((at, value)) = held.filter(|(at, _)| {
+                self._power_cmd_motor == Some(START_LAUNCH_MOTOR) && 0. <= now - at && now - at <= LANE_SPEED_HOLD_S
+            }) {
+                let _ = at;
+                value + LANE_SPEED_HOLD_MARGIN_MPS
+            } else {
+                LANE_SPEED_UNKNOWN_MPS
+            };
+            let v = base + rise;
             stop_at = Some(FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * reaction);
             allowed = Self::start_allowed_speed(ahead);
-            if speed.is_some() {
+            if let Some(s) = speed {
                 self._start_speed_measured = true;
+                self._start_speed_last = Some((now, s));
             }
-            self._start_motor = Self::start_governor(speed, rise, allowed, self._start_speed_measured);
+            let settling = self._launch_cmd_at.is_some_and(|at| now - at < ESC_LAG_S + START_LAUNCH_SETTLE_S);
+            self._start_motor = Self::start_governor(speed, rise, allowed, self._start_speed_measured, settling);
         } else {
             self._start_motor =
                 if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };

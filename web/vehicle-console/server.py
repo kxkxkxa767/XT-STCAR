@@ -36,7 +36,7 @@ from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoa
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate, _number
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S, LANE_WALL_PLAY_PWM,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
-                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
+                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
                                OPEN_STAGES)
 from route_engine import RouteEngine, RustManeuverSequence
 
@@ -1762,8 +1762,16 @@ class Console:
                              or (route_stage == 'first_target' and motion.handover_observed is True)
                              or (route_stage == 'start_lane' and getattr(motion, 'entry_kind', None) == 'lane'))
                         and decision.get('quality_resume_pending') is False)
-        if (motor not in ((1500, TRIAL_MOTOR, ROUTE_SLOW_MOTOR) if slow_allowed else (1500, TRIAL_MOTOR))
-                or not minimum_servo <= servo <= SERVO_MAX):
+        # Round 100: the start-zone lane launch may use 1600, before any
+        # handover or pass and outside a resume only.
+        launch_allowed = (route and decision['phase'] == 'drive' and route_stage == 'start_lane'
+                          and getattr(motion, 'entry_kind', None) == 'lane'
+                          and motion.first_pass_evidence is None and not motion.handover_observed
+                          and decision.get('quality_resume_pending') is False)
+        allowed_motors = (1500, TRIAL_MOTOR, ROUTE_SLOW_MOTOR) if slow_allowed else (1500, TRIAL_MOTOR)
+        if launch_allowed:
+            allowed_motors += (START_LAUNCH_MOTOR,)
+        if motor not in allowed_motors or not minimum_servo <= servo <= SERVO_MAX:
             raise ValueError('invalid_turn_trial_output')
         if route and decision['phase'] == 'quality_wait' and (motor != 1500 or servo != motion.quality_wait_servo):
             raise ValueError('invalid_turn_quality_wait_output')

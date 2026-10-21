@@ -220,7 +220,8 @@ class Vehicle:
         self.rng = random.Random(seed)
 
     def target_speed(self, motor):
-        return {1550: 1.0, 1560: 1.35, 1570: 1.5}.get(motor, 0.)*self.speed_scale
+        # 1600 (round 100 start-lane launch): extrapolated from 1560/1570, not measured.
+        return {1550: 1.0, 1560: 1.35, 1570: 1.5, 1600: 1.95}.get(motor, 0.)*self.speed_scale
 
     def step(self, t, dt, motor, servo):
         self.servo_queue.append((t, servo))
@@ -257,7 +258,9 @@ class Vehicle:
 MEASURED_STEER_TABLE = ((1200, -1.35), (1314, -1.2), (1500, 0.), (1720, 1.42))
 # Steady speed (m/s) per motor PWM on tiles, straight; speed keeps rising for
 # seconds (1560: 1.2 -> 1.9 m/s over 1.3 s), so a first-order lag.
-MEASURED_TARGET_SPEED = {1550: 1.1, 1560: 2.2, 1570: 2.7, 1580: 3.2}
+# 1600 (round 100 start-lane launch): extrapolated (+.5 per 10 PWM), not
+# measured; the response is limited to 2.5 m/s^2 below.
+MEASURED_TARGET_SPEED = {1550: 1.1, 1560: 2.2, 1570: 2.7, 1580: 3.2, 1600: 4.2}
 
 
 def _interp(table, x):
