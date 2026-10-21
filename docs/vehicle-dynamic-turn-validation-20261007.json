@@ -23472,7 +23472,7 @@
         "unchanged": "route-engine-parity sweep (DualManeuverSequence) re-run after these engine changes; engine tests 13/13; clearance and coast parity re-run."
       }
     },
-    "not_yet": "build round 98 (build-race.py: the round-97 file group from HEAD + race-trial.py as the round helper); deploy and a car run of the standalone program only with the user's agreement and the car back at the start.",
+    "not_yet": "round 98 is built (turn98_race_program_20261021.package), not deployed; deploy and a car run of the standalone program only with the user's agreement and the car back at the start.",
     "open_for_user": "how the race run starts without the console (terminal command over SSH that waits for the start check, then Enter or a countdown; or automatic start after boot) and whether a dropped terminal connection stops the run (the console's owner lease stops it when the helper dies).",
     "protections": "all unchanged in value and order (owner lease .20 s, .12 s gap, total and cumulative drive deadlines, 8 cm body gate with the raw-scan cone witness, sensor ages/health, arm/lock feedback, ACK sequences, output limits).",
     "program_20261021": {
@@ -23556,6 +23556,29 @@
       "a dropped SSH session does not stop the run (no terminal; the helper and program keep running to their end, the drive budget bounds it) and the helper still restarts the console.",
       "the car must be at the start: on the table the start check correctly refused (probe_obstacle_close_body, front .34 m)."
     ],
-    "procedure_differences": "agent.md section 1 steps 5-12 with build-race.py instead of build-matched.py; step 8 also: no route-engine or vehicle-bridge process outside the console's; step 10: the evidence has helper files at the top (before-console.json, after-console.json, helper-result.json, race-stdout.txt) and the program's in run/ (before.json, before-lidar.json, feedback.jsonl, after.json, summary.json, cli-result.json): 10 files, check all hashes recursively; step 11: point trial-timeline.py/trial-map.py at .../run."
+    "procedure_differences": "agent.md section 1 steps 5-12 with build-race.py instead of build-matched.py; step 8 also: no route-engine or vehicle-bridge process outside the console's; step 10: the evidence has helper files at the top (before-console.json, after-console.json, helper-result.json, race-stdout.txt) and the program's in run/ (before.json, before-lidar.json, feedback.jsonl, after.json, summary.json, cli-result.json): 10 files, check all hashes recursively; step 11: point trial-timeline.py/trial-map.py at .../run.",
+    "package": {
+      "builder": "work/vehicle-dynamic-deploy-20261008/build-race.py claude-turn94 claude-turn98 98 turn98_race_program_20261021 (build-engine.py, then the round helper replaced; baseline = the installed round 94; stdout/stderr build98-*.txt)",
+      "source_commit": "b07d85dcc6c915bb5568845cb066ba5bbf1ea760",
+      "archive": "XT-STCAR-claude-turn98-b07d85d.tar.gz",
+      "archive_sha256": "f1c653c7aa3383298f412292173196233dce944155d941ba82d22032150e5d97",
+      "deploy_script": "deploy-claude-turn98.py",
+      "deploy_script_sha256": "0f4e19e6a36d9e9504482e038e9ce833f778d7cdf0d6afad657c3d402231d11d",
+      "helper": "left-cone-trial-once-98.py = scripts/race-trial.py with FIXED_ARGS (evidence left-cone-trial-20261021-98; the installed 20260917/route-engine and vehicle-bridge with this package's hashes; --max-drive-s 40, --initial-presteer-pwm 1670, --ready-hold-s 1); refuses any argument (checked offline)",
+      "helper_sha256": "86cfdeadaea6153d066afcf60847a8dfae43ad1edcc7bbaed8c19f67ab92faca",
+      "replaced_console_helper_sha256": "19f9aa3cec836b9cfa56f4360d7e2b031657096afbb8def6fc08761e235ccca1",
+      "files": 19,
+      "runtime_changed_vs_installed_94": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine",
+        "payload/route_engine.py",
+        "payload/server.py"
+      ],
+      "route_engine_sha256": "23f6eacffcf203726f2cc06fad1e8973d08eb3471916097b27ad96133f9762b2",
+      "route_engine_elf": "riscv64 cross build (zigbuild, glibc baseline 2.38), inspect passed=True; byte-identical to the binary tested on the car (car_selfcheck_20261021b/c)",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn98-20261021-163951",
+      "checks": "SHA256SUMS 19/19 OK; against round 97's bundle only payload/route-engine and support/validation-record.json differ (the console's Python payload is byte-identical); the deploy script differs from round 97's only in archive hash, source commit and the backup label; the helper differs from scripts/race-trial.py only in the FIXED_ARGS line; same harmless zig linker message as rounds 96/97.",
+      "not_deployed": "built only; the car is switched off. Deploy only when the user agrees, with the car at the start: agent.md section 1 steps 6-12 with claude-turn98 / 98 (procedure_differences above). The round-97 package stays as built and unused (98 contains all of it)."
+    }
   }
 }

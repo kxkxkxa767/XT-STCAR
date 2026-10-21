@@ -1,5 +1,20 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-21 夜 Claude：第98轮的包已打好（独立程序`route-engine race`跑路线），未部署；车已关机）
+
+记录键`turn98_race_program_20261021`，打包信息在其中的`package`。
+- 构建：`python3 work/vehicle-dynamic-deploy-20261008/build-race.py claude-turn94 claude-turn98 98 turn98_race_program_20261021`。它先调用build-engine.py，再把这一轮的助手换成写死参数的`scripts/race-trial.py`。
+- 内容：控制台与第97轮完全相同（A和第96轮引擎）。引擎从HEAD交叉编译，sha256 23f6eacf…，与车上测过的二进制逐字节相同。
+- 本轮助手`left-cone-trial-once-98.py`，部署时作为`trial98.py`放进stage：
+  - 先核对已装引擎和桥的哈希；
+  - 要求控制台处于新鲜、健康、锁定中位，且控制台自己的起点检查通过；
+  - 停控制台，确认两个设备空闲，跑`route-engine race --start ready --ready-hold-s 1`（累计行驶40s，预打1670）；
+  - 结束后必定恢复控制台，并要求6个健康锁定中位样本。
+  - 证据目录`left-cone-trial-20261021-98`：助手的文件在顶层，程序的文件在`run/`。
+- 核验：SHA256SUMS 19/19 OK。与第97轮相比只有引擎和记录文件不同。部署脚本只差包哈希、源提交和备份名。助手只差FIXED_ARGS一行，带任何参数都拒绝。
+- 下一步需用户同意，并且车要放回起点：按第1节第6–12步（标签claude-turn98、轮次98），差异见记录键的`procedure_differences`。
+- 还要用户定：比赛时的启动方式（默认在终端按回车；助手用的是起点检查连续通过1s后自动启动）和断线行为（无终端时断线不停车，靠40s行驶预算兜底）。
+
 ## 当前接手入口（2026-10-21 夜 Claude：车上要跑的静态检查已全部跑完（滑行对比车上11168个结果一致；车上助手只检查不启动两次通过）；车可以离开；未部署、未动车）
 
 记录键`rust_control_program_wip_20261021.car_selfcheck_20261021c`。全程静态，从未解锁，车上仍是第94轮。
