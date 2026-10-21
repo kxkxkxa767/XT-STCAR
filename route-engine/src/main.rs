@@ -10,7 +10,10 @@
 //! keys, e.g. received_at) or {"$same": 1, "$with": extra} (the previous
 //! base again, equal content). Every request names its session ("sid");
 //! {"op": "drop"} ends one, and "drops": [sid, ...] ends others first.
+//! A known-body stop of `clearance_probe` answers {"ok": false, "exc":
+//! "ProbeClearanceError", "msg": ..., "clearance": ...}.
 
+pub mod clearance;
 pub mod compact_target;
 pub mod dump;
 pub mod helpers;
@@ -24,6 +27,7 @@ pub mod py;
 
 use std::io::{BufRead, BufWriter, Write};
 
+use clearance::{ClearanceReuse, Probe};
 use maneuver::Maneuver;
 use py::*;
 
@@ -34,6 +38,7 @@ struct Session {
     last_scan: V,
     last_decision: V,
     last_mirror: V,
+    clearance: ClearanceReuse,
 }
 
 #[derive(Default)]
@@ -131,6 +136,7 @@ impl Session {
                 self.last_scan = V::None;
                 self.last_decision = V::dict();
                 self.last_mirror = V::dict();
+                self.clearance = ClearanceReuse::default();
                 crate::dict! {"ok" => true, "r" => V::None}
             }
             "call" => self.call(req),
@@ -208,6 +214,37 @@ impl Session {
                 let now = arg("now");
                 self.motion().current_contact_target(&scan, &now)
             }
+            "clearance_probe" => {
+                // server.autonomy_tick's body-clearance check: the current
+                // contact target (route sessions) as its witness, then
+                // ClearanceReuse(probe_clearance) as the console ran it.
+                let scan = self.scan_arg(&arg("scan"));
+                let now = arg("now");
+                let contact = if arg("contact").is_true() {
+                    self.motion().current_contact_target(&scan, &now)
+                } else {
+                    V::None
+                };
+                let mut kw = arg("kw");
+                kw.set("body_contact_target", contact.clone());
+                let reuse = &mut self.clearance;
+                match reuse.probe(&scan, &arg("ages"), &arg("demo"), &arg("centering"), &kw) {
+                    Ok(Probe::Reused) => crate::dict! {
+                        "contact" => contact, "reused" => true, "token" => reuse.token, "count" => reuse.reused,
+                    },
+                    Ok(Probe::Fresh { clearance, stored }) => crate::dict! {
+                        "contact" => contact, "reused" => false,
+                        "token" => if stored { V::Int(reuse.token) } else { V::None },
+                        "count" => reuse.reused, "clearance" => clearance,
+                    },
+                    Err(clearance) => {
+                        return crate::dict! {
+                            "ok" => false, "exc" => "ProbeClearanceError", "msg" => "probe_obstacle_close_body",
+                            "clearance" => clearance,
+                        };
+                    }
+                }
+            }
             "start_lane_quality_geometry" => {
                 let scan = self.scan_arg(&arg("scan"));
                 V::Bool(self.motion().start_lane_quality_geometry(&scan))
@@ -247,6 +284,10 @@ fn function(name: &str, args: &[V]) -> V {
             compact_target::scan_points(&compact_target::floats(&args[0])).into_iter().map(|p| p.map(V::from).unwrap_or(V::None)).collect(),
         ),
         "contact_supports" => V::list(compact_target::contact_supports(&args[0])),
+        "probe_clearance" => match clearance::probe_clearance(&args[0], &args[1], &args[2], &args[3], &args[4]) {
+            Ok(result) => crate::dict! {"clearance" => result},
+            Err(result) => crate::dict! {"body_stop" => result},
+        },
         _ => raise(Exc::ValueError, format!("route_engine_unknown_function_{name}")),
     }
 }

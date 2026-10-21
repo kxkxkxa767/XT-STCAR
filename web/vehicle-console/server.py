@@ -1056,25 +1056,34 @@ class Console:
                 and control.get('armed') is True and control.get('motor') in DRIVE_MOTORS
                 and type(control.get('servo')) is int and 1500 < control['servo'] <= SERVO_MAX)
             route_motion = session.get('turn_motion')
-            contact_target = None
+            route_contact = (turn_trial and session.get('continue_route') is True
+                             and isinstance(route_motion, MANEUVER_TYPES) and route_motion.continue_route is True)
             clearance_scan = self.scan
-            if (turn_trial and session.get('continue_route') is True
-                    and isinstance(route_motion, MANEUVER_TYPES) and route_motion.continue_route is True):
+            if route_contact:
                 clearance_scan = {**self.scan, 'received_at': self.scan_at} if isinstance(self.scan, dict) else self.scan
-                contact_target = route_motion.current_contact_target(clearance_scan, now)
+            # The contact target, lane and start-zone flags only read state.
             front_lane, front_side_walls = self.turn_front_walls(session, now) if turn_trial else (None, False)
-            # Round 87: an unchanged scan with unchanged inputs is not re-checked
-            # every 20 ms (ClearanceReuse); a raised check always runs again.
-            reuse = session.setdefault('clearance_reuse', ClearanceReuse())
-            clearance = reuse.probe(probe_clearance, clearance_scan, report['sensor_ages'], self.args.demo,
-                                    report.get('centering', False),
-                                    rear_launch=rear_active, camera_required=not turn_trial,
-                                    clearance_profile='maneuver' if turn_trial else 'straight',
-                                    relaxed_turn_left=relaxed_turn_left,
-                                    body_contact_target=contact_target,
-                                    front_lane=front_lane, front_side_walls=front_side_walls,
-                                    rear_start=self.turn_rear_start(session))
-            report['clearance_reused_count'] = reuse.reused
+            probe_options = dict(rear_launch=rear_active, camera_required=not turn_trial,
+                                 clearance_profile='maneuver' if turn_trial else 'straight',
+                                 relaxed_turn_left=relaxed_turn_left,
+                                 front_lane=front_lane, front_side_walls=front_side_walls,
+                                 rear_start=self.turn_rear_start(session))
+            if turn_trial and hasattr(route_motion, 'clearance_probe'):
+                # Round 97: the route engine binds the contact target and runs
+                # the same check (and its reuse) in one request.
+                _, clearance, reused = route_motion.clearance_probe(
+                    clearance_scan, now, route_contact, report['sensor_ages'], self.args.demo,
+                    report.get('centering', False), **probe_options)
+            else:
+                contact_target = route_motion.current_contact_target(clearance_scan, now) if route_contact else None
+                # Round 87: an unchanged scan with unchanged inputs is not re-checked
+                # every 20 ms (ClearanceReuse); a raised check always runs again.
+                reuse = session.setdefault('clearance_reuse', ClearanceReuse())
+                clearance = reuse.probe(probe_clearance, clearance_scan, report['sensor_ages'], self.args.demo,
+                                        report.get('centering', False), body_contact_target=contact_target,
+                                        **probe_options)
+                reused = reuse.reused
+            report['clearance_reused_count'] = reused
             if clearance['body_proximity']['target_contact_tolerated']:
                 report['target_contact_tolerated_count'] = report.get('target_contact_tolerated_count', 0)+1
             tolerable = [issue for issue in ('scan_incomplete', 'front_sparse')

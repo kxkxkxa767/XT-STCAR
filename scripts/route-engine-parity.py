@@ -6,8 +6,11 @@
   python3 scripts/route-engine-parity.py -- scripts/route-replay.py TRIAL_DIR
 
 Each console call goes to both the Python sequence (whose result the tool
-keeps using) and the engine (route_engine.RustManeuverSequence). The results
-must match exactly; values are compared by type and bits, so 1 and 1.0 differ
+keeps using) and the engine (route_engine.RustManeuverSequence); since round
+97 that includes the console's body-clearance check (clearance_probe: the
+contact target plus ClearanceReuse(probe_clearance), compared with its reuse
+count and, for a body stop, the attached clearance). The results must match
+exactly; values are compared by type and bits, so 1 and 1.0 differ
 and so do 0.0 and -0.0. After a call (every N calls with --every) the whole
 Python state (__dict__, nested objects as their __dict__) must equal the
 engine's dump. The first difference is printed with its path and the run
@@ -87,12 +90,13 @@ def outcome(call):
 
 def describe_error(error):
     message = str(error) if not isinstance(error, TypeError) else ''
-    return [type(error).__name__, message]
+    return [type(error).__name__, message, normalize(getattr(error, 'clearance', None))]
 
 
 class Parity:
     every = 1
     calls = 0
+    methods = {}
     engine = None
     dump = None
     last_call = None
@@ -114,6 +118,7 @@ def fail(where, found):
 
 def install(engine_path, every):
     sys.path.insert(0, str(CONSOLE))
+    import autonomy_live
     import maneuver_sequence
     import route_engine
     original = maneuver_sequence.ManeuverSequence
@@ -131,6 +136,7 @@ def install(engine_path, every):
             if py_out[0] == 'error':
                 raise py_out[1]
             state['_py'], state['_rust'] = py_out[1], rust_out[1]
+            state['_py_reuse'] = autonomy_live.ClearanceReuse()
             self._check_state('__init__')
 
         def __getattr__(self, name):
@@ -140,6 +146,7 @@ def install(engine_path, every):
 
         def _compare(self, where, py_out, rust_out, result=True):
             Parity.calls += 1
+            Parity.methods[where] = Parity.methods.get(where, 0)+1
             if py_out[0] != rust_out[0]:
                 fail(where, ('$.outcome', py_out[0] == 'error' and describe_error(py_out[1]) or 'ok',
                              rust_out[0] == 'error' and describe_error(rust_out[1]) or 'ok'))
@@ -202,6 +209,23 @@ def install(engine_path, every):
         def lane_wall_output_active(self):
             return self._both('lane_wall_output_active')
 
+        def clearance_probe(self, scan, now, contact, ages, demo=False, centering=False, **kwargs):
+            # server.autonomy_tick's Python path for the same arguments.
+            def python_probe():
+                target = self._py.current_contact_target(scan, now) if contact else None
+                reuse = self.__dict__['_py_reuse']
+                clearance = reuse.probe(autonomy_live.probe_clearance, scan, ages, demo, centering,
+                                        body_contact_target=target, **kwargs)
+                return target, clearance, reuse.reused
+            Parity.last_call = ['clearance_probe', [scan, now, contact, ages, demo, centering], kwargs]
+            rust_out = outcome(lambda: self._rust.clearance_probe(scan, now, contact, ages, demo, centering, **kwargs))
+            py_out = outcome(python_probe)
+            self._compare('clearance_probe', py_out, rust_out)
+            self._check_state('clearance_probe')
+            if py_out[0] == 'error':
+                raise py_out[1]
+            return py_out[1]
+
         def probe_measurement(self, scan, candidates, dt):
             def python_probe():
                 probe = copy.copy(self._py)
@@ -235,7 +259,8 @@ def main():
     try:
         runpy.run_path(options.script, run_name='__main__')
     finally:
-        print(f'parity: {Parity.calls} calls compared', file=sys.stderr)
+        counts = ', '.join(f'{name} {count}' for name, count in sorted(Parity.methods.items()))
+        print(f'parity: {Parity.calls} calls compared ({counts})', file=sys.stderr)
         Parity.engine.close()
 
 

@@ -23393,6 +23393,34 @@
       "A (into route-engine/, new round number 97+)",
       "B (builds on A)"
     ],
-    "round_96": "the built claude-turn96 package (engine only) stays as built; A/B go into new rounds."
+    "round_96": "the built claude-turn96 package (engine only) stays as built; A/B go into new rounds.",
+    "status_20261021": "A implemented (turn97_clearance_engine_20261021): bit-identical, Mac worst tick 1.02 -> 0.77 ms; not built, not deployed. B next."
+  },
+  "turn97_clearance_engine_20261021": {
+    "date": "2026-10-21",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "package_built": false,
+    "user": "就改a和b你先记录下需要改和已经改成rust的部分README.md里面也加上吧，我压缩下上下文，后你再开始 / 开始吧",
+    "plan": "rust_port_plan_20261021, part A",
+    "change": {
+      "engine": "route-engine/src/clearance.rs (new): autonomy_live.probe_clearance line for line, the whole function including the straight profile, with front_gap_evidence, _front_lane_wall_projection, _front_side_wall_projection, _body_contact_bins (cone-like witness recomputed from the raw scan with the ported contact_supports), _age_sides, _same (dict keys as a set, no identity shortcut) and ClearanceReuse; reuses the already ported side_wall_fit, valid_candidate and current_contact_target. Same result dicts (key order, int/float types, signed zeros), same ValueError messages; the known-body stop returns its clearance (ProbeClearanceError).",
+      "protocol": "new call method clearance_probe {scan, now, contact, ages, demo, centering, kw}: with contact the session's current_contact_target is the witness (body_contact_target), then ClearanceReuse(probe_clearance) in the session. Answer {contact, reused, token, count, clearance (only when not reused)}; a body stop answers ok=false, exc ProbeClearanceError, msg probe_obstacle_close_body, clearance. op fn probe_clearance for pure checks.",
+      "proxy": "route_engine.RustManeuverSequence.clearance_probe returns (contact_target, clearance, reused_count). A reused answer hands out the kept result again as a shallow copy (dict of the result kept when it was computed, as ClearanceReuse does; nested values shared like Python's); the engine names the kept result with a token and a missing/other token is route_engine_protocol_error. ProbeClearanceError is rebuilt with its clearance, so the tick's halt keeps report.clearance_current from the error as before.",
+      "server": "autonomy_tick: when the turn motion has clearance_probe (the engine's), one request replaces current_contact_target + ClearanceReuse(probe_clearance); otherwise (Python motion, straight sessions) the old Python path unchanged. turn_front_walls/turn_rear_start/relaxed_turn_left are still decided in the console from the mirrored state (pure reads, now evaluated before the contact target; only the order of two simultaneous exceptions could differ, none of these raise on valid state). Preview (turn_preview), health_watch and straight/arm paths keep Python probe_clearance.",
+      "unchanged": "all protections and their values: 8 cm body gate with the cone exception (witness checked against this raw scan), 4 cm relaxed left-turn gate, start-zone rear exemption, sensor ages/stale/clock, front gates and route tolerances, ACK, .12 s gap, 300 ms heartbeat. Python probe_clearance stays (fallback, preview, reference)."
+    },
+    "scope_from_profile": "cProfile of console.autonomy_tick with the round-96 engine (course-sim user8, Mac): 0.513 s over 1326 ticks; ClearanceReuse.probe 0.251 s = probe_clearance 0.165 s in 272 real checks (0.6 ms each) + deep copies 0.047 + comparisons 0.031 (cone supports in it 0.038); engine round trips 0.160 s; turn_front_walls 0.013 s (kept in Python). Whole functions were ported instead of covered lines; the fuzz below reaches every branch.",
+    "verification": {
+      "route_parity_sweep": "scripts/route-engine-parity-sweep.py all (DualManeuverSequence now also compares clearance_probe: contact target, clearance or error with its attached clearance, reuse count, then the whole state): course-sim 156/156 and recordings 28/28 bit-identical (round 75 has no recorded drive, the replay tool exits); 175,834 clearance_probe calls compared. Default layout 3756 calls (__init__ 1, begin_coast 1, clearance_probe 1251, lane_wall_output_active 1250, update 1253).",
+      "clearance_fuzz": "scripts/route-engine-clearance-parity.py (new): every scan of rounds 64-94 with random arguments and changes (front null runs, scattered nulls, returns at/around each body face incl. exact stop distances, synthetic cones, integer ranges, invalid values incl. NaN/inf/bool/str, wrong frame/seq/length, late/invalid ages, invalid profile/flags, lanes not in the scan or past 90 deg, cone-like/confirmed/broken witnesses) through Python and the engine, plus every trial's frames in order through ClearanceReuse and clearance_probe: seed 97 x6 16,684 calls and seed 1 x12 28,460 calls, all identical (types, float bits, messages, attached clearances). Seed 1 reached: ok 8858, body stop 3796, every ValueError branch, lane projection hits 688, side-board projection hits 1861, cone contact tolerated 417, rear-start exemptions 500, relaxed nearest point 1443, tolerable scan_incomplete 1405 / front_sparse 847.",
+      "tests": "tests/test_route_97_clearance.py (6): results and reuse follow ClearanceReuse (equal content reused, across the lidar limit / other arguments checked again), kept result handed out as a shallow copy, body stop carries its clearance and is never reused, other refusals keep type and message, token mismatch = protocol error, console tick with the engine (bound cone into contact continues, wall point stops) identical to the Python console (per-tick clearances, outputs, halt reason and clearance). Full suite 860 OK (expected failures 2).",
+      "timing_mac": "course-sim, console.autonomy_tick, user8 / doc8x4: Python worst 1.61 / 1.60 ms; round-96 engine worst 1.02 / 0.99 ms, console CPU max 0.80 / 0.79, new-scan p99 0.85 / 0.93, repeat p99 0.44 / 0.43; round 97 worst 0.77 / 0.76 ms, CPU max 0.43 / 0.40, new-scan p99 0.56 / 0.56, repeat p99 0.20 / 0.21. Worst tick is the light-lane coast start (4 engine requests in one tick); others about 0.5 ms.",
+      "car_estimate": "not measured on the car. With round 96's car/Mac ratio (~29x): worst tick ~29 -> ~22 ms, new-scan p99 ~24.5 -> ~16 ms. The earlier plan estimate (~15 ms) did not count the remaining round trips; B removes them."
+    },
+    "risks": "a scan field containing NaN outside ranges would compare unequal in the engine's reuse check where Python's deep copy keeps the same float object (equal by identity): only the reuse count could differ, never a result; no source of such values (the bridge cannot emit NaN). Car timing and the deploy are not checked yet.",
+    "next": "build as round 97 (build-engine.py with the installed round-94 package as baseline; the round-96 package stays as built, round 97 contains all of it); deploy and measure on the car when the user agrees; then B."
   }
 }

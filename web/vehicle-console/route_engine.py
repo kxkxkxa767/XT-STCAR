@@ -3,9 +3,12 @@
 The engine is a line-for-line port of ManeuverSequence. This module gives the
 console the same interface: every call goes to one shared engine process over
 stdin/stdout JSON lines; the console keeps all of its own hard checks
-(owner/heartbeat/gap/body clearance/ACK) and treats the result exactly like the
-Python sequence's. Any engine failure (process exit, protocol error, timeout,
-internal panic) raises RuntimeError, which the autonomy tick turns into a halt.
+(owner/heartbeat/gap/ACK) and treats the result exactly like the Python
+sequence's. Round 97: the body-clearance check (autonomy_live.probe_clearance
+with ClearanceReuse, same 8 cm gate and cone exception) also runs in the
+engine, in one request with the contact target. Any engine failure (process
+exit, protocol error, timeout, internal panic) raises RuntimeError, which the
+autonomy tick turns into a halt.
 """
 import json
 import os
@@ -14,6 +17,7 @@ import subprocess
 import threading
 from time import monotonic  # bound now: tools may patch time.monotonic
 
+from autonomy_live import ProbeClearanceError
 from maneuver_sequence import DEFAULT_INITIAL_PWM, ManeuverSequence
 
 
@@ -29,6 +33,8 @@ _SCALARS = (type(None), bool, int, float, str)
 
 def _engine_error(response):
     name, message = response.get('exc'), response.get('msg', '')
+    if name == 'ProbeClearanceError':
+        return ProbeClearanceError(message, response.get('clearance'))
     kind = EXCEPTIONS.get(name)
     if kind is None:
         return RuntimeError(f'route_engine_{name or "error"}: {message}')
@@ -236,6 +242,29 @@ class RustManeuverSequence:
     def lane_wall_output_active(self):
         # A pure predicate of the state, mirrored with every response.
         return self._mirror['lane_wall_output_active()']
+
+    def clearance_probe(self, scan, now, contact, ages, demo=False, centering=False, **kwargs):
+        """server.autonomy_tick's body-clearance check, in the engine (round 97).
+
+        With ``contact`` (route sessions) the engine first takes this scan's
+        current_contact_target as the witness, then runs
+        ClearanceReuse(probe_clearance) as the console did. Returns
+        (contact_target, clearance, reused_count); raises what probe_clearance
+        raises (ProbeClearanceError with its clearance). A reused result is
+        the kept one again as a shallow copy, as ClearanceReuse hands it out.
+        """
+        r = self._call('clearance_probe', scan=self._scan(scan), now=now, contact=contact, ages=ages,
+                       demo=demo, centering=centering, kw=kwargs)
+        if r['reused']:
+            kept = self.__dict__.get('_clearance')
+            if kept is None or kept[0] != r['token']:
+                raise RuntimeError('route_engine_protocol_error')
+            clearance = dict(kept[1])
+        else:
+            clearance = r['clearance']
+            if r['token'] is not None:
+                self.__dict__['_clearance'] = (r['token'], dict(clearance))
+        return r['contact'], clearance, r['count']
 
     def probe_measurement(self, scan, candidates, dt):
         """server.turn_route_quality_scope's isolated _measurement check."""
