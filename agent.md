@@ -1,5 +1,28 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-21 晚 Claude：B独立程序已写好，Mac上闭环仿真跑完全程；车上静态自检进行中；未部署、未动车）
+
+记录键`rust_control_program_wip_20261021`，其中`program_update_20261021`和`car_selfcheck_20261021b`是本次的内容。
+- 程序：`route-engine race`（`route-engine/src/race.rs`）。
+  - 默认累计行驶预算40s，同助手的`--max-seconds 40`，并按1..40检查。
+  - 滑行静止拟合放在独立线程。之前从未计算待拟合的帧，所以终点一直报coast_standstill_unconfirmed，已修好。
+  - `--start enter|ready|never`，never只检查、从不解锁。
+  - 测试`tests/test_route_97_race.py`共5项。
+- Mac实时闭环仿真（`scripts/sim-vehicle-bridge.py`，user8）：跑完全程，结束原因route_finish_zone_stop，静止已确认，无接触，最大间隔0.025s，最慢一拍1.1ms。trial-timeline和trial-map可以直接读程序的证据文件。
+- 车上助手`scripts/race-trial.py`（新写，还没用过）：
+  - 先确认控制台处于新鲜锁定中位，且控制台自己的Python起点检查通过；
+  - 然后停控制台服务，跑一次`route-engine race --start ready`；
+  - 最后必定恢复控制台，并要求6个新鲜锁定中位样本。
+  - 证据放在`新目录/run/`。
+- 车上静态自检（用户：“车我连上了，放在桌子上，你可以静态测试”）：目录`/home/bianbu/xt-stcar-console/selftest-claude-b-20261021-155035`，代码为HEAD 249efe8，RISC-V引擎sha256 23f6eacf…，ELF检查通过。
+  - 测试18项OK。
+  - 车上录像双跑：路线引擎28/28，监管核心28/28（共6101拍），间隙检查12908次，全部一致。第75轮无行驶。
+  - 滑行拟合的对比没跑完：工具一次请求发送整段序列，超过了代理0.5s的应答超时。这是工具的限制，不是差异，待改成分段后重跑。
+  - 真实设备只检查（`device-check.py`）：停控制台后两个设备空闲；用真实的桥跑`--start never` 8s，0.2s内收到真实反馈；起点检查不通过（probe_obstacle_close_body，前方0.335m，与控制台在桌上报的0.334m一致）；从未解锁。之后控制台恢复，6个新鲜锁定中位样本，healthy，无错误。
+  - 进行中：车上的course-sim计时（python、rust96、rust三种），以及独立程序在车CPU上的闭环仿真，重点看滑行拟合在车上的耗时。结果在该目录的`logs/timing-*.txt`、`logs/race-sim.txt`、`race-sim/evidence`。
+- 还没做：取回车上计时并记录；修好滑行对比工具后重跑；用新编号（98）打包，载荷含race程序和race-trial.py；部署和上车跑需用户同意。
+- 待用户定：比赛时怎么启动（回车，还是检查通过后自动），以及断线时要不要停车。
+
 ## 当前接手入口（2026-10-21 Claude：B独立控制程序的核心已移植并与Python逐拍一致；独立程序的输入输出还没写；未部署）
 
 记录键`rust_control_program_wip_20261021`。做法同A，先移植，再与Python双跑到0差异。
