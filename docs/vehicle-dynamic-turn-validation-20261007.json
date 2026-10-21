@@ -23651,8 +23651,8 @@
     "date": "2026-10-21",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "installed round 99 (claude-turn99, e80ee80)",
     "user": "刚开始直道那一段你可以试试1600的pwm",
     "change": {
@@ -23667,6 +23667,38 @@
     "risks": [
       "1600 acceleration on the car is not measured; the burst is short and the stop check is unchanged, so the worst case is a start-lane coast (run ends early), not a higher-speed loop entry",
       "wheel slip at the 1600 launch"
-    ]
+    ],
+    "deployment": {
+      "operator": "要不不模拟，直接编译下一轮测试",
+      "before": "before100-fresh.json: six fresh locked ready samples, 17 hashes match round 99; start lane heading +.2 deg, 3 cm left, lane .927 m, side gap .291 m, ahead 7.57 m",
+      "deploy": "deploy-matched.py claude-turn100 100: deployed, error/rollback null, backup backup-claude-turn100-20261021-192411",
+      "after_and_pre_run": "six fresh locked ready samples, 17 hashes match round 100; helper 210561ec..., engine 4e986aa8..., bridge fc7028ae... match"
+    }
+  },
+  "turn100_actual_20261021": {
+    "date": "2026-10-21",
+    "trial": 100,
+    "source_commit": "2814359",
+    "route_controller": "rust_program",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261021-100",
+    "evidence_sha256_files_ok": 10,
+    "result": "complete route, route_finish_zone_stop with standstill confirmed (first time for the standalone program); finish stop 20.13 s after the first drive (runs 99/98: 18.21/17.37 s). 1600 was NEVER commanded: the start-lane speed stayed unknown until 1.12 s and its first value was 1.38 m/s (> START_LAUNCH_MAX_MPS .2), so the launch ran at 1560. The first approach began later (ahead 3.94 m; run 99 4.37 m), the stopping taper coasted the lane at 2.7-3.2 s.",
+    "timing": "max gap .0218 s, worst tick 4.6 ms; scan_to_tick 219 scans, mean 1.23 ms, max 5.5 ms",
+    "light_lane_all_runs": "runs 98/99/100: the light lane starts at 1.5-1.7 m/s with 3.1-3.4 m to the board and coasts at once (slow zone latched: gap <= cut gap + .6 m), ~2.7 s, the car stops 1.0-1.3 m from the board (outside the .8 m zone), then creeps on in 1560 kicks and stops (run 100: three kicks, ~3 s). The cut uses the weakest coast decel (.35 m/s^2) plus the reaction; the car cannot brake.",
+    "user": "最后那段直道想办法让他一口气跑完不要停顿，这个太耗时间了，你记录提交，我压缩上下文"
+  },
+  "turn100b_launch_from_rest_wip_20261021": {
+    "date": "2026-10-21",
+    "author": "Claude",
+    "implemented": false,
+    "deployed": false,
+    "status": "work in progress, NOT in the committed code: saved as work/vehicle-dynamic-deploy-20261008/round100b-launch-from-rest-wip.patch (sha256 74c8498ae6ecaaf4..., 132 lines, against 2814359); the four files were restored to 2814359.",
+    "design": "1600 for the first START_LAUNCH_S .3 s of drive from rest (no speed measured yet) where its full rise fits under the allowed speed; just after it 1550 while settling; until the first measurement the stop check bounds the speed from rest: min(1.3, 2.5 x max(0, t - drive_since - .3)) (only once a 1600 frame was sent).",
+    "validation_so_far": "start-lane/open-course tests 56/57: L5.0W6.0lane0.9div0.4cone+0.0+0.0 (test_close_second_divider_and_light_entry_regressions) fails; full suite and parity not run."
+  },
+  "next_tasks_20261021": {
+    "light_lane_one_go": "user: 最后那段直道想办法让他一口气跑完不要停顿. Evidence above (light_lane_all_runs). Options: (1) cut later from the measured coast decel of this lane (_lane_coast_decel, currently clamped to .35-.375) and a lower approach speed so one coast lands in the zone; (2) a controlled brake at the finish (ESC mode kept: bidirectional with brake; needs the bridge below 1500 = brake, its own guard and tests; the race program starts the bridge without reverse); (3) avoid the latched early slow zone at 1.5 m/s.",
+    "launch_1600": "finish turn100b (fix the L5.0 short-course case) or keep 1560.",
+    "standstill": "runs 98/99 ended coast_standstill_unconfirmed (scan matching 1-7 mm noise in the narrow lane), run 100 confirmed."
   }
 }
