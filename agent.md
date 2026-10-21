@@ -1,6 +1,6 @@
 # XT-STCAR 接手与开发约定
 
-## 当前接手入口（2026-10-21 Claude：第97轮A已完成，车身间隙检查进Rust引擎，逐位一致；未构建、未部署；下一步B）
+## 当前接手入口（2026-10-21 Claude：第97轮A已完成，车身间隙检查进Rust引擎，逐位一致；部署包已打好，未部署；下一步B）
 
 记录键`turn97_clearance_engine_20261021`。
 - 引擎：新增`route-engine/src/clearance.rs`，逐行移植了`autonomy_live.probe_clearance`整个函数（含直道分支），以及front_gap_evidence、车道墙/单侧板投影、桶接触见证（用原始扫描重算contact_supports）、_age_sides、_same、ClearanceReuse。新调用`clearance_probe`：先在会话里算current_contact_target作见证，再跑ClearanceReuse(probe_clearance)。车身停车以ProbeClearanceError返回，并附带clearance。
@@ -11,7 +11,11 @@
   - 新工具`scripts/route-engine-clearance-parity.py`：真实扫描加随机参数和故障，再按顺序过ClearanceReuse，两个种子共4.5万次，全部一致，每个分支都覆盖到。
   - 新测试`tests/test_route_97_clearance.py`共6项；全量860 OK。
 - 计时（Mac，user8）：最慢一拍1.02→0.77ms，控制线程CPU最大0.80→0.43ms，新帧p99 0.85→0.56ms。车上没测；按第96轮车/Mac比例估计，最慢一拍约29→约22ms，新帧p99约24.5→约16ms。原计划写的约15ms没算上剩下的往返；最慢的是进入滑行那拍，一拍里有4次请求，要靠B消除。
-- 构建：`build-engine.py claude-turn94 claude-turn97 97 turn97_clearance_engine_20261021`，以车上实际安装的第94轮为基线。第96轮包保持原样不重建，第97轮已包含它的全部内容。部署前后的核验同第96轮，部署后改用`claude-turn97-package.json`。
+- 部署包已打好（`build-engine.py claude-turn94 claude-turn97 97 turn97_clearance_engine_20261021`，以车上实际安装的第94轮为基线）：
+  - `XT-STCAR-claude-turn97-d37560d.tar.gz`（sha256 08d0c510…54d8），`deploy-claude-turn97.py`，helper `left-cone-trial-once-97.py`，证据目录`left-cone-trial-20261021-97`，引擎sha256 c37a29e2…
+  - 19个文件校验全过，载荷与HEAD逐字一致；部署脚本与第96轮相比只差包哈希和源码提交，helper只差证据目录。
+  - 第96轮包保持原样不重建，第97轮已包含它的全部内容。包只构建一次，再改代码用98。
+  - 用户同意后部署：部署前`read-fresh-route.py` + `validate-fresh.py before97-fresh.json claude-turn94-package.json`；部署`deploy-matched.py claude-turn97 97`；部署后`read-fresh-engine.py` + `validate-fresh-engine.py after97-deploy-fresh.json claude-turn97-package.json`。
 - 下一步：B独立控制程序。
 
 ## 当前接手入口（2026-10-21 Claude：用户决定把A车身间隙检查和B整个控制循环改成Rust；已记录，压缩上下文后开始）

@@ -1,4 +1,4 @@
-# XT-STCAR（10-21 Claude：第97轮完成A，车身间隙检查已移进Rust引擎，与Python逐位一致，Mac上最慢一拍1.02→0.77ms；未构建、未部署；下一步做B独立控制程序，见下方“Rust化状态”）
+# XT-STCAR（10-21 Claude：第97轮完成A，车身间隙检查已移进Rust引擎，与Python逐位一致，Mac上最慢一拍1.02→0.77ms；部署包已打好，未部署；下一步做B独立控制程序，见下方“Rust化状态”）
 
 ## Rust化状态（2026-10-21）
 
@@ -11,7 +11,7 @@
 | `crates/robot-core`、`crates/app`、`crates/device-io` | 几何、路口、跟踪、任务库，协议，设备访问 | 已有 |
 | `crates/vision` + vision-shadow | 车上YOLO（ONNX Runtime）推理，只做感知；`vision_shadow.py`是薄包装 | 已部署 |
 | `route-engine/` | 第96轮：整套路线决策，即ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区。与Python逐位一致：仿真156/156，录像在Mac和车上都是28/28 | 部署包已打好、车上自检通过，未部署 |
-| `route-engine/src/clearance.rs` | 第97轮（A）：控制台每拍的车身间隙检查，即probe_clearance及其辅助函数、ClearanceReuse，和接触目标在同一次请求里算。与Python逐位一致：仿真156/156、录像28/28（共比较17.6万次间隙检查），另有真实扫描加随机参数和故障的单独对比4.5万次 | 未构建、未部署 |
+| `route-engine/src/clearance.rs` | 第97轮（A）：控制台每拍的车身间隙检查，即probe_clearance及其辅助函数、ClearanceReuse，和接触目标在同一次请求里算。与Python逐位一致：仿真156/156、录像28/28（共比较17.6万次间隙检查），另有真实扫描加随机参数和故障的单独对比4.5万次 | 第97轮部署包已打好，未部署 |
 | `tools/scan-geometry` | Mac/仿真用的桥几何（不部署） | 已有 |
 
 `maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`的Python版保留，作为后备和对比基准。

@@ -23402,7 +23402,7 @@
     "implemented": true,
     "deployed": false,
     "physical_trial_executed": false,
-    "package_built": false,
+    "package_built": true,
     "user": "就改a和b你先记录下需要改和已经改成rust的部分README.md里面也加上吧，我压缩下上下文，后你再开始 / 开始吧",
     "plan": "rust_port_plan_20261021, part A",
     "change": {
@@ -23421,6 +23421,28 @@
       "car_estimate": "not measured on the car. With round 96's car/Mac ratio (~29x): worst tick ~29 -> ~22 ms, new-scan p99 ~24.5 -> ~16 ms. The earlier plan estimate (~15 ms) did not count the remaining round trips; B removes them."
     },
     "risks": "a scan field containing NaN outside ranges would compare unequal in the engine's reuse check where Python's deep copy keeps the same float object (equal by identity): only the reuse count could differ, never a result; no source of such values (the bridge cannot emit NaN). Car timing and the deploy are not checked yet.",
-    "next": "build as round 97 (build-engine.py with the installed round-94 package as baseline; the round-96 package stays as built, round 97 contains all of it); deploy and measure on the car when the user agrees; then B."
+    "next": "deploy (user's go-ahead) and measure on the car: timing (max_tick_cpu_s, max_gap_breakdown) against round 94; then B.",
+    "package": {
+      "builder": "work/vehicle-dynamic-deploy-20261008/build-engine.py claude-turn94 claude-turn97 97 turn97_clearance_engine_20261021 (baseline = the installed round 94; stdout/stderr build97-*.txt)",
+      "source_commit": "d37560d4452614ff460a879b3af3f76e832085d5",
+      "archive": "XT-STCAR-claude-turn97-d37560d.tar.gz",
+      "archive_sha256": "08d0c51021fe2960c15e9421cedffc0e46a9fb274a9760d8e814dc320e4e54d8",
+      "deploy_script": "deploy-claude-turn97.py",
+      "deploy_script_sha256": "2aee0873ce0603252015e37fa67d38af36ef2077270b95009c6bc526d9abef75",
+      "helper": "left-cone-trial-once-97.py (round 94's helper; only the evidence directory differs: left-cone-trial-20261021-97)",
+      "helper_sha256": "520766853a0a25dde9633d25da8514a65bfdd8ea97a0224c143527e713a0129f",
+      "files": 19,
+      "runtime_changed_vs_installed_94": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine",
+        "payload/route_engine.py",
+        "payload/server.py"
+      ],
+      "route_engine_sha256": "c37a29e2f997b6fcfbaee8b00a1509c72296bce4930261331136db016a4f3dff",
+      "route_engine_elf": "riscv64 cross build (zigbuild, glibc baseline 2.38), 1761232 bytes, inspect passed=True",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn97-20261021-121243",
+      "checks": "SHA256SUMS 19/19 OK; payload server.py, route_engine.py, maneuver_sequence.py, autonomy_live.py byte-identical to HEAD; deploy script differs from round 96's only in archive hash and source commit; helper only in its evidence directory; same harmless zig linker message as round 96.",
+      "not_deployed": "built only; no car connection. Deploy when the user agrees: before read-fresh-route.py + validate-fresh.py beforeM-fresh.json claude-turn94-package.json; deploy-matched.py claude-turn97 97; after read-fresh-engine.py + validate-fresh-engine.py after97-deploy-fresh.json claude-turn97-package.json (17 hashes, route_controller rust_engine). The round-96 package stays as built and unused (97 contains all of it)."
+    }
   }
 }
