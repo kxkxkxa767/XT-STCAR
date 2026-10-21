@@ -23456,7 +23456,7 @@
       "1 coast_motion.CoastMotion + worker queue -> route-engine/src/coast.rs (done, verified)",
       "2 steer_calibration.SteerOutput, autonomy_live.QualityLatch/QualityRecovery -> supervisor.rs (done, verified through 3)",
       "3 server.py route supervision (start admission, tick, coast, halt, eligibility checks, emit/calibration) -> supervisor.rs (done, verified)",
-      "4 standalone program I/O: bridges, 20 ms loop thread, health watch, owner lease, evidence, terminal output, start trigger (to do; start trigger and disconnect behaviour to settle with the user)"
+      "4 standalone program I/O: written (route-engine/src/race.rs, `route-engine race`), Mac-tested with fake/sim bridges; not on the car; start trigger defaults to settle with the user"
     ],
     "coast": {
       "port": "route-engine/src/coast.rs: _fit (statistics.fmean = math.fsum/n, added to py.rs as a port of CPython's math_fsum incl. the half-even fix-up), _planes (window fits, stable descending sort, dict.fromkeys de-duplication and point sets by value, 0.0 == -0.0), _register, CoastMotion.update (all reasons), CoastMotionWorker queue (submit/result/reset; run_pending computes; processing_ms is the wall clock, fixed for offline runs).",
@@ -23474,6 +23474,11 @@
     },
     "not_yet": "the standalone program itself (bridge processes, reader threads, 20 ms loop with the console's pacing and timing records, health watch, owner lease, evidence files for trial-timeline/trial-map/route-replay, terminal status, stop on Ctrl-C), its tests with fake bridges, a deploy round and the car.",
     "open_for_user": "how the race run starts without the console (terminal command over SSH that waits for the start check, then Enter or a countdown; or automatic start after boot) and whether a dropped terminal connection stops the run (the console's owner lease stops it when the helper dies).",
-    "protections": "all unchanged in value and order (owner lease .20 s, .12 s gap, total and cumulative drive deadlines, 8 cm body gate with the raw-scan cone witness, sensor ages/health, arm/lock feedback, ACK sequences, output limits)."
+    "protections": "all unchanged in value and order (owner lease .20 s, .12 s gap, total and cumulative drive deadlines, 8 cm body gate with the raw-scan cone witness, sensor ages/health, arm/lock feedback, ACK sequences, output limits).",
+    "program_20261021": {
+      "race_rs": "`route-engine race --bridge PATH --out NEW_DIR [--start enter|ready] [--ready-hold-s 3] [--max-drive-s 16] ...`: one control thread owns the Supervisor (no locks): bridge lines from reader threads (accept_control with the lock halt, accept_lidar), 20 ms ticks with the console's pacing and timing records (lock wait 0, gap breakdown, CPU from /proc/thread-self/schedstat on Linux), health watch every 50 ms, owner lease renewed by the program, evidence (before.json, before-lidar.json, feedback.jsonl every .15 s, after.json, summary.json, cli-result.json; trial-helper layout) written by a writer thread after ticks, terminal status. Device identity + fuser checks as the console (console service must be stopped). Bridges in their own process group: Ctrl-C or a closed terminal ends the program, bridge input closes, the bridge holds neutral (its own 300 ms lease also covers a stall). No camera: camera age None. Supervisor additions: accept_lidar, accept_control, bridge_failed, health_watch, record_tick_timing, state_view, active_report_view, renew_owner.",
+      "mac_tests": "scripts/fake-vehicle-bridge.py (bridge teleop guard + recorded-scan replay, open loop): run 94 replay starts, drives, coasts, halts exactly as route-replay.py with the same code (start_lane_board_ahead_without_first_support at 0.6 s; same with round-94 source f565aaf: open-loop artefact). scripts/sim-vehicle-bridge.py (course-sim measured vehicle in real time, closed loop, user8): start check ready, automatic start, start lane -> first loop -> transfer -> second loop -> light entry, no contact (min board gap .22 m, cone .288 m), max control gap .030 s, worst tick 1.1 ms; ended maneuver_cumulative_drive_timeout at the 16 s budget (the sim car is slower than the real one).",
+      "not_yet": "unit tests for race.rs, a deploy round with a helper that stops/starts the console service, the car."
+    }
   }
 }

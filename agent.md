@@ -17,7 +17,8 @@
   - 扫描（`route-engine-parity-sweep.py 输出目录 all --supervisor`）：仿真156/156，录像28/28，共184次启动、17.6万拍，全部一致。
   - `--keep-going`配合新的`scripts/run-console-tests.py`，可以在双跑下跑控制台的单元测试：7个模块169项，其中130项一致。不一致的14个测试函数都直接改了Python的motion或session，或者patch了motion的方法，Rust核心看不到这些改动，已逐个用AST确认。
 - 保护全部不变（租约0.20s、0.12s间隔、总期限和累计行驶期限、8cm车身门加原始扫描的桶见证、年龄和健康、上锁和反馈、ACK序列、输出上下限）。
-- 第4步还没做：独立程序本身，包括启动两个桥、读取线程、20ms节拍（沿用控制台的节奏和计时记录）、健康检查、租约、证据文件（供trial-timeline、trial-map、route-replay使用）、终端状态显示、Ctrl-C停车，以及用假桥做测试、部署新一轮、上车。
+- 第4步已写（10-21晚）：`route-engine/src/race.rs`，命令`route-engine race --bridge 路径 --out 新目录 [--start enter|ready]`。单线程控制循环，桥在独立进程组（Ctrl-C或断线时桥自己回中位），证据文件同试验助手。Mac上测过：`scripts/fake-vehicle-bridge.py`回放第94轮，结果与route-replay一致；`scripts/sim-vehicle-bridge.py`实时闭环仿真user8，跑到灯区入口，无接触，最大间隔0.030s、最慢一拍1.1ms，最后因16s累计行驶预算结束（仿真车较慢）。还缺：race.rs的单元测试、停启控制台服务的助手、部署新一轮、上车。
+- 原第4步说明：独立程序本身，包括启动两个桥、读取线程、20ms节拍（沿用控制台的节奏和计时记录）、健康检查、租约、证据文件（供trial-timeline、trial-map、route-replay使用）、终端状态显示、Ctrl-C停车，以及用假桥做测试、部署新一轮、上车。
 - 需要和用户定的：
   - 比赛时怎么启动：SSH终端命令等起点检查通过后按回车或倒计时启动，还是开机后自动启动。
   - 终端断开时这一圈要不要停：控制台的租约在助手断开时会停车。

@@ -281,6 +281,8 @@ pub struct Supervisor {
     pub scan: V,
     pub scan_at: V,
     pub camera_at: f64,
+    /// False in the standalone program (no camera): camera age None.
+    pub camera: bool,
     pub errors: V,
     /// time.monotonic() during the current call (the console reads it inside
     /// the tick for the control health check and the lane scope).
@@ -384,6 +386,7 @@ impl Supervisor {
             scan: V::None,
             scan_at: V::Int(0),
             camera_at: 0.,
+            camera: true,
             errors: V::dict(),
             mono: 0.,
             ages_override: None,
@@ -412,7 +415,8 @@ impl Supervisor {
         if let Some(ages) = &self.ages_override {
             return ages.clone();
         }
-        dict! {"camera" => now - self.camera_at, "lidar" => now - self.scan_at_f(), "control" => now - self.control_at}
+        let camera = if self.camera { V::Float(now - self.camera_at) } else { V::None };
+        dict! {"camera" => camera, "lidar" => now - self.scan_at_f(), "control" => now - self.control_at}
     }
 
     pub fn turn_healthy(&self) -> bool {
@@ -1634,4 +1638,215 @@ impl Supervisor {
         self.arm_sequence = self.sequence;
         Ok(dict! {"ok" => true, "run_id" => run_id, "epoch" => self.control_epoch})
     }
+}
+
+// ---------------------------------------------------------------- the program's console duties
+
+const ACTIVE_SUMMARY_FIELDS: [&str; 7] = [
+    "route_events", "quality_wait_snapshot", "quality_resume_snapshot", "left_turn_pause_snapshot",
+    "left_turn_pause_resume_snapshot", "post_pass_pause_resume_snapshot", "recovery_hold_resume_snapshot",
+];
+
+/// _evidence_summary(value).
+fn evidence_summary(value: &V) -> V {
+    if !value.is_dict() {
+        return value.clone();
+    }
+    let seq = |item: &V| {
+        let scan = if item.is_dict() { item.get("scan") } else { &V::None };
+        if scan.is_dict() { scan.get("seq").clone() } else { V::None }
+    };
+    if value.items().iter().all(|(_, item)| item.is_dict() && item.has("scan")) {
+        let mut events = V::dict();
+        for (name, item) in value.items() {
+            events.set(name, dict! {"scan_seq" => seq(item)});
+        }
+        return dict! {"summarized" => true, "events" => events};
+    }
+    let mut keys: Vec<String> = value.items().iter().map(|(k, _)| k.to_string()).collect();
+    keys.sort();
+    dict! {"summarized" => true, "keys" => V::list(keys.into_iter().map(V::from).collect()), "scan_seq" => seq(value)}
+}
+
+/// active_report_view(report): a live report with bulky evidence summarized.
+pub fn active_report_view(report: &V) -> V {
+    let mut view = report.clone();
+    for key in ACTIVE_SUMMARY_FIELDS {
+        if view.get(key).is_dict() {
+            let summary = evidence_summary(view.get(key));
+            view.set(key, summary);
+        }
+    }
+    let turn = view.get("turn");
+    if turn.is_dict() {
+        let mut turn = turn.clone();
+        if turn.get("route_events").is_dict() {
+            let summary = evidence_summary(turn.get("route_events"));
+            turn.set("route_events", summary);
+        }
+        let avoid = turn.get("avoid_evidence");
+        if avoid.is_list() && avoid.len() > 2 {
+            let list = avoid.l();
+            let summary = dict! {"summarized" => true, "count" => list.len(), "last" => V::list(list[list.len() - 2..].to_vec())};
+            turn.set("avoid_evidence", summary);
+        }
+        view.set("turn", turn);
+    }
+    view
+}
+
+impl Supervisor {
+    /// accept_lidar(value, now): a newer scan replaces the current one.
+    pub fn accept_lidar(&mut self, value: V, now: f64) -> bool {
+        if !value.is_dict() || !value.get("seq").is_int() || value.get("seq").i() < 0 {
+            value_error("invalid_lidar_sequence")
+        }
+        let published = value.get("at_ms").clone();
+        if !self.demo && (!published.is_int() || published.i() < 0) {
+            value_error("invalid_lidar_publication_clock")
+        }
+        if self.scan.is_some() {
+            let (old_seq, old_publication) = (self.scan.get("seq"), self.scan.get("at_ms"));
+            if old_seq.is_int() && value.get("seq").i() <= old_seq.i() {
+                return false;
+            }
+            if old_publication.is_int() && (!published.is_int() || published.i() <= old_publication.i()) {
+                return false;
+            }
+        }
+        self.scan = value;
+        self.scan_at = V::Float(now);
+        true
+    }
+
+    /// read_bridge's control branch: feedback in nominal PWM; a lock after our arm halts.
+    pub fn accept_control(&mut self, value: &V, now: f64) {
+        self.status = self.nominal_status(value);
+        self.control_at = now;
+        let control = self.control();
+        if self.owner.is_some() && !control.get("armed").truthy() && seq_of(&control) >= self.arm_sequence as f64 {
+            let reason = if control.has("reason") { control.get("reason").s().to_string() } else { "locked".into() };
+            self.halt(&format!("bridge_{reason}"));
+        }
+    }
+
+    /// A bridge ended or sent an invalid line (read_bridge's exception path).
+    pub fn bridge_failed(&mut self, kind: &str, error: &str) {
+        self.errors.set(kind, error);
+        self.halt("bridge_failure");
+    }
+
+    /// health_watch, one pass (every 50 ms). The program has no camera: its
+    /// idle health is lidar and control freshness without errors.
+    pub fn health_watch(&mut self, now: f64) {
+        self.mono = now;
+        let healthy = if self.session.is_some() {
+            self.turn_healthy()
+        } else {
+            now - self.scan_at_f() < 1. && now - self.control_at < 0.2 && self.errors.items().is_empty()
+        };
+        let unsafe_state = !healthy || (self.owner.is_some() && now - self.owner_at > 0.35);
+        let armed = self.control().get("armed").truthy();
+        if unsafe_state && (armed || self.owner.is_some()) {
+            self.halt(if !healthy { "sensor_stale" } else { "browser_timeout" });
+        }
+        if self.session.is_none() {
+            // The idle latch as the console keeps it (no camera here).
+            let ages = self.sensor_ages(now);
+            let kw = dict! {"camera_required" => false};
+            if let Ok(Ok(clearance)) = except(&[Exc::ValueError], || {
+                probe_clearance(&self.scan, &ages, &V::Bool(self.demo), &V::Bool(false), &kw)
+            }) {
+                self.perception_quality.update(clearance.idx("quality_issues"), now);
+            }
+        }
+    }
+
+    /// record_tick_timing(session, lock_wait, tick_wall, cpu=None, breakdown).
+    pub fn record_tick_timing(&mut self, lock_wait_s: f64, tick_wall_s: f64, tick_cpu_s: Option<f64>,
+                              breakdown: Option<V>, run_id: &V) {
+        let report = match &self.session {
+            Some(s) => s.report.clone(),
+            None if py_eq(self.auto_result.get("run_id"), run_id) => {
+                self.auto_result.clone()
+            }
+            None => return,
+        };
+        let mut timing = dict! {
+            "last_lock_wait_s" => pmax(0., lock_wait_s), "last_tick_compute_s" => pmax(0., tick_wall_s),
+            "max_lock_wait_s" => pmax(get_or(&report, "max_lock_wait_s", &V::Float(0.)).f(), lock_wait_s),
+            "max_tick_compute_s" => pmax(get_or(&report, "max_tick_compute_s", &V::Float(0.)).f(), tick_wall_s),
+            "control_tick_timing_basis" => "host_monotonic_wall_including_scheduling_and_waits",
+        };
+        if let Some(cpu) = tick_cpu_s {
+            timing.update(&dict! {
+                "last_tick_cpu_s" => cpu, "max_tick_cpu_s" => pmax(get_or(&report, "max_tick_cpu_s", &V::Float(0.)).f(), cpu),
+                "tick_cpu_basis" => "control_thread_schedstat_run_time",
+            });
+        }
+        if let Some(b) = breakdown {
+            timing.set("max_wake_late_s", pmax(get_or(&report, "max_wake_late_s", &V::Float(0.)).f(), b.idx("wake_late_s").f()));
+            let previous = report.get("max_gap_breakdown");
+            let previous_gap = if previous.is_dict() && previous.has("gap_s") { previous.get("gap_s").f() } else { -1. };
+            if b.idx("gap_s").f() > previous_gap {
+                timing.set("max_gap_breakdown", b);
+            }
+        }
+        if let Some(s) = self.session.as_mut() {
+            s.report.update(&timing);
+        }
+        if self.auto_result.is_dict() && py_eq(self.auto_result.get("run_id"), run_id) {
+            self.auto_result.update(&timing);
+        }
+    }
+
+    /// The console's /api/state, the parts the analysis tools read.
+    pub fn state_view(&mut self, now: f64, max_drive_s: &V, initial: &V) -> V {
+        let owned = self.owner.is_some() || self.session.is_some() || self.control().get("armed").truthy();
+        let (mut turn_ready, mut turn_rejection, mut turn_preview, mut turn_clearance) =
+            (false, V::None, V::None, V::None);
+        if owned {
+            turn_rejection = V::str("control_owned_or_unlocked");
+        } else {
+            self.mono = now;
+            match py_try(|| self.turn_preview(&V::Float(now), max_drive_s, initial, true)) {
+                Ok(Ok((_, decision, clearance))) => {
+                    turn_ready = true;
+                    turn_preview = decision;
+                    turn_clearance = clearance;
+                }
+                Ok(Err((error, clearance))) => {
+                    turn_rejection = V::from(error.msg);
+                    turn_clearance = clearance;
+                }
+                Err(error) => turn_rejection = V::from(format!("{}: {}", error.kind.name(), error.msg)),
+            }
+        }
+        let autonomy = dict! {
+            "mode" => self.control_mode, "epoch" => self.control_epoch,
+            "control_loop_limit_s" => MANEUVER_CONTROL_LOOP_LIMIT_S,
+            "turn_ready" => turn_ready, "turn_rejection" => turn_rejection, "turn_preview" => turn_preview,
+            "turn_clearance" => turn_clearance, "route_controller" => self.route_controller.as_str(),
+            "trial_mode" => "turn-cone", "continue_route" => true,
+            "active" => self.session.as_ref().map(|s| active_report_view(&s.report)).unwrap_or(V::None),
+            "last_result" => self.auto_result.clone(),
+        };
+        dict! {
+            "demo" => self.demo, "boot" => self.boot.as_str(), "status" => self.status.clone(),
+            "ages" => dict! {"camera" => V::None, "lidar" => now - self.scan_at_f(), "control" => now - self.control_at},
+            "errors" => self.errors.clone(), "owner" => opt_s(&self.owner), "last_stop" => self.last_stop.clone(),
+            "autonomy" => autonomy,
+        }
+    }
+
+    /// The owner lease (the console's heartbeat): the program renews it itself.
+    pub fn renew_owner(&mut self, now: f64) {
+        if self.owner.is_some() {
+            self.owner_at = now;
+        }
+    }
+}
+
+fn opt_s(value: &Option<String>) -> V {
+    value.as_deref().map(V::str).unwrap_or(V::None)
 }

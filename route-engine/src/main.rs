@@ -25,6 +25,7 @@ pub mod maneuver_post;
 pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
+pub mod race;
 pub mod supervisor;
 
 use std::io::{BufRead, BufWriter, Write};
@@ -455,6 +456,10 @@ fn function(name: &str, args: &[V]) -> V {
 
 fn main() {
     install_panic_hook();
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("race") {
+        std::process::exit(race::main(&args[2..]));
+    }
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut out = BufWriter::with_capacity(1 << 16, stdout.lock());
