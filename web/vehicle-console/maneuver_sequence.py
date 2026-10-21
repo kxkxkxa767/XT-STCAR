@@ -538,7 +538,13 @@ LANE_START_STOP_DECEL_MPS2 = .5
 # creeping near the end of a short one while the support is searched for.
 # Above it the car coasts, well below it 1560, else 1550 (short courses: with
 # the ESC lag a fixed cruise reached the stopping range before any support).
-LANE_START_MAX_MPS = 1.5
+# Round 99 (user: 刚开始那个直道速度可以快点): run 98 cruised at 1.1-1.2 m/s
+# on the open start lane (with the full ESC-lag rise, any 1560 frame above
+# ~1.05 m/s was followed by a coast at the 1.5 cap); 1.8 only lets the lane
+# go faster while the board ahead is far (the stopping taper above is
+# unchanged and binds from ~5.5 m), so the first-loop approach speed is
+# unchanged. course-sim: the same 98/110 courses succeed, gaps unchanged.
+LANE_START_MAX_MPS = 1.8
 LANE_START_SEARCH_M = 1.6
 LANE_START_PUSH_BAND_MPS = .4
 # Open-course loops (round 64, entry_kind 'lane' only). Without overlapping

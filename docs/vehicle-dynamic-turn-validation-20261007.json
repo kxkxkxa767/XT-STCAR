@@ -23536,8 +23536,8 @@
     "date": "2026-10-21",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "installed round 94 (claude-turn94, f565aaf); rounds 96 and 97 were built and never deployed (98 contains both)",
     "change": {
       "console": "round 97's console unchanged (A: the body-clearance check in the engine; round 96: the route decisions in the engine). web/vehicle-console and the other payload sources are byte-identical to d37560d.",
@@ -23579,6 +23579,47 @@
       "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn98-20261021-163951",
       "checks": "SHA256SUMS 19/19 OK; against round 97's bundle only payload/route-engine and support/validation-record.json differ (the console's Python payload is byte-identical); the deploy script differs from round 97's only in archive hash, source commit and the backup label; the helper differs from scripts/race-trial.py only in the FIXED_ARGS line; same harmless zig linker message as rounds 96/97.",
       "not_deployed": "built only; the car is switched off. Deploy only when the user agrees, with the car at the start: agent.md section 1 steps 6-12 with claude-turn98 / 98 (procedure_differences above). The round-97 package stays as built and unused (98 contains all of it)."
+    },
+    "deployment": {
+      "operator": "好了，摆好了连上了 / 同意部署第98轮并用独立程序跑一次",
+      "before": "before98-fresh.json: six fresh locked ready samples, 14 hashes and settings match round 94",
+      "deploy": "deploy-matched.py claude-turn98 98: deployed true, error/rollback null, backup /home/bianbu/xt-stcar-console/backup-claude-turn98-20261021-163951, access token and launch command preserved, route_controller rust_engine (the first attempt was refused by Claude Code's permission check before running; the second ran and deployed, but the local wrapper returned 1 with no output: the state was verified independently)",
+      "after": "after98-deploy-fresh.json: six fresh locked ready samples (rust_engine), 17 hashes and settings match round 98",
+      "pre_run": "pre98-run-fresh.json: the same; staged trial98.py, installed engine and bridge hashes match; only the console and its own engine and bridges running"
     }
+  },
+  "turn98_actual_20261021": {
+    "date": "2026-10-21",
+    "trial": 98,
+    "source_commit": "b07d85d",
+    "route_controller": "rust_program (route-engine race)",
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261021-98 (helper files; the program's in run/)",
+    "evidence_sha256_files_ok": 10,
+    "start_geometry": "start-lane fit heading -4.1 deg, 4.7 cm right, side gap .246 m, lane .893 m (runs 90-94: -2.9..+1.1 deg, .296-.317 m, .923-.925 m); ahead 7.85 m, rear .32 m; both consoles' start checks passed",
+    "result": "complete route, no body stop: start lane -> first loop (4.02 s after the first drive) -> transfer (6.92) -> second loop (8.53) -> light entry (11.10) -> light lane (13.83) -> finish-zone stop 17.37 s after the first drive (runs 94/93: 19.24/19.48 s; stage starts about the same until the light lane, which took 3.5 s instead of 5.2 s). One recovery hold (neutral) in the transfer and one post-pass pause at the light entry, each about .5 s. Final front gap about .54 m (bin 0 .742 m).",
+    "timing": "max control gap .0214 s (console on the car .09-.13 s), worst tick 4.5 ms wall, wake late <= .7 ms; scan age at the program median 52 ms (10 Hz); bridge receive minus publication 11-13.5 ms (one 4 ms): the lidar bridge's geometry and JSON per scan.",
+    "ending": "coast_standstill_unconfirmed after the 5 s coast: the car stood still from ~18.4 s, but scan matching read 1-7 mm between frames (up to .07 m/s against the .05 m/s low-motion limit) and the narrow light lane often gave parallel_planes_unobservable / insufficient_associated_planes, so 5 stable pairs never came together. Locked at neutral afterwards; console back with 6 healthy locked samples.",
+    "cpu": "per-tick CPU via /proc/thread-self/schedstat reads 0 on many ticks (the run time advances only at scheduler events), so it is not a per-tick measure; the run had no run-level account (added in round 99).",
+    "start_lane": "the governor cruised at 1.1-1.2 m/s: with the full ESC-lag rise (.45 m/s), any 1560 frame above ~1.05 m/s was followed by a coast at the 1.5 m/s cap; the board-ahead stopping taper bound from ~5 m (1.45 -> 1.27 m/s at the first approach). Front sector checked for a revolution seam while moving: left-right of bin 0 -.005 m mean at 1.22 m/s, so none.",
+    "user": "刚开始那个直道速度可以快点，你检查下这轮的延迟和cpu占用看看还有没有什么可以优化的"
+  },
+  "turn99_start_lane_scan_tick_20261021": {
+    "date": "2026-10-21",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "installed round 98 (claude-turn98, b07d85d)",
+    "user": "刚开始那个直道速度可以快点，你检查下这轮的延迟和cpu占用看看还有没有什么可以优化的 / 你编译完二进制文件后直接上传到车上开始下一轮测试吧，别模拟了",
+    "change": {
+      "start_lane": "LANE_START_MAX_MPS 1.5 -> 1.8 (maneuver_sequence.py and route-engine/src/maneuver.rs): the open start lane may go faster while the board ahead is far; the stopping taper (LANE_START_SEARCH_M 1.6, decel .5, reaction .65) is unchanged and binds from ~5.5 m, so the first-loop approach speed is unchanged. Rejected on course-sim: push band .4 -> .2 (98 -> 95/110, no time gain) and search margin 1.6 -> 1.2 with cap 1.8 (104 -> 103/118, board contacts on 5 m courses). Cap 1.8 alone: the same 98/110 courses, gaps unchanged.",
+      "program": "route-engine race: a new lidar scan is decided on at once (a tick as soon as it is applied, at least 5 ms after the previous tick) instead of at the next 20 ms tick; summary.json gains scan_to_tick (count, mean, max of receive -> deciding tick) and cpu (schedstat run time over the drive loop per program thread by name and per bridge process, with core fractions and the load average); threads are named (read-control, read-lidar, coast-fit, evidence-write, read-stdin). The tick breakdown gains scan_woken.",
+      "builder": "build-engine.py derives the console helper from console_helper_base when the baseline was a race round; build-race.py records it (round 98 package record: round 94's helper, hash-checked)."
+    },
+    "validation": "console tests 865 OK (2 expected failures); route-engine cargo tests OK; route parity sweep 184/185 (run 75 never drove); program tests 5 OK (closed loop on the Mac: scan_to_tick mean .22 ms, max 3.5 ms; before up to a 20 ms tick).",
+    "risks": [
+      "start-lane speed up to ~1.4-1.5 m/s where the board ahead is far; approach unchanged",
+      "scan-woken ticks are irregular (decisions are time-based; .12 s gap and every protection unchanged)"
+    ]
   }
 }

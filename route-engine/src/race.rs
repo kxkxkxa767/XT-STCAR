@@ -6,6 +6,10 @@
 //! accept_control and its lock halt), a tick every 20 ms with the console's
 //! pacing (at least 5 ms idle after a long tick) and timing records, the
 //! health watch every 50 ms, the owner lease renewed by the program itself.
+//! Round 99: a new lidar scan is decided on at once (a tick as soon as it is
+//! applied, still at least 5 ms after the previous tick) instead of at the
+//! next 20 ms tick (on average 10 ms later); the run's CPU time per program
+//! thread and bridge goes to summary.json.
 //! Reader threads only forward bridge lines; a writer thread writes the
 //! evidence files (the trial helper's layout, so trial-timeline, trial-map and
 //! route-replay read them unchanged). The bridges run in their own process
@@ -147,7 +151,7 @@ fn spawn(o: &Options, mode: &'static str, device: &str, expected: &str) -> Resul
 }
 
 fn reader(kind: &'static str, stream: impl Read + Send + 'static, tx: Sender<Event>) {
-    thread::spawn(move || {
+    spawn_named(&format!("read-{kind}"), move || {
         let mut reader = BufReader::with_capacity(LINE_LIMIT, stream);
         loop {
             let mut line = String::new();
@@ -174,7 +178,7 @@ enum FileOp {
 
 fn writer(dir: PathBuf) -> (Sender<FileOp>, thread::JoinHandle<()>) {
     let (tx, rx) = mpsc::channel::<FileOp>();
-    let handle = thread::spawn(move || {
+    let handle = spawn_named("evidence-write", move || {
         let mut files: Vec<(&'static str, std::fs::File)> = Vec::new();
         for message in rx {
             match message {
@@ -205,6 +209,59 @@ fn thread_cpu_s() -> Option<f64> {
     text.split_whitespace().next()?.parse::<f64>().ok().map(|ns| ns / 1e9)
 }
 
+/// CPU time so far (schedstat run time, s) of each thread of this program
+/// (by thread name) and of each bridge process (all its threads); empty
+/// without /proc. Exact in sum, unlike one tick's reading.
+fn cpu_account(bridges: &[(&'static str, u32)]) -> Vec<(String, f64)> {
+    fn tasks(pid: &str) -> Vec<(String, f64)> {
+        let Ok(dir) = std::fs::read_dir(format!("/proc/{pid}/task")) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for entry in dir.flatten() {
+            let path = entry.path();
+            let run = std::fs::read_to_string(path.join("schedstat"))
+                .ok()
+                .and_then(|t| t.split_whitespace().next()?.parse::<f64>().ok());
+            if let Some(ns) = run {
+                let name = std::fs::read_to_string(path.join("comm")).unwrap_or_default();
+                out.push((name.trim().to_string(), ns / 1e9));
+            }
+        }
+        out
+    }
+    let mut out: Vec<(String, f64)> = Vec::new();
+    let mut add = |name: String, cpu: f64| match out.iter_mut().find(|(n, _)| *n == name) {
+        Some(slot) => slot.1 += cpu,
+        None => out.push((name, cpu)),
+    };
+    for (name, cpu) in tasks("self") {
+        add(format!("program/{name}"), cpu);
+    }
+    for (mode, pid) in bridges {
+        for (_, cpu) in tasks(&pid.to_string()) {
+            add(format!("bridge/{mode}"), cpu);
+        }
+    }
+    out
+}
+
+/// The CPU used between two accounts over `wall` seconds, per thread or bridge.
+fn cpu_report(start: &[(String, f64)], end: &[(String, f64)], wall: f64) -> V {
+    if end.is_empty() {
+        return V::None;
+    }
+    let mut used = V::dict();
+    for (name, at_end) in end {
+        let at_start = start.iter().find(|(n, _)| n == name).map_or(0., |(_, c)| *c);
+        let cpu = at_end - at_start;
+        used.set(name, dict! {"cpu_s" => cpu, "core_fraction" => if wall > 0. { cpu / wall } else { 0. }});
+    }
+    let load = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
+    dict! {"wall_s" => wall, "used" => used, "loadavg_end" => load.trim(),
+           "basis" => "schedstat run time per thread over the drive loop (program threads by name; each bridge: all its threads)"}
+}
+
 fn unix_s() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.)
 }
@@ -230,6 +287,14 @@ struct Program {
     max_drive_v: V,
     initial_v: V,
     coast: Sender<(u64, String)>,
+    bridge_pids: Vec<(&'static str, u32)>,
+    /// Receive time of the newest scan no tick has decided on yet.
+    scan_at: Option<f64>,
+}
+
+/// thread::spawn with a name (it shows in /proc and in the CPU account).
+fn spawn_named<T: Send + 'static>(name: &str, f: impl FnOnce() -> T + Send + 'static) -> thread::JoinHandle<T> {
+    thread::Builder::new().name(name.to_string()).spawn(f).expect("thread spawn")
 }
 
 impl Program {
@@ -241,12 +306,13 @@ impl Program {
         instant.saturating_duration_since(self.base).as_secs_f64()
     }
 
-    /// One bridge line or event, as read_bridge applies it under the console lock.
-    fn handle(&mut self, event: Event) {
+    /// One bridge line or event, as read_bridge applies it under the console lock;
+    /// true for an applied lidar scan.
+    fn handle(&mut self, event: Event) -> bool {
         match event {
             Event::Line(kind, line, received) => {
                 if self.failed.contains(&kind) {
-                    return;
+                    return false;
                 }
                 let now = self.at(received);
                 self.sup.mono = self.mono();
@@ -258,9 +324,18 @@ impl Program {
                         self.sup.accept_lidar(value, now);
                     }
                 });
-                if let Err(error) = applied {
-                    self.failed.push(kind);
-                    self.sup.bridge_failed(kind, &error.msg);
+                match applied {
+                    Ok(()) => {
+                        if kind == "lidar" {
+                            self.scan_at = Some(now);
+                            return true;
+                        }
+                        return false;
+                    }
+                    Err(error) => {
+                        self.failed.push(kind);
+                        self.sup.bridge_failed(kind, &error.msg);
+                    }
                 }
             }
             Event::Ended(kind, message) => {
@@ -276,6 +351,7 @@ impl Program {
             Event::Enter => self.entered = true,
             Event::StdinClosed => self.stdin_closed = true,
         }
+        false
     }
 
     /// Hand the coast worker's pending scan to the fitting thread.
@@ -287,20 +363,28 @@ impl Program {
 
     /// Wait up to `until` (program clock), applying events as they come.
     fn pump(&mut self, until: f64) {
+        self.pump_scan(until, false);
+    }
+
+    /// pump; with `on_scan` it returns as soon as a lidar scan was applied.
+    /// True when one was.
+    fn pump_scan(&mut self, until: f64, on_scan: bool) -> bool {
+        let mut scan = false;
         loop {
             let left = until - self.mono();
-            if left <= 0. {
+            if left <= 0. || (on_scan && scan) {
                 break;
             }
             match self.rx.recv_timeout(Duration::from_secs_f64(left)) {
-                Ok(event) => self.handle(event),
+                Ok(event) => scan |= self.handle(event),
                 Err(RecvTimeoutError::Timeout) => break,
                 Err(RecvTimeoutError::Disconnected) => break,
             }
         }
         while let Ok(event) = self.rx.try_recv() {
-            self.handle(event);
+            scan |= self.handle(event);
         }
+        scan
     }
 
     fn state(&mut self) -> V {
@@ -378,7 +462,7 @@ pub fn main(args: &[String]) -> i32 {
     reader("lidar", lidar.stdout.take().unwrap(), tx.clone());
     if o.start == "enter" {
         let tx = tx.clone();
-        thread::spawn(move || {
+        spawn_named("read-stdin", move || {
             let stdin = std::io::stdin();
             for line in stdin.lock().lines() {
                 if line.is_err() || tx.send(Event::Enter).is_err() {
@@ -392,7 +476,7 @@ pub fn main(args: &[String]) -> i32 {
     let (coast, jobs) = mpsc::channel::<(u64, String)>();
     {
         let tx = tx.clone();
-        thread::spawn(move || {
+        spawn_named("coast-fit", move || {
             let mut fitter = crate::coast::CoastFitter::default();
             for (number, request) in jobs {
                 if tx.send(Event::Coast(number, fitter.fit(&request))).is_err() {
@@ -414,6 +498,7 @@ pub fn main(args: &[String]) -> i32 {
     }));
     let max_drive_v = V::Float(o.max_drive_s);
     let initial_v = V::Int(o.initial_presteer_pwm);
+    let bridge_pids = vec![("control", control.id()), ("lidar", lidar.id())];
     let mut p = Program {
         o,
         sup,
@@ -426,6 +511,8 @@ pub fn main(args: &[String]) -> i32 {
         max_drive_v,
         initial_v,
         coast,
+        bridge_pids,
+        scan_at: None,
     };
     let code = run(&mut p);
     let _ = p.files.send(FileOp::Stop);
@@ -550,9 +637,23 @@ fn run(p: &mut Program) -> i32 {
     let mut previous: Option<(f64, f64, f64, Option<f64>)> = None;
     let mut next_tick = p.mono() + wait;
     let (mut next_health, mut next_evidence, mut next_status) = (p.mono(), p.mono(), p.mono());
+    let (mut last_end, mut scan_woken) = (p.mono(), false);
+    let bridge_pids = p.bridge_pids.clone();
+    let cpu_start = cpu_account(&bridge_pids);
+    let cpu_t0 = p.mono();
+    // Receive -> deciding tick, per new scan.
+    let (mut waits, mut wait_sum, mut wait_max) = (0_i64, 0., 0_f64);
+    p.scan_at = None;
     while p.sup.session.is_some() {
         let until = next_tick.min(next_health);
-        p.pump(until);
+        if p.pump_scan(until, true) {
+            // A new scan: decide on it now, at least MIN_IDLE_S after the last tick.
+            let soon = p.mono().max(last_end + MIN_IDLE_S);
+            if soon < next_tick {
+                next_tick = soon;
+                scan_woken = true;
+            }
+        }
         let now = p.mono();
         if now >= next_health {
             p.sup.renew_owner(now);
@@ -569,6 +670,10 @@ fn run(p: &mut Program) -> i32 {
         let tick_at = p.mono();
         let cpu0 = thread_cpu_s();
         p.sup.mono = tick_at;
+        if let Some(at) = p.scan_at.take() {
+            let waited = (tick_at - at).max(0.);
+            (waits, wait_sum, wait_max) = (waits + 1, wait_sum + waited, wait_max.max(waited));
+        }
         if let Err(error) = py_try(|| p.sup.autonomy_tick(&V::Float(tick_at))) {
             p.sup.halt(&format!("tick_internal_error_{}: {}", error.kind.name(), error.msg));
         }
@@ -577,12 +682,14 @@ fn run(p: &mut Program) -> i32 {
         let breakdown = previous.map(|(start0, end0, idle0, cpu0)| {
             dict! {"gap_s" => tick_at - start0, "previous_tick_wall_s" => end0 - start0,
                    "previous_tick_cpu_s" => opt_f(cpu0), "planned_idle_s" => idle0,
-                   "wake_late_s" => requested - (end0 + idle0), "lock_wait_s" => tick_at - requested}
+                   "wake_late_s" => requested - (end0 + idle0), "lock_wait_s" => tick_at - requested,
+                   "scan_woken" => scan_woken}
         });
         p.sup.record_tick_timing(tick_at - requested, ended - tick_at, cpu, breakdown, &run_v);
         wait = MIN_IDLE_S.max(TICK_S - (ended - requested));
         previous = Some((tick_at, ended, wait, cpu));
         next_tick = ended + wait;
+        (last_end, scan_woken) = (ended, false);
         // The scan this tick submitted for the coast fit goes to its thread.
         p.dispatch();
         // Evidence and the terminal line in the idle time after a tick.
@@ -600,6 +707,9 @@ fn run(p: &mut Program) -> i32 {
             next_status = now + p.o.status_s.max(0.1);
         }
     }
+    let cpu = cpu_report(&cpu_start, &cpu_account(&bridge_pids), p.mono() - cpu_t0);
+    let scan_to_tick = dict! {"scans" => waits, "mean_s" => if waits > 0 { wait_sum / waits as f64 } else { 0. },
+                              "max_s" => wait_max, "basis" => "reader receive time -> start of the tick that decided on it"};
     let result = p.sup.auto_result.clone();
     p.say(&format!("ended: {}", to_json(result.get("reason"))));
     // After the run: six samples about .2 s apart (the helper's after.json).
@@ -617,7 +727,7 @@ fn run(p: &mut Program) -> i32 {
         "run_id" => run_v.clone(), "started" => started, "reason" => result.get("reason").clone(),
         "route_controller" => "rust_program", "max_tick_compute_s" => result.get("max_tick_compute_s").clone(),
         "max_actual_gap_s" => result.get("max_actual_gap_s").clone(), "max_gap_breakdown" => result.get("max_gap_breakdown").clone(),
-        "result" => result,
+        "cpu" => cpu, "scan_to_tick" => scan_to_tick, "result" => result,
     };
     let _ = p.files.send(FileOp::Put("summary.json", to_json(&summary)));
     let _ = p.files.send(FileOp::Put("cli-result.json", to_json(&summary)));

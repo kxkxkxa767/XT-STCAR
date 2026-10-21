@@ -8,6 +8,7 @@ files, a lidar bridge that ends (bridge_failure), and an interrupted program
 whose bridges hold neutral themselves. The decisions are checked exactly by
 scripts/route-engine-supervisor-parity.py; these tests cover the program's
 own I/O. Real time (about 40 s in all); skipped without the builds.
+Round 99: the closed-loop run also checks the scan-to-tick wait.
 """
 import json
 import os
@@ -82,6 +83,12 @@ class RaceProgramTests(unittest.TestCase):
         self.assertTrue(result['observed_armed'])
         self.assertGreater(result['drive_ticks'], 50)
         self.assertLess(summary['max_actual_gap_s'], .12)
+        # Round 99: a new scan is decided on at once, not at the next 20 ms tick.
+        waits = summary['scan_to_tick']
+        self.assertGreater(waits['scans'], 20)
+        self.assertLess(waits['mean_s'], .01)
+        self.assertLess(waits['max_s'], .05)
+        self.assertIn('cpu', summary)  # per-thread CPU (None without /proc)
         rows = [json.loads(line) for line in (self.out/'feedback.jsonl').read_text().splitlines()]
         self.assertGreater(len(rows), 10)
         # The fields trial-timeline/trial-map read.
