@@ -13,7 +13,8 @@ its own millisecond clock. The first powered drive is noted in FAKE_SHARED.
 lidar: the trial's saved scans (feedback.jsonl), renumbered and re-stamped on
 this clock at 10 Hz: the scans before its recorded drive loop until the control
 side has driven, then the recorded drive scans follow at their recorded
-spacing (open loop, like route-replay.py). Offline only.
+spacing (open loop, like route-replay.py). When its input closes the control
+side records its final status in FAKE_SHARED/control-final.json. Offline only.
 """
 import json
 import os
@@ -91,6 +92,7 @@ def control():
             advance(now_ms())
             if state['closed']:
                 stop('input_closed')
+                (shared/'control-final.json').write_text(json.dumps(status))
                 emit({'control': dict(status), 'physical_output': False, 'reverse_enabled': False})
                 return
             emit({'control': dict(status), 'physical_output': False, 'reverse_enabled': False})

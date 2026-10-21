@@ -15,7 +15,9 @@
 //!
 //! Start: the console's start check (turn_preview) is shown until it passes;
 //! then `--start enter` waits for Enter on the terminal, `--start ready`
-//! starts once it has passed continuously for `--ready-hold-s`.
+//! starts once it has passed continuously for `--ready-hold-s`; `--start
+//! never` only shows and records the check for `--max-wait-s` and never arms
+//! (static tests on the car).
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -27,6 +29,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::dict;
+use crate::maneuver::ROUTE_MAX_DRIVE_S;
 use crate::py::*;
 use crate::supervisor::Supervisor;
 
@@ -50,15 +53,15 @@ struct Options {
     status_s: f64,
 }
 
-const USAGE: &str = "usage: route-engine race --bridge PATH --out NEW_DIR [--start enter|ready] [--ready-hold-s 3] \
-[--max-drive-s 16] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
+const USAGE: &str = "usage: route-engine race --bridge PATH --out NEW_DIR [--start enter|ready|never] [--ready-hold-s 3] \
+[--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
 [--control-device /dev/car] [--lidar-device /dev/laser]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
     let mut o = Options {
         bridge: String::new(),
         out: PathBuf::new(),
-        max_drive_s: 16.,
+        max_drive_s: ROUTE_MAX_DRIVE_S,
         initial_presteer_pwm: 1670,
         start: "enter".into(),
         ready_hold_s: 3.,
@@ -100,14 +103,19 @@ fn parse(args: &[String]) -> Result<Options, String> {
     if o.bridge.is_empty() || o.out.as_os_str().is_empty() {
         return Err("--bridge and --out are required".into());
     }
-    if o.start != "enter" && o.start != "ready" {
-        return Err("--start must be enter or ready".into());
+    if !["enter", "ready", "never"].contains(&o.start.as_str()) {
+        return Err("--start must be enter, ready or never".into());
+    }
+    // autonomy-control.py's route drive limit (1..ROUTE_MAX_DRIVE_S).
+    if !(1. ..=ROUTE_MAX_DRIVE_S).contains(&o.max_drive_s) {
+        return Err(format!("drive limit must be 1..{ROUTE_MAX_DRIVE_S} seconds"));
     }
     Ok(o)
 }
 
 enum Event {
     Line(&'static str, String, Instant),
+    Coast(u64, String),
     Ended(&'static str, String),
     Enter,
     StdinClosed,
@@ -221,6 +229,7 @@ struct Program {
     stdin_closed: bool,
     max_drive_v: V,
     initial_v: V,
+    coast: Sender<(u64, String)>,
 }
 
 impl Program {
@@ -260,8 +269,19 @@ impl Program {
                     self.sup.bridge_failed(kind, &message);
                 }
             }
+            Event::Coast(number, answer) => {
+                self.sup.coast_worker.finish_job(number, &answer);
+                self.dispatch();
+            }
             Event::Enter => self.entered = true,
             Event::StdinClosed => self.stdin_closed = true,
+        }
+    }
+
+    /// Hand the coast worker's pending scan to the fitting thread.
+    fn dispatch(&mut self) {
+        if let Some(job) = self.sup.coast_worker.take_job() {
+            let _ = self.coast.send((job.number, job.request));
         }
     }
 
@@ -368,6 +388,19 @@ pub fn main(args: &[String]) -> i32 {
             let _ = tx.send(Event::StdinClosed);
         });
     }
+    // The coast standstill fit (a worker process in the console) on its own thread.
+    let (coast, jobs) = mpsc::channel::<(u64, String)>();
+    {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let mut fitter = crate::coast::CoastFitter::default();
+            for (number, request) in jobs {
+                if tx.send(Event::Coast(number, fitter.fit(&request))).is_err() {
+                    break;
+                }
+            }
+        });
+    }
     drop(tx);
     let (files, writer_thread) = writer(o.out.clone());
     let mut bridge_in = control.stdin.take().unwrap();
@@ -392,6 +425,7 @@ pub fn main(args: &[String]) -> i32 {
         stdin_closed: false,
         max_drive_v,
         initial_v,
+        coast,
     };
     let code = run(&mut p);
     let _ = p.files.send(FileOp::Stop);
@@ -468,14 +502,26 @@ fn run(p: &mut Program) -> i32 {
                 p.say("terminal input closed; use --start ready without a terminal");
                 return 64;
             }
-        } else if ready_since.is_some_and(|since| now - since >= p.o.ready_hold_s) {
+        } else if p.o.start == "ready" && ready_since.is_some_and(|since| now - since >= p.o.ready_hold_s) {
             break state;
+        }
+        if p.o.start == "never" && now >= wait_until {
+            // Check only: record what the check saw; nothing was armed.
+            let _ = p.files.send(FileOp::Put("before.json", to_json(&state)));
+            let _ = p.files.send(FileOp::Put("before-lidar.json", to_json(&p.lidar())));
+            let result = dict! {"started" => false, "check_only" => true, "turn_ready" => ready,
+                                "turn_rejection" => state.idx("autonomy").get("turn_rejection").clone(),
+                                "control" => p.sup.control(), "errors" => p.sup.errors.clone()};
+            let _ = p.files.send(FileOp::Put("cli-result.json", to_json(&result)));
+            p.say("check only: not started");
+            return 0;
         }
         if now >= wait_until {
             p.say("start check did not pass in time");
             return 75;
         }
     };
+    assert!(p.o.start != "never", "check-only mode never reaches the start");
     let _ = p.files.send(FileOp::Put("before.json", to_json(&before)));
     let _ = p.files.send(FileOp::Put("before-lidar.json", to_json(&p.lidar())));
     let control = p.sup.control();
@@ -537,6 +583,8 @@ fn run(p: &mut Program) -> i32 {
         wait = MIN_IDLE_S.max(TICK_S - (ended - requested));
         previous = Some((tick_at, ended, wait, cpu));
         next_tick = ended + wait;
+        // The scan this tick submitted for the coast fit goes to its thread.
+        p.dispatch();
         // Evidence and the terminal line in the idle time after a tick.
         let now = p.mono();
         if now >= next_evidence && p.sup.session.is_some() {

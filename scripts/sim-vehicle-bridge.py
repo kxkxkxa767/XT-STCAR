@@ -4,7 +4,8 @@
   sim-vehicle-bridge.py control | lidar
 
 Environment: SIM_SHARED (a scratch directory both modes share), SIM_LAYOUT
-(course-sim layout, default user8), SIM_SEED.
+(course-sim layout, default user8), SIM_SEED, SIM_LIDAR_END_S (tests: the
+lidar side ends this many seconds after the first powered drive).
 
 control: fake-vehicle-bridge.py's copy of the bridge's teleop guard; the
 adopted motor/servo go to SIM_SHARED/command.json every 20 ms.
@@ -64,9 +65,15 @@ def lidar():
     truth = (shared/'truth.jsonl').open('a')
     start = time.monotonic()
     t, seq, next_scan = 0., 1, 0.
+    end_after = float(os.environ['SIM_LIDAR_END_S']) if os.environ.get('SIM_LIDAR_END_S') else None
+    driving_at = None
     try:
         while True:
             now = time.monotonic()-start
+            if end_after is not None and driving_at is None and (shared/'driving').exists():
+                driving_at = now
+            if driving_at is not None and now-driving_at >= end_after:
+                return
             try:
                 command = json.loads((shared/'command.json').read_text())
             except (OSError, ValueError):
@@ -98,6 +105,7 @@ def lidar():
 
 
 if __name__ == '__main__':
+    (Path(os.environ['SIM_SHARED'])/f'pid-{sys.argv[1]}').write_text(str(os.getpid()))
     try:
         {'control': control, 'lidar': lidar}[sys.argv[1]]()
     except (BrokenPipeError, KeyboardInterrupt):

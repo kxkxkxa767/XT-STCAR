@@ -466,6 +466,9 @@ pub struct CoastWorker {
     last_input: Option<V>,
     motion: Option<CoastMotion>,
     motion_generation: Option<i64>,
+    /// A fit handed to a worker thread: (generation, identity, submitted, job number, scan, received).
+    inflight: Option<(i64, V, f64, u64, V, V)>,
+    jobs: u64,
     /// processing_ms in results (wall clock in Python; fixed for offline runs).
     pub processing_ms: Option<f64>,
 }
@@ -581,5 +584,82 @@ impl CoastWorker {
         if generation == self.generation {
             self.result = Some((generation, id, submitted, motion));
         }
+    }
+}
+
+/// A fit for a worker thread (the console's worker-process request), as
+/// text so it can cross threads; the answer comes back the same way.
+pub struct CoastJob {
+    pub number: u64,
+    pub request: String,
+}
+
+impl CoastWorker {
+    /// _take_pending for a worker thread: the latest pending scan, unless a
+    /// fit is in flight (a reset does not cancel it; its result is dropped).
+    pub fn take_job(&mut self) -> Option<CoastJob> {
+        if self.inflight.is_some() {
+            return None;
+        }
+        let (generation, id, scan, age, received, submitted) = self.pending.take()?;
+        self.jobs += 1;
+        let request = to_json(&dict! {
+            "generation" => generation, "scan" => scan.clone(), "lidar_age_s" => age, "received_s" => received.clone(),
+        });
+        self.inflight = Some((generation, id, submitted, self.jobs, scan, received));
+        Some(CoastJob { number: self.jobs, request })
+    }
+
+    /// The worker thread's answer to job `number` (_compute's result step).
+    pub fn finish_job(&mut self, number: u64, answer: &str) {
+        let Some((generation, id, submitted, job, scan, received)) = self.inflight.take() else { return };
+        if job != number {
+            self.inflight = Some((generation, id, submitted, job, scan, received));
+            return;
+        }
+        let parsed = parse_json(answer).unwrap_or(V::None);
+        let mut motion = if parsed.get("result").is_dict() {
+            parsed.get("result").clone()
+        } else {
+            CoastWorker::unknown("motion_estimator_failed")
+        };
+        motion.update(&dict! {
+            "source_scan_seq" => scan.idx("seq").clone(), "source_publication_at_ms" => scan.idx("at_ms").clone(),
+            "source_receive_monotonic_s" => received.clone(), "processing_ms" => parsed.get("processing_ms").clone(),
+        });
+        if generation == self.generation {
+            self.result = Some((generation, id, submitted, motion));
+        }
+    }
+}
+
+/// The worker thread's side: one estimator per generation, as the console's
+/// worker process keeps it.
+#[derive(Default)]
+pub struct CoastFitter {
+    motion: CoastMotion,
+    generation: Option<i64>,
+}
+
+impl CoastFitter {
+    pub fn fit(&mut self, request: &str) -> String {
+        let started = std::time::Instant::now();
+        let request = parse_json(request).unwrap_or(V::None);
+        let generation = request.get("generation");
+        let generation = if generation.is_int() { Some(generation.i()) } else { None };
+        if generation != self.generation {
+            self.motion = CoastMotion::new();
+            self.generation = generation;
+        }
+        let estimator = &mut self.motion;
+        let result = match py_try(|| estimator.update(request.get("scan"), request.get("lidar_age_s"), request.get("received_s"))) {
+            Ok(motion) => motion,
+            Err(_) => {
+                self.motion = CoastMotion::new();
+                CoastWorker::unknown("motion_estimator_failed")
+            }
+        };
+        let processing_ms = started.elapsed().as_secs_f64() * 1000.;
+        to_json(&dict! {"result" => result, "processing_ms" => processing_ms})
     }
 }
