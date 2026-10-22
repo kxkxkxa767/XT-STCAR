@@ -1332,9 +1332,7 @@ impl Maneuver {
         self.route_stage = "light_lane";
         self.lane_motor = ROUTE_SLOW_MOTOR;
         self._lane_steering = CorridorSteering::default();
-        self._lane_slow_zone = false;
         self._lane_pulse = 0;
-        self._lane_rest = 0;
         let e = dict! {"source_seq" => scan.idx("seq").clone()};
         self.route_event("light_lane", scan, control, e);
         self.steering_target = self.servo;
@@ -1386,39 +1384,125 @@ impl Maneuver {
         }
     }
 
-    /// _lane_cut_gap(speed, reaction).
-    fn lane_cut_gap(speed: f64, reaction: f64) -> f64 {
-        LANE_FINISH_TARGET_GAP_M + speed * reaction + speed * speed / (2. * LANE_STOP_DECEL_MPS2)
+    /// _lane_decels(): (aim, guard, strong).
+    fn lane_decels(&self) -> (f64, f64, Option<f64>) {
+        let Some(decel) = self._lane_coast_decel else {
+            return (LANE_STOP_DECEL_MPS2, LANE_STOP_DECEL_MIN_MPS2, None);
+        };
+        let se = self._lane_coast_decel_se.unwrap();
+        (
+            decel,
+            pmax(LANE_COAST_DECEL_FLOOR_MPS2, pmin(LANE_COAST_GUARD_RATIO * decel, decel - 2. * se)),
+            Some(pmax(decel / LANE_COAST_GUARD_RATIO, decel + 2. * se)),
+        )
     }
 
-    /// _lane_safe_gap(speed, reaction).
-    fn lane_safe_gap(&self, speed: f64, reaction: f64) -> f64 {
-        let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MIN_MPS2);
-        LANE_FINISH_MIN_GAP_M + speed * reaction + speed * speed / (2. * decel)
+    /// _lane_pipeline(now, onset, offset, push_s): (coast_s, power_s).
+    fn lane_pipeline(&self, now: f64, onset: f64, offset: f64, push_s: f64) -> (f64, f64) {
+        let (mut since, mut last) = (self._power_since, self._power_cmd_at);
+        if last.is_some() && since.is_none() {
+            since = last;
+        }
+        if push_s > 0. {
+            if last.is_none_or(|l| l + offset <= now) {
+                since = Some(now);
+            }
+            last = Some(now + push_s);
+        }
+        let Some(last) = last else {
+            return (0., 0.);
+        };
+        let (start, end) = (since.unwrap() + onset, last + offset);
+        if end <= now || end <= start {
+            return (0., 0.);
+        }
+        (pmax(0., start - now), end - pmax(now, start))
+    }
+
+    /// _lane_speed_now(speed, now, onset, offset, decel, accel).
+    fn lane_speed_now(&self, speed: f64, now: f64, onset: f64, offset: f64, decel: f64, accel: f64) -> f64 {
+        let history = &self._lane_ranges;
+        let lag = if history.is_empty() { 0. } else { (history[history.len() - 1].0 - history[0].0) / 2. };
+        let mut powered_s = 0.;
+        if let Some(cmd_at) = self._power_cmd_at {
+            let since = self._power_since.unwrap_or(cmd_at);
+            powered_s = pmax(0., pmin(now, cmd_at + offset) - pmax(now - lag, since + onset));
+            if let Some(prev_end) = self._power_prev_end {
+                powered_s += pmax(0., pmin(pmin(now, prev_end + offset), since + onset) - (now - lag));
+            }
+        }
+        powered_s = pmin(lag, powered_s);
+        pmax(0., speed + accel * powered_s - decel * (lag - powered_s))
+    }
+
+    /// _lane_worst_gap(gap, speed, now, decel, accel, reaction, push_s).
+    #[allow(clippy::too_many_arguments)]
+    fn lane_worst_gap(&self, gap: f64, speed: f64, now: f64, decel: f64, accel: f64, reaction: f64, push_s: f64) -> f64 {
+        let mut worst: Option<f64> = None;
+        for lag in [LANE_ESC_LAG_MIN_S, ESC_LAG_S] {
+            let (onset, offset) = (lag - LANE_ESC_SKEW_S, lag + LANE_ESC_SKEW_S);
+            let v = self.lane_speed_now(speed, now, onset, offset, decel, accel) + LANE_SPEED_GUARD_MARGIN_MPS;
+            let (coast_s, power_s) = self.lane_pipeline(now, onset, offset, push_s);
+            let value = Self::lane_stop(gap, v, decel, reaction, coast_s, power_s, accel);
+            worst = Some(match worst {
+                None => value,
+                Some(w) => pmin(w, value),
+            });
+        }
+        worst.unwrap()
+    }
+
+    /// _lane_stop(gap, speed, decel, reaction, coast_s, power_s, accel).
+    fn lane_stop(gap: f64, speed: f64, decel: f64, reaction: f64, coast_s: f64, power_s: f64, accel: f64) -> f64 {
+        let travel = speed * reaction;
+        if speed <= decel * coast_s {
+            return gap - travel - speed * speed / (2. * decel);
+        }
+        let coasted = speed - decel * coast_s;
+        let peak = pmin(coasted + accel * power_s, pmax(coasted, LANE_PUSH_MAX_MPS));
+        gap - travel - (speed + coasted) / 2. * coast_s - peak * power_s - peak * peak / (2. * decel)
     }
 
     /// _lane_coast_observe(now, speed).
     fn lane_coast_observe(&mut self, now: f64, speed: Option<f64>) {
-        let coasting = self.lane_motor == NEUTRAL && speed.is_some() && self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S);
+        let n = self._lane_ranges.len();
+        let coasting = self.lane_motor == NEUTRAL
+            && speed.is_some()
+            && n >= 3
+            && self._power_cmd_at.is_none_or(|at| self._lane_ranges[n.saturating_sub(5)].1 - at >= ESC_LAG_S);
         if !coasting {
             self._lane_coast_track.clear();
             return;
         }
         let speed = speed.unwrap();
+        if speed < LANE_SPEED_RESTART_MPS {
+            return;
+        }
         if let Some(&last) = self._lane_coast_track.last()
             && (now <= last.0 || speed > last.1 + LANE_SPEED_CUT_MARGIN_MPS)
         {
             self._lane_coast_track.clear();
         }
         self._lane_coast_track.push((now, speed));
-        if self._lane_coast_track.len() > LANE_SPEED_HISTORY {
-            let n = self._lane_coast_track.len();
-            self._lane_coast_track.drain(..n - LANE_SPEED_HISTORY);
+        if self._lane_coast_track.len() > LANE_COAST_TRACK_POINTS {
+            let m = self._lane_coast_track.len();
+            self._lane_coast_track.drain(..m - LANE_COAST_TRACK_POINTS);
         }
-        let (t0, v0) = self._lane_coast_track[0];
-        let (t1, v1) = self._lane_coast_track[self._lane_coast_track.len() - 1];
-        if t1 - t0 >= LANE_COAST_MIN_SPAN_S && v0 - v1 >= LANE_COAST_MIN_DROP_MPS {
-            self._lane_coast_decel = Some(pmax(LANE_STOP_DECEL_MIN_MPS2, pmin(LANE_COAST_DECEL_CAP_MPS2, (v0 - v1) / (t1 - t0))));
+        let track = &self._lane_coast_track;
+        let (t0, v0) = track[0];
+        let (t1, v1) = track[track.len() - 1];
+        if t1 - t0 >= LANE_COAST_MIN_SPAN_S && v0 - v1 >= LANE_COAST_MIN_DROP_MPS && track.len() >= 4 {
+            let count = track.len() as f64;
+            let mean_t = fsum_py(track.iter().map(|p| p.0)) / count;
+            let mean_v = fsum_py(track.iter().map(|p| p.1)) / count;
+            let sxx = fsum_py(track.iter().map(|p| (p.0 - mean_t) * (p.0 - mean_t)));
+            let slope = fsum_py(track.iter().map(|p| (p.0 - mean_t) * (p.1 - mean_v))) / sxx;
+            let residual = fsum_py(track.iter().map(|p| (p.1 - mean_v - slope * (p.0 - mean_t)) * (p.1 - mean_v - slope * (p.0 - mean_t))));
+            let se = sqrt(residual / (count - 2.) / sxx);
+            if se <= LANE_COAST_DECEL_SE_MAX_MPS2 {
+                self._lane_coast_decel = Some(pmax(LANE_COAST_DECEL_FLOOR_MPS2, pmin(LANE_COAST_DECEL_CAP_MPS2, -slope)));
+                self._lane_coast_decel_se = Some(se);
+            }
         }
     }
 
@@ -1479,34 +1563,68 @@ impl Maneuver {
             speed_known = false;
             LANE_SPEED_UNKNOWN_MPS
         };
-        let v_cut = v + LANE_SPEED_CUT_MARGIN_MPS + if DRIVE_MOTORS.contains(&self.lane_motor) { LANE_SPEED_POWER_MARGIN_MPS } else { 0. };
         let gap = ahead.map(|a| a - FRONT_BODY_EXTENT_M);
-        let reaction = self.reaction_s(now);
-        let cut_gap = Self::lane_cut_gap(v_cut, reaction);
-        let safe_gap = self.lane_safe_gap(v_cut, reaction);
-        if gap.is_some_and(|g| g <= cut_gap + LANE_SLOW_TRAVEL_M) {
-            self._lane_slow_zone = true;
+        let (decel, guard_decel, strong_decel) = self.lane_decels();
+        let powered = DRIVE_MOTORS.contains(&self.lane_motor);
+        let (aim_coast, aim_power) = self.lane_pipeline(now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, 0.);
+        let coasting = !powered && self._power_cmd_at.is_none_or(|at| now >= at + ESC_LAG_S + LANE_ESC_SKEW_S);
+        let kick = self._power_cmd_motor == Some(TRIAL_MOTOR);
+        let aim_accel = if kick { LANE_POWER_ACCEL_MPS2 } else { LANE_PUSH_ACCEL_MPS2 };
+        let late = gap.is_some_and(|g| g <= LANE_FINISH_ZONE_GAP_M);
+        let guard_accel = if kick {
+            LANE_KICK_ACCEL_MAX_MPS2
+        } else if late {
+            LANE_PUSH_LATE_ACCEL_MAX_MPS2
+        } else {
+            LANE_PUSH_ACCEL_MAX_MPS2
+        };
+        let mut v_aim = v;
+        if speed.is_some() {
+            v_aim = self.lane_speed_now(v, now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, decel, aim_accel);
+        }
+        let guard_reaction = if powered { LANE_REACTION_BASE_S } else { LANE_AIM_REACTION_S };
+        let (mut stop_gap, mut worst_gap) = (None, None);
+        if let Some(g) = gap {
+            stop_gap = Some(Self::lane_stop(g, v_aim, decel, if powered { LANE_AIM_REACTION_S } else { 0. }, aim_coast, aim_power, aim_accel));
+            worst_gap = Some(self.lane_worst_gap(g, v, now, guard_decel, guard_accel, guard_reaction, 0.));
         }
         let stopped = speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS);
         let in_zone = gap.is_some_and(|g| g <= LANE_FINISH_ZONE_GAP_M);
-        let coasting = self.lane_motor == NEUTRAL;
-        let cut = speed_known && in_zone && ((gap.unwrap() <= cut_gap && v <= LANE_SLOW_HIGH_MPS && coasting) || stopped);
+        let body_in_zone = gap.is_some_and(|g| g <= LANE_FINISH_BODY_GAP_M);
+        let kick_room = gap.is_some_and(|g| g >= LANE_FINISH_MIN_GAP_M + LANE_KICK_TRAVEL_M);
+        let rested = self._power_cmd_at.is_none_or(|at| now - at >= LANE_KICK_REST_S);
+        let mut basis: Option<&str> = None;
+        if speed_known && stopped && body_in_zone {
+            basis = Some("stopped_with_the_whole_car_in_the_finish_zone");
+        } else if speed_known && stopped && in_zone && !kick_room {
+            basis = Some("stopped_front_in_finish_zone_restart_could_reach_the_board");
+        } else if speed_known
+            && coasting
+            && !stopped
+            && strong_decel.is_some()
+            && gap.is_some()
+            && stop_gap.unwrap() >= LANE_FINISH_MIN_GAP_M
+            && Self::lane_stop(gap.unwrap(), v_aim, strong_decel.unwrap(), 0., 0., 0., 0.) <= LANE_FINISH_BODY_GAP_M
+        {
+            basis = Some("coast_stops_the_whole_car_in_the_finish_zone");
+        }
         self.lane_feedback = dict! {
             "source_seq" => scan.idx("seq").clone(), "steering_source" => source,
             "nominal_target_pwm" => natural, "lane" => lane.clone(), "free_space" => space.clone(), "walls" => walls,
             "front_range_m" => ahead, "front_gap_m" => gap, "speed_mps" => speed, "speed_for_cut_mps" => v,
-            "speed_known" => speed_known, "speed_basis" => "closing_rate_on_board_ahead_axis",
-            "finish_cut_gap_m" => cut_gap, "weakest_coast_gap_m" => safe_gap, "in_finish_zone" => in_zone,
-            "reaction_s" => reaction,
-            "nominal_decel_mps2" => LANE_STOP_DECEL_MPS2, "weakest_decel_mps2" => LANE_STOP_DECEL_MIN_MPS2,
-            "slow_zone" => self._lane_slow_zone,
+            "speed_aim_mps" => v_aim, "speed_known" => speed_known, "speed_basis" => "closing_rate_on_board_ahead_axis",
+            "predicted_stop_gap_m" => stop_gap, "worst_stop_gap_m" => worst_gap, "in_finish_zone" => in_zone,
+            "whole_car_in_finish_zone" => body_in_zone, "pipeline_power_s" => aim_power,
+            "coast_decel_mps2" => decel, "guard_decel_mps2" => guard_decel, "strong_decel_mps2" => strong_decel,
+            "coast_decel_se_mps2" => self._lane_coast_decel_se,
+            "coast_decel_measured" => self._lane_coast_decel.is_some(),
             "motor_before" => self.lane_motor, "swept_path_certified" => false, "traffic_light_vision" => false,
         };
-        if cut {
+        if let Some(basis) = basis {
             let mut finish = self.lane_feedback.clone();
             finish.update(&dict! {
                 "received_at" => scan.idx("received_at").clone(),
-                "basis" => if gap.unwrap() <= cut_gap { "nominal_coast_lands_mid_finish_zone" } else { "body_front_in_finish_zone_and_stopped" },
+                "basis" => basis,
                 "finish_zone_certified" => false,
             });
             self.finish_evidence = finish;
@@ -1514,41 +1632,29 @@ impl Maneuver {
             self.route_event("finish_stop", scan, control, e);
             return self.end_light_stage("route_finish_zone_stop", now, control);
         }
-        if gap.is_some_and(|g| g <= safe_gap || g <= cut_gap) {
+        if gap.is_some() && (stop_gap.unwrap() <= LANE_FINISH_TARGET_GAP_M || worst_gap.unwrap() <= LANE_FINISH_MIN_GAP_M) {
             self.lane_motor = NEUTRAL;
         } else if speed.is_none() {
             self.lane_motor = ROUTE_SLOW_MOTOR;
-        } else if speed.unwrap() < LANE_SPEED_RESTART_MPS {
-            self.lane_motor = TRIAL_MOTOR;
-        } else if !self._lane_slow_zone {
-            self.lane_motor = ROUTE_SLOW_MOTOR;
-        } else if speed.unwrap() > LANE_SLOW_HIGH_MPS {
-            self.lane_motor = NEUTRAL;
-        } else if speed.unwrap() < LANE_SLOW_LOW_MPS
-            && gap.is_some_and(|g| {
-                g > Self::lane_cut_gap(v_cut, reaction) + LANE_PUSH_CLEAR_M
-                    && g > self.lane_safe_gap(
-                        v + LANE_SPEED_CUT_MARGIN_MPS + LANE_SPEED_POWER_MARGIN_MPS + LANE_SLOW_PUSH_GAIN_MPS,
-                        LANE_REACTION_S,
-                    )
-            })
+        } else if stopped {
+            self.lane_motor = if kick_room && (rested || self._lane_pulse > 0) { TRIAL_MOTOR } else { NEUTRAL };
+        } else if self.lane_motor == ROUTE_SLOW_MOTOR {
+        } else if self.lane_motor == NEUTRAL
+            && stop_gap.unwrap() > LANE_FINISH_TARGET_GAP_M + LANE_TOPUP_BAND_M
+            && v_aim - decel * LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
+            && self.lane_worst_gap(gap.unwrap(), v, now, guard_decel, guard_accel, guard_reaction, LANE_PUSH_MIN_S) > LANE_FINISH_MIN_GAP_M
         {
             self.lane_motor = ROUTE_SLOW_MOTOR;
+        } else {
+            self.lane_motor = NEUTRAL;
         }
-        if self.lane_motor == TRIAL_MOTOR {
-            if self._lane_rest > 0 || self._lane_pulse >= LANE_KICK_FRAMES {
-                if self._lane_pulse >= LANE_KICK_FRAMES {
-                    self._lane_rest = LANE_REST_FRAMES;
-                    self._lane_pulse = 0;
-                }
-                self._lane_rest -= 1;
-                self.lane_motor = NEUTRAL;
-            } else {
-                self._lane_pulse += 1;
-            }
+        if self.lane_motor == TRIAL_MOTOR && self._lane_pulse >= LANE_KICK_FRAMES {
+            self.lane_motor = NEUTRAL;
+            self._lane_pulse = 0;
+        } else if self.lane_motor == TRIAL_MOTOR {
+            self._lane_pulse += 1;
         } else {
             self._lane_pulse = 0;
-            self._lane_rest = 0i64.max(self._lane_rest - 1);
         }
         self.lane_feedback.set("motor", self.lane_motor);
         self.steering_target = target;

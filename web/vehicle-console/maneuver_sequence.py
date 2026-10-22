@@ -198,9 +198,6 @@ LANE_SPEED_UNKNOWN_MPS = 1.3
 LANE_MAX_CLOSING_MPS = 3.5
 LANE_COAST_DECEL_MPS2 = .5
 LANE_STOP_DECEL_MPS2 = .5
-LANE_SLOW_TRAVEL_M = .60
-LANE_SLOW_HIGH_MPS = .60
-LANE_SLOW_LOW_MPS = .40
 LANE_SPEED_HOLD_S = .5
 LANE_SPEED_HOLD_MARGIN_MPS = .1
 # Control/perception reaction plus the ESC lag: the car keeps its last motor
@@ -212,11 +209,6 @@ LANE_REACTION_S = LANE_REACTION_BASE_S+ESC_LAG_S  # where the last push time is 
 # Speed still rising while a cut waits out the ESC lag (1560 straight on tiles:
 # about 1 m/s^2 at 1-1.5 m/s).
 LANE_POWER_ACCEL_MPS2 = 1.
-# 1550 settles near 1.1 m/s on tiles: a slow car gains about this much over
-# the ESC lag after a 1550 push (the 1560 rate overstated it).
-LANE_SLOW_PUSH_GAIN_MPS = .3
-# Round 94: near-end 1550 pushes are no longer 2-frame pulses (half that
-# gain, .15 m/s); they are checked with the full push gain.
 LANE_LAUNCH_S = .4
 LANE_FINISH_GAP_M = .15
 # Round 64 (Claude): finish. A cut from cruise speed cannot land inside the
@@ -230,12 +222,15 @@ LANE_FINISH_GAP_M = .15
 # decel (the measured ~.5 m/s^2) stops LANE_FINISH_TARGET_GAP_M from the board,
 # or when stopped with the front inside the zone. Parameters chosen on the
 # round-63 closed-loop model (decel .25-1.0, start 3.5-6 m, cruise .9/1.27).
+# Round 101 replaced (2) and (3), see LANE_FINISH_BODY_GAP_M.
 # Round 92 (user: 为什么最后那么点距离，你频繁的停车再加pwm): light-lane coasts
 # on the car stopped after v0^2/(2d) = .46 (run 91: 1.1 m/s, 1.31 m), ~.45
 # (run 80) and ~.51 m/s^2 (run 88); at .25 the cut came ~1 m early and the car
 # stopped short of the zone, then crept on in pulses (run 91: 6.5 s). .35
 # keeps ~22 % below the weakest measured coast.
-LANE_STOP_DECEL_MIN_MPS2 = .35
+# Round 101: the guard now models the ESC lag's travel apart (see
+# LANE_FINISH_BODY_GAP_M): .45 keeps ~25 % below the .57-.61 coasts of runs 98-100.
+LANE_STOP_DECEL_MIN_MPS2 = .45
 # Round 82: a coast decel measured over at least this span and speed drop
 # replaces the weakest one, clamped to [LANE_STOP_DECEL_MIN_MPS2,
 # LANE_COAST_DECEL_CAP_MPS2]. Round 86: the cap was the nominal .5 and the
@@ -245,21 +240,96 @@ LANE_STOP_DECEL_MIN_MPS2 = .35
 LANE_COAST_MIN_SPAN_S = .4
 LANE_COAST_MIN_DROP_MPS = .1
 # Round 92: at most the weakest coast measured on the car (~.45, see above).
-LANE_COAST_DECEL_CAP_MPS2 = .45
+# Round 101: light-lane coasts on the car, runs 98-100, ~.55-.6 m/s^2 (1.5-1.7
+# m/s at the cut, 2.0-2.5 m to the stop); the measured one now also aims the
+# coast (below), so the cap only bounds a bad fit.
+LANE_COAST_DECEL_CAP_MPS2 = .70
+# Front in the zone (the stage's old end; the finish line lies ~.05 m beyond).
 LANE_FINISH_ZONE_GAP_M = .75
+# Round 101 (Claude; user: 最后那段直道想办法让他一口气跑完不要停顿，这个太耗时间了).
+# Runs 98-100 entered the lane at 1.5-1.7 m/s with 3.1-3.4 m to go, coasted at
+# once on the weakest-coast guard (.35 m/s^2 plus .3 m/s of margins), stopped
+# 1.0-1.3 m from the board and crept on in 1560 kicks (run 100: three, ~3 s);
+# the end at a front gap of .74-.76 m left the rear wheels outside the 80 cm
+# zone (rules 2.4.2: the time ends when the front wheels cross the finish
+# line; at the stop all four wheels must be in the zone, else +5 s; board
+# contact +10 s). Those coasts, fitted with the ESC lag apart, ran at .57-.61
+# m/s^2 (speed residual ~.03 m/s); the older .45-.51 (runs 80/88/91) were
+# v0^2/(2 d) with the lag's travel inside d. The cut came ~.2-.3 s before the
+# coast, run 100's restart kick moved the car ~.3 s after it was sent.
+# Now the coast is aimed at a stop with the whole car in the zone, and a car
+# that would stop short is pushed again (1550) while it still rolls:
+# - aim (_lane_stop): the front gap less the travel over LANE_AIM_REACTION_S
+#   (while powered), the outputs still in the ESC pipeline (_lane_pipeline:
+#   LANE_ESC_LAG_NOMINAL_S both ways, 1550 at LANE_PUSH_ACCEL_MPS2) and a coast
+#   at the lane's measured decel (_lane_coast_observe), LANE_STOP_DECEL_MPS2
+#   before one is measured; the median-rate speed is brought to now
+#   (_lane_speed_now: it is half its window old);
+# - guard (_lane_worst_gap): the worse of a LANE_ESC_LAG_MIN_S and an
+#   ESC_LAG_S lag, each LANE_ESC_SKEW_S early on and late off, the speed plus
+#   LANE_SPEED_GUARD_MARGIN_MPS, power at LANE_PUSH_ACCEL_MAX_MPS2 (inside the
+#   zone LANE_PUSH_LATE_ACCEL_MAX_MPS2, a 1560 kick LANE_KICK_ACCEL_MAX_MPS2) up
+#   to LANE_PUSH_MAX_MPS, then the measured decel
+#   less two standard errors (at least LANE_COAST_GUARD_RATIO of it;
+#   LANE_STOP_DECEL_MIN_MPS2 before one is measured); never within
+#   LANE_FINISH_MIN_GAP_M of the board. Roughly two standard deviations of
+#   each, not all worst cases at once: compounded they ruled out any push
+#   inside ~1.5 m at .8 m/s (closed-loop simulation with a pure ESC delay)
+#   while the aim already keeps .25 m from the board. A push starts only when
+#   its first scan (LANE_PUSH_MIN_S) passes the guard and the car still rolls.
+LANE_FINISH_BODY_GAP_M = .40  # zone .80 less the car's .38 m, .02 inside
 LANE_FINISH_MIN_GAP_M = .05
-LANE_FINISH_TARGET_GAP_M = .45
-LANE_PUSH_CLEAR_M = .2
-# Near the end (front gap <= zone + LANE_SLOW_TRAVEL_M) power came in pulses
-# (LANE_PULSE_FRAMES = 2 powered frames, then LANE_REST_FRAMES neutral): the
-# closing-speed estimate lags a push, and a 1560 restart held until it read
-# .15 m/s had reached .93 m/s (simulation, 8x6 course: then cut late and hit
-# the end board). Round 94: every 1560 restart is a LANE_KICK_FRAMES kick and
-# a rolling 1550 push is not chopped (see _light_lane_update).
+LANE_FINISH_TARGET_GAP_M = .25
+# Push again only when the aimed coast stops this far short of the target.
+LANE_TOPUP_BAND_M = .10
+# 1550 moves a car that still rolls at this speed when it acts (run 93: .3 ->
+# .62 m/s in 1 s, ~.32 m/s^2), not a car at rest (~.7 s, 2026-10-16); .25
+# (simulation: .3 left 13 % more stops with the rear outside the zone).
+LANE_PUSH_ROLLING_MPS = .25
+LANE_PUSH_ACCEL_MPS2 = .35
+LANE_PUSH_ACCEL_MAX_MPS2 = .5
+# Round 101: inside the zone (past the finish line) a push only brings the rear
+# wheels in, while the board costs +10 s: guarded at this (course-sim's nominal
+# car, no ESC lag and 1550 up to ~1.6 m/s^2 at .45 m/s, met the board after a
+# late .5 m/s^2-guarded push).
+LANE_PUSH_LATE_ACCEL_MAX_MPS2 = 1.
+# A 1560 restart kick from rest reached ~.47 m/s within ~.3 s of power (run 91).
+LANE_KICK_ACCEL_MAX_MPS2 = 1.6
+# 1550 cruises at ~1.5 m/s on the track (runs 98-100 light entry), ~1.1 on tiles.
+LANE_PUSH_MAX_MPS = 1.7
+LANE_PUSH_MIN_S = .1  # one scan
+LANE_ESC_LAG_NOMINAL_S = .3
+# The guard takes the worse of a LANE_ESC_LAG_MIN_S and an ESC_LAG_S lag, each
+# reaching the wheels LANE_ESC_SKEW_S early and leaving them that much late.
+LANE_ESC_LAG_MIN_S = .2
+LANE_ESC_SKEW_S = .05
+LANE_AIM_REACTION_S = .1
+# The coasting speed's residual on the car was ~.03 m/s (runs 98-100).
+LANE_SPEED_GUARD_MARGIN_MPS = .05
+LANE_COAST_GUARD_RATIO = .9
+LANE_COAST_TRACK_POINTS = 12
+# A fit is used once its slope's standard error is at most this; the guard and
+# the rolling end then take two standard errors (at least LANE_COAST_GUARD_RATIO).
+LANE_COAST_DECEL_SE_MAX_MPS2 = .08
+# Restart from rest: a LANE_KICK_FRAMES 1560 kick moved the car .08-.36 m
+# (runs 98-100); none when that could reach LANE_FINISH_MIN_GAP_M.
+LANE_KICK_TRAVEL_M = .45
+# No restart kick until a push has left the ESC pipeline and the speed window
+# (the estimate lags a kick: a moving car still read 0 and got a second kick).
+LANE_KICK_REST_S = 1.
+# A measured coast decel is kept within these (the prior LANE_STOP_DECEL_MIN_MPS2
+# bounds the guard only before one is measured).
+LANE_COAST_DECEL_FLOOR_MPS2 = .2
+# Near the end power came in pulses (LANE_PULSE_FRAMES = 2 powered frames, then
+# LANE_REST_FRAMES neutral): the closing-speed estimate lags a push, and a 1560
+# restart held until it read .15 m/s had reached .93 m/s (simulation, 8x6
+# course: then cut late and hit the end board). Round 94: every 1560 restart
+# is a LANE_KICK_FRAMES kick and a rolling 1550 push is not chopped (see
+# _light_lane_update).
 # Rest at least the ESC lag between pushes, so the speed a push produces is
 # measured before the next one (2026-10-16 measured car: a stopped car got
-# 1560 for 1 s before it moved, then ran into the end board at 1.2 m/s).
-LANE_REST_FRAMES = 5
+# 1560 for 1 s before it moved, then ran into the end board at 1.2 m/s); round
+# 101: LANE_KICK_REST_S (was LANE_REST_FRAMES = 5 scans).
 # A restart kick at 1560 anywhere in the lane is a pulse too.
 LANE_KICK_FRAMES = 3
 
@@ -1291,8 +1361,7 @@ class ManeuverSequence(TurnMotion):
         self.light_turn_started = None  # second pass time; not renewed by a pause
         self._lane_steering = CorridorSteering()
         self._lane_speed_last = None
-        self._lane_slow_zone = False
-        self._lane_pulse = self._lane_rest = 0
+        self._lane_pulse = 0
         self._light_history = []
         self._light_heading = None
         self.light_feedback = None
@@ -1300,6 +1369,7 @@ class ManeuverSequence(TurnMotion):
         self.lane_motor = ROUTE_SLOW_MOTOR
         self._lane_coast_track = []
         self._lane_coast_decel = None
+        self._lane_coast_decel_se = None
         self._lane_ranges = []
         self.lane_feedback = None
         self.finish_evidence = None
@@ -1345,6 +1415,8 @@ class ManeuverSequence(TurnMotion):
         self._front_track = None
         self._track_history = []
         self._power_cmd_at = None  # last output frame with a drive motor (ESC lag)
+        self._power_since = None  # first output frame of that powered run (round 101)
+        self._power_prev_end = None  # last output frame of the powered run before it
         self._launch_cmd_at = None  # round 100: last output frame at START_LAUNCH_MOTOR
         self._power_cmd_motor = None
         self._launch_until = None
@@ -2888,6 +2960,7 @@ class ManeuverSequence(TurnMotion):
             self._launch_until = None  # the next push is a launch again
         elif self._launch_until is None:
             self._launch_until = now+ESC_LAG_S+LANE_LAUNCH_S
+            self._power_since, self._power_prev_end = now, self._power_cmd_at
         if (result['motor'] == ROUTE_SLOW_MOTOR and self.continue_route and self.entry_kind == 'lane'
                 and now < self._launch_until
                 and self.route_stage in ('first_target', 'open_transfer', 'second_loop', 'light_entry')):
@@ -5258,16 +5331,11 @@ class ManeuverSequence(TurnMotion):
         self.route_stage = 'light_lane'
         self.lane_motor = ROUTE_SLOW_MOTOR  # speed history from the aligned frames is kept
         self._lane_steering = CorridorSteering()
-        self._lane_slow_zone = False
-        self._lane_pulse = self._lane_rest = 0
+        self._lane_pulse = 0
         self._route_event('light_lane', scan, control, {'source_seq': scan['seq']})
         self.steering_target = self.servo
         self.reason = 'light_lane_started_keep_adopted_command'
         return self._result(now)
-
-    def _lane_stop_range(self, speed):
-        """Board range of the finish cut at ``speed`` (nominal coast to mid zone)."""
-        return FRONT_BODY_EXTENT_M+self._lane_cut_gap(speed)
 
     @staticmethod
     def _start_allowed_speed(ahead):
@@ -5310,37 +5378,112 @@ class ManeuverSequence(TurnMotion):
             return LANE_REACTION_BASE_S
         return LANE_REACTION_BASE_S+max(0., min(ESC_LAG_S, ESC_LAG_S-(now-self._power_cmd_at)))
 
+    def _lane_decels(self):
+        """(aim, guard, strong) coast decels: the lane's measured one, less and more
+        by two standard errors (at least by LANE_COAST_GUARD_RATIO); else
+        LANE_STOP_DECEL_MPS2, the weakest LANE_STOP_DECEL_MIN_MPS2 and None."""
+        decel, se = self._lane_coast_decel, self._lane_coast_decel_se
+        if decel is None:
+            return LANE_STOP_DECEL_MPS2, LANE_STOP_DECEL_MIN_MPS2, None
+        return (decel, max(LANE_COAST_DECEL_FLOOR_MPS2, min(LANE_COAST_GUARD_RATIO*decel, decel-2*se)),
+                max(decel/LANE_COAST_GUARD_RATIO, decel+2*se))
+
+    def _lane_pipeline(self, now, onset, offset, push_s=0.):
+        """(coast_s, power_s) the wheels still get if the motor goes neutral now, or
+        after ``push_s`` more of power: power from ``onset`` after the powered run
+        began (now, for a push after it has left the pipeline) until ``offset``
+        after its last output."""
+        since, last = self._power_since, self._power_cmd_at
+        if last is not None and since is None:
+            since = last
+        if push_s > 0:
+            if last is None or last+offset <= now:
+                since = now
+            last = now+push_s
+        if last is None:
+            return 0., 0.
+        start, end = since+onset, last+offset
+        if end <= now or end <= start:
+            return 0., 0.
+        return max(0., start-now), end-max(now, start)
+
+    def _lane_speed_now(self, speed, now, onset, offset, decel, accel):
+        """The closing speed now from the median rate, which is the speed half its
+        window ago: over that half window the wheels coasted at ``decel`` except
+        while power reached them (``onset`` after a powered run began until
+        ``offset`` after its last output), at ``accel``."""
+        history = self._lane_ranges
+        lag = (history[-1][0]-history[0][0])/2 if history else 0.
+        powered_s = 0.
+        if self._power_cmd_at is not None:
+            since = self._power_cmd_at if self._power_since is None else self._power_since
+            powered_s = max(0., min(now, self._power_cmd_at+offset)-max(now-lag, since+onset))
+            if self._power_prev_end is not None:
+                # the run before this one (a push that has not reached the wheels yet)
+                powered_s += max(0., min(now, self._power_prev_end+offset, since+onset)-(now-lag))
+        powered_s = min(lag, powered_s)
+        return max(0., speed+accel*powered_s-decel*(lag-powered_s))
+
+    def _lane_worst_gap(self, gap, speed, now, decel, accel, reaction, push_s=0.):
+        """Guard: the smaller front gap at the stop over a LANE_ESC_LAG_MIN_S and an
+        ESC_LAG_S lag (each skewed by LANE_ESC_SKEW_S), with the speed brought to
+        now plus LANE_SPEED_GUARD_MARGIN_MPS."""
+        worst = None
+        for lag in (LANE_ESC_LAG_MIN_S, ESC_LAG_S):
+            onset, offset = lag-LANE_ESC_SKEW_S, lag+LANE_ESC_SKEW_S
+            v = self._lane_speed_now(speed, now, onset, offset, decel, accel)+LANE_SPEED_GUARD_MARGIN_MPS
+            coast_s, power_s = self._lane_pipeline(now, onset, offset, push_s)
+            value = self._lane_stop(gap, v, decel, reaction, coast_s, power_s, accel)
+            worst = value if worst is None else min(worst, value)
+        return worst
+
     @staticmethod
-    def _lane_cut_gap(speed, reaction=LANE_REACTION_S):
-        """Front gap at which a neutral coast at the nominal decel stops mid-zone."""
-        return LANE_FINISH_TARGET_GAP_M+speed*reaction+speed*speed/(2*LANE_STOP_DECEL_MPS2)
-
-    def _lane_safe_gap(self, speed, reaction=LANE_REACTION_S):
-        """Front gap at which even the weakest coast only just keeps the minimum gap.
-
-        Round 82: the weakest decel is the coast decel measured in this lane
-        when one is (_lane_coast_decel), at most LANE_COAST_DECEL_CAP_MPS2;
-        car run 80 measured ~.53 m/s^2 while LANE_STOP_DECEL_MIN_MPS2 .25
-        made the car stop .6 m short of the zone and crawl ~5 s in kicks."""
-        decel = LANE_STOP_DECEL_MIN_MPS2 if self._lane_coast_decel is None else self._lane_coast_decel
-        return LANE_FINISH_MIN_GAP_M+speed*reaction+speed*speed/(2*decel)
+    def _lane_stop(gap, speed, decel, reaction, coast_s, power_s, accel):
+        """Front gap where the car stops: ``speed`` over ``reaction``, ``coast_s``
+        coasting, ``power_s`` of power at ``accel`` (to LANE_PUSH_MAX_MPS, travelled
+        at the speed reached), then a coast at ``decel``."""
+        travel = speed*reaction
+        if speed <= decel*coast_s:
+            return gap-travel-speed*speed/(2*decel)
+        coasted = speed-decel*coast_s
+        peak = min(coasted+accel*power_s, max(coasted, LANE_PUSH_MAX_MPS))
+        return gap-travel-(speed+coasted)/2*coast_s-peak*power_s-peak*peak/(2*decel)
 
     def _lane_coast_observe(self, now, speed):
-        """Coast decel from the measured speed while coasting past the ESC lag."""
-        coasting = (self.lane_motor == NEUTRAL and speed is not None
-                    and (self._power_cmd_at is None or now-self._power_cmd_at >= ESC_LAG_S))
+        """Coast decel: least-squares slope of the speed while its whole window coasts.
+
+        Round 101: the newest three rates of the median (its last five scans)
+        must start ESC_LAG_S after the last powered output: the median of five
+        rates whose newest three fall is the middle one, as in a whole coast;
+        fitted over up to LANE_COAST_TRACK_POINTS scans (was the end points of
+        LANE_SPEED_HISTORY) once its slope's standard error is at most
+        LANE_COAST_DECEL_SE_MAX_MPS2; a speed under LANE_SPEED_RESTART_MPS (at or
+        near rest reads 0) does not enter the fit."""
+        coasting = (self.lane_motor == NEUTRAL and speed is not None and len(self._lane_ranges) >= 3
+                    and (self._power_cmd_at is None
+                         or self._lane_ranges[max(0, len(self._lane_ranges)-5)][1]-self._power_cmd_at >= ESC_LAG_S))
         if not coasting:
             self._lane_coast_track = []
+            return
+        if speed < LANE_SPEED_RESTART_MPS:
             return
         track = self._lane_coast_track
         if track and (now <= track[-1][0] or speed > track[-1][1]+LANE_SPEED_CUT_MARGIN_MPS):
             track.clear()  # a jump up is not a coast
         track.append((now, speed))
-        del track[:-LANE_SPEED_HISTORY]
+        del track[:-LANE_COAST_TRACK_POINTS]
         t0, v0 = track[0]
         t1, v1 = track[-1]
-        if t1-t0 >= LANE_COAST_MIN_SPAN_S and v0-v1 >= LANE_COAST_MIN_DROP_MPS:
-            self._lane_coast_decel = max(LANE_STOP_DECEL_MIN_MPS2, min(LANE_COAST_DECEL_CAP_MPS2, (v0-v1)/(t1-t0)))
+        if t1-t0 >= LANE_COAST_MIN_SPAN_S and v0-v1 >= LANE_COAST_MIN_DROP_MPS and len(track) >= 4:
+            mean_t = sum(t for t, _ in track)/len(track)
+            mean_v = sum(v for _, v in track)/len(track)
+            sxx = sum((t-mean_t)*(t-mean_t) for t, _ in track)
+            slope = sum((t-mean_t)*(v-mean_v) for t, v in track)/sxx
+            residual = sum((v-mean_v-slope*(t-mean_t))*(v-mean_v-slope*(t-mean_t)) for t, v in track)
+            se = math.sqrt(residual/(len(track)-2)/sxx)
+            if se <= LANE_COAST_DECEL_SE_MAX_MPS2:
+                self._lane_coast_decel = max(LANE_COAST_DECEL_FLOOR_MPS2, min(LANE_COAST_DECEL_CAP_MPS2, -slope))
+                self._lane_coast_decel_se = se
 
     def _light_lane_update(self, scan, now, control):
         """Follow the light-lane straight, then stop inside the finish zone.
@@ -5395,72 +5538,92 @@ class ManeuverSequence(TurnMotion):
             v = held[1]+LANE_SPEED_HOLD_MARGIN_MPS
         else:
             v, speed_known = LANE_SPEED_UNKNOWN_MPS, False
-        v_cut = v+LANE_SPEED_CUT_MARGIN_MPS+(LANE_SPEED_POWER_MARGIN_MPS if self.lane_motor in DRIVE_MOTORS else 0.)
         gap = None if ahead is None else ahead-FRONT_BODY_EXTENT_M
-        reaction = self._reaction_s(now)
-        cut_gap = self._lane_cut_gap(v_cut, reaction)
-        safe_gap = self._lane_safe_gap(v_cut, reaction)
-        if gap is not None and gap <= cut_gap+LANE_SLOW_TRAVEL_M:
-            self._lane_slow_zone = True  # latched: the final approach stays slow
+        decel, guard_decel, strong_decel = self._lane_decels()
+        powered = self.lane_motor in DRIVE_MOTORS
+        aim_coast, aim_power = self._lane_pipeline(now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S)
+        # nothing left in the ESC pipeline even with the longest lag
+        coasting = not powered and (self._power_cmd_at is None
+                                    or now >= self._power_cmd_at+ESC_LAG_S+LANE_ESC_SKEW_S)
+        kick = self._power_cmd_motor == TRIAL_MOTOR
+        aim_accel = LANE_POWER_ACCEL_MPS2 if kick else LANE_PUSH_ACCEL_MPS2
+        # Past the finish line a push only brings the rear wheels in (the time
+        # has ended; the board costs +10 s): LANE_PUSH_LATE_ACCEL_MAX_MPS2.
+        late = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M
+        guard_accel = (LANE_KICK_ACCEL_MAX_MPS2 if kick else LANE_PUSH_LATE_ACCEL_MAX_MPS2 if late
+                       else LANE_PUSH_ACCEL_MAX_MPS2)
+        v_aim = v
+        if speed is not None:
+            v_aim = self._lane_speed_now(v, now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, decel, aim_accel)
+        guard_reaction = LANE_REACTION_BASE_S if powered else LANE_AIM_REACTION_S
+        stop_gap = worst_gap = None
+        if gap is not None:
+            stop_gap = self._lane_stop(gap, v_aim, decel, LANE_AIM_REACTION_S if powered else 0.,
+                                       aim_coast, aim_power, aim_accel)
+            worst_gap = self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction)
         stopped = speed is not None and speed < LANE_SPEED_RESTART_MPS
         in_zone = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M
-        coasting = self.lane_motor == NEUTRAL  # the estimate is not lagging a push
-        # End only with the front inside the zone: outside it the car coasts on
-        # and, if it stops short (the estimate lags high while coasting), is
-        # pushed on in pulses.
-        cut = speed_known and in_zone and ((gap <= cut_gap and v <= LANE_SLOW_HIGH_MPS and coasting) or stopped)
+        body_in_zone = gap is not None and gap <= LANE_FINISH_BODY_GAP_M
+        kick_room = gap is not None and gap >= LANE_FINISH_MIN_GAP_M+LANE_KICK_TRAVEL_M
+        rested = self._power_cmd_at is None or now-self._power_cmd_at >= LANE_KICK_REST_S
+        # Round 101: end with the whole car in the zone: stopped there, or still
+        # coasting where even a coast at the strong measured decel (_lane_decels)
+        # stops in it (and the aimed one short of the board); stopped with only
+        # the front in it where a restart kick could reach the board, end there.
+        basis = None
+        if speed_known and stopped and body_in_zone:
+            basis = 'stopped_with_the_whole_car_in_the_finish_zone'
+        elif speed_known and stopped and in_zone and not kick_room:
+            basis = 'stopped_front_in_finish_zone_restart_could_reach_the_board'
+        elif (speed_known and coasting and not stopped and strong_decel is not None and gap is not None
+              and stop_gap >= LANE_FINISH_MIN_GAP_M
+              and self._lane_stop(gap, v_aim, strong_decel, 0., 0., 0., 0.)
+              <= LANE_FINISH_BODY_GAP_M):
+            basis = 'coast_stops_the_whole_car_in_the_finish_zone'
         self.lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
             'nominal_target_pwm': natural, 'lane': lane, 'free_space': space, 'walls': walls,
             'front_range_m': ahead, 'front_gap_m': gap, 'speed_mps': speed, 'speed_for_cut_mps': v,
-            'speed_known': speed_known, 'speed_basis': 'closing_rate_on_board_ahead_axis',
-            'finish_cut_gap_m': cut_gap, 'weakest_coast_gap_m': safe_gap, 'in_finish_zone': in_zone,
-            'reaction_s': reaction,
-            'nominal_decel_mps2': LANE_STOP_DECEL_MPS2, 'weakest_decel_mps2': LANE_STOP_DECEL_MIN_MPS2,
-            'slow_zone': self._lane_slow_zone,
+            'speed_aim_mps': v_aim, 'speed_known': speed_known, 'speed_basis': 'closing_rate_on_board_ahead_axis',
+            'predicted_stop_gap_m': stop_gap, 'worst_stop_gap_m': worst_gap, 'in_finish_zone': in_zone,
+            'whole_car_in_finish_zone': body_in_zone, 'pipeline_power_s': aim_power,
+            'coast_decel_mps2': decel, 'guard_decel_mps2': guard_decel, 'strong_decel_mps2': strong_decel,
+            'coast_decel_se_mps2': self._lane_coast_decel_se,
+            'coast_decel_measured': self._lane_coast_decel is not None,
             'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': False}
-        if cut:
+        if basis is not None:
             self.finish_evidence = {**self.lane_feedback, 'received_at': scan['received_at'],
-                'basis': ('nominal_coast_lands_mid_finish_zone' if gap <= cut_gap
-                          else 'body_front_in_finish_zone_and_stopped'),
-                'finish_zone_certified': False}
+                                    'basis': basis, 'finish_zone_certified': False}
             self._route_event('finish_stop', scan, control, self.finish_evidence)
             return self._end_light_stage('route_finish_zone_stop', now, control)
-        if gap is not None and (gap <= safe_gap or gap <= cut_gap):
-            self.lane_motor = NEUTRAL  # within the weakest coast distance or the cut: coast, decide coasting
+        if gap is not None and (stop_gap <= LANE_FINISH_TARGET_GAP_M or worst_gap <= LANE_FINISH_MIN_GAP_M):
+            self.lane_motor = NEUTRAL  # the coast from here reaches the target (or the guard)
         elif speed is None:
             self.lane_motor = ROUTE_SLOW_MOTOR
-        elif speed < LANE_SPEED_RESTART_MPS:
-            self.lane_motor = TRIAL_MOTOR
-        elif not self._lane_slow_zone:
-            self.lane_motor = ROUTE_SLOW_MOTOR  # the straight itself: 1550
-        elif speed > LANE_SLOW_HIGH_MPS:
-            self.lane_motor = NEUTRAL
-        elif (speed < LANE_SLOW_LOW_MPS and gap is not None
-              and gap > self._lane_cut_gap(v_cut, reaction)+LANE_PUSH_CLEAR_M
-              # The push itself, and the ESC lag after it, add speed: even the
-              # weakest coast from there must still stop short of the board.
-              # Round 94: an unchopped push near the end gains the full push.
-              and gap > self._lane_safe_gap(v+LANE_SPEED_CUT_MARGIN_MPS+LANE_SPEED_POWER_MARGIN_MPS
-                                            + LANE_SLOW_PUSH_GAIN_MPS, LANE_REACTION_S)):
-            self.lane_motor = ROUTE_SLOW_MOTOR
-        near_end = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M+LANE_SLOW_TRAVEL_M
+        elif stopped:
+            self.lane_motor = TRIAL_MOTOR if kick_room and (rested or self._lane_pulse > 0) else NEUTRAL
+        elif self.lane_motor == ROUTE_SLOW_MOTOR:
+            pass  # the straight, or a push, until the coast is aimed
+        elif (self.lane_motor == NEUTRAL and stop_gap > LANE_FINISH_TARGET_GAP_M+LANE_TOPUP_BAND_M
+              and v_aim-decel*LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
+              and self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction,
+                                       LANE_PUSH_MIN_S) > LANE_FINISH_MIN_GAP_M):
+            self.lane_motor = ROUTE_SLOW_MOTOR  # it would stop short: push again while it rolls
+        else:
+            self.lane_motor = NEUTRAL  # coasting, or a kick once the car rolls
         # Round 94 (user: 最后不到半米的距离一直停车再动): near the end a 2-frame
         # pulse barely moved the car (run 93: 1550 pulse at .86 m, then 0 m/s
         # and .17 m in 1.1 s; run 91: 1560 pulses crept 1.04 -> .87 m in 2 s),
         # while a 3-frame 1560 kick from rest reached .47 m/s and ~.3-.4 m (run
         # 91). A restart from rest is that kick everywhere; a 1550 push of a
-        # car still rolling is not chopped (its safe-gap check is unchanged).
-        if self.lane_motor == TRIAL_MOTOR:
-            if self._lane_rest > 0 or self._lane_pulse >= LANE_KICK_FRAMES:
-                if self._lane_pulse >= LANE_KICK_FRAMES:
-                    self._lane_rest, self._lane_pulse = LANE_REST_FRAMES, 0
-                self._lane_rest -= 1
-                self.lane_motor = NEUTRAL
-            else:
-                self._lane_pulse += 1
+        # car still rolling is not chopped (its guard is checked every scan).
+        # Round 101: the next kick no sooner than LANE_KICK_REST_S after it (was
+        # LANE_REST_FRAMES scans after the kick, restarted by any other output).
+        if self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= LANE_KICK_FRAMES:
+            self.lane_motor, self._lane_pulse = NEUTRAL, 0
+        elif self.lane_motor == TRIAL_MOTOR:
+            self._lane_pulse += 1
         else:
             self._lane_pulse = 0
-            self._lane_rest = max(0, self._lane_rest-1)
         self.lane_feedback['motor'] = self.lane_motor
         self.steering_target, self.natural_steering_target = target, natural
         self.reason = 'light_lane_follow_straight'

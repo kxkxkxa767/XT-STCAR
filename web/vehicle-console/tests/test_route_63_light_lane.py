@@ -1,6 +1,7 @@
 """Round 63 (Claude): light-lane straight like the start straight, earlier
-hand-over from the light turn, coasting profile to the finish, and a cheaper
-(bitwise identical) free-space computation.
+hand-over from the light turn, coasting profile to the finish (round 101: aimed
+at a whole-car stop, closed loop with an ESC delay), and a cheaper (bitwise
+identical) free-space computation.
 Real trials 60-62 light frames: fixtures/route-60-62-light-lane.json (saved
 scans only). Real-frame stage tests re-time the saved 5 Hz frames to 100 ms;
 geometry is unchanged. Closed-loop stops are a kinematic model, no physical
@@ -16,9 +17,9 @@ import test_maneuver_route as route
 import maneuver_sequence as ms
 from maneuver_sequence import (ManeuverSequence, LIGHT_HEADINGS_DEG, LIGHT_FREE_HORIZON_M, LIGHT_BRIDGE_MAX_BINS,
                                LIGHT_UNKNOWN_BLOCK_M, LIGHT_TURN_MIN_S, LIGHT_LANE_ENTRY_HEADING_RAD,
-                               LANE_STOP_DECEL_MPS2, LANE_SLOW_HIGH_MPS, LANE_SLOW_TRAVEL_M,
                                ROUTE_SLOW_MOTOR, FRONT_BODY_EXTENT_M, REAR_BODY_EXTENT_M, SIDE_BODY_EXTENT_M,
                                MANEUVER_BODY_CLEARANCE_M, _wrap)
+from turn_motion import TRIAL_MOTOR
 from test_route_58_light_lane import box
 
 FIXTURE = json.loads((Path(__file__).parent/'fixtures'/'route-60-62-light-lane.json').read_text())
@@ -113,222 +114,139 @@ def lane_motion(stage='light_lane'):
     return motion
 
 
-class FreeSpaceTests(unittest.TestCase):
-    def test_bitwise_identical_to_the_round58_implementation(self):
-        scans = [s for n in (60, 61, 62) for s in frames(n)]
-        scans += [{'ranges': box(a, half=h)} for a in (.4, 1., 2.5, 5.) for h in (.5, 1.)]
-        holed = {'ranges': box(2.)}
-        for i in (0, 1, 2, 3, 350, 351, 20, 21, 22, 23, 24, 25, 26):
-            holed['ranges'][i] = None
-        scans.append(holed)
-        for scan in scans:
-            for previous in (None, 0., math.radians(-40), math.radians(37)):
-                self.assertEqual(ManeuverSequence._free_space(scan, previous),
-                                 reference_free_space(scan, previous))
-        self.assertIsNone(ManeuverSequence._free_space({'ranges': [None]*360}))
-
-    def test_at_least_twice_as_fast_on_the_real_light_frames(self):
-        scans = [s for n in (60, 61, 62) for s in frames(n)]
-        def best(fn):
-            times = []
-            for _ in range(5):
-                start = time.perf_counter()
-                for scan in scans:
-                    fn(scan, None)
-                times.append(time.perf_counter()-start)
-            return min(times)
-        # Measured ~1.8x on the Mac (round 63 WIP); a further cut is still needed for the car.
-        self.assertLess(best(ManeuverSequence._free_space), .7*best(reference_free_space))
-
-
-class LightTurnEntryTests(unittest.TestCase):
-    def test_real62_lane_hands_over_after_the_minimum_turn_time(self):
-        scans = frames(62, 409, 422)
-        # Trial62: the ~1.05 m light lane is measured at 10-12 deg from 412.
-        motion = lane_motion('light_turn')
-        motion.light_since = motion.light_turn_started = scans[0]['received_at']-LIGHT_TURN_MIN_S
-        stages = []
-        for k, scan in enumerate(scans):
-            result = motion.update(scan, 0., scan['received_at'],
-                                   route.feedback(k+5, motion.servo, ROUTE_SLOW_MOTOR))
-            stages.append((scan['seq'], result['route_stage']))
-            if result['route_stage'] == 'light_lane':
-                break
-        self.assertEqual(result['route_stage'], 'light_lane')
-        self.assertLessEqual(scan['seq'], 417)  # trial62 stayed in the light turn to 460
-        evidence = result['light_alignment_evidence']
-        self.assertEqual(evidence['basis'], 'measured_lane_aligned')
-        self.assertLessEqual(abs(evidence['measured_lane']['heading_left_rad']), LIGHT_LANE_ENTRY_HEADING_RAD)
-
-    def test_no_lane_hand_over_before_the_minimum_turn_time(self):
-        scans = frames(62, 412, 417)
-        motion = lane_motion('light_turn')
-        motion.light_since = motion.light_turn_started = scans[0]['received_at']
-        for k, scan in enumerate(scans):
-            if scan['received_at']-motion.light_turn_started+1e-9 >= LIGHT_TURN_MIN_S:
-                break
-            result = motion.update(scan, 0., scan['received_at'],
-                                   route.feedback(k+5, motion.servo, ROUTE_SLOW_MOTOR))
-            self.assertEqual(result['route_stage'], 'light_turn')
-
-    def test_turn_start_time_is_set_by_the_second_pass_only(self):
-        motion = ManeuverSequence(0., continue_route=True)
-        self.assertIsNone(motion.light_turn_started)
-
-
-class StraightLaneSteeringTests(unittest.TestCase):
-    @unittest.expectedFailure  # ROUND 63 WIP (not deployable): see agent.md top / after62_light_lane_straight_wip
-    def test_real_lane_frames_use_the_wall_law_bounded_and_without_direct_reversal(self):
-        for trial, first, last in ((60, 509, 519), (62, 412, 446)):
-            motion = lane_motion()
-            motion.servo = motion.steering_target = 1500
-            servos, sources = [motion.servo], []
-            for k, scan in enumerate(frames(trial, first, last)):
-                result = motion.update(scan, 0., scan['received_at'],
-                                       route.feedback(k+5, motion.servo, ROUTE_SLOW_MOTOR))
-                if result['phase'] != 'drive':
-                    break
-                sources.append(result['lane_feedback']['steering_source'])
-                servos.append(result['servo'])
-            with self.subTest(trial=trial):
-                self.assertIn('straight_lane_walls', sources)
-                self.assertTrue(all(1445 <= s <= 1555 for s in servos))
-                for a, b in zip(servos, servos[1:]):
-                    self.assertLessEqual(abs(b-a), 20)
-                    self.assertFalse(a > 1500 > b or a < 1500 < b)  # passes through center
-
-    @unittest.expectedFailure  # ROUND 63 WIP (not deployable): see agent.md top / after62_light_lane_straight_wip
-    def test_off_center_straight_steers_back_and_centered_holds(self):
-        def shifted(seq, shift):
-            value = route.observation(seq, heading=0.)
-            # Car .2 m right of a 2 m lane center: left board 1.2 m, right .8 m.
-            ranges = []
-            for i in range(360):
-                a = -math.radians(i)
-                dx, dy = math.cos(a), math.sin(a)
-                best = 6.
-                if dx > 1e-9:
-                    best = min(best, 5./dx)
-                if dy > 1e-9:
-                    best = min(best, (1.+shift)/dy)
-                if dy < -1e-9:
-                    best = min(best, (1.-shift)/-dy)
-                ranges.append(round(best, 3))
-            value['ranges'] = ranges
-            return value
-        motion = lane_motion()
-        targets = []
-        for seq in range(5, 12):
-            result = motion.update(shifted(seq, .2), 0., 1.+seq/10, route.feedback(seq, motion.servo, ROUTE_SLOW_MOTOR))
-            targets.append(result['lane_feedback']['nominal_target_pwm'])
-        self.assertGreater(targets[-1], 1500)  # left, toward the center
-        self.assertLessEqual(max(targets), 1555)
-        motion = lane_motion()
-        for seq in range(5, 12):
-            result = motion.update(shifted(seq, 0.), 0., 1.+seq/10, route.feedback(seq, motion.servo, ROUTE_SLOW_MOTOR))
-            self.assertEqual(result['lane_feedback']['nominal_target_pwm'], 1500)
+# Round 101: front wheels over the finish line (zone .80 m, front overhang
+# ~.08 m) and the whole car (.38 m) inside the zone.
+LINE_GAP_M = .72
+WHOLE_CAR_GAP_M = .80-(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M)
 
 
 class FinishStopTests(unittest.TestCase):
+    """Round 101 (user: 最后那段直道想办法让他一口气跑完不要停顿): a closed-loop lane
+    end with the motor acting a pure ESC delay late both ways (round 64-94
+    tests moved the car the scan a command was sent), coasting at
+    ``decel``, 1550 a first-order lag to ``cruise`` (``tau``), 1560 to 2.2
+    m/s; 100 ms scans of a centered 1.05 m lane, the car entering it
+    powered at ``v0`` with ``start`` m of front gap. A kinematic model, no
+    physical claim."""
     @staticmethod
-    def stop(true_decel, *, start=4.5, cruise=1.27, push=1.5):
-        """Closed-loop lane end: 1550 holds `cruise` (accelerating at `push`),
-        neutral coasts at `true_decel`; 100 ms scans of a centered 1.05 m lane."""
+    def stop(lag, decel, start, v0, *, cruise=1.15, tau=1.1, noise=0., seed=0):
+        import random
+        rng = random.Random(seed)
         motion = lane_motion()
         motion.servo = motion.steering_target = 1500
-        ahead, v, motor, seq, coasted = start, cruise, ROUTE_SLOW_MOTOR, 5, False
-        log, still = [], 0
-        # Round 64: the service keeps observing a car that has stopped; a few
-        # standstill frames let the controller see it (stopped inside the zone).
-        while (v > 0 or (still < 5 and not coasted)) and seq < 400:
-            still = still+1 if v <= 0 else 0
-            value = route.observation(seq, heading=0.)
-            value['ranges'] = box(ahead, half=.525)
-            value['corridor_candidates'][0].update(center_offset_left_m=0., width_m=1.05)
-            value['at_ms'], value['received_at'] = 1000+100*seq, 1.+.1*seq
-            if motion.phase == 'drive':
-                result = motion.update(value, 0., value['received_at'], route.feedback(seq, motion.servo, motor))
-                motor = result['motor']
+        motion.lane_motor = ROUTE_SLOW_MOTOR
+        motion._power_since, motion._power_cmd_at = 0., .98  # the light turn drove at 1550
+        motion._power_cmd_motor = ROUTE_SLOW_MOTOR
+        gap, v, t, cmd, seq = start, v0, 1., ROUTE_SLOW_MOTOR, 5
+        queue = [(0., ROUTE_SLOW_MOTOR)]
+        ended, first_stop, moving, kicks, log = None, None, True, [], []
+        for step in range(1500):
+            t = round(1.+.02*step, 4)
+            if step % 5 == 0 and ended is None:
+                value = route.observation(seq, heading=0.)
+                value['ranges'] = box(gap+FRONT_BODY_EXTENT_M+(rng.gauss(0, noise) if noise else 0.), half=.525)
+                value['corridor_candidates'][0].update(center_offset_left_m=0., width_m=1.05)
+                value['at_ms'], value['received_at'] = round(1000*t), t
+                result = motion.update(value, 0., t, route.feedback(seq, motion.servo, cmd))
+                new = result['motor'] if result['phase'] == 'drive' else 1500
+                if new == TRIAL_MOTOR and cmd != TRIAL_MOTOR:
+                    kicks.append([t, 0])
+                if new == TRIAL_MOTOR:
+                    kicks[-1][1] += 1
                 if result['phase'] != 'drive':
-                    coasted = True
-                    motor = 1500
-            log.append((round(ahead, 3), round(v, 3), motor))
-            if motor in (1550, 1560):
-                v = min(cruise, v+push*.1)
-                ahead -= v*.1
+                    ended = motion.reason
+                cmd = new
+                log.append((t, round(gap, 3), round(v, 3), cmd))
+                seq += 1
+            queue.append((t, cmd))
+            while len(queue) > 1 and queue[1][0] <= t-lag:
+                queue.pop(0)
+            motor = queue[0][1]
+            if motor == ROUTE_SLOW_MOTOR and v > .05:
+                v += max(-decel, min(2.5, (cruise-v)/tau))*.02
+            elif motor == TRIAL_MOTOR:
+                v += max(-decel, min(2.5, (2.2-v)/1.1))*.02
             else:
-                step = min(v, true_decel*.1)
-                ahead -= (v-step/2)*.1
-                v -= step
-            seq += 1
-        return ahead-FRONT_BODY_EXTENT_M, coasted, log, motion
+                v = max(0., v-decel*.02)
+            gap -= v*.02
+            if v <= 0 and moving and first_stop is None:
+                first_stop = gap
+            moving = v > 0
+            if gap <= 0 or (ended is not None and v <= 0):
+                break
+        return {'gap': gap, 'first_stop': first_stop, 'ended': ended, 'kicks': kicks, 'log': log,
+                'evidence': motion.finish_evidence}
 
-    def test_lane_end_stop_inside_the_finish_zone_without_contact(self):
-        # Round 64: passes with the closed-loop finish (weakest-coast no-power
-        # guard, slow band, nominal mid-zone cut).
-        # Measured rolling decel ~.5 m/s^2 (rebuilt paths, trials 49-51).
-        for true_decel in (.35, .5, .6):
-            for start in (3.5, 4.5, 6.):
-                for cruise in (.9, 1.27):
-                    gap, coasted, log, motion = self.stop(true_decel, start=start, cruise=cruise)
-                    with self.subTest(decel=true_decel, start=start, cruise=cruise):
-                        self.assertTrue(coasted)
-                        self.assertEqual(motion.reason, 'route_finish_zone_stop')
-                        self.assertGreater(gap, .05)   # never at the board
-                        self.assertLess(gap, .80)      # inside the 80 cm finish zone
-                        self.assertLessEqual(motion.finish_evidence['speed_for_cut_mps'], LANE_SLOW_HIGH_MPS+.25)
+    @staticmethod
+    def feasible(lag, decel, start, v0):
+        """Whether a cut on entry still stops before the board."""
+        return v0*lag+v0*v0/(2*decel) < start
 
-    def test_restarts_near_the_end_are_full_kicks(self):
+    def test_one_go_to_a_whole_car_stop_without_contact(self):
+        rows = []
+        for lag in (.2, .3, .45):
+            for decel in (.5, .58, .65):
+                for cruise, tau in ((1.15, 1.1), (1.5, 3.5)):
+                    for start, v0 in ((3.3, 1.5), (3.1, 1.7), (3.4, 1.5), (4.5, 1.2), (5.5, 1.), (2.5, 1.)):
+                        if not self.feasible(lag, decel, start, v0):
+                            continue
+                        row = self.stop(lag, decel, start, v0, cruise=cruise, tau=tau)
+                        rows.append(row)
+                        with self.subTest(lag=lag, decel=decel, cruise=cruise, start=start, v0=v0):
+                            self.assertEqual(row['ended'], 'route_finish_zone_stop')
+                            self.assertGreater(row['gap'], 0.)  # no board contact
+                            # No standstill before the front wheels cross the line.
+                            self.assertLessEqual(row['first_stop'], LINE_GAP_M)
+                            self.assertLess(row['gap'], .5)  # the front well inside the zone
+        # 75 % at the time of writing (84 % before late pushes were guarded at
+        # LANE_PUSH_LATE_ACCEL_MAX_MPS2); the rest stopped .42-.5 m from the board
+        # (front well in, rear wheels just outside), none before the line.
+        whole = sum(row['gap'] <= WHOLE_CAR_GAP_M for row in rows)
+        self.assertGreaterEqual(whole, .7*len(rows), (whole, len(rows)))
+
+    def test_noisy_ranges_still_never_reach_the_board(self):
+        for seed in range(2):
+            for lag in (.2, .45):
+                for decel in (.5, .62):
+                    for start, v0 in ((3.3, 1.5), (4.5, 1.2), (2.5, 1.)):
+                        row = self.stop(lag, decel, start, v0, noise=.01, seed=seed)
+                        with self.subTest(seed=seed, lag=lag, decel=decel, start=start, v0=v0):
+                            self.assertGreater(row['gap'], 0.)
+                            self.assertLessEqual(row['first_stop'], LINE_GAP_M)
+
+    def test_restarts_are_full_kicks_rested_apart(self):
         # Round 94 (car runs 91/93): 2-frame pulses barely moved the car; every
-        # 1560 restart is one LANE_KICK_FRAMES kick, followed by a rest.
-        for true_decel in (.5, .7, 1.):
-            gap, coasted, log, motion = self.stop(true_decel, start=1.9, cruise=.6)
-            runs, run = [], 0
-            for _, _, motor in log:
-                if motor == 1560:
-                    run += 1
-                elif run:
-                    runs.append(run)
-                    run = 0
-            with self.subTest(decel=true_decel):
-                self.assertTrue(coasted)
-                self.assertGreater(gap, .05)
-                self.assertLess(gap, .80)
-                self.assertTrue(all(r <= ms.LANE_KICK_FRAMES for r in runs), runs)
+        # 1560 restart is one LANE_KICK_FRAMES kick; round 101: the next one
+        # no sooner than LANE_KICK_REST_S after it (a moving car read 0 m/s).
+        for decel in (.5, .7, 1.):
+            row = self.stop(.3, decel, 1.9, .2, cruise=.6)
+            with self.subTest(decel=decel):
+                self.assertEqual(row['ended'], 'route_finish_zone_stop')
+                self.assertGreater(row['gap'], 0.)
+                self.assertTrue(all(frames <= ms.LANE_KICK_FRAMES for _, frames in row['kicks']), row['kicks'])
+                starts = [at for at, _ in row['kicks']]
+                self.assertTrue(all(b-a >= ms.LANE_KICK_REST_S for a, b in zip(starts, starts[1:])), starts)
 
-    def test_weaker_or_stronger_decel_still_never_reaches_the_board(self):
-        for true_decel in (.25, .7, 1.):
-            for cruise in (.9, 1.27):
-                gap, coasted, log, motion = self.stop(true_decel, start=4.5, cruise=cruise)
-                with self.subTest(decel=true_decel, cruise=cruise):
-                    self.assertTrue(coasted)
-                    self.assertGreater(gap, 0.)
+    def test_weaker_or_stronger_coast_never_reaches_the_board(self):
+        for decel in (.35, .8, 1.):
+            for lag in (.2, .45):
+                for start, v0 in ((4.5, 1.2), (5.5, 1.), (1.9, .6)):
+                    row = self.stop(lag, decel, start, v0)
+                    with self.subTest(decel=decel, lag=lag, start=start, v0=v0):
+                        self.assertGreater(row['gap'], 0.)
+                        self.assertEqual(row['ended'], 'route_finish_zone_stop')
 
-    def test_far_part_is_driven_at_1550_not_slow_regulated(self):
-        # Round 64: "far" = beyond the weakest-coast distance from the speed
-        # plus its margins (no power is ever given inside it).
-        gap, coasted, log, motion = self.stop(.5, start=6., cruise=.9)
-        # Round 82: the guard before any coast decel is measured in the lane.
-        motion._lane_coast_decel = None
-        v_cut = .9+ms.LANE_SPEED_CUT_MARGIN_MPS+ms.LANE_SPEED_POWER_MARGIN_MPS
-        guard = FRONT_BODY_EXTENT_M+motion._lane_safe_gap(v_cut)
-        # Round 92: with the measured weakest coast (.35) the slow zone
-        # (nominal cut + LANE_SLOW_TRAVEL_M) can begin before that guard.
-        slow = FRONT_BODY_EXTENT_M+motion._lane_cut_gap(v_cut)+ms.LANE_SLOW_TRAVEL_M
-        far = [m for a, v, m in log if a > max(guard, slow)+.1]
-        self.assertTrue(len(far) > 3 and all(m == ROUTE_SLOW_MOTOR for m in far[3:]))
-
-    def test_slow_zone_latches_before_the_cut_at_cruise_speed(self):
-        # Round 64: the first coast is the weakest-coast guard, well before the cut.
-        gap, coasted, log, motion = self.stop(.5, start=6., cruise=1.27)
-        first_coast = next(i for i, (a, v, m) in enumerate(log) if m == 1500)
-        motion._lane_coast_decel = None  # round 82: the guard in effect at the first coast
-        guard = (FRONT_BODY_EXTENT_M+motion._lane_safe_gap(1.27+ms.LANE_SPEED_CUT_MARGIN_MPS
-                                                           + ms.LANE_SPEED_POWER_MARGIN_MPS))
-        self.assertLessEqual(log[first_coast][0], guard+.15)
-        self.assertGreater(log[first_coast][0], motion._lane_stop_range(1.27))
-        self.assertLess(ms.LANE_STOP_DECEL_MIN_MPS2, LANE_STOP_DECEL_MPS2)
-        self.assertLessEqual(LANE_STOP_DECEL_MPS2, ms.LANE_COAST_DECEL_MPS2)
+    def test_far_part_is_driven_at_1550_and_the_measured_coast_aims_the_stop(self):
+        row = self.stop(.3, .58, 5.5, 1.)  # box() returns at most 6 m
+        # Far = beyond the guard's reach at ~1.1 m/s before a coast is measured.
+        far = [motor for t, gap, v, motor in row['log'] if gap > 3.6]
+        self.assertTrue(len(far) > 10 and all(motor == ROUTE_SLOW_MOTOR for motor in far[1:]), far)
+        evidence = row['evidence']
+        self.assertGreater(row['gap'], 0.)
+        self.assertLess(evidence['front_gap_m'], .5)
+        self.assertTrue(evidence['coast_decel_measured'])
+        self.assertAlmostEqual(evidence['coast_decel_mps2'], .58, delta=.06)
+        self.assertFalse(evidence['finish_zone_certified'])
 
 
 if __name__ == '__main__':

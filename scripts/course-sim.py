@@ -471,6 +471,7 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
     stage_seen = []
     min_wall = min_cone = math.inf
     min_wall_at = min_cone_at = None
+    line_at = None  # round 101: the front wheels (~.08 m behind the front) over the finish line
     while start_error is None and t < max_s:
         t = round(t+dt, 6)
         clock['now'] = t
@@ -499,6 +500,9 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         if not stage_seen or stage_seen[-1][1:] != (stage, phase):
             stage_seen.append((t, stage, phase))
         wall, cone = course.body_gaps(car.x, car.y, car.psi)
+        if (line_at is None and car.y >= course.W-course.light_lane
+                and car.x+(FRONT-.08)*math.cos(car.psi) >= course.finish_x):
+            line_at = round(t, 2)
         if wall < min_wall:
             min_wall_at = (round(t, 2), round(car.x, 3), round(car.y, 3), round(car.psi, 4))
         if cone < min_cone:
@@ -526,12 +530,15 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
     front_x = car.x+FRONT*math.cos(car.psi)
     in_finish = (front_x >= course.finish_x and car.y >= course.W-course.light_lane
                  and abs(math.degrees(car.psi)) < 45)
+    # Rules 2.4.2: all four wheels in the zone at the stop (the whole body, conservatively).
+    body_in_finish = in_finish and car.x-REAR*math.cos(car.psi) >= course.finish_x
     summary = {'start_error': start_error, 'end_reason': result.get('reason'),
                'stages': [(round(a, 2), b, c) for a, b, c in stage_seen],
                'contacts': contacts, 'min_board_gap_m': round(min_wall, 3), 'min_cone_gap_m': round(min_cone, 3),
                'min_board_gap_at': min_wall_at, 'min_cone_gap_at': min_cone_at,
                'final': (round(car.x, 2), round(car.y, 2), round(math.degrees(car.psi), 1)),
                'final_front_x': round(front_x, 2), 'in_finish_zone': in_finish, 'time_s': t,
+               'body_in_finish_zone': body_in_finish, 'finish_line_time_s': line_at,
                'success': in_finish and not any(c[1] == 'board' for c in contacts),
                # Keep the historical position-based score for comparisons,
                # but do not count a safety stop in the zone as route completion.

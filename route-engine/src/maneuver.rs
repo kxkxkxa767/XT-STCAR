@@ -66,30 +66,45 @@ pub const LANE_SPEED_RESTART_MPS: f64 = 0.15;
 pub const LANE_SPEED_UNKNOWN_MPS: f64 = 1.3;
 pub const LANE_MAX_CLOSING_MPS: f64 = 3.5;
 pub const LANE_STOP_DECEL_MPS2: f64 = 0.5;
-pub const LANE_SLOW_TRAVEL_M: f64 = 0.60;
-pub const LANE_SLOW_HIGH_MPS: f64 = 0.60;
-pub const LANE_SLOW_LOW_MPS: f64 = 0.40;
 pub const LANE_SPEED_HOLD_S: f64 = 0.5;
 pub const LANE_SPEED_HOLD_MARGIN_MPS: f64 = 0.1;
 pub const ESC_LAG_S: f64 = 0.45;
 pub const LANE_REACTION_BASE_S: f64 = 0.2;
 pub const LANE_REACTION_S: f64 = LANE_REACTION_BASE_S + ESC_LAG_S;
 pub const LANE_POWER_ACCEL_MPS2: f64 = 1.;
-pub const LANE_SLOW_PUSH_GAIN_MPS: f64 = 0.3;
 pub const LANE_LAUNCH_S: f64 = 0.4;
 pub const LANE_FINISH_GAP_M: f64 = 0.15;
-pub const LANE_STOP_DECEL_MIN_MPS2: f64 = 0.35;
+pub const LANE_STOP_DECEL_MIN_MPS2: f64 = 0.45;
 pub const LANE_COAST_MIN_SPAN_S: f64 = 0.4;
 pub const LANE_COAST_MIN_DROP_MPS: f64 = 0.1;
-pub const LANE_COAST_DECEL_CAP_MPS2: f64 = 0.45;
+pub const LANE_COAST_DECEL_CAP_MPS2: f64 = 0.70;
 pub const LANE_FINISH_ZONE_GAP_M: f64 = 0.75;
+// Round 101: aim the light-lane coast at a stop with the whole car in the zone
+// and push again while it still rolls (maneuver_sequence.py has the derivation).
+pub const LANE_FINISH_BODY_GAP_M: f64 = 0.40;
 pub const LANE_FINISH_MIN_GAP_M: f64 = 0.05;
-pub const LANE_FINISH_TARGET_GAP_M: f64 = 0.45;
-pub const LANE_PUSH_CLEAR_M: f64 = 0.2;
-pub const LANE_REST_FRAMES: i64 = 5;
+pub const LANE_FINISH_TARGET_GAP_M: f64 = 0.25;
+pub const LANE_TOPUP_BAND_M: f64 = 0.10;
+pub const LANE_PUSH_ROLLING_MPS: f64 = 0.25;
+pub const LANE_PUSH_ACCEL_MPS2: f64 = 0.35;
+pub const LANE_PUSH_ACCEL_MAX_MPS2: f64 = 0.5;
+pub const LANE_PUSH_LATE_ACCEL_MAX_MPS2: f64 = 1.;
+pub const LANE_KICK_ACCEL_MAX_MPS2: f64 = 1.6;
+pub const LANE_PUSH_MAX_MPS: f64 = 1.7;
+pub const LANE_PUSH_MIN_S: f64 = 0.1;
+pub const LANE_ESC_LAG_NOMINAL_S: f64 = 0.3;
+pub const LANE_ESC_LAG_MIN_S: f64 = 0.2;
+pub const LANE_ESC_SKEW_S: f64 = 0.05;
+pub const LANE_AIM_REACTION_S: f64 = 0.1;
+pub const LANE_SPEED_GUARD_MARGIN_MPS: f64 = 0.05;
+pub const LANE_COAST_GUARD_RATIO: f64 = 0.9;
+pub const LANE_COAST_TRACK_POINTS: usize = 12;
+pub const LANE_COAST_DECEL_SE_MAX_MPS2: f64 = 0.08;
+pub const LANE_KICK_TRAVEL_M: f64 = 0.45;
+pub const LANE_KICK_REST_S: f64 = 1.;
+pub const LANE_COAST_DECEL_FLOOR_MPS2: f64 = 0.2;
 pub const LANE_KICK_FRAMES: i64 = 3;
 pub const LANE_SPEED_CUT_MARGIN_MPS: f64 = 0.15;
-pub const LANE_SPEED_POWER_MARGIN_MPS: f64 = 0.15;
 pub const LANE_SPEED_BASELINE: usize = 2;
 pub const LANE_SPEED_HISTORY: usize = 7;
 pub const LANE_FRONT_HALF_BINS: i64 = 3;
@@ -439,9 +454,7 @@ pub struct Maneuver {
     pub light_turn_started: Option<f64>,
     pub _lane_steering: CorridorSteering,
     pub _lane_speed_last: Option<(f64, f64)>,
-    pub _lane_slow_zone: bool,
     pub _lane_pulse: i64,
-    pub _lane_rest: i64,
     pub _light_history: Vec<Row>,
     pub _light_heading: Option<f64>,
     pub light_feedback: V,
@@ -449,6 +462,7 @@ pub struct Maneuver {
     pub lane_motor: i64,
     pub _lane_coast_track: Vec<(f64, f64)>,
     pub _lane_coast_decel: Option<f64>,
+    pub _lane_coast_decel_se: Option<f64>,
     pub _lane_ranges: Vec<(f64, f64, f64)>,
     pub lane_feedback: V,
     pub finish_evidence: V,
@@ -488,6 +502,8 @@ pub struct Maneuver {
     pub _front_track: Option<(i64, Vec<(i64, f64)>, f64)>,
     pub _track_history: Vec<(f64, f64, f64)>,
     pub _power_cmd_at: Option<f64>,
+    pub _power_since: Option<f64>,
+    pub _power_prev_end: Option<f64>,
     pub _launch_cmd_at: Option<f64>,
     pub _power_cmd_motor: Option<i64>,
     pub _launch_until: Option<f64>,
@@ -708,9 +724,7 @@ impl Maneuver {
             light_turn_started: None,
             _lane_steering: CorridorSteering::default(),
             _lane_speed_last: None,
-            _lane_slow_zone: false,
             _lane_pulse: 0,
-            _lane_rest: 0,
             _light_history: Vec::new(),
             _light_heading: None,
             light_feedback: V::None,
@@ -718,6 +732,7 @@ impl Maneuver {
             lane_motor: ROUTE_SLOW_MOTOR,
             _lane_coast_track: Vec::new(),
             _lane_coast_decel: None,
+            _lane_coast_decel_se: None,
             _lane_ranges: Vec::new(),
             lane_feedback: V::None,
             finish_evidence: V::None,
@@ -757,6 +772,8 @@ impl Maneuver {
             _front_track: None,
             _track_history: Vec::new(),
             _power_cmd_at: None,
+            _power_since: None,
+            _power_prev_end: None,
             _launch_cmd_at: None,
             _power_cmd_motor: None,
             _launch_until: None,
@@ -1003,6 +1020,8 @@ impl Maneuver {
             self._launch_until = None;
         } else if self._launch_until.is_none() {
             self._launch_until = Some(now + ESC_LAG_S + LANE_LAUNCH_S);
+            self._power_since = Some(now);
+            self._power_prev_end = self._power_cmd_at;
         }
         if motor == ROUTE_SLOW_MOTOR
             && self.continue_route
