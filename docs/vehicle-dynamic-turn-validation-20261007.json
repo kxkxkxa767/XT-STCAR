@@ -23814,16 +23814,17 @@
     ]
   },
   "next_tasks_20261022": {
-    "light_entry": "round 102 on the car: watch light_feedback.line_shift at the gantry, the pause steps and the resume",
+    "start_lane": "round 103: start-lane speed estimate robust to noisy far ranges (turn102_actual_20261022.fix_directions_not_implemented)",
+    "light_entry": "round 102 change still not exercised on the car (run 102 ended in the start lane)",
     "light_lane_one_go": "round 101 change not yet exercised on the car",
-    "next_round": "round 102 (this record); after it 103"
+    "next_round": "round 103; the car holds round 102 (261840b, engine 752e08e0...)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "round 101 (dd282c2) on the car; ca8e24a records run 101",
     "user": [
       "(photo of the light-zone entrance)",
@@ -23857,6 +23858,31 @@
       "a light-entry pause with a stale compass keeps stepping toward the last hold target, now 40 PWM per step",
       "the tight second-loop exit (outer board 1.39 m) is unchanged",
       "the light-lane one-go change (round 101) has still not run on the car"
+    ],
+    "deployment": {
+      "operator": [
+        "不要仿真了改完再跑一遍，我待会有事",
+        "好了 (car back at the start)"
+      ],
+      "before": "before102-fresh.json: six fresh locked ready samples (rust_engine), 17 hashes and settings match round 101",
+      "deploy": "deploy-matched.py claude-turn102 102: deployed, error/rollback null, backup backup-claude-turn102-20261022-173957",
+      "after_and_pre_run": "after102-deploy-fresh.json and pre102-run-fresh.json: six fresh locked ready samples, 17 hashes match round 102; trial102.py a83713c6..., engine 752e08e0..., bridge fc7028ae... match; no evidence dir; only the console, its engine and two bridges running; start: left .44 / right .49 m, 7.34 m ahead, turn_ready true",
+      "run": "ssh 'python3 stage-claude-turn102-20261022-173957/trial102.py' > trial102-stdout.json (exit 0)",
+      "fetch": "trial102-remote-sha256.txt, scp left-cone-trial-20261022-102: 10/10 sha256 OK; after102-trial-fresh.json locked, 1500/1500, no owner"
+    }
+  },
+  "turn102_actual_20261022": {
+    "date": "2026-10-22",
+    "author": "Claude",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261022-102 (run/ = program files)",
+    "user": [
+      "为什么停下来了"
+    ],
+    "result": "coast_standstill_unconfirmed after start_lane_board_ahead_without_first_support at seq 27 (~1.1 s after the first drive, .33 m from the start); the car coasted ~2.7 m and stopped ~3.0 m from the start. No contact. program exit 0, 12.73 s, max control gap .0219 s, max tick 2.9 ms. The light entry (the round-102 change) and the light lane were not reached.",
+    "cause": "start-lane stop check: front range 6.564 m against a stop range 6.568 m (4 mm) from a measured closing speed of 1.77 m/s while the car rolled at ~.6-.7 m/s (.08 m in the last .2 s). The far axis range (~7 m) jumped by up to .2 m without motion (seq 16 7.32 -> 17 7.53) and fell .45 m in .2 s (seq 25 7.02 -> 27 6.56) while the compass swung +.7 -> -3.4 deg; the 2-scan-baseline median of the first few rates took the drop as speed. The first cone (3.35 m, 27 deg left) was not yet confirmed, so the check ended the start lane by a terminal coast. The start was .6 m nearer the end board than in run 101 (7.34 vs 7.9 m), which left less margin over the inflated stop range.",
+    "fix_directions_not_implemented": [
+      "bound the start-lane speed used by the stop check by what the commanded power could have produced since the launch (launch accel x time since the first motion, or the travel seen in the walls) instead of a far-range closing rate alone",
+      "do not take closing rates from far axis ranges (several metres) that move without the car moving, or require more rates before the first measured speed replaces the prior"
     ]
   }
 }
