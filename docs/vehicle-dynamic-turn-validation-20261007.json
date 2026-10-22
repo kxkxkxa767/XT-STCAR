@@ -23883,6 +23883,12 @@
     "fix_directions_not_implemented": [
       "bound the start-lane speed used by the stop check by what the commanded power could have produced since the launch (launch accel x time since the first motion, or the travel seen in the walls) instead of a far-range closing rate alone",
       "do not take closing rates from far axis ranges (several metres) that move without the car moving, or require more rates before the first measured speed replaces the prior"
-    ]
+    ],
+    "why_not_before": {
+      "user": "为什么前面一直没有这个问题，这一轮却出现了",
+      "code": "the start-lane check, its speed estimate (_lane_speed: median of 2-scan-baseline closing rates, history cleared by any rate outside -.4..3.5 m/s) and _reaction_s are unchanged since round 100 (git diff 2814359..261840b); rounds 101/102 changed the light lane and light entry only",
+      "noise_every_run": "the far axis range (7.3-7.9 m) jumped in every recorded start: saved-scan closing rates in the first 1.6 s reach 2-3.4 m/s in runs 91, 92, 93, 99, 100, 101 and 17 m/s in run 94, and the first rate after the launch is -1 to -2 m/s (the range grows ~.2 m as the car starts) in runs 91-94, 99, 100, 102; such a rate clears the history, and with only two rates the median is the larger one",
+      "this_run": "start 7.32 m from the end board (runs 98-101: 7.52-7.91; run 92 7.27), the .45 m drop (7.02 -> 6.56) at ~1.1 s while the compass swung to -3.4 deg, before the first cone was confirmed; the inflated stop range exceeded the range by 4 mm. Earlier runs had the same noise but more margin or a median that rejected the jump; the saved scans are every other one, so the car's own estimates cannot be replayed exactly."
+    }
   }
 }
