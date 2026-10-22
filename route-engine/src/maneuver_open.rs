@@ -1106,7 +1106,7 @@ impl Maneuver {
             && p >= OPEN_LIGHT_HANDOFF_PROGRESS_RAD
         {
             let heading = heading.unwrap();
-            if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose)) {
+            if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose), None) {
                 let kappa = (NEUTRAL - self.servo) as f64 / ROUTE_PWM_PER_CURVATURE;
                 let remaining_lateral =
                     if kappa > 0. && 0. <= heading && heading <= PI / 2. { Some((1. - heading.pcos()) / kappa) } else { None };
@@ -1203,14 +1203,20 @@ impl Maneuver {
         }
     }
 
-    /// _open_light_pursuit(scan, heading, pose): (lane, point, curvature, pwm).
-    pub fn open_light_pursuit(&mut self, scan: &V, heading: f64, pose: Option<(f64, f64, f64, f64)>) -> Option<(V, (f64, f64), f64, i64)> {
+    /// _open_light_pursuit(scan, heading, pose, lateral): (lane, point, curvature, pwm).
+    pub fn open_light_pursuit(
+        &mut self,
+        scan: &V,
+        heading: f64,
+        pose: Option<(f64, f64, f64, f64)>,
+        lateral: Option<f64>,
+    ) -> Option<(V, (f64, f64), f64, i64)> {
         let lane = self.open_lane_target(scan, heading);
         if lane.is_none() {
             return None;
         }
         let u = ((-heading).pcos(), (-heading).psin());
-        let lateral = lane.idx("center_lateral_m").f();
+        let lateral = lateral.unwrap_or_else(|| lane.idx("center_lateral_m").f());
         let start0 = lane.idx("inner_start_along_m").of();
         let lane_point = |moved_along: f64, moved_lateral: f64| -> (f64, f64) {
             let start = start0.map(|s| s - moved_along);
@@ -1275,6 +1281,96 @@ impl Maneuver {
         best
     }
 
+    /// _open_entry_free_lateral(scan, heading, lane, reach) (round 102).
+    pub fn open_entry_free_lateral(&self, scan: &V, heading: f64, lane: &V, reach: f64) -> Option<f64> {
+        if !scan.get("ranges").is_list() {
+            return None;
+        }
+        let half = SIDE_BODY_EXTENT_M + OPEN_APPROACH_MARGIN_M;
+        let limit = reach + FRONT_BODY_EXTENT_M;
+        let u = ((-heading).pcos(), (-heading).psin());
+        let floats = Self::ranges_floats(scan);
+        let mut blocks: Vec<(f64, f64)> = Vec::new();
+        for (x, y) in scan_points(&floats, limit + 1.) {
+            let along = x * u.0 + y * u.1;
+            if OPEN_LANE_LOOKAHEAD_M.0 <= along && along <= limit {
+                let lateral = y * u.0 - x * u.1;
+                blocks.push((lateral - half, lateral + half));
+            }
+        }
+        blocks.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.partial_cmp(&b.1).unwrap()));
+        let mut gaps: Vec<(f64, f64)> = Vec::new();
+        let mut edge = f64::NEG_INFINITY;
+        for &(lo, hi) in &blocks {
+            if lo > edge {
+                gaps.push((edge, lo));
+            }
+            edge = pmax(edge, hi);
+        }
+        gaps.push((edge, f64::INFINITY));
+        let centre = lane.idx("center_lateral_m").f();
+        let width = lane.idx("width_m").f();
+        let top = lane.idx("outer_lateral_m").f() - half;
+        let (low, high) = (centre - width / 2., pmin(centre + width / 2., top));
+        // Python tuple order of (narrow, distance, -hi).
+        let less = |a: (bool, f64, f64), b: (bool, f64, f64)| {
+            if a.0 != b.0 {
+                !a.0 && b.0
+            } else if a.1 != b.1 {
+                a.1 < b.1
+            } else {
+                a.2 < b.2
+            }
+        };
+        let mut best: Option<((bool, f64, f64), f64, f64)> = None;
+        for &(lo, hi) in &gaps {
+            let hi = pmin(hi, top);
+            if pmax(lo, low) >= pmin(hi, high) {
+                continue;
+            }
+            let distance = if lo <= centre && centre <= hi { 0. } else { pmin((lo - centre).abs(), (hi - centre).abs()) };
+            let key = (hi - lo < OPEN_LANE_SHIFT_MIN_GAP_M, distance, -hi);
+            if best.is_none_or(|b| less(key, b.0)) {
+                best = Some((key, lo, hi));
+            }
+        }
+        let (_, lo, hi) = best?;
+        let span = pmax(0., width - 2. * half);
+        let (a, b) = if centre > hi {
+            (pmax(lo, hi - span), hi)
+        } else if centre < lo {
+            (lo, pmin(hi, lo + span))
+        } else {
+            (pmax(lo, centre - span / 2.), pmin(hi, centre + span / 2.))
+        };
+        Some((a + b) / 2.)
+    }
+
+    /// _open_entry_shift(scan, heading, lane, pose, stop_at, fallback, blocked) (round 102).
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    pub fn open_entry_shift(
+        &mut self,
+        scan: &V,
+        heading: f64,
+        lane: &V,
+        pose: Option<(f64, f64, f64, f64)>,
+        stop_at: f64,
+        fallback: Option<f64>,
+        blocked: f64,
+    ) -> Option<((V, (f64, f64), f64, i64), Option<f64>, V)> {
+        let lateral = self.open_entry_free_lateral(scan, heading, lane, stop_at)?;
+        let moved = self.open_light_pursuit(scan, heading, pose, Some(lateral))?;
+        let ahead = self.open_entry_path_hit(scan, moved.1, heading, stop_at, fallback);
+        if ahead.is_some_and(|a| a <= stop_at) {
+            return None;
+        }
+        let evidence = dict! {
+            "line_lateral_m" => lane.idx("center_lateral_m").clone(), "lateral_m" => lateral,
+            "blocked_front_range_m" => blocked, "basis" => "nearest_free_body_strip_along_axis",
+        };
+        Some((moved, ahead, evidence))
+    }
+
     /// _open_light_lane_entry(scan, heading, lane).
     pub fn open_light_lane_entry(&self, scan: &V, heading: f64, lane: &V) -> V {
         let walls = corridor_walls(scan);
@@ -1302,14 +1398,12 @@ impl Maneuver {
             return self.result(now);
         }
         let heading = self.compass.current(scan);
+        let pose = self.response_pose();
         let pursuit = match heading {
             None => None,
-            Some(h) => {
-                let pose = self.response_pose();
-                self.open_light_pursuit(scan, h, Some(pose))
-            }
+            Some(h) => self.open_light_pursuit(scan, h, Some(pose), None),
         };
-        let Some((lane, point, curvature, natural)) = pursuit else {
+        let Some((mut lane, mut point, mut curvature, mut natural)) = pursuit else {
             self.begin_recovery_hold("open_light_lane_unmeasured", now, control);
             return self.result(now);
         };
@@ -1320,13 +1414,20 @@ impl Maneuver {
         }
         let walls = corridor_walls(scan);
         let (axis_ahead, speed, stop_at) = self.open_front_stop(scan);
-        let ahead = self.open_entry_path_hit(scan, point, heading, stop_at, axis_ahead);
+        let mut ahead = self.open_entry_path_hit(scan, point, heading, stop_at, axis_ahead);
+        let mut shift = V::None;
+        if let Some(blocked) = ahead.filter(|a| *a <= stop_at)
+            && let Some(((l, p, c, n), a, e)) =
+                self.open_entry_shift(scan, heading, &lane, Some(pose), stop_at, axis_ahead, blocked)
+        {
+            (lane, point, curvature, natural, ahead, shift) = (l, p, c, n, a, e);
+        }
         self.light_feedback = dict! {
             "source_seq" => scan.idx("seq").clone(), "stage" => "light_entry", "compass_heading_rad" => heading,
             "lane_target" => lane, "pursuit_point_left_m" => round3_list(&[point.0, point.1]),
             "pursuit_curvature_per_m" => curvature, "nominal_target_pwm" => natural, "walls" => walls,
             "front_range_m" => ahead, "axis_front_range_m" => axis_ahead, "speed_mps" => speed,
-            "front_stop_range_m" => stop_at, "swept_path_certified" => false,
+            "front_stop_range_m" => stop_at, "line_shift" => shift, "swept_path_certified" => false,
         };
         if ahead.is_some_and(|a| a <= stop_at) {
             self.begin_recovery_hold("open_board_ahead_before_light_lane", now, control);

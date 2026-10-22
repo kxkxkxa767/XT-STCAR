@@ -1519,7 +1519,7 @@ impl Maneuver {
             None => None,
             Some(h) => {
                 let pose = self.response_pose();
-                self.open_light_pursuit(scan, h, Some(pose))
+                self.open_light_pursuit(scan, h, Some(pose), None)
             }
         };
         let (natural, source): (i64, &str);

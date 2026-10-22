@@ -170,6 +170,7 @@ pub const OPEN_PREDICT_SPEED_MPS: f64 = 1.3;
 pub const OPEN_LANE_LOOKAHEAD_M: (f64, f64) = (0.8, 1.6);
 pub const OPEN_LANE_WIDTH_M: (f64, f64) = (0.65, 2.2);
 pub const OPEN_LANE_INSIDE_MARGIN_M: f64 = 0.05;
+pub const OPEN_LANE_SHIFT_MIN_GAP_M: f64 = 0.20;
 pub const OPEN_LINE_REACH_M: f64 = 6.;
 pub const OPEN_STAGES: [&str; 3] = ["open_transfer", "second_loop", "light_entry"];
 pub const OPEN_SUPPORT_MAX_DEPTH_M: f64 = 0.15;

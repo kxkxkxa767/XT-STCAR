@@ -292,23 +292,30 @@ impl Maneuver {
                 && ((self.route_stage == "start_lane"
                     && (self._lane_start_slow || self.reason == "start_lane_lane_walls" || self.reason == "start_lane_side_wall"))
                     || (self.route_stage == "first_target" && self.entry_kind == Some("lane") && self.handover_observed));
+            // Round 102: a light-entry pause steps its lane-axis hold at the open-stage steps.
+            let light_pause = self.continue_route
+                && self.phase == "quality_wait"
+                && self.first_pass_evidence.is_some()
+                && self.route_stage == "light_entry"
+                && self._pause_steer_target.is_some();
+            let open_steps = light_pause || (post_pass && OPEN_STAGES.contains(&self.route_stage));
             let crossing = (target - NEUTRAL) * (self.servo - NEUTRAL) < 0;
             let releasing = self.servo != NEUTRAL && (crossing || (target - NEUTRAL).abs() < (self.servo - NEUTRAL).abs());
             let post_step = if post_pass && reducing_left && self.route_stage == "second_orbit" && self.second_return_preparing {
                 ROUTE_RETURN_RELEASE_PWM_STEP
-            } else if post_pass && OPEN_STAGES.contains(&self.route_stage) && releasing {
+            } else if open_steps && releasing {
                 if crossing {
                     target = NEUTRAL;
                 }
                 OPEN_RELEASE_PWM_STEP
-            } else if lane_approach || (post_pass && OPEN_STAGES.contains(&self.route_stage)) {
+            } else if lane_approach || open_steps {
                 OPEN_PWM_STEP
             } else {
                 ROUTE_POST_PASS_PWM_STEP
             };
             let mut step = if self.phase == "presteer" {
                 PRESTEER_PWM_STEP
-            } else if post_pass || lane_approach {
+            } else if post_pass || lane_approach || light_pause {
                 post_step
             } else if reducing_left {
                 if self.route_exit_release_active() { ROUTE_EXIT_RELEASE_PWM_STEP } else { LEFT_RELEASE_PWM_STEP }

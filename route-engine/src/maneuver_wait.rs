@@ -679,10 +679,13 @@ impl Maneuver {
             let (ahead, _, stop_at) = self.open_front_stop(scan);
             let board_ahead = ahead.is_some_and(|a| a <= stop_at);
             if stage == "light_entry" {
-                let Some((lane, point, _, _)) = self.open_light_pursuit(scan, heading, None) else { return false };
+                let Some((lane, point, _, _)) = self.open_light_pursuit(scan, heading, None, None) else { return false };
                 self._pause_steer_target = self.light_entry_pause_hold(scan);
                 let hit = self.open_entry_path_hit(scan, point, heading, stop_at, ahead);
-                return hit.is_none_or(|h| h > stop_at) || self.open_light_lane_entry(scan, heading, &lane).is_some();
+                // Round 102: also where the drive would take a free parallel line.
+                return hit.is_none_or(|h| h > stop_at)
+                    || self.open_light_lane_entry(scan, heading, &lane).is_some()
+                    || self.open_entry_shift(scan, heading, &lane, None, stop_at, ahead, hit.unwrap()).is_some();
             }
             if stage == "open_transfer" && self.second_track_id.is_none() {
                 self.open_second_observation(scan, now, heading);

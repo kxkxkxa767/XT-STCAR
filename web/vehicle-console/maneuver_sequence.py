@@ -766,6 +766,10 @@ OPEN_LANE_LOOKAHEAD_M = (.8, 1.6)
 OPEN_LANE_WIDTH_M = (.65, 2.2)
 OPEN_LANE_ENTRY_HEADING_RAD = math.radians(20)
 OPEN_LANE_INSIDE_MARGIN_M = .05
+# Round 102: a blocked light-entry line moves to a free one; gaps narrower
+# than this (lateral room for the line, body strip excluded) are taken only
+# when no wider one is in reach (_open_entry_free_lateral).
+OPEN_LANE_SHIFT_MIN_GAP_M = .20
 OPEN_LINE_BAND_M = .06
 OPEN_LINE_MIN_POINTS = 8
 OPEN_LINE_GAP_M = .3
@@ -2416,8 +2420,10 @@ class ManeuverSequence(TurnMotion):
                 # turned the coasting car from 9 to 15 deg left into the lane.
                 self._pause_steer_target = self._light_entry_pause_hold(scan)
                 hit = self._open_entry_path_hit(scan, point, heading, stop_at, ahead)
+                # Round 102: also where the drive would take a free parallel line.
                 return ((hit is None or hit > stop_at)
-                        or self._open_light_lane_entry(scan, heading, lane) is not None)
+                        or self._open_light_lane_entry(scan, heading, lane) is not None
+                        or self._open_entry_shift(scan, heading, lane, None, stop_at, ahead, hit) is not None)
             if stage == 'open_transfer' and self.second_track_id is None:
                 # Round 77: the hold waited for a confirmed second support but
                 # never observed it (the tracker froze at its first sighting).
@@ -2868,22 +2874,30 @@ class ManeuverSequence(TurnMotion):
                                         or self.reason in ('start_lane_lane_walls', 'start_lane_side_wall')))
                                   or (self.route_stage == 'first_target' and self.entry_kind == 'lane'
                                       and self.handover_observed)))
+            # Round 102 (car run 101): a light-entry pause steps its lane-axis
+            # hold at the open-stage steps (10 PWM per ACK left the rolling car
+            # turning from +16 to -23 deg on the loop's right).
+            light_pause = (self.continue_route and self.phase == 'quality_wait'
+                           and self.first_pass_evidence is not None and self.route_stage == 'light_entry'
+                           and self._pause_steer_target is not None)
+            open_steps = light_pause or (post_pass and self.route_stage in OPEN_STAGES)
             crossing = (target-NEUTRAL)*(self.servo-NEUTRAL) < 0
             releasing = self.servo != NEUTRAL and (crossing or abs(target-NEUTRAL) < abs(self.servo-NEUTRAL))
             if (post_pass and reducing_left and self.route_stage == 'second_orbit'
                     and self.second_return_preparing):
                 post_step = ROUTE_RETURN_RELEASE_PWM_STEP
-            elif post_pass and self.route_stage in OPEN_STAGES and releasing:
+            elif open_steps and releasing:
                 post_step = OPEN_RELEASE_PWM_STEP  # round 79: release fast, to centre first
                 if crossing:
                     target = NEUTRAL
-            elif lane_approach or (post_pass and self.route_stage in OPEN_STAGES):
+            elif lane_approach or open_steps:
                 post_step = OPEN_PWM_STEP
             else:
                 post_step = ROUTE_POST_PASS_PWM_STEP
-            step = PRESTEER_PWM_STEP if self.phase == 'presteer' else post_step if post_pass or lane_approach else (
-                (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
-                if reducing_left else ROUTE_ORBIT_LEFT_PWM_STEP if orbit_left else PWM_STEP)
+            step = (PRESTEER_PWM_STEP if self.phase == 'presteer'
+                    else post_step if post_pass or lane_approach or light_pause else
+                    (ROUTE_EXIT_RELEASE_PWM_STEP if self._route_exit_release_active() else LEFT_RELEASE_PWM_STEP)
+                    if reducing_left else ROUTE_ORBIT_LEFT_PWM_STEP if orbit_left else PWM_STEP)
             if avoid_target != self.steering_target:
                 step = max(step, ROUTE_AVOID_PWM_STEP)
             if reducing_left and target < NEUTRAL:
@@ -4168,18 +4182,19 @@ class ManeuverSequence(TurnMotion):
                 'width_m': width, 'width_source': 'measured' if inner is not None else 'start_lane_prior',
                 'center_lateral_m': outer['lateral_m']-width/2, 'walls': len(walls)}
 
-    def _open_light_pursuit(self, scan, heading, pose=None):
+    def _open_light_pursuit(self, scan, heading, pose=None, lateral=None):
         """Pursuit of the light-lane centre line: (lane, point, curvature, pwm) or None.
 
         ``pose`` (round 79, _response_pose): the command may come from the same
         construction ahead of that pose (_overshoot_guard); the point is the
         current-pose one (the path check models the arc from the current pose).
+        ``lateral`` (round 102): a line parallel to it instead (_open_entry_shift).
         """
         lane = self._open_lane_target(scan, heading)
         if lane is None:
             return None
         u = (math.cos(-heading), math.sin(-heading))
-        lateral = lane['center_lateral_m']
+        lateral = lane['center_lateral_m'] if lateral is None else lateral
 
         def lane_point(moved_along=0., moved_lateral=0.):
             start = lane['inner_start_along_m']
@@ -4240,6 +4255,78 @@ class ManeuverSequence(TurnMotion):
                 best = hit if best is None else min(best, hit)
         return best
 
+    def _open_entry_free_lateral(self, scan, heading, lane, reach):
+        """Lateral (left +) of a lane-axis line whose body strip is free ahead, or None.
+
+        Round 102 (car run 101; the user's photo and the car's lidar facing the
+        light, 2026-10-22): the traffic-light gantry's two legs stand in the
+        light-lane mouth (.96 m apart in a 1.14 m lane). The divider not yet in
+        view, the start-lane width put the line .12 m out and the path met the
+        outer leg 2.9 m ahead: the car held at 1.5 m/s and turned past the axis.
+        Every return from the near pursuit horizon to the path reach along the
+        axis blocks the body strip (side + margin) round it. Of the free gaps
+        within half a lane of the measured line (never outside the outer
+        board) the nearest one at least OPEN_LANE_SHIFT_MIN_GAP_M wide is taken
+        (else the nearest; ties: the outer side); in it a lane's span from its
+        near edge is centred (between two returns: the middle of the gap).
+        """
+        if not isinstance(scan.get('ranges'), list):
+            return None
+        half = SIDE_BODY_EXTENT_M+OPEN_APPROACH_MARGIN_M
+        limit = reach+FRONT_BODY_EXTENT_M
+        u = (math.cos(-heading), math.sin(-heading))
+        blocks = []
+        for x, y in _scan_points(scan['ranges'], limit+1.):
+            if OPEN_LANE_LOOKAHEAD_M[0] <= x*u[0]+y*u[1] <= limit:
+                lateral = y*u[0]-x*u[1]
+                blocks.append((lateral-half, lateral+half))
+        blocks.sort()
+        gaps, edge = [], -math.inf
+        for lo, hi in blocks:
+            if lo > edge:
+                gaps.append((edge, lo))
+            edge = max(edge, hi)
+        gaps.append((edge, math.inf))
+        centre, width = lane['center_lateral_m'], lane['width_m']
+        top = lane['outer_lateral_m']-half
+        low, high = centre-width/2, min(centre+width/2, top)
+        best = None
+        for lo, hi in gaps:
+            hi = min(hi, top)
+            if max(lo, low) >= min(hi, high):
+                continue
+            distance = 0. if lo <= centre <= hi else min(abs(lo-centre), abs(hi-centre))
+            key = (hi-lo < OPEN_LANE_SHIFT_MIN_GAP_M, distance, -hi)
+            if best is None or key < best[0]:
+                best = (key, lo, hi)
+        if best is None:
+            return None
+        _, lo, hi = best
+        span = max(0., width-2*half)
+        if centre > hi:
+            a, b = max(lo, hi-span), hi
+        elif centre < lo:
+            a, b = lo, min(hi, lo+span)
+        else:
+            a, b = max(lo, centre-span/2), min(hi, centre+span/2)
+        return (a+b)/2
+
+    def _open_entry_shift(self, scan, heading, lane, pose, stop_at, fallback, blocked):
+        """Round 102: the light-entry pursuit on a free parallel line.
+
+        (pursuit, path hit, evidence) when the moved path is clear of the stop
+        range, else None (the stage holds as before).
+        """
+        lateral = self._open_entry_free_lateral(scan, heading, lane, stop_at)
+        moved = None if lateral is None else self._open_light_pursuit(scan, heading, pose, lateral)
+        if moved is None:
+            return None
+        ahead = self._open_entry_path_hit(scan, moved[1], heading, stop_at, fallback)
+        if ahead is not None and ahead <= stop_at:
+            return None
+        return moved, ahead, {'line_lateral_m': lane['center_lateral_m'], 'lateral_m': lateral,
+                              'blocked_front_range_m': blocked, 'basis': 'nearest_free_body_strip_along_axis'}
+
     def _open_light_lane_entry(self, scan, heading, lane):
         """The same measured lane admission for driving and paused recovery."""
         walls = corridor_walls(scan)
@@ -4265,7 +4352,8 @@ class ManeuverSequence(TurnMotion):
         if not self._route_adopted(control, now):
             return self._result(now)
         heading = self.compass.current(scan)
-        pursuit = None if heading is None else self._open_light_pursuit(scan, heading, self._response_pose())
+        pose = self._response_pose()
+        pursuit = None if heading is None else self._open_light_pursuit(scan, heading, pose)
         if pursuit is None:
             self._begin_recovery_hold('open_light_lane_unmeasured', now, control)
             return self._result(now)
@@ -4276,11 +4364,16 @@ class ManeuverSequence(TurnMotion):
         walls = corridor_walls(scan)
         axis_ahead, speed, stop_at = self._open_front_stop(scan)
         ahead = self._open_entry_path_hit(scan, point, heading, stop_at, axis_ahead)
+        shift = None
+        if ahead is not None and ahead <= stop_at:
+            shift = self._open_entry_shift(scan, heading, lane, pose, stop_at, axis_ahead, ahead)
+            if shift is not None:
+                (lane, point, curvature, natural), ahead, shift = shift
         self.light_feedback = {'source_seq': scan['seq'], 'stage': 'light_entry', 'compass_heading_rad': heading,
             'lane_target': lane, 'pursuit_point_left_m': [round(v, 3) for v in point],
             'pursuit_curvature_per_m': curvature, 'nominal_target_pwm': natural, 'walls': walls,
             'front_range_m': ahead, 'axis_front_range_m': axis_ahead, 'speed_mps': speed,
-            'front_stop_range_m': stop_at, 'swept_path_certified': False}
+            'front_stop_range_m': stop_at, 'line_shift': shift, 'swept_path_certified': False}
         if ahead is not None and ahead <= stop_at:
             self._begin_recovery_hold('open_board_ahead_before_light_lane', now, control)
             return self._result(now)

@@ -13,7 +13,8 @@ x from the start-end wall (0) to the finish-end wall (L), y from the start
 lane's outer wall (0) to the light lane's outer wall (W). Start lane y in
 [0, start_lane]; its divider at y=start_lane from x=0 to start_divider. Light
 lane y in [W-light_lane, W]; its divider from x=L-light_divider to L. Finish
-zone: the last .8 m of the light lane. Cones are circles.
+zone: the last .8 m of the light lane. Cones are circles. Optional (--gantry):
+the traffic-light gantry's two legs at the light divider's open end.
 
 Vehicle model (measured where available, see agent.md section 5): speed per
 motor PWM with a first-order response, neutral rolling decel, curvature
@@ -47,8 +48,9 @@ CONSOLE = ROOT/'web'/'vehicle-console'
 TOOL = ROOT/'tools'/'scan-geometry'/'target'/'release'/'xt-stcar-scan-geometry'
 FRONT, REAR, SIDE = .20, .18, .14
 BOARD = .02
+GANTRY_POST_M = .05
 
-def layout(L, W, lane, divider, *, first=None, second=None, start=None):
+def layout(L, W, lane, divider, *, first=None, second=None, start=None, light_lane=None):
     """A course of the construction document's shape (sizes are parameters).
 
     Document text (赛道搭建细节): boards around a rectangle 5-8 m x 4-6 m, two
@@ -59,8 +61,8 @@ def layout(L, W, lane, divider, *, first=None, second=None, start=None):
     middle line); the first cone in route order is the one nearer the finish
     end. Figure proportions are never used as dimensions.
     """
-    return dict(L=L, W=W, start_lane=lane, light_lane=lane, start_divider=divider, light_divider=divider,
-                cones=[first or (.75*L, W/2), second or (.25*L, W/2)], start=start)
+    return dict(L=L, W=W, start_lane=lane, light_lane=light_lane or lane, start_divider=divider,
+                light_divider=divider, cones=[first or (.75*L, W/2), second or (.25*L, W/2)], start=start)
 
 
 LAYOUTS = {
@@ -78,16 +80,21 @@ LAYOUTS = {
 }
 
 
-def variations():
-    """The rules' range: lengths, widths, lanes, divider fractions, cone offsets."""
+def variations(gantry=False, light_lane_delta=0.):
+    """The rules' range: lengths, widths, lanes, divider fractions, cone offsets.
+
+    ``gantry`` adds the traffic-light legs, ``light_lane_delta`` widens the
+    light lane over the start lane (2026-10-22 lidar: 1.14 m against .89 m).
+    The names stay those of the plain range.
+    """
     for L in (5., 6.4, 8.):
         for W in (4., 5., 6.):
             for lane in (.9, 1.05):
                 for fraction in (.4, .5):
                     for dx, dy in ((0., 0.), (-.4, .3), (.4, -.3)):
-                        yield (f'L{L}W{W}lane{lane}div{fraction}cone{dx:+}{dy:+}',
-                               layout(L, W, lane, round(fraction*L, 2),
-                                      first=(.75*L+dx, W/2+dy), second=(.25*L-dx, W/2-dy)))
+                        spec = layout(L, W, lane, round(fraction*L, 2), light_lane=round(lane+light_lane_delta, 3),
+                                      first=(.75*L+dx, W/2+dy), second=(.25*L-dx, W/2-dy))
+                        yield f'L{L}W{W}lane{lane}div{fraction}cone{dx:+}{dy:+}', {**spec, 'gantry': gantry}
 
 
 def load(name, path):
@@ -99,7 +106,7 @@ def load(name, path):
 
 class Course:
     def __init__(self, L, W, start_lane, light_lane, start_divider, light_divider, cones, start=None,
-                 cone_radius=.10):
+                 cone_radius=.10, gantry=False):
         self.L, self.W = L, W
         self.start_lane, self.light_lane = start_lane, light_lane
         self.cones = [(x, y, cone_radius) for x, y in cones]
@@ -110,6 +117,19 @@ class Course:
                    ((x1, y+BOARD/2), (x0, y+BOARD/2)), ((x0, y+BOARD/2), (x0, y-BOARD/2))]
             self.boards.append(box)
             self.segments.extend(box)
+        if gantry:
+            # Traffic-light gantry legs (user photo and the car's lidar facing
+            # the light, 2026-10-22): two ~.05 m posts at the light divider's
+            # open end, the outer one .11 m inside the outer board, the inner
+            # one .07 m inside the divider line (.96 m apart in a 1.14 m lane).
+            # They count as boards for contacts.
+            x = L-light_divider-GANTRY_POST_M/2
+            for y in (W-.11, W-light_lane+.07):
+                h = GANTRY_POST_M/2
+                corners = [(x-h, y-h), (x+h, y-h), (x+h, y+h), (x-h, y+h)]
+                box = list(zip(corners, corners[1:]+corners[:1]))
+                self.boards.append(box)
+                self.segments.extend(box)
         # Lidar in the 80 cm start zone, rear ~.2 m clear of the start-end wall.
         self.start = start or (.40, start_lane/2, 0.)
         self.finish_x = L-.8
@@ -710,6 +730,9 @@ def main():
     parser.add_argument('--grazing-dropout', type=float, default=1.,
                         help='probability per grazing planar return; independent RNG, default 1')
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--gantry', action='store_true', help='add the traffic-light gantry legs at the light-lane mouth')
+    parser.add_argument('--light-lane-delta', type=float, default=0.,
+                        help='with --range/--variant: light lane this much wider than the start lane')
     parser.add_argument('--max-s', type=float, default=45.)
     parser.add_argument('--png')
     parser.add_argument('--log')
@@ -729,7 +752,7 @@ def main():
     if args.matrix:
         for name in sorted(LAYOUTS):
             for speed, decel, delay in ((1., .5, .15), (1.2, .35, .3), (.8, .7, .15)):
-                summary, _, _ = run(Course(**LAYOUTS[name]), speed_scale=speed, decel=decel, delay=delay,
+                summary, _, _ = run(Course(**LAYOUTS[name], gantry=args.gantry), speed_scale=speed, decel=decel, delay=delay,
                                     max_s=args.max_s, seed=args.seed, right_curvature_max=args.right_curvature_max,
                                     steer_backlash=args.steer_backlash, **sensors, **vehicle)
                 print(name, f'speed{speed} decel{decel} delay{delay}',
@@ -737,7 +760,7 @@ def main():
         return
     if args.range:
         passed = total = 0
-        for name, spec in variations():
+        for name, spec in variations(args.gantry, args.light_lane_delta):
             course = Course(**spec)
             summary, log, _ = run(course, max_s=args.max_s, seed=args.seed,
                                   right_curvature_max=args.right_curvature_max,
@@ -751,10 +774,10 @@ def main():
         print(f'success {passed}/{total}')
         return
     if args.variant:
-        spec = dict(dict(variations())[args.variant])
+        spec = dict(dict(variations(args.gantry, args.light_lane_delta))[args.variant])
         args.layout = args.variant
     else:
-        spec = dict(LAYOUTS[args.layout])
+        spec = dict(LAYOUTS[args.layout], gantry=args.gantry)
     if args.cones:
         v = [float(a) for a in args.cones.split(',')]
         spec['cones'] = [(v[0], v[1]), (v[2], v[3])]

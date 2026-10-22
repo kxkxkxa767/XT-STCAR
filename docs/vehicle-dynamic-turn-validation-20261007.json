@@ -23814,8 +23814,49 @@
     ]
   },
   "next_tasks_20261022": {
-    "light_entry": "decide the light-entry fix after the user's photo of the light-zone entrance (turn101_actual_20261022.fix_directions_not_implemented)",
-    "light_lane_one_go": "round 101 change not yet exercised on the car (the run ended before the light lane)",
-    "next_round": "round 102; the car holds round 101 (dd282c2, engine b75c1cf6...)"
+    "light_entry": "round 102 on the car: watch light_feedback.line_shift at the gantry, the pause steps and the resume",
+    "light_lane_one_go": "round 101 change not yet exercised on the car",
+    "next_round": "round 102 (this record); after it 103"
+  },
+  "turn102_light_entry_gate_20261022": {
+    "date": "2026-10-22",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 101 (dd282c2) on the car; ca8e24a records run 101",
+    "user": [
+      "(photo of the light-zone entrance)",
+      "我现在把车正对着红绿灯，你检测一下",
+      "你改吧",
+      "不要仿真了改完再跑一遍，我待会有事"
+    ],
+    "entrance_measured": {
+      "source": "read-only /api/state + /api/lidar + /camera.jpg with the car locked neutral, facing the traffic light (work/vehicle-dynamic-deploy-20261008/light-entrance-facing-20261022.json, light-entrance-camera-20261022.*)",
+      "lidar": "gantry legs .83 m ahead at +.46 / -.50 m (.96 m apart), the outer one ~.11 m inside the left board, the inner one at the divider's open end; light lane 1.14 m wide (_open_lane_target outer .574 / inner -.566; start lane .89); end board 4.13 m ahead; the photoelectric sensor and the floor rails are below the scan plane (not seen)",
+      "camera": "the whole light in the upper middle of the frame; the installed vision model has one class (blue_cone), light unknown (no traffic-light recognition yet)",
+      "run_101": "the path hit 2.3-2.9 m ahead that held the car was the outer gantry leg (seq 115: legs at axis +.19 / -.76 from the car, .94 m apart); the divider unseen, the start-lane width (.89 vs 1.14) and the compass during the -64 deg/s turn put the measured line on that leg. The contact was at the divider's open end beside the inner leg (~1.05 m inside the outer board). Runs 88-100: the same legs (the ~.1 m object near the lane line noted since round 88/94)."
+    },
+    "change": {
+      "line_shift": "light entry: when the pursuit path meets a return inside the stop range, _open_entry_free_lateral looks for a free line parallel to the axis: every return from the near pursuit horizon (.8 m) to the path reach along the axis blocks the body strip (side .14 + margin .05) round it; of the free gaps within half a lane of the measured line, never outside the outer board, the nearest one at least OPEN_LANE_SHIFT_MIN_GAP_M .20 wide is taken (else the nearest; ties the outer side), and in it a lane's span from its near edge is centred. The pursuit then aims at that line (_open_light_pursuit lateral) when its own path (arc + line) is clear of the stop range; otherwise the stage holds as before. light_feedback.line_shift records it. No course constant.",
+      "pause_readiness": "a light-entry pause is also ready where the drive would take such a free line (same helper)",
+      "pause_steps": "a light-entry pause steps its lane-axis hold (_pause_steer_target) at the open-stage steps: release OPEN_RELEASE_PWM_STEP to centre first, else OPEN_PWM_STEP 40 (was PWM_STEP 10: run 101 1421 -> 1441 in .5 s while the rolling car turned +16 -> -23 deg)",
+      "rust": "route-engine maneuver.rs / maneuver_open.rs / maneuver_wait.rs / maneuver_path.rs / maneuver_post.rs mirror it",
+      "course_sim": "optional --gantry (two .05 m posts at the light divider's open end, .11 m inside the outer board and .07 m inside the divider) and --light-lane-delta (range/variant light lane wider than the start lane)",
+      "not_changed": "the fixed 2.89 m light-entry stop range (at 1.5 m/s the measured-speed range is longer), the resume pulse, the second-loop exit"
+    },
+    "validation": {
+      "unit_tests": "full console discover 877 OK (866 + 11 in test_route_102_light_entry_gate); route-engine cargo test 3 OK; clippy: no new warning",
+      "open_loop_run_101": "recorded scans through the new helpers: seq 115 (heading 29 deg, outer leg on the line 2.91 m ahead) -> free line -.285 m (the gate between the legs), pursuit 1390 -> 1352, moved path clear; seq 126-131 (divider end .94-.28 m ahead) no clear line -> hold as before. Run 100: no path inside the stop range, unchanged.",
+      "parity": "route-engine-parity bit-identical in 11 course-sim cases: 8 light-entry cases (4 range variants with --gantry --light-lane-delta .25, user8/practice measured with --gantry, doc8x4 measured, L8.0W6.0lane0.9div0.5) 2571-4206 calls each, and 3 user8 measured cases with an extra post in the mouth (.35/.40/.45 m inside the outer board) where the line shift acted 18-21 times, 3270-4116 calls. The full sweep was not run (user: no more simulation).",
+      "course_sim_base": "round-101 code, 114 cases with --gantry and the light lane +.25: 97 success (the failures in the first loop), 16 light-entry holds (the end board of short lanes, no free line: still held with the new code)"
+    },
+    "risks": [
+      "not validated in a closed loop that reproduces run 101 (the simulated car follows its commands and its compass error is small): the line shift was seen to act only open-loop on recorded scans and in artificial post cases",
+      "the shifted line is computed each scan without hysteresis; near the gate the nominal line may come back",
+      "a light-entry pause with a stale compass keeps stepping toward the last hold target, now 40 PWM per step",
+      "the tight second-loop exit (outer board 1.39 m) is unchanged",
+      "the light-lane one-go change (round 101) has still not run on the car"
+    ]
   }
 }
