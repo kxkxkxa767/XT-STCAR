@@ -23713,8 +23713,8 @@
     "date": "2026-10-22",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "round 100 (2814359) on the car; code since then documentation only",
     "user": [
       "最后那段直道想办法让他一口气跑完不要停顿，这个太耗时间了",
@@ -23778,6 +23778,44 @@
       "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn101-20261022-094115",
       "evidence_dir": "/home/bianbu/xt-stcar-console/left-cone-trial-20261022-101",
       "differences_from_round_100": "deploy script: archive sha, source commit and the OLD (installed round-100) hashes; helper: FIXED_ARGS evidence dir and engine sha only"
+    },
+    "deployment": {
+      "operator": "好了，你可以开始了",
+      "before": "before101-fresh.json: six fresh locked ready samples (rust_engine), 17 hashes and settings match round 100; start lane heading -.7 deg, 2 cm right, width .894 m, turn_ready and continue_route true",
+      "deploy": "deploy-matched.py claude-turn101 101: deployed, error/rollback null, backup backup-claude-turn101-20261022-094115",
+      "after_and_pre_run": "after101-deploy-fresh.json and pre101-run-fresh.json: six fresh locked ready samples, 17 hashes match round 101; trial101.py ab47562d..., engine b75c1cf6..., bridge fc7028ae... match; no evidence dir; only the console, its engine and two bridges running",
+      "run": "ssh 'python3 stage-claude-turn101-20261022-094115/trial101.py' > trial101-stdout.json (exit 0)",
+      "fetch": "trial101-remote-sha256.txt, scp left-cone-trial-20261022-101: 10/10 sha256 OK; after101-trial-fresh.json locked, 1500/1500, no owner"
     }
+  },
+  "turn101_actual_20261022": {
+    "date": "2026-10-22",
+    "author": "Claude",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261022-101 (run/ = program files)",
+    "result": "probe_obstacle_close_body (8 cm body gate) at ~11.9 s after the first drive, in light_entry, before the light lane (the round-101 change was not reached). program exit 0, 18.21 s; max control gap .0229 s, max tick 4.4 ms; scan_to_tick mean 1.26 ms, max 6.2 ms; CPU route-engine 11.6 %, lidar bridge 11.1 %; console restored with 6 healthy locked neutral samples. Rest scan: nearest body gap 0 at bin 7 (range .187 m): contact.",
+    "user": [
+      "这一轮撞到灯区的挡板了，是灯区入口的那个地方",
+      "装完后我立马放回起点了，所以轨迹图有点奇怪 (the map after the lock is the car being carried back)"
+    ],
+    "stages": "start lane 0.35-4.19 s, first loop 4.19-6.11, open transfer 6.11-7.71 (one quality wait 6.91-7.55), second loop 7.71-9.63, light entry 9.63-",
+    "light_entry_analysis": {
+      "entry_pose": "second pass at 9.63 s with the compass 78 deg left of the light-lane axis and the outer board 1.39 m to the left (runs 98-100: 66-78 deg, 1.61-1.91 m); the pursuit asked 1373 -> 1341 (runs 98-100: 1413-1529), yaw ~-64 deg/s (run 100 ~-40 deg/s); outer board 1.39 -> .55 m in .6 s",
+      "first_hold": "at 10.26 s (heading 29 deg, outer .55 m) the pursuit path met a return 2.91 m ahead (axis ray 2.87 m), then 2.34 m (axis 2.70 m), inside the fixed stop range 2.89 m (_open_front_stop: nominal 1.3 m/s, never the measured speed) -> recovery hold open_board_ahead_before_light_lane at 10.42 s, held 1421. Runs 98-100 never had a path hit here.",
+      "hold_steering": "during the hold the car rolled at ~1.5 m/s; the lane-axis hold steering stepped only +10 PWM per ACKed step (phase quality_wait: _slew uses PWM_STEP 10, the drive-phase open stages 40 per 100 ms): 1421 -> 1431 -> 1441 in .5 s while the heading went +16 -> -23 deg (past the axis, toward the divider side)",
+      "resume_and_contact": "resumed at 10.9 s with the 1560 ACK pulse, the pursuit steering left 1629/1636 (servo 1500 -> 1540 -> 1580); at 11.38 s the path hit .94 m -> hold again (held 1580, then 1547/1527); still under the 1560 in the ESC pipeline the car rolled into the board ahead-right (bins 5-14: .43 m at 11.54 s, .09 m at 11.86 s, gap 0 at rest)",
+      "inner_board": "the inner board (divider) was never detected during this light entry (inner_lateral None); in runs 98-100 it appeared once the heading was <= ~12 deg",
+      "unknown_object": "the return on the path 2.3-2.9 m ahead may be the ~.1 m object inside the light-lane entrance noted since round 94 (traffic-light photo sensor or stand?); the user will send a photo of the light-zone entrance"
+    },
+    "fix_directions_not_implemented": [
+      "light-entry pause steering at the open-stage step (40) instead of PWM_STEP 10 while the paused car still rolls (same class as rounds 84/85/88/90/91: a paused car turning on with the held servo)",
+      "the light-entry board-ahead hold uses a fixed 2.89 m stop range for any return on the pursuit path; use the measured speed / a coast model and check whether the return is a passable stand once the photo shows it",
+      "the resume ACK pulse (1560) toward a return within ~1 m",
+      "a tighter second-loop exit (outer board 1.39 m at the second pass): the light-entry pursuit then turned at ~-64 deg/s"
+    ]
+  },
+  "next_tasks_20261022": {
+    "light_entry": "decide the light-entry fix after the user's photo of the light-zone entrance (turn101_actual_20261022.fix_directions_not_implemented)",
+    "light_lane_one_go": "round 101 change not yet exercised on the car (the run ended before the light lane)",
+    "next_round": "round 102; the car holds round 101 (dd282c2, engine b75c1cf6...)"
   }
 }
