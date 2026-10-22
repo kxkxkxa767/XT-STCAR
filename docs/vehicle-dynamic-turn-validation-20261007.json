@@ -23759,6 +23759,25 @@
       "with a coast decel of .25 (simulation, 55 % of the weakest prior) every entry touched the board",
       "stopping .42-.5 m from the board (front well in, rear wheels just outside: +5 s) remains in ~25-30 % of the harness cases and 19 of 98 course-sim finishes"
     ],
-    "next": "build round 101 with build-race.py claude-turn100 claude-turn101 101 turn101_light_lane_one_go_20261022, then deploy and run once on the car (needs the car powered, the SSH socket, the car at the start and the user's agreement)"
+    "next": "deploy and run once (agent.md section 1, label claude-turn101, round 101): needs the car powered, the SSH socket (work/vehicle-test-ssh.sock was absent on 10-22), the car at the start and the user's agreement",
+    "package": {
+      "build": "python3 work/vehicle-dynamic-deploy-20261008/build-race.py claude-turn100 claude-turn101 101 turn101_light_lane_one_go_20261022",
+      "source_commit": "dd282c23eed3bfd763b2c898a6bd95cfc95b7c2f",
+      "archive": "XT-STCAR-claude-turn101-dd282c2.tar.gz",
+      "archive_sha256": "066f256c4938eddca49f5080d9db5e3b20463d3f8f34f3d048fde899496bb136",
+      "route_engine_sha256": "b75c1cf62ac6a5e5efd48d25bd74e1ce6826e941b81833b0f9fef5e21ac3189c",
+      "bridge_sha256_unchanged": "fc7028ae4392fbfc71a70feb105a41747baf248f1e34583b3721ea3b76661446",
+      "runtime_changed": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine"
+      ],
+      "files": 19,
+      "sha256sums": "19/19 OK",
+      "helper": "left-cone-trial-once-101.py",
+      "helper_sha256": "ab47562dc3e8b999935c1499a31e247c34e0f5cbfd5d771b477f1771b94ac1f3",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn101-20261022-094115",
+      "evidence_dir": "/home/bianbu/xt-stcar-console/left-cone-trial-20261022-101",
+      "differences_from_round_100": "deploy script: archive sha, source commit and the OLD (installed round-100) hashes; helper: FIXED_ARGS evidence dir and engine sha only"
+    }
   }
 }
