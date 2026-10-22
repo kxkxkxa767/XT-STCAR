@@ -23927,6 +23927,26 @@
       "a car that keeps reading a board inside its stopping range without the first support now waits there (neutral, lane law) until the drive budget ends instead of ending at once",
       "the far-range speed overestimate itself is unchanged: such cuts still cost a moment of coasting",
       "not run on the car"
-    ]
+    ],
+    "package": {
+      "tool": "work/vehicle-dynamic-deploy-20261008/build-race.py claude-turn102 claude-turn103 103 turn103_start_lane_cut_20261022",
+      "source_commit": "16ea82f3290f24c5993c7c5babbf978418872eb4",
+      "files": 19,
+      "sha256sums": "19/19 OK",
+      "runtime_changed": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine"
+      ],
+      "route_engine_sha256": "c3bde5d233c9cfc43e05f52ad733db5097f23f1dfca2e48b56aa3659f4253fbd",
+      "route_engine_elf": "riscv64 lp64d",
+      "bridge_sha256": "fc7028ae4392fbfc71a70feb105a41747baf248f1e34583b3721ea3b76661446 (unchanged)",
+      "archive_sha256": "fac7ee282b2a933a18c5cd268952d575681eeeb830737f53faeebde80d0f171a",
+      "helper": "left-cone-trial-once-103.py b318d0d1c3c759a88175839da95c887f9f50e34439a3e330c05b17bb457739d6",
+      "deploy_script_sha256": "cb0e1dce89f97281ee4b9480a024d4c75c40fe86eb26a639c927b4022cb57547",
+      "planned_stage": "/home/bianbu/xt-stcar-console/stage-claude-turn103-20261022-183958",
+      "evidence_dir_on_car": "/home/bianbu/xt-stcar-console/left-cone-trial-20261022-103",
+      "deployed": false,
+      "note": "built and kept in work/ (not in git); the user deploys it when back"
+    }
   }
 }
