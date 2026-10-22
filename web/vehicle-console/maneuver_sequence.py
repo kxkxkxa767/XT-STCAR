@@ -3553,15 +3553,24 @@ class ManeuverSequence(TurnMotion):
             # The approach drives on at 1550 (a stopped car restarts at 1560).
             self._start_motor = (TRIAL_MOTOR if speed is not None and speed < LANE_SPEED_RESTART_MPS
                                  else ROUTE_SLOW_MOTOR)
+        # Round 103 (car run 102): a stopping range that reaches the board
+        # ahead before the first support is found cuts the power for this scan
+        # only; the lane law keeps steering and the next scan checks again (the
+        # governor's own speed cuts always worked so). It was a terminal coast:
+        # a closing speed read off the end board ~7 m ahead (1.77 m/s at ~1.3)
+        # ended run 102 .3 m after the start. Without a support in reach the
+        # governor still allows no speed inside LANE_START_SEARCH_M of the board.
+        cut = stop_at is not None and ahead is not None and ahead <= stop_at
+        if cut:
+            self._start_motor = NEUTRAL
+            self._route_event('start_lane_board_ahead_cut', scan, control,
+                              {'source_seq': scan['seq'], 'front_range_m': ahead, 'front_stop_range_m': stop_at,
+                               'speed_mps': speed, 'basis': 'stopping_range_reaches_board_without_first_support'})
         self.start_lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
             'nominal_target_pwm': natural, 'walls': walls, 'compass_heading_rad': heading,
             'first_approach': approach, 'front_range_m': ahead, 'speed_mps': speed,
             'front_stop_range_m': stop_at, 'allowed_speed_mps': allowed, 'slow': self._lane_start_slow,
-            'motor': self._start_motor, 'swept_path_certified': False}
-        if stop_at is not None and ahead is not None and ahead <= stop_at:
-            self.begin_coast('start_lane_board_ahead_without_first_support', now)
-            self._slew(now)
-            return self._result(now)
+            'motor': self._start_motor, 'board_ahead_cut': cut, 'swept_path_certified': False}
         self.steering_target, self.natural_steering_target = target, natural
         self.reason = 'start_lane_' + source
         self._slew(now)

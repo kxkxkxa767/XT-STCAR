@@ -242,9 +242,11 @@ class LaneWallPlay(unittest.TestCase):
 
 
 class CoastKeepsTheLane(unittest.TestCase):
-    """A start-lane coast (board ahead forced at scan 18) on a car whose real
-    play is smaller than the calibration's: the old coast held the calibrated
-    'neutral' (physical 1450 after a left correction) into the right board."""
+    """A start-lane coast (forced at scan 18) on a car whose real play is
+    smaller than the calibration's: the old coast held the calibrated
+    'neutral' (physical 1450 after a left correction) into the right board.
+    Round 103: a board ahead no longer ends the start lane, so the terminal
+    coast is forced as the drive budget's."""
     @classmethod
     def setUpClass(cls):
         spec = importlib.util.spec_from_file_location('course_sim_69_coast', ROOT/'scripts/course-sim.py')
@@ -253,13 +255,11 @@ class CoastKeepsTheLane(unittest.TestCase):
 
     def run_coast(self, steer):
         cs = self.cs
-        orig_range, orig_update = ms.ManeuverSequence._lane_front_range, ms.ManeuverSequence._start_lane_update
-
-        def front(self, scan):
-            value = orig_range(self, scan)
-            return 1.2 if self.route_stage == 'start_lane' and scan['seq'] >= 18 and value is not None else value
+        orig_update = ms.ManeuverSequence._start_lane_update
 
         def update(self, scan, *a, **k):
+            if self.phase == 'drive' and scan['seq'] >= 18:
+                self.begin_coast('maneuver_cumulative_drive_timeout', a[1])
             if self.phase == 'coast' and not steer:
                 saved = ms.corridor_walls
                 ms.corridor_walls = lambda scan: None
@@ -272,11 +272,11 @@ class CoastKeepsTheLane(unittest.TestCase):
         x, y, psi = course.start
         course.start = (x, y-.04, psi+math.radians(2))
         try:
-            ms.ManeuverSequence._lane_front_range, ms.ManeuverSequence._start_lane_update = front, update
+            ms.ManeuverSequence._start_lane_update = update
             summary, log, _ = cs.run(course, max_s=6., vehicle='measured', delay=.25,
                                      vehicle_params={'play_pwm': 0., 'near_center_gain': 2.})
         finally:
-            ms.ManeuverSequence._lane_front_range, ms.ManeuverSequence._start_lane_update = orig_range, orig_update
+            ms.ManeuverSequence._start_lane_update = orig_update
         coast = [r for r in log if r[8] == 'coast']
         return summary, coast
 

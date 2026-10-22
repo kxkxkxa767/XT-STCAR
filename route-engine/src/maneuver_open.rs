@@ -385,20 +385,23 @@ impl Maneuver {
             self._start_motor =
                 if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
         }
+        // Round 103: the board-ahead cut is per scan (was a terminal coast).
+        let cut = matches!((stop_at, ahead), (Some(stop), Some(a)) if a <= stop);
+        if cut {
+            self._start_motor = NEUTRAL;
+            let evidence = dict! {
+                "source_seq" => scan.idx("seq").clone(), "front_range_m" => ahead, "front_stop_range_m" => stop_at,
+                "speed_mps" => speed, "basis" => "stopping_range_reaches_board_without_first_support",
+            };
+            self.route_event("start_lane_board_ahead_cut", scan, control, evidence);
+        }
         self.start_lane_feedback = dict! {
             "source_seq" => scan.idx("seq").clone(), "steering_source" => source,
             "nominal_target_pwm" => natural, "walls" => walls, "compass_heading_rad" => heading,
             "first_approach" => approach.clone(), "front_range_m" => ahead, "speed_mps" => speed,
             "front_stop_range_m" => stop_at, "allowed_speed_mps" => allowed, "slow" => self._lane_start_slow,
-            "motor" => self._start_motor, "swept_path_certified" => false,
+            "motor" => self._start_motor, "board_ahead_cut" => cut, "swept_path_certified" => false,
         };
-        if let (Some(stop), Some(a)) = (stop_at, ahead)
-            && a <= stop
-        {
-            self.begin_coast("start_lane_board_ahead_without_first_support", now);
-            self.slew(now);
-            return self.result(now);
-        }
         self.steering_target = target;
         self.natural_steering_target = Some(natural);
         self.reason = format!("start_lane_{source}");

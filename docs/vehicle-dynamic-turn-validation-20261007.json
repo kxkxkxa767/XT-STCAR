@@ -23814,10 +23814,11 @@
     ]
   },
   "next_tasks_20261022": {
-    "start_lane": "round 103: start-lane speed estimate robust to noisy far ranges (turn102_actual_20261022.fix_directions_not_implemented)",
-    "light_entry": "round 102 change still not exercised on the car (run 102 ended in the start lane)",
+    "deploy": "round 103 package built and pushed, not deployed (user: deploy when back)",
+    "start_lane": "round 103 on the car: watch start_lane_feedback.board_ahead_cut and the restart",
+    "light_entry": "round 102 change not yet exercised on the car",
     "light_lane_one_go": "round 101 change not yet exercised on the car",
-    "next_round": "round 103; the car holds round 102 (261840b, engine 752e08e0...)"
+    "next_round": "round 103 (this record); the car holds round 102 (261840b, engine 752e08e0...)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -23890,5 +23891,42 @@
       "noise_every_run": "the far axis range (7.3-7.9 m) jumped in every recorded start: saved-scan closing rates in the first 1.6 s reach 2-3.4 m/s in runs 91, 92, 93, 99, 100, 101 and 17 m/s in run 94, and the first rate after the launch is -1 to -2 m/s (the range grows ~.2 m as the car starts) in runs 91-94, 99, 100, 102; such a rate clears the history, and with only two rates the median is the larger one",
       "this_run": "start 7.32 m from the end board (runs 98-101: 7.52-7.91; run 92 7.27), the .45 m drop (7.02 -> 6.56) at ~1.1 s while the compass swung to -3.4 deg, before the first cone was confirmed; the inflated stop range exceeded the range by 4 mm. Earlier runs had the same noise but more margin or a median that rejected the jump; the saved scans are every other one, so the car's own estimates cannot be replayed exactly."
     }
+  },
+  "turn103_start_lane_cut_20261022": {
+    "date": "2026-10-22",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 102 (261840b) on the car; 8aef876/2bd10c5 record run 102",
+    "user": [
+      "为什么停下来了",
+      "为什么前面一直没有这个问题，这一轮却出现了",
+      "哦不对，前面应该也出现过，但自恢复的程序又让它继续了，这次并没有触发",
+      "我抽空回来了一下，你接着改，不传到车上，改完直接编译上传，我回来再让你部署到车上测试",
+      "你要认真思考哦，我希望在我回来的时候你可以改好，我相信你"
+    ],
+    "evidence": {
+      "run_102_stop_range": "start_lane_feedback at seq 27: front range 6.564 m, measured speed 1.767 m/s; stop range 6.568 = .35 + v^2/(2 x .5) + v x .63 with v = 1.767 + .43 (1560 rise: the last 1560 frame one tick earlier, LANE_POWER_ACCEL_MPS2 x the .43 s ESC lag left)",
+      "run_102_true_speed": "the axis range then fell 1.4/1.2/1.1/1.0 m/s per frame pair while still under the ESC lag (not rising): ~1.3 m/s at seq 27; the 2.3 m/s pair (seq 25 7.02 -> 27 6.56) and the +.21 m jump at the launch (seq 16 7.32 -> 17 7.53) are far-range steps (~7 m, every sector bin); the ICP map speeds in the lane are not usable (motion along a corridor is unobservable)",
+      "earlier_runs": "runs 60-102: this terminal cut happened only in runs 71 (a stale frame, 2.11 m/s at 1.2) and 102; the start-lane power cuts seen in other runs (e.g. run 101 2.8-3.1 s at 1500, then 1550) are the governor's per-scan cuts (speed + rise >= allowed speed), which always resumed: what the user saw as the self-recovery"
+    },
+    "change": {
+      "start_lane_cut": "a stopping range that reaches the board ahead before the first support is found sets the start motor neutral for that scan only (_start_motor = NEUTRAL, start_lane_feedback.board_ahead_cut, route event start_lane_board_ahead_cut kept at its first occurrence) instead of the terminal coast start_lane_board_ahead_without_first_support. The lane law keeps steering with its reason (start_lane_lane_walls / side_wall), so the console's wall-law steering calibration does not switch; the next scan checks again and the governor powers on once the stopping range clears (a stopped car restarts by the governor's own launch rules). Without a support in reach the governor still allows no speed within LANE_START_SEARCH_M (+ body and finish gap) of the board; only the drive budget ends such a wait (route never gives up).",
+      "not_changed": "the speed estimate (_lane_front_track/_track_speed): an overestimate now only coasts the start lane for a scan or two; a cap on its rise could hide a real speed increase and make the stop check late. The light entry/lane (rounds 101/102) unchanged.",
+      "rust": "route-engine maneuver_open.rs mirrors it",
+      "tests": "test_route_103_start_lane_cut (closed loop): a board forced 1.2 m ahead for scans 18-30 cuts the power on the lane law (drive phase, motor 1500), the governor restarts 1560 at 3.1 s and the route completes (user8 measured, min board .211 m); with the cones outside the field the car stops 1.66 m short of the far wall and waits without contact. test_route_69 CoastKeepsTheLane now forces the terminal coast as the drive budget's (a board ahead no longer coasts)."
+    },
+    "validation": {
+      "unit_tests": "full console discover 879 OK (877 + 2); route-engine cargo test 3 OK; clippy: no new warning",
+      "course_sim": "126 cases (108 rules-range + 6 layouts x nominal / measured / faster-laggier nominal): 110 success; the cut never acted, so every case behaves as round 102",
+      "extreme_vehicles": "measured car with ESC lag .7/1.0 s and 1.4x speed, nominal 1.4/1.8x with decel .3 (36 cases): the cut acted in 5; round 101/102 code ended all 5 in the start lane (terminal coast); now user8 / short5 (lag 1.0) / mid64 finish (route_finish_zone_stop, gaps >= .208 m), wide8x6 still driving at the 20 s limit, short5 lag .7 reaches the second loop and stops on the body gate there (.023 m; that stage was never reached before)",
+      "parity": "route-engine-parity bit-identical in the 5 cut cases (1410-3002 calls); full sweep route-engine-parity-sweep all 184/185 (the miss: run 75 never drove, 0 calls, as in every sweep); route-engine-supervisor-parity bit-identical in the 5 cut cases and in a no-cone wait (user8 measured, cones outside the field: 471-1001 ticks), motion parity of that wait 3002 calls"
+    },
+    "risks": [
+      "a car that keeps reading a board inside its stopping range without the first support now waits there (neutral, lane law) until the drive budget ends instead of ending at once",
+      "the far-range speed overestimate itself is unchanged: such cuts still cost a moment of coasting",
+      "not run on the car"
+    ]
   }
 }
