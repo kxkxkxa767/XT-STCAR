@@ -24074,7 +24074,7 @@
     "date": "2026-10-23",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "baseline": "round 104 (410bc96) on the car; 4f5dc32 records run 104",
     "user": [
@@ -24098,6 +24098,34 @@
     "risks": [
       "no 2-frame 1560 from rest was measured in the light lane (run 91's 2-frame pulses crept ~.17 m over several); a creep that does not move the car is repeated up to 3 times",
       "not run on the car"
-    ]
+    ],
+    "package": {
+      "build": "build-race.py claude-turn104 claude-turn105 105 turn105_finish_creep_20261023 (exit 0; bridge reused)",
+      "source_commit": "ab7a6969c657ba58be531b23a5e931be5e818554",
+      "runtime_changed": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine"
+      ],
+      "route_engine_sha256": "342e6a3ced938f432c9c4e81fb2d0db67758e3a2057d7a5a06b3d792aa071950 (riscv64 lp64d, inspection passed)",
+      "vehicle_bridge_sha256": "fe5c0056... (round 104)",
+      "sha256sums": "19/19 OK",
+      "archive_sha256": "f8b8401968876a35d4b1f65abb1ba59d88438286952d68c189be866972368cf1",
+      "helper": "left-cone-trial-once-105.py 4c06256a...",
+      "deploy_script_sha256": "7ff62bf3...",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn105-20261023-204543",
+      "evidence_dir": "left-cone-trial-20261023-105"
+    },
+    "deployment": {
+      "operator": [
+        "去吧",
+        "完成后你再加一个启动的命令，我终端输进去后直接启动，开始跑"
+      ],
+      "before": "before105-fresh.json: six fresh locked ready samples, 17 hashes and settings match round 104",
+      "deploy": "deploy-matched.py claude-turn105 105: deployed, error/rollback null, backup backup-claude-turn105-20261023-204543",
+      "after": "after105-deploy-fresh.json: six fresh locked ready samples, 17 hashes match round 105; trial105.py 4c06256a..., engine 342e6a3c..., bridge fe5c0056... match; no evidence dir; only the console, its engine and two bridges",
+      "start_command_selftest": "start-round.py refuses without N, for round 104 (already run) and a round without a package; its read+validate steps alone (scratch output) pass for round 105 via the SSH socket; the car then read left .48 / right .42 / 7.51 m ahead",
+      "run": "left to the operator: python3 scripts/start-round.py 105 (creates pre105-run-fresh.json, trial105-stdout.json)"
+    },
+    "readme": "README.md rewritten as a whole (user: 推送的时候你顺便全量更新下README.MD): status and car-round table, how a round is built/deployed/started, the hard protections, Rust status, code map (+ lidar_revolution.rs, start-round.py), measured car values; the early xt-stcar-robot stack and the dated 09-16..10-17 entries kept further down"
   }
 }

@@ -1,193 +1,295 @@
-# XT-STCAR（10-23 Claude：第104轮实车整条路线一次跑完、全程无停顿等待18.7s；桥补雷达0°接缝后每帧覆盖360；见下方“Rust化状态”）
+# XT-STCAR（10-23 Claude：第105轮终点补进已部署待跑，车摆好后`python3 scripts/start-round.py 105`；第104轮整条路线一次跑完、全程无停顿18.7s）
 
-## Rust化状态（2026-10-21）
+Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。路线只用激光雷达，不用摄像头。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
+源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。
 
-机器记录：[`rust_port_plan_20261021`](docs/vehicle-dynamic-turn-validation-20261007.json)。GitHub显示的约42% Python里，一半是单元测试，其余主要是控制台和Mac上的离线工具。
+## 现状（2026-10-23）
 
-**已经是Rust的部分**
+**路线**：起步直道 → 逆时针绕第一个桶 → 过渡 → 顺时针绕第二个桶 → 灯区入口（红绿灯龙门架）→ 光区直道 → 停进终点区。不针对某一块赛道调参；起步、绕桶、灯区和终点都按当场雷达几何决定。
+
+**车上版本**：第105轮（源提交 ab7a696，引擎 `342e6a3c…`，桥 `fe5c0056…`），已部署、待跑。
+
+| 轮 | 日期 | 结果 | 起步→停车 | 说明 |
+| --- | --- | --- | --- | --- |
+| 98 | 10-21 | 跑完全程，停车后静止确认未通过 | 17.4 s | 第一次用独立程序 `route-engine race`；停在离终点板 .715 m（只有车头进区） |
+| 99 | 10-21 | 同上 | 18.3 s | 离板 .701 m |
+| 100 | 10-21 | 停进终点区 | 20.1 s | 离板 .743 m；光区直道停了三次再走 |
+| 101 | 10-22 | 灯区入口车身门停车 | — | 追踪线擦到龙门架外侧腿 |
+| 102 | 10-22 | 起步直道误判"前方有板"滑停 | — | 远处测距跳变被当成 1.77 m/s 接近速度 |
+| 103 | 10-23 | 整条路线一次跑完，停进终点区 | 19.7 s | 绕第一个桶和过桶后各有一次约 .5 s 的雷达质量等待；离板 .404 m |
+| 104 | 10-23 | 整条路线一次跑完，停进终点区 | 18.7 s | 全程没有任何等待或暂停；离板 .459 m，车尾在区外约 6 cm |
+| 105 | 10-23 | 已部署，待跑 | | 终点补进 |
+
+**最近几轮改了什么**
+- 第101轮：光区直道一口气跑完：滑行按"整车停进区"瞄准，车还在滚动时短推补足（原先停三次再爬）。
+- 第102轮：灯区入口的追踪线被挡（龙门架两腿相距 .96 m）时，沿车道轴找最近的够宽空隙，挪过去的路径通才走，否则照旧停车等待。
+- 第103轮：起步直道"停车距离够到前方挡板、还没看到第一个桶"只断这一帧的电，下一帧重判（原先直接结束整轮）。
+- 第104轮：
+  - 桥补雷达 0° 接缝的漏点。按包分圈时，每帧在原始 0–12° 会漏掉 1–3°，偶尔整包约 12°，车头右前方因此常判"前方看不全"而断电等待。现在每帧覆盖都是 360°。
+  - 起步直道新给 1560 前，先确认这次加油在电调延迟内带来的增速不超过许可速度。
+- 第105轮：
+  - 终点补进：车头进区、车尾在区外、离板不到 .50 m 时，补 2 帧 1560（行程上限 .27 m，最多 3 次）。规则要求停车时四轮都在区内，否则加 5 s。
+  - 新增本机一条命令启动一轮（见下节）。
+
+**已知问题与下一步**
+- 起步直道：远处测距偶尔跳变，会多断一帧电。还没看到第一个桶时，离尽头约 4.4 m 起限速，是为了没看到桶也能停在板前 1.6 m（设计如此）。
+- 雷达整包缺失（原始 0–11°）在新桥上还没再出现过，补点是否覆盖这种情况要看 `seam_filled_bins` ≥ 10 的帧。
+- 第一个桶按"目标桶"允许贴近，最近 .047–.06 m；碰板才停。
+- 不识别红绿灯：视觉模型只有 `blue_cone`，路线也不用摄像头。
+- 2 帧 1560 从静止补进在车上实际能走多远，还没实测。
+
+## 跑一轮：改代码 → 验证 → 打包 → 部署 → 启动
+
+`work/`（构建/部署脚本、部署包、取回的证据）只在本机，不进 Git。
+
+1. **改代码**：路线的 Python 参考实现 `web/vehicle-console/maneuver_sequence.py` 和车上引擎 `route-engine/src/` 两边同步改。桥在 `crates/runner/`。
+2. **验证**：
+   - 控制台全量测试：`cd web/vehicle-console && python3 -m unittest discover -s tests`，必须 0 失败。
+   - 引擎：`cd route-engine && cargo test && cargo build --release`。
+   - Python/Rust 逐位对比：`python3 scripts/route-engine-parity-sweep.py OUT all`，不要和全量测试同时跑。
+   - 改了 `crates/` 时，还要跑工作区的 `cargo fmt --all --check`、`cargo test --workspace --locked`、`cargo clippy --workspace --all-targets -- -D warnings`。
+3. **记录并推送**：机器记录加新键，更新 `agent.md` 顶部和本文件第一行，提交并推送 `main`。
+4. **打包**：`python3 work/vehicle-dynamic-deploy-20261008/build-race.py claude-turn<上一轮> claude-turn<N> <N> <记录键>`。改了 `crates/` 时加 `--rebuild-bridge` 重编桥。打包会交叉编译引擎（和桥）、检查 ELF、写 19 个文件的 SHA256SUMS，并生成本轮的车上助手 `trial<N>.py`。
+5. **部署**：`python3 work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn<N> <N>`，有备份和回滚。部署前后都用 `read-fresh-engine.py` + `validate-fresh-engine.py` 核对：6 个新鲜的锁定中位样本，17 个安装哈希和部署包一致。
+6. **启动**：车摆到起点后，在本机终端输入：
+
+```bash
+python3 scripts/start-round.py 105
+```
+
+`scripts/start-round.py N` 的流程：
+- 先核对车上状态和第 N 轮部署（锁定、中位、就绪、17 个哈希），不符就不启动。
+- 然后跑一次本轮的 `trial<N>.py`。车上助手会再核对一遍哈希和起点、停掉控制台、跑 `route-engine race`、跑完必定恢复控制台。
+- 最后取回证据目录，逐个文件校验 sha256，读跑后车况，打印结果小结。
+- 每轮只能跑一次：已经跑过就拒绝。
+- SSH 优先用 `work/vehicle-test-ssh.sock`，否则用普通 ssh（可能在终端里要密码）。
+
+证据在 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-<日期>-<N>/`：助手的文件在顶层，程序的文件在 `run/`（`summary.json`、`feedback.jsonl`、`cli-result.json`）。分析工具有 `scripts/trial-timeline.py`、`trial-map.py`、`route-replay.py`。
+
+## 上车的硬保护（各轮都不改）
+
+- **桥**（`crates/robot-core/src/teleop.rs`）：300 ms 命令租约、250 ms 过期请求、150 ms 控制间隔；电机 1500–1620（`--allow-reverse` 时下限 1350），舵机 1200–1800；任何违规都锁定在中位。
+- **控制程序**：
+  - 20 ms 一拍，控制间隔超过 .12 s 就停；50 ms 一次健康检查。
+  - 传感器过期即停；命令有 arm/锁定和 ACK 序列。
+  - 输出检查：只有起步直道允许 1600。
+  - 累计行驶 40 s 上限，服务另有总期限。
+- **8 cm 车身门**：已知回波离车身矩形不到 5 cm 净距加 3 cm 测距余量就停（左转内侧另有放宽）。目标桶允许贴近，碰板必停。
+- **助手**：每个证据目录只用一次；跑完必定恢复控制台，并要求 6 个健康的锁定样本。
+- **路线等待和暂停**：不设时间上限，只由累计行驶预算结束。
+
+## Rust化状态（2026-10-23）
+
 | 部分 | 做什么 | 状态 |
 | --- | --- | --- |
-| `crates/runner` vehicle-bridge | 底盘串口控制、雷达读取、原生扫描几何（通道/墙候选、左转开口、前方边界） | 早已部署 |
-| `crates/robot-core`、`crates/app`、`crates/device-io` | 几何、路口、跟踪、任务库，协议，设备访问 | 已有 |
-| `crates/vision` + vision-shadow | 车上YOLO（ONNX Runtime）推理，只做感知；`vision_shadow.py`是薄包装 | 已部署 |
-| `route-engine/` | 第96轮：整套路线决策，即ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区。与Python逐位一致：仿真156/156，录像在Mac和车上都是28/28 | 随第98轮上车（第96、97轮的包没部署） |
-| `route-engine/src/clearance.rs` | 第97轮（A）：控制台每拍的车身间隙检查，即probe_clearance及其辅助函数、ClearanceReuse，和接触目标在同一次请求里算。与Python逐位一致：仿真156/156、录像28/28（共比较17.6万次间隙检查），另有真实扫描加随机参数和故障的单独对比4.5万次 | 随第98轮上车 |
+| `crates/runner` vehicle-bridge | 底盘串口、雷达整圈（第104轮起补 0° 接缝）、原生扫描几何（通道/墙候选、左转开口、前方边界） | 第104轮重编上车 |
+| `route-engine/`（`route-engine race`） | 整套路线决策（ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区、终点）、车身间隙检查、滑行静止、控制台监管的逐行移植，以及独立程序本身 | 第98轮起每轮上车 |
+| `crates/vision` + vision-shadow | 车上 YOLO（ONNX Runtime），只做感知；路线不用 | 已部署 |
 | `tools/scan-geometry` | Mac/仿真用的桥几何（不部署） | 已有 |
 
-`maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`的Python版保留，作为后备和对比基准。
+- Python 的 `maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`、`autonomy_live.py`、`server.py` 保留为参考实现和后备，Rust 与它们逐位一致。
+- 当前对比 185 个场景（仿真加实车录像）184 个一致，唯一不一致的是第75轮回放（那轮车没开动）。
+- 监管、间隙检查和滑行另有专门的对比工具（`route-engine-supervisor-parity.py`、`-clearance-parity.py`、`-coast-parity.py`）。
+- 测试数量：控制台 Python 887 个，Rust 工作区 658 个（另有 3 个按设计忽略），引擎 3 个单元测试加上面的逐位对比。
+- 不改成 Rust 的部分：
+  - 控制台的 HTTP、网页、摄像头采集和录制（比赛时不启动控制台）；
+  - `autonomy-control.py`、`stop_goal.py`（路线不用）；
+  - 单元测试和 Mac 上的离线工具。
+- 计划和进度记录：`rust_port_plan_20261021`、`rust_control_program_wip_20261021`。
 
-**要改成Rust的部分（用户10-21决定，先A后B）**
-| | 范围 | 收益 | 验证 |
-| --- | --- | --- | --- |
-| A 车身间隙检查进引擎（**已完成，随第98轮上车**） | `autonomy_live.py`的probe_clearance整个函数（含直道分支）及front_gap_evidence、车道墙/单侧板投影、桶接触见证、ClearanceReuse；server里的车道、起点区、左转放宽判断仍在控制台（只读引擎镜像的状态） | Mac：最慢一拍1.02→0.77ms，控制线程CPU最大0.80→0.43ms，新帧p99 0.85→0.56ms。按第96轮车/Mac比例估计车上最慢一拍约29→约22ms、新帧p99约24.5→约16ms，尚未上车实测。剩下的最慢拍主要是一拍里多次往返（如进入滑行那拍有4次），要靠B消除 | 双跑对比：仿真156/156、录像28/28；`scripts/route-engine-clearance-parity.py`对比4.5万次；新测试6项，全量860 OK |
-| B 整个控制循环做成独立Rust程序（**第98–100轮实车跑完全程**） | server.py的节拍路径（autonomy/turn/coast tick、心跳、间隔、期限、ACK、质量等待/滑行、停车），QualityLatch/QualityRecovery，SteerOutput，滑行静止检测；包含A。只做turn-cone路线路径 | 最慢一拍<约10ms，平常<1ms；没有GIL，HTTP、心跳、摄像头线程不会再拖晚控制拍（第86/89/92轮计时停车的原因）；这就是比赛形态（比赛时去掉控制台） | 与Python控制台节拍逐拍双跑，并移植保护相关的单元测试；作为新一轮部署，有备份和回滚 |
+## 代码结构：模块在哪、负责什么
 
-B的进展（`rust_control_program_wip_20261021`）：
-- `route-engine/src/coast.rs`：滑行静止判断CoastMotion及其队列。与Python在全部录像加随机改动上逐位一致，约3.3万次结果。
-- `route-engine/src/supervisor.rs`：控制台的路线监管，包括启动准入、节拍、质量等待/暂停/滑行、停车、输出检查、ACK序列、转向标定和反馈换算。用`scripts/route-engine-supervisor-parity.py`与Python控制台逐拍双跑：仿真156/156、录像28/28，共17.6万拍，每拍比较整份报告。
-- `route-engine/src/race.rs`（`route-engine race`）：独立程序本身，包括两个桥、20ms节拍线程、健康检查、证据文件和终端输出。在车的CPU上闭环仿真跑完全程，最大间隔0.026s。在真实设备上只检查不启动，通过三次，从未解锁。车上助手`scripts/race-trial.py`负责停控制台、跑一次、再恢复控制台。
-- 车上逐位对比：路线引擎28/28，监管核心28/28，间隙检查12908次，滑行11168个结果，全部一致。
-- 第98–100轮用独立程序在车上跑完全程（打包用`build-race.py`；记录键`turn98_actual_20261021`、`turn99_actual_20261021`、`turn100_actual_20261021`）。
+第98轮起，上车跑路线的是两个 Rust 程序：`crates/runner` 的车上桥 `vehicle-bridge`（底盘串口、雷达和原生扫描几何），以及 `route-engine/` 的独立程序 `route-engine race`（路线决策和全部控制保护）。
+Python 控制台 `web/vehicle-console/` 用于遥控、采图和录像，同时是路线控制器的参考实现；Rust 引擎与它逐位一致。比赛时不启动控制台。
 
-B的待定设计：Rust程序独占两个桥，在自己的线程上跑20ms节拍。控制台改为它的客户端，负责遥控、显示和记录、开始/停止，摄像头继续留在控制台里用于采图和YOLO。比赛时不启动控制台，启动方式待和用户定。
+```text
+XT-STCAR/
+├── route-engine/        比赛控制程序（Rust，无依赖、禁用 unsafe）：路线决策、车身间隙、滑行静止、监管，以及 `route-engine race`
+├── web/vehicle-console/ 车上控制台（Python）：网页遥控与状态、桥进程、摄像头；路线控制器的 Python 参考实现和全部单元测试
+├── crates/
+│   ├── runner/          车上桥 vehicle-bridge、vision-shadow；xt-stcar-robot：自主模拟、感知/规划线程、采集与回放
+│   ├── robot-core/      任务/安全、扫描/定位/导航、路口与雷达锥桶几何、桥的遥控保护、厂商协议和标定表
+│   ├── vision/          视觉数学、模型契约与标签绑定
+│   ├── app/             xt-stcar：视觉 CLI、原生/参考推理后端
+│   └── device-io/       有截止时间的串口配置与传输库
+├── tools/scan-geometry/ Mac/仿真用的桥几何，输出与车上桥相同的字段（不部署）
+├── scripts/             车上助手、闭环仿真、Python/Rust 逐位对比、实车证据分析、模型/打包/上传
+├── tests/               Python 模型/交付测试与跨实现对照工具
+├── config/              显式配置；车辆相关示例均未经实车标定
+├── examples/            合成 JSONL 回放输入
+├── docs/                协议依据、使用说明、验证报告；每轮改动和实车结果记在 vehicle-dynamic-turn-validation-20261007.json
+├── 资料/                 来源索引、环境记录、已归档官方参考
+├── work/                本地：每轮构建/部署脚本、部署包、取回的实车证据（不进 Git）
+├── 打开车辆驾驶台.command/.html  Mac 上通过 SSH 打开车上控制台，不解锁、不发运动命令
+├── Cargo.toml/lock      Rust workspace（crates/）、依赖与精确版本锁
+├── rust-toolchain.toml  Rust 1.97.1 工具链选择
+├── requirements-*.in/lock.txt  Mac 上的 Python 开发与模型环境
+├── AGENTS.md            开发约定的加载入口
+├── 上传规范.md           main 直接开发、修改前同步与提交推送流程
+├── Mac与车端命令手册.txt   按执行机器分类的命令、参数与使用步骤
+├── agent-history-20261007.md  10-07 以前的交接记录归档
+└── agent.md             完整交接快照与长期约定
+```
 
-**不改的部分**：
-- 控制台的HTTP接口、网页、摄像头采集和录制（比赛时去掉；摄像头受I/O限制；YOLO推理已是Rust）。
-- `autonomy-control.py`、`vision_shadow.py`、`stop_goal.py`（路线不用）。
-- 单元测试、`scripts/`离线工具、YOLO训练/导出（只在Mac上跑）。
+`route-engine/` 和 `tools/scan-geometry/` 各有自己的 Cargo 工程，放在 `crates/` 外面：部署构建要求 `crates/`（桥的源码）与车上已装版本一致。
 
+**比赛路径（第98轮起）**：
+1. 车上助手 `scripts/race-trial.py`（每轮由 `work/…/build-race.py` 写死参数，部署后是 `trial<轮>.py`）核对已装引擎和桥的哈希、控制台的新鲜锁定中位和起点检查，然后停掉控制台。
+2. `route-engine race` 在自己的进程组里启动 `vehicle-bridge control`（底盘串口）和 `vehicle-bridge lidar`（雷达整圈和原生几何）。
+3. 控制线程每 20ms 一拍，收到新扫描立即决策（距上一拍结束至少 5ms）：监管（起步准入、质量等待/滑行、停车、输出检查、ACK 序列、转向标定）→ ManeuverSequence 路线决策 → 底盘命令。
+4. 证据写到 `left-cone-trial-<日期>-<轮>/`：助手的文件在顶层，程序的文件在 `run/`；助手结束时必定恢复控制台。
 
-2026-10-17（Claude）第66/67轮：66实车单拍最大.032s（提速+屏蔽网页生效），起步.4s后前方5格缺口在发车直道不被容忍而停车；67让发车直道在当前原生几何有效时使用已有的有界缺口容忍，仿真加深度突变丢回波模型验证（无容忍10/12停、有容忍11/12跑完），全量751 OK。
+**控制台路径（遥控、采图、对比）**：浏览器 ↔ `server.py`（HTTP、两个桥、摄像头、`vision_shadow.py`）。路线会话由 `route_engine.py` 为每个会话起一个 `route-engine` 子进程，按逐行 JSON 调用；Python 的 `maneuver_sequence.py` 等保留为后备和对比基准。
 
-2026-10-17（Claude）第65轮：第64轮实车发车直道3.3s后首桶进近一拍算了.242s，心跳租约超时锁定（保护正常）。只提速不改决策（墙线提取约8倍、同帧缓存、少深拷贝、近距检查少建对象），自动运行期间屏蔽局域网网页读取；Mac最慢单拍5.9→2.7ms，全量746 OK，仿真/回放逐字节不变。未构建/未上车。
+| 比赛与控制台源码 | 职责与边界 |
+|---|---|
+| [`route-engine/src/main.rs`](route-engine/src/main.rs) | 引擎入口：默认是控制台的逐行 JSON 引擎（每会话一个 ManeuverSequence，new/call/get/dump）；`race` 子命令进入独立程序 |
+| [`route-engine/src/race.rs`](route-engine/src/race.rs) | 独立程序：两个桥、只转发的读线程、20ms 节拍加新扫描即决策、50ms 健康检查、自续 owner 租约、起点检查与启动方式（enter/ready/never）、证据写线程；summary.json 记控制间隔、scan_to_tick 和每线程/每个桥的 CPU |
+| [`route-engine/src/supervisor.rs`](route-engine/src/supervisor.rs) | server.py 路线监管的逐行移植：起步准入、节拍、质量等待/滑行、停车、输出检查（含仅起步直道允许 1600）、ACK 序列、转向标定与反馈换算、QualityLatch/QualityRecovery；保护值与 Python 相同 |
+| [`route-engine/src/maneuver.rs`](route-engine/src/maneuver.rs) | ManeuverSequence 与其 TurnMotion 基类合成一个结构体，属性名同 Python；`super()` 调用对应 `tm_*` |
+| [`route-engine/src/maneuver_open.rs`](route-engine/src/maneuver_open.rs) | 起步直道（车道几何、预打舵、起步限速）和开放赛道各段：第一圈、换桶、第二圈、光区入口 |
+| [`route-engine/src/maneuver_tm.rs`](route-engine/src/maneuver_tm.rs) | TurnMotion.update、路口进入、首个目标和首过观察 |
+| [`route-engine/src/maneuver_wait.rs`](route-engine/src/maneuver_wait.rs) | 路线等待和暂停：首目标质量等待、重绑、中位暂停及恢复规则 |
+| [`route-engine/src/maneuver_path.rs`](route-engine/src/maneuver_path.rs) | 转向变化率、近距避让、预测弧线的路径检查 |
+| [`route-engine/src/maneuver_post.rs`](route-engine/src/maneuver_post.rs) | 首过之后：出口通道、第二支撑（通道证明、恢复、绕圈）、光区转向和光区直道到终点 |
+| [`route-engine/src/clearance.rs`](route-engine/src/clearance.rs) | 第97轮：控制台每拍的车身间隙检查 probe_clearance 及 ClearanceReuse |
+| [`route-engine/src/coast.rs`](route-engine/src/coast.rs) | 滑行静止判断 CoastMotion 及其队列语义；独立程序里在自己的线程上算 |
+| [`route-engine/src/compact_target.rs`](route-engine/src/compact_target.rs) | compact_target.py 的移植：雷达小目标（桶）的提取、关联和角色 |
+| [`route-engine/src/helpers.rs`](route-engine/src/helpers.rs) | 路线用到的模块级函数：通道墙、罗盘、起步直道墙律、绕圈规划、追踪、轴线 |
+| [`route-engine/src/py.rs`](route-engine/src/py.rs)、[`dump.rs`](route-engine/src/dump.rs) | 移植依赖的 Python 语义（区分 int/float/bool 的动态值、有序 dict、异常展开与捕获）；对比用的完整状态和控制台每次调用后读取的属性 |
+| [`crates/runner/src/bin/vehicle-bridge.rs`](crates/runner/src/bin/vehicle-bridge.rs) | 车上桥：`control` 写底盘串口，`lidar` 解 N10 整圈（拼圈见下行）并输出标定后的扫描和原生几何（前方边界、左路口、通道/墙候选、左转目标）；默认空跑，`--execute --device` 才打开设备 |
+| [`crates/robot-core/src/teleop.rs`](crates/robot-core/src/teleop.rs) | 桥自己的保护：300ms 命令租约、250ms 过期请求、150ms 控制间隔、电机 1500–1620（`--allow-reverse` 时下限 1350）、舵机 1200–1800，任何违规锁定中位 |
+| [`crates/runner/src/bin/support/lidar_calibration.rs`](crates/runner/src/bin/support/lidar_calibration.rs) | 控制台扫描的可选粗校正，不是导航标定 |
+| [`crates/runner/src/bin/support/lidar_revolution.rs`](crates/runner/src/bin/support/lidar_revolution.rs) | 第104轮：N10 包拼成 360 格整圈；本圈没采到的接缝格用上一圈 0° 之后的点补，每行记 `seam_filled_bins` |
+| [`crates/runner/src/bin/vision-shadow.rs`](crates/runner/src/bin/vision-shadow.rs) | 有界 JPEG 进程通信 → 常驻感知 → JSON；不接触设备或运动输出 |
+| [`web/vehicle-console/server.py`](web/vehicle-console/server.py) | 车上控制台服务：HTTP 和网页、两个桥进程、遥控、路线会话的监管（独立程序的参考实现）；Rust 独占底盘串口 |
+| [`web/vehicle-console/route_engine.py`](web/vehicle-console/route_engine.py) | 控制台调用 Rust 引擎的适配层：子进程、逐行 JSON、应答超时 |
+| [`web/vehicle-console/maneuver_sequence.py`](web/vehicle-console/maneuver_sequence.py)、[`turn_motion.py`](web/vehicle-console/turn_motion.py) | 路线控制器的 Python 参考实现，引擎与它逐位一致；改路线时两边同步修改 |
+| [`web/vehicle-console/compact_target.py`](web/vehicle-console/compact_target.py) | 雷达小目标的形状/关联门限（实验值，不是实测桶尺寸） |
+| [`web/vehicle-console/autonomy_live.py`](web/vehicle-console/autonomy_live.py) | 车身间隙检查 probe_clearance、通道墙与转向、QualityLatch/QualityRecovery |
+| [`web/vehicle-console/coast_motion.py`](web/vehicle-console/coast_motion.py) | 滑行静止证据：相邻扫描的低运动配准，不用轮速 |
+| [`web/vehicle-console/steer_calibration.py`](web/vehicle-console/steer_calibration.py) | 本车实测转向：路线名义舵机 PWM → 实际舵机 PWM |
+| [`web/vehicle-console/vision_shadow.py`](web/vehicle-console/vision_shadow.py) | 摄像头帧交给 Rust vision-shadow 做 YOLO，只做感知 |
+| [`web/vehicle-console/autonomy-control.py`](web/vehicle-console/autonomy-control.py)、[`stop_goal.py`](web/vehicle-console/stop_goal.py) | 早期的车上终端入口和停车目标，路线不用 |
+| [`web/vehicle-console/index.html`](web/vehicle-console/index.html)、`app.js`、`style.css`、`systemd/` | 网页驾驶台和车上服务单元 |
+| [`web/vehicle-console/tests/`](web/vehicle-console/tests) | 控制台、路线、引擎和独立程序的单元测试（全量须 0 失败才能上车）；`fixtures/` 是实车扫描片段 |
+| [`scripts/race-trial.py`](scripts/race-trial.py) | 车上助手：先核对哈希，再查新鲜锁定中位和起点检查，停控制台跑一次 race，必定恢复控制台并要求 6 个健康锁定样本；打包后带任何参数都拒绝 |
+| [`scripts/start-round.py`](scripts/start-round.py) | 第105轮：本机一条命令启动已部署的第 N 轮：核对车上状态与部署、跑一次 `trial<N>.py`、取回并逐个校验证据、打印小结；每轮只跑一次 |
+| [`scripts/course-sim.py`](scripts/course-sim.py)、[`route-sim.py`](scripts/route-sim.py) | 闭环赛道仿真：真实控制台服务（演示模式）加车辆模型（名义/实测）；不连车 |
+| [`scripts/route-engine-parity.py`](scripts/route-engine-parity.py)、`route-engine-parity-sweep.py`、`route-engine-supervisor-parity.py`、`route-engine-clearance-parity.py`、`route-engine-coast-parity.py` | Python 与 Rust 逐位对比：路线、监管、间隙检查、滑行；sweep 在仿真和录像上并行跑（不要和全量测试同时跑） |
+| [`scripts/sim-vehicle-bridge.py`](scripts/sim-vehicle-bridge.py)、[`fake-vehicle-bridge.py`](scripts/fake-vehicle-bridge.py) | Mac 上测 `route-engine race` 用的闭环仿真桥和假桥 |
+| [`scripts/trial-timeline.py`](scripts/trial-timeline.py)、`trial-map.py`、`route-replay.py`、`detector-replay.py`、`second-orbit-replay.py` | 实车证据分析：时间线、由扫描重建路径、用当前代码回放决策、小目标检测回放、第二圈回放 |
+| [`scripts/run-console-tests.py`](scripts/run-console-tests.py) | 按模块名跑控制台测试 |
+| [`scripts/start-vehicle-console.py`](scripts/start-vehicle-console.py)、`open-vehicle-console.py`、`run-vehicle-console-service.py` | 启动/打开车上控制台和 systemd 入口；都不解锁 |
+| [`scripts/static-steering-check.py`](scripts/static-steering-check.py)、`steering-arc-check.py` | 车上一次性的静态打舵和低速弧线检查 |
+| [`scripts/camera-preview.py`](scripts/camera-preview.py)、`check-vision-deployment.py`、`vehicle-vision.sh` | 摄像头预览、视觉部署只读检查和车上视觉入口 |
+| [`scripts/local-sim-sweep.py`](scripts/local-sim-sweep.py)、`vehicle-bluetooth-repair.py` | `crates/runner` 冻结二进制的批量仿真；车上蓝牙驱动修复 |
+| [`tools/scan-geometry/src/main.rs`](tools/scan-geometry/src/main.rs) | 在 Mac 上为扫描加上与车上桥相同的几何字段，供仿真和离线分析 |
 
-2026-10-17（Claude）：用户把车放上赛道。第64轮以 steering300 桥为基线构建（新构建器 `build-turn64.py`，15个安装哈希，helper `--max-seconds 40`）。只读检查发现雷达左后约210–232格自10-16换件后一直无回波（车后挡板在那里也无回波，车身固定遮挡），车上桥要求缺口≤5°，墙/车道几何全部为空，路线起不了步；车尾离后挡板约6cm不足8cm。已请用户检查遮挡、前挪约10cm。记录键 `turn64_measured_car_route_20261017`。
+下表是 `crates/` 里的库和 xt-stcar-robot 程序（比赛路径只用到桥、`teleop.rs`、`junction` 和协议/串口部分）。
 
-2026-10-16：Chrome解锁复现“解锁请求已过期”，实测部分TCP建连卡顿约1s；用户随后报告恢复，发生在补丁部署前。已本地修复HTTP连接复用、状态响应乱序/重复tick续龄、恢复后残留断线提示，保留全部控制时限；本轮不重启当前可用车辆服务。前端19项、Python全量738项通过（含6项新增HTTP回归，保留2项原有预期失败），详细证据见[当前入口](agent.md)和机器记录`console_unlock_timeout_20261016`。候选尚未部署或通过实车解锁验证，不能把网络暂时恢复写成修复通过；后续不得直接将main的第64轮WIP覆盖车端。
+| 源码位置 | 职责与边界 |
+|---|---|
+| [`crates/vision/src/lib.rs`](crates/vision/src/lib.rs) | `ModelSpec`、RGB letterbox、NCHW FP32 张量、输出契约检查、阈值过滤、坐标还原；不访问设备或加载原生库 |
+| [`crates/vision/src/semantics.rs`](crates/vision/src/semantics.rs) | 显式的模型标签绑定，不按类别编号推断语义 |
+| [`crates/app/src/main.rs`](crates/app/src/main.rs) | `xt-stcar` 命令入口：`self-check`、`preprocess`、`replay`、`infer`，参数与输出文件保护 |
+| [`crates/app/src/ort_backend.rs`](crates/app/src/ort_backend.rs) | `NativeOrtBackend`：动态加载 ORT C 库、模型 SHA/provenance/实际张量元数据验证、常驻 Session 和超时取消 |
+| [`crates/app/src/backend.rs`](crates/app/src/backend.rs) | 显式 Python 参考后端、张量文件交换、子进程超时清理与原子输出工具 |
+| [`crates/app/src/file_io.rs`](crates/app/src/file_io.rs) | 两套 CLI 共用的静态文件边界：非阻塞打开后检查普通文件、限制实际读取量、拒绝非普通输出目标 |
+| [`crates/app/src/lib.rs`](crates/app/src/lib.rs) | 导出可复用的推理后端，供总调度调用 |
+| [`crates/robot-core/src/sensors.rs`](crates/robot-core/src/sensors.rs) | IMU、雷达、里程计、视觉摘要及 frame/单位/时间/有限数值校验；里程计类型本身不计算里程计 |
+| [`crates/robot-core/src/safety.rs`](crates/robot-core/src/safety.rs) | Disarmed/Armed/Running/Fault、急停锁存、deadman、心跳/指令/传感器超时、物理速度和曲率限值；`RecordingSink` 仅记录输出 |
+| [`crates/robot-core/src/protocol/chassis.rs`](crates/robot-core/src/protocol/chassis.rs) | 厂商 7 字节底盘编码、三种不同话题语义的显式预览、通用短写/失败锁存适配器；经验系数不作为物理标定 |
+| [`crates/robot-core/src/protocol/calibrated_chassis.rs`](crates/robot-core/src/protocol/calibrated_chassis.rs) | 速度→电机 PWM、曲率→舵机 PWM 的显式分段表；零锚点、限值、倒车策略校验，拒绝外推；当前只接受未验证模拟配置 |
+| [`crates/robot-core/src/startup_assist.rs`](crates/robot-core/src/startup_assist.rs) | 根据新鲜扫描里程计确认静止、受限步进PWM、起步交接及故障锁存；不打开执行器 |
+| [`crates/runner/src/startup_replay.rs`](crates/runner/src/startup_replay.rs) | 自适应起步离线回放与PWM建议记录，显式标记无物理输出 |
+| [`crates/robot-core/src/protocol/imu.rs`](crates/robot-core/src/protocol/imu.rs) | WIT 11 字节增量解析、校验和、三分量组合、单位/四元数转换、坏帧与过期控制 |
+| [`crates/robot-core/src/protocol/n10.rs`](crates/robot-core/src/protocol/n10.rs) | 按厂商源码解析 N10 58 字节/16 点包、分包/粘包重同步、角度/距离/强度、保留无效点槽位；只生成局部扫描样本 |
+| [`crates/robot-core/src/lib.rs`](crates/robot-core/src/lib.rs)、[`protocol/mod.rs`](crates/robot-core/src/protocol/mod.rs) | 核心类型与协议模块的公共导出入口 |
+| [`crates/device-io/src/lib.rs`](crates/device-io/src/lib.rs) | 安全 Rust 串口库：显式设备、8N1 配置读回、关闭软硬件流控、独占、非阻塞 poll、整包截止时间、错误锁存和退出恢复 |
+| [`crates/runner/src/main.rs`](crates/runner/src/main.rs) | `xt-stcar-robot` 命令解析、默认采集计划、输入文件保护、完整日志原子提交 |
+| [`crates/runner/src/input.rs`](crates/runner/src/input.rs) | 非阻塞普通文件校验、配置/事件实际字节限制、严格 JSONL 与单调时序、图像路径/序号检查，解析 `imu_bytes` / `n10_bytes` |
+| [`crates/runner/src/vision.rs`](crates/runner/src/vision.rs) | 图像读取、预处理与复用同一 ORT Session；将检测结果交给调度 |
+| [`crates/runner/src/lib.rs`](crates/runner/src/lib.rs) | 串联输入→解码/推理→安全控制器→可选 PWM 预览→JSONL；EOF Stop、推理/映射失败急停；完整解码批次每块只记一次 |
+| [`crates/runner/src/capture.rs`](crates/runner/src/capture.rs) | 有时间/字节/记录上限的 IMU 或 N10 采集，使用统一 `Instant` 时钟，空闲和结束写 Tick；不发送设备命令 |
+| [`crates/vision/src/road.rs`](crates/vision/src/road.rs) | 白条几何、HSV 灯色、红蓝锥桶及相机地面投影；普通 YOLO `zebra` 不用于斑马线 |
+| [`crates/robot-core/src/autonomy.rs`](crates/robot-core/src/autonomy.rs) | 米制坐标、位姿质量、车体足迹、道路观察及有向禁越线 HalfPlane 共享类型 |
+| [`crates/robot-core/src/junction.rs`](crates/robot-core/src/junction.rs)、[`junction/corridor.rs`](crates/robot-core/src/junction/corridor.rs)、[`junction/turn_goal.rs`](crates/robot-core/src/junction/turn_goal.rs) | 车上桥的原生几何：局部墙/开口证据、双墙通道朝向候选、有限墙段与左开口对齐；只给几何，不发转弯或空闲许可 |
+| [`crates/robot-core/src/lidar_cones.rs`](crates/robot-core/src/lidar_cones.rs) | 由原始扫描得到有界的几何锥桶候选；圆截面模型仅用于仿真，未在实际安装高度测定 |
+| [`crates/robot-core/src/field.rs`](crates/robot-core/src/field.rs) | 米制 `FieldSpec`、规则尺寸与组合校验、固定纸条/锥桶/发车终点几何、生成绕桶顺序及直道入口朝向；不缩放车体或控制限值 |
+| [`crates/runner/src/field.rs`](crates/runner/src/field.rs) | 赛前编译 `FieldScenario` 为冻结的任务配置，校验派生坐标一致性，限制合成灯的可见区/触发区；不把模拟灯时钟交给任务 |
+| [`crates/runner/examples/field_matrix.rs`](crates/runner/examples/field_matrix.rs) | 固定九组场地/元素布局，分别运行同步和真实 worker 的 PP/LQR 闭环；保留失败，不代表连续尺寸范围保证 |
+| [`config/field-example.json`](config/field-example.json) | 合成场地规格模板；填入现场测量值后先生成布局、再编译验证 |
+| [`crates/robot-core/src/local_world.rs`](crates/robot-core/src/local_world.rs) | 有界元素身份、时效/误差、视觉雷达锥桶关联，局部空闲/障碍/未知及完整通道覆盖检查 |
+| [`crates/robot-core/src/online_mission.rs`](crates/robot-core/src/online_mission.rs) | 固定任务顺序、搜索、当前桶身份与绕行进度、观测区域停车，生成动态局部目标 |
+| [`crates/vision/src/ground_markers.rs`](crates/vision/src/ground_markers.rs) | 默认禁用的实验白条协议、地面米制方向/区域几何；不认定真实赛事存在同样标记 |
+| [`crates/runner/src/online.rs`](crates/runner/src/online.rs) | 同刻元素/扫描/位姿接入，局部任务与原导航连接，完整停车包络的已知空闲检查 |
+| [`crates/runner/src/online_simulation.rs`](crates/runner/src/online_simulation.rs) | 隔离场景真值，生成统一控制器配置；仅模拟器渲染与独立裁判使用真实元素位置 |
+| [`crates/runner/examples/online_matrix.rs`](crates/runner/examples/online_matrix.rs) | 预先声明的场地/元素移动、遮挡和缺失场景，同步/异步 PP；保留未完成与故障 |
+| [`crates/robot-core/src/mission.rs`](crates/robot-core/src/mission.rs) | 斑马线实际停止计时、锥桶顺序、可选通过点朝向及 Stop/PassThrough 到达策略、灯前全车停车/绿灯确认、终点与故障锁存 |
+| [`crates/robot-core/src/scan.rs`](crates/robot-core/src/scan.rs) | N10 整圈组帧、覆盖/盲区/时间检查；不同于旧局部包回放 |
+| [`crates/robot-core/src/localization.rs`](crates/robot-core/src/localization.rs) | 有界 ICP 激光里程计；退化/跳变/过期门控，不假造编码器 |
+| [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 路径搜索、跟踪、障碍/制动和停车朝向；将异步采用约束传入候选筛选，分别记录普通搜索和恢复；`SteeringEstimate` 区分命令目标与渐变执行估计，规划与 adopt 分离 |
+| [`crates/robot-core/src/admission.rs`](crates/robot-core/src/admission.rs) | 共用源车体系停车矩形、当前采用区间和有限多拍前瞻；保留真实历史上界及实际命令变化时基，按未来采集相位预测正常减速后备动作 |
+| [`crates/robot-core/src/admission/slew.rs`](crates/robot-core/src/admission/slew.rs) | `command_slew_allowance` 统一规划/前置检查/证书/输出的曲率时基；区分无变化历史的启动与已有修订，后备预测另跟踪模型命令变化时刻 |
+| [`crates/robot-core/src/navigation/recovery.rs`](crates/robot-core/src/navigation/recovery.rs) | 前向搜索失败分层、首个被拒绝运动基元和普通/恢复工作量；连续几何恢复保留完整车体、间隙和障碍半径，避免把占用格近似当成物理不可达 |
+| [`crates/robot-core/src/navigation/primitive_envelope.rs`](crates/robot-core/src/navigation/primitive_envelope.rs) | 按速度/转向饱和点分段积分，给出位置与航向数值误差界；沿运动基元、搜索节点和终端连接传递误差，供连续扫掠核验使用 |
+| [`crates/robot-core/src/motion_transition.rs`](crates/robot-core/src/motion_transition.rs) | `MotionTransition` 解析检查过渡侧向峰值，`project_motion` 按渐变模型投影位置/速度/转向；计算有界、无堆分配，不是测量反馈 |
+| [`crates/robot-core/src/reference.rs`](crates/robot-core/src/reference.rs) | 每拍验证一次的局部参考窗口；投影、弧长游标、整段评分参考及候选偏差诊断，无额外路径分配 |
+| [`crates/robot-core/src/tracking.rs`](crates/robot-core/src/tracking.rs) | PathTracker 接口、默认 Pure Pursuit、实验性曲率前馈 + LQR；只给导航期望曲率 |
+| [`crates/robot-core/examples/tracking_comparison.rs`](crates/robot-core/examples/tracking_comparison.rs) | 直线/弯道的 Rust 跟踪 A/B 实验，输出误差与合成转向响应指标 |
+| [`crates/runner/src/laser_pose.rs`](crates/runner/src/laser_pose.rs) | 整圈检查、雷达到车体外参与 ICP 桥接，保留源时刻 |
+| [`crates/runner/src/perception.rs`](crates/runner/src/perception.rs) | 同图 RGB + 常驻原生 YOLO + RoadDetector；new_online 输出最多16项带几何元素，旧入口不变；后台只留最新待处理帧 |
+| [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 传感器 → 任务 → 导航 → Safety；同步 tick 采用最终命令；异步 tick_with_projection 分开使用源测量和模型规划状态，不采用后台计划 |
+| [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立 poll 和源时间看门狗；仅最终 ControlPoll.command 推进执行历史；检查采用窗口、历史前提和原源期限 |
+| [`crates/runner/src/control_diagnostics.rs`](crates/runner/src/control_diagnostics.rs) | 显式开启的排队/导航/终端/证书耗时、共享最新发布报告和有界计数；默认不读取主机时钟，离线调度钩子不进入输出线程 |
+| [`crates/runner/src/async_simulation.rs`](crates/runner/src/async_simulation.rs) | 完整 RGB/雷达异步比赛，独立渐变车辆只执行 poll 最终命令；`simulate_async_observed` 提供显式离线只读回调，覆盖正常输出和最终制动 |
+| [`crates/runner/examples/async_timing_matrix.rs`](crates/runner/examples/async_timing_matrix.rs) | 固定 2×2 时序、PP/LQR 共 8 场；在有界内存比较最早实际输出、同源计划和路线差异，另计实际 Stop 与拒绝期间保持 Drive |
+| [`crates/runner/examples/support/performance_gate.rs`](crates/runner/examples/support/performance_gate.rs) | 八场结束后检查预先固定的整场时间/距离、阶段时长与实际 Stop 预算；只影响离线测试退出状态，不参与车辆控制 |
+| [`crates/runner/src/host_clock_simulation.rs`](crates/runner/src/host_clock_simulation.rs) | 持续 Instant 时钟的短转弯/断流观察；计算期间输出时间继续推进，分开记录主机负载和功能结果 |
+| [`crates/runner/examples/async_motion_comparison.rs`](crates/runner/examples/async_motion_comparison.rs)、[`async_host_clock.rs`](crates/runner/examples/async_host_clock.rs) | 前者执行完整异步 PP/LQR 与可选时序配置，后者显式采集一次实际主机时钟观察；失败报告仍输出并返回非零 |
+| [`crates/runner/src/control_execution.rs`](crates/runner/src/control_execution.rs) | 固定容量已采用命令历史、源时刻查询和运动投影；最终独立检查整段采用窗口及原期限停车空间，返回证书或结构化首个失败 |
+| [`crates/runner/src/control_execution/diagnostics.rs`](crates/runner/src/control_execution/diagnostics.rs) | 证书失败原因、障碍/角点索引、有单位的符号余量、源时刻/期限/采用窗和历史 V/K；无逐拍文件输出 |
+| [`crates/runner/src/control_admission.rs`](crates/runner/src/control_admission.rs) | 每份源快照准备一次共享采用上下文，验证历史、时间及有限数值；准备失败明确拒绝，不能解释为关闭前置约束 |
+| [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿合成闭环；车辆速度/曲率连续渐变，以不超过 1 ms 的子步积分并检查车体碰撞/边界，含故障后制动 |
+| [`crates/runner/src/simulation_geometry.rs`](crates/runner/src/simulation_geometry.rs)、[`sweep_simulation.rs`](crates/runner/src/sweep_simulation.rs) | 离线胶囊墙（合成雷达和独立车体检查共用）；规则范围内任意真值场景 |
+| [`crates/runner/examples/lidar_matrix.rs`](crates/runner/examples/lidar_matrix.rs)、[`lidar_sweep.rs`](crates/runner/examples/lidar_sweep.rs) | 八个场景加桶偏移和测距噪声的原生流程探测；每进程一个场景，供外部批量调度 |
+| [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
+| [`crates/runner/examples/motion_profile.rs`](crates/runner/examples/motion_profile.rs) | 显式预热与重复测量完整模拟墙钟时间；记录平均/最大及完成状态，不能当作板卡时限 |
+| [`crates/robot-core/src/navigation/terminal.rs`](crates/robot-core/src/navigation/terminal.rs) | 单/双段曲率渐变末端连接、接续数值初值、共享计算额度与求解失败诊断 |
+| [`crates/robot-core/src/navigation/continuity.rs`](crates/robot-core/src/navigation/continuity.rs) | 记录末端初值的预测状态，延迟后调整初猜并重新认证；保留已恢复短连接族，计算同姿态旧剩余路线诊断；fixtures 内含原始窗口及专项实验快照 |
+| `crates/robot-core/src/navigation/` 下的 `*_arrival.rs`、`*_replay.rs`、`short_*.rs`、`terminal_continuity_region.rs`、`oriented_region_advance.rs`、`candidate_pipeline.rs`、`stopping_envelope.rs` | 用实际采到的 worker 状态做的回放测试和对应修正（短到达、首拒、连续性区域、候选顺序）；`stopping_envelope.rs` 是原停车盘拒绝后的第二个完整停车集证明 |
+| [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
+| [`crates/runner/src/navigation_diagnostics.rs`](crates/runner/src/navigation_diagnostics.rs) | 模拟首个非预期阻塞/故障的最多 17 帧内存上下文，结束随摘要输出 |
+| [`crates/runner/src/phase_statistics.rs`](crates/runner/src/phase_statistics.rs) | 各阶段实际时长/距离、Stop 次数/命令时长、路径生成、拒绝原因及终端工作总数/每拍最大值的有界内存统计；最终制动单列 |
+| [`crates/runner/src/telemetry.rs`](crates/runner/src/telemetry.rs) | 有界内存事件日志；调试预算耗尽不影响比赛控制 |
 
-2026-10-16（Claude）：路线按实测车况改造（转向标定层 `steer_calibration.py`、电调滞后、发车直道限速、灯区脉冲补油、入口路径检查、假桶剔除），全量738 OK、回放不变；实测车况规则范围96/108（8m 35/36），标定偏差稳健性117/130。**第64轮未构建/未上车，部署须带新模块。**
+`crates/runner` 的 xt-stcar-robot 有两条流程，都没有上车跑过路线：
+- 诊断流：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
+- 在线自主流：RGB/雷达/位姿 → 元素关联与局部空间 → 任务顺序和动态局部目标 → 原规划/跟踪及安全检查 → 车辆模型 → 下一帧反馈。
+- 独立串口采集先生成可回放的原始字节文件；采集没有 Arm/Start/Motion 事件。
 
-2026-10-13（Claude）：核验 Codex 9b4a41d，结果一致：725 OK，范围 95/108，回放逐字节相同。修复停稳确认：同一墙的重复子窗口被丢弃，只用唯一对应的平面配准，长平面消失仍判场景变化。实车停稳帧可配准 0/220→114/220，仿真正常结束 79→95/108，全量 732 OK。仿真新增转向回差假设：回差 15 PWM 时 88/108，30 PWM 时 31/108，但重铺练习场 user8 在 0/15/30 下全部完成。新增未运行的实测脚本 `scripts/steering-arc-check.py`，需用户在场。**1200 曲率与回差未实测，第 64 轮不可构建/上车。**
-
-2026-10-13：用户要求先不连车，本地修改已保存供Claude核验。手动/桥限幅1200–1800此前已静态实测；本次路线右舵候选1350→1200、左舵仍1720、中位仍1500，修窄通道绕行规划、灯区交接/恢复和直道遮挡减速。全量725项OK（2项原有预期失败），44轮detector及51/52回放逐字不变。范围位置分70→95/108，正常路线结束仅79/108；1200曲率仍是名义模型，旧右转能力敏感性73/108。**剩余仿真失败、1200动态曲率与回中迟滞尚待解决，第64轮不可构建/上车**。见[当前入口](agent.md)、[机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)、[±300静态构建/部署/备份与实测](docs/vehicle-steering300-validation-20261013.json)。本轮未连接车辆；车上历史仍62路线加手动补丁与新桥，好版本标签保留。
-
-下方日期条目保留历史结果，当前参数与部署状态以`agent.md`为准。
-
-2026-10-05最新：当前直道接入默认1秒的受限居中控制，有偏差容忍带、350ms调整间隔和人工停止锁存。
-用户量得雷达至左右轮胎外沿17cm，侧向按10cm净距加测距余量检查；相机/雷达短暂迟帧放宽。
-36项Python/PTY/故障检查通过；完整比赛定位/循迹/绕桶尚未接入实车。
-使用见 [驾驶台说明](web/vehicle-console/README.md)，证据见 [直道验证](docs/vehicle-straight-validation-20261005.json)。
-
-2026-10-05追加：放宽短动探针的有限雷达缺回波，并按直行通道排除侧挡板误停；感知质量持续异常2秒才锁定，硬故障与近障碍仍立即停。
-26项检查通过，车端1560/400ms窗口成功输出并回1500锁定；仍未接通完整比赛导航，未测车轮位移/制动距离。
-见[保护清单](docs/实车控制保护清单-20261005.md)及[实车短动证据](docs/vehicle-quality-recovery-validation-20261005.json)。
-
-2026-10-05追加：已接通车端共享采集/单串口桥的受限直行验证入口，支持终端启动、人工接管和急停。
-1530/400ms实车请求因前方未知雷达bin在解锁前拒绝；未启动电机，不构成全程自动驾驶。
-用户要求逐项审核保护，除指定新电池前进1560外未调整；完整比赛链路仍未接通，最终四文件已补部署。
-见[实际保护与车端命令](docs/实车控制保护清单-20261005.md)。
-
-2026-10-05：最新算法已重新交叉构建并上传车端独立目录，34 个文件哈希、动态依赖和 CLI 检查通过。
-现有驾驶台与模型保持运行，前进参数设为 1530，车辆保持锁定。导航程序仍仅支持离线仿真/回放，
-实车自主执行与人工接管仲裁待接入。此前 Mac 长批次已依用户要求停止。
-见[车端上传与后续接入](docs/车端算法程序上传-20261005.md)。
-
-2026-10-03：新增任意场地范围离线入口、可选内挡板雷达/物理检查，以及 Mac 双进程可续跑扫描。原 32 场基线复跑为 27 场完赛；新范围队列已启动，尚未验收。见[本地范围仿真与运行方法](docs/Mac本地范围仿真-20261003.md)。
-
-2026-10-02：已检查雷达独立认桶和实际桶位偏移，修正入口朝向、出口停稳衔接、半圈边界筛选和同身份几何抖动。
-新增零视觉桶的偏移/量程噪声矩阵，分开记录两桶裁判结果与整场完成；仍有未通过场景，不能视为实车验收。
-见[偏移仿真与限制](docs/雷达绕桶偏移仿真-20261002.md)。本轮未连接车端、部署或启动电机。
-
-2026-09-28：新增雷达独立锥桶检测/确认、YOLO 辅助同身份关联、独立相机健康与语义时钟、
-任务 revision 防止旧路线重入，以及运行原 Rust 导航/执行检查的八场仿真入口。
-仍是离线功能，车端未部署、未启动电机；整场完赛问题与真实标定尚未解决。
-见[接入与原生验证](docs/雷达优先绕桶接入与原生验证.md)。
-
-2026-09-23雷达粗修正已安装：左/右墙三组尺量后，按用户要求采用量程−2厘米、顺时针5°修正；驾驶台画面与保存数据已生效，保留原始扫描，原点仍是雷达中心。未改导航外参或质量门、未驱动车辆。追加后墙尺量1.155米、前墙1.190米，现有修正后分别拟合1.1576/1.1908米，两组均保留现有参数；尺量残差不等于绝对精度。[三组对照与回退](docs/车辆尺寸与几何来源.md#追加右墙对照与启用粗修正2026-09-23)。
-
-车端二进制与完整驾驶台附件见 [视觉部署 Release](https://github.com/kxkxkxa767/XT-STCAR/releases/tag/vision-console-20260922)，部署及单蓝桶模型接入见[队友交接说明](docs/视觉驾驶台部署交接.md)。`git pull`只更新源码，不会自动更新小车安装目录。
-
-2026-09-21：已增加自训练 YOLO26n 的可信导出/类别映射、模型候选与 RGB 地面元素的连接，以及复用驾驶台相机的只读连续推理和检测图 JPG 保存。详见[视觉模型接入与只读测试](docs/视觉模型接入与只读测试.md)。默认仍为官方80类模型；自训练赛道权重、真实地面标定和车端部署尚未完成。
-
-Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，视觉使用 YOLO26n Detect。**
-工程目录为 `/Users/yuhaojin/Documents/XT-STCAR`，源码仓库为
-[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)。
-
-目前有 **5 个 Rust crate、2 个可执行程序**。视觉预处理/后处理、原生推理调用、传感器协议、
-串口传输、比赛状态机、场地规格与布局生成、在线元素跟踪、局部可通行空间、道路识别、激光里程计、路径规划、底盘标定映射和调度均由 Rust 实现。Python 用于离线模型导出、校验、参考对照及独立硬件诊断/相机预览；
-默认推理由 Rust 直接调用 ONNX Runtime C API，不启动 Python 进程，推理引擎仍是上游原生库。
-
-**2026-09-16 已进入车辆架空模块测试。** 用户确认车辆到场、车轮架空，SSH已接通；旧“暂不接车”是历史边界。
-车上实测为 Bianbu 2.2 / RISC-V、GLIBC 2.39、约8GB内存；保持系统libc不变。已将原哈希核验通过的含模型包放入独立测试目录，未覆盖厂商工作区。
-Rust运动主程序目前仍使用记录输出，架空硬件诊断与自主闭环验收分开。厂商资料视频未读取。
-
-| 实车模块 | 本轮状态 |
-| --- | --- |
-| 载荷与目标程序 | 车端SHA256SUMS全部通过，动态依赖齐全，视觉无模型自检及机器人离线回放通过 |
-| USB相机 | 连续640×480/1920×1080取帧均无读取失败；V4L2 MJPG约29.8fps，OpenCV转BGR读循环分别约14.9/9.93fps，不能混为推理帧率 |
-| 蓝牙 | 修复并安装系统完成：临时扫描8设备、系统扫描7设备；厂商服务active/enabled，控制器已上电。配对和重启后验证未做 |
-| 雷达 / IMU | 雷达追加10秒采集2815包，协议错误0；主机用生产组帧器得到99圈、覆盖率99.17%–100%、拒绝0圈。IMU原3秒299样本，平均加速度模长9.819m/s²；安装外参和零偏未标定 |
-| ONNX Runtime | 已安装SpacemiT 2.0.6 / ORT1.24.2+spacemit.a1到车端用户目录，并设为工程启动命令默认库；API22与真实图片推理通过。系统1.18.1和Python1.18.0保留，未替换libc |
-| 规划与任务 | 完整固定场目标端执行通过：模拟75.6秒/757拍，主机耗时105.64秒；首次90秒超时保留。仅合成闭环，在线正常整场此前0/15完成 |
-| 底盘 | 用户确认1450向右、1550向左、1500回中；0.5秒测试1510/1519未起转、1520向前转并停住；延长至10秒后1519间歇转了两次，1520起转且最终停住，不能据短脉冲确定固定死区。1515过程未确认；速度/转角/响应与制动时延未标定 |
-
-真实相机图像推理输出人（0.870）和杯子（0.357），单次命令报告约1.71秒；这是单帧功能证据，未启用厂商EP，也不是实时帧率验收。道路检测入口同图运行成功，但沿用模拟标定时在室内画面报出一个未验证锥桶候选，不能作为实车识别通过，须用本车外参及赛道样本验证。
-
-实际命令、结果和限制见 [车辆到场模块检查](docs/车辆到场模块检查.md)、[机器验证记录](docs/vehicle-bringup-validation.json)和[雷达相机追加验证](docs/vehicle-sensor-followup-validation.json)。
-8080相机预览脚本为 [camera-preview.py](scripts/camera-preview.py)，已在车端验证单帧和连续MJPEG；[后台启动与停止命令](docs/车辆到场模块检查.md#相机8080网页预览)。测试服务已停止，按需启动。
-车端现在可用 `~/.local/bin/xt-stcar infer --image /绝对路径/图片.png`，自动选择已部署模型和新运行库；[安装、使用与回退](docs/车端ONNXRuntime升级.md)。入口源码为 [vehicle-vision.sh](scripts/vehicle-vision.sh)，Rust程序和原部署包未改写。
-蓝牙工具及配套固件已通过临时和系统扫描验证，安装到系统目录；已停用冲突的用户级Blueman KillSwitch插件。[修复步骤与状态](docs/车端蓝牙修复.md)。
-车辆驾驶台现已配置开机自启动（systemd用户服务、Linger=yes），通常直接用同网浏览器访问8081；下方Mac入口仍保留作为连接诊断和恢复方式。
-Mac双击工程根目录的[打开车辆驾驶台.command](打开车辆驾驶台.command)即可打开网页：自动复用或建立SSH连接、检查/启动已部署服务、建立隧道并读取私密令牌；不会自动解锁或发送运动指令。
-新增[网页驾驶台](web/vehicle-console/README.md)：方向键/WASD按住持续输出、松开回中，PWM可调；相机/雷达实时预览，直接保存相机JPG、雷达PNG或单张双画面PNG；原始数据/录制ZIP为可选。安卓/Windows/Mac同一局域网可打开 `http://192.168.0.156:8081/`（首次输入访问码），工程根目录[打开车辆驾驶台.html](打开车辆驾驶台.html)为通用入口；原Mac SSH隧道入口保留，默认锁定、前进上限1620，9月18日架空确认后启用倒车（默认1450，下限1350；1350尚未实测），转向使用范围1350–1650。已验证真实图像、点云及保存，本次未启动电机。[验证记录](docs/vehicle-console-validation.json)。
-
-2026-09-23已修复驾驶台心跳漏排队、重复旧时标导致的频繁锁定，并部署到车端。请刷新网页后重新解锁；失焦、断网与真正超时仍会停止，未取消安全保护。测试与部署范围见[本次记录](docs/console-relock-validation-20260923.json)。
-晚间追加1550/2秒和1600/0.3秒均由用户确认未动；1600/2秒用户估计前进4–5米并确认停住；1620/0.3秒前进不到1米并停住复位；1620/2秒用户观察向左偏（原因未定），已回中补发停止帧，用户确认完全停住并要求结束测试。当前场地扫描未通过质量门，最高速度仍未测。[追加测试记录](docs/vehicle-speed-probe-validation.json)。
-已新增Rust自适应起步辅助：连续有效定位确认未动时限时、小步增加PWM；微动后禁止继续加档，确认起步交回速度控制，失效/超时/上限停车锁存。提供`startup-replay`离线入口，尚未接入实车自动油门。[设计与使用](docs/自适应起步辅助.md)。
-最新1秒起步测试：1510–1545每5一档未检出明显净位移；1550首轮仅前倾回位、复测前进约18厘米，1551/1552分别约34/39厘米。最低已观察起步为1550，但固定阈值和重复性未建立；最高车速未测，当前保持停车。[起步PWM记录](docs/vehicle-startup-pwm-validation.json)。
-9月17日落地测试已结束：1550起步重复性不稳定；后续用户指定1600、0.3秒，用户观察约1.25米、无明显偏移，超出1米目标。离线雷达宽范围匹配约1.22米但质量不足，不能算定距成功；当前停止追加运动。[本轮记录](docs/vehicle-one-metre-attempt-validation.json)。
-9月17日固件复查：发现U-Boot/OpenSBI 2.2.7候选，但安装会直接写启动分区，未完成车辆镜像兼容核验，未升级；视频/GPU配套源无新版。[固件检查记录](docs/车端固件更新检查.md)。
-车端系统更新已重新检查当前配套源：普通升级0包；完整升级模拟会删除当前内核并降级系统包，未执行。[更新检查与蓝牙异常](docs/车端系统更新检查.md)。
-新增比赛模块与验证边界见 [Rust 比赛自主闭环](docs/Rust比赛自主闭环.md)，完整命令见 [Mac与车端命令手册.txt](Mac与车端命令手册.txt)。
-前轮 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保留作历史，交接状态见 [agent.md](agent.md)。
-已完整核对用户提供的 10 页比赛规则初稿，见 [赛项三规则与工程差距](docs/赛项三规则与工程差距.md)。
-日常直接在 `main` 开发和推送；修改前检查并拉取远端更新，提交信息简述本次改动，详见 [上传规范](上传规范.md)。
-
-## 在线元素驱动任务
-
-新增在线任务模式：**任务顺序固定，元素几何由连续观测更新，短距离目标随当前任务生成。**
-RGB 提供带颜色的锥桶候选、斑马线近沿与方向；锥桶必须经过同刻雷达关联。局部记忆保留身份、时间、误差与已处理状态，
-LocalWorld 的完整面积空闲证明最多用 64 次圆域核验：保留原外接圆成功路径，否则用固定栈自适应二分外包矩形，所有叶矩形都须完整被已证空闲圆覆盖，额度耗尽则拒绝。Obstacle 独立检查真实回波到最多 32 点凸包的欧氏距离及原量程/位姿/年龄误差，覆盖区域多出的面积不制造碰撞结论。半径候选区分 KnownFree/Obstacle/Unknown，未来 Unknown 只可保留为规划假设，当前目标车体和完整执行停车包络仍必须 KnownFree。目标仍经过原导航、默认 Pure Pursuit、碰撞/制动与异步采用检查。
-
-已确认锥桶可由当前雷达几何维护原身份：`last_visual_at` 与 `last_geometry_at` 分开，缺少新几何满 1.8 秒失效，未获新视觉满 20 秒失效；雷达不创建颜色/身份或增加视觉确认数。
-位置/方向仅在纯 roundoff 范围内保留旧浮点表示（最多 1 nm / 1e-9 rad），毫米变化仍更新，误差和时间不冻结。
-绕桶半径按实际车体半宽、桶几何误差与原曲率能力选取，前后悬保留在全扫掠检查中；已选半径仍可行时保持，避免视点变化使目标向外跳。
-完成绕桶还须真实沿出口方向越过桶中心位置误差，出口目标延伸位置误差加两份原目标容差；原半圈、外侧、位置和航向条件继续生效，靠近圆顶不能提前计数。
-剩余转角为零仍按实际切向证明完整车体和净空 KnownFree，不自动放行，也不直接判成 Unknown；真实出桶完成门保持。
-前方短弧未知时提前使用原接近限速 0.18 m/s，完整已知空闲才允许原巡航上限 0.3 m/s；当前执行门不变。斑马线停车目标也计入区域航向误差造成的边角位移，不能只减位置误差。
-入口必要时用原 Stop 条件切向对齐，无新增 hold。稳定带航向目标可用两个局部 horizon（默认 1.6 m），更远仍是单 horizon 的无航向临时引导；搜索保持默认 0.8 m。
-真实 26,580 ms worker 短连接回归补充了同目标漂移后的原到达区域重认证，仍共用原求解预算；这些修改不等于整场验证通过。
-导航初始化时默认 `TargetPolicy::Fixed`，在线统一为 `RollingLocal`。49,580 ms 的滚动无航向局部点问题由同账短单弧修正：适用距离 `[0.35 m, min(2 × lookahead, 2 m))`，严格中心连接失败后可认证原半位置容差内的真实积分端点。21,380 ms 的定向斑马线接近则在原单/双弧后，额外认证当前执行曲率按原模型向零渐变的短前进候选，仍要求累计误差下的原半位置与航向容差。Fixed 保留原搜索顺序；最新 `legacy-integration` 八场已完成并通过原性能门，九项关键指标、输出计数和单因素比较与 v9 一致，初版通用开关的退化仍保留。这里未声称所有命令与完整轨迹逐点相同。
-小于 0.35 m 的定向 RollingLocal 目标按原严格双弧→原严格单弧→原到达区域→lattice 顺序、同账重证当前边界，修复真实 18,100 / 18,800 ms 短路线变成长回环。仅 RollingLocal 在原停车圆盘证明失败时追加完整 StoppingEnvelope 证明，保留两控制周期、全制动、历史速度上界和最大曲率下任意变向；Fixed 不改。
-RollingLocal 原到达区域和零目标曲率候选均失败后，可同账尝试“保持实际曲率→按原变化率回中→直行”三段短接，连续携带误差，真实端点仍须满足原半位置/航向容差。候选动作的原严格 continuation 全部失败后，另可从真实周期预测状态用旧到达区域求解器证明连续性，不直接认定任务到达或采用命令。
-仅 RollingLocal 连续 recovery 的有限侧带边界可追加完整车体扫掠证明：端点车体凸包加 `L/2 × (1 + Kmax × 车体外接半径)` 及原余量和累计误差，整体须处于同一允许侧；世界边界与障碍仍使用原胶囊，Fixed 和点状参考检查不变。
-若原胶囊及一阶界仍拒绝，第三份证明用实际速度/转向模型的车体点二阶界 `M = A + V²K + r(AK + VS + V²K²)`，将完整运动包在端点车体凸包加 `M×dt²/8` 内。dt 与实际积分、加减速缩尾完全一致，保留原 A/S、端点误差和全部余量，不用低速除法反推时间，也不增加采样或预算。真实 32,000 ms 与邻帧专项区分“路线可行”和“执行可认证”；严格短接提前成功可能改变后续轨迹，整场结果单独列于下文。
-
-`OrbitSpeedHint` 只为绕桶选速：实际姿态加五个观测短弧参考姿态检查完整停车包络，原上限已证则保持，否则最多八次二分取已证正下界，同时限制当前与后续目标。这些离散参考姿态不是连续执行证书，原来源、历史速度、负向约束、lease 与实际停车证明保持。
-绕桶时还按当前原始来源姿态检查 pending/confirmed 停车线负约束，用相同误差时钟和完整停车包络给出有界速度提示。只接受已证且不低于“同源速度按原减速度、本拍实际间隔及 adoption 区间允许”的速度上限，同时限制 continuation；冲突时不向上凑限值，也不假装真实车辆已降速。原 source/history、负线和最终采用门保持，不能用提示直接放行。
-停车区/终点槽内真实唯一重观察可续接原身份，跨几何 TTL 首新帧重新计一次、默认第二不同采集帧才恢复确认；invalid/歧义不复活，processed 不清除。runner 显式 pin 至多两个当前引用的区域槽，防止身份回收；不延长 TTL、不伪造新观测或放行过期几何。
-
-`FieldSpec` 在该模式中只用于模拟器生成图像、雷达和裁判真值；不同场景使用逐值相同的在线控制器配置。
-灯前/终点的真实可见图案尚未确认，目前只支持**显式实验单/双白条协议**。标记检测器默认禁用，在线示例显式启用；
-视觉条纹跨度与协议子区宽度分开：灯前 0.6 m 条纹对应 0.8 m 宽停车子区，终点两条 0.9 m 条纹对应 0.9 m 宽子区；这些是实验协议，不保证真实赛场存在相同标记。
-存在两个独立缺口：官方资料没有可用的左桶出口→灯距离正下界，固定灯色 ROI 又不能定位；已确认的地面线也可能在清尾前退出前向 ROI。特定默认直行估算清尾至少约 2.44 s、计既有误差约 4.89 s，超过 1.8 s 几何期限；该估算不是全场不可行证明或实跑成绩。
-保留灯色无几何时 Stop。过期 StopLine 的负向约束持续增加误差，完整包络仍可在保守线前或扩大侧带之外通行；过期证据不能授权新任务获取、绿灯或清尾。后续需要可验证的新定位信息或在原约束下保持实际地标可见的路径，当前不能保证在线整场完成；车辆现已进入架空模块测试，尚未验证落地闭环。
-终点完成显式要求全车清空灯区：即使合法终点与灯区重叠，已到达停稳而未清尾仍 Fault，不提前标记终点；实际清尾后的部分重叠可以正常处理。
-
-入口为 `online-example` → `online-compile` → `autonomy-sim`，详见[在线元素驱动任务](docs/在线元素驱动任务.md)和命令手册第十二节。
-冻结源码后的最终 19 场矩阵已完成：**正常场 0/15 完成，在线比赛闭环尚未验收**。4/19 符合预定检查，仅为缺标记、缺锥桶各同步/异步的安全停止。14 场独立裁判证明两桶（12 个正常场、2 个缺标记场），随后均在 ApproachLight 因看见灯而缺少确认的停车区几何停止。三个小场仍未通过第一桶：同步 46.200 s、异步 43.863 s、扰动异步 45.045 s 因普通停车超过 10 秒结束；不能把所有失败归为灯区缺信息。
-首轮至第五轮及 82.8 s、84.383 s 等开发失败均保留，不能替代最终记录。矩阵的运行前后源码账、真实命令、可执行文件及原始输出哈希已核对；最终工作区 565 项通过、3 项按设计忽略，双 RISC-V 链接通过。构建与包完整性不表示在线比赛完成。
-模拟结果同时核对独立 `online_referee` 的实际轨迹/顺序证据；任务自报完成不能替代裁判。摘要保留末 16 项诊断，显式 `online_matrix async-trace` 最多保存前 2048 个计划，仅用于模拟排查。
-本轮实际成功、失败和限制以 `docs/online-mission-*` 正式报告为准，旧场地矩阵不作为在线验收。
-开发记录中的 `OpenEmpty` 若发生在 rollout 之前，只能说明原约束下有界规划未找到路径；不能据此声称几何无解、节点耗尽或已经被执行门拒绝。最终在线矩阵如实保留失败，局部改善和旧八场恢复均不作为在线通过结论。
-
-2026-09-16 接手诊断已补齐小场异步 33.180 / 33.260 / 33.380 s 的真实输入和完整导航缓存，见[首拒快照](docs/小场异步首拒快照.md)。原版与隔离观测版的 439 条计划及整场功能字段一致；三帧夹具可直接回放。33.260 s 的17次拒绝定位到有限停车线侧带：当前候选的端点车体余量已不足原净空或净空加起步预留，仅缩紧扫掠管不能解决。生产算法未修改，小场仍失败；后续检查原约束下的目标、路线形状和候选覆盖，不能据此判断物理无解。
-
-## 赛前测量后生成固定布局（保留的历史模式）
-
-已增加 Rust 场地规格模块，输入实际长宽、上下直道宽度/跨度、锥桶中心及灯前区域，就能生成发车区、搜索区、绕桶通过点和终点。
-规则初稿的外场范围为 **长 5–8 m、宽 4–6 m**，上下直道分别 **1–2 m**；各项在范围内还要检查组合是否相容。
-80 cm 发车/终点区、白条、锥桶底座、车体尺寸、控制限值和任务等待条件都不按比例缩放。
-
-这是**赛前测量后适配**：运行前编译并冻结布局。斑马线依靠实际图像前沿和同采集时刻位姿确定停车点，实时障碍继续参与避障；
-该模式不自动巡视测场；本轮在线分支另由短期元素身份和观测几何产生目标，仍未验证现场灯前/终点识别。
-模板与逐字段测量方法、命令、限制见[赛场规格自适应](docs/赛场规格自适应.md)。旧八场时序回归仍是同一个简化布局，不是八种赛场。
-
-历史固定九种布局的同步/异步矩阵：**PP 18/18 通过，实验性 LQR 17/18**；LQR 的 5×6 m 同步场仍在左桶阶段停滞。
-旧八场时序回归完成并通过原性能门，时间/路程保持 v9。结果及失败均见[场地矩阵](docs/field-adaptation-matrix.json)和[验证报告](docs/field-adaptation-validation.json)。
-这不等于无人测场或保证尺寸范围内任意组合都能完成，实车仍待验证。
+车上的实时闭环是上面的比赛路径（`route-engine race` + `vehicle-bridge`），不经过 xt-stcar-robot。
 
 ## 整车与硬件详细参数
+
+以下先列路线实际用到的实测值，再列资料标称与出厂代码参考。
+
+### 实车测得（2026-10，路线在用）
+
+这些数来自实车运行记录和用户量测，写在代码常量的注释里。都是粗测或拟合值，不是标定证书。
+
+| 项目 | 数值 | 来源 |
+| --- | --- | --- |
+| 车身外廓（以雷达为原点） | 前 .20 m、后 .18 m、左右各 .14 m | 用户 10-07 粗测；`autonomy_live.py` 的 `*_BODY_EXTENT_M` |
+| 雷达粗校正 | 顺时针 5 格、测距 −2 cm | 09-23 三组墙面尺量；桥的 `lidar-calibration.json` |
+| 雷达整圈接缝 | 原始 0°（校正后 5°）处每帧漏 1–3°，偶尔整包约 12°；第104轮起桥用上一圈 0° 之后的点补齐，每行记 `seam_filled_bins` | 第79、103、104轮；[N10 协议依据](docs/N10协议依据.md) |
+| 电调延迟 | 新命令约 .45 s 后才作用到车轮 | `ESC_LAG_S`（10-16 起多轮） |
+| 前进 PWM | 1550 在赛道上巡航约 1.5 m/s（瓷砖约 1.1）；1550 从静止要约 .7 s 才动，起步用 1560；1560 直道加速约 1 m/s² | `ROUTE_SLOW_MOTOR`、`LANE_POWER_ACCEL_MPS2` 注释 |
+| 起步补进 | 静止时 3 帧 1560 走了 .08–.34 m（第98–103轮 7 次） | `LANE_KICK_TRAVEL_M` .45 |
+| 滑行减速度 | 约 .5–.6 m/s²（光区直道第98–100轮拟合 .57–.61） | `LANE_STOP_DECEL_MPS2`、`LANE_COAST_DECEL_CAP_MPS2` |
+| 转向 | 名义舵机 PWM → 实际 PWM 的实测表：空行程约 40，约 155 PWM/(1/m) | `steer_calibration.py`（第79轮） |
+| 控制台运动设定 | 前进 1550、倒车 1450、左 1650、右 1350 | 部署记录 `runtime_settings` |
 
 资料核对日期：2026-09-08。以下是**资料标称与出厂代码参考**；本车2026-09-16实测结果见顶部模块表，未核验的规格不代表本批次已验收。
 来源标记：
@@ -319,179 +421,153 @@ RollingLocal 原到达区域和零目标曲率候选均失败后，可同账尝�
 
 上述硬件补录仅归档资料，不将标称或示例数字写入比赛控制参数；当前仍不读取视频、不连接设备。
 
-## 代码结构：模块在哪、负责什么
+## YOLO26n 原生推理
 
-第98轮起，上车跑路线的是两个 Rust 程序：`crates/runner` 的车上桥 `vehicle-bridge`（底盘串口、雷达和原生扫描几何），以及 `route-engine/` 的独立程序 `route-engine race`（路线决策和全部控制保护）。
-Python 控制台 `web/vehicle-console/` 用于遥控、采图和录像，同时是路线控制器的参考实现；Rust 引擎与它逐位一致。比赛时不启动控制台。
+使用实际本机图片（替换 `path/to/image.png`）：
 
-```text
-XT-STCAR/
-├── route-engine/        比赛控制程序（Rust，无依赖、禁用 unsafe）：路线决策、车身间隙、滑行静止、监管，以及 `route-engine race`
-├── web/vehicle-console/ 车上控制台（Python）：网页遥控与状态、桥进程、摄像头；路线控制器的 Python 参考实现和全部单元测试
-├── crates/
-│   ├── runner/          车上桥 vehicle-bridge、vision-shadow；xt-stcar-robot：自主模拟、感知/规划线程、采集与回放
-│   ├── robot-core/      任务/安全、扫描/定位/导航、路口与雷达锥桶几何、桥的遥控保护、厂商协议和标定表
-│   ├── vision/          视觉数学、模型契约与标签绑定
-│   ├── app/             xt-stcar：视觉 CLI、原生/参考推理后端
-│   └── device-io/       有截止时间的串口配置与传输库
-├── tools/scan-geometry/ Mac/仿真用的桥几何，输出与车上桥相同的字段（不部署）
-├── scripts/             车上助手、闭环仿真、Python/Rust 逐位对比、实车证据分析、模型/打包/上传
-├── tests/               Python 模型/交付测试与跨实现对照工具
-├── config/              显式配置；车辆相关示例均未经实车标定
-├── examples/            合成 JSONL 回放输入
-├── docs/                协议依据、使用说明、验证报告；每轮改动和实车结果记在 vehicle-dynamic-turn-validation-20261007.json
-├── 资料/                 来源索引、环境记录、已归档官方参考
-├── work/                本地：每轮构建/部署脚本、部署包、取回的实车证据（不进 Git）
-├── 打开车辆驾驶台.command/.html  Mac 上通过 SSH 打开车上控制台，不解锁、不发运动命令
-├── Cargo.toml/lock      Rust workspace（crates/）、依赖与精确版本锁
-├── rust-toolchain.toml  Rust 1.97.1 工具链选择
-├── requirements-*.in/lock.txt  Mac 上的 Python 开发与模型环境
-├── AGENTS.md            开发约定的加载入口
-├── 上传规范.md           main 直接开发、修改前同步与提交推送流程
-├── Mac与车端命令手册.txt   按执行机器分类的命令、参数与使用步骤
-├── agent-history-20261007.md  10-07 以前的交接记录归档
-└── agent.md             完整交接快照与长期约定
+```bash
+cargo run --locked --bin xt-stcar -- infer --image path/to/image.png \
+  --model models/yolo26n.onnx \
+  --runtime-lib toolchains/onnxruntime-macos-arm64-1.29.0/lib/libonnxruntime.1.29.0.dylib \
+  --output work/detections.json
 ```
 
-`route-engine/` 和 `tools/scan-geometry/` 各有自己的 Cargo 工程，放在 `crates/` 外面：部署构建要求 `crates/`（桥的源码）与车上已装版本一致。
+模型旁必须有 `.provenance.json`。当前锁定官方 YOLO26n Detect、Ultralytics 8.4.142、FP32、
+静态 320×320、batch=1、opset 17、one-to-one `[1,300,6]`；严格 `score > threshold`，不重复 NMS。
+图像预处理与保存张量回放分别用 `preprocess` / `replay` 子命令，参数见 `xt-stcar --help`。
+`--backend python-reference --python .venv-model/bin/python` 才会使用 Python 参考进程。
+原生 Mac 模型推理已在此前验证；车上已用 SpacemiT 2.0.6 所带 ORT 1.24.2 跑通 Rust 原生 YOLO26n（09-16，见“早期栈尚未完成的部分”）。车上的 vision-shadow 只做感知，路线不用。
 
-**比赛路径（第98轮起）**：
-1. 车上助手 `scripts/race-trial.py`（每轮由 `work/…/build-race.py` 写死参数，部署后是 `trial<轮>.py`）核对已装引擎和桥的哈希、控制台的新鲜锁定中位和起点检查，然后停掉控制台。
-2. `route-engine race` 在自己的进程组里启动 `vehicle-bridge control`（底盘串口）和 `vehicle-bridge lidar`（雷达整圈和原生几何）。
-3. 控制线程每 20ms 一拍，收到新扫描立即决策（距上一拍结束至少 5ms）：监管（起步准入、质量等待/滑行、停车、输出检查、ACK 序列、转向标定）→ ManeuverSequence 路线决策 → 底盘命令。
-4. 证据写到 `left-cone-trial-<日期>-<轮>/`：助手的文件在顶层，程序的文件在 `run/`；助手结束时必定恢复控制台。
+## 构建、测试与交付
 
-**控制台路径（遥控、采图、对比）**：浏览器 ↔ `server.py`（HTTP、两个桥、摄像头、`vision_shadow.py`）。路线会话由 `route_engine.py` 为每个会话起一个 `route-engine` 子进程，按逐行 JSON 调用；Python 的 `maneuver_sequence.py` 等保留为后备和对比基准。
+- 比赛路径：每轮由 `build-race.py` 交叉编译引擎、检查 ELF 并打包；改了 `crates/` 时加 `--rebuild-bridge`，同一流程重编桥（见“跑一轮”）。
+- 工具链：Rust 1.97.1、Zig 0.15.2、cargo-zigbuild 0.23.4，`Cargo.lock` 锁定依赖；交叉目标 `riscv64gc-unknown-linux-gnu.2.38`（车上实际 GLIBC 2.39，未改系统库）。
+- 下面是早期 xt-stcar / xt-stcar-robot 两程序的构建与交付记录。
 
-| 比赛与控制台源码 | 职责与边界 |
+### 早期两程序的构建与交付
+
+Rust 1.97.1、Zig 0.15.2、cargo-zigbuild 0.23.4 和 `Cargo.lock` 锁定依赖。
+Linux 交叉链接目标固定为 **`riscv64gc-unknown-linux-gnu.2.38`**，没有修改车端系统库。
+
+```bash
+scripts/build-riscv.sh --offline
+scripts/package.sh
+scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
+```
+
+| 路径 | 内容 |
 |---|---|
-| [`route-engine/src/main.rs`](route-engine/src/main.rs) | 引擎入口：默认是控制台的逐行 JSON 引擎（每会话一个 ManeuverSequence，new/call/get/dump）；`race` 子命令进入独立程序 |
-| [`route-engine/src/race.rs`](route-engine/src/race.rs) | 独立程序：两个桥、只转发的读线程、20ms 节拍加新扫描即决策、50ms 健康检查、自续 owner 租约、起点检查与启动方式（enter/ready/never）、证据写线程；summary.json 记控制间隔、scan_to_tick 和每线程/每个桥的 CPU |
-| [`route-engine/src/supervisor.rs`](route-engine/src/supervisor.rs) | server.py 路线监管的逐行移植：起步准入、节拍、质量等待/滑行、停车、输出检查（含仅起步直道允许 1600）、ACK 序列、转向标定与反馈换算、QualityLatch/QualityRecovery；保护值与 Python 相同 |
-| [`route-engine/src/maneuver.rs`](route-engine/src/maneuver.rs) | ManeuverSequence 与其 TurnMotion 基类合成一个结构体，属性名同 Python；`super()` 调用对应 `tm_*` |
-| [`route-engine/src/maneuver_open.rs`](route-engine/src/maneuver_open.rs) | 起步直道（车道几何、预打舵、起步限速）和开放赛道各段：第一圈、换桶、第二圈、光区入口 |
-| [`route-engine/src/maneuver_tm.rs`](route-engine/src/maneuver_tm.rs) | TurnMotion.update、路口进入、首个目标和首过观察 |
-| [`route-engine/src/maneuver_wait.rs`](route-engine/src/maneuver_wait.rs) | 路线等待和暂停：首目标质量等待、重绑、中位暂停及恢复规则 |
-| [`route-engine/src/maneuver_path.rs`](route-engine/src/maneuver_path.rs) | 转向变化率、近距避让、预测弧线的路径检查 |
-| [`route-engine/src/maneuver_post.rs`](route-engine/src/maneuver_post.rs) | 首过之后：出口通道、第二支撑（通道证明、恢复、绕圈）、光区转向和光区直道到终点 |
-| [`route-engine/src/clearance.rs`](route-engine/src/clearance.rs) | 第97轮：控制台每拍的车身间隙检查 probe_clearance 及 ClearanceReuse |
-| [`route-engine/src/coast.rs`](route-engine/src/coast.rs) | 滑行静止判断 CoastMotion 及其队列语义；独立程序里在自己的线程上算 |
-| [`route-engine/src/compact_target.rs`](route-engine/src/compact_target.rs) | compact_target.py 的移植：雷达小目标（桶）的提取、关联和角色 |
-| [`route-engine/src/helpers.rs`](route-engine/src/helpers.rs) | 路线用到的模块级函数：通道墙、罗盘、起步直道墙律、绕圈规划、追踪、轴线 |
-| [`route-engine/src/py.rs`](route-engine/src/py.rs)、[`dump.rs`](route-engine/src/dump.rs) | 移植依赖的 Python 语义（区分 int/float/bool 的动态值、有序 dict、异常展开与捕获）；对比用的完整状态和控制台每次调用后读取的属性 |
-| [`crates/runner/src/bin/vehicle-bridge.rs`](crates/runner/src/bin/vehicle-bridge.rs) | 车上桥：`control` 写底盘串口，`lidar` 解 N10 整圈并输出标定后的扫描和原生几何（前方边界、左路口、通道/墙候选、左转目标）；默认空跑，`--execute --device` 才打开设备 |
-| [`crates/robot-core/src/teleop.rs`](crates/robot-core/src/teleop.rs) | 桥自己的保护：300ms 命令租约、250ms 过期请求、150ms 控制间隔、电机 1500–1620（`--allow-reverse` 时下限 1350）、舵机 1200–1800，任何违规锁定中位 |
-| [`crates/runner/src/bin/support/lidar_calibration.rs`](crates/runner/src/bin/support/lidar_calibration.rs) | 控制台扫描的可选粗校正，不是导航标定 |
-| [`crates/runner/src/bin/vision-shadow.rs`](crates/runner/src/bin/vision-shadow.rs) | 有界 JPEG 进程通信 → 常驻感知 → JSON；不接触设备或运动输出 |
-| [`web/vehicle-console/server.py`](web/vehicle-console/server.py) | 车上控制台服务：HTTP 和网页、两个桥进程、遥控、路线会话的监管（独立程序的参考实现）；Rust 独占底盘串口 |
-| [`web/vehicle-console/route_engine.py`](web/vehicle-console/route_engine.py) | 控制台调用 Rust 引擎的适配层：子进程、逐行 JSON、应答超时 |
-| [`web/vehicle-console/maneuver_sequence.py`](web/vehicle-console/maneuver_sequence.py)、[`turn_motion.py`](web/vehicle-console/turn_motion.py) | 路线控制器的 Python 参考实现，引擎与它逐位一致；改路线时两边同步修改 |
-| [`web/vehicle-console/compact_target.py`](web/vehicle-console/compact_target.py) | 雷达小目标的形状/关联门限（实验值，不是实测桶尺寸） |
-| [`web/vehicle-console/autonomy_live.py`](web/vehicle-console/autonomy_live.py) | 车身间隙检查 probe_clearance、通道墙与转向、QualityLatch/QualityRecovery |
-| [`web/vehicle-console/coast_motion.py`](web/vehicle-console/coast_motion.py) | 滑行静止证据：相邻扫描的低运动配准，不用轮速 |
-| [`web/vehicle-console/steer_calibration.py`](web/vehicle-console/steer_calibration.py) | 本车实测转向：路线名义舵机 PWM → 实际舵机 PWM |
-| [`web/vehicle-console/vision_shadow.py`](web/vehicle-console/vision_shadow.py) | 摄像头帧交给 Rust vision-shadow 做 YOLO，只做感知 |
-| [`web/vehicle-console/autonomy-control.py`](web/vehicle-console/autonomy-control.py)、[`stop_goal.py`](web/vehicle-console/stop_goal.py) | 早期的车上终端入口和停车目标，路线不用 |
-| [`web/vehicle-console/index.html`](web/vehicle-console/index.html)、`app.js`、`style.css`、`systemd/` | 网页驾驶台和车上服务单元 |
-| [`web/vehicle-console/tests/`](web/vehicle-console/tests) | 控制台、路线、引擎和独立程序的单元测试（全量须 0 失败才能上车）；`fixtures/` 是实车扫描片段 |
-| [`scripts/race-trial.py`](scripts/race-trial.py) | 车上助手：先核对哈希，再查新鲜锁定中位和起点检查，停控制台跑一次 race，必定恢复控制台并要求 6 个健康锁定样本；打包后带任何参数都拒绝 |
-| [`scripts/course-sim.py`](scripts/course-sim.py)、[`route-sim.py`](scripts/route-sim.py) | 闭环赛道仿真：真实控制台服务（演示模式）加车辆模型（名义/实测）；不连车 |
-| [`scripts/route-engine-parity.py`](scripts/route-engine-parity.py)、`route-engine-parity-sweep.py`、`route-engine-supervisor-parity.py`、`route-engine-clearance-parity.py`、`route-engine-coast-parity.py` | Python 与 Rust 逐位对比：路线、监管、间隙检查、滑行；sweep 在仿真和录像上并行跑（不要和全量测试同时跑） |
-| [`scripts/sim-vehicle-bridge.py`](scripts/sim-vehicle-bridge.py)、[`fake-vehicle-bridge.py`](scripts/fake-vehicle-bridge.py) | Mac 上测 `route-engine race` 用的闭环仿真桥和假桥 |
-| [`scripts/trial-timeline.py`](scripts/trial-timeline.py)、`trial-map.py`、`route-replay.py`、`detector-replay.py`、`second-orbit-replay.py` | 实车证据分析：时间线、由扫描重建路径、用当前代码回放决策、小目标检测回放、第二圈回放 |
-| [`scripts/run-console-tests.py`](scripts/run-console-tests.py) | 按模块名跑控制台测试 |
-| [`scripts/start-vehicle-console.py`](scripts/start-vehicle-console.py)、`open-vehicle-console.py`、`run-vehicle-console-service.py` | 启动/打开车上控制台和 systemd 入口；都不解锁 |
-| [`scripts/static-steering-check.py`](scripts/static-steering-check.py)、`steering-arc-check.py` | 车上一次性的静态打舵和低速弧线检查 |
-| [`scripts/camera-preview.py`](scripts/camera-preview.py)、`check-vision-deployment.py`、`vehicle-vision.sh` | 摄像头预览、视觉部署只读检查和车上视觉入口 |
-| [`scripts/local-sim-sweep.py`](scripts/local-sim-sweep.py)、`vehicle-bluetooth-repair.py` | `crates/runner` 冻结二进制的批量仿真；车上蓝牙驱动修复 |
-| [`tools/scan-geometry/src/main.rs`](tools/scan-geometry/src/main.rs) | 在 Mac 上为扫描加上与车上桥相同的几何字段，供仿真和离线分析 |
+| `crates/*/tests/`、源码内 `#[cfg(test)]` | Rust 协议/数学/状态机、CLI 文件保护、PTY 传输与采集集成测试 |
+| `tests/test_delivery.py` | ELF、打包白名单、哈希与上传参数边界测试 |
+| `tests/test_yolo26_tools.py` | Python 导出/输出契约回归 |
+| `tests/measure_yolo26_reference.py`、`tests/verify_robot_reference.py` | 真实模型与机器人图像回放参考对照 |
+| `scripts/export_yolo26.py`、`validate_yolo26.py`、`verify_preprocess.py` | 模型导出、静态校验及预处理对照 |
+| `scripts/onnx_worker.py` | 仅供显式 Python 参考后端的一次性推理工作进程；配置、模型和张量受实际读取量限制 |
+| `scripts/review-motion-ablation.py`、`scripts/review-motion-ablation/` | 固定旧提交、检查顺序补丁和只读观察器；每个变体独立主机编译目录，复现三版本消融 |
+| `scripts/capture-online-first-rejection.py`、`scripts/capture-online-first-rejection/` | 固定提交的两份独立主机构建，补采小场异步首拒的原始输入/缓存/终端账；核对439条计划一致并保留比赛失败 |
+| `scripts/build-riscv.sh`、`inspect_elf.py` | fmt/test/clippy、两程序交叉构建、独立 ELF/GLIBC 报告和源码哈希 |
+| `scripts/delivery.py`、`package.sh`、`upload.sh` | 白名单打包与哈希核验；上传默认 dry-run，显式新账号/IP/release 目录 |
+| `scripts/check-vehicle.sh` | 车端系统/设备/服务的只读检查脚本，不启动驱动或运动 |
+| `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
+| `dist/` | core 或含模型的独立部署包（不进 Git） |
 
-下表是 `crates/` 里的库和 xt-stcar-robot 程序（比赛路径只用到桥、`teleop.rs`、`junction` 和协议/串口部分）。
+本轮冻结源码后的最终在线矩阵为 4/19 符合检查、正常完成 0/15；通过项仅预定缺失场景的安全停止。最新 `legacy-integration` 旧八场 8/8 完成、原性能门通过，与 v9 的九项关键指标、输出计数和单因素比较一致，不能代替在线整场通过。本轮不宣称已完成在线比赛验收。
 
-| 源码位置 | 职责与边界 |
-|---|---|
-| [`crates/vision/src/lib.rs`](crates/vision/src/lib.rs) | `ModelSpec`、RGB letterbox、NCHW FP32 张量、输出契约检查、阈值过滤、坐标还原；不访问设备或加载原生库 |
-| [`crates/vision/src/semantics.rs`](crates/vision/src/semantics.rs) | 显式的模型标签绑定，不按类别编号推断语义 |
-| [`crates/app/src/main.rs`](crates/app/src/main.rs) | `xt-stcar` 命令入口：`self-check`、`preprocess`、`replay`、`infer`，参数与输出文件保护 |
-| [`crates/app/src/ort_backend.rs`](crates/app/src/ort_backend.rs) | `NativeOrtBackend`：动态加载 ORT C 库、模型 SHA/provenance/实际张量元数据验证、常驻 Session 和超时取消 |
-| [`crates/app/src/backend.rs`](crates/app/src/backend.rs) | 显式 Python 参考后端、张量文件交换、子进程超时清理与原子输出工具 |
-| [`crates/app/src/file_io.rs`](crates/app/src/file_io.rs) | 两套 CLI 共用的静态文件边界：非阻塞打开后检查普通文件、限制实际读取量、拒绝非普通输出目标 |
-| [`crates/app/src/lib.rs`](crates/app/src/lib.rs) | 导出可复用的推理后端，供总调度调用 |
-| [`crates/robot-core/src/sensors.rs`](crates/robot-core/src/sensors.rs) | IMU、雷达、里程计、视觉摘要及 frame/单位/时间/有限数值校验；里程计类型本身不计算里程计 |
-| [`crates/robot-core/src/safety.rs`](crates/robot-core/src/safety.rs) | Disarmed/Armed/Running/Fault、急停锁存、deadman、心跳/指令/传感器超时、物理速度和曲率限值；`RecordingSink` 仅记录输出 |
-| [`crates/robot-core/src/protocol/chassis.rs`](crates/robot-core/src/protocol/chassis.rs) | 厂商 7 字节底盘编码、三种不同话题语义的显式预览、通用短写/失败锁存适配器；经验系数不作为物理标定 |
-| [`crates/robot-core/src/protocol/calibrated_chassis.rs`](crates/robot-core/src/protocol/calibrated_chassis.rs) | 速度→电机 PWM、曲率→舵机 PWM 的显式分段表；零锚点、限值、倒车策略校验，拒绝外推；当前只接受未验证模拟配置 |
-| [`crates/robot-core/src/startup_assist.rs`](crates/robot-core/src/startup_assist.rs) | 根据新鲜扫描里程计确认静止、受限步进PWM、起步交接及故障锁存；不打开执行器 |
-| [`crates/runner/src/startup_replay.rs`](crates/runner/src/startup_replay.rs) | 自适应起步离线回放与PWM建议记录，显式标记无物理输出 |
-| [`crates/robot-core/src/protocol/imu.rs`](crates/robot-core/src/protocol/imu.rs) | WIT 11 字节增量解析、校验和、三分量组合、单位/四元数转换、坏帧与过期控制 |
-| [`crates/robot-core/src/protocol/n10.rs`](crates/robot-core/src/protocol/n10.rs) | 按厂商源码解析 N10 58 字节/16 点包、分包/粘包重同步、角度/距离/强度、保留无效点槽位；只生成局部扫描样本 |
-| [`crates/robot-core/src/lib.rs`](crates/robot-core/src/lib.rs)、[`protocol/mod.rs`](crates/robot-core/src/protocol/mod.rs) | 核心类型与协议模块的公共导出入口 |
-| [`crates/device-io/src/lib.rs`](crates/device-io/src/lib.rs) | 安全 Rust 串口库：显式设备、8N1 配置读回、关闭软硬件流控、独占、非阻塞 poll、整包截止时间、错误锁存和退出恢复 |
-| [`crates/runner/src/main.rs`](crates/runner/src/main.rs) | `xt-stcar-robot` 命令解析、默认采集计划、输入文件保护、完整日志原子提交 |
-| [`crates/runner/src/input.rs`](crates/runner/src/input.rs) | 非阻塞普通文件校验、配置/事件实际字节限制、严格 JSONL 与单调时序、图像路径/序号检查，解析 `imu_bytes` / `n10_bytes` |
-| [`crates/runner/src/vision.rs`](crates/runner/src/vision.rs) | 图像读取、预处理与复用同一 ORT Session；将检测结果交给调度 |
-| [`crates/runner/src/lib.rs`](crates/runner/src/lib.rs) | 串联输入→解码/推理→安全控制器→可选 PWM 预览→JSONL；EOF Stop、推理/映射失败急停；完整解码批次每块只记一次 |
-| [`crates/runner/src/capture.rs`](crates/runner/src/capture.rs) | 有时间/字节/记录上限的 IMU 或 N10 采集，使用统一 `Instant` 时钟，空闲和结束写 Tick；不发送设备命令 |
-| [`crates/vision/src/road.rs`](crates/vision/src/road.rs) | 白条几何、HSV 灯色、红蓝锥桶及相机地面投影；普通 YOLO `zebra` 不用于斑马线 |
-| [`crates/robot-core/src/autonomy.rs`](crates/robot-core/src/autonomy.rs) | 米制坐标、位姿质量、车体足迹、道路观察及有向禁越线 HalfPlane 共享类型 |
-| [`crates/robot-core/src/junction.rs`](crates/robot-core/src/junction.rs)、[`junction/corridor.rs`](crates/robot-core/src/junction/corridor.rs)、[`junction/turn_goal.rs`](crates/robot-core/src/junction/turn_goal.rs) | 车上桥的原生几何：局部墙/开口证据、双墙通道朝向候选、有限墙段与左开口对齐；只给几何，不发转弯或空闲许可 |
-| [`crates/robot-core/src/lidar_cones.rs`](crates/robot-core/src/lidar_cones.rs) | 由原始扫描得到有界的几何锥桶候选；圆截面模型仅用于仿真，未在实际安装高度测定 |
-| [`crates/robot-core/src/field.rs`](crates/robot-core/src/field.rs) | 米制 `FieldSpec`、规则尺寸与组合校验、固定纸条/锥桶/发车终点几何、生成绕桶顺序及直道入口朝向；不缩放车体或控制限值 |
-| [`crates/runner/src/field.rs`](crates/runner/src/field.rs) | 赛前编译 `FieldScenario` 为冻结的任务配置，校验派生坐标一致性，限制合成灯的可见区/触发区；不把模拟灯时钟交给任务 |
-| [`crates/runner/examples/field_matrix.rs`](crates/runner/examples/field_matrix.rs) | 固定九组场地/元素布局，分别运行同步和真实 worker 的 PP/LQR 闭环；保留失败，不代表连续尺寸范围保证 |
-| [`config/field-example.json`](config/field-example.json) | 合成场地规格模板；填入现场测量值后先生成布局、再编译验证 |
-| [`crates/robot-core/src/local_world.rs`](crates/robot-core/src/local_world.rs) | 有界元素身份、时效/误差、视觉雷达锥桶关联，局部空闲/障碍/未知及完整通道覆盖检查 |
-| [`crates/robot-core/src/online_mission.rs`](crates/robot-core/src/online_mission.rs) | 固定任务顺序、搜索、当前桶身份与绕行进度、观测区域停车，生成动态局部目标 |
-| [`crates/vision/src/ground_markers.rs`](crates/vision/src/ground_markers.rs) | 默认禁用的实验白条协议、地面米制方向/区域几何；不认定真实赛事存在同样标记 |
-| [`crates/runner/src/online.rs`](crates/runner/src/online.rs) | 同刻元素/扫描/位姿接入，局部任务与原导航连接，完整停车包络的已知空闲检查 |
-| [`crates/runner/src/online_simulation.rs`](crates/runner/src/online_simulation.rs) | 隔离场景真值，生成统一控制器配置；仅模拟器渲染与独立裁判使用真实元素位置 |
-| [`crates/runner/examples/online_matrix.rs`](crates/runner/examples/online_matrix.rs) | 预先声明的场地/元素移动、遮挡和缺失场景，同步/异步 PP；保留未完成与故障 |
-| [`crates/robot-core/src/mission.rs`](crates/robot-core/src/mission.rs) | 斑马线实际停止计时、锥桶顺序、可选通过点朝向及 Stop/PassThrough 到达策略、灯前全车停车/绿灯确认、终点与故障锁存 |
-| [`crates/robot-core/src/scan.rs`](crates/robot-core/src/scan.rs) | N10 整圈组帧、覆盖/盲区/时间检查；不同于旧局部包回放 |
-| [`crates/robot-core/src/localization.rs`](crates/robot-core/src/localization.rs) | 有界 ICP 激光里程计；退化/跳变/过期门控，不假造编码器 |
-| [`crates/robot-core/src/navigation.rs`](crates/robot-core/src/navigation.rs) | 路径搜索、跟踪、障碍/制动和停车朝向；将异步采用约束传入候选筛选，分别记录普通搜索和恢复；`SteeringEstimate` 区分命令目标与渐变执行估计，规划与 adopt 分离 |
-| [`crates/robot-core/src/admission.rs`](crates/robot-core/src/admission.rs) | 共用源车体系停车矩形、当前采用区间和有限多拍前瞻；保留真实历史上界及实际命令变化时基，按未来采集相位预测正常减速后备动作 |
-| [`crates/robot-core/src/admission/slew.rs`](crates/robot-core/src/admission/slew.rs) | `command_slew_allowance` 统一规划/前置检查/证书/输出的曲率时基；区分无变化历史的启动与已有修订，后备预测另跟踪模型命令变化时刻 |
-| [`crates/robot-core/src/navigation/recovery.rs`](crates/robot-core/src/navigation/recovery.rs) | 前向搜索失败分层、首个被拒绝运动基元和普通/恢复工作量；连续几何恢复保留完整车体、间隙和障碍半径，避免把占用格近似当成物理不可达 |
-| [`crates/robot-core/src/navigation/primitive_envelope.rs`](crates/robot-core/src/navigation/primitive_envelope.rs) | 按速度/转向饱和点分段积分，给出位置与航向数值误差界；沿运动基元、搜索节点和终端连接传递误差，供连续扫掠核验使用 |
-| [`crates/robot-core/src/motion_transition.rs`](crates/robot-core/src/motion_transition.rs) | `MotionTransition` 解析检查过渡侧向峰值，`project_motion` 按渐变模型投影位置/速度/转向；计算有界、无堆分配，不是测量反馈 |
-| [`crates/robot-core/src/reference.rs`](crates/robot-core/src/reference.rs) | 每拍验证一次的局部参考窗口；投影、弧长游标、整段评分参考及候选偏差诊断，无额外路径分配 |
-| [`crates/robot-core/src/tracking.rs`](crates/robot-core/src/tracking.rs) | PathTracker 接口、默认 Pure Pursuit、实验性曲率前馈 + LQR；只给导航期望曲率 |
-| [`crates/robot-core/examples/tracking_comparison.rs`](crates/robot-core/examples/tracking_comparison.rs) | 直线/弯道的 Rust 跟踪 A/B 实验，输出误差与合成转向响应指标 |
-| [`crates/runner/src/laser_pose.rs`](crates/runner/src/laser_pose.rs) | 整圈检查、雷达到车体外参与 ICP 桥接，保留源时刻 |
-| [`crates/runner/src/perception.rs`](crates/runner/src/perception.rs) | 同图 RGB + 常驻原生 YOLO + RoadDetector；new_online 输出最多16项带几何元素，旧入口不变；后台只留最新待处理帧 |
-| [`crates/runner/src/autonomy.rs`](crates/runner/src/autonomy.rs) | 传感器 → 任务 → 导航 → Safety；同步 tick 采用最终命令；异步 tick_with_projection 分开使用源测量和模型规划状态，不采用后台计划 |
-| [`crates/runner/src/control_runtime.rs`](crates/runner/src/control_runtime.rs) | 后台规划、最新快照队列、独立 poll 和源时间看门狗；仅最终 ControlPoll.command 推进执行历史；检查采用窗口、历史前提和原源期限 |
-| [`crates/runner/src/control_diagnostics.rs`](crates/runner/src/control_diagnostics.rs) | 显式开启的排队/导航/终端/证书耗时、共享最新发布报告和有界计数；默认不读取主机时钟，离线调度钩子不进入输出线程 |
-| [`crates/runner/src/async_simulation.rs`](crates/runner/src/async_simulation.rs) | 完整 RGB/雷达异步比赛，独立渐变车辆只执行 poll 最终命令；`simulate_async_observed` 提供显式离线只读回调，覆盖正常输出和最终制动 |
-| [`crates/runner/examples/async_timing_matrix.rs`](crates/runner/examples/async_timing_matrix.rs) | 固定 2×2 时序、PP/LQR 共 8 场；在有界内存比较最早实际输出、同源计划和路线差异，另计实际 Stop 与拒绝期间保持 Drive |
-| [`crates/runner/examples/support/performance_gate.rs`](crates/runner/examples/support/performance_gate.rs) | 八场结束后检查预先固定的整场时间/距离、阶段时长与实际 Stop 预算；只影响离线测试退出状态，不参与车辆控制 |
-| [`crates/runner/src/host_clock_simulation.rs`](crates/runner/src/host_clock_simulation.rs) | 持续 Instant 时钟的短转弯/断流观察；计算期间输出时间继续推进，分开记录主机负载和功能结果 |
-| [`crates/runner/examples/async_motion_comparison.rs`](crates/runner/examples/async_motion_comparison.rs)、[`async_host_clock.rs`](crates/runner/examples/async_host_clock.rs) | 前者执行完整异步 PP/LQR 与可选时序配置，后者显式采集一次实际主机时钟观察；失败报告仍输出并返回非零 |
-| [`crates/runner/src/control_execution.rs`](crates/runner/src/control_execution.rs) | 固定容量已采用命令历史、源时刻查询和运动投影；最终独立检查整段采用窗口及原期限停车空间，返回证书或结构化首个失败 |
-| [`crates/runner/src/control_execution/diagnostics.rs`](crates/runner/src/control_execution/diagnostics.rs) | 证书失败原因、障碍/角点索引、有单位的符号余量、源时刻/期限/采用窗和历史 V/K；无逐拍文件输出 |
-| [`crates/runner/src/control_admission.rs`](crates/runner/src/control_admission.rs) | 每份源快照准备一次共享采用上下文，验证历史、时间及有限数值；准备失败明确拒绝，不能解释为关闭前置约束 |
-| [`crates/runner/src/simulation.rs`](crates/runner/src/simulation.rs) | RGB/雷达/位姿合成闭环；车辆速度/曲率连续渐变，以不超过 1 ms 的子步积分并检查车体碰撞/边界，含故障后制动 |
-| [`crates/runner/src/simulation_geometry.rs`](crates/runner/src/simulation_geometry.rs)、[`sweep_simulation.rs`](crates/runner/src/sweep_simulation.rs) | 离线胶囊墙（合成雷达和独立车体检查共用）；规则范围内任意真值场景 |
-| [`crates/runner/examples/lidar_matrix.rs`](crates/runner/examples/lidar_matrix.rs)、[`lidar_sweep.rs`](crates/runner/examples/lidar_sweep.rs) | 八个场景加桶偏移和测距噪声的原生流程探测；每进程一个场景，供外部批量调度 |
-| [`crates/runner/examples/motion_comparison.rs`](crates/runner/examples/motion_comparison.rs) | PP/LQR 进入同一完整模拟比赛，报告成功与失败结果 |
-| [`crates/runner/examples/motion_profile.rs`](crates/runner/examples/motion_profile.rs) | 显式预热与重复测量完整模拟墙钟时间；记录平均/最大及完成状态，不能当作板卡时限 |
-| [`crates/robot-core/src/navigation/terminal.rs`](crates/robot-core/src/navigation/terminal.rs) | 单/双段曲率渐变末端连接、接续数值初值、共享计算额度与求解失败诊断 |
-| [`crates/robot-core/src/navigation/continuity.rs`](crates/robot-core/src/navigation/continuity.rs) | 记录末端初值的预测状态，延迟后调整初猜并重新认证；保留已恢复短连接族，计算同姿态旧剩余路线诊断；fixtures 内含原始窗口及专项实验快照 |
-| `crates/robot-core/src/navigation/` 下的 `*_arrival.rs`、`*_replay.rs`、`short_*.rs`、`terminal_continuity_region.rs`、`oriented_region_advance.rs`、`candidate_pipeline.rs`、`stopping_envelope.rs` | 用实际采到的 worker 状态做的回放测试和对应修正（短到达、首拒、连续性区域、候选顺序）；`stopping_envelope.rs` 是原停车盘拒绝后的第二个完整停车集证明 |
-| [`crates/runner/src/autonomy_replay.rs`](crates/runner/src/autonomy_replay.rs) | 同步传感器快照回放，不接受人工 Motion；结束明确 Stop |
-| [`crates/runner/src/navigation_diagnostics.rs`](crates/runner/src/navigation_diagnostics.rs) | 模拟首个非预期阻塞/故障的最多 17 帧内存上下文，结束随摘要输出 |
-| [`crates/runner/src/phase_statistics.rs`](crates/runner/src/phase_statistics.rs) | 各阶段实际时长/距离、Stop 次数/命令时长、路径生成、拒绝原因及终端工作总数/每拍最大值的有界内存统计；最终制动单列 |
-| [`crates/runner/src/telemetry.rs`](crates/runner/src/telemetry.rs) | 有界内存事件日志；调试预算耗尽不影响比赛控制 |
+原正式部署包对应 Rust 工作区 **565 通过、0 失败、3 项按设计忽略**；实际日志另记录 tracking/timing/online example 分别 **2/5/2 通过**，Python 交付 **37 通过**。fmt、all-targets clippy `-D warnings`、双 RISC-V 链接与 ELF 检查通过；[构建报告](docs/online-mission-build.json)记录并核对 **150 份**编译输入。例程与 Python 数量来自各自实际日志，不另推断这些日志的源码同一性。后续首拒回放增加2项测试，最新主机工作区为567通过、3忽略，见[首拒验证](docs/online-first-rejection-validation.json)；本次实车检查未修改Rust算法或重做该主机测试计数。
+两个程序均为 RISC-V64、LP64D、RVC、PIE，加载器 `/lib/ld-linux-riscv64-lp64d.so.1`；构建基线 **GLIBC 2.38**、实际最高引用 **2.34**。`xt-stcar` 为 **1,217,056 字节**、依赖 libc；`xt-stcar-robot` 为 **2,376,448 字节**、依赖 libm 和 libc。上述构建报告生成时未接车；2026-09-16已使用同一哈希的程序执行车端模块测试，结果见顶部及实车检查记录。
+[在线验证](docs/online-mission-validation.json)、[在线矩阵](docs/online-mission-matrix.json)及[开发实验](docs/online-mission-experiments.json)保留成功与失败；core/含模型两包的本地路径、哈希和核验见[包外交付报告](docs/online-mission-delivery.json)。包内 `build.json` 是本轮构建报告，`elf.json`、`robot-elf.json` 对应两程序；交付报告留在包外避免循环哈希。Git 提交与远端同步状态以实查为准。
 
-`crates/runner` 的 xt-stcar-robot 有两条流程，都没有上车跑过路线：
-- 诊断流：文件回放 → 传感器/视觉模块 → 安全状态机 → 可选 PWM 映射校验 → 运动记录/预览日志。
-- 在线自主流：RGB/雷达/位姿 → 元素关联与局部空间 → 任务顺序和动态局部目标 → 原规划/跟踪及安全检查 → 车辆模型 → 下一帧反馈。
-- 独立串口采集先生成可回放的原始字节文件；采集没有 Arm/Start/Motion 事件。
+历史场地适配轮 Rust 工作区 **409 通过、0 失败、2 项按设计忽略**；跟踪 example 2 项、旧时序矩阵 example 5 项、Python 交付 36 项及 39 个子测试通过。
+fmt、all-targets clippy `-D warnings`、双 RISC-V 链接与 ELF 检查通过；[构建报告](docs/field-adaptation-build.json)记录 **112 份**编译输入，
+GLIBC 基线 **2.38**、实际最高引用 **2.34**，robot 为 **2,090,544 字节**。
+[验证汇总](docs/field-adaptation-validation.json)区分 PP 18/18、LQR 17/18、旧八场回归及三个实际 CLI 完整运行，
+[本地交付报告](docs/field-adaptation-delivery.json)记录本地包；目标程序尚未在车上或模拟器执行。
+新场地改动还包含有限禁带整包络检查、网格误拒后的原预算连续恢复、定向通过点短连接及原到达区域后备连接。
+后备连接只在原精确解/搜索失败后使用，终点保留实际积分值，位置/朝向误差含累计误差须进入原容差一半；不把邻近位置假作目标中心。
+开发失败与 22/36、34/36 中间矩阵见[试验记录](docs/field-adaptation-experiments.json)。同步末曲率未单独观测；全部异步场末速度/曲率归零。
 
-车上的实时闭环是上面的比赛路径（`route-engine race` + `vehicle-bridge`），不经过 xt-stcar-robot。
+历史 v9 为 371 Rust、2 跟踪 example、5 矩阵 example、35 Python 交付测试通过；108 份编译输入。
+[原验证](docs/motion-v9-validation.json)、[连续性回归](docs/motion-v9-route-regressions.json)和[原试验记录](docs/motion-v9-experiments.json)保留，不能作为新二进制证据。
 
-## 运动控制
+历史 v7 Rust 常规测试 **350 通过、0 失败、2 项按设计忽略**；跟踪 example 2 项、Python 交付 35 项通过。
+fmt、all-targets clippy `-D warnings`、两个 RISC-V 交叉链接和 ELF 检查通过。
+[构建报告](docs/motion-v7-build.json)记录 98 份 Rust 源码、清单及编译嵌入 fixture 的哈希，GLIBC 基线 2.38、实际最高引用 2.34。
+`xt-stcar-robot` 为 2,020,984 字节；最终二进制证据见[验证汇总](docs/motion-v7-validation.json)，本地包状态见[交付报告](docs/motion-v7-delivery.json)。
+
+历史 v6 Rust 常规测试 **322 通过、0 失败**；原生ORT opt-in和独立证书性能基准各1项按设计忽略。
+跟踪example 2项、Python交付34项通过；fmt、all-targets clippy `-D warnings`和两个RISC-V交叉链接通过，
+见[验证汇总](docs/motion-v6-validation.json)与[构建报告](docs/motion-v6-build.json)。89份Rust源码/清单哈希已核对，
+GLIBC构建基线2.38、实际最高引用2.34。本地包的生成/核验状态、路径和哈希见 `docs/motion-v6-delivery.json`。
+v6 另测完整异步分段耗时与持续主机时钟；其 LQR 异步失败保留在历史报告中，测试通过并不表示两种算法全场均完成。
+[前轮 v2 验证](docs/motion-v2-validation.json)的237项Rust常规测试、2项跟踪example测试、34项交付测试与二进制证据保留为历史。
+更早的[运动控制验证](docs/motion-control-validation.json)也保留，不作为当前二进制证据。
+模型/原生推理模块的历史结果单独记录；本轮是否重跑及最终打包证据以在线验证报告为准。
+前轮 1 项原生 ORT、48 项模型测试记录见 [历史比赛验证](docs/competition-validation.json)。
+构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的架构/ABI/加载器/GLIBC。
+ELF 检查核对动态加载表与 section 映射及版本需求，不验证所有机器指令或代替目标机运行。
+交付包不含工具链、虚拟环境、Mac dylib 或缓存；带模型包另带 provenance 与模型许可。
+源码仓库也排除模型、厂商大包、镜像、`target/`、`dist/`、`work/` 和缓存。
+
+## 早期 Rust 自主栈（xt-stcar-robot，没有上车跑路线）
+
+下面是 9 月开发的 `crates/runner` xt-stcar-robot：视觉+雷达在线任务、固定布局、规划与跟踪、异步执行证书。
+它只在 Mac 上仿真和回放过，比赛路径（上文）不经过它；内容保留作参考，其中的通过数和限制描述的都是当时的离线结果。
+
+### 在线元素驱动任务
+
+新增在线任务模式：**任务顺序固定，元素几何由连续观测更新，短距离目标随当前任务生成。**
+RGB 提供带颜色的锥桶候选、斑马线近沿与方向；锥桶必须经过同刻雷达关联。局部记忆保留身份、时间、误差与已处理状态，
+LocalWorld 的完整面积空闲证明最多用 64 次圆域核验：保留原外接圆成功路径，否则用固定栈自适应二分外包矩形，所有叶矩形都须完整被已证空闲圆覆盖，额度耗尽则拒绝。Obstacle 独立检查真实回波到最多 32 点凸包的欧氏距离及原量程/位姿/年龄误差，覆盖区域多出的面积不制造碰撞结论。半径候选区分 KnownFree/Obstacle/Unknown，未来 Unknown 只可保留为规划假设，当前目标车体和完整执行停车包络仍必须 KnownFree。目标仍经过原导航、默认 Pure Pursuit、碰撞/制动与异步采用检查。
+
+已确认锥桶可由当前雷达几何维护原身份：`last_visual_at` 与 `last_geometry_at` 分开，缺少新几何满 1.8 秒失效，未获新视觉满 20 秒失效；雷达不创建颜色/身份或增加视觉确认数。
+位置/方向仅在纯 roundoff 范围内保留旧浮点表示（最多 1 nm / 1e-9 rad），毫米变化仍更新，误差和时间不冻结。
+绕桶半径按实际车体半宽、桶几何误差与原曲率能力选取，前后悬保留在全扫掠检查中；已选半径仍可行时保持，避免视点变化使目标向外跳。
+完成绕桶还须真实沿出口方向越过桶中心位置误差，出口目标延伸位置误差加两份原目标容差；原半圈、外侧、位置和航向条件继续生效，靠近圆顶不能提前计数。
+剩余转角为零仍按实际切向证明完整车体和净空 KnownFree，不自动放行，也不直接判成 Unknown；真实出桶完成门保持。
+前方短弧未知时提前使用原接近限速 0.18 m/s，完整已知空闲才允许原巡航上限 0.3 m/s；当前执行门不变。斑马线停车目标也计入区域航向误差造成的边角位移，不能只减位置误差。
+入口必要时用原 Stop 条件切向对齐，无新增 hold。稳定带航向目标可用两个局部 horizon（默认 1.6 m），更远仍是单 horizon 的无航向临时引导；搜索保持默认 0.8 m。
+真实 26,580 ms worker 短连接回归补充了同目标漂移后的原到达区域重认证，仍共用原求解预算；这些修改不等于整场验证通过。
+导航初始化时默认 `TargetPolicy::Fixed`，在线统一为 `RollingLocal`。49,580 ms 的滚动无航向局部点问题由同账短单弧修正：适用距离 `[0.35 m, min(2 × lookahead, 2 m))`，严格中心连接失败后可认证原半位置容差内的真实积分端点。21,380 ms 的定向斑马线接近则在原单/双弧后，额外认证当前执行曲率按原模型向零渐变的短前进候选，仍要求累计误差下的原半位置与航向容差。Fixed 保留原搜索顺序；最新 `legacy-integration` 八场已完成并通过原性能门，九项关键指标、输出计数和单因素比较与 v9 一致，初版通用开关的退化仍保留。这里未声称所有命令与完整轨迹逐点相同。
+小于 0.35 m 的定向 RollingLocal 目标按原严格双弧→原严格单弧→原到达区域→lattice 顺序、同账重证当前边界，修复真实 18,100 / 18,800 ms 短路线变成长回环。仅 RollingLocal 在原停车圆盘证明失败时追加完整 StoppingEnvelope 证明，保留两控制周期、全制动、历史速度上界和最大曲率下任意变向；Fixed 不改。
+RollingLocal 原到达区域和零目标曲率候选均失败后，可同账尝试“保持实际曲率→按原变化率回中→直行”三段短接，连续携带误差，真实端点仍须满足原半位置/航向容差。候选动作的原严格 continuation 全部失败后，另可从真实周期预测状态用旧到达区域求解器证明连续性，不直接认定任务到达或采用命令。
+仅 RollingLocal 连续 recovery 的有限侧带边界可追加完整车体扫掠证明：端点车体凸包加 `L/2 × (1 + Kmax × 车体外接半径)` 及原余量和累计误差，整体须处于同一允许侧；世界边界与障碍仍使用原胶囊，Fixed 和点状参考检查不变。
+若原胶囊及一阶界仍拒绝，第三份证明用实际速度/转向模型的车体点二阶界 `M = A + V²K + r(AK + VS + V²K²)`，将完整运动包在端点车体凸包加 `M×dt²/8` 内。dt 与实际积分、加减速缩尾完全一致，保留原 A/S、端点误差和全部余量，不用低速除法反推时间，也不增加采样或预算。真实 32,000 ms 与邻帧专项区分“路线可行”和“执行可认证”；严格短接提前成功可能改变后续轨迹，整场结果单独列于下文。
+
+`OrbitSpeedHint` 只为绕桶选速：实际姿态加五个观测短弧参考姿态检查完整停车包络，原上限已证则保持，否则最多八次二分取已证正下界，同时限制当前与后续目标。这些离散参考姿态不是连续执行证书，原来源、历史速度、负向约束、lease 与实际停车证明保持。
+绕桶时还按当前原始来源姿态检查 pending/confirmed 停车线负约束，用相同误差时钟和完整停车包络给出有界速度提示。只接受已证且不低于“同源速度按原减速度、本拍实际间隔及 adoption 区间允许”的速度上限，同时限制 continuation；冲突时不向上凑限值，也不假装真实车辆已降速。原 source/history、负线和最终采用门保持，不能用提示直接放行。
+停车区/终点槽内真实唯一重观察可续接原身份，跨几何 TTL 首新帧重新计一次、默认第二不同采集帧才恢复确认；invalid/歧义不复活，processed 不清除。runner 显式 pin 至多两个当前引用的区域槽，防止身份回收；不延长 TTL、不伪造新观测或放行过期几何。
+
+`FieldSpec` 在该模式中只用于模拟器生成图像、雷达和裁判真值；不同场景使用逐值相同的在线控制器配置。
+灯前/终点的真实可见图案尚未确认，目前只支持**显式实验单/双白条协议**。标记检测器默认禁用，在线示例显式启用；
+视觉条纹跨度与协议子区宽度分开：灯前 0.6 m 条纹对应 0.8 m 宽停车子区，终点两条 0.9 m 条纹对应 0.9 m 宽子区；这些是实验协议，不保证真实赛场存在相同标记。
+存在两个独立缺口：官方资料没有可用的左桶出口→灯距离正下界，固定灯色 ROI 又不能定位；已确认的地面线也可能在清尾前退出前向 ROI。特定默认直行估算清尾至少约 2.44 s、计既有误差约 4.89 s，超过 1.8 s 几何期限；该估算不是全场不可行证明或实跑成绩。
+保留灯色无几何时 Stop。过期 StopLine 的负向约束持续增加误差，完整包络仍可在保守线前或扩大侧带之外通行；过期证据不能授权新任务获取、绿灯或清尾。后续需要可验证的新定位信息或在原约束下保持实际地标可见的路径，当前不能保证在线整场完成；车辆现已进入架空模块测试，尚未验证落地闭环。
+终点完成显式要求全车清空灯区：即使合法终点与灯区重叠，已到达停稳而未清尾仍 Fault，不提前标记终点；实际清尾后的部分重叠可以正常处理。
+
+入口为 `online-example` → `online-compile` → `autonomy-sim`，详见[在线元素驱动任务](docs/在线元素驱动任务.md)和命令手册第十二节。
+冻结源码后的最终 19 场矩阵已完成：**正常场 0/15 完成，在线比赛闭环尚未验收**。4/19 符合预定检查，仅为缺标记、缺锥桶各同步/异步的安全停止。14 场独立裁判证明两桶（12 个正常场、2 个缺标记场），随后均在 ApproachLight 因看见灯而缺少确认的停车区几何停止。三个小场仍未通过第一桶：同步 46.200 s、异步 43.863 s、扰动异步 45.045 s 因普通停车超过 10 秒结束；不能把所有失败归为灯区缺信息。
+首轮至第五轮及 82.8 s、84.383 s 等开发失败均保留，不能替代最终记录。矩阵的运行前后源码账、真实命令、可执行文件及原始输出哈希已核对；最终工作区 565 项通过、3 项按设计忽略，双 RISC-V 链接通过。构建与包完整性不表示在线比赛完成。
+模拟结果同时核对独立 `online_referee` 的实际轨迹/顺序证据；任务自报完成不能替代裁判。摘要保留末 16 项诊断，显式 `online_matrix async-trace` 最多保存前 2048 个计划，仅用于模拟排查。
+本轮实际成功、失败和限制以 `docs/online-mission-*` 正式报告为准，旧场地矩阵不作为在线验收。
+开发记录中的 `OpenEmpty` 若发生在 rollout 之前，只能说明原约束下有界规划未找到路径；不能据此声称几何无解、节点耗尽或已经被执行门拒绝。最终在线矩阵如实保留失败，局部改善和旧八场恢复均不作为在线通过结论。
+
+2026-09-16 接手诊断已补齐小场异步 33.180 / 33.260 / 33.380 s 的真实输入和完整导航缓存，见[首拒快照](docs/小场异步首拒快照.md)。原版与隔离观测版的 439 条计划及整场功能字段一致；三帧夹具可直接回放。33.260 s 的17次拒绝定位到有限停车线侧带：当前候选的端点车体余量已不足原净空或净空加起步预留，仅缩紧扫掠管不能解决。生产算法未修改，小场仍失败；后续检查原约束下的目标、路线形状和候选覆盖，不能据此判断物理无解。
+
+### 赛前测量后生成固定布局（保留的历史模式）
+
+已增加 Rust 场地规格模块，输入实际长宽、上下直道宽度/跨度、锥桶中心及灯前区域，就能生成发车区、搜索区、绕桶通过点和终点。
+规则初稿的外场范围为 **长 5–8 m、宽 4–6 m**，上下直道分别 **1–2 m**；各项在范围内还要检查组合是否相容。
+80 cm 发车/终点区、白条、锥桶底座、车体尺寸、控制限值和任务等待条件都不按比例缩放。
+
+这是**赛前测量后适配**：运行前编译并冻结布局。斑马线依靠实际图像前沿和同采集时刻位姿确定停车点，实时障碍继续参与避障；
+该模式不自动巡视测场；本轮在线分支另由短期元素身份和观测几何产生目标，仍未验证现场灯前/终点识别。
+模板与逐字段测量方法、命令、限制见[赛场规格自适应](docs/赛场规格自适应.md)。旧八场时序回归仍是同一个简化布局，不是八种赛场。
+
+历史固定九种布局的同步/异步矩阵：**PP 18/18 通过，实验性 LQR 17/18**；LQR 的 5×6 m 同步场仍在左桶阶段停滞。
+旧八场时序回归完成并通过原性能门，时间/路程保持 v9。结果及失败均见[场地矩阵](docs/field-adaptation-matrix.json)和[验证报告](docs/field-adaptation-validation.json)。
+这不等于无人测场或保证尺寸范围内任意组合都能完成，实车仍待验证。
+
+### 运动控制
 
 已对照[用户分享的算法建议](https://chatgpt.com/share/6aa0bf59-c8f8-83ee-b001-13dd5945ce14)审查代码。
 继续核对[修改后的意见](https://chatgpt.com/share/6aa27143-7204-83ee-ad9a-7067ef49a1bc)，
@@ -748,7 +824,7 @@ Stop 是停止请求，车辆模型继续减速并逐步回中；物理 ESC 中�
 导航保存已采用曲率目标与模型执行估计，尚无真实转向反馈；解析过渡峰值也依赖配置的执行器模型，
 不能据此声称实际侧向加速度已受实测保证。保守停车圆盘覆盖中间转向，但仍依赖实际制动能力达到配置假设。
 
-## 配置与样例索引
+### 配置与样例索引
 
 | 位置 | 用途 |
 |---|---|
@@ -768,7 +844,7 @@ Stop 是停止请求，车辆模型继续减速并逐步回中；物理 ESC 中�
 
 不要把示例超时、零偏、frame 或 PWM 中性值作为实车校准结果。N10 局部包的接收健康不能证明全圈覆盖或避障有效。
 
-## 本机运行
+### 本机运行
 
 在仓库根目录执行。以下命令不需要模型或设备：
 
@@ -802,88 +878,7 @@ cargo run --locked --bin xt-stcar-robot -- serial-capture \
 最后一条只输出计划，不打开设备或写文件；显式加 `--execute` 才配置并读取指定传感器 tty。
 本轮没有执行真实设备采集。限制、输出格式与空闲 Tick 见 [Rust 串口采集](docs/Rust串口采集.md)。
 
-## YOLO26n 原生推理
-
-使用实际本机图片（替换 `path/to/image.png`）：
-
-```bash
-cargo run --locked --bin xt-stcar -- infer --image path/to/image.png \
-  --model models/yolo26n.onnx \
-  --runtime-lib toolchains/onnxruntime-macos-arm64-1.29.0/lib/libonnxruntime.1.29.0.dylib \
-  --output work/detections.json
-```
-
-模型旁必须有 `.provenance.json`。当前锁定官方 YOLO26n Detect、Ultralytics 8.4.142、FP32、
-静态 320×320、batch=1、opset 17、one-to-one `[1,300,6]`；严格 `score > threshold`，不重复 NMS。
-图像预处理与保存张量回放分别用 `preprocess` / `replay` 子命令，参数见 `xt-stcar --help`。
-`--backend python-reference --python .venv-model/bin/python` 才会使用 Python 参考进程。
-原生 Mac 模型推理已在此前验证，RISC-V 目标真实推理尚未验证。
-
-## 构建、测试与交付
-
-Rust 1.97.1、Zig 0.15.2、cargo-zigbuild 0.23.4 和 `Cargo.lock` 锁定依赖。
-Linux 交叉链接目标固定为 **`riscv64gc-unknown-linux-gnu.2.38`**，没有修改车端系统库。
-
-```bash
-scripts/build-riscv.sh --offline
-scripts/package.sh
-scripts/package.sh --model models/yolo26n.onnx --python .venv-model/bin/python
-```
-
-| 路径 | 内容 |
-|---|---|
-| `crates/*/tests/`、源码内 `#[cfg(test)]` | Rust 协议/数学/状态机、CLI 文件保护、PTY 传输与采集集成测试 |
-| `tests/test_delivery.py` | ELF、打包白名单、哈希与上传参数边界测试 |
-| `tests/test_yolo26_tools.py` | Python 导出/输出契约回归 |
-| `tests/measure_yolo26_reference.py`、`tests/verify_robot_reference.py` | 真实模型与机器人图像回放参考对照 |
-| `scripts/export_yolo26.py`、`validate_yolo26.py`、`verify_preprocess.py` | 模型导出、静态校验及预处理对照 |
-| `scripts/onnx_worker.py` | 仅供显式 Python 参考后端的一次性推理工作进程；配置、模型和张量受实际读取量限制 |
-| `scripts/review-motion-ablation.py`、`scripts/review-motion-ablation/` | 固定旧提交、检查顺序补丁和只读观察器；每个变体独立主机编译目录，复现三版本消融 |
-| `scripts/capture-online-first-rejection.py`、`scripts/capture-online-first-rejection/` | 固定提交的两份独立主机构建，补采小场异步首拒的原始输入/缓存/终端账；核对439条计划一致并保留比赛失败 |
-| `scripts/build-riscv.sh`、`inspect_elf.py` | fmt/test/clippy、两程序交叉构建、独立 ELF/GLIBC 报告和源码哈希 |
-| `scripts/delivery.py`、`package.sh`、`upload.sh` | 白名单打包与哈希核验；上传默认 dry-run，显式新账号/IP/release 目录 |
-| `scripts/check-vehicle.sh` | 车端系统/设备/服务的只读检查脚本，不启动驱动或运动 |
-| `target/riscv64gc-unknown-linux-gnu/release/` | 两个目标程序与 build/ELF 证据（本地产物，不进 Git） |
-| `dist/` | core 或含模型的独立部署包（不进 Git） |
-
-本轮冻结源码后的最终在线矩阵为 4/19 符合检查、正常完成 0/15；通过项仅预定缺失场景的安全停止。最新 `legacy-integration` 旧八场 8/8 完成、原性能门通过，与 v9 的九项关键指标、输出计数和单因素比较一致，不能代替在线整场通过。本轮不宣称已完成在线比赛验收。
-
-原正式部署包对应 Rust 工作区 **565 通过、0 失败、3 项按设计忽略**；实际日志另记录 tracking/timing/online example 分别 **2/5/2 通过**，Python 交付 **37 通过**。fmt、all-targets clippy `-D warnings`、双 RISC-V 链接与 ELF 检查通过；[构建报告](docs/online-mission-build.json)记录并核对 **150 份**编译输入。例程与 Python 数量来自各自实际日志，不另推断这些日志的源码同一性。后续首拒回放增加2项测试，最新主机工作区为567通过、3忽略，见[首拒验证](docs/online-first-rejection-validation.json)；本次实车检查未修改Rust算法或重做该主机测试计数。
-两个程序均为 RISC-V64、LP64D、RVC、PIE，加载器 `/lib/ld-linux-riscv64-lp64d.so.1`；构建基线 **GLIBC 2.38**、实际最高引用 **2.34**。`xt-stcar` 为 **1,217,056 字节**、依赖 libc；`xt-stcar-robot` 为 **2,376,448 字节**、依赖 libm 和 libc。上述构建报告生成时未接车；2026-09-16已使用同一哈希的程序执行车端模块测试，结果见顶部及实车检查记录。
-[在线验证](docs/online-mission-validation.json)、[在线矩阵](docs/online-mission-matrix.json)及[开发实验](docs/online-mission-experiments.json)保留成功与失败；core/含模型两包的本地路径、哈希和核验见[包外交付报告](docs/online-mission-delivery.json)。包内 `build.json` 是本轮构建报告，`elf.json`、`robot-elf.json` 对应两程序；交付报告留在包外避免循环哈希。Git 提交与远端同步状态以实查为准。
-
-历史场地适配轮 Rust 工作区 **409 通过、0 失败、2 项按设计忽略**；跟踪 example 2 项、旧时序矩阵 example 5 项、Python 交付 36 项及 39 个子测试通过。
-fmt、all-targets clippy `-D warnings`、双 RISC-V 链接与 ELF 检查通过；[构建报告](docs/field-adaptation-build.json)记录 **112 份**编译输入，
-GLIBC 基线 **2.38**、实际最高引用 **2.34**，robot 为 **2,090,544 字节**。
-[验证汇总](docs/field-adaptation-validation.json)区分 PP 18/18、LQR 17/18、旧八场回归及三个实际 CLI 完整运行，
-[本地交付报告](docs/field-adaptation-delivery.json)记录本地包；目标程序尚未在车上或模拟器执行。
-新场地改动还包含有限禁带整包络检查、网格误拒后的原预算连续恢复、定向通过点短连接及原到达区域后备连接。
-后备连接只在原精确解/搜索失败后使用，终点保留实际积分值，位置/朝向误差含累计误差须进入原容差一半；不把邻近位置假作目标中心。
-开发失败与 22/36、34/36 中间矩阵见[试验记录](docs/field-adaptation-experiments.json)。同步末曲率未单独观测；全部异步场末速度/曲率归零。
-
-历史 v9 为 371 Rust、2 跟踪 example、5 矩阵 example、35 Python 交付测试通过；108 份编译输入。
-[原验证](docs/motion-v9-validation.json)、[连续性回归](docs/motion-v9-route-regressions.json)和[原试验记录](docs/motion-v9-experiments.json)保留，不能作为新二进制证据。
-
-历史 v7 Rust 常规测试 **350 通过、0 失败、2 项按设计忽略**；跟踪 example 2 项、Python 交付 35 项通过。
-fmt、all-targets clippy `-D warnings`、两个 RISC-V 交叉链接和 ELF 检查通过。
-[构建报告](docs/motion-v7-build.json)记录 98 份 Rust 源码、清单及编译嵌入 fixture 的哈希，GLIBC 基线 2.38、实际最高引用 2.34。
-`xt-stcar-robot` 为 2,020,984 字节；最终二进制证据见[验证汇总](docs/motion-v7-validation.json)，本地包状态见[交付报告](docs/motion-v7-delivery.json)。
-
-历史 v6 Rust 常规测试 **322 通过、0 失败**；原生ORT opt-in和独立证书性能基准各1项按设计忽略。
-跟踪example 2项、Python交付34项通过；fmt、all-targets clippy `-D warnings`和两个RISC-V交叉链接通过，
-见[验证汇总](docs/motion-v6-validation.json)与[构建报告](docs/motion-v6-build.json)。89份Rust源码/清单哈希已核对，
-GLIBC构建基线2.38、实际最高引用2.34。本地包的生成/核验状态、路径和哈希见 `docs/motion-v6-delivery.json`。
-v6 另测完整异步分段耗时与持续主机时钟；其 LQR 异步失败保留在历史报告中，测试通过并不表示两种算法全场均完成。
-[前轮 v2 验证](docs/motion-v2-validation.json)的237项Rust常规测试、2项跟踪example测试、34项交付测试与二进制证据保留为历史。
-更早的[运动控制验证](docs/motion-control-validation.json)也保留，不作为当前二进制证据。
-模型/原生推理模块的历史结果单独记录；本轮是否重跑及最终打包证据以在线验证报告为准。
-前轮 1 项原生 ORT、48 项模型测试记录见 [历史比赛验证](docs/competition-validation.json)。
-构建脚本完整执行 fmt、主机测试、clippy `-D warnings`，再检查两个 RISC-V ELF 的架构/ABI/加载器/GLIBC。
-ELF 检查核对动态加载表与 section 映射及版本需求，不验证所有机器指令或代替目标机运行。
-交付包不含工具链、虚拟环境、Mac dylib 或缓存；带模型包另带 provenance 与模型许可。
-源码仓库也排除模型、厂商大包、镜像、`target/`、`dist/`、`work/` 和缓存。
-
-## 已完成与后续实车工作
+### 早期栈尚未完成的部分（不影响比赛路径）
 
 已完成上述 Rust 算法、线程接口和离线集成，不等于无人驾驶系统已实车验收。
 比赛状态机、元素短期身份/几何、局部可通行检查、斑马线/灯色/锥桶视觉、全圈组帧、ICP、导航与模拟闭环已有代码；
@@ -911,3 +906,141 @@ eMMC 5.1 策略以正常运行/比赛为先：计算与队列在内存，默认�
 2026-09-16 用户确认车辆到场并授权架空模块检查；最新接入状态和逐项结果见 [车辆到场模块检查](docs/车辆到场模块检查.md)。此前目标端未执行的交付报告保留为历史证据，实际通过项目以新记录为准。
 
 现场视觉尺寸参照：[2026-09-23人行横道](docs/现场人行横道尺寸.md)：单条297×105毫米、边缘净间隙108毫米，供画面对照；尚未完成图像识别或投影标定验收。
+
+## 历史记录（2026-09-16 至 10-17）
+
+以下按原样保留当时写在本文件开头的日期条目和接车说明；当前状态以上文和 [agent.md](agent.md) 为准。
+
+### 2026-10-21 的 Rust 化计划与进度（原文）
+
+机器记录：[`rust_port_plan_20261021`](docs/vehicle-dynamic-turn-validation-20261007.json)。GitHub显示的约42% Python里，一半是单元测试，其余主要是控制台和Mac上的离线工具。
+
+**已经是Rust的部分**
+| 部分 | 做什么 | 状态 |
+| --- | --- | --- |
+| `crates/runner` vehicle-bridge | 底盘串口控制、雷达读取、原生扫描几何（通道/墙候选、左转开口、前方边界） | 早已部署 |
+| `crates/robot-core`、`crates/app`、`crates/device-io` | 几何、路口、跟踪、任务库，协议，设备访问 | 已有 |
+| `crates/vision` + vision-shadow | 车上YOLO（ONNX Runtime）推理，只做感知；`vision_shadow.py`是薄包装 | 已部署 |
+| `route-engine/` | 第96轮：整套路线决策，即ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区。与Python逐位一致：仿真156/156，录像在Mac和车上都是28/28 | 随第98轮上车（第96、97轮的包没部署） |
+| `route-engine/src/clearance.rs` | 第97轮（A）：控制台每拍的车身间隙检查，即probe_clearance及其辅助函数、ClearanceReuse，和接触目标在同一次请求里算。与Python逐位一致：仿真156/156、录像28/28（共比较17.6万次间隙检查），另有真实扫描加随机参数和故障的单独对比4.5万次 | 随第98轮上车 |
+| `tools/scan-geometry` | Mac/仿真用的桥几何（不部署） | 已有 |
+
+`maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`的Python版保留，作为后备和对比基准。
+
+**要改成Rust的部分（用户10-21决定，先A后B）**
+| | 范围 | 收益 | 验证 |
+| --- | --- | --- | --- |
+| A 车身间隙检查进引擎（**已完成，随第98轮上车**） | `autonomy_live.py`的probe_clearance整个函数（含直道分支）及front_gap_evidence、车道墙/单侧板投影、桶接触见证、ClearanceReuse；server里的车道、起点区、左转放宽判断仍在控制台（只读引擎镜像的状态） | Mac：最慢一拍1.02→0.77ms，控制线程CPU最大0.80→0.43ms，新帧p99 0.85→0.56ms。按第96轮车/Mac比例估计车上最慢一拍约29→约22ms、新帧p99约24.5→约16ms，尚未上车实测。剩下的最慢拍主要是一拍里多次往返（如进入滑行那拍有4次），要靠B消除 | 双跑对比：仿真156/156、录像28/28；`scripts/route-engine-clearance-parity.py`对比4.5万次；新测试6项，全量860 OK |
+| B 整个控制循环做成独立Rust程序（**第98–100轮实车跑完全程**） | server.py的节拍路径（autonomy/turn/coast tick、心跳、间隔、期限、ACK、质量等待/滑行、停车），QualityLatch/QualityRecovery，SteerOutput，滑行静止检测；包含A。只做turn-cone路线路径 | 最慢一拍<约10ms，平常<1ms；没有GIL，HTTP、心跳、摄像头线程不会再拖晚控制拍（第86/89/92轮计时停车的原因）；这就是比赛形态（比赛时去掉控制台） | 与Python控制台节拍逐拍双跑，并移植保护相关的单元测试；作为新一轮部署，有备份和回滚 |
+
+B的进展（`rust_control_program_wip_20261021`）：
+- `route-engine/src/coast.rs`：滑行静止判断CoastMotion及其队列。与Python在全部录像加随机改动上逐位一致，约3.3万次结果。
+- `route-engine/src/supervisor.rs`：控制台的路线监管，包括启动准入、节拍、质量等待/暂停/滑行、停车、输出检查、ACK序列、转向标定和反馈换算。用`scripts/route-engine-supervisor-parity.py`与Python控制台逐拍双跑：仿真156/156、录像28/28，共17.6万拍，每拍比较整份报告。
+- `route-engine/src/race.rs`（`route-engine race`）：独立程序本身，包括两个桥、20ms节拍线程、健康检查、证据文件和终端输出。在车的CPU上闭环仿真跑完全程，最大间隔0.026s。在真实设备上只检查不启动，通过三次，从未解锁。车上助手`scripts/race-trial.py`负责停控制台、跑一次、再恢复控制台。
+- 车上逐位对比：路线引擎28/28，监管核心28/28，间隙检查12908次，滑行11168个结果，全部一致。
+- 第98–100轮用独立程序在车上跑完全程（打包用`build-race.py`；记录键`turn98_actual_20261021`、`turn99_actual_20261021`、`turn100_actual_20261021`）。
+
+B的待定设计：Rust程序独占两个桥，在自己的线程上跑20ms节拍。控制台改为它的客户端，负责遥控、显示和记录、开始/停止，摄像头继续留在控制台里用于采图和YOLO。比赛时不启动控制台，启动方式待和用户定。
+
+**不改的部分**：
+- 控制台的HTTP接口、网页、摄像头采集和录制（比赛时去掉；摄像头受I/O限制；YOLO推理已是Rust）。
+- `autonomy-control.py`、`vision_shadow.py`、`stop_goal.py`（路线不用）。
+- 单元测试、`scripts/`离线工具、YOLO训练/导出（只在Mac上跑）。
+
+### 2026-09-16 至 10-17 的日期条目
+
+2026-10-17（Claude）第66/67轮：66实车单拍最大.032s（提速+屏蔽网页生效），起步.4s后前方5格缺口在发车直道不被容忍而停车；67让发车直道在当前原生几何有效时使用已有的有界缺口容忍，仿真加深度突变丢回波模型验证（无容忍10/12停、有容忍11/12跑完），全量751 OK。
+
+2026-10-17（Claude）第65轮：第64轮实车发车直道3.3s后首桶进近一拍算了.242s，心跳租约超时锁定（保护正常）。只提速不改决策（墙线提取约8倍、同帧缓存、少深拷贝、近距检查少建对象），自动运行期间屏蔽局域网网页读取；Mac最慢单拍5.9→2.7ms，全量746 OK，仿真/回放逐字节不变。未构建/未上车。
+
+2026-10-17（Claude）：用户把车放上赛道。第64轮以 steering300 桥为基线构建（新构建器 `build-turn64.py`，15个安装哈希，helper `--max-seconds 40`）。只读检查发现雷达左后约210–232格自10-16换件后一直无回波（车后挡板在那里也无回波，车身固定遮挡），车上桥要求缺口≤5°，墙/车道几何全部为空，路线起不了步；车尾离后挡板约6cm不足8cm。已请用户检查遮挡、前挪约10cm。记录键 `turn64_measured_car_route_20261017`。
+
+2026-10-16：Chrome解锁复现“解锁请求已过期”，实测部分TCP建连卡顿约1s；用户随后报告恢复，发生在补丁部署前。已本地修复HTTP连接复用、状态响应乱序/重复tick续龄、恢复后残留断线提示，保留全部控制时限；本轮不重启当前可用车辆服务。前端19项、Python全量738项通过（含6项新增HTTP回归，保留2项原有预期失败），详细证据见[当前入口](agent.md)和机器记录`console_unlock_timeout_20261016`。候选尚未部署或通过实车解锁验证，不能把网络暂时恢复写成修复通过；后续不得直接将main的第64轮WIP覆盖车端。
+
+2026-10-16（Claude）：路线按实测车况改造（转向标定层 `steer_calibration.py`、电调滞后、发车直道限速、灯区脉冲补油、入口路径检查、假桶剔除），全量738 OK、回放不变；实测车况规则范围96/108（8m 35/36），标定偏差稳健性117/130。**第64轮未构建/未上车，部署须带新模块。**
+
+2026-10-13（Claude）：核验 Codex 9b4a41d，结果一致：725 OK，范围 95/108，回放逐字节相同。修复停稳确认：同一墙的重复子窗口被丢弃，只用唯一对应的平面配准，长平面消失仍判场景变化。实车停稳帧可配准 0/220→114/220，仿真正常结束 79→95/108，全量 732 OK。仿真新增转向回差假设：回差 15 PWM 时 88/108，30 PWM 时 31/108，但重铺练习场 user8 在 0/15/30 下全部完成。新增未运行的实测脚本 `scripts/steering-arc-check.py`，需用户在场。**1200 曲率与回差未实测，第 64 轮不可构建/上车。**
+
+2026-10-13：用户要求先不连车，本地修改已保存供Claude核验。手动/桥限幅1200–1800此前已静态实测；本次路线右舵候选1350→1200、左舵仍1720、中位仍1500，修窄通道绕行规划、灯区交接/恢复和直道遮挡减速。全量725项OK（2项原有预期失败），44轮detector及51/52回放逐字不变。范围位置分70→95/108，正常路线结束仅79/108；1200曲率仍是名义模型，旧右转能力敏感性73/108。**剩余仿真失败、1200动态曲率与回中迟滞尚待解决，第64轮不可构建/上车**。见[当前入口](agent.md)、[机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)、[±300静态构建/部署/备份与实测](docs/vehicle-steering300-validation-20261013.json)。本轮未连接车辆；车上历史仍62路线加手动补丁与新桥，好版本标签保留。
+
+下方日期条目保留历史结果，当前参数与部署状态以`agent.md`为准。
+
+2026-10-05最新：当前直道接入默认1秒的受限居中控制，有偏差容忍带、350ms调整间隔和人工停止锁存。
+用户量得雷达至左右轮胎外沿17cm，侧向按10cm净距加测距余量检查；相机/雷达短暂迟帧放宽。
+36项Python/PTY/故障检查通过；完整比赛定位/循迹/绕桶尚未接入实车。
+使用见 [驾驶台说明](web/vehicle-console/README.md)，证据见 [直道验证](docs/vehicle-straight-validation-20261005.json)。
+
+2026-10-05追加：放宽短动探针的有限雷达缺回波，并按直行通道排除侧挡板误停；感知质量持续异常2秒才锁定，硬故障与近障碍仍立即停。
+26项检查通过，车端1560/400ms窗口成功输出并回1500锁定；仍未接通完整比赛导航，未测车轮位移/制动距离。
+见[保护清单](docs/实车控制保护清单-20261005.md)及[实车短动证据](docs/vehicle-quality-recovery-validation-20261005.json)。
+
+2026-10-05追加：已接通车端共享采集/单串口桥的受限直行验证入口，支持终端启动、人工接管和急停。
+1530/400ms实车请求因前方未知雷达bin在解锁前拒绝；未启动电机，不构成全程自动驾驶。
+用户要求逐项审核保护，除指定新电池前进1560外未调整；完整比赛链路仍未接通，最终四文件已补部署。
+见[实际保护与车端命令](docs/实车控制保护清单-20261005.md)。
+
+2026-10-05：最新算法已重新交叉构建并上传车端独立目录，34 个文件哈希、动态依赖和 CLI 检查通过。
+现有驾驶台与模型保持运行，前进参数设为 1530，车辆保持锁定。导航程序仍仅支持离线仿真/回放，
+实车自主执行与人工接管仲裁待接入。此前 Mac 长批次已依用户要求停止。
+见[车端上传与后续接入](docs/车端算法程序上传-20261005.md)。
+
+2026-10-03：新增任意场地范围离线入口、可选内挡板雷达/物理检查，以及 Mac 双进程可续跑扫描。原 32 场基线复跑为 27 场完赛；新范围队列已启动，尚未验收。见[本地范围仿真与运行方法](docs/Mac本地范围仿真-20261003.md)。
+
+2026-10-02：已检查雷达独立认桶和实际桶位偏移，修正入口朝向、出口停稳衔接、半圈边界筛选和同身份几何抖动。
+新增零视觉桶的偏移/量程噪声矩阵，分开记录两桶裁判结果与整场完成；仍有未通过场景，不能视为实车验收。
+见[偏移仿真与限制](docs/雷达绕桶偏移仿真-20261002.md)。本轮未连接车端、部署或启动电机。
+
+2026-09-28：新增雷达独立锥桶检测/确认、YOLO 辅助同身份关联、独立相机健康与语义时钟、
+任务 revision 防止旧路线重入，以及运行原 Rust 导航/执行检查的八场仿真入口。
+仍是离线功能，车端未部署、未启动电机；整场完赛问题与真实标定尚未解决。
+见[接入与原生验证](docs/雷达优先绕桶接入与原生验证.md)。
+
+2026-09-23雷达粗修正已安装：左/右墙三组尺量后，按用户要求采用量程−2厘米、顺时针5°修正；驾驶台画面与保存数据已生效，保留原始扫描，原点仍是雷达中心。未改导航外参或质量门、未驱动车辆。追加后墙尺量1.155米、前墙1.190米，现有修正后分别拟合1.1576/1.1908米，两组均保留现有参数；尺量残差不等于绝对精度。[三组对照与回退](docs/车辆尺寸与几何来源.md#追加右墙对照与启用粗修正2026-09-23)。
+
+车端二进制与完整驾驶台附件见 [视觉部署 Release](https://github.com/kxkxkxa767/XT-STCAR/releases/tag/vision-console-20260922)，部署及单蓝桶模型接入见[队友交接说明](docs/视觉驾驶台部署交接.md)。`git pull`只更新源码，不会自动更新小车安装目录。
+
+2026-09-21：已增加自训练 YOLO26n 的可信导出/类别映射、模型候选与 RGB 地面元素的连接，以及复用驾驶台相机的只读连续推理和检测图 JPG 保存。详见[视觉模型接入与只读测试](docs/视觉模型接入与只读测试.md)。默认仍为官方80类模型；自训练赛道权重、真实地面标定和车端部署尚未完成。
+
+Muse Pi Pro / RISC-V 无人车工程：**Rust 为主，在 Mac 交叉编译，视觉使用 YOLO26n Detect。**
+工程目录为 `/Users/yuhaojin/Documents/XT-STCAR`，源码仓库为
+[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)。
+
+目前有 **5 个 Rust crate、2 个可执行程序**。视觉预处理/后处理、原生推理调用、传感器协议、
+串口传输、比赛状态机、场地规格与布局生成、在线元素跟踪、局部可通行空间、道路识别、激光里程计、路径规划、底盘标定映射和调度均由 Rust 实现。Python 用于离线模型导出、校验、参考对照及独立硬件诊断/相机预览；
+默认推理由 Rust 直接调用 ONNX Runtime C API，不启动 Python 进程，推理引擎仍是上游原生库。
+
+**2026-09-16 已进入车辆架空模块测试。** 用户确认车辆到场、车轮架空，SSH已接通；旧“暂不接车”是历史边界。
+车上实测为 Bianbu 2.2 / RISC-V、GLIBC 2.39、约8GB内存；保持系统libc不变。已将原哈希核验通过的含模型包放入独立测试目录，未覆盖厂商工作区。
+Rust运动主程序目前仍使用记录输出，架空硬件诊断与自主闭环验收分开。厂商资料视频未读取。
+
+| 实车模块 | 本轮状态 |
+| --- | --- |
+| 载荷与目标程序 | 车端SHA256SUMS全部通过，动态依赖齐全，视觉无模型自检及机器人离线回放通过 |
+| USB相机 | 连续640×480/1920×1080取帧均无读取失败；V4L2 MJPG约29.8fps，OpenCV转BGR读循环分别约14.9/9.93fps，不能混为推理帧率 |
+| 蓝牙 | 修复并安装系统完成：临时扫描8设备、系统扫描7设备；厂商服务active/enabled，控制器已上电。配对和重启后验证未做 |
+| 雷达 / IMU | 雷达追加10秒采集2815包，协议错误0；主机用生产组帧器得到99圈、覆盖率99.17%–100%、拒绝0圈。IMU原3秒299样本，平均加速度模长9.819m/s²；安装外参和零偏未标定 |
+| ONNX Runtime | 已安装SpacemiT 2.0.6 / ORT1.24.2+spacemit.a1到车端用户目录，并设为工程启动命令默认库；API22与真实图片推理通过。系统1.18.1和Python1.18.0保留，未替换libc |
+| 规划与任务 | 完整固定场目标端执行通过：模拟75.6秒/757拍，主机耗时105.64秒；首次90秒超时保留。仅合成闭环，在线正常整场此前0/15完成 |
+| 底盘 | 用户确认1450向右、1550向左、1500回中；0.5秒测试1510/1519未起转、1520向前转并停住；延长至10秒后1519间歇转了两次，1520起转且最终停住，不能据短脉冲确定固定死区。1515过程未确认；速度/转角/响应与制动时延未标定 |
+
+真实相机图像推理输出人（0.870）和杯子（0.357），单次命令报告约1.71秒；这是单帧功能证据，未启用厂商EP，也不是实时帧率验收。道路检测入口同图运行成功，但沿用模拟标定时在室内画面报出一个未验证锥桶候选，不能作为实车识别通过，须用本车外参及赛道样本验证。
+
+实际命令、结果和限制见 [车辆到场模块检查](docs/车辆到场模块检查.md)、[机器验证记录](docs/vehicle-bringup-validation.json)和[雷达相机追加验证](docs/vehicle-sensor-followup-validation.json)。
+8080相机预览脚本为 [camera-preview.py](scripts/camera-preview.py)，已在车端验证单帧和连续MJPEG；[后台启动与停止命令](docs/车辆到场模块检查.md#相机8080网页预览)。测试服务已停止，按需启动。
+车端现在可用 `~/.local/bin/xt-stcar infer --image /绝对路径/图片.png`，自动选择已部署模型和新运行库；[安装、使用与回退](docs/车端ONNXRuntime升级.md)。入口源码为 [vehicle-vision.sh](scripts/vehicle-vision.sh)，Rust程序和原部署包未改写。
+蓝牙工具及配套固件已通过临时和系统扫描验证，安装到系统目录；已停用冲突的用户级Blueman KillSwitch插件。[修复步骤与状态](docs/车端蓝牙修复.md)。
+车辆驾驶台现已配置开机自启动（systemd用户服务、Linger=yes），通常直接用同网浏览器访问8081；下方Mac入口仍保留作为连接诊断和恢复方式。
+Mac双击工程根目录的[打开车辆驾驶台.command](打开车辆驾驶台.command)即可打开网页：自动复用或建立SSH连接、检查/启动已部署服务、建立隧道并读取私密令牌；不会自动解锁或发送运动指令。
+新增[网页驾驶台](web/vehicle-console/README.md)：方向键/WASD按住持续输出、松开回中，PWM可调；相机/雷达实时预览，直接保存相机JPG、雷达PNG或单张双画面PNG；原始数据/录制ZIP为可选。安卓/Windows/Mac同一局域网可打开 `http://192.168.0.156:8081/`（首次输入访问码），工程根目录[打开车辆驾驶台.html](打开车辆驾驶台.html)为通用入口；原Mac SSH隧道入口保留，默认锁定、前进上限1620，9月18日架空确认后启用倒车（默认1450，下限1350；1350尚未实测），转向使用范围1350–1650。已验证真实图像、点云及保存，本次未启动电机。[验证记录](docs/vehicle-console-validation.json)。
+
+2026-09-23已修复驾驶台心跳漏排队、重复旧时标导致的频繁锁定，并部署到车端。请刷新网页后重新解锁；失焦、断网与真正超时仍会停止，未取消安全保护。测试与部署范围见[本次记录](docs/console-relock-validation-20260923.json)。
+晚间追加1550/2秒和1600/0.3秒均由用户确认未动；1600/2秒用户估计前进4–5米并确认停住；1620/0.3秒前进不到1米并停住复位；1620/2秒用户观察向左偏（原因未定），已回中补发停止帧，用户确认完全停住并要求结束测试。当前场地扫描未通过质量门，最高速度仍未测。[追加测试记录](docs/vehicle-speed-probe-validation.json)。
+已新增Rust自适应起步辅助：连续有效定位确认未动时限时、小步增加PWM；微动后禁止继续加档，确认起步交回速度控制，失效/超时/上限停车锁存。提供`startup-replay`离线入口，尚未接入实车自动油门。[设计与使用](docs/自适应起步辅助.md)。
+最新1秒起步测试：1510–1545每5一档未检出明显净位移；1550首轮仅前倾回位、复测前进约18厘米，1551/1552分别约34/39厘米。最低已观察起步为1550，但固定阈值和重复性未建立；最高车速未测，当前保持停车。[起步PWM记录](docs/vehicle-startup-pwm-validation.json)。
+9月17日落地测试已结束：1550起步重复性不稳定；后续用户指定1600、0.3秒，用户观察约1.25米、无明显偏移，超出1米目标。离线雷达宽范围匹配约1.22米但质量不足，不能算定距成功；当前停止追加运动。[本轮记录](docs/vehicle-one-metre-attempt-validation.json)。
+9月17日固件复查：发现U-Boot/OpenSBI 2.2.7候选，但安装会直接写启动分区，未完成车辆镜像兼容核验，未升级；视频/GPU配套源无新版。[固件检查记录](docs/车端固件更新检查.md)。
+车端系统更新已重新检查当前配套源：普通升级0包；完整升级模拟会删除当前内核并降级系统包，未执行。[更新检查与蓝牙异常](docs/车端系统更新检查.md)。
+新增比赛模块与验证边界见 [Rust 比赛自主闭环](docs/Rust比赛自主闭环.md)，完整命令见 [Mac与车端命令手册.txt](Mac与车端命令手册.txt)。
+前轮 [总体架构审查](docs/总体架构审查-2026-09-08.md) 保留作历史，交接状态见 [agent.md](agent.md)。
+已完整核对用户提供的 10 页比赛规则初稿，见 [赛项三规则与工程差距](docs/赛项三规则与工程差距.md)。
+日常直接在 `main` 开发和推送；修改前检查并拉取远端更新，提交信息简述本次改动，详见 [上传规范](上传规范.md)。
