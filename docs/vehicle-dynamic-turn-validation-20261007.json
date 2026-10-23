@@ -23814,7 +23814,9 @@
     ]
   },
   "next_tasks_20261022": {
+    "crosswalk_light": "waiting for the teammate's YOLO model (crosswalk, traffic light); see crosswalk_light_yolo_pending_20261023",
     "transfer_pause": "open_board_ahead_without_second_support (runs 98, 99, 101, 105): ~.4 s neutral before the second support",
+    "finish_speed": "carry more speed over the finish line now that the creep exists",
     "creep": "not yet exercised on the car (run 105 stopped inside on the coast)",
     "start_lane": "far-range speed steps still cost a frame; the stopping taper before the first support binds from ~4.4 m",
     "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
@@ -24150,5 +24152,28 @@
     "seam": "131 recorded scans, coverage 360 in all; seam_filled_bins 0 x41, 1 x36, 2 x40, 3 x13, 4 x1; no whole-band loss",
     "start_lane": "neutral in 2 of 27 recorded frames (seq 27, 41)",
     "clearances": "no body-gate stop; cone tolerated 14 times; min known body distance .060 m (transfer, seq 81)"
+  },
+  "crosswalk_light_yolo_pending_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "user": [
+      "还有什么去要改的吗",
+      "人行横道、红绿灯都是yolo模型来做的，但目前队友没有训练好，先记录推送吧"
+    ],
+    "decision": "crosswalk and traffic-light detection come from the teammate's YOLO model (not trained yet); no separate classical (HSV / white-stripe) detector is to be built for them; integrate once the model is delivered",
+    "current_route": "lidar only: the start lane drives over the crosswalk (the start is just behind it) and the light entry drives through the gantry; neither stops. The car-side vision model has only blue_cone; route-engine race has no camera input",
+    "rules": "docs/赛项三规则与工程差距.md (p5): crosswalk: stop >= 3 s before it, short +10 s, on/over the line +20 s, no stop +30 s; light: the light turns red (3-10 s) once the car is ~1 m before it, all wheels must stop in the pre-light zone until green: going before green +30 s, a wheel outside the zone +20 s, no stop +50 s; the red-light stop time is subtracted from the run time; any other stop > 10 s fails the run. As driven now each run would carry ~+80 s",
+    "integration_plan": [
+      "a camera path into route-engine race (the race program has none; vision-shadow runs the Rust YOLO via ONNX Runtime)",
+      "light: stop position from the lidar (the gantry legs are seen: .83 m ahead, .96 m apart, round-102 measurement) so all wheels are in the pre-light zone; go on the model's green",
+      "crosswalk: distance from the camera (on the floor, below the lidar plane); stop >= 3 s before the line, then drive on",
+      "images for checking: red / green from the stop position, the crosswalk at known distances, the zone floor markings"
+    ],
+    "meanwhile_speed_items": [
+      "transfer pause open_board_ahead_without_second_support (~.4 s, runs 98/99/101/105): cut that scan only, as round 103 did for the start lane",
+      "finish: the time ends at the finish line (front wheels); the car crossed it at ~.6 m/s; with the creep it could carry more speed (~.2-.3 s)",
+      "start lane: the taper before the first support binds from ~4.4 m (~.3-.5 s); far-range speed steps cost a frame"
+    ],
+    "status": "recorded only; no code changed"
   }
 }

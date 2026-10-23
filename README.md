@@ -1,4 +1,4 @@
-# XT-STCAR（10-23 Claude：第105轮实车整条路线一次跑完、整车停进终点区（离板.363m）18.6s；启动：Mac上`python3 scripts/start-round.py N`，车上终端用本轮`trial<N>.py`）
+# XT-STCAR（10-23 Claude：第105轮实车整条路线一次跑完、整车停进终点区18.6s；人行横道/红绿灯等队友YOLO模型，尚未接入；启动：Mac上`python3 scripts/start-round.py N`，车上终端用本轮`trial<N>.py`）
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。路线只用激光雷达，不用摄像头。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。
@@ -36,7 +36,11 @@ Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车�
 - 雷达整包缺失（原始 0–11°）在新桥上还没再出现过，补点是否覆盖这种情况要看 `seam_filled_bins` ≥ 10 的帧。
 - 过渡段：前方有板进入停车距离、还没看到第二个桶时会断电约 .4 s（第98、99、101、105轮）。
 - 第一个桶按"目标桶"允许贴近，最近 .047–.06 m；碰板才停。
-- 不识别红绿灯：视觉模型只有 `blue_cone`，路线也不用摄像头。
+- **人行横道和红绿灯还没接入**：由队友的 YOLO 模型负责，模型还没训练好。现在路线纯雷达，开过斑马线、穿过龙门架都不停。按规则每跑一次约 +80 s：斑马线不停 +30 s，红绿灯不停 +50 s。模型到了以后：
+  - 给 `route-engine race` 接摄像头；
+  - 灯前停车位置用雷达看龙门架两腿来定，模型给出绿灯再走；
+  - 斑马线前停够 3 s 再走。
+  - 详见记录键 `crosswalk_light_yolo_pending_20261023`。
 - 2 帧 1560 从静止补进在车上实际能走多远，还没实测。
 
 ## 跑一轮：改代码 → 验证 → 打包 → 部署 → 启动
