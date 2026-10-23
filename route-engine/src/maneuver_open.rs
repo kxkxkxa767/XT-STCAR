@@ -693,15 +693,31 @@ impl Maneuver {
     /// _open_second_maturing(scan, ahead, stop_at).
     pub fn open_second_maturing(&self, scan: &V, ahead: Option<f64>, stop_at: f64) -> bool {
         let target = &self.second_target;
-        ahead.is_some_and(|a| a > stop_at - OPEN_SECOND_CONFIRM_GRACE_M)
+        if !(ahead.is_some_and(|a| a > stop_at - OPEN_SECOND_CONFIRM_GRACE_M)
             && target.is_dict()
             && target.get("confirmed").is_false()
             && target.get("track_id").is_int()
             && py_eq(target.get("source_seq"), scan.get("seq"))
             && target.get("range_m").is_num()
-            && target.idx("range_m").f() < ahead.unwrap()
             && self.role_distinct_evidence.is_some()
-            && py_eq(self.role_distinct_evidence.get("source_seq"), scan.get("seq"))
+            && py_eq(self.role_distinct_evidence.get("source_seq"), scan.get("seq")))
+        {
+            return false;
+        }
+        let range = target.idx("range_m").f();
+        if range < ahead.unwrap() {
+            return true;
+        }
+        // Round 106: the return ahead may be the support itself.
+        let bins = target.get("support_bins");
+        if !bins.is_list() || !scan.get("ranges").is_list() {
+            return false;
+        }
+        let exclude: Vec<i64> = bins.l().iter().map(|b| b.i()).collect();
+        match self.lane_front_range_excluding(scan, &exclude) {
+            None => true,
+            Some(board) => range < board,
+        }
     }
 
     /// _open_confirmed_second(scan).
@@ -1456,4 +1472,59 @@ fn guarded_pursuit(
     let moved = (pose.0 * u.0 + pose.1 * u.1, pose.1 * u.0 - pose.0 * u.1);
     let predicted = pursuit_pwm(in_pose(build(moved.0, moved.1), pose));
     if overshoot_guard(pwm, predicted.1) != pwm { predicted } else { (curvature, pwm) }
+}
+
+#[cfg(test)]
+mod round106_tests {
+    //! Round 106: the second support standing on the transfer axis is the
+    //! return ahead; the same frames and Python results as
+    //! web/vehicle-console/tests/fixtures/transfer_axis_support_frames.json.
+    use super::*;
+    use crate::py::parse_json;
+
+    fn frames() -> V {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../web/vehicle-console/tests/fixtures/transfer_axis_support_frames.json"
+        );
+        parse_json(&std::fs::read_to_string(path).unwrap()).unwrap().idx("frames").clone()
+    }
+
+    fn transfer(frame: &V) -> (Maneuver, V) {
+        let mut m = Maneuver::new(&V::Float(0.), &V::Float(40.), &V::Int(1670), &V::Bool(true));
+        m.entry_kind = Some("lane");
+        m.route_stage = "open_transfer";
+        let at = frame.idx("at_ms").i() as f64 / 1000.;
+        m.compass.heading = Some(frame.idx("compass_heading_rad").f());
+        m.compass.rate = 0.;
+        m.compass.at_s = Some(at);
+        m.compass.measured_at_s = Some(at);
+        m.second_target = frame.idx("second_target").clone();
+        m.role_distinct_evidence = crate::dict! {"source_seq" => frame.idx("role_distinct_source_seq").clone()};
+        let scan = crate::dict! {
+            "seq" => frame.idx("seq").clone(), "at_ms" => frame.idx("at_ms").clone(),
+            "ranges" => frame.idx("ranges").clone(),
+        };
+        (m, scan)
+    }
+
+    #[test]
+    fn the_support_on_the_axis_matures_exactly_as_in_python() {
+        let frames = frames();
+        assert_eq!(frames.l().len(), 4);
+        for frame in frames.l() {
+            let (m, scan) = transfer(frame);
+            let python = frame.idx("python");
+            let stop = python.idx("stop_at").f();
+            let ahead = m.lane_front_range(&scan).unwrap();
+            assert_eq!(ahead.to_bits(), python.idx("ahead").f().to_bits());
+            let bins: Vec<i64> = frame.idx("second_target").idx("support_bins").l().iter().map(|b| b.i()).collect();
+            let board = m.lane_front_range_excluding(&scan, &bins).unwrap();
+            assert_eq!(board.to_bits(), python.idx("board_excluding_support").f().to_bits());
+            assert!(m.open_second_maturing(&scan, Some(ahead), stop));
+            assert!(python.idx("maturing").is_true());
+            assert!(!m.open_second_maturing(&scan, Some(stop - OPEN_SECOND_CONFIRM_GRACE_M), stop));
+            assert!(python.idx("maturing_at_grace_end").is_false());
+        }
+    }
 }

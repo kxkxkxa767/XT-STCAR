@@ -1187,6 +1187,11 @@ impl Maneuver {
 
     /// _lane_front_range(scan).
     pub fn lane_front_range(&self, scan: &V) -> Option<f64> {
+        self.lane_front_range_excluding(scan, &[])
+    }
+
+    /// _lane_front_range(scan, exclude): round 106, bins in ``exclude`` skipped.
+    pub fn lane_front_range_excluding(&self, scan: &V, exclude: &[i64]) -> Option<f64> {
         let heading = if self.entry_kind == Some("lane") { self.compass.current(scan) } else { None };
         let list = scan.idx("ranges").l();
         if let Some(heading) = heading {
@@ -1195,7 +1200,7 @@ impl Maneuver {
             let mut best: Option<f64> = None;
             for i in center - LANE_FRONT_HALF_BINS..center + LANE_FRONT_HALF_BINS + 1 {
                 let r = &list[imod(i, 360) as usize];
-                if r.is_num() {
+                if r.is_num() && !exclude.contains(&imod(i, 360)) {
                     let v = r.f() * radians((i - center) as f64).pcos();
                     best = Some(match best {
                         None => v,
@@ -1208,7 +1213,7 @@ impl Maneuver {
         let mut best: Option<f64> = None;
         for i in -LANE_FRONT_HALF_BINS..LANE_FRONT_HALF_BINS + 1 {
             let r = &list[imod(i, 360) as usize];
-            if r.is_num() {
+            if r.is_num() && !exclude.contains(&imod(i, 360)) {
                 best = Some(match best {
                     None => r.f(),
                     Some(b) => pmin(b, r.f()),

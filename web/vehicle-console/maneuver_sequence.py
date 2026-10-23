@@ -3793,14 +3793,29 @@ class ManeuverSequence(TurnMotion):
     def _open_second_maturing(self, scan, ahead, stop_at):
         """A second support tracked in this scan, not yet confirmed, nearer than
         the board ahead, while the board is within OPEN_SECOND_CONFIRM_GRACE_M
-        of the stopping range (see there). The body gate is unchanged."""
+        of the stopping range (see there). The body gate is unchanged.
+
+        Round 106 (car runs 98/99/101/105): the support standing on the
+        transfer axis was itself the return ahead (2.87-2.98 m, its centre
+        range ~1 cm farther), so it was never "nearer than the board" and the
+        hold stopped the car for .4-.7 s just before its confirmation. The
+        board is then the nearest axis return that is not one of its own.
+        """
         target = self.second_target
-        return (ahead is not None and ahead > stop_at-OPEN_SECOND_CONFIRM_GRACE_M
+        if not (ahead is not None and ahead > stop_at-OPEN_SECOND_CONFIRM_GRACE_M
                 and isinstance(target, dict) and target.get('confirmed') is False
                 and type(target.get('track_id')) is int and target.get('source_seq') == scan.get('seq')
-                and _number(target.get('range_m')) and target['range_m'] < ahead
+                and _number(target.get('range_m'))
                 and self.role_distinct_evidence is not None
-                and self.role_distinct_evidence.get('source_seq') == scan.get('seq'))
+                and self.role_distinct_evidence.get('source_seq') == scan.get('seq')):
+            return False
+        if target['range_m'] < ahead:
+            return True
+        bins = target.get('support_bins')
+        if not isinstance(bins, list) or not isinstance(scan.get('ranges'), list):
+            return False
+        board = self._lane_front_range(scan, exclude=set(bins))
+        return board is None or target['range_m'] < board
 
     def _open_confirmed_second(self, scan):
         """The second support when confirmed with its complete support this frame."""
@@ -5345,8 +5360,9 @@ class ManeuverSequence(TurnMotion):
                        if center is not None and abs(best) <= math.radians(20) else 0.)
         return max(RIGHT_EXIT_MIN_PWM, min(SERVO_MAX, NEUTRAL+round(LEFT_TRIAL_GAIN*(best+center_term))))
 
-    def _lane_front_range(self, scan):
-        """Nearest return straight ahead (+-LANE_FRONT_HALF_BINS deg), or None.
+    def _lane_front_range(self, scan, exclude=()):
+        """Nearest return straight ahead (+-LANE_FRONT_HALF_BINS deg), or None;
+        bins in ``exclude`` are skipped (round 106: a support's own returns).
 
         Round 64 (lane entry): measured along the compass axis instead, as
         the distance along that axis. An angled car's own straight-ahead ray
@@ -5359,9 +5375,10 @@ class ManeuverSequence(TurnMotion):
             center = round(math.degrees(_wrap(heading-axis)))
             values = [scan['ranges'][i % 360]*math.cos(math.radians(i-center))
                       for i in range(center-LANE_FRONT_HALF_BINS, center+LANE_FRONT_HALF_BINS+1)
-                      if _number(scan['ranges'][i % 360])]
+                      if _number(scan['ranges'][i % 360]) and i % 360 not in exclude]
             return min(values) if values else None
-        values = [scan['ranges'][i % 360] for i in range(-LANE_FRONT_HALF_BINS, LANE_FRONT_HALF_BINS+1)]
+        values = [scan['ranges'][i % 360] for i in range(-LANE_FRONT_HALF_BINS, LANE_FRONT_HALF_BINS+1)
+                  if i % 360 not in exclude]
         values = [r for r in values if _number(r)]
         return min(values) if values else None
 

@@ -23815,12 +23815,12 @@
   },
   "next_tasks_20261022": {
     "crosswalk_light": "waiting for the teammate's YOLO model (crosswalk, traffic light); see crosswalk_light_yolo_pending_20261023",
-    "transfer_pause": "open_board_ahead_without_second_support (runs 98, 99, 101, 105): ~.4 s neutral before the second support",
+    "transfer_pause": "round 106 on the car: watch for open_board_ahead_without_second_support and the second handover",
     "finish_speed": "carry more speed over the finish line now that the creep exists",
     "creep": "not yet exercised on the car (run 105 stopped inside on the coast)",
     "start_lane": "far-range speed steps still cost a frame; the stopping taper before the first support binds from ~4.4 m",
     "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
-    "next_round": "round 106; the car holds round 105 (ab7a696, engine 342e6a3c..., bridge fe5c0056...)"
+    "next_round": "round 106 (this record); the car holds round 105 (ab7a696)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -24175,5 +24175,36 @@
       "start lane: the taper before the first support binds from ~4.4 m (~.3-.5 s); far-range speed steps cost a frame"
     ],
     "status": "recorded only; no code changed"
+  },
+  "turn106_transfer_axis_support_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 105 (ab7a696) on the car; 2e9ed50 records run 105",
+    "user": [
+      "还有什么去要改的吗 -> (crosswalk/light: wait for the YOLO model) -> 去吧加油，我相信你可以的"
+    ],
+    "evidence": {
+      "runs": "open_board_ahead_without_second_support recovery holds in runs 98 (seq 94), 99 (94), 101 (81), 105 (90): at entry the axis return ahead was 2.81-2.98 m and the tracked, unconfirmed second support's centre range .01 m farther (2.82-2.99 m): the support itself stood on the transfer axis. The confirmation grace (_open_second_maturing: a tracked support nearer than the board, OPEN_SECOND_CONFIRM_GRACE_M) required range < ahead and never applied; the hold cost .4-.7 s (the support confirmed 1-4 scans later, the resume needs .3 s of clean frames)",
+      "run_105_seq_89": "axis window bins 16-22: 16-18 read 5.13-5.15 m (the end board), 19-22 = the support's bins (2.99-3.00 m); fixture tests/fixtures/run105_seq89_transfer_axis_support.json"
+    },
+    "change": {
+      "maturing": "_open_second_maturing (route-engine open_second_maturing): when the support is not nearer than the return ahead, the board is the nearest axis return outside the support's own support_bins (_lane_front_range(scan, exclude); Rust lane_front_range_excluding); the support matures if it is nearer than that board (or nothing else is in the axis window). Every other condition is unchanged: tracked in this scan, unconfirmed, role-distinct evidence of this scan, and the hold still comes once the return ahead is OPEN_SECOND_CONFIRM_GRACE_M inside the stopping range (2.385 m at the nominal 1.3 m/s); the body gate is unchanged",
+      "not_changed": "the hold itself, its resume rules, the stopping range, the second-support confirmation and every other stage"
+    },
+    "validation": {
+      "offline_runs": "the recorded scans of runs 98/99/101/105 through the new check: at each hold's first frame (98 seq 94, 99 seq 94, 101 seq 81) the support now matures (the old rule held); the following frames confirm it (99 at 96, 101 at ~84, 105 at 91), where the drive starts the second loop. Run 101 lost the support for one frame at seq 83 (no track), where the hold still applies",
+      "python": "full console discover 891 OK (887 + 4: test_route_106_transfer_axis_support on the run-105 frame and the four recorded hold starts, fixtures run105_seq89_transfer_axis_support.json, transfer_axis_support_frames.json)",
+      "rust": "route-engine cargo test 4 passed (new round106_tests: on the four recorded frames lane_front_range, lane_front_range_excluding and open_second_maturing equal the Python results bit for bit), clippy warning count unchanged (35)",
+      "course_sim": "6 layouts x 4 vehicles (24): no transfer hold either way, identical. 108 rules-range variants old vs new: identical (93 finish both, 4 contacts both; no transfer hold either way: the simulated second support confirms before the board-ahead range)",
+      "parity": "route-engine-parity-sweep all 184/185 (the known run-75 replay); the sweep's replays end at run 94 and no simulated case reaches the hold, so the new branch is checked by the Rust unit test on the four recorded frames instead"
+    },
+    "expected_gain": "~.4 s where the second support stands on the transfer axis and confirms before 2.385 m (4 of 8 runs since 98 held there)",
+    "risks": [
+      "a support tracked but never confirmed now holds at 2.385 m instead of 2.885 m along the axis (the grace the board case already had); the second loop needs its confirmation as before",
+      "not run on the car"
+    ]
   }
 }
