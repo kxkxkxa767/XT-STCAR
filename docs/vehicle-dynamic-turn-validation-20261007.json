@@ -24019,6 +24019,24 @@
       "the rare whole-band (raw 0-11) loss was never captured packet by packet; the fill covers it only when the previous revolution had its packet past 0 deg (seam_filled_bins on the car shows it)",
       "a filled bin is up to one revolution (~.1 s) older than the end-of-sweep bins beside it, as the sweep's start always was",
       "not run on the car"
-    ]
+    ],
+    "package": {
+      "build": "build-race.py claude-turn103 claude-turn104 104 turn104_seam_and_start_push_20261023 --rebuild-bridge (exit 0)",
+      "source_commit": "410bc963a4ae4ca41cdfc003818a8f904756db54",
+      "runtime_changed": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine",
+        "payload/vehicle-bridge"
+      ],
+      "route_engine_sha256": "f8cad5f3beea17ee5da2da161c9717f2a2a924465efa9b666e49e159eb597a0f",
+      "vehicle_bridge_sha256": "fe5c0056da3e82cb6fdef96cdfac53c3aa091126042f8476ccbc61671ee71d57 (rebuilt; was fc7028ae... since round 79; rust_changed lidar_revolution.rs, vehicle-bridge.rs)",
+      "elf": "bridge and engine riscv64 lp64d, inspection passed",
+      "sha256sums": "19/19 OK",
+      "archive_sha256": "b10d5b1efcfe462a5adcc669a7a4bea23bb5fa43027204ff012808b7c24086bb",
+      "helper": "left-cone-trial-once-104.py 4967e98c... (race-trial.py, --bridge-sha256 fe5c0056...)",
+      "deploy_script_sha256": "c2d1bdf7eafe98f6a629fa03e48f600a733bfe690c60f333dc399883332625f9",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn104-20261023-201552",
+      "evidence_dir": "left-cone-trial-20261023-104"
+    }
   }
 }
