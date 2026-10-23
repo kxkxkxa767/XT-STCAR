@@ -23815,13 +23815,11 @@
   },
   "next_tasks_20261022": {
     "crosswalk_light": "waiting for the teammate's YOLO model (crosswalk, traffic light); see crosswalk_light_yolo_pending_20261023",
-    "transfer_pause": "round 106 on the car: watch for open_board_ahead_without_second_support and the second handover",
-    "finish_speed": "carry more speed over the finish line now that the creep exists",
-    "creep": "not yet exercised on the car (run 105 stopped inside on the coast)",
+    "loops": "the first and second loops vary most between runs (22-28 / 28-35 frames)",
+    "finish_speed": "carry more speed over the finish line now that the creep exists (it worked on the car in run 106)",
     "start_lane": "far-range speed steps still cost a frame; the stopping taper before the first support binds from ~4.4 m",
     "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
-    "next_round": "round 107; the car holds round 106 (c0843c4, engine 7f4e2306..., bridge fe5c0056...)",
-    "fetch_106": "fetch left-cone-trial-20261023-106 and complete turn106_actual_20261023"
+    "next_round": "round 107; the car holds round 106 (c0843c4, engine 7f4e2306..., bridge fe5c0056...)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -24235,20 +24233,15 @@
   "turn106_actual_20261023": {
     "date": "2026-10-23",
     "author": "Claude",
-    "status": "partial: helper result only, evidence not yet fetched",
-    "helper_result": {
-      "reason": "route_finish_zone_stop",
-      "program_exit": 0,
-      "program_elapsed_s": 26.397,
-      "max_actual_gap_s": 0.0226,
-      "max_tick_compute_s": 0.0043,
-      "console_healthy": true,
-      "console_neutral_samples": 6,
-      "service_active": "active",
-      "devices_busy_after_run": []
-    },
-    "evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261023-106 on the car (after-console.json, before-console.json, helper-result.json, race-stdout.txt, run/); not copied: the SSH master broke during the listing and the car then answered no ping (192.168.0.156, the Mac on 192.168.0.193): probably powered off or off the Wi-Fi. Two empty files the failed commands had created locally (trial106-remote-sha256.txt, after106-trial-fresh.json) were removed; nothing was copied",
-    "not_known_yet": "whether the transfer still held (open_board_ahead_without_second_support), the second handover, the route time and the finish gap; program_elapsed_s (26.40 vs 27.31 in run 105) includes the ready wait and the standstill check, so it is not the route time",
-    "next": "when the car is back: fetch the evidence dir with sha256 checks (as start-round.py does) and complete this record"
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261023-106 (run/ = program files); fetched after the car was switched off and on again (the user reopened the SSH master): 10/10 sha256 OK",
+    "run": "the operator ran trial106.py from an SSH terminal on the car",
+    "result": "route_finish_zone_stop, the whole route in one go: start -> finish stop 18.8 s (seq +188), start -> front over the finish line (gap <= .80) 17.2 s; program 26.40 s, max gap .023 s, max tick compute .004 s; console healthy, 6 neutral samples",
+    "transfer": "no pause: second_confirm_grace true at seq 94-95 (the support tracked, unconfirmed, 3.09/2.99 m on the axis), the motor stayed 1550 and the second support was handed over; first pass -> second handover 1.2 s (run 105 1.5 s with its .4 s hold, run 104 1.2 s without a hold)",
+    "finish_creep": "first use on the car: stopped .46 m from the board (rear out), one 2-frame 1560 creep (seq 198-199) moved it ~.07 m; stopped_with_the_whole_car_in_the_finish_zone at .394 m",
+    "compared": "start -> finish line: 104 17.5 s, 105 16.4 s, 106 17.2 s; stage frames (104/105/106): start lane 41/43/44, first loop 28/22/26, transfer 12/15/12, second loop 35/28/32, to the light lane 27/28/28. The loops (unchanged code) vary by placement and cone position from run to run, more than the transfer gain",
+    "seam": "126 recorded scans, coverage 360 in all; seam_filled_bins 0 x42, 1 x38, 2 x35, 3 x10, 4 x1",
+    "start_lane": "neutral in 2 of 27 recorded frames (seq 46-47)",
+    "clearances": "no body-gate stop; min known body distance .080 m (transfer)",
+    "car_after": "after106-trial-fresh.json (after the restart): locked, 1500/1500, no owner"
   }
 }
