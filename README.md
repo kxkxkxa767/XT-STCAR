@@ -1,4 +1,4 @@
-# XT-STCAR（10-23 Claude：第105轮终点补进已部署待跑，车摆好后`python3 scripts/start-round.py 105`；第104轮整条路线一次跑完、全程无停顿18.7s）
+# XT-STCAR（10-23 Claude：第105轮终点补进已部署待跑，车摆好后在Mac上`python3 scripts/start-round.py 105`（车上终端用本轮`trial105.py`）；第104轮整条路线一次跑完、全程无停顿18.7s）
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。路线只用激光雷达，不用摄像头。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。
@@ -51,11 +51,19 @@ Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车�
 3. **记录并推送**：机器记录加新键，更新 `agent.md` 顶部和本文件第一行，提交并推送 `main`。
 4. **打包**：`python3 work/vehicle-dynamic-deploy-20261008/build-race.py claude-turn<上一轮> claude-turn<N> <N> <记录键>`。改了 `crates/` 时加 `--rebuild-bridge` 重编桥。打包会交叉编译引擎（和桥）、检查 ELF、写 19 个文件的 SHA256SUMS，并生成本轮的车上助手 `trial<N>.py`。
 5. **部署**：`python3 work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn<N> <N>`，有备份和回滚。部署前后都用 `read-fresh-engine.py` + `validate-fresh-engine.py` 核对：6 个新鲜的锁定中位样本，17 个安装哈希和部署包一致。
-6. **启动**：车摆到起点后，在本机终端输入：
+6. **启动**：车摆到起点后，在 **Mac 终端**（不是 SSH 到车上的终端）输入：
 
 ```bash
-python3 scripts/start-round.py 105
+python3 /Users/yuhaojin/Documents/XT-STCAR/scripts/start-round.py 105
 ```
+
+已经 SSH 在车上的终端里，直接跑本轮的车上助手（同样只跑一次、开跑前自查；证据留在车上，之后由 Mac 取回）：
+
+```bash
+python3 /home/bianbu/xt-stcar-console/stage-claude-turn105-20261023-204543/trial105.py
+```
+
+两条只选一条。
 
 `scripts/start-round.py N` 的流程：
 - 先核对车上状态和第 N 轮部署（锁定、中位、就绪、17 个哈希），不符就不启动。

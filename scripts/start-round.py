@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start one built and deployed round on the car from this Mac.
+"""Start one built and deployed round on the car from this Mac (not on the car).
 
   python3 scripts/start-round.py N
 
