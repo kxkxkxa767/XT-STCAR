@@ -23820,7 +23820,8 @@
     "creep": "not yet exercised on the car (run 105 stopped inside on the coast)",
     "start_lane": "far-range speed steps still cost a frame; the stopping taper before the first support binds from ~4.4 m",
     "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
-    "next_round": "round 106 (this record); the car holds round 105 (ab7a696)"
+    "next_round": "round 107; the car holds round 106 (c0843c4, engine 7f4e2306..., bridge fe5c0056...)",
+    "fetch_106": "fetch left-cone-trial-20261023-106 and complete turn106_actual_20261023"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -24181,7 +24182,7 @@
     "author": "Claude",
     "implemented": true,
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "baseline": "round 105 (ab7a696) on the car; 2e9ed50 records run 105",
     "user": [
       "还有什么去要改的吗 -> (crosswalk/light: wait for the YOLO model) -> 去吧加油，我相信你可以的"
@@ -24228,7 +24229,26 @@
       "before": "before106-fresh.json: six fresh locked ready samples, 17 hashes and settings match round 105",
       "deploy": "deploy-matched.py claude-turn106 106: deployed, error/rollback null, backup backup-claude-turn106-20261023-213625",
       "after": "after106-deploy-fresh.json validated against round 106 (see the commit)",
-      "run": "left to the operator"
+      "run": "the operator ran trial106.py from an SSH terminal on the car (\"跑完了，你记录并推送\")"
     }
+  },
+  "turn106_actual_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "status": "partial: helper result only, evidence not yet fetched",
+    "helper_result": {
+      "reason": "route_finish_zone_stop",
+      "program_exit": 0,
+      "program_elapsed_s": 26.397,
+      "max_actual_gap_s": 0.0226,
+      "max_tick_compute_s": 0.0043,
+      "console_healthy": true,
+      "console_neutral_samples": 6,
+      "service_active": "active",
+      "devices_busy_after_run": []
+    },
+    "evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261023-106 on the car (after-console.json, before-console.json, helper-result.json, race-stdout.txt, run/); not copied: the SSH master broke during the listing and the car then answered no ping (192.168.0.156, the Mac on 192.168.0.193): probably powered off or off the Wi-Fi. Two empty files the failed commands had created locally (trial106-remote-sha256.txt, after106-trial-fresh.json) were removed; nothing was copied",
+    "not_known_yet": "whether the transfer still held (open_board_ahead_without_second_support), the second handover, the route time and the finish gap; program_elapsed_s (26.40 vs 27.31 in run 105) includes the ready wait and the standstill check, so it is not the route time",
+    "next": "when the car is back: fetch the evidence dir with sha256 checks (as start-round.py does) and complete this record"
   }
 }
