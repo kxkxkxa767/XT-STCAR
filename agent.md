@@ -9,6 +9,24 @@
 - 总时间没比第105轮短：两圈绕桶（代码未改）每轮差0.4s左右，主要随摆放和桶位变化。
 - 证据是车关机重开、用户重建SSH共享连接后取回的，10/10校验一致。
 
+**明天继续（用户10-23晚：“先记录吧，明天再分析”）**
+1. 现状：车上第106轮，已跑、证据已取回并记录；下一轮编号107。车已关机。
+2. 连车：车只能密码登录。车开机后请用户在Mac终端运行`cd /Users/yuhaojin/Documents/XT-STCAR && ssh -M -S work/vehicle-test-ssh.sock -o ControlPersist=yes -fN bianbu@192.168.0.156`（不在聊天里要密码），再用`ssh -S work/vehicle-test-ssh.sock -o BatchMode=yes …`。
+3. 待分析（还没开始）：
+   - 两圈绕桶每轮差约0.4s：第104/105/106轮首桶28/22/26帧、二桶35/28/32帧，代码没变，先查摆放和桶位、规划半径与速度；
+   - 终点有了补进后能否带更高速度过线（规则在车头过线时停表）；
+   - 起步直道未见首桶时约4.4m起的减速带；
+   - 新桥上整包缺失（`seam_filled_bins`≥10）还没出现。
+4. 人行横道/红绿灯：等队友的YOLO模型，不自己做（`crosswalk_light_yolo_pending_20261023`）。
+5. 每轮流程：
+   - Python参考实现和Rust引擎同步改；
+   - 全量测试0失败、`route-engine` cargo test、逐位对比`scripts/route-engine-parity-sweep.py OUT all`（不和全量测试同时跑）；
+   - 记录（机器记录新键、本文件顶部、README第一行）后推送；
+   - `build-race.py`（改crates时加`--rebuild-bridge`），`deploy-matched.py`前后都用`read/validate-fresh-engine.py`核对；
+   - 用户摆好车后自己启动：Mac上`python3 scripts/start-round.py N`，或车上终端跑stage里的`trialN.py`；
+   - 取证据（逐个sha256），然后记录推送。
+6. 注意：第98轮起证据在`run/`下，逐位对比的录像回放只到第94轮。仿真不触发的新逻辑，要用实录帧写Rust单元测试和Python对比（参考`round106_tests`）。
+
 ## 当前接手入口（2026-10-23 Claude：第106轮过渡段——第二个桶站在轴线上时被当成前方挡板，确认前的宽限不生效、停车约.4–.7s；改为排除桶自己的回波再比；未部署）
 
 记录键`turn106_transfer_axis_support_20261023`。车上是第106轮（c0843c4，引擎7f4e2306…，桥fe5c0056…），已部署待跑：Mac上`python3 scripts/start-round.py 106`，或车上终端`python3 /home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625/trial106.py`。
