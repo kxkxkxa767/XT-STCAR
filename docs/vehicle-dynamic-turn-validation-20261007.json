@@ -23814,11 +23814,10 @@
     ]
   },
   "next_tasks_20261022": {
-    "deploy": "round 103 package built and pushed, not deployed (user: deploy when back)",
-    "start_lane": "round 103 on the car: watch start_lane_feedback.board_ahead_cut and the restart",
-    "light_entry": "round 102 change not yet exercised on the car",
-    "light_lane_one_go": "round 101 change not yet exercised on the car",
-    "next_round": "round 103 (this record); the car holds round 102 (261840b, engine 752e08e0...)"
+    "round_104": "bridge seam fill + start-lane push rule (this conversation, 2026-10-23)",
+    "finish_zone": "run 103 stopped .404 m from the board, rear ~4 mm short of whole-car-in-zone",
+    "light_entry": "round 102 shift not yet needed on the car",
+    "next_round": "round 104; the car holds round 103 (16ea82f, engine c3bde5d2...)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -23896,8 +23895,8 @@
     "date": "2026-10-22",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "round 102 (261840b) on the car; 8aef876/2bd10c5 record run 102",
     "user": [
       "为什么停下来了",
@@ -23947,6 +23946,49 @@
       "evidence_dir_on_car": "/home/bianbu/xt-stcar-console/left-cone-trial-20261022-103",
       "deployed": false,
       "note": "built and kept in work/ (not in git); the user deploys it when back"
+    },
+    "deployment": {
+      "operator": [
+        "好了，你可以开始这一轮的测试了 (2026-10-23, car at the start)"
+      ],
+      "before": "before103-fresh.json: six fresh locked ready samples (rust_engine), 17 hashes and settings match round 102 (the car had rebooted 4 min before)",
+      "deploy": "deploy-matched.py claude-turn103 103: deployed, error/rollback null, backup backup-claude-turn103-20261022-183958",
+      "after_and_pre_run": "after103-deploy-fresh.json and pre103-run-fresh.json: six fresh locked ready samples, 17 hashes match round 103; trial103.py b318d0d1..., engine c3bde5d2..., bridge fc7028ae... match; no evidence dir; only the console, its engine and two bridges running; start: left .42 / right .48 m, 7.63 m ahead, turn_ready true",
+      "run": "ssh 'python3 stage-claude-turn103-20261022-183958/trial103.py' > trial103-stdout.json (exit 0)",
+      "fetch": "trial103-remote-sha256.txt, scp left-cone-trial-20261022-103: 10/10 sha256 OK; after103-trial-fresh.json locked, 1500/1500, no owner"
     }
+  },
+  "turn103_actual_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261022-103 (run/ = program files)",
+    "result": "route_finish_zone_stop: the whole route (start lane, anticlockwise loop round cone 1, transfer, clockwise loop round cone 2, light entry, light lane, finish) in one go, 21.3 s from the start (seq 16 -> 213); program 29.97 s, max gap .022 s, max tick compute .005 s; console healthy, 6 neutral samples after",
+    "stages_seq": {
+      "start_lane": 16,
+      "first_approach_handover": 63,
+      "quality_wait": "87-92",
+      "first_pass": 93,
+      "post_pass_pause": "96-101",
+      "second_handover": 103,
+      "second_pass": 135,
+      "light_aligned_and_lane": 162,
+      "finish_stop": 213
+    },
+    "clearances": "board contact none (no body-gate stop); the first cone was tolerated as the target 16 times (min known body distance .047 m at seq 91 in the first loop); finish: stopped .404 m from the end board, front in the zone, the rear ~4 mm short of whole-car-in-zone (LANE_FINISH_BODY_GAP_M .40), basis stopped_front_in_finish_zone_restart_could_reach_the_board",
+    "round_changes_on_car": "round 103 start-lane cut never acted (no start_lane_board_ahead_cut event); round 102 light-entry shift not needed (no blocked line, line_shift null in every frame); round 101 light lane one-go: light_aligned -> light_lane -> finish without a pause",
+    "user": [
+      "这一轮的起步直行、左转和绕第一个桶明显有多次停顿，慢了很多"
+    ],
+    "compared": "start lane (start -> first handover) 47 scans (rounds 98-101: 41/39/44/38); first loop (handover -> first pass) 30 incl. the .5 s wait (98-101: 28/28/26/19); start -> finish 213 (98/99/100: 189/198/216)",
+    "pauses": {
+      "first_loop_quality_wait": "seq 87 front_sparse: raw bins 0-10 (calibrated 5-15) null, an 11-bin open run; the wait needs 5 clean frames: motor 1500 seq 88-91, resumed 92",
+      "post_pass_pause": "seq 96 front_sparse: raw bins 0-11 (calibrated 5-16) null, coverage 348 = valid 348 (never sampled, not invalid returns); 1500 seq 96-101",
+      "start_lane_governor": "seq 30 one cut (speed read 1.80 off the far range = allowed 1.80); seq 38-41 four cuts after a single 1560 push at seq 37 (1.23 m/s < allowed 1.66 - .4 with no rise; the next scan added the push's own ESC-lag rise .43: 1.31 + .43 >= 1.62); seq 49-53 the stopping taper (1.25 >= 1.24) before the first support was approached at 3.84 m"
+    },
+    "cause_seam": "the bridge assembles a revolution by packet start angle (crates/runner/src/bin/vehicle-bridge.rs): the packet straddling 0 deg puts its points past 0 deg into the revolution it started in, and the next revolution's first packet starts where it ended. With the packet phase precessing backwards (round 79 at rest: ~1.7 deg per revolution) the sliver between a revolution's own straddle end and its first packet is never sampled: raw 0-12 had 1-3 null bins in 70 % of this run's 148 recorded scans (79 % / 63 % in rounds 100/101), and a revolution without a straddle (or a lost one) lacks a whole packet (raw 0-11). Round 79 recorded both as open (assemble by point angle; whole-band loss unexplained).",
+    "fix_directions": [
+      "bridge: a bin this revolution never sampled takes the previous revolution's point past 0 deg (measured right before this revolution's first packet)",
+      "start-lane governor: a new 1560 push only while its own full ESC-lag rise stays under the allowed speed (as the 1600 launch already does)"
+    ]
   }
 }
