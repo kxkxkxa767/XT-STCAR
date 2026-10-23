@@ -118,18 +118,14 @@ class LightLaneTests(unittest.TestCase):
 
     def test_stop_with_only_the_front_in_the_zone_kicks_unless_that_could_reach_the_board(self):
         # Round 101: a restart kick from rest moved the car .08-.36 m (runs
-        # 98-100); within LANE_FINISH_MIN_GAP_M+LANE_KICK_TRAVEL_M it ends there.
-        for start, kicked in ((.2+.47, False), (.2+.7, True)):
+        # 98-100); within LANE_FINISH_MIN_GAP_M+LANE_KICK_TRAVEL_M no kick.
+        # Round 105: there a shorter creep instead (test_route_105_finish_creep).
+        for start, frames in ((.2+.47, ms.LANE_CREEP_FRAMES), (.2+.7, ms.LANE_KICK_FRAMES)):
             motion = self.lane_motion()
             results = self.drive(motion, [0.]*6, start=start)
             with self.subTest(gap=start-.2):
-                if kicked:
-                    self.assertEqual(results[-1]['phase'], 'drive')
-                    self.assertIn(TRIAL_MOTOR, [r['motor'] for r in results])
-                else:
-                    self.assertEqual(results[-1]['reason'], 'route_finish_zone_stop')
-                    self.assertEqual(results[-1]['finish_evidence']['basis'],
-                                     'stopped_front_in_finish_zone_restart_could_reach_the_board')
+                self.assertEqual(results[-1]['phase'], 'drive')
+                self.assertEqual([r['motor'] for r in results].count(TRIAL_MOTOR), frames)
 
     def test_unknown_speed_coasts_near_the_board_and_decides_once_measured(self):
         # Round 64: an unmeasured speed (1.3 m/s fallback) within the weakest

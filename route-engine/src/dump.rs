@@ -116,7 +116,7 @@ impl Maneuver {
             "route_end_coast_servo" => self.route_end_coast_servo, "light_since" => self.light_since,
             "light_turn_started" => self.light_turn_started, "_lane_steering" => self._lane_steering.dump(),
             "_lane_speed_last" => opt_pair(&self._lane_speed_last),
-            "_lane_pulse" => self._lane_pulse, "_light_history" => rows_v(&self._light_history),
+            "_lane_pulse" => self._lane_pulse, "_lane_creep" => self._lane_creep, "_lane_creeps" => self._lane_creeps, "_light_history" => rows_v(&self._light_history),
             "_light_heading" => self._light_heading, "light_feedback" => self.light_feedback.clone(),
             "light_alignment_evidence" => self.light_alignment_evidence.clone(), "lane_motor" => self.lane_motor,
             "_lane_coast_track" => V::list(self._lane_coast_track.iter().map(|p| V::from(*p)).collect()),

@@ -104,6 +104,10 @@ pub const LANE_KICK_TRAVEL_M: f64 = 0.45;
 pub const LANE_KICK_REST_S: f64 = 1.;
 pub const LANE_COAST_DECEL_FLOOR_MPS2: f64 = 0.2;
 pub const LANE_KICK_FRAMES: i64 = 3;
+// Round 105: the finish creep (front in the zone, rear out, no room for the kick).
+pub const LANE_CREEP_FRAMES: i64 = 2;
+pub const LANE_CREEP_TRAVEL_M: f64 = 0.27;
+pub const LANE_CREEP_MAX: i64 = 3;
 pub const LANE_SPEED_CUT_MARGIN_MPS: f64 = 0.15;
 pub const LANE_SPEED_BASELINE: usize = 2;
 pub const LANE_SPEED_HISTORY: usize = 7;
@@ -456,6 +460,8 @@ pub struct Maneuver {
     pub _lane_steering: CorridorSteering,
     pub _lane_speed_last: Option<(f64, f64)>,
     pub _lane_pulse: i64,
+    pub _lane_creep: bool,
+    pub _lane_creeps: i64,
     pub _light_history: Vec<Row>,
     pub _light_heading: Option<f64>,
     pub light_feedback: V,
@@ -726,6 +732,8 @@ impl Maneuver {
             _lane_steering: CorridorSteering::default(),
             _lane_speed_last: None,
             _lane_pulse: 0,
+            _lane_creep: false,
+            _lane_creeps: 0,
             _light_history: Vec::new(),
             _light_heading: None,
             light_feedback: V::None,

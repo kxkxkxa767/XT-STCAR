@@ -1597,11 +1597,21 @@ impl Maneuver {
         let body_in_zone = gap.is_some_and(|g| g <= LANE_FINISH_BODY_GAP_M);
         let kick_room = gap.is_some_and(|g| g >= LANE_FINISH_MIN_GAP_M + LANE_KICK_TRAVEL_M);
         let rested = self._power_cmd_at.is_none_or(|at| now - at >= LANE_KICK_REST_S);
+        // Round 105: the finish creep.
+        let creep_room = in_zone
+            && !body_in_zone
+            && !kick_room
+            && gap.unwrap() >= LANE_FINISH_MIN_GAP_M + LANE_CREEP_TRAVEL_M
+            && (self._lane_creeps < LANE_CREEP_MAX || !rested);
         let mut basis: Option<&str> = None;
         if speed_known && stopped && body_in_zone {
             basis = Some("stopped_with_the_whole_car_in_the_finish_zone");
-        } else if speed_known && stopped && in_zone && !kick_room {
-            basis = Some("stopped_front_in_finish_zone_restart_could_reach_the_board");
+        } else if speed_known && stopped && in_zone && !kick_room && !creep_room {
+            basis = Some(if self._lane_creeps != 0 {
+                "stopped_front_in_finish_zone_creeps_used"
+            } else {
+                "stopped_front_in_finish_zone_restart_could_reach_the_board"
+            });
         } else if speed_known
             && coasting
             && !stopped
@@ -1623,6 +1633,7 @@ impl Maneuver {
             "coast_decel_se_mps2" => self._lane_coast_decel_se,
             "coast_decel_measured" => self._lane_coast_decel.is_some(),
             "motor_before" => self.lane_motor, "swept_path_certified" => false, "traffic_light_vision" => false,
+            "creep_room" => creep_room, "creeps" => self._lane_creeps,
         };
         if let Some(basis) = basis {
             let mut finish = self.lane_feedback.clone();
@@ -1641,7 +1652,7 @@ impl Maneuver {
         } else if speed.is_none() {
             self.lane_motor = ROUTE_SLOW_MOTOR;
         } else if stopped {
-            self.lane_motor = if kick_room && (rested || self._lane_pulse > 0) { TRIAL_MOTOR } else { NEUTRAL };
+            self.lane_motor = if (kick_room || creep_room) && (rested || self._lane_pulse > 0) { TRIAL_MOTOR } else { NEUTRAL };
         } else if self.lane_motor == ROUTE_SLOW_MOTOR {
         } else if self.lane_motor == NEUTRAL
             && stop_gap.unwrap() > LANE_FINISH_TARGET_GAP_M + LANE_TOPUP_BAND_M
@@ -1652,15 +1663,23 @@ impl Maneuver {
         } else {
             self.lane_motor = NEUTRAL;
         }
-        if self.lane_motor == TRIAL_MOTOR && self._lane_pulse >= LANE_KICK_FRAMES {
+        let frames = if self._lane_creep { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
+        if self.lane_motor == TRIAL_MOTOR && self._lane_pulse >= frames {
             self.lane_motor = NEUTRAL;
             self._lane_pulse = 0;
+            self._lane_creep = false;
         } else if self.lane_motor == TRIAL_MOTOR {
+            if self._lane_pulse == 0 && !kick_room && creep_room {
+                self._lane_creep = true;
+                self._lane_creeps += 1;
+            }
             self._lane_pulse += 1;
         } else {
             self._lane_pulse = 0;
+            self._lane_creep = false;
         }
         self.lane_feedback.set("motor", self.lane_motor);
+        self.lane_feedback.set("creeps", self._lane_creeps);
         self.steering_target = target;
         self.natural_steering_target = Some(natural);
         self.reason = "light_lane_follow_straight".into();

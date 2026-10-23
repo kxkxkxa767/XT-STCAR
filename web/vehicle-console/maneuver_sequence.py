@@ -332,6 +332,18 @@ LANE_COAST_DECEL_FLOOR_MPS2 = .2
 # 101: LANE_KICK_REST_S (was LANE_REST_FRAMES = 5 scans).
 # A restart kick at 1560 anywhere in the lane is a pulse too.
 LANE_KICK_FRAMES = 3
+# Round 105 (Claude; car runs 103/104 stopped .404/.459 m from the end board:
+# the front in the zone, the rear out (rules 2.4.2: +5 s), inside the kick's
+# LANE_FINISH_MIN_GAP_M+LANE_KICK_TRAVEL_M). A car stopped there gets a
+# LANE_CREEP_FRAMES 1560 creep instead, at most LANE_CREEP_MAX of them (the time
+# has already ended at the finish line). Its travel bound scales the kick's
+# (.45 m for 3 frames; the car's 3-frame kicks moved .08-.34 m, runs 98-103)
+# by the squared speed reached: LANE_SPEED_GUARD_MARGIN_MPS plus
+# LANE_KICK_ACCEL_MAX_MPS2 over the frames and the ESC skew on both ends,
+# (.53/.69)^2 x .45 = .266 m; from the zone's rear edge it stops >= .13 m short.
+LANE_CREEP_FRAMES = 2
+LANE_CREEP_TRAVEL_M = .27
+LANE_CREEP_MAX = 3
 
 LANE_SPEED_CUT_MARGIN_MPS = .15
 # While powered the speed rises faster than the ~.3 s estimate follows.
@@ -1366,6 +1378,8 @@ class ManeuverSequence(TurnMotion):
         self._lane_steering = CorridorSteering()
         self._lane_speed_last = None
         self._lane_pulse = 0
+        self._lane_creep = False  # round 105: the current 1560 pulse is a creep
+        self._lane_creeps = 0
         self._light_history = []
         self._light_heading = None
         self.light_feedback = None
@@ -5675,15 +5689,22 @@ class ManeuverSequence(TurnMotion):
         body_in_zone = gap is not None and gap <= LANE_FINISH_BODY_GAP_M
         kick_room = gap is not None and gap >= LANE_FINISH_MIN_GAP_M+LANE_KICK_TRAVEL_M
         rested = self._power_cmd_at is None or now-self._power_cmd_at >= LANE_KICK_REST_S
+        # Round 105: the front in the zone, the rear out, no room for the kick:
+        # creep, until LANE_CREEP_MAX creeps have been sent and the last one
+        # has rested (its ESC lag and the speed window behind it).
+        creep_room = (in_zone and not body_in_zone and not kick_room
+                      and gap >= LANE_FINISH_MIN_GAP_M+LANE_CREEP_TRAVEL_M
+                      and (self._lane_creeps < LANE_CREEP_MAX or not rested))
         # Round 101: end with the whole car in the zone: stopped there, or still
         # coasting where even a coast at the strong measured decel (_lane_decels)
         # stops in it (and the aimed one short of the board); stopped with only
-        # the front in it where a restart kick could reach the board, end there.
+        # the front in it where neither a kick nor a creep may go on, end there.
         basis = None
         if speed_known and stopped and body_in_zone:
             basis = 'stopped_with_the_whole_car_in_the_finish_zone'
-        elif speed_known and stopped and in_zone and not kick_room:
-            basis = 'stopped_front_in_finish_zone_restart_could_reach_the_board'
+        elif speed_known and stopped and in_zone and not kick_room and not creep_room:
+            basis = ('stopped_front_in_finish_zone_creeps_used' if self._lane_creeps
+                     else 'stopped_front_in_finish_zone_restart_could_reach_the_board')
         elif (speed_known and coasting and not stopped and strong_decel is not None and gap is not None
               and stop_gap >= LANE_FINISH_MIN_GAP_M
               and self._lane_stop(gap, v_aim, strong_decel, 0., 0., 0., 0.)
@@ -5698,7 +5719,8 @@ class ManeuverSequence(TurnMotion):
             'coast_decel_mps2': decel, 'guard_decel_mps2': guard_decel, 'strong_decel_mps2': strong_decel,
             'coast_decel_se_mps2': self._lane_coast_decel_se,
             'coast_decel_measured': self._lane_coast_decel is not None,
-            'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': False}
+            'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': False,
+            'creep_room': creep_room, 'creeps': self._lane_creeps}
         if basis is not None:
             self.finish_evidence = {**self.lane_feedback, 'received_at': scan['received_at'],
                                     'basis': basis, 'finish_zone_certified': False}
@@ -5709,7 +5731,8 @@ class ManeuverSequence(TurnMotion):
         elif speed is None:
             self.lane_motor = ROUTE_SLOW_MOTOR
         elif stopped:
-            self.lane_motor = TRIAL_MOTOR if kick_room and (rested or self._lane_pulse > 0) else NEUTRAL
+            self.lane_motor = (TRIAL_MOTOR if (kick_room or creep_room) and (rested or self._lane_pulse > 0)
+                               else NEUTRAL)
         elif self.lane_motor == ROUTE_SLOW_MOTOR:
             pass  # the straight, or a push, until the coast is aimed
         elif (self.lane_motor == NEUTRAL and stop_gap > LANE_FINISH_TARGET_GAP_M+LANE_TOPUP_BAND_M
@@ -5727,13 +5750,17 @@ class ManeuverSequence(TurnMotion):
         # car still rolling is not chopped (its guard is checked every scan).
         # Round 101: the next kick no sooner than LANE_KICK_REST_S after it (was
         # LANE_REST_FRAMES scans after the kick, restarted by any other output).
-        if self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= LANE_KICK_FRAMES:
-            self.lane_motor, self._lane_pulse = NEUTRAL, 0
+        if self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= (LANE_CREEP_FRAMES if self._lane_creep
+                                                                   else LANE_KICK_FRAMES):
+            self.lane_motor, self._lane_pulse, self._lane_creep = NEUTRAL, 0, False
         elif self.lane_motor == TRIAL_MOTOR:
+            if self._lane_pulse == 0 and not kick_room and creep_room:
+                self._lane_creep = True
+                self._lane_creeps += 1
             self._lane_pulse += 1
         else:
-            self._lane_pulse = 0
-        self.lane_feedback['motor'] = self.lane_motor
+            self._lane_pulse, self._lane_creep = 0, False
+        self.lane_feedback.update(motor=self.lane_motor, creeps=self._lane_creeps)
         self.steering_target, self.natural_steering_target = target, natural
         self.reason = 'light_lane_follow_straight'
         self._slew(now)

@@ -23814,10 +23814,11 @@
     ]
   },
   "next_tasks_20261022": {
-    "finish_zone": "runs 103/104 stopped .404/.459 m from the board, the rear short of whole-car-in-zone; a short creep that cannot reach the board would end inside",
-    "start_lane": "far-range speed steps still cost a frame (seq 36); the stopping taper before the first support binds from ~4.4 m",
+    "deploy": "round 105 (finish creep); start it with python3 scripts/start-round.py 105 once the car is at the start",
+    "check_on_car": "finish_evidence.creeps and basis, the final front gap (<= .40)",
+    "start_lane": "far-range speed steps still cost a frame; the stopping taper before the first support binds from ~4.4 m",
     "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
-    "next_round": "round 105; the car holds round 104 (410bc96, engine f8cad5f3..., bridge fe5c0056...)"
+    "next_round": "round 105 (this record); the car holds round 104 (410bc96)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -24068,5 +24069,35 @@
     "start_lane": "neutral in 2 of 25 recorded start-lane frames (run 103: 8 of 30): seq 36 speed read 1.72 against 1.70 (the far-range step after 1.16 at seq 33), seq 48 the stopping taper (1.33 >= 1.26); the first approach began at 4.26 m (run 103: 3.84)",
     "clearances": "no body-gate stop; the first cone tolerated as the target 20 times; min known body distance .060 m (transfer, seq 88)",
     "finish": "stopped .459 m from the end board at .09 m/s: front in the zone, the rear ~6 cm short of whole-car-in-zone (LANE_FINISH_BODY_GAP_M .40; run 103 .404); basis stopped_front_in_finish_zone_restart_could_reach_the_board (gap < LANE_FINISH_MIN_GAP_M + LANE_KICK_TRAVEL_M .50, so no restart kick)"
+  },
+  "turn105_finish_creep_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 104 (410bc96) on the car; 4f5dc32 records run 104",
+    "user": [
+      "要不要我接着做这个终点补进 -> 去吧",
+      "完成后你再加一个启动的命令，我终端输进去后直接启动，开始跑"
+    ],
+    "evidence": "runs 103/104 stopped .404/.459 m from the end board at the finish: the front in the zone, the rear out (LANE_FINISH_BODY_GAP_M .40 = zone .80 - car .38 - .02; rules 2.4.2: all four wheels in the zone at the stop, else +5 s), basis stopped_front_in_finish_zone_restart_could_reach_the_board (gap < LANE_FINISH_MIN_GAP_M + LANE_KICK_TRAVEL_M = .50). Light-lane 3-frame kicks from rest, runs 98-103: .092/.248/.153/.341/.184/.078/.241 m. The last ~.8 m was a coast whose closing-rate speed lagged (run 104: read .48 m/s while the gap barely changed)",
+    "change": {
+      "creep": "maneuver_sequence._light_lane_update (route-engine maneuver_post.rs light_lane_update): stopped with the front in the zone, the rear out and no kick room, the car gets a LANE_CREEP_FRAMES (2) 1560 creep when gap >= LANE_FINISH_MIN_GAP_M + LANE_CREEP_TRAVEL_M (.05 + .27), after LANE_KICK_REST_S as every kick, at most LANE_CREEP_MAX (3); the stage ends stopped_with_the_whole_car_in_the_finish_zone once inside, or stopped_front_in_finish_zone_creeps_used after the last creep has rested (it never ends while a creep may still be in the ESC pipeline). The time ended at the finish line already (front wheels), so a creep costs no time.",
+      "travel_bound": "LANE_CREEP_TRAVEL_M .27: the kick's .45 m (3 frames) scaled by the squared speed reached (LANE_SPEED_GUARD_MARGIN_MPS + LANE_KICK_ACCEL_MAX_MPS2 x (frames x .1 s + 2 x LANE_ESC_SKEW_S)): (.53/.69)^2 x .45 = .266 m; from the zone's rear edge (.40) it stops >= .13 m from the board",
+      "state": "_lane_creep (the current pulse is a creep), _lane_creeps (count); lane_feedback/finish_evidence gain creep_room and creeps; dump.rs carries both fields",
+      "start_command": "scripts/start-round.py N (new): from the Mac, once per round: fresh-state check against the round's package (nothing starts otherwise), the packaged trialN.py once, evidence copied back with per-file sha256, the after-run state and a short summary",
+      "not_changed": "the coast aim, guard, push rules and the kick itself; every other stage"
+    },
+    "validation": {
+      "python": "full console discover 887 OK (883 + 4: test_route_105_finish_creep; test_route_58 kick test now expects the 2-frame creep at gap .47)",
+      "rust": "route-engine cargo test OK, clippy warning count unchanged (35, none in the new lines)",
+      "course_sim": "creeps 3 vs 0, 5 layouts x (measured, nominal, measured 1.4x, nominal decel .8, nominal decel .35) = 25: the 7 that ended front-in/rear-out (gaps .413-.485) all end with the whole car in the zone (.341-.398), the other 18 identical; no new contact (min board gap >= .200 m); the 4 failures (decel .35 / short5 1.4x) fail identically in both",
+      "parity": "route-engine-parity-sweep all 184/185 (the known run-75 replay; measured-user8 is a creep case: final front x 7.79 m vs 7.65 without)"
+    },
+    "risks": [
+      "no 2-frame 1560 from rest was measured in the light lane (run 91's 2-frame pulses crept ~.17 m over several); a creep that does not move the car is repeated up to 3 times",
+      "not run on the car"
+    ]
   }
 }
