@@ -24180,7 +24180,7 @@
     "date": "2026-10-23",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "baseline": "round 105 (ab7a696) on the car; 2e9ed50 records run 105",
     "user": [
@@ -24205,6 +24205,30 @@
     "risks": [
       "a support tracked but never confirmed now holds at 2.385 m instead of 2.885 m along the axis (the grace the board case already had); the second loop needs its confirmation as before",
       "not run on the car"
-    ]
+    ],
+    "package": {
+      "build": "build-race.py claude-turn105 claude-turn106 106 turn106_transfer_axis_support_20261023 (exit 0; bridge reused)",
+      "source_commit": "c0843c44902dce534eba0962ea640eb4428edb76",
+      "runtime_changed": [
+        "payload/maneuver_sequence.py",
+        "payload/route-engine"
+      ],
+      "route_engine_sha256": "7f4e2306f57b33ec3b2f22897c40dd693578df4ecc531f4bba0ae5e575e2c5be (riscv64 lp64d, inspection passed)",
+      "vehicle_bridge_sha256": "fe5c0056... (round 104)",
+      "sha256sums": "19/19 OK",
+      "archive_sha256": "6cf939021ab439fb1785cefdf453490dd69041d7fb01bdc2c1d8917a5ceba338",
+      "helper": "left-cone-trial-once-106.py ab26a1df...",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625",
+      "evidence_dir": "left-cone-trial-20261023-106"
+    },
+    "deployment": {
+      "operator": [
+        "好了后把启动脚本给我，测试完后记录推送"
+      ],
+      "before": "before106-fresh.json: six fresh locked ready samples, 17 hashes and settings match round 105",
+      "deploy": "deploy-matched.py claude-turn106 106: deployed, error/rollback null, backup backup-claude-turn106-20261023-213625",
+      "after": "after106-deploy-fresh.json validated against round 106 (see the commit)",
+      "run": "left to the operator"
+    }
   }
 }

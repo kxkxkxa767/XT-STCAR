@@ -2,7 +2,7 @@
 
 ## 当前接手入口（2026-10-23 Claude：第106轮过渡段——第二个桶站在轴线上时被当成前方挡板，确认前的宽限不生效、停车约.4–.7s；改为排除桶自己的回波再比；未部署）
 
-记录键`turn106_transfer_axis_support_20261023`。车上是第105轮（ab7a696）。
+记录键`turn106_transfer_axis_support_20261023`。车上是第106轮（c0843c4，引擎7f4e2306…，桥fe5c0056…），已部署待跑：Mac上`python3 scripts/start-round.py 106`，或车上终端`python3 /home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625/trial106.py`。
 - 证据：第98/99/101/105轮过渡段的`open_board_ahead_without_second_support`暂停，进入时前方轴线回波2.81–2.98m，正被跟踪、尚未确认的第二个桶中心距离只远.01m，就是桶本身；宽限条件“桶比板近”因此不成立。第105轮第89帧：轴线窗口16–18格是5.13m的尽头板，19–22格是桶。
 - 改动：桶不比前方回波近时，前方挡板取轴线窗口里不属于桶自己回波点的最近回波，桶比它近就适用宽限；其余条件、停车距离、暂停和恢复规则、车身门都不变。桶若一直确认不了，仍在前方回波进入停车距离.5m时（约2.385m）暂停。
 - 验证：用四轮实录帧回放，暂停起始帧现在都适用宽限（第101轮第83帧桶丢了一帧，那里照旧暂停）；Python全量891 OK（新增4，用四轮实录帧）；引擎cargo test 4过（新增的Rust测试在四轮实录帧上与Python逐位相等）、clippy数不变；仿真24组新旧相同（仿真里没出现这种暂停）；108 rules-range variants old vs new: identical (93 finish both, 4 contacts both; no transfer hold either way: the simulated second support confirms before the board-ahead range)；Python/Rust route-engine-parity-sweep all 184/185 (the known run-75 replay); the sweep's replays end at run 94 and no simulated case reaches the hold, so the new branch is checked by the Rust unit test on the four recorded frames instead。

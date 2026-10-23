@@ -1,4 +1,4 @@
-# XT-STCAR（10-23 Claude：第105轮实车整条路线一次跑完、整车停进终点区18.6s；人行横道/红绿灯等队友YOLO模型，尚未接入；启动：Mac上`python3 scripts/start-round.py N`，车上终端用本轮`trial<N>.py`）
+# XT-STCAR（10-23 Claude：第106轮过渡段修正已部署待跑，Mac上`python3 scripts/start-round.py 106`；第105轮整条路线一次跑完、整车停进终点区18.6s；人行横道/红绿灯等队友YOLO模型）
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。路线只用激光雷达，不用摄像头。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。
@@ -7,7 +7,7 @@ Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车�
 
 **路线**：起步直道 → 逆时针绕第一个桶 → 过渡 → 顺时针绕第二个桶 → 灯区入口（红绿灯龙门架）→ 光区直道 → 停进终点区。不针对某一块赛道调参；起步、绕桶、灯区和终点都按当场雷达几何决定。
 
-**车上版本**：第105轮（源提交 ab7a696，引擎 `342e6a3c…`，桥 `fe5c0056…`）。
+**车上版本**：第106轮（源提交 c0843c4，引擎 `7f4e2306…`，桥 `fe5c0056…`），已部署、待跑。
 
 | 轮 | 日期 | 结果 | 起步→停车 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -19,6 +19,7 @@ Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车�
 | 103 | 10-23 | 整条路线一次跑完，停进终点区 | 19.7 s | 绕第一个桶和过桶后各有一次约 .5 s 的雷达质量等待；离板 .404 m |
 | 104 | 10-23 | 整条路线一次跑完，停进终点区 | 18.7 s | 全程没有任何等待或暂停；离板 .459 m，车尾在区外约 6 cm |
 | 105 | 10-23 | 整条路线一次跑完，整车停进终点区 | 18.6 s | 离板 .363 m（滑行直接停在区里，补进没用上）；过渡段等第二个桶暂停约 .4 s |
+| 106 | 10-23 | 已部署，待跑 | | 过渡段：第二个桶站在轴线上时不再被当成挡板 |
 
 **最近几轮改了什么**
 - 第101轮：光区直道一口气跑完：滑行按"整车停进区"瞄准，车还在滚动时短推补足（原先停三次再爬）。
@@ -59,13 +60,13 @@ Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车�
 6. **启动**：车摆到起点后，在 **Mac 终端**（不是 SSH 到车上的终端）输入：
 
 ```bash
-python3 /Users/yuhaojin/Documents/XT-STCAR/scripts/start-round.py 105
+python3 /Users/yuhaojin/Documents/XT-STCAR/scripts/start-round.py 106
 ```
 
 已经 SSH 在车上的终端里，直接跑本轮的车上助手（同样只跑一次、开跑前自查；证据留在车上，之后由 Mac 取回）：
 
 ```bash
-python3 /home/bianbu/xt-stcar-console/stage-claude-turn105-20261023-204543/trial105.py
+python3 /home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625/trial106.py
 ```
 
 两条只选一条。
