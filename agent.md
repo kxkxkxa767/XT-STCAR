@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-23 Claude：第104轮补雷达0°接缝漏点（桥重编）、起步直道新的1560先算自身延迟增速；未部署）
+
+记录键`turn104_seam_and_start_push_20261023`、`next_tasks_20261022`。车上是第103轮（16ea82f，引擎c3bde5d2…，桥fc7028ae…）。
+- 用户：“这一轮的起步直行、左转和绕第一个桶明显有多次停顿，慢了很多”。原因见`turn103_actual_20261023`。
+- 桥（`crates/runner/src/bin/support/lidar_revolution.rs`，新）：分圈规则不变；每圈另存0°之后的点，发布时本圈没采到的格子用上一圈0°之后的点（在本圈首包之前紧挨着测得），本圈采到的格子只用本圈数据；每行新增`seam_filled_bins`。离线：第103轮第87帧用第86帧补后front_sparse消失（原为11格空洞、绕桶等待）。控制模式、租约、超时、1620限幅都没动。
+- 起步直道：新的1560需速度+max(当前增速, 1.0×0.45)低于许可速度（1600已如此）；正在加油时原带宽规则更严、不变。第103轮第37帧1.23m/s、许可1.66→1550，不再断电4帧。减速带、测速、质量等待规则都没改。
+- 验证：Rust工作区fmt OK、test 658过/0败（新增4）、clippy -D warnings OK；引擎cargo test OK、无新clippy警告；Python全量883 OK（新增4）；仿真18组新旧对比15组相同、3组起步断电减少、结果和接触不变；Python/Rust 逐位对比184/185（并行首批9个是新引擎首次启动超时，逐个重跑全部一致；剩下第75轮回放历来不符）。
+- 打包要用`build-race.py claude-turn103 claude-turn104 104 turn104_seam_and_start_push_20261023 --rebuild-bridge`（build-race.py已能把第五个参数传给build-engine.py）。车上要看：每帧seam_filled_bins、原始0–12空点和front_sparse次数（应接近0）、起步断电帧数、首桶有无等待。
+
 ## 当前接手入口（2026-10-23 Claude：第103轮实车整条路线一次跑完、停进终点区，21.3s；起步直道、左转和绕第一桶有停顿，原因已查明，待第104轮）
 
 记录键`turn103_actual_20261023`（部署记录在`turn103_start_lane_cut_20261022.deployment`）。车上是第103轮（16ea82f，引擎c3bde5d2…）。

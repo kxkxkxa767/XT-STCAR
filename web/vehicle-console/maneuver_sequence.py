@@ -5470,7 +5470,14 @@ class ManeuverSequence(TurnMotion):
         # full ESC-lag rise stays under the allowed speed.
         if speed < START_LAUNCH_MAX_MPS and speed+launch_rise < cap:
             return START_LAUNCH_MOTOR
-        if speed < LANE_SPEED_RESTART_MPS or speed+rise < cap-LANE_START_PUSH_BAND_MPS:
+        # Round 104 (car run 103): a new 1560 push also keeps its own full
+        # ESC-lag rise under the allowed speed, as 1600 does. One 1560 scan at
+        # 1.23 m/s (allowed 1.66, no rise yet) put speed + rise at 1.31 + .43
+        # against 1.62 the next scan and cut four scans (.4 s at neutral). A
+        # push under way (rise near its full value) keeps the band rule.
+        push_rise = max(rise, LANE_POWER_ACCEL_MPS2*ESC_LAG_S)
+        if speed < LANE_SPEED_RESTART_MPS or (speed+rise < cap-LANE_START_PUSH_BAND_MPS
+                                               and speed+push_rise < cap):
             return TRIAL_MOTOR
         return ROUTE_SLOW_MOTOR
 

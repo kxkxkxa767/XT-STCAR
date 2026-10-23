@@ -1370,7 +1370,11 @@ impl Maneuver {
         if speed < START_LAUNCH_MAX_MPS && speed + launch_rise < cap {
             return START_LAUNCH_MOTOR;
         }
-        if speed < LANE_SPEED_RESTART_MPS || speed + rise < cap - LANE_START_PUSH_BAND_MPS {
+        // Round 104: a new 1560 push keeps its own full ESC-lag rise under the cap.
+        let push_rise = pmax(rise, LANE_POWER_ACCEL_MPS2 * ESC_LAG_S);
+        if speed < LANE_SPEED_RESTART_MPS
+            || (speed + rise < cap - LANE_START_PUSH_BAND_MPS && speed + push_rise < cap)
+        {
             return TRIAL_MOTOR;
         }
         ROUTE_SLOW_MOTOR

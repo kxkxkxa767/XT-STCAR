@@ -23814,10 +23814,10 @@
     ]
   },
   "next_tasks_20261022": {
-    "round_104": "bridge seam fill + start-lane push rule (this conversation, 2026-10-23)",
+    "deploy": "round 104 package (bridge rebuilt), not deployed",
+    "check_on_car": "seam_filled_bins per frame, raw 0-12 nulls and front_sparse counts (expected ~0); start-lane neutral frames; the first loop without quality waits",
     "finish_zone": "run 103 stopped .404 m from the board, rear ~4 mm short of whole-car-in-zone",
-    "light_entry": "round 102 shift not yet needed on the car",
-    "next_round": "round 104; the car holds round 103 (16ea82f, engine c3bde5d2...)"
+    "next_round": "round 104 (this record); the car holds round 103 (16ea82f, engine c3bde5d2...)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -23989,6 +23989,36 @@
     "fix_directions": [
       "bridge: a bin this revolution never sampled takes the previous revolution's point past 0 deg (measured right before this revolution's first packet)",
       "start-lane governor: a new 1560 push only while its own full ESC-lag rise stays under the allowed speed (as the 1600 launch already does)"
+    ]
+  },
+  "turn104_seam_and_start_push_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 103 (16ea82f) on the car; dce94fc records run 103",
+    "user": [
+      "这一轮的起步直行、左转和绕第一个桶明显有多次停顿，慢了很多"
+    ],
+    "change": {
+      "bridge_seam_fill": "crates/runner/src/bin/support/lidar_revolution.rs (new; vehicle-bridge.rs uses it): the revolution assembly is unchanged (a packet belongs to the revolution its start angle falls in; a new one starts at a packet more than 180 deg below its predecessor), but each revolution also keeps its points past 0 deg (rounded bin >= 360, the straddling packet's tail). At publication a bin this revolution never sampled takes the previous revolution's point past 0 deg for that bin (measured right before this revolution's first packet, so as old as the points beside it, ~one revolution); a sampled bin keeps only its own points (nearest of several as before). coverage and valid_fraction include the filled bins; each row adds seam_filled_bins (count). Nothing else in the bridge changed (control mode, lease, stale, gap and 1620 limits untouched).",
+      "why_safe": "the filled points are real measurements of the same sweep's start, not interpolation; before, the same depth step between the sweep's start and end sat across 1-3 (or 12) null bins, now it sits next to them; more known returns can only make the body gate see more",
+      "start_push": "maneuver_sequence._start_governor (route-engine maneuver_post.rs start_governor): a 1560 push also needs speed + max(rise, LANE_POWER_ACCEL_MPS2 x ESC_LAG_S) < allowed, like the 1600 launch; a push under way (rise near .45) keeps the band rule, which is stronger there. Run 103 seq 37: 1.23 m/s, allowed 1.66 -> 1550 instead of the 1560 that cut seq 38-41.",
+      "not_changed": "the stopping taper before the first support (seq 49-53 cut in run 103), the speed estimate, the quality-wait rules and thresholds (front_sparse, 5 clean frames) and every other stage",
+      "tooling": "work/.../build-race.py passes a fifth argument --rebuild-bridge on to build-engine.py (not in git); docs/N10协议依据.md notes the seam fill"
+    },
+    "validation": {
+      "rust": "cargo fmt --all --check OK; cargo test --workspace --locked --offline 658 passed / 0 failed / 3 ignored (4 new: a backward-precessing phase (1.6 deg a turn) leaves no gap and most frames needed a fill of <= 3 bins; a turn missing its packet past 0 deg (raw 0-11, as in run 103) is filled with 12 bins from the turn before; sampled bins keep their own points; nothing is published before the first complete revolution); clippy --workspace --all-targets -D warnings OK; route-engine cargo test OK, no new clippy warning",
+      "python": "full console discover 883 OK (879 + 4: test_route_104_start_push, run-103 values)",
+      "course_sim": "old vs new push rule, 6 layouts x (measured, nominal, measured 1.4x): identical in 15 of 18; doc8x4 measured 6 -> 3 neutral ticks in the start lane (handover .6 s later, the first loop as much shorter: transfer at 9.2 s both, light lane 20.3 vs 20.5 s), user8 nominal 1 -> 0, mid64 nominal 5 -> 3; outcomes and contacts unchanged (practice and short5 1.4x fail in both)",
+      "offline_run_103": "seq 87 (the first-loop wait): raw 0-10 null between 1.191 (raw 359) and 1.021 m (raw 11); seq 86 had all of raw 0-10 (1.145 -> 1.08 m, the same board); filled from it, probe_clearance (maneuver) reports no quality issue (was front_sparse, open run 11). Seq 96's predecessor was not recorded.",
+      "parity": "route-engine-parity-sweep all: 175/185 in the parallel sweep; the 9 extra misses were the first 9-worker batch timing out at the engine's start (route_engine_timeout after __init__, 5.2 s each, the freshly built binary's first launches) and match bit for bit rerun one at a time (1260-2706 calls each): 184/185, the remaining miss is the known run-75 replay (the car never moved)"
+    },
+    "risks": [
+      "the rare whole-band (raw 0-11) loss was never captured packet by packet; the fill covers it only when the previous revolution had its packet past 0 deg (seam_filled_bins on the car shows it)",
+      "a filled bin is up to one revolution (~.1 s) older than the end-of-sweep bins beside it, as the sweep's start always was",
+      "not run on the car"
     ]
   }
 }

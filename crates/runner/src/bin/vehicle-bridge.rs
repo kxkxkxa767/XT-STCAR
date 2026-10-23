@@ -1,6 +1,8 @@
 //! Console bridge. Default dry run; explicit --execute opens a selected device.
 #[path = "support/lidar_calibration.rs"]
 mod lidar_calibration;
+#[path = "support/lidar_revolution.rs"]
+mod lidar_revolution;
 use std::{
     io::{self, BufRead, Read, Write},
     path::PathBuf,
@@ -105,10 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             range_max_m: 12.0,
             max_packet_age_ms: 50,
         })?;
-        let mut bins = vec![None::<f64>; 360];
-        let mut seen = vec![false; 360];
-        let mut prev = 0;
-        let mut synced = false;
+        let mut revolution = lidar_revolution::Revolution::new();
         let mut seq = 0u64;
         loop {
             if let Some(p) = port.as_mut() {
@@ -120,65 +119,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .feed(&buf[..n], Timestamp(start.elapsed().as_millis() as u64))?
                         .packets
                     {
-                        if prev > packet.start_angle_cdeg.saturating_add(18000) {
-                            if synced {
-                                seq += 1;
-                                let valid = bins.iter().filter(|r| r.is_some()).count();
-                                let coverage = seen.iter().filter(|v| **v).count();
-                                let mut row = serde_json::json!({"seq":seq,"at_ms":start.elapsed().as_millis(),"ranges":bins,"valid_fraction":valid as f64/360.0,"coverage":coverage as f64/360.0,"navigation_validated":false});
-                                if let Some(calibration) = &calibration {
-                                    calibration.apply(&mut row)?;
-                                    let frame = FrameId("lidar_origin_coarse_body_heading".into());
-                                    let sample = LidarSample {
-                                        captured_at: Timestamp(start.elapsed().as_millis() as u64),
-                                        frame_id: frame.clone(),
-                                        angle_min_rad: 0.0,
-                                        angle_increment_rad: -std::f64::consts::TAU / 360.0,
-                                        range_min_m: 0.02,
-                                        range_max_m: 12.0,
-                                        ranges_m: serde_json::from_value(row["ranges"].clone())?,
-                                    };
-                                    row["front_boundary_m"] = serde_json::to_value(
-                                        detect_front_boundary(&sample, &frame).ok().flatten(),
-                                    )?;
-                                    // Optional diagnostic; an invalid scan never grants an opening.
-                                    row["left_junction"] = serde_json::to_value(
-                                        detect_left_junction(&sample, &frame).ok().flatten(),
-                                    )?;
-                                    row["corridor_candidates"] = serde_json::to_value(
-                                        detect_corridor_candidates(&sample, &frame)
-                                            .unwrap_or_default(),
-                                    )?;
-                                    let turn_geometry =
-                                        detect_turn_geometry(&sample, &frame).unwrap_or_default();
-                                    row["wall_candidates"] =
-                                        serde_json::to_value(turn_geometry.walls)?;
-                                    row["left_turn_goal"] =
-                                        serde_json::to_value(turn_geometry.left_goal)?;
-                                }
-                                if matches!(
-                                    out.try_send(row),
-                                    Err(mpsc::TrySendError::Disconnected(_))
-                                ) {
-                                    return Ok(());
-                                }
+                        let ranges = packet.points.map(|p| p.range_m);
+                        if let Some(done) =
+                            revolution.push(packet.start_angle_cdeg, packet.end_angle_cdeg, &ranges)
+                        {
+                            seq += 1;
+                            let mut row = serde_json::json!({"seq":seq,"at_ms":start.elapsed().as_millis(),"ranges":done.ranges,"valid_fraction":done.valid as f64/360.0,"coverage":done.coverage as f64/360.0,"seam_filled_bins":done.seam_filled,"navigation_validated":false});
+                            if let Some(calibration) = &calibration {
+                                calibration.apply(&mut row)?;
+                                let frame = FrameId("lidar_origin_coarse_body_heading".into());
+                                let sample = LidarSample {
+                                    captured_at: Timestamp(start.elapsed().as_millis() as u64),
+                                    frame_id: frame.clone(),
+                                    angle_min_rad: 0.0,
+                                    angle_increment_rad: -std::f64::consts::TAU / 360.0,
+                                    range_min_m: 0.02,
+                                    range_max_m: 12.0,
+                                    ranges_m: serde_json::from_value(row["ranges"].clone())?,
+                                };
+                                row["front_boundary_m"] = serde_json::to_value(
+                                    detect_front_boundary(&sample, &frame).ok().flatten(),
+                                )?;
+                                // Optional diagnostic; an invalid scan never grants an opening.
+                                row["left_junction"] = serde_json::to_value(
+                                    detect_left_junction(&sample, &frame).ok().flatten(),
+                                )?;
+                                row["corridor_candidates"] = serde_json::to_value(
+                                    detect_corridor_candidates(&sample, &frame).unwrap_or_default(),
+                                )?;
+                                let turn_geometry =
+                                    detect_turn_geometry(&sample, &frame).unwrap_or_default();
+                                row["wall_candidates"] = serde_json::to_value(turn_geometry.walls)?;
+                                row["left_turn_goal"] =
+                                    serde_json::to_value(turn_geometry.left_goal)?;
                             }
-                            bins.fill(None);
-                            seen.fill(false);
-                            synced = true;
-                        }
-                        prev = packet.start_angle_cdeg;
-                        let span = (i32::from(packet.end_angle_cdeg)
-                            - i32::from(packet.start_angle_cdeg))
-                        .rem_euclid(36000) as f64;
-                        for (i, p) in packet.points.iter().enumerate() {
-                            let angle = (f64::from(packet.start_angle_cdeg)
-                                + span * i as f64 / 15.0)
-                                / 100.0;
-                            let bin = (angle.round() as usize) % 360;
-                            seen[bin] = true;
-                            if let Some(r) = p.range_m {
-                                bins[bin] = Some(bins[bin].map_or(r, |old| old.min(r)));
+                            if matches!(out.try_send(row), Err(mpsc::TrySendError::Disconnected(_)))
+                            {
+                                return Ok(());
                             }
                         }
                     }
