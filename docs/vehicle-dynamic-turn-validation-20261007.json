@@ -23814,10 +23814,10 @@
     ]
   },
   "next_tasks_20261022": {
-    "deploy": "round 104 package (bridge rebuilt), not deployed",
-    "check_on_car": "seam_filled_bins per frame, raw 0-12 nulls and front_sparse counts (expected ~0); start-lane neutral frames; the first loop without quality waits",
-    "finish_zone": "run 103 stopped .404 m from the board, rear ~4 mm short of whole-car-in-zone",
-    "next_round": "round 104 (this record); the car holds round 103 (16ea82f, engine c3bde5d2...)"
+    "finish_zone": "runs 103/104 stopped .404/.459 m from the board, the rear short of whole-car-in-zone; a short creep that cannot reach the board would end inside",
+    "start_lane": "far-range speed steps still cost a frame (seq 36); the stopping taper before the first support binds from ~4.4 m",
+    "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
+    "next_round": "round 105; the car holds round 104 (410bc96, engine f8cad5f3..., bridge fe5c0056...)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -23995,8 +23995,8 @@
     "date": "2026-10-23",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "round 103 (16ea82f) on the car; dce94fc records run 103",
     "user": [
       "这一轮的起步直行、左转和绕第一个桶明显有多次停顿，慢了很多"
@@ -24037,6 +24037,36 @@
       "deploy_script_sha256": "c2d1bdf7eafe98f6a629fa03e48f600a733bfe690c60f333dc399883332625f9",
       "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn104-20261023-201552",
       "evidence_dir": "left-cone-trial-20261023-104"
+    },
+    "deployment": {
+      "operator": [
+        "好了，你开始吧 (car at the start)"
+      ],
+      "before": "before104-fresh.json: six fresh locked ready samples (rust_engine), 17 hashes and settings match round 103; start left .39 / right .53 m, 7.76 m ahead",
+      "deploy": "deploy-matched.py claude-turn104 104: deployed, error/rollback null, backup backup-claude-turn104-20261023-201552",
+      "after_and_pre_run": "after104-deploy-fresh.json and pre104-run-fresh.json: six fresh locked ready samples, 17 hashes match round 104; trial104.py 4967e98c..., engine f8cad5f3..., bridge fe5c0056... match; no evidence dir; only the console, its engine and two bridges running; the new bridge at rest: coverage 360 in all 6 samples, seam_filled_bins 0-2, raw 5-6 sampled without a return (the depth edge noted in round 79)",
+      "run": "ssh 'python3 stage-claude-turn104-20261023-201552/trial104.py' > trial104-stdout.json (exit 0)",
+      "fetch": "trial104-remote-sha256.txt, scp left-cone-trial-20261023-104: 10/10 sha256 OK; after104-trial-fresh.json locked, 1500/1500, no owner"
     }
+  },
+  "turn104_actual_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261023-104 (run/ = program files)",
+    "result": "route_finish_zone_stop again, the whole route in one go: seq 15 -> 202 (18.7 s; run 103 16 -> 213, 19.7 s of scans, 21.3 s by the summary clock); program 29.37 s, max gap .022 s, max tick compute .004 s; no quality wait or pause of any kind (quality_counts empty; run 103: front_sparse 12, two waits)",
+    "stages_seq": {
+      "start_lane": 15,
+      "first_approach_handover": 56,
+      "first_pass": 84,
+      "second_handover": 96,
+      "second_pass": 131,
+      "light_aligned_and_lane": 158,
+      "finish_stop": 202
+    },
+    "compared_103": "start lane 41 scans (47), first loop 28 (30 with the .5 s wait), first pass -> second handover 12 (10), second loop 35 (32), to the light lane 27 (27), light lane 44 (51)",
+    "seam": "145 recorded scans: coverage 360 in all (run 103: 360 in 50 of 148); seam_filled_bins 0 x37, 1 x54, 2 x45, 3 x8, 4 x1; raw 0-12 nulls 0 in 134 scans, 1-2 in 11 (sampled without a return); no whole-band loss happened this run, so that case is still unverified on the car",
+    "start_lane": "neutral in 2 of 25 recorded start-lane frames (run 103: 8 of 30): seq 36 speed read 1.72 against 1.70 (the far-range step after 1.16 at seq 33), seq 48 the stopping taper (1.33 >= 1.26); the first approach began at 4.26 m (run 103: 3.84)",
+    "clearances": "no body-gate stop; the first cone tolerated as the target 20 times; min known body distance .060 m (transfer, seq 88)",
+    "finish": "stopped .459 m from the end board at .09 m/s: front in the zone, the rear ~6 cm short of whole-car-in-zone (LANE_FINISH_BODY_GAP_M .40; run 103 .404); basis stopped_front_in_finish_zone_restart_could_reach_the_board (gap < LANE_FINISH_MIN_GAP_M + LANE_KICK_TRAVEL_M .50, so no restart kick)"
   }
 }
