@@ -23814,11 +23814,11 @@
     ]
   },
   "next_tasks_20261022": {
-    "deploy": "round 105 (finish creep); start it with python3 scripts/start-round.py 105 once the car is at the start",
-    "check_on_car": "finish_evidence.creeps and basis, the final front gap (<= .40)",
+    "transfer_pause": "open_board_ahead_without_second_support (runs 98, 99, 101, 105): ~.4 s neutral before the second support",
+    "creep": "not yet exercised on the car (run 105 stopped inside on the coast)",
     "start_lane": "far-range speed steps still cost a frame; the stopping taper before the first support binds from ~4.4 m",
     "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
-    "next_round": "round 105 (this record); the car holds round 104 (410bc96)"
+    "next_round": "round 106; the car holds round 105 (ab7a696, engine 342e6a3c..., bridge fe5c0056...)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -24075,7 +24075,7 @@
     "author": "Claude",
     "implemented": true,
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "baseline": "round 104 (410bc96) on the car; 4f5dc32 records run 104",
     "user": [
       "要不要我接着做这个终点补进 -> 去吧",
@@ -24124,8 +24124,31 @@
       "deploy": "deploy-matched.py claude-turn105 105: deployed, error/rollback null, backup backup-claude-turn105-20261023-204543",
       "after": "after105-deploy-fresh.json: six fresh locked ready samples, 17 hashes match round 105; trial105.py 4c06256a..., engine 342e6a3c..., bridge fe5c0056... match; no evidence dir; only the console, its engine and two bridges",
       "start_command_selftest": "start-round.py refuses without N, for round 104 (already run) and a round without a package; its read+validate steps alone (scratch output) pass for round 105 via the SSH socket; the car then read left .48 / right .42 / 7.51 m ahead",
-      "run": "left to the operator: python3 scripts/start-round.py 105 (creates pre105-run-fresh.json, trial105-stdout.json)"
+      "run": "the operator ran trial105.py from an SSH terminal on the car (start-round.py was typed there first: not on the car, nothing started), 20:54; evidence fetched afterwards",
+      "fetch": "trial105-remote-sha256.txt, scp left-cone-trial-20261023-105: 10/10 sha256 OK; after105-trial-fresh.json locked, 1500/1500, no owner"
     },
     "readme": "README.md rewritten as a whole (user: 推送的时候你顺便全量更新下README.MD): status and car-round table, how a round is built/deployed/started, the hard protections, Rust status, code map (+ lidar_revolution.rs, start-round.py), measured car values; the early xt-stcar-robot stack and the dated 09-16..10-17 entries kept further down"
+  },
+  "turn105_actual_20261023": {
+    "date": "2026-10-23",
+    "author": "Claude",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261023-105 (run/ = program files)",
+    "result": "route_finish_zone_stop, the whole route in one go: seq 15 -> 201 (18.6 s; run 104 18.7); program 27.31 s, max gap .022 s, max tick compute .005 s; console healthy, 6 neutral samples",
+    "finish": "stopped .363 m from the end board: stopped_with_the_whole_car_in_the_finish_zone, creeps 0 (the coast itself ended inside; the creep was not needed)",
+    "stages_seq": {
+      "start_lane": 15,
+      "first_approach_handover": 58,
+      "first_pass": 80,
+      "neutral_pause_recovery": "90-94",
+      "second_handover": 95,
+      "second_pass": 123,
+      "light_aligned_and_lane": 151,
+      "finish_stop": 201
+    },
+    "compared_104": "start lane 43 scans (41), first loop 22 (28), first pass -> second handover 15 incl. the pause (12), second loop 28 (35), to the light lane 28 (27), light lane 50 (44)",
+    "pause": "open_transfer seq 90-94 (~.4 s neutral): open_board_ahead_without_second_support, resumed on 4 clean frames, the second support handed over at seq 95 (also in runs 98, 99, 101); quality_counts empty",
+    "seam": "131 recorded scans, coverage 360 in all; seam_filled_bins 0 x41, 1 x36, 2 x40, 3 x13, 4 x1; no whole-band loss",
+    "start_lane": "neutral in 2 of 27 recorded frames (seq 27, 41)",
+    "clearances": "no body-gate stop; cone tolerated 14 times; min known body distance .060 m (transfer, seq 81)"
   }
 }
