@@ -5,8 +5,11 @@
       [--initial-presteer-pwm 1670] [--ready-hold-s 1] [--program-sha256 H] [--bridge-sha256 H]
       [--check-only]
 
-Runs on the car, once per evidence directory (never reused). A round's
-packaged copy has FIXED_ARGS set by its builder and takes no arguments. The
+Runs on the car, as often as wanted (user, 10-24: “不限次数”), one run at a
+time (BASE/race-trial.lock). Each run gets a new evidence directory: NEW_DIR,
+else NEW_DIR-2, NEW_DIR-3, ... (an existing one is never reused); its path is
+the first line printed. A round's packaged copy has FIXED_ARGS set by its
+builder and takes no arguments. The
 program and bridge must match the given hashes before anything else. Before: the
 console must report a fresh locked neutral and its own (Python) start check
 for the explicit route must pass. Then the console service is stopped (the
@@ -20,7 +23,9 @@ NEW_DIR/helper-result.json. The console's access token is read here and
 never printed.
 """
 import argparse
+import fcntl
 import hashlib
+import itertools
 import json
 from pathlib import Path
 import subprocess
@@ -31,6 +36,17 @@ import urllib.request
 BASE = Path('/home/bianbu/xt-stcar-console')
 SERVICE = 'xt-stcar-console.service'
 FIXED_ARGS = None  # a round's packaged copy: its arguments, set by the builder
+
+
+def fresh_dir(base):
+    """Create and return the first of BASE, BASE-2, BASE-3, ... that does not exist yet."""
+    for n in itertools.count(1):
+        out = base if n == 1 else base.with_name(f'{base.name}-{n}')
+        try:
+            out.mkdir(mode=0o700)
+            return out
+        except FileExistsError:
+            continue
 
 
 def main():
@@ -50,8 +66,13 @@ def main():
     for path, expected in ((args.program, args.program_sha256), (args.bridge, args.bridge_sha256)):
         if expected is not None and hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
             raise SystemExit(f'{path} does not match its expected sha256; nothing started')
-    out = Path(args.evidence)
-    out.mkdir(mode=0o700)  # once: an existing directory is never reused
+    lock = (BASE/'race-trial.lock').open('w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise SystemExit('another run is in progress; nothing started') from None
+    out = fresh_dir(Path(args.evidence))
+    print(json.dumps({'evidence_dir': str(out)}), flush=True)
     access = json.loads((BASE/'access.json').read_text())
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 

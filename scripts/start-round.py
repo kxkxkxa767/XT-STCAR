@@ -3,13 +3,15 @@
 
   python3 scripts/start-round.py N
 
-Typing it is the operator's go: the car must already stand at the start. Each
-round runs once: it refuses when work/.../trialN-stdout.json or the local copy
-of the round's evidence directory already exists. Steps:
+Typing it is the operator's go: the car must already stand at the start. A
+round can run any number of times (user, 10-24): the car-side helper gives each
+run a new evidence directory (left-cone-trial-<date>-N, then -N-2, -N-3, ...),
+and this Mac's files of a run carry the time it started (preN-<time>-fresh.json,
+trialN-<time>-stdout.json, ...), so nothing is overwritten. Steps:
 1. the car's fresh state (work/.../read-fresh-engine.py) must be six fresh
    locked-neutral ready samples whose 17 installed hashes match
    claude-turnN-package.json (validate-fresh-engine.py); otherwise nothing starts;
-2. the round's packaged helper STAGE/trialN.py runs once on the car (it checks
+2. the round's packaged helper STAGE/trialN.py runs on the car (it checks
    the hashes, the console's fresh locked neutral and its start check again,
    runs `route-engine race` and always restores the console);
 3. the evidence directory is copied back and checked file by file (sha256), the
@@ -62,18 +64,14 @@ def main():
     if not package.is_file():
         fail(f'没有第{n}轮的部署包记录 {package.name}')
     pkg = json.loads(package.read_text())
-    args = pkg['helper_fixed_args']
-    remote_evidence = args[args.index('--evidence')+1]
-    evidence = WORK/Path(remote_evidence).name
-    stdout_path = WORK/f'trial{n}-stdout.json'
-    if stdout_path.exists() or evidence.exists():
-        fail(f'第{n}轮已经跑过（{stdout_path.name} 或 {evidence.name} 已存在），每轮只跑一次')
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    stdout_path = WORK/f'trial{n}-{stamp}-stdout.json'
+    if stdout_path.exists():
+        fail(f'{stdout_path.name} 已存在，过一秒再试')
     ssh, scp = ssh_base()
 
     say(f'第{n}轮：读车上状态并核对部署（车须锁定、中位、在起点）')
-    pre = WORK/f'pre{n}-run-fresh.json'
-    if pre.exists():
-        pre = WORK/f'pre{n}-run-fresh-{time.strftime("%H%M%S")}.json'
+    pre = WORK/f'pre{n}-{stamp}-fresh.json'
     fresh = read_fresh(ssh, pre)
     check = subprocess.run([sys.executable, str(WORK/'validate-fresh-engine.py'), str(pre), str(package)],
                            capture_output=True, text=True)
@@ -85,28 +83,41 @@ def main():
     say(f'起点读数：左 {side(270)}，右 {side(90)}，前方 {side(0)}，后方 {side(180)}')
 
     say('开跑（约30秒，跑完车自动锁定）')
-    with open(stdout_path, 'wb') as out, open(WORK/f'trial{n}-stderr.txt', 'wb') as err:
+    stderr_path = WORK/f'trial{n}-{stamp}-stderr.txt'
+    with open(stdout_path, 'wb') as out, open(stderr_path, 'wb') as err:
         code = subprocess.run(ssh+[f"python3 {pkg['stage']}/trial{n}.py"], stdout=out, stderr=err,
                               timeout=300).returncode
-    try:
-        helper = json.loads(stdout_path.read_text().strip().splitlines()[-1])
-    except (ValueError, IndexError):
-        helper = {}
+    printed = []
+    for line in stdout_path.read_text().splitlines():
+        try:
+            printed.append(json.loads(line))
+        except ValueError:
+            pass
+    helper = printed[-1] if printed and 'reason' in printed[-1] else {}
+    remote_evidence = next((row['evidence_dir'] for row in printed if 'evidence_dir' in row), None)
     say(f"车上助手退出码 {code}，结束原因 {helper.get('reason')}")
+    if not helper:
+        say('车上助手的提示：' + stderr_path.read_text().strip()[-300:])
+    if remote_evidence is None:
+        fail('车上没有建证据目录、没有启动：' + stderr_path.read_text().strip()[-300:])
+    evidence = WORK/Path(remote_evidence).name
+    if evidence.exists():
+        fail(f'本机已有 {evidence.name}，没有覆盖，请让 Claude 检查')
+    say(f'这次的证据目录：{evidence.name}')
 
     say('取回证据')
     listing = subprocess.run(ssh+[f'cd {remote_evidence} && find . -type f | sort | xargs sha256sum'],
                              capture_output=True, text=True, timeout=60)
     if listing.returncode != 0:
         fail('车上证据目录读不到，请让 Claude 检查')
-    (WORK/f'trial{n}-remote-sha256.txt').write_text(listing.stdout)
+    (WORK/f'trial{n}-{stamp}-remote-sha256.txt').write_text(listing.stdout)
     if subprocess.run(scp+['-p', '-r', '-q', f'{HOST}:{remote_evidence}', str(WORK)+'/'], timeout=120).returncode != 0:
         fail('证据复制失败，请让 Claude 检查')
     lines = [l.split(None, 1) for l in listing.stdout.splitlines() if l.strip()]
     bad = [name for digest, name in lines
            if hashlib.sha256((evidence/name.strip()).read_bytes()).hexdigest() != digest]
     say(f'证据 {len(lines)-len(bad)}/{len(lines)} 个文件校验一致' + (f'，不一致：{bad}' if bad else ''))
-    after = read_fresh(ssh, WORK/f'after{n}-trial-fresh.json')
+    after = read_fresh(ssh, WORK/f'after{n}-{stamp}-fresh.json')
     control = after['samples'][-1]['state']['status']['control']
     say(f"跑后车况：armed={control['armed']} 电机 {control['motor']} 舵机 {control['servo']}")
 

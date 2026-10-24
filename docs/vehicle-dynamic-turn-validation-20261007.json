@@ -24243,5 +24243,29 @@
     "start_lane": "neutral in 2 of 27 recorded frames (seq 46-47)",
     "clearances": "no body-gate stop; min known body distance .080 m (transfer)",
     "car_after": "after106-trial-fresh.json (after the restart): locked, 1500/1500, no owner"
+  },
+  "race_helper_repeatable_runs_20261024": {
+    "date": "2026-10-24",
+    "author": "Claude",
+    "implemented": true,
+    "user": [
+      "先等一下，为什么我用这个脚本python3 /home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625/trial106.py. ssh发送给车，车没有动",
+      "可以，你改成只要执行这个脚本就可以跑，不限次数",
+      "先让我可以用这个脚本跑，再修改下一轮"
+    ],
+    "cause": "trialN.py ran once per round by design: its first step after the hash checks was mkdir of the round's fixed evidence directory, so with left-cone-trial-20261023-106 already on the car (run 106, 10-23 21:39) it stopped with FileExistsError before reading the console; nothing was sent to the car (the directory was unchanged)",
+    "change": {
+      "race_trial": "scripts/race-trial.py: any number of runs, one at a time (flock on /home/bianbu/xt-stcar-console/race-trial.lock, non-blocking: a second concurrent start stops with \"another run is in progress; nothing started\"); each run creates the first free one of NEW_DIR, NEW_DIR-2, NEW_DIR-3, ... (an existing directory is still never reused or overwritten) and prints {\"evidence_dir\": ...} as its first line. Every other check is unchanged: hashes, fresh locked neutral, the console start check (car at the start), console stop/restart and six fresh neutral samples after",
+      "start_round": "scripts/start-round.py: no longer refuses a round that has run; the Mac files of a run carry its start time (preN-<time>-fresh.json, trialN-<time>-stdout.json/-stderr.txt/-remote-sha256.txt, afterN-<time>-fresh.json); the evidence directory is the one the helper printed, refused if a local copy of that name exists",
+      "build": "build-race.py takes the helper from HEAD's scripts/race-trial.py, so every later round's trialN.py repeats"
+    },
+    "car_round_106": {
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625",
+      "trial106.py": "replaced in place by the new helper with the same FIXED_ARGS (local copy work/vehicle-dynamic-deploy-20261008/trial106-repeatable.py): sha256 db747e7de17181379a5c67ea1d31440d0669c22774e42e37965b05e59374bc62",
+      "backup": "trial106-once-original.py beside it, sha256 ab26a1dfdfe6477a082928a7b96933d19dc4136aea52bfa3734bd3e7f286c942 (= left-cone-trial-once-106.py, the run-106 helper)",
+      "engine_bridge": "unchanged (route-engine 7f4e2306..., bridge fe5c0056...)",
+      "fresh_check": "after the swap: six fresh locked ready samples, 17 hashes and settings match claude-turn106-package.json"
+    },
+    "validation": "local run of the helper with a stand-in console: three runs created ...-106, -106-2, -106-3 and stopped at the console read; with the lock held the run stopped before creating a directory; extra arguments are still refused"
   }
 }
