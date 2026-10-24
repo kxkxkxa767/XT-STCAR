@@ -23814,12 +23814,11 @@
     ]
   },
   "next_tasks_20261022": {
-    "crosswalk_light": "waiting for the teammate's YOLO model (crosswalk, traffic light); see crosswalk_light_yolo_pending_20261023",
-    "loops": "the first and second loops vary most between runs (22-28 / 28-35 frames)",
-    "finish_speed": "carry more speed over the finish line now that the creep exists (it worked on the car in run 106)",
-    "start_lane": "far-range speed steps still cost a frame; the stopping taper before the first support binds from ~4.4 m",
-    "seam": "whole-band loss not yet seen with the new bridge (watch seam_filled_bins >= 10)",
-    "next_round": "round 107; the car holds round 106 (c0843c4, engine 7f4e2306..., bridge fe5c0056...)"
+    "after_demo_20261025": "round 107: traffic-light stop by lidar (gantry legs) + the YOLO model the user will hand over (crosswalk too); camera input for route-engine race; ask the user for the pre-light zone size",
+    "crosswalk_light": "see turn107_analysis_20261024.decision and crosswalk_light_yolo_pending_20261023",
+    "speed": "remaining route speedups ~.1-.2 s each and each relaxes a protection (turn107_analysis_20261024)",
+    "seam": "whole-band loss seen once (run 106-2 seq 43, 11 bins) and filled",
+    "next_round": "107; the car holds round 106 (c0843c4); trial106.py runs any number of times"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -24267,5 +24266,54 @@
       "fresh_check": "after the swap: six fresh locked ready samples, 17 hashes and settings match claude-turn106-package.json"
     },
     "validation": "local run of the helper with a stand-in console: three runs created ...-106, -106-2, -106-3 and stopped at the console read; with the lock held the run stopped before creating a directory; extra arguments are still refused"
+  },
+  "turn106_rerun2_actual_20261024": {
+    "date": "2026-10-24",
+    "author": "Claude",
+    "physical_trial_executed": true,
+    "program": "round 106 unchanged (c0843c4, route-engine 7f4e2306..., bridge fe5c0056...), the repeatable trial106.py (race_helper_repeatable_runs_20261024); the user started it from the Mac over the shared SSH connection",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261023-106-2 (car clock still 10-23), 10/10 files sha256 equal (trial106-2-remote-sha256.txt); after: six locked neutral samples (after106-2-trial-fresh.json; turn_ready false only because the car stood in the finish zone)",
+    "result": {
+      "reason": "route_finish_zone_stop",
+      "helper": "program exit 0, 26.0 s; console restored, 6 neutral samples",
+      "stage_times_s_from_start_lane": {
+        "first_approach_handover": 4.2,
+        "first_pass": 6.7,
+        "second_handover": 7.9,
+        "second_pass": 11.1,
+        "light_lane": 13.8,
+        "front_in_finish_zone": 16.8,
+        "finish_stop": 18.3
+      },
+      "compare": "front in the zone 16.8 s (run 106 17.2, 105 16.4, 104 17.7)",
+      "finish": "stopped .46 m from the end board, one 2-scan creep, whole car in the zone at .397 m",
+      "quality_waits": "none",
+      "nearest_body_gap_m": 0.082,
+      "max_tick_compute_s": 0.0044,
+      "max_actual_gap_s": 0.0217,
+      "lidar": "coverage 360 in all 124 saved frames; seq 43 (start lane) had 11 seam bins filled from the previous revolution: the first whole-band loss seen with the round-104 bridge, filled, no front_sparse wait"
+    }
+  },
+  "turn107_analysis_20261024": {
+    "date": "2026-10-24",
+    "author": "Claude",
+    "implemented": false,
+    "deployed": false,
+    "user": [
+      "继续改下一轮吧",
+      "跑完了，你接着改，后续给我的执行命令也要可以重复执行的",
+      "因为明天需要向别人演示，我怕按照你推荐的改后，不能动了，所以你先记录，等明天演示好了，你再按照第一条改，届时我会将yolo模型也给你，你最后给我启动的py程序的命令"
+    ],
+    "loops": "the ~.4 s loop differences between runs 104-106-2 are placement: loop speed ~1.28-1.36 m/s in all, path from the start to the first pass 6.46 m in run 105 (the first support ~1 m nearer the start, ICP map) against 7.32-7.92 m in the others",
+    "light_lane": {
+      "finding": "the lane never measured its own coast in runs 98-106-2, so the guard prior LANE_STOP_DECEL_MIN_MPS2 .45 binds: cut at the lane entry, short pushes ended by the guard (run 106: 2.9 s from the entry, 3.4 m at 1.48 m/s, to the zone)",
+      "car_coasts": "quadratic fits of the range ahead from .45 s after the last power: runs 98-100 long coasts 1.5-1.7 m/s to rest .58-.60 m/s^2 (rms .6-.7 cm); ten shorter ones in runs 100-106-2 .54-1.0 (one .47 on a tail that had already stopped)",
+      "tried": "guard .50 + aim .55: course-sim no new contacts, finish line .07 s (108 rules-range) / .20 s (45 cases) earlier, but test_route_63_light_lane fails: a .35 m/s^2 car reaches the board by .8-6 mm (4 subtests) and a .58 car no longer measures its coast (1 test); aim .55 alone: no gain (+.02 s). Reverted"
+    },
+    "start_lane": {
+      "finding": "the start lane holds 1.2-1.35 m/s under the 1.5-1.8 allowed speed: the round-104 push rule reserves a full ESC lag of 1560 rise (.45 m/s) for any new push, and the stopping taper binds from ~5.5 m",
+      "tried": "rise as the 1560 still in the ESC pipeline (both edges delayed, as the light lane) with band .4/.2/.15: course-sim first handover .06-.16 s later on average. Reverted"
+    },
+    "decision": "no code change for round 107 before the user's demo on 2026-10-25; the car keeps round 106. After the demo (user): lidar traffic-light stop (the gantry legs by lidar, all four wheels in the pre-light zone, go on the YOLO model's green; the rules: no stop +50 s, before green +30 s, a wheel outside +20 s, the red-light stop time is deducted, the red lasts 3-10 s from ~1 m before the light) with the teammate's YOLO model, then give the user a repeatable start command"
   }
 }
