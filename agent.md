@@ -8,6 +8,8 @@
 - 第107轮：已打包（引擎04f2c39b…，桥沿用fe5c0056…），stage `stage-claude-turn107-20261025-131757`。晚上部署：先建SSH共享连接，再`read-fresh-engine.py`→`validate-fresh-engine.py … claude-turn106-package.json`→`deploy-matched.py claude-turn107 107`→再核对`claude-turn107-package.json`，然后给用户启动命令。
 - y1：路线和第107轮完全一样（同一个已装引擎），旁边多一个只读识别记录`scripts/vision-log.py`。它打开相机，跑race4，记录每帧检出，不碰车的控制和雷达设备，不影响行驶。`race-trial.py`新增可选`--vision-*`参数，不带时行为不变；`start-round.py`支持`y1`。
 - y1打包和部署：`work/.../build-vision.py claude-turn107 y1 race4_vehicle_handoff_20261024.zip`（从HEAD生成助手和部署包），然后`deploy-vision.py y1`（新建stage、拷文件、逐个核对sha256，不动控制台、引擎和桥）。启动用车上`trialy1.py`或`start-round.py y1`。
+- y1已打包：stage `stage-claude-y1-20261025-132806`，证据`left-cone-trial-20261025-y1`。trialy1.py 4cc66611…，vision-log.py b95a58ce…，模型4089dab5…（IR 8、opset 17，车上Python ORT 1.18能加载）。
+- 晚上顺序：用户开机建SSH→部署107（前后核对）→用户跑107→取回、看第一个桶的间隙→车上检查python3能否导入onnxruntime/cv2/numpy，用一张控制台画面跑`vision-log.py --images`看加载和速度→`deploy-vision.py y1`→用户跑y1→取回，对照路线事件分析检出。
 - y1之后：看斑马线和灯的检出距离、漏检和误检、帧率，以及对控制循环间隔的影响，再决定停车逻辑（灯前停车区域大小要问用户）。
 
 ## 当前接手入口（2026-10-25 Claude：第107轮——演示撞第一个桶：实车第一圈转得比标定紧1.2–1.4倍、跑进圆里；第一圈左转舵量输出时除以1.2；已推送、未上车）

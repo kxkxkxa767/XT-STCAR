@@ -24413,6 +24413,27 @@
       "python": "full console discover 895 OK (route code unchanged)",
       "helper_harness": "stand-in console/systemctl/fuser/program/log: plain run unchanged; with the log ready before the program and stopped after it (summary recorded); wrong log hash refuses before anything; a log never ready: the program runs alone, the log is terminated after; the console is restarted in every case"
     },
-    "round_107_package": "built: claude-turn107-package.json, engine 04f2c39b..., bridge fe5c0056..., stage stage-claude-turn107-20261025-131757 (deploy tonight)"
+    "round_107_package": "built: claude-turn107-package.json, engine 04f2c39b..., bridge fe5c0056..., stage stage-claude-turn107-20261025-131757 (deploy tonight)",
+    "package": {
+      "built_from": "3dbdf31 (scripts) on round 107's package (649b2de, engine 04f2c39b..., bridge fe5c0056...)",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-y1-20261025-132806",
+      "evidence": "/home/bianbu/xt-stcar-console/left-cone-trial-20261025-y1 (then -y1-2, -y1-3, ...)",
+      "files_sha256": {
+        "trialy1.py": "4cc66611ddb0...",
+        "vision-log.py": "b95a58ce7d61...",
+        "race4/race4.onnx": "4089dab5ed30...",
+        "race4/race4.json": "975e61d59d36...",
+        "race4/race4.provenance.json": "eab0c45e1ab3...",
+        "race4/README.md": "b293e47fa2a0..."
+      },
+      "onnx": "IR version 8, opset 17, 29 standard operators (the car's Python onnxruntime 1.18 loads IR <= 9)",
+      "tonight": [
+        "user: power on, SSH master",
+        "deploy round 107 (validate before against claude-turn106, after against claude-turn107)",
+        "user runs 107; fetch, check the first-support gap",
+        "on the car: python3 imports onnxruntime/cv2/numpy; vision-log.py --images on one console frame (load, speed)",
+        "deploy-vision.py y1; user runs y1; fetch, analyse detections against the route events"
+      ]
+    }
   }
 }
