@@ -431,7 +431,14 @@ impl Supervisor {
             return servo.clone();
         }
         let lane = s.motion.lane_wall_output_active();
-        let physical = V::Int(s.steer_output.physical(servo, if lane { Some(LANE_WALL_PLAY_PWM) } else { None }));
+        // Round 107: the first loop's left commands divided by FIRST_LOOP_STEER_GAIN.
+        let command = match servo {
+            V::Int(v) if !lane && *v > NEUTRAL && s.motion.first_loop_output_active() => {
+                V::Int(NEUTRAL + round((*v - NEUTRAL) as f64 / FIRST_LOOP_STEER_GAIN))
+            }
+            _ => servo.clone(),
+        };
+        let physical = V::Int(s.steer_output.physical(&command, if lane { Some(LANE_WALL_PLAY_PWM) } else { None }));
         self.steer_sent.insert(sequence, (servo.clone(), physical.clone()));
         self.steer_sent.retain(|&k, _| k >= sequence - 64);
         physical

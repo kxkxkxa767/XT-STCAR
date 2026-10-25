@@ -243,6 +243,10 @@ class RustManeuverSequence:
         # A pure predicate of the state, mirrored with every response.
         return self._mirror['lane_wall_output_active()']
 
+    def first_loop_output_active(self):
+        # Round 107: likewise mirrored.
+        return self._mirror['first_loop_output_active()']
+
     def clearance_probe(self, scan, now, contact, ages, demo=False, centering=False, **kwargs):
         """server.autonomy_tick's body-clearance check, in the engine (round 97).
 

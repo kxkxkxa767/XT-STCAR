@@ -31,10 +31,11 @@ from autonomy_live import (HEARTBEAT_S, QUALITY_CONFIRM_S, QUALITY_RECOVERY_STAB
                            FRONT_MAX_UNKNOWN, ClearanceReuse, corridor_walls, front_gap_evidence, probe_clearance,
                            probe_parameters)
 from coast_motion import COAST_MIN_VALID_POINTS, CoastMotionWorker
-from steer_calibration import SteerOutput
+from steer_calibration import NEUTRAL, SteerOutput
 from stop_goal import FinalStopGoal, StopGoalConsumer, StopGoalContract, StopGoalError, read_local_json
 from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_pwm, SERVO_MIN, SERVO_MAX, TRIAL_MOTOR, MAX_DRIVE_S, MAX_PRESTEER_S, STEERING_ALLOWANCE_S, SCAN_AGE_S, _valid_candidate, _number
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S, LANE_WALL_PLAY_PWM,
+                               FIRST_LOOP_STEER_GAIN,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
                                DRIVE_MOTORS, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
                                OPEN_STAGES)
@@ -282,7 +283,10 @@ class Console:
             return servo
         motion = (self.auto_session or {}).get('turn_motion')
         lane = isinstance(motion, MANEUVER_TYPES) and motion.lane_wall_output_active()
-        physical = steer.physical(servo, LANE_WALL_PLAY_PWM if lane else None)
+        command = servo
+        if not lane and servo > NEUTRAL and isinstance(motion, MANEUVER_TYPES) and motion.first_loop_output_active():
+            command = NEUTRAL+round((servo-NEUTRAL)/FIRST_LOOP_STEER_GAIN)  # round 107
+        physical = steer.physical(command, LANE_WALL_PLAY_PWM if lane else None)
         self.steer_sent[sequence] = (servo, physical)
         for old in [k for k in self.steer_sent if k < sequence-64]:
             del self.steer_sent[old]

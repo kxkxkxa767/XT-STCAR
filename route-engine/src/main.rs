@@ -333,6 +333,7 @@ impl Session {
                 V::Bool(self.motion().start_lane_quality_geometry(&scan))
             }
             "lane_wall_output_active" => V::Bool(self.motion().lane_wall_output_active()),
+            "first_loop_output_active" => V::Bool(self.motion().first_loop_output_active()),
             "probe_measurement" => {
                 // server.turn_route_quality_scope: _measurement on an isolated
                 // copy, so the check cannot refresh a live lease or history.

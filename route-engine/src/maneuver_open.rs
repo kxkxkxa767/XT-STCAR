@@ -250,6 +250,11 @@ impl Maneuver {
         }
     }
 
+    /// first_loop_output_active() (round 107).
+    pub fn first_loop_output_active(&self) -> bool {
+        self.continue_route && self.entry_kind == Some("lane") && self.route_stage == "first_target" && self.phase == "drive"
+    }
+
     /// lane_wall_output_active().
     pub fn lane_wall_output_active(&self) -> bool {
         self.continue_route

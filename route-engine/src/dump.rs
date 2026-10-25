@@ -35,6 +35,7 @@ impl Maneuver {
             "quality_resume_pending" => self.quality_resume_pending,
             // Pure state predicate the console asks on every drive output.
             "lane_wall_output_active()" => self.lane_wall_output_active(),
+            "first_loop_output_active()" => self.first_loop_output_active(),
         }
     }
 

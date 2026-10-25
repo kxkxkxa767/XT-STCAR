@@ -23814,11 +23814,11 @@
     ]
   },
   "next_tasks_20261022": {
-    "after_demo_20261025": "round 107: traffic-light stop by lidar (gantry legs) + the YOLO model the user will hand over (crosswalk too); camera input for route-engine race; ask the user for the pre-light zone size",
-    "crosswalk_light": "see turn107_analysis_20261024.decision and crosswalk_light_yolo_pending_20261023",
-    "speed": "remaining route speedups ~.1-.2 s each and each relaxes a protection (turn107_analysis_20261024)",
-    "seam": "whole-band loss seen once (run 106-2 seq 43, 11 bins) and filled",
-    "next_round": "107; the car holds round 106 (c0843c4); trial106.py runs any number of times"
+    "first_support": "round 107 (first loop steering gain) is committed, not deployed; on the car check the first-support gap (expect >= .15 m) and the transfer/second loop",
+    "after_demo": "traffic-light stop by lidar (gantry legs) + the YOLO model the user will hand over (crosswalk too); camera input for route-engine race; ask the user for the pre-light zone size",
+    "steering_calibration": "the car steers 1.2-1.4 times the calibration in both loops: a full recalibration (all stages, course-sim cars) needs car runs",
+    "power": "run 106-7 lost power at ~13 s: check the battery before runs",
+    "next_round": "107 built from this commit; the car holds round 106 (c0843c4)"
   },
   "turn102_light_entry_gate_20261022": {
     "date": "2026-10-22",
@@ -24315,5 +24315,75 @@
       "tried": "rise as the 1560 still in the ESC pipeline (both edges delayed, as the light lane) with band .4/.2/.15: course-sim first handover .06-.16 s later on average. Reverted"
     },
     "decision": "no code change for round 107 before the user's demo on 2026-10-25; the car keeps round 106. After the demo (user): lidar traffic-light stop (the gantry legs by lidar, all four wheels in the pre-light zone, go on the YOLO model's green; the rules: no stop +50 s, before green +30 s, a wheel outside +20 s, the red-light stop time is deducted, the red lasts 3-10 s from ~1 m before the light) with the teammate's YOLO model, then give the user a repeatable start command"
+  },
+  "turn106_demo_runs_20261025": {
+    "date": "2026-10-25",
+    "author": "Claude",
+    "physical_trial_executed": true,
+    "program": "round 106 unchanged (c0843c4, route-engine 7f4e2306..., bridge fe5c0056...), the repeatable trial106.py",
+    "user": [
+      "并不是很顺利，第一次演示的时候撞到了第一个桶，我再跑的时候拍了一下，确实第一个桶可能会被轮子碰到，你一并修改吧"
+    ],
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261023-106-3 .. -106-8 (car clock 10-23 for 3/4, 10-25 for 5-8), every file sha256 equal (trial106-K-remote-sha256.txt)",
+    "runs": {
+      "106-3": "route_finish_zone_stop, front in the zone 16.7 s, stop 18.5 s, whole car in at .393 m",
+      "106-4": "route_finish_zone_stop, 16.8 s, 19.4 s, .403 m, one creep",
+      "106-5": "route_finish_zone_stop, 18.1 s, 20.9 s, .368 m (first demo run: the first support was hit; first-loop body gap .051 m, the smallest of all runs)",
+      "106-6": "route_finish_zone_stop, 17.2 s, 18.6 s, .372 m, one creep",
+      "106-7": "interrupted at ~13 s (light entry): race-stdout.txt ends in NUL bytes, summary/cli-result/after.json empty, no helper-result or after-console: a power cut during the run (the car was booted again at ~10:40)",
+      "106-8": "route_finish_zone_stop, 17.2 s, 19.6 s, .371 m, two creeps"
+    },
+    "first_support_gaps_m": {
+      "104": 0.06,
+      "105": 0.06,
+      "106": 0.08,
+      "106-2": 0.082,
+      "106-3": 0.085,
+      "106-4": 0.095,
+      "106-5": 0.051,
+      "106-6": 0.071,
+      "basis": "lidar points of the first support against the body box (front .20, rear .18, sides .14 m), minimum over the first loop and the transfer; the base on the floor is wider than the body the lidar sees (user photo)"
+    },
+    "second_support_gaps_m": ".29-.38 in runs 104-106-8"
+  },
+  "turn107_first_loop_steer_gain_20261025": {
+    "date": "2026-10-25",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 106 (c0843c4) on the car",
+    "user": [
+      "并不是很顺利，第一次演示的时候撞到了第一个桶 … 你一并修改吧",
+      "舵机延迟会不会有底盘的问题，底盘用的是stm362f103c8t6，里面程序是厂家的，需不需要我用stlink给你读取一下",
+      "改完后不上车，直接推送"
+    ],
+    "chassis_question": "not needed: physical_servo in the logs is our own calibrated command (the play compensation), not an MCU measurement; the ~.3 s lag is plausible from link, servo speed, play and tyres; any compensation belongs in our control. If read with ST-Link: read only, never remove read protection (an STM32F103 RDP removal mass-erases the vendor firmware)",
+    "evidence": {
+      "path_inside_circle": "runs 106-2..106-8: the car ran .60-.74 m from the first loop's .95 m circle centre from ~90 deg of the loop on (ICP map; the car's own loop-centre estimate .70-.75) and passed the support at ~.33 m centre distance against ~.45-.50 m planned",
+      "steering_stronger": "the first loop's path in the support's frame (lidar support centre and compass heading, no speed): .18-.32 /m more curvature than commanded at every nominal servo 1525-1724, ratio median 1.18-1.49 per run (runs 104-106-8); heading fits with delay, lag, play free: 1.2-1.4 times the calibration (rms 7-8 deg against 17-25 deg at 1.0); the second loop at 1300-1400 1.35-1.45 times (it keeps .29-.38 m from its support)",
+      "simulation_gap": "course-sim cars steer as the calibration and pass the first support at ~.3 m; with 1.15-1.3 times stronger steering and .3 s lag they pass at 0-.12 m like the car"
+    },
+    "tried_and_rejected": {
+      "loop_curvature_cap_and_base_margin": "cap at the circle's curvature and the support radius +.06 m: board contacts on 5 m courses (second loop at its right limit), finish +.44 s",
+      "online_ratio_estimate": "measured on the loop itself: the entry transient (servo ramp) biases it low; usable only from ~108 deg, after the car is already inside",
+      "no_play_compensation_in_the_loop": "on a car that keeps the 40 PWM play the release then sticks and the car cut deeper (gaps under .12 m 7 -> 14 of 20)",
+      "pursuit_gain_in_nominal_space": "also under-steers a car that steers as the nominal model: two open-course regressions failed",
+      "gain_1.25": "the measured car with play 60 ended .069 m from the outer board (test_route_64 calibration-error case)"
+    },
+    "change": "FIRST_LOOP_STEER_GAIN = 1.2: while the open course's first loop drives (first_loop_output_active: continue_route, entry_kind lane, route_stage first_target, phase drive) a left nominal command reaches the steering output as 1500 + (servo - 1500)/1.2 (server.output_servo; route-engine supervisor output_servo), then the calibration with its play as before. The nominal command, its feedback mapping, the planners and every other stage are unchanged; a simulated car that steers as the nominal model takes the nominal servo and is unchanged. Rust mirrors it (maneuver_open first_loop_output_active, dump/main mirror, route_engine.py and route-engine-parity.py proxies)",
+    "validation": {
+      "python": "full console discover 895 OK (891 + 4: test_route_107_first_loop_steer_gain)",
+      "rust": "route-engine cargo test 4 passed; release build; no clippy warning in the changed lines",
+      "parity": "Python/Rust route-engine-parity-sweep all 184/185 (the known run-75 replay)",
+      "supervisor_parity": "route-engine-parity-sweep all --supervisor 184/185 (the run-75 replay), ~170,600 ticks: every command incl. the physical servo (the first loop's scaled left commands) equal bit for bit",
+      "course_sim": "course-sim: cars steering as the nominal model 15/15 identical; cars steering as the old calibration (40 cases) first-support gap mean .396 -> .507 m (min .236 -> .348), completions 37 -> 33 (new failures 5 m/6.4 m courses, one fixed), finish +.22 s; cars steering 1.3 times (20) gaps under .12 m 8 -> 3, completions 11 -> 12; 1.15 times 3 -> 1, 16 -> 15; without play smallest gap .23 -> .36 m, 18 -> 18"
+    },
+    "expected_on_the_car": "the first loop on its planned circle: first-support body gap ~.15-.25 m instead of .05-.095 m",
+    "risks": [
+      "not run on the car (user: push without a car run)",
+      "if the floor or the car makes the steering weaker than the calibration, the first loop runs wider (play 60 case: board .08-.1 m)",
+      "the transfer starts where the loop plan ends, ~.1 m further out than in runs 104-106-8"
+    ]
   }
 }

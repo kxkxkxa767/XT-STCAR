@@ -209,6 +209,9 @@ def install(engine_path, every):
         def lane_wall_output_active(self):
             return self._both('lane_wall_output_active')
 
+        def first_loop_output_active(self):
+            return self._both('first_loop_output_active')
+
         def clearance_probe(self, scan, now, contact, ages, demo=False, centering=False, **kwargs):
             # server.autonomy_tick's Python path for the same arguments.
             def python_probe():

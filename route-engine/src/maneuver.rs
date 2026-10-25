@@ -136,6 +136,8 @@ pub const LANE_START_SETTLE_S: f64 = 0.3;
 pub const LANE_START_HOLD_PWM: i64 = 55;
 pub const LANE_TRACK_SPEED_POINTS: usize = 5;
 pub const LANE_WALL_PLAY_PWM: i64 = STEER_PLAY_PWM;
+/// Round 107: the first loop's left commands reach the steering output divided by this (see the Python constant).
+pub const FIRST_LOOP_STEER_GAIN: f64 = 1.2;
 pub const OPEN_FIRST_MIN_ALONG_M: f64 = -1.2;
 pub const FIRST_APPROACH_MAX_RANGE_M: f64 = 3.5;
 pub const OPEN_HANDOVER_MAX_RANGE_M: f64 = 2.5;

@@ -534,6 +534,30 @@ LANE_SIDE_WALL_HEADING_RAD = math.radians(5)
 # was the then measured 50 in turn69_start_lane_law_20261018, chosen over real
 # play 0-70 in simulation; the track fit gives 40).
 LANE_WALL_PLAY_PWM = STEER_PLAY_PWM
+# Round 107 (Claude; user 10-25: the first support was hit in the demo, a
+# wheel passing its base). Car runs 104-106-8 passed the first support at
+# .051-.095 m body gap (lidar points; the base on the floor is wider). The
+# first loop's path in the support's frame (lidar support centre and compass
+# heading, no speed involved) curved .18-.32 /m more than its commands meant
+# at every servo from 1525 to 1724 (nine runs, median ratio 1.18-1.49 per
+# run; fits of the heading with delay, lag and play free: 1.2-1.4 times the
+# calibration). Pure pursuit then settles inside its .95 m circle (radius ~R/
+# sqrt(ratio)) and the steering lag adds to it: the car ran .60-.74 m from its
+# centre and passed the support ~.2 m nearer than planned. Whether the play
+# shrank or the gain grew the data do not tell, and they need opposite fixes
+# of the play (course-sim: a first loop without the play compensation cut
+# deeper into the support on a car that keeps the 40 PWM play), so the first
+# loop's left commands go to the steering output divided by this gain (the
+# play is crossed as before). Course-sim, 20 cases per car (5 layouts x
+# steering delay/lag), first-support gaps under .12 m and completions: car
+# steering 1.3 times 8 -> 3, 11 -> 12; 1.15 times 3 -> 1, 16 -> 15; without
+# play (smallest gap .23 -> .36 m) 18 -> 18. 1.25 took the gaps under .12 m
+# to 2 but the measured car with the play at 60 (steering weaker) then ended
+# .069 m from the outer board after the loop; at 1.2 every calibration-error
+# case of test_route_64 completes. The planners' nominal space and every
+# other stage are unchanged, and so is a simulated car that steers as the
+# nominal model (it takes the nominal servo).
+FIRST_LOOP_STEER_GAIN = 1.2
 
 
 class LaneWallSteering:
@@ -3446,6 +3470,11 @@ class ManeuverSequence(TurnMotion):
         self.start_side_wall = {'source_seq': scan['seq'], **fit, 'lane_width_m': width}
         return {'offset_right_m': centre, 'heading_right_deg': math.degrees(math.atan(fit['slope'])),
                 'slope': fit['slope'], 'width_m': width, 'side_wall': fit['side']}
+
+    def first_loop_output_active(self):
+        """Round 107: the current command is the open course's first loop (FIRST_LOOP_STEER_GAIN)."""
+        return (self.continue_route and self.entry_kind == 'lane' and self.route_stage == 'first_target'
+                and self.phase == 'drive')
 
     def lane_wall_output_active(self):
         """The current command comes from the start-lane wall law (drive or coast)."""

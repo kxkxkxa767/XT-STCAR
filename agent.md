@@ -1,5 +1,17 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-25 Claude：第107轮——演示撞第一个桶：实车第一圈转得比标定紧1.2–1.4倍、跑进圆里；第一圈左转舵量输出时除以1.2；已推送、未上车）
+
+记录键`turn106_demo_runs_20261025`、`turn107_first_loop_steer_gain_20261025`。车上仍是第106轮（c0843c4）。用户：“改完后不上车，直接推送”。
+- 演示：第106轮又跑了6次（106-3…106-8），5次完整跑完、车头进区16.7–18.1s；106-5（第一次演示）撞了第一个桶。106-7在约13s中断，标准输出末尾全是零字节、几个结果文件为空，是中途断电，提醒用户查电池。
+- 第一个桶：车身到桶（雷达点）最近.051–.095m（第104–106-8轮），桶底座比雷达看到的桶身宽；第二个桶.29–.38m。
+- 原因：第一圈后半段车跑进了计划圆（离圆心.60–.74m，圆半径.95m），离桶中心约.33m，计划约.45–.50m。用桶的位置和车头朝向反推第一圈的路径（不依赖车速），实际曲率比指令大.18–.32/m，每轮中位1.18–1.49倍；拟合朝向得1.2–1.4倍。纯追踪在转得过紧的车上会停在圆里，再加上舵机延迟就更靠里。仿真车按标定转，所以复现不出来；仿真车转向调强1.15–1.3倍、加0.3s延迟后才复现。
+- 改动：开放场地第一圈行驶时（`first_loop_output_active`），左转名义舵量在输出层先变成`1500+(舵量-1500)/1.2`，再按原标定加空程补偿（`server.output_servo`、引擎`supervisor`）。名义舵量、反馈换算、规划和其他阶段都不变；按名义模型转向的仿真车读名义舵量，也不受影响。
+- 试过并撤回：圆上弯度封顶加底座余量（5m场地撞板、慢.44s）；圈内现测比值（入圈过渡段测得偏小，约108°才生效）；第一圈不加空程补偿（有空程的车回舵卡住，更贴桶）；在名义舵量上直接乘增益（按模型转向的车转不够，2项回归测试不过）；增益1.25（空程60的车离外板.069m）。
+- 验证：Python全量895 OK（新增4）；引擎cargo test过、改动行无clippy警告；Python/Rust route-engine-parity-sweep all 184/185 (the known run-75 replay)；route-engine-parity-sweep all --supervisor 184/185 (the run-75 replay), ~170,600 ticks: every command incl. the physical servo (the first loop's scaled left commands) equal bit for bit；course-sim: cars steering as the nominal model 15/15 identical; cars steering as the old calibration (40 cases) first-support gap mean .396 -> .507 m (min .236 -> .348), completions 37 -> 33 (new failures 5 m/6.4 m courses, one fixed), finish +.22 s; cars steering 1.3 times (20) gaps under .12 m 8 -> 3, completions 11 -> 12; 1.15 times 3 -> 1, 16 -> 15; without play smallest gap .23 -> .36 m, 18 -> 18。
+- 底盘问题的答复：`physical_servo`是我们自己算的补偿后舵量，不是底盘测得的；不用读厂家固件。如果要读，只读，不能解除读保护（会整片擦除）。
+- 下一步：上车时看第一个桶的间隙（预计≥.15m），以及过渡段和第二圈。演示后的红绿灯停车加YOLO照旧排在后面。两圈都显示转向比标定强，全面重新标定要靠实车跑。
+
 ## 当前接手入口（2026-10-24 Claude：第106轮再跑一次仍整条跑完；第107轮分析后不改代码；10-25演示后做雷达红绿灯停车并接YOLO）
 
 记录键`turn106_rerun2_actual_20261024`、`turn107_analysis_20261024`。车上仍是第106轮（c0843c4，引擎7f4e2306…，桥fe5c0056…），`trial106.py`可重复跑。
