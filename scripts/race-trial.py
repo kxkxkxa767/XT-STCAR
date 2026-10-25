@@ -3,7 +3,8 @@
 
   python3 race-trial.py --evidence NEW_DIR --program PATH --bridge PATH [--max-drive-s 40]
       [--initial-presteer-pwm 1670] [--ready-hold-s 1] [--program-sha256 H] [--bridge-sha256 H]
-      [--check-only]
+      [--check-only] [--vision-script PATH --vision-model DIR [--vision-script-sha256 H]
+      [--vision-model-sha256 H] [--vision-camera /dev/video20]]
 
 Runs on the car, as often as wanted (user, 10-24: “不限次数”), one run at a
 time (BASE/race-trial.lock). Each run gets a new evidence directory: NEW_DIR,
@@ -21,6 +22,16 @@ started again whatever happened, and six fresh locked-neutral samples are
 required (state in NEW_DIR/after-console.json). The result is
 NEW_DIR/helper-result.json. The console's access token is read here and
 never printed.
+
+Round y1 (user 10-25: the YOLO model race4): with --vision-script and
+--vision-model (both hashes checked with the program's), once the console is
+stopped the camera must be free too and the read-only perception log
+(scripts/vision-log.py) starts beside the program into NEW_DIR/vision/; the
+program starts after its ready line (model and camera working, at most
+VISION_READY_S) or, without it, alone (recorded). The log never touches the
+car's devices or the program; it is stopped after the program ends (SIGTERM,
+then killed after VISION_STOP_S) and its summary goes into the result with
+the program's start time on the same monotonic clock.
 """
 import argparse
 import fcntl
@@ -28,6 +39,7 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+import select
 import subprocess
 import sys
 import time
@@ -36,6 +48,8 @@ import urllib.request
 BASE = Path('/home/bianbu/xt-stcar-console')
 SERVICE = 'xt-stcar-console.service'
 FIXED_ARGS = None  # a round's packaged copy: its arguments, set by the builder
+VISION_READY_S = 25.
+VISION_STOP_S = 10.
 
 
 def fresh_dir(base):
@@ -60,10 +74,21 @@ def main():
     parser.add_argument('--program-sha256')
     parser.add_argument('--bridge-sha256')
     parser.add_argument('--check-only', action='store_true')
+    parser.add_argument('--vision-script')
+    parser.add_argument('--vision-script-sha256')
+    parser.add_argument('--vision-model')
+    parser.add_argument('--vision-model-sha256')
+    parser.add_argument('--vision-camera', default='/dev/video20')
     if FIXED_ARGS is not None and sys.argv[1:]:
         raise SystemExit("this round's helper takes no arguments")
     args = parser.parse_args(FIXED_ARGS)
-    for path, expected in ((args.program, args.program_sha256), (args.bridge, args.bridge_sha256)):
+    if (args.vision_script is None) != (args.vision_model is None):
+        raise SystemExit('--vision-script and --vision-model go together; nothing started')
+    checks = [(args.program, args.program_sha256), (args.bridge, args.bridge_sha256)]
+    if args.vision_script is not None:
+        checks += [(args.vision_script, args.vision_script_sha256),
+                   (str(Path(args.vision_model)/'race4.onnx'), args.vision_model_sha256)]
+    for path, expected in checks:
         if expected is not None and hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
             raise SystemExit(f'{path} does not match its expected sha256; nothing started')
     lock = (BASE/'race-trial.lock').open('w')
@@ -88,9 +113,10 @@ def main():
                 and s['autonomy']['mode'] == 'locked'
                 and c['armed'] is False and c['motor'] == c['servo'] == 1500 and 0 <= s['ages']['control'] < .2)
 
+    devices = ('/dev/car', '/dev/laser') + ((args.vision_camera,) if args.vision_script is not None else ())
+
     def busy():
-        return [d for d in ('/dev/car', '/dev/laser')
-                if subprocess.run(['fuser', d], capture_output=True).returncode != 1]
+        return [d for d in devices if subprocess.run(['fuser', d], capture_output=True).returncode != 1]
 
     pre = state(f'?trial_mode=turn-cone&initial_presteer_pwm={args.initial_presteer_pwm}&continue_route=true')
     (out/'before-console.json').write_text(json.dumps(pre, indent=2)+'\n')
@@ -101,6 +127,7 @@ def main():
                                     and (pre['autonomy'].get('turn_preview') or {}).get('continue_route') is True):
         raise SystemExit(f"console start check not ready ({pre['autonomy'].get('turn_rejection')}); nothing started")
     result = {'evidence_dir': str(out), 'check_only': args.check_only}
+    vision = None
     subprocess.run(['systemctl', '--user', 'stop', SERVICE], check=True, timeout=30)
     try:
         deadline = time.monotonic()+15
@@ -113,13 +140,39 @@ def main():
                    '--max-drive-s', args.max_drive_s, '--initial-presteer-pwm', args.initial_presteer_pwm,
                    '--status-s', '.5', '--max-wait-s', '20']
         command += ['--start', 'never'] if args.check_only else ['--start', 'ready', '--ready-hold-s', args.ready_hold_s]
+        if args.vision_script is not None:
+            vision = subprocess.Popen([sys.executable, args.vision_script, '--model-dir', args.vision_model,
+                                       '--out', str(out/'vision'), '--camera', args.vision_camera, '--max-s', '150'],
+                                      stdout=subprocess.PIPE, stderr=(out/'vision-stderr.txt').open('w'),
+                                      stdin=subprocess.DEVNULL, text=True)
+            ready, deadline = None, time.monotonic()+VISION_READY_S
+            while ready is None and vision.poll() is None and time.monotonic() < deadline:
+                if select.select([vision.stdout], [], [], max(0., deadline-time.monotonic()))[0]:
+                    line = vision.stdout.readline()
+                    if not line:
+                        break
+                    if line.startswith('{') and json.loads(line).get('kind') == 'ready':
+                        ready = json.loads(line)
+            result.update(vision_ready=ready, vision_exit_before_run=vision.poll())
         started = time.monotonic()
+        result['program_started_monotonic_s'] = started
         with (out/'race-stdout.txt').open('w') as stdout:
             p = subprocess.run(command, stdout=stdout, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, timeout=120)
         result.update(program_exit=p.returncode, program_elapsed_s=time.monotonic()-started)
         time.sleep(1)
         result['devices_busy_after_run'] = busy()
     finally:
+        if vision is not None:
+            if vision.poll() is None:
+                vision.terminate()
+                try:
+                    vision.wait(VISION_STOP_S)
+                except subprocess.TimeoutExpired:
+                    vision.kill()
+                    vision.wait(5)
+            tail = [json.loads(line) for line in vision.stdout.read().splitlines() if line.startswith('{')]
+            result.update(vision_exit=vision.returncode,
+                          vision_summary=next((row for row in tail if row.get('kind') == 'summary'), None))
         subprocess.run(['systemctl', '--user', 'start', SERVICE], timeout=30)
         final, deadline = [], time.monotonic()+90
         while len(final) < 6 and time.monotonic() < deadline:

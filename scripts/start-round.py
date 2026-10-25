@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Start one built and deployed round on the car from this Mac (not on the car).
 
-  python3 scripts/start-round.py N
+  python3 scripts/start-round.py N        (round N: work/.../claude-turnN-package.json)
+  python3 scripts/start-round.py yK       (round yK with the YOLO log: claude-yK-package.json)
 
 Typing it is the operator's go: the car must already stand at the start. A
 round can run any number of times (user, 10-24): the car-side helper gives each
@@ -22,6 +23,7 @@ may ask for the password in this terminal). Nothing secret is printed.
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -57,10 +59,10 @@ def read_fresh(ssh, out):
 
 
 def main():
-    if len(sys.argv) != 2 or not sys.argv[1].isdigit():
+    if len(sys.argv) != 2 or not re.fullmatch(r'\d+|y\d+', sys.argv[1]):
         raise SystemExit(__doc__)
-    n = int(sys.argv[1])
-    package = WORK/f'claude-turn{n}-package.json'
+    n = sys.argv[1]
+    package = WORK/(f'claude-turn{n}-package.json' if n.isdigit() else f'claude-{n}-package.json')
     if not package.is_file():
         fail(f'没有第{n}轮的部署包记录 {package.name}')
     pkg = json.loads(package.read_text())
@@ -133,6 +135,10 @@ def main():
     if 'finish_stop' in seq and 'start_lane' in seq:
         say(f"起步到停车约 {(seq['finish_stop']-seq['start_lane'])/10:.1f} 秒；离终点板 {finish.get('front_gap_m', 0):.3f}m，"
             f"依据 {finish.get('basis')}，补进 {finish.get('creeps')} 次")
+    vision = helper.get('vision_summary')
+    if vision or helper.get('vision_exit') is not None:
+        say(f"识别记录（只读）：{vision.get('frames')} 帧，{vision.get('fps')} 帧/秒，推理中位 {vision.get('infer_ms_median')} ms，"
+            f"各类检出 {vision.get('counts')}" if vision else f"识别记录没有小结（退出码 {helper.get('vision_exit')}），请让 Claude 检查")
     say(f"质量等待计数 {result.get('quality_counts') or {}}；把结果告诉 Claude 即可继续分析")
     return 0 if code == 0 and not bad else 1
 

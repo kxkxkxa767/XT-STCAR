@@ -1,5 +1,15 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-25 Claude：第107轮已打包待部署；y1＝第107轮引擎加只读YOLO识别记录（race4模型），晚上用户回来先跑107再跑y1）
+
+记录键`y1_vision_log_20261025`。车上仍是第106轮；车已关机。
+- 用户：“这一轮保存，等我晚上回来，先运行这一轮，再运行尝试添加yolo模型的版本，添加yolo模型的版本测试以y1开头，模型在工程文件夹里面叫race4_vehicle_handoff_20261024.zip”。
+- 模型：YOLO26n，4类（斑马线、蓝桶、红灯、绿灯），输入320，输出`[1,300,6]`，不带NMS。测试集mAP50 0.934，斑马线召回约0.75。队友说明还没在车上验过，要先只读测试。zip在工程根目录，不进git。本机加载通过；17张旧车载照片上没有≥0.25的检出（灯区入口那张灯没亮）。
+- 第107轮：已打包（引擎04f2c39b…，桥沿用fe5c0056…），stage `stage-claude-turn107-20261025-131757`。晚上部署：先建SSH共享连接，再`read-fresh-engine.py`→`validate-fresh-engine.py … claude-turn106-package.json`→`deploy-matched.py claude-turn107 107`→再核对`claude-turn107-package.json`，然后给用户启动命令。
+- y1：路线和第107轮完全一样（同一个已装引擎），旁边多一个只读识别记录`scripts/vision-log.py`。它打开相机，跑race4，记录每帧检出，不碰车的控制和雷达设备，不影响行驶。`race-trial.py`新增可选`--vision-*`参数，不带时行为不变；`start-round.py`支持`y1`。
+- y1打包和部署：`work/.../build-vision.py claude-turn107 y1 race4_vehicle_handoff_20261024.zip`（从HEAD生成助手和部署包），然后`deploy-vision.py y1`（新建stage、拷文件、逐个核对sha256，不动控制台、引擎和桥）。启动用车上`trialy1.py`或`start-round.py y1`。
+- y1之后：看斑马线和灯的检出距离、漏检和误检、帧率，以及对控制循环间隔的影响，再决定停车逻辑（灯前停车区域大小要问用户）。
+
 ## 当前接手入口（2026-10-25 Claude：第107轮——演示撞第一个桶：实车第一圈转得比标定紧1.2–1.4倍、跑进圆里；第一圈左转舵量输出时除以1.2；已推送、未上车）
 
 记录键`turn106_demo_runs_20261025`、`turn107_first_loop_steer_gain_20261025`。车上仍是第106轮（c0843c4）。用户：“改完后不上车，直接推送”。

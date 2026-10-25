@@ -1,4 +1,4 @@
-# XT-STCAR（10-25 Claude：第107轮——演示撞第一个桶：实车第一圈转向比标定紧1.2–1.4倍、跑进圆里，第一圈左转舵量输出时除以1.2；已推送未上车）
+# XT-STCAR（10-25 Claude：第107轮第一圈转向修正已打包待部署；y1＝第107轮加只读YOLO识别记录（race4四类模型），晚上先跑107再跑y1）
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。路线只用激光雷达，不用摄像头。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。
@@ -196,6 +196,7 @@ XT-STCAR/
 | [`web/vehicle-console/index.html`](web/vehicle-console/index.html)、`app.js`、`style.css`、`systemd/` | 网页驾驶台和车上服务单元 |
 | [`web/vehicle-console/tests/`](web/vehicle-console/tests) | 控制台、路线、引擎和独立程序的单元测试（全量须 0 失败才能上车）；`fixtures/` 是实车扫描片段 |
 | [`scripts/race-trial.py`](scripts/race-trial.py) | 车上助手：先核对哈希，再查新鲜锁定中位和起点检查，停控制台跑一次 race，必定恢复控制台并要求 6 个健康锁定样本；打包后带任何参数都拒绝；可重复跑，每次新的证据目录、同时只跑一个 |
+| [`scripts/vision-log.py`](scripts/vision-log.py) | y1：车上只读识别记录，相机加 race4 YOLO（斑马线/蓝桶/红灯/绿灯），逐帧记检出和耗时；不碰控制和雷达设备 |
 | [`scripts/start-round.py`](scripts/start-round.py) | 第105轮：本机一条命令启动已部署的第 N 轮：核对车上状态与部署、跑 `trial<N>.py`、取回并逐个校验证据、打印小结；可重复跑 |
 | [`scripts/course-sim.py`](scripts/course-sim.py)、[`route-sim.py`](scripts/route-sim.py) | 闭环赛道仿真：真实控制台服务（演示模式）加车辆模型（名义/实测）；不连车 |
 | [`scripts/route-engine-parity.py`](scripts/route-engine-parity.py)、`route-engine-parity-sweep.py`、`route-engine-supervisor-parity.py`、`route-engine-clearance-parity.py`、`route-engine-coast-parity.py` | Python 与 Rust 逐位对比：路线、监管、间隙检查、滑行；sweep 在仿真和录像上并行跑（不要和全量测试同时跑） |
