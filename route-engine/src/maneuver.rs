@@ -174,6 +174,8 @@ pub const OPEN_RELEASE_PWM_STEP: i64 = ROUTE_RETURN_RELEASE_PWM_STEP;
 pub const OPEN_RELEASE_PWM_PER_S: f64 = 550.;
 pub const OPEN_PREDICT_SPEED_MPS: f64 = 1.3;
 pub const OPEN_LANE_LOOKAHEAD_M: (f64, f64) = (0.8, 1.6);
+/// Round 108: the light pursuit aims at the divider's open end no nearer than this.
+pub const OPEN_LANE_PURSUIT_MIN_M: f64 = 1.4;
 pub const OPEN_LANE_WIDTH_M: (f64, f64) = (0.65, 2.2);
 pub const OPEN_LANE_INSIDE_MARGIN_M: f64 = 0.05;
 pub const OPEN_LANE_SHIFT_MIN_GAP_M: f64 = 0.20;

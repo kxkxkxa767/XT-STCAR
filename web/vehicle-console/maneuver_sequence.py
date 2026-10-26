@@ -799,6 +799,17 @@ OPEN_PREDICT_SPEED_MPS = 1.3
 OPEN_LANE_PARALLEL_RAD = math.radians(12)
 OPEN_LANE_MIN_SPAN_M = .5
 OPEN_LANE_LOOKAHEAD_M = (.8, 1.6)
+# Round 108 (car run 107, hit the light divider's side): the light pursuit
+# aims at the divider's open end no nearer than this. The .8 m floor dates
+# from ~1.1 m/s at 1550; runs 104-107 measured 1.3-1.5 m/s (higher on a fresh
+# battery), and with the ~.3 s steering lag a .9 m horizon (.6 s) handed over
+# at 1382 with the heading still 10 deg left of the axis, then swung 38 deg
+# past it while releasing. Course-sim, measured cars (gain 1-1.4, speed
+# 1-1.3, .15/.3 s delay, with and without gantry, 288 cases): overshoot after
+# the lane hand-over p90 20.5 -> 15.5 deg, max 43 -> 36, light-stage stops
+# 29 -> 22, entry gaps unchanged; round-107 set unchanged or better. The same
+# floor on the near-line shortening below broke cars without play (18 -> 13).
+OPEN_LANE_PURSUIT_MIN_M = 1.4
 OPEN_LANE_WIDTH_M = (.65, 2.2)
 OPEN_LANE_ENTRY_HEADING_RAD = math.radians(20)
 OPEN_LANE_INSIDE_MARGIN_M = .05
@@ -4267,7 +4278,7 @@ class ManeuverSequence(TurnMotion):
             start = lane['inner_start_along_m']
             start = None if start is None else start-moved_along
             along = (OPEN_LANE_LOOKAHEAD_M[1] if start is None or start <= FRONT_BODY_EXTENT_M
-                     else max(OPEN_LANE_LOOKAHEAD_M[0], min(OPEN_LANE_LOOKAHEAD_M[1], start)))
+                     else max(OPEN_LANE_PURSUIT_MIN_M, min(OPEN_LANE_LOOKAHEAD_M[1], start)))
             # As the line is approached, shorten the pursuit horizon so the
             # remaining cross-lane motion is removed before releasing the turn.
             along = min(along, max(OPEN_LANE_LOOKAHEAD_M[0], OPEN_LOOKAHEAD_M+abs(lateral-moved_lateral)))

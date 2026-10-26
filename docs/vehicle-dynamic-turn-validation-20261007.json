@@ -24350,8 +24350,8 @@
     "date": "2026-10-25",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "round 106 (c0843c4) on the car",
     "user": [
       "并不是很顺利，第一次演示的时候撞到了第一个桶 … 你一并修改吧",
@@ -24384,7 +24384,19 @@
       "not run on the car (user: push without a car run)",
       "if the floor or the car makes the steering weaker than the calibration, the first loop runs wider (play 60 case: board .08-.1 m)",
       "the transfer starts where the loop plan ends, ~.1 m further out than in runs 104-106-8"
-    ]
+    ],
+    "deployment": {
+      "date": "2026-10-26",
+      "commit": "649b2de",
+      "archive_sha256": "b7b6576fe9cfa97859e6e9587adac385f8faaa9892ebcdc0e5e7e2e1fd8cfac2",
+      "route_engine_sha256": "04f2c39bcd3d9fb39c631ba4a8f42de85a894ee36dc915cd3a2507416433fc25",
+      "bridge": "unchanged fe5c0056...",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn107-20261025-131757",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn107-20261025-131757",
+      "helper": "trial107.py sha256 fba87c26... (repeatable)",
+      "fresh_checks": "before107-fresh.json vs claude-turn106-package.json and after107-deploy-fresh.json vs claude-turn107-package.json: six fresh locked ready samples (rust_engine), 17 hashes and settings; continue_route preview true",
+      "result": "turn107_actual_20261026"
+    }
   },
   "y1_vision_log_20261025": {
     "date": "2026-10-25",
@@ -24435,5 +24447,60 @@
         "deploy-vision.py y1; user runs y1; fetch, analyse detections against the route events"
       ]
     }
+  },
+  "turn107_actual_20261026": {
+    "date": "2026-10-26",
+    "author": "Claude",
+    "physical_trial_executed": true,
+    "user": [
+      "现在我连上了，你给车部署没有加yolo模型的版本并开始测试",
+      "这次撞到挡板了",
+      "是不是电调的原因，我看每次电池电压在11.8v左右跑的轨迹是没问题的，12.3v左右轨迹有点歪，电压大了电机输出的功率大点？",
+      "如果是这个问题的话，我以后把电压限制在11.8v"
+    ],
+    "start": "start-round.py 107 (Mac 15:26:07, car clock 10-25 16:35); start lane width .908 m, front 2.33 m, side clearance .36 m (runs 104-106: .913-.925, 1.53-2.52, .29-.41)",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261025-107, 10/10 files sha256 equal (trial107-20261026-152607-remote-sha256.txt); after the run locked 1500/1500, not armed",
+    "result": "probe_obstacle_close_body at scan 155 in light_lane (13.9 s after the start): nearest return 42 deg right, .037 m from the right-front body corner; the user saw the board hit. Max control gap .022 s, max tick compute .0073 s; no quality wait",
+    "first_loop": "round 107 worked: first-support body gap .216 m (runs 104-106-8: .051-.095)",
+    "cause": {
+      "light_entry": "the car left the second loop 15 deg left of the light-lane axis, close to the outer board (outer lateral .63 -> .35 m); the entry pursuit aimed at the divider's open end at .9-1.1 m and asked 1431 -> 1408 -> 1392 -> 1382",
+      "hand_over": "light_lane admitted at scan 145 (heading 10 deg, within the 20 deg tolerance) with the command still 1382; the stage kept it one frame and released 40 PWM per step (1382, 1422, 1462, 1502)",
+      "overshoot": "right-board line angle in the car frame (fit per scan): -13 (142), -6 (145), +5 (147), +18 (148), +28.5 (150), +29 (151, 153): the car yawed ~35 deg right in .5 s after the hand-over (steering lag ~.3 s at 1.47 m/s on a car steering stronger than the calibration) and drove into the light divider's side with the right-front corner",
+      "other_runs": "runs 104-106-8 handed over at 1420-1540 (mostly ~1500), light-entry speed 1.25-1.57 m/s (the car's own estimate); run 107 1.47 m/s"
+    },
+    "battery_question": "no voltage is recorded on the car. Higher voltage gives a higher speed at the same 1550 (run 107: transfer 1.51 m/s against .96-1.41 in runs 104-106-8, first loop 1.39 against 1.15-1.41) but the light-entry speed was normal; the cause was the hand-over at 1382. Course-sim: light-stage failures concentrate at 1.3 times the modelled 1550 speed (12 of 48 against 0-1 of 48 at 1.0/1.15) and at .3 s steering lag, so speed does matter; the program must not rely on a battery voltage (answer: no need to limit to 11.8 V; please tell Claude the voltage before each run so the relation can be checked)"
+  },
+  "turn108_light_pursuit_floor_20261026": {
+    "date": "2026-10-26",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 107 (649b2de) on the car",
+    "user": [
+      "你改108轮吧，改完后跑一次，跑完我把车放红绿灯前，你用yolo模型识别一下"
+    ],
+    "change": "OPEN_LANE_PURSUIT_MIN_M = 1.4: the light pursuit (_open_light_pursuit, light entry and light lane) aims at the divider's open end no nearer than 1.4 m (was the .8 m floor of OPEN_LANE_LOOKAHEAD_M); the near-line shortening (OPEN_LOOKAHEAD_M + lateral, floor .8), the lane admission (inner start <= .8 m), the free-line blocks and every other pursuit are unchanged. Rust mirrors it (maneuver.rs constant, maneuver_open open_light_pursuit). At run 107's hand-over (divider end .906 m, centre .157 m right, 10 deg left) the command is 1426 instead of 1382",
+    "why": "the .8 m floor dates from ~1.1 m/s at 1550; runs 104-107 measured 1.3-1.5 m/s and the steering lags ~.3 s, so a .9 m horizon (.6 s) is too short for the car (pure pursuit with lag overshoots)",
+    "tried_and_rejected": {
+      "same_floor_on_the_near_line_shortening": "cars without play 18 -> 13 of 20 and one old-calibration case .064 m from a board (the light entry cut the corner)",
+      "floor_only_in_the_light_lane_stage": "no effect on the overshoot (it builds up in the entry before the hand-over); light-stage failures 29 -> 32",
+      "floor_1.6": "overshoot max 19.5 deg but 11 new failures",
+      "faster_release_in_the_light_lane": "light_lane with the open stages' 80 PWM release steps: alone +3 cases, with the floor no gain",
+      "response_pose_with_the_command_in_flight": "the overshoot guard's turn also from the sent command when it leads the measured yaw rate: alone +5, with the floor no gain",
+      "hand_over_only_if_the_predicted_heading_is_within_tolerance": "cases stuck in the light entry",
+      "same_floor_on_the_transfer_channel_pursuit": "identical results (that floor never binds there): not changed"
+    },
+    "validation": {
+      "python": "full console discover 899 OK (895 + 4: test_route_108_light_pursuit_floor)",
+      "rust": "route-engine cargo test passed; release build; no clippy warning in the changed lines",
+      "parity": "route-engine-parity-sweep all: 184/185 (the known run-75 replay, 0 calls), ~170,900 update calls",
+      "supervisor_parity": "route-engine-parity-sweep all --supervisor: 184/185 (the run-75 replay), 170,610 ticks",
+      "course_sim_measured_sweep": "288 cases (6 layouts, gain 1/1.15/1.3/1.4, speed 1/1.15/1.3, delay .3+.25 / .15+.1, gantry or not): completed 188 -> 195 (+15 -8, all changes at speed 1.3), light-stage stops 29 -> 22, heading overshoot after the hand-over p90 20.5 -> 15.5 deg, max 43 -> 36 (the case most like run 107, hand-over at 11.6 deg and 1383, fixed), light-entry gaps unchanged, finish time unchanged",
+      "round107_set": "old-calibration measured cars 16/16 -> 16/16; 1.3 times steering 12 -> 16 of 20; 1.15 times 15 -> 17; without play 18 -> 18",
+      "rules_range": "432 (nominal and measured cars, plain and gantry with a .25 m wider light lane): success 351 -> 350 (nominal gantry L5W6 lane .9: a light-entry pause held 1380 while coasting into the outer board, the base also paused there; one invalid_turn_trial_output flip each way), light-entry pauses 49 -> 50 runs, board gaps and finish times unchanged in median"
+    },
+    "risks": "a model result; the real car's gain and lag are estimates. The light entry still holds a strong right when the second loop exits steeply; speed in the open stages is not governed (fresh battery: faster)",
+    "expected_on_the_car": "a gentler light entry and hand-over near centre; the first loop as in run 107"
   }
 }

@@ -1247,7 +1247,7 @@ impl Maneuver {
             let mut along = match start {
                 None => OPEN_LANE_LOOKAHEAD_M.1,
                 Some(s) if s <= FRONT_BODY_EXTENT_M => OPEN_LANE_LOOKAHEAD_M.1,
-                Some(s) => pmax(OPEN_LANE_LOOKAHEAD_M.0, pmin(OPEN_LANE_LOOKAHEAD_M.1, s)),
+                Some(s) => pmax(OPEN_LANE_PURSUIT_MIN_M, pmin(OPEN_LANE_LOOKAHEAD_M.1, s)),
             };
             along = pmin(along, pmax(OPEN_LANE_LOOKAHEAD_M.0, OPEN_LOOKAHEAD_M + (lateral - moved_lateral).abs()));
             along += moved_along;
