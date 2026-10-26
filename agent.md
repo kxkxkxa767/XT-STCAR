@@ -1,5 +1,9 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-26 夜 Claude：y2红绿灯停车——Python参考实现和仿真红绿灯模型已完成；Rust移植、比赛程序读灯状态、识别进程输出、助手参数、测试和逐位对比都还没做；半成品，不可构建部署）
+
+记录键`y2_light_stop_wip_20261026`。车上仍是第108轮。用户：光电传感器约70cm，触发后红10s再绿；停车时调整姿态，绿灯后一次冲到终点。test_route_96_engine在Rust移植前会失败。下一步：把maneuver_sequence.py里y2的全部改动（_thin_posts、_light_*、_lane_goal_control、入口/车道接入、_route_adopted/_route_motor/_result、结果键）逐行移植到route-engine（含dump.rs所有新属性）、supervisor.rs（期限顺延、右转规则）、race.rs读灯状态文件并并入control；vision-log.py加--light-state；race-trial.py传参；单元测试（夹具tests/fixtures/light_gantry_run108_frames.json）；逐位对比加带灯仿真；然后打包y2。
+
 ## 当前接手入口（2026-10-26 Claude：第108轮实车整条跑完、整车停进终点区（离板.384m，18.6s）；灯区交接舵1504、车道里±4°；第107轮撞分隔板的原因和改法见下）
 
 记录键`turn107_actual_20261026`、`turn108_light_pursuit_floor_20261026`、`turn108_actual_20261026`。车上是第108轮（c21a8c3，引擎4cf8ea60…，桥fe5c0056…），`trial108.py`可重复跑。

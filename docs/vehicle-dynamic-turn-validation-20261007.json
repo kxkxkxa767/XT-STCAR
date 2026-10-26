@@ -24553,5 +24553,21 @@
     "trigger_position_lidar": "where the user says the light is triggered: gantry left leg .75 m ahead of the lidar, .53 m left (2 bins); right leg about as far ahead at the right board (.40 m right); the car front (lidar + .20 m) ~.55 m before the legs; lane ~1.05 m between the boards (left .65 m, right .40 m); the end board 4.03 m straight ahead",
     "next": "red: capture again while the light is red (user re-triggers); y2: stop for red before the gantry and go on green; ask the user the size and position of the pre-light stop zone",
     "second_capture": "600 frames of /camera.jpg over ~3 min (vision-bench-20261025-182000, 600 files sha256 equal) meant for a red light: the car stood elsewhere facing an empty lane, no gantry in view, so no red was captured. race4 on the Mac (onnxruntime 1.29, conf .10): no red_light or green_light in 600 frames; crosswalk only at .10-0.18 (below .25)"
+  },
+  "y2_light_stop_wip_20261026": {
+    "date": "2026-10-26",
+    "author": "Claude",
+    "implemented": "python_reference_only",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "这样子，先不加斑马线识别的，先来红绿灯，看看它能不能停下等绿灯亮了再走，用y的编号结合无视觉模型测试的最新版来改",
+      "1.约莫70cm 2.触发后先是红的10s亮绿灯表示可以前进所以灯区那里你可以在停车的时候调整姿态，让绿的亮起来后能快速一次冲到终点",
+      "你慢慢改，我睡觉去了，改完推送"
+    ],
+    "status": "WORK IN PROGRESS, do not build or deploy: Python reference (maneuver_sequence.py, server.py) and course-sim light model done; the Rust engine port, the race program light-state reader, vision-log.py --light-state, the helper arguments, unit tests and parity are NOT done. test_route_96_engine (Python vs Rust console) fails until the port.",
+    "design": "only with control['light'] (frame, captured_at, red, green): gantry legs = thin isolated posts (real returns both sides, seam excluded); a pair confirmed by one more sighting, or 3 single legs inside a board; line followed by legs, else board-ahead odometry, else held; the light lane coast/push/kick/creep control (_lane_goal_control, LIGHT_GOAL: zone .70, whole car at front gap <= .26, target .15, creep bound .20) also from the light entry (neutral allowed there while active; coast centre ACK dropped when it ends); wait: steering pre-aimed (15 PWM deadband), green in 2 fresh frames after the stop, no light at all for 4 s -> go and look again 1 m on, 12 s max; wait not counted in the drive budget/deadline; after green a 1560 launch if >= 2.5 m to the end board",
+    "validation_so_far": "no light: measured sweep 288/288 and rules range 432/432 identical to round 108; light sweep (6 layouts, gain 1/1.3, speed 1/1.3, 2 delays, gantry 0/1/2 m in, red 3/10 s): 154 of 182 baseline-completed cases stop in the zone and finish without penalty, no stopped car left before green; real-car-like set (user8/doc8x4, gain/speed 1.15-1.4): 32 of 40, effective time +2.5 s median; car runs 105-108: first leg pair at 3.3-4.0 m",
+    "open": "Rust port with bit parity (dump of every new attribute), race.rs light reader merging into control lines, vision process writing the light state file, helper/package y2, tests; known risk: finish kick after a short coast can stop on the body gate before the end board (sim car kicks harder than the car)"
   }
 }

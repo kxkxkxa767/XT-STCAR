@@ -1510,7 +1510,10 @@ class Console:
         if route and session.get('phase') != 'coast':
             # Waiting never starts a new segment budget or pauses the original
             # cumulative drive clock. A deadline wins over same-tick recovery.
-            if now >= session['deadline']:
+            # Round y2: a wait at the traffic light (the car standing at neutral)
+            # moves the total deadline on as it moves the drive clock.
+            credit = (report.get('turn') or {}).get('light_wait_credit_s') or 0.
+            if now >= session['deadline']+credit:
                 self.halt('turn_total_deadline')
                 return
             if motion.drive_since is not None and now-motion.drive_since+1e-9 >= motion.max_drive_s:
@@ -1732,7 +1735,10 @@ class Console:
             # Round 82: the coasting light lane may prove centre at neutral
             # (car runs 80/81: right blocked while coasting, left-board contact).
             and (route_center.get('motor') in DRIVE_MOTORS
-                 or (route_stage == 'light_lane' and route_center.get('motor') == 1500))
+                 or (route_stage == 'light_lane' and route_center.get('motor') == 1500)
+                 # Round y2: the light stop coasts from the light entry on.
+                 or (route_stage == 'light_entry' and decision.get('light_stop_active') is True
+                     and route_center.get('motor') == 1500))
             and type(route_center.get('seq')) is int
             and self.arm_sequence <= route_center['seq'] <= control.get('seq', -1)
             and type(route_center.get('tick')) is int and 0 <= route_center['tick'] <= control.get('tick', -1)

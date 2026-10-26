@@ -50,6 +50,34 @@ FRONT, REAR, SIDE = .20, .18, .14
 BOARD = .02
 GANTRY_POST_M = .05
 
+# Round y2: the traffic light (run(light=...)). The user's practice track:
+# the photo sensor ~.70 m before the gantry, 10 s of red; the detector on the
+# car ~4 frames/s at ~.25 s per frame (race4, 2026-10-26); the lit lamp scored
+# .89 at the trigger position.
+LIGHT_DEFAULTS = {'zone': .70, 'red_s': 10., 'pre': 'off', 'fps': 4., 'latency': .25, 'score': .89,
+                  'min_ahead_m': .25, 'max_range_m': 6., 'half_fov_deg': 50.}
+
+
+def light_summary(lamp, line_at):
+    """Rules 2.4.2 (4) for one run: no stop +50 s, going before green +30 s,
+    a stop with a wheel outside the zone +20 s; the stop time is not counted."""
+    if lamp is None:
+        return None
+    stops = [{k: v for k, v in stop.items() if k != 'last_t'} for stop in lamp['stops']]
+    stopped = bool(stops)
+    last = stops[-1] if stops else None
+    in_zone = last is not None and last['front_gap_m'] >= 0 and last['rear_past_sensor_m'] >= 0
+    crossed = lamp['crossed_at']
+    early = crossed is not None and lamp['green_at'] is not None and crossed < lamp['green_at']
+    penalty = (0 if stopped else 50)+(30 if early else 0)+(20 if stopped and not in_zone else 0)
+    if lamp['trigger_at'] is None:
+        penalty = 50  # never passed the sensor: no stop at the light either
+    return {'trigger_at': lamp['trigger_at'], 'green_at': lamp['green_at'], 'crossed_at': crossed,
+            'stops': stops, 'stationary_s': round(lamp['stationary_s'], 2), 'stopped_in_zone': in_zone,
+            'went_before_green': early, 'penalty_s': penalty,
+            'effective_line_s': None if line_at is None else round(line_at-lamp['stationary_s']+penalty, 2)}
+
+
 def layout(L, W, lane, divider, *, first=None, second=None, start=None, light_lane=None):
     """A course of the construction document's shape (sizes are parameters).
 
@@ -106,8 +134,9 @@ def load(name, path):
 
 class Course:
     def __init__(self, L, W, start_lane, light_lane, start_divider, light_divider, cones, start=None,
-                 cone_radius=.10, gantry=False):
+                 cone_radius=.10, gantry=False, gantry_at=0.):
         self.L, self.W = L, W
+        self.gantry = gantry
         self.start_lane, self.light_lane = start_lane, light_lane
         self.cones = [(x, y, cone_radius) for x, y in cones]
         self.segments = [((0, 0), (L, 0)), ((L, 0), (L, W)), ((L, W), (0, W)), ((0, W), (0, 0))]
@@ -123,7 +152,10 @@ class Course:
             # open end, the outer one .11 m inside the outer board, the inner
             # one .07 m inside the divider line (.96 m apart in a 1.14 m lane).
             # They count as boards for contacts.
-            x = L-light_divider-GANTRY_POST_M/2
+            # Round y2: ``gantry_at`` moves it that far into the light lane
+            # (rules 2.2: the light stands anywhere in the light area).
+            x = L-light_divider-GANTRY_POST_M/2+gantry_at
+            self.gantry_x, self.light_y = x, W-light_lane/2
             for y in (W-.11, W-light_lane+.07):
                 h = GANTRY_POST_M/2
                 corners = [(x-h, y-h), (x+h, y-h), (x+h, y+h), (x-h, y+h)]
@@ -390,7 +422,16 @@ def make_console(server):
 def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1., noise=.008, seed=0,
         verbose=False, initial_presteer_pwm=None, max_drive_s=40., trace=None, right_curvature_max=1.875,
         steer_backlash=0., vehicle='nominal', vehicle_params=None, edge_dropout=0.,
-        grazing_angle_deg=0., grazing_dropout=1.):
+        grazing_angle_deg=0., grazing_dropout=1., light=None):
+    """``light`` (round y2): the traffic light and its read-only camera
+    detector, a dict of LIGHT_DEFAULTS' keys (or {} for those): the photo
+    sensor ``zone`` m before the gantry; the car's front past it starts
+    ``red_s`` of red, then green; before that the lamps show ``pre`` ('off' or
+    'green'). The detector takes a frame every 1/``fps`` s, delivered
+    ``latency`` s later as control['light'] = {'frame', 'captured_at', 'red',
+    'green'} with ``score`` for the lit lamp while the light is in view (ahead
+    of the camera by ``min_ahead_m``-``max_range_m`` within ``half_fov_deg``).
+    The summary's 'light' scores the rules 2.4.2 (4)."""
     if not math.isfinite(grazing_angle_deg) or not 0 <= grazing_angle_deg <= 90:
         raise ValueError('grazing_angle_deg must be finite and in 0..90')
     if not math.isfinite(grazing_dropout) or not 0 <= grazing_dropout <= 1:
@@ -472,6 +513,19 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         return geometry({'seq': seq, 'at_ms': round(t*1000), 'frame_id': 'lidar_origin_coarse_body_heading',
                          'ranges': ranges})
 
+    lamp = None
+    if light is not None:
+        if not getattr(course, 'gantry', False):
+            raise ValueError('light needs the gantry')
+        lamp = {**LIGHT_DEFAULTS, **light}
+        lamp.update(sensor_x=course.gantry_x-lamp['zone'], trigger_at=None, green_at=None, next_frame=lamp['latency'],
+                    frame=0, pending=[], crossed_at=None, stops=[], stationary_s=0.)
+
+    def lamp_state(at):
+        if lamp['trigger_at'] is not None and at >= lamp['trigger_at']:
+            return 'red' if at < lamp['green_at'] else 'green'
+        return lamp['pre']
+
     seq = 1
     console.scan, console.scan_at, console.control_at = make_scan(seq, 0.), 0., 0.
     log, contacts, events = [], [], []
@@ -502,6 +556,38 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         car.step(t, dt, motor, servo)
         history.append((t, car.x, car.y, car.psi))
         del history[:-40]
+        if lamp is not None:
+            c, s_ = math.cos(car.psi), math.sin(car.psi)
+            front, rear = car.x+FRONT*c, car.x-REAR*c
+            in_lane = car.y >= course.W-course.light_lane-.1
+            if lamp['trigger_at'] is None and in_lane and front >= lamp['sensor_x']:
+                lamp['trigger_at'] = t
+                lamp['green_at'] = t+lamp['red_s']
+            if lamp['trigger_at'] is not None and lamp['crossed_at'] is None:
+                if front >= course.gantry_x:
+                    lamp['crossed_at'] = t
+                elif car.v < .02:
+                    lamp['stationary_s'] += dt
+                    if not lamp['stops'] or t-lamp['stops'][-1]['last_t'] > .1:
+                        lamp['stops'].append({'t': round(t, 2), 'last_t': t, 'state': lamp_state(t),
+                                              'front_gap_m': round(course.gantry_x-front, 3),
+                                              'rear_past_sensor_m': round(rear-lamp['sensor_x'], 3)})
+                    else:
+                        lamp['stops'][-1]['last_t'] = t
+            if t+1e-9 >= lamp['next_frame']:
+                lamp['next_frame'] += 1/lamp['fps']
+                dx, dy = course.gantry_x-car.x, course.light_y-car.y
+                ahead, side = c*dx+s_*dy, -s_*dx+c*dy
+                visible = (lamp['min_ahead_m'] <= ahead <= lamp['max_range_m']
+                           and abs(math.degrees(math.atan2(side, ahead))) <= lamp['half_fov_deg'])
+                state = lamp_state(t)
+                lamp['pending'].append((t+lamp['latency'], {
+                    'frame': lamp['frame'], 'captured_at': round(t, 4),
+                    'red': lamp['score'] if visible and state == 'red' else 0.,
+                    'green': lamp['score'] if visible and state == 'green' else 0.}))
+                lamp['frame'] += 1
+            while lamp['pending'] and lamp['pending'][0][0] <= t+1e-9:
+                console.status['control']['light'] = lamp['pending'].pop(0)[1]
         if round(t*1000) % 100 == 0:
             seq += 1
             console.scan, console.scan_at = make_scan(seq, t), t
@@ -560,6 +646,7 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                'final_front_x': round(front_x, 2), 'in_finish_zone': in_finish, 'time_s': t,
                'body_in_finish_zone': body_in_finish, 'finish_line_time_s': line_at,
                'success': in_finish and not any(c[1] == 'board' for c in contacts),
+               'light': light_summary(lamp, line_at),
                # Keep the historical position-based score for comparisons,
                # but do not count a safety stop in the zone as route completion.
                'route_completed': (in_finish and not any(c[1] == 'board' for c in contacts)
@@ -731,6 +818,9 @@ def main():
                         help='probability per grazing planar return; independent RNG, default 1')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--gantry', action='store_true', help='add the traffic-light gantry legs at the light-lane mouth')
+    parser.add_argument('--gantry-at', type=float, default=0., help='with --gantry: that far into the light lane (m)')
+    parser.add_argument('--light', help='with --gantry: the traffic light and its camera detector, JSON of '
+                        'run(light=...) keys (\'{}\' for the defaults)')
     parser.add_argument('--light-lane-delta', type=float, default=0.,
                         help='with --range/--variant: light lane this much wider than the start lane')
     parser.add_argument('--max-s', type=float, default=45.)
@@ -777,7 +867,7 @@ def main():
         spec = dict(dict(variations(args.gantry, args.light_lane_delta))[args.variant])
         args.layout = args.variant
     else:
-        spec = dict(LAYOUTS[args.layout], gantry=args.gantry)
+        spec = dict(LAYOUTS[args.layout], gantry=args.gantry, gantry_at=args.gantry_at)
     if args.cones:
         v = [float(a) for a in args.cones.split(',')]
         spec['cones'] = [(v[0], v[1]), (v[2], v[3])]
@@ -788,7 +878,8 @@ def main():
     summary, log, _ = run(course, max_s=args.max_s, speed_scale=args.speed_scale, decel=args.decel,
                           delay=args.delay, seed=args.seed, verbose=args.verbose, trace=args.trace,
                           right_curvature_max=args.right_curvature_max,
-                          steer_backlash=args.steer_backlash, **sensors, **vehicle)
+                          steer_backlash=args.steer_backlash, **sensors, **vehicle,
+                          light=None if args.light is None else json.loads(args.light))
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     if args.log:
         Path(args.log).write_text(''.join('\t'.join(str(round(v, 3)) if isinstance(v, float) else str(v)

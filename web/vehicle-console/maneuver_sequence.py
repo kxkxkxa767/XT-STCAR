@@ -823,6 +823,151 @@ OPEN_LINE_GAP_M = .3
 OPEN_LINE_GAP_SCALE = .03
 OPEN_LINE_REACH_M = 6.
 OPEN_STAGES = ('open_transfer', 'second_loop', 'light_entry')
+# Round y2 (Claude; user 2026-10-26: 先来红绿灯，看看它能不能停下等绿灯亮了再走;
+# the photo sensor about 70 cm before the gantry; after the trigger 10 s red,
+# then green; 停车的时候调整姿态，让绿的亮起来后能快速一次冲到终点). Rules 2.4.2
+# (4): the photo sensor stands ~1 m before the light and the stop zone lies
+# between them; passing it starts a 3-10 s red, then green; going before green
+# +30 s, a wheel outside the zone +20 s, no stop +50 s; the stop's time is not
+# counted. Only with a light vision input (control['light'], the race
+# program's read-only YOLO process): the gantry's two legs (thin isolated
+# posts at both lane sides, _light_gantry) set the light line, the light lane's
+# coast/push/kick/creep control (_lane_goal_control) stops the car with the
+# whole body between the sensor and the light (the shorter practice zone also
+# satisfies the rules' 1 m), it waits there (steering pre-aimed along the
+# lane) until green in LIGHT_GREEN_FRAMES fresh frames taken after the stop,
+# then runs on to the finish. Without that input nothing changes.
+LIGHT_ZONE_M = .70
+LIGHT_STOP_TARGET_GAP_M = .15  # front to the light line
+LIGHT_STOP_MIN_GAP_M = .05
+# .26: the rear .06 inside the sensor line (the legs are ~.05 m thick and the
+# lidar sees their near face; simulation: .02 left rears .003-.02 m outside)
+LIGHT_STOP_BODY_GAP_M = LIGHT_ZONE_M-(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M)-.06
+LIGHT_STOP_ZONE_GAP_M = LIGHT_ZONE_M-.02  # .68: front past the sensor line
+# Gantry legs (2026-10-22 and run 108's lidar: ~.05 m posts .93-.96 m apart, the
+# outer one ~.12 m inside the outer board, the inner one at the divider's open
+# end; seen from ~3.2 m along the lane, as 1-6 returns standing well in front
+# of what lies behind them). A post: at most LIGHT_POST_MAX_BINS bins joined by
+# range steps <= LIGHT_POST_STEP_M, at most LIGHT_POST_MAX_EXTENT_M across,
+# both outer neighbours LIGHT_POST_JUMP_M farther (or no return). A gantry:
+# two posts LIGHT_GANTRY_SPAN_M apart across the lane axis and within
+# LIGHT_GANTRY_ALONG_DIFF_M along it, both inside the measured lane band
+# (LIGHT_GANTRY_EDGE_M outside its boards at most); else one post
+# LIGHT_LEG_INSIDE_M inside a measured side board (simulation: a leg .07 m from
+# the divider merges with the board once the gantry stands inside the lane;
+# the divider's own open end lies on its line, the outer leg ~.12 m in); ahead
+# within LIGHT_GANTRY_REACH_M; confirmed on LIGHT_GANTRY_CONFIRM scans in a row
+# (each at most LIGHT_GANTRY_STEP_S apart, nearer by at most the fastest
+# closing speed). The light line is the nearer leg.
+LIGHT_POST_MAX_BINS = 8
+LIGHT_POST_STEP_M = .05
+LIGHT_POST_MAX_EXTENT_M = .10
+LIGHT_POST_JUMP_M = .12
+LIGHT_GANTRY_SPAN_M = (.6, 1.3)
+LIGHT_GANTRY_ALONG_DIFF_M = .30
+LIGHT_GANTRY_EDGE_M = .10
+LIGHT_GANTRY_REACH_M = 4.
+# Car runs 105-108 (light entry, every saved scan): with the divider not yet
+# measured the start lane's .91 m left the inner leg of a 1.14 m light lane
+# outside the band (106-4: the pair .98 m apart from 3.7 m on, rejected until
+# 2.4 m); far away the compass's degree or two puts the outer leg .23-.31 m
+# inside its board (~.12 m measured). The band then reaches
+# LIGHT_LANE_MAX_WIDTH_M inside the outer board.
+LIGHT_LEG_INSIDE_M = (.05, .35)
+LIGHT_LANE_MAX_WIDTH_M = 1.4
+# Sightings follow each other within LIGHT_GANTRY_STEP_S (a missed scan
+# between is allowed). A pair of legs is a candidate; one more sighting of it
+# (a pair again, or one of its legs where it should be) confirms it: in car
+# runs 105-108 the first pair came at 3.3-4.0 m, where a car at 1.47 m/s still
+# stops in the zone (lag and coast ~2.6 m plus the target), but later pairs
+# were missed for up to .8 s while one leg stayed in view (105: two pairs in a
+# row only at 1.8 m); a single pair also arose once from posts at the divider
+# end (simulation, gantry 2 m into the lane: the car waited there and passed
+# the real light). Without any pair, LIGHT_GANTRY_CONFIRM single legs inside a
+# board. A wrong line ends when it is lost.
+LIGHT_GANTRY_CONFIRM = 3
+LIGHT_GANTRY_PAIR_CONFIRM = 2
+LIGHT_GANTRY_STEP_S = .25
+# Once confirmed, a leg is followed within these of where it was (along: plus
+# the travel at the fastest closing speed); without one the line moves by the
+# board ahead's change since the last leg (odometry along the axis), when that
+# change is plausible (LANE_MAX_CLOSING_MPS plus LIGHT_LINE_JUMP_M).
+LIGHT_LEG_LATERAL_M = .15
+LIGHT_LEG_ALONG_M = .30
+# The lateral window grows at this since the last measurement (the car's own
+# sideways speed, ~v sin(heading)); the gantry is rigid: an unseen leg moves
+# with the seen one (simulation: a fast entry moved the car 1.1 m sideways and
+# the outer leg, kept at its confirmed lateral, was never followed again).
+LIGHT_LEG_LATERAL_MPS = 1.
+# (Simulation: an absolute offset of the axis ray's board to the line, taken
+# from the mouth, mixed the divider's end and the end board, .12 and ~2 m, and
+# a line read 1.04 m too far was driven through; the change since the last leg
+# only needs the same surface on both scans.)
+LIGHT_LINE_JUMP_M = .25
+# Light frames (race4: red_light / green_light scores of the newest frame).
+LIGHT_GREEN_MIN_SCORE = .5
+LIGHT_RED_MIN_SCORE = .25
+LIGHT_GREEN_FRAMES = 2
+LIGHT_FRAME_MAX_AGE_S = 1.
+# Green never seen (vision lost): go after this, +30 s instead of a lost run
+# (the rules' red lasts at most 10 s).
+LIGHT_WAIT_MAX_S = 12.
+# No light at all (no red or green score >= LIGHT_RED_MIN_SCORE in a frame taken
+# after the stop) after this: the stop was not at the light (rules: any other
+# stop over 10 s loses the run; passing the sensor turns the light red at
+# once). Go, and look for a gantry again at least LIGHT_REARM_MIN_M ahead
+# (simulation: posts at the divider's end confirmed a line there; the car
+# waited 12 s and then passed the real light 2 m on without a stop).
+LIGHT_NO_LIGHT_WAIT_S = 4.
+LIGHT_REARM_MIN_M = 1.
+# The wait (the car stands at neutral) is not drive time: the cumulative drive
+# clock moves on by it (light_wait_credit_s, also added to the console's total
+# deadline), so the 40 s drive budget still bounds the driving itself
+# (simulation: a 1.1 m/s car reached the light after ~25 s and ran out of
+# budget during the red).
+# While waiting the steering is pre-aimed along the lane; changes smaller than
+# this are not sent (the car does not move; the play made 1500 +-5 flip the
+# wheels by 80 PWM every scan in simulation).
+LIGHT_WAIT_STEER_DEADBAND_PWM = 15
+# After green: 1560 for the ESC lag plus LANE_LAUNCH_S (the resume launch of
+# the open stages), then 1550 until the coast into the finish zone is aimed;
+# restart kicks from rest (3 frames, then a rest) took ~1.5 s per .4 m. Only
+# with LIGHT_LAUNCH_MIN_GAP_M to the end board (simulation: a gantry 2 m into
+# the lane left 1.45 m and the launch ran into the end board); nearer, the
+# lane's own kicks and pushes.
+LIGHT_LAUNCH_MIN_GAP_M = 2.5
+# The light's zone leaves .21 m for the front (LIGHT_STOP_MIN_GAP_M to
+# LIGHT_STOP_BODY_GAP_M), the finish's .35: its creep bound (.27, the kick's
+# model scaled) left a car stopped at .32 waiting with the rear .03 outside
+# (simulation). A 2-frame creep moved the car ~.07 m (run 106); the light's
+# creeps are bounded at LIGHT_CREEP_TRAVEL_M and the red leaves time for
+# LIGHT_CREEP_MAX of them.
+LIGHT_CREEP_TRAVEL_M = .20
+LIGHT_CREEP_MAX = 6
+# A light line lost on a scan (no leg followed, no board offset) is the last
+# measured one less the travel since: at the closing speed then (else
+# LANE_SPEED_UNKNOWN_MPS), coasting at the guard decel once the coast acts;
+# for at most LIGHT_LINE_HOLD_S, or with the front already past the sensor
+# line and coasting, until that coast has stopped and LIGHT_LINE_HOLD_S more
+# (the near leg leaves the posts' view at ~.3 m). A line lost with the front
+# already past the sensor line never hands the car to the finish (simulation:
+# that pushed a car stopped .6 m before the light through it in the red): it
+# coasts, and stopped there it waits as stopped in the zone.
+LIGHT_LINE_HOLD_S = .5
+# One leg alone confirms a gantry only with the car within this of the lane
+# axis (simulation: a single leg confirmed across the lane at 84 deg was lost
+# while turning); two legs at any heading (simulation, 5 m course: the pair
+# showed at 84 deg 1.8 m before the line, but the 45 deg gate held the
+# confirmation to .99 m at 1.06 m/s and the car ran through). A line lost
+# beyond LIGHT_LINE_HOLD_S ends the approach: the car drives on and a gantry
+# seen again starts a new one.
+LIGHT_GANTRY_MAX_HEADING_RAD = math.radians(45)
+# _lane_goal_control goals: (kind, front-in-zone gap, whole-car gap, target,
+# minimum, creep travel bound, creeps).
+FINISH_GOAL = ('finish', LANE_FINISH_ZONE_GAP_M, LANE_FINISH_BODY_GAP_M, LANE_FINISH_TARGET_GAP_M,
+               LANE_FINISH_MIN_GAP_M, LANE_CREEP_TRAVEL_M, LANE_CREEP_MAX)
+LIGHT_GOAL = ('light', LIGHT_STOP_ZONE_GAP_M, LIGHT_STOP_BODY_GAP_M, LIGHT_STOP_TARGET_GAP_M, LIGHT_STOP_MIN_GAP_M,
+              LIGHT_CREEP_TRAVEL_M, LIGHT_CREEP_MAX)
 
 
 def _wrap90(angle):
@@ -920,6 +1065,47 @@ def _axis_frame(axis, heading, side=1):
 def _scan_points(ranges, reach):
     return [(r*_DIRECTION_COS[i], -r*_DIRECTION_SIN[i]) for i, r in enumerate(ranges)
             if _number(r) and .02 <= r <= reach]
+
+
+def _thin_posts(ranges):
+    """Round y2: isolated thin posts (car frame, left +), nearest first.
+
+    A run of at most LIGHT_POST_MAX_BINS returns, neighbours joined by range
+    steps <= LIGHT_POST_STEP_M, at most LIGHT_POST_MAX_EXTENT_M across, whose
+    outer neighbours are both returns LIGHT_POST_JUMP_M beyond its farthest
+    one: a gantry leg in front of the board behind it, not a board's own piece
+    or end seen along it. (Simulation: a board met at grazing incidence steps
+    .3-.7 m per bin, and one such return beside a lost one stood alone.) None
+    touches the scan's seam (bins 359 and 0, taken a revolution apart: a board
+    straight ahead jumps there; simulation: a false leg on the outer board).
+    """
+    n = len(ranges)
+
+    def joined(a, b):
+        return (_number(ranges[a]) and _number(ranges[b])
+                and abs(ranges[a]-ranges[b]) <= LIGHT_POST_STEP_M)
+    posts = []
+    for start in range(n):
+        if not _number(ranges[start]) or joined((start-1) % n, start):
+            continue
+        run = [start]
+        while len(run) <= LIGHT_POST_MAX_BINS and joined(run[-1], (run[-1]+1) % n):
+            run.append((run[-1]+1) % n)
+        if len(run) > LIGHT_POST_MAX_BINS:
+            continue
+        if any(i in (0, n-1) for i in [(run[0]-1) % n, *run, (run[-1]+1) % n]):
+            continue
+        far = max(ranges[i] for i in run)
+        before, after = ranges[(run[0]-1) % n], ranges[(run[-1]+1) % n]
+        if not (_number(before) and _number(after)
+                and before >= far+LIGHT_POST_JUMP_M and after >= far+LIGHT_POST_JUMP_M):
+            continue
+        points = [(ranges[i]*_DIRECTION_COS[i], -ranges[i]*_DIRECTION_SIN[i]) for i in run]
+        if max(math.dist(a, b) for a in points for b in points) > LIGHT_POST_MAX_EXTENT_M:
+            continue
+        posts.append((sum(p[0] for p in points)/len(points), sum(p[1] for p in points)/len(points)))
+    posts.sort(key=lambda p: p[0]*p[0]+p[1]*p[1])
+    return posts
 
 
 def _support_center(ranges, bins, diameter):
@@ -1426,6 +1612,20 @@ class ManeuverSequence(TurnMotion):
         self._lane_ranges = []
         self.lane_feedback = None
         self.finish_evidence = None
+        # Round y2: the traffic-light stop (only with control['light']).
+        self.light_vision = False
+        self._light_frames = []  # (frame, captured_at, red, green), newest last
+        self.light_stop_state = None  # None, 'approach', 'waiting', 'released'
+        self.light_stop_evidence = None
+        self._light_gantry_seen = []
+        self._light_line = None
+        self._light_wait_since = None
+        self._light_red_frames = 0
+        self._light_launch_until = None
+        self._light_seen_waiting = False
+        self._light_rearm_min_m = None
+        self.light_wait_credit_s = 0.
+        self._light_wait_tick = None
         self._exit_heading = None
         self.role_distinct_evidence = None
         self.second_acquisition_reason = None
@@ -3026,7 +3226,8 @@ class ManeuverSequence(TurnMotion):
             self._power_since, self._power_prev_end = now, self._power_cmd_at
         if (result['motor'] == ROUTE_SLOW_MOTOR and self.continue_route and self.entry_kind == 'lane'
                 and now < self._launch_until
-                and self.route_stage in ('first_target', 'open_transfer', 'second_loop', 'light_entry')):
+                and self.route_stage in ('first_target', 'open_transfer', 'second_loop', 'light_entry')
+                and not self._light_stop_active()):
             # 1550 does not start a car at rest (2026-10-16: ~.7 s before it
             # moved; in simulation never; a one-tick 1560 resume ACK then 1550
             # left it standing). Every push after an unpowered output launches
@@ -3124,6 +3325,12 @@ class ManeuverSequence(TurnMotion):
             light_alignment_evidence=self._snap('light_alignment_evidence', self.light_alignment_evidence),
             lane_feedback=self._snap('lane_feedback', self.lane_feedback), lane_motor=self.lane_motor,
             finish_evidence=self._snap('finish_evidence', self.finish_evidence),
+            light_vision=self.light_vision, light_stop_state=self.light_stop_state,
+            light_stop_active=self._light_stop_active(),
+            light_stop_evidence=self._snap('light_stop_evidence', self.light_stop_evidence),
+            light_line=self._snap('_light_line', self._light_line),
+            light_frame=list(self._light_frames[-1]) if self._light_frames else None,
+            light_wait_credit_s=self.light_wait_credit_s,
             second_acquisition_reason=self.second_acquisition_reason,
             second_recovery_prior=self._snap('second_recovery_prior', self.second_recovery_prior),
             role_distinct_evidence=self._snap('role_distinct_evidence', self.role_distinct_evidence),
@@ -3968,7 +4175,9 @@ class ManeuverSequence(TurnMotion):
         2.3 m/s at 1550), so the conservative nominal speed is used.
         """
         ahead = self._lane_front_range(scan)
-        speed = self._lane_speed(scan, ahead)  # history only: the light lane continues it
+        # history only: the light lane continues it (round y2: not while the
+        # light stop's own history runs)
+        speed = None if self._light_stop_active() else self._lane_speed(scan, ahead)
         v = LANE_SPEED_UNKNOWN_MPS
         stop_at = FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)+v*LANE_REACTION_S
         return ahead, speed, stop_at
@@ -4436,9 +4645,18 @@ class ManeuverSequence(TurnMotion):
             self._begin_recovery_hold('open_light_lane_unmeasured', now, control)
             return self._result(now)
         lane, point, curvature, natural = pursuit
+        light_ahead = self._light_stop_track(scan, now, control, heading, lane)
         entry = self._open_light_lane_entry(scan, heading, lane)
         if entry is not None:
             return self._begin_light_lane(scan, now, control, entry)
+        if self.light_stop_state == 'waiting' and not self._light_wait(scan, now, control):
+            # Round y2: stopped before the light still in the entry.
+            self.natural_steering_target = natural
+            target = self._open_right_gate(natural)
+            self.steering_target = target if abs(target-self.servo) >= LIGHT_WAIT_STEER_DEADBAND_PWM else self.servo
+            self.reason = 'light_stop_waiting_for_green'
+            self._slew(now)
+            return self._result(now)
         walls = corridor_walls(scan)
         axis_ahead, speed, stop_at = self._open_front_stop(scan)
         ahead = self._open_entry_path_hit(scan, point, heading, stop_at, axis_ahead)
@@ -4455,6 +4673,12 @@ class ManeuverSequence(TurnMotion):
         if ahead is not None and ahead <= stop_at:
             self._begin_recovery_hold('open_board_ahead_before_light_lane', now, control)
             return self._result(now)
+        if self.light_stop_state == 'approach':
+            # Round y2: the light lane's stop control on the light line drives
+            # the motor from the entry on (the coast must start ~2-3 m before).
+            basis, self.lane_feedback = self._lane_goal_control(scan, light_ahead, now, LIGHT_GOAL)
+            if basis is not None:
+                self._light_stop_reached(scan, now, control, basis)
         self.natural_steering_target = natural
         self.steering_target = self._open_right_gate(natural)
         self.reason = 'open_light_entry'
@@ -4567,8 +4791,9 @@ class ManeuverSequence(TurnMotion):
         """
         slow_stage = ((self.handover_observed and self.route_stage == 'first_target')
                       or (self.first_pass_evidence is not None and self.route_stage in POST_PASS_STAGES))
-        if (self.continue_route and self.phase == 'drive' and self.route_stage == 'light_lane'
-                and not self.quality_resume_pending):
+        if (self.continue_route and self.phase == 'drive' and not self.quality_resume_pending
+                and (self.route_stage == 'light_lane'
+                     or (self.route_stage == 'light_entry' and self._light_stop_active()))):
             return self.lane_motor  # slow light lane: 1550 / neutral coast / 1560 restart
         if self.continue_route and self.phase == 'drive' and self.route_stage == 'start_lane':
             # Round 64: the start lane at 1560; slow from the first approach on.
@@ -4584,8 +4809,9 @@ class ManeuverSequence(TurnMotion):
             if self.servo < NEUTRAL:
                 self.lock('route_actual_steering_crossed_center')
                 return False
-        motors = ((NEUTRAL,)+DRIVE_MOTORS if self.route_stage in ('light_lane', 'start_lane')
-                  else DRIVE_MOTORS)
+        coasting_stage = (self.route_stage in ('light_lane', 'start_lane')
+                          or (self.route_stage == 'light_entry' and self._light_stop_active()))
+        motors = (NEUTRAL,)+DRIVE_MOTORS if coasting_stage else DRIVE_MOTORS
         adopted = (control.get('motor') in motors and control.get('servo') == self.servo
                    and control.get('command_acked') is True)
         if not adopted:
@@ -4601,13 +4827,16 @@ class ManeuverSequence(TurnMotion):
         if self.servo > NEUTRAL:
             self._route_center_ack = None
         elif self.servo == NEUTRAL and (control.get('motor') in DRIVE_MOTORS
-                                        or (self.route_stage == 'light_lane' and control.get('motor') == NEUTRAL)):
+                                        or ((self.route_stage == 'light_lane'
+                                             or (self.route_stage == 'light_entry' and self._light_stop_active()))
+                                            and control.get('motor') == NEUTRAL)):
             # A center ACK is recorded under drive power (service check); a
             # neutral coasting pulse keeps the previous one. Round 82: in the
             # light lane an ACKed centre while coasting counts too (car runs
             # 80/81: the lane coasts to the finish, right stayed blocked for
             # .6-2.8 s, the car drifted to ~.08 m from / into the left board).
             self._route_center_ack = {k: control.get(k) for k in ('servo', 'motor', 'tick', 'seq')}
+        self._light_entry_coast_ack_dropped()
         return True
 
     def _right_exit_update(self, scan, now, control):
@@ -5502,9 +5731,12 @@ class ManeuverSequence(TurnMotion):
         self.light_alignment_evidence = evidence
         self._route_event('light_aligned', scan, control, evidence)
         self.route_stage = 'light_lane'
-        self.lane_motor = ROUTE_SLOW_MOTOR  # speed history from the aligned frames is kept
+        if not self._light_stop_active():
+            # speed history from the aligned frames is kept (round y2: a light
+            # stop's coast or wait goes on unchanged)
+            self.lane_motor = ROUTE_SLOW_MOTOR
+            self._lane_pulse = 0
         self._lane_steering = CorridorSteering()
-        self._lane_pulse = 0
         self._route_event('light_lane', scan, control, {'source_seq': scan['seq']})
         self.steering_target = self.servo
         self.reason = 'light_lane_started_keep_adopted_command'
@@ -5665,6 +5897,299 @@ class ManeuverSequence(TurnMotion):
                 self._lane_coast_decel = max(LANE_COAST_DECEL_FLOOR_MPS2, min(LANE_COAST_DECEL_CAP_MPS2, -slope))
                 self._lane_coast_decel_se = se
 
+    def _light_stop_active(self):
+        return self.light_stop_state in ('approach', 'waiting')
+
+    def _light_entry_coast_ack_dropped(self):
+        """A centre ACK proven at neutral authorizes right in the light entry only
+        while its light stop lasts (service check); once it ends the next right
+        needs a new ACK under power (simulation: a cancelled approach kept the
+        coast's ACK, steered right and the service halted the run)."""
+        if (self.route_stage == 'light_entry' and not self._light_stop_active()
+                and isinstance(self._route_center_ack, dict) and self._route_center_ack.get('motor') == NEUTRAL):
+            self._route_center_ack = None
+
+    def _light_observe(self, control):
+        """Round y2: the newest frame of control['light'] (the race program's
+        read-only YOLO process; none on the console or in old simulations):
+        {'frame', 'captured_at' (this clock), 'red', 'green' (race4 scores)},
+        recorded once per frame."""
+        light = control.get('light') if isinstance(control, dict) else None
+        if not isinstance(light, dict):
+            return
+        self.light_vision = True
+        frame, captured = light.get('frame'), light.get('captured_at')
+        if (type(frame) is not int or not _number(captured)
+                or (self._light_frames and self._light_frames[-1][0] == frame)):
+            return
+        red, green = light.get('red'), light.get('green')
+        red, green = (red if _number(red) else 0.), (green if _number(green) else 0.)
+        self._light_frames.append((frame, captured, red, green))
+        del self._light_frames[:-(LIGHT_GREEN_FRAMES+2)]
+        if self.light_stop_state == 'waiting' and red >= LIGHT_RED_MIN_SCORE:
+            self._light_red_frames += 1
+        if (self.light_stop_state == 'waiting' and captured >= self._light_wait_since
+                and max(red, green) >= LIGHT_RED_MIN_SCORE):
+            self._light_seen_waiting = True
+
+    @staticmethod
+    def _light_lane_band(lane):
+        """(low, high) lateral (left +) the gantry legs may stand at, or None."""
+        if not isinstance(lane, dict):
+            return None
+        outer = lane['outer_lateral_m']
+        inner = lane['inner_lateral_m'] if lane['inner_lateral_m'] is not None else outer-LIGHT_LANE_MAX_WIDTH_M
+        return inner-LIGHT_GANTRY_EDGE_M, outer+LIGHT_GANTRY_EDGE_M
+
+    def _light_gantry(self, scan, heading, lane):
+        """Round y2: the nearest gantry ahead, two legs across the lane axis (else
+        one leg inside a side board), or None: {'along_m': the nearer leg,
+        'legs': [[along, lateral], ...] left first, 'basis'}."""
+        band = self._light_lane_band(lane)
+        if band is None or not isinstance(scan.get('ranges'), list):
+            return None
+        u = (math.cos(-heading), math.sin(-heading))
+        legs = []
+        for x, y in _thin_posts(scan['ranges']):
+            along, lateral = x*u[0]+y*u[1], y*u[0]-x*u[1]
+            if FRONT_BODY_EXTENT_M < along <= LIGHT_GANTRY_REACH_M and band[0] <= lateral <= band[1]:
+                legs.append((along, lateral))
+        best = None
+        for i, a in enumerate(legs):
+            for b in legs[i+1:]:
+                if (LIGHT_GANTRY_SPAN_M[0] <= abs(a[1]-b[1]) <= LIGHT_GANTRY_SPAN_M[1]
+                        and abs(a[0]-b[0]) <= LIGHT_GANTRY_ALONG_DIFF_M
+                        and (best is None or min(a[0], b[0]) < best[0])):
+                    best = (min(a[0], b[0]), [list(a), list(b)] if a[1] >= b[1] else [list(b), list(a)])
+        if best is not None:
+            return {'along_m': best[0], 'legs': best[1], 'basis': 'two_legs'}
+        if abs(heading) > LIGHT_GANTRY_MAX_HEADING_RAD:
+            return None
+        sides = [lane['outer_lateral_m']-LIGHT_LEG_INSIDE_M[1], lane['outer_lateral_m']-LIGHT_LEG_INSIDE_M[0]]
+        inner = lane['inner_lateral_m']
+        for along, lateral in legs:
+            if ((sides[0] <= lateral <= sides[1]
+                 or (inner is not None and inner+LIGHT_LEG_INSIDE_M[0] <= lateral <= inner+LIGHT_LEG_INSIDE_M[1]))
+                    and (best is None or along < best[0])):
+                best = (along, [[along, lateral]])
+        return None if best is None else {'along_m': best[0], 'legs': best[1], 'basis': 'one_leg_inside_a_board'}
+
+    def _light_leg_followed(self, posts, legs, along_m, since):
+        """Round y2: one of ``legs`` (the line ``along_m``) found among ``posts``
+        (along, lateral) after ``since`` s: (line along, legs moved), or None. The
+        gantry is rigid: the unseen leg moves with the seen one."""
+        reach = LANE_MAX_CLOSING_MPS*since+LIGHT_LEG_ALONG_M
+        side = LIGHT_LEG_LATERAL_M+LIGHT_LEG_LATERAL_MPS*since
+        best = None
+        for k, leg in enumerate(legs):
+            for along, lateral in posts:
+                if (abs(lateral-leg[1]) <= side and leg[0]-reach <= along <= leg[0]+LIGHT_LEG_ALONG_M
+                        and (best is None or abs(along-leg[0]) < abs(best[1][0]-legs[best[0]][0]))):
+                    best = (k, (along, lateral))
+        if best is None:
+            return None
+        k, (along, lateral) = best
+        moved, sideways = along-legs[k][0], lateral-legs[k][1]
+        return along_m+moved, [[leg[0]+moved, leg[1]+sideways] for leg in legs]
+
+    def _light_line_held(self, at, now):
+        """The line from its last measurement (LIGHT_LINE_HOLD_S), or None."""
+        line = self._light_line
+        dt = at-line['at_s']
+        v0 = line['speed_mps'] if line['speed_mps'] is not None else LANE_SPEED_UNKNOWN_MPS
+        coasting = self.lane_motor == NEUTRAL and (self._power_cmd_at is None or now-self._power_cmd_at >= ESC_LAG_S)
+        if coasting:
+            decel = self._lane_decels()[1]
+            stop_s = v0/decel
+            moving = min(dt, stop_s)
+            travel = v0*moving-decel*moving*moving/2
+            in_zone = line['along_m']-FRONT_BODY_EXTENT_M <= LIGHT_STOP_ZONE_GAP_M
+            limit = stop_s+LIGHT_LINE_HOLD_S if in_zone else LIGHT_LINE_HOLD_S
+        else:
+            travel, limit = v0*dt, LIGHT_LINE_HOLD_S
+        return None if dt > limit else line['along_m']-travel
+
+    def _light_line_ahead(self, scan, heading, lane, now):
+        """Round y2: lidar to the light line along the axis, or None.
+
+        Confirmation (LIGHT_GANTRY_PAIR_CONFIRM, LIGHT_GANTRY_CONFIRM): a pair of
+        legs and one more sighting of it, or single legs inside a board. Then
+        each leg is followed (_light_leg_followed's windows; the rigid gantry
+        moves an unseen leg with the seen ones) and the line is the nearest
+        followed leg less its offset to the line; on a scan without a leg, the
+        last one moved by the board ahead's change since (odometry), else held
+        (_light_line_held).
+        """
+        at = scan['at_ms']/1000
+        board = self._lane_front_range(scan)
+        line = self._light_line
+        if line is None:
+            seen = self._light_gantry_seen
+            gantry = self._light_gantry(scan, heading, lane)
+            if gantry is not None and self._light_rearm_min_m is not None and gantry['along_m'] < self._light_rearm_min_m:
+                gantry = None  # the posts of a stop that was not at the light
+            if gantry is None and seen and seen[-1]['basis'] in ('two_legs', 'leg_followed'):
+                u = (math.cos(-heading), math.sin(-heading))
+                posts = [(x*u[0]+y*u[1], y*u[0]-x*u[1]) for x, y in _thin_posts(scan['ranges'])]
+                followed = self._light_leg_followed(posts, seen[-1]['legs'], seen[-1]['along_m'], at-seen[-1]['at_s'])
+                if followed is not None:
+                    gantry = {'along_m': followed[0], 'legs': followed[1], 'basis': 'leg_followed'}
+            if gantry is None:
+                return None
+            if seen and not (0 < at-seen[-1]['at_s'] <= LIGHT_GANTRY_STEP_S
+                             and -LIGHT_LEG_ALONG_M <= seen[-1]['along_m']-gantry['along_m']
+                             <= LANE_MAX_CLOSING_MPS*(at-seen[-1]['at_s'])+LIGHT_LEG_ALONG_M):
+                seen.clear()
+            seen.append({'at_s': at, 'received_at': scan['received_at'], 'seq': scan['seq'],
+                         'along_m': gantry['along_m'], 'legs': gantry['legs'], 'board_m': board,
+                         'basis': gantry['basis']})
+            paired = (len(seen) >= LIGHT_GANTRY_PAIR_CONFIRM
+                      and any(row['basis'] == 'two_legs' for row in seen[-LIGHT_GANTRY_PAIR_CONFIRM:]))
+            if not paired and (len(seen) < LIGHT_GANTRY_CONFIRM
+                               or any(row['basis'] != 'one_leg_inside_a_board' for row in seen[-LIGHT_GANTRY_CONFIRM:])):
+                return None
+            near = gantry['along_m']
+            self._light_line = {'along_m': near, 'at_s': at, 'source': 'legs', 'confirmed_seq': scan['seq'],
+                                'legs': [list(leg) for leg in gantry['legs']], 'speed_mps': None, 'board_m': board,
+                                'leg_offsets_m': [leg[0]-near for leg in gantry['legs']]}
+            return near
+        u = (math.cos(-heading), math.sin(-heading))
+        posts = [(x*u[0]+y*u[1], y*u[0]-x*u[1]) for x, y in _thin_posts(scan['ranges'])]
+        since = max(0., at-line['at_s'])
+        reach = LANE_MAX_CLOSING_MPS*since+LIGHT_LEG_ALONG_M
+        side = LIGHT_LEG_LATERAL_M+LIGHT_LEG_LATERAL_MPS*since
+        matched, near, shifts = [], None, []
+        for k, leg in enumerate(line['legs']):
+            match = None
+            for along, lateral in posts:
+                if (abs(lateral-leg[1]) <= side and leg[0]-reach <= along <= leg[0]+LIGHT_LEG_ALONG_M
+                        and (match is None or abs(along-leg[0]) < abs(match[0]-leg[0]))):
+                    match = (along, lateral)
+            if match is not None:
+                matched.append(k)
+                shifts.append(match[1]-leg[1])
+                line['legs'][k] = list(match)
+                value = match[0]-line['leg_offsets_m'][k]
+                near = value if near is None else min(near, value)
+        if near is None:
+            # the last leg measurement stays the reference
+            reference = line['board_m']
+            if (board is not None and reference is not None
+                    and -LIGHT_LINE_JUMP_M <= reference-board <= LANE_MAX_CLOSING_MPS*since+LIGHT_LINE_JUMP_M):
+                line['source'] = 'board_odometry'
+                return line['along_m']-(reference-board)
+            held = self._light_line_held(at, now)
+            line['source'] = None if held is None else 'held'
+            return held
+        moved = near-line['along_m']
+        sideways = sum(shifts)/len(shifts) if shifts else 0.
+        for k, leg in enumerate(line['legs']):
+            if k not in matched:
+                leg[0] += moved  # an unseen leg moves with the line
+                leg[1] += sideways
+        held_speed = self._lane_speed_last
+        line.update(along_m=near, at_s=at, source='legs', board_m=board,
+                    speed_mps=None if held_speed is None or now-held_speed[0] > LANE_SPEED_HOLD_S else held_speed[1])
+        return near
+
+    def _light_stop_track(self, scan, now, control, heading, lane):
+        """Round y2: start the light stop on a confirmed gantry (light vision
+        only); the light line ahead while approaching, else None."""
+        if not self.light_vision or heading is None or self.light_stop_state in ('waiting', 'released'):
+            return None
+        ahead = self._light_line_ahead(scan, heading, lane, now)
+        if (ahead is None and self.light_stop_state == 'approach'
+                and self._light_line['along_m']-FRONT_BODY_EXTENT_M > LIGHT_STOP_ZONE_GAP_M):
+            lost = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'route_stage': self.route_stage,
+                    'line': copy.deepcopy(self._light_line)}
+            self.light_stop_evidence = {**self.light_stop_evidence,
+                                        'lost': (self.light_stop_evidence.get('lost') or [])+[lost]}
+            self.light_stop_state, self._light_line = None, None
+            self._light_gantry_seen.clear()
+            self._lane_speed(scan, None)
+            self._light_entry_coast_ack_dropped()
+            if self.route_stage != 'light_lane':
+                self.lane_motor = ROUTE_SLOW_MOTOR
+            return None
+        if ahead is None or self.light_stop_state == 'approach':
+            return ahead
+        evidence = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'route_stage': self.route_stage,
+                    'compass_heading_rad': heading, 'line': copy.deepcopy(self._light_line),
+                    'seen': copy.deepcopy(self._light_gantry_seen),
+                    'basis': 'gantry_legs_confirmed_on_consecutive_scans'}
+        self.light_stop_state = 'approach'
+        self.light_stop_evidence = {**(self.light_stop_evidence or {}), 'gantry': evidence}
+        self._route_event('light_gantry', scan, control, evidence)
+        # The approach's speed is the closing rate on the line itself, from the
+        # confirming scans on (a turning car's axis ray is no distance to go).
+        self._lane_ranges = [(row['at_s'], row['received_at'], row['along_m']) for row in self._light_gantry_seen]
+        self._lane_speed_last = None
+        self._lane_coast_track = []
+        self._lane_pulse, self._lane_creep, self._lane_creeps = 0, False, 0
+        if self.route_stage != 'light_lane':
+            self.lane_motor = ROUTE_SLOW_MOTOR  # the light entry drives at 1550 until the coast is aimed
+        return ahead
+
+    def _light_stop_reached(self, scan, now, control, basis):
+        stop = {**self.lane_feedback, 'basis': basis, 'received_at': scan['received_at'],
+                'route_stage': self.route_stage, 'light_line': copy.deepcopy(self._light_line),
+                'zone_m': LIGHT_ZONE_M, 'stop_zone_certified': False}
+        self.light_stop_state = 'waiting'
+        self._light_wait_since = self._light_wait_tick = now
+        self._light_red_frames = 0
+        self._light_seen_waiting = False
+        self.lane_motor = NEUTRAL
+        self._lane_pulse, self._lane_creep = 0, False
+        self.light_stop_evidence = {**self.light_stop_evidence, 'stop': stop}
+        self._route_event('light_stop', scan, control, stop)
+        self._lane_speed(scan, None)  # the wait follows the board ahead: the restart's speed
+
+    def _light_wait(self, scan, now, control):
+        """Round y2: stopped before the light; True once released: green (and no
+        red) in the last LIGHT_GREEN_FRAMES frames, each taken after the stop and
+        at most LIGHT_FRAME_MAX_AGE_S old, or LIGHT_WAIT_MAX_S without that."""
+        waited_now = max(0., now-self._light_wait_tick)
+        self._light_wait_tick = now
+        self.drive_since += waited_now  # standing is not drive time
+        self.light_wait_credit_s += waited_now
+        self.lane_motor = NEUTRAL
+        frames = self._light_frames[-LIGHT_GREEN_FRAMES:]
+        green = (len(frames) == LIGHT_GREEN_FRAMES
+                 and all(f[1] >= self._light_wait_since and now-f[1] <= LIGHT_FRAME_MAX_AGE_S
+                         and f[3] >= LIGHT_GREEN_MIN_SCORE and f[2] < LIGHT_RED_MIN_SCORE for f in frames))
+        waited = now-self._light_wait_since
+        no_light = not self._light_seen_waiting and waited >= LIGHT_NO_LIGHT_WAIT_S
+        if not green and not no_light and waited < LIGHT_WAIT_MAX_S:
+            # the board ahead's history for the restart (the releasing scan
+            # leaves it to the stage's own speed estimate: one entry per scan)
+            self._lane_speed(scan, self._lane_front_range(scan))
+            return False
+        board = self._lane_front_range(scan)
+        if (self.route_stage == 'light_lane' and board is not None
+                and board-FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M):
+            # (in the light entry the open stages' own resume launch applies)
+            self._light_launch_until = now+ESC_LAG_S+LANE_LAUNCH_S
+        go = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'waited_s': waited,
+              'basis': ('green_in_fresh_frames_after_the_stop' if green
+                        else 'no_light_seen_after_the_stop_looking_again' if no_light
+                        else 'green_not_seen_light_wait_max'),
+              'frames': [list(f) for f in frames], 'red_frames_while_waiting': self._light_red_frames,
+              'route_stage': self.route_stage, 'launch': self._light_launch_until is not None}
+        self.light_stop_evidence = {**self.light_stop_evidence, 'go': go}
+        self._route_event('light_go', scan, control, go)
+        self._lane_creeps = 0
+        if no_light and not green:
+            # not the light: a later gantry may start a new stop
+            self.light_stop_evidence = {**self.light_stop_evidence,
+                                        'rearmed': (self.light_stop_evidence.get('rearmed') or [])+[go]}
+            self.light_stop_state, self._light_line = None, None
+            self._light_gantry_seen.clear()
+            self._light_rearm_min_m = LIGHT_REARM_MIN_M
+        else:
+            self.light_stop_state = 'released'
+        self._light_entry_coast_ack_dropped()
+        return True
+
     def _light_lane_update(self, scan, now, control):
         """Follow the light-lane straight, then stop inside the finish zone.
 
@@ -5672,7 +6197,8 @@ class ManeuverSequence(TurnMotion):
         wall law (autonomy_live.CorridorSteering: two fitted side boards,
         hysteresis, trend damping, +-55 PWM, slow steps, release before
         reversing), else the measured-lane corridor law, else free space.
-        Right still needs a current actual center ACK. No traffic-light vision.
+        Right still needs a current actual center ACK. Round y2: with light
+        vision the stop before the light comes first (_light_stop_track).
         """
         if not self._route_adopted(control, now):
             return self._result(now)
@@ -5706,7 +6232,52 @@ class ManeuverSequence(TurnMotion):
         target = natural
         if target < NEUTRAL and (self._route_center_ack is None or self.servo > NEUTRAL):
             target = NEUTRAL  # right only after a current actual center ACK
-        ahead = self._lane_front_range(scan)
+        lane_target = open_pursuit[0] if open_pursuit is not None else None
+        light_ahead = self._light_stop_track(scan, now, control, heading, lane_target)
+        steering = {'source_seq': scan['seq'], 'steering_source': source, 'nominal_target_pwm': natural,
+                    'lane': lane, 'free_space': space, 'walls': walls}
+        if self.light_stop_state == 'waiting' and not self._light_wait(scan, now, control):
+            # Round y2: stopped before the light, the steering pre-aimed along
+            # the lane for the run to the finish (the car does not move).
+            self.lane_feedback = {**steering, 'light_stop': 'waiting_for_green', 'motor': self.lane_motor}
+            self.steering_target = target if abs(target-self.servo) >= LIGHT_WAIT_STEER_DEADBAND_PWM else self.servo
+            self.natural_steering_target = natural
+            self.reason = 'light_stop_waiting_for_green'
+            self._slew(now)
+            return self._result(now)
+        if self.light_stop_state == 'approach':
+            basis, speed_feedback = self._lane_goal_control(scan, light_ahead, now, LIGHT_GOAL)
+            self.lane_feedback = {**steering, **speed_feedback}
+            if basis is not None:
+                self._light_stop_reached(scan, now, control, basis)
+            self.steering_target, self.natural_steering_target = target, natural
+            self.reason = 'light_stop_approach'
+            self._slew(now)
+            return self._result(now)
+        basis, speed_feedback = self._lane_goal_control(scan, self._lane_front_range(scan), now, FINISH_GOAL)
+        self.lane_feedback = {**steering, **speed_feedback}
+        if basis is not None:
+            self.finish_evidence = {**self.lane_feedback, 'received_at': scan['received_at'],
+                                    'basis': basis, 'finish_zone_certified': False}
+            self._route_event('finish_stop', scan, control, self.finish_evidence)
+            return self._end_light_stage('route_finish_zone_stop', now, control)
+        self.steering_target, self.natural_steering_target = target, natural
+        self.reason = 'light_lane_follow_straight'
+        self._slew(now)
+        return self._result(now)
+
+    def _lane_goal_control(self, scan, ahead, now, goal):
+        """The light lane's coast/push/kick/creep control toward a line ``ahead``
+        (lidar to it along the compass axis): the end board (FINISH_GOAL), round
+        y2 also the light line (LIGHT_GOAL; then the zone keys of the feedback
+        mean the light's stop zone). (basis, feedback): a basis once the goal is
+        met (the motor left as it was), else None with self.lane_motor and the
+        pulse state set for this scan. Rounds 64-105, see LANE_FINISH_BODY_GAP_M.
+        The speed is the closing rate on ``ahead`` (the light line: from its
+        legs, else the board ahead's odometry, else held; simulation: the axis
+        ray's own board read .3 m/s at 1.05 m/s while the car still turned).
+        """
+        kind, zone_gap, body_gap, target_gap, min_gap, creep_travel, creep_max = goal
         speed = self._lane_speed(scan, ahead)
         self._lane_coast_observe(now, speed)
         held = getattr(self, '_lane_speed_last', None)
@@ -5729,7 +6300,7 @@ class ManeuverSequence(TurnMotion):
         aim_accel = LANE_POWER_ACCEL_MPS2 if kick else LANE_PUSH_ACCEL_MPS2
         # Past the finish line a push only brings the rear wheels in (the time
         # has ended; the board costs +10 s): LANE_PUSH_LATE_ACCEL_MAX_MPS2.
-        late = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M
+        late = gap is not None and gap <= zone_gap
         guard_accel = (LANE_KICK_ACCEL_MAX_MPS2 if kick else LANE_PUSH_LATE_ACCEL_MAX_MPS2 if late
                        else LANE_PUSH_ACCEL_MAX_MPS2)
         v_aim = v
@@ -5742,49 +6313,54 @@ class ManeuverSequence(TurnMotion):
                                        aim_coast, aim_power, aim_accel)
             worst_gap = self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction)
         stopped = speed is not None and speed < LANE_SPEED_RESTART_MPS
-        in_zone = gap is not None and gap <= LANE_FINISH_ZONE_GAP_M
-        body_in_zone = gap is not None and gap <= LANE_FINISH_BODY_GAP_M
-        kick_room = gap is not None and gap >= LANE_FINISH_MIN_GAP_M+LANE_KICK_TRAVEL_M
+        in_zone = gap is not None and gap <= zone_gap
+        body_in_zone = gap is not None and gap <= body_gap
+        kick_room = gap is not None and gap >= min_gap+LANE_KICK_TRAVEL_M
         rested = self._power_cmd_at is None or now-self._power_cmd_at >= LANE_KICK_REST_S
         # Round 105: the front in the zone, the rear out, no room for the kick:
         # creep, until LANE_CREEP_MAX creeps have been sent and the last one
         # has rested (its ESC lag and the speed window behind it).
         creep_room = (in_zone and not body_in_zone and not kick_room
-                      and gap >= LANE_FINISH_MIN_GAP_M+LANE_CREEP_TRAVEL_M
-                      and (self._lane_creeps < LANE_CREEP_MAX or not rested))
+                      and gap >= min_gap+creep_travel
+                      and (self._lane_creeps < creep_max or not rested))
         # Round 101: end with the whole car in the zone: stopped there, or still
         # coasting where even a coast at the strong measured decel (_lane_decels)
         # stops in it (and the aimed one short of the board); stopped with only
         # the front in it where neither a kick nor a creep may go on, end there.
+        # Round y2: the light stop ends stopped only (rules: 若未停车 +50 s).
         basis = None
         if speed_known and stopped and body_in_zone:
-            basis = 'stopped_with_the_whole_car_in_the_finish_zone'
+            basis = f'stopped_with_the_whole_car_in_the_{kind}_zone'
         elif speed_known and stopped and in_zone and not kick_room and not creep_room:
-            basis = ('stopped_front_in_finish_zone_creeps_used' if self._lane_creeps
-                     else 'stopped_front_in_finish_zone_restart_could_reach_the_board')
-        elif (speed_known and coasting and not stopped and strong_decel is not None and gap is not None
-              and stop_gap >= LANE_FINISH_MIN_GAP_M
-              and self._lane_stop(gap, v_aim, strong_decel, 0., 0., 0., 0.)
-              <= LANE_FINISH_BODY_GAP_M):
+            basis = (f'stopped_front_in_{kind}_zone_creeps_used' if self._lane_creeps
+                     else f'stopped_front_in_{kind}_zone_restart_could_reach_the_{"board" if kind == "finish" else "line"}')
+        elif kind == 'light' and gap is None and speed_known and stopped:
+            basis = 'stopped_with_the_light_line_lost_in_the_zone'
+        elif (kind == 'finish' and speed_known and coasting and not stopped and strong_decel is not None
+              and gap is not None and stop_gap >= min_gap
+              and self._lane_stop(gap, v_aim, strong_decel, 0., 0., 0., 0.) <= body_gap):
             basis = 'coast_stops_the_whole_car_in_the_finish_zone'
-        self.lane_feedback = {'source_seq': scan['seq'], 'steering_source': source,
-            'nominal_target_pwm': natural, 'lane': lane, 'free_space': space, 'walls': walls,
-            'front_range_m': ahead, 'front_gap_m': gap, 'speed_mps': speed, 'speed_for_cut_mps': v,
-            'speed_aim_mps': v_aim, 'speed_known': speed_known, 'speed_basis': 'closing_rate_on_board_ahead_axis',
+        feedback = {'front_range_m': ahead, 'front_gap_m': gap, 'speed_mps': speed, 'speed_for_cut_mps': v,
+            'speed_aim_mps': v_aim, 'speed_known': speed_known,
+            'speed_basis': 'closing_rate_on_board_ahead_axis' if kind == 'finish' else 'closing_rate_on_light_line_axis',
             'predicted_stop_gap_m': stop_gap, 'worst_stop_gap_m': worst_gap, 'in_finish_zone': in_zone,
             'whole_car_in_finish_zone': body_in_zone, 'pipeline_power_s': aim_power,
             'coast_decel_mps2': decel, 'guard_decel_mps2': guard_decel, 'strong_decel_mps2': strong_decel,
             'coast_decel_se_mps2': self._lane_coast_decel_se,
             'coast_decel_measured': self._lane_coast_decel is not None,
-            'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': False,
-            'creep_room': creep_room, 'creeps': self._lane_creeps}
+            'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': self.light_vision,
+            'creep_room': creep_room, 'creeps': self._lane_creeps, 'goal': kind}
         if basis is not None:
-            self.finish_evidence = {**self.lane_feedback, 'received_at': scan['received_at'],
-                                    'basis': basis, 'finish_zone_certified': False}
-            self._route_event('finish_stop', scan, control, self.finish_evidence)
-            return self._end_light_stage('route_finish_zone_stop', now, control)
-        if gap is not None and (stop_gap <= LANE_FINISH_TARGET_GAP_M or worst_gap <= LANE_FINISH_MIN_GAP_M):
+            return basis, feedback
+        launching = self._light_launch_until is not None and now < self._light_launch_until
+        if gap is None and kind == 'light':
+            self.lane_motor = NEUTRAL  # round y2: no light line this scan: coast
+        elif gap is not None and (stop_gap <= target_gap or worst_gap <= min_gap):
             self.lane_motor = NEUTRAL  # the coast from here reaches the target (or the guard)
+        elif launching:
+            self.lane_motor = TRIAL_MOTOR  # round y2: the launch after green
+        elif self._light_launch_until is not None and self.lane_motor == TRIAL_MOTOR:
+            self.lane_motor = ROUTE_SLOW_MOTOR  # the launch goes on at 1550
         elif speed is None:
             self.lane_motor = ROUTE_SLOW_MOTOR
         elif stopped:
@@ -5792,10 +6368,10 @@ class ManeuverSequence(TurnMotion):
                                else NEUTRAL)
         elif self.lane_motor == ROUTE_SLOW_MOTOR:
             pass  # the straight, or a push, until the coast is aimed
-        elif (self.lane_motor == NEUTRAL and stop_gap > LANE_FINISH_TARGET_GAP_M+LANE_TOPUP_BAND_M
+        elif (self.lane_motor == NEUTRAL and stop_gap > target_gap+LANE_TOPUP_BAND_M
               and v_aim-decel*LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
               and self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction,
-                                       LANE_PUSH_MIN_S) > LANE_FINISH_MIN_GAP_M):
+                                       LANE_PUSH_MIN_S) > min_gap):
             self.lane_motor = ROUTE_SLOW_MOTOR  # it would stop short: push again while it rolls
         else:
             self.lane_motor = NEUTRAL  # coasting, or a kick once the car rolls
@@ -5807,8 +6383,12 @@ class ManeuverSequence(TurnMotion):
         # car still rolling is not chopped (its guard is checked every scan).
         # Round 101: the next kick no sooner than LANE_KICK_REST_S after it (was
         # LANE_REST_FRAMES scans after the kick, restarted by any other output).
-        if self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= (LANE_CREEP_FRAMES if self._lane_creep
-                                                                   else LANE_KICK_FRAMES):
+        if self.lane_motor != TRIAL_MOTOR and self._light_launch_until is not None:
+            self._light_launch_until = None  # after the launch: the lane's own pushes and kicks
+        if self.lane_motor == TRIAL_MOTOR and launching:
+            self._lane_pulse, self._lane_creep = 0, False
+        elif self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= (LANE_CREEP_FRAMES if self._lane_creep
+                                                                     else LANE_KICK_FRAMES):
             self.lane_motor, self._lane_pulse, self._lane_creep = NEUTRAL, 0, False
         elif self.lane_motor == TRIAL_MOTOR:
             if self._lane_pulse == 0 and not kick_room and creep_room:
@@ -5817,11 +6397,8 @@ class ManeuverSequence(TurnMotion):
             self._lane_pulse += 1
         else:
             self._lane_pulse, self._lane_creep = 0, False
-        self.lane_feedback.update(motor=self.lane_motor, creeps=self._lane_creeps)
-        self.steering_target, self.natural_steering_target = target, natural
-        self.reason = 'light_lane_follow_straight'
-        self._slew(now)
-        return self._result(now)
+        feedback.update(motor=self.lane_motor, creeps=self._lane_creeps)
+        return None, feedback
 
     def _light_update(self, scan, now, control):
         if now-self.light_since+1e-9 >= LIGHT_STAGE_MAX_S:
@@ -6359,6 +6936,8 @@ class ManeuverSequence(TurnMotion):
         if self.continue_route and isinstance(scan, dict) and type(scan.get('at_ms')) is int:
             # Round 64: one compass step per newly published scan (repeats ignored).
             self.compass.update(scan)
+        if self.continue_route:
+            self._light_observe(control)
         if self.compact_target is not None and self.compact_target.get('confirmed') is True:
             self._last_confirmed_compact_target = self.compact_target
         self.compact_target_error = None
