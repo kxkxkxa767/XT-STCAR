@@ -24536,5 +24536,21 @@
       "basis": "first support: its lidar returns against the body box; others: the engine's current known min distance"
     },
     "light_entry": "commands 1456 -> 1430 -> 1500 -> 1540 (run 107: down to 1382); heading against the outer board -21 -> +5 deg; hand-over at scan 155 with 1504 (run 107: 1382); in the light lane the side boards stayed within +-4 deg of the heading"
+  },
+  "light_trigger_race4_bench_20261026": {
+    "date": "2026-10-26",
+    "author": "Claude",
+    "physical_output": false,
+    "car_moved_by": "user (by hand)",
+    "user": [
+      "你记录，我现在把车放到红绿灯那里，现在是绿灯你看看识别的怎么样",
+      "我放到这个位置是因为到这才能触发红绿的"
+    ],
+    "method": "read only, console running and locked: 30 frames of the console's /camera.jpg (640x480 JPEG q75, 0.2 s apart) into /home/bianbu/xt-stcar-console/vision-bench-20261025-181136 (car clock), then scripts/vision-log.py --images on the car (python3 onnxruntime 1.18.0 CPU, numpy 1.26.4, cv2 4.6.0) with race4 (onnx 4089dab5..., copied by deploy-vision.py y1 into stage-claude-y1-20261025-132806, 6 files sha256 equal), conf .10",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/vision-bench-20261025-181136 (62 files sha256 equal; raw images, not in git), lidar-at-light.jsonl (3 /api/lidar scans)",
+    "detections": "green_light in 30/30 frames, score .886-.891 (median .889), box x 382-455 y 133-198 px (the lit right lamp of the gantry's three); nothing else at conf .10 (the unlit red and amber lamps were not taken for lights)",
+    "speed_on_the_car": "median inference 261 ms with 2 threads (3.3 frames/s), 232 ms with 4, 366 ms with 6, beside the console and its blue-cone shadow vision (load ~10 on 8 cores); in a race run the console is stopped. The SpacemiT ONNX Runtime used by the Rust vision path is not tried yet",
+    "trigger_position_lidar": "where the user says the light is triggered: gantry left leg .75 m ahead of the lidar, .53 m left (2 bins); right leg about as far ahead at the right board (.40 m right); the car front (lidar + .20 m) ~.55 m before the legs; lane ~1.05 m between the boards (left .65 m, right .40 m); the end board 4.03 m straight ahead",
+    "next": "red: capture again while the light is red (user re-triggers); y2: stop for red before the gantry and go on green; ask the user the size and position of the pre-light stop zone"
   }
 }
