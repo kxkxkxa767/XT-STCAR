@@ -2,7 +2,7 @@
 """Read-only camera perception log for the race4 YOLO26n model (round y1).
 
   python3 vision-log.py --model-dir DIR --out NEW_DIR [--camera /dev/video20] [--threads 2]
-      [--max-s 150] [--conf .25] [--save-every 10] [--max-saved 400]
+      [--max-s 150] [--conf .25] [--save-every 10] [--max-saved 400] [--light-state PATH]
 
 Runs on the car beside `route-engine race` (scripts/race-trial.py --vision-*), or
 alone for a bench check. It never opens the car's control or lidar devices and
@@ -15,6 +15,13 @@ in camera pixels). JPEGs go to NEW_DIR/frames/: every frame with a crosswalk or
 a light and every --save-every-th frame, at most --max-saved. NEW_DIR/summary.json
 is written at the end (SIGTERM, SIGINT or --max-s). The first stdout line is
 {"kind": "ready", ...} once the model and the camera work.
+
+Round y2: with --light-state PATH, after every frame PATH is replaced
+atomically (a temporary file renamed over it) by one JSON object: the frame
+number, its capture time and the write time on this process's CLOCK_MONOTONIC
+("captured_s", "written_s") and the highest red_light / green_light score of
+the frame ("red", "green"; 0 without one). `route-engine race --light-state
+PATH` reads it as the traffic light's state; nothing else is sent anywhere.
 
 Before anything else the model must match its handoff files: sha256 of
 race4.onnx equal to race4.provenance.json's, the class order of race4.json
@@ -93,6 +100,7 @@ def main():
     parser.add_argument('--save-every', type=int, default=10)
     parser.add_argument('--max-saved', type=int, default=400)
     parser.add_argument('--images', nargs='*', help='bench: these image files instead of the camera')
+    parser.add_argument('--light-state', help='round y2: the light state file for route-engine race')
     args = parser.parse_args()
     onnx, spec, digest = check_model(Path(args.model_dir))
     out = Path(args.out)
@@ -167,6 +175,16 @@ def main():
                 saved = f'frame-{stats["frames"]:06d}.jpg'
                 cv2.imwrite(str(out/'frames'/saved), frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 stats['saved'] += 1
+            if args.light_state:
+                def best(cls):
+                    return max((d['score'] for d in detections if d['cls'] == cls), default=0.)
+                state = {'frame': stats['frames'], 'captured_s': round(captured, 4),
+                         'written_s': round(time.monotonic(), 4), 'red': best('red_light'),
+                         'green': best('green_light')}
+                light_state = Path(args.light_state)
+                temporary = light_state.with_name(light_state.name+'.tmp')
+                temporary.write_text(json.dumps(state))
+                os.replace(temporary, light_state)
             log.write(json.dumps({'frame': stats['frames'], 'captured_monotonic_s': round(captured, 4),
                                   'infer_ms': round(infer_ms, 1), 'detections': detections, 'saved': saved,
                                   'source': None if cap is not None else path}) + '\n')

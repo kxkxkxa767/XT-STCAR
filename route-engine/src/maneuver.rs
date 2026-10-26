@@ -181,6 +181,77 @@ pub const OPEN_LANE_INSIDE_MARGIN_M: f64 = 0.05;
 pub const OPEN_LANE_SHIFT_MIN_GAP_M: f64 = 0.20;
 pub const OPEN_LINE_REACH_M: f64 = 6.;
 pub const OPEN_STAGES: [&str; 3] = ["open_transfer", "second_loop", "light_entry"];
+// Round y2: the traffic-light stop (maneuver_sequence.py has the derivations;
+// only with control['light'], the race program's read-only YOLO process).
+pub const LIGHT_ZONE_M: f64 = 0.70;
+pub const LIGHT_STOP_TARGET_GAP_M: f64 = 0.15;
+pub const LIGHT_STOP_MIN_GAP_M: f64 = 0.05;
+pub const LIGHT_STOP_BODY_GAP_M: f64 = LIGHT_ZONE_M - (FRONT_BODY_EXTENT_M + REAR_BODY_EXTENT_M) - 0.06;
+pub const LIGHT_STOP_ZONE_GAP_M: f64 = LIGHT_ZONE_M - 0.02;
+pub const LIGHT_POST_MAX_BINS: usize = 8;
+pub const LIGHT_POST_STEP_M: f64 = 0.05;
+pub const LIGHT_POST_MAX_EXTENT_M: f64 = 0.10;
+pub const LIGHT_POST_JUMP_M: f64 = 0.12;
+pub const LIGHT_GANTRY_SPAN_M: (f64, f64) = (0.6, 1.3);
+pub const LIGHT_GANTRY_ALONG_DIFF_M: f64 = 0.30;
+pub const LIGHT_GANTRY_EDGE_M: f64 = 0.10;
+pub const LIGHT_GANTRY_REACH_M: f64 = 4.;
+pub const LIGHT_LEG_INSIDE_M: (f64, f64) = (0.05, 0.35);
+pub const LIGHT_LANE_MAX_WIDTH_M: f64 = 1.4;
+pub const LIGHT_GANTRY_CONFIRM: usize = 3;
+pub const LIGHT_GANTRY_PAIR_CONFIRM: usize = 2;
+pub const LIGHT_GANTRY_STEP_S: f64 = 0.25;
+pub const LIGHT_LEG_LATERAL_M: f64 = 0.15;
+pub const LIGHT_LEG_ALONG_M: f64 = 0.30;
+pub const LIGHT_LEG_LATERAL_MPS: f64 = 1.;
+pub const LIGHT_LINE_JUMP_M: f64 = 0.25;
+pub const LIGHT_GREEN_MIN_SCORE: f64 = 0.5;
+pub const LIGHT_RED_MIN_SCORE: f64 = 0.25;
+pub const LIGHT_GREEN_FRAMES: usize = 2;
+pub const LIGHT_FRAME_MAX_AGE_S: f64 = 1.;
+pub const LIGHT_WAIT_MAX_S: f64 = 12.;
+pub const LIGHT_NO_LIGHT_WAIT_S: f64 = 4.;
+pub const LIGHT_REARM_MIN_M: f64 = 1.;
+pub const LIGHT_WAIT_STEER_DEADBAND_PWM: i64 = 15;
+pub const LIGHT_LAUNCH_MIN_GAP_M: f64 = 2.5;
+pub const LIGHT_LAUNCH_S: f64 = 0.2;
+pub const LIGHT_CREEP_TRAVEL_M: f64 = 0.20;
+pub const LIGHT_CREEP_MAX: i64 = 6;
+pub const LIGHT_LINE_HOLD_S: f64 = 0.5;
+pub const LIGHT_PASSED_M: f64 = 0.05;
+pub fn light_gantry_max_heading_rad() -> f64 {
+    radians(45.)
+}
+
+/// _lane_goal_control goals: (kind, front-in-zone gap, whole-car gap, target,
+/// minimum, creep travel bound, creeps).
+pub struct Goal {
+    pub kind: &'static str,
+    pub zone_gap: f64,
+    pub body_gap: f64,
+    pub target_gap: f64,
+    pub min_gap: f64,
+    pub creep_travel: f64,
+    pub creep_max: i64,
+}
+pub const FINISH_GOAL: Goal = Goal {
+    kind: "finish",
+    zone_gap: LANE_FINISH_ZONE_GAP_M,
+    body_gap: LANE_FINISH_BODY_GAP_M,
+    target_gap: LANE_FINISH_TARGET_GAP_M,
+    min_gap: LANE_FINISH_MIN_GAP_M,
+    creep_travel: LANE_CREEP_TRAVEL_M,
+    creep_max: LANE_CREEP_MAX,
+};
+pub const LIGHT_GOAL: Goal = Goal {
+    kind: "light",
+    zone_gap: LIGHT_STOP_ZONE_GAP_M,
+    body_gap: LIGHT_STOP_BODY_GAP_M,
+    target_gap: LIGHT_STOP_TARGET_GAP_M,
+    min_gap: LIGHT_STOP_MIN_GAP_M,
+    creep_travel: LIGHT_CREEP_TRAVEL_M,
+    creep_max: LIGHT_CREEP_MAX,
+};
 pub const OPEN_SUPPORT_MAX_DEPTH_M: f64 = 0.15;
 
 pub fn route_align_heading_rad() -> f64 {
@@ -477,6 +548,21 @@ pub struct Maneuver {
     pub _lane_ranges: Vec<(f64, f64, f64)>,
     pub lane_feedback: V,
     pub finish_evidence: V,
+    // Round y2: the traffic-light stop.
+    pub light_vision: bool,
+    pub _light_frames: Vec<V>,
+    pub light_stop_state: Option<&'static str>,
+    pub light_stop_evidence: V,
+    pub _light_gantry_seen: Vec<V>,
+    pub _light_line: V,
+    pub _light_wait_since: Option<f64>,
+    pub _light_red_frames: i64,
+    pub _light_launch_until: Option<f64>,
+    pub _light_seen: bool,
+    pub _light_gantry_since: Option<f64>,
+    pub _light_rearm_min_m: Option<f64>,
+    pub light_wait_credit_s: f64,
+    pub _light_wait_tick: Option<f64>,
     pub _exit_heading: Option<f64>,
     pub role_distinct_evidence: V,
     pub second_acquisition_reason: Option<String>,
@@ -749,6 +835,20 @@ impl Maneuver {
             _lane_ranges: Vec::new(),
             lane_feedback: V::None,
             finish_evidence: V::None,
+            light_vision: false,
+            _light_frames: Vec::new(),
+            light_stop_state: None,
+            light_stop_evidence: V::None,
+            _light_gantry_seen: Vec::new(),
+            _light_line: V::None,
+            _light_wait_since: None,
+            _light_red_frames: 0,
+            _light_launch_until: None,
+            _light_seen: false,
+            _light_gantry_since: None,
+            _light_rearm_min_m: None,
+            light_wait_credit_s: 0.,
+            _light_wait_tick: None,
             _exit_heading: None,
             role_distinct_evidence: V::None,
             second_acquisition_reason: None,
@@ -1041,6 +1141,7 @@ impl Maneuver {
             && self.entry_kind == Some("lane")
             && now < self._launch_until.unwrap_or_else(|| type_error("'<' not supported between float and NoneType"))
             && ["first_target", "open_transfer", "second_loop", "light_entry"].contains(&self.route_stage)
+            && !self.light_stop_active()
         {
             result.set("motor", TRIAL_MOTOR);
         }
@@ -1160,6 +1261,12 @@ impl Maneuver {
             "light_alignment_evidence" => self.light_alignment_evidence.clone(),
             "lane_feedback" => self.lane_feedback.clone(), "lane_motor" => self.lane_motor,
             "finish_evidence" => self.finish_evidence.clone(),
+            "light_vision" => self.light_vision, "light_stop_state" => self.light_stop_state,
+            "light_stop_active" => self.light_stop_active(),
+            "light_stop_evidence" => self.light_stop_evidence.clone(),
+            "light_line" => self._light_line.clone(),
+            "light_frame" => self._light_frames.last().cloned().unwrap_or(V::None),
+            "light_wait_credit_s" => self.light_wait_credit_s,
             "second_acquisition_reason" => self.second_acquisition_reason.clone(),
             "second_recovery_prior" => self.second_recovery_prior.clone(),
             "role_distinct_evidence" => self.role_distinct_evidence.clone(),
@@ -1186,7 +1293,11 @@ impl Maneuver {
     pub fn route_motor(&self) -> i64 {
         let slow_stage = (self.handover_observed && self.route_stage == "first_target")
             || (self.first_pass_evidence.is_some() && POST_PASS_STAGES.contains(&self.route_stage));
-        if self.continue_route && self.phase == "drive" && self.route_stage == "light_lane" && !self.quality_resume_pending {
+        if self.continue_route
+            && self.phase == "drive"
+            && !self.quality_resume_pending
+            && (self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()))
+        {
             return self.lane_motor;
         }
         if self.continue_route && self.phase == "drive" && self.route_stage == "start_lane" {
@@ -1344,6 +1455,9 @@ impl Maneuver {
         let now = now_v.f();
         if self.continue_route && scan.is_dict() && scan.get("at_ms").is_int() {
             self.compass.update(scan);
+        }
+        if self.continue_route {
+            self.light_observe(control);
         }
         if self.compact_target.is_dict() && self.compact_target.get("confirmed").is_true() {
             self._last_confirmed_compact_target = self.compact_target.clone();

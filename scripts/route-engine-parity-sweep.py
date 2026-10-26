@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Parity sweep: course-sim cases through route-engine-parity.py, in parallel.
 
-  python3 scripts/route-engine-parity-sweep.py OUT_DIR [all|range|matrix|measured|sensors|replay] [--supervisor]
+  python3 scripts/route-engine-parity-sweep.py OUT_DIR [all|range|matrix|measured|sensors|light|replay] [--supervisor]
 
+light (round y2): the traffic light (course-sim --gantry --light) with the
+lamps off or green before the trigger, a camera losing the light near it, no
+light seen at all, short and long reds, a faster car.
 replay: route-replay.py over every recorded car trial from round 64 on
 (work/vehicle-dynamic-deploy-20261008/left-cone-trial-*-N, N >= 64).
 
@@ -40,6 +43,14 @@ if which in ('all', 'sensors'):
             cases.append((f'sensors-{n}-edge-{seed}', ['--layout', n, '--edge-dropout', '.15', '--seed', str(seed)]))
             cases.append((f'sensors-{n}-graze-{seed}', ['--layout', n, '--grazing-angle-deg', '25', '--grazing-dropout', '.5', '--seed', str(seed)]))
             cases.append((f'sensors-{n}-backlash-{seed}', ['--layout', n, '--steer-backlash', '30', '--seed', str(seed)]))
+if which in ('all', 'light'):
+    lights = (('default', 0., '{}', ()), ('red3-at1', 1., '{"red_s": 3}', ()), ('green-at2', 2., '{"pre": "green"}', ()),
+              ('near.6', 0., '{"min_ahead_m": 0.6}', ()), ('unseen', 0., '{"score": 0.0}', ()),
+              ('fast', 0., '{}', ('--vehicle-param', 'speed_scale=1.3', '--vehicle-param', 'gain_scale=1.3')))
+    for n in ('user8', 'doc8x4', 'short5'):
+        for tag, at, light, extra in lights:
+            cases.append((f'light-{n}-{tag}', ['--layout', n, '--vehicle', 'measured', '--gantry', '--gantry-at', str(at),
+                                               '--light', light, '--max-s', '75', *extra]))
 
 cases = [(name, ['scripts/course-sim.py', *args]) for name, args in cases]
 if which in ('all', 'replay'):

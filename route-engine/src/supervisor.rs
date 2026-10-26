@@ -1183,10 +1183,17 @@ impl Supervisor {
     fn turn_tick(&mut self, s: &mut Session, now: &V, motion_ready: bool) -> Flow {
         let t = now.f();
         let control = self.control();
+        // Round y2: a wait at the traffic light (the car standing at neutral)
+        // moves the total deadline on as it moves the drive clock.
+        let credit = {
+            let turn = s.report.get("turn");
+            let c = if turn.truthy() { turn.get("light_wait_credit_s").clone() } else { V::None };
+            if c.truthy() { c.f() } else { 0. }
+        };
         // Route session (continue_route): waiting never pauses the cumulative
         // drive clock; a deadline wins over same-tick recovery.
         if s.phase != "coast" {
-            if t >= s.deadline {
+            if t >= s.deadline + credit {
                 return halt("turn_total_deadline");
             }
             if let Some(since) = s.motion.drive_since
@@ -1237,7 +1244,10 @@ impl Supervisor {
             {
                 // Self-recovery after the first pass: pause at neutral holding
                 // the ACKed command, re-check, resume.
-                let entry_neutral = s.motion.route_stage == "light_lane" && py_eq(control.get("motor"), &V::Int(NEUTRAL));
+                let light_entry_stop = s.motion.route_stage == "light_entry"
+                    && (if s.report.get("turn").truthy() { s.report.get("turn").get("light_stop_active").is_true() } else { false });
+                let entry_neutral = (s.motion.route_stage == "light_lane" || light_entry_stop)
+                    && py_eq(control.get("motor"), &V::Int(NEUTRAL));
                 Supervisor::enter_quality_wait(s, "post_pass_pause", entry_neutral);
                 let trigger = dict! {
                     "scan_seq" => self.scan.idx("seq").clone(), "source_at_ms" => self.scan.idx("at_ms").clone(),
@@ -1293,7 +1303,7 @@ impl Supervisor {
         if s.phase == "quality_wait" && !self.turn_quality_wait_eligible(s) {
             return halt("turn_quality_wait_feedback_changed");
         }
-        if t >= s.deadline {
+        if t >= s.deadline + credit {
             return halt("turn_total_deadline");
         }
         if !control.get("armed").truthy() || seq_of(&control) < self.arm_sequence as f64 {
@@ -1342,8 +1352,11 @@ impl Supervisor {
             s.quality_resume_sequence = None;
             s.quality_wait_kind =
                 Some(if s.motion.neutral_pause_kind == Some("recovery") { "recovery_hold" } else { "orbit_wait" });
-            s.quality_wait_entry_neutral =
-                Some(s.motion.route_stage == "light_lane" && py_eq(control.get("motor"), &V::Int(NEUTRAL)));
+            s.quality_wait_entry_neutral = Some(
+                (s.motion.route_stage == "light_lane"
+                    || (s.motion.route_stage == "light_entry" && decision.get("light_stop_active").is_true()))
+                    && py_eq(control.get("motor"), &V::Int(NEUTRAL)),
+            );
             s.quality_wait_front_sparse_entry = Some(false);
             s.report.set("recovery_hold_trigger", dict! {
                 "scan_seq" => self.scan.idx("seq").clone(), "reason" => decision.get("reason").clone(),
@@ -1370,7 +1383,11 @@ impl Supervisor {
             && py_eq(route_center.get("servo"), &V::Int(NEUTRAL))
             // Round 82: the coasting light lane may prove centre at neutral.
             && (in_motors(route_center.get("motor"), &DRIVE_MOTORS)
-                || (stage_is("light_lane") && py_eq(route_center.get("motor"), &V::Int(NEUTRAL))))
+                || (stage_is("light_lane") && py_eq(route_center.get("motor"), &V::Int(NEUTRAL)))
+                // Round y2: the light stop coasts from the light entry on.
+                || (stage_is("light_entry")
+                    && decision.get("light_stop_active").is_true()
+                    && py_eq(route_center.get("motor"), &V::Int(NEUTRAL))))
             && route_center.get("seq").is_int()
             && self.arm_sequence as f64 <= route_center.get("seq").f()
             && route_center.get("seq").f() <= seq_of(&control)
@@ -1745,6 +1762,16 @@ impl Supervisor {
         if self.owner.is_some() && !control.get("armed").truthy() && seq_of(&control) >= self.arm_sequence as f64 {
             let reason = if control.has("reason") { control.get("reason").s().to_string() } else { "locked".into() };
             self.halt(&format!("bridge_{reason}"));
+        }
+    }
+
+    /// Round y2 (race program): the read-only vision process's newest light
+    /// frame rides on the control status as control['light'].
+    pub fn set_light(&mut self, light: &V) {
+        if self.status.get("control").is_dict() {
+            let mut control = self.status.get("control").clone();
+            control.set("light", light.clone());
+            self.status.set("control", control);
         }
     }
 

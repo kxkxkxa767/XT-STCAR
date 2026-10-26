@@ -4,7 +4,7 @@
   python3 race-trial.py --evidence NEW_DIR --program PATH --bridge PATH [--max-drive-s 40]
       [--initial-presteer-pwm 1670] [--ready-hold-s 1] [--program-sha256 H] [--bridge-sha256 H]
       [--check-only] [--vision-script PATH --vision-model DIR [--vision-script-sha256 H]
-      [--vision-model-sha256 H] [--vision-camera /dev/video20]]
+      [--vision-model-sha256 H] [--vision-camera /dev/video20] [--light-stop]]
 
 Runs on the car, as often as wanted (user, 10-24: “不限次数”), one run at a
 time (BASE/race-trial.lock). Each run gets a new evidence directory: NEW_DIR,
@@ -32,6 +32,12 @@ VISION_READY_S) or, without it, alone (recorded). The log never touches the
 car's devices or the program; it is stopped after the program ends (SIGTERM,
 then killed after VISION_STOP_S) and its summary goes into the result with
 the program's start time on the same monotonic clock.
+
+Round y2: with --light-stop as well, the log writes the traffic light's state
+to NEW_DIR/light-state.json (vision-log.py --light-state) and the program
+reads it (route-engine race --light-state): the route stops before the light
+and waits for green. Without the log's ready line the program runs without
+it (no light stop; recorded).
 """
 import argparse
 import fcntl
@@ -79,11 +85,14 @@ def main():
     parser.add_argument('--vision-model')
     parser.add_argument('--vision-model-sha256')
     parser.add_argument('--vision-camera', default='/dev/video20')
+    parser.add_argument('--light-stop', action='store_true')
     if FIXED_ARGS is not None and sys.argv[1:]:
         raise SystemExit("this round's helper takes no arguments")
     args = parser.parse_args(FIXED_ARGS)
     if (args.vision_script is None) != (args.vision_model is None):
         raise SystemExit('--vision-script and --vision-model go together; nothing started')
+    if args.light_stop and args.vision_script is None:
+        raise SystemExit('--light-stop needs --vision-script and --vision-model; nothing started')
     checks = [(args.program, args.program_sha256), (args.bridge, args.bridge_sha256)]
     if args.vision_script is not None:
         checks += [(args.vision_script, args.vision_script_sha256),
@@ -140,9 +149,11 @@ def main():
                    '--max-drive-s', args.max_drive_s, '--initial-presteer-pwm', args.initial_presteer_pwm,
                    '--status-s', '.5', '--max-wait-s', '20']
         command += ['--start', 'never'] if args.check_only else ['--start', 'ready', '--ready-hold-s', args.ready_hold_s]
+        light_state = out/'light-state.json'
         if args.vision_script is not None:
             vision = subprocess.Popen([sys.executable, args.vision_script, '--model-dir', args.vision_model,
-                                       '--out', str(out/'vision'), '--camera', args.vision_camera, '--max-s', '150'],
+                                       '--out', str(out/'vision'), '--camera', args.vision_camera, '--max-s', '150',
+                                       *(['--light-state', str(light_state)] if args.light_stop else [])],
                                       stdout=subprocess.PIPE, stderr=(out/'vision-stderr.txt').open('w'),
                                       stdin=subprocess.DEVNULL, text=True)
             ready, deadline = None, time.monotonic()+VISION_READY_S
@@ -154,6 +165,9 @@ def main():
                     if line.startswith('{') and json.loads(line).get('kind') == 'ready':
                         ready = json.loads(line)
             result.update(vision_ready=ready, vision_exit_before_run=vision.poll())
+            if args.light_stop and ready is not None:
+                command += ['--light-state', str(light_state)]
+            result['light_stop'] = args.light_stop and ready is not None
         started = time.monotonic()
         result['program_started_monotonic_s'] = started
         with (out/'race-stdout.txt').open('w') as stdout:

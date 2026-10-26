@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-26 夜 Claude：y2红绿灯停车完成并Rust同步——只在有识别输入时生效；未打包未部署；车上仍是第108轮）
+
+记录键`y2_light_stop_20261026`（取代`y2_light_stop_wip_20261026`）。用户：光电传感器约70cm，触发后红10s再绿；停车时调整姿态，绿灯后一次冲到终点；可用MATLAB命令行做计算或仿真。
+- 接法：`race-trial.py --light-stop`（要和`--vision-script/--vision-model`一起）→识别进程`vision-log.py --light-state NEW_DIR/light-state.json`每帧原子写{frame, captured_s, written_s, red, green}→`route-engine race --light-state`读它，换算到程序时钟后并入每条control的`light`；记录在`run/light.jsonl`和summary.json的light。没有识别输入时所有决策与第108轮相同。
+- 逻辑：龙门架两腿=细立柱（两侧都有更远的回波，不在扫描接缝），一对腿再见一次确认（或板内单腿3次）；灯线跟腿走，丢了用前方挡板测距，再不行按滑行推算；从灯区入口起用灯区车道的滑行/补推/补进控制停进.70m停车区（车头离灯线≤.26、目标.15，补进≤.20m共6次），只在停稳后算到；入口里停车时允许空挡（采纳、中心ACK、质量暂停、监管右转规则同步）；实测车头过灯线>.05m算没停住，放弃这次停车。等灯：方向预打（<15PWM不发），停车后连续2帧新绿灯（无红）就走；确认龙门架后一直没见到红或绿灯4s，或只见绿没见过红：不是这个灯，走并在1m外再找；否则最多12s；等待不计入行驶预算和总期限。绿灯后离终点板≥2.5m时1560（ESC滞后+.2s）再1550巡航到终点滑行；灯后起步的终点只在停稳后结束。
+- 移植中修的：总期限第二处检查没加顺延（第一处等于没用）；入口停车空挡时扫描质量暂停被拒会停跑；停车后摄像头可能看不到灯（灯在雷达前约.35m，10-25台架只验证过.75m）——改为从确认龙门架起看到过红灯就继续等；没停住冲过灯线后不再在灯后等12s（规则：其他停车超10s失败）。
+- 验证：Python full suite 919 OK (20 new: tests/test_route_y2_light_stop.py)；cargo test过、新Rust测试在第108轮实录帧上与Python逐位相等、clippy数不变；逐位对比Python/Rust route-engine-parity-sweep all 202/203 (the known run-75 replay), including 18 new light cases (lamps off/green before the trigger, camera losing the light near, no light seen, red 3 s, gantry 1/2 m in, a faster car) bit for bit；监管层route-engine-parity-sweep all --supervisor 202/203 (the run-75 replay), the 18 light cases included；无灯without the light input the measured-car sweep 288/288 and the rules-range sweep 432/432 identical to round 108；仿真广泛集288例（无灯能完成182）：灯前熄灯157无罚时完成（灯前绿灯相同）、近处看不到灯156，停车后提前走0例；实车类108例（无灯能完成40）：38和40，提前走0，有效时间中位+2.6s、最大+3.7s。
+- 风险/下一步：先让用户把车摆在停车位置（车头离灯线约15cm）跑一次识别台架，看摄像头能否看到灯；识别进程和比赛程序同跑时的周期时间没测过；快车确认龙门架太晚会冲过（仿真快车12/182）；灯后起步冲终点时最后一米补推在仿真强车上会到8cm近距门。打包y2（build-race新引擎+识别文件，`--light-stop`）尚未做。
+
 ## 当前接手入口（2026-10-26 夜 Claude：y2红绿灯停车——Python参考实现和仿真红绿灯模型已完成；Rust移植、比赛程序读灯状态、识别进程输出、助手参数、测试和逐位对比都还没做；半成品，不可构建部署）
 
 记录键`y2_light_stop_wip_20261026`。车上仍是第108轮。用户：光电传感器约70cm，触发后红10s再绿；停车时调整姿态，绿灯后一次冲到终点。test_route_96_engine在Rust移植前会失败。下一步：把maneuver_sequence.py里y2的全部改动（_thin_posts、_light_*、_lane_goal_control、入口/车道接入、_route_adopted/_route_motor/_result、结果键）逐行移植到route-engine（含dump.rs所有新属性）、supervisor.rs（期限顺延、右转规则）、race.rs读灯状态文件并并入control；vision-log.py加--light-state；race-trial.py传参；单元测试（夹具tests/fixtures/light_gantry_run108_frames.json）；逐位对比加带灯仿真；然后打包y2。

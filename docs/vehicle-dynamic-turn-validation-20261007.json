@@ -24568,6 +24568,53 @@
     "status": "WORK IN PROGRESS, do not build or deploy: Python reference (maneuver_sequence.py, server.py) and course-sim light model done; the Rust engine port, the race program light-state reader, vision-log.py --light-state, the helper arguments, unit tests and parity are NOT done. test_route_96_engine (Python vs Rust console) fails until the port.",
     "design": "only with control['light'] (frame, captured_at, red, green): gantry legs = thin isolated posts (real returns both sides, seam excluded); a pair confirmed by one more sighting, or 3 single legs inside a board; line followed by legs, else board-ahead odometry, else held; the light lane coast/push/kick/creep control (_lane_goal_control, LIGHT_GOAL: zone .70, whole car at front gap <= .26, target .15, creep bound .20) also from the light entry (neutral allowed there while active; coast centre ACK dropped when it ends); wait: steering pre-aimed (15 PWM deadband), green in 2 fresh frames after the stop, no light at all for 4 s -> go and look again 1 m on, 12 s max; wait not counted in the drive budget/deadline; after green a 1560 launch if >= 2.5 m to the end board",
     "validation_so_far": "no light: measured sweep 288/288 and rules range 432/432 identical to round 108; light sweep (6 layouts, gain 1/1.3, speed 1/1.3, 2 delays, gantry 0/1/2 m in, red 3/10 s): 154 of 182 baseline-completed cases stop in the zone and finish without penalty, no stopped car left before green; real-car-like set (user8/doc8x4, gain/speed 1.15-1.4): 32 of 40, effective time +2.5 s median; car runs 105-108: first leg pair at 3.3-4.0 m",
-    "open": "Rust port with bit parity (dump of every new attribute), race.rs light reader merging into control lines, vision process writing the light state file, helper/package y2, tests; known risk: finish kick after a short coast can stop on the body gate before the end board (sim car kicks harder than the car)"
+    "open": "Rust port with bit parity (dump of every new attribute), race.rs light reader merging into control lines, vision process writing the light state file, helper/package y2, tests; known risk: finish kick after a short coast can stop on the body gate before the end board (sim car kicks harder than the car)",
+    "superseded_by": "y2_light_stop_20261026"
+  },
+  "y2_light_stop_20261026": {
+    "date": "2026-10-26",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "round 108 (c21a8c3) on the car; Python reference of 5b707ee",
+    "user": [
+      "这样子，先不加斑马线识别的，先来红绿灯，看看它能不能停下等绿灯亮了再走，用y的编号结合无视觉模型测试的最新版来改",
+      "1.约莫70cm 2.触发后先是红的10s亮绿灯表示可以前进所以灯区那里你可以在停车的时候调整姿态，让绿的亮起来后能快速一次冲到终点",
+      "你慢慢改，我睡觉去了，改完推送",
+      "有需要计算或者系统仿真你可以调用matlab的cli"
+    ],
+    "scope": "only with control['light']: route-engine race --light-state PATH (a reader thread polls the file the read-only YOLO process writes per frame, vision-log.py --light-state; captured_at = receive time - (written - captured) on the program clock; every accepted state in run/light.jsonl, the counts in summary.json light); race-trial.py --light-stop (needs --vision-script/--vision-model; without the log's ready line the program runs without it). Without the input every decision is round 108's",
+    "design": {
+      "gantry": "legs = thin isolated posts (<= 8 bins, steps <= .05 m, <= .10 m across, real returns >= .12 m farther on both sides, not on the scan seam); a pair .6-1.3 m apart across the lane axis within .3 m along, inside the measured lane band (+.10 m; 1.4 m from the outer board without a divider), confirmed by one more sighting; or 3 single legs .05-.35 m inside a board with the car within 45 deg of the axis; within 4 m",
+      "line": "the nearer leg; followed per leg (rigid gantry, growing windows), else the board ahead's change since the last leg (odometry), else held from the last measurement (coasting: the guard decel)",
+      "stop": "the light lane's coast/push/kick/creep control (_lane_goal_control, LIGHT_GOAL) on the light line from the light entry on: zone .70 m, whole car at front gap <= .26, target .15, minimum .05, creeps of <= .20 m (6); ends stopped only; neutral allowed in the light entry while it lasts (adoption, centre ACK, quality pause, supervisor right rule); a front measured more than .05 m past the line ends the approach (missed: no stop after the light)",
+      "wait": "steering pre-aimed along the lane (changes < 15 PWM not sent); green (>= .5, red < .25) in the last 2 frames, each taken after the stop and <= 1 s old: go; nothing red or green seen since the gantry for 4 s, or green with no red since the gantry: not the light, go and look again >= 1 m on; else 12 s at most; the wait is not drive time (drive clock and the console's total deadline move on by light_wait_credit_s)",
+      "after_green": "with >= 2.5 m to the end board 1560 for the ESC lag + .2 s, then 1550 to the finish coast (the open stages' .4 s overshot to the 8 cm gate in simulation); the finish after a restart from the light ends stopped only (the launch's own coast fit read low)"
+    },
+    "fixed_during_port": [
+      "server.py: the second total-deadline check had no light credit (the credit at the first one never took effect)",
+      "a quality pause in the light entry while the light stop coasts or waits at neutral was refused (begin_post_pass_quality_pause, the server's entry_neutral): the run would have halted",
+      "a red seen on the way in now keeps the wait (stopped, the lamps are ~.35 m ahead of the lidar; the 10-25 bench saw them from .75 m only)",
+      "green without any red since the gantry rearms (a stop before the sensor with green lamps would have ended the light logic)",
+      "a car past the line no longer waits 12 s there (rules: other stops over 10 s lose the run)"
+    ],
+    "rust": "route-engine/src/maneuver_light.rs (thin_posts, light_* methods), maneuver.rs (constants, Goal, fields, result keys, route_motor, launch rule, light_observe), maneuver_post.rs (route_adopted, begin_light_lane, light_lane_update with lane_goal_control), maneuver_open.rs (open_front_stop, open_light_entry_update), maneuver_wait.rs, dump.rs (every new attribute), supervisor.rs (deadline credit at both checks, right rule, entry_neutral, set_light), race.rs (--light-state)",
+    "validation": {
+      "python_suite": "Python full suite 919 OK (20 new: tests/test_route_y2_light_stop.py)",
+      "cargo_test": "passes; the new Rust test equals Python bit for bit on car run 108's light-entry scans (fixture with Python's posts and gantries); clippy count unchanged (32)",
+      "parity": "Python/Rust route-engine-parity-sweep all 202/203 (the known run-75 replay), including 18 new light cases (lamps off/green before the trigger, camera losing the light near, no light seen, red 3 s, gantry 1/2 m in, a faster car) bit for bit",
+      "supervisor_parity": "route-engine-parity-sweep all --supervisor 202/203 (the run-75 replay), the 18 light cases included",
+      "no_light": "without the light input the measured-car sweep 288/288 and the rules-range sweep 432/432 identical to round 108",
+      "simulation_broad": "288 cases (6 layouts, gain 1/1.3, speed 1/1.3, ESC/steer delays (.3,.25)/(.15,.1), gantry 0/1/2 m into the lane, red 3/10 s), 182 complete without the light: lamps off before the trigger 157 complete with no light penalty (green before the trigger: identical), camera losing the light within .6 m 156; 0 runs left a stop before green; the 12 no-stop penalties are 10 on the practice layout (old route) and 2 fast doc8x4 cars; the other failures are body-gate stops near the end board after the restart (pushes stronger than the measured bounds) and drive-budget ends on long courses",
+      "simulation_car_like": "108 cases (user8/doc8x4, gain and speed 1.15/1.3/1.4, three delay pairs, gantry at the mouth, red 3/10 s), 40 complete without the light: 38 (off), 40 (camera losing the light near), 0 early departures, effective time (line time - stop + penalty) median +2.6 s, max +3.7 s over the run without the light; the 2 failures: a top-up push in the last metre with a .2 s ESC lag (8 cm gate) "
+    },
+    "risks": [
+      "the camera's view of the lamps at the stop (gantry ~.35 m ahead of the lidar) is unmeasured: bench it with the car there",
+      "tick timing with the YOLO process beside the program (y1 measured 232-261 ms per frame on 2-4 threads) is unmeasured in a run",
+      "fast cars confirm the gantry too late and run through without stopping (simulation: 12 of 182, all faster than the car-like set)",
+      "the finish after the restart: pushes in the last metre on cars stronger than the measured bounds reach the 8 cm gate in simulation"
+    ],
+    "not_done": "the package (build-race + vision, y2) and the car run"
   }
 }

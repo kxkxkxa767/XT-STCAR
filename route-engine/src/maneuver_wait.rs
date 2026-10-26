@@ -510,7 +510,8 @@ impl Maneuver {
             None => self._current_scan.clone(),
         };
         let mut motors = Vec::new();
-        if self.route_stage == "light_lane" {
+        // round y2: the light stop coasts and waits at neutral from the light entry on
+        if self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()) {
             motors.push(NEUTRAL);
         }
         motors.extend_from_slice(&DRIVE_MOTORS);

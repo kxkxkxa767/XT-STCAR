@@ -1507,12 +1507,12 @@ class Console:
         motion = session['turn_motion']
         route = (session.get('continue_route') is True and isinstance(motion, MANEUVER_TYPES)
                  and getattr(motion, 'continue_route', False) is True)
+        # Round y2: a wait at the traffic light (the car standing at neutral)
+        # moves the total deadline on as it moves the drive clock.
+        credit = (report.get('turn') or {}).get('light_wait_credit_s') or 0.
         if route and session.get('phase') != 'coast':
             # Waiting never starts a new segment budget or pauses the original
             # cumulative drive clock. A deadline wins over same-tick recovery.
-            # Round y2: a wait at the traffic light (the car standing at neutral)
-            # moves the total deadline on as it moves the drive clock.
-            credit = (report.get('turn') or {}).get('light_wait_credit_s') or 0.
             if now >= session['deadline']+credit:
                 self.halt('turn_total_deadline')
                 return
@@ -1592,7 +1592,9 @@ class Console:
                 session['quality_wait_neutral_sequence'] = None
                 session['quality_resume_sequence'] = None
                 session['quality_wait_kind'] = 'post_pass_pause'
-                session['quality_wait_entry_neutral'] = (motion.route_stage == 'light_lane'
+                session['quality_wait_entry_neutral'] = ((motion.route_stage == 'light_lane'
+                                                          or (motion.route_stage == 'light_entry'
+                                                              and (report.get('turn') or {}).get('light_stop_active') is True))
                                                          and control.get('motor') == 1500)
                 session['quality_wait_front_sparse_entry'] = 'front_sparse' in report['quality_issues']
                 report['post_pass_pause_trigger'] = {
@@ -1662,7 +1664,7 @@ class Console:
         if route and session.get('phase') == 'quality_wait' and not self.turn_quality_wait_eligible(session):
             self.halt('turn_quality_wait_feedback_changed')
             return
-        if now >= session['deadline']:
+        if now >= session['deadline']+credit:
             self.halt('turn_total_deadline')
             return
         if not control.get('armed') or control.get('seq', -1) < self.arm_sequence:
@@ -1711,7 +1713,9 @@ class Console:
             session['quality_resume_sequence'] = None
             session['quality_wait_kind'] = ('recovery_hold' if getattr(motion, 'neutral_pause_kind', None) == 'recovery'
                                             else 'orbit_wait')
-            session['quality_wait_entry_neutral'] = (getattr(motion, 'route_stage', None) == 'light_lane'
+            session['quality_wait_entry_neutral'] = ((getattr(motion, 'route_stage', None) == 'light_lane'
+                                                      or (getattr(motion, 'route_stage', None) == 'light_entry'
+                                                          and decision.get('light_stop_active') is True))
                                                      and control.get('motor') == 1500)
             session['quality_wait_front_sparse_entry'] = False
             report['recovery_hold_trigger'] = {'scan_seq': self.scan['seq'], 'reason': decision.get('reason'),

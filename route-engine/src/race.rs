@@ -22,6 +22,15 @@
 //! starts once it has passed continuously for `--ready-hold-s`; `--start
 //! never` only shows and records the check for `--max-wait-s` and never arms
 //! (static tests on the car).
+//!
+//! Round y2: with `--light-state PATH` a reader thread polls that file (the
+//! read-only vision process, scripts/vision-log.py --light-state, replaces
+//! it atomically per frame: {"frame", "captured_s", "written_s", "red",
+//! "green"} on its own monotonic clock). Each new valid content becomes
+//! control['light'] = {"frame", "captured_at", "red", "green"} on every
+//! control line from then on, with captured_at on this program's clock: the
+//! receive time less the file's own written - captured. Every accepted one is
+//! appended to light.jsonl; an invalid content is counted and ignored.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -55,11 +64,12 @@ struct Options {
     lidar_device: String,
     max_wait_s: f64,
     status_s: f64,
+    light_state: Option<PathBuf>,
 }
 
 const USAGE: &str = "usage: route-engine race --bridge PATH --out NEW_DIR [--start enter|ready|never] [--ready-hold-s 3] \
 [--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
-[--control-device /dev/car] [--lidar-device /dev/laser]";
+[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
     let mut o = Options {
@@ -74,6 +84,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         lidar_device: "/dev/laser".into(),
         max_wait_s: 300.,
         status_s: 0.5,
+        light_state: None,
     };
     let mut i = 0;
     let value = |i: usize| args.get(i + 1).cloned().ok_or_else(|| format!("{} needs a value", args[i]));
@@ -95,6 +106,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--status-s" => o.status_s = number(i)?,
             "--control-device" => o.control_device = value(i)?,
             "--lidar-device" => o.lidar_device = value(i)?,
+            "--light-state" => o.light_state = Some(PathBuf::from(value(i)?)),
             "--demo" => {
                 o.demo = true;
                 i += 1;
@@ -119,6 +131,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
 
 enum Event {
     Line(&'static str, String, Instant),
+    Light(String, Instant),
     Coast(u64, String),
     Ended(&'static str, String),
     Enter,
@@ -168,6 +181,39 @@ fn reader(kind: &'static str, stream: impl Read + Send + 'static, tx: Sender<Eve
         }
         let _ = tx.send(Event::Ended(kind, format!("{kind} bridge ended")));
     });
+}
+
+/// Round y2: poll the vision process's light state file; each changed content
+/// goes to the control thread with its receive time.
+fn light_reader(path: PathBuf, tx: Sender<Event>) {
+    spawn_named("read-light", move || {
+        let mut last: Option<String> = None;
+        loop {
+            thread::sleep(Duration::from_millis(20));
+            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            if last.as_deref() == Some(text.as_str()) {
+                continue;
+            }
+            if tx.send(Event::Light(text.clone(), Instant::now())).is_err() {
+                return;
+            }
+            last = Some(text);
+        }
+    });
+}
+
+/// The light state file's content as control['light'] received at `now`, or
+/// None when it is not a valid one.
+fn light_of(text: &str, now: f64) -> Option<V> {
+    let v = parse_json(text.trim()).ok().filter(|v| v.is_dict())?;
+    let num = |key: &str| if v.get(key).is_num() { Some(v.get(key).f()) } else { None };
+    let score = |key: &str| num(key).filter(|s| (0. ..=1.).contains(s));
+    let age = num("written_s")? - num("captured_s")?;
+    if !v.get("frame").is_int() || v.get("frame").i() < 0 || !(0. ..=5.).contains(&age) {
+        return None;
+    }
+    Some(dict! {"frame" => v.get("frame").clone(), "captured_at" => now - age,
+                "red" => score("red")?, "green" => score("green")?})
 }
 
 enum FileOp {
@@ -290,6 +336,10 @@ struct Program {
     bridge_pids: Vec<(&'static str, u32)>,
     /// Receive time of the newest scan no tick has decided on yet.
     scan_at: Option<f64>,
+    /// Round y2: the newest light frame (control['light']), and the counts.
+    light: V,
+    light_updates: i64,
+    light_invalid: i64,
 }
 
 /// thread::spawn with a name (it shows in /proc and in the CPU account).
@@ -320,6 +370,9 @@ impl Program {
                     let value = parse_json(line.trim_end()).unwrap_or_else(|e| value_error(e));
                     if kind == "control" {
                         self.sup.accept_control(&value, now);
+                        if self.light.is_some() {
+                            self.sup.set_light(&self.light);
+                        }
                     } else {
                         self.sup.accept_lidar(value, now);
                     }
@@ -347,6 +400,20 @@ impl Program {
             Event::Coast(number, answer) => {
                 self.sup.coast_worker.finish_job(number, &answer);
                 self.dispatch();
+            }
+            Event::Light(text, received) => {
+                let now = self.at(received);
+                match light_of(&text, now) {
+                    Some(light) => {
+                        self.light_updates += 1;
+                        let mut row = to_json(&dict! {"received_at" => now, "light" => light.clone()});
+                        row.push('\n');
+                        let _ = self.files.send(FileOp::Append("light.jsonl", row));
+                        self.sup.set_light(&light);
+                        self.light = light;
+                    }
+                    None => self.light_invalid += 1,
+                }
             }
             Event::Enter => self.entered = true,
             Event::StdinClosed => self.stdin_closed = true,
@@ -460,6 +527,9 @@ pub fn main(args: &[String]) -> i32 {
     };
     reader("control", control.stdout.take().unwrap(), tx.clone());
     reader("lidar", lidar.stdout.take().unwrap(), tx.clone());
+    if let Some(path) = &o.light_state {
+        light_reader(path.clone(), tx.clone());
+    }
     if o.start == "enter" {
         let tx = tx.clone();
         spawn_named("read-stdin", move || {
@@ -513,6 +583,9 @@ pub fn main(args: &[String]) -> i32 {
         coast,
         bridge_pids,
         scan_at: None,
+        light: V::None,
+        light_updates: 0,
+        light_invalid: 0,
     };
     let code = run(&mut p);
     let _ = p.files.send(FileOp::Stop);
@@ -728,6 +801,8 @@ fn run(p: &mut Program) -> i32 {
         "route_controller" => "rust_program", "max_tick_compute_s" => result.get("max_tick_compute_s").clone(),
         "max_actual_gap_s" => result.get("max_actual_gap_s").clone(), "max_gap_breakdown" => result.get("max_gap_breakdown").clone(),
         "cpu" => cpu, "scan_to_tick" => scan_to_tick, "result" => result,
+        "light" => dict! {"state_file" => p.o.light_state.as_ref().map(|path| path.display().to_string()),
+                          "updates" => p.light_updates, "invalid" => p.light_invalid, "last" => p.light.clone()},
     };
     let _ = p.files.send(FileOp::Put("summary.json", to_json(&summary)));
     let _ = p.files.send(FileOp::Put("cli-result.json", to_json(&summary)));

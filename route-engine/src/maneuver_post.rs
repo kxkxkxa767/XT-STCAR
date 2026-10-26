@@ -181,7 +181,10 @@ impl Maneuver {
             }
         }
         let mut motors = Vec::new();
-        if self.route_stage == "light_lane" || self.route_stage == "start_lane" {
+        let coasting_stage = self.route_stage == "light_lane"
+            || self.route_stage == "start_lane"
+            || (self.route_stage == "light_entry" && self.light_stop_active());
+        if coasting_stage {
             motors.push(NEUTRAL);
         }
         motors.extend_from_slice(&DRIVE_MOTORS);
@@ -204,10 +207,13 @@ impl Maneuver {
         if self.servo > NEUTRAL {
             self._route_center_ack = V::None;
         } else if self.servo == NEUTRAL
-            && (motor_in(control.get("motor"), &DRIVE_MOTORS) || (self.route_stage == "light_lane" && eq_i(control.get("motor"), NEUTRAL)))
+            && (motor_in(control.get("motor"), &DRIVE_MOTORS)
+                || ((self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()))
+                    && eq_i(control.get("motor"), NEUTRAL)))
         {
             self._route_center_ack = control.pick(&["servo", "motor", "tick", "seq"]);
         }
+        self.light_entry_coast_ack_dropped();
         true
     }
 
@@ -1335,9 +1341,12 @@ impl Maneuver {
         self.light_alignment_evidence = evidence.clone();
         self.route_event("light_aligned", scan, control, evidence);
         self.route_stage = "light_lane";
-        self.lane_motor = ROUTE_SLOW_MOTOR;
+        if !self.light_stop_active() {
+            // round y2: a light stop's coast or wait goes on unchanged
+            self.lane_motor = ROUTE_SLOW_MOTOR;
+            self._lane_pulse = 0;
+        }
         self._lane_steering = CorridorSteering::default();
-        self._lane_pulse = 0;
         let e = dict! {"source_seq" => scan.idx("seq").clone()};
         self.route_event("light_lane", scan, control, e);
         self.steering_target = self.servo;
@@ -1394,7 +1403,7 @@ impl Maneuver {
     }
 
     /// _lane_decels(): (aim, guard, strong).
-    fn lane_decels(&self) -> (f64, f64, Option<f64>) {
+    pub(crate) fn lane_decels(&self) -> (f64, f64, Option<f64>) {
         let Some(decel) = self._lane_coast_decel else {
             return (LANE_STOP_DECEL_MPS2, LANE_STOP_DECEL_MIN_MPS2, None);
         };
@@ -1558,7 +1567,61 @@ impl Maneuver {
         if target < NEUTRAL && (self._route_center_ack.is_none() || self.servo > NEUTRAL) {
             target = NEUTRAL;
         }
+        let lane_target = open_pursuit.as_ref().map(|p| p.0.clone()).unwrap_or(V::None);
+        let light_ahead = self.light_stop_track(scan, now, control, heading, &lane_target);
+        let steering = dict! {
+            "source_seq" => scan.idx("seq").clone(), "steering_source" => source, "nominal_target_pwm" => natural,
+            "lane" => lane.clone(), "free_space" => space.clone(), "walls" => walls,
+        };
+        if self.light_stop_state == Some("waiting") && !self.light_wait(scan, now, control) {
+            // Round y2: stopped before the light, the steering pre-aimed along
+            // the lane for the run to the finish (the car does not move).
+            self.lane_feedback = steering.merged(&dict! {"light_stop" => "waiting_for_green", "motor" => self.lane_motor});
+            self.steering_target = if (target - self.servo).abs() >= LIGHT_WAIT_STEER_DEADBAND_PWM { target } else { self.servo };
+            self.natural_steering_target = Some(natural);
+            self.reason = "light_stop_waiting_for_green".into();
+            self.slew(now);
+            return self.result(now);
+        }
+        if self.light_stop_state == Some("approach") {
+            let (basis, speed_feedback) = self.lane_goal_control(scan, light_ahead, now, &LIGHT_GOAL);
+            self.lane_feedback = steering.merged(&speed_feedback);
+            if let Some(basis) = basis {
+                self.light_stop_reached(scan, now, control, &basis);
+            }
+            self.steering_target = target;
+            self.natural_steering_target = Some(natural);
+            self.reason = "light_stop_approach".into();
+            self.slew(now);
+            return self.result(now);
+        }
         let ahead = self.lane_front_range(scan);
+        let (basis, speed_feedback) = self.lane_goal_control(scan, ahead, now, &FINISH_GOAL);
+        self.lane_feedback = steering.merged(&speed_feedback);
+        if let Some(basis) = basis {
+            let mut finish = self.lane_feedback.clone();
+            finish.update(&dict! {
+                "received_at" => scan.idx("received_at").clone(),
+                "basis" => basis,
+                "finish_zone_certified" => false,
+            });
+            self.finish_evidence = finish;
+            let e = self.finish_evidence.clone();
+            self.route_event("finish_stop", scan, control, e);
+            return self.end_light_stage("route_finish_zone_stop", now, control);
+        }
+        self.steering_target = target;
+        self.natural_steering_target = Some(natural);
+        self.reason = "light_lane_follow_straight".into();
+        self.slew(now);
+        self.result(now)
+    }
+
+    /// _lane_goal_control(scan, ahead, now, goal): the light lane's
+    /// coast/push/kick/creep control toward a line ``ahead`` (the end board,
+    /// round y2 also the light line): (basis, feedback).
+    pub fn lane_goal_control(&mut self, scan: &V, ahead: Option<f64>, now: f64, goal: &Goal) -> (Option<String>, V) {
+        let kind = goal.kind;
         let speed = self.lane_speed(scan, ahead, 2);
         self.lane_coast_observe(now, speed);
         let held = self._lane_speed_last;
@@ -1579,7 +1642,7 @@ impl Maneuver {
         let coasting = !powered && self._power_cmd_at.is_none_or(|at| now >= at + ESC_LAG_S + LANE_ESC_SKEW_S);
         let kick = self._power_cmd_motor == Some(TRIAL_MOTOR);
         let aim_accel = if kick { LANE_POWER_ACCEL_MPS2 } else { LANE_PUSH_ACCEL_MPS2 };
-        let late = gap.is_some_and(|g| g <= LANE_FINISH_ZONE_GAP_M);
+        let late = gap.is_some_and(|g| g <= goal.zone_gap);
         let guard_accel = if kick {
             LANE_KICK_ACCEL_MAX_MPS2
         } else if late {
@@ -1598,78 +1661,88 @@ impl Maneuver {
             worst_gap = Some(self.lane_worst_gap(g, v, now, guard_decel, guard_accel, guard_reaction, 0.));
         }
         let stopped = speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS);
-        let in_zone = gap.is_some_and(|g| g <= LANE_FINISH_ZONE_GAP_M);
-        let body_in_zone = gap.is_some_and(|g| g <= LANE_FINISH_BODY_GAP_M);
-        let kick_room = gap.is_some_and(|g| g >= LANE_FINISH_MIN_GAP_M + LANE_KICK_TRAVEL_M);
+        let in_zone = gap.is_some_and(|g| g <= goal.zone_gap);
+        let body_in_zone = gap.is_some_and(|g| g <= goal.body_gap);
+        let kick_room = gap.is_some_and(|g| g >= goal.min_gap + LANE_KICK_TRAVEL_M);
         let rested = self._power_cmd_at.is_none_or(|at| now - at >= LANE_KICK_REST_S);
         // Round 105: the finish creep.
         let creep_room = in_zone
             && !body_in_zone
             && !kick_room
-            && gap.unwrap() >= LANE_FINISH_MIN_GAP_M + LANE_CREEP_TRAVEL_M
-            && (self._lane_creeps < LANE_CREEP_MAX || !rested);
-        let mut basis: Option<&str> = None;
+            && gap.unwrap() >= goal.min_gap + goal.creep_travel
+            && (self._lane_creeps < goal.creep_max || !rested);
+        // Round y2: the light stop ends stopped only; so does the finish after a
+        // restart from a light wait (the launch's own coast fit reads low).
+        let restarted = self.light_stop_evidence.is_dict() && self.light_stop_evidence.has("go");
+        let mut basis: Option<String> = None;
         if speed_known && stopped && body_in_zone {
-            basis = Some("stopped_with_the_whole_car_in_the_finish_zone");
+            basis = Some(format!("stopped_with_the_whole_car_in_the_{kind}_zone"));
         } else if speed_known && stopped && in_zone && !kick_room && !creep_room {
             basis = Some(if self._lane_creeps != 0 {
-                "stopped_front_in_finish_zone_creeps_used"
+                format!("stopped_front_in_{kind}_zone_creeps_used")
             } else {
-                "stopped_front_in_finish_zone_restart_could_reach_the_board"
+                format!("stopped_front_in_{kind}_zone_restart_could_reach_the_{}", if kind == "finish" { "board" } else { "line" })
             });
-        } else if speed_known
+        } else if kind == "light" && gap.is_none() && speed_known && stopped {
+            basis = Some("stopped_with_the_light_line_lost_in_the_zone".into());
+        } else if kind == "finish"
+            && !restarted
+            && speed_known
             && coasting
             && !stopped
             && strong_decel.is_some()
             && gap.is_some()
-            && stop_gap.unwrap() >= LANE_FINISH_MIN_GAP_M
-            && Self::lane_stop(gap.unwrap(), v_aim, strong_decel.unwrap(), 0., 0., 0., 0.) <= LANE_FINISH_BODY_GAP_M
+            && stop_gap.unwrap() >= goal.min_gap
+            && Self::lane_stop(gap.unwrap(), v_aim, strong_decel.unwrap(), 0., 0., 0., 0.) <= goal.body_gap
         {
-            basis = Some("coast_stops_the_whole_car_in_the_finish_zone");
+            basis = Some("coast_stops_the_whole_car_in_the_finish_zone".into());
         }
-        self.lane_feedback = dict! {
-            "source_seq" => scan.idx("seq").clone(), "steering_source" => source,
-            "nominal_target_pwm" => natural, "lane" => lane.clone(), "free_space" => space.clone(), "walls" => walls,
+        let mut feedback = dict! {
             "front_range_m" => ahead, "front_gap_m" => gap, "speed_mps" => speed, "speed_for_cut_mps" => v,
-            "speed_aim_mps" => v_aim, "speed_known" => speed_known, "speed_basis" => "closing_rate_on_board_ahead_axis",
+            "speed_aim_mps" => v_aim, "speed_known" => speed_known,
+            "speed_basis" => if kind == "finish" { "closing_rate_on_board_ahead_axis" } else { "closing_rate_on_light_line_axis" },
             "predicted_stop_gap_m" => stop_gap, "worst_stop_gap_m" => worst_gap, "in_finish_zone" => in_zone,
             "whole_car_in_finish_zone" => body_in_zone, "pipeline_power_s" => aim_power,
             "coast_decel_mps2" => decel, "guard_decel_mps2" => guard_decel, "strong_decel_mps2" => strong_decel,
             "coast_decel_se_mps2" => self._lane_coast_decel_se,
             "coast_decel_measured" => self._lane_coast_decel.is_some(),
-            "motor_before" => self.lane_motor, "swept_path_certified" => false, "traffic_light_vision" => false,
-            "creep_room" => creep_room, "creeps" => self._lane_creeps,
+            "motor_before" => self.lane_motor, "swept_path_certified" => false, "traffic_light_vision" => self.light_vision,
+            "creep_room" => creep_room, "creeps" => self._lane_creeps, "goal" => kind,
         };
-        if let Some(basis) = basis {
-            let mut finish = self.lane_feedback.clone();
-            finish.update(&dict! {
-                "received_at" => scan.idx("received_at").clone(),
-                "basis" => basis,
-                "finish_zone_certified" => false,
-            });
-            self.finish_evidence = finish;
-            let e = self.finish_evidence.clone();
-            self.route_event("finish_stop", scan, control, e);
-            return self.end_light_stage("route_finish_zone_stop", now, control);
+        if basis.is_some() {
+            return (basis, feedback);
         }
-        if gap.is_some() && (stop_gap.unwrap() <= LANE_FINISH_TARGET_GAP_M || worst_gap.unwrap() <= LANE_FINISH_MIN_GAP_M) {
+        let launching = self._light_launch_until.is_some_and(|until| now < until);
+        if gap.is_none() && kind == "light" {
+            self.lane_motor = NEUTRAL; // round y2: no light line this scan: coast
+        } else if gap.is_some() && (stop_gap.unwrap() <= goal.target_gap || worst_gap.unwrap() <= goal.min_gap) {
             self.lane_motor = NEUTRAL;
+        } else if launching {
+            self.lane_motor = TRIAL_MOTOR; // round y2: the launch after green
+        } else if self._light_launch_until.is_some() && self.lane_motor == TRIAL_MOTOR {
+            self.lane_motor = ROUTE_SLOW_MOTOR; // the launch goes on at 1550
         } else if speed.is_none() {
             self.lane_motor = ROUTE_SLOW_MOTOR;
         } else if stopped {
             self.lane_motor = if (kick_room || creep_room) && (rested || self._lane_pulse > 0) { TRIAL_MOTOR } else { NEUTRAL };
         } else if self.lane_motor == ROUTE_SLOW_MOTOR {
         } else if self.lane_motor == NEUTRAL
-            && stop_gap.unwrap() > LANE_FINISH_TARGET_GAP_M + LANE_TOPUP_BAND_M
+            && stop_gap.unwrap() > goal.target_gap + LANE_TOPUP_BAND_M
             && v_aim - decel * LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
-            && self.lane_worst_gap(gap.unwrap(), v, now, guard_decel, guard_accel, guard_reaction, LANE_PUSH_MIN_S) > LANE_FINISH_MIN_GAP_M
+            && self.lane_worst_gap(gap.unwrap(), v, now, guard_decel, guard_accel, guard_reaction, LANE_PUSH_MIN_S) > goal.min_gap
         {
             self.lane_motor = ROUTE_SLOW_MOTOR;
         } else {
             self.lane_motor = NEUTRAL;
         }
+        if self.lane_motor != TRIAL_MOTOR && self._light_launch_until.is_some() {
+            self._light_launch_until = None; // after the launch: the lane's own pushes and kicks
+        }
         let frames = if self._lane_creep { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
-        if self.lane_motor == TRIAL_MOTOR && self._lane_pulse >= frames {
+        if self.lane_motor == TRIAL_MOTOR && launching {
+            self._lane_pulse = 0;
+            self._lane_creep = false;
+        } else if self.lane_motor == TRIAL_MOTOR && self._lane_pulse >= frames {
             self.lane_motor = NEUTRAL;
             self._lane_pulse = 0;
             self._lane_creep = false;
@@ -1683,13 +1756,9 @@ impl Maneuver {
             self._lane_pulse = 0;
             self._lane_creep = false;
         }
-        self.lane_feedback.set("motor", self.lane_motor);
-        self.lane_feedback.set("creeps", self._lane_creeps);
-        self.steering_target = target;
-        self.natural_steering_target = Some(natural);
-        self.reason = "light_lane_follow_straight".into();
-        self.slew(now);
-        self.result(now)
+        feedback.set("motor", self.lane_motor);
+        feedback.set("creeps", self._lane_creeps);
+        (None, feedback)
     }
 
     /// _light_update(scan, now, control).

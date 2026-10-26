@@ -855,7 +855,9 @@ impl Maneuver {
     /// _open_front_stop(scan): (ahead, speed, stop_at).
     pub fn open_front_stop(&mut self, scan: &V) -> (Option<f64>, Option<f64>, f64) {
         let ahead = self.lane_front_range(scan);
-        let speed = self.lane_speed(scan, ahead, 2);
+        // history only: the light lane continues it (round y2: not while the
+        // light stop's own history runs)
+        let speed = if self.light_stop_active() { None } else { self.lane_speed(scan, ahead, 2) };
         let v = LANE_SPEED_UNKNOWN_MPS;
         let stop_at = FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * LANE_REACTION_S;
         (ahead, speed, stop_at)
@@ -1432,9 +1434,19 @@ impl Maneuver {
             return self.result(now);
         };
         let heading = heading.unwrap();
+        let light_ahead = self.light_stop_track(scan, now, control, Some(heading), &lane);
         let entry = self.open_light_lane_entry(scan, heading, &lane);
         if entry.is_some() {
             return self.begin_light_lane(scan, now, control, entry);
+        }
+        if self.light_stop_state == Some("waiting") && !self.light_wait(scan, now, control) {
+            // Round y2: stopped before the light still in the entry.
+            self.natural_steering_target = Some(natural);
+            let target = self.open_right_gate(natural);
+            self.steering_target = if (target - self.servo).abs() >= LIGHT_WAIT_STEER_DEADBAND_PWM { target } else { self.servo };
+            self.reason = "light_stop_waiting_for_green".into();
+            self.slew(now);
+            return self.result(now);
         }
         let walls = corridor_walls(scan);
         let (axis_ahead, speed, stop_at) = self.open_front_stop(scan);
@@ -1456,6 +1468,15 @@ impl Maneuver {
         if ahead.is_some_and(|a| a <= stop_at) {
             self.begin_recovery_hold("open_board_ahead_before_light_lane", now, control);
             return self.result(now);
+        }
+        if self.light_stop_state == Some("approach") {
+            // Round y2: the light lane's stop control on the light line drives
+            // the motor from the entry on (the coast must start ~2-3 m before).
+            let (basis, feedback) = self.lane_goal_control(scan, light_ahead, now, &LIGHT_GOAL);
+            self.lane_feedback = feedback;
+            if let Some(basis) = basis {
+                self.light_stop_reached(scan, now, control, &basis);
+            }
         }
         self.natural_steering_target = Some(natural);
         self.steering_target = self.open_right_gate(natural);

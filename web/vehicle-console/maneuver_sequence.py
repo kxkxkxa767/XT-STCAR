@@ -913,11 +913,18 @@ LIGHT_FRAME_MAX_AGE_S = 1.
 # (the rules' red lasts at most 10 s).
 LIGHT_WAIT_MAX_S = 12.
 # No light at all (no red or green score >= LIGHT_RED_MIN_SCORE in a frame taken
-# after the stop) after this: the stop was not at the light (rules: any other
-# stop over 10 s loses the run; passing the sensor turns the light red at
-# once). Go, and look for a gantry again at least LIGHT_REARM_MIN_M ahead
-# (simulation: posts at the divider's end confirmed a line there; the car
-# waited 12 s and then passed the real light 2 m on without a stop).
+# since the gantry was confirmed) after this: the stop was not at the light
+# (rules: any other stop over 10 s loses the run; passing the sensor turns the
+# light red at once). Go, and look for a gantry again at least
+# LIGHT_REARM_MIN_M ahead (simulation: posts at the divider's end confirmed a
+# line there; the car waited 12 s and then passed the real light 2 m on
+# without a stop). Frames from the approach count: stopped, the lamps stand
+# ~.35 m ahead of the lidar, the camera saw them from .75 m (2026-10-25
+# bench) but nearer is unmeasured; a red seen on the way in keeps the wait
+# (simulation, camera losing the light within .6: a 4 s no-light release
+# went in the red). Green with no red since the gantry: not the light's stop
+# either (the sensor before the zone turns it red; a stop before the sensor
+# sees the lamps' state before the trigger): go and look again as well.
 LIGHT_NO_LIGHT_WAIT_S = 4.
 LIGHT_REARM_MIN_M = 1.
 # The wait (the car stands at neutral) is not drive time: the cumulative drive
@@ -929,13 +936,17 @@ LIGHT_REARM_MIN_M = 1.
 # this are not sent (the car does not move; the play made 1500 +-5 flip the
 # wheels by 80 PWM every scan in simulation).
 LIGHT_WAIT_STEER_DEADBAND_PWM = 15
-# After green: 1560 for the ESC lag plus LANE_LAUNCH_S (the resume launch of
-# the open stages), then 1550 until the coast into the finish zone is aimed;
+# After green: 1560 for the ESC lag plus LIGHT_LAUNCH_S, then 1550 (the light
+# lane's cruise, car run 108) until the coast into the finish zone is aimed;
 # restart kicks from rest (3 frames, then a rest) took ~1.5 s per .4 m. Only
 # with LIGHT_LAUNCH_MIN_GAP_M to the end board (simulation: a gantry 2 m into
 # the lane left 1.45 m and the launch ran into the end board); nearer, the
-# lane's own kicks and pushes.
+# lane's own kicks and pushes. (Simulation, the open stages' LANE_LAUNCH_S .4:
+# fast cars with a .2 s ESC lag peaked at 1.7 m/s from rest, the lagging speed
+# estimate cut the coast late and the 8 cm body gate stopped them .09 m
+# before the end board, 8 of 40 car-like cases.)
 LIGHT_LAUNCH_MIN_GAP_M = 2.5
+LIGHT_LAUNCH_S = .2
 # The light's zone leaves .21 m for the front (LIGHT_STOP_MIN_GAP_M to
 # LIGHT_STOP_BODY_GAP_M), the finish's .35: its creep bound (.27, the kick's
 # model scaled) left a car stopped at .32 waiting with the rear .03 outside
@@ -954,6 +965,12 @@ LIGHT_CREEP_MAX = 6
 # that pushed a car stopped .6 m before the light through it in the red): it
 # coasts, and stopped there it waits as stopped in the zone.
 LIGHT_LINE_HOLD_S = .5
+# A front measured (legs or board odometry, not held) this far past the light
+# line while approaching: the stop was missed (simulation, fast cars: the
+# coast ran .3-.6 m through the line, stopped there and waited 12 s: rules,
+# any other stop over 10 s loses the run). The approach ends; a gantry at
+# least LIGHT_REARM_MIN_M ahead may start a new one.
+LIGHT_PASSED_M = .05
 # One leg alone confirms a gantry only with the car within this of the lane
 # axis (simulation: a single leg confirmed across the lane at 84 deg was lost
 # while turning); two legs at any heading (simulation, 5 m course: the pair
@@ -1620,9 +1637,10 @@ class ManeuverSequence(TurnMotion):
         self._light_gantry_seen = []
         self._light_line = None
         self._light_wait_since = None
-        self._light_red_frames = 0
+        self._light_red_frames = 0  # red frames taken since the gantry
         self._light_launch_until = None
-        self._light_seen_waiting = False
+        self._light_seen = False  # a red or green frame taken since the gantry
+        self._light_gantry_since = None
         self._light_rearm_min_m = None
         self.light_wait_credit_s = 0.
         self._light_wait_tick = None
@@ -2542,7 +2560,10 @@ class ManeuverSequence(TurnMotion):
                 or self.route_stage not in POST_PASS_STAGES or self.quality_resume_pending
                 or not _number(now) or now < self.last_now
                 or control.get('armed') is not True
+                # round y2: the light stop coasts and waits at neutral from the
+                # light entry on (a quality fault there halted the run)
                 or control.get('motor') not in ((NEUTRAL,)+DRIVE_MOTORS if self.route_stage == 'light_lane'
+                                                or (self.route_stage == 'light_entry' and self._light_stop_active())
                                                 else DRIVE_MOTORS)
                 or control.get('command_acked') is not True
                 or not RIGHT_EXIT_MIN_PWM <= control.get('servo', 0) == self.servo <= SERVO_MAX
@@ -5926,11 +5947,11 @@ class ManeuverSequence(TurnMotion):
         red, green = (red if _number(red) else 0.), (green if _number(green) else 0.)
         self._light_frames.append((frame, captured, red, green))
         del self._light_frames[:-(LIGHT_GREEN_FRAMES+2)]
-        if self.light_stop_state == 'waiting' and red >= LIGHT_RED_MIN_SCORE:
-            self._light_red_frames += 1
-        if (self.light_stop_state == 'waiting' and captured >= self._light_wait_since
-                and max(red, green) >= LIGHT_RED_MIN_SCORE):
-            self._light_seen_waiting = True
+        if self._light_stop_active() and captured >= self._light_gantry_since:
+            if red >= LIGHT_RED_MIN_SCORE:
+                self._light_red_frames += 1
+            if max(red, green) >= LIGHT_RED_MIN_SCORE:
+                self._light_seen = True
 
     @staticmethod
     def _light_lane_band(lane):
@@ -6098,14 +6119,20 @@ class ManeuverSequence(TurnMotion):
         if not self.light_vision or heading is None or self.light_stop_state in ('waiting', 'released'):
             return None
         ahead = self._light_line_ahead(scan, heading, lane, now)
-        if (ahead is None and self.light_stop_state == 'approach'
-                and self._light_line['along_m']-FRONT_BODY_EXTENT_M > LIGHT_STOP_ZONE_GAP_M):
-            lost = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'route_stage': self.route_stage,
-                    'line': copy.deepcopy(self._light_line)}
+        passed = (ahead is not None and self.light_stop_state == 'approach'
+                  and self._light_line['source'] in ('legs', 'board_odometry')
+                  and ahead-FRONT_BODY_EXTENT_M < -LIGHT_PASSED_M)
+        if passed or (ahead is None and self.light_stop_state == 'approach'
+                      and self._light_line['along_m']-FRONT_BODY_EXTENT_M > LIGHT_STOP_ZONE_GAP_M):
+            key = 'passed' if passed else 'lost'
+            ended = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'route_stage': self.route_stage,
+                     'line': copy.deepcopy(self._light_line)}
             self.light_stop_evidence = {**self.light_stop_evidence,
-                                        'lost': (self.light_stop_evidence.get('lost') or [])+[lost]}
+                                        key: (self.light_stop_evidence.get(key) or [])+[ended]}
             self.light_stop_state, self._light_line = None, None
             self._light_gantry_seen.clear()
+            if passed:
+                self._light_rearm_min_m = LIGHT_REARM_MIN_M
             self._lane_speed(scan, None)
             self._light_entry_coast_ack_dropped()
             if self.route_stage != 'light_lane':
@@ -6118,6 +6145,7 @@ class ManeuverSequence(TurnMotion):
                     'seen': copy.deepcopy(self._light_gantry_seen),
                     'basis': 'gantry_legs_confirmed_on_consecutive_scans'}
         self.light_stop_state = 'approach'
+        self._light_gantry_since, self._light_red_frames, self._light_seen = now, 0, False
         self.light_stop_evidence = {**(self.light_stop_evidence or {}), 'gantry': evidence}
         self._route_event('light_gantry', scan, control, evidence)
         # The approach's speed is the closing rate on the line itself, from the
@@ -6136,8 +6164,6 @@ class ManeuverSequence(TurnMotion):
                 'zone_m': LIGHT_ZONE_M, 'stop_zone_certified': False}
         self.light_stop_state = 'waiting'
         self._light_wait_since = self._light_wait_tick = now
-        self._light_red_frames = 0
-        self._light_seen_waiting = False
         self.lane_motor = NEUTRAL
         self._lane_pulse, self._lane_creep = 0, False
         self.light_stop_evidence = {**self.light_stop_evidence, 'stop': stop}
@@ -6147,7 +6173,9 @@ class ManeuverSequence(TurnMotion):
     def _light_wait(self, scan, now, control):
         """Round y2: stopped before the light; True once released: green (and no
         red) in the last LIGHT_GREEN_FRAMES frames, each taken after the stop and
-        at most LIGHT_FRAME_MAX_AGE_S old, or LIGHT_WAIT_MAX_S without that."""
+        at most LIGHT_FRAME_MAX_AGE_S old, or LIGHT_WAIT_MAX_S without that; no
+        light seen since the gantry, or green without red, releases it as not
+        the light (LIGHT_NO_LIGHT_WAIT_S)."""
         waited_now = max(0., now-self._light_wait_tick)
         self._light_wait_tick = now
         self.drive_since += waited_now  # standing is not drive time
@@ -6158,7 +6186,7 @@ class ManeuverSequence(TurnMotion):
                  and all(f[1] >= self._light_wait_since and now-f[1] <= LIGHT_FRAME_MAX_AGE_S
                          and f[3] >= LIGHT_GREEN_MIN_SCORE and f[2] < LIGHT_RED_MIN_SCORE for f in frames))
         waited = now-self._light_wait_since
-        no_light = not self._light_seen_waiting and waited >= LIGHT_NO_LIGHT_WAIT_S
+        no_light = not self._light_seen and waited >= LIGHT_NO_LIGHT_WAIT_S
         if not green and not no_light and waited < LIGHT_WAIT_MAX_S:
             # the board ahead's history for the restart (the releasing scan
             # leaves it to the stage's own speed estimate: one entry per scan)
@@ -6168,17 +6196,18 @@ class ManeuverSequence(TurnMotion):
         if (self.route_stage == 'light_lane' and board is not None
                 and board-FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M):
             # (in the light entry the open stages' own resume launch applies)
-            self._light_launch_until = now+ESC_LAG_S+LANE_LAUNCH_S
+            self._light_launch_until = now+ESC_LAG_S+LIGHT_LAUNCH_S
         go = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'waited_s': waited,
-              'basis': ('green_in_fresh_frames_after_the_stop' if green
-                        else 'no_light_seen_after_the_stop_looking_again' if no_light
+              'basis': ('green_in_fresh_frames_after_the_stop' if green and self._light_red_frames
+                        else 'green_without_red_since_the_gantry_looking_again' if green
+                        else 'no_light_seen_since_the_gantry_looking_again' if no_light
                         else 'green_not_seen_light_wait_max'),
-              'frames': [list(f) for f in frames], 'red_frames_while_waiting': self._light_red_frames,
+              'frames': [list(f) for f in frames], 'red_frames_since_gantry': self._light_red_frames,
               'route_stage': self.route_stage, 'launch': self._light_launch_until is not None}
         self.light_stop_evidence = {**self.light_stop_evidence, 'go': go}
         self._route_event('light_go', scan, control, go)
         self._lane_creeps = 0
-        if no_light and not green:
+        if (no_light and not green) or (green and not self._light_red_frames):
             # not the light: a later gantry may start a new stop
             self.light_stop_evidence = {**self.light_stop_evidence,
                                         'rearmed': (self.light_stop_evidence.get('rearmed') or [])+[go]}
@@ -6327,7 +6356,12 @@ class ManeuverSequence(TurnMotion):
         # coasting where even a coast at the strong measured decel (_lane_decels)
         # stops in it (and the aimed one short of the board); stopped with only
         # the front in it where neither a kick nor a creep may go on, end there.
-        # Round y2: the light stop ends stopped only (rules: 若未停车 +50 s).
+        # Round y2: the light stop ends stopped only (rules: 若未停车 +50 s); so
+        # does the finish after a restart from a light wait (simulation: the
+        # launch's own coast fitted .34-.44 m/s2 on a .6 m/s2 car while the
+        # lagging speed estimate still read the peak, and that coast ended the
+        # run .14 m short of the zone; stopped short, the kick or creep goes on).
+        restarted = isinstance(self.light_stop_evidence, dict) and 'go' in self.light_stop_evidence
         basis = None
         if speed_known and stopped and body_in_zone:
             basis = f'stopped_with_the_whole_car_in_the_{kind}_zone'
@@ -6336,8 +6370,8 @@ class ManeuverSequence(TurnMotion):
                      else f'stopped_front_in_{kind}_zone_restart_could_reach_the_{"board" if kind == "finish" else "line"}')
         elif kind == 'light' and gap is None and speed_known and stopped:
             basis = 'stopped_with_the_light_line_lost_in_the_zone'
-        elif (kind == 'finish' and speed_known and coasting and not stopped and strong_decel is not None
-              and gap is not None and stop_gap >= min_gap
+        elif (kind == 'finish' and not restarted and speed_known and coasting and not stopped
+              and strong_decel is not None and gap is not None and stop_gap >= min_gap
               and self._lane_stop(gap, v_aim, strong_decel, 0., 0., 0., 0.) <= body_gap):
             basis = 'coast_stops_the_whole_car_in_the_finish_zone'
         feedback = {'front_range_m': ahead, 'front_gap_m': gap, 'speed_mps': speed, 'speed_for_cut_mps': v,
