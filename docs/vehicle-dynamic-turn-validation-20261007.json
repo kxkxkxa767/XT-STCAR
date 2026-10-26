@@ -24474,8 +24474,8 @@
     "date": "2026-10-26",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "round 107 (649b2de) on the car",
     "user": [
       "你改108轮吧，改完后跑一次，跑完我把车放红绿灯前，你用yolo模型识别一下"
@@ -24501,6 +24501,40 @@
       "rules_range": "432 (nominal and measured cars, plain and gantry with a .25 m wider light lane): success 351 -> 350 (nominal gantry L5W6 lane .9: a light-entry pause held 1380 while coasting into the outer board, the base also paused there; one invalid_turn_trial_output flip each way), light-entry pauses 49 -> 50 runs, board gaps and finish times unchanged in median"
     },
     "risks": "a model result; the real car's gain and lag are estimates. The light entry still holds a strong right when the second loop exits steeply; speed in the open stages is not governed (fresh battery: faster)",
-    "expected_on_the_car": "a gentler light entry and hand-over near centre; the first loop as in run 107"
+    "expected_on_the_car": "a gentler light entry and hand-over near centre; the first loop as in run 107",
+    "deployment": {
+      "date": "2026-10-26",
+      "commit": "c21a8c3",
+      "route_engine_sha256": "4cf8ea607bb97581130728712c4ab8991ead393f3baffe816afe688b3939eea5",
+      "bridge": "unchanged fe5c0056...",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn108-20261026-165312",
+      "stage": "/home/bianbu/xt-stcar-console/stage-claude-turn108-20261026-165312",
+      "helper": "trial108.py sha256 57c3b3e3... (repeatable)",
+      "fresh_checks": "before108-fresh.json vs claude-turn107-package.json and after108-deploy-fresh.json vs claude-turn108-package.json: six fresh locked ready samples (rust_engine), 17 hashes and settings; continue_route preview true",
+      "result": "turn108_actual_20261026"
+    }
+  },
+  "turn108_actual_20261026": {
+    "date": "2026-10-26",
+    "author": "Claude",
+    "physical_trial_executed": true,
+    "start": "start-round.py 108 (16:55:57); start lane width .934 m, front 2.05 m, side clearance .43 m, heading -3.6 deg",
+    "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261026-108, 10/10 files sha256 equal; after the run locked 1500/1500, not armed",
+    "result": "route_finish_zone_stop: the whole car in the finish zone .384 m from the end board, one creep; start to the front in the zone 17.3 s, to the stop 18.6 s (runs 106-2/106-8: 18.3/19.6 s); no quality wait; max control gap .021 s, max tick compute .0048 s",
+    "events_s": {
+      "first_approach_handover": 4.4,
+      "first_pass": 6.8,
+      "second_handover": 7.9,
+      "second_pass": 11.1,
+      "light_lane": 13.9
+    },
+    "body_gaps_m": {
+      "first_support": 0.185,
+      "second_loop": 0.329,
+      "light_entry": 0.234,
+      "light_lane": 0.155,
+      "basis": "first support: its lidar returns against the body box; others: the engine's current known min distance"
+    },
+    "light_entry": "commands 1456 -> 1430 -> 1500 -> 1540 (run 107: down to 1382); heading against the outer board -21 -> +5 deg; hand-over at scan 155 with 1504 (run 107: 1382); in the light lane the side boards stayed within +-4 deg of the heading"
   }
 }
