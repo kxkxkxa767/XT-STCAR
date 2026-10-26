@@ -24551,6 +24551,7 @@
     "detections": "green_light in 30/30 frames, score .886-.891 (median .889), box x 382-455 y 133-198 px (the lit right lamp of the gantry's three); nothing else at conf .10 (the unlit red and amber lamps were not taken for lights)",
     "speed_on_the_car": "median inference 261 ms with 2 threads (3.3 frames/s), 232 ms with 4, 366 ms with 6, beside the console and its blue-cone shadow vision (load ~10 on 8 cores); in a race run the console is stopped. The SpacemiT ONNX Runtime used by the Rust vision path is not tried yet",
     "trigger_position_lidar": "where the user says the light is triggered: gantry left leg .75 m ahead of the lidar, .53 m left (2 bins); right leg about as far ahead at the right board (.40 m right); the car front (lidar + .20 m) ~.55 m before the legs; lane ~1.05 m between the boards (left .65 m, right .40 m); the end board 4.03 m straight ahead",
-    "next": "red: capture again while the light is red (user re-triggers); y2: stop for red before the gantry and go on green; ask the user the size and position of the pre-light stop zone"
+    "next": "red: capture again while the light is red (user re-triggers); y2: stop for red before the gantry and go on green; ask the user the size and position of the pre-light stop zone",
+    "second_capture": "600 frames of /camera.jpg over ~3 min (vision-bench-20261025-182000, 600 files sha256 equal) meant for a red light: the car stood elsewhere facing an empty lane, no gantry in view, so no red was captured. race4 on the Mac (onnxruntime 1.29, conf .10): no red_light or green_light in 600 frames; crosswalk only at .10-0.18 (below .25)"
   }
 }
