@@ -520,6 +520,7 @@ impl Maneuver {
         if self.route_stage == "light_lane" && board.is_some_and(|b| b - FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M) {
             // (in the light entry the open stages' own resume launch applies)
             self._light_launch_until = Some(now + ESC_LAG_S + LIGHT_LAUNCH_S);
+            self._light_launch_from = Some(now);
         }
         let basis = if green && self._light_red_frames != 0 {
             "green_in_fresh_frames_after_the_stop"

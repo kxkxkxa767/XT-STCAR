@@ -128,7 +128,7 @@ impl Maneuver {
             "light_stop_state" => self.light_stop_state, "light_stop_evidence" => self.light_stop_evidence.clone(),
             "_light_gantry_seen" => V::list(self._light_gantry_seen.clone()), "_light_line" => self._light_line.clone(),
             "_light_wait_since" => self._light_wait_since, "_light_red_frames" => self._light_red_frames,
-            "_light_launch_until" => self._light_launch_until, "_light_seen" => self._light_seen,
+            "_light_launch_until" => self._light_launch_until, "_light_launch_from" => self._light_launch_from, "_light_seen" => self._light_seen,
             "_light_gantry_since" => self._light_gantry_since, "_light_red_at" => self._light_red_at,
             "_light_stop_red_frames" => self._light_stop_red_frames, "_light_center_shift_m" => self._light_center_shift_m,
             "_light_rearm_min_m" => self._light_rearm_min_m, "light_wait_credit_s" => self.light_wait_credit_s,

@@ -222,7 +222,7 @@ pub fn light_center_max_heading_rad() -> f64 {
 pub const LIGHT_CENTER_MAX_SHIFT_M: f64 = 0.15;
 pub const LIGHT_WAIT_STEER_DEADBAND_PWM: i64 = 15;
 pub const LIGHT_LAUNCH_MIN_GAP_M: f64 = 2.5;
-pub const LIGHT_LAUNCH_S: f64 = 0.2;
+pub const LIGHT_LAUNCH_S: f64 = 0.6;
 pub const LIGHT_CREEP_TRAVEL_M: f64 = 0.20;
 pub const LIGHT_CREEP_MAX: i64 = 6;
 pub const LIGHT_LINE_HOLD_S: f64 = 0.5;
@@ -566,6 +566,7 @@ pub struct Maneuver {
     pub _light_wait_since: Option<f64>,
     pub _light_red_frames: i64,
     pub _light_launch_until: Option<f64>,
+    pub _light_launch_from: Option<f64>,
     pub _light_seen: bool,
     pub _light_gantry_since: Option<f64>,
     pub _light_red_at: Option<f64>,
@@ -855,6 +856,7 @@ impl Maneuver {
             _light_wait_since: None,
             _light_red_frames: 0,
             _light_launch_until: None,
+            _light_launch_from: None,
             _light_seen: false,
             _light_gantry_since: None,
             _light_red_at: None,

@@ -135,6 +135,37 @@ class LightFacing(unittest.TestCase):
         self.assertEqual(motion._light_center_shift_m, before)  # one leg: kept
 
 
+class LightLaunch(unittest.TestCase):
+    """Car run y3-2: .64 s into the launch (1560 since 26.55 s, a .9 s rate window)
+    the median rate read .39 m/s with 3.25 m to the board; the guard put the
+    stop past the board and ended the launch at once."""
+    lane_motion = lane.LightLaneTests.lane_motion
+    scan = y2.LightWait.scan
+    waiting = y2.LightWait.waiting
+
+    def guard(self, launch_from):
+        motion = self.lane_motion()
+        motion._power_since, motion._power_cmd_at, motion._power_prev_end = 26.55, 27.17, None
+        motion._lane_ranges = [(26.29+.1*k, 26.29+.1*k, 3.6) for k in range(10)]
+        motion._light_launch_from = launch_from
+        return motion._lane_worst_gap(3.25, .39, 27.19, ms.LANE_STOP_DECEL_MIN_MPS2, ms.LANE_KICK_ACCEL_MAX_MPS2,
+                                      ms.LANE_REACTION_BASE_S)
+
+    def test_from_rest_the_kick_bound_keeps_the_launch_going(self):
+        self.assertLess(self.guard(None), ms.LANE_FINISH_MIN_GAP_M)  # as on the car: cut
+        bounded = self.guard(26.55)
+        self.assertGreater(bounded, ms.LANE_FINISH_MIN_GAP_M)
+        self.assertLess(bounded, 1.3)  # still a 1.2 m/s peak at the weakest coast
+        self.assertEqual(self.guard(20.), self.guard(None))  # long powered: the rate itself
+
+    def test_the_launch_sets_the_bound_and_lasts_longer(self):
+        self.assertEqual(ms.LIGHT_LAUNCH_S, .6)
+        motion = self.waiting([(1, .8, .9, 0.), (2, 1.2, 0., .9), (3, 1.5, 0., .9)])
+        self.assertTrue(motion._light_wait(self.scan(16), 1.6, {}))
+        self.assertEqual(motion._light_launch_from, 1.6)
+        self.assertAlmostEqual(motion._light_launch_until, 1.6+ms.ESC_LAG_S+ms.LIGHT_LAUNCH_S)
+
+
 class SimulatedFacing(unittest.TestCase):
     def test_green_out_of_view_at_the_stop_the_car_leaves_when_the_red_goes(self):
         cs = y2.course_sim()

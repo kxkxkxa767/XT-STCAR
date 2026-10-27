@@ -977,7 +977,17 @@ LIGHT_WAIT_STEER_DEADBAND_PWM = 15
 # estimate cut the coast late and the 8 cm body gate stopped them .09 m
 # before the end board, 8 of 40 car-like cases.)
 LIGHT_LAUNCH_MIN_GAP_M = 2.5
-LIGHT_LAUNCH_S = .2
+# Round y3 (user 10-27: 过红绿灯后速度可以快点): the launch's 1560 lasts up to
+# ESC_LAG_S plus LIGHT_LAUNCH_S, ended earlier by the aimed coast or the guard
+# as any push; the guard bounds the speed of this powered run from rest by
+# LANE_KICK_ACCEL_MAX_MPS2 over the time its power has reached the wheels
+# (_light_launch_from). Car runs y2-2, y3, y3-2: the guard ended the .2 s
+# launch at once (a .39 m/s median rate, half a .9 s window old, brought to
+# 1.1+ m/s at the kick's bound and on to a 1.7 m/s peak: a stop .96 m past
+# the board), the car coasted from .8-.9 m/s and went on in 1550 top-ups at
+# .55-.9 m/s, 5.9 s from green to the stop; 1560 from rest gave ~1.2 m/s2
+# over the first .5 s.
+LIGHT_LAUNCH_S = .6
 # The light's zone leaves .21 m for the front (LIGHT_STOP_MIN_GAP_M to
 # LIGHT_STOP_BODY_GAP_M), the finish's .35: its creep bound (.27, the kick's
 # model scaled) left a car stopped at .32 waiting with the rear .03 outside
@@ -1691,6 +1701,7 @@ class ManeuverSequence(TurnMotion):
         self._light_wait_since = None
         self._light_red_frames = 0  # red frames taken since the gantry
         self._light_launch_until = None
+        self._light_launch_from = None  # the light launch's first output: a powered run from rest
         self._light_seen = False  # a red or green frame taken since the gantry
         self._light_gantry_since = None
         self._light_red_at = None  # capture time of the first red frame since the gantry
@@ -5925,7 +5936,11 @@ class ManeuverSequence(TurnMotion):
         worst = None
         for lag in (LANE_ESC_LAG_MIN_S, ESC_LAG_S):
             onset, offset = lag-LANE_ESC_SKEW_S, lag+LANE_ESC_SKEW_S
-            v = self._lane_speed_now(speed, now, onset, offset, decel, accel)+LANE_SPEED_GUARD_MARGIN_MPS
+            v = self._lane_speed_now(speed, now, onset, offset, decel, accel)
+            if self._light_launch_from is not None:
+                # round y3: from rest, no faster than the kick's bound while its power has acted
+                v = min(v, LANE_KICK_ACCEL_MAX_MPS2*max(0., now-(self._light_launch_from+onset)))
+            v += LANE_SPEED_GUARD_MARGIN_MPS
             coast_s, power_s = self._lane_pipeline(now, onset, offset, push_s)
             value = self._lane_stop(gap, v, decel, reaction, coast_s, power_s, accel)
             worst = value if worst is None else min(worst, value)
@@ -6294,6 +6309,7 @@ class ManeuverSequence(TurnMotion):
                 and board-FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M):
             # (in the light entry the open stages' own resume launch applies)
             self._light_launch_until = now+ESC_LAG_S+LIGHT_LAUNCH_S
+            self._light_launch_from = now
         go = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'waited_s': waited,
               'basis': ('green_in_fresh_frames_after_the_stop' if green and self._light_red_frames
                         else 'green_without_red_since_the_gantry_looking_again' if green
@@ -6520,6 +6536,8 @@ class ManeuverSequence(TurnMotion):
         # LANE_REST_FRAMES scans after the kick, restarted by any other output).
         if self.lane_motor != TRIAL_MOTOR and self._light_launch_until is not None:
             self._light_launch_until = None  # after the launch: the lane's own pushes and kicks
+        if self.lane_motor == NEUTRAL:
+            self._light_launch_from = None  # the launch's powered run has ended: the car rolls
         if self.lane_motor == TRIAL_MOTOR and launching:
             self._lane_pulse, self._lane_creep = 0, False
         elif self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= (LANE_CREEP_FRAMES if self._lane_creep

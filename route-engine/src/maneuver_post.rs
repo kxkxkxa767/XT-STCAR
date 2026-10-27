@@ -1459,7 +1459,12 @@ impl Maneuver {
         let mut worst: Option<f64> = None;
         for lag in [LANE_ESC_LAG_MIN_S, ESC_LAG_S] {
             let (onset, offset) = (lag - LANE_ESC_SKEW_S, lag + LANE_ESC_SKEW_S);
-            let v = self.lane_speed_now(speed, now, onset, offset, decel, accel) + LANE_SPEED_GUARD_MARGIN_MPS;
+            let mut v = self.lane_speed_now(speed, now, onset, offset, decel, accel);
+            if let Some(from) = self._light_launch_from {
+                // round y3: from rest, no faster than the kick's bound while its power has acted
+                v = pmin(v, LANE_KICK_ACCEL_MAX_MPS2 * pmax(0., now - (from + onset)));
+            }
+            v += LANE_SPEED_GUARD_MARGIN_MPS;
             let (coast_s, power_s) = self.lane_pipeline(now, onset, offset, push_s);
             let value = Self::lane_stop(gap, v, decel, reaction, coast_s, power_s, accel);
             worst = Some(match worst {
@@ -1737,6 +1742,9 @@ impl Maneuver {
         }
         if self.lane_motor != TRIAL_MOTOR && self._light_launch_until.is_some() {
             self._light_launch_until = None; // after the launch: the lane's own pushes and kicks
+        }
+        if self.lane_motor == NEUTRAL {
+            self._light_launch_from = None; // the launch's powered run has ended: the car rolls
         }
         let frames = if self._lane_creep { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
         if self.lane_motor == TRIAL_MOTOR && launching {

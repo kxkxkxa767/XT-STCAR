@@ -24739,6 +24739,45 @@
       "after_green": "1560 for the ESC lag + .2 s, then the light lane's 1550 pushes and coasts to the finish coast, one 1560 creep at the end; user: the car went to the zone in one go, not stop-and-go",
       "timing_with_vision": "max tick compute 9.9 ms, max actual gap 26.5 ms, scan to tick max 7.4 ms (y2: 9.8/22.4/6.8 ms, y2-2: 8.8/22.1/7.0 ms); 130 light states, 0 invalid; race4 149 frames 3.58/s, 239 ms"
     },
-    "next": "not yet: the car still stands .087 m left of the gantry centre (the right steering gate); the crosswalk (teammate YOLO) is not used yet"
+    "next": "not yet: the car still stands .087 m left of the gantry centre (the right steering gate); the crosswalk (teammate YOLO) is not used yet",
+    "car_run_y3_2": {
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261027-y3-2 (73/73 files sha256 equal)",
+      "user": "推送完后再跑一次",
+      "result": "route_finish_zone_stop 32.4 s, .397 m from the end board, 1 creep at the finish",
+      "stop": "front .259 m before the light line (whole car in the zone, at the .26 bound), the car .049 m left of the gantry centre",
+      "light": "red 16.93-26.75 s, first green 27.05; released on green_in_fresh_frames_after_the_stop at 27.71 (.67 s after the first green), waited 7.6 s",
+      "timing_with_vision": "max tick compute 9.1 ms, max gap 22.5 ms; 131 light states, 0 invalid"
+    }
+  },
+  "y4_light_launch_20261027": {
+    "date": "2026-10-27",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y3 (6e5b0ad) on the car as round 110 engine (b84ed5b9...) + y3 helper",
+    "user": [
+      "过红绿灯后速度可以快点",
+      "这部分改完后推送上传，我压缩下context，明天继续测试",
+      "别仿真了你记录上传，我压缩context，明天再接着实测"
+    ],
+    "problem": "after green (car runs y2-2, y3, y3-2) the car never exceeded ~.9 m/s: .64 s into the launch (1560 for ESC_LAG_S + LIGHT_LAUNCH_S .2) the median rate read .39 m/s (its window ~.9 s, half of it old) and the guard (_lane_worst_gap) brought it to 1.1+ m/s at the kick bound (1.6 m/s2) and on through the ESC pipeline to a 1.7 m/s peak at the .45 m/s2 weakest coast: a stop .96 m past the board, so it cut the launch at once (the aimed coast still stopped 1.95 m short). The car coasted from ~.89 m/s to ~.55 and went on in 1550 top-ups cut by the same guard: .55-.9 m/s, 5.9 s from the release to the stop for ~3.1 m",
+    "measured": "board ahead per scan after the release: 1560 from rest ~1.2 m/s2 over the first .5 s (y2-2, y3, y3-2), motion ~.25 s after the command, low-speed coasts ~.45-.6 m/s2",
+    "change": [
+      "while the launch's powered run from rest lasts (_light_launch_from, set at the release with the launch, cleared at its first neutral), the guard bounds the speed by LANE_KICK_ACCEL_MAX_MPS2 x the time its power has reached the wheels (per lag variant, from the first output + onset); y3-2's state: the guard's stop 1.0 m before the board instead of .12 m past it (unit test)",
+      "LIGHT_LAUNCH_S .2 -> .6: the 1560 launch lasts until the aimed coast or the guard ends it (at most ESC_LAG_S + .6 s); then 1550 as before"
+    ],
+    "expected": "a 1560 launch to ~1.0-1.2 m/s, one coast and fewer top-ups (to be measured on the car); every other stage and the finish without the light unchanged",
+    "validation": {
+      "python_suite": "Python full suite 936 OK (2 new in tests/test_route_y3_light_face.py: LightLaunch)",
+      "cargo_test": "6 pass; clippy 32 (unchanged)",
+      "parity": "not run (user: 别仿真了); run the light group (and --supervisor) before packaging y4",
+      "simulation": "not run (user); a car-like comparison against HEAD was stopped before it finished"
+    },
+    "risks": [
+      "a car accelerating faster than 1.6 m/s2 from rest would be under-estimated by the bound during the launch (measured ~1.2)",
+      "the finish after the launch still ends stopped only; the 8 cm body gate stays"
+    ],
+    "next": "parity light group, then build round 111 engine + y4 (build-race.py claude-turn110 claude-turn111 111 y4_light_launch_20261027; build-vision.py claude-turn111 y4 race4_vehicle_handoff_20261024.zip --light-stop), deploy with the before/after checks, run y4 from the start; watch the speed after green, the time from the release to the stop, the board gap and any 8 cm gate"
   }
 }
