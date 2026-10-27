@@ -254,6 +254,62 @@ class LightApproach(unittest.TestCase):
         self.assertIsNone(motion.light_stop_state)
 
 
+def bin_of(along, lateral):
+    return round(-math.degrees(math.atan2(lateral, along))) % 360
+
+
+def legs_scan(seq, *legs):
+    return {'seq': seq, 'at_ms': seq*100, 'received_at': seq/10,
+            'ranges': ranges_with({bin_of(*leg): math.hypot(*leg) for leg in legs}, board=4.)}
+
+
+class LightLegs(unittest.TestCase):
+    """The gantry's legs while the car turns in the light entry (simulation,
+    fast car: a line on the outer leg alone was lost while the inner one stayed
+    in view and the car ran through the light)."""
+    lane_motion = lane.LightLaneTests.lane_motion
+    LANE = {'outer_lateral_m': .57, 'inner_lateral_m': -.57}
+
+    def test_a_line_on_one_leg_takes_the_pair_it_is_part_of(self):
+        motion = self.lane_motion()
+        outer = ms._thin_posts(legs_scan(9, (2.0, .45))['ranges'])[0]
+        motion._light_line = {'along_m': outer[0]+.05, 'at_s': .8, 'source': 'legs', 'legs': [[outer[0]+.05, outer[1]]],
+                              'speed_mps': None, 'board_m': None, 'leg_offsets_m': [0.]}
+        ahead = motion._light_line_ahead(legs_scan(9, (2.0, .45), (2.1, -.5)), 0., self.LANE, .9)
+        line = motion._light_line
+        self.assertEqual(len(line['legs']), 2)
+        self.assertEqual(ahead, min(leg[0] for leg in line['legs']))  # the nearer leg
+        self.assertEqual(line['leg_offsets_m'], [leg[0]-ahead for leg in line['legs']])
+        # the outer leg gone, the inner one alone carries the line
+        inner = line['legs'][1]
+        later = motion._light_line_ahead(legs_scan(10, (inner[0]-.1, inner[1])), 0., self.LANE, 1.)
+        self.assertEqual(motion._light_line['source'], 'legs')
+        self.assertAlmostEqual(later, ahead-.1, delta=.03)
+
+    def test_one_post_goes_to_the_leg_nearest_its_lateral(self):
+        # A second without legs: both lateral windows reach the inner leg's
+        # post; it is the inner leg's, and the outer one moves rigidly.
+        motion = self.lane_motion()
+        motion._light_line = {'along_m': 2.0, 'at_s': 0., 'source': 'legs', 'legs': [[2.0, .45], [2.0, -.45]],
+                              'speed_mps': None, 'board_m': None, 'leg_offsets_m': [0., 0.]}
+        post = ms._thin_posts(legs_scan(10, (1.9, -.4))['ranges'])[0]
+        ahead = motion._light_line_ahead(legs_scan(10, (1.9, -.4)), 0., self.LANE, 1.)
+        outer, inner = motion._light_line['legs']
+        self.assertEqual(inner, list(post))
+        self.assertEqual(ahead, post[0])
+        self.assertAlmostEqual(outer[1], .45+(post[1]+.45), places=9)  # not the inner post's lateral
+        self.assertEqual(ms._light_leg_matches([(1.9, -.4)], [[2.0, .45], [2.0, -.45]], 4., 1.15), {1: (1.9, -.4)})
+
+    def test_before_confirmation_the_last_pair_is_followed_before_one_leg(self):
+        motion = self.lane_motion()
+        self.assertIsNone(motion._light_line_ahead(legs_scan(9, (3.0, .45), (3.05, -.5)), 0., self.LANE, .9))
+        self.assertEqual(motion._light_gantry_seen[-1]['basis'], 'two_legs')
+        ahead = motion._light_line_ahead(legs_scan(10, (2.9, .45)), 0., self.LANE, 1.)
+        self.assertIsNotNone(ahead)  # the pair and one more sighting of it
+        self.assertEqual(motion._light_gantry_seen[-1]['basis'], 'leg_followed')
+        self.assertEqual(len(motion._light_line['legs']), 2)
+
+
 def course_sim():
     spec = importlib.util.spec_from_file_location('course_sim_y2', ROOT/'scripts'/'course-sim.py')
     module = importlib.util.module_from_spec(spec)

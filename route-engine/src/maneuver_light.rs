@@ -50,6 +50,34 @@ pub fn thin_posts(ranges: &[V]) -> Vec<(f64, f64)> {
     posts
 }
 
+/// _light_leg_matches(posts, legs, reach, side): (leg index, post) pairs in
+/// assignment order, one post per leg and one leg per post, nearest in lateral
+/// first, in one along window for the gantry.
+pub fn light_leg_matches(posts: &[(f64, f64)], legs: &[(f64, f64)], reach: f64, side: f64) -> Vec<(usize, (f64, f64))> {
+    let low = legs.iter().map(|leg| leg.0).fold(legs[0].0, pmin) - reach;
+    let high = legs.iter().map(|leg| leg.0).fold(legs[0].0, pmax) + LIGHT_LEG_ALONG_M;
+    let mut candidates: Vec<(f64, f64, usize, usize)> = Vec::new();
+    for (k, leg) in legs.iter().enumerate() {
+        for (j, post) in posts.iter().enumerate() {
+            if (post.1 - leg.1).abs() <= side && low <= post.0 && post.0 <= high {
+                candidates.push(((post.1 - leg.1).abs(), (post.0 - leg.0).abs(), k, j));
+            }
+        }
+    }
+    candidates.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0).unwrap().then(a.1.partial_cmp(&b.1).unwrap()).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3))
+    });
+    let mut matches: Vec<(usize, (f64, f64))> = Vec::new();
+    let mut used: Vec<usize> = Vec::new();
+    for (_, _, k, j) in candidates {
+        if !matches.iter().any(|(mk, _)| *mk == k) && !used.contains(&j) {
+            matches.push((k, posts[j]));
+            used.push(j);
+        }
+    }
+    matches
+}
+
 /// The posts in the lane frame (along, lateral) for compass heading ``heading``.
 fn lane_posts(ranges: &[V], heading: f64) -> Vec<(f64, f64)> {
     let u = ((-heading).pcos(), (-heading).psin());
@@ -184,19 +212,8 @@ impl Maneuver {
     fn light_leg_followed(posts: &[(f64, f64)], legs: &[(f64, f64)], along_m: f64, since: f64) -> Option<(f64, Vec<(f64, f64)>)> {
         let reach = LANE_MAX_CLOSING_MPS * since + LIGHT_LEG_ALONG_M;
         let side = LIGHT_LEG_LATERAL_M + LIGHT_LEG_LATERAL_MPS * since;
-        let mut best: Option<(usize, (f64, f64))> = None;
-        for (k, leg) in legs.iter().enumerate() {
-            for &(along, lateral) in posts {
-                if (lateral - leg.1).abs() <= side
-                    && leg.0 - reach <= along
-                    && along <= leg.0 + LIGHT_LEG_ALONG_M
-                    && best.is_none_or(|(bk, bp)| (along - leg.0).abs() < (bp.0 - legs[bk].0).abs())
-                {
-                    best = Some((k, (along, lateral)));
-                }
-            }
-        }
-        let (k, (along, lateral)) = best?;
+        // the leg nearest its own lateral (the first assignment)
+        let (k, (along, lateral)) = *light_leg_matches(posts, legs, reach, side).first()?;
         let (moved, sideways) = (along - legs[k].0, lateral - legs[k].1);
         Some((along_m + moved, legs.iter().map(|leg| (leg.0 + moved, leg.1 + sideways)).collect()))
     }
@@ -232,7 +249,8 @@ impl Maneuver {
             {
                 gantry = None; // the posts of a stop that was not at the light
             }
-            if gantry.is_none()
+            // both legs of the last pair, followed, before one leg alone
+            if gantry.as_ref().is_none_or(|g| g.legs.len() == 1)
                 && let Some(last) = self._light_gantry_seen.last()
                 && ["two_legs", "leg_followed"].contains(&last.idx("basis").s())
             {
@@ -290,19 +308,10 @@ impl Maneuver {
         let mut legs = legs_of(line.idx("legs"));
         let offsets: Vec<f64> = line.idx("leg_offsets_m").l().iter().map(|o| o.f()).collect();
         let (mut matched, mut near, mut shifts): (Vec<usize>, Option<f64>, Vec<f64>) = (Vec::new(), None, Vec::new());
+        let matches = light_leg_matches(&posts, &legs, reach, side);
         for k in 0..legs.len() {
             let leg = legs[k];
-            let mut found: Option<(f64, f64)> = None;
-            for &(along, lateral) in &posts {
-                if (lateral - leg.1).abs() <= side
-                    && leg.0 - reach <= along
-                    && along <= leg.0 + LIGHT_LEG_ALONG_M
-                    && found.is_none_or(|m| (along - leg.0).abs() < (m.0 - leg.0).abs())
-                {
-                    found = Some((along, lateral));
-                }
-            }
-            if let Some(m) = found {
+            if let Some(&(_, m)) = matches.iter().find(|(mk, _)| *mk == k) {
                 matched.push(k);
                 shifts.push(m.1 - leg.1);
                 legs[k] = m;
@@ -336,6 +345,21 @@ impl Maneuver {
                 leg.0 += moved; // an unseen leg moves with the line
                 leg.1 += sideways;
             }
+        }
+        if legs.len() == 1
+            && let Some(pair) = self.light_gantry(scan, heading, lane)
+            && pair.basis == "two_legs"
+            && pair.legs.contains(&legs[0])
+        {
+            // a line on one leg takes the pair that leg is part of now
+            legs = pair.legs;
+            matched = vec![0, 1];
+        }
+        let mut near = near;
+        if legs.len() == 2 && matched.len() == 2 {
+            // both legs seen: the nearer one, and their offsets to it now
+            near = pmin(legs[0].0, legs[1].0);
+            line.set("leg_offsets_m", V::list(legs.iter().map(|leg| V::Float(leg.0 - near)).collect()));
         }
         let held_speed = self._lane_speed_last;
         line.update(&dict! {
@@ -539,5 +563,15 @@ mod tests {
             }
         }
         assert_eq!(found, 7);
+    }
+
+    #[test]
+    fn one_post_goes_to_the_leg_nearest_its_lateral() {
+        // as tests/test_route_y2_light_stop.py: both windows reach it, the inner leg takes it
+        let legs = [(2.0, 0.45), (2.0, -0.45)];
+        assert_eq!(light_leg_matches(&[(1.9, -0.4)], &legs, 4., 1.15), vec![(1, (1.9, -0.4))]);
+        let both = light_leg_matches(&[(1.9, -0.4), (1.95, 0.5)], &legs, 4., 1.15);
+        assert_eq!(both, vec![(0, (1.95, 0.5)), (1, (1.9, -0.4))]); // equal laterals: leg order, as Python
+        assert!(light_leg_matches(&[(2.5, 0.45)], &legs, 4., 1.15).is_empty()); // beyond the gantry's window
     }
 }

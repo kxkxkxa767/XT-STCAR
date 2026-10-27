@@ -888,6 +888,11 @@ LIGHT_LANE_MAX_WIDTH_M = 1.4
 LIGHT_GANTRY_CONFIRM = 3
 LIGHT_GANTRY_PAIR_CONFIRM = 2
 LIGHT_GANTRY_STEP_S = .25
+# Before confirmation the legs of the last pair are followed in preference to
+# one leg alone, and a line confirmed on one leg takes the pair that leg is
+# part of when one shows (simulation, fast car turning in the light entry: a
+# line on the outer leg alone was lost for 1.2 s while the inner one stayed in
+# view, the approach ended 1.6 m before the light and the car ran through).
 # Once confirmed, a leg is followed within these of where it was (along: plus
 # the travel at the fastest closing speed); without one the line moves by the
 # board ahead's change since the last leg (odometry along the axis), when that
@@ -1123,6 +1128,27 @@ def _thin_posts(ranges):
         posts.append((sum(p[0] for p in points)/len(points), sum(p[1] for p in points)/len(points)))
     posts.sort(key=lambda p: p[0]*p[0]+p[1]*p[1])
     return posts
+
+
+def _light_leg_matches(posts, legs, reach, side):
+    """Round y2: (leg index, post) pairs, one post per leg and one leg per post,
+    nearest in lateral first, in one along window for the gantry (``reach``
+    before its nearer leg to LIGHT_LEG_ALONG_M beyond the farther): the legs
+    stand on one line across the lane, so the lateral tells them apart, not the
+    along (simulation: matched by along in windows of their own, the inner
+    leg's track took the outer leg and the rigid shift put the other track
+    outside the course)."""
+    low = min(leg[0] for leg in legs)-reach
+    high = max(leg[0] for leg in legs)+LIGHT_LEG_ALONG_M
+    candidates = sorted((abs(post[1]-leg[1]), abs(post[0]-leg[0]), k, j)
+                        for k, leg in enumerate(legs) for j, post in enumerate(posts)
+                        if abs(post[1]-leg[1]) <= side and low <= post[0] <= high)
+    matches, posts_used = {}, set()
+    for _, _, k, j in candidates:
+        if k not in matches and j not in posts_used:
+            matches[k] = posts[j]
+            posts_used.add(j)
+    return matches
 
 
 def _support_center(ranges, bins, diameter):
@@ -6001,15 +6027,12 @@ class ManeuverSequence(TurnMotion):
         gantry is rigid: the unseen leg moves with the seen one."""
         reach = LANE_MAX_CLOSING_MPS*since+LIGHT_LEG_ALONG_M
         side = LIGHT_LEG_LATERAL_M+LIGHT_LEG_LATERAL_MPS*since
-        best = None
-        for k, leg in enumerate(legs):
-            for along, lateral in posts:
-                if (abs(lateral-leg[1]) <= side and leg[0]-reach <= along <= leg[0]+LIGHT_LEG_ALONG_M
-                        and (best is None or abs(along-leg[0]) < abs(best[1][0]-legs[best[0]][0]))):
-                    best = (k, (along, lateral))
-        if best is None:
+        matches = _light_leg_matches(posts, legs, reach, side)
+        if not matches:
             return None
-        k, (along, lateral) = best
+        # the leg nearest its own lateral (the first assignment)
+        k = min(matches, key=lambda i: (abs(matches[i][1]-legs[i][1]), abs(matches[i][0]-legs[i][0]), i))
+        along, lateral = matches[k]
         moved, sideways = along-legs[k][0], lateral-legs[k][1]
         return along_m+moved, [[leg[0]+moved, leg[1]+sideways] for leg in legs]
 
@@ -6049,7 +6072,9 @@ class ManeuverSequence(TurnMotion):
             gantry = self._light_gantry(scan, heading, lane)
             if gantry is not None and self._light_rearm_min_m is not None and gantry['along_m'] < self._light_rearm_min_m:
                 gantry = None  # the posts of a stop that was not at the light
-            if gantry is None and seen and seen[-1]['basis'] in ('two_legs', 'leg_followed'):
+            if ((gantry is None or len(gantry['legs']) == 1) and seen
+                    and seen[-1]['basis'] in ('two_legs', 'leg_followed')):
+                # both legs of the last pair, followed, before one leg alone
                 u = (math.cos(-heading), math.sin(-heading))
                 posts = [(x*u[0]+y*u[1], y*u[0]-x*u[1]) for x, y in _thin_posts(scan['ranges'])]
                 followed = self._light_leg_followed(posts, seen[-1]['legs'], seen[-1]['along_m'], at-seen[-1]['at_s'])
@@ -6080,12 +6105,9 @@ class ManeuverSequence(TurnMotion):
         reach = LANE_MAX_CLOSING_MPS*since+LIGHT_LEG_ALONG_M
         side = LIGHT_LEG_LATERAL_M+LIGHT_LEG_LATERAL_MPS*since
         matched, near, shifts = [], None, []
+        matches = _light_leg_matches(posts, line['legs'], reach, side)
         for k, leg in enumerate(line['legs']):
-            match = None
-            for along, lateral in posts:
-                if (abs(lateral-leg[1]) <= side and leg[0]-reach <= along <= leg[0]+LIGHT_LEG_ALONG_M
-                        and (match is None or abs(along-leg[0]) < abs(match[0]-leg[0]))):
-                    match = (along, lateral)
+            match = matches.get(k)
             if match is not None:
                 matched.append(k)
                 shifts.append(match[1]-leg[1])
@@ -6108,6 +6130,18 @@ class ManeuverSequence(TurnMotion):
             if k not in matched:
                 leg[0] += moved  # an unseen leg moves with the line
                 leg[1] += sideways
+        if len(line['legs']) == 1:
+            # A line on one leg takes the pair that leg is part of now.
+            pair = self._light_gantry(scan, heading, lane)
+            if pair is not None and pair['basis'] == 'two_legs' and line['legs'][0] in pair['legs']:
+                line['legs'] = [list(leg) for leg in pair['legs']]
+                matched = [0, 1]
+        if len(line['legs']) == 2 and len(matched) == 2:
+            # both legs seen: the nearer one, and their offsets to it now (a
+            # heading error at the confirmation is not kept: simulation, .11 m
+            # from the car turning 8 deg put the line .1 m near for good)
+            near = min(leg[0] for leg in line['legs'])
+            line['leg_offsets_m'] = [leg[0]-near for leg in line['legs']]
         held_speed = self._lane_speed_last
         line.update(along_m=near, at_s=at, source='legs', board_m=board,
                     speed_mps=None if held_speed is None or now-held_speed[0] > LANE_SPEED_HOLD_S else held_speed[1])

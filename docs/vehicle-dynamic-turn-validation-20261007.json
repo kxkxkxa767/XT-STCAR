@@ -24616,5 +24616,40 @@
       "the finish after the restart: pushes in the last metre on cars stronger than the measured bounds reach the 8 cm gate in simulation"
     ],
     "not_done": "the package (build-race + vision, y2) and the car run"
+  },
+  "y2_light_legs_20261027": {
+    "date": "2026-10-27",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y2 of 526d77e (not deployed; the car holds round 108)",
+    "user": [
+      "你继续修改"
+    ],
+    "problem": "simulation (user8, gain and speed 1.3 like the car): the light stop started 3.9 m before the gantry, but the line was confirmed on a scan that saw one leg only, so it followed the outer leg alone; turning in the light entry (heading 48 -> -25 -> +20 deg) that leg left the view for 1.2 s while the inner one stayed in it, the board ahead changed surface (no odometry), the hold ended and the approach was cancelled 1.6 m before the light; 1550 again, confirmed anew at .92 m and the car ran through (+80 s). Then, with the pair taken in: legs matched by along in windows of their own, an inner track took the outer leg after a gap (its lateral window had grown) and the rigid shift put the other track outside the course; offsets fixed at the confirmation kept a heading error (.11 m with the car turning 8 deg): the line .1 m near, the rear .04 m outside the zone (+20 s)",
+    "change": [
+      "before confirmation the last pair's legs are followed (rigidly) in preference to a new one-leg sighting",
+      "a line on one leg takes the two-leg gantry that leg is part of when one shows",
+      "legs and posts matched one to one, nearest in lateral first, in one along window for the gantry (reach before the nearer leg to .3 m beyond the farther): _light_leg_matches, also for the follow before confirmation",
+      "with both legs seen the line is the nearer leg now and the offsets are refreshed to it (one leg alone uses them)"
+    ],
+    "tried_and_rejected": {
+      "line_between_the_legs_at_the_car_lateral": "interpolating the two legs to lateral 0 (the heading error cancels): with a mismatched leg it read the line past the car, the passed rule ended a correct stop and 2 cars left in the red; the nearer leg stays (conservative)"
+    },
+    "validation": {
+      "python_suite": "Python full suite 922 OK (3 new in tests/test_route_y2_light_stop.py)",
+      "cargo_test": "6 pass (new: leg matching equal to the Python test); clippy count unchanged (32)",
+      "parity": "Python/Rust route-engine-parity-sweep all 202/203 (the known run-75 replay), the 18 light cases bit for bit",
+      "supervisor_parity": "route-engine-parity-sweep all --supervisor 202/203 (the run-75 replay), the 18 light cases included",
+      "no_light": "without the light input the measured-car sweep 288/288 identical to round 108 (the change is inside the light line tracking only)",
+      "simulation_broad": "288 cases, 182 complete without the light: 157 -> 159 complete with no light penalty (camera losing the light near: 156 -> 156); stopped in the zone 206 -> 210; runs through the light 22 -> 18 (all 18 on the old practice layout); 0 departures before green after a stop; the +20 s rear-outside stops of the intermediate version 0",
+      "simulation_car_like": "108 cases, 40 complete without the light: 38 -> 39 (camera losing the light near 40 -> 40), runs through 2 -> 0, stopped in the zone 50 -> 52, effective time +2.6 s median, +4.0 s max; the failure left: the 8 cm body gate before the end board after the restart"
+    },
+    "risks_unchanged": [
+      "camera view of the lamps at the stop unmeasured",
+      "tick timing with the YOLO process unmeasured",
+      "finish after the restart: kicks/pushes of cars stronger than the measured bounds reach the 8 cm gate in simulation"
+    ]
   }
 }
