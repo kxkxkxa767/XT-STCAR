@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-27 中午 Claude：下午用户把车放到红绿灯下，做y2的测试；车上仍是第108轮+新app.js）
+
+状态：y2红绿灯停车（526d77e）和龙门架腿跟踪修正（d0f33ae）都已推送，未打包未部署；控制台自动下载录制包已部署（b8ffddb）。SSH主连接用`work/vehicle-test-ssh.sock`。
+下午的测试顺序：
+1. 识别台架：车摆在停车位置（车头离灯线约15cm，龙门架腿在雷达前约.35m），用race4在车上跑识别（以前的台架做法见`light_trigger_race4_bench_20261026`），看触发后红灯、10s后绿灯能否被看到；再在雷达前.75m处对照。看不到灯也不改逻辑：确认龙门架后见过红灯会等满12s（`LIGHT_WAIT_MAX_S`）。
+2. 同时记录雷达帧，用`tests/fixtures/light_gantry_run108_frames.json`的做法核对`_light_gantry`在真龙门架上能否从3m以外确认两腿。
+3. 打包y2：build-race.py出新引擎（HEAD）+ build-vision.py加识别文件，helper的FIXED_ARGS要加`--light-stop`（build-vision.py目前没有这个参数，需加），先`--check-only`静态跑，再上车跑；部署前后用validate-fresh-engine核对。
+4. 实车要看：灯前是否整车停进.70m区、绿灯后是否一次冲到终点；run/light.jsonl（灯状态）和summary.json的light计数；识别进程同跑时max_tick_compute_s和scan_to_tick。
+
 ## 当前接手入口（2026-10-27 Claude：控制台“结束录制”后自动下载录制包；已部署到车上，只换了app.js）
 
 记录键`console_record_auto_download_20261027`。用户：“录制按钮，点击停止后立马通过浏览器下载到本地”。app.js：结束录制请求等服务器打包最长120s（原来固定1s会超时），拿到文件名后立即触发浏览器下载（与保存照片相同），列表里仍可重新下载；server.py未改。演示控制台验证：停止后自动请求`/download/<名>.zip`，返回zip附件。10:06已部署：只替换车上`20260917/app.js`（f822d3d0…，原文件备份为`app.js.before-record-download-20261027`），服务未重启，第108轮包记录里的app.js哈希仍是旧的。y2红绿灯的状态见下一条。
