@@ -24651,5 +24651,17 @@
       "tick timing with the YOLO process unmeasured",
       "finish after the restart: kicks/pushes of cars stronger than the measured bounds reach the 8 cm gate in simulation"
     ]
+  },
+  "console_record_auto_download_20261027": {
+    "date": "2026-10-27",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "user": [
+      "你先把控制台改一下，下面的录制按钮，点击停止后立马通过浏览器下载到本地"
+    ],
+    "change": "web/vehicle-console/app.js: 结束录制 waits up to 120 s for the server to pack the ZIP (api() took a fixed 1 s abort; a long recording's packing would have timed out) and then starts the browser download of that file at once (as the photo buttons do); the files list keeps the link; the server is unchanged",
+    "validation": "test_console 23 OK, test_frontend.cjs 0 failures; demo console in the built-in browser: start, stop -> the page clicked /download/<name>.zip with the token, the server answered 200 application/zip attachment (23 files)",
+    "note": "takes effect on the car after the console files are deployed; the race program does not use the console"
   }
 }
