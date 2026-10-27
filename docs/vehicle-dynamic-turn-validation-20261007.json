@@ -24678,8 +24678,8 @@
     "date": "2026-10-27",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "y2 (d0f33ae) as round 109 + y2 on the car (engine 6e3a975b..., bridge fe5c0056..., race4 4089dab5...)",
     "user": [
       "车连上了，你跑一次看看",
@@ -24688,7 +24688,8 @@
       "我把车放到你停车的地方，你看看红绿灯",
       "现在是绿灯亮",
       "比赛的规定是红的3-10s绿灯亮了，5s不走就算没有完成，大概率不会取两个极端，所以你可以改成如果一直没有识别到绿灯，再识别到红灯8s后开始走",
-      "你尽量让车停下来的时候正对着红绿灯"
+      "你尽量让车停下来的时候正对着红绿灯",
+      "这个版本不错，应为调整了在红绿灯下的位置，后面也能一下到停车区不是断断续续的了"
     ],
     "deployment_round_109": {
       "build": "build-race.py claude-turn108 claude-turn109 109 y2_light_legs_20261027 (engine 6e3a975b..., bridge unchanged)",
@@ -24716,11 +24717,28 @@
     "validation": {
       "python_suite": "Python full suite 934 OK (12 new: tests/test_route_y3_light_face.py 11, test_route_y2_light_stop.py 1; two y2 tests and the round 108 test fixture updated)",
       "cargo_test": "6 pass; clippy 32 (unchanged)",
-      "parity": "light group (27 cases) run alongside the y3 build, result in the next record",
-      "supervisor_parity": "not run (user 10-27: 别跑仿真了，我现在放回去，你直接跑下一版吧)",
+      "parity": "light group 27/27 bit for bit (Python/Rust, 9 new cases), run during the build; the full sweep was stopped (user: no simulation)",
+      "supervisor_parity": "light group --supervisor 27/27",
       "simulation_car_like": "not run (user: no simulation)",
       "simulation_broad": "not run (user: no simulation)",
       "no_light": "not rerun: every change acts only with the light stop active (light vision) or on the light frames"
-    }
+    },
+    "deployment": {
+      "engine": "round 110 (build-race.py claude-turn109 claude-turn110 110 y3_light_face_20261027; 6e5b0ad, engine b84ed5b9..., bridge fe5c0056... unchanged); the number only labels the engine package for the deploy tools, the run is y3",
+      "checks": "before: six fresh locked samples and 17 hashes equal round 109; deploy-matched.py claude-turn110 110 deployed (backup-claude-turn110-20261027-222135); after: 17 hashes equal round 110",
+      "y3": "build-vision.py claude-turn110 y3 race4_vehicle_handoff_20261024.zip --light-stop; deploy-vision.py y3: stage-claude-y3-20261027-222255, 6 files sha256 equal (trialy3.py, vision-log.py and race4 as y2's); no --check-only (the helper and vision files equal y2's, only the engine hash differs)"
+    },
+    "car_run_y3": {
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261027-y3 (71/71 files sha256 equal)",
+      "result": "route_finish_zone_stop 32.5 s, .396 m from the end board, 1 creep at the finish",
+      "gantry": "confirmed 3.97 m ahead in the light entry (the car still turning: the shift was bounded at -.15 until aligned, then -.07 to -.10)",
+      "stop": "front .236 m before the light line, whole car in the zone (stopped_with_the_whole_car_in_the_light_zone); the car .087 m left of the gantry centre (y2-2: .142), light_center_shift_m -.073",
+      "camera_at_the_stop": "all three lamps in view (frame 100: red x 112-223, green x 491-577 at the top edge)",
+      "light": "red from 17.36 s (36 frames, .89-.91); last red frame 27.32, first green 27.62 (.87), green in 5 frames until the car moved",
+      "release": "green_in_fresh_frames_after_the_stop at 28.18 s (the second green frame): .56 s after the first green capture, .86 s after the last red; waited 7.8 s; red_frames_since_stop 25, red_since_s 10.8",
+      "after_green": "1560 for the ESC lag + .2 s, then the light lane's 1550 pushes and coasts to the finish coast, one 1560 creep at the end; user: the car went to the zone in one go, not stop-and-go",
+      "timing_with_vision": "max tick compute 9.9 ms, max actual gap 26.5 ms, scan to tick max 7.4 ms (y2: 9.8/22.4/6.8 ms, y2-2: 8.8/22.1/7.0 ms); 130 light states, 0 invalid; race4 149 frames 3.58/s, 239 ms"
+    },
+    "next": "not yet: the car still stands .087 m left of the gantry centre (the right steering gate); the crosswalk (teammate YOLO) is not used yet"
   }
 }

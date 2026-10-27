@@ -1,4 +1,4 @@
-# XT-STCAR（10-27夜 Claude：y2实车跑完两次；y3改红绿灯放行规则、停车对准龙门架中线，未打包未部署；车上第109轮+y2）
+# XT-STCAR（10-27夜 Claude：y3实车跑完——停车看得见三个灯、认出绿灯就走，整条32.5s；车上第110轮引擎+y3）
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。路线只用激光雷达，不用摄像头。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。
