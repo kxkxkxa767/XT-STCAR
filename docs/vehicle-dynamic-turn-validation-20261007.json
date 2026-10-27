@@ -24650,7 +24650,8 @@
       "camera view of the lamps at the stop unmeasured",
       "tick timing with the YOLO process unmeasured",
       "finish after the restart: kicks/pushes of cars stronger than the measured bounds reach the 8 cm gate in simulation"
-    ]
+    ],
+    "packaged_as": "round 109 (engine 6e3a975b...) + y2 (helper --light-stop), deployed 10-27 21:41; see y3_light_face_20261027"
   },
   "console_record_auto_download_20261027": {
     "date": "2026-10-27",
@@ -24671,6 +24672,55 @@
       "backup": "/home/bianbu/xt-stcar-console/app.js.before-record-download-20261027",
       "verified": "http://192.168.0.156:8081/app.js serves the new code",
       "note": "the round-108 package record still lists the old app.js hash; engine, bridge, server.py unchanged"
+    }
+  },
+  "y3_light_face_20261027": {
+    "date": "2026-10-27",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y2 (d0f33ae) as round 109 + y2 on the car (engine 6e3a975b..., bridge fe5c0056..., race4 4089dab5...)",
+    "user": [
+      "车连上了，你跑一次看看",
+      "刚刚忘记启动红绿的的触发了，我开启你再来一次",
+      "你识别的是不是慢了，绿灯亮了一两秒后你才动的",
+      "我把车放到你停车的地方，你看看红绿灯",
+      "现在是绿灯亮",
+      "比赛的规定是红的3-10s绿灯亮了，5s不走就算没有完成，大概率不会取两个极端，所以你可以改成如果一直没有识别到绿灯，再识别到红灯8s后开始走",
+      "你尽量让车停下来的时候正对着红绿灯"
+    ],
+    "deployment_round_109": {
+      "build": "build-race.py claude-turn108 claude-turn109 109 y2_light_legs_20261027 (engine 6e3a975b..., bridge unchanged)",
+      "deploy": "deploy.py first refused (active app.js changed since the audit: the 10-27 record auto-download app.js f822d3d0); the round 108 app.js was restored from app.js.before-record-download-20261027 (4afe4cf1) and deploy.py ran: deployed, backup backup-claude-turn109-20261027-213853; the package carries HEAD's app.js (f822d3d0), so the console keeps the auto-download",
+      "checks": "before: six fresh locked samples, 16 of 17 hashes equal round 108 (app.js = HEAD's); after: 17 hashes equal round 109",
+      "y2": "build-vision.py claude-turn109 y2 race4_vehicle_handoff_20261024.zip --light-stop (build-vision.py takes a fourth argument --light-stop now; work/ is not in git); deploy-vision.py y2: stage-claude-y2-20261027-214100, 6 files sha256 equal; --check-only on the car: vision ready (onnxruntime 1.18.0, 2 threads), 92 frames 3.6/s 240 ms, the program received 73 light states (capture to receipt ~.27 s), console restored"
+    },
+    "car_runs_y2": {
+      "y2 (21:42, lamps not triggered)": "route_finish_zone_stop 30.8 s, .394 m from the end board, 1 creep; stopped at the gantry, no light seen for 4 s, went on (rearmed); race4 150 frames 3.68/s, 233 ms",
+      "y2-2 (21:45, triggered)": "route_finish_zone_stop 37.8 s, .373 m, 0 creeps; gantry confirmed 3.59 m ahead; stopped with the front .215 m before the line (whole car in the zone); red from 16.51 to 26.78 s (10.3 s, 36 frames, .7-.94); green detected in 1 frame (.57, the lamp cut by the frame edge); released on LIGHT_WAIT_MAX_S (green_not_seen_light_wait_max, 12.1 s waited) at 32.66 s: 5-6 s after green; race4 170 frames 3.64/s 236 ms; max tick/scan timing not affected (supervisor kept the run)",
+      "why": "the stop frames show the three lamps at the top edge of the frame, the red one at x 162-295 and the green one beyond the right edge: the car stood .12-.14 m left of the gantry centre (legs at +.342/-.580 m) and ~4 deg right; through the whole approach the car stayed .08-.10 m left of the lane centre (the right steering gate and small pursuit errors) and the gantry centre is .06 m right of the lane centre (outer leg ~.12 m inside the outer board, inner leg at the divider end)"
+    },
+    "bench_at_the_stop": "user placed the car at the stop spot, centred (legs +.474/-.452 m, .47-.49 m ahead of the lidar), green lit: race4 green_light 15/15 frames .893-.899, box x 426-529 y 1-65 (the three lamps in view), 15 /camera.jpg frames in vision-bench-20261027-stop-green on the car",
+    "change": {
+      "release": "besides green in 2 fresh frames after the stop: a red seen from the stop (3 frames >= .5) and absent from the 3 newest fresh frames releases (red_gone_from_fresh_frames_after_the_stop); green never seen: 8 s after the first red since the gantry unless red is in the newest fresh frames (green_not_seen_red_go_time), 11 s after it in any case (red_still_seen_red_max_time); no light 4 s, green without red, the 12 s cap unchanged",
+      "facing": "while the light stop approaches or waits and the car is within 20 deg of the axis, the light pursuit follows the gantry centre line: the lane centre plus (gantry centre - lane centre) measured whenever both legs are on the same scan, bounded .15 m (light_center_shift_m in the result)",
+      "buffer": "the last 5 light frames are kept (was 4)",
+      "simulation": "course-sim light green_min_ahead_m (the green lamp out of view nearer than it) and the summary's went_late (the light line crossed more than 5 s after green); parity sweep light group +9 cases (green out of view near, with a 5 s red; a 6 s red with the camera losing the light near)"
+    },
+    "risks": [
+      "with neither lamp in view at the stop (or vision lost) the 8 s rule runs a 9-10 s red (+30 s) and fails a 3 s red (moving after 5 s): the user accepted it",
+      "a red lamp in view whose detections stop for 3 frames while it is still lit releases the car early (y2-2: 1 single miss in ~22 stop frames)",
+      "the right steering gate may still slow the move to the gantry centre (only rights after a centre ACK)"
+    ],
+    "validation": {
+      "python_suite": "Python full suite 934 OK (12 new: tests/test_route_y3_light_face.py 11, test_route_y2_light_stop.py 1; two y2 tests and the round 108 test fixture updated)",
+      "cargo_test": "6 pass; clippy 32 (unchanged)",
+      "parity": "light group (27 cases) run alongside the y3 build, result in the next record",
+      "supervisor_parity": "not run (user 10-27: 别跑仿真了，我现在放回去，你直接跑下一版吧)",
+      "simulation_car_like": "not run (user: no simulation)",
+      "simulation_broad": "not run (user: no simulation)",
+      "no_light": "not rerun: every change acts only with the light stop active (light vision) or on the light frames"
     }
   }
 }

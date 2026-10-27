@@ -1,5 +1,15 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-27 夜 Claude：y2实车两次跑完；y3改放行规则和停车对准龙门架中线，未打包未部署；车上第109轮+y2）
+
+记录键`y3_light_face_20261027`。车上是第109轮（引擎6e3a975b…，即y2的引擎）+ y2助手（`stage-claude-y2-20261027-214100/trialy2.py`，带`--light-stop`），`python3 scripts/start-round.py y2`可重复跑。
+- 部署第109轮时deploy.py先拒绝（车上app.js是上午换的自动下载版）：放回备份的第108轮app.js后部署成功，第109轮包里就是HEAD的app.js，自动下载仍在。`build-vision.py`加了第四个参数`--light-stop`（work/不在git里）。
+- y2实车：第一次灯没触发，在龙门架前停车4s没见灯就走，整条30.8s，终点离板.394m；第二次触发了，停车时车头离灯线.215m、整车在区内，红灯10.3s（36帧），绿灯只认出1帧（灯被画面右边切掉），等满12s上限才走，比绿灯晚5–6s，整条37.8s，离板.373m。
+- 原因：停车画面里三个灯在最上沿，绿灯在画面右边外；车停在龙门架中线左边.12–.14m、偏右约4°（整个接近过程都在车道中线左边.08–.10m，右转要先等舵机回中确认；龙门架中线比车道中线偏右.06m）。用户把车摆正在停车位置时race4认绿灯15/15帧（.89–.90）。
+- 改法（用户：红灯规则3–10s，绿灯后5s不走算没完成，没认出绿灯就在认出红灯8s后走；停车尽量正对红绿灯）：放行加两条——停车后看得见的红灯（3帧≥.5）在最新3帧新画面里都没了就走；一直没认出绿灯，从第一次认出红灯起8s后走，但最新画面里还有红灯就继续等，11s一律走。停车接近中车头在车道轴20°内时，追踪线从车道中线移到龙门架两腿中线（两腿同一帧测到时更新偏移，最多.15m）。仿真加了绿灯近处看不见（green_min_ahead_m）和绿灯后5s未走（went_late）。
+- 验证：Python full suite 934 OK (12 new: tests/test_route_y3_light_face.py 11, test_route_y2_light_stop.py 1; two y2 tests and the round 108 test fixture updated)；cargo test 6个过、clippy 32条不变；逐位对比light group (27 cases) run alongside the y3 build, result in the next record；监管层not run (user 10-27: 别跑仿真了，我现在放回去，你直接跑下一版吧)；实车类仿真not run (user: no simulation)；广泛集not run (user: no simulation)；无灯not rerun: every change acts only with the light stop active (light vision) or on the light frames。
+- 下一步：打包第110轮+y3（build-race.py claude-turn109 claude-turn110 110 y3_light_face_20261027，build-vision.py claude-turn110 y3 … --light-stop），部署前后核对，车放回起点再跑；看停车时两腿中点（light_center_shift_m、light_line的legs）和放行依据。
+
 ## 当前接手入口（2026-10-27 中午 Claude：下午用户把车放到红绿灯下，做y2的测试；车上仍是第108轮+新app.js）
 
 状态：y2红绿灯停车（526d77e）和龙门架腿跟踪修正（d0f33ae）都已推送，未打包未部署；控制台自动下载录制包已部署（b8ffddb）。SSH主连接用`work/vehicle-test-ssh.sock`。

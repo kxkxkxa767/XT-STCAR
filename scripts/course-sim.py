@@ -54,8 +54,14 @@ GANTRY_POST_M = .05
 # the photo sensor ~.70 m before the gantry, 10 s of red; the detector on the
 # car ~4 frames/s at ~.25 s per frame (race4, 2026-10-26); the lit lamp scored
 # .89 at the trigger position.
+# Round y3: ``green_min_ahead_m`` (default ``min_ahead_m``): the green lamp
+# leaves the view nearer than the others (car run y2-2: stopped ~.3 m before the
+# gantry and .14 m off its centre, the red lamp at the frame's top edge, the
+# green one beyond its right edge). Rules: not moving 5 s after green fails the
+# run (``went_late``: the front crossed the light line LIGHT_LATE_S after green).
 LIGHT_DEFAULTS = {'zone': .70, 'red_s': 10., 'pre': 'off', 'fps': 4., 'latency': .25, 'score': .89,
-                  'min_ahead_m': .25, 'max_range_m': 6., 'half_fov_deg': 50.}
+                  'min_ahead_m': .25, 'max_range_m': 6., 'half_fov_deg': 50., 'green_min_ahead_m': None}
+LIGHT_LATE_S = 5.
 
 
 def light_summary(lamp, line_at):
@@ -69,12 +75,14 @@ def light_summary(lamp, line_at):
     in_zone = last is not None and last['front_gap_m'] >= 0 and last['rear_past_sensor_m'] >= 0
     crossed = lamp['crossed_at']
     early = crossed is not None and lamp['green_at'] is not None and crossed < lamp['green_at']
+    late = (lamp['green_at'] is not None and stopped and not early
+            and (crossed if crossed is not None else math.inf)-lamp['green_at'] > LIGHT_LATE_S)
     penalty = (0 if stopped else 50)+(30 if early else 0)+(20 if stopped and not in_zone else 0)
     if lamp['trigger_at'] is None:
         penalty = 50  # never passed the sensor: no stop at the light either
     return {'trigger_at': lamp['trigger_at'], 'green_at': lamp['green_at'], 'crossed_at': crossed,
             'stops': stops, 'stationary_s': round(lamp['stationary_s'], 2), 'stopped_in_zone': in_zone,
-            'went_before_green': early, 'penalty_s': penalty,
+            'went_before_green': early, 'went_late': late, 'penalty_s': penalty,
             'effective_line_s': None if line_at is None else round(line_at-lamp['stationary_s']+penalty, 2)}
 
 
@@ -580,11 +588,13 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                 ahead, side = c*dx+s_*dy, -s_*dx+c*dy
                 visible = (lamp['min_ahead_m'] <= ahead <= lamp['max_range_m']
                            and abs(math.degrees(math.atan2(side, ahead))) <= lamp['half_fov_deg'])
+                green_near = lamp['green_min_ahead_m']
+                green_visible = visible and (green_near is None or ahead >= green_near)
                 state = lamp_state(t)
                 lamp['pending'].append((t+lamp['latency'], {
                     'frame': lamp['frame'], 'captured_at': round(t, 4),
                     'red': lamp['score'] if visible and state == 'red' else 0.,
-                    'green': lamp['score'] if visible and state == 'green' else 0.}))
+                    'green': lamp['score'] if green_visible and state == 'green' else 0.}))
                 lamp['frame'] += 1
             while lamp['pending'] and lamp['pending'][0][0] <= t+1e-9:
                 console.status['control']['light'] = lamp['pending'].pop(0)[1]

@@ -117,7 +117,7 @@ class LightWait(unittest.TestCase):
         self.assertEqual(motion._light_frames, [(1, .5, .9, 0.), (4, .8, 0., 0.)])
         for k in range(5, 12):
             motion._light_observe({'light': {'frame': k, 'captured_at': k/10}})
-        self.assertEqual([f[0] for f in motion._light_frames], [8, 9, 10, 11])
+        self.assertEqual([f[0] for f in motion._light_frames], [7, 8, 9, 10, 11])  # round y3: 5 kept
 
     def test_green_in_two_fresh_frames_after_red_releases_and_the_wait_is_not_drive_time(self):
         motion = self.waiting([(1, .8, .9, 0.), (2, 1.2, .9, 0.), (3, 1.5, .9, 0.)])
@@ -153,10 +153,19 @@ class LightWait(unittest.TestCase):
         self.assertEqual(len(motion.light_stop_evidence['rearmed']), 1)
         self.assertEqual(motion._light_rearm_min_m, ms.LIGHT_REARM_MIN_M)
 
-    def test_red_seen_on_the_way_in_keeps_the_wait_until_the_max(self):
-        # Stopped, the lamps may be out of the camera's view (~.35 m ahead).
+    def test_red_seen_on_the_way_in_keeps_the_wait_8_s_from_the_first_red(self):
+        # Stopped, the lamps may be out of the camera's view (~.35 m ahead);
+        # round y3: green never seen, the car goes LIGHT_RED_GO_S after the first red.
         motion = self.waiting([(1, .7, .9, 0.), (2, 1.1, 0., 0.)])
         self.assertFalse(motion._light_wait(self.scan(60), 6., {}))
+        self.assertFalse(motion._light_wait(self.scan(86), 8.6, {}))
+        self.assertTrue(motion._light_wait(self.scan(88), 8.8, {}))
+        self.assertEqual(motion.light_stop_state, 'released')
+        self.assertEqual(motion.light_stop_evidence['go']['basis'], 'green_not_seen_red_go_time')
+
+    def test_a_weak_green_alone_waits_until_the_max(self):
+        motion = self.waiting([(1, .8, 0., .3), (2, 1.2, 0., .3)])
+        self.assertTrue(motion._light_seen)
         self.assertFalse(motion._light_wait(self.scan(129), 12.9, {}))
         self.assertTrue(motion._light_wait(self.scan(130), 13., {}))
         self.assertEqual(motion.light_stop_state, 'released')
@@ -268,7 +277,7 @@ class LightLegs(unittest.TestCase):
     fast car: a line on the outer leg alone was lost while the inner one stayed
     in view and the car ran through the light)."""
     lane_motion = lane.LightLaneTests.lane_motion
-    LANE = {'outer_lateral_m': .57, 'inner_lateral_m': -.57}
+    LANE = {'outer_lateral_m': .57, 'inner_lateral_m': -.57, 'center_lateral_m': 0.}
 
     def test_a_line_on_one_leg_takes_the_pair_it_is_part_of(self):
         motion = self.lane_motion()

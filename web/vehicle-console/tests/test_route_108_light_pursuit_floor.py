@@ -19,6 +19,7 @@ def pursuit(start, centre, heading_deg=10.):
     lane = {'outer_lateral_m': centre+.55, 'inner_lateral_m': None if start is None else centre-.55,
             'inner_start_along_m': start, 'width_m': 1.1, 'center_lateral_m': centre}
     m._open_lane_target = lambda scan, heading: lane
+    m.light_stop_state = None  # round y3: the pursuit reads the light stop
     heading = math.radians(heading_deg)
     _, point, _, pwm = m._open_light_pursuit({}, heading)
     u = (math.cos(-heading), math.sin(-heading))

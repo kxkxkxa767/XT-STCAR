@@ -212,6 +212,14 @@ pub const LIGHT_FRAME_MAX_AGE_S: f64 = 1.;
 pub const LIGHT_WAIT_MAX_S: f64 = 12.;
 pub const LIGHT_NO_LIGHT_WAIT_S: f64 = 4.;
 pub const LIGHT_REARM_MIN_M: f64 = 1.;
+pub const LIGHT_RED_STOP_FRAMES: i64 = 3;
+pub const LIGHT_RED_GONE_FRAMES: usize = 3;
+pub const LIGHT_RED_GO_S: f64 = 8.;
+pub const LIGHT_RED_MAX_S: f64 = 11.;
+pub fn light_center_max_heading_rad() -> f64 {
+    open_lane_entry_heading_rad()
+}
+pub const LIGHT_CENTER_MAX_SHIFT_M: f64 = 0.15;
 pub const LIGHT_WAIT_STEER_DEADBAND_PWM: i64 = 15;
 pub const LIGHT_LAUNCH_MIN_GAP_M: f64 = 2.5;
 pub const LIGHT_LAUNCH_S: f64 = 0.2;
@@ -560,6 +568,9 @@ pub struct Maneuver {
     pub _light_launch_until: Option<f64>,
     pub _light_seen: bool,
     pub _light_gantry_since: Option<f64>,
+    pub _light_red_at: Option<f64>,
+    pub _light_stop_red_frames: i64,
+    pub _light_center_shift_m: f64,
     pub _light_rearm_min_m: Option<f64>,
     pub light_wait_credit_s: f64,
     pub _light_wait_tick: Option<f64>,
@@ -846,6 +857,9 @@ impl Maneuver {
             _light_launch_until: None,
             _light_seen: false,
             _light_gantry_since: None,
+            _light_red_at: None,
+            _light_stop_red_frames: 0,
+            _light_center_shift_m: 0.,
             _light_rearm_min_m: None,
             light_wait_credit_s: 0.,
             _light_wait_tick: None,
@@ -1267,6 +1281,7 @@ impl Maneuver {
             "light_line" => self._light_line.clone(),
             "light_frame" => self._light_frames.last().cloned().unwrap_or(V::None),
             "light_wait_credit_s" => self.light_wait_credit_s,
+            "light_center_shift_m" => if self.light_stop_active() { V::Float(self._light_center_shift_m) } else { V::None },
             "second_acquisition_reason" => self.second_acquisition_reason.clone(),
             "second_recovery_prior" => self.second_recovery_prior.clone(),
             "role_distinct_evidence" => self.role_distinct_evidence.clone(),

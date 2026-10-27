@@ -138,15 +138,25 @@ impl Maneuver {
         let (red, green) = (score(light.get("red")), score(light.get("green")));
         self._light_frames.push(V::list(vec![frame.clone(), captured.clone(), red.clone(), green.clone()]));
         let n = self._light_frames.len();
-        if n > LIGHT_GREEN_FRAMES + 2 {
-            self._light_frames.drain(..n - (LIGHT_GREEN_FRAMES + 2));
+        let keep = LIGHT_GREEN_FRAMES.max(LIGHT_RED_GONE_FRAMES) + 2;
+        if n > keep {
+            self._light_frames.drain(..n - keep);
         }
         if self.light_stop_active() && captured.f() >= self._light_gantry_since.unwrap() {
             if red.f() >= LIGHT_RED_MIN_SCORE {
                 self._light_red_frames += 1;
+                if self._light_red_at.is_none() {
+                    self._light_red_at = Some(captured.f());
+                }
             }
             if red.f() >= LIGHT_RED_MIN_SCORE || green.f() >= LIGHT_RED_MIN_SCORE {
                 self._light_seen = true;
+            }
+            if self.light_stop_state == Some("waiting")
+                && captured.f() >= self._light_wait_since.unwrap()
+                && red.f() >= LIGHT_GREEN_MIN_SCORE
+            {
+                self._light_stop_red_frames += 1;
             }
         }
     }
@@ -219,6 +229,16 @@ impl Maneuver {
     }
 
     /// _light_line_held(at, now): the line from its last measurement, or None.
+    /// _light_center_offset(legs, lane, current): the gantry's centre less the
+    /// lane's centre (left +), bounded; ``current`` without two legs or the lane.
+    fn light_center_offset(legs: &[(f64, f64)], lane: &V, current: f64) -> f64 {
+        if legs.len() != 2 || !lane.is_dict() {
+            return current;
+        }
+        let shift = (legs[0].1 + legs[1].1) / 2. - lane.idx("center_lateral_m").f();
+        pmax(-LIGHT_CENTER_MAX_SHIFT_M, pmin(LIGHT_CENTER_MAX_SHIFT_M, shift))
+    }
+
     fn light_line_held(&self, at: f64, now: f64) -> Option<f64> {
         let line = &self._light_line;
         let dt = at - line.idx("at_s").f();
@@ -298,6 +318,7 @@ impl Maneuver {
                 "legs" => legs_v(&gantry.legs), "speed_mps" => V::None, "board_m" => board,
                 "leg_offsets_m" => V::list(gantry.legs.iter().map(|leg| V::Float(leg.0 - near)).collect()),
             };
+            self._light_center_shift_m = Self::light_center_offset(&gantry.legs, lane, 0.);
             return Some(near);
         }
         let posts = lane_posts(scan.idx("ranges").l(), heading);
@@ -360,6 +381,7 @@ impl Maneuver {
             // both legs seen: the nearer one, and their offsets to it now
             near = pmin(legs[0].0, legs[1].0);
             line.set("leg_offsets_m", V::list(legs.iter().map(|leg| V::Float(leg.0 - near)).collect()));
+            self._light_center_shift_m = Self::light_center_offset(&legs, lane, self._light_center_shift_m);
         }
         let held_speed = self._lane_speed_last;
         line.update(&dict! {
@@ -422,6 +444,7 @@ impl Maneuver {
         };
         self.light_stop_state = Some("approach");
         (self._light_gantry_since, self._light_red_frames, self._light_seen) = (Some(now), 0, false);
+        self._light_red_at = None;
         let base = if self.light_stop_evidence.truthy() { self.light_stop_evidence.clone() } else { V::dict() };
         self.light_stop_evidence = base.merged(&dict! {"gantry" => evidence.clone()});
         self.route_event("light_gantry", scan, control, evidence);
@@ -451,6 +474,7 @@ impl Maneuver {
         self.light_stop_state = Some("waiting");
         self._light_wait_since = Some(now);
         self._light_wait_tick = Some(now);
+        self._light_stop_red_frames = 0;
         self.lane_motor = NEUTRAL;
         (self._lane_pulse, self._lane_creep) = (0, false);
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"stop" => stop.clone()});
@@ -475,9 +499,18 @@ impl Maneuver {
                     && f.at(3).f() >= LIGHT_GREEN_MIN_SCORE
                     && f.at(2).f() < LIGHT_RED_MIN_SCORE
             });
+        let recent: Vec<&V> = self._light_frames[self._light_frames.len().saturating_sub(LIGHT_RED_GONE_FRAMES)..]
+            .iter()
+            .filter(|f| f.at(1).f() >= wait_since && now - f.at(1).f() <= LIGHT_FRAME_MAX_AGE_S)
+            .collect();
+        let red_now = recent.iter().any(|f| f.at(2).f() >= LIGHT_RED_MIN_SCORE);
+        let red_ended =
+            self._light_stop_red_frames >= LIGHT_RED_STOP_FRAMES && recent.len() == LIGHT_RED_GONE_FRAMES && !red_now;
+        let red_s = self._light_red_at.map(|at| now - at);
+        let red_timed = red_s.is_some_and(|s| s >= LIGHT_RED_MAX_S || (s >= LIGHT_RED_GO_S && !red_now));
         let waited = now - wait_since;
         let no_light = !self._light_seen && waited >= LIGHT_NO_LIGHT_WAIT_S;
-        if !green && !no_light && waited < LIGHT_WAIT_MAX_S {
+        if !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S {
             // the board ahead's history for the restart
             let ahead = self.lane_front_range(scan);
             self.lane_speed(scan, ahead, 2);
@@ -492,6 +525,12 @@ impl Maneuver {
             "green_in_fresh_frames_after_the_stop"
         } else if green {
             "green_without_red_since_the_gantry_looking_again"
+        } else if red_ended {
+            "red_gone_from_fresh_frames_after_the_stop"
+        } else if red_timed && !red_now {
+            "green_not_seen_red_go_time"
+        } else if red_timed {
+            "red_still_seen_red_max_time"
         } else if no_light {
             "no_light_seen_since_the_gantry_looking_again"
         } else {
@@ -499,8 +538,10 @@ impl Maneuver {
         };
         let go = dict! {
             "source_seq" => scan.idx("seq").clone(), "received_at" => scan.idx("received_at").clone(),
-            "waited_s" => waited, "basis" => basis, "frames" => V::list(frames),
-            "red_frames_since_gantry" => self._light_red_frames, "route_stage" => self.route_stage,
+            "waited_s" => waited, "basis" => basis,
+            "frames" => V::list(self._light_frames[self._light_frames.len().saturating_sub(LIGHT_GREEN_FRAMES.max(LIGHT_RED_GONE_FRAMES))..].to_vec()),
+            "red_frames_since_gantry" => self._light_red_frames, "red_frames_since_stop" => self._light_stop_red_frames,
+            "red_since_s" => red_s, "route_stage" => self.route_stage,
             "launch" => self._light_launch_until.is_some(),
         };
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"go" => go.clone()});

@@ -932,6 +932,32 @@ LIGHT_WAIT_MAX_S = 12.
 # sees the lamps' state before the trigger): go and look again as well.
 LIGHT_NO_LIGHT_WAIT_S = 4.
 LIGHT_REARM_MIN_M = 1.
+# Round y3: the camera may see one lamp only from the stop (car run y2-2,
+# 10-27: stopped .14 m left of the gantry's centre, the red lamp at the top
+# edge of the frame and the green one beyond its right edge; race4 scored the
+# red .7-.8 in 20 frames in a row there and no green while it was lit, and
+# the car left on LIGHT_WAIT_MAX_S 6 s after green). A red seen from the stop
+# (LIGHT_RED_STOP_FRAMES frames scoring >= LIGHT_GREEN_MIN_SCORE: the lamp in
+# view) and then absent from LIGHT_RED_GONE_FRAMES fresh frames in a row: the
+# lamp changed, go. Green never seen otherwise: go LIGHT_RED_GO_S after the
+# first red since the gantry unless red is in the newest fresh frames, and at
+# LIGHT_RED_MAX_S after it in any case (rules: red 3-10 s, then green; not
+# moving 5 s after green fails the run; user 10-27: 8 s covers 3-8 s reds,
+# the extremes are unlikely; 11 s: the longest red and 1 s).
+LIGHT_RED_STOP_FRAMES = 3
+LIGHT_RED_GONE_FRAMES = 3
+LIGHT_RED_GO_S = 8.
+LIGHT_RED_MAX_S = 11.
+# Round y3 (user 10-27: stop facing the light): while stopping, the light lane
+# pursuit follows the gantry's centre line (between its two legs, measured on
+# the same scan as the lane) instead of the lane's centre, once the car is
+# within LIGHT_CENTER_MAX_HEADING_RAD of the axis (the entry turn is left as
+# it was); the shift from the lane's centre is bounded by
+# LIGHT_CENTER_MAX_SHIFT_M. (Car run y2-2: the outer leg ~.12 m inside the
+# outer board, the inner one at the divider's open end: the gantry's centre
+# .06 m right of the lane's; the car stopped .14 m left of it.)
+LIGHT_CENTER_MAX_HEADING_RAD = OPEN_LANE_ENTRY_HEADING_RAD
+LIGHT_CENTER_MAX_SHIFT_M = .15
 # The wait (the car stands at neutral) is not drive time: the cumulative drive
 # clock moves on by it (light_wait_credit_s, also added to the console's total
 # deadline), so the 40 s drive budget still bounds the driving itself
@@ -1667,6 +1693,9 @@ class ManeuverSequence(TurnMotion):
         self._light_launch_until = None
         self._light_seen = False  # a red or green frame taken since the gantry
         self._light_gantry_since = None
+        self._light_red_at = None  # capture time of the first red frame since the gantry
+        self._light_stop_red_frames = 0  # frames taken since the stop with red >= LIGHT_GREEN_MIN_SCORE
+        self._light_center_shift_m = 0.  # the gantry's centre less the lane's
         self._light_rearm_min_m = None
         self.light_wait_credit_s = 0.
         self._light_wait_tick = None
@@ -3378,6 +3407,7 @@ class ManeuverSequence(TurnMotion):
             light_line=self._snap('_light_line', self._light_line),
             light_frame=list(self._light_frames[-1]) if self._light_frames else None,
             light_wait_credit_s=self.light_wait_credit_s,
+            light_center_shift_m=self._light_center_shift_m if self._light_stop_active() else None,
             second_acquisition_reason=self.second_acquisition_reason,
             second_recovery_prior=self._snap('second_recovery_prior', self.second_recovery_prior),
             role_distinct_evidence=self._snap('role_distinct_evidence', self.role_distinct_evidence),
@@ -4523,12 +4553,17 @@ class ManeuverSequence(TurnMotion):
         construction ahead of that pose (_overshoot_guard); the point is the
         current-pose one (the path check models the arc from the current pose).
         ``lateral`` (round 102): a line parallel to it instead (_open_entry_shift).
+        Round y3: while stopping for the light, nearly aligned, the gantry's
+        centre line (LIGHT_CENTER_MAX_HEADING_RAD, _light_center_offset).
         """
         lane = self._open_lane_target(scan, heading)
         if lane is None:
             return None
         u = (math.cos(-heading), math.sin(-heading))
-        lateral = lane['center_lateral_m'] if lateral is None else lateral
+        if lateral is None:
+            lateral = lane['center_lateral_m']
+            if self._light_stop_active() and abs(heading) <= LIGHT_CENTER_MAX_HEADING_RAD:
+                lateral += self._light_center_shift_m
 
         def lane_point(moved_along=0., moved_lateral=0.):
             start = lane['inner_start_along_m']
@@ -5972,12 +6007,17 @@ class ManeuverSequence(TurnMotion):
         red, green = light.get('red'), light.get('green')
         red, green = (red if _number(red) else 0.), (green if _number(green) else 0.)
         self._light_frames.append((frame, captured, red, green))
-        del self._light_frames[:-(LIGHT_GREEN_FRAMES+2)]
+        del self._light_frames[:-(max(LIGHT_GREEN_FRAMES, LIGHT_RED_GONE_FRAMES)+2)]
         if self._light_stop_active() and captured >= self._light_gantry_since:
             if red >= LIGHT_RED_MIN_SCORE:
                 self._light_red_frames += 1
+                if self._light_red_at is None:
+                    self._light_red_at = captured
             if max(red, green) >= LIGHT_RED_MIN_SCORE:
                 self._light_seen = True
+            if (self.light_stop_state == 'waiting' and captured >= self._light_wait_since
+                    and red >= LIGHT_GREEN_MIN_SCORE):
+                self._light_stop_red_frames += 1
 
     @staticmethod
     def _light_lane_band(lane):
@@ -6035,6 +6075,16 @@ class ManeuverSequence(TurnMotion):
         along, lateral = matches[k]
         moved, sideways = along-legs[k][0], lateral-legs[k][1]
         return along_m+moved, [[leg[0]+moved, leg[1]+sideways] for leg in legs]
+
+    @staticmethod
+    def _light_center_offset(legs, lane, current):
+        """Round y3: the gantry's centre (between its two legs) less the lane's
+        centre, lateral (left +), bounded by LIGHT_CENTER_MAX_SHIFT_M;
+        ``current`` without two legs or the lane."""
+        if len(legs) != 2 or not isinstance(lane, dict):
+            return current
+        shift = (legs[0][1]+legs[1][1])/2-lane['center_lateral_m']
+        return max(-LIGHT_CENTER_MAX_SHIFT_M, min(LIGHT_CENTER_MAX_SHIFT_M, shift))
 
     def _light_line_held(self, at, now):
         """The line from its last measurement (LIGHT_LINE_HOLD_S), or None."""
@@ -6098,6 +6148,7 @@ class ManeuverSequence(TurnMotion):
             self._light_line = {'along_m': near, 'at_s': at, 'source': 'legs', 'confirmed_seq': scan['seq'],
                                 'legs': [list(leg) for leg in gantry['legs']], 'speed_mps': None, 'board_m': board,
                                 'leg_offsets_m': [leg[0]-near for leg in gantry['legs']]}
+            self._light_center_shift_m = self._light_center_offset(gantry['legs'], lane, 0.)
             return near
         u = (math.cos(-heading), math.sin(-heading))
         posts = [(x*u[0]+y*u[1], y*u[0]-x*u[1]) for x, y in _thin_posts(scan['ranges'])]
@@ -6142,6 +6193,7 @@ class ManeuverSequence(TurnMotion):
             # from the car turning 8 deg put the line .1 m near for good)
             near = min(leg[0] for leg in line['legs'])
             line['leg_offsets_m'] = [leg[0]-near for leg in line['legs']]
+            self._light_center_shift_m = self._light_center_offset(line['legs'], lane, self._light_center_shift_m)
         held_speed = self._lane_speed_last
         line.update(along_m=near, at_s=at, source='legs', board_m=board,
                     speed_mps=None if held_speed is None or now-held_speed[0] > LANE_SPEED_HOLD_S else held_speed[1])
@@ -6180,6 +6232,7 @@ class ManeuverSequence(TurnMotion):
                     'basis': 'gantry_legs_confirmed_on_consecutive_scans'}
         self.light_stop_state = 'approach'
         self._light_gantry_since, self._light_red_frames, self._light_seen = now, 0, False
+        self._light_red_at = None
         self.light_stop_evidence = {**(self.light_stop_evidence or {}), 'gantry': evidence}
         self._route_event('light_gantry', scan, control, evidence)
         # The approach's speed is the closing rate on the line itself, from the
@@ -6198,6 +6251,7 @@ class ManeuverSequence(TurnMotion):
                 'zone_m': LIGHT_ZONE_M, 'stop_zone_certified': False}
         self.light_stop_state = 'waiting'
         self._light_wait_since = self._light_wait_tick = now
+        self._light_stop_red_frames = 0
         self.lane_motor = NEUTRAL
         self._lane_pulse, self._lane_creep = 0, False
         self.light_stop_evidence = {**self.light_stop_evidence, 'stop': stop}
@@ -6209,7 +6263,9 @@ class ManeuverSequence(TurnMotion):
         red) in the last LIGHT_GREEN_FRAMES frames, each taken after the stop and
         at most LIGHT_FRAME_MAX_AGE_S old, or LIGHT_WAIT_MAX_S without that; no
         light seen since the gantry, or green without red, releases it as not
-        the light (LIGHT_NO_LIGHT_WAIT_S)."""
+        the light (LIGHT_NO_LIGHT_WAIT_S). Round y3: also a red seen from the
+        stop that has gone from the newest fresh frames, and the time since the
+        first red (LIGHT_RED_GO_S without red in them, LIGHT_RED_MAX_S)."""
         waited_now = max(0., now-self._light_wait_tick)
         self._light_wait_tick = now
         self.drive_since += waited_now  # standing is not drive time
@@ -6219,9 +6275,16 @@ class ManeuverSequence(TurnMotion):
         green = (len(frames) == LIGHT_GREEN_FRAMES
                  and all(f[1] >= self._light_wait_since and now-f[1] <= LIGHT_FRAME_MAX_AGE_S
                          and f[3] >= LIGHT_GREEN_MIN_SCORE and f[2] < LIGHT_RED_MIN_SCORE for f in frames))
+        recent = [f for f in self._light_frames[-LIGHT_RED_GONE_FRAMES:]
+                  if f[1] >= self._light_wait_since and now-f[1] <= LIGHT_FRAME_MAX_AGE_S]
+        red_now = any(f[2] >= LIGHT_RED_MIN_SCORE for f in recent)
+        red_ended = (self._light_stop_red_frames >= LIGHT_RED_STOP_FRAMES
+                     and len(recent) == LIGHT_RED_GONE_FRAMES and not red_now)
+        red_s = None if self._light_red_at is None else now-self._light_red_at
+        red_timed = red_s is not None and (red_s >= LIGHT_RED_MAX_S or red_s >= LIGHT_RED_GO_S and not red_now)
         waited = now-self._light_wait_since
         no_light = not self._light_seen and waited >= LIGHT_NO_LIGHT_WAIT_S
-        if not green and not no_light and waited < LIGHT_WAIT_MAX_S:
+        if not green and not red_ended and not red_timed and not no_light and waited < LIGHT_WAIT_MAX_S:
             # the board ahead's history for the restart (the releasing scan
             # leaves it to the stage's own speed estimate: one entry per scan)
             self._lane_speed(scan, self._lane_front_range(scan))
@@ -6234,10 +6297,14 @@ class ManeuverSequence(TurnMotion):
         go = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'waited_s': waited,
               'basis': ('green_in_fresh_frames_after_the_stop' if green and self._light_red_frames
                         else 'green_without_red_since_the_gantry_looking_again' if green
+                        else 'red_gone_from_fresh_frames_after_the_stop' if red_ended
+                        else 'green_not_seen_red_go_time' if red_timed and not red_now
+                        else 'red_still_seen_red_max_time' if red_timed
                         else 'no_light_seen_since_the_gantry_looking_again' if no_light
                         else 'green_not_seen_light_wait_max'),
-              'frames': [list(f) for f in frames], 'red_frames_since_gantry': self._light_red_frames,
-              'route_stage': self.route_stage, 'launch': self._light_launch_until is not None}
+              'frames': [list(f) for f in self._light_frames[-max(LIGHT_GREEN_FRAMES, LIGHT_RED_GONE_FRAMES):]],
+              'red_frames_since_gantry': self._light_red_frames, 'red_frames_since_stop': self._light_stop_red_frames,
+              'red_since_s': red_s, 'route_stage': self.route_stage, 'launch': self._light_launch_until is not None}
         self.light_stop_evidence = {**self.light_stop_evidence, 'go': go}
         self._route_event('light_go', scan, control, go)
         self._lane_creeps = 0

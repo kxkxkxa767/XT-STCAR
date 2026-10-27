@@ -1242,7 +1242,15 @@ impl Maneuver {
             return None;
         }
         let u = ((-heading).pcos(), (-heading).psin());
-        let lateral = lateral.unwrap_or_else(|| lane.idx("center_lateral_m").f());
+        // Round y3: while stopping for the light, nearly aligned, the gantry's centre line.
+        let lateral = lateral.unwrap_or_else(|| {
+            let centre = lane.idx("center_lateral_m").f();
+            if self.light_stop_active() && heading.abs() <= light_center_max_heading_rad() {
+                centre + self._light_center_shift_m
+            } else {
+                centre
+            }
+        });
         let start0 = lane.idx("inner_start_along_m").of();
         let lane_point = |moved_along: f64, moved_lateral: f64| -> (f64, f64) {
             let start = start0.map(|s| s - moved_along);
