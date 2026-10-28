@@ -65,7 +65,7 @@ pub const LIGHT_BRIDGE_MAX_BINS: i64 = 5;
 pub const LANE_SPEED_RESTART_MPS: f64 = 0.15;
 pub const LANE_SPEED_UNKNOWN_MPS: f64 = 1.3;
 pub const LANE_MAX_CLOSING_MPS: f64 = 3.5;
-pub const LANE_STOP_DECEL_MPS2: f64 = 0.5;
+pub const LANE_STOP_DECEL_MPS2: f64 = 0.6;
 pub const LANE_SPEED_HOLD_S: f64 = 0.5;
 pub const LANE_SPEED_HOLD_MARGIN_MPS: f64 = 0.1;
 pub const ESC_LAG_S: f64 = 0.45;
@@ -260,6 +260,27 @@ pub const LIGHT_GOAL: Goal = Goal {
     creep_travel: LIGHT_CREEP_TRAVEL_M,
     creep_max: LIGHT_CREEP_MAX,
 };
+// Round y5: the crosswalk stop in the start lane (see maneuver_sequence.py).
+pub const CROSSWALK_SEEN_SCORE: f64 = 0.25;
+pub const CROSSWALK_RANGE_SCORE: f64 = 0.45;
+pub const CROSSWALK_SEEN_FRAMES: i64 = 2;
+pub const CROSSWALK_SEEN_S: f64 = 1.5;
+pub const CROSSWALK_ROW_SCALE: f64 = 89.;
+pub const CROSSWALK_ROW_HORIZON_PX: f64 = 404.5;
+pub const CROSSWALK_ROW_OFFSET_M: f64 = 0.24;
+pub const CROSSWALK_ROW_MIN_PX: f64 = 430.;
+pub const CROSSWALK_ROW_MAX_PX: f64 = 474.;
+pub const CROSSWALK_ROW_SIGMA_PX: f64 = 2.;
+pub const CROSSWALK_CAMERA_LAG_S: f64 = 0.3;
+pub const CROSSWALK_TRACK_S: f64 = 3.;
+pub const CROSSWALK_SEARCH_MPS: f64 = 0.5;
+pub const CROSSWALK_AIM_LAG_S: f64 = 0.3;
+pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
+pub const CROSSWALK_TARGET_GAP_M: f64 = 0.25;
+pub const CROSSWALK_MIN_GAP_M: f64 = 0.05;
+pub const CROSSWALK_ZONE_M: f64 = 1.;
+pub const CROSSWALK_WAIT_S: f64 = 3.5;
+pub const CROSSWALK_STOP_MAX_S: f64 = 3.;
 pub const OPEN_SUPPORT_MAX_DEPTH_M: f64 = 0.15;
 
 pub fn route_align_heading_rad() -> f64 {
@@ -575,6 +596,17 @@ pub struct Maneuver {
     pub _light_rearm_min_m: Option<f64>,
     pub light_wait_credit_s: f64,
     pub _light_wait_tick: Option<f64>,
+    pub crosswalk_state: Option<&'static str>,
+    pub crosswalk_evidence: V,
+    pub _crosswalk_raw: Vec<V>,
+    pub _crosswalk_seen: Vec<f64>,
+    pub _crosswalk_fixes: Vec<V>,
+    pub _crosswalk_track: Vec<(f64, f64)>,
+    pub _crosswalk_board_m: Option<f64>,
+    pub _crosswalk_stop_at: Option<f64>,
+    pub _crosswalk_wait_tick: Option<f64>,
+    pub crosswalk_wait_credit_s: f64,
+    pub _crosswalk_kick: i64,
     pub _exit_heading: Option<f64>,
     pub role_distinct_evidence: V,
     pub second_acquisition_reason: Option<String>,
@@ -865,6 +897,17 @@ impl Maneuver {
             _light_rearm_min_m: None,
             light_wait_credit_s: 0.,
             _light_wait_tick: None,
+            crosswalk_state: None,
+            crosswalk_evidence: V::None,
+            _crosswalk_raw: Vec::new(),
+            _crosswalk_seen: Vec::new(),
+            _crosswalk_fixes: Vec::new(),
+            _crosswalk_track: Vec::new(),
+            _crosswalk_board_m: None,
+            _crosswalk_stop_at: None,
+            _crosswalk_wait_tick: None,
+            crosswalk_wait_credit_s: 0.,
+            _crosswalk_kick: 0,
             _exit_heading: None,
             role_distinct_evidence: V::None,
             second_acquisition_reason: None,
@@ -1284,6 +1327,8 @@ impl Maneuver {
             "light_frame" => self._light_frames.last().cloned().unwrap_or(V::None),
             "light_wait_credit_s" => self.light_wait_credit_s,
             "light_center_shift_m" => if self.light_stop_active() { V::Float(self._light_center_shift_m) } else { V::None },
+            "crosswalk_state" => self.crosswalk_state, "crosswalk_evidence" => self.crosswalk_evidence.clone(),
+            "crosswalk_board_m" => self._crosswalk_board_m, "crosswalk_wait_credit_s" => self.crosswalk_wait_credit_s,
             "second_acquisition_reason" => self.second_acquisition_reason.clone(),
             "second_recovery_prior" => self.second_recovery_prior.clone(),
             "role_distinct_evidence" => self.role_distinct_evidence.clone(),
@@ -1518,7 +1563,10 @@ impl Maneuver {
             self.decide_entry(scan);
         }
         if self.continue_route && self.route_stage == "start_lane" {
-            if !(self.phase == "drive" && self.start_lane_handover_ready(scan, control)) {
+            if !(self.phase == "drive"
+                && !matches!(self.crosswalk_state, Some("fallback" | "waiting"))
+                && self.start_lane_handover_ready(scan, control))
+            {
                 return self.start_lane_update(scan, lidar_age_s, now, control, safe, presteer_wait);
             }
             self.route_stage = "first_target";

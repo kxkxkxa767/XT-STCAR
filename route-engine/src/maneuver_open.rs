@@ -351,8 +351,10 @@ impl Maneuver {
         let ahead = self.lane_front_range(scan);
         let track = self.lane_front_track(scan, ahead);
         let speed = self.track_speed(scan, track);
+        self.crosswalk_observe(scan, track);
         let mut stop_at = None;
         let mut allowed = None;
+        let mut v_cut = None;
         if approach.is_none() && source != "first_support_missing_frame_hold" {
             let reaction = self.reaction_s(now);
             let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) {
@@ -378,8 +380,15 @@ impl Maneuver {
                 LANE_SPEED_UNKNOWN_MPS
             };
             let v = base + rise;
+            v_cut = Some(v);
             stop_at = Some(FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * reaction);
             allowed = Self::start_allowed_speed(ahead);
+            if matches!(self.crosswalk_state, Some("search" | "approach")) {
+                allowed = Some(match allowed {
+                    None => CROSSWALK_SEARCH_MPS,
+                    Some(a) => pmin(a, CROSSWALK_SEARCH_MPS),
+                });
+            }
             if let Some(s) = speed {
                 self._start_speed_measured = true;
                 self._start_speed_last = Some((now, s));
@@ -390,6 +399,7 @@ impl Maneuver {
             self._start_motor =
                 if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
         }
+        let crosswalk = self.crosswalk_control(scan, now, control, track, speed, v_cut);
         // Round 103: the board-ahead cut is per scan (was a terminal coast).
         let cut = matches!((stop_at, ahead), (Some(stop), Some(a)) if a <= stop);
         if cut {
@@ -405,11 +415,19 @@ impl Maneuver {
             "nominal_target_pwm" => natural, "walls" => walls, "compass_heading_rad" => heading,
             "first_approach" => approach.clone(), "front_range_m" => ahead, "speed_mps" => speed,
             "front_stop_range_m" => stop_at, "allowed_speed_mps" => allowed, "slow" => self._lane_start_slow,
-            "motor" => self._start_motor, "board_ahead_cut" => cut, "swept_path_certified" => false,
+            "motor" => self._start_motor, "board_ahead_cut" => cut, "crosswalk" => crosswalk,
+            "swept_path_certified" => false,
         };
+        if self.crosswalk_state == Some("waiting") && (target - self.servo).abs() < LIGHT_WAIT_STEER_DEADBAND_PWM {
+            target = self.servo; // standing: the steering pre-aimed, no small steps
+        }
         self.steering_target = target;
         self.natural_steering_target = Some(natural);
-        self.reason = format!("start_lane_{source}");
+        self.reason = match self.crosswalk_state {
+            Some("waiting") => "crosswalk_stop_waiting".into(),
+            Some("fallback") => "crosswalk_fallback_stop".into(),
+            _ => format!("start_lane_{source}"),
+        };
         self.slew(now);
         if self.servo > NEUTRAL {
             self._route_center_ack = V::None;

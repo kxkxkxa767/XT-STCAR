@@ -197,7 +197,12 @@ LANE_SPEED_UNKNOWN_MPS = 1.3
 # different return on the ray (turning car), not speed.
 LANE_MAX_CLOSING_MPS = 3.5
 LANE_COAST_DECEL_MPS2 = .5
-LANE_STOP_DECEL_MPS2 = .5
+# Round y5: the aim's coast before one is measured (was .5). Car runs y3,
+# y3-2, y4: the six cuts that ended in a stop (light approach and finish,
+# .40-.56 m/s) travelled .24-.46 m, .75-.8 of the aimed travel, so every aimed
+# coast stopped .1-.2 m short (then kicks); with a ~.25 s lag those coasts ran
+# at ~.5-.78 m/s2, runs 98-100 at .57-.61.
+LANE_STOP_DECEL_MPS2 = .6
 LANE_SPEED_HOLD_S = .5
 LANE_SPEED_HOLD_MARGIN_MPS = .1
 # Control/perception reaction plus the ESC lag: the car keeps its last motor
@@ -1027,6 +1032,60 @@ FINISH_GOAL = ('finish', LANE_FINISH_ZONE_GAP_M, LANE_FINISH_BODY_GAP_M, LANE_FI
 LIGHT_GOAL = ('light', LIGHT_STOP_ZONE_GAP_M, LIGHT_STOP_BODY_GAP_M, LIGHT_STOP_TARGET_GAP_M, LIGHT_STOP_MIN_GAP_M,
               LIGHT_CREEP_TRAVEL_M, LIGHT_CREEP_MAX)
 
+# Round y5 (Claude; user 10-28: 加上斑马线停车等待3s; 如果在转弯处没识别/长时间
+# 丢失目标/定位不准，一定要在转弯处停下来，停下来等3s再走). Rules 2.4.2 (3): stop
+# before the crosswalk for 3 s; under 3 s +10 s, on or past it +20 s, no stop
+# +30 s. Only with the light vision input (control['light'] also carries
+# race4's best crosswalk score and its box's bottom row, 'crosswalk' and
+# 'crosswalk_row'). Bench 10-28 (car at rest, front 1.0/1.5/2.0/2.46 m before
+# the stripes' near edge): 8/8 frames each, scores .75-.79/.57-.61/.32-.36/
+# .25-.28, bottom rows 476/456/444/437.5 of 480; distance = CROSSWALK_ROW_SCALE
+# /(row - CROSSWALK_ROW_HORIZON_PX) - CROSSWALK_ROW_OFFSET_M fits all four
+# within .01 m. Nearer than ~1 m the near edge leaves the frame. Car run y4
+# (moving ~1.4 m/s): rows ~.25 s behind the lidar's odometry, and the weak
+# frames at rest from 2.46 m sat 10 rows higher than the bench's (a 3.7 m
+# fit): a distance only from frames scoring CROSSWALK_RANGE_SCORE (~1.75 m and
+# nearer), taken CROSSWALK_CAMERA_LAG_S before their capture time, less
+# CROSSWALK_ROW_SIGMA_PX rows twice at that range. The near edge is held as a
+# distance to the board ahead (the start lane's front track), so the car keeps
+# it once the stripes leave the view. The start lane drives at most
+# CROSSWALK_SEARCH_MPS until the crosswalk is fixed (CROSSWALK_SEEN_FRAMES
+# frames, one in range) and stopped CROSSWALK_ZONE_M before it at most, then
+# waits CROSSWALK_WAIT_S. Not stopped there when the first support's approach
+# begins (never seen, lost, or never in range): stop in the turn and wait
+# there the same (no stop costs 30 s, a stop past it 20 s).
+CROSSWALK_SEEN_SCORE = .25  # the race program's own detection threshold
+CROSSWALK_RANGE_SCORE = .45
+CROSSWALK_SEEN_FRAMES = 2
+CROSSWALK_SEEN_S = 1.5
+CROSSWALK_ROW_SCALE = 89.
+CROSSWALK_ROW_HORIZON_PX = 404.5
+CROSSWALK_ROW_OFFSET_M = .24
+CROSSWALK_ROW_MIN_PX = 430.  # ~3.2 m
+CROSSWALK_ROW_MAX_PX = 474.  # the near edge still inside the frame (bottom 480)
+CROSSWALK_ROW_SIGMA_PX = 2.
+CROSSWALK_CAMERA_LAG_S = .3
+CROSSWALK_TRACK_S = 3.
+# Search speed: at .9 a crosswalk 1.4-2.46 m ahead was fixed ~1 m before it
+# with the car at ~1.1 m/s and still powered (the speed estimate lags a start
+# from rest), and it stopped .3-.64 m past the edge (simulation).
+CROSSWALK_SEARCH_MPS = .5
+# The stop: a coast at the measured ~.6 m/s2 after a .3 s lag aims at
+# CROSSWALK_TARGET_GAP_M; never past CROSSWALK_MIN_GAP_M at the weakest coast
+# after the reaction and the rest of the ESC lag (speed + margin).
+CROSSWALK_AIM_LAG_S = .3
+CROSSWALK_AIM_DECEL_MPS2 = .6
+CROSSWALK_TARGET_GAP_M = .25
+CROSSWALK_MIN_GAP_M = .05
+# Stopped farther than this from it, 3-frame 1560 kicks rested apart (as the
+# lane's), each only with LANE_KICK_TRAVEL_M of room; from rest the start
+# lane's own 1560 ran until a lagging speed read .15 m/s and overshot the edge
+# by .36 m (simulation). Stopping early costs nothing (rules: before the
+# crosswalk).
+CROSSWALK_ZONE_M = 1.
+CROSSWALK_WAIT_S = 3.5
+CROSSWALK_STOP_MAX_S = 3.  # neutral this long counts as stopped (speed unknown)
+
 
 def _wrap90(angle):
     quarter = math.pi/2
@@ -1710,6 +1769,18 @@ class ManeuverSequence(TurnMotion):
         self._light_rearm_min_m = None
         self.light_wait_credit_s = 0.
         self._light_wait_tick = None
+        # Round y5: the crosswalk stop in the start lane (only with control['light']).
+        self.crosswalk_state = None  # None, 'search', 'approach', 'fallback', 'waiting', 'done'
+        self.crosswalk_evidence = None
+        self._crosswalk_raw = []  # (frame, captured_at, score, row) not yet placed
+        self._crosswalk_seen = []  # capture times of frames >= CROSSWALK_SEEN_SCORE
+        self._crosswalk_fixes = []  # (frame, captured_at, score, row, distance, sigma, board_m)
+        self._crosswalk_track = []  # (received_at, start-lane front track)
+        self._crosswalk_board_m = None  # the near edge (conservative) before the board ahead
+        self._crosswalk_stop_at = None
+        self._crosswalk_wait_tick = None
+        self.crosswalk_wait_credit_s = 0.
+        self._crosswalk_kick = 0  # 1560 frames of the current kick toward the crosswalk
         self._exit_heading = None
         self.role_distinct_evidence = None
         self.second_acquisition_reason = None
@@ -3419,6 +3490,9 @@ class ManeuverSequence(TurnMotion):
             light_frame=list(self._light_frames[-1]) if self._light_frames else None,
             light_wait_credit_s=self.light_wait_credit_s,
             light_center_shift_m=self._light_center_shift_m if self._light_stop_active() else None,
+            crosswalk_state=self.crosswalk_state,
+            crosswalk_evidence=self._snap('crosswalk_evidence', self.crosswalk_evidence),
+            crosswalk_board_m=self._crosswalk_board_m, crosswalk_wait_credit_s=self.crosswalk_wait_credit_s,
             second_acquisition_reason=self.second_acquisition_reason,
             second_recovery_prior=self._snap('second_recovery_prior', self.second_recovery_prior),
             role_distinct_evidence=self._snap('role_distinct_evidence', self.role_distinct_evidence),
@@ -3788,6 +3862,127 @@ class ManeuverSequence(TurnMotion):
                 and (self.phase == 'drive' and self.reason in ('start_lane_lane_walls', 'start_lane_side_wall')
                      or self.phase == 'coast' and self.start_lane_coast_steering is not None))
 
+    def _crosswalk_observe(self, scan, track):
+        """Round y5: place the new crosswalk frames on the start lane's front track
+        (the board ahead, CROSSWALK_CAMERA_LAG_S before their capture time) and
+        fix the near edge once CROSSWALK_SEEN_FRAMES frames within
+        CROSSWALK_SEEN_S of the newest in-range one: the larger (nearer to the
+        car) of the two in-range frames with the smallest row error, each less
+        two errors."""
+        if self.crosswalk_state is None and self.light_vision:
+            self.crosswalk_state = 'search'
+        if self.crosswalk_state not in ('search', 'approach'):
+            self._crosswalk_raw.clear()
+            return
+        history = self._crosswalk_track
+        if track is not None:
+            history.append((scan['received_at'], track))
+        while history and history[0][0] < scan['received_at']-CROSSWALK_TRACK_S:
+            history.pop(0)
+        for frame, captured, score, row in self._crosswalk_raw:
+            self._crosswalk_seen.append(captured)
+            at = captured-CROSSWALK_CAMERA_LAG_S
+            if (score < CROSSWALK_RANGE_SCORE or row is None or not CROSSWALK_ROW_MIN_PX <= row <= CROSSWALK_ROW_MAX_PX
+                    or not history or at < history[0][0]):
+                continue
+            place = history[-1][1]
+            for (t0, x0), (t1, x1) in zip(history, history[1:]):
+                if t0 <= at <= t1:
+                    place = x0 if t1 <= t0 else x0+(x1-x0)*(at-t0)/(t1-t0)
+                    break
+            depth = row-CROSSWALK_ROW_HORIZON_PX
+            distance = CROSSWALK_ROW_SCALE/depth-CROSSWALK_ROW_OFFSET_M
+            sigma = CROSSWALK_ROW_SCALE*CROSSWALK_ROW_SIGMA_PX/(depth*depth)
+            self._crosswalk_fixes.append((frame, captured, score, row, distance, sigma,
+                                          place-FRONT_BODY_EXTENT_M-(distance-2*sigma)))
+        self._crosswalk_raw.clear()
+        del self._crosswalk_seen[:-8]
+        del self._crosswalk_fixes[:-8]
+        if not self._crosswalk_fixes:
+            return
+        newest = self._crosswalk_fixes[-1][1]
+        if sum(1 for c in self._crosswalk_seen if abs(c-newest) <= CROSSWALK_SEEN_S) < CROSSWALK_SEEN_FRAMES:
+            return
+        best = sorted(self._crosswalk_fixes, key=lambda f: (f[5], -f[1]))[:2]
+        self._crosswalk_board_m = max(f[6] for f in best)
+        if self.crosswalk_state == 'search':
+            self.crosswalk_state = 'approach'
+            self._route_event('crosswalk_fixed', scan, None, {
+                'source_seq': scan['seq'], 'received_at': scan['received_at'], 'board_m': self._crosswalk_board_m,
+                'front_track_m': track, 'fixes': [list(f) for f in self._crosswalk_fixes]})
+
+    def _crosswalk_control(self, scan, now, control, track, speed, v):
+        """Round y5: the start lane's motor around the crosswalk stop (it sets
+        self._start_motor); returns the feedback, or None outside the stop."""
+        state = self.crosswalk_state
+        if state not in ('search', 'approach', 'fallback', 'waiting'):
+            return None
+        if state in ('search', 'approach') and self.first_approach is not None:
+            # never fixed, lost, or not stopped before it: stop in the turn
+            state = self.crosswalk_state = 'fallback'
+            self._route_event('crosswalk_fallback', scan, control, {
+                'source_seq': scan['seq'], 'received_at': scan['received_at'], 'board_m': self._crosswalk_board_m,
+                'front_track_m': track, 'seen': len(self._crosswalk_seen),
+                'fixes': [list(f) for f in self._crosswalk_fixes]})
+        gap = (None if track is None or self._crosswalk_board_m is None
+               else track-FRONT_BODY_EXTENT_M-self._crosswalk_board_m)
+        stopped = speed is not None and speed < LANE_SPEED_RESTART_MPS
+        rolled_out = self._power_cmd_at is None or now-self._power_cmd_at >= CROSSWALK_STOP_MAX_S
+        aim = worst = None
+        if state == 'approach':
+            if v is not None and gap is not None:
+                aim = gap-v*CROSSWALK_AIM_LAG_S-v*v/(2*CROSSWALK_AIM_DECEL_MPS2)
+                guard = v+LANE_SPEED_GUARD_MARGIN_MPS
+                worst = gap-guard*self._reaction_s(now)-guard*guard/(2*LANE_STOP_DECEL_MIN_MPS2)
+            if gap is None:
+                self._start_motor = NEUTRAL  # the edge's odometry lost: stop where it is
+                if stopped or rolled_out:
+                    state = self._crosswalk_stopped(scan, now, control, gap, 'stopped_with_the_crosswalk_odometry_lost')
+            elif (stopped or rolled_out) and gap <= CROSSWALK_ZONE_M:
+                state = self._crosswalk_stopped(scan, now, control, gap,
+                                                'stopped_before_the_crosswalk' if gap >= 0 else 'stopped_past_the_crosswalk_edge')
+            elif aim is None or aim <= CROSSWALK_TARGET_GAP_M or worst <= CROSSWALK_MIN_GAP_M:
+                self._start_motor = NEUTRAL
+            elif speed is None or speed < LANE_SPEED_RESTART_MPS or self._crosswalk_kick:
+                # from rest only kicks (the start lane's own launch overshoots)
+                rested = self._power_cmd_at is None or now-self._power_cmd_at >= LANE_KICK_REST_S
+                if self._crosswalk_kick >= LANE_KICK_FRAMES and rested and stopped:
+                    self._crosswalk_kick = 0
+                if 0 < self._crosswalk_kick < LANE_KICK_FRAMES or (
+                        not self._crosswalk_kick and rested and gap-LANE_KICK_TRAVEL_M >= CROSSWALK_MIN_GAP_M):
+                    self._start_motor = TRIAL_MOTOR
+                    self._crosswalk_kick += 1
+                else:
+                    self._start_motor = NEUTRAL
+        elif state == 'fallback':
+            self._start_motor = NEUTRAL
+            if stopped or rolled_out:
+                state = self._crosswalk_stopped(scan, now, control, gap, 'stopped_in_the_first_turn_fallback')
+        if state == 'waiting':
+            self._start_motor = NEUTRAL
+            waited_now = max(0., now-self._crosswalk_wait_tick)
+            self._crosswalk_wait_tick = now
+            self.drive_since += waited_now  # standing is not drive time
+            self.crosswalk_wait_credit_s += waited_now
+            if now-self._crosswalk_stop_at >= CROSSWALK_WAIT_S:
+                state = self.crosswalk_state = 'done'
+                go = {'source_seq': scan['seq'], 'received_at': scan['received_at'],
+                      'waited_s': now-self._crosswalk_stop_at}
+                self.crosswalk_evidence = {**(self.crosswalk_evidence or {}), 'go': go}
+                self._route_event('crosswalk_go', scan, control, go)
+        return {'state': state, 'gap_m': gap, 'board_m': self._crosswalk_board_m, 'speed_mps': speed,
+                'speed_for_cut_mps': v, 'aimed_stop_gap_m': aim, 'worst_stop_gap_m': worst,
+                'motor': self._start_motor}
+
+    def _crosswalk_stopped(self, scan, now, control, gap, basis):
+        self.crosswalk_state = 'waiting'
+        self._crosswalk_stop_at = self._crosswalk_wait_tick = now
+        stop = {'source_seq': scan['seq'], 'received_at': scan['received_at'], 'basis': basis, 'gap_m': gap,
+                'board_m': self._crosswalk_board_m, 'fixes': [list(f) for f in self._crosswalk_fixes]}
+        self.crosswalk_evidence = {**(self.crosswalk_evidence or {}), 'stop': stop}
+        self._route_event('crosswalk_stop', scan, control, stop)
+        return 'waiting'
+
     def _start_lane_update(self, scan, lidar_age_s, now, control, *, safe, presteer_wait):
         """Start lane: wall law (else compass hold), then the first approach."""
         if self.phase == 'presteer':
@@ -3861,8 +4056,10 @@ class ManeuverSequence(TurnMotion):
         # the far ray ahead (2026-10-18 simulation, .94 m lane: rates 2.7/-.3
         # gave 2.65 m/s at .9 m/s and cut the lane); unknown speed meanwhile
         # is the conservative LANE_SPEED_UNKNOWN_MPS.
-        speed = self._track_speed(scan, self._lane_front_track(scan, ahead))
-        stop_at = allowed = None
+        track = self._lane_front_track(scan, ahead)
+        speed = self._track_speed(scan, track)
+        self._crosswalk_observe(scan, track)
+        stop_at = allowed = v = None
         if approach is None and source != 'first_support_missing_frame_hold':
             # A cut now still pushes for the rest of the ESC lag, the speed
             # rising meanwhile; once coasting that long, neither applies.
@@ -3892,6 +4089,8 @@ class ManeuverSequence(TurnMotion):
             stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)
                        + v*reaction)
             allowed = self._start_allowed_speed(ahead)
+            if self.crosswalk_state in ('search', 'approach'):
+                allowed = CROSSWALK_SEARCH_MPS if allowed is None else min(allowed, CROSSWALK_SEARCH_MPS)
             if speed is not None:
                 self._start_speed_measured = True
                 self._start_speed_last = (now, speed)
@@ -3909,6 +4108,7 @@ class ManeuverSequence(TurnMotion):
         # a closing speed read off the end board ~7 m ahead (1.77 m/s at ~1.3)
         # ended run 102 .3 m after the start. Without a support in reach the
         # governor still allows no speed inside LANE_START_SEARCH_M of the board.
+        crosswalk = self._crosswalk_control(scan, now, control, track, speed, v)
         cut = stop_at is not None and ahead is not None and ahead <= stop_at
         if cut:
             self._start_motor = NEUTRAL
@@ -3919,9 +4119,14 @@ class ManeuverSequence(TurnMotion):
             'nominal_target_pwm': natural, 'walls': walls, 'compass_heading_rad': heading,
             'first_approach': approach, 'front_range_m': ahead, 'speed_mps': speed,
             'front_stop_range_m': stop_at, 'allowed_speed_mps': allowed, 'slow': self._lane_start_slow,
-            'motor': self._start_motor, 'board_ahead_cut': cut, 'swept_path_certified': False}
+            'motor': self._start_motor, 'board_ahead_cut': cut, 'crosswalk': crosswalk,
+            'swept_path_certified': False}
+        if self.crosswalk_state == 'waiting' and abs(target-self.servo) < LIGHT_WAIT_STEER_DEADBAND_PWM:
+            target = self.servo  # standing: the steering pre-aimed, no small steps
         self.steering_target, self.natural_steering_target = target, natural
-        self.reason = 'start_lane_' + source
+        self.reason = ('crosswalk_stop_waiting' if self.crosswalk_state == 'waiting'
+                       else 'crosswalk_fallback_stop' if self.crosswalk_state == 'fallback'
+                       else 'start_lane_' + source)
         self._slew(now)
         if self.servo > NEUTRAL:
             self._route_center_ack = None
@@ -6021,6 +6226,11 @@ class ManeuverSequence(TurnMotion):
             return
         red, green = light.get('red'), light.get('green')
         red, green = (red if _number(red) else 0.), (green if _number(green) else 0.)
+        crosswalk, row = light.get('crosswalk'), light.get('crosswalk_row')
+        if self.route_stage == 'start_lane' and _number(crosswalk) and crosswalk >= CROSSWALK_SEEN_SCORE:
+            # round y5: placed on the start lane's next scan (_crosswalk_observe)
+            self._crosswalk_raw.append((frame, captured, crosswalk, row if _number(row) else None))
+            del self._crosswalk_raw[:-8]
         self._light_frames.append((frame, captured, red, green))
         del self._light_frames[:-(max(LIGHT_GREEN_FRAMES, LIGHT_RED_GONE_FRAMES)+2)]
         if self._light_stop_active() and captured >= self._light_gantry_since:
@@ -7123,7 +7333,8 @@ class ManeuverSequence(TurnMotion):
         if self.continue_route and self.entry_kind is None and self.phase == 'presteer':
             self._decide_entry(scan)
         if self.continue_route and self.route_stage == 'start_lane':
-            if not (self.phase == 'drive' and self._start_lane_handover_ready(scan, control)):
+            if not (self.phase == 'drive' and self.crosswalk_state not in ('fallback', 'waiting')
+                    and self._start_lane_handover_ready(scan, control)):
                 return self._start_lane_update(scan, lidar_age_s, now, control, safe=safe,
                                                presteer_wait=presteer_wait)
             # The support is round on the left with an adopted left command:

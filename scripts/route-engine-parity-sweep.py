@@ -7,7 +7,8 @@ light (round y2): the traffic light (course-sim --gantry --light) with the
 lamps off or green before the trigger, a camera losing the light near it, no
 light seen at all, short and long reds, a faster car; round y3: the green lamp
 out of view near it (green_min_ahead_m), with a 5 s red, and a 6 s red with the
-camera losing the light near it.
+camera losing the light near it; round y5: a crosswalk 2.46 or 1.4 m before
+the start (else the start lane's fallback stop in the first turn).
 replay: route-replay.py over every recorded car trial from round 64 on
 (work/vehicle-dynamic-deploy-20261008/left-cone-trial-*-N, N >= 64).
 
@@ -51,6 +52,8 @@ if which in ('all', 'light'):
               ('greennear.6', 0., '{"green_min_ahead_m": 0.6}', ()),
               ('greennear.6-red5', 0., '{"green_min_ahead_m": 0.6, "red_s": 5}', ()),
               ('near.6-red6', 0., '{"min_ahead_m": 0.6, "red_s": 6}', ()),
+              ('crosswalk2.46', 0., '{"crosswalk_m": 2.46}', ()),
+              ('crosswalk1.4', 0., '{"crosswalk_m": 1.4}', ()),
               ('fast', 0., '{}', ('--vehicle-param', 'speed_scale=1.3', '--vehicle-param', 'gain_scale=1.3')))
     for n in ('user8', 'doc8x4', 'short5'):
         for tag, at, light, extra in lights:

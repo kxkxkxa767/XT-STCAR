@@ -26,7 +26,8 @@
 //! Round y2: with `--light-state PATH` a reader thread polls that file (the
 //! read-only vision process, scripts/vision-log.py --light-state, replaces
 //! it atomically per frame: {"frame", "captured_s", "written_s", "red",
-//! "green"} on its own monotonic clock). Each new valid content becomes
+//! "green"} on its own monotonic clock; round y5 also "crosswalk",
+//! "crosswalk_row"). Each new valid content becomes
 //! control['light'] = {"frame", "captured_at", "red", "green"} on every
 //! control line from then on, with captured_at on this program's clock: the
 //! receive time less the file's own written - captured. Every accepted one is
@@ -212,8 +213,16 @@ fn light_of(text: &str, now: f64) -> Option<V> {
     if !v.get("frame").is_int() || v.get("frame").i() < 0 || !(0. ..=5.).contains(&age) {
         return None;
     }
-    Some(dict! {"frame" => v.get("frame").clone(), "captured_at" => now - age,
-                "red" => score("red")?, "green" => score("green")?})
+    let mut light = dict! {"frame" => v.get("frame").clone(), "captured_at" => now - age,
+                           "red" => score("red")?, "green" => score("green")?};
+    // Round y5: the best crosswalk score and its box's bottom row, when present.
+    if let Some(crosswalk) = score("crosswalk") {
+        light.set("crosswalk", crosswalk);
+        if let Some(row) = num("crosswalk_row").filter(|r| (0. ..=4000.).contains(r)) {
+            light.set("crosswalk_row", row);
+        }
+    }
+    Some(light)
 }
 
 enum FileOp {

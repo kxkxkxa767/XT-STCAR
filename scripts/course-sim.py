@@ -59,8 +59,25 @@ GANTRY_POST_M = .05
 # gantry and .14 m off its centre, the red lamp at the frame's top edge, the
 # green one beyond its right edge). Rules: not moving 5 s after green fails the
 # run (``went_late``: the front crossed the light line LIGHT_LATE_S after green).
+# Round y5: ``crosswalk_m`` (default None: none), the crosswalk's near edge that
+# far ahead of the car's front at the start along the start heading; frames
+# then carry race4's crosswalk score and box bottom row as on the 10-28 bench
+# (scores .77/.59/.34/.27 at 1.0/1.5/2.0/2.46 m, row 404.5 + 89/(m + .24)),
+# seen from 1.0 to 2.6 m within 30 deg of the start heading.
 LIGHT_DEFAULTS = {'zone': .70, 'red_s': 10., 'pre': 'off', 'fps': 4., 'latency': .25, 'score': .89,
-                  'min_ahead_m': .25, 'max_range_m': 6., 'half_fov_deg': 50., 'green_min_ahead_m': None}
+                  'min_ahead_m': .25, 'max_range_m': 6., 'half_fov_deg': 50., 'green_min_ahead_m': None,
+                  'crosswalk_m': None}
+CROSSWALK_BENCH = ((1.0, .77), (1.5, .59), (2.0, .34), (2.46, .27), (2.6, .25))
+
+
+def crosswalk_frame(ahead):
+    """(score, bottom row) of the crosswalk ``ahead`` m before the car's front, or None."""
+    if not CROSSWALK_BENCH[0][0] <= ahead <= CROSSWALK_BENCH[-1][0]:
+        return None
+    for (a0, s0), (a1, s1) in zip(CROSSWALK_BENCH, CROSSWALK_BENCH[1:]):
+        if a0 <= ahead <= a1:
+            return round(s0+(s1-s0)*(ahead-a0)/(a1-a0), 4), round(404.5+89./(ahead+.24), 1)
+    return None
 LIGHT_LATE_S = 5.
 
 
@@ -595,6 +612,13 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                     'frame': lamp['frame'], 'captured_at': round(t, 4),
                     'red': lamp['score'] if visible and state == 'red' else 0.,
                     'green': lamp['score'] if green_visible and state == 'green' else 0.}))
+                if lamp['crosswalk_m'] is not None:
+                    sx, sy, spsi = course.start
+                    along = lamp['crosswalk_m']+FRONT-((car.x-sx)*math.cos(spsi)+(car.y-sy)*math.sin(spsi))
+                    turned = abs(math.degrees(math.atan2(math.sin(car.psi-spsi), math.cos(car.psi-spsi))))
+                    seen = crosswalk_frame(along-FRONT) if turned <= 30 else None
+                    if seen is not None:
+                        lamp['pending'][-1][1].update(crosswalk=seen[0], crosswalk_row=seen[1])
                 lamp['frame'] += 1
             while lamp['pending'] and lamp['pending'][0][0] <= t+1e-9:
                 console.status['control']['light'] = lamp['pending'].pop(0)[1]

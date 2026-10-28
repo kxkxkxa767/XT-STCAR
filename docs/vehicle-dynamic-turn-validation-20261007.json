@@ -24753,8 +24753,8 @@
     "date": "2026-10-27",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "y3 (6e5b0ad) on the car as round 110 engine (b84ed5b9...) + y3 helper",
     "user": [
       "过红绿灯后速度可以快点",
@@ -24778,6 +24778,73 @@
       "a car accelerating faster than 1.6 m/s2 from rest would be under-estimated by the bound during the launch (measured ~1.2)",
       "the finish after the launch still ends stopped only; the 8 cm body gate stays"
     ],
-    "next": "parity light group, then build round 111 engine + y4 (build-race.py claude-turn110 claude-turn111 111 y4_light_launch_20261027; build-vision.py claude-turn111 y4 race4_vehicle_handoff_20261024.zip --light-stop), deploy with the before/after checks, run y4 from the start; watch the speed after green, the time from the release to the stop, the board gap and any 8 cm gate"
+    "next": "parity light group, then build round 111 engine + y4 (build-race.py claude-turn110 claude-turn111 111 y4_light_launch_20261027; build-vision.py claude-turn111 y4 race4_vehicle_handoff_20261024.zip --light-stop), deploy with the before/after checks, run y4 from the start; watch the speed after green, the time from the release to the stop, the board gap and any 8 cm gate",
+    "deployment": {
+      "checks_before": "light parity 27/27, supervisor parity 27/27 (route-engine-parity-sweep.py OUT light [--supervisor])",
+      "engine": "build-race.py claude-turn110 claude-turn111 111 y4_light_launch_20261027 (5160e24, route-engine ff3c482a..., archive c8f70390...); the number only labels the engine package, the run is y4",
+      "deploy": "before: six fresh locked samples, 17 hashes equal round 110; deploy-matched.py claude-turn111 111 (stage-claude-turn111-20261028-154356); after: 17 hashes equal round 111; build-vision.py claude-turn111 y4 race4_vehicle_handoff_20261024.zip --light-stop, deploy-vision.py y4: stage-claude-y4-20261028-154404, 6 files equal"
+    },
+    "car_run_y4": {
+      "evidence": "left-cone-trial-20261028-y4 (83/83 files equal)",
+      "result": "route_finish_zone_stop 33.4 s from the start to the stop, .389 m from the end board, 2 creeps; race4 164 frames 3.7/s, 232 ms; max tick compute 10.9 ms, max gap 25.3 ms",
+      "light": "stopped at the light (whole car in the zone) after a stop at .82 m from the light line in the entry turn and three 1560 kicks (.55->.44, .44->.35, .31->.24 m; ~3.5 s); released on green in fresh frames (2nd green frame), 37 red frames",
+      "after_green": "the 1560 launch lasted ~.45 s (one 160 ms sample more than y3-2), peak .84 m/s (y3-2 .79); then the same 1550 push / guard cut / coast cycle at .55-.84 m/s (guard worst gap -.25 at .77 m/s with 2.16 m to go, the aim at .84); stopped .48 m from the board, two kicks to .39; release to the final stop 7.3 s (y3-2 6.2 s)",
+      "verdict": "no faster than y3-2: the launch bound acted (the launch was not cut at once) but the guard limits every later 1550 push",
+      "user": "有两个拖慢时间的地方的，第一个是在红绿灯前停下来断断续续的，过红绿灯后也是断断续续的走"
+    }
+  },
+  "y5_crosswalk_20261028": {
+    "date": "2026-10-28",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y4 (5160e24) as round 111 + y4 on the car",
+    "user": [
+      "有两个拖慢时间的地方的，第一个是在红绿灯前停下来断断续续的，过红绿灯后也是断断续续的走，现在我把车放到斑马线后面你看看多远可以识别到，下一轮修复上面的问题并加上斑马线停车等待3s",
+      "还有你做个保底的，在发车的直道，如果在转弯处没识别/长时间丢失目标/定位不准，一定要在转弯处停下来 停下来等3s再走",
+      "改完后不仿真，直接开始下一轮的测试",
+      "我睡觉去了，你改完直接推送"
+    ],
+    "crosswalk_bench": {
+      "method": "8 /camera.jpg frames per position on the car (vision-bench-20261028-crosswalk-<pos>), race4 (stage-claude-y4 vision-log.py --conf .10), lidar",
+      "positions": {
+        "1.0m": "crosswalk 8/8 .75-.79, box bottom row 476 (frame 480), lidar front 6.38 rear 1.60",
+        "1.5m": "8/8 .57-.61, row 456, front 6.84 rear 1.16",
+        "2.0m": "8/8 .32-.36, row 444, front 7.35 rear .65",
+        "2.46m (rear at the start board)": "8/8 .25-.28, row 437-438, front 7.79 rear .23"
+      },
+      "fit": "distance (front to the near edge) = 89/(row - 404.5) - .24, residuals <= .013 m; ~.034 m/row at 1.5 m, ~.08 at 2.46 m",
+      "in_run_y4": "at rest at the start (same place as the 2.46 m bench) the weak boxes sat at rows 427 (a 3.7 m fit): weak frames give no distance; moving at ~1.4 m/s the rows (frames 12-14) were ~.22-.27 s behind the lidar odometry",
+      "range": "detected across the 2.46 m (at the .25 threshold there); >= .45 from ~1.75 m; nearer than ~1 m the near edge leaves the frame"
+    },
+    "change": {
+      "vision": "vision-log.py --light-state also writes the best crosswalk score and its box bottom row (crosswalk, crosswalk_row); route-engine race passes them in control[\"light\"]",
+      "crosswalk_stop": "start lane only, with light vision: frames >= .25 counted, frames >= .45 with rows 430-474 placed on the start lane front track .3 s before their capture time, less two 2-row errors (the edge nearer); fixed with 2 frames within 1.5 s, the larger edge of the two smallest-error frames; until fixed (and while approaching) the start lane drives at most .5 m/s; cut when a .3 s lag + .6 m/s2 coast reaches .25 m or the weakest coast (.45, reaction + rest of the ESC lag, +.05 m/s) .05 m; from rest toward it only 3-frame 1560 kicks 1 s apart with .45 m of room (the start lane own 1560 from rest overshot); stopped (or neutral 3 s) within 1.0 m: wait 3.5 s (not drive time), then the start lane goes on (1600 launch)",
+      "fallback": "not stopped when the first support approach begins (never seen, lost, never in range, or not stopped): neutral, stop in the turn, wait 3.5 s; the handover to the first target waits for it; odometry lost in the approach: stop where it is and wait",
+      "aim": "LANE_STOP_DECEL_MPS2 .5 -> .6 (the six stop coasts of y3/y3-2/y4 travelled .75-.8 of the aim; .5-.78 m/s2 with a ~.25 s lag)",
+      "simulation_model": "course-sim light crosswalk_m (frames from the bench table) for the parity sweep; parity light group +2 cases (crosswalk 2.46 / 1.4 m ahead)",
+      "functional_check": "a few course-sim runs only to see the crosswalk path act (user8/doc8x4/short5, crosswalk 2.46/2.0/1.4/1.1 m): first design (search .9 m/s, zone .6, the start lane own restart) stopped .3-.64 m PAST the edge; now every case stops before the conservative edge (.09-.96 m); the 2.46 m case stops ~7 s after the start (the sim 1550 fades at low speed, two kicks); no crosswalk: fallback stop in the first turn",
+      "tests": "test_route_y5_crosswalk.py (12); test_route_y3_light_face SimulatedFacing now has the crosswalk at 2.46 m and checks the light (the run may end on the 40 s drive budget after the light)"
+    },
+    "tried_and_reverted": [
+      "guard long lag ESC_LAG_S .45 -> .35 (track cuts ~.2-.3 s): FinishStopTests closed-loop cases touched the board by .5-3.6 mm (lag .45 model cases, also lag .2/.3 with 1550 cruising to 1.15-1.5 m/s)",
+      "every restart from rest as a launch (1560 until aim/guard): the test model 1560 (~2 m/s2 from rest, above the 1.6 bound) ran into the board",
+      "the kick bound carried into the pipeline peak: no effect (with 1.6 both ways the bounded peak equals the model peak); the guard still ends kicks after 1-2 frames"
+    ],
+    "not_done": "the stop-and-go before the light and after green is NOT fixed: in y3/y3-2/y4 the guard (1550 at .5 m/s2 for up to .5 s after a cut, weakest coast .45) put stop travel at 2.5-4x what the car did; a smaller guard needs either car data on kicks/pushes or accepting the board risk; only the aim decel changed",
+    "risks": [
+      "a weak or wrong row fixing the crosswalk too near stops the car early (no penalty if before the stripes); too far would stop on it (+20 s): only frames >= .45 range it, .3 s lag and two errors put it nearer",
+      "the search cap (.5 m/s) holds the whole start straight when no crosswalk is fixed; with the fallback the start lane took 7-9 s more in simulation (.3 s delay car) and 4 light parity cases (user8 red3-at1, doc8x4 default/green-at2/red3-at1) now end on the 40 s drive budget after the light (y4 parity: none); on the car y4 drove ~26.5 s, expected ~+4 s",
+      "a stop up to 1.0 m (plus the margins) before the stripes: assumed to count as stopping before the crosswalk",
+      "the stop in the first turn happens while the approach steers; the handover waits for the wait"
+    ],
+    "validation": {
+      "python_suite": "Python全量948 OK",
+      "cargo_test": "6 pass; clippy 32 (unchanged)",
+      "parity_light": "33/33",
+      "supervisor_light": "33/33",
+      "simulation": "not run (user); parity sweeps only"
+    }
   }
 }

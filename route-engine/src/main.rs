@@ -19,6 +19,7 @@ pub mod compact_target;
 pub mod dump;
 pub mod helpers;
 pub mod maneuver;
+pub mod maneuver_crosswalk;
 pub mod maneuver_light;
 pub mod maneuver_open;
 pub mod maneuver_path;

@@ -22,6 +22,9 @@ number, its capture time and the write time on this process's CLOCK_MONOTONIC
 ("captured_s", "written_s") and the highest red_light / green_light score of
 the frame ("red", "green"; 0 without one). `route-engine race --light-state
 PATH` reads it as the traffic light's state; nothing else is sent anywhere.
+Round y5: with a crosswalk in the frame also its best score ("crosswalk")
+and that box's bottom row in image pixels ("crosswalk_row"), for the start
+lane's crosswalk stop.
 
 Before anything else the model must match its handoff files: sha256 of
 race4.onnx equal to race4.provenance.json's, the class order of race4.json
@@ -181,6 +184,11 @@ def main():
                 state = {'frame': stats['frames'], 'captured_s': round(captured, 4),
                          'written_s': round(time.monotonic(), 4), 'red': best('red_light'),
                          'green': best('green_light')}
+                crosswalks = [d for d in detections if d['cls'] == 'crosswalk']
+                if crosswalks:
+                    # round y5: the best crosswalk and its box's bottom row (image pixels)
+                    top = max(crosswalks, key=lambda d: d['score'])
+                    state.update(crosswalk=top['score'], crosswalk_row=round(top['box'][3], 1))
                 light_state = Path(args.light_state)
                 temporary = light_state.with_name(light_state.name+'.tmp')
                 temporary.write_text(json.dumps(state))

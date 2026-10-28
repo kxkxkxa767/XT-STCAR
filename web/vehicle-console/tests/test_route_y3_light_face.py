@@ -171,10 +171,15 @@ class SimulatedFacing(unittest.TestCase):
         cs = y2.course_sim()
         course = cs.Course(**cs.LAYOUTS['user8'], gantry=True)
         vehicle = {'steer_tau': .25, 'play_pwm': 40., 'speed_scale': 1., 'decel': .6, 'gain_scale': 1.}
+        # Round y5: the crosswalk where the user's track has it. Its stop (search at
+        # .5 m/s, kicks; this car's 1550 fades at low speed) costs this .3 s-delay
+        # car ~7 s more drive time in the start lane, and the 40 s budget may end
+        # the run after the light (car run y4 drove ~26.5 s): the light is checked.
         summary, _, _ = cs.run(course, max_s=75., vehicle='measured', delay=.3, vehicle_params=vehicle,
-                               light={'red_s': 10., 'green_min_ahead_m': .6})
+                               light={'red_s': 10., 'green_min_ahead_m': .6, 'crosswalk_m': 2.46})
         light = summary['light']
-        self.assertTrue(summary['route_completed'], summary['end_reason'])
+        self.assertIn(summary['end_reason'], ('route_finish_zone_stop', 'maneuver_cumulative_drive_timeout'))
+        self.assertIsNotNone(light['crossed_at'], light)
         self.assertTrue(light['stopped_in_zone'], light)
         self.assertFalse(light['went_before_green'], light)
         self.assertFalse(light['went_late'], light)
