@@ -24890,8 +24890,8 @@
     "date": "2026-10-29",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "y6 (8251f35) as round 113 + y6",
     "change": "crosswalk search/approach: an unknown start lane speed holds the last measured one (+.1 m/s and the rise) for 1 s (CROSSWALK_SPEED_HOLD_S) for the cruise and the stop aim, instead of LANE_SPEED_UNKNOWN_MPS",
     "validation": {
@@ -24900,6 +24900,14 @@
       "parity_light": "33/33",
       "supervisor_light": "33/33",
       "crosswalk_quick_check": "same 18 stops as y6 (.04-.65 m before the conservative edge)"
+    },
+    "deployment": "build-race.py claude-turn113 claude-turn114 114 (b5877cc); before: equal round 113 (after the car was back at the start); deploy-matched.py claude-turn114 114 (backup-claude-turn114-20261029-201105); after: equal round 114; deploy-vision.py y7 (stage-claude-y7-20261029-201105)",
+    "car_run_y7": {
+      "evidence": "left-cone-trial-20261029-y7 (83/83 files equal)",
+      "note": "user: 刚刚忘记初始化红绿灯了，它一直都是绿灯 - the light showed green throughout (race4: 0 red, 33 green frames); the car still stopped at the light and was released .7 s later (green without red: not the light, rearmed); the light part is not a test",
+      "result": "route_finish_zone_stop 36.7 s, .378 m from the end board, 0 creeps; max tick 9.9 ms, gap 23.2 ms",
+      "crosswalk": "fixed 4.90 s; drive to the stop 5.0 s (y5 7.3, y6 13.3); stopped 6.8 s (conservative gap .388); rear lidar .337 -> 2.242 m: ~.35-.45 m before the stripes by the bench; waited 3.6 s; start lane to the handover 11.95 s (y4 4.6 s)",
+      "other": "a .6 s recovery pause in the open transfer (open_board_ahead_without_second_support, resumed after 5 good frames); otherwise stage times within ~.6 s of y4"
     }
   }
 }
