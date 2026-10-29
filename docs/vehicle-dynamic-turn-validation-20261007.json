@@ -24986,5 +24986,44 @@
       "crosswalk": "drive to the stop 5.6 s (first y9 run 3.5 s, y7-2 5.3); four cuts before the stop (the .5 m/s cap: 1550 takes the rolling car past it, then a coast); conservative gap .39 m; rear lidar .368 -> 2.24 m: ~.36 m before the stripes; waited 3.6 s; go to the handover 3.6 s",
       "light": "stopped .253 m from the light line, released on green after 7.1 s (red 10.7 s)"
     }
+  },
+  "y10_crosswalk_calibrated_20261029": {
+    "date": "2026-10-29",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "commit": "d9f44cf",
+    "baseline": "y9 (2b69305) as round 116 + y9 on the car",
+    "user": [
+      "按第二条改，认出斑马线前只用1550",
+      "如何校准",
+      "车放在起点了，车头到白条近边量了是234cm",
+      "摄像头没动过，按这个写y10",
+      "改完你直接上传，明天再测"
+    ],
+    "first_try_without_calibration": "1550 only with the 10-28 fit: simulation stopped up to .21 m past the conservative edge (fix only ~1.75 m ahead at ~.9 m/s); on the car the conservative margin had not shown (y5 conservative .28 vs ~.15 by the rear lidar, y9-2 .39 vs ~.36): not deployed",
+    "calibration": {
+      "anchor": "car at the start, tape front -> near edge 2.34 m, board behind .320 m (true distance = 2.66 - rear); the 10-28 bench positions by it: 1.06/1.50/2.01/2.43 m for the taped 1.0/1.5/2.0/2.46 (papers not moved)",
+      "bench_now": "vision-bench-20261028-crosswalk-start-234cm-20261029 (stage y9 vision-log): 8/8 frames .24-.28, rows 424-426",
+      "data": "213 crosswalk frames of y5..y9-2 in the start lane up to the crosswalk go, rear lidar from the feedback scans (at_ms clock) interpolated",
+      "fit": "distance = 461.4/(row - 323.5) - 2.186 at a .15 s camera lag (.15-.3 fit alike): rms .087 m; scores .25-.35 .08 (max .29), .35-.45 .12 (max .32), >= .6 .06 (max .20); 2.2-3.0 m .07 (max .15)",
+      "unexplained": "the 10-28 bench rows sat 8-15 lower at the same distances (437.5 at 2.43 m vs today 424 at 2.34; the user: camera not moved); y4 (10-28 afternoon) at the start had 427 like today"
+    },
+    "change": [
+      "the new fit; every frame >= .25 ranges (rows 410-474, ~3.15-.88 m), each less 2 x .15 m",
+      "the edge = the median of the newest 3 ranged frames within 1.5 s, afterwards only nearer (max)",
+      "frames before the first odometry sample are placed at it (the car at the start): the crosswalk fixes before the car moves",
+      "search and approach: 1560 only to start (speed + rise < .2), else 1550, no cap; the stop aim/guard cuts once and the car coasts to a stop",
+      "course-sim crosswalk rows by the new fit"
+    ],
+    "simulation_check": "quick crosswalk check (user8/doc8x4, 1.4-2.46 m): fixed at 1.1 s (frames at rest), stops -.02..+.24 m from the conservative edge (~.28-.54 m before the stripes), 2.8-3.9 s from the start",
+    "validation": {
+      "python_suite": "Python全量950 OK",
+      "cargo_test": "6 pass; clippy 32",
+      "parity_light": "33/33",
+      "supervisor_light": "33/33"
+    },
+    "risk": "the fit holds while the camera keeps today's tilt; a tilt like the 10-28 bench one (8-15 rows) moves a 2.3 m edge by ~.5-.8 m"
   }
 }
