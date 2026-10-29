@@ -383,18 +383,22 @@ impl Maneuver {
             v_cut = Some(v);
             stop_at = Some(FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * reaction);
             allowed = Self::start_allowed_speed(ahead);
-            if matches!(self.crosswalk_state, Some("search" | "approach")) {
-                allowed = Some(match allowed {
-                    None => CROSSWALK_SEARCH_MPS,
-                    Some(a) => pmin(a, CROSSWALK_SEARCH_MPS),
-                });
-            }
             if let Some(s) = speed {
                 self._start_speed_measured = true;
                 self._start_speed_last = Some((now, s));
             }
             let settling = self._launch_cmd_at.is_some_and(|at| now - at < ESC_LAG_S + START_LAUNCH_SETTLE_S);
             self._start_motor = Self::start_governor(speed, rise, allowed, self._start_speed_measured, settling);
+            if matches!(self.crosswalk_state, Some("search" | "approach")) && self._start_motor != NEUTRAL {
+                // round y6: a steady cruise until the crosswalk stop
+                self._start_motor = if v > CROSSWALK_SEARCH_MPS {
+                    NEUTRAL
+                } else if v < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS {
+                    TRIAL_MOTOR
+                } else {
+                    ROUTE_SLOW_MOTOR
+                };
+            }
         } else {
             self._start_motor =
                 if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };

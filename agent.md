@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-29 晚 Claude：y5实车跑完——斑马线停住等3.6s，整条43.9s；起步断断续续，y6改成匀速巡航，未打包；车上第112轮+y5）
+
+记录键`y6_crosswalk_cruise_20261029`（y5实车见`y5_crosswalk_20261028`的`car_run_y5`）。车上：第112轮引擎（49c149d，c820d7df…）+ y5助手（`stage-claude-y5-20261029-193858`），`python3 scripts/start-round.py y5`可重复跑。
+- y5第一次没启动：控制台起步检查时好时坏（`left_corridor_unknown`），用户摆正后通过；start-round.py报错时的格式化崩溃已修（%d→%s）。
+- y5实车：斑马线5.2s定位（第一帧是弱远框，算成2.76m，后面近帧修正到1.15–1.6m），9.0s停在保守白条前.277m，等3.6s，12.6s走；按雷达后方距离对照昨天台架，车头离白条约.15m（白条没动的话），比相机估的近约.2m。起步在.5m/s上限下1560/1550/空挡每.5s一换，.15–.3m/s爬了7s。其余（灯、过灯后、终点）和y4一样。整条43.9s。
+- y6改法：斑马线停车前不再用.5m/s上限，改匀速巡航：速度加电调滞后增量<.30用1560，否则1550，>.6空挡；瞄准目标.25→.35m、保护最小.05→.1m。快速仿真核对（3种场地×1.1–2.46m共18例）都停在保守白条前.04–.65m，起步到停车2.6–4.2s。
+- 验证：Python全量948 OK；cargo test 6个过、clippy 32；带灯逐位对比33/33、监管层33/33（2例在灯后撞40s行驶预算，y5是4例）。
+- 下一步：打包第113轮+y6（`build-race.py claude-turn112 claude-turn113 113 y6_crosswalk_cruise_20261029`，`build-vision.py claude-turn113 y6 race4_vehicle_handoff_20261024.zip --light-stop`），部署前后核对，`python3 scripts/start-round.py y6`；问用户y5/y6停车时车头离白条的实际距离。
+
 ## 当前接手入口（2026-10-28 夜 Claude：y4实车跑完未提速；斑马线识别台架；y5加斑马线停车3s和转弯处保底停车，未打包未部署；车上第111轮+y4）
 
 记录键`y5_crosswalk_20261028`（y4实车见`y4_light_launch_20261027`的`car_run_y4`）。车上：第111轮引擎（5160e24，ff3c482a…）+ y4助手（`stage-claude-y4-20261028-154404/trialy4.py`），`python3 scripts/start-round.py y4`可重复跑。

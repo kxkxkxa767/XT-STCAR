@@ -24797,8 +24797,8 @@
     "date": "2026-10-28",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "y4 (5160e24) as round 111 + y4 on the car",
     "user": [
       "有两个拖慢时间的地方的，第一个是在红绿灯前停下来断断续续的，过红绿灯后也是断断续续的走，现在我把车放到斑马线后面你看看多远可以识别到，下一轮修复上面的问题并加上斑马线停车等待3s",
@@ -24845,6 +24845,36 @@
       "parity_light": "33/33",
       "supervisor_light": "33/33",
       "simulation": "not run (user); parity sweeps only"
+    },
+    "deployment": "build-race.py claude-turn111 claude-turn112 112 y5_crosswalk_20261028 (49c149d, route-engine c820d7df...); before: 17 hashes equal round 111; deploy-matched.py claude-turn112 112 (backup-claude-turn112-20261029-193858); after: equal round 112; deploy-vision.py y5 (stage-claude-y5-20261029-193858, 6 files equal)",
+    "start_check": "first start-round.py y5 refused: the console start check flickered (left_corridor_unknown in ~1/3 samples; front 7.98 vs 7.75 m at y4, the 351 deg ray empty); the user straightened the car; start-round.py also crashed formatting that refusal (%d with \"y5\"), fixed (%s)",
+    "car_run_y5": {
+      "evidence": "left-cone-trial-20261029-y5 (88/88 files equal)",
+      "result": "route_finish_zone_stop 43.9 s (y4 33.4), .397 m from the end board, 1 creep; race4 196 frames 3.61/s, 239 ms; max tick 10.8 ms, gap 25.2 ms",
+      "crosswalk": "fixed at 5.21 s (frame 18 score .52 row 434 -> 2.76 m: a weak far row) with the car ~.7 m from the start; refined by rows 453-468 (1.60-1.15 m); stopped 9.0 s (basis stopped_before_the_crosswalk, conservative gap .277 m, nominal ~.36); waited 3.6 s; went 12.6 s; rear lidar 2.448 m at the stop against the bench (1.0 m at rear 1.596) puts the front ~.15 m before the stripes if they did not move",
+      "start": "under the .5 m/s cap the car crept at .15-.3 m/s in 1560/1550/neutral pulses every ~.5 s, 7.1 s from drive to the stop (user: 起步的时候很怪，为什么一直短短续续的); start lane to the handover 14.2 s (y4 4.6 s) incl. the 3.6 s wait",
+      "rest": "handover to the light stop 15.3 s (y4 14.6), light go to the finish stop 7.2 s (y4 7.3): unchanged, the guard cut pattern as y4"
     }
+  },
+  "y6_crosswalk_cruise_20261029": {
+    "date": "2026-10-29",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y5 (49c149d) as round 112 + y5 on the car",
+    "user": [
+      "起步的时候很怪，为什么一直短短续续的"
+    ],
+    "change": "until the crosswalk stop the start lane cruises instead of the .5 m/s governor cap: 1560 while speed + ESC-lag rise < .30 (CROSSWALK_CRUISE_MPS .45 - band .15), else 1550, neutral above .6 (and the board cut, and the stop aim/guard); stop aim target .25 -> .35 m, guard minimum .05 -> .1 m",
+    "simulation_check": "quick course-sim crosswalk checks only (user8/doc8x4/short5, 1.1-2.46 m): cruise .7/max .9 stopped up to .35 m past the edge; .5/.65 with target .4 one case .05 past; .45/.6 with target .35/min .1: all 18 before the conservative edge (.04-.65 m), 2.6-4.2 s from the start (y5 setting 7 s)",
+    "validation": {
+      "python_suite": "Python全量948 OK",
+      "cargo_test": "6 pass; clippy 32 (unchanged)",
+      "parity_light": "33/33",
+      "supervisor_light": "33/33",
+      "note": "2 light parity cases end on the 40 s drive budget after the light (y5: 4, y4: 0)"
+    },
+    "risk": "y5 on the car: the rear lidar says the camera placed the edge ~.2 m too far; if so the .04 m simulation margin is not enough on the car"
   }
 }

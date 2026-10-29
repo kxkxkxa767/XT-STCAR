@@ -1069,14 +1069,27 @@ CROSSWALK_TRACK_S = 3.
 # Search speed: at .9 a crosswalk 1.4-2.46 m ahead was fixed ~1 m before it
 # with the car at ~1.1 m/s and still powered (the speed estimate lags a start
 # from rest), and it stopped .3-.64 m past the edge (simulation).
-CROSSWALK_SEARCH_MPS = .5
+# Round y6 (user: 起步的时候很怪，为什么一直短短续续的): car run y5 under the
+# .5 m/s cap crept at .15-.3 m/s in 1560/1550/neutral pulses every ~.5 s, 7 s
+# from the start to the stop (y4 reached the crosswalk's place in ~1.5 s). Now
+# until the stop a steady cruise: 1560 while the speed plus the ESC lag's rise
+# is under CROSSWALK_CRUISE_MPS less CROSSWALK_CRUISE_BAND_MPS, else 1550
+# (which holds a rolling car on the track), neutral above CROSSWALK_SEARCH_MPS
+# (and the start lane's own board cut). y5 fixed the edge ~1.6 m before it.
+# Simulation (crosswalk 1.1-2.46 m ahead, three courses): a .7 cruise stopped
+# up to .35 m past the edge (the edge fixed late, the car still speeding up);
+# .45/.6 with the target .35 and the minimum .1 stopped all 18 before it
+# (.04-.65 m before the edge as placed, 2.6-4.2 s from the start).
+CROSSWALK_SEARCH_MPS = .6
+CROSSWALK_CRUISE_MPS = .45
+CROSSWALK_CRUISE_BAND_MPS = .15
 # The stop: a coast at the measured ~.6 m/s2 after a .3 s lag aims at
 # CROSSWALK_TARGET_GAP_M; never past CROSSWALK_MIN_GAP_M at the weakest coast
 # after the reaction and the rest of the ESC lag (speed + margin).
 CROSSWALK_AIM_LAG_S = .3
 CROSSWALK_AIM_DECEL_MPS2 = .6
-CROSSWALK_TARGET_GAP_M = .25
-CROSSWALK_MIN_GAP_M = .05
+CROSSWALK_TARGET_GAP_M = .35
+CROSSWALK_MIN_GAP_M = .1
 # Stopped farther than this from it, 3-frame 1560 kicks rested apart (as the
 # lane's), each only with LANE_KICK_TRAVEL_M of room; from rest the start
 # lane's own 1560 ran until a lagging speed read .15 m/s and overshot the edge
@@ -4089,14 +4102,17 @@ class ManeuverSequence(TurnMotion):
             stop_at = (FRONT_BODY_EXTENT_M+LANE_FINISH_GAP_M+v*v/(2*LANE_START_STOP_DECEL_MPS2)
                        + v*reaction)
             allowed = self._start_allowed_speed(ahead)
-            if self.crosswalk_state in ('search', 'approach'):
-                allowed = CROSSWALK_SEARCH_MPS if allowed is None else min(allowed, CROSSWALK_SEARCH_MPS)
             if speed is not None:
                 self._start_speed_measured = True
                 self._start_speed_last = (now, speed)
             settling = (self._launch_cmd_at is not None
                         and now-self._launch_cmd_at < ESC_LAG_S+START_LAUNCH_SETTLE_S)
             self._start_motor = self._start_governor(speed, rise, allowed, self._start_speed_measured, settling)
+            if self.crosswalk_state in ('search', 'approach') and self._start_motor != NEUTRAL:
+                # round y6: a steady cruise until the crosswalk stop
+                self._start_motor = (NEUTRAL if v > CROSSWALK_SEARCH_MPS
+                                     else TRIAL_MOTOR if v < CROSSWALK_CRUISE_MPS-CROSSWALK_CRUISE_BAND_MPS
+                                     else ROUTE_SLOW_MOTOR)
         else:
             # The approach drives on at 1550 (a stopped car restarts at 1560).
             self._start_motor = (TRIAL_MOTOR if speed is not None and speed < LANE_SPEED_RESTART_MPS

@@ -78,7 +78,7 @@ def main():
     check = subprocess.run([sys.executable, str(WORK/'validate-fresh-engine.py'), str(pre), str(package)],
                            capture_output=True, text=True)
     if check.returncode != 0:
-        fail('车上状态或安装文件与第%d轮部署不符，没有启动：%s' % (n, (check.stderr or check.stdout).strip()[-300:]))
+        fail('车上状态或安装文件与第%s轮部署不符，没有启动：%s' % (n, (check.stderr or check.stdout).strip()[-300:]))
     ranges = fresh['samples'][-1]['lidar']['scan']['ranges']
     side = lambda i: '-' if ranges[i] is None else f'{ranges[i]:.2f}m'
     say(f'核对通过：{check.stdout.strip()}')
