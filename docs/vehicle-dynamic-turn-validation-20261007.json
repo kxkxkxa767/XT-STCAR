@@ -24953,8 +24953,8 @@
     "date": "2026-10-29",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "y8 (2c13e03) as round 115 + y8",
     "change": [
       "crosswalk search and approach: speed (pairwise median, as the start lane) and the edge odometry from the board behind (_lane_rear_range, along the compass axis) when it is within 4 m as the stop begins; the start lane own board guard keeps the front track",
@@ -24972,6 +24972,13 @@
     "costs_in_simulation": [
       "light parity: 10 cases end on the 40 s drive budget (y8: 2): the no-crosswalk cases search at <= .5 m/s with the sim car 1550 fading (~.35 m/s) and then stop in the first turn (doc8x4 default: handover at 16.0 s, y4 5.4)",
       "test_route_y3_light_face SimulatedFacing (.3 s delay car, crosswalk 2.46 m) now stops on the 8 cm body gate in the light entry turn (.065 m, no contact); the test checks no contact and the light only if reached"
-    ]
+    ],
+    "deployment": "build-race.py claude-turn115 claude-turn116 116 (2b69305); the SSH master had dropped, the user reopened it; before: equal round 115; deploy-matched.py claude-turn116 116 (backup-claude-turn116-20261029-212404); after: equal round 116; deploy-vision.py y9 (stage-claude-y9-20261029-212404)",
+    "car_run_y9": {
+      "evidence": "left-cone-trial-20261029-y9 (41/41 files equal)",
+      "result": "ended turn_perception_unavailable in the start lane ~1 s after the crosswalk go (the car locked there; user: 为什么停那不动了)",
+      "crosswalk": "rear odometry in use: speed .06 -> .62 m/s smooth; two cuts (the .5 cap at .60 m/s, then the stop aim at the fix); drive to the stop 3.5 s (y7-2 5.3, y8 8.7); conservative gap .387 m; rear lidar .431 -> 2.207 m; waited 3.5 s",
+      "halt": "on the restart a scan had 9 open front bins at 16-26 deg left (-26..-16, 351 valid returns): front_sparse; the start lane is outside the route quality tolerance scope (only after the handover / in the left turn), so the console supervisor halted (server.py turn_quality_hold_eligible / halt turn_perception_unavailable); y5-y8 restarted from about the same place without it"
+    }
   }
 }
