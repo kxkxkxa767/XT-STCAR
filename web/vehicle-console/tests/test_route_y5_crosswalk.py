@@ -108,6 +108,18 @@ class CrosswalkStop(unittest.TestCase):
         self.assertIn('crosswalk_go', motion.route_events)
         self.assertIsNone(motion._crosswalk_control(scan(6, 6.6), 6.6, {}, 3.5, 0., 0.))
 
+    def test_after_the_cut_it_coasts_to_a_standstill(self):
+        motion = self.approach()
+        motion._crosswalk_control(scan(1, 1.), 1., {}, 3.+ms.FRONT_BODY_EXTENT_M+.55, .5, .5)
+        self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (NEUTRAL, True))
+        motion._start_motor = ms.ROUTE_SLOW_MOTOR  # the cruise would push again
+        motion._crosswalk_control(scan(2, 1.1), 1.1, {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, .3, .3)
+        self.assertEqual(motion._start_motor, NEUTRAL)  # aimed short now, still coasting
+        motion._power_cmd_at = 0.
+        motion._start_motor = TRIAL_MOTOR
+        motion._crosswalk_control(scan(3, 3.), 3., {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, 0., 0.)
+        self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (TRIAL_MOTOR, False))  # stopped short: a kick
+
     def test_the_guard_cuts_a_fast_car(self):
         motion = self.approach()
         motion._crosswalk_control(scan(1, 1.), 1., {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, 1.4, 1.4)

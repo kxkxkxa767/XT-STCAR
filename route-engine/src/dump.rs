@@ -140,7 +140,7 @@ impl Maneuver {
             "_crosswalk_track" => V::list(self._crosswalk_track.iter().map(|p| V::from(*p)).collect()),
             "_crosswalk_board_m" => self._crosswalk_board_m, "_crosswalk_stop_at" => self._crosswalk_stop_at,
             "_crosswalk_wait_tick" => self._crosswalk_wait_tick, "crosswalk_wait_credit_s" => self.crosswalk_wait_credit_s,
-            "_crosswalk_kick" => self._crosswalk_kick,
+            "_crosswalk_kick" => self._crosswalk_kick, "_crosswalk_coasting" => self._crosswalk_coasting,
             "_exit_heading" => self._exit_heading, "role_distinct_evidence" => self.role_distinct_evidence.clone(),
             "second_acquisition_reason" => self.second_acquisition_reason.clone(), "_second_proof_at" => self._second_proof_at,
             "_second_pass_history" => rows_v(&self._second_pass_history), "_second_role_anchor" => self._second_role_anchor.clone(),

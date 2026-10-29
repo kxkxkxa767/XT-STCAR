@@ -146,9 +146,13 @@ impl Maneuver {
                     state = self.crosswalk_stopped(scan, now, control, gap, basis);
                 }
                 Some(g) => {
-                    if aim.is_none_or(|a| a <= CROSSWALK_TARGET_GAP_M) || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M) {
+                    if self._crosswalk_coasting && !stopped && !rolled_out {
+                        self._start_motor = NEUTRAL; // round y8: one coast to the stop
+                    } else if aim.is_none_or(|a| a <= CROSSWALK_TARGET_GAP_M) || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M) {
                         self._start_motor = NEUTRAL;
+                        self._crosswalk_coasting = true;
                     } else if speed.is_none_or(|s| s < LANE_SPEED_RESTART_MPS) || self._crosswalk_kick != 0 {
+                        self._crosswalk_coasting = false;
                         // from rest only kicks (the start lane's own launch overshoots)
                         let rested = self._power_cmd_at.is_none_or(|at| now - at >= LANE_KICK_REST_S);
                         if self._crosswalk_kick >= LANE_KICK_FRAMES && rested && stopped {

@@ -24914,7 +24914,32 @@
       "result": "route_finish_zone_stop 41.1 s, .363 m from the end board, 0 creeps; light stop 7.3 s (not counted by the rules): ~33.8 s effective (y4 33.4 - 6.9 = ~26.5); max tick 10.3 ms, gap 22.4 ms",
       "crosswalk": "start to the stop 5.3 s; conservative gap .307 m; rear lidar .307 -> 2.383 m: ~.2-.3 m before the stripes; waited 3.6 s; one start_lane_board_ahead_cut scan on the restart; start lane to the handover 11.9 s (y4 4.6)",
       "light": "stopped .245 m from the light line (whole car in the zone), released on the 2nd green frame after 7.3 s (red 10.6 s, 35 frames)",
-      "other": "again a .5 s recovery pause in the open transfer (open_board_ahead_without_second_support), not in y4"
+      "other": "again a .5 s recovery pause in the open transfer (open_board_ahead_without_second_support), not in y4",
+      "video": "user video VID_20261029_201935.mp4 (40.8 s, not in git): 中间有很多地方明显的不连续，主要是开头那里; the log: four cuts in the first 5 s (1.3 s: .22 m/s + .43 rise > .6; 2.6 s: .73 m/s > .6; 3.9 s: the stop cut at the fix 1.26 m; 4.5 s: a 1550 top-up, the aim .39 > .35) and one tick of 1600 then a board-ahead cut on the restart after the wait (speed unknown, 6.25 m stop range > 5.81 m ahead)"
+    }
+  },
+  "y8_crosswalk_one_coast_20261029": {
+    "date": "2026-10-29",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y7 (b5877cc) as round 114 + y7",
+    "change": "once the crosswalk stop aim or guard has cut, the start lane stays neutral until standstill (no 1550 top-up); kicks only from there",
+    "tried_and_kept_out": [
+      "search cap .6 -> .8: simulation stopped up to .2 m past the edge",
+      "the cap on the measured speed without the 1560 rise: up to .2 m past the edge for crosswalks 1.1-1.7 m ahead"
+    ],
+    "not_done": [
+      "the cruise cut at ~.6 m/s stays (1550 takes a rolling car past .6 on the track): one more coast before the fix",
+      "the one-tick board-ahead cut on the restart after the wait (unknown speed): not found from the 5 Hz saved scans"
+    ],
+    "simulation_check": "quick crosswalk check (3 courses x 1.1-2.46 m): all 18 before the conservative edge (.04-.65), 2.6-4.2 s",
+    "validation": {
+      "python_suite": "Python全量949 OK (new test: one coast)",
+      "cargo_test": "6 pass; clippy 32",
+      "parity_light": "33/33",
+      "supervisor_light": "33/33"
     }
   }
 }
