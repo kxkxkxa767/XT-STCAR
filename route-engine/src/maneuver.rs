@@ -273,10 +273,11 @@ pub const CROSSWALK_ROW_MAX_PX: f64 = 474.;
 pub const CROSSWALK_ROW_SIGMA_PX: f64 = 2.;
 pub const CROSSWALK_CAMERA_LAG_S: f64 = 0.3;
 pub const CROSSWALK_TRACK_S: f64 = 3.;
-pub const CROSSWALK_SEARCH_MPS: f64 = 0.6;
+pub const CROSSWALK_SEARCH_MPS: f64 = 0.5;
 pub const CROSSWALK_CRUISE_MPS: f64 = 0.45;
-pub const CROSSWALK_CRUISE_BAND_MPS: f64 = 0.15;
+pub const CROSSWALK_CRUISE_BAND_MPS: f64 = 0.25;
 pub const CROSSWALK_SPEED_HOLD_S: f64 = 1.;
+pub const CROSSWALK_REAR_MAX_M: f64 = 4.;
 pub const CROSSWALK_AIM_LAG_S: f64 = 0.3;
 pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
 pub const CROSSWALK_TARGET_GAP_M: f64 = 0.35;
@@ -611,6 +612,10 @@ pub struct Maneuver {
     pub crosswalk_wait_credit_s: f64,
     pub _crosswalk_kick: i64,
     pub _crosswalk_coasting: bool,
+    pub _crosswalk_rear: Option<bool>,
+    pub _crosswalk_rear_history: Vec<(f64, f64, f64)>,
+    pub _crosswalk_speed_last: Option<(f64, f64)>,
+    pub _crosswalk_search_passed: bool,
     pub _exit_heading: Option<f64>,
     pub role_distinct_evidence: V,
     pub second_acquisition_reason: Option<String>,
@@ -913,6 +918,10 @@ impl Maneuver {
             crosswalk_wait_credit_s: 0.,
             _crosswalk_kick: 0,
             _crosswalk_coasting: false,
+            _crosswalk_rear: None,
+            _crosswalk_rear_history: Vec::new(),
+            _crosswalk_speed_last: None,
+            _crosswalk_search_passed: false,
             _exit_heading: None,
             role_distinct_evidence: V::None,
             second_acquisition_reason: None,

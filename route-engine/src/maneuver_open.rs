@@ -351,10 +351,11 @@ impl Maneuver {
         let ahead = self.lane_front_range(scan);
         let track = self.lane_front_track(scan, ahead);
         let speed = self.track_speed(scan, track);
-        self.crosswalk_observe(scan, track);
+        let (cw_track, cw_speed) = self.crosswalk_odometry(scan, track, speed);
+        self.crosswalk_observe(scan, cw_track);
         let mut stop_at = None;
         let mut allowed = None;
-        let mut v_cut = None;
+        let mut v_crosswalk = None;
         if approach.is_none() && source != "first_support_missing_frame_hold" {
             let reaction = self.reaction_s(now);
             let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) {
@@ -379,8 +380,7 @@ impl Maneuver {
             } else {
                 LANE_SPEED_UNKNOWN_MPS
             };
-            let mut v = base + rise;
-            v_cut = Some(v);
+            let v = base + rise;
             stop_at = Some(FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * reaction);
             allowed = Self::start_allowed_speed(ahead);
             if let Some(s) = speed {
@@ -389,28 +389,35 @@ impl Maneuver {
             }
             let settling = self._launch_cmd_at.is_some_and(|at| now - at < ESC_LAG_S + START_LAUNCH_SETTLE_S);
             self._start_motor = Self::start_governor(speed, rise, allowed, self._start_speed_measured, settling);
-            if matches!(self.crosswalk_state, Some("search" | "approach"))
-                && speed.is_none()
-                && let Some((_, value)) = held.filter(|(at, _)| 0. <= now - at && now - at <= CROSSWALK_SPEED_HOLD_S)
-            {
-                v = value + LANE_SPEED_HOLD_MARGIN_MPS + rise; // round y7: the last measured speed
-                v_cut = Some(v);
-            }
-            if matches!(self.crosswalk_state, Some("search" | "approach")) && self._start_motor != NEUTRAL {
-                // round y6: a steady cruise until the crosswalk stop
-                self._start_motor = if v > CROSSWALK_SEARCH_MPS {
-                    NEUTRAL
-                } else if v < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS {
-                    TRIAL_MOTOR
+            if matches!(self.crosswalk_state, Some("search" | "approach")) {
+                let last = self._crosswalk_speed_last;
+                let vc = if let Some(s) = cw_speed {
+                    self._crosswalk_speed_last = Some((now, s));
+                    s + rise
+                } else if let Some((_, value)) = last.filter(|(at, _)| 0. <= now - at && now - at <= CROSSWALK_SPEED_HOLD_S) {
+                    value + LANE_SPEED_HOLD_MARGIN_MPS + rise // round y7: the last measured speed
                 } else {
-                    ROUTE_SLOW_MOTOR
+                    LANE_SPEED_UNKNOWN_MPS + rise
                 };
+                v_crosswalk = Some(vc);
+                if self._start_motor != NEUTRAL
+                    && (self.crosswalk_state == Some("approach") || !self._crosswalk_search_passed)
+                {
+                    // round y6: a steady cruise until the crosswalk stop
+                    self._start_motor = if vc > CROSSWALK_SEARCH_MPS {
+                        NEUTRAL
+                    } else if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS {
+                        TRIAL_MOTOR
+                    } else {
+                        ROUTE_SLOW_MOTOR
+                    };
+                }
             }
         } else {
             self._start_motor =
                 if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
         }
-        let crosswalk = self.crosswalk_control(scan, now, control, track, speed, v_cut);
+        let crosswalk = self.crosswalk_control(scan, now, control, cw_track, cw_speed, v_crosswalk);
         // Round 103: the board-ahead cut is per scan (was a terminal coast).
         let cut = matches!((stop_at, ahead), (Some(stop), Some(a)) if a <= stop);
         if cut {

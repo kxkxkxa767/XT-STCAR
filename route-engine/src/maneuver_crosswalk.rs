@@ -7,9 +7,56 @@
 use crate::dict;
 use crate::helpers::*;
 use crate::maneuver::*;
+use crate::maneuver_post::pairwise_track_speed;
 use crate::py::*;
 
 impl Maneuver {
+    /// _lane_rear_range(scan): round y9, the nearest return straight behind
+    /// along the compass axis (+-LANE_FRONT_HALF_BINS), or None.
+    pub fn lane_rear_range(&self, scan: &V) -> Option<f64> {
+        let heading = self.compass.current(scan);
+        let center = 180 + heading.map_or(0, |h| round(degrees(wrap(h))));
+        let list = scan.idx("ranges").l();
+        let mut best: Option<f64> = None;
+        for i in center - LANE_FRONT_HALF_BINS..center + LANE_FRONT_HALF_BINS + 1 {
+            let r = &list[imod(i, 360) as usize];
+            if r.is_num() {
+                let v = r.f() * radians((i - center) as f64).pcos();
+                best = Some(match best {
+                    None => v,
+                    Some(b) => pmin(b, v),
+                });
+            }
+        }
+        best
+    }
+
+    /// _crosswalk_odometry(scan, track, speed): round y9.
+    pub fn crosswalk_odometry(&mut self, scan: &V, track: Option<f64>, speed: Option<f64>) -> (Option<f64>, Option<f64>) {
+        if self.crosswalk_state.is_none() && self.light_vision {
+            self.crosswalk_state = Some("search");
+        }
+        if !matches!(self.crosswalk_state, Some("search" | "approach")) {
+            return (track, speed);
+        }
+        let rear = self.lane_rear_range(scan);
+        if self._crosswalk_rear.is_none() {
+            self._crosswalk_rear = Some(rear.is_some_and(|r| r <= CROSSWALK_REAR_MAX_M));
+        }
+        let rear_track = rear.filter(|r| *r <= CROSSWALK_REAR_MAX_M).map(|r| -r);
+        if self._crosswalk_rear == Some(true) && rear_track.is_none() && self._crosswalk_board_m.is_none() {
+            // nothing placed on it yet: the start lane's own from here on, at
+            // its own speed (the fallback stop in the first turn stays)
+            self._crosswalk_rear = Some(false);
+            self._crosswalk_track.clear();
+            self._crosswalk_search_passed = true;
+        }
+        if self._crosswalk_rear != Some(true) {
+            return (track, speed);
+        }
+        (rear_track, pairwise_track_speed(&mut self._crosswalk_rear_history, scan, rear_track))
+    }
+
     /// _crosswalk_observe(scan, track).
     pub fn crosswalk_observe(&mut self, scan: &V, track: Option<f64>) {
         if self.crosswalk_state.is_none() && self.light_vision {

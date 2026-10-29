@@ -24922,8 +24922,8 @@
     "date": "2026-10-29",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "y7 (b5877cc) as round 114 + y7",
     "change": "once the crosswalk stop aim or guard has cut, the start lane stays neutral until standstill (no 1550 top-up); kicks only from there",
     "tried_and_kept_out": [
@@ -24940,6 +24940,38 @@
       "cargo_test": "6 pass; clippy 32",
       "parity_light": "33/33",
       "supervisor_light": "33/33"
+    },
+    "car_run_y8": {
+      "evidence": "left-cone-trial-20261029-y8 (115/115 files equal); round 115 (2c13e03), backup-claude-turn115-20261029-205818, stage-claude-y8-20261029-205818",
+      "result": "route_finish_zone_stop 48.3 s, .391 m from the end board, 1 creep; light stop 7.2 s",
+      "crosswalk": "start to the stop 8.7 s (y7-2 5.3); stopped ~.76 m before the stripes (rear lidar 1.835 m); four stops 1.4-1.8 m before the edge, each followed by a kick and a 1 s rest",
+      "why": "the start lane speed came from the front track on the end board ~7-8 m ahead, which jumped (7.43/7.60, 7.15/7.22, 6.40/6.57, 5.41 m) and read .98/1.36/1.17 m/s while the board behind rose smoothly (.333 -> 1.835 m, .1-.5 m/s); the false highs cut the cruise and the fix (3.87 s, speed 1.17) cut the approach at once",
+      "user": "斑马线的那个部分越改停顿越多"
     }
+  },
+  "y9_crosswalk_rear_odometry_20261029": {
+    "date": "2026-10-29",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y8 (2c13e03) as round 115 + y8",
+    "change": [
+      "crosswalk search and approach: speed (pairwise median, as the start lane) and the edge odometry from the board behind (_lane_rear_range, along the compass axis) when it is within 4 m as the stop begins; the start lane own board guard keeps the front track",
+      "the board behind out of reach (> 4 m or none) before a fix: back to the front track and the start lane own speed (no search cap); after a fix: odometry lost -> stop where it is (unchanged)",
+      "cruise: 1560 only under .2 m/s (band .15 -> .25), neutral above .5 (.6)",
+      "_pairwise_track_speed shared by both (Python module function, Rust free fn)"
+    ],
+    "simulation_check": "quick crosswalk check (user8/doc8x4, 1.1-2.46 m): .15-.87 m before the conservative edge; at .6/.3 with rear odometry up to .14 m past it for 1.1-1.7 m",
+    "validation": {
+      "python_suite": "Python全量949 OK",
+      "cargo_test": "6 pass; clippy 32",
+      "parity_light": "33/33",
+      "supervisor_light": "33/33"
+    },
+    "costs_in_simulation": [
+      "light parity: 10 cases end on the 40 s drive budget (y8: 2): the no-crosswalk cases search at <= .5 m/s with the sim car 1550 fading (~.35 m/s) and then stop in the first turn (doc8x4 default: handover at 16.0 s, y4 5.4)",
+      "test_route_y3_light_face SimulatedFacing (.3 s delay car, crosswalk 2.46 m) now stops on the 8 cm body gate in the light entry turn (.065 m, no contact); the test checks no contact and the light only if reached"
+    ]
   }
 }

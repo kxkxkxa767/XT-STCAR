@@ -1088,9 +1088,13 @@ CROSSWALK_TRACK_S = 3.
 # from there). Kept: the .6 cap on the speed plus the rise. Simulation: a .8
 # cap stopped up to .2 m past the edge, and the cap on the speed alone (the
 # early 1560 longer) up to .2 m past it for a crosswalk 1.1-1.7 m ahead.
-CROSSWALK_SEARCH_MPS = .6
+# Round y9: with the board behind's speed (no false highs cutting early),
+# simulation stopped up to .14 m past the conservative edge for crosswalks
+# 1.1-1.7 m ahead at .6/.3; 1560 only under .2 and neutral above .5 kept all
+# 12 (two courses x 1.1-2.46 m) .15-.87 m before it.
+CROSSWALK_SEARCH_MPS = .5
 CROSSWALK_CRUISE_MPS = .45
-CROSSWALK_CRUISE_BAND_MPS = .15
+CROSSWALK_CRUISE_BAND_MPS = .25
 # Round y7 (user: 为什么越来越慢了): car run y6, the front track ~7.5-7.9 m ahead
 # jumped (7.64/7.84/7.41/7.52 m) and the speed went unknown for .3-.5 s again
 # and again; read as LANE_SPEED_UNKNOWN_MPS it cut the cruise and the stop's
@@ -1098,6 +1102,16 @@ CROSSWALK_CRUISE_BAND_MPS = .15
 # to the stop, y5 7.3 s). An unknown speed now holds the last measured one
 # (plus LANE_SPEED_HOLD_MARGIN_MPS and the rise) for CROSSWALK_SPEED_HOLD_S.
 CROSSWALK_SPEED_HOLD_S = 1.
+# Round y9 (user: 斑马线的那个部分越改停顿越多): car run y8, the front track on the
+# end board ~7-8 m ahead jumped (7.43/7.60, 7.15/7.22, 6.40/6.57, 5.41 m) and
+# read .98/1.36/1.17 m/s while the board behind rose smoothly at .1-.5 m/s
+# (.333 -> 1.835 m); the false speeds cut the cruise, the car stopped 1.4-1.8 m
+# before the edge four times and kicked on (8.7 s to the stop, ~.76 m short).
+# With the board behind within CROSSWALK_REAR_MAX_M when the crosswalk stop
+# begins, its search and approach take the speed and the edge's odometry from
+# it (the start lane's own board guard keeps the front track); the speed held
+# CROSSWALK_SPEED_HOLD_S is that one.
+CROSSWALK_REAR_MAX_M = 4.
 # The stop: a coast at the measured ~.6 m/s2 after a .3 s lag aims at
 # CROSSWALK_TARGET_GAP_M; never past CROSSWALK_MIN_GAP_M at the weakest coast
 # after the reaction and the rest of the ESC lag (speed + margin).
@@ -1113,6 +1127,28 @@ CROSSWALK_MIN_GAP_M = .1
 CROSSWALK_ZONE_M = 1.
 CROSSWALK_WAIT_S = 3.5
 CROSSWALK_STOP_MAX_S = 3.  # neutral this long counts as stopped (speed unknown)
+
+
+def _pairwise_track_speed(history, scan, track):
+    """Median of the pairwise slopes of the last LANE_TRACK_SPEED_POINTS track
+    values in ``history`` (its rows updated in place), or None."""
+    if track is None:
+        history.clear()
+        return None
+    row = (scan['at_ms']/1000, scan['received_at'], track)
+    if history:
+        dt = row[0]-history[-1][0]
+        rate = (history[-1][2]-track)/dt if dt > 0 else None
+        if (not .05 <= dt <= SCAN_AGE_S+.05 or not .05 <= row[1]-history[-1][1] <= SCAN_AGE_S+.05
+                or rate is None or not -.4 <= rate <= LANE_MAX_CLOSING_MPS):
+            history.clear()
+    history.append(row)
+    del history[:-LANE_TRACK_SPEED_POINTS]
+    if len(history) < LANE_TRACK_SPEED_POINTS:
+        return None
+    slopes = sorted((b[2]-a[2])/(b[0]-a[0]) for i, a in enumerate(history) for b in history[i+1:])
+    slope = (slopes[(len(slopes)-1)//2]+slopes[len(slopes)//2])/2
+    return max(0., -slope)
 
 
 def _wrap90(angle):
@@ -1810,6 +1846,10 @@ class ManeuverSequence(TurnMotion):
         self.crosswalk_wait_credit_s = 0.
         self._crosswalk_kick = 0  # 1560 frames of the current kick toward the crosswalk
         self._crosswalk_coasting = False  # round y8: the stop's cut holds until standstill
+        self._crosswalk_rear = None  # round y9: odometry from the board behind (decided once)
+        self._crosswalk_rear_history = []
+        self._crosswalk_speed_last = None
+        self._crosswalk_search_passed = False  # round y9: the board behind out of reach before a fix
         self._exit_heading = None
         self.role_distinct_evidence = None
         self.second_acquisition_reason = None
@@ -4091,8 +4131,9 @@ class ManeuverSequence(TurnMotion):
         # is the conservative LANE_SPEED_UNKNOWN_MPS.
         track = self._lane_front_track(scan, ahead)
         speed = self._track_speed(scan, track)
-        self._crosswalk_observe(scan, track)
-        stop_at = allowed = v = None
+        cw_track, cw_speed = self._crosswalk_odometry(scan, track, speed)
+        self._crosswalk_observe(scan, cw_track)
+        stop_at = allowed = v = v_crosswalk = None
         if approach is None and source != 'first_support_missing_frame_hold':
             # A cut now still pushes for the rest of the ESC lag, the speed
             # rising meanwhile; once coasting that long, neither applies.
@@ -4128,14 +4169,21 @@ class ManeuverSequence(TurnMotion):
             settling = (self._launch_cmd_at is not None
                         and now-self._launch_cmd_at < ESC_LAG_S+START_LAUNCH_SETTLE_S)
             self._start_motor = self._start_governor(speed, rise, allowed, self._start_speed_measured, settling)
-            if (self.crosswalk_state in ('search', 'approach') and speed is None and held is not None
-                    and 0 <= now-held[0] <= CROSSWALK_SPEED_HOLD_S):
-                v = held[1]+LANE_SPEED_HOLD_MARGIN_MPS+rise  # round y7: the last measured speed
-            if self.crosswalk_state in ('search', 'approach') and self._start_motor != NEUTRAL:
-                # round y6: a steady cruise until the crosswalk stop
-                self._start_motor = (NEUTRAL if v > CROSSWALK_SEARCH_MPS
-                                     else TRIAL_MOTOR if v < CROSSWALK_CRUISE_MPS-CROSSWALK_CRUISE_BAND_MPS
-                                     else ROUTE_SLOW_MOTOR)
+            if self.crosswalk_state in ('search', 'approach'):
+                last = self._crosswalk_speed_last
+                if cw_speed is not None:
+                    self._crosswalk_speed_last = (now, cw_speed)
+                    v_crosswalk = cw_speed+rise
+                elif last is not None and 0 <= now-last[0] <= CROSSWALK_SPEED_HOLD_S:
+                    v_crosswalk = last[1]+LANE_SPEED_HOLD_MARGIN_MPS+rise  # round y7: the last measured speed
+                else:
+                    v_crosswalk = LANE_SPEED_UNKNOWN_MPS+rise
+                if self._start_motor != NEUTRAL and (self.crosswalk_state == 'approach'
+                                                     or not self._crosswalk_search_passed):
+                    # round y6: a steady cruise until the crosswalk stop
+                    self._start_motor = (NEUTRAL if v_crosswalk > CROSSWALK_SEARCH_MPS
+                                         else TRIAL_MOTOR if v_crosswalk < CROSSWALK_CRUISE_MPS-CROSSWALK_CRUISE_BAND_MPS
+                                         else ROUTE_SLOW_MOTOR)
         else:
             # The approach drives on at 1550 (a stopped car restarts at 1560).
             self._start_motor = (TRIAL_MOTOR if speed is not None and speed < LANE_SPEED_RESTART_MPS
@@ -4147,7 +4195,7 @@ class ManeuverSequence(TurnMotion):
         # a closing speed read off the end board ~7 m ahead (1.77 m/s at ~1.3)
         # ended run 102 .3 m after the start. Without a support in reach the
         # governor still allows no speed inside LANE_START_SEARCH_M of the board.
-        crosswalk = self._crosswalk_control(scan, now, control, track, speed, v)
+        crosswalk = self._crosswalk_control(scan, now, control, cw_track, cw_speed, v_crosswalk)
         cut = stop_at is not None and ahead is not None and ahead <= stop_at
         if cut:
             self._start_motor = NEUTRAL
@@ -6024,24 +6072,38 @@ class ManeuverSequence(TurnMotion):
         1.2 m/s in round 71 from one stale frame (all sector bins .35 m too
         far for one scan) and cut the start lane; one bad frame of five
         cannot move the pairwise median."""
-        history = self._track_history
-        if track is None:
-            history.clear()
-            return None
-        row = (scan['at_ms']/1000, scan['received_at'], track)
-        if history:
-            dt = row[0]-history[-1][0]
-            rate = (history[-1][2]-track)/dt if dt > 0 else None
-            if (not .05 <= dt <= SCAN_AGE_S+.05 or not .05 <= row[1]-history[-1][1] <= SCAN_AGE_S+.05
-                    or rate is None or not -.4 <= rate <= LANE_MAX_CLOSING_MPS):
-                history.clear()
-        history.append(row)
-        del history[:-LANE_TRACK_SPEED_POINTS]
-        if len(history) < LANE_TRACK_SPEED_POINTS:
-            return None
-        slopes = sorted((b[2]-a[2])/(b[0]-a[0]) for i, a in enumerate(history) for b in history[i+1:])
-        slope = (slopes[(len(slopes)-1)//2]+slopes[len(slopes)//2])/2
-        return max(0., -slope)
+        return _pairwise_track_speed(self._track_history, scan, track)
+
+    def _lane_rear_range(self, scan):
+        """Round y9: nearest return straight behind along the compass axis (+-LANE_FRONT_HALF_BINS), or None."""
+        heading = self.compass.current(scan)
+        center = 180+(0 if heading is None else round(math.degrees(_wrap(heading))))
+        values = [scan['ranges'][i % 360]*math.cos(math.radians(i-center))
+                  for i in range(center-LANE_FRONT_HALF_BINS, center+LANE_FRONT_HALF_BINS+1)
+                  if _number(scan['ranges'][i % 360])]
+        return min(values) if values else None
+
+    def _crosswalk_odometry(self, scan, track, speed):
+        """Round y9: (track, speed) for the crosswalk stop's search and approach:
+        the board behind's (its range negated) when it was within
+        CROSSWALK_REAR_MAX_M as the stop began, else the start lane's own."""
+        if self.crosswalk_state is None and self.light_vision:
+            self.crosswalk_state = 'search'
+        if self.crosswalk_state not in ('search', 'approach'):
+            return track, speed
+        rear = self._lane_rear_range(scan)
+        if self._crosswalk_rear is None:
+            self._crosswalk_rear = rear is not None and rear <= CROSSWALK_REAR_MAX_M
+        rear_track = None if rear is None or rear > CROSSWALK_REAR_MAX_M else -rear
+        if self._crosswalk_rear and rear_track is None and self._crosswalk_board_m is None:
+            # nothing placed on it yet: the start lane's own from here on, at
+            # its own speed (the fallback stop in the first turn stays)
+            self._crosswalk_rear = False
+            self._crosswalk_track.clear()
+            self._crosswalk_search_passed = True
+        if not self._crosswalk_rear:
+            return track, speed
+        return rear_track, _pairwise_track_speed(self._crosswalk_rear_history, scan, rear_track)
 
     def _lane_speed(self, scan, ahead, *, min_rates=2):
         """Closing speed on the board ahead: median rate over ~.3 s baselines."""

@@ -1266,40 +1266,7 @@ impl Maneuver {
 
     /// _track_speed(scan, track).
     pub fn track_speed(&mut self, scan: &V, track: Option<f64>) -> Option<f64> {
-        let Some(track) = track else {
-            self._track_history.clear();
-            return None;
-        };
-        let row = (scan.idx("at_ms").i() as f64 / 1000., scan.idx("received_at").f(), track);
-        if let Some(&last) = self._track_history.last() {
-            let dt = row.0 - last.0;
-            let rate = if dt > 0. { Some((last.2 - track) / dt) } else { None };
-            let dr = row.1 - last.1;
-            if !(0.05 <= dt && dt <= SCAN_AGE_S + 0.05)
-                || !(0.05 <= dr && dr <= SCAN_AGE_S + 0.05)
-                || rate.is_none_or(|r| !(-0.4 <= r && r <= LANE_MAX_CLOSING_MPS))
-            {
-                self._track_history.clear();
-            }
-        }
-        self._track_history.push(row);
-        if self._track_history.len() > LANE_TRACK_SPEED_POINTS {
-            let n = self._track_history.len();
-            self._track_history.drain(..n - LANE_TRACK_SPEED_POINTS);
-        }
-        if self._track_history.len() < LANE_TRACK_SPEED_POINTS {
-            return None;
-        }
-        let h = &self._track_history;
-        let mut slopes = Vec::new();
-        for (i, a) in h.iter().enumerate() {
-            for b in &h[i + 1..] {
-                slopes.push((b.2 - a.2) / (b.0 - a.0));
-            }
-        }
-        sort_floats(&mut slopes);
-        let slope = (slopes[(slopes.len() - 1) / 2] + slopes[slopes.len() / 2]) / 2.;
-        Some(pmax(0., -slope))
+        pairwise_track_speed(&mut self._track_history, scan, track)
     }
 
     /// _lane_speed(scan, ahead, min_rates).
@@ -1838,4 +1805,43 @@ impl Maneuver {
 
 fn p_y(target: &V) -> f64 {
     target.idx("point_left_m").l()[1].f()
+}
+
+/// _pairwise_track_speed(history, scan, track): median of the pairwise slopes of
+/// the last LANE_TRACK_SPEED_POINTS track values (rows updated in place).
+pub fn pairwise_track_speed(history: &mut Vec<(f64, f64, f64)>, scan: &V, track: Option<f64>) -> Option<f64> {
+    let Some(track) = track else {
+        history.clear();
+        return None;
+    };
+    let row = (scan.idx("at_ms").i() as f64 / 1000., scan.idx("received_at").f(), track);
+    if let Some(&last) = history.last() {
+        let dt = row.0 - last.0;
+        let rate = if dt > 0. { Some((last.2 - track) / dt) } else { None };
+        let dr = row.1 - last.1;
+        if !(0.05 <= dt && dt <= SCAN_AGE_S + 0.05)
+            || !(0.05 <= dr && dr <= SCAN_AGE_S + 0.05)
+            || rate.is_none_or(|r| !(-0.4 <= r && r <= LANE_MAX_CLOSING_MPS))
+        {
+            history.clear();
+        }
+    }
+    history.push(row);
+    if history.len() > LANE_TRACK_SPEED_POINTS {
+        let n = history.len();
+        history.drain(..n - LANE_TRACK_SPEED_POINTS);
+    }
+    if history.len() < LANE_TRACK_SPEED_POINTS {
+        return None;
+    }
+    let h = &*history;
+    let mut slopes = Vec::new();
+    for (i, a) in h.iter().enumerate() {
+        for b in &h[i + 1..] {
+            slopes.push((b.2 - a.2) / (b.0 - a.0));
+        }
+    }
+    sort_floats(&mut slopes);
+    let slope = (slopes[(slopes.len() - 1) / 2] + slopes[slopes.len() / 2]) / 2.;
+    Some(pmax(0., -slope))
 }
