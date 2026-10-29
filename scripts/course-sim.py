@@ -61,8 +61,9 @@ GANTRY_POST_M = .05
 # run (``went_late``: the front crossed the light line LIGHT_LATE_S after green).
 # Round y5: ``crosswalk_m`` (default None: none), the crosswalk's near edge that
 # far ahead of the car's front at the start along the start heading; frames
-# then carry race4's crosswalk score and box bottom row as on the 10-28 bench
-# (scores .77/.59/.34/.27 at 1.0/1.5/2.0/2.46 m, row 404.5 + 89/(m + .24)),
+# then carry race4's crosswalk score and box bottom row (scores of the 10-28
+# bench, .77/.59/.34/.27 at 1.0/1.5/2.0/2.46 m; round y10: rows of the 10-29
+# car-run calibration, 323.5 + 461.4/(m + 2.186)),
 # seen from 1.0 to 2.6 m within 30 deg of the start heading.
 LIGHT_DEFAULTS = {'zone': .70, 'red_s': 10., 'pre': 'off', 'fps': 4., 'latency': .25, 'score': .89,
                   'min_ahead_m': .25, 'max_range_m': 6., 'half_fov_deg': 50., 'green_min_ahead_m': None,
@@ -76,7 +77,8 @@ def crosswalk_frame(ahead):
         return None
     for (a0, s0), (a1, s1) in zip(CROSSWALK_BENCH, CROSSWALK_BENCH[1:]):
         if a0 <= ahead <= a1:
-            return round(s0+(s1-s0)*(ahead-a0)/(a1-a0), 4), round(404.5+89./(ahead+.24), 1)
+            # round y10: the rows of the 10-29 car-run calibration
+            return round(s0+(s1-s0)*(ahead-a0)/(a1-a0), 4), round(323.5+461.4/(ahead+2.186), 1)
     return None
 LIGHT_LATE_S = 5.
 

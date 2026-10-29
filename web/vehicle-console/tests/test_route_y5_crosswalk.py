@@ -1,9 +1,8 @@
 """Round y5 (Claude): the crosswalk stop in the start lane and its fallback in
-the first turn.
-
-Bench 10-28 on the car (front 1.0/1.5/2.0/2.46 m before the stripes' near
-edge): race4's crosswalk box bottom rows 476/456/444/437.5. Synthetic frames
-and states; no physical claim."""
+the first turn. Round y10: the row-to-distance fit of the 10-29 car runs
+(rows 424/468/441/435 at 2.34/1.06/1.60/1.92 m by the board behind, anchored
+by the user's tape at the start), fixed from frames at the standstill.
+Synthetic frames and states; no physical claim."""
 import unittest
 
 import maneuver_sequence as ms
@@ -16,6 +15,7 @@ def start_motion():
     motion.route_stage, motion.light_vision = 'start_lane', True
     motion.first_approach = None
     motion.drive_since = 0.
+    motion._power_cmd_at = None  # not moved yet
     return motion
 
 
@@ -32,43 +32,59 @@ def distance(row):
     return ms.CROSSWALK_ROW_SCALE/(row-ms.CROSSWALK_ROW_HORIZON_PX)-ms.CROSSWALK_ROW_OFFSET_M
 
 
+def board(place, row):
+    return place-ms.FRONT_BODY_EXTENT_M-(distance(row)-2*ms.CROSSWALK_DISTANCE_SIGMA_M)
+
+
 class CrosswalkFix(unittest.TestCase):
-    def test_the_rows_fit_the_bench(self):
-        for row, metres in ((476, 1.0), (456, 1.5), (444, 2.0), (437.5, 2.46)):
-            self.assertAlmostEqual(distance(row), metres, delta=.02)
+    def test_the_rows_fit_the_car_runs(self):
+        for row, metres in ((424., 2.34), (468.1, 1.06), (441., 1.60), (434.7, 1.92)):
+            self.assertAlmostEqual(distance(row), metres, delta=.15)  # the fit's largest errors .29-.32
 
-    def test_two_frames_one_in_range_fix_the_edge_nearer_by_the_lag_and_two_errors(self):
+    def test_frames_at_the_standstill_fix_it_before_the_car_moves(self):
         motion = start_motion()
-        track = {k: 6.-.6*(k-10)*.1 for k in range(10, 31)}  # .6 m/s toward the board ahead
-        motion._crosswalk_observe(scan(10, 1.0), track[10])
-        frame(motion, 1, 1.05, .30, 444.)  # weak: seen, not ranged
-        motion._crosswalk_observe(scan(11, 1.1), track[11])
-        self.assertEqual((motion.crosswalk_state, motion._crosswalk_board_m), ('search', None))
-        for k in range(12, 20):
-            motion._crosswalk_observe(scan(k, k/10), track[k])
-        frame(motion, 2, 1.85, .60, 456.)
-        motion._crosswalk_observe(scan(20, 2.0), track[20])
+        for k, t in enumerate((.1, .4, .7)):
+            frame(motion, k+1, t, .27, 424.)
+        motion._crosswalk_observe(scan(10, 1.0), -.32)  # the board behind .32 m
         self.assertEqual(motion.crosswalk_state, 'approach')
-        at = 1.85-ms.CROSSWALK_CAMERA_LAG_S
-        place = 6.-.6*(at-1.)
-        sigma = ms.CROSSWALK_ROW_SCALE*ms.CROSSWALK_ROW_SIGMA_PX/(456.-ms.CROSSWALK_ROW_HORIZON_PX)**2
-        self.assertAlmostEqual(motion._crosswalk_board_m,
-                               place-ms.FRONT_BODY_EXTENT_M-(distance(456.)-2*sigma), places=9)
-        self.assertIn('crosswalk_fixed', motion.route_events)
+        self.assertAlmostEqual(motion._crosswalk_board_m, board(-.32, 424.), places=9)
+        self.assertEqual(motion._crosswalk_rest, (1.0, -.32))
 
-    def test_one_frame_or_weak_frames_only_do_not_fix_it(self):
+    def test_three_frames_within_the_window(self):
         motion = start_motion()
-        for k in range(10, 20):
-            motion._crosswalk_observe(scan(k, k/10), 6.-.05*k)
-        frame(motion, 1, 1.6, .7, 460.)
-        motion._crosswalk_observe(scan(20, 2.0), 5.)
-        self.assertIsNone(motion._crosswalk_board_m)  # one frame
+        frame(motion, 1, .1, .27, 424.)
+        frame(motion, 2, .4, .27, 424.)
+        motion._crosswalk_observe(scan(10, 1.0), -.32)
+        self.assertIsNone(motion._crosswalk_board_m)
         motion2 = start_motion()
-        for k in range(10, 20):
-            motion2._crosswalk_observe(scan(k, k/10), 6.-.05*k)
-            frame(motion2, k, k/10, .35, 440.)
-        self.assertIsNone(motion2._crosswalk_board_m)  # never in range
-        self.assertEqual(motion2.crosswalk_state, 'search')
+        for k, t in enumerate((.1, .4, 2.0)):
+            frame(motion2, k+1, t, .27, 424.)
+        motion2._crosswalk_observe(scan(10, 2.2), -.32)
+        self.assertIsNone(motion2._crosswalk_board_m)  # 1.9 s apart
+        frame(motion, 3, .7, .27, 424.)
+        frame(motion, 4, 1.0, .27, 405.)  # out of the rows: seen only
+        motion._crosswalk_observe(scan(11, 1.1), -.32)
+        self.assertIsNotNone(motion._crosswalk_board_m)
+
+    def test_later_frames_only_bring_it_nearer(self):
+        motion = start_motion()
+        for k, t in enumerate((.1, .4, .7)):
+            frame(motion, k+1, t, .27, 424.)
+        motion._crosswalk_observe(scan(10, 1.0), -.32)
+        fixed = motion._crosswalk_board_m
+        motion._power_cmd_at = 1.0
+        track = {k: -.32-.5*(k-10)*.1 for k in range(10, 30)}  # .5 m/s away from the board behind
+        for k in range(11, 20):
+            motion._crosswalk_observe(scan(k, k/10), track[k])
+        for n, t in enumerate((1.3, 1.6, 1.9)):
+            frame(motion, 10+n, t, .4, 428.)  # farther than placed
+        motion._crosswalk_observe(scan(20, 2.0), track[20])
+        self.assertEqual(motion._crosswalk_board_m, fixed)
+        for n, t in enumerate((2.2, 2.5, 2.8)):
+            frame(motion, 20+n, t, .8, 470.)  # nearer
+        for k in range(21, 30):
+            motion._crosswalk_observe(scan(k, k/10), track[k])
+        self.assertGreater(motion._crosswalk_board_m, fixed)
 
     def test_frames_outside_the_start_lane_are_ignored(self):
         motion = start_motion()

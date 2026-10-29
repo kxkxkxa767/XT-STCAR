@@ -1054,17 +1054,29 @@ LIGHT_GOAL = ('light', LIGHT_STOP_ZONE_GAP_M, LIGHT_STOP_BODY_GAP_M, LIGHT_STOP_
 # waits CROSSWALK_WAIT_S. Not stopped there when the first support's approach
 # begins (never seen, lost, or never in range): stop in the turn and wait
 # there the same (no stop costs 30 s, a stop past it 20 s).
+# Round y10 (user: 按这个写y10; the camera was not moved): recalibrated on the
+# car runs of 10-29 (y5-y9-2, 213 crosswalk frames in the start lane up to the
+# crosswalk go) against the board behind, anchored by the user's tape at the
+# start (front 2.34 m from the near edge, the board behind .320 m): distance =
+# CROSSWALK_ROW_SCALE/(row-CROSSWALK_ROW_HORIZON_PX)-CROSSWALK_ROW_OFFSET_M,
+# rms .087 m (scores .25-.35: .08, max .29; 2.2-3.0 m: .07, max .15) with the
+# frames CROSSWALK_CAMERA_LAG_S before their capture time (.15-.3 s fit
+# alike). The 10-28 bench sat 8-15 rows lower at the same distances (the tape
+# anchor matched it within .06 m; unexplained). Every frame >= the race
+# program's .25 now ranges, less two CROSSWALK_DISTANCE_SIGMA_M (.3 m); the
+# edge is the median of the newest CROSSWALK_FIX_FRAMES (within
+# CROSSWALK_SEEN_S), moved only nearer afterwards. Frames taken before the car
+# first moved are placed at its standstill, so the start fixes it at rest.
 CROSSWALK_SEEN_SCORE = .25  # the race program's own detection threshold
-CROSSWALK_RANGE_SCORE = .45
-CROSSWALK_SEEN_FRAMES = 2
+CROSSWALK_FIX_FRAMES = 3
 CROSSWALK_SEEN_S = 1.5
-CROSSWALK_ROW_SCALE = 89.
-CROSSWALK_ROW_HORIZON_PX = 404.5
-CROSSWALK_ROW_OFFSET_M = .24
-CROSSWALK_ROW_MIN_PX = 430.  # ~3.2 m
-CROSSWALK_ROW_MAX_PX = 474.  # the near edge still inside the frame (bottom 480)
-CROSSWALK_ROW_SIGMA_PX = 2.
-CROSSWALK_CAMERA_LAG_S = .3
+CROSSWALK_ROW_SCALE = 461.4
+CROSSWALK_ROW_HORIZON_PX = 323.5
+CROSSWALK_ROW_OFFSET_M = 2.186
+CROSSWALK_ROW_MIN_PX = 410.  # ~3.15 m
+CROSSWALK_ROW_MAX_PX = 474.  # the near edge still inside the frame (bottom 480), ~.88 m
+CROSSWALK_DISTANCE_SIGMA_M = .15
+CROSSWALK_CAMERA_LAG_S = .15
 CROSSWALK_TRACK_S = 3.
 # Search speed: at .9 a crosswalk 1.4-2.46 m ahead was fixed ~1 m before it
 # with the car at ~1.1 m/s and still powered (the speed estimate lags a start
@@ -1092,7 +1104,10 @@ CROSSWALK_TRACK_S = 3.
 # simulation stopped up to .14 m past the conservative edge for crosswalks
 # 1.1-1.7 m ahead at .6/.3; 1560 only under .2 and neutral above .5 kept all
 # 12 (two courses x 1.1-2.46 m) .15-.87 m before it.
-CROSSWALK_SEARCH_MPS = .5
+# Round y10 (user: 按第二条改，认出斑马线前只用1550): car run y9-2 cut four times
+# under the .5 cap (1550 takes a rolling car past it). Now no cap: 1560 only to
+# start (speed plus rise under CROSSWALK_CRUISE_MPS less the band), else 1550;
+# the stop's aim or guard cuts once and the car coasts to a standstill.
 CROSSWALK_CRUISE_MPS = .45
 CROSSWALK_CRUISE_BAND_MPS = .25
 # Round y7 (user: 为什么越来越慢了): car run y6, the front track ~7.5-7.9 m ahead
@@ -1850,6 +1865,7 @@ class ManeuverSequence(TurnMotion):
         self._crosswalk_rear_history = []
         self._crosswalk_speed_last = None
         self._crosswalk_search_passed = False  # round y9: the board behind out of reach before a fix
+        self._crosswalk_rest = None  # round y10: (time, track) of the first odometry sample
         self._exit_heading = None
         self.role_distinct_evidence = None
         self.second_acquisition_reason = None
@@ -3932,12 +3948,11 @@ class ManeuverSequence(TurnMotion):
                      or self.phase == 'coast' and self.start_lane_coast_steering is not None))
 
     def _crosswalk_observe(self, scan, track):
-        """Round y5: place the new crosswalk frames on the start lane's front track
-        (the board ahead, CROSSWALK_CAMERA_LAG_S before their capture time) and
-        fix the near edge once CROSSWALK_SEEN_FRAMES frames within
-        CROSSWALK_SEEN_S of the newest in-range one: the larger (nearer to the
-        car) of the two in-range frames with the smallest row error, each less
-        two errors."""
+        """Round y5: place the new crosswalk frames on the crosswalk odometry's track
+        (CROSSWALK_CAMERA_LAG_S before their capture time; round y10: at the
+        standstill for frames before the first output) and fix the near edge,
+        each frame less two CROSSWALK_DISTANCE_SIGMA_M: the median of the newest
+        CROSSWALK_FIX_FRAMES within CROSSWALK_SEEN_S, afterwards only nearer."""
         if self.crosswalk_state is None and self.light_vision:
             self.crosswalk_state = 'search'
         if self.crosswalk_state not in ('search', 'approach'):
@@ -3946,34 +3961,42 @@ class ManeuverSequence(TurnMotion):
         history = self._crosswalk_track
         if track is not None:
             history.append((scan['received_at'], track))
+            if self._crosswalk_rest is None:
+                self._crosswalk_rest = (scan['received_at'], track)  # round y10: the first odometry, at the start
         while history and history[0][0] < scan['received_at']-CROSSWALK_TRACK_S:
             history.pop(0)
+        added = False
         for frame, captured, score, row in self._crosswalk_raw:
             self._crosswalk_seen.append(captured)
             at = captured-CROSSWALK_CAMERA_LAG_S
-            if (score < CROSSWALK_RANGE_SCORE or row is None or not CROSSWALK_ROW_MIN_PX <= row <= CROSSWALK_ROW_MAX_PX
-                    or not history or at < history[0][0]):
+            rest = self._crosswalk_rest
+            if row is None or not CROSSWALK_ROW_MIN_PX <= row <= CROSSWALK_ROW_MAX_PX:
                 continue
-            place = history[-1][1]
-            for (t0, x0), (t1, x1) in zip(history, history[1:]):
-                if t0 <= at <= t1:
-                    place = x0 if t1 <= t0 else x0+(x1-x0)*(at-t0)/(t1-t0)
-                    break
-            depth = row-CROSSWALK_ROW_HORIZON_PX
-            distance = CROSSWALK_ROW_SCALE/depth-CROSSWALK_ROW_OFFSET_M
-            sigma = CROSSWALK_ROW_SCALE*CROSSWALK_ROW_SIGMA_PX/(depth*depth)
-            self._crosswalk_fixes.append((frame, captured, score, row, distance, sigma,
-                                          place-FRONT_BODY_EXTENT_M-(distance-2*sigma)))
+            if history and at >= history[0][0]:
+                place = history[-1][1]
+                for (t0, x0), (t1, x1) in zip(history, history[1:]):
+                    if t0 <= at <= t1:
+                        place = x0 if t1 <= t0 else x0+(x1-x0)*(at-t0)/(t1-t0)
+                        break
+            elif rest is not None and at <= rest[0]:
+                place = rest[1]  # taken at the standstill before the first output
+            else:
+                continue
+            distance = CROSSWALK_ROW_SCALE/(row-CROSSWALK_ROW_HORIZON_PX)-CROSSWALK_ROW_OFFSET_M
+            self._crosswalk_fixes.append((frame, captured, score, row, distance, CROSSWALK_DISTANCE_SIGMA_M,
+                                          place-FRONT_BODY_EXTENT_M-(distance-2*CROSSWALK_DISTANCE_SIGMA_M)))
+            added = True
         self._crosswalk_raw.clear()
         del self._crosswalk_seen[:-8]
         del self._crosswalk_fixes[:-8]
-        if not self._crosswalk_fixes:
+        recent = [f for f in self._crosswalk_fixes[-CROSSWALK_FIX_FRAMES:]
+                  if self._crosswalk_fixes[-1][1]-f[1] <= CROSSWALK_SEEN_S]
+        if not added or len(recent) < CROSSWALK_FIX_FRAMES:
             return
-        newest = self._crosswalk_fixes[-1][1]
-        if sum(1 for c in self._crosswalk_seen if abs(c-newest) <= CROSSWALK_SEEN_S) < CROSSWALK_SEEN_FRAMES:
-            return
-        best = sorted(self._crosswalk_fixes, key=lambda f: (f[5], -f[1]))[:2]
-        self._crosswalk_board_m = max(f[6] for f in best)
+        boards = sorted(f[6] for f in recent)
+        board = boards[len(boards)//2]
+        # round y10: later frames only bring the edge nearer
+        self._crosswalk_board_m = board if self._crosswalk_board_m is None else max(self._crosswalk_board_m, board)
         if self.crosswalk_state == 'search':
             self.crosswalk_state = 'approach'
             self._route_event('crosswalk_fixed', scan, None, {
@@ -4180,9 +4203,8 @@ class ManeuverSequence(TurnMotion):
                     v_crosswalk = LANE_SPEED_UNKNOWN_MPS+rise
                 if self._start_motor != NEUTRAL and (self.crosswalk_state == 'approach'
                                                      or not self._crosswalk_search_passed):
-                    # round y6: a steady cruise until the crosswalk stop
-                    self._start_motor = (NEUTRAL if v_crosswalk > CROSSWALK_SEARCH_MPS
-                                         else TRIAL_MOTOR if v_crosswalk < CROSSWALK_CRUISE_MPS-CROSSWALK_CRUISE_BAND_MPS
+                    # round y10: 1560 to start, then 1550 until the crosswalk stop
+                    self._start_motor = (TRIAL_MOTOR if v_crosswalk < CROSSWALK_CRUISE_MPS-CROSSWALK_CRUISE_BAND_MPS
                                          else ROUTE_SLOW_MOTOR)
         else:
             # The approach drives on at 1550 (a stopped car restarts at 1560).

@@ -262,18 +262,16 @@ pub const LIGHT_GOAL: Goal = Goal {
 };
 // Round y5: the crosswalk stop in the start lane (see maneuver_sequence.py).
 pub const CROSSWALK_SEEN_SCORE: f64 = 0.25;
-pub const CROSSWALK_RANGE_SCORE: f64 = 0.45;
-pub const CROSSWALK_SEEN_FRAMES: i64 = 2;
+pub const CROSSWALK_FIX_FRAMES: usize = 3;
 pub const CROSSWALK_SEEN_S: f64 = 1.5;
-pub const CROSSWALK_ROW_SCALE: f64 = 89.;
-pub const CROSSWALK_ROW_HORIZON_PX: f64 = 404.5;
-pub const CROSSWALK_ROW_OFFSET_M: f64 = 0.24;
-pub const CROSSWALK_ROW_MIN_PX: f64 = 430.;
+pub const CROSSWALK_ROW_SCALE: f64 = 461.4;
+pub const CROSSWALK_ROW_HORIZON_PX: f64 = 323.5;
+pub const CROSSWALK_ROW_OFFSET_M: f64 = 2.186;
+pub const CROSSWALK_ROW_MIN_PX: f64 = 410.;
 pub const CROSSWALK_ROW_MAX_PX: f64 = 474.;
-pub const CROSSWALK_ROW_SIGMA_PX: f64 = 2.;
-pub const CROSSWALK_CAMERA_LAG_S: f64 = 0.3;
+pub const CROSSWALK_DISTANCE_SIGMA_M: f64 = 0.15;
+pub const CROSSWALK_CAMERA_LAG_S: f64 = 0.15;
 pub const CROSSWALK_TRACK_S: f64 = 3.;
-pub const CROSSWALK_SEARCH_MPS: f64 = 0.5;
 pub const CROSSWALK_CRUISE_MPS: f64 = 0.45;
 pub const CROSSWALK_CRUISE_BAND_MPS: f64 = 0.25;
 pub const CROSSWALK_SPEED_HOLD_S: f64 = 1.;
@@ -616,6 +614,7 @@ pub struct Maneuver {
     pub _crosswalk_rear_history: Vec<(f64, f64, f64)>,
     pub _crosswalk_speed_last: Option<(f64, f64)>,
     pub _crosswalk_search_passed: bool,
+    pub _crosswalk_rest: Option<(f64, f64)>,
     pub _exit_heading: Option<f64>,
     pub role_distinct_evidence: V,
     pub second_acquisition_reason: Option<String>,
@@ -922,6 +921,7 @@ impl Maneuver {
             _crosswalk_rear_history: Vec::new(),
             _crosswalk_speed_last: None,
             _crosswalk_search_passed: false,
+            _crosswalk_rest: None,
             _exit_heading: None,
             role_distinct_evidence: V::None,
             second_acquisition_reason: None,

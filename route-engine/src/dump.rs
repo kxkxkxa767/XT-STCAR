@@ -145,6 +145,7 @@ impl Maneuver {
             "_crosswalk_rear_history" => V::list(self._crosswalk_rear_history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect()),
             "_crosswalk_speed_last" => opt_pair(&self._crosswalk_speed_last),
             "_crosswalk_search_passed" => self._crosswalk_search_passed,
+            "_crosswalk_rest" => opt_pair(&self._crosswalk_rest),
             "_exit_heading" => self._exit_heading, "role_distinct_evidence" => self.role_distinct_evidence.clone(),
             "second_acquisition_reason" => self.second_acquisition_reason.clone(), "_second_proof_at" => self._second_proof_at,
             "_second_pass_history" => rows_v(&self._second_pass_history), "_second_role_anchor" => self._second_role_anchor.clone(),

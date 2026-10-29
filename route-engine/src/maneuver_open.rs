@@ -403,14 +403,9 @@ impl Maneuver {
                 if self._start_motor != NEUTRAL
                     && (self.crosswalk_state == Some("approach") || !self._crosswalk_search_passed)
                 {
-                    // round y6: a steady cruise until the crosswalk stop
-                    self._start_motor = if vc > CROSSWALK_SEARCH_MPS {
-                        NEUTRAL
-                    } else if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS {
-                        TRIAL_MOTOR
-                    } else {
-                        ROUTE_SLOW_MOTOR
-                    };
+                    // round y10: 1560 to start, then 1550 until the crosswalk stop
+                    self._start_motor =
+                        if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
                 }
             }
         } else {
