@@ -24860,7 +24860,7 @@
     "date": "2026-10-29",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "baseline": "y5 (49c149d) as round 112 + y5 on the car",
     "user": [
@@ -24875,6 +24875,7 @@
       "supervisor_light": "33/33",
       "note": "2 light parity cases end on the 40 s drive budget after the light (y5: 4, y4: 0)"
     },
-    "risk": "y5 on the car: the rear lidar says the camera placed the edge ~.2 m too far; if so the .04 m simulation margin is not enough on the car"
+    "risk": "y5 on the car: the rear lidar says the camera placed the edge ~.2 m too far; if so the .04 m simulation margin is not enough on the car",
+    "deployment": "build-race.py claude-turn112 claude-turn113 113 y6_crosswalk_cruise_20261029 (8251f35); before: 17 hashes equal round 112; deploy-matched.py claude-turn113 113 (backup-claude-turn113-20261029-195814); after: equal round 113; deploy-vision.py y6 (stage-claude-y6-20261029-195814, 6 files equal); not run yet"
   }
 }
