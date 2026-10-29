@@ -276,6 +276,7 @@ pub const CROSSWALK_TRACK_S: f64 = 3.;
 pub const CROSSWALK_SEARCH_MPS: f64 = 0.6;
 pub const CROSSWALK_CRUISE_MPS: f64 = 0.45;
 pub const CROSSWALK_CRUISE_BAND_MPS: f64 = 0.15;
+pub const CROSSWALK_SPEED_HOLD_S: f64 = 1.;
 pub const CROSSWALK_AIM_LAG_S: f64 = 0.3;
 pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
 pub const CROSSWALK_TARGET_GAP_M: f64 = 0.35;

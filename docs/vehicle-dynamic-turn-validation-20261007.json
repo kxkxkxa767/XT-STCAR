@@ -24861,7 +24861,7 @@
     "author": "Claude",
     "implemented": true,
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "baseline": "y5 (49c149d) as round 112 + y5 on the car",
     "user": [
       "起步的时候很怪，为什么一直短短续续的"
@@ -24876,6 +24876,30 @@
       "note": "2 light parity cases end on the 40 s drive budget after the light (y5: 4, y4: 0)"
     },
     "risk": "y5 on the car: the rear lidar says the camera placed the edge ~.2 m too far; if so the .04 m simulation margin is not enough on the car",
-    "deployment": "build-race.py claude-turn112 claude-turn113 113 y6_crosswalk_cruise_20261029 (8251f35); before: 17 hashes equal round 112; deploy-matched.py claude-turn113 113 (backup-claude-turn113-20261029-195814); after: equal round 113; deploy-vision.py y6 (stage-claude-y6-20261029-195814, 6 files equal); not run yet"
+    "deployment": "build-race.py claude-turn112 claude-turn113 113 y6_crosswalk_cruise_20261029 (8251f35); before: 17 hashes equal round 112; deploy-matched.py claude-turn113 113 (backup-claude-turn113-20261029-195814); after: equal round 113; deploy-vision.py y6 (stage-claude-y6-20261029-195814, 6 files equal); not run yet",
+    "car_run_y6": {
+      "evidence": "left-cone-trial-20261029-y6 (137/137 files equal)",
+      "result": "route_finish_zone_stop 49.0 s (y5 43.9, y4 33.4), .382 m from the end board, 0 creeps; max tick 6.9 ms, gap 22.2 ms",
+      "crosswalk": "fixed 6.29 s; stopped 15.1 s (conservative gap .951 m; rear lidar 1.61 m: ~1 m before the stripes); waited 3.6 s; start lane drive to the stop 13.3 s (y5 7.3 s)",
+      "why": "the front track ~7.5-7.9 m ahead jumped (7.64/7.84/7.41/7.52 m) and the start lane speed went unknown for .3-.5 s again and again; read as 1.3 m/s it cut the cruise (> .6) and the stop aim; the car stopped ~6 times and restarted with kicks 1 s apart",
+      "rest": "handover to the light stop 14.5 s, light go to the finish 6.7 s: as y4/y5",
+      "user": "为什么越来越慢了"
+    }
+  },
+  "y7_crosswalk_speed_hold_20261029": {
+    "date": "2026-10-29",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "y6 (8251f35) as round 113 + y6",
+    "change": "crosswalk search/approach: an unknown start lane speed holds the last measured one (+.1 m/s and the rise) for 1 s (CROSSWALK_SPEED_HOLD_S) for the cruise and the stop aim, instead of LANE_SPEED_UNKNOWN_MPS",
+    "validation": {
+      "python_suite": "Python全量948 OK",
+      "cargo_test": "6 pass; clippy 32",
+      "parity_light": "33/33",
+      "supervisor_light": "33/33",
+      "crosswalk_quick_check": "same 18 stops as y6 (.04-.65 m before the conservative edge)"
+    }
   }
 }

@@ -1083,6 +1083,13 @@ CROSSWALK_TRACK_S = 3.
 CROSSWALK_SEARCH_MPS = .6
 CROSSWALK_CRUISE_MPS = .45
 CROSSWALK_CRUISE_BAND_MPS = .15
+# Round y7 (user: 为什么越来越慢了): car run y6, the front track ~7.5-7.9 m ahead
+# jumped (7.64/7.84/7.41/7.52 m) and the speed went unknown for .3-.5 s again
+# and again; read as LANE_SPEED_UNKNOWN_MPS it cut the cruise and the stop's
+# aim, the car stopped ~6 times before the crosswalk (13.3 s from the start
+# to the stop, y5 7.3 s). An unknown speed now holds the last measured one
+# (plus LANE_SPEED_HOLD_MARGIN_MPS and the rise) for CROSSWALK_SPEED_HOLD_S.
+CROSSWALK_SPEED_HOLD_S = 1.
 # The stop: a coast at the measured ~.6 m/s2 after a .3 s lag aims at
 # CROSSWALK_TARGET_GAP_M; never past CROSSWALK_MIN_GAP_M at the weakest coast
 # after the reaction and the rest of the ESC lag (speed + margin).
@@ -4108,6 +4115,9 @@ class ManeuverSequence(TurnMotion):
             settling = (self._launch_cmd_at is not None
                         and now-self._launch_cmd_at < ESC_LAG_S+START_LAUNCH_SETTLE_S)
             self._start_motor = self._start_governor(speed, rise, allowed, self._start_speed_measured, settling)
+            if (self.crosswalk_state in ('search', 'approach') and speed is None and held is not None
+                    and 0 <= now-held[0] <= CROSSWALK_SPEED_HOLD_S):
+                v = held[1]+LANE_SPEED_HOLD_MARGIN_MPS+rise  # round y7: the last measured speed
             if self.crosswalk_state in ('search', 'approach') and self._start_motor != NEUTRAL:
                 # round y6: a steady cruise until the crosswalk stop
                 self._start_motor = (NEUTRAL if v > CROSSWALK_SEARCH_MPS

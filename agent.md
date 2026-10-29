@@ -1,5 +1,13 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-10-29 晚 Claude：y6实车49.0s更慢——起步速度读数反复丢失被当成太快而切；y7改为丢失时沿用上次速度）
+
+记录键`y7_crosswalk_speed_hold_20261029`（y6实车见`y6_crosswalk_cruise_20261029`的`car_run_y6`）。
+- 用时：y4 33.4s（无斑马线），y5 43.9s（斑马线等3.6s+慢慢开过去），y6 49.0s。灯、过灯后、终点三次都一样，差别全在起点到斑马线：y5 7.3s，y6 13.3s。
+- y6慢的原因：前方7.5–7.9m的板读数跳（7.64/7.84/7.41/7.52m），起步速度反复变成未知，y6把未知当1.3m/s（>.6就空挡、瞄准也切），车在斑马线前停了约6次、每次靠踢+1s休息重启；停在白条前约1m。
+- y7：斑马线前速度未知时沿用1s内最后一次测到的速度（+.1和加速增量），不再切。Python全量948 OK，cargo 6个过、clippy 32，带灯逐位对比33/33、监管层33/33。
+- 下一步：打包第114轮+y7（`build-race.py claude-turn113 claude-turn114 114 y7_crosswalk_speed_hold_20261029`，`build-vision.py claude-turn114 y7 … --light-stop`），部署核对，车放起点后`python3 scripts/start-round.py y7`。
+
 ## 当前接手入口（2026-10-29 晚 Claude：y5实车跑完——斑马线停住等3.6s，整条43.9s；起步断断续续，y6改成匀速巡航，未打包；车上第112轮+y5）
 
 记录键`y6_crosswalk_cruise_20261029`（y5实车见`y5_crosswalk_20261028`的`car_run_y5`）。车上：第113轮引擎（8251f35）+ y6助手（`stage-claude-y6-20261029-195814`），已部署核对、未跑：车放起点后`python3 scripts/start-round.py y6`。
