@@ -24991,8 +24991,8 @@
     "date": "2026-10-29",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "commit": "d9f44cf",
     "baseline": "y9 (2b69305) as round 116 + y9 on the car",
     "user": [
@@ -25024,6 +25024,22 @@
       "parity_light": "33/33",
       "supervisor_light": "33/33"
     },
-    "risk": "the fit holds while the camera keeps today's tilt; a tilt like the 10-28 bench one (8-15 rows) moves a 2.3 m edge by ~.5-.8 m"
+    "risk": "the fit holds while the camera keeps today's tilt; a tilt like the 10-28 bench one (8-15 rows) moves a 2.3 m edge by ~.5-.8 m",
+    "deployment": "10-31: build-race.py claude-turn116 claude-turn117 117 y10_crosswalk_calibrated_20261029 (609c194); before: 17 hashes equal round 116; deploy-matched.py claude-turn117 117 (backup-claude-turn117-20261031-200801); after: equal round 117; deploy-vision.py y10 (stage-claude-y10-20261031-200801)",
+    "car_run_y10": {
+      "evidence": "left-cone-trial-20261031-y10 (70/70 files equal)",
+      "user": "你取回数据看看，第一部分，你停车的地方离斑马线还有大概40cm的距离，红绿灯过后，你速度可以快点，还是太慢了，一共用时多少？",
+      "result": "route_finish_zone_stop 37.6 s from the start to the stop, .370 m from the end board, 1 creep; light stop 4.8 s (not counted by the rules): ~32.8 s effective (y9-2 ~36.4, y7-2 ~33.8, y4 ~26.5); max tick 9.5 ms, gap 24.0 ms",
+      "stages": "start lane 1.75 s -> crosswalk stop 5.53 (3.8 s) -> wait 3.6 s -> go 9.14 -> handover 12.83 (3.7 s) -> light stop 27.92 (15.1 s) -> wait 4.8 s -> go 32.72 -> finish stop 39.31 (6.6 s; y4 7.3)",
+      "crosswalk": "fixed 2.06 s from three frames at the standstill (rows 419.2-419.4, scores .26-.29, 2.63 m by the fit); 1560 once, then 1550 continuously .16 -> .91 m/s; one cut (the guard, conservative gap 1.33 m) plus one 1-scan neutral at the fix (speed still unknown, 1.3 m/s assumed); coasted to a stop 1.6 s later; conservative gap .341 m; the user measured ~.40 m to the stripes; start to the stop 3.8 s (y9-2 5.6 with 4 cuts)",
+      "calibration_shift": "at the start the rows were 419 (rear .365 m) vs 424-427 on 10-29 at about the same place; by the user's .40 m at the stop (rear 2.082) the edge was ~2.12 m from the start, so the at-rest frames read ~.5 m too far (the .3 m margin left the edge ~.2 m beyond the truth at the fix); the nearer frames during the approach moved it .27 m nearer (only-nearer rule) and the stop ended .40 m before the stripes. The rows (camera pitch) changed again between days (10-28 bench 8-15 rows, 10-31 ~5 rows) although the camera was not moved by hand",
+      "light": "stopped .252 m from the light line (whole car in the zone); red seen 24.52-27.96 s (13 frames), none after the stop: the saved frame 111 (30.7 s) shows the lamp housing cut by the top edge of the frame (the camera pitched lower, as the crosswalk rows); green never seen; released by green_not_seen_red_go_time 8.08 s after the first red: if the red outlasted that (rules 3-10 s) the car left before green (+30 s)",
+      "after_green": "go to the finish stop 6.6 s, the guard-cut 1550 pushes as in y4-y9 (user: 红绿灯过后，你速度可以快点，还是太慢了)",
+      "next": [
+        "camera pitch: it moves between days; check it (a known target at a taped distance) before runs or measure it per run from a scene feature",
+        "light stop: with lamps out of view at the stop the 8 s rule may leave before green; stop farther from the gantry when the lamps leave the view, or keep the camera pitch fixed",
+        "after green: the board guard (1550 at .5 m/s2 for the ESC lag, weakest coast .45) still cuts every push; needs car data on pushes/coasts"
+      ]
+    }
   }
 }
