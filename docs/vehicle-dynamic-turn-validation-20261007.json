@@ -25041,5 +25041,69 @@
         "after green: the board guard (1550 at .5 m/s2 for the ESC lag, weakest coast .45) still cuts every push; needs car data on pushes/coasts"
       ]
     }
+  },
+  "y11_camera_model_light_zone_20261031": {
+    "date": "2026-10-31",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "commit": "b71bf5b",
+    "baseline": "6eef8cd (car: round 117 engine 609c194 + y10 helper)",
+    "user": [
+      "我觉得可以先校准下摄像头，先放在斑马线和红绿灯触发器的位置看看什么角度合适，然后固定，再校准摄像头的畸变",
+      "相机的仰角我减小了，所以置信度应该有提高，之前只能拍一部分",
+      "如果车距离红绿灯在地下的投影15cm的话是完全看不到灯的，可以就在触发的位置停下来",
+      "是1m，仰角和俯角我不好测",
+      "我在校准前就用热熔胶固定了，应该不会动的，现在车头距离白线末端1m,镜头中心距离地面19.5cm",
+      "你为什么不用m5的gpu算，你校准好再修改下一步的方案，明天我直接测试下一个版本的",
+      "你所有工具的安装路径要在工程文件夹里面",
+      "你修改好后直接上传，我回去睡觉去了"
+    ],
+    "camera": {
+      "angle": "the user tried lower (crosswalk stop: score .63-.78, the box full width) and raised it for the light; glued with hot glue before the calibration",
+      "angle_checks": {
+        "crosswalk_stop_lowered_20_24": "crosswalk .63-.78 (y10 same place .36-.48)",
+        "light_trigger_lowered_20_32": "green .91, the lamps touching the frame's top",
+        "light_raised_20_43_20_50": "green .91, whole housing in view, front ~.56 m from the posts by lidar (the user's 15 cm was to the gantry foot)"
+      },
+      "lens": "OpenCV pinhole k5 from 138 of 141 distinct 9x6 board views (12 user console captures + 136 kept automatically), rms .42 px, fx 426.55 fy 424.47 cx 349.59 cy 227.85, k1 -.372 k2 .172 k3 -.043, p ~0; 70 % subsets fx 424-434 (the first 21-33 views, far and frontal, gave 450 and 488 with subsets 432-588); FOV 88.8 x 65.9 deg",
+      "mount": "lens centre .195 m above the floor (tape; wall board .1924), .041 m behind the front (wall pose: optical centre .4557 m from the wall, glass .454, front .415 by tape)",
+      "pitch": "physical 8.5-8.8 deg from the far board bases at lidar distances (start 7.70 m: 8.50-8.64; light lane end 3.92 m: 8.60) and the stripes' edge at 2.31-2.34 m (8.74-8.80); the wall board's 6.38 rejected (2.2 deg off every track reference); ranging pitch 9.1 for race4 box bottoms (1.00 m: 8.94-9.21, 2.31-2.34 m: 9.07-9.13: the boxes end 2-3 rows below the edge)",
+      "track_checks": {
+        "start_2_34_m": "crosswalk .37-.43 (y10 .26-.29), box bottom 330 -> 2.32 m",
+        "front_1_00_m": "crosswalk .62-.72, box bottom 372 -> 1.01 m",
+        "front_0_21_m": "crosswalk .42-.62, box bottom 476.5 (stripes out of the frame): no distance",
+        "light_trigger_21_56": "green .90, housing top row 32, front .59 m from the posts (lidar); housing 17 cm tall seen .637 m from the lens (posts .631)"
+      },
+      "record": "config/camera-race4-20261031.json; views and scripts' outputs in work/camera-calibration-20261031 (not in Git; /calibration/ ignored)",
+      "tools": "scripts/camera-calibration-grab.py (car: console /camera.jpg, board detection), scripts/camera-calibration-solve.py and camera-wall-pose.py (Mac, the project's .venv OpenCV 4.14), scripts/camera-pitch-check.py (before a run: board base vs lidar; offline on the 10-31 frames 8.64/8.60 ok, the pre-glue 20:50 frame 6.69 flagged)"
+    },
+    "rules": "p5 (4): the photo sensor 1 m before the light, the zone between them; any wheel outside it at the stop +20 s; going before green +30 s; no stop +50 s; nothing after green (the light's stop time is not counted, stops elsewhere over 10 s fail)",
+    "change": [
+      "scripts/vision-log.py: crosswalk_front_m (undistort the box bottom in the column nearest the centre, intersect the floor at the ranging pitch, less the lens behind the front); boxes ending at row >= 472 give none; the light state gets crosswalk_m",
+      "engine (Python/Rust): frames range by crosswalk_m within .3-3.5 m, each less 2 sigma (.015 + .02 d^2); a fix (median of the newest 3) replaces the edge when at least as precise as the fix that set it, else only nearer; CROSSWALK_MIN_GAP_M .10 -> .15",
+      "light: LIGHT_ZONE_M .70 -> 1.0 (rules; the user's sensor at 1 m), target .15 -> .48, minimum .05 -> .40 (lamps in view), whole car <= .56; LIGHT_CREEP_TRAVEL_M .20 -> .15; LIGHT_RED_GO_S 8 -> 10.5",
+      "race.rs light_of passes crosswalk_m (0-20 m); course-sim: sensor 1 m, lamps seen from .60 m (lidar), 88.8 deg, crosswalk frames with crosswalk_m (crosswalk_scale for a ranging error), the summary's crosswalk stop gap"
+    ],
+    "simulation_check": {
+      "crosswalk_guard_floor": "measured car, three courses: crosswalk 1.4 m stopped .10 m before the edge at a .10 floor (cut by the guard, the same with ranging 10 % long), .21 at .15/.20; 2.46 m .60 -> .71; 1.1 m stopped at 1.0 (no kick room) and waited",
+      "light_dead_band": "min .40 + creep .20 left .56-.60 with neither a creep nor the whole car in: stops at .59-.63, one rear .005 m outside after six creeps (+20 s); creep .15: 12 runs final .46-.58, rears .04-.17 m inside, no light penalty; a .25 floor ended one fast car's finish at the body gate",
+      "short5": "ends at the 8 cm body gate (18.8-41.6 s) in the baseline 6eef8cd as well; y11 not worse",
+      "after_green": "unchanged: still the guard's pushes and coasts (y10 6.6 s) - not changed tonight without car data"
+    },
+    "validation": {
+      "python_suite": "950 OK",
+      "cargo_test": "7 pass (new light_of test); clippy 32",
+      "parity_light": "39/39",
+      "supervisor_light": "39/39"
+    },
+    "risk": [
+      "the pitch must hold: ~.5 m per degree at 2.3 m, ~.06 m per degree at .8 m; check with scripts/camera-pitch-check.py at the start before deploying",
+      "the light stop at .40-.56 m relies on the 1 m sensor; the first stop may still come early (the guard) and creep",
+      "race4's box bottoms when moving (blur) are unmeasured; the camera lag .15 s is from 10-29",
+      "the lamps clipped at the top below ~.45 m front gap (detection seen at .90 clipped in y3)"
+    ],
+    "next": "tomorrow: the car at the start, pitch check, build round 118 + y11 (build-race.py claude-turn117 claude-turn118 118 this key; build-vision.py claude-turn118 y11 race4_vehicle_handoff_20261024.zip --light-stop), validate, deploy, run; then the speed after green from the run's pushes and coasts"
   }
 }
