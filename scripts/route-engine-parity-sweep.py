@@ -8,7 +8,9 @@ lamps off or green before the trigger, a camera losing the light near it, no
 light seen at all, short and long reds, a faster car; round y3: the green lamp
 out of view near it (green_min_ahead_m), with a 5 s red, and a 6 s red with the
 camera losing the light near it; round y5: a crosswalk 2.46 or 1.4 m before
-the start (else the start lane's fallback stop in the first turn).
+the start (else the start lane's fallback stop in the first turn); round y11:
+the glued camera's view (lamps to .60 m from the lidar) is the default, the
+light lost from .80 instead, and crosswalks 3.0 m ahead and ranged 10 % long.
 replay: route-replay.py over every recorded car trial from round 64 on
 (work/vehicle-dynamic-deploy-20261008/left-cone-trial-*-N, N >= 64).
 
@@ -48,12 +50,14 @@ if which in ('all', 'sensors'):
             cases.append((f'sensors-{n}-backlash-{seed}', ['--layout', n, '--steer-backlash', '30', '--seed', str(seed)]))
 if which in ('all', 'light'):
     lights = (('default', 0., '{}', ()), ('red3-at1', 1., '{"red_s": 3}', ()), ('green-at2', 2., '{"pre": "green"}', ()),
-              ('near.6', 0., '{"min_ahead_m": 0.6}', ()), ('unseen', 0., '{"score": 0.0}', ()),
+              ('near.8', 0., '{"min_ahead_m": 0.8}', ()), ('unseen', 0., '{"score": 0.0}', ()),
               ('greennear.6', 0., '{"green_min_ahead_m": 0.6}', ()),
               ('greennear.6-red5', 0., '{"green_min_ahead_m": 0.6, "red_s": 5}', ()),
-              ('near.6-red6', 0., '{"min_ahead_m": 0.6, "red_s": 6}', ()),
+              ('near.8-red6', 0., '{"min_ahead_m": 0.8, "red_s": 6}', ()),
               ('crosswalk2.46', 0., '{"crosswalk_m": 2.46}', ()),
               ('crosswalk1.4', 0., '{"crosswalk_m": 1.4}', ()),
+              ('crosswalk3.0', 0., '{"crosswalk_m": 3.0}', ()),
+              ('crosswalk2.46-long1.1', 0., '{"crosswalk_m": 2.46, "crosswalk_scale": 1.1}', ()),
               ('fast', 0., '{}', ('--vehicle-param', 'speed_scale=1.3', '--vehicle-param', 'gain_scale=1.3')))
     for n in ('user8', 'doc8x4', 'short5'):
         for tag, at, light, extra in lights:

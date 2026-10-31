@@ -183,9 +183,9 @@ pub const OPEN_LINE_REACH_M: f64 = 6.;
 pub const OPEN_STAGES: [&str; 3] = ["open_transfer", "second_loop", "light_entry"];
 // Round y2: the traffic-light stop (maneuver_sequence.py has the derivations;
 // only with control['light'], the race program's read-only YOLO process).
-pub const LIGHT_ZONE_M: f64 = 0.70;
-pub const LIGHT_STOP_TARGET_GAP_M: f64 = 0.15;
-pub const LIGHT_STOP_MIN_GAP_M: f64 = 0.05;
+pub const LIGHT_ZONE_M: f64 = 1.;
+pub const LIGHT_STOP_TARGET_GAP_M: f64 = 0.48;
+pub const LIGHT_STOP_MIN_GAP_M: f64 = 0.40;
 pub const LIGHT_STOP_BODY_GAP_M: f64 = LIGHT_ZONE_M - (FRONT_BODY_EXTENT_M + REAR_BODY_EXTENT_M) - 0.06;
 pub const LIGHT_STOP_ZONE_GAP_M: f64 = LIGHT_ZONE_M - 0.02;
 pub const LIGHT_POST_MAX_BINS: usize = 8;
@@ -214,7 +214,7 @@ pub const LIGHT_NO_LIGHT_WAIT_S: f64 = 4.;
 pub const LIGHT_REARM_MIN_M: f64 = 1.;
 pub const LIGHT_RED_STOP_FRAMES: i64 = 3;
 pub const LIGHT_RED_GONE_FRAMES: usize = 3;
-pub const LIGHT_RED_GO_S: f64 = 8.;
+pub const LIGHT_RED_GO_S: f64 = 10.5;
 pub const LIGHT_RED_MAX_S: f64 = 11.;
 pub fn light_center_max_heading_rad() -> f64 {
     open_lane_entry_heading_rad()
@@ -223,7 +223,7 @@ pub const LIGHT_CENTER_MAX_SHIFT_M: f64 = 0.15;
 pub const LIGHT_WAIT_STEER_DEADBAND_PWM: i64 = 15;
 pub const LIGHT_LAUNCH_MIN_GAP_M: f64 = 2.5;
 pub const LIGHT_LAUNCH_S: f64 = 0.6;
-pub const LIGHT_CREEP_TRAVEL_M: f64 = 0.20;
+pub const LIGHT_CREEP_TRAVEL_M: f64 = 0.15;
 pub const LIGHT_CREEP_MAX: i64 = 6;
 pub const LIGHT_LINE_HOLD_S: f64 = 0.5;
 pub const LIGHT_PASSED_M: f64 = 0.05;
@@ -264,12 +264,9 @@ pub const LIGHT_GOAL: Goal = Goal {
 pub const CROSSWALK_SEEN_SCORE: f64 = 0.25;
 pub const CROSSWALK_FIX_FRAMES: usize = 3;
 pub const CROSSWALK_SEEN_S: f64 = 1.5;
-pub const CROSSWALK_ROW_SCALE: f64 = 461.4;
-pub const CROSSWALK_ROW_HORIZON_PX: f64 = 323.5;
-pub const CROSSWALK_ROW_OFFSET_M: f64 = 2.186;
-pub const CROSSWALK_ROW_MIN_PX: f64 = 410.;
-pub const CROSSWALK_ROW_MAX_PX: f64 = 474.;
-pub const CROSSWALK_DISTANCE_SIGMA_M: f64 = 0.15;
+pub const CROSSWALK_RANGE_M: (f64, f64) = (0.3, 3.5);
+pub const CROSSWALK_SIGMA_M: f64 = 0.015;
+pub const CROSSWALK_SIGMA_PER_M2: f64 = 0.02;
 pub const CROSSWALK_CAMERA_LAG_S: f64 = 0.15;
 pub const CROSSWALK_TRACK_S: f64 = 3.;
 pub const CROSSWALK_CRUISE_MPS: f64 = 0.45;
@@ -279,7 +276,7 @@ pub const CROSSWALK_REAR_MAX_M: f64 = 4.;
 pub const CROSSWALK_AIM_LAG_S: f64 = 0.3;
 pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
 pub const CROSSWALK_TARGET_GAP_M: f64 = 0.35;
-pub const CROSSWALK_MIN_GAP_M: f64 = 0.1;
+pub const CROSSWALK_MIN_GAP_M: f64 = 0.15;
 pub const CROSSWALK_ZONE_M: f64 = 1.;
 pub const CROSSWALK_WAIT_S: f64 = 3.5;
 pub const CROSSWALK_STOP_MAX_S: f64 = 3.;
@@ -605,6 +602,7 @@ pub struct Maneuver {
     pub _crosswalk_fixes: Vec<V>,
     pub _crosswalk_track: Vec<(f64, f64)>,
     pub _crosswalk_board_m: Option<f64>,
+    pub _crosswalk_board_sigma: Option<f64>,
     pub _crosswalk_stop_at: Option<f64>,
     pub _crosswalk_wait_tick: Option<f64>,
     pub crosswalk_wait_credit_s: f64,
@@ -912,6 +910,7 @@ impl Maneuver {
             _crosswalk_fixes: Vec::new(),
             _crosswalk_track: Vec::new(),
             _crosswalk_board_m: None,
+            _crosswalk_board_sigma: None,
             _crosswalk_stop_at: None,
             _crosswalk_wait_tick: None,
             crosswalk_wait_credit_s: 0.,

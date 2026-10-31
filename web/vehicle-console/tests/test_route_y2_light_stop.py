@@ -1,7 +1,8 @@
 """Round y2 (Claude): the traffic-light stop. With control['light'] (the race
 program's read-only YOLO process) the gantry's legs set the light line, the
-light lane's goal control stops the whole car in the .70 m zone before it and
-the car waits there for green in fresh frames; without it nothing changes.
+light lane's goal control stops the whole car in the zone before it (round
+y11: the rules' 1 m, .70 before) and the car waits there for green in fresh
+frames; without it nothing changes.
 Car run 108's light-entry scans (fixture), synthetic scans and states, one
 simulated run; no physical claim."""
 import importlib.util
@@ -92,7 +93,7 @@ class LightWait(unittest.TestCase):
         motion = self.lane_motion()
         motion.light_vision = True
         motion.light_stop_state, motion._light_gantry_since = 'approach', stop_at-.5
-        motion._light_line = {'along_m': FRONT+.15, 'source': 'legs'}
+        motion._light_line = {'along_m': FRONT+ms.LIGHT_STOP_TARGET_GAP_M, 'source': 'legs'}
         motion.light_stop_evidence = {'gantry': {}}
         for frame, captured, red, green in frames:
             if captured >= stop_at and motion.light_stop_state == 'approach':
@@ -153,13 +154,15 @@ class LightWait(unittest.TestCase):
         self.assertEqual(len(motion.light_stop_evidence['rearmed']), 1)
         self.assertEqual(motion._light_rearm_min_m, ms.LIGHT_REARM_MIN_M)
 
-    def test_red_seen_on_the_way_in_keeps_the_wait_8_s_from_the_first_red(self):
-        # Stopped, the lamps may be out of the camera's view (~.35 m ahead);
-        # round y3: green never seen, the car goes LIGHT_RED_GO_S after the first red.
+    def test_red_seen_on_the_way_in_keeps_the_wait_10_5_s_from_the_first_red(self):
+        # Stopped, the lamps may be out of the camera's view; round y3: green
+        # never seen, the car goes LIGHT_RED_GO_S after the first red (round
+        # y11: the rules' longest red and .5 s; y10 left after 8 s of a 10 s red).
         motion = self.waiting([(1, .7, .9, 0.), (2, 1.1, 0., 0.)])
         self.assertFalse(motion._light_wait(self.scan(60), 6., {}))
-        self.assertFalse(motion._light_wait(self.scan(86), 8.6, {}))
-        self.assertTrue(motion._light_wait(self.scan(88), 8.8, {}))
+        self.assertFalse(motion._light_wait(self.scan(88), 8.8, {}))
+        self.assertFalse(motion._light_wait(self.scan(111), 11.1, {}))
+        self.assertTrue(motion._light_wait(self.scan(113), 11.3, {}))
         self.assertEqual(motion.light_stop_state, 'released')
         self.assertEqual(motion.light_stop_evidence['go']['basis'], 'green_not_seen_red_go_time')
 
@@ -200,10 +203,16 @@ class LightGoal(unittest.TestCase):
         self.assertEqual(basis, 'stopped_with_the_whole_car_in_the_finish_zone')
         self.assertEqual(feedback['goal'], 'finish')
 
-    def test_the_light_zone_is_shorter_than_the_finish_zone(self):
-        self.assertAlmostEqual(ms.LIGHT_STOP_BODY_GAP_M, .26)
+    def test_the_light_zone_is_the_rules_metre(self):
+        # round y11: the practice sensor at 1 m (user 10-31); the stop stays far
+        # enough back for the glued camera to see the lamps (front >= .40)
+        self.assertAlmostEqual(ms.LIGHT_STOP_BODY_GAP_M, .56)
         self.assertLess(ms.LIGHT_STOP_BODY_GAP_M+FRONT+ms.REAR_BODY_EXTENT_M, ms.LIGHT_ZONE_M)
-        _, (basis, _) = self.goal(FRONT+.3, ms.LIGHT_GOAL)  # rear out of the light zone: creep
+        self.assertLess(ms.LIGHT_STOP_MIN_GAP_M, ms.LIGHT_STOP_TARGET_GAP_M)
+        self.assertLess(ms.LIGHT_STOP_TARGET_GAP_M, ms.LIGHT_STOP_BODY_GAP_M)
+        _, (basis, _) = self.goal(FRONT+ms.LIGHT_STOP_TARGET_GAP_M, ms.LIGHT_GOAL)
+        self.assertEqual(basis, 'stopped_with_the_whole_car_in_the_light_zone')
+        _, (basis, _) = self.goal(FRONT+.62, ms.LIGHT_GOAL)  # rear out of the light zone: creep
         self.assertIsNone(basis)
         _, (basis, _) = self.goal(FRONT+.3, ms.FINISH_GOAL)
         self.assertEqual(basis, 'stopped_with_the_whole_car_in_the_finish_zone')

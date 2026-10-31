@@ -58,8 +58,9 @@ class LightRelease(unittest.TestCase):
                                (5, 2.1, 0., 0.), (6, 2.4, 0., 0.), (7, 2.7, 0., 0.)])
         self.assertEqual(motion._light_stop_red_frames, 0)  # below LIGHT_GREEN_MIN_SCORE: the lamp may be cut off
         self.assertFalse(motion._light_wait(self.scan(28), 2.8, {}))
-        self.assertFalse(motion._light_wait(self.scan(86), 8.6, {}))
-        self.assertTrue(motion._light_wait(self.scan(88), 8.8, {}))
+        self.assertFalse(motion._light_wait(self.scan(88), 8.8, {}))  # round y11: 10.5 s, not 8
+        self.assertFalse(motion._light_wait(self.scan(111), 11.1, {}))
+        self.assertTrue(motion._light_wait(self.scan(113), 11.3, {}))
         self.assertEqual(motion.light_stop_evidence['go']['basis'], 'green_not_seen_red_go_time')
 
     def test_a_red_still_in_view_holds_past_8_s_until_11_s(self):
@@ -86,8 +87,8 @@ class LightRelease(unittest.TestCase):
 
     def test_no_frames_at_all_after_the_first_red(self):
         motion = self.waiting([(1, .7, .9, 0.)])  # the camera process died
-        self.assertFalse(motion._light_wait(self.scan(86), 8.6, {}))
-        self.assertTrue(motion._light_wait(self.scan(88), 8.8, {}))
+        self.assertFalse(motion._light_wait(self.scan(111), 11.1, {}))  # round y11: 10.5 s, not 8
+        self.assertTrue(motion._light_wait(self.scan(113), 11.3, {}))
         self.assertEqual(motion.light_stop_evidence['go']['basis'], 'green_not_seen_red_go_time')
 
 

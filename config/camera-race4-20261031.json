@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "camera": "car USB camera /dev/video20, V4L2 MJPG 640x480 (the console's and vision-log.py's mode)",
+  "measurement_date": "2026-10-31",
+  "mount": "fixed with hot glue by the user before the calibration, at the angle chosen at the traffic light",
+  "used_by": "scripts/vision-log.py CAMERA_* constants (round y11 crosswalk_m)",
+  "intrinsics": {
+    "model": "opencv_pinhole_k1_k2_p1_p2_k3",
+    "image_size": [
+      640,
+      480
+    ],
+    "fx_fy_cx_cy": [
+      426.55,
+      424.47,
+      349.59,
+      227.85
+    ],
+    "sd_fx_fy_cx_cy": [
+      1.0,
+      1.03,
+      0.63,
+      0.66
+    ],
+    "distortion_k1_k2_p1_p2_k3": [
+      -0.371764,
+      0.172259,
+      -9.2e-05,
+      -0.000226,
+      -0.042575
+    ],
+    "sd_distortion": [
+      0.00192,
+      0.00247,
+      0.00019,
+      0.00023,
+      0.00116
+    ],
+    "rms_px": 0.4191,
+    "views_used": 138,
+    "board": "9x6 inner corners, 25 mm squares, A4 print (scale checked by the user)",
+    "board_distance_m_min_med_max": [
+      0.37,
+      0.57,
+      1.07
+    ],
+    "board_tilt_deg_min_med_max": [
+      1,
+      11,
+      39
+    ],
+    "coverage_3x4_corners": [
+      [
+        668,
+        1652,
+        665,
+        664
+      ],
+      [
+        1099,
+        754,
+        897,
+        336
+      ],
+      [
+        275,
+        96,
+        242,
+        104
+      ]
+    ],
+    "subset70_fx_range": [
+      423.6,
+      433.5
+    ],
+    "subset70_k1_range": [
+      -0.3832,
+      -0.3696
+    ],
+    "rational_model": "rms .41 but k1 -1.8 +- .47 (over-parameterized): not used",
+    "field_of_view_deg": {
+      "horizontal": 88.8,
+      "vertical": 65.9,
+      "top_row_above_axis": 31.3,
+      "bottom_row_below_axis": 34.6
+    },
+    "views": "work/camera-calibration-20261031/ (console /camera.jpg captures: 12 by the user, 136 kept automatically; not in Git)"
+  },
+  "extrinsics": {
+    "lens_centre_height_m": 0.195,
+    "lens_centre_height_sources": {
+      "user_tape": 0.195,
+      "wall_board_pose": 0.1924
+    },
+    "camera_behind_front_m": 0.041,
+    "camera_behind_front_sources": "wall board pose: optical centre 0.4557 m from the wall, the glass 0.454 m and the front 0.415 m by tape",
+    "camera_ahead_of_lidar_m": 0.159,
+    "roll_deg": 0.0,
+    "physical_pitch_up_deg": 8.6,
+    "physical_pitch_sources": {
+      "light_lane_end_board_base_lidar_3_92_m": 8.6,
+      "start_lane_far_board_base_lidar_7_70_m": 8.5,
+      "crosswalk_stripe_edge_2_31_to_2_34_m": [
+        8.74,
+        8.8
+      ],
+      "wall_board_pose_rejected": {
+        "value": 6.38,
+        "why": "2.2 deg below all track references; the board likely leaned off the wall or the car stood on the uneven border floor"
+      }
+    },
+    "ranging_pitch_up_deg_for_race4_box_bottoms": 9.1,
+    "ranging_pitch_sources": {
+      "front_1_00_m_tape_1_028_lidar": [
+        8.94,
+        9.21
+      ],
+      "front_2_34_m_tape_2_31_lidar": [
+        9.13,
+        9.07
+      ],
+      "why_above_physical": "race4's crosswalk box bottoms sit 2-3 rows below the stripes' near edge"
+    },
+    "light_check": "light trigger position 21:56: housing 17 cm tall seen 0.637 m from the lens at pitch 8.6 (lidar: the gantry posts' near faces 0.631 m), bottom ~0.42-0.43 m above the floor (rules 0.40)"
+  },
+  "track_checks_2026_10_31": [
+    {
+      "position": "start, front 2.34 m (tape) / 2.31 (board behind)",
+      "crosswalk_score": [
+        0.37,
+        0.43
+      ],
+      "box_bottom_row": 330,
+      "crosswalk_m": 2.32
+    },
+    {
+      "position": "front 1.00 m (tape) / 1.028 (board behind)",
+      "crosswalk_score": [
+        0.62,
+        0.72
+      ],
+      "box_bottom_row": 372,
+      "crosswalk_m": 1.01
+    },
+    {
+      "position": "front 0.21 m (tape)",
+      "crosswalk_score": [
+        0.42,
+        0.62
+      ],
+      "box_bottom_row": 476.5,
+      "crosswalk_m": null,
+      "note": "the near edge below the frame (visible to ~0.38 m)"
+    },
+    {
+      "position": "light trigger, front 0.59 m from the posts (lidar)",
+      "green_score": 0.9,
+      "housing_top_row": 32
+    },
+    {
+      "position": "light, front ~0.56 m from the posts (lidar; the user's 15 cm was to the gantry foot)",
+      "green_score": 0.91,
+      "housing_top_row": 10,
+      "note": "before the camera was glued (pitch ~1.9 deg lower)"
+    }
+  ],
+  "limits": [
+    "the pitch is only valid while the glued mount holds: recheck with the far board base and the lidar (work/camera-calibration-20261031) or the crosswalk at a taped distance",
+    "ranging error at the start (2.3 m) ~0.5 m per degree of pitch; 0.06 m per degree at 0.8 m"
+  ]
+}

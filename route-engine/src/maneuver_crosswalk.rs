@@ -79,11 +79,12 @@ impl Maneuver {
         let raw = std::mem::take(&mut self._crosswalk_raw);
         let mut added = false;
         for f in &raw {
-            let (frame, captured, score, row) = (f.at(0).clone(), f.at(1).f(), f.at(2).clone(), f.at(3).clone());
+            let (frame, captured, score, row, metres) =
+                (f.at(0).clone(), f.at(1).f(), f.at(2).clone(), f.at(3).clone(), f.at(4).clone());
             self._crosswalk_seen.push(captured);
             let at = captured - CROSSWALK_CAMERA_LAG_S;
             let rest = self._crosswalk_rest;
-            if !row.is_num() || !(CROSSWALK_ROW_MIN_PX <= row.f() && row.f() <= CROSSWALK_ROW_MAX_PX) {
+            if !metres.is_num() || !(CROSSWALK_RANGE_M.0 <= metres.f() && metres.f() <= CROSSWALK_RANGE_M.1) {
                 continue;
             }
             let history = &self._crosswalk_track;
@@ -103,15 +104,16 @@ impl Maneuver {
             } else {
                 continue;
             };
-            let distance = CROSSWALK_ROW_SCALE / (row.f() - CROSSWALK_ROW_HORIZON_PX) - CROSSWALK_ROW_OFFSET_M;
-            let board = place - FRONT_BODY_EXTENT_M - (distance - 2. * CROSSWALK_DISTANCE_SIGMA_M);
+            let distance = metres.f();
+            let sigma = CROSSWALK_SIGMA_M + CROSSWALK_SIGMA_PER_M2 * distance * distance;
+            let board = place - FRONT_BODY_EXTENT_M - (distance - 2. * sigma);
             self._crosswalk_fixes.push(V::list(vec![
                 frame,
                 V::Float(captured),
                 score,
                 row,
                 V::Float(distance),
-                V::Float(CROSSWALK_DISTANCE_SIGMA_M),
+                V::Float(sigma),
                 V::Float(board),
             ]));
             added = true;
@@ -127,21 +129,26 @@ impl Maneuver {
         let Some(last) = self._crosswalk_fixes.last() else { return };
         let newest = last.at(1).f();
         let n = self._crosswalk_fixes.len();
-        let mut boards: Vec<f64> = self._crosswalk_fixes[n.saturating_sub(CROSSWALK_FIX_FRAMES)..]
+        // (board, sigma) of the newest fixes, in order (a stable sort keeps ties as Python)
+        let mut recent: Vec<(f64, f64)> = self._crosswalk_fixes[n.saturating_sub(CROSSWALK_FIX_FRAMES)..]
             .iter()
             .filter(|f| newest - f.at(1).f() <= CROSSWALK_SEEN_S)
-            .map(|f| f.at(6).f())
+            .map(|f| (f.at(6).f(), f.at(5).f()))
             .collect();
-        if !added || boards.len() < CROSSWALK_FIX_FRAMES {
+        if !added || recent.len() < CROSSWALK_FIX_FRAMES {
             return;
         }
-        sort_floats(&mut boards);
-        let board = boards[boards.len() / 2];
-        // round y10: later frames only bring the edge nearer
-        self._crosswalk_board_m = Some(match self._crosswalk_board_m {
-            None => board,
-            Some(old) => pmax(old, board),
-        });
+        recent.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        let (board, sigma) = recent[recent.len() / 2];
+        // round y11: a fix as precise as the one that set the edge replaces it
+        // (the car closing in), a less precise one only brings it nearer
+        match (self._crosswalk_board_m, self._crosswalk_board_sigma) {
+            (Some(old), Some(old_sigma)) if sigma > old_sigma => self._crosswalk_board_m = Some(pmax(old, board)),
+            _ => {
+                self._crosswalk_board_m = Some(board);
+                self._crosswalk_board_sigma = Some(sigma);
+            }
+        }
         if self.crosswalk_state == Some("search") {
             self.crosswalk_state = Some("approach");
             let evidence = dict! {

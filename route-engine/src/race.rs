@@ -27,7 +27,7 @@
 //! read-only vision process, scripts/vision-log.py --light-state, replaces
 //! it atomically per frame: {"frame", "captured_s", "written_s", "red",
 //! "green"} on its own monotonic clock; round y5 also "crosswalk",
-//! "crosswalk_row"). Each new valid content becomes
+//! "crosswalk_row", round y11 "crosswalk_m"). Each new valid content becomes
 //! control['light'] = {"frame", "captured_at", "red", "green"} on every
 //! control line from then on, with captured_at on this program's clock: the
 //! receive time less the file's own written - captured. Every accepted one is
@@ -215,11 +215,15 @@ fn light_of(text: &str, now: f64) -> Option<V> {
     }
     let mut light = dict! {"frame" => v.get("frame").clone(), "captured_at" => now - age,
                            "red" => score("red")?, "green" => score("green")?};
-    // Round y5: the best crosswalk score and its box's bottom row, when present.
+    // Round y5: the best crosswalk score and its box's bottom row, when present;
+    // round y11: the camera model's distance from the front to its near edge.
     if let Some(crosswalk) = score("crosswalk") {
         light.set("crosswalk", crosswalk);
         if let Some(row) = num("crosswalk_row").filter(|r| (0. ..=4000.).contains(r)) {
             light.set("crosswalk_row", row);
+        }
+        if let Some(metres) = num("crosswalk_m").filter(|m| (0. ..=20.).contains(m)) {
+            light.set("crosswalk_m", metres);
         }
     }
     Some(light)
@@ -816,4 +820,32 @@ fn run(p: &mut Program) -> i32 {
     let _ = p.files.send(FileOp::Put("summary.json", to_json(&summary)));
     let _ = p.files.send(FileOp::Put("cli-result.json", to_json(&summary)));
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn light_states_carry_the_crosswalk_distance() {
+        // round y11: scripts/vision-log.py writes crosswalk_m beside the score and the row
+        let text = r#"{"frame": 7, "captured_s": 10.0, "written_s": 10.25, "red": 0.0, "green": 0.0,
+                       "crosswalk": 0.42, "crosswalk_row": 330.0, "crosswalk_m": 2.319}"#;
+        let light = light_of(text, 100.).unwrap();
+        assert_eq!(light.get("crosswalk_m").f(), 2.319);
+        assert_eq!(light.get("crosswalk_row").f(), 330.);
+        assert_eq!(light.get("captured_at").f(), 99.75);
+        // the edge out of view: no distance; an impossible one is dropped, the frame kept
+        let text = r#"{"frame": 8, "captured_s": 10.0, "written_s": 10.2, "red": 0.0, "green": 0.0,
+                       "crosswalk": 0.5, "crosswalk_row": 476.5}"#;
+        assert!(light_of(text, 100.).unwrap().get("crosswalk_m").is_none());
+        let text = r#"{"frame": 9, "captured_s": 10.0, "written_s": 10.2, "red": 0.0, "green": 0.0,
+                       "crosswalk": 0.5, "crosswalk_m": -1.0}"#;
+        let light = light_of(text, 100.).unwrap();
+        assert!(light.get("crosswalk_m").is_none());
+        assert_eq!(light.get("crosswalk").f(), 0.5);
+        // no crosswalk score: no crosswalk keys at all
+        let text = r#"{"frame": 10, "captured_s": 10.0, "written_s": 10.2, "red": 0.1, "green": 0.0, "crosswalk_m": 2.0}"#;
+        assert!(light_of(text, 100.).unwrap().get("crosswalk_m").is_none());
+    }
 }

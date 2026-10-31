@@ -136,11 +136,13 @@ impl Maneuver {
         }
         let score = |v: &V| if v.is_num() { v.clone() } else { V::Float(0.) };
         let (red, green) = (score(light.get("red")), score(light.get("green")));
-        let (crosswalk, row) = (light.get("crosswalk"), light.get("crosswalk_row"));
+        let (crosswalk, row, metres) = (light.get("crosswalk"), light.get("crosswalk_row"), light.get("crosswalk_m"));
         if self.route_stage == "start_lane" && crosswalk.is_num() && crosswalk.f() >= CROSSWALK_SEEN_SCORE {
-            // round y5: placed on the start lane's next scan (crosswalk_observe)
+            // round y5: placed on the start lane's next scan (crosswalk_observe);
+            // round y11: with the camera model's distance
             let row = if row.is_num() { row.clone() } else { V::None };
-            self._crosswalk_raw.push(V::list(vec![frame.clone(), captured.clone(), crosswalk.clone(), row]));
+            let metres = if metres.is_num() { metres.clone() } else { V::None };
+            self._crosswalk_raw.push(V::list(vec![frame.clone(), captured.clone(), crosswalk.clone(), row, metres]));
             let n = self._crosswalk_raw.len();
             if n > 8 {
                 self._crosswalk_raw.drain(..n - 8);

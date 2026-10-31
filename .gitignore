@@ -36,3 +36,6 @@ work/
 /recordings/
 /web/vehicle-console/access.json
 /web/vehicle-console/recordings/
+
+# Camera calibration captures (raw images, 2026-10-31)
+/calibration/

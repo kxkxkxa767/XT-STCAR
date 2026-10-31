@@ -65,20 +65,30 @@ GANTRY_POST_M = .05
 # bench, .77/.59/.34/.27 at 1.0/1.5/2.0/2.46 m; round y10: rows of the 10-29
 # car-run calibration, 323.5 + 461.4/(m + 2.186)),
 # seen from 1.0 to 2.6 m within 30 deg of the start heading.
-LIGHT_DEFAULTS = {'zone': .70, 'red_s': 10., 'pre': 'off', 'fps': 4., 'latency': .25, 'score': .89,
-                  'min_ahead_m': .25, 'max_range_m': 6., 'half_fov_deg': 50., 'green_min_ahead_m': None,
-                  'crosswalk_m': None}
-CROSSWALK_BENCH = ((1.0, .77), (1.5, .59), (2.0, .34), (2.46, .27), (2.6, .25))
+# Round y11 (the camera raised for the light, glued and calibrated 10-31,
+# config/camera-race4-20261031.json): the user's practice sensor at the rules'
+# 1 m; the whole housing in view to .45 m before the posts (front), the lamps
+# to ~.40 (``min_ahead_m`` .60 from the lidar); 88.8 deg across. Crosswalk
+# frames carry the camera model's distance (``crosswalk_m`` of the frame,
+# times ``crosswalk_scale``: a ranging error) while the edge is in view (front
+# .38 m and on) and race4's score of the 10-31 track checks (.40 at 2.31 m,
+# .67 at 1.0 m, .52 with the edge out of view at .21 m), seen from .2 to 3.2 m.
+LIGHT_DEFAULTS = {'zone': 1., 'red_s': 10., 'pre': 'off', 'fps': 4., 'latency': .25, 'score': .89,
+                  'min_ahead_m': .60, 'max_range_m': 6., 'half_fov_deg': 44., 'green_min_ahead_m': None,
+                  'crosswalk_m': None, 'crosswalk_scale': 1.}
+CROSSWALK_BENCH = ((.2, .52), (1.0, .67), (2.31, .40), (3.0, .26), (3.2, .22))
+CROSSWALK_EDGE_IN_VIEW_M = .38
 
 
-def crosswalk_frame(ahead):
-    """(score, bottom row) of the crosswalk ``ahead`` m before the car's front, or None."""
+def crosswalk_frame(ahead, scale=1.):
+    """(score, front-to-edge metres or None) of the crosswalk ``ahead`` m before
+    the car's front, or None."""
     if not CROSSWALK_BENCH[0][0] <= ahead <= CROSSWALK_BENCH[-1][0]:
         return None
     for (a0, s0), (a1, s1) in zip(CROSSWALK_BENCH, CROSSWALK_BENCH[1:]):
         if a0 <= ahead <= a1:
-            # round y10: the rows of the 10-29 car-run calibration
-            return round(s0+(s1-s0)*(ahead-a0)/(a1-a0), 4), round(323.5+461.4/(ahead+2.186), 1)
+            return (round(s0+(s1-s0)*(ahead-a0)/(a1-a0), 4),
+                    round(ahead*scale, 3) if ahead >= CROSSWALK_EDGE_IN_VIEW_M else None)
     return None
 LIGHT_LATE_S = 5.
 
@@ -545,6 +555,7 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         if not getattr(course, 'gantry', False):
             raise ValueError('light needs the gantry')
         lamp = {**LIGHT_DEFAULTS, **light}
+        lamp.update(crosswalk_min_gap_m=math.inf, crosswalk_stop=None)  # round y11
         lamp.update(sensor_x=course.gantry_x-lamp['zone'], trigger_at=None, green_at=None, next_frame=lamp['latency'],
                     frame=0, pending=[], crossed_at=None, stops=[], stationary_s=0.)
 
@@ -618,9 +629,11 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                     sx, sy, spsi = course.start
                     along = lamp['crosswalk_m']+FRONT-((car.x-sx)*math.cos(spsi)+(car.y-sy)*math.sin(spsi))
                     turned = abs(math.degrees(math.atan2(math.sin(car.psi-spsi), math.cos(car.psi-spsi))))
-                    seen = crosswalk_frame(along-FRONT) if turned <= 30 else None
+                    seen = crosswalk_frame(along-FRONT, lamp['crosswalk_scale']) if turned <= 30 else None
                     if seen is not None:
-                        lamp['pending'][-1][1].update(crosswalk=seen[0], crosswalk_row=seen[1])
+                        lamp['pending'][-1][1].update(crosswalk=seen[0])
+                        if seen[1] is not None:
+                            lamp['pending'][-1][1].update(crosswalk_m=seen[1])
                 lamp['frame'] += 1
             while lamp['pending'] and lamp['pending'][0][0] <= t+1e-9:
                 console.status['control']['light'] = lamp['pending'].pop(0)[1]
@@ -641,6 +654,16 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
         reason = getattr(motion, 'reason', '') if motion else (console.auto_result or {}).get('reason', '')
         if not stage_seen or stage_seen[-1][1:] != (stage, phase):
             stage_seen.append((t, stage, phase))
+        if lamp is not None and lamp['crosswalk_m'] is not None and motion is not None:
+            # round y11: the front's true gap to the crosswalk's near edge
+            sx, sy, spsi = course.start
+            gap = lamp['crosswalk_m']-((car.x-sx)*math.cos(spsi)+(car.y-sy)*math.sin(spsi))
+            if stage == 'start_lane':
+                lamp['crosswalk_min_gap_m'] = min(lamp['crosswalk_min_gap_m'], round(gap, 3))
+            if getattr(motion, 'crosswalk_state', None) == 'waiting' and lamp['crosswalk_stop'] is None:
+                stop = (getattr(motion, 'crosswalk_evidence', None) or {}).get('stop') or {}
+                lamp['crosswalk_stop'] = {'t': round(t, 2), 'front_gap_m': round(gap, 3), 'basis': stop.get('basis'),
+                                          'board_m': getattr(motion, '_crosswalk_board_m', None)}
         wall, cone = course.body_gaps(car.x, car.y, car.psi)
         if (line_at is None and car.y >= course.W-course.light_lane
                 and car.x+(FRONT-.08)*math.cos(car.psi) >= course.finish_x):
@@ -683,6 +706,8 @@ def run(course, *, max_s=45., speed_scale=1., decel=.5, delay=.15, distortion=1.
                'body_in_finish_zone': body_in_finish, 'finish_line_time_s': line_at,
                'success': in_finish and not any(c[1] == 'board' for c in contacts),
                'light': light_summary(lamp, line_at),
+               'crosswalk': (None if lamp is None or lamp['crosswalk_m'] is None
+                             else {'stop': lamp['crosswalk_stop'], 'min_gap_m': lamp['crosswalk_min_gap_m']}),
                # Keep the historical position-based score for comparisons,
                # but do not count a safety stop in the zone as route completion.
                'route_completed': (in_finish and not any(c[1] == 'board' for c in contacts)

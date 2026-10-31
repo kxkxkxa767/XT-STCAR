@@ -842,13 +842,23 @@ OPEN_STAGES = ('open_transfer', 'second_loop', 'light_entry')
 # satisfies the rules' 1 m), it waits there (steering pre-aimed along the
 # lane) until green in LIGHT_GREEN_FRAMES fresh frames taken after the stop,
 # then runs on to the finish. Without that input nothing changes.
-LIGHT_ZONE_M = .70
-LIGHT_STOP_TARGET_GAP_M = .15  # front to the light line
-LIGHT_STOP_MIN_GAP_M = .05
-# .26: the rear .06 inside the sensor line (the legs are ~.05 m thick and the
+# Round y11 (user 10-31: the practice sensor is at 1 m, as the rules; 车距离红绿灯
+# 在地下的投影15cm的话是完全看不到灯的): the zone is the rules' 1 m. The glued,
+# calibrated camera (config/camera-race4-20261031.json) sees the whole housing
+# from .45 m before the posts' near faces (the lamps, clipped at the frame's
+# top, from ~.40; y3 still scored a clipped red .90), and the light trigger
+# position had the front .59 m before them (lidar): the stop aims at .48 with
+# the whole car in the zone up to LIGHT_STOP_BODY_GAP_M (.56) and never nearer
+# than LIGHT_STOP_MIN_GAP_M. Before, .15 (.05-.26 in a .70 zone): car run y10
+# stopped .252 m before the line, the lamps above the frame (released blind
+# by LIGHT_RED_GO_S).
+LIGHT_ZONE_M = 1.
+LIGHT_STOP_TARGET_GAP_M = .48  # front to the light line
+LIGHT_STOP_MIN_GAP_M = .40
+# .56: the rear .06 inside the sensor line (the legs are ~.05 m thick and the
 # lidar sees their near face; simulation: .02 left rears .003-.02 m outside)
 LIGHT_STOP_BODY_GAP_M = LIGHT_ZONE_M-(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M)-.06
-LIGHT_STOP_ZONE_GAP_M = LIGHT_ZONE_M-.02  # .68: front past the sensor line
+LIGHT_STOP_ZONE_GAP_M = LIGHT_ZONE_M-.02  # .98: front past the sensor line
 # Gantry legs (2026-10-22 and run 108's lidar: ~.05 m posts .93-.96 m apart, the
 # outer one ~.12 m inside the outer board, the inner one at the divider's open
 # end; seen from ~3.2 m along the lane, as 1-6 returns standing well in front
@@ -949,9 +959,14 @@ LIGHT_REARM_MIN_M = 1.
 # LIGHT_RED_MAX_S after it in any case (rules: red 3-10 s, then green; not
 # moving 5 s after green fails the run; user 10-27: 8 s covers 3-8 s reds,
 # the extremes are unlikely; 11 s: the longest red and 1 s).
+# Round y11: car run y10 never saw a lamp from the stop and left 8.08 s after
+# the first red, of a practice red that lasts 10 s (user 10-26): before green.
+# Now LIGHT_RED_GO_S is the rules' longest red and .5 s (the first red frame
+# comes after the trigger); the rules' text has no limit after green (the
+# light's stop time is not counted, and only stops elsewhere fail after 10 s).
 LIGHT_RED_STOP_FRAMES = 3
 LIGHT_RED_GONE_FRAMES = 3
-LIGHT_RED_GO_S = 8.
+LIGHT_RED_GO_S = 10.5
 LIGHT_RED_MAX_S = 11.
 # Round y3 (user 10-27: stop facing the light): while stopping, the light lane
 # pursuit follows the gantry's centre line (between its two legs, measured on
@@ -998,8 +1013,12 @@ LIGHT_LAUNCH_S = .6
 # model scaled) left a car stopped at .32 waiting with the rear .03 outside
 # (simulation). A 2-frame creep moved the car ~.07 m (run 106); the light's
 # creeps are bounded at LIGHT_CREEP_TRAVEL_M and the red leaves time for
-# LIGHT_CREEP_MAX of them.
-LIGHT_CREEP_TRAVEL_M = .20
+# LIGHT_CREEP_MAX of them. Round y11: the zone now leaves .16 m (.40 to .56),
+# and a creep needs its bound above the minimum: at .20 no creep went from
+# .56-.60 (simulation: stops there, one rear .005 m outside after six creeps);
+# .15 creeps down to .55 (simulation, 12 runs: final .46-.58, rears .04-.17 m
+# inside; a floor of .25 instead ended one fast car's finish at the body gate).
+LIGHT_CREEP_TRAVEL_M = .15
 LIGHT_CREEP_MAX = 6
 # A light line lost on a scan (no leg followed, no board offset) is the last
 # measured one less the travel since: at the closing speed then (else
@@ -1067,15 +1086,25 @@ LIGHT_GOAL = ('light', LIGHT_STOP_ZONE_GAP_M, LIGHT_STOP_BODY_GAP_M, LIGHT_STOP_
 # edge is the median of the newest CROSSWALK_FIX_FRAMES (within
 # CROSSWALK_SEEN_S), moved only nearer afterwards. Frames taken before the car
 # first moved are placed at its standstill, so the start fixes it at rest.
+# Round y11 (user: 先校准下摄像头 ... 然后固定，再校准摄像头的畸变): the camera was
+# raised for the light, glued and calibrated (config/camera-race4-20261031.json);
+# the race program's YOLO process sends the distance itself ('crosswalk_m',
+# scripts/vision-log.py crosswalk_front_m: front to the near edge, only while
+# the edge is in view: to ~.38 m now, ~.88 m before). Track checks 10-31:
+# 2.32/1.01 m at 2.31-2.34/1.00-1.03 m by tape and the board behind. A frame
+# ranges within CROSSWALK_RANGE_M, less two sigmas growing with the square of
+# the distance (CROSSWALK_SIGMA_M + CROSSWALK_SIGMA_PER_M2 m^2: a .2 deg pitch
+# error moves 2.3 m by ~.1 m and .8 m by ~.01 m). A fix (the median of the
+# newest CROSSWALK_FIX_FRAMES) replaces the edge when it is at least as
+# precise as the one that set it (the car closing in), else only brings it
+# nearer: y10's rule kept the conservative far fix (.3 m short then) against
+# the nearer, sharper frames.
 CROSSWALK_SEEN_SCORE = .25  # the race program's own detection threshold
 CROSSWALK_FIX_FRAMES = 3
 CROSSWALK_SEEN_S = 1.5
-CROSSWALK_ROW_SCALE = 461.4
-CROSSWALK_ROW_HORIZON_PX = 323.5
-CROSSWALK_ROW_OFFSET_M = 2.186
-CROSSWALK_ROW_MIN_PX = 410.  # ~3.15 m
-CROSSWALK_ROW_MAX_PX = 474.  # the near edge still inside the frame (bottom 480), ~.88 m
-CROSSWALK_DISTANCE_SIGMA_M = .15
+CROSSWALK_RANGE_M = (.3, 3.5)
+CROSSWALK_SIGMA_M = .015
+CROSSWALK_SIGMA_PER_M2 = .02
 CROSSWALK_CAMERA_LAG_S = .15
 CROSSWALK_TRACK_S = 3.
 # Search speed: at .9 a crosswalk 1.4-2.46 m ahead was fixed ~1 m before it
@@ -1130,10 +1159,14 @@ CROSSWALK_REAR_MAX_M = 4.
 # The stop: a coast at the measured ~.6 m/s2 after a .3 s lag aims at
 # CROSSWALK_TARGET_GAP_M; never past CROSSWALK_MIN_GAP_M at the weakest coast
 # after the reaction and the rest of the ESC lag (speed + margin).
+# Round y11: with the camera model's narrower margin (2 sigma ~.1 m at the cut
+# instead of .3) the guard's floor rises to .15: simulation (measured car,
+# three courses), a crosswalk 1.4 m before the start stopped .10 m before the
+# edge at .1, .21 at .15 (the same at .2), 2.46 m .60 -> .71.
 CROSSWALK_AIM_LAG_S = .3
 CROSSWALK_AIM_DECEL_MPS2 = .6
 CROSSWALK_TARGET_GAP_M = .35
-CROSSWALK_MIN_GAP_M = .1
+CROSSWALK_MIN_GAP_M = .15
 # Stopped farther than this from it, 3-frame 1560 kicks rested apart (as the
 # lane's), each only with LANE_KICK_TRAVEL_M of room; from rest the start
 # lane's own 1560 ran until a lagging speed read .15 m/s and overshot the edge
@@ -1851,11 +1884,12 @@ class ManeuverSequence(TurnMotion):
         # Round y5: the crosswalk stop in the start lane (only with control['light']).
         self.crosswalk_state = None  # None, 'search', 'approach', 'fallback', 'waiting', 'done'
         self.crosswalk_evidence = None
-        self._crosswalk_raw = []  # (frame, captured_at, score, row) not yet placed
+        self._crosswalk_raw = []  # (frame, captured_at, score, row, metres) not yet placed
         self._crosswalk_seen = []  # capture times of frames >= CROSSWALK_SEEN_SCORE
         self._crosswalk_fixes = []  # (frame, captured_at, score, row, distance, sigma, board_m)
         self._crosswalk_track = []  # (received_at, start-lane front track)
         self._crosswalk_board_m = None  # the near edge (conservative) before the board ahead
+        self._crosswalk_board_sigma = None  # round y11: the sigma of the fix that set it
         self._crosswalk_stop_at = None
         self._crosswalk_wait_tick = None
         self.crosswalk_wait_credit_s = 0.
@@ -3951,8 +3985,10 @@ class ManeuverSequence(TurnMotion):
         """Round y5: place the new crosswalk frames on the crosswalk odometry's track
         (CROSSWALK_CAMERA_LAG_S before their capture time; round y10: at the
         standstill for frames before the first output) and fix the near edge,
-        each frame less two CROSSWALK_DISTANCE_SIGMA_M: the median of the newest
-        CROSSWALK_FIX_FRAMES within CROSSWALK_SEEN_S, afterwards only nearer."""
+        each frame less two sigmas of its distance (round y11: the camera
+        model's 'crosswalk_m'): the median of the newest CROSSWALK_FIX_FRAMES
+        within CROSSWALK_SEEN_S, replacing the edge when as precise as the fix
+        that set it, else only nearer."""
         if self.crosswalk_state is None and self.light_vision:
             self.crosswalk_state = 'search'
         if self.crosswalk_state not in ('search', 'approach'):
@@ -3966,11 +4002,11 @@ class ManeuverSequence(TurnMotion):
         while history and history[0][0] < scan['received_at']-CROSSWALK_TRACK_S:
             history.pop(0)
         added = False
-        for frame, captured, score, row in self._crosswalk_raw:
+        for frame, captured, score, row, distance in self._crosswalk_raw:
             self._crosswalk_seen.append(captured)
             at = captured-CROSSWALK_CAMERA_LAG_S
             rest = self._crosswalk_rest
-            if row is None or not CROSSWALK_ROW_MIN_PX <= row <= CROSSWALK_ROW_MAX_PX:
+            if distance is None or not CROSSWALK_RANGE_M[0] <= distance <= CROSSWALK_RANGE_M[1]:
                 continue
             if history and at >= history[0][0]:
                 place = history[-1][1]
@@ -3982,9 +4018,9 @@ class ManeuverSequence(TurnMotion):
                 place = rest[1]  # taken at the standstill before the first output
             else:
                 continue
-            distance = CROSSWALK_ROW_SCALE/(row-CROSSWALK_ROW_HORIZON_PX)-CROSSWALK_ROW_OFFSET_M
-            self._crosswalk_fixes.append((frame, captured, score, row, distance, CROSSWALK_DISTANCE_SIGMA_M,
-                                          place-FRONT_BODY_EXTENT_M-(distance-2*CROSSWALK_DISTANCE_SIGMA_M)))
+            sigma = CROSSWALK_SIGMA_M+CROSSWALK_SIGMA_PER_M2*distance*distance
+            self._crosswalk_fixes.append((frame, captured, score, row, distance, sigma,
+                                          place-FRONT_BODY_EXTENT_M-(distance-2*sigma)))
             added = True
         self._crosswalk_raw.clear()
         del self._crosswalk_seen[:-8]
@@ -3993,10 +4029,15 @@ class ManeuverSequence(TurnMotion):
                   if self._crosswalk_fixes[-1][1]-f[1] <= CROSSWALK_SEEN_S]
         if not added or len(recent) < CROSSWALK_FIX_FRAMES:
             return
-        boards = sorted(f[6] for f in recent)
-        board = boards[len(boards)//2]
-        # round y10: later frames only bring the edge nearer
-        self._crosswalk_board_m = board if self._crosswalk_board_m is None else max(self._crosswalk_board_m, board)
+        median = sorted(recent, key=lambda f: f[6])[len(recent)//2]
+        board, sigma = median[6], median[5]
+        # round y11: a fix as precise as the one that set the edge replaces it
+        # (the car closing in), a less precise one only brings it nearer
+        old = self._crosswalk_board_m
+        if old is None or sigma <= self._crosswalk_board_sigma:
+            self._crosswalk_board_m, self._crosswalk_board_sigma = board, sigma
+        else:
+            self._crosswalk_board_m = max(old, board)
         if self.crosswalk_state == 'search':
             self.crosswalk_state = 'approach'
             self._route_event('crosswalk_fixed', scan, None, {
@@ -6349,10 +6390,12 @@ class ManeuverSequence(TurnMotion):
             return
         red, green = light.get('red'), light.get('green')
         red, green = (red if _number(red) else 0.), (green if _number(green) else 0.)
-        crosswalk, row = light.get('crosswalk'), light.get('crosswalk_row')
+        crosswalk, row, metres = light.get('crosswalk'), light.get('crosswalk_row'), light.get('crosswalk_m')
         if self.route_stage == 'start_lane' and _number(crosswalk) and crosswalk >= CROSSWALK_SEEN_SCORE:
-            # round y5: placed on the start lane's next scan (_crosswalk_observe)
-            self._crosswalk_raw.append((frame, captured, crosswalk, row if _number(row) else None))
+            # round y5: placed on the start lane's next scan (_crosswalk_observe);
+            # round y11: with the camera model's distance
+            self._crosswalk_raw.append((frame, captured, crosswalk, row if _number(row) else None,
+                                        metres if _number(metres) else None))
             del self._crosswalk_raw[:-8]
         self._light_frames.append((frame, captured, red, green))
         del self._light_frames[:-(max(LIGHT_GREEN_FRAMES, LIGHT_RED_GONE_FRAMES)+2)]

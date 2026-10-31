@@ -25,6 +25,9 @@ PATH` reads it as the traffic light's state; nothing else is sent anywhere.
 Round y5: with a crosswalk in the frame also its best score ("crosswalk")
 and that box's bottom row in image pixels ("crosswalk_row"), for the start
 lane's crosswalk stop.
+Round y11: and the distance from the car's front to the stripes' near edge
+("crosswalk_m", metres along the ground) by the calibrated camera model
+(crosswalk_front_m), when the box's bottom stands clear of the frame's.
 
 Before anything else the model must match its handoff files: sha256 of
 race4.onnx equal to race4.provenance.json's, the class order of race4.json
@@ -36,6 +39,7 @@ the aspect kept, centred integer padding filled with 114, RGB, 0-1.
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -46,6 +50,62 @@ CLASSES = ['crosswalk', 'blue_cone', 'red_light', 'green_light']
 SIZE = 320
 FILL = 114
 LOGGED = ('crosswalk', 'red_light', 'green_light')
+# Round y11: the car camera's model (2026-10-31, config/camera-race4-20261031.json;
+# the camera fixed with hot glue at the angle chosen at the light). Lens:
+# OpenCV's pinhole k1 k2 p1 p2 k3 from 138 views of a 9x6 board (.42 px rms;
+# 70 % subsets fx 424-434). Mount: the lens centre .195 m above the floor (tape;
+# a board on a wall gave .1924) and .041 m behind the front (the wall pose and
+# the tape at the glass, 45.4 vs 41.5 cm). The ranging pitch fits race4's box
+# bottoms on the track (front 1.00/2.31-2.34 m from the near edge by tape and
+# the board behind: 8.94-9.21 deg); the stripes' edge and the far boards'
+# bases (lidar 3.92/7.70 m) put the camera's own pitch at 8.5-8.8 deg, the box
+# bottoms sitting 2-3 rows below the edge.
+CAMERA_FX_FY_CX_CY = (426.55, 424.47, 349.59, 227.85)
+CAMERA_DISTORTION = (-.371764, .172259, -.000092, -.000226, -.042575)
+CAMERA_HEIGHT_M = .195
+CAMERA_BEHIND_FRONT_M = .041
+CAMERA_RANGE_PITCH_DEG = 9.1
+# A crosswalk box this low touches the frame's bottom (480): race4 ended the
+# boxes of stripes running out of the frame at rows 476-477 (front .21 m from
+# the edge, 10-31); the edge itself stays in view to ~.38 m (row ~474).
+CROSSWALK_CLIPPED_ROW = 472.
+
+
+def undistort(u, v):
+    """Normalized undistorted image point of pixel (u, v), or None where the
+    fixed-point iteration does not reproduce the pixel (the bottom corners)."""
+    fx, fy, cx, cy = CAMERA_FX_FY_CX_CY
+    k1, k2, p1, p2, k3 = CAMERA_DISTORTION
+    xd, yd = (u-cx)/fx, (v-cy)/fy
+    x, y = xd, yd
+    for _ in range(40):
+        r2 = x*x+y*y
+        radial = 1+r2*(k1+r2*(k2+r2*k3))
+        x, y = (xd-2*p1*x*y-p2*(r2+2*x*x))/radial, (yd-p1*(r2+2*y*y)-2*p2*x*y)/radial
+    r2 = x*x+y*y
+    radial = 1+r2*(k1+r2*(k2+r2*k3))
+    if (abs(fx*(x*radial+2*p1*x*y+p2*(r2+2*x*x))+cx-u) > 1e-3
+            or abs(fy*(y*radial+p1*(r2+2*y*y)+2*p2*x*y)+cy-v) > 1e-3):
+        return None
+    return x, y
+
+
+def crosswalk_front_m(box):
+    """Round y11: metres from the car's front to the crosswalk's near edge on
+    the floor at box's bottom row (in the column nearest the image centre:
+    the edge's lowest point there), or None (bottom at the frame's, or no
+    floor point)."""
+    x1, _, x2, y2 = box
+    if y2 >= CROSSWALK_CLIPPED_ROW:
+        return None
+    point = undistort(min(max(CAMERA_FX_FY_CX_CY[2], x1), x2), y2)
+    if point is None:
+        return None
+    pitch = math.radians(CAMERA_RANGE_PITCH_DEG)
+    down = point[1]*math.cos(pitch)-math.sin(pitch)
+    if down <= 1e-6:
+        return None
+    return CAMERA_HEIGHT_M*(math.cos(pitch)+point[1]*math.sin(pitch))/down-CAMERA_BEHIND_FRONT_M
 
 
 def check_model(model_dir):
@@ -189,6 +249,9 @@ def main():
                     # round y5: the best crosswalk and its box's bottom row (image pixels)
                     top = max(crosswalks, key=lambda d: d['score'])
                     state.update(crosswalk=top['score'], crosswalk_row=round(top['box'][3], 1))
+                    metres = crosswalk_front_m(top['box'])
+                    if metres is not None:
+                        state['crosswalk_m'] = round(metres, 3)  # round y11
                 light_state = Path(args.light_state)
                 temporary = light_state.with_name(light_state.name+'.tmp')
                 temporary.write_text(json.dumps(state))
