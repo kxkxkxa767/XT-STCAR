@@ -25361,8 +25361,8 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "79a443d (car: round 124 + y17)",
     "user": [
       "还是同样的问题，灯区的直道断断续续的，反正在红绿灯那里调整了姿态，可以尝试1580起步，这样滑行的更长，你需要补的更少",
@@ -25381,6 +25381,15 @@
     "risks": [
       "1580's real launch accel is unmeasured; with the 2.5 bound the guard may cut the launch sooner than 1560's, at a similar speed"
     ],
-    "next": "run y18: after-green launch motor, cut time and speed, pushes after it, green-to-stop time"
+    "next": "y19: no top-up within the launch's ESC tail (a push .16 s after its cut); the finish guard after the light from the measured decel (.56-.60, se ~.02 over y15-y18) and the measured cut lag (<= .3 s), so the last coast ends with the whole car in the zone instead of kicks",
+    "commit": "50b204f",
+    "deployment": "build-race.py claude-turn124 claude-turn125 125, build-vision.py y18; deploy-matched.py 125, deploy-vision.py y18",
+    "car_run_y18": {
+      "evidence": "left-cone-trial-20261101-y18 (90/90)",
+      "end": "coast_standstill_unconfirmed (end check; whole car in the zone .369 m, 1 creep), 37.6 s start to stop, light wait 8.9 s: ~28.7 s effective (y17-2 ~30.4)",
+      "crosswalk": "guard cut at 2.25 s (.852 m/s), coasted .835 m, ~.67 m before the stripes by the board behind (2.748 - .344 - 1.734)",
+      "light": "stopped .540 m, green release after 8.9 s (35 red frames)",
+      "after_green": "1580 launch cut by the guard after .48 s (reading .672, aim 1.108 m/s; its 2.5 m/s2 bound over the .5 s tail); 1550 again .16 s later (a top-up within the launch tail) cut at .80 s; peak 1.395 m/s (y17-2 .92); 1550 top-ups at 1.44 and 2.41 s; the last coast stopped .545 m out (rear outside) -> two 1560 kicks -> .369 m; front past .8 m ~3.1 s after green (y17-2 ~4.2); green to stop ~5.7 s; decel .565 +- .021"
+    }
   }
 }
