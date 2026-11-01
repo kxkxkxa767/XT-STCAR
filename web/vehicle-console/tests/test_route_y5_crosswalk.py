@@ -174,8 +174,10 @@ class CrosswalkStop(unittest.TestCase):
 
     def test_stopped_short_of_the_zone_kicks_rested_apart(self):
         motion = self.approach()
+        motion._crosswalk_coasting = True  # round y11: a coast ended short of the zone
         at = 3.+ms.FRONT_BODY_EXTENT_M+1.3
         fb = motion._crosswalk_control(scan(1, 1.5), 1.5, {}, at, 0., 0.)
+        self.assertEqual((motion._crosswalk_coasting, motion._crosswalk_restart), (False, True))
         self.assertEqual((fb['state'], motion._start_motor), ('approach', NEUTRAL))  # not rested
         motors = []
         for k, now in enumerate((2., 2.1, 2.2, 2.3, 2.4)):
@@ -188,6 +190,51 @@ class CrosswalkStop(unittest.TestCase):
         motion._start_motor = TRIAL_MOTOR
         motion._crosswalk_control(scan(9, 3.3), 3.3, {}, at, 0., 0.)
         self.assertEqual(motion._start_motor, TRIAL_MOTOR)  # rested: the next kick
+
+    def test_leaving_the_start_slow_keeps_the_cruise(self):
+        # Round y11 (car run y11): fixed at .04 m/s as the car left the start; no
+        # cut yet, so no kicks: the start lane's own cruise drives on.
+        motion = self.approach()
+        motion._power_cmd_at = .9  # the launch's 1560 just sent
+        for k, (now, speed) in enumerate(((1., .044), (1.15, .1), (1.3, .16))):
+            motion._start_motor = TRIAL_MOTOR if speed+.33 < ms.CROSSWALK_CRUISE_MPS-ms.CROSSWALK_CRUISE_BAND_MPS else ms.ROUTE_SLOW_MOTOR
+            cruise = motion._start_motor
+            fb = motion._crosswalk_control(scan(1+k, now), now, {}, 3.+ms.FRONT_BODY_EXTENT_M+2.0, speed, speed+.33)
+            self.assertEqual((fb['state'], motion._start_motor), ('approach', cruise))
+        self.assertEqual((motion._crosswalk_kick, motion._crosswalk_restart, motion._crosswalk_coasting), (0, False, False))
+
+    def test_an_unknown_speed_cuts_one_scan_only(self):
+        motion = self.approach()
+        # the speed not measured yet: assumed fast (1.3 m/s), the aim cuts this scan
+        motion._crosswalk_control(scan(1, 1.), 1., {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, None, 1.3+.33)
+        self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (NEUTRAL, False))
+        # measured on the next scan: slow, the cruise goes on
+        motion._start_motor = TRIAL_MOTOR
+        motion._crosswalk_control(scan(2, 1.1), 1.1, {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, .1, .43)
+        self.assertEqual(motion._start_motor, TRIAL_MOTOR)
+
+    def test_an_unknown_speed_once_moving_holds_the_coast(self):
+        # the dropout at speed (the car .3 m from its rest): the coast holds as a measured cut
+        motion = self.approach()
+        at = 3.+ms.FRONT_BODY_EXTENT_M+.9
+        motion._crosswalk_rest = (0., at+.5)
+        motion._crosswalk_control(scan(1, 1.), 1., {}, at+.2, None, .8+.33)
+        self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (NEUTRAL, True))
+        motion._start_motor = TRIAL_MOTOR
+        motion._crosswalk_control(scan(2, 1.1), 1.1, {}, at+.15, .5, .5)
+        self.assertEqual(motion._start_motor, NEUTRAL)  # still coasting
+
+    def test_the_wait_begins_with_the_pipeline_empty(self):
+        # Round y11 (car run y11): a kick's 1560 still took .16 m after the speed read .1
+        motion = self.approach()
+        motion._crosswalk_restart = True
+        motion._power_cmd_at = 4.8  # the kick's last 1560
+        at = 3.+ms.FRONT_BODY_EXTENT_M+.9
+        fb = motion._crosswalk_control(scan(1, 5.), 5., {}, at, .09, .09)
+        self.assertEqual(fb['state'], 'approach')
+        motion._crosswalk_control(scan(2, 5.31), 5.31, {}, at, .02, .02)
+        self.assertEqual(motion.crosswalk_state, 'waiting')
+        self.assertEqual(motion.crosswalk_evidence['stop']['basis'], 'stopped_before_the_crosswalk')
 
     def test_no_kick_without_its_room(self):
         motion = self.approach()

@@ -25046,8 +25046,8 @@
     "date": "2026-10-31",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "commit": "b71bf5b",
     "baseline": "6eef8cd (car: round 117 engine 609c194 + y10 helper)",
     "user": [
@@ -25104,6 +25104,51 @@
       "race4's box bottoms when moving (blur) are unmeasured; the camera lag .15 s is from 10-29",
       "the lamps clipped at the top below ~.45 m front gap (detection seen at .90 clipped in y3)"
     ],
-    "next": "tomorrow: the car at the start, pitch check, build round 118 + y11 (build-race.py claude-turn117 claude-turn118 118 this key; build-vision.py claude-turn118 y11 race4_vehicle_handoff_20261024.zip --light-stop), validate, deploy, run; then the speed after green from the run's pushes and coasts"
+    "next": "tomorrow: the car at the start, pitch check, build round 118 + y11 (build-race.py claude-turn117 claude-turn118 118 this key; build-vision.py claude-turn118 y11 race4_vehicle_handoff_20261024.zip --light-stop), validate, deploy, run; then the speed after green from the run's pushes and coasts",
+    "deployment": "11-01: build-race.py claude-turn117 claude-turn118 118 y11_camera_model_light_zone_20261031 (c321cbb, built 10-31); before: 17 hashes equal round 117; deploy-matched.py claude-turn118 118; after: equal round 118; deploy-vision.py y11 (stage-claude-y11-20261031-225010, 6 files equal)",
+    "car_run_y11": {
+      "evidence": "left-cone-trial-20261031-y11 (88/88 files equal; run 11-01 09:16)",
+      "user": "我红绿灯忘记开了，这轮不算，但你起步的时候一直断断续续的，而且在距离斑马线还有60cm左右的时候停下来了",
+      "pitch_check": "scripts/camera-pitch-check.py at the start: 8.29 deg (10-31 8.50-8.64), within the .4 tolerance",
+      "crosswalk_at_start": "front 2.20 m by the user: race4 .30-.31, crosswalk_m 2.37-2.50 (about half the excess from the .26 deg lower pitch)",
+      "result": "route_finish_zone_stop 41.2 s, .392 m from the end board, 1 creep; the light was off (red 1 frame, green none): not counted",
+      "start_lane": "fixed at .98 s at .044 m/s as the car left the start: the old \"slower than .15 m/s: kicks only\" branch held neutral, then six 3-frame 1560 kicks each coasting to a standstill (1.0-9.3 s); the stop was declared at 9.45 s inside the 1 m zone (conservative gap .983) during the last kick (speed read .097) and the car rolled .16 m more; by the board behind it moved 1.25 m from 2.20: ~.9 m before the stripes (the user saw ~60 cm); the 3.5 s wait left ~3.05 s at rest",
+      "why_y10_was_smooth": "y10 fixed at .48 m/s (speed above .15): one 1550 cruise, one guard cut, .40 m",
+      "next": "y12: kicks only after a coast ends short of the zone; the wait only with the ESC pipeline empty"
+    }
+  },
+  "y12_crosswalk_start_cruise_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "c321cbb (car: round 118 + y11)",
+    "user": [
+      "我红绿灯忘记开了，这轮不算，但你起步的时候一直断断续续的，而且在距离斑马线还有60cm左右的时候停下来了",
+      "以后部署到车上不要校验哈希值，这车没有其他人动"
+    ],
+    "change": [
+      "crosswalk approach (Python/Rust): the 'slow or unknown speed: kicks from rest' branch only once a coast has ended short of the 1 m zone (new _crosswalk_restart); before any cut the start lane's cruise drives (1560 to start, then 1550) as in y10",
+      "a cut holds the coast to the standstill on a measured speed or once the car has left its rest by CROSSWALK_MOVED_M (.1 m); an unknown speed at the start cuts that scan only",
+      "the crosswalk wait begins only with nothing in the ESC pipeline (ESC_LAG_S + LANE_ESC_SKEW_S, .5 s, since the last 1560/1550) unless rolled out",
+      "tests: the slow start keeps the cruise, an unknown speed cuts one scan, a dropout once moving holds the coast, the wait waits for the pipeline"
+    ],
+    "simulation_check": {
+      "user_track_2_2_to_2_46_m": "stops .56-.71 m before the edge (measured car; the real car stopped .32 m shorter than the guard's worst in y10)",
+      "near_1_4_m": ".099 (y11 .216: its one neutral scan at the fix delayed the launch .15 s); ranging 10 % long -.013: outside the expected envelope, the real car's guard slack ~.3 m",
+      "sim_car_starts": "the simulated cars reach .5 m/s by the fix, so the y11 kick loop never showed in simulation"
+    },
+    "validation": {
+      "python_suite": "954 OK",
+      "cargo_test": "7 pass; clippy 32",
+      "parity_light": "39/39",
+      "supervisor_light": "39/39"
+    },
+    "deploy_policy": "user 11-01: no separate hash validations before/after deploying",
+    "risk": [
+      "a crosswalk ~1.4 m from the start leaves little margin with the cruise (simulation .10 m)",
+      "the camera pitch read 8.29 deg today (8.55 calibrated): distances at the start read ~5-10 % long"
+    ]
   }
 }

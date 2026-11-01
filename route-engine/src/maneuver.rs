@@ -277,6 +277,7 @@ pub const CROSSWALK_AIM_LAG_S: f64 = 0.3;
 pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
 pub const CROSSWALK_TARGET_GAP_M: f64 = 0.35;
 pub const CROSSWALK_MIN_GAP_M: f64 = 0.15;
+pub const CROSSWALK_MOVED_M: f64 = 0.1;
 pub const CROSSWALK_ZONE_M: f64 = 1.;
 pub const CROSSWALK_WAIT_S: f64 = 3.5;
 pub const CROSSWALK_STOP_MAX_S: f64 = 3.;
@@ -608,6 +609,7 @@ pub struct Maneuver {
     pub crosswalk_wait_credit_s: f64,
     pub _crosswalk_kick: i64,
     pub _crosswalk_coasting: bool,
+    pub _crosswalk_restart: bool,
     pub _crosswalk_rear: Option<bool>,
     pub _crosswalk_rear_history: Vec<(f64, f64, f64)>,
     pub _crosswalk_speed_last: Option<(f64, f64)>,
@@ -916,6 +918,7 @@ impl Maneuver {
             crosswalk_wait_credit_s: 0.,
             _crosswalk_kick: 0,
             _crosswalk_coasting: false,
+            _crosswalk_restart: false,
             _crosswalk_rear: None,
             _crosswalk_rear_history: Vec::new(),
             _crosswalk_speed_last: None,

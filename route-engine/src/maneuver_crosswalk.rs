@@ -190,6 +190,8 @@ impl Maneuver {
         };
         let stopped = speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS);
         let rolled_out = self._power_cmd_at.is_none_or(|at| now - at >= CROSSWALK_STOP_MAX_S);
+        // round y11: nothing of a 1560/1550 left in the ESC pipeline
+        let settled = self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S);
         let (mut aim, mut worst) = (None, None);
         if state == "approach" {
             if let (Some(v), Some(g)) = (v, gap) {
@@ -204,7 +206,7 @@ impl Maneuver {
                         state = self.crosswalk_stopped(scan, now, control, gap, "stopped_with_the_crosswalk_odometry_lost");
                     }
                 }
-                Some(g) if (stopped || rolled_out) && g <= CROSSWALK_ZONE_M => {
+                Some(g) if (stopped && settled || rolled_out) && g <= CROSSWALK_ZONE_M => {
                     let basis = if g >= 0. { "stopped_before_the_crosswalk" } else { "stopped_past_the_crosswalk_edge" };
                     state = self.crosswalk_stopped(scan, now, control, gap, basis);
                 }
@@ -213,10 +215,15 @@ impl Maneuver {
                         self._start_motor = NEUTRAL; // round y8: one coast to the stop
                     } else if aim.is_none_or(|a| a <= CROSSWALK_TARGET_GAP_M) || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M) {
                         self._start_motor = NEUTRAL;
-                        self._crosswalk_coasting = true;
-                    } else if speed.is_none_or(|s| s < LANE_SPEED_RESTART_MPS) || self._crosswalk_kick != 0 {
+                        // round y11: held on a measured speed or once the car has left the start
+                        let moved = matches!((self._crosswalk_rest, track),
+                                             (Some((_, r)), Some(t)) if (t - r).abs() > CROSSWALK_MOVED_M);
+                        self._crosswalk_coasting = speed.is_some() || moved;
+                    } else if self._crosswalk_coasting || self._crosswalk_restart || self._crosswalk_kick != 0 {
+                        // round y11: kicks only once a coast has ended short of the zone;
+                        // before any cut the start lane's own cruise drives
                         self._crosswalk_coasting = false;
-                        // from rest only kicks (the start lane's own launch overshoots)
+                        self._crosswalk_restart = true;
                         let rested = self._power_cmd_at.is_none_or(|at| now - at >= LANE_KICK_REST_S);
                         if self._crosswalk_kick >= LANE_KICK_FRAMES && rested && stopped {
                             self._crosswalk_kick = 0;

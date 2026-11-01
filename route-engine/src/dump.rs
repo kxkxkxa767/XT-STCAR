@@ -142,6 +142,7 @@ impl Maneuver {
             "_crosswalk_stop_at" => self._crosswalk_stop_at,
             "_crosswalk_wait_tick" => self._crosswalk_wait_tick, "crosswalk_wait_credit_s" => self.crosswalk_wait_credit_s,
             "_crosswalk_kick" => self._crosswalk_kick, "_crosswalk_coasting" => self._crosswalk_coasting,
+            "_crosswalk_restart" => self._crosswalk_restart,
             "_crosswalk_rear" => self._crosswalk_rear,
             "_crosswalk_rear_history" => V::list(self._crosswalk_rear_history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect()),
             "_crosswalk_speed_last" => opt_pair(&self._crosswalk_speed_last),

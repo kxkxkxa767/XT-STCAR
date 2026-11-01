@@ -1174,6 +1174,7 @@ CROSSWALK_MIN_GAP_M = .15
 # crosswalk).
 CROSSWALK_ZONE_M = 1.
 CROSSWALK_WAIT_S = 3.5
+CROSSWALK_MOVED_M = .1  # round y11: the car has left the start (the odometry since its rest)
 CROSSWALK_STOP_MAX_S = 3.  # neutral this long counts as stopped (speed unknown)
 
 
@@ -1895,6 +1896,7 @@ class ManeuverSequence(TurnMotion):
         self.crosswalk_wait_credit_s = 0.
         self._crosswalk_kick = 0  # 1560 frames of the current kick toward the crosswalk
         self._crosswalk_coasting = False  # round y8: the stop's cut holds until standstill
+        self._crosswalk_restart = False  # round y11: a coast ended short of the zone: kicks
         self._crosswalk_rear = None  # round y9: odometry from the board behind (decided once)
         self._crosswalk_rear_history = []
         self._crosswalk_speed_last = None
@@ -4061,6 +4063,9 @@ class ManeuverSequence(TurnMotion):
                else track-FRONT_BODY_EXTENT_M-self._crosswalk_board_m)
         stopped = speed is not None and speed < LANE_SPEED_RESTART_MPS
         rolled_out = self._power_cmd_at is None or now-self._power_cmd_at >= CROSSWALK_STOP_MAX_S
+        # round y11: nothing of a 1560/1550 left in the ESC pipeline (car run y11:
+        # the wait began .16 m before the car stopped, read .1 m/s while a kick took)
+        settled = self._power_cmd_at is None or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S
         aim = worst = None
         if state == 'approach':
             if v is not None and gap is not None:
@@ -4071,17 +4076,29 @@ class ManeuverSequence(TurnMotion):
                 self._start_motor = NEUTRAL  # the edge's odometry lost: stop where it is
                 if stopped or rolled_out:
                     state = self._crosswalk_stopped(scan, now, control, gap, 'stopped_with_the_crosswalk_odometry_lost')
-            elif (stopped or rolled_out) and gap <= CROSSWALK_ZONE_M:
+            elif (stopped and settled or rolled_out) and gap <= CROSSWALK_ZONE_M:
                 state = self._crosswalk_stopped(scan, now, control, gap,
                                                 'stopped_before_the_crosswalk' if gap >= 0 else 'stopped_past_the_crosswalk_edge')
             elif self._crosswalk_coasting and not stopped and not rolled_out:
                 self._start_motor = NEUTRAL  # round y8: one coast to the stop
             elif aim is None or aim <= CROSSWALK_TARGET_GAP_M or worst <= CROSSWALK_MIN_GAP_M:
                 self._start_motor = NEUTRAL
-                self._crosswalk_coasting = True
-            elif speed is None or speed < LANE_SPEED_RESTART_MPS or self._crosswalk_kick:
-                self._crosswalk_coasting = False
-                # from rest only kicks (the start lane's own launch overshoots)
+                # round y11: the coast holds to the standstill on a measured speed or
+                # once the car has left the start; an unknown speed at the start
+                # (assumed fast) cuts this scan only (car run y10's fix: 1.3 m/s
+                # assumed at rest; simulation, a crosswalk 1.4 m ahead: a dropout at
+                # speed not held stopped .10 m before the edge, held .22)
+                rest = self._crosswalk_rest
+                self._crosswalk_coasting = speed is not None or (
+                    rest is not None and track is not None and abs(track-rest[1]) > CROSSWALK_MOVED_M)
+            elif self._crosswalk_coasting or self._crosswalk_restart or self._crosswalk_kick:
+                # Round y11: kicks only once a coast has ended short of the zone;
+                # before any cut the start lane's own cruise drives (1560 to start,
+                # then 1550). Car run y11: fixed at .04 m/s as the car left the
+                # start, the old 'slow: kicks only' took it into six kick-and-coast
+                # cycles over 8.5 s and a stop .9 m before the stripes (y10, fixed
+                # at .48 m/s: one cruise, one cut, .40 m).
+                self._crosswalk_coasting, self._crosswalk_restart = False, True
                 rested = self._power_cmd_at is None or now-self._power_cmd_at >= LANE_KICK_REST_S
                 if self._crosswalk_kick >= LANE_KICK_FRAMES and rested and stopped:
                     self._crosswalk_kick = 0
