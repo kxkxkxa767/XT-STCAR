@@ -25261,19 +25261,24 @@
       "LANE_COAST_DECEL_CAP_MPS2 .70 -> 1.6 (a grippier floor); the crosswalk aim uses the measured coast, its guard max(.6, the lane guard); while coasting with a good fit the top-up foresees the stop from the fit's speed and decel",
       "the measured coast is the run's (the crosswalk's carries to the light stop and the finish)",
       "after a light restart the finish guards with a .35 s long lag (was ESC_LAG_S .45) and tops up at 1560 where that push's one-scan guard passes outside the zone, else 1550; such a 1560 push is not chopped as a kick",
-      "push response: each rolling top-up's speed gain per powered second (lowest lane speed within .8 s of its first output to the highest within .8 s of its last, >= .3 s of that), per PWM: the aim takes it for the next push at that PWM, the 1560 guard 1.25 times it (at least 1.3; 1.6 before one is measured)"
+      "push response: each rolling top-up's speed gain per powered second (lowest lane speed within .8 s of its first output to the highest within .8 s of its last, >= .3 s of that), per PWM: the aim takes it for the next push at that PWM, the 1560 guard 1.25 times it (at least 1.3; 1.6 before one is measured)",
+      "after the first push: the .35 s tail only once no launch power can be left in the ESC pipeline (the last powered run a top-up, or none within ESC_LAG_S + skew)",
+      "the launch's powered run (_light_launch_from) is guarded at the 1560 bound through its 1550 tail: with the measured coast (.65-.72 m/s2 in simulation) above the prior .45 the 1.3x measured car's launch tail at 1550's bound was cut late and met the 8 cm gate (min board gap .074 m)",
+      "a 1560 top-up only where its guard admits LANE_STRONG_PUSH_MIN_S .3 s of it: one admitted for a scan at .87 m/s 1.65 m out was cut after two, added less than 1550 and the car stopped 1.03 m out and kicked on (+2.1 s)"
     ],
     "validation": {
-      "python": "the 6 touched test files 83 OK; full suite 964: test_route_58_light_lane unknown-speed finish test updated (it relied on the old fit reading .335 on a scripted .55 coast and ending the finish 1.22 m out), test_route_96_engine timed out under the suite load and passes alone 7/7; full rerun queued after parity",
+      "python": "full suite 966 OK",
       "cargo": "test 7 passed, clippy 32 (unchanged)",
-      "parity_light": "18 of 39 cases compared call by call identical when pushed; the rest and the supervisor sweep still running",
-      "simulation": "not run (user: quota)"
+      "parity_light": "39/39 matched call by call",
+      "parity_light_supervisor": "39/39 matched"
     },
     "risks": [
       "not driven: the 1560 top-up after the light and the .35 s tail are new on the car (the simulated measured car keeps .45 s both ways)",
       "the push response comes from the lagging median-rate speed: short pushes read low; the 1560 guard keeps a 1.3 floor",
       "a coast fitted while the car yaws a little (within 60 PWM) reads the along-axis decel"
     ],
-    "next": "build round 122 + y15 (build-race.py claude-turn121 claude-turn122 122 y15_coast_fit_strong_topup_20261101; build-vision.py claude-turn122 y15 race4_vehicle_handoff_20261024.zip --light-stop; deploy-matched.py claude-turn122 122; deploy-vision.py y15; start-round.py y15); check coast_fit/coast_decel in the crosswalk and lane feedback, the after-green time and pushes, the finish gap"
+    "next": "build round 122 + y15 (build-race.py claude-turn121 claude-turn122 122 y15_coast_fit_strong_topup_20261101; build-vision.py claude-turn122 y15 race4_vehicle_handoff_20261024.zip --light-stop; deploy-matched.py claude-turn122 122; deploy-vision.py y15; start-round.py y15); check coast_fit/coast_decel in the crosswalk and lane feedback, the after-green time and pushes, the finish gap",
+    "simulation_check": "the 39 light cases against y14 (measured car, user8/doc8x4/short5): 13 identical, 26 changed, all route_finish_zone_stop with the whole car in the zone, no contacts, light stops in the zone, no new early go; finish line median -1.27 s (-4.32 .. +.64; only short5 1.3x car slower, its launch tail now at the 1560 bound); doc8x4 crosswalk 3.0 m drive-budget timeout in y14 now finishes",
+    "commit_first_push": "4b8d55e"
   }
 }

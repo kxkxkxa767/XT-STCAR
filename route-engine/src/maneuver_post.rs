@@ -1665,9 +1665,13 @@ impl Maneuver {
         // Round y15: after the light the finish's tail lag, its 1560 top-ups and
         // the pushes' measured responses.
         let after_light = kind == "finish" && restarted;
-        let long_lag = if after_light { LANE_FINISH_ESC_LAG_S } else { ESC_LAG_S };
-        let strong = self._lane_strong_push && self._power_cmd_motor == Some(TRIAL_MOTOR);
-        let kick = self._power_cmd_motor == Some(TRIAL_MOTOR) && !strong;
+        // once no launch power can be left in the ESC pipeline
+        let relaxed = after_light
+            && (self._lane_topup_motor.is_some() || self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S));
+        let long_lag = if relaxed { LANE_FINISH_ESC_LAG_S } else { ESC_LAG_S };
+        let strong = self._lane_topup_motor == Some(TRIAL_MOTOR) && self._power_cmd_motor == Some(TRIAL_MOTOR);
+        // round y15: the launch's 1560 still acts through its 1550 tail
+        let kick = self._power_cmd_motor == Some(TRIAL_MOTOR) && !strong || self._light_launch_from.is_some();
         let (rate_slow, rate_strong) = (self._lane_push_rate_slow, self._lane_push_rate_strong);
         let aim_accel = if strong {
             rate_strong.unwrap_or(LANE_POWER_ACCEL_MPS2)
@@ -1754,7 +1758,7 @@ impl Maneuver {
             return (basis, feedback);
         }
         let launching = self._light_launch_until.is_some_and(|until| now < until);
-        let mut strong_push = false; // round y15: this scan's output is a 1560 top-up after the light
+        let mut topup_motor: Option<i64> = None; // round y15: this scan's output continues or starts a top-up
         if gap.is_none() && kind == "light" {
             self.lane_motor = NEUTRAL; // round y2: no light line this scan: coast
         } else if gap.is_some() && (stop_gap.unwrap() <= goal.target_gap || worst_gap.unwrap() <= goal.min_gap) {
@@ -1769,7 +1773,9 @@ impl Maneuver {
             self.lane_motor = if (kick_room || creep_room) && (rested || self._lane_pulse > 0) { TRIAL_MOTOR } else { NEUTRAL };
         } else if self.lane_motor == ROUTE_SLOW_MOTOR || self.lane_motor == TRIAL_MOTOR && strong {
             // the straight, or a push (round y15: also a 1560 top-up), until the coast is aimed
-            strong_push = self.lane_motor == TRIAL_MOTOR;
+            if self._lane_topup_motor == Some(self.lane_motor) {
+                topup_motor = Some(self.lane_motor);
+            }
         } else if self.lane_motor == NEUTRAL
             && stop_gap.unwrap() > goal.target_gap + LANE_TOPUP_BAND_M
             && v_aim - decel * LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
@@ -1779,17 +1785,17 @@ impl Maneuver {
             let g = gap.unwrap();
             if after_light
                 && !late
-                && self.lane_worst_gap(g, v, now, guard_decel, pmax(guard_accel, strong_accel), guard_reaction, LANE_PUSH_MIN_S, long_lag)
+                && self.lane_worst_gap(g, v, now, guard_decel, pmax(guard_accel, strong_accel), guard_reaction, LANE_STRONG_PUSH_MIN_S, long_lag)
                     > goal.min_gap
             {
                 self.lane_motor = TRIAL_MOTOR;
-                strong_push = true;
             } else if self.lane_worst_gap(g, v, now, guard_decel, guard_accel, guard_reaction, LANE_PUSH_MIN_S, long_lag) > goal.min_gap {
                 self.lane_motor = ROUTE_SLOW_MOTOR;
             } else {
                 self.lane_motor = NEUTRAL;
             }
             if self.lane_motor != NEUTRAL {
+                topup_motor = Some(self.lane_motor);
                 self._lane_push_probe = Some((self.lane_motor, now, speed, None, None));
             }
         } else {
@@ -1802,10 +1808,10 @@ impl Maneuver {
             self._light_launch_from = None; // the launch's powered run has ended: the car rolls
         }
         if DRIVE_MOTORS.contains(&self.lane_motor) {
-            self._lane_strong_push = strong_push;
+            self._lane_topup_motor = topup_motor;
         }
         let frames = if self._lane_creep { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
-        if self.lane_motor == TRIAL_MOTOR && (launching || strong_push) {
+        if self.lane_motor == TRIAL_MOTOR && (launching || topup_motor == Some(TRIAL_MOTOR)) {
             self._lane_pulse = 0;
             self._lane_creep = false;
         } else if self.lane_motor == TRIAL_MOTOR && self._lane_pulse >= frames {

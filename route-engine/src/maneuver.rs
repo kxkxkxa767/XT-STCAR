@@ -119,6 +119,7 @@ pub const LANE_PUSH_PROBE_MIN_S: f64 = 0.3;
 pub const LANE_PUSH_RATE_MIN_MPS2: f64 = 0.05;
 pub const LANE_PUSH_RATE_MARGIN: f64 = 1.25;
 pub const LANE_STRONG_PUSH_ACCEL_MIN_MPS2: f64 = 1.3;
+pub const LANE_STRONG_PUSH_MIN_S: f64 = 0.3;
 pub const LANE_KICK_FRAMES: i64 = 3;
 // Round 105: the finish creep (front in the zone, rear out, no room for the kick).
 pub const LANE_CREEP_FRAMES: i64 = 2;
@@ -594,7 +595,7 @@ pub struct Maneuver {
     pub _coast_fit: Option<(f64, f64, f64)>,
     pub _lane_coast_decel: Option<f64>,
     pub _lane_coast_decel_se: Option<f64>,
-    pub _lane_strong_push: bool,
+    pub _lane_topup_motor: Option<i64>,
     pub _lane_push_probe: Option<PushProbe>,
     pub _lane_push_rate_slow: Option<f64>,
     pub _lane_push_rate_strong: Option<f64>,
@@ -910,7 +911,7 @@ impl Maneuver {
             _coast_fit: None,
             _lane_coast_decel: None,
             _lane_coast_decel_se: None,
-            _lane_strong_push: false,
+            _lane_topup_motor: None,
             _lane_push_probe: None,
             _lane_push_rate_slow: None,
             _lane_push_rate_strong: None,

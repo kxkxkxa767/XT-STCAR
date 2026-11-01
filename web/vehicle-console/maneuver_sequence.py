@@ -358,7 +358,8 @@ COAST_FIT_MODEL_SE_MPS2 = .01
 LANE_FINISH_ESC_LAG_S = .35
 # Round y15 (user: 在过红绿灯后，你的补的推力可以适当大点; 加大后再来个逻辑就是根据上一次
 # 补的力度反馈的速度来决定下一次的补推力度). After the light the finish tops up at
-# 1560 where that push's guard passes (outside the zone), else 1550 as before;
+# 1560 where that push's guard passes for LANE_STRONG_PUSH_MIN_S (outside the
+# zone), else 1550 as before;
 # such a push is not chopped as a kick. Each rolling top-up's speed gain per
 # powered second (the lowest lane speed within LANE_PUSH_PROBE_S of its first
 # output to the highest within it of its last, LANE_PUSH_PROBE_MIN_S of that
@@ -373,6 +374,10 @@ LANE_PUSH_PROBE_MIN_S = .3
 LANE_PUSH_RATE_MIN_MPS2 = .05
 LANE_PUSH_RATE_MARGIN = 1.25
 LANE_STRONG_PUSH_ACCEL_MIN_MPS2 = 1.3
+# A 1560 top-up only where its guard admits this much of it (simulation: one
+# admitted for a scan .87 m/s 1.65 m out was cut after two, added less than
+# 1550 would and the car stopped 1.03 m out, then kicked on; +2.1 s).
+LANE_STRONG_PUSH_MIN_S = .3
 # Near the end power came in pulses (LANE_PULSE_FRAMES = 2 powered frames, then
 # LANE_REST_FRAMES neutral): the closing-speed estimate lags a push, and a 1560
 # restart held until it read .15 m/s had reached .93 m/s (simulation, 8x6
@@ -2015,7 +2020,7 @@ class ManeuverSequence(TurnMotion):
         self._coast_fit = None  # round y15: this scan's combined fit (decel, se, speed) or None
         self._lane_coast_decel = None
         self._lane_coast_decel_se = None
-        self._lane_strong_push = False  # round y15: the last powered run is a 1560 top-up after the light
+        self._lane_topup_motor = None  # round y15: the last powered run's PWM if it was a top-up
         self._lane_push_probe = None  # round y15: [motor, first output, lowest, last output, highest]
         self._lane_push_rate_slow = None  # round y15: measured speed gain per powered second at 1550
         self._lane_push_rate_strong = None  # ... at 1560 (a rolling top-up)
@@ -7064,13 +7069,22 @@ class ManeuverSequence(TurnMotion):
         coasting = not powered and (self._power_cmd_at is None
                                     or now >= self._power_cmd_at+ESC_LAG_S+LANE_ESC_SKEW_S)
         restarted = isinstance(self.light_stop_evidence, dict) and 'go' in self.light_stop_evidence
-        # Round y15: after the light the finish's tail lag (LANE_FINISH_ESC_LAG_S),
-        # its 1560 top-ups (strong: the last powered run is one) and the pushes'
+        # Round y15: after the light the finish's tail lag (LANE_FINISH_ESC_LAG_S)
+        # once no launch power can be left in the ESC pipeline (the last powered
+        # run a top-up, or none within the longest lag; simulation, 1.3x car:
+        # with it during the launch's 1550 tail the guard took 1550's bound
+        # while the 1560 still acted, and the car met the 8 cm gate), its 1560
+        # top-ups (strong: the last powered run is one) and the pushes'
         # measured responses (_lane_push_observe).
         after_light = kind == 'finish' and restarted
-        long_lag = LANE_FINISH_ESC_LAG_S if after_light else ESC_LAG_S
-        strong = self._lane_strong_push and self._power_cmd_motor == TRIAL_MOTOR
-        kick = self._power_cmd_motor == TRIAL_MOTOR and not strong
+        relaxed = after_light and (self._lane_topup_motor is not None or self._power_cmd_at is None
+                                   or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S)
+        long_lag = LANE_FINISH_ESC_LAG_S if relaxed else ESC_LAG_S
+        strong = self._lane_topup_motor == TRIAL_MOTOR and self._power_cmd_motor == TRIAL_MOTOR
+        # Round y15: the launch's 1560 still acts through its 1550 tail (simulation,
+        # 1.3x car: the guard at 1550's bound with the measured .65 m/s2 instead of
+        # the prior .45 cut it late and the car met the 8 cm gate).
+        kick = self._power_cmd_motor == TRIAL_MOTOR and not strong or self._light_launch_from is not None
         rate_slow, rate_strong = self._lane_push_rate_slow, self._lane_push_rate_strong
         aim_accel = ((LANE_POWER_ACCEL_MPS2 if rate_strong is None else rate_strong) if strong
                      else LANE_POWER_ACCEL_MPS2 if kick
@@ -7138,7 +7152,7 @@ class ManeuverSequence(TurnMotion):
         if basis is not None:
             return basis, feedback
         launching = self._light_launch_until is not None and now < self._light_launch_until
-        strong_push = False  # round y15: this scan's output is a 1560 top-up after the light
+        topup_motor = None  # round y15: this scan's output continues or starts a top-up at this PWM
         if gap is None and kind == 'light':
             self.lane_motor = NEUTRAL  # round y2: no light line this scan: coast
         elif gap is not None and (stop_gap <= target_gap or worst_gap <= min_gap):
@@ -7154,21 +7168,23 @@ class ManeuverSequence(TurnMotion):
                                else NEUTRAL)
         elif self.lane_motor == ROUTE_SLOW_MOTOR or self.lane_motor == TRIAL_MOTOR and strong:
             # the straight, or a push (round y15: also a 1560 top-up), until the coast is aimed
-            strong_push = self.lane_motor == TRIAL_MOTOR
+            if self._lane_topup_motor == self.lane_motor:
+                topup_motor = self.lane_motor
         elif (self.lane_motor == NEUTRAL and stop_gap > target_gap+LANE_TOPUP_BAND_M
               and v_aim-decel*LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS):
             # it would stop short: push again while it rolls (round y15: after the
             # light at 1560 where that push's guard passes, outside the zone)
             if (after_light and not late
                     and self._lane_worst_gap(gap, v, now, guard_decel, max(guard_accel, strong_accel),
-                                             guard_reaction, LANE_PUSH_MIN_S, long_lag) > min_gap):
-                self.lane_motor, strong_push = TRIAL_MOTOR, True
+                                             guard_reaction, LANE_STRONG_PUSH_MIN_S, long_lag) > min_gap):
+                self.lane_motor = TRIAL_MOTOR
             elif self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction,
                                       LANE_PUSH_MIN_S, long_lag) > min_gap:
                 self.lane_motor = ROUTE_SLOW_MOTOR
             else:
                 self.lane_motor = NEUTRAL
             if self.lane_motor != NEUTRAL:
+                topup_motor = self.lane_motor
                 self._lane_push_probe = [self.lane_motor, now, speed, None, None]
         else:
             self.lane_motor = NEUTRAL  # coasting, or a kick once the car rolls
@@ -7185,8 +7201,8 @@ class ManeuverSequence(TurnMotion):
         if self.lane_motor == NEUTRAL:
             self._light_launch_from = None  # the launch's powered run has ended: the car rolls
         if self.lane_motor in DRIVE_MOTORS:
-            self._lane_strong_push = strong_push
-        if self.lane_motor == TRIAL_MOTOR and (launching or strong_push):
+            self._lane_topup_motor = topup_motor
+        if self.lane_motor == TRIAL_MOTOR and (launching or topup_motor == TRIAL_MOTOR):
             self._lane_pulse, self._lane_creep = 0, False
         elif self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= (LANE_CREEP_FRAMES if self._lane_creep
                                                                      else LANE_KICK_FRAMES):

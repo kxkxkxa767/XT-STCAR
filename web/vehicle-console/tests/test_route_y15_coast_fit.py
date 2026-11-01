@@ -141,7 +141,7 @@ class AfterTheLight(unittest.TestCase):
     def test_a_short_coast_after_the_light_tops_up_at_1560_unchopped(self):
         motion = self.finish()
         self.step(motion, 1., 2.8, .8)
-        self.assertEqual((motion.lane_motor, motion._lane_strong_push), (TRIAL_MOTOR, True))
+        self.assertEqual((motion.lane_motor, motion._lane_topup_motor), (TRIAL_MOTOR, TRIAL_MOTOR))
         for k in range(1, 5):  # past LANE_KICK_FRAMES: a push, not a kick
             feedback = self.step(motion, 1.+k*.1, 2.8-k*.08, .8)
             self.assertEqual(motion.lane_motor, TRIAL_MOTOR)
@@ -149,12 +149,32 @@ class AfterTheLight(unittest.TestCase):
         self.assertEqual(feedback['guard_accel_mps2'], ms.LANE_KICK_ACCEL_MAX_MPS2)
         plain = self.finish(restarted=False)  # no light restart: 1550 as before
         self.step(plain, 1., 2.8, .8)
-        self.assertEqual((plain.lane_motor, plain._lane_strong_push), (ms.ROUTE_SLOW_MOTOR, False))
+        self.assertEqual((plain.lane_motor, plain._lane_topup_motor), (ms.ROUTE_SLOW_MOTOR, ms.ROUTE_SLOW_MOTOR))
+
+    def test_the_launch_keeps_the_long_tail_until_its_power_has_left(self):
+        # simulation, 1.3x car: the launch's 1550 tail guarded with the short lag
+        # while its 1560 still acted met the 8 cm gate
+        motion = self.finish()
+        motion._power_cmd_at, motion._power_cmd_motor = .8, ms.ROUTE_SLOW_MOTOR  # the launch, cut .2 s ago
+        motion.lane_motor = NEUTRAL
+        feedback = self.step(motion, 1., 2.8, .8)
+        self.assertEqual(feedback['tail_lag_s'], ms.ESC_LAG_S)
+        feedback = self.step(motion, 1.5, 2.8, .8)  # nothing of it left
+        self.assertEqual(feedback['tail_lag_s'], ms.LANE_FINISH_ESC_LAG_S)
+
+    def test_the_launch_tail_is_guarded_at_the_1560_bound(self):
+        # simulation, 1.3x car: the launch's 1550 tail guarded at 1550's bound
+        # (the measured decel above the prior) cut it late into the 8 cm gate
+        motion = self.finish()
+        motion._light_launch_from = .5  # the launch's powered run, now at 1550
+        motion.lane_motor, motion._power_cmd_at, motion._power_cmd_motor = ms.ROUTE_SLOW_MOTOR, .9, ms.ROUTE_SLOW_MOTOR
+        feedback = self.step(motion, 1., 3.2, 1.)
+        self.assertEqual(feedback['guard_accel_mps2'], ms.LANE_KICK_ACCEL_MAX_MPS2)
 
     def test_where_1560_would_reach_the_board_1550(self):
         motion = self.finish()
         self.step(motion, 1., 1.3, .8)
-        self.assertEqual((motion.lane_motor, motion._lane_strong_push), (ms.ROUTE_SLOW_MOTOR, False))
+        self.assertEqual((motion.lane_motor, motion._lane_topup_motor), (ms.ROUTE_SLOW_MOTOR, ms.ROUTE_SLOW_MOTOR))
 
     def test_the_last_push_response_sets_the_next_push(self):
         motion = self.finish()
@@ -169,7 +189,7 @@ class AfterTheLight(unittest.TestCase):
         motion._lane_push_observe(2.1, .76)  # LANE_PUSH_PROBE_S after the last output
         self.assertIsNone(motion._lane_push_probe)
         self.assertAlmostEqual(motion._lane_push_rate_strong, (.85-.57)/(.2+ms.LANE_PUSH_MIN_S))
-        motion._lane_strong_push, motion._power_cmd_motor = True, TRIAL_MOTOR
+        motion._lane_topup_motor, motion._power_cmd_motor = TRIAL_MOTOR, TRIAL_MOTOR
         feedback = self.step(motion, 2.2, 3.5, .8)  # the strong push's guard now from its response
         self.assertEqual(feedback['guard_accel_mps2'],
                          max(ms.LANE_STRONG_PUSH_ACCEL_MIN_MPS2, ms.LANE_PUSH_RATE_MARGIN*motion._lane_push_rate_strong))

@@ -122,7 +122,7 @@ impl Maneuver {
             "light_alignment_evidence" => self.light_alignment_evidence.clone(), "lane_motor" => self.lane_motor,
             "_coast_fit_front" => self._coast_fit_front.dump(), "_coast_fit_rear" => self._coast_fit_rear.dump(),
             "_coast_fit" => crate::maneuver_post::fit_value(self._coast_fit),
-            "_lane_strong_push" => self._lane_strong_push,
+            "_lane_topup_motor" => self._lane_topup_motor,
             "_lane_push_probe" => match self._lane_push_probe {
                 None => V::None,
                 Some((m, since, low, end, high)) => V::list(vec![V::from(m), V::from(since), V::from(low), V::from(end), V::from(high)]),
