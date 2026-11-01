@@ -353,6 +353,7 @@ impl Maneuver {
         let speed = self.track_speed(scan, track);
         let (cw_track, cw_speed) = self.crosswalk_odometry(scan, track, speed);
         self.crosswalk_observe(scan, cw_track);
+        self.crosswalk_coast_observe(scan, now, cw_track, cw_speed);
         let mut stop_at = None;
         let mut allowed = None;
         let mut v_crosswalk = None;

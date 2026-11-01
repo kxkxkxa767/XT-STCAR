@@ -189,6 +189,134 @@ pub fn corridor_walls(scan: &V) -> V {
     }
 }
 
+/// maneuver_sequence.CoastFit (round y15): a least-squares parabola through one
+/// coast's positions by running sums (same operation order as Python).
+#[derive(Clone, Debug)]
+pub struct CoastFit {
+    pub n: i64,
+    pub t0: f64,
+    pub x0: f64,
+    pub s1: f64,
+    pub s2: f64,
+    pub s3: f64,
+    pub s4: f64,
+    pub y0: f64,
+    pub y1: f64,
+    pub y2: f64,
+    pub yy: f64,
+    pub last: Option<(f64, f64, Option<f64>)>,
+    pub dropped: bool,
+}
+
+impl Default for CoastFit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CoastFit {
+    pub fn new() -> Self {
+        CoastFit { n: 0, t0: 0., x0: 0., s1: 0., s2: 0., s3: 0., s4: 0., y0: 0., y1: 0., y2: 0., yy: 0., last: None, dropped: false }
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    pub fn add(&mut self, t: f64, x: f64) {
+        let mut speed = None;
+        if let Some(last) = self.last {
+            let dt = t - last.0;
+            if dt.is_nan() || dt <= 0. || dt > crate::maneuver::COAST_FIT_GAP_S {
+                self.reset();
+            } else {
+                let v = (x - last.1) / dt;
+                speed = Some(v);
+                if let Some(prev) = last.2
+                    && (v - prev).abs() > crate::maneuver::COAST_FIT_JUMP_MPS
+                {
+                    if !self.dropped {
+                        self.dropped = true;
+                        return;
+                    }
+                    self.reset();
+                    speed = None;
+                }
+            }
+        }
+        self.dropped = false;
+        if self.n == 0 {
+            self.t0 = t;
+            self.x0 = x;
+        }
+        let (u, y) = (t - self.t0, x - self.x0);
+        let u2 = u * u;
+        self.n += 1;
+        self.s1 += u;
+        self.s2 += u2;
+        self.s3 += u2 * u;
+        self.s4 += u2 * u2;
+        self.y0 += y;
+        self.y1 += u * y;
+        self.y2 += u2 * y;
+        self.yy += y * y;
+        self.last = Some((t, x, speed));
+    }
+
+    /// (decel, standard error, speed at the newest point), or None.
+    pub fn fit(&self) -> Option<(f64, f64, f64)> {
+        let n = self.n;
+        let last = self.last?;
+        if n < crate::maneuver::COAST_FIT_MIN_POINTS || last.0 - self.t0 < crate::maneuver::LANE_COAST_MIN_SPAN_S {
+            return None;
+        }
+        let (a, b, c, d, e) = (n as f64, self.s1, self.s2, self.s3, self.s4);
+        let (m00, m01, m02) = (c * e - d * d, c * d - b * e, b * d - c * c);
+        let (m11, m12, m22) = (a * e - c * c, b * c - a * d, a * c - b * b);
+        let det = a * m00 + b * m01 + c * m02;
+        if det.is_nan() || det <= 0. {
+            return None;
+        }
+        let c0 = (m00 * self.y0 + m01 * self.y1 + m02 * self.y2) / det;
+        let c1 = (m01 * self.y0 + m11 * self.y1 + m12 * self.y2) / det;
+        let c2 = (m02 * self.y0 + m12 * self.y1 + m22 * self.y2) / det;
+        let rss = pmax(0., self.yy - c0 * self.y0 - c1 * self.y1 - c2 * self.y2);
+        Some((-2. * c2, 2. * sqrt(rss / (n - 3) as f64 * m22 / det), c1 + 2. * c2 * (last.0 - self.t0)))
+    }
+
+    pub fn dump(&self) -> V {
+        dict! {
+            "n" => self.n, "t0" => self.t0, "x0" => self.x0, "s1" => self.s1, "s2" => self.s2, "s3" => self.s3,
+            "s4" => self.s4, "y0" => self.y0, "y1" => self.y1, "y2" => self.y2, "yy" => self.yy,
+            "last" => match self.last {
+                None => V::None,
+                Some((t, x, v)) => V::list(vec![V::from(t), V::from(x), V::from(v)]),
+            },
+            "dropped" => self.dropped,
+        }
+    }
+}
+
+/// maneuver_sequence._coast_fit_combined (round y15).
+pub fn coast_fit_combined(front: Option<(f64, f64, f64)>, rear: Option<(f64, f64, f64)>) -> Option<(f64, f64, f64)> {
+    let found: Vec<(f64, f64, f64)> = [front, rear].into_iter().flatten().collect();
+    if found.is_empty() {
+        return None;
+    }
+    let (mut total, mut weighted, mut speed) = (0., 0., 0.);
+    for &(decel, se, v) in &found {
+        let w = 1. / (se * se + crate::maneuver::COAST_FIT_MODEL_SE_MPS2 * crate::maneuver::COAST_FIT_MODEL_SE_MPS2);
+        total += w;
+        weighted += w * decel;
+        speed += w * v;
+    }
+    let mut se = sqrt(1. / total);
+    if found.len() == 2 {
+        se = pmax(se, (found[0].0 - found[1].0).abs() / 2.);
+    }
+    Some((weighted / total, se, speed / total))
+}
+
 /// autonomy_live.CorridorSteering.
 #[derive(Clone, Debug)]
 pub struct CorridorSteering {

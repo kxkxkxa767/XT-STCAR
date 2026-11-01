@@ -160,6 +160,17 @@ impl Maneuver {
         }
     }
 
+    /// _crosswalk_coast_observe(scan, now, track, speed) (round y15): the coast
+    /// after the cut on the board behind (the track is that range negated).
+    pub fn crosswalk_coast_observe(&mut self, scan: &V, now: f64, track: Option<f64>, speed: Option<f64>) {
+        let coasting = self.crosswalk_state == Some("approach")
+            && self._crosswalk_rear == Some(true)
+            && self._crosswalk_coasting
+            && speed.is_some_and(|s| s >= LANE_SPEED_RESTART_MPS)
+            && self.coast_fit_window(now);
+        self.coast_measure(scan, coasting, None, track.map(|t| -t));
+    }
+
     /// _crosswalk_control(scan, now, control, track, speed, v): sets _start_motor.
     pub fn crosswalk_control(
         &mut self,
@@ -193,11 +204,16 @@ impl Maneuver {
         // round y11: nothing of a 1560/1550 left in the ESC pipeline
         let settled = self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S);
         let (mut aim, mut worst) = (None, None);
+        // Round y15: a measured coast aims the stop; the guard takes its weak end
+        // where that is above the tile's.
+        let measured = self._lane_coast_decel.is_some();
+        let decel = self._lane_coast_decel.unwrap_or(CROSSWALK_AIM_DECEL_MPS2);
+        let guard_decel = if measured { pmax(CROSSWALK_GUARD_DECEL_MPS2, self.lane_decels().1) } else { CROSSWALK_GUARD_DECEL_MPS2 };
         if state == "approach" {
             if let (Some(v), Some(g)) = (v, gap) {
-                aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * CROSSWALK_AIM_DECEL_MPS2));
+                aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * decel));
                 let guard = v + LANE_SPEED_GUARD_MARGIN_MPS;
-                worst = Some(g - guard * CROSSWALK_GUARD_REACTION_S - guard * guard / (2. * CROSSWALK_GUARD_DECEL_MPS2));
+                worst = Some(g - guard * CROSSWALK_GUARD_REACTION_S - guard * guard / (2. * guard_decel));
             }
             match gap {
                 None => {
@@ -214,11 +230,20 @@ impl Maneuver {
                     if self._crosswalk_coasting && !stopped && !rolled_out {
                         // round y14: push 1550 again while rolling when the coast would stop
                         // short of the target and even the push's worst case stays off the floor
-                        let topup = match (aim, v, speed) {
+                        // round y15: once this coast's fit (the board behind) is good, the
+                        // stop it foresees from its speed and decel, else the aim
+                        let coast = match self._coast_fit {
+                            Some((d, se, rolling)) if se <= LANE_COAST_DECEL_SE_MAX_MPS2 => {
+                                let rolling = pmax(0., rolling);
+                                Some(g - rolling * rolling / (2. * pmax(LANE_COAST_DECEL_FLOOR_MPS2, d)))
+                            }
+                            _ => aim,
+                        };
+                        let topup = match (coast, v, speed) {
                             (Some(a), Some(v), Some(s)) => {
                                 let push = v + LANE_SPEED_GUARD_MARGIN_MPS + LANE_PUSH_ACCEL_MAX_MPS2 * (ESC_LAG_S + LANE_PUSH_MIN_S);
                                 let push_worst = g - push * (CROSSWALK_GUARD_REACTION_S + LANE_PUSH_MIN_S)
-                                    - push * push / (2. * CROSSWALK_GUARD_DECEL_MPS2);
+                                    - push * push / (2. * guard_decel);
                                 a > CROSSWALK_TARGET_GAP_M + CROSSWALK_TOPUP_BAND_M
                                     && s >= LANE_PUSH_ROLLING_MPS
                                     && push_worst > CROSSWALK_MIN_GAP_M
@@ -282,6 +307,8 @@ impl Maneuver {
         dict! {
             "state" => state, "gap_m" => gap, "board_m" => self._crosswalk_board_m, "speed_mps" => speed,
             "speed_for_cut_mps" => v, "aimed_stop_gap_m" => aim, "worst_stop_gap_m" => worst,
+            "coast_decel_mps2" => decel, "guard_decel_mps2" => guard_decel,
+            "coast_fit" => crate::maneuver_post::fit_value(self._coast_fit),
             "motor" => self._start_motor,
         }
     }

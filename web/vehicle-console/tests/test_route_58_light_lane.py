@@ -130,17 +130,21 @@ class LightLaneTests(unittest.TestCase):
     def test_unknown_speed_coasts_near_the_board_and_decides_once_measured(self):
         # Round 64: an unmeasured speed (1.3 m/s fallback) within the weakest
         # coast distance gives no power and no cut; round 101: the stage then
-        # ends once the measured car has stopped in the zone.
+        # ends once the measured car has stopped in the zone. Round y15: the
+        # position fit reads this coast's .55 m/s^2 (the speed line read .335 and
+        # ended the stage 1.22 m out, where the car stopped .645 m out with
+        # the rear outside the zone), so the coast here ends inside it.
         motion = self.lane_motion()
-        result = motion.update(self.scan(5, 2.0), 0., .5, route.feedback(5, motion.servo, ROUTE_SLOW_MOTOR))
+        result = motion.update(self.scan(5, 1.75), 0., .5, route.feedback(5, motion.servo, ROUTE_SLOW_MOTOR))
         self.assertIsNone(result['finish_evidence'])
         self.assertEqual(result['phase'], 'drive')
         self.assertEqual(result['motor'], 1500)
         self.assertFalse(result['lane_feedback']['speed_known'])
         speeds = [max(0., 1.1-.055*k) for k in range(25)]+[0.]*5
-        results = self.drive(motion, speeds, start=2., seq0=6)
+        results = self.drive(motion, speeds, start=1.75, seq0=6)
         self.assertEqual(results[-1]['reason'], 'route_finish_zone_stop')
         self.assertNotIn(TRIAL_MOTOR, [r['motor'] for r in results])
+        self.assertAlmostEqual(motion._lane_coast_decel, .55, delta=.01)
         self.assertLess(LANE_STOP_DECEL_MIN_MPS2, LANE_STOP_DECEL_MPS2)
 
     def test_lane_starts_with_the_speed_measured_while_aligning(self):

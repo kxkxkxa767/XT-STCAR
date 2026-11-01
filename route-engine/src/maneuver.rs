@@ -76,8 +76,8 @@ pub const LANE_LAUNCH_S: f64 = 0.4;
 pub const LANE_FINISH_GAP_M: f64 = 0.15;
 pub const LANE_STOP_DECEL_MIN_MPS2: f64 = 0.45;
 pub const LANE_COAST_MIN_SPAN_S: f64 = 0.4;
-pub const LANE_COAST_MIN_DROP_MPS: f64 = 0.1;
-pub const LANE_COAST_DECEL_CAP_MPS2: f64 = 0.70;
+// Round y15: a grippier floor (rubber track) coasts shorter.
+pub const LANE_COAST_DECEL_CAP_MPS2: f64 = 1.6;
 pub const LANE_FINISH_ZONE_GAP_M: f64 = 0.75;
 // Round 101: aim the light-lane coast at a stop with the whole car in the zone
 // and push again while it still rolls (maneuver_sequence.py has the derivation).
@@ -98,17 +98,32 @@ pub const LANE_ESC_SKEW_S: f64 = 0.05;
 pub const LANE_AIM_REACTION_S: f64 = 0.1;
 pub const LANE_SPEED_GUARD_MARGIN_MPS: f64 = 0.05;
 pub const LANE_COAST_GUARD_RATIO: f64 = 0.9;
-pub const LANE_COAST_TRACK_POINTS: usize = 12;
 pub const LANE_COAST_DECEL_SE_MAX_MPS2: f64 = 0.08;
 pub const LANE_KICK_TRAVEL_M: f64 = 0.45;
 pub const LANE_KICK_REST_S: f64 = 1.;
 pub const LANE_COAST_DECEL_FLOOR_MPS2: f64 = 0.2;
+// Round y15: the coast decel from positions (CoastFit; maneuver_sequence.py
+// has the derivation and the car data), the finish's tail lag after a light
+// restart, its 1560 top-ups and the pushes' measured responses.
+pub const COAST_FIT_MIN_POINTS: i64 = 5;
+pub const COAST_FIT_JUMP_MPS: f64 = 0.5;
+pub const COAST_FIT_GAP_S: f64 = 0.35;
+pub const COAST_FIT_STRAIGHT_PWM: i64 = 60;
+pub const COAST_FIT_REAR_MAX_M: f64 = 4.;
+pub const COAST_FIT_MODEL_SE_MPS2: f64 = 0.01;
+pub const LANE_FINISH_ESC_LAG_S: f64 = 0.35;
+/// _lane_push_probe: (motor, first output, lowest, last output, highest).
+pub type PushProbe = (i64, f64, Option<f64>, Option<f64>, Option<f64>);
+pub const LANE_PUSH_PROBE_S: f64 = 0.8;
+pub const LANE_PUSH_PROBE_MIN_S: f64 = 0.3;
+pub const LANE_PUSH_RATE_MIN_MPS2: f64 = 0.05;
+pub const LANE_PUSH_RATE_MARGIN: f64 = 1.25;
+pub const LANE_STRONG_PUSH_ACCEL_MIN_MPS2: f64 = 1.3;
 pub const LANE_KICK_FRAMES: i64 = 3;
 // Round 105: the finish creep (front in the zone, rear out, no room for the kick).
 pub const LANE_CREEP_FRAMES: i64 = 2;
 pub const LANE_CREEP_TRAVEL_M: f64 = 0.27;
 pub const LANE_CREEP_MAX: i64 = 3;
-pub const LANE_SPEED_CUT_MARGIN_MPS: f64 = 0.15;
 pub const LANE_SPEED_BASELINE: usize = 2;
 pub const LANE_SPEED_HISTORY: usize = 7;
 pub const LANE_FRONT_HALF_BINS: i64 = 3;
@@ -574,9 +589,15 @@ pub struct Maneuver {
     pub light_feedback: V,
     pub light_alignment_evidence: V,
     pub lane_motor: i64,
-    pub _lane_coast_track: Vec<(f64, f64)>,
+    pub _coast_fit_front: CoastFit,
+    pub _coast_fit_rear: CoastFit,
+    pub _coast_fit: Option<(f64, f64, f64)>,
     pub _lane_coast_decel: Option<f64>,
     pub _lane_coast_decel_se: Option<f64>,
+    pub _lane_strong_push: bool,
+    pub _lane_push_probe: Option<PushProbe>,
+    pub _lane_push_rate_slow: Option<f64>,
+    pub _lane_push_rate_strong: Option<f64>,
     pub _lane_ranges: Vec<(f64, f64, f64)>,
     pub lane_feedback: V,
     pub finish_evidence: V,
@@ -884,9 +905,15 @@ impl Maneuver {
             light_feedback: V::None,
             light_alignment_evidence: V::None,
             lane_motor: ROUTE_SLOW_MOTOR,
-            _lane_coast_track: Vec::new(),
+            _coast_fit_front: CoastFit::new(),
+            _coast_fit_rear: CoastFit::new(),
+            _coast_fit: None,
             _lane_coast_decel: None,
             _lane_coast_decel_se: None,
+            _lane_strong_push: false,
+            _lane_push_probe: None,
+            _lane_push_rate_slow: None,
+            _lane_push_rate_strong: None,
             _lane_ranges: Vec::new(),
             lane_feedback: V::None,
             finish_evidence: V::None,

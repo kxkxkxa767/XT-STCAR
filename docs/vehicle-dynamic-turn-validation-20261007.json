@@ -25232,5 +25232,48 @@
       "light": "stopped .546 m before the posts in one go, red in 26 frames after the stop, released by green after 8.2 s (red 10.8 s since the first)",
       "next": "y15: the coast decel measured online (rubber tracks); the speed jump at the cut; the finish standstill check; the .6 s transfer recovery hold seen in y13"
     }
+  },
+  "y15_coast_fit_strong_topup_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "170d179 (car: round 121 + y14)",
+    "user": [
+      "你可以加入根据雷达测距的数据动态调整滑行距离的步骤，比赛场地可能是塑胶跑道，那个动摩擦因数比瓷砖大多了 后续的过红绿灯的逻辑你也可以用这个",
+      "过红绿的你可以用前方+后方辅助的方式来拟合",
+      "在过红绿灯后，你的补的推力可以适当大点",
+      "加大后再来个逻辑就是根据上一次补的力度反馈的速度来决定下一次的补推力度",
+      "注意实时性和cpu开销",
+      "5h限额快没了，你写完后直接上传"
+    ],
+    "car_data": {
+      "crosswalk_coasts_refit": "positions on the board behind after the cut, speed held L s then a constant decel: y12 L .30 d .66, y13 L .175 d .60, y14 L 0 d .61 (residual 2.8-5.2 mm)",
+      "light_lane_cuts_refit": "the board ahead after each cut in the light lane, y10-y14: decel .52-.64 (kicks from rest excluded), L 0-.2 s; with the crosswalk cuts twenty cuts L 0-.3 s",
+      "old_lane_fit": "the median-rate speed line measured a coast only in y10 (.589, se .076) and y13 (.557, se .067); y12/y14 none: each coast between pushes ~.5 s",
+      "y14_after_green": "go at 33.07 s, 3.4 m in 6.5 s (front past .8 m after ~4.5 s): 1560 launch cut by the guard at .96 s (~1.0 m/s, gap 3.25), three 1550 pushes each cut by the guard after .3-.8 s, a 1560 kick from rest .52 m before the board, guard decel the prior .45 throughout"
+    },
+    "change": [
+      "CoastFit: a least-squares parabola through one coast's positions by running sums (a few multiplications a scan; Python and Rust in the same operation order): decel, its standard error, the speed at the newest point; a step changing the speed by .5 m/s is dropped, two in a row or a gap over .35 s restart it",
+      "fit window: nothing of a push in the ESC pipeline (ESC_LAG_S + skew after the last powered output), steering within 60 PWM of centre, the car moving (>= .15 m/s; an unknown lane speed does not restart it)",
+      "crosswalk: the board behind after the cut; the light lane: the board ahead and the board behind (<= 4 m) along the axis, weighted by their variance (each at least .01), the error at least half their spread; a combined error <= .08 becomes the measured coast (replaces the median-rate speed line fit)",
+      "LANE_COAST_DECEL_CAP_MPS2 .70 -> 1.6 (a grippier floor); the crosswalk aim uses the measured coast, its guard max(.6, the lane guard); while coasting with a good fit the top-up foresees the stop from the fit's speed and decel",
+      "the measured coast is the run's (the crosswalk's carries to the light stop and the finish)",
+      "after a light restart the finish guards with a .35 s long lag (was ESC_LAG_S .45) and tops up at 1560 where that push's one-scan guard passes outside the zone, else 1550; such a 1560 push is not chopped as a kick",
+      "push response: each rolling top-up's speed gain per powered second (lowest lane speed within .8 s of its first output to the highest within .8 s of its last, >= .3 s of that), per PWM: the aim takes it for the next push at that PWM, the 1560 guard 1.25 times it (at least 1.3; 1.6 before one is measured)"
+    ],
+    "validation": {
+      "python": "the 6 touched test files 83 OK; full suite 964: test_route_58_light_lane unknown-speed finish test updated (it relied on the old fit reading .335 on a scripted .55 coast and ending the finish 1.22 m out), test_route_96_engine timed out under the suite load and passes alone 7/7; full rerun queued after parity",
+      "cargo": "test 7 passed, clippy 32 (unchanged)",
+      "parity_light": "18 of 39 cases compared call by call identical when pushed; the rest and the supervisor sweep still running",
+      "simulation": "not run (user: quota)"
+    },
+    "risks": [
+      "not driven: the 1560 top-up after the light and the .35 s tail are new on the car (the simulated measured car keeps .45 s both ways)",
+      "the push response comes from the lagging median-rate speed: short pushes read low; the 1560 guard keeps a 1.3 floor",
+      "a coast fitted while the car yaws a little (within 60 PWM) reads the along-axis decel"
+    ],
+    "next": "build round 122 + y15 (build-race.py claude-turn121 claude-turn122 122 y15_coast_fit_strong_topup_20261101; build-vision.py claude-turn122 y15 race4_vehicle_handoff_20261024.zip --light-stop; deploy-matched.py claude-turn122 122; deploy-vision.py y15; start-round.py y15); check coast_fit/coast_decel in the crosswalk and lane feedback, the after-green time and pushes, the finish gap"
   }
 }

@@ -468,7 +468,6 @@ impl Maneuver {
             .map(|row| (row.idx("at_s").f(), row.idx("received_at").f(), row.idx("along_m").f()))
             .collect();
         self._lane_speed_last = None;
-        self._lane_coast_track.clear();
         (self._lane_pulse, self._lane_creep, self._lane_creeps) = (0, false, 0);
         if self.route_stage != "light_lane" {
             self.lane_motor = ROUTE_SLOW_MOTOR; // the light entry drives at 1550 until the coast is aimed

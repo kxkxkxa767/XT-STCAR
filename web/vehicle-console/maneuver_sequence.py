@@ -241,14 +241,16 @@ LANE_STOP_DECEL_MIN_MPS2 = .45
 # LANE_COAST_DECEL_CAP_MPS2]. Round 86: the cap was the nominal .5 and the
 # measured car with 15 % stronger steering (user8) stopped .055 m from the
 # end board on the body gate; at .375 (halfway) all sixteen measured-car
-# finish cases (user8/doc8x4) stop in the zone, board >= .15 m.
+# finish cases (user8/doc8x4) stop in the zone, board >= .15 m. Round y15: the
+# span of a position fit (CoastFit; the speed drop is not required).
 LANE_COAST_MIN_SPAN_S = .4
-LANE_COAST_MIN_DROP_MPS = .1
 # Round 92: at most the weakest coast measured on the car (~.45, see above).
 # Round 101: light-lane coasts on the car, runs 98-100, ~.55-.6 m/s^2 (1.5-1.7
 # m/s at the cut, 2.0-2.5 m to the stop); the measured one now also aims the
 # coast (below), so the cap only bounds a bad fit.
-LANE_COAST_DECEL_CAP_MPS2 = .70
+# Round y15 (user: 比赛场地可能是塑胶跑道，那个动摩擦因数比瓷砖大多了): a grippier
+# floor coasts shorter; .70 would keep its aim long and every stop short.
+LANE_COAST_DECEL_CAP_MPS2 = 1.6
 # Front in the zone (the stage's old end; the finish line lies ~.05 m beyond).
 LANE_FINISH_ZONE_GAP_M = .75
 # Round 101 (Claude; user: 最后那段直道想办法让他一口气跑完不要停顿，这个太耗时间了).
@@ -312,7 +314,6 @@ LANE_AIM_REACTION_S = .1
 # The coasting speed's residual on the car was ~.03 m/s (runs 98-100).
 LANE_SPEED_GUARD_MARGIN_MPS = .05
 LANE_COAST_GUARD_RATIO = .9
-LANE_COAST_TRACK_POINTS = 12
 # A fit is used once its slope's standard error is at most this; the guard and
 # the rolling end then take two standard errors (at least LANE_COAST_GUARD_RATIO).
 LANE_COAST_DECEL_SE_MAX_MPS2 = .08
@@ -325,6 +326,53 @@ LANE_KICK_REST_S = 1.
 # A measured coast decel is kept within these (the prior LANE_STOP_DECEL_MIN_MPS2
 # bounds the guard only before one is measured).
 LANE_COAST_DECEL_FLOOR_MPS2 = .2
+# Round y15 (user: 你可以加入根据雷达测距的数据动态调整滑行距离的步骤…后续的过红绿灯的
+# 逻辑你也可以用这个; 过红绿的你可以用前方+后方辅助的方式来拟合; 注意实时性和cpu开销):
+# the coast decel from positions, not from the median-rate speed. A least-
+# squares parabola through each source's positions (CoastFit: running sums, a
+# few multiplications a scan) while nothing of a push is left in the ESC
+# pipeline (ESC_LAG_S+LANE_ESC_SKEW_S), the steering within
+# COAST_FIT_STRAIGHT_PWM of centre and the car moving: the crosswalk stop on the
+# board behind, the light lane on the board ahead and the board behind (within
+# COAST_FIT_REAR_MAX_M) along the axis. The sources' decels are weighted by
+# their variance (each at least COAST_FIT_MODEL_SE_MPS2), the standard error at
+# least half their spread; LANE_COAST_DECEL_SE_MAX_MPS2 still admits it. Car
+# runs y10-y14 refitted so (the board behind / ahead, 2-6 mm residual): the
+# crosswalk coasts .60-.66 m/s2, the finish coasts after the light .52-.64,
+# while the median-rate fit measured one only in y10 and y13 (.59/.56, standard
+# error .076/.067; most coasts between pushes ~.5 s, too short for its window).
+# A reading whose step changes the speed by COAST_FIT_JUMP_MPS
+# (~6 sigma of the scan-to-scan speed) is dropped; two in a row restart the
+# fit there (another surface); a gap over COAST_FIT_GAP_S restarts it.
+COAST_FIT_MIN_POINTS = 5
+COAST_FIT_JUMP_MPS = .5
+COAST_FIT_GAP_S = .35
+COAST_FIT_STRAIGHT_PWM = 60
+COAST_FIT_REAR_MAX_M = 4.
+COAST_FIT_MODEL_SE_MPS2 = .01
+# Round y15: the finish after a light restart guards the push's tail with this
+# long lag instead of ESC_LAG_S. Twenty cuts of car runs y10-y14 (crosswalk
+# and light lane, positions fitted as speed held L s after the cut, then a
+# constant decel): L 0-.3 s, most 0-.2 (the guard's ESC_LAG_S+LANE_ESC_SKEW_S
+# kept the power on .5 s at the push's bound; the light stop keeps it).
+LANE_FINISH_ESC_LAG_S = .35
+# Round y15 (user: 在过红绿灯后，你的补的推力可以适当大点; 加大后再来个逻辑就是根据上一次
+# 补的力度反馈的速度来决定下一次的补推力度). After the light the finish tops up at
+# 1560 where that push's guard passes (outside the zone), else 1550 as before;
+# such a push is not chopped as a kick. Each rolling top-up's speed gain per
+# powered second (the lowest lane speed within LANE_PUSH_PROBE_S of its first
+# output to the highest within it of its last, LANE_PUSH_PROBE_MIN_S of that
+# at least) is kept per PWM: the aim takes it for the next push at that PWM
+# (at least LANE_PUSH_RATE_MIN_MPS2), the 1560 guard LANE_PUSH_RATE_MARGIN
+# times it, at least LANE_STRONG_PUSH_ACCEL_MIN_MPS2 (1560 from .2-.8 m/s
+# after the light: ~1.2-1.4 m/s2, y14); before one is measured
+# LANE_KICK_ACCEL_MAX_MPS2. A strong last response so makes the next 1560
+# rarer (1550 then), a weak one leaves it at 1560.
+LANE_PUSH_PROBE_S = .8
+LANE_PUSH_PROBE_MIN_S = .3
+LANE_PUSH_RATE_MIN_MPS2 = .05
+LANE_PUSH_RATE_MARGIN = 1.25
+LANE_STRONG_PUSH_ACCEL_MIN_MPS2 = 1.3
 # Near the end power came in pulses (LANE_PULSE_FRAMES = 2 powered frames, then
 # LANE_REST_FRAMES neutral): the closing-speed estimate lags a push, and a 1560
 # restart held until it read .15 m/s had reached .93 m/s (simulation, 8x6
@@ -350,7 +398,6 @@ LANE_CREEP_FRAMES = 2
 LANE_CREEP_TRAVEL_M = .27
 LANE_CREEP_MAX = 3
 
-LANE_SPEED_CUT_MARGIN_MPS = .15
 # While powered the speed rises faster than the ~.3 s estimate follows.
 LANE_SPEED_POWER_MARGIN_MPS = .15
 # Speed: closing rate over ~.2 s baselines (median), so one scan-seam jump of
@@ -1196,6 +1243,94 @@ CROSSWALK_MOVED_M = .1  # round y11: the car has left the start (the odometry si
 CROSSWALK_STOP_MAX_S = 3.  # neutral this long counts as stopped (speed unknown)
 
 
+class CoastFit:
+    """Round y15: least-squares parabola x = c0 + c1 u + c2 u^2 (u = t - t0, x
+    less its first value) through one coast's positions by running sums, so a
+    scan costs a few multiplications: decel -2 c2, its standard error, the
+    speed at the newest point (fit). A step that changes the speed by more than
+    COAST_FIT_JUMP_MPS is dropped, a second one in a row restarts the fit there;
+    so does a gap over COAST_FIT_GAP_S."""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.n = 0
+        self.t0 = self.x0 = 0.
+        self.s1 = self.s2 = self.s3 = self.s4 = 0.
+        self.y0 = self.y1 = self.y2 = self.yy = 0.
+        self.last = None  # [t, x, speed from the point before or None]
+        self.dropped = False
+
+    def add(self, t, x):
+        last = self.last
+        speed = None
+        if last is not None:
+            dt = t-last[0]
+            if not 0 < dt <= COAST_FIT_GAP_S:
+                self.reset()
+            else:
+                speed = (x-last[1])/dt
+                if last[2] is not None and abs(speed-last[2]) > COAST_FIT_JUMP_MPS:
+                    if not self.dropped:
+                        self.dropped = True
+                        return
+                    self.reset()
+                    speed = None
+        self.dropped = False
+        if self.n == 0:
+            self.t0, self.x0 = t, x
+        u, y = t-self.t0, x-self.x0
+        u2 = u*u
+        self.n += 1
+        self.s1 += u
+        self.s2 += u2
+        self.s3 += u2*u
+        self.s4 += u2*u2
+        self.y0 += y
+        self.y1 += u*y
+        self.y2 += u2*y
+        self.yy += y*y
+        self.last = [t, x, speed]
+
+    def fit(self):
+        """(decel, standard error, speed at the newest point), or None under
+        COAST_FIT_MIN_POINTS or LANE_COAST_MIN_SPAN_S."""
+        n = self.n
+        if n < COAST_FIT_MIN_POINTS or self.last[0]-self.t0 < LANE_COAST_MIN_SPAN_S:
+            return None
+        a, b, c, d, e = float(n), self.s1, self.s2, self.s3, self.s4
+        m00, m01, m02 = c*e-d*d, c*d-b*e, b*d-c*c
+        m11, m12, m22 = a*e-c*c, b*c-a*d, a*c-b*b
+        det = a*m00+b*m01+c*m02
+        if not det > 0:
+            return None
+        c0 = (m00*self.y0+m01*self.y1+m02*self.y2)/det
+        c1 = (m01*self.y0+m11*self.y1+m12*self.y2)/det
+        c2 = (m02*self.y0+m12*self.y1+m22*self.y2)/det
+        rss = max(0., self.yy-c0*self.y0-c1*self.y1-c2*self.y2)
+        return -2*c2, 2*math.sqrt(rss/(n-3)*m22/det), c1+2*c2*(self.last[0]-self.t0)
+
+
+def _coast_fit_combined(*fits):
+    """Round y15: (decel, standard error, speed) of the fitted sources (CoastFit.fit
+    results or None), weighted by their variance (each standard error at least
+    COAST_FIT_MODEL_SE_MPS2), the error at least half their spread; or None."""
+    found = [f for f in fits if f is not None]
+    if not found:
+        return None
+    total = weighted = speed = 0.
+    for decel, se, v in found:
+        w = 1/(se*se+COAST_FIT_MODEL_SE_MPS2*COAST_FIT_MODEL_SE_MPS2)
+        total += w
+        weighted += w*decel
+        speed += w*v
+    se = math.sqrt(1/total)
+    if len(found) == 2:
+        se = max(se, abs(found[0][0]-found[1][0])/2)
+    return weighted/total, se, speed/total
+
+
 def _pairwise_track_speed(history, scan, track):
     """Median of the pairwise slopes of the last LANE_TRACK_SPEED_POINTS track
     values in ``history`` (its rows updated in place), or None."""
@@ -1875,9 +2010,15 @@ class ManeuverSequence(TurnMotion):
         self.light_feedback = None
         self.light_alignment_evidence = None
         self.lane_motor = ROUTE_SLOW_MOTOR
-        self._lane_coast_track = []
+        self._coast_fit_front = CoastFit()  # round y15: the board ahead's coast
+        self._coast_fit_rear = CoastFit()  # round y15: the board behind's coast
+        self._coast_fit = None  # round y15: this scan's combined fit (decel, se, speed) or None
         self._lane_coast_decel = None
         self._lane_coast_decel_se = None
+        self._lane_strong_push = False  # round y15: the last powered run is a 1560 top-up after the light
+        self._lane_push_probe = None  # round y15: [motor, first output, lowest, last output, highest]
+        self._lane_push_rate_slow = None  # round y15: measured speed gain per powered second at 1550
+        self._lane_push_rate_strong = None  # ... at 1560 (a rolling top-up)
         self._lane_ranges = []
         self.lane_feedback = None
         self.finish_evidence = None
@@ -4064,6 +4205,13 @@ class ManeuverSequence(TurnMotion):
                 'source_seq': scan['seq'], 'received_at': scan['received_at'], 'board_m': self._crosswalk_board_m,
                 'front_track_m': track, 'fixes': [list(f) for f in self._crosswalk_fixes]})
 
+    def _crosswalk_coast_observe(self, scan, now, track, speed):
+        """Round y15: the crosswalk stop's coast after its cut on the board behind
+        (its odometry: the track is that range negated), the car moving."""
+        coasting = (self.crosswalk_state == 'approach' and self._crosswalk_rear is True and self._crosswalk_coasting
+                    and speed is not None and speed >= LANE_SPEED_RESTART_MPS and self._coast_fit_window(now))
+        self._coast_measure(scan, coasting, None, None if track is None else -track)
+
     def _crosswalk_control(self, scan, now, control, track, speed, v):
         """Round y5: the start lane's motor around the crosswalk stop (it sets
         self._start_motor); returns the feedback, or None outside the stop."""
@@ -4085,11 +4233,17 @@ class ManeuverSequence(TurnMotion):
         # the wait began .16 m before the car stopped, read .1 m/s while a kick took)
         settled = self._power_cmd_at is None or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S
         aim = worst = None
+        # Round y15: a measured coast (this run's, _coast_measure) aims the stop;
+        # the guard takes its weak end where that is above the tile's.
+        measured = self._lane_coast_decel is not None
+        decel = self._lane_coast_decel if measured else CROSSWALK_AIM_DECEL_MPS2
+        guard_decel = (max(CROSSWALK_GUARD_DECEL_MPS2, self._lane_decels()[1]) if measured
+                       else CROSSWALK_GUARD_DECEL_MPS2)
         if state == 'approach':
             if v is not None and gap is not None:
-                aim = gap-v*CROSSWALK_AIM_LAG_S-v*v/(2*CROSSWALK_AIM_DECEL_MPS2)
+                aim = gap-v*CROSSWALK_AIM_LAG_S-v*v/(2*decel)
                 guard = v+LANE_SPEED_GUARD_MARGIN_MPS
-                worst = gap-guard*CROSSWALK_GUARD_REACTION_S-guard*guard/(2*CROSSWALK_GUARD_DECEL_MPS2)
+                worst = gap-guard*CROSSWALK_GUARD_REACTION_S-guard*guard/(2*guard_decel)
             if gap is None:
                 self._start_motor = NEUTRAL  # the edge's odometry lost: stop where it is
                 if stopped or rolled_out:
@@ -4103,13 +4257,20 @@ class ManeuverSequence(TurnMotion):
                 # again while the car rolls, if even that push's worst case (its power
                 # raising the speed over the ESC lag and the scan, then the guard's
                 # reaction and coast) stays off the floor; else one coast to the stop
-                # (round y8).
+                # (round y8). Round y15: once this coast's fit (the board behind)
+                # is good, the stop it foresees from its speed and decel (nothing
+                # left in the ESC pipeline), else the aim.
+                fit = self._coast_fit
+                coast = aim
+                if fit is not None and fit[1] <= LANE_COAST_DECEL_SE_MAX_MPS2 and gap is not None:
+                    rolling = max(0., fit[2])
+                    coast = gap-rolling*rolling/(2*max(LANE_COAST_DECEL_FLOOR_MPS2, fit[0]))
                 topup = False
-                if (aim is not None and aim > CROSSWALK_TARGET_GAP_M+CROSSWALK_TOPUP_BAND_M
-                        and speed is not None and speed >= LANE_PUSH_ROLLING_MPS):
+                if (coast is not None and v is not None and speed is not None
+                        and coast > CROSSWALK_TARGET_GAP_M+CROSSWALK_TOPUP_BAND_M and speed >= LANE_PUSH_ROLLING_MPS):
                     push = v+LANE_SPEED_GUARD_MARGIN_MPS+LANE_PUSH_ACCEL_MAX_MPS2*(ESC_LAG_S+LANE_PUSH_MIN_S)
                     topup = (gap-push*(CROSSWALK_GUARD_REACTION_S+LANE_PUSH_MIN_S)
-                             -push*push/(2*CROSSWALK_GUARD_DECEL_MPS2)) > CROSSWALK_MIN_GAP_M
+                             -push*push/(2*guard_decel)) > CROSSWALK_MIN_GAP_M
                 self._start_motor = ROUTE_SLOW_MOTOR if topup else NEUTRAL
             elif aim is None or aim <= CROSSWALK_TARGET_GAP_M or worst <= CROSSWALK_MIN_GAP_M:
                 self._start_motor = NEUTRAL
@@ -4156,6 +4317,7 @@ class ManeuverSequence(TurnMotion):
                 self._route_event('crosswalk_go', scan, control, go)
         return {'state': state, 'gap_m': gap, 'board_m': self._crosswalk_board_m, 'speed_mps': speed,
                 'speed_for_cut_mps': v, 'aimed_stop_gap_m': aim, 'worst_stop_gap_m': worst,
+                'coast_decel_mps2': decel, 'guard_decel_mps2': guard_decel, 'coast_fit': self._coast_fit,
                 'motor': self._start_motor}
 
     def _crosswalk_stopped(self, scan, now, control, gap, basis):
@@ -4244,6 +4406,7 @@ class ManeuverSequence(TurnMotion):
         speed = self._track_speed(scan, track)
         cw_track, cw_speed = self._crosswalk_odometry(scan, track, speed)
         self._crosswalk_observe(scan, cw_track)
+        self._crosswalk_coast_observe(scan, now, cw_track, cw_speed)
         stop_at = allowed = v = v_crosswalk = None
         if approach is None and source != 'first_support_missing_frame_hold':
             # A cut now still pushes for the rest of the ESC lag, the speed
@@ -6345,12 +6508,12 @@ class ManeuverSequence(TurnMotion):
         powered_s = min(lag, powered_s)
         return max(0., speed+accel*powered_s-decel*(lag-powered_s))
 
-    def _lane_worst_gap(self, gap, speed, now, decel, accel, reaction, push_s=0.):
-        """Guard: the smaller front gap at the stop over a LANE_ESC_LAG_MIN_S and an
-        ESC_LAG_S lag (each skewed by LANE_ESC_SKEW_S), with the speed brought to
-        now plus LANE_SPEED_GUARD_MARGIN_MPS."""
+    def _lane_worst_gap(self, gap, speed, now, decel, accel, reaction, push_s=0., long_lag=ESC_LAG_S):
+        """Guard: the smaller front gap at the stop over a LANE_ESC_LAG_MIN_S and a
+        ``long_lag`` lag (each skewed by LANE_ESC_SKEW_S), with the speed brought
+        to now plus LANE_SPEED_GUARD_MARGIN_MPS."""
         worst = None
-        for lag in (LANE_ESC_LAG_MIN_S, ESC_LAG_S):
+        for lag in (LANE_ESC_LAG_MIN_S, long_lag):
             onset, offset = lag-LANE_ESC_SKEW_S, lag+LANE_ESC_SKEW_S
             v = self._lane_speed_now(speed, now, onset, offset, decel, accel)
             if self._light_launch_from is not None:
@@ -6374,41 +6537,76 @@ class ManeuverSequence(TurnMotion):
         peak = min(coasted+accel*power_s, max(coasted, LANE_PUSH_MAX_MPS))
         return gap-travel-(speed+coasted)/2*coast_s-peak*power_s-peak*peak/(2*decel)
 
-    def _lane_coast_observe(self, now, speed):
-        """Coast decel: least-squares slope of the speed while its whole window coasts.
+    def _coast_fit_window(self, now):
+        """Round y15: nothing of a push left in the ESC pipeline (the longest lag)
+        and the steering near centre: a straight coast."""
+        return ((self._power_cmd_at is None or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S)
+                and abs(self.servo-NEUTRAL) <= COAST_FIT_STRAIGHT_PWM)
 
-        Round 101: the newest three rates of the median (its last five scans)
-        must start ESC_LAG_S after the last powered output: the median of five
-        rates whose newest three fall is the middle one, as in a whole coast;
-        fitted over up to LANE_COAST_TRACK_POINTS scans (was the end points of
-        LANE_SPEED_HISTORY) once its slope's standard error is at most
-        LANE_COAST_DECEL_SE_MAX_MPS2; a speed under LANE_SPEED_RESTART_MPS (at or
-        near rest reads 0) does not enter the fit."""
-        coasting = (self.lane_motor == NEUTRAL and speed is not None and len(self._lane_ranges) >= 3
-                    and (self._power_cmd_at is None
-                         or self._lane_ranges[max(0, len(self._lane_ranges)-5)][1]-self._power_cmd_at >= ESC_LAG_S))
+    def _coast_measure(self, scan, coasting, front, rear):
+        """Round y15: this scan's positions (``front``: lidar to the board ahead,
+        ``rear``: to the board behind, None when not read) into their coast
+        fits while ``coasting``, else both restart; a combined fit whose standard
+        error is at most LANE_COAST_DECEL_SE_MAX_MPS2 is the measured coast."""
         if not coasting:
-            self._lane_coast_track = []
+            if self._coast_fit_front.n or self._coast_fit_rear.n:
+                self._coast_fit_front.reset()
+                self._coast_fit_rear.reset()
+            self._coast_fit = None
             return
-        if speed < LANE_SPEED_RESTART_MPS:
+        at = scan['at_ms']/1000
+        if front is not None:
+            self._coast_fit_front.add(at, -front)
+        if rear is not None and rear <= COAST_FIT_REAR_MAX_M:
+            self._coast_fit_rear.add(at, rear)
+        fit = self._coast_fit = _coast_fit_combined(self._coast_fit_front.fit(), self._coast_fit_rear.fit())
+        if fit is not None and fit[1] <= LANE_COAST_DECEL_SE_MAX_MPS2:
+            self._lane_coast_decel = max(LANE_COAST_DECEL_FLOOR_MPS2, min(LANE_COAST_DECEL_CAP_MPS2, fit[0]))
+            self._lane_coast_decel_se = fit[1]
+
+    def _lane_coast_observe(self, scan, now, speed):
+        """Round y15 (user: 过红绿的你可以用前方+后方辅助的方式来拟合): the lane's coast on
+        the board ahead and the board behind along the axis, while coasting
+        (_coast_fit_window) and not at or near rest (a speed under
+        LANE_SPEED_RESTART_MPS; an unknown one does not restart the fits)."""
+        coasting = (self.lane_motor == NEUTRAL and (speed is None or speed >= LANE_SPEED_RESTART_MPS)
+                    and self._coast_fit_window(now))
+        if not coasting:
+            self._coast_measure(scan, False, None, None)
             return
-        track = self._lane_coast_track
-        if track and (now <= track[-1][0] or speed > track[-1][1]+LANE_SPEED_CUT_MARGIN_MPS):
-            track.clear()  # a jump up is not a coast
-        track.append((now, speed))
-        del track[:-LANE_COAST_TRACK_POINTS]
-        t0, v0 = track[0]
-        t1, v1 = track[-1]
-        if t1-t0 >= LANE_COAST_MIN_SPAN_S and v0-v1 >= LANE_COAST_MIN_DROP_MPS and len(track) >= 4:
-            mean_t = sum(t for t, _ in track)/len(track)
-            mean_v = sum(v for _, v in track)/len(track)
-            sxx = sum((t-mean_t)*(t-mean_t) for t, _ in track)
-            slope = sum((t-mean_t)*(v-mean_v) for t, v in track)/sxx
-            residual = sum((v-mean_v-slope*(t-mean_t))*(v-mean_v-slope*(t-mean_t)) for t, v in track)
-            se = math.sqrt(residual/(len(track)-2)/sxx)
-            if se <= LANE_COAST_DECEL_SE_MAX_MPS2:
-                self._lane_coast_decel = max(LANE_COAST_DECEL_FLOOR_MPS2, min(LANE_COAST_DECEL_CAP_MPS2, -slope))
-                self._lane_coast_decel_se = se
+        self._coast_measure(scan, True, self._lane_front_range(scan), self._lane_rear_range(scan))
+
+    def _lane_push_observe(self, now, speed):
+        """Round y15 (user: 根据上一次补的力度反馈的速度来决定下一次的补推力度): a rolling
+        top-up's speed gain per powered second, kept per PWM: from the lowest
+        lane speed within LANE_PUSH_PROBE_S of its first output to the highest
+        within it of its last output (the ESC lag and the speed's window lag
+        both ways); the next push starting earlier closes it after
+        LANE_PUSH_PROBE_MIN_S, else drops it."""
+        probe = self._lane_push_probe
+        if probe is None:
+            return
+        motor, since, low, end, high = probe
+        if end is None and self.lane_motor != motor:
+            if self.lane_motor in DRIVE_MOTORS:
+                self._lane_push_probe = None  # turned into another push
+                return
+            end = self._power_cmd_at
+        elif end is not None and (self.lane_motor in DRIVE_MOTORS or now-end > LANE_PUSH_PROBE_S):
+            self._lane_push_probe = None
+            if low is not None and high is not None and now-end >= LANE_PUSH_PROBE_MIN_S:
+                rate = max(LANE_PUSH_RATE_MIN_MPS2, (high-low)/(end-since+LANE_PUSH_MIN_S))
+                if motor == TRIAL_MOTOR:
+                    self._lane_push_rate_strong = rate
+                else:
+                    self._lane_push_rate_slow = rate
+            return
+        if speed is not None:
+            if now-since <= LANE_PUSH_PROBE_S:
+                low = speed if low is None else min(low, speed)
+            if end is not None:
+                high = speed if high is None else max(high, speed)
+        self._lane_push_probe = [motor, since, low, end, high]
 
     def _light_stop_active(self):
         return self.light_stop_state in ('approach', 'waiting')
@@ -6677,7 +6875,6 @@ class ManeuverSequence(TurnMotion):
         # confirming scans on (a turning car's axis ray is no distance to go).
         self._lane_ranges = [(row['at_s'], row['received_at'], row['along_m']) for row in self._light_gantry_seen]
         self._lane_speed_last = None
-        self._lane_coast_track = []
         self._lane_pulse, self._lane_creep, self._lane_creeps = 0, False, 0
         if self.route_stage != 'light_lane':
             self.lane_motor = ROUTE_SLOW_MOTOR  # the light entry drives at 1550 until the coast is aimed
@@ -6848,7 +7045,8 @@ class ManeuverSequence(TurnMotion):
         """
         kind, zone_gap, body_gap, target_gap, min_gap, creep_travel, creep_max = goal
         speed = self._lane_speed(scan, ahead)
-        self._lane_coast_observe(now, speed)
+        self._lane_coast_observe(scan, now, speed)
+        self._lane_push_observe(now, speed)
         held = getattr(self, '_lane_speed_last', None)
         speed_known = True
         if speed is not None:
@@ -6865,13 +7063,25 @@ class ManeuverSequence(TurnMotion):
         # nothing left in the ESC pipeline even with the longest lag
         coasting = not powered and (self._power_cmd_at is None
                                     or now >= self._power_cmd_at+ESC_LAG_S+LANE_ESC_SKEW_S)
-        kick = self._power_cmd_motor == TRIAL_MOTOR
-        aim_accel = LANE_POWER_ACCEL_MPS2 if kick else LANE_PUSH_ACCEL_MPS2
+        restarted = isinstance(self.light_stop_evidence, dict) and 'go' in self.light_stop_evidence
+        # Round y15: after the light the finish's tail lag (LANE_FINISH_ESC_LAG_S),
+        # its 1560 top-ups (strong: the last powered run is one) and the pushes'
+        # measured responses (_lane_push_observe).
+        after_light = kind == 'finish' and restarted
+        long_lag = LANE_FINISH_ESC_LAG_S if after_light else ESC_LAG_S
+        strong = self._lane_strong_push and self._power_cmd_motor == TRIAL_MOTOR
+        kick = self._power_cmd_motor == TRIAL_MOTOR and not strong
+        rate_slow, rate_strong = self._lane_push_rate_slow, self._lane_push_rate_strong
+        aim_accel = ((LANE_POWER_ACCEL_MPS2 if rate_strong is None else rate_strong) if strong
+                     else LANE_POWER_ACCEL_MPS2 if kick
+                     else LANE_PUSH_ACCEL_MPS2 if rate_slow is None else rate_slow)
+        strong_accel = (LANE_KICK_ACCEL_MAX_MPS2 if rate_strong is None
+                        else max(LANE_STRONG_PUSH_ACCEL_MIN_MPS2, LANE_PUSH_RATE_MARGIN*rate_strong))
         # Past the finish line a push only brings the rear wheels in (the time
         # has ended; the board costs +10 s): LANE_PUSH_LATE_ACCEL_MAX_MPS2.
         late = gap is not None and gap <= zone_gap
-        guard_accel = (LANE_KICK_ACCEL_MAX_MPS2 if kick else LANE_PUSH_LATE_ACCEL_MAX_MPS2 if late
-                       else LANE_PUSH_ACCEL_MAX_MPS2)
+        guard_accel = (strong_accel if strong else LANE_KICK_ACCEL_MAX_MPS2 if kick
+                       else LANE_PUSH_LATE_ACCEL_MAX_MPS2 if late else LANE_PUSH_ACCEL_MAX_MPS2)
         v_aim = v
         if speed is not None:
             v_aim = self._lane_speed_now(v, now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, decel, aim_accel)
@@ -6880,7 +7090,8 @@ class ManeuverSequence(TurnMotion):
         if gap is not None:
             stop_gap = self._lane_stop(gap, v_aim, decel, LANE_AIM_REACTION_S if powered else 0.,
                                        aim_coast, aim_power, aim_accel)
-            worst_gap = self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction)
+            worst_gap = self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction,
+                                             long_lag=long_lag)
         stopped = speed is not None and speed < LANE_SPEED_RESTART_MPS
         in_zone = gap is not None and gap <= zone_gap
         body_in_zone = gap is not None and gap <= body_gap
@@ -6901,7 +7112,6 @@ class ManeuverSequence(TurnMotion):
         # launch's own coast fitted .34-.44 m/s2 on a .6 m/s2 car while the
         # lagging speed estimate still read the peak, and that coast ended the
         # run .14 m short of the zone; stopped short, the kick or creep goes on).
-        restarted = isinstance(self.light_stop_evidence, dict) and 'go' in self.light_stop_evidence
         basis = None
         if speed_known and stopped and body_in_zone:
             basis = f'stopped_with_the_whole_car_in_the_{kind}_zone'
@@ -6921,12 +7131,14 @@ class ManeuverSequence(TurnMotion):
             'whole_car_in_finish_zone': body_in_zone, 'pipeline_power_s': aim_power,
             'coast_decel_mps2': decel, 'guard_decel_mps2': guard_decel, 'strong_decel_mps2': strong_decel,
             'coast_decel_se_mps2': self._lane_coast_decel_se,
-            'coast_decel_measured': self._lane_coast_decel is not None,
+            'coast_decel_measured': self._lane_coast_decel is not None, 'coast_fit': self._coast_fit,
+            'push_rates_mps2': [rate_slow, rate_strong], 'guard_accel_mps2': guard_accel, 'tail_lag_s': long_lag,
             'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': self.light_vision,
             'creep_room': creep_room, 'creeps': self._lane_creeps, 'goal': kind}
         if basis is not None:
             return basis, feedback
         launching = self._light_launch_until is not None and now < self._light_launch_until
+        strong_push = False  # round y15: this scan's output is a 1560 top-up after the light
         if gap is None and kind == 'light':
             self.lane_motor = NEUTRAL  # round y2: no light line this scan: coast
         elif gap is not None and (stop_gap <= target_gap or worst_gap <= min_gap):
@@ -6940,13 +7152,24 @@ class ManeuverSequence(TurnMotion):
         elif stopped:
             self.lane_motor = (TRIAL_MOTOR if (kick_room or creep_room) and (rested or self._lane_pulse > 0)
                                else NEUTRAL)
-        elif self.lane_motor == ROUTE_SLOW_MOTOR:
-            pass  # the straight, or a push, until the coast is aimed
+        elif self.lane_motor == ROUTE_SLOW_MOTOR or self.lane_motor == TRIAL_MOTOR and strong:
+            # the straight, or a push (round y15: also a 1560 top-up), until the coast is aimed
+            strong_push = self.lane_motor == TRIAL_MOTOR
         elif (self.lane_motor == NEUTRAL and stop_gap > target_gap+LANE_TOPUP_BAND_M
-              and v_aim-decel*LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
-              and self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction,
-                                       LANE_PUSH_MIN_S) > min_gap):
-            self.lane_motor = ROUTE_SLOW_MOTOR  # it would stop short: push again while it rolls
+              and v_aim-decel*LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS):
+            # it would stop short: push again while it rolls (round y15: after the
+            # light at 1560 where that push's guard passes, outside the zone)
+            if (after_light and not late
+                    and self._lane_worst_gap(gap, v, now, guard_decel, max(guard_accel, strong_accel),
+                                             guard_reaction, LANE_PUSH_MIN_S, long_lag) > min_gap):
+                self.lane_motor, strong_push = TRIAL_MOTOR, True
+            elif self._lane_worst_gap(gap, v, now, guard_decel, guard_accel, guard_reaction,
+                                      LANE_PUSH_MIN_S, long_lag) > min_gap:
+                self.lane_motor = ROUTE_SLOW_MOTOR
+            else:
+                self.lane_motor = NEUTRAL
+            if self.lane_motor != NEUTRAL:
+                self._lane_push_probe = [self.lane_motor, now, speed, None, None]
         else:
             self.lane_motor = NEUTRAL  # coasting, or a kick once the car rolls
         # Round 94 (user: 最后不到半米的距离一直停车再动): near the end a 2-frame
@@ -6961,7 +7184,9 @@ class ManeuverSequence(TurnMotion):
             self._light_launch_until = None  # after the launch: the lane's own pushes and kicks
         if self.lane_motor == NEUTRAL:
             self._light_launch_from = None  # the launch's powered run has ended: the car rolls
-        if self.lane_motor == TRIAL_MOTOR and launching:
+        if self.lane_motor in DRIVE_MOTORS:
+            self._lane_strong_push = strong_push
+        if self.lane_motor == TRIAL_MOTOR and (launching or strong_push):
             self._lane_pulse, self._lane_creep = 0, False
         elif self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= (LANE_CREEP_FRAMES if self._lane_creep
                                                                      else LANE_KICK_FRAMES):
