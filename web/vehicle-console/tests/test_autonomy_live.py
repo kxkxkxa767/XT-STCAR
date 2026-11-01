@@ -586,6 +586,29 @@ class ManeuverClearanceTests(unittest.TestCase):
         sparse = {**self.scan, 'ranges': [1.6 if a % 9 else None for a in range(360)]}
         self.assertFalse(self.probe(sparse)['scan_incomplete_tolerable'])  # 320 returns
 
+    def test_a_far_dropout_between_far_returns_is_bridged(self):
+        # Car run y16-3 scan 84: past the start lane's left board end the rays
+        # reach the far boards at ~6.1-6.4 m; 7 of them (-19..-13) returned
+        # nothing and the restart after the crosswalk halted (front_sparse).
+        scan = {**self.scan, 'ranges': [1.6]*360}
+        for angle in range(-21, -9):
+            scan['ranges'][angle % 360] = 6.4-.02*(angle+21)
+        for angle in range(-19, -12):
+            scan['ranges'][angle % 360] = None
+        result = self.probe(scan)
+        self.assertNotIn('front_sparse', result['quality_issues'])
+        self.assertEqual(result['front_bridged_bins'], list(range(-19, -12)))
+        near = {**self.scan, 'ranges': [1.6]*360}  # the same run between near returns
+        for angle in range(-19, -12):
+            near['ranges'][angle % 360] = None
+        near['ranges'][-12 % 360] = 2.4  # one side another surface: not one continuous board
+        self.assertIn('front_sparse', self.probe(near)['quality_issues'])
+        longer = {**scan, 'ranges': list(scan['ranges'])}
+        for angle in range(-30, -17):  # joins the run: 18 bins (-30..-13), far neighbours: too long
+            longer['ranges'][angle % 360] = None
+        longer['ranges'][-31 % 360] = 6.5
+        self.assertIn('front_sparse', self.probe(longer)['quality_issues'])
+
     def test_gap_at_range_step_or_longer_than_bridge_stays_unknown(self):
         for case in ('step', 'long', 'edge_null'):
             with self.subTest(case=case):

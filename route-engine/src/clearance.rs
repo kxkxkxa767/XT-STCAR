@@ -17,6 +17,9 @@ pub const FRONT_MAX_UNKNOWN: usize = 6;
 pub const FRONT_MAX_GAP: i64 = 3;
 pub const FRONT_BRIDGE_MAX_BINS: i64 = 5;
 pub const FRONT_BRIDGE_MAX_STEP_M: f64 = 0.15;
+// Round y16: a far dropout between returns >= FRONT_FAR_BRIDGE_MIN_M (autonomy_live.py).
+pub const FRONT_FAR_BRIDGE_MAX_BINS: i64 = 12;
+pub const FRONT_FAR_BRIDGE_MIN_M: f64 = 4.;
 pub const FRONT_LANE_WALL_MAX_RANGE_M: f64 = 6.;
 pub const MANEUVER_TOLERABLE_MIN_VALID: usize = 324;
 pub const MANEUVER_TOLERABLE_MAX_NULL_RUN: i64 = 12;
@@ -175,9 +178,9 @@ pub fn front_gap_evidence(bins: &[Option<f64>], bridge: bool, front_lane: &V, si
             if missing && start.is_none() {
                 start = Some(angle);
             } else if !missing && let Some(first) = start {
-                if angle - first <= FRONT_BRIDGE_MAX_BINS
-                    && let (Some(left), Some(right)) = (at(first - 1), at(angle))
-                    && (left - right).abs() <= FRONT_BRIDGE_MAX_STEP_M
+                if let (Some(left), Some(right)) = (at(first - 1), at(angle))
+                    && (angle - first <= FRONT_BRIDGE_MAX_BINS && (left - right).abs() <= FRONT_BRIDGE_MAX_STEP_M
+                        || angle - first <= FRONT_FAR_BRIDGE_MAX_BINS && pmin(left, right) >= FRONT_FAR_BRIDGE_MIN_M)
                 {
                     bridged.extend(first..angle);
                 }

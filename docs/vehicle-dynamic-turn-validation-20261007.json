@@ -25295,8 +25295,8 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "cf10172 (car: round 122 + y15)",
     "user": [
       "跑完了你取回数据吧，最后的时候还是断断续续的走的"
@@ -25305,7 +25305,45 @@
       "the measured coast decel is the inverse-variance weighted mean of the run's finished coasts and the current coast's latest good fit (each fit's error <= .08), its error sqrt(1/sum w); was the latest good fit alone",
       "car run y15 with it: crosswalk .588 +- .016 and the light stop's .582 +- .07 -> .588 +- .016, finish guard decel ~.53 instead of .441"
     ],
+    "validation": {
+      "python": "full suite 967 OK",
+      "cargo": "test 7, clippy 32",
+      "parity_light": "39/39",
+      "parity_light_supervisor": "39/39"
+    },
+    "next": "run y16 (round 123); see whether the finish after green tops up into the zone without kicks",
+    "commit": "50ca8cd",
+    "deployment": "build-race.py claude-turn122 claude-turn123 123, build-vision.py y16; deploy-matched.py 123, deploy-vision.py y16",
+    "car_runs": {
+      "y16": "not counted (user: 红绿灯没有触发…这个数据不保留): the light was not triggered, released after 4.1 s without a light; 35.4 s, finish .386 m",
+      "y16-2": "turn_perception_unavailable on the restart after the crosswalk wait: scan 87 front_sparse, open unknown -21..-14 (8 bins) between returns at ~4-6.2 m past the start lane's left board end (that board ends ~.9-1.1 m ahead at -30..-25 deg); the start lane has no quality tolerance (same as y9 on 10-29)",
+      "y16-3": "the same on scan 84: open unknown -19..-13 (7 bins) between ~6.14-6.37 m returns; the car had stopped .602 m before the conservative edge",
+      "user": [
+        "为什么这次停在斑马线那里不动了",
+        "还是一样的停着不动了",
+        "y16和y15相比你应该没改斑马线的部分吧 (no: y16 only weights the coasts; the crosswalk is the first coast, unchanged)"
+      ]
+    }
+  },
+  "y17_front_far_dropout_bridge_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "50ca8cd (car: round 123 + y16)",
+    "user": [
+      "为什么这次停在斑马线那里不动了",
+      "还是一样的停着不动了"
+    ],
+    "change": [
+      "autonomy_live.front_gap_evidence (and clearance.rs), maneuver profile only: a front null run of up to FRONT_FAR_BRIDGE_MAX_BINS 12 whose two adjacent returns are both at least FRONT_FAR_BRIDGE_MIN_M 4 m away is bridged (occupied, never free; still reported in front_unknown_bins); the existing short-run rule (<= 5 bins, neighbours within .15 m) unchanged",
+      "the y16-2/y16-3/y9 restarts would not have halted: their runs (7-9 bins) lay between 4-6.4 m returns"
+    ],
+    "risks": [
+      "a nearer object returning nothing across its whole width inside such a run (<= 12 deg) is not seen; the boards and blue cones of the course return; the 8 cm body gate is unchanged"
+    ],
     "validation": "pending",
-    "next": "run y16 (round 123); see whether the finish after green tops up into the zone without kicks"
+    "next": "run y17 (round 124): restart after the crosswalk; then the finish after green (y16 coast weighting not yet seen on the car with the light)"
   }
 }

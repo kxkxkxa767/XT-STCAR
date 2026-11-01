@@ -24,6 +24,15 @@ FRONT_MAX_GAP = 3
 # step between the neighbours stay unknown; all nulls are still reported.
 FRONT_BRIDGE_MAX_BINS = 5
 FRONT_BRIDGE_MAX_STEP_M = .15
+# Round y16 (car runs y16-2/y16-3, and y9 on 10-29): stopped at the crosswalk, the
+# rays past the start lane's left board end (14-21 deg left) reach the far boards
+# at ~6-6.4 m and drop out in runs of 7-9 bins on some frames; the start lane
+# halted the route on the restart (front_sparse). A run of up to
+# FRONT_FAR_BRIDGE_MAX_BINS with both adjacent returns at least
+# FRONT_FAR_BRIDGE_MIN_M away is bridged too (occupied, never free): a nearer
+# object inside it would have to return nothing across its whole width.
+FRONT_FAR_BRIDGE_MAX_BINS = 12
+FRONT_FAR_BRIDGE_MIN_M = 4.
 # Only a currently measured native lane may explain grazing null rays by its
 # side-wall planes, bounded in range. This is occupied projection, not a new
 # return, free space, or evidence that the finite board continues indefinitely.
@@ -604,8 +613,9 @@ def front_gap_evidence(bins, *, bridge=False, front_lane=None, side_walls=False)
                 start = angle
             elif not missing and start is not None:
                 left, right = bins[(start-1) % 360], bins[angle % 360]
-                if (angle-start <= FRONT_BRIDGE_MAX_BINS and left is not None and right is not None
-                        and abs(left-right) <= FRONT_BRIDGE_MAX_STEP_M):
+                if left is not None and right is not None and (
+                        angle-start <= FRONT_BRIDGE_MAX_BINS and abs(left-right) <= FRONT_BRIDGE_MAX_STEP_M
+                        or angle-start <= FRONT_FAR_BRIDGE_MAX_BINS and min(left, right) >= FRONT_FAR_BRIDGE_MIN_M):
                     bridged.extend(range(start, angle))
                 start = None
     bridged_set = set(bridged)
