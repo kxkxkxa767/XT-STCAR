@@ -1230,9 +1230,15 @@ CROSSWALK_REAR_MAX_M = 4.
 # now the ESC lag: 1.03/.94 m, a third over the real coasts; the aim to .25.
 CROSSWALK_AIM_LAG_S = .3
 CROSSWALK_AIM_DECEL_MPS2 = .6
-CROSSWALK_TARGET_GAP_M = .25
-CROSSWALK_MIN_GAP_M = .15
-CROSSWALK_GUARD_REACTION_S = ESC_LAG_S
+# Round y19 (user: 这次停在斑马线后面大概50cm的位置我记得有次停在了将近20cm的位置): car runs
+# y17-2/y18 the guard cut first (aim .332 still above the target) and the cars stopped
+# ~.5-.67 m before the stripes, y15's late aim cut ~.18 m. The guard's reaction is
+# the measured cut lag (twenty cuts of y10-y14: 0-.3 s; was ESC_LAG_S .45), the
+# target .25 -> .15 and the floor .15 -> .08 from the conservative edge (itself two
+# sigmas, ~.05-.1 m, before the stripes): ~.2-.3 m before them.
+CROSSWALK_TARGET_GAP_M = .15
+CROSSWALK_MIN_GAP_M = .08
+CROSSWALK_GUARD_REACTION_S = .3
 # Round y14 (user: 根据...车的速度来动态调整滑行距离): the cut already takes the
 # measured speed (the board behind); the guard's weakest coast (the lane's .45)
 # still cut first in y13 (foresaw 1.15 m, coasted .743 from .784 m/s). With its
@@ -7199,7 +7205,10 @@ class ManeuverSequence(TurnMotion):
             if self._lane_topup_motor == self.lane_motor:
                 topup_motor = self.lane_motor
         elif (self.lane_motor == NEUTRAL and stop_gap > target_gap+LANE_TOPUP_BAND_M
-              and v_aim-decel*LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS):
+              and v_aim-decel*LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
+              # round y19: after the light not while the launch's power may still act
+              # (car run y18: 1550 again .16 s after the 1580 launch's cut)
+              and (relaxed or not after_light)):
             # it would stop short: push again while it rolls (round y15: after the
             # light at 1560 where that push's guard passes, outside the zone)
             if (after_light and not late

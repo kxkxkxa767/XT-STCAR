@@ -296,9 +296,10 @@ pub const CROSSWALK_SPEED_HOLD_S: f64 = 1.;
 pub const CROSSWALK_REAR_MAX_M: f64 = 4.;
 pub const CROSSWALK_AIM_LAG_S: f64 = 0.3;
 pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
-pub const CROSSWALK_TARGET_GAP_M: f64 = 0.25;
-pub const CROSSWALK_MIN_GAP_M: f64 = 0.15;
-pub const CROSSWALK_GUARD_REACTION_S: f64 = ESC_LAG_S;
+// Round y19: the measured cut lag (0-.3 s), stops ~.2-.3 m before the stripes.
+pub const CROSSWALK_TARGET_GAP_M: f64 = 0.15;
+pub const CROSSWALK_MIN_GAP_M: f64 = 0.08;
+pub const CROSSWALK_GUARD_REACTION_S: f64 = 0.3;
 pub const CROSSWALK_GUARD_DECEL_MPS2: f64 = 0.6;
 pub const CROSSWALK_TOPUP_BAND_M: f64 = 0.15;
 pub const CROSSWALK_MOVED_M: f64 = 0.1;

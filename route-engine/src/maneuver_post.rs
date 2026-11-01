@@ -1795,6 +1795,8 @@ impl Maneuver {
         } else if self.lane_motor == NEUTRAL
             && stop_gap.unwrap() > goal.target_gap + LANE_TOPUP_BAND_M
             && v_aim - decel * LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
+            // round y19: after the light not while the launch's power may still act
+            && (relaxed || !after_light)
         {
             // it would stop short: push again while it rolls (round y15: after the
             // light at 1560 where that push's guard passes, outside the zone)

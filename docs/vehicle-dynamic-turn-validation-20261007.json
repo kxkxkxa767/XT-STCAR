@@ -25391,5 +25391,29 @@
       "light": "stopped .540 m, green release after 8.9 s (35 red frames)",
       "after_green": "1580 launch cut by the guard after .48 s (reading .672, aim 1.108 m/s; its 2.5 m/s2 bound over the .5 s tail); 1550 again .16 s later (a top-up within the launch tail) cut at .80 s; peak 1.395 m/s (y17-2 .92); 1550 top-ups at 1.44 and 2.41 s; the last coast stopped .545 m out (rear outside) -> two 1560 kicks -> .369 m; front past .8 m ~3.1 s after green (y17-2 ~4.2); green to stop ~5.7 s; decel .565 +- .021"
     }
+  },
+  "y19_crosswalk_closer_launch_tail_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "50b204f + y18 record (car: round 125 + y18)",
+    "user": [
+      "加到1580后明显好很多，但这次停在斑马线后面大概50cm的位置我记得有次停在了将近20cm的位置"
+    ],
+    "change": [
+      "crosswalk: CROSSWALK_GUARD_REACTION_S ESC_LAG_S .45 -> .3 (the measured cut lag of twenty cuts, 0-.3 s), CROSSWALK_TARGET_GAP_M .25 -> .15, CROSSWALK_MIN_GAP_M .15 -> .08 (from the conservative edge, itself ~.05-.1 m before the stripes); y17-2/y18 cut on the guard with the aim still .332 and stopped ~.5-.67 m before the stripes, y15's late aim cut ~.18 m",
+      "light lane after green: no top-up while the launch's power may still act (the relaxed condition: the last powered run a top-up or no power for ESC_LAG_S + skew); car run y18 pushed 1550 .16 s after the 1580 launch's cut"
+    ],
+    "validation": {
+      "python": "full suite 968 OK (four crosswalk tests moved to the new thresholds: the aim cut at .45 m, the push-guard and band cases at .6/.45 m, the unknown-speed hold at .5 m)",
+      "cargo": "test 7, clippy 32",
+      "parity_sweeps": "not run (user: no simulation)"
+    },
+    "risks": [
+      "a late cut like y15's (the speed reading jumping one scan) now stops ~.1 m nearer: ~.1-.15 m before the stripes"
+    ],
+    "next": "run y19: crosswalk stop distance (user tape), the after-green launch and pushes"
   }
 }
