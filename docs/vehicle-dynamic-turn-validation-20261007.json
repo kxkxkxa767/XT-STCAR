@@ -25165,8 +25165,8 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "165d551 (car: round 119 + y12)",
     "user": [
       "红绿灯触发有问题下一轮再看看，开始的时候还是离斑马线有些距离",
@@ -25185,6 +25185,43 @@
       "clippy": "32"
     },
     "expectation": "the real car's cut ~.26 m later than y12: stop ~.5 m before the stripes",
-    "risk": "a crosswalk nearer than ~1.8 m from the start has little margin if the real coast ever matches the simulated one"
+    "risk": "a crosswalk nearer than ~1.8 m from the start has little margin if the real coast ever matches the simulated one",
+    "commit": "2ae481b",
+    "deployment": "build-race.py claude-turn119 claude-turn120 120, build-vision.py y13; deploy-matched.py 120, deploy-vision.py y13 (stage-claude-y13-20261101-095343)",
+    "car_run_y13": {
+      "evidence": "left-cone-trial-20261101-y13 (99/99)",
+      "user": "你斑马线停车的时间好像不止3s",
+      "result": "41.2 s to the finish stop (.380 m, 0 creeps); light stop ~8.9 s: ~32.3 s effective (y10 ~32.8); ended coast_standstill_unconfirmed although the front read .581-.583 m for 5 s (the end check, not the car)",
+      "crosswalk": "fixed during the launch, 1550 to .784 m/s, the guard cut at 2.26 s (gap 1.250, worst .101 with the lane decel .45, aim .502); coasted .743 m (peak .856) to a standstill at 3.86 s, the wait declared 4.02 (speed .076), go 7.54, moving ~7.95: stood ~4.1 s for the 3.5 s wait; conservative gap .617, ~.63-.72 m before the stripes by the start anchors; start to the stop 3.9 s",
+      "light": "triggered: stopped .542 m before the posts in one go (whole car in the zone), red in 30 frames after the stop (lamps in view), released by green_in_fresh_frames_after_the_stop after 8.9 s (red 10.8 s since the first)",
+      "other": "a .6 s route_recovery_hold_neutral in the open transfer (14.57-15.21 s); green to the finish stop 5.3 s (y10 6.6)"
+    }
+  },
+  "y14_crosswalk_wait_topup_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "2ae481b (car: round 120 + y13)",
+    "user": [
+      "你斑马线停车的时间好像不止3s",
+      "你可以根据开始给出的电机pwm车的速度来动态调整滑行距离，类似于如果给pwm出来的车速比预期要慢，你加点pwm，确保滑行距离",
+      "增加pwm而不是停车然后再启动",
+      "你可以加入根据雷达测距的数据动态调整滑行距离的步骤，比赛场地可能是塑胶跑道，那个动摩擦因数比瓷砖大多了；后续的过红绿灯的逻辑你也可以用这个"
+    ],
+    "change": [
+      "CROSSWALK_WAIT_S 3.5 -> 3.0 (y13 stood 4.1 s: declared .16 s after the standstill, the restart's ESC lag ~.4 s; 3.0 stands ~3.4-3.6, >= 3.2 even rolling .2 s into it)",
+      "crosswalk guard decel: the lane's weakest .45 -> CROSSWALK_GUARD_DECEL_MPS2 .6 (with the guard's reaction and margin the real coasts fit .95-1.2 m/s2: 29-44 % margin)",
+      "a coast foreseen (aim) to stop more than CROSSWALK_TOPUP_BAND_M (.15) short of the target pushes 1550 again while rolling (>= LANE_PUSH_ROLLING_MPS), only if a push's worst case (its power raising the speed by LANE_PUSH_ACCEL_MAX over the ESC lag and the scan) stays off the floor: no stop-and-kick"
+    ],
+    "simulation_check": "measured car: 2.2 m .33 (8 % long .22), 2.46 m .37, 3.0 m .57, 1.8 m .16, 1.4 m -.13 (the simulated car coasts ~35 % longer than the real one); the top-up did not trigger in these",
+    "validation": {
+      "python_suite": "955 OK",
+      "cargo_test": "7 pass; clippy 32",
+      "parity_light": "39/39",
+      "supervisor_light": "39/39"
+    },
+    "next": "y15: the coast decel measured online from the board behind (rubber track: more friction, shorter coasts) for the crosswalk's aim/top-up and the guard, carried to the light lane"
   }
 }

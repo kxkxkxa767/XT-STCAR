@@ -278,9 +278,11 @@ pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
 pub const CROSSWALK_TARGET_GAP_M: f64 = 0.25;
 pub const CROSSWALK_MIN_GAP_M: f64 = 0.15;
 pub const CROSSWALK_GUARD_REACTION_S: f64 = ESC_LAG_S;
+pub const CROSSWALK_GUARD_DECEL_MPS2: f64 = 0.6;
+pub const CROSSWALK_TOPUP_BAND_M: f64 = 0.15;
 pub const CROSSWALK_MOVED_M: f64 = 0.1;
 pub const CROSSWALK_ZONE_M: f64 = 1.;
-pub const CROSSWALK_WAIT_S: f64 = 3.5;
+pub const CROSSWALK_WAIT_S: f64 = 3.;
 pub const CROSSWALK_STOP_MAX_S: f64 = 3.;
 pub const OPEN_SUPPORT_MAX_DEPTH_M: f64 = 0.15;
 

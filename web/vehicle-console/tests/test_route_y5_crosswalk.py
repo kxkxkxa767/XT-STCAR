@@ -146,26 +146,48 @@ class CrosswalkStop(unittest.TestCase):
         self.assertEqual(fb['state'], 'waiting')
         self.assertEqual(motion.crosswalk_evidence['stop']['basis'], 'stopped_before_the_crosswalk')
         motion._start_motor = TRIAL_MOTOR
-        motion._crosswalk_control(scan(4, 6.4), 6.4, {}, 3.5, 0., 0.)
+        motion._crosswalk_control(scan(4, 5.9), 5.9, {}, 3.5, 0., 0.)
         self.assertEqual((motion.crosswalk_state, motion._start_motor), ('waiting', NEUTRAL))
-        motion._crosswalk_control(scan(5, 6.5), 6.5, {}, 3.5, 0., 0.)
+        motion._crosswalk_control(scan(5, 6.), 6., {}, 3.5, 0., 0.)  # round y13: 3.0 s
         self.assertEqual(motion.crosswalk_state, 'done')
-        self.assertAlmostEqual(motion.crosswalk_wait_credit_s, 3.5)
-        self.assertAlmostEqual(motion.drive_since, 3.5)
+        self.assertAlmostEqual(motion.crosswalk_wait_credit_s, 3.)
+        self.assertAlmostEqual(motion.drive_since, 3.)
         self.assertIn('crosswalk_go', motion.route_events)
-        self.assertIsNone(motion._crosswalk_control(scan(6, 6.6), 6.6, {}, 3.5, 0., 0.))
+        self.assertIsNone(motion._crosswalk_control(scan(6, 6.1), 6.1, {}, 3.5, 0., 0.))
 
     def test_after_the_cut_it_coasts_to_a_standstill(self):
         motion = self.approach()
         motion._crosswalk_control(scan(1, 1.), 1., {}, 3.+ms.FRONT_BODY_EXTENT_M+.55, .5, .5)
         self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (NEUTRAL, True))
         motion._start_motor = ms.ROUTE_SLOW_MOTOR  # the cruise would push again
-        motion._crosswalk_control(scan(2, 1.1), 1.1, {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, .3, .3)
+        motion._crosswalk_control(scan(2, 1.1), 1.1, {}, 3.+ms.FRONT_BODY_EXTENT_M+.6, .3, .3)
         self.assertEqual(motion._start_motor, NEUTRAL)  # aimed short now, still coasting
+        # round y14: far short with room for a push's worst case: 1550 while rolling
+        motion._crosswalk_control(scan(3, 1.2), 1.2, {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, .3, .3)
+        self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (ms.ROUTE_SLOW_MOTOR, True))
         motion._power_cmd_at = 0.
         motion._start_motor = TRIAL_MOTOR
         motion._crosswalk_control(scan(3, 3.), 3., {}, 3.+ms.FRONT_BODY_EXTENT_M+1.5, 0., 0.)
         self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (TRIAL_MOTOR, False))  # stopped short: a kick
+
+    def test_a_short_coast_is_topped_up_while_rolling(self):
+        # Round y14 (user: 增加pwm而不是停车然后再启动): coasting, foreseen to stop well
+        # short of the target, room for even a push's worst case: 1550 while it rolls
+        motion = self.approach()
+        motion._crosswalk_coasting = True
+        motion._power_cmd_at = 1.
+        far = 3.+ms.FRONT_BODY_EXTENT_M+1.4
+        motion._crosswalk_control(scan(1, 2.), 2., {}, far, .3, .3)
+        self.assertEqual((motion._start_motor, motion._crosswalk_coasting), (ms.ROUTE_SLOW_MOTOR, True))
+        # nearer: the push's worst case would reach the floor: coast on
+        motion._crosswalk_control(scan(2, 2.1), 2.1, {}, 3.+ms.FRONT_BODY_EXTENT_M+.75, .3, .3)
+        self.assertEqual(motion._start_motor, NEUTRAL)
+        # the coast already aims within the band: no push
+        motion._crosswalk_control(scan(3, 2.2), 2.2, {}, 3.+ms.FRONT_BODY_EXTENT_M+.5, .3, .3)
+        self.assertEqual(motion._start_motor, NEUTRAL)
+        # too slow to count as rolling: no push (a stop there waits or kicks)
+        motion._crosswalk_control(scan(4, 2.3), 2.3, {}, far, .2, .2)
+        self.assertEqual(motion._start_motor, NEUTRAL)
 
     def test_the_guard_cuts_a_fast_car(self):
         motion = self.approach()

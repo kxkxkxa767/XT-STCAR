@@ -197,7 +197,7 @@ impl Maneuver {
             if let (Some(v), Some(g)) = (v, gap) {
                 aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * CROSSWALK_AIM_DECEL_MPS2));
                 let guard = v + LANE_SPEED_GUARD_MARGIN_MPS;
-                worst = Some(g - guard * CROSSWALK_GUARD_REACTION_S - guard * guard / (2. * LANE_STOP_DECEL_MIN_MPS2));
+                worst = Some(g - guard * CROSSWALK_GUARD_REACTION_S - guard * guard / (2. * CROSSWALK_GUARD_DECEL_MPS2));
             }
             match gap {
                 None => {
@@ -212,7 +212,20 @@ impl Maneuver {
                 }
                 Some(g) => {
                     if self._crosswalk_coasting && !stopped && !rolled_out {
-                        self._start_motor = NEUTRAL; // round y8: one coast to the stop
+                        // round y14: push 1550 again while rolling when the coast would stop
+                        // short of the target and even the push's worst case stays off the floor
+                        let topup = match (aim, v, speed) {
+                            (Some(a), Some(v), Some(s)) => {
+                                let push = v + LANE_SPEED_GUARD_MARGIN_MPS + LANE_PUSH_ACCEL_MAX_MPS2 * (ESC_LAG_S + LANE_PUSH_MIN_S);
+                                let push_worst = g - push * (CROSSWALK_GUARD_REACTION_S + LANE_PUSH_MIN_S)
+                                    - push * push / (2. * CROSSWALK_GUARD_DECEL_MPS2);
+                                a > CROSSWALK_TARGET_GAP_M + CROSSWALK_TOPUP_BAND_M
+                                    && s >= LANE_PUSH_ROLLING_MPS
+                                    && push_worst > CROSSWALK_MIN_GAP_M
+                            }
+                            _ => false,
+                        };
+                        self._start_motor = if topup { ROUTE_SLOW_MOTOR } else { NEUTRAL }; // else round y8: one coast
                     } else if aim.is_none_or(|a| a <= CROSSWALK_TARGET_GAP_M) || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M) {
                         self._start_motor = NEUTRAL;
                         // round y11: held on a measured speed or once the car has left the start

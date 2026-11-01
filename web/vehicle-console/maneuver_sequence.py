@@ -1173,13 +1173,25 @@ CROSSWALK_AIM_DECEL_MPS2 = .6
 CROSSWALK_TARGET_GAP_M = .25
 CROSSWALK_MIN_GAP_M = .15
 CROSSWALK_GUARD_REACTION_S = ESC_LAG_S
+# Round y14 (user: 根据...车的速度来动态调整滑行距离): the cut already takes the
+# measured speed (the board behind); the guard's weakest coast (the lane's .45)
+# still cut first in y13 (foresaw 1.15 m, coasted .743 from .784 m/s). With its
+# reaction and margin the real coasts fit .95-1.2 m/s2 (y13/y12/y10); .6 leaves
+# them 29-44 % short of the guard's.
+CROSSWALK_GUARD_DECEL_MPS2 = .6
+CROSSWALK_TOPUP_BAND_M = .15
 # Stopped farther than this from it, 3-frame 1560 kicks rested apart (as the
 # lane's), each only with LANE_KICK_TRAVEL_M of room; from rest the start
 # lane's own 1560 ran until a lagging speed read .15 m/s and overshot the edge
 # by .36 m (simulation). Stopping early costs nothing (rules: before the
 # crosswalk).
 CROSSWALK_ZONE_M = 1.
-CROSSWALK_WAIT_S = 3.5
+# Round y13 (user: 你斑马线停车的时间好像不止3s): car run y13 stood 4.1 s for the
+# 3.5 s wait (by the board behind: still from 3.86 s, the wait declared at
+# 4.02, the go at 7.54, moving from ~7.95 after the ESC lag). 3.0 s stands
+# ~3.4-3.6 s; even a car still rolling .2 s into the wait stands 3.2 s (the
+# restart's ESC lag always adds ~.4 s); the rules ask 3 s.
+CROSSWALK_WAIT_S = 3.
 CROSSWALK_MOVED_M = .1  # round y11: the car has left the start (the odometry since its rest)
 CROSSWALK_STOP_MAX_S = 3.  # neutral this long counts as stopped (speed unknown)
 
@@ -4077,7 +4089,7 @@ class ManeuverSequence(TurnMotion):
             if v is not None and gap is not None:
                 aim = gap-v*CROSSWALK_AIM_LAG_S-v*v/(2*CROSSWALK_AIM_DECEL_MPS2)
                 guard = v+LANE_SPEED_GUARD_MARGIN_MPS
-                worst = gap-guard*CROSSWALK_GUARD_REACTION_S-guard*guard/(2*LANE_STOP_DECEL_MIN_MPS2)
+                worst = gap-guard*CROSSWALK_GUARD_REACTION_S-guard*guard/(2*CROSSWALK_GUARD_DECEL_MPS2)
             if gap is None:
                 self._start_motor = NEUTRAL  # the edge's odometry lost: stop where it is
                 if stopped or rolled_out:
@@ -4086,7 +4098,19 @@ class ManeuverSequence(TurnMotion):
                 state = self._crosswalk_stopped(scan, now, control, gap,
                                                 'stopped_before_the_crosswalk' if gap >= 0 else 'stopped_past_the_crosswalk_edge')
             elif self._crosswalk_coasting and not stopped and not rolled_out:
-                self._start_motor = NEUTRAL  # round y8: one coast to the stop
+                # Round y14 (user: 增加pwm而不是停车然后再启动): a coast foreseen to stop
+                # short of the target by more than CROSSWALK_TOPUP_BAND_M pushes 1550
+                # again while the car rolls, if even that push's worst case (its power
+                # raising the speed over the ESC lag and the scan, then the guard's
+                # reaction and coast) stays off the floor; else one coast to the stop
+                # (round y8).
+                topup = False
+                if (aim is not None and aim > CROSSWALK_TARGET_GAP_M+CROSSWALK_TOPUP_BAND_M
+                        and speed is not None and speed >= LANE_PUSH_ROLLING_MPS):
+                    push = v+LANE_SPEED_GUARD_MARGIN_MPS+LANE_PUSH_ACCEL_MAX_MPS2*(ESC_LAG_S+LANE_PUSH_MIN_S)
+                    topup = (gap-push*(CROSSWALK_GUARD_REACTION_S+LANE_PUSH_MIN_S)
+                             -push*push/(2*CROSSWALK_GUARD_DECEL_MPS2)) > CROSSWALK_MIN_GAP_M
+                self._start_motor = ROUTE_SLOW_MOTOR if topup else NEUTRAL
             elif aim is None or aim <= CROSSWALK_TARGET_GAP_M or worst <= CROSSWALK_MIN_GAP_M:
                 self._start_motor = NEUTRAL
                 # round y11: the coast holds to the standstill on a measured speed or
