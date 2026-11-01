@@ -25396,8 +25396,8 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "50b204f + y18 record (car: round 125 + y18)",
     "user": [
       "加到1580后明显好很多，但这次停在斑马线后面大概50cm的位置我记得有次停在了将近20cm的位置"
@@ -25414,6 +25414,27 @@
     "risks": [
       "a late cut like y15's (the speed reading jumping one scan) now stops ~.1 m nearer: ~.1-.15 m before the stripes"
     ],
-    "next": "run y19: crosswalk stop distance (user tape), the after-green launch and pushes"
+    "next": "crosswalk: the cut uses fixes from ~1.5-2 m whose two sigmas (~.1-.2 m) the nearer fixes later remove (y19 stopped ~.16 m beyond the aimed stop): consider one sigma, or aiming with the nearer fixes; light: the stop .55 m may sit at the edge of the photo sensor (user: the first stop did not trip it); finish: the last coast still stops ~.5 m out (rear outside) and creeps",
+    "commit": "db68d62",
+    "deployment": "build-race.py claude-turn125 claude-turn126 126, build-vision.py y19; deploy-matched.py 126, deploy-vision.py y19",
+    "car_run_y19": {
+      "evidence": "left-cone-trial-20261101-y19 (92/92)",
+      "end": "route_finish_zone_stop, 39.2 s start to stop, light wait 8.7 s (~30.5 s effective), finish .383 m, 2 creeps",
+      "segments_s": {
+        "crosswalk_stop": 4.0,
+        "crosswalk_go": 7.1,
+        "first_handover": 10.3,
+        "first_pass": 13.1,
+        "second_handover": 14.4,
+        "second_pass": 17.6,
+        "light_gantry": 18.1,
+        "light_stop": 24.6,
+        "light_go": 33.3,
+        "finish_stop": 39.2
+      },
+      "vs_y18": "gantry to light stop 6.5 s (y18 5.5): user: 一开始车没有触发传感器，但往前挪一挪触发了 (the first stop did not trip the light's photo sensor; the creep forward did); green to stop 5.9 s both; front past .8 m 3.35 s after green (y18 3.1)",
+      "crosswalk": "cut at 2.57 s (.906 m/s, gap .973 to the edge then, aim .017: one scan late), coasted .805 m; the edge moved ~.16 m farther with nearer, sharper fixes during the coast (stop gap .330); ~.42 m before the stripes by the board behind (2.748 - .311 - 2.013); y18 ~.5-.67",
+      "after_green": "1580 launch .64 s, cut by the guard; no top-up within its tail (y19); 1550 top-ups at 1.12, 2.07, 3.03 s; stopped .495 m (rear outside) -> two creeps -> .383; decel .575 +- .025"
+    }
   }
 }
