@@ -25436,5 +25436,43 @@
       "crosswalk": "cut at 2.57 s (.906 m/s, gap .973 to the edge then, aim .017: one scan late), coasted .805 m; the edge moved ~.16 m farther with nearer, sharper fixes during the coast (stop gap .330); ~.42 m before the stripes by the board behind (2.748 - .311 - 2.013); y18 ~.5-.67",
       "after_green": "1580 launch .64 s, cut by the guard; no top-up within its tail (y19); 1550 top-ups at 1.12, 2.07, 3.03 s; stopped .495 m (rear outside) -> two creeps -> .383; decel .575 +- .025"
     }
+  },
+  "y20_light_launch_1600_crosswalk_newest_fix_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "c85a1c3 (car: round 126 + y19)",
+    "user": [
+      "现在还有35的5h额度，你改吧应该能改完，不跑仿真",
+      "你不必针对这个赛道特化",
+      "后面过红绿灯后你可以1600起步",
+      "改完后直接上传，我睡觉去了"
+    ],
+    "analysis": {
+      "crosswalk_camera_vs_board_behind": "201 crosswalk frames (score >= .25) of the 11-01 runs y12-y19 against 2.748 - rear lidar (frames .15 s before capture): pitch 9.1 errors median -.09 m nearer than .6 m, -.05 at .6-1.0, -.015 at 1.0-1.5, -.04 at 1.5-2.0 (rms .144; run-level: y15 +.15..+.38, y16-3 -.25..-.32, y18 -.21), +.07 beyond 2 m (at-rest start frames, y15 up to +1.1). The best single pitch (8.71) made most bands worse: no recalibration (user: not tuned to this track).",
+      "crosswalk_y19_breakdown": "stop ~.42 m before the stripes = floor .08 + the guard coast foreseen ~.24 m long (its .3 s lag against ~.13 then, the .05 m/s speed margin ~.09) + the edge .256 m nearer than the stripes at the cut (the median frame ~1.8 m away, two sigmas .16) - the late scan ~.16.",
+      "crosswalk_coasts_after_the_cut": "speed/coast (m/s, m, board behind): y10 .822/.711, y12 .777/.681, y13 .784/.743, y15 .961/.835, y17-2 .844/.804, y18 .852/.835, y19 .906/.805; at .6 m/s2 the lags are .07-.30 s (mean .20); the guard at .3 s, .6 and no margin foresees .004-.22 m beyond each.",
+      "light_y19": "the light approach's last 1550 top-up lasted one scan (gap .98, foreseen stop .82, guard .59 against the .40 floor); the coast stopped .78 m before the light line, the photo sensor (~.7 m before the gantry, user 10-26) not tripped; creeps to .68, .58, .51 took 2.3 s (y18 .55 in one go). The guard's push model (the .45 s ESC lag, 1550 at .5-1.0 m/s2, +.05 m/s) foresees ~.2-.5 m beyond the real coasts there; not changed this round (no simulation)."
+    },
+    "change": [
+      "light launch after green at 1600 (LIGHT_LAUNCH_MOTOR = START_LAUNCH_MOTOR, Python/Rust); the server and the supervisor allow it only in light_lane while the launch lasts (unchanged rule); its guard bound 2.5 m/s2 and aim 1.5 unchanged",
+      "crosswalk fix (_crosswalk_observe / crosswalk_observe): the newest of the recent three frames sets the edge with its own sigma when it is sharper than the median and its nominal edge lies within the median's two sigmas of the median's",
+      "crosswalk aim lag .3 -> .2 s (the mean of the seven coasts); the guard keeps the .3 s reaction without the lane speed margin"
+    ],
+    "expected": "y19's frames: the cut one scan later, a stop ~.27 m before the stripes (camera unbiased); a y15-like far-reading camera ~.1 m",
+    "validation": {
+      "python_full_suite": "968 OK",
+      "cargo_test": "7 passed",
+      "clippy_warnings": 32,
+      "parity_and_simulation": "not run (user: 不跑仿真)"
+    },
+    "risks": [
+      "1600 from rest after green is not measured: the guard keeps 2.5 m/s2 (y19's 1580 averaged ~1.6 m/s2 over ~.8 s of power, peak 1.3 m/s); a harder 1600 launch ends at the same time bound but faster",
+      "crosswalk: with the camera reading far at 1.5-2 m (y15: +.15..+.38) the car may stop within ~.1 m of the stripes"
+    ],
+    "next": "deploy round 127 + y20 and run it (the user confirms the car at the start and the light on); light approach: tighten the push guard by the measured cut lag (<= .3 s) and the push responses so the first stop reaches the zone (~.55 m) in one go; finish: the last coast still stops ~.5 m out and creeps",
+    "commit": "(this commit)"
   }
 }

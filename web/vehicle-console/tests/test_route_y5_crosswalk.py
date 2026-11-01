@@ -101,7 +101,8 @@ class CrosswalkFix(unittest.TestCase):
             frame(motion, 10+n, t, .6, 2.32-.5*(t-ms.CROSSWALK_CAMERA_LAG_S-1.))
         motion._crosswalk_observe(scan(20, 2.0), track[20])
         self.assertLess(motion._crosswalk_board_m, fixed)  # farther: the start's margin was wider
-        self.assertAlmostEqual(motion._crosswalk_board_sigma, sigma(2.32-.5*(1.6-ms.CROSSWALK_CAMERA_LAG_S-1.)))
+        # round y20: the newest frame, the sharpest and agreeing with the median, sets it
+        self.assertAlmostEqual(motion._crosswalk_board_sigma, sigma(2.32-.5*(1.9-ms.CROSSWALK_CAMERA_LAG_S-1.)))
         self.assertAlmostEqual(motion._crosswalk_board_m, board(-.32, 2.32)-2*sigma(2.32)+2*motion._crosswalk_board_sigma)
         sharp, sharp_sigma = motion._crosswalk_board_m, motion._crosswalk_board_sigma
         # blunter frames placing it farther: ignored

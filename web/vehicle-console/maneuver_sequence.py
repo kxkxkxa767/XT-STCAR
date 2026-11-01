@@ -72,8 +72,10 @@ ROUTE_SLOW_MOTOR = MIN_FORWARD_PWM
 START_LAUNCH_MOTOR = 1600
 # Round y18 (user: 灯区的直道断断续续的，反正在红绿灯那里调整了姿态，可以尝试1580起步，这样滑行的
 # 更长，你需要补的更少): the launch after green at 1580 (the car already faces the lane
-# from the light stop); the server allows it in that launch only.
-LIGHT_LAUNCH_MOTOR = 1580
+# from the light stop); the server allows it in that launch only. Round y20 (user:
+# 后面过红绿灯后你可以1600起步): the start lane's 1600 (car runs y18/y19: the 1580 launch
+# cut by its guard after .48/.64 s, peaks 1.4/1.3 m/s, then 1550 top-ups).
+LIGHT_LAUNCH_MOTOR = START_LAUNCH_MOTOR
 DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR)
 POST_PASS_STAGES = ('right_align', 'corridor_follow', 'second_orbit', 'light_turn', 'light_lane',
                     'open_transfer', 'second_loop', 'light_entry')
@@ -726,7 +728,9 @@ LANE_START_PUSH_BAND_MPS = .4
 START_LAUNCH_MAX_MPS = .2
 START_LAUNCH_ACCEL_MPS2 = 2.5
 # Round y18: the 1580 launch after green is guarded at 1600's bound (not measured) and
-# aimed at this (between 1560's LANE_POWER_ACCEL_MPS2 and that bound).
+# aimed at this (between 1560's LANE_POWER_ACCEL_MPS2 and that bound). Round y20: the
+# launch is 1600 itself, the same bound and aim (car run y19's 1580: ~1.3 m/s from
+# rest after ~.8 s of power, ~1.6 m/s2).
 LIGHT_LAUNCH_ACCEL_MAX_MPS2 = START_LAUNCH_ACCEL_MPS2
 LIGHT_LAUNCH_ACCEL_MPS2 = 1.5
 # After the last 1600 frame: no 1560 for the ESC lag plus this (the closing-
@@ -1228,7 +1232,12 @@ CROSSWALK_REAR_MAX_M = 4.
 # .40 and ~.9 m before the stripes); the guard with the lane's reaction (.86 s
 # there) foresaw 1.31 m and cut first, the aim .74-.81. The guard's reaction is
 # now the ESC lag: 1.03/.94 m, a third over the real coasts; the aim to .25.
-CROSSWALK_AIM_LAG_S = .3
+# Round y20 (user: ~20 cm; 不必针对这个赛道特化): the seven crosswalk coasts after the
+# cut (y10, y12, y13, y15, y17-2, y18, y19: .68-.84 m from .78-.96 m/s, by the board
+# behind) fit .6 m/s2 after lags of .07-.30 s, mean .20: the aim takes the mean, the
+# guard the longest (.3) without the lane's speed margin (the seven stop .004-.22 m
+# short of that guard's coast; the margin added ~.09 m at .9 m/s).
+CROSSWALK_AIM_LAG_S = .2
 CROSSWALK_AIM_DECEL_MPS2 = .6
 # Round y19 (user: 这次停在斑马线后面大概50cm的位置我记得有次停在了将近20cm的位置): car runs
 # y17-2/y18 the guard cut first (aim .332 still above the target) and the cars stopped
@@ -4213,6 +4222,14 @@ class ManeuverSequence(TurnMotion):
         if not added or len(recent) < CROSSWALK_FIX_FRAMES:
             return
         median = sorted(recent, key=lambda f: f[6])[len(recent)//2]
+        # Round y20: the newest frame (the nearest, the sharpest) sets the edge with its
+        # own sigmas where it agrees with the median within the median's two (car run
+        # y19: the cut came on the median of frames 1.6-2.0 m away, the edge two sigmas
+        # .13-.19 m nearer, while the newest at 1.57 m had .064; the car stopped ~.42 m
+        # before the stripes).
+        newest = recent[-1]
+        if newest[5] < median[5] and abs(newest[6]-2*newest[5]-median[6]+2*median[5]) <= 2*median[5]:
+            median = newest
         board, sigma = median[6], median[5]
         # round y11: a fix as precise as the one that set the edge replaces it
         # (the car closing in), a less precise one only brings it nearer
@@ -4264,8 +4281,7 @@ class ManeuverSequence(TurnMotion):
         if state == 'approach':
             if v is not None and gap is not None:
                 aim = gap-v*CROSSWALK_AIM_LAG_S-v*v/(2*decel)
-                guard = v+LANE_SPEED_GUARD_MARGIN_MPS
-                worst = gap-guard*CROSSWALK_GUARD_REACTION_S-guard*guard/(2*guard_decel)
+                worst = gap-v*CROSSWALK_GUARD_REACTION_S-v*v/(2*guard_decel)  # round y20: no speed margin
             if gap is None:
                 self._start_motor = NEUTRAL  # the edge's odometry lost: stop where it is
                 if stopped or rolled_out:
@@ -7116,7 +7132,7 @@ class ManeuverSequence(TurnMotion):
         # 1.3x car: the guard at 1550's bound with the measured .65 m/s2 instead of
         # the prior .45 cut it late and the car met the 8 cm gate).
         kick = self._power_cmd_motor == TRIAL_MOTOR and not strong or self._light_launch_from is not None
-        launch = self._light_launch_from is not None  # round y18: the 1580 launch's powered run
+        launch = self._light_launch_from is not None  # round y18: the launch's powered run (y20: 1600)
         rate_slow, rate_strong = self._lane_push_rate_slow, self._lane_push_rate_strong
         aim_accel = ((LANE_POWER_ACCEL_MPS2 if rate_strong is None else rate_strong) if strong
                      else LIGHT_LAUNCH_ACCEL_MPS2 if launch
@@ -7192,7 +7208,7 @@ class ManeuverSequence(TurnMotion):
         elif gap is not None and (stop_gap <= target_gap or worst_gap <= min_gap):
             self.lane_motor = NEUTRAL  # the coast from here reaches the target (or the guard)
         elif launching:
-            self.lane_motor = LIGHT_LAUNCH_MOTOR  # round y2: the launch after green (round y18: 1580)
+            self.lane_motor = LIGHT_LAUNCH_MOTOR  # round y2: the launch after green (y18: 1580, y20: 1600)
         elif self._light_launch_until is not None and self.lane_motor in (TRIAL_MOTOR, LIGHT_LAUNCH_MOTOR):
             self.lane_motor = ROUTE_SLOW_MOTOR  # the launch goes on at 1550
         elif speed is None:

@@ -1782,7 +1782,7 @@ class Console:
                           and getattr(motion, 'entry_kind', None) == 'lane'
                           and motion.first_pass_evidence is None and not motion.handover_observed
                           and decision.get('quality_resume_pending') is False)
-        # Round y18: the launch after green in the light lane may use 1580, while it lasts.
+        # Round y18: the launch after green in the light lane may use 1580 (y20: 1600), while it lasts.
         light_launch_allowed = (route and decision['phase'] == 'drive' and route_stage == 'light_lane'
                                 and getattr(motion, '_light_launch_until', None) is not None
                                 and decision.get('quality_resume_pending') is False)

@@ -1427,7 +1427,7 @@ impl Supervisor {
             && m.first_pass_evidence.is_none()
             && !m.handover_observed
             && decision.get("quality_resume_pending").is_false();
-        // Round y18: the launch after green in the light lane may use 1580, while it lasts.
+        // Round y18: the launch after green in the light lane may use 1580 (y20: 1600), while it lasts.
         let light_launch_allowed = phase == "drive"
             && stage_is("light_lane")
             && m._light_launch_until.is_some()

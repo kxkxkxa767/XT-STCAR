@@ -138,8 +138,15 @@ impl Maneuver {
         if !added || recent.len() < CROSSWALK_FIX_FRAMES {
             return;
         }
+        let latest = recent[recent.len() - 1];
         recent.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-        let (board, sigma) = recent[recent.len() / 2];
+        let mut median = recent[recent.len() / 2];
+        // Round y20: the newest frame (the nearest, the sharpest) sets the edge with its
+        // own sigmas where it agrees with the median within the median's two.
+        if latest.1 < median.1 && (latest.0 - 2. * latest.1 - median.0 + 2. * median.1).abs() <= 2. * median.1 {
+            median = latest;
+        }
+        let (board, sigma) = median;
         // round y11: a fix as precise as the one that set the edge replaces it
         // (the car closing in), a less precise one only brings it nearer
         match (self._crosswalk_board_m, self._crosswalk_board_sigma) {
@@ -212,8 +219,7 @@ impl Maneuver {
         if state == "approach" {
             if let (Some(v), Some(g)) = (v, gap) {
                 aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * decel));
-                let guard = v + LANE_SPEED_GUARD_MARGIN_MPS;
-                worst = Some(g - guard * CROSSWALK_GUARD_REACTION_S - guard * guard / (2. * guard_decel));
+                worst = Some(g - v * CROSSWALK_GUARD_REACTION_S - v * v / (2. * guard_decel)); // round y20: no speed margin
             }
             match gap {
                 None => {

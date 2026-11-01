@@ -39,8 +39,8 @@ pub const ROUTE_ORBIT_LEFT_PWM_STEP: i64 = ROUTE_POST_PASS_PWM_STEP;
 pub const ROUTE_SLOW_MOTOR: i64 = MIN_FORWARD_PWM;
 // Round 100: the open start lane launches at 1600 (Python's comment).
 pub const START_LAUNCH_MOTOR: i64 = 1600;
-// Round y18: the launch after green in the light lane.
-pub const LIGHT_LAUNCH_MOTOR: i64 = 1580;
+// Round y18: the launch after green in the light lane (round y20: 1600, the start lane's).
+pub const LIGHT_LAUNCH_MOTOR: i64 = START_LAUNCH_MOTOR;
 pub const DRIVE_MOTORS: [i64; 4] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR];
 pub const POST_PASS_STAGES: [&str; 8] =
     ["right_align", "corridor_follow", "second_orbit", "light_turn", "light_lane", "open_transfer", "second_loop", "light_entry"];
@@ -294,7 +294,8 @@ pub const CROSSWALK_CRUISE_MPS: f64 = 0.45;
 pub const CROSSWALK_CRUISE_BAND_MPS: f64 = 0.25;
 pub const CROSSWALK_SPEED_HOLD_S: f64 = 1.;
 pub const CROSSWALK_REAR_MAX_M: f64 = 4.;
-pub const CROSSWALK_AIM_LAG_S: f64 = 0.3;
+// Round y20: the mean lag of seven measured crosswalk coasts (.07-.30 s); the guard keeps .3.
+pub const CROSSWALK_AIM_LAG_S: f64 = 0.2;
 pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
 // Round y19: the measured cut lag (0-.3 s), stops ~.2-.3 m before the stripes.
 pub const CROSSWALK_TARGET_GAP_M: f64 = 0.15;
