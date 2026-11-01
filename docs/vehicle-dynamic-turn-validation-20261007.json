@@ -25201,8 +25201,8 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "2ae481b (car: round 120 + y13)",
     "user": [
       "你斑马线停车的时间好像不止3s",
@@ -25222,6 +25222,15 @@
       "parity_light": "39/39",
       "supervisor_light": "39/39"
     },
-    "next": "y15: the coast decel measured online from the board behind (rubber track: more friction, shorter coasts) for the crosswalk's aim/top-up and the guard, carried to the light lane"
+    "next": "y15: the coast decel measured online from the board behind (rubber track: more friction, shorter coasts) for the crosswalk's aim/top-up and the guard, carried to the light lane",
+    "commit": "ecfb253",
+    "deployment": "build-race.py claude-turn120 claude-turn121 121, build-vision.py y14; deploy-matched.py 121, deploy-vision.py y14; no separate hash validations",
+    "car_run_y14": {
+      "evidence": "left-cone-trial-20261101-y14 (102/102)",
+      "result": "39.4 s to the finish stop (.378 m, 0 creeps, route_finish_zone_stop confirmed); light wait 8.2 s: ~31.2 s effective (y13 ~32.3, y10 ~32.8)",
+      "crosswalk": "1550 to .775 m/s, the speed read .928 on the next scan and the cut came there (2.43 s, gap 1.000, aim .003, worst -.238: one scan late); coasted .743 m to a standstill at 3.87 s, no top-up (the coast aimed below the band); conservative gap .354; ~.39-.47 m before the stripes by the start anchors (y13 ~.65, y12 ~.9); stood ~3.6 s (still 3.87, declared 4.03, moving ~7.45)",
+      "light": "stopped .546 m before the posts in one go, red in 26 frames after the stop, released by green after 8.2 s (red 10.8 s since the first)",
+      "next": "y15: the coast decel measured online (rubber tracks); the speed jump at the cut; the finish standstill check; the .6 s transfer recovery hold seen in y13"
+    }
   }
 }
