@@ -39,7 +39,9 @@ pub const ROUTE_ORBIT_LEFT_PWM_STEP: i64 = ROUTE_POST_PASS_PWM_STEP;
 pub const ROUTE_SLOW_MOTOR: i64 = MIN_FORWARD_PWM;
 // Round 100: the open start lane launches at 1600 (Python's comment).
 pub const START_LAUNCH_MOTOR: i64 = 1600;
-pub const DRIVE_MOTORS: [i64; 3] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR];
+// Round y18: the launch after green in the light lane.
+pub const LIGHT_LAUNCH_MOTOR: i64 = 1580;
+pub const DRIVE_MOTORS: [i64; 4] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR];
 pub const POST_PASS_STAGES: [&str; 8] =
     ["right_align", "corridor_follow", "second_orbit", "light_turn", "light_lane", "open_transfer", "second_loop", "light_entry"];
 pub const ROUTE_MAX_DRIVE_S: f64 = 40.0;
@@ -163,6 +165,9 @@ pub const LANE_START_SEARCH_M: f64 = 1.6;
 pub const LANE_START_PUSH_BAND_MPS: f64 = 0.4;
 pub const START_LAUNCH_MAX_MPS: f64 = 0.2;
 pub const START_LAUNCH_ACCEL_MPS2: f64 = 2.5;
+// Round y18: the 1580 launch's guard bound and aim.
+pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = START_LAUNCH_ACCEL_MPS2;
+pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 1.5;
 pub const START_LAUNCH_SETTLE_S: f64 = 0.3;
 pub const OPEN_LEFT_RADIUS_M: (f64, f64) = (0.90, 0.95);
 pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.90, 1.40);

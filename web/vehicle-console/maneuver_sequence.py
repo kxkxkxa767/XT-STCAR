@@ -70,7 +70,11 @@ ROUTE_SLOW_MOTOR = MIN_FORWARD_PWM
 # launches at 1600 (start-zone entry, before any handover only; the server
 # allows it nowhere else). Run 99: 1560 took 1.1 s to reach 1.0 m/s.
 START_LAUNCH_MOTOR = 1600
-DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR)
+# Round y18 (user: 灯区的直道断断续续的，反正在红绿灯那里调整了姿态，可以尝试1580起步，这样滑行的
+# 更长，你需要补的更少): the launch after green at 1580 (the car already faces the lane
+# from the light stop); the server allows it in that launch only.
+LIGHT_LAUNCH_MOTOR = 1580
+DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR)
 POST_PASS_STAGES = ('right_align', 'corridor_follow', 'second_orbit', 'light_turn', 'light_lane',
                     'open_transfer', 'second_loop', 'light_entry')
 # Route mode alone may extend the cumulative drive budget (user permitted a
@@ -721,6 +725,10 @@ LANE_START_PUSH_BAND_MPS = .4
 # from rest in run 99), so the cut comes early rather than late.
 START_LAUNCH_MAX_MPS = .2
 START_LAUNCH_ACCEL_MPS2 = 2.5
+# Round y18: the 1580 launch after green is guarded at 1600's bound (not measured) and
+# aimed at this (between 1560's LANE_POWER_ACCEL_MPS2 and that bound).
+LIGHT_LAUNCH_ACCEL_MAX_MPS2 = START_LAUNCH_ACCEL_MPS2
+LIGHT_LAUNCH_ACCEL_MPS2 = 1.5
 # After the last 1600 frame: no 1560 for the ESC lag plus this (the closing-
 # rate estimate trails a hard launch; course-sim with a .6 s ESC lag: 1560
 # right after the burst reached 2.1 m/s and the stopping range cut the lane).
@@ -6525,8 +6533,8 @@ class ManeuverSequence(TurnMotion):
             onset, offset = lag-LANE_ESC_SKEW_S, lag+LANE_ESC_SKEW_S
             v = self._lane_speed_now(speed, now, onset, offset, decel, accel)
             if self._light_launch_from is not None:
-                # round y3: from rest, no faster than the kick's bound while its power has acted
-                v = min(v, LANE_KICK_ACCEL_MAX_MPS2*max(0., now-(self._light_launch_from+onset)))
+                # round y3: from rest, no faster than the launch's bound while its power has acted
+                v = min(v, LIGHT_LAUNCH_ACCEL_MAX_MPS2*max(0., now-(self._light_launch_from+onset)))
             v += LANE_SPEED_GUARD_MARGIN_MPS
             coast_s, power_s = self._lane_pipeline(now, onset, offset, push_s)
             value = self._lane_stop(gap, v, decel, reaction, coast_s, power_s, accel)
@@ -7102,8 +7110,10 @@ class ManeuverSequence(TurnMotion):
         # 1.3x car: the guard at 1550's bound with the measured .65 m/s2 instead of
         # the prior .45 cut it late and the car met the 8 cm gate).
         kick = self._power_cmd_motor == TRIAL_MOTOR and not strong or self._light_launch_from is not None
+        launch = self._light_launch_from is not None  # round y18: the 1580 launch's powered run
         rate_slow, rate_strong = self._lane_push_rate_slow, self._lane_push_rate_strong
         aim_accel = ((LANE_POWER_ACCEL_MPS2 if rate_strong is None else rate_strong) if strong
+                     else LIGHT_LAUNCH_ACCEL_MPS2 if launch
                      else LANE_POWER_ACCEL_MPS2 if kick
                      else LANE_PUSH_ACCEL_MPS2 if rate_slow is None else rate_slow)
         strong_accel = (LANE_KICK_ACCEL_MAX_MPS2 if rate_strong is None
@@ -7111,7 +7121,8 @@ class ManeuverSequence(TurnMotion):
         # Past the finish line a push only brings the rear wheels in (the time
         # has ended; the board costs +10 s): LANE_PUSH_LATE_ACCEL_MAX_MPS2.
         late = gap is not None and gap <= zone_gap
-        guard_accel = (strong_accel if strong else LANE_KICK_ACCEL_MAX_MPS2 if kick
+        guard_accel = (strong_accel if strong else LIGHT_LAUNCH_ACCEL_MAX_MPS2 if launch
+                       else LANE_KICK_ACCEL_MAX_MPS2 if kick
                        else LANE_PUSH_LATE_ACCEL_MAX_MPS2 if late else LANE_PUSH_ACCEL_MAX_MPS2)
         v_aim = v
         if speed is not None:
@@ -7175,8 +7186,8 @@ class ManeuverSequence(TurnMotion):
         elif gap is not None and (stop_gap <= target_gap or worst_gap <= min_gap):
             self.lane_motor = NEUTRAL  # the coast from here reaches the target (or the guard)
         elif launching:
-            self.lane_motor = TRIAL_MOTOR  # round y2: the launch after green
-        elif self._light_launch_until is not None and self.lane_motor == TRIAL_MOTOR:
+            self.lane_motor = LIGHT_LAUNCH_MOTOR  # round y2: the launch after green (round y18: 1580)
+        elif self._light_launch_until is not None and self.lane_motor in (TRIAL_MOTOR, LIGHT_LAUNCH_MOTOR):
             self.lane_motor = ROUTE_SLOW_MOTOR  # the launch goes on at 1550
         elif speed is None:
             self.lane_motor = ROUTE_SLOW_MOTOR
@@ -7213,7 +7224,7 @@ class ManeuverSequence(TurnMotion):
         # car still rolling is not chopped (its guard is checked every scan).
         # Round 101: the next kick no sooner than LANE_KICK_REST_S after it (was
         # LANE_REST_FRAMES scans after the kick, restarted by any other output).
-        if self.lane_motor != TRIAL_MOTOR and self._light_launch_until is not None:
+        if self.lane_motor not in (TRIAL_MOTOR, LIGHT_LAUNCH_MOTOR) and self._light_launch_until is not None:
             self._light_launch_until = None  # after the launch: the lane's own pushes and kicks
         if self.lane_motor == NEUTRAL:
             self._light_launch_from = None  # the launch's powered run has ended: the car rolls

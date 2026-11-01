@@ -37,7 +37,7 @@ from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S, LANE_WALL_PLAY_PWM,
                                FIRST_LOOP_STEER_GAIN,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
-                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
+                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
                                OPEN_STAGES)
 from route_engine import RouteEngine, RustManeuverSequence
 
@@ -1782,9 +1782,15 @@ class Console:
                           and getattr(motion, 'entry_kind', None) == 'lane'
                           and motion.first_pass_evidence is None and not motion.handover_observed
                           and decision.get('quality_resume_pending') is False)
+        # Round y18: the launch after green in the light lane may use 1580, while it lasts.
+        light_launch_allowed = (route and decision['phase'] == 'drive' and route_stage == 'light_lane'
+                                and getattr(motion, '_light_launch_until', None) is not None
+                                and decision.get('quality_resume_pending') is False)
         allowed_motors = (1500, TRIAL_MOTOR, ROUTE_SLOW_MOTOR) if slow_allowed else (1500, TRIAL_MOTOR)
         if launch_allowed:
             allowed_motors += (START_LAUNCH_MOTOR,)
+        if light_launch_allowed:
+            allowed_motors += (LIGHT_LAUNCH_MOTOR,)
         if motor not in allowed_motors or not minimum_servo <= servo <= SERVO_MAX:
             raise ValueError('invalid_turn_trial_output')
         if route and decision['phase'] == 'quality_wait' and (motor != 1500 or servo != motion.quality_wait_servo):

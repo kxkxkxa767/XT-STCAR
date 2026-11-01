@@ -228,7 +228,7 @@ class LightGoal(unittest.TestCase):
         motion._light_launch_until = 1.5
         scan = {'seq': 9, 'at_ms': 900, 'received_at': .9, 'ranges': ranges_with()}
         self.assertIsNone(motion._lane_goal_control(scan, FRONT+3., 1., ms.FINISH_GOAL)[0])
-        self.assertEqual((motion.lane_motor, motion._lane_pulse), (TRIAL_MOTOR, 0))
+        self.assertEqual((motion.lane_motor, motion._lane_pulse), (ms.LIGHT_LAUNCH_MOTOR, 0))  # round y18: 1580
         motion._lane_speed = lambda scan, ahead, **_: .8
         motion._lane_goal_control(scan, FRONT+3., 1.6, ms.FINISH_GOAL)
         self.assertEqual(motion.lane_motor, ms.ROUTE_SLOW_MOTOR)

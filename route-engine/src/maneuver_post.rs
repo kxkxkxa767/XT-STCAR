@@ -1429,7 +1429,7 @@ impl Maneuver {
             let mut v = self.lane_speed_now(speed, now, onset, offset, decel, accel);
             if let Some(from) = self._light_launch_from {
                 // round y3: from rest, no faster than the kick's bound while its power has acted
-                v = pmin(v, LANE_KICK_ACCEL_MAX_MPS2 * pmax(0., now - (from + onset)));
+                v = pmin(v, LIGHT_LAUNCH_ACCEL_MAX_MPS2 * pmax(0., now - (from + onset)));
             }
             v += LANE_SPEED_GUARD_MARGIN_MPS;
             let (coast_s, power_s) = self.lane_pipeline(now, onset, offset, push_s);
@@ -1683,9 +1683,12 @@ impl Maneuver {
         let strong = self._lane_topup_motor == Some(TRIAL_MOTOR) && self._power_cmd_motor == Some(TRIAL_MOTOR);
         // round y15: the launch's 1560 still acts through its 1550 tail
         let kick = self._power_cmd_motor == Some(TRIAL_MOTOR) && !strong || self._light_launch_from.is_some();
+        let launch = self._light_launch_from.is_some(); // round y18: the 1580 launch's powered run
         let (rate_slow, rate_strong) = (self._lane_push_rate_slow, self._lane_push_rate_strong);
         let aim_accel = if strong {
             rate_strong.unwrap_or(LANE_POWER_ACCEL_MPS2)
+        } else if launch {
+            LIGHT_LAUNCH_ACCEL_MPS2
         } else if kick {
             LANE_POWER_ACCEL_MPS2
         } else {
@@ -1698,6 +1701,8 @@ impl Maneuver {
         let late = gap.is_some_and(|g| g <= goal.zone_gap);
         let guard_accel = if strong {
             strong_accel
+        } else if launch {
+            LIGHT_LAUNCH_ACCEL_MAX_MPS2
         } else if kick {
             LANE_KICK_ACCEL_MAX_MPS2
         } else if late {
@@ -1775,8 +1780,8 @@ impl Maneuver {
         } else if gap.is_some() && (stop_gap.unwrap() <= goal.target_gap || worst_gap.unwrap() <= goal.min_gap) {
             self.lane_motor = NEUTRAL;
         } else if launching {
-            self.lane_motor = TRIAL_MOTOR; // round y2: the launch after green
-        } else if self._light_launch_until.is_some() && self.lane_motor == TRIAL_MOTOR {
+            self.lane_motor = LIGHT_LAUNCH_MOTOR; // round y2: the launch after green (round y18: 1580)
+        } else if self._light_launch_until.is_some() && (self.lane_motor == TRIAL_MOTOR || self.lane_motor == LIGHT_LAUNCH_MOTOR) {
             self.lane_motor = ROUTE_SLOW_MOTOR; // the launch goes on at 1550
         } else if speed.is_none() {
             self.lane_motor = ROUTE_SLOW_MOTOR;
@@ -1812,7 +1817,7 @@ impl Maneuver {
         } else {
             self.lane_motor = NEUTRAL;
         }
-        if self.lane_motor != TRIAL_MOTOR && self._light_launch_until.is_some() {
+        if self.lane_motor != TRIAL_MOTOR && self.lane_motor != LIGHT_LAUNCH_MOTOR && self._light_launch_until.is_some() {
             self._light_launch_until = None; // after the launch: the lane's own pushes and kicks
         }
         if self.lane_motor == NEUTRAL {

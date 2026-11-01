@@ -187,14 +187,15 @@ class AfterTheLight(unittest.TestCase):
         feedback = self.step(motion, 1.5, 2.8, .8)  # nothing of it left
         self.assertEqual(feedback['tail_lag_s'], ms.LANE_FINISH_ESC_LAG_S)
 
-    def test_the_launch_tail_is_guarded_at_the_1560_bound(self):
+    def test_the_launch_tail_is_guarded_at_the_launch_bound(self):
         # simulation, 1.3x car: the launch's 1550 tail guarded at 1550's bound
-        # (the measured decel above the prior) cut it late into the 8 cm gate
+        # (the measured decel above the prior) cut it late into the 8 cm gate;
+        # round y18: the launch is 1580, guarded at LIGHT_LAUNCH_ACCEL_MAX_MPS2
         motion = self.finish()
         motion._light_launch_from = .5  # the launch's powered run, now at 1550
         motion.lane_motor, motion._power_cmd_at, motion._power_cmd_motor = ms.ROUTE_SLOW_MOTOR, .9, ms.ROUTE_SLOW_MOTOR
         feedback = self.step(motion, 1., 3.2, 1.)
-        self.assertEqual(feedback['guard_accel_mps2'], ms.LANE_KICK_ACCEL_MAX_MPS2)
+        self.assertEqual(feedback['guard_accel_mps2'], ms.LIGHT_LAUNCH_ACCEL_MAX_MPS2)
 
     def test_where_1560_would_reach_the_board_1550(self):
         motion = self.finish()

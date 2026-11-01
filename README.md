@@ -1,4 +1,4 @@
-# XT-STCAR（11-01 Claude：y16两次在斑马线起步时因左前远处掉点被安全检查停跑；y17把两侧都是4m外回波的空洞当远处的面；车上第123轮+y16）
+# XT-STCAR（11-01 Claude：y17-2整条38.3s，过灯后停进区内不再点动；y18绿灯后1580起步；车上第124轮+y17）
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。路线只用激光雷达，不用摄像头。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。

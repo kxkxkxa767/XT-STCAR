@@ -25330,7 +25330,7 @@
     "author": "Claude",
     "implemented": true,
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "baseline": "50ca8cd (car: round 123 + y16)",
     "user": [
       "为什么这次停在斑马线那里不动了",
@@ -25351,6 +25351,36 @@
       "simulation": "39 light cases vs y14: 14 identical, 25 changed, all finish in the zone, no contacts, light stops in the zone; finish line median -1.28 s (-4.68 .. +.64)"
     },
     "next": "run y17 (round 124): restart after the crosswalk; then the finish after green (y16 coast weighting not yet seen on the car with the light)",
-    "deployment": "build-race.py claude-turn123 claude-turn124 124, build-vision.py y17; deploy-matched.py 124, deploy-vision.py y17 (runtime files of eab713b; the test updates came after)"
+    "deployment": "build-race.py claude-turn123 claude-turn124 124, build-vision.py y17; deploy-matched.py 124, deploy-vision.py y17 (runtime files of eab713b; the test updates came after)",
+    "car_runs": {
+      "y17": "not a valid test: started without the user confirming the start (Claude), from y16-3's crosswalk stop (rear 2.15 m, front 5.87 m); the Mac-side start-round output was piped into head and died before the fetch (evidence fetched by hand, 55/55); the car stopped .09 m on at the crosswalk, waited 3 s, restarted without a front_sparse halt and finished (.399 m, 2 creeps); the light did not trigger",
+      "y17-2": "from the start (rear .31 m): 38.3 s, finish .385 m, 0 creeps, no quality waits; crosswalk: guard cut at 2.58 s (.844 m/s), coasted .804 m, ~.5 m before the stripes by the board behind (2.748 - .313 - 1.920); light .546 m, green release after 7.9 s (35 red frames); after green: decel .603 +- .029 (weighted) -> guard .543 (y15 .441), 1560 launch cut at .96 s, three 1550 top-ups (the first ~1 s), the last coast stopped .385 m in the zone without kicks; green to stop ~5.4 s (y14 6.5, y15 7.5), front past .8 m ~4.2 s (y14 ~4.5); user: 还是同样的问题，灯区的直道断断续续的"
+    }
+  },
+  "y18_light_launch_1580_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "79a443d (car: round 124 + y17)",
+    "user": [
+      "还是同样的问题，灯区的直道断断续续的，反正在红绿灯那里调整了姿态，可以尝试1580起步，这样滑行的更长，你需要补的更少",
+      "这次不仿真，改完直接测"
+    ],
+    "change": [
+      "the launch after green (_light_launch_until: ESC_LAG_S + LIGHT_LAUNCH_S) at LIGHT_LAUNCH_MOTOR 1580 instead of 1560, then 1550 as before; DRIVE_MOTORS includes 1580",
+      "server.py / supervisor.rs: 1580 allowed only in the light lane while that launch lasts (route, drive, no resume pending)",
+      "its powered run guarded at LIGHT_LAUNCH_ACCEL_MAX_MPS2 = START_LAUNCH_ACCEL_MPS2 2.5 (1600's bound, not measured; the from-rest speed bound too) and aimed at LIGHT_LAUNCH_ACCEL_MPS2 1.5"
+    ],
+    "validation": {
+      "python": "full suite 968: two launch tests updated to 1580 (the rest passed before the update); test_route_96_engine (Rust engine console vs Python) OK",
+      "cargo": "test 7, clippy 32",
+      "parity_sweeps": "not run (user: 这次不仿真，改完直接测)"
+    },
+    "risks": [
+      "1580's real launch accel is unmeasured; with the 2.5 bound the guard may cut the launch sooner than 1560's, at a similar speed"
+    ],
+    "next": "run y18: after-green launch motor, cut time and speed, pushes after it, green-to-stop time"
   }
 }

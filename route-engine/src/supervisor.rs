@@ -769,7 +769,7 @@ impl Supervisor {
         // Pending neutral only before its first ACK (round 58: a light-lane
         // wait entered during a neutral pulse may already read 1500).
         let pending_motors: Vec<i64> = if s.quality_wait_entry_neutral == Some(true) {
-            vec![NEUTRAL, DRIVE_MOTORS[0], DRIVE_MOTORS[1], DRIVE_MOTORS[2]]
+            std::iter::once(NEUTRAL).chain(DRIVE_MOTORS).collect()
         } else {
             DRIVE_MOTORS.to_vec()
         };
@@ -1427,9 +1427,17 @@ impl Supervisor {
             && m.first_pass_evidence.is_none()
             && !m.handover_observed
             && decision.get("quality_resume_pending").is_false();
+        // Round y18: the launch after green in the light lane may use 1580, while it lasts.
+        let light_launch_allowed = phase == "drive"
+            && stage_is("light_lane")
+            && m._light_launch_until.is_some()
+            && decision.get("quality_resume_pending").is_false();
         let mut motors: Vec<i64> = if slow_allowed { vec![NEUTRAL, TRIAL_MOTOR, ROUTE_SLOW_MOTOR] } else { vec![NEUTRAL, TRIAL_MOTOR] };
         if launch_allowed {
             motors.push(START_LAUNCH_MOTOR);
+        }
+        if light_launch_allowed {
+            motors.push(LIGHT_LAUNCH_MOTOR);
         }
         if !in_motors(&motor, &motors) || !(minimum_servo as f64 <= num(&servo) && num(&servo) <= SERVO_MAX as f64) {
             value_error("invalid_turn_trial_output")
