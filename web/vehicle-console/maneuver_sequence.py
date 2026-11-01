@@ -1163,10 +1163,16 @@ CROSSWALK_REAR_MAX_M = 4.
 # instead of .3) the guard's floor rises to .15: simulation (measured car,
 # three courses), a crosswalk 1.4 m before the start stopped .10 m before the
 # edge at .1, .21 at .15 (the same at .2), 2.46 m .60 -> .71.
+# Round y12 (user: 开始的时候还是离斑马线有些距离): the car's coasts after the cut,
+# by the board behind: y10 .711 m from .822 m/s, y12 .681 m from .777 (stops
+# .40 and ~.9 m before the stripes); the guard with the lane's reaction (.86 s
+# there) foresaw 1.31 m and cut first, the aim .74-.81. The guard's reaction is
+# now the ESC lag: 1.03/.94 m, a third over the real coasts; the aim to .25.
 CROSSWALK_AIM_LAG_S = .3
 CROSSWALK_AIM_DECEL_MPS2 = .6
-CROSSWALK_TARGET_GAP_M = .35
+CROSSWALK_TARGET_GAP_M = .25
 CROSSWALK_MIN_GAP_M = .15
+CROSSWALK_GUARD_REACTION_S = ESC_LAG_S
 # Stopped farther than this from it, 3-frame 1560 kicks rested apart (as the
 # lane's), each only with LANE_KICK_TRAVEL_M of room; from rest the start
 # lane's own 1560 ran until a lagging speed read .15 m/s and overshot the edge
@@ -4071,7 +4077,7 @@ class ManeuverSequence(TurnMotion):
             if v is not None and gap is not None:
                 aim = gap-v*CROSSWALK_AIM_LAG_S-v*v/(2*CROSSWALK_AIM_DECEL_MPS2)
                 guard = v+LANE_SPEED_GUARD_MARGIN_MPS
-                worst = gap-guard*self._reaction_s(now)-guard*guard/(2*LANE_STOP_DECEL_MIN_MPS2)
+                worst = gap-guard*CROSSWALK_GUARD_REACTION_S-guard*guard/(2*LANE_STOP_DECEL_MIN_MPS2)
             if gap is None:
                 self._start_motor = NEUTRAL  # the edge's odometry lost: stop where it is
                 if stopped or rolled_out:

@@ -25121,8 +25121,8 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "c321cbb (car: round 118 + y11)",
     "user": [
       "我红绿灯忘记开了，这轮不算，但你起步的时候一直断断续续的，而且在距离斑马线还有60cm左右的时候停下来了",
@@ -25149,6 +25149,42 @@
     "risk": [
       "a crosswalk ~1.4 m from the start leaves little margin with the cruise (simulation .10 m)",
       "the camera pitch read 8.29 deg today (8.55 calibrated): distances at the start read ~5-10 % long"
-    ]
+    ],
+    "commit": "165d551",
+    "deployment": "build-race.py claude-turn118 claude-turn119 119 (165d551), build-vision.py y12; deploy-matched.py 119, deploy-vision.py y12 (stage-claude-y12-20261101-093733); no separate hash validations (user)",
+    "car_run_y12": {
+      "evidence": "left-cone-trial-20261101-y12 (66/66)",
+      "user": "红绿灯触发有问题下一轮再看看，开始的时候还是离斑马线有些距离",
+      "result": "38.1 s to the finish stop (.388 m, 1 creep); ended coast_standstill_unconfirmed (the finish stop declared right after a 1560 creep: same pipeline issue as the crosswalk wait, harmless here)",
+      "crosswalk": "fixed at .83 s at .094 m/s: no kicks (the fix worked), 1550 to .82 m/s, the guard cut at 2.10 s (conservative gap 1.354, worst .073, aim .618) right as a fix moved the edge .1 m nearer; coasted .681 m (board behind) to a stop at 3.70 s, conservative gap .884; the edge moved .21 m farther after the cut; ~.87-.96 m before the stripes by the start anchors; start to the stop 3.7 s (y10 3.8)",
+      "light": "stopped .557 m before the posts in one go (whole car in the zone, no creep); the light never triggered (no red, 1 green frame): released after 4.1 s by no_light_seen",
+      "coasts": "y10 .711 m from .822 m/s and y12 .681 m from .777 m/s by the board behind; the guard (lane reaction .86 s) foresaw 1.31 m"
+    }
+  },
+  "y13_crosswalk_guard_calibrated_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "165d551 (car: round 119 + y12)",
+    "user": [
+      "红绿灯触发有问题下一轮再看看，开始的时候还是离斑马线有些距离",
+      "我觉得你可以在这个直道的时候根据后方挡板位置实时估计已走过的距离，但要尽量少的cpu开销，根据这个来判定该不该停下"
+    ],
+    "answer_to_user": "the start lane has used the board behind as its odometry since y9 (median of 9 rear bins per scan: negligible CPU); y12's odometry was right, the stop rule was pessimistic; next idea: weight the camera fixes instead of replacing, so a moving frame cannot jump the edge",
+    "change": [
+      "crosswalk guard reaction: the lane's _reaction_s (.86 s in y12) -> CROSSWALK_GUARD_REACTION_S = ESC_LAG_S (.45): worst coasts 1.03/.94 m for y10/y12's real .711/.681",
+      "CROSSWALK_TARGET_GAP_M .35 -> .25 (the aim foresaw .74-.81 for the real .68-.71)"
+    ],
+    "simulation_check": "measured car: 2.2 m .45 (8 % long ranging .33), 2.46 m .59, 3.0 m .80, 1.8 m .16, 1.4 m -.013 (the simulated car coasts ~35 % longer than the real one: .93 m from .59 m/s)",
+    "validation": {
+      "python_suite": "954 OK",
+      "parity_light": "39/39",
+      "supervisor_light": "39/39",
+      "clippy": "32"
+    },
+    "expectation": "the real car's cut ~.26 m later than y12: stop ~.5 m before the stripes",
+    "risk": "a crosswalk nearer than ~1.8 m from the start has little margin if the real coast ever matches the simulated one"
   }
 }

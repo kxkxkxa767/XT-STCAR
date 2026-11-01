@@ -197,7 +197,7 @@ impl Maneuver {
             if let (Some(v), Some(g)) = (v, gap) {
                 aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * CROSSWALK_AIM_DECEL_MPS2));
                 let guard = v + LANE_SPEED_GUARD_MARGIN_MPS;
-                worst = Some(g - guard * self.reaction_s(now) - guard * guard / (2. * LANE_STOP_DECEL_MIN_MPS2));
+                worst = Some(g - guard * CROSSWALK_GUARD_REACTION_S - guard * guard / (2. * LANE_STOP_DECEL_MIN_MPS2));
             }
             match gap {
                 None => {
