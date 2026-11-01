@@ -76,6 +76,31 @@ class LaneFrontAndRear(unittest.TestCase):
         self.assertAlmostEqual(motion._lane_coast_decel, .6, places=6)
 
 
+class RunCoasts(unittest.TestCase):
+    def test_finished_coasts_are_weighted_by_their_variance(self):
+        # car run y15: a short fit near rest (.582 +- .07) replaced the crosswalk's
+        # .588 +- .016 and the finish guard fell back to .44
+        motion = ms.ManeuverSequence(0., continue_route=True)
+        motion.lane_motor, motion.servo = NEUTRAL, NEUTRAL
+        for k in range(12):  # a long clean coast at .6
+            x = coast(k*.1, 1.2)
+            motion._lane_front_range = lambda scan, x=x: 4.-x
+            motion._lane_rear_range = lambda scan, x=x: 1.+x
+            motion._lane_coast_observe({'at_ms': k*100}, k*.1, 1.)
+        first = motion._lane_coast_decel_se
+        motion._lane_coast_observe({'at_ms': 1300}, 1.3, .1)  # at rest: the coast is finished
+        self.assertIsNone(motion._coast_best)
+        noise = (.002, -.003, .003, -.002, .003, -.003, .002, -.002)
+        for k, e in enumerate(noise):  # a shorter noisier coast at .8
+            x = coast(k*.1, .6, .8)+e
+            motion._lane_front_range = lambda scan, x=x: 4.-x
+            motion._lane_rear_range = lambda scan, x=x: 1.+x
+            motion._lane_coast_observe({'at_ms': 2000+k*100}, 2.+k*.1, 1.)
+        self.assertIsNotNone(motion._coast_best)
+        self.assertLess(motion._lane_coast_decel, .62)  # the precise coast dominates
+        self.assertLess(motion._lane_coast_decel_se, first)
+
+
 class CrosswalkCoast(unittest.TestCase):
     def coasting(self):
         motion = crosswalk.start_motion()

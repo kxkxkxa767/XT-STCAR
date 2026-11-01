@@ -25237,8 +25237,8 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "170d179 (car: round 121 + y14)",
     "user": [
       "你可以加入根据雷达测距的数据动态调整滑行距离的步骤，比赛场地可能是塑胶跑道，那个动摩擦因数比瓷砖大多了 后续的过红绿灯的逻辑你也可以用这个",
@@ -25279,6 +25279,33 @@
     ],
     "next": "build round 122 + y15 (build-race.py claude-turn121 claude-turn122 122 y15_coast_fit_strong_topup_20261101; build-vision.py claude-turn122 y15 race4_vehicle_handoff_20261024.zip --light-stop; deploy-matched.py claude-turn122 122; deploy-vision.py y15; start-round.py y15); check coast_fit/coast_decel in the crosswalk and lane feedback, the after-green time and pushes, the finish gap",
     "simulation_check": "the 39 light cases against y14 (measured car, user8/doc8x4/short5): 13 identical, 26 changed, all route_finish_zone_stop with the whole car in the zone, no contacts, light stops in the zone, no new early go; finish line median -1.27 s (-4.32 .. +.64; only short5 1.3x car slower, its launch tail now at the 1560 bound); doc8x4 crosswalk 3.0 m drive-budget timeout in y14 now finishes",
-    "commit_first_push": "4b8d55e"
+    "commit_first_push": "4b8d55e",
+    "commit": "cf10172",
+    "deployment": "build-race.py claude-turn121 claude-turn122 122, build-vision.py y15; deploy-matched.py 122 (first try failed at the stage mkdir: SSH master gone; user reconnected), deploy-vision.py y15 (6 files, none mismatched)",
+    "car_run_y15": {
+      "evidence": "left-cone-trial-20261101-y15 (91/91 files)",
+      "end": "route_finish_zone_stop, 39.8 s start to stop, finish .346 m, 0 creeps",
+      "crosswalk": "cut at 2.74 s (.961 m/s, gap 1.051, aim -.008: one scan late again), coasted .835 m (peak .994), stopped .115 m before the conservative edge (~.18 m before the stripes by the board behind: 2.748 - .353 - 2.213); the board-behind fit .534 +- .187 -> .588 +- .016 by the stop (valid from 3.87 s)",
+      "light": "stopped .551 m (whole car in the zone), released on green after 9.7 s (34 red frames)",
+      "after_green": "decel .582 +- .07 (a short fit near rest at the light stop replaced the crosswalk .588 +- .016), guard decel .441; launch 1560 cut by the guard at .96 s (as y14); no 1560 top-up admitted (its .3 s guard at 1.6 m/s2 with .441); three 1550 pushes each cut after .3-.5 s; the last coast stopped .698 m out (rear outside) -> two 1560 kicks -> .346 (user: 最后的时候还是断断续续的走的); front past .8 m at ~4.5 s after green (y14 ~4.5)",
+      "user": "跑完了你取回数据吧，最后的时候还是断断续续的走的"
+    }
+  },
+  "y16_coast_runs_weighted_20261101": {
+    "date": "2026-11-01",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "cf10172 (car: round 122 + y15)",
+    "user": [
+      "跑完了你取回数据吧，最后的时候还是断断续续的走的"
+    ],
+    "change": [
+      "the measured coast decel is the inverse-variance weighted mean of the run's finished coasts and the current coast's latest good fit (each fit's error <= .08), its error sqrt(1/sum w); was the latest good fit alone",
+      "car run y15 with it: crosswalk .588 +- .016 and the light stop's .582 +- .07 -> .588 +- .016, finish guard decel ~.53 instead of .441"
+    ],
+    "validation": "pending",
+    "next": "run y16 (round 123); see whether the finish after green tops up into the zone without kicks"
   }
 }

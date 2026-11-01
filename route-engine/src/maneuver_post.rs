@@ -1462,6 +1462,13 @@ impl Maneuver {
     /// _coast_measure(scan, coasting, front, rear) (round y15).
     pub(crate) fn coast_measure(&mut self, scan: &V, coasting: bool, front: Option<f64>, rear: Option<f64>) {
         if !coasting {
+            if let Some((decel, se)) = self._coast_best {
+                // round y16: a finished coast joins the run's
+                let w = 1. / (se * se);
+                self._coast_runs_w += w;
+                self._coast_runs_wd += w * decel;
+                self._coast_best = None;
+            }
             if self._coast_fit_front.n != 0 || self._coast_fit_rear.n != 0 {
                 self._coast_fit_front.reset();
                 self._coast_fit_rear.reset();
@@ -1481,8 +1488,12 @@ impl Maneuver {
         if let Some((decel, se, _)) = fit
             && se <= LANE_COAST_DECEL_SE_MAX_MPS2
         {
-            self._lane_coast_decel = Some(pmax(LANE_COAST_DECEL_FLOOR_MPS2, pmin(LANE_COAST_DECEL_CAP_MPS2, decel)));
-            self._lane_coast_decel_se = Some(se);
+            self._coast_best = Some((decel, se));
+            let w = 1. / (se * se);
+            let total = self._coast_runs_w + w;
+            self._lane_coast_decel =
+                Some(pmax(LANE_COAST_DECEL_FLOOR_MPS2, pmin(LANE_COAST_DECEL_CAP_MPS2, (self._coast_runs_wd + w * decel) / total)));
+            self._lane_coast_decel_se = Some(sqrt(1. / total));
         }
     }
 

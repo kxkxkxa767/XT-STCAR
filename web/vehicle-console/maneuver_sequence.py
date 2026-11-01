@@ -2018,6 +2018,9 @@ class ManeuverSequence(TurnMotion):
         self._coast_fit_front = CoastFit()  # round y15: the board ahead's coast
         self._coast_fit_rear = CoastFit()  # round y15: the board behind's coast
         self._coast_fit = None  # round y15: this scan's combined fit (decel, se, speed) or None
+        self._coast_best = None  # round y16: this coast's latest good fit (decel, se)
+        self._coast_runs_w = 0.  # round y16: inverse-variance sums of the run's finished coasts
+        self._coast_runs_wd = 0.
         self._lane_coast_decel = None
         self._lane_coast_decel_se = None
         self._lane_topup_motor = None  # round y15: the last powered run's PWM if it was a top-up
@@ -6552,8 +6555,18 @@ class ManeuverSequence(TurnMotion):
         """Round y15: this scan's positions (``front``: lidar to the board ahead,
         ``rear``: to the board behind, None when not read) into their coast
         fits while ``coasting``, else both restart; a combined fit whose standard
-        error is at most LANE_COAST_DECEL_SE_MAX_MPS2 is the measured coast."""
+        error is at most LANE_COAST_DECEL_SE_MAX_MPS2 is weighted with the run's
+        finished coasts (round y16) into the measured coast."""
         if not coasting:
+            if self._coast_best is not None:
+                # round y16: a finished coast joins the run's (car run y15: a short
+                # fit near rest, .582 +- .07, replaced the crosswalk's .588 +- .016
+                # and the finish guard fell back to .44)
+                decel, se = self._coast_best
+                w = 1/(se*se)
+                self._coast_runs_w += w
+                self._coast_runs_wd += w*decel
+                self._coast_best = None
             if self._coast_fit_front.n or self._coast_fit_rear.n:
                 self._coast_fit_front.reset()
                 self._coast_fit_rear.reset()
@@ -6566,8 +6579,12 @@ class ManeuverSequence(TurnMotion):
             self._coast_fit_rear.add(at, rear)
         fit = self._coast_fit = _coast_fit_combined(self._coast_fit_front.fit(), self._coast_fit_rear.fit())
         if fit is not None and fit[1] <= LANE_COAST_DECEL_SE_MAX_MPS2:
-            self._lane_coast_decel = max(LANE_COAST_DECEL_FLOOR_MPS2, min(LANE_COAST_DECEL_CAP_MPS2, fit[0]))
-            self._lane_coast_decel_se = fit[1]
+            self._coast_best = (fit[0], fit[1])
+            w = 1/(fit[1]*fit[1])
+            total = self._coast_runs_w+w
+            self._lane_coast_decel = max(LANE_COAST_DECEL_FLOOR_MPS2, min(LANE_COAST_DECEL_CAP_MPS2,
+                                                                          (self._coast_runs_wd+w*fit[0])/total))
+            self._lane_coast_decel_se = math.sqrt(1/total)
 
     def _lane_coast_observe(self, scan, now, speed):
         """Round y15 (user: 过红绿的你可以用前方+后方辅助的方式来拟合): the lane's coast on
