@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 import autonomy_live as al  # noqa: E402
@@ -67,11 +68,15 @@ class SideWallProjection(unittest.TestCase):
         # nulls before it (14-17 deg, 1.5-1.9 m) are surface, beyond (3-8, too
         # long for the short-gap bridge) unknown.
         ranges = board_scan(nulls=(3, 4, 5, 6, 7, 8, 14, 15, 16, 17), opening_at=2.)
-        evidence = al.front_gap_evidence(ranges, bridge=True, side_walls=True)
+        with patch.object(al, 'FRONT_FAR_BRIDGE_MIN_M', math.inf):  # the projection alone
+            evidence = al.front_gap_evidence(ranges, bridge=True, side_walls=True)
         projection = evidence['front_wall_projection']
         self.assertLess(projection['known_opening_limit_forward_m']['right'], 2.1)
         self.assertEqual(evidence['front_wall_projected_bins'], [14, 15, 16, 17])
         self.assertEqual(evidence['front_open_unknown_bins'], [3, 4, 5, 6, 7, 8])
+        # round y17: those nulls lie between ~7 m returns beyond the opening: a far dropout
+        self.assertEqual(al.front_gap_evidence(ranges, bridge=True, side_walls=True)['front_bridged_bins'],
+                         [3, 4, 5, 6, 7, 8])
 
     def test_round_72_stop_frame(self):
         ranges = FRAMES['1547']['ranges']

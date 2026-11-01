@@ -73,7 +73,9 @@ class ScatteredFrontGaps(unittest.TestCase):
             if ranges[i % 360] is None:
                 continue
             if left is not None and ranges[(i-1) % 360] is None:
-                ranges[i % 360] = ranges[left % 360]+1.
+                # round y17: 3 / 4 m alternately (rising steps put later runs between
+                # returns >= FRONT_FAR_BRIDGE_MIN_M, a far dropout that is bridged)
+                ranges[i % 360] = 4. if ranges[left % 360] == 3. else 3.
             left = i
         scan = {'seq': 1, 'at_ms': 100, 'frame_id': 'lidar_origin_coarse_body_heading', 'ranges': ranges}
         return autonomy_live.probe_clearance(scan, {'camera': .01, 'lidar': .01, 'control': .01},
@@ -112,7 +114,10 @@ class StartLaneDropoutClosedLoop(unittest.TestCase):
         self.assertNotEqual(summary['end_reason'], 'turn_perception_unavailable')
 
     def test_without_the_allowance_the_same_dropouts_stop_the_start_lane(self):
-        with patch.object(ms.ManeuverSequence, 'start_lane_quality_geometry', lambda self, scan: False):
+        import autonomy_live
+        # round y17: the far-dropout bridge off too (it also covers some of these)
+        with patch.object(ms.ManeuverSequence, 'start_lane_quality_geometry', lambda self, scan: False), \
+                patch.object(autonomy_live, 'FRONT_FAR_BRIDGE_MIN_M', math.inf):
             summary = self.run_user8()
         self.assertEqual(summary['end_reason'], 'turn_perception_unavailable')
         self.assertNotIn('first_target', [s[1] for s in summary['stages']])

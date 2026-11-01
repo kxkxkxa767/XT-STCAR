@@ -25329,7 +25329,7 @@
     "date": "2026-11-01",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "baseline": "50ca8cd (car: round 123 + y16)",
     "user": [
@@ -25343,7 +25343,14 @@
     "risks": [
       "a nearer object returning nothing across its whole width inside such a run (<= 12 deg) is not seen; the boards and blue cones of the course return; the 8 cm body gate is unchanged"
     ],
-    "validation": "pending",
-    "next": "run y17 (round 124): restart after the crosswalk; then the finish after green (y16 coast weighting not yet seen on the car with the light)"
+    "validation": {
+      "python": "full suite 968 OK (three tests whose synthetic scans put long runs between returns >= 4 m updated: test_route_66 scattered runs alternate 3/4 m neighbours, its closed loop without the allowance also turns the far bridge off, test_route_72 opening tests the projection with the far bridge off and asserts the bridge with it on)",
+      "cargo": "clippy 32",
+      "parity_light": "39/39",
+      "parity_light_supervisor": "39/39",
+      "simulation": "39 light cases vs y14: 14 identical, 25 changed, all finish in the zone, no contacts, light stops in the zone; finish line median -1.28 s (-4.68 .. +.64)"
+    },
+    "next": "run y17 (round 124): restart after the crosswalk; then the finish after green (y16 coast weighting not yet seen on the car with the light)",
+    "deployment": "build-race.py claude-turn123 claude-turn124 124, build-vision.py y17; deploy-matched.py 124, deploy-vision.py y17 (runtime files of eab713b; the test updates came after)"
   }
 }
