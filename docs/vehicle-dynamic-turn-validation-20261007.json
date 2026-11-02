@@ -26037,6 +26037,18 @@
     "author": "Codex",
     "baseline": "61014fc; deployed reference y32 was built from 94b4b83",
     "engine_round": 140,
+    "build": {
+      "source_commit": "48a2a855049d0768c4d5ef402e32d117c520db95",
+      "archive": "XT-STCAR-claude-turn140-48a2a85.tar.gz",
+      "engine_package": "claude-turn140-package.json",
+      "vision_package": "claude-y33-package.json",
+      "vision_light_stop": true,
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "elf_maximum_glibc": "2.34",
+      "y32_engine_bytes": 2720064,
+      "y33_engine_bytes": 2715080,
+      "bytes_change": -4984
+    },
     "implemented": true,
     "deployed": false,
     "physical_trial_executed": false,
