@@ -1348,9 +1348,10 @@ impl Maneuver {
                 0.
             };
         if speed + rise >= cap {
-            return if coast { NEUTRAL } else { ROUTE_SLOW_MOTOR };
+            return if coast && speed + rise >= cap + STRAIGHT_COAST_MARGIN_MPS { NEUTRAL } else { ROUTE_SLOW_MOTOR };
         }
-        if speed + rise + STRAIGHT_ACCEL_MAX_MPS2 * STRAIGHT_LAG_S < cap {
+        // round y24: from rest 1560 as before
+        if speed >= LANE_SPEED_RESTART_MPS && speed + rise + STRAIGHT_ACCEL_MAX_MPS2 * STRAIGHT_LAG_S < cap {
             return STRAIGHT_MOTOR;
         }
         if speed + rise + LANE_POWER_ACCEL_MPS2 * STRAIGHT_LAG_S < cap {

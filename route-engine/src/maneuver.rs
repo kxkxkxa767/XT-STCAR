@@ -47,7 +47,10 @@ pub const DRIVE_MOTORS: [i64; 5] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
 pub const STRAIGHT_TURN_MPS: f64 = 1.1;
-pub const STRAIGHT_TRANSFER_MPS: f64 = 1.4;
+// Round y24: the transfer only up to the loop speed (simulation: the second loop at 1.45 m/s met the wall).
+pub const STRAIGHT_TRANSFER_MPS: f64 = STRAIGHT_TURN_MPS;
+// Round y24: over a cap 1550 holds up to this, else neutral.
+pub const STRAIGHT_COAST_MARGIN_MPS: f64 = 0.15;
 pub const POST_PASS_STAGES: [&str; 8] =
     ["right_align", "corridor_follow", "second_orbit", "light_turn", "light_lane", "open_transfer", "second_loop", "light_entry"];
 pub const ROUTE_MAX_DRIVE_S: f64 = 40.0;

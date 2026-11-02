@@ -744,7 +744,15 @@ START_LAUNCH_ACCEL_MPS2 = 2.5
 STRAIGHT_ACCEL_MAX_MPS2 = 3.
 STRAIGHT_LAG_S = .3
 STRAIGHT_TURN_MPS = 1.1
-STRAIGHT_TRANSFER_MPS = 1.4
+# Round y24 (user: 斑马线启动后又断断续续的走，还比之前慢了): car run y23 capped the first approach by
+# the board ahead too (y22 drove it at 1550 regardless): .65 m/s by the handover, 1500/1550
+# in turns, the first loop .6 s slower. The approach now takes the turn's cap only, and over
+# a cap the car holds 1550 (slowing gently) up to STRAIGHT_COAST_MARGIN_MPS over it, else coasts.
+STRAIGHT_COAST_MARGIN_MPS = .15
+# Round y24: the transfer only up to the loop speed (simulation, the y2 light case: 1560
+# pushes under 1.4 took the second loop in at 1.45 m/s and it met the outer wall; car run
+# y23 read no transfer speed and drove 1550 there).
+STRAIGHT_TRANSFER_MPS = STRAIGHT_TURN_MPS
 # Round y18: the 1580 launch after green is guarded at 1600's bound (not measured) and
 # aimed at this (between 1560's LANE_POWER_ACCEL_MPS2 and that bound). Round y20: the
 # launch is 1600 itself (car run y19's 1580: ~1.3 m/s from rest after ~.8 s of power,
@@ -4550,12 +4558,10 @@ class ManeuverSequence(TurnMotion):
                     self._start_motor = (TRIAL_MOTOR if v_crosswalk < CROSSWALK_CRUISE_MPS-CROSSWALK_CRUISE_BAND_MPS
                                          else ROUTE_SLOW_MOTOR)
         elif self.crosswalk_state == 'done' and approach is not None:
-            # Round y23: towards the first support under the board's cap and the speed
-            # that coasts down to STRAIGHT_TURN_MPS by the handover range.
-            allowed = self._start_allowed_speed(ahead)
-            turn = math.sqrt(STRAIGHT_TURN_MPS**2+2*LANE_START_STOP_DECEL_MPS2
-                             * max(0., approach['range_m']-OPEN_HANDOVER_MAX_RANGE_M))
-            allowed = turn if allowed is None else min(allowed, turn)
+            # Round y23: towards the first support under the speed that coasts down to
+            # STRAIGHT_TURN_MPS by the handover range (round y24: not the board's cap).
+            allowed = math.sqrt(STRAIGHT_TURN_MPS**2+2*LANE_START_STOP_DECEL_MPS2
+                                * max(0., approach['range_m']-OPEN_HANDOVER_MAX_RANGE_M))
             self._start_motor = self._straight_motor(speed, now, allowed)
         else:
             # The approach drives on at 1550 (a stopped car restarts at 1560).
@@ -6572,8 +6578,10 @@ class ManeuverSequence(TurnMotion):
         rise = left*(STRAIGHT_ACCEL_MAX_MPS2 if self._power_cmd_motor in (STRAIGHT_MOTOR, START_LAUNCH_MOTOR)
                      else LANE_POWER_ACCEL_MPS2 if self._power_cmd_motor == TRIAL_MOTOR else 0.)
         if speed+rise >= cap:
-            return NEUTRAL if coast else ROUTE_SLOW_MOTOR
-        if speed+rise+STRAIGHT_ACCEL_MAX_MPS2*STRAIGHT_LAG_S < cap:
+            return NEUTRAL if coast and speed+rise >= cap+STRAIGHT_COAST_MARGIN_MPS else ROUTE_SLOW_MOTOR
+        # round y24: from rest 1560 as before (simulation, the y2 light case: 1590 out of the
+        # fallback stop just before the first loop changed both loops and met the outer wall)
+        if speed >= LANE_SPEED_RESTART_MPS and speed+rise+STRAIGHT_ACCEL_MAX_MPS2*STRAIGHT_LAG_S < cap:
             return STRAIGHT_MOTOR
         if speed+rise+LANE_POWER_ACCEL_MPS2*STRAIGHT_LAG_S < cap:
             return TRIAL_MOTOR

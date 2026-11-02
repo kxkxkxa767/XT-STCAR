@@ -25594,8 +25594,8 @@
     "date": "2026-11-02",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "11884f6 (car: round 129 + y22)",
     "user": [
       "在绕桶的那个任务中有很大部分的路程都接近于直道，可不可以开放到1590，在快到桶要绕弯的时候减速按照原来的pwm来跑",
@@ -25613,6 +25613,37 @@
       "cargo_test": "7 passed",
       "clippy_warnings": 32,
       "simulation": "not run (user: 别仿真)"
+    },
+    "commit": "(this commit)",
+    "deployment": "build-race.py claude-turn129 claude-turn130 130, build-vision.py y23; deploy-matched.py 130, deploy-vision.py y23",
+    "car_run_y23": {
+      "start": "rear .39, front 7.84",
+      "end": "route_finish_zone_stop .336 m, 0 creeps, 38.1 s (the light: no red, green shown, released at its 12.1 s wait cap; user: 红绿灯的触发还是失败了，这个红绿灯后续我修一下)",
+      "start_lane": "after the crosswalk 1560 to 1.24 m/s by 9.13 s (y22 ~1.0), then the board cap cut it; the first approach took the board cap too (.65 m/s by the handover), 1500/1550 in turns (user: 斑马线启动后又断断续续的走，还比之前慢了); handover 11.05 s (y22 11.06), the first loop 3.03 s (y22 2.40) from the slower entry",
+      "transfer": "speed mostly unmeasured there: 1550 throughout (unchanged), 1.28 s (y22 1.12)"
+    }
+  },
+  "y24_straight_turn_cap_only_20261102": {
+    "date": "2026-11-02",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "933ba96 + y23 record (car: round 130 + y23)",
+    "user": [
+      "怎么感觉你斑马线启动后又断断续续的走，还比之前慢了",
+      "放好了"
+    ],
+    "change": [
+      "the first approach's cap is the turn's alone (back to ~1.1 m/s by the handover range; no board cap, as y22's fixed 1550)",
+      "_straight_motor over the cap holds 1550 up to STRAIGHT_COAST_MARGIN_MPS .15 over it, else neutral (y23 alternated 1500/1550)",
+      "the transfer capped at the loop speed STRAIGHT_TURN_MPS (simulation, the y2 light case: 1560 pushes under 1.4 took the second loop in at 1.45 m/s, the outer wall)",
+      "1590 only while rolling, from rest 1560 as before (simulation: 1590 out of the fallback stop just before the first loop changed both loops, the outer wall)"
+    ],
+    "validation": {
+      "python_full_suite": "968 OK",
+      "cargo_test": "7 passed",
+      "clippy_warnings": 32
     },
     "commit": "(this commit)"
   }

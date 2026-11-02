@@ -422,10 +422,7 @@ impl Maneuver {
                 sq(STRAIGHT_TURN_MPS)
                     + 2. * LANE_START_STOP_DECEL_MPS2 * pmax(0., approach.idx("range_m").f() - OPEN_HANDOVER_MAX_RANGE_M),
             );
-            allowed = Some(match Self::start_allowed_speed(ahead) {
-                Some(board) => pmin(board, turn),
-                None => turn,
-            });
+            allowed = Some(turn); // round y24: not the board's cap
             self._start_motor = self.straight_motor(speed, now, allowed, true);
         } else {
             self._start_motor =
