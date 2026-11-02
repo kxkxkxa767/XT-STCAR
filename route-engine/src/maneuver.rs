@@ -183,7 +183,6 @@ pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 1.5;
 // Round y22: the finish brake after the light (once; the bridge takes 1000-2000).
 pub const LANE_BRAKE_MOTOR: i64 = 1300;
 pub const LANE_BRAKE_START_GAP_M: f64 = 1.2;
-pub const FINISH_BRAKE_DECEL_MPS2: f64 = 0.8; // y25–y27 calibrated IMU, mean during 1300 ACKs
 pub const LANE_BRAKE_MIN_MPS: f64 = 0.3;
 pub const LANE_BRAKE_MAX_S: f64 = 1.5;
 pub const START_LAUNCH_SETTLE_S: f64 = 0.3;
@@ -706,6 +705,7 @@ pub struct Maneuver {
     pub _start_motor: i64,
     pub _transfer_motor: i64,
     pub race_transfer: Option<crate::race_transfer::RaceTransfer>,
+    pub(crate) race_light: crate::race_light::RaceLight,
     pub _start_speed_measured: bool,
     pub _start_speed_last: Option<(f64, f64)>,
     pub start_lane_coast_steering: V,
@@ -1030,6 +1030,7 @@ impl Maneuver {
             _start_motor: TRIAL_MOTOR,
             _transfer_motor: ROUTE_SLOW_MOTOR,
             race_transfer: None,
+            race_light: Default::default(),
             _start_speed_measured: false,
             _start_speed_last: None,
             start_lane_coast_steering: V::None,

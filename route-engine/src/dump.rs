@@ -207,6 +207,11 @@ impl Maneuver {
         d.set("_path_cache", self._path_cache.as_ref().map(|(k, v)| V::list(vec![k.clone(), V::Int(*v)])));
         if let Some(t) = &self.race_transfer {
             d.set("race_transfer", t.dump());
+            d.set("first_loop_divider", crate::dict! {
+                "end_wall_offset_m" => self.race_light.landmark().map(|v| v.1),
+                "observations" => self.race_light.landmark().map(|v| v.0 as i64),
+                "gantry_ahead_m" => self.race_light.prior_ahead, "phase" => self.race_light.phase.label()
+            });
         }
         d
     }

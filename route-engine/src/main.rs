@@ -29,6 +29,7 @@ pub mod maneuver_wait;
 pub mod py;
 pub mod race;
 mod race_imu;
+mod race_light;
 mod race_transfer;
 pub mod supervisor;
 

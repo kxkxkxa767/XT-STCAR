@@ -25980,6 +25980,35 @@
       "end_control": "unarmed, motor and servo 1500"
     }
   },
+  "y32_first_divider_light_coast_y27_finish_20261102": {
+    "date": "2026-11-02",
+    "author": "Codex",
+    "baseline": "07cfa57: two y31 physical runs",
+    "engine_round": 139,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "7 passed", "clippy_warnings": 32},
+    "change": "While rounding cone one, identify the upstream end of the light-lane divider: two farther returns into the opening and a downstream parallel board face spanning at least 0.50 m. Store the observed end-wall-to-opening offset from agreeing scans. Thirteen projected rays supply the end-wall range. In the light entry use that range and the offset as a prior; confirmed live gantry legs correct the target position without invalidating the ongoing velocity estimate. No map coordinate is used onboard.",
+    "light": "Hold 1550 until coasting through the beam 1.10 m upstream would bring the nose to 0.55 m from the gantry. Use measured closing rate, short-window IMU correction, observed coast deceleration and remaining ESC power. Stay in coast instead of chasing a beam crawl speed. If rolling short, one sustained top-up can precede the final coast. If still dark as momentum runs out, continue through; a fresh red always cuts immediately. The existing real-red 10.5 s/no-fresh-red release fallback remains.",
+    "finish": "Remove y31's dedicated early finish-launch cutoff and dynamic brake-start gate. For a real post-red release the body of lane_goal_control is the y27 implementation: the board-range slope, its calibrated ESC projection, sustained launch, coast and one 1300 brake when warranted. Retain treatment of verified passage without red. Cone and crosswalk control and PWM are unchanged.",
+    "static_gap": {"evidence": "work/y32-first-cone-gap-vrsuCXnS/capture.jsonl", "scan_seq": [7791,7793,7796,7799,7801], "complete_scans": 5, "before_after_control": "unarmed, motor 1500, servo 1500", "bearing_clockwise_deg": [110,111], "near_return_m": [0.688,0.705], "opening_return_m": [1.729,1.745]},
+    "y27_offline_comparison": {
+      "input": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y27/run",
+      "evidence": "work/y32-first-cone-gap-vrsuCXnS/y27-compare.json",
+      "method": "Mac-only Rust driver y32_compare.rs invokes the production landmark, light tracking and approach control on distinct saved lidar scans with the recorded compass, synchronized projected IMU integral, recorded control/vision and observed deceleration. No drive connection. The fixed-map comparison uses the user8 layout's 3.225 m end-wall-to-post-centre offset; y27 itself used live gantry observations. Each case uses the same recorded vehicle trajectory, not a new closed-loop drive.",
+      "first_loop_agreeing_scans": 8,
+      "learned_end_wall_offset_m": 3.15262,
+      "columns": ["source","first_saved_neutral_scan","since_start_s","nose_to_gantry_m","nose_to_beam_m"],
+      "rows": [
+        ["y27_observed_bridge_ack",177,16.174,3.06629,1.96629],
+        ["y32_fixed_map_counterfactual",177,16.174,3.11008,2.01008],
+        ["y32_first_divider_only",177,16.174,3.18246,2.08246],
+        ["y32_divider_then_live_legs",177,16.174,3.06629,1.96629]
+      ],
+      "limits": "The observer did not save every 10 Hz scan. Equal recorded scan means no resolved time difference, not proof of identical physical stopping, scoring, or generalization to another layout."
+    }
+  },
   "next_tasks_20261102": {
     "date": "2026-11-02",
     "author": "Claude",

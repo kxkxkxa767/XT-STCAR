@@ -806,6 +806,9 @@ impl Maneuver {
     /// _open_first_loop_update(scan, now, control).
     pub fn open_first_loop_update(&mut self, scan: &V, now: f64, control: &V) -> V {
         let heading = self.compass.current(scan);
+        if self.race_transfer.is_some() && let Some(h) = heading {
+            self.race_light.observe_first(scan, h);
+        }
         let progress = heading;
         if let Some(p) = progress
             && p >= OPEN_SECOND_LOOKOUT_RAD
@@ -1591,7 +1594,7 @@ impl Maneuver {
             self.begin_recovery_hold("open_board_ahead_before_light_lane", now, control);
             return self.result(now);
         }
-        if self.light_stop_state == Some("approach") {
+        if self.light_approaching() {
             // Round y2: the light lane's stop control on the light line drives
             // the motor from the entry on (the coast must start ~2-3 m before).
             let (basis, feedback) = self.light_approach_control(scan, light_ahead, now);
