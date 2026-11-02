@@ -15,6 +15,7 @@ pub struct RaceTransfer {
     pub imu_yaw_rate: Option<f64>,
     pub imu_forward_integral: Option<f64>,
     crosswalk_release: Option<(f64, Option<f64>)>,
+    crosswalk_upshifted: bool,
     first_approach: FirstApproach,
 }
 
@@ -38,6 +39,7 @@ enum TransferPhase {
 impl RaceTransfer {
     pub fn release_crosswalk(&mut self, now: f64) {
         self.crosswalk_release = Some((now, self.imu_forward_integral));
+        self.crosswalk_upshifted = false;
     }
 
     pub fn crosswalk_released(&self) -> bool { self.crosswalk_release.is_some() }
@@ -70,14 +72,21 @@ impl RaceTransfer {
             self.first_approach = FirstApproach::Hold;
         }
         let phase = self.first_phase();
+        // y29 lost six adjacent lidar bins during the initial 1620 push;
+        // it later accepted 1620 while rolling at 1.10 m/s. Start at 1600.
+        if self.first_approach == FirstApproach::Cruise && boosted && speed.is_some_and(|v| v >= STRAIGHT_TURN_MPS) {
+            self.crosswalk_upshifted = true;
+        }
         let motor = if self.first_approach == FirstApproach::Coast { NEUTRAL }
-            else if self.first_approach == FirstApproach::Cruise && boosted { TRANSFER_BOOST_MOTOR }
+            else if self.first_approach == FirstApproach::Cruise && boosted {
+                if self.crosswalk_upshifted { TRANSFER_BOOST_MOTOR } else { START_LAUNCH_MOTOR }
+            }
             else if speed.is_some_and(|v| v < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR }
             else { ROUTE_SLOW_MOTOR };
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
                        "speed_source" => if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
-                       "entry_target_mps" => STRAIGHT_TURN_MPS})
+                       "upshifted" => self.crosswalk_upshifted, "entry_target_mps" => STRAIGHT_TURN_MPS})
     }
 
     fn first_phase(&self) -> &'static str {
@@ -146,6 +155,7 @@ impl RaceTransfer {
         };
         dict! {"speed_mps" => self.speed, "phase" => phase, "boost_since" => since, "imu_yaw_rate" => self.imu_yaw_rate,
                "first_approach_phase" => self.first_phase(), "imu_forward_integral" => self.imu_forward_integral,
+               "crosswalk_upshifted" => self.crosswalk_upshifted,
                "crosswalk_release" => self.crosswalk_release.map(|(t, v)| V::list(vec![t.into(), v.into()])),
                "history" => V::list(self.history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect())}
     }

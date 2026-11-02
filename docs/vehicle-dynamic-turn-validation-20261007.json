@@ -25825,9 +25825,29 @@
     "baseline": "2547fba, y28",
     "engine_round": 136,
     "implemented": true,
+    "deployed": true,
+    "physical_trial_executed": true,
+    "car_run_y29": {
+      "source_commit": "378ec9c",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y29",
+      "completion": "Did not finish. The helper's 120 s process timeout ended a wait for green. Six healthy, locked-neutral console readings were restored; feedback and vision were retrieved, no terminal run/summary.json.",
+      "crosswalk": "1620 at release. Sampled neutral quality pause at 7.361 s, resume ACK at 7.849 s, 1620 again at 8.008 s (IMU speed 1.10 m/s). The formerly terminal dropout recovered. Cut at 8.168 s; 1550 at 9.129 s.",
+      "light": "Confirmed gantry 3.466 m from lidar. First sampled deceleration at a 2.242 m front gap, estimated beam speed 1.24 m/s versus planned about 0.63. First red frame 73 scored 0.9175, captured at program 20.581 s and acted on at 20.848 s. Front gap near decision 0.325 m; stopped at 0.202 m. The gantry crossbar was visible at the top, the lamps were outside the frame. No green release and no fallback in this build."
+    },
+    "change": "After a confirmed crosswalk release in the Rust race start lane, bounded fresh front_sparse/scan_incomplete faults can use the existing neutral pause. Hold adopted steering (including a right correction), keep body/bridge gates and drive budget, then resume after neutral ACK and stable fresh start-lane geometry. The 1560 resume ACK precedes recomputing the normal motor on the next scan.",
+    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32}
+  },
+  "y30_crosswalk_1600_visible_light_stop_20261102": {
+    "date": "2026-11-02",
+    "author": "Codex",
+    "baseline": "378ec9c, y29",
+    "engine_round": 137,
+    "implemented": true,
     "deployed": false,
     "physical_trial_executed": false,
-    "change": "After a confirmed crosswalk release in the Rust race start lane, bounded fresh front_sparse/scan_incomplete faults can use the existing neutral pause. Hold adopted steering (including a right correction), keep body/bridge gates and drive budget, then resume after neutral ACK and stable fresh start-lane geometry. The 1560 resume ACK precedes recomputing the normal motor on the next scan.",
+    "user": "1600 at the crosswalk restart, then try 1620. The light was too close to see: decelerate earlier and restore the red-timer fallback.",
+    "change": "Start at 1600, latch 1620 only while the straight still has room and speed reaches the 1.1 m/s first-turn entry speed. Aim to stop with the front 0.55 m short of the gantry. Beam-to-red exposure took 0.81–1.17 s in y25–y29, so the planning model includes 1.0 s plus the current delivery age and power tail. Account for oblique laser range-rate on the entry and continue the coast to beam pace. Once stopped on real red, release on confirmed green or 10.5 s from the first fresh red capture with no current red.",
+    "bench_reference": "Near static green visible at about 0.52 m nose-to-gantry. At the y29 0.202 m stop the lamps were above the frame.",
     "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32}
   },
   "next_tasks_20261102": {

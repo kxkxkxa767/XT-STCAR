@@ -9,6 +9,8 @@ use crate::maneuver::*;
 use crate::py::*;
 
 const NEAR_POST_EDGE_M: f64 = 0.04; // measured close to both boards at the static gantry pose
+const VISIBLE_LIGHT_STOP_GAP_M: f64 = 0.55; // head visible at 0.52 m, out of frame at the y29 stop at 0.20 m
+const BEAM_TO_RED_EXPOSURE_S: f64 = 1.0; // observed 0.81–1.17 s, then inference/delivery time
 
 /// _thin_posts(ranges): isolated thin posts (car frame, left +), nearest first.
 pub fn thin_posts(ranges: &[V]) -> Vec<(f64, f64)> {
@@ -165,24 +167,24 @@ impl Maneuver {
         if n > keep {
             self._light_frames.drain(..n - keep);
         }
-        if self.race_transfer.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
+        let fresh_race_red = self.race_transfer.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
             && !matches!(self.light_stop_state, Some("waiting" | "released" | "passed"))
             && red.f() >= LIGHT_RED_MIN_SCORE && (0.0..=LIGHT_FRAME_MAX_AGE_S).contains(&(now - captured.f()))
-            && self.light_since.is_some_and(|entry| captured.f() >= entry)
-        {
-            if self._light_red_at.is_none() {
+            && self.light_since.is_some_and(|entry| captured.f() >= entry);
+        if fresh_race_red {
+            if !self._light_red_hold {
+                self._light_red_at = Some(captured.f());
                 if !self.light_stop_evidence.is_dict() { self.light_stop_evidence = V::dict(); }
                 self.light_stop_evidence.set("red_trigger", dict! {
                     "frame" => frame.clone(), "captured_at" => captured.f(), "decision_at" => now, "red" => red.f()
                 });
             }
             self._light_gantry_since.get_or_insert(captured.f());
-            self._light_red_at.get_or_insert(captured.f());
             self._light_red_hold = true;
             self.light_stop_state = Some("approach");
             self.lane_motor = NEUTRAL; // applies on this control tick, even on a repeated lidar scan
         }
-        if self.light_stop_active() && captured.f() >= self._light_gantry_since.unwrap() {
+        if self.light_stop_active() && (fresh_race_red || captured.f() >= self._light_gantry_since.unwrap()) {
             if red.f() >= LIGHT_RED_MIN_SCORE {
                 self._light_red_frames += 1;
                 if self._light_red_at.is_none() {
@@ -550,9 +552,15 @@ impl Maneuver {
         let decel = self.lane_decels().0;
         let lag = CROSSWALK_AIM_LAG_S;
         let camera_age = self._light_frames.last().map_or(LANE_ESC_LAG_NOMINAL_S, |f| (now - f.at(1).f()).clamp(0., LIGHT_FRAME_MAX_AGE_S));
-        let reaction = decel * (camera_age + lag);
-        let beam_speed = (reaction*reaction + 2.*decel*(LIGHT_SENSOR_TO_GANTRY_M - LIGHT_STOP_TARGET_GAP_M)).sqrt() - reaction;
-        let coast_to_beam = v*lag + (v*v - beam_speed*beam_speed).max(0.)/(2.*decel);
+        let reaction = decel * (BEAM_TO_RED_EXPOSURE_S + camera_age + lag);
+        let beam_speed = (reaction*reaction + 2.*decel*(LIGHT_SENSOR_TO_GANTRY_M - VISIBLE_LIGHT_STOP_GAP_M)).sqrt() - reaction;
+        // Closing on an oblique gantry underestimates road speed while turning
+        // into the lane. Compare in the measured axis, without dividing by cos near 90 degrees.
+        let axis_cos = self.compass.current(scan).map_or(1., |h| h.pcos().max(0.));
+        let permitted = to_sensor.map(|d| {
+            let tail = decel * lag;
+            ((tail*tail + beam_speed*beam_speed + 2.*decel*d.max(0.)).sqrt() - tail) * axis_cos
+        });
         let was_coasting = self.lane_motor == NEUTRAL;
         let red = self._light_red_hold;
         let motor = if red {
@@ -561,8 +569,8 @@ impl Maneuver {
             TRIAL_MOTOR
         } else if let Some(d) = to_sensor {
             if d > 0. {
-                if d <= coast_to_beam && v > beam_speed { NEUTRAL } else { ROUTE_SLOW_MOTOR }
-            } else if v > beam_speed || (was_coasting && v > LANE_PUSH_ROLLING_MPS + decel*lag) {
+                if v >= permitted.unwrap() || (was_coasting && v > beam_speed) { NEUTRAL } else { ROUTE_SLOW_MOTOR }
+            } else if v > beam_speed || (was_coasting && v > LANE_PUSH_ROLLING_MPS) {
                 NEUTRAL
             } else {
                 ROUTE_SLOW_MOTOR
@@ -575,7 +583,8 @@ impl Maneuver {
         let basis = stopped.then(|| "stopped_after_camera_red".to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
-            "speed_mps" => speed, "beam_speed_mps" => beam_speed, "coast_to_beam_m" => coast_to_beam,
+            "speed_mps" => speed, "beam_speed_mps" => beam_speed, "allowed_axis_speed_mps" => permitted,
+            "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "beam_to_red_exposure_s" => BEAM_TO_RED_EXPOSURE_S,
             "camera_age_s" => camera_age, "red_hold" => red, "motor" => motor, "creeps" => self._lane_creeps,
             "whole_car_in_finish_zone" => gap.is_some_and(|g| (0.0..=LIGHT_STOP_BODY_GAP_M).contains(&g))};
         (basis, feedback)
@@ -627,7 +636,10 @@ impl Maneuver {
         let red_timed = red_s.is_some_and(|s| s >= LIGHT_RED_MAX_S || (s >= LIGHT_RED_GO_S && !red_now));
         let waited = now - wait_since;
         let no_light = !self._light_seen && waited >= LIGHT_NO_LIGHT_WAIT_S;
-        if !green && (self.race_transfer.is_some() || (!red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S)) {
+        let race_fallback = red_s.is_some_and(|s| s >= LIGHT_RED_GO_S) && !red_now;
+        let wait = if self.race_transfer.is_some() { !green && !race_fallback }
+            else { !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S };
+        if wait {
             // the board ahead's history for the restart
             let ahead = self.lane_front_range(scan);
             self.lane_speed(scan, ahead, 2);
@@ -643,6 +655,8 @@ impl Maneuver {
             "green_in_fresh_frames_after_the_stop"
         } else if green {
             "green_without_red_since_the_gantry_looking_again"
+        } else if self.race_transfer.is_some() && race_fallback {
+            "red_seen_10_5s_no_fresh_red"
         } else if red_ended {
             "red_gone_from_fresh_frames_after_the_stop"
         } else if red_timed && !red_now {
