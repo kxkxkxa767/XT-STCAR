@@ -731,7 +731,7 @@ impl Supervisor {
     }
 
     fn wait_lower(s: &Session) -> i64 {
-        if matches!(s.quality_wait_kind, Some("post_pass_pause" | "recovery_hold")) { right_exit_min_pwm() } else { NEUTRAL }
+        if matches!(s.quality_wait_kind, Some("post_pass_pause" | "recovery_hold" | "start_lane_pause")) { right_exit_min_pwm() } else { NEUTRAL }
     }
 
     /// turn_quality_wait_eligible(session).
@@ -1220,6 +1220,12 @@ impl Supervisor {
                 if !self.turn_quality_wait_eligible(s) {
                     return halt("turn_perception_unavailable");
                 }
+            } else if s.motion.crosswalk_exit_stage() && self.wait_entry_guard(s, &control)
+                && s.motion.begin_start_lane_pause(t, &self.received_scan(), &turn_control)
+            {
+                Self::enter_quality_wait(s, "start_lane_pause", eq_i(control.get("motor"), NEUTRAL));
+                let trigger = self.wait_trigger(s, &control);
+                s.report.set("start_lane_pause_trigger", trigger);
             } else if self.wait_entry_guard(s, &control)
                 && s.motion.begin_quality_wait(now, &turn_control, Some(&self.received_scan()))
             {
@@ -1275,8 +1281,7 @@ impl Supervisor {
                 s.report.set("quality_coast_trigger", trigger);
             } else if s.phase == s.motion.phase
                 && s.motion.phase == "drive"
-                && POST_PASS_STAGES.contains(&s.motion.route_stage)
-                && s.motion.first_pass_evidence.is_some()
+                && (s.motion.crosswalk_exit_stage() || (POST_PASS_STAGES.contains(&s.motion.route_stage) && s.motion.first_pass_evidence.is_some()))
                 && !turn_control.get("command_acked").is_true()
                 && s.turn_servo_sent_at.is_num()
                 && (0. ..QUALITY_PAUSE_ACK_GRACE_S).contains(&(t - s.turn_servo_sent_at.f()))
@@ -1407,7 +1412,7 @@ impl Supervisor {
                     && m.first_pass_evidence.is_none()
                     && !m.handover_observed));
         let right_exit = route_right;
-        let wait_kind_right = matches!(s.quality_wait_kind, Some("post_pass_pause" | "recovery_hold"));
+        let wait_kind_right = matches!(s.quality_wait_kind, Some("post_pass_pause" | "recovery_hold" | "start_lane_pause"));
         let right_hold = (phase == "quality_wait" && wait_kind_right)
             || (decision.get("quality_resume_pending").is_true()
                 && wait_kind_right
@@ -1472,6 +1477,7 @@ impl Supervisor {
         let resume_key = match s.quality_wait_kind {
             Some("left_turn_pause") => "left_turn_pause_resume_snapshot",
             Some("post_pass_pause") => "post_pass_pause_resume_snapshot",
+            Some("start_lane_pause") => "start_lane_pause_resume_snapshot",
             Some("recovery_hold") => "recovery_hold_resume_snapshot",
             _ => "quality_resume_snapshot",
         };

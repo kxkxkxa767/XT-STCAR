@@ -228,7 +228,7 @@ impl Maneuver {
         if !neutral || !py_eq(servo_feedback, &V::from(self.quality_wait_servo)) || self.quality_wait_previous_servo.is_some() {
             return;
         }
-        let lower = if matches!(self.neutral_pause_kind, Some("post_pass") | Some("recovery")) { right_exit_min_pwm() } else { NEUTRAL };
+        let lower = if matches!(self.neutral_pause_kind, Some("post_pass" | "recovery" | "start_lane")) { right_exit_min_pwm() } else { NEUTRAL };
         let before = self.servo;
         self.steering_target = clampi(base, lower, SERVO_MAX);
         self.slew(now);
@@ -584,6 +584,22 @@ impl Maneuver {
         false
     }
 
+    pub fn crosswalk_exit_stage(&self) -> bool {
+        self.route_stage == "start_lane" && self.race_transfer.as_ref().is_some_and(|r| r.crosswalk_released())
+    }
+
+    pub fn begin_start_lane_pause(&mut self, now: f64, scan: &V, control: &V) -> bool {
+        if !self.crosswalk_exit_stage() || self.quality_resume_pending || !control.get("armed").is_true()
+            || !control.get("command_acked").is_true() || !eq_i(control.get("servo"), self.servo)
+            || !(eq_i(control.get("motor"), NEUTRAL) || motor_in(control.get("motor"), &DRIVE_MOTORS)) {
+            return false;
+        }
+        self._start_motor = TRIAL_MOTOR; // first resume ACK; the next new scan recomputes the launch
+        self.enter_neutral_pause("start_lane", "start_lane_quality_pause", now, scan, control,
+            "quality", "fresh start-lane geometry after a bounded lidar dropout");
+        true
+    }
+
     /// _enter_neutral_pause(kind, reason, now, scan, control, cause, resume_requires).
     #[allow(clippy::too_many_arguments)]
     fn enter_neutral_pause(&mut self, kind: &'static str, reason: &str, now: f64, scan: &V, control: &V, cause: &str, resume_requires: &str) {
@@ -653,6 +669,9 @@ impl Maneuver {
         let kind = self.neutral_pause_kind;
         let mut stage = self.route_stage;
         self._pause_stage_held = false;
+        if kind == Some("start_lane") {
+            return self.start_lane_quality_geometry(scan);
+        }
         if kind == Some("left_turn") {
             return self.left_turn_pause_geometry(scan, now);
         }

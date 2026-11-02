@@ -25787,8 +25787,25 @@
     "baseline": "y27, engine 134, source 9239d78",
     "engine_round": 135,
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
+    "car_run_y28": {
+      "source_commit": "2547fba",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y28",
+      "reason": "turn_perception_unavailable",
+      "stage": "start_lane, after the crosswalk release; the light section was not reached",
+      "crosswalk_go_seq": 82,
+      "first_sampled_1620_ack_seq": 83,
+      "fault_scan_seq": 85,
+      "quality": "front_sparse on one fresh scan (0.50 ms old), 350 valid bins, two missing clusters at -27..-24 and -20..-15 degrees. The longest gap was 6 bins and the preceding tolerable front run ended at 5. No start-lane pause branch existed. The next six saved post-run scans all had 360 valid returns.",
+      "closest_body_gap_m": 0.2713,
+      "body_stop_requested": false,
+      "max_control_interval_ms": 23.26,
+      "max_control_compute_ms": 6.54,
+      "imu_samples": 982,
+      "imu_checksum_errors": 0,
+      "after": "locked and motor/servo neutral"
+    },
     "user": "Try 1620 when released from the crosswalk and keep the powered straight at 1600 or more where possible. The practice beam is 1.10 m upstream of the gantry. Before the beam both lamps normally are off. Use the gantry to plan deceleration; the camera seeing red triggers the stop.",
     "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32},
     "change": [
@@ -25801,6 +25818,17 @@
       {"local": "work/y28-gantry-pos2-or_6eahq", "frames": 6, "median_axis_to_gantry_m": 2.723, "front_to_trigger_m": 1.423, "y27_gantry_returns": 6, "y27_pairs": 4, "green_scores": [0.7838, 0.7870, 0.7777]},
       {"local": "work/y28-gantry-pos2-yz4cgbdr", "frames": 6, "median_heading_deg": 23.2, "median_axis_to_gantry_m": 3.899, "y27_pairs": 2, "green_scores": [0.7513, 0.7519, 0.7500], "note": "Floor reflection also detected; the true head had the higher scores. Lamp left green by operator for this observation."}
     ]
+  },
+  "y29_start_lane_dropout_resume_20261102": {
+    "date": "2026-11-02",
+    "author": "Codex",
+    "baseline": "2547fba, y28",
+    "engine_round": 136,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": "After a confirmed crosswalk release in the Rust race start lane, bounded fresh front_sparse/scan_incomplete faults can use the existing neutral pause. Hold adopted steering (including a right correction), keep body/bridge gates and drive budget, then resume after neutral ACK and stable fresh start-lane geometry. The 1560 resume ACK precedes recomputing the normal motor on the next scan.",
+    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32}
   },
   "next_tasks_20261102": {
     "date": "2026-11-02",

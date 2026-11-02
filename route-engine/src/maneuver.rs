@@ -1461,7 +1461,7 @@ impl Maneuver {
             return self.lane_motor;
         }
         if self.continue_route && self.phase == "drive" && self.route_stage == "start_lane" {
-            return self._start_motor;
+            return if self.quality_resume_pending { TRIAL_MOTOR } else { self._start_motor };
         }
         if self.continue_route && self.phase == "drive" && (self.route_stage == "open_transfer" || self.transfer_stage()) && !self.quality_resume_pending {
             return self._transfer_motor;

@@ -66,7 +66,7 @@ impl Maneuver {
         if !self.continue_route
             || self.entry_kind != Some("lane")
             || self.route_stage != "start_lane"
-            || self.phase != "drive"
+            || !(self.phase == "drive" || (self.phase == "quality_wait" && self.neutral_pause_kind == Some("start_lane")))
             || self.drive_since.is_none()
             || !scan.is_dict()
         {
