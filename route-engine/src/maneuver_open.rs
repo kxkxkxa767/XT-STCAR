@@ -357,6 +357,7 @@ impl Maneuver {
         let mut stop_at = None;
         let mut allowed = None;
         let mut v_crosswalk = None;
+        let mut first_drive = V::None;
         if approach.is_none() && source != "first_support_missing_frame_hold" {
             let reaction = self.reaction_s(now);
             let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) {
@@ -415,6 +416,10 @@ impl Maneuver {
                         if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
                 }
             }
+        } else if self.race_transfer.is_some() && self.crosswalk_state == Some("done") && self.first_approach.is_some() {
+            let decel = self.lane_decels().0;
+            let before = self.first_approach.idx("before_tangent_point_m").f();
+            (self._start_motor, first_drive) = self.race_transfer.as_mut().unwrap().first_approach_drive(speed, before, decel);
         } else if self.crosswalk_state == Some("done") && !approach.is_none() {
             // Round y23: towards the first support under the board's cap and the speed
             // that coasts down to STRAIGHT_TURN_MPS by the handover range.
@@ -447,6 +452,9 @@ impl Maneuver {
             "motor" => self._start_motor, "board_ahead_cut" => cut, "crosswalk" => crosswalk,
             "swept_path_certified" => false,
         };
+        if first_drive.is_some() {
+            self.start_lane_feedback.set("first_approach_drive", first_drive);
+        }
         if self.crosswalk_state == Some("waiting") && (target - self.servo).abs() < LIGHT_WAIT_STEER_DEADBAND_PWM {
             target = self.servo; // standing: the steering pre-aimed, no small steps
         }

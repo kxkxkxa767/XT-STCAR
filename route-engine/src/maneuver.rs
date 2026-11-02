@@ -1281,7 +1281,12 @@ impl Maneuver {
         if !DRIVE_MOTORS.contains(&motor) {
             self._launch_until = None;
         } else if self._launch_until.is_none() {
-            self._launch_until = Some(now + ESC_LAG_S + LANE_LAUNCH_S);
+            // y26 restored 1550 above 1 m/s, then handed 1560 to the first
+            // loop because it mistook the preceding coast for a start from rest.
+            let rolling = self.route_stage == "start_lane" && motor == ROUTE_SLOW_MOTOR
+                && self.race_transfer.as_ref().is_some_and(|t| t.first_rolling_hold())
+                && self.start_lane_feedback.get("speed_mps").of().is_some_and(|v| v >= LANE_SPEED_RESTART_MPS);
+            self._launch_until = Some(if rolling { now } else { now + ESC_LAG_S + LANE_LAUNCH_S });
             self._power_since = Some(now);
             self._power_prev_end = self._power_cmd_at;
         }

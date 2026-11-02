@@ -1,5 +1,5 @@
 //! Longitudinal control from the first loop's exit to the second loop's tangent.
-use crate::helpers::NEUTRAL;
+use crate::helpers::{NEUTRAL, TRIAL_MOTOR};
 use crate::maneuver::*;
 use crate::maneuver_post::pairwise_track_speed;
 use crate::py::*;
@@ -13,6 +13,15 @@ pub struct RaceTransfer {
     speed: Option<f64>,
     phase: TransferPhase,
     pub imu_yaw_rate: Option<f64>,
+    first_approach: FirstApproach,
+}
+
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+enum FirstApproach {
+    #[default]
+    Cruise,
+    Coast,
+    Hold,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -25,6 +34,32 @@ enum TransferPhase {
 }
 
 impl RaceTransfer {
+    /// After the crosswalk the car is already rolling when the first support
+    /// is acquired. Aim one coast at the planned bend, then hold cruise.
+    pub fn first_approach_drive(&mut self, speed: Option<f64>, before: f64, decel: f64) -> (i64, V) {
+        let coast_m = speed.map(|v| v * CROSSWALK_AIM_LAG_S + (v*v - STRAIGHT_TURN_MPS*STRAIGHT_TURN_MPS).max(0.) / (2.*decel));
+        if self.first_approach == FirstApproach::Cruise && speed.is_some_and(|v| v > STRAIGHT_TURN_MPS)
+            && coast_m.is_some_and(|d| before <= d)
+        {
+            self.first_approach = FirstApproach::Coast;
+        }
+        if self.first_approach == FirstApproach::Coast && (before <= 0. || speed.is_none_or(|v| v <= STRAIGHT_TURN_MPS)) {
+            self.first_approach = FirstApproach::Hold;
+        }
+        let phase = self.first_phase();
+        let motor = if self.first_approach == FirstApproach::Coast { NEUTRAL }
+            else if speed.is_some_and(|v| v < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR }
+            else { ROUTE_SLOW_MOTOR };
+        (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
+                       "entry_target_mps" => STRAIGHT_TURN_MPS})
+    }
+
+    fn first_phase(&self) -> &'static str {
+        match self.first_approach { FirstApproach::Cruise => "cruise", FirstApproach::Coast => "coast", FirstApproach::Hold => "hold" }
+    }
+
+    pub fn first_rolling_hold(&self) -> bool { self.first_approach == FirstApproach::Hold }
+
     /// The end wall behind recedes along the start axis. A cone can cover
     /// the centre ray; nine projected rays retained the wall in y22 and y24.
     pub fn observe(&mut self, scan: &V, heading: Option<f64>) {
@@ -84,6 +119,7 @@ impl RaceTransfer {
             TransferPhase::Bend => ("bend", None),
         };
         dict! {"speed_mps" => self.speed, "phase" => phase, "boost_since" => since, "imu_yaw_rate" => self.imu_yaw_rate,
+               "first_approach_phase" => self.first_phase(),
                "history" => V::list(self.history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect())}
     }
 }
