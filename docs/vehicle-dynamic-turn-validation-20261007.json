@@ -25474,5 +25474,45 @@
     ],
     "next": "deploy round 127 + y20 and run it (the user confirms the car at the start and the light on); light approach: tighten the push guard by the measured cut lag (<= .3 s) and the push responses so the first stop reaches the zone (~.55 m) in one go; finish: the last coast still stops ~.5 m out and creeps",
     "commit": "(this commit)"
+  },
+  "y20_light_one_motion_red_hold_20261102": {
+    "date": "2026-11-02",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "9f15546 (y20's first part; car: round 126 + y19)",
+    "round": "y20 (second part, same deploy label)",
+    "user": [
+      "你再改改，赛事好像要求红灯亮了之后就不能动了",
+      "光电传感器的那个部分你可以稍微往前走点，毕竟那个停车区1m呢",
+      "这个中间没有停车/车速非常慢的部分吧"
+    ],
+    "rules": "2.4.2 (4): the photo sensor 1 m before the light, the zone between; passing it starts a 3-10 s red; the car stops before the light until green; going before green +30 s, a wheel outside the zone when stopped +20 s, no stop +50 s; overview: 红灯亮起立即停车",
+    "analysis": {
+      "first_red_in_the_runs": "first red frame captured with the front .63-.74 m before the line (y13 .67, y14 .72, y15 .63, y17-2 .69, y18 .70, y19 .69; y19 first stop .783 did not trip it), the rear then still outside the 1 m line; every run crept 1-3 times after it (stops: y15 .551 1 creep, y17-2 .546 3, y18 .54 2, y19 .549 3)",
+      "why_short": "the light approach's guard (its .40 floor, the .45 s tail lag, the finish's late 1.0 m/s2 push bound inside the zone, the .05 m/s margin) foresaw ~.2-.5 m beyond the real coasts and cut the 1550 early: the first coast stopped .63-.78 m out",
+      "strict_hold_rejected": "holding the motor from the red itself left the simulated cars stopped .05-.24 m outside the zone (+20 s; the simulator trips the sensor with the front at 1 m) and would have left y13-y18 with the rear out",
+      "launch_1600_simulation": "the y2 light case with 1600 met the end board: the launch's guard capped its peak at LANE_PUSH_MAX_MPS 1.7 (the car reached 1.92 after the cut) and after the cut guarded the 1600 still in the ESC pipeline at 1550's .5 m/s2"
+    },
+    "change": [
+      "light stop: target .48 -> .45, guard floor .40 -> .05 (the line itself; the lamps clipped from ~.40 are the softer need: the red is seen on the way in, LIGHT_RED_GO_S releases, the light stop is not counted); in the zone the pushes take the lane bound (the late 1.0 m/s2 is the finish only); the light approach takes the .35 s tail lag (no launch before it)",
+      "red hold: a red frame captured with the front in the light's zone (after the zone entry): once the whole car is in, no power at all until the stop and the wait (no creep, kick, push, nor a lost speed's 1550); with the rear still out it only brings it in",
+      "1600 launch guard: the launch's peak is not capped at 1.7 m/s in the guard's stop model; the launch's powered run lasts for the guard until its power is out of the ESC pipeline"
+    ],
+    "simulation": "y2 light case (user8, measured car, .3 s delay, red 10 s): one motion from 1.45 m at .8 m/s, the red seen at .79, a stop at .475 (sim truth front .516, rear .106 inside), penalty 0; the 1600 launch cut one scan earlier, peak 1.71 m/s, route_finish_zone_stop; before: a stop at .84 then a kick in the red, and the launch into the end board",
+    "validation": {
+      "python_full_suite": "968 OK",
+      "cargo_test": "7 passed",
+      "clippy_warnings": 32,
+      "parity_sweeps": "not run (user: no simulation sweeps; only the unit tests and their simulated cases)"
+    },
+    "risks": [
+      "a stop nearer than ~.35-.40 m may clip the lamps: release by the red-gone rule or LIGHT_RED_GO_S (10.5 s after the first red)",
+      "a coast that still ends with the rear out after the red brings it in (a move in the red, against +20 s)",
+      "the launch's guard is more conservative: the 1600 launch may end a scan earlier"
+    ],
+    "next": "deploy round 127 + y20 and run (the user confirms the car at the start, the light on); check: one motion into the light zone, no move after the stop, the 1600 launch peak and the finish; the crosswalk stop distance",
+    "commit": "(this commit)"
   }
 }

@@ -917,8 +917,20 @@ OPEN_STAGES = ('open_transfer', 'second_loop', 'light_entry')
 # stopped .252 m before the line, the lamps above the frame (released blind
 # by LIGHT_RED_GO_S).
 LIGHT_ZONE_M = 1.
-LIGHT_STOP_TARGET_GAP_M = .48  # front to the light line
-LIGHT_STOP_MIN_GAP_M = .40
+# Round y20 (user: 光电传感器的那个部分你可以稍微往前走点，毕竟那个停车区1m呢; 赛事好像要求红灯亮了之后
+# 就不能动了; rules 2.4.2: 红灯亮起立即停车): car runs y13-y19 took the first red frame with
+# the front .63-.74 m before the line, the first coast having stopped .63-.78 m out (the
+# guard's floor bound it, its worst case ~.2-.5 m beyond the real coasts); 1-3 creeps
+# after the red took the cars to ~.55 (user: 这个中间没有停车/车速非常慢的部分吧). The coast
+# now aims at .45 with the guard's floor at the line itself (.05: passing it before green
+# +30 s; the lamps, clipped at the frame's top from ~.40, are the softer need: the red is
+# seen on the way in, the wait's LIGHT_RED_GO_S releases, the light's stop is not
+# counted), and the zone's pushes take the lane's bound, not the finish's late one:
+# simulation (the y2 light case), one motion from 1.45 m at .8 m/s to a stop at .475
+# (before: a stop at .84, short of the zone, and a kick in the red). A red taken in the
+# zone then holds the car once it is in (_lane_goal_control).
+LIGHT_STOP_TARGET_GAP_M = .45  # front to the light line
+LIGHT_STOP_MIN_GAP_M = .05
 # .56: the rear .06 inside the sensor line (the legs are ~.05 m thick and the
 # lidar sees their near face; simulation: .02 left rears .003-.02 m outside)
 LIGHT_STOP_BODY_GAP_M = LIGHT_ZONE_M-(FRONT_BODY_EXTENT_M+REAR_BODY_EXTENT_M)-.06
@@ -2067,6 +2079,8 @@ class ManeuverSequence(TurnMotion):
         self._light_seen = False  # a red or green frame taken since the gantry
         self._light_gantry_since = None
         self._light_red_at = None  # capture time of the first red frame since the gantry
+        self._light_zone_at = None  # round y20: the approach's first scan with the front in the zone
+        self._light_red_hold = False  # round y20: a red taken since then: no power once the car is in
         self._light_stop_red_frames = 0  # frames taken since the stop with red >= LIGHT_GREEN_MIN_SCORE
         self._light_center_shift_m = 0.  # the gantry's centre less the lane's
         self._light_rearm_min_m = None
@@ -6559,20 +6573,23 @@ class ManeuverSequence(TurnMotion):
                 v = min(v, LIGHT_LAUNCH_ACCEL_MAX_MPS2*max(0., now-(self._light_launch_from+onset)))
             v += LANE_SPEED_GUARD_MARGIN_MPS
             coast_s, power_s = self._lane_pipeline(now, onset, offset, push_s)
-            value = self._lane_stop(gap, v, decel, reaction, coast_s, power_s, accel)
+            # round y20: the launch's peak not capped at LANE_PUSH_MAX_MPS (simulation, 1600:
+            # 1.92 m/s after the cut, the guard's 1.7 had foreseen a stop before the end board)
+            value = self._lane_stop(gap, v, decel, reaction, coast_s, power_s, accel,
+                                    math.inf if self._light_launch_from is not None else LANE_PUSH_MAX_MPS)
             worst = value if worst is None else min(worst, value)
         return worst
 
     @staticmethod
-    def _lane_stop(gap, speed, decel, reaction, coast_s, power_s, accel):
+    def _lane_stop(gap, speed, decel, reaction, coast_s, power_s, accel, peak_max=LANE_PUSH_MAX_MPS):
         """Front gap where the car stops: ``speed`` over ``reaction``, ``coast_s``
-        coasting, ``power_s`` of power at ``accel`` (to LANE_PUSH_MAX_MPS, travelled
-        at the speed reached), then a coast at ``decel``."""
+        coasting, ``power_s`` of power at ``accel`` (to ``peak_max``, travelled at the
+        speed reached), then a coast at ``decel``."""
         travel = speed*reaction
         if speed <= decel*coast_s:
             return gap-travel-speed*speed/(2*decel)
         coasted = speed-decel*coast_s
-        peak = min(coasted+accel*power_s, max(coasted, LANE_PUSH_MAX_MPS))
+        peak = min(coasted+accel*power_s, max(coasted, peak_max))
         return gap-travel-(speed+coasted)/2*coast_s-peak*power_s-peak*peak/(2*decel)
 
     def _coast_fit_window(self, now):
@@ -6921,6 +6938,7 @@ class ManeuverSequence(TurnMotion):
         self.light_stop_state = 'approach'
         self._light_gantry_since, self._light_red_frames, self._light_seen = now, 0, False
         self._light_red_at = None
+        self._light_zone_at, self._light_red_hold = None, False
         self.light_stop_evidence = {**(self.light_stop_evidence or {}), 'gantry': evidence}
         self._route_event('light_gantry', scan, control, evidence)
         # The approach's speed is the closing rate on the line itself, from the
@@ -7124,8 +7142,11 @@ class ManeuverSequence(TurnMotion):
         # top-ups (strong: the last powered run is one) and the pushes'
         # measured responses (_lane_push_observe).
         after_light = kind == 'finish' and restarted
-        relaxed = after_light and (self._lane_topup_motor is not None or self._power_cmd_at is None
-                                   or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S)
+        # Round y20: the light's approach too (no launch before it; car runs: cuts lag <= .3 s;
+        # simulation, the y2 light case: the guard cut the 1550 at 1.37 m foreseeing .22 m
+        # while the coast stopped at .84, short of the sensor's red)
+        relaxed = kind == 'light' or after_light and (self._lane_topup_motor is not None or self._power_cmd_at is None
+                                                      or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S)
         long_lag = LANE_FINISH_ESC_LAG_S if relaxed else ESC_LAG_S
         strong = self._lane_topup_motor == TRIAL_MOTOR and self._power_cmd_motor == TRIAL_MOTOR
         # Round y15: the launch's 1560 still acts through its 1550 tail (simulation,
@@ -7142,7 +7163,7 @@ class ManeuverSequence(TurnMotion):
                         else max(LANE_STRONG_PUSH_ACCEL_MIN_MPS2, LANE_PUSH_RATE_MARGIN*rate_strong))
         # Past the finish line a push only brings the rear wheels in (the time
         # has ended; the board costs +10 s): LANE_PUSH_LATE_ACCEL_MAX_MPS2.
-        late = gap is not None and gap <= zone_gap
+        late = kind == 'finish' and gap is not None and gap <= zone_gap  # round y20: the finish's only
         guard_accel = (strong_accel if strong else LIGHT_LAUNCH_ACCEL_MAX_MPS2 if launch
                        else LANE_KICK_ACCEL_MAX_MPS2 if kick
                        else LANE_PUSH_LATE_ACCEL_MAX_MPS2 if late else LANE_PUSH_ACCEL_MAX_MPS2)
@@ -7176,6 +7197,20 @@ class ManeuverSequence(TurnMotion):
         # launch's own coast fitted .34-.44 m/s2 on a .6 m/s2 car while the
         # lagging speed estimate still read the peak, and that coast ended the
         # run .14 m short of the zone; stopped short, the kick or creep goes on).
+        # Round y20 (user: 赛事好像要求红灯亮了之后就不能动了; rules 2.4.2: 红灯亮起立即停车, a
+        # wheel outside the zone +20 s): after a red frame taken with the front in the light's
+        # zone (the light stays dark until the sensor) no power at all once the whole car is in
+        # (not even a lost speed's 1550); with the rear still out the car only brings it in.
+        # The red comes as the sensor is passed, the rear then still out (simulation: the
+        # trigger on the front at 1 m, a hold from the red left the rear .05-.24 m out; car
+        # runs y13-y19: the first red .63-.74 m from the line, then 1-3 creeps to bring it in).
+        if kind == 'light' and in_zone:
+            if self._light_zone_at is None:
+                self._light_zone_at = now
+            newest = self._light_frames[-1] if self._light_frames else None
+            if newest is not None and newest[2] >= LIGHT_RED_MIN_SCORE and newest[1] >= self._light_zone_at:
+                self._light_red_hold = True
+        red_hold = kind == 'light' and self._light_red_hold and body_in_zone
         basis = None
         if speed_known and stopped and body_in_zone:
             basis = f'stopped_with_the_whole_car_in_the_{kind}_zone'
@@ -7198,12 +7233,14 @@ class ManeuverSequence(TurnMotion):
             'coast_decel_measured': self._lane_coast_decel is not None, 'coast_fit': self._coast_fit,
             'push_rates_mps2': [rate_slow, rate_strong], 'guard_accel_mps2': guard_accel, 'tail_lag_s': long_lag,
             'motor_before': self.lane_motor, 'swept_path_certified': False, 'traffic_light_vision': self.light_vision,
-            'creep_room': creep_room, 'creeps': self._lane_creeps, 'goal': kind}
+            'creep_room': creep_room, 'creeps': self._lane_creeps, 'goal': kind, 'red_hold': red_hold}
         if basis is not None:
             return basis, feedback
         launching = self._light_launch_until is not None and now < self._light_launch_until
         topup_motor = None  # round y15: this scan's output continues or starts a top-up at this PWM
-        if gap is None and kind == 'light':
+        if red_hold:
+            self.lane_motor = NEUTRAL  # round y20: in the red with the whole car in: no power
+        elif gap is None and kind == 'light':
             self.lane_motor = NEUTRAL  # round y2: no light line this scan: coast
         elif gap is not None and (stop_gap <= target_gap or worst_gap <= min_gap):
             self.lane_motor = NEUTRAL  # the coast from here reaches the target (or the guard)
@@ -7251,8 +7288,11 @@ class ManeuverSequence(TurnMotion):
         # LANE_REST_FRAMES scans after the kick, restarted by any other output).
         if self.lane_motor not in (TRIAL_MOTOR, LIGHT_LAUNCH_MOTOR) and self._light_launch_until is not None:
             self._light_launch_until = None  # after the launch: the lane's own pushes and kicks
-        if self.lane_motor == NEUTRAL:
-            self._light_launch_from = None  # the launch's powered run has ended: the car rolls
+        if self.lane_motor == NEUTRAL and (self._power_cmd_at is None
+                                           or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S):
+            # the launch's powered run has ended (round y20: its power out of the ESC pipeline
+            # too; simulation, 1600: guarded at 1550's .5 m/s2 after the cut): the car rolls
+            self._light_launch_from = None
         if self.lane_motor in DRIVE_MOTORS:
             self._lane_topup_motor = topup_motor
         if self.lane_motor == TRIAL_MOTOR and (launching or topup_motor == TRIAL_MOTOR):

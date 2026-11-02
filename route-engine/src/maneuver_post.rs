@@ -1433,7 +1433,9 @@ impl Maneuver {
             }
             v += LANE_SPEED_GUARD_MARGIN_MPS;
             let (coast_s, power_s) = self.lane_pipeline(now, onset, offset, push_s);
-            let value = Self::lane_stop(gap, v, decel, reaction, coast_s, power_s, accel);
+            // round y20: the launch's peak not capped at LANE_PUSH_MAX_MPS
+            let peak_max = if self._light_launch_from.is_some() { f64::INFINITY } else { LANE_PUSH_MAX_MPS };
+            let value = Self::lane_stop_to(gap, v, decel, reaction, coast_s, power_s, accel, peak_max);
             worst = Some(match worst {
                 None => value,
                 Some(w) => pmin(w, value),
@@ -1444,12 +1446,18 @@ impl Maneuver {
 
     /// _lane_stop(gap, speed, decel, reaction, coast_s, power_s, accel).
     fn lane_stop(gap: f64, speed: f64, decel: f64, reaction: f64, coast_s: f64, power_s: f64, accel: f64) -> f64 {
+        Self::lane_stop_to(gap, speed, decel, reaction, coast_s, power_s, accel, LANE_PUSH_MAX_MPS)
+    }
+
+    /// _lane_stop with its peak_max.
+    #[allow(clippy::too_many_arguments)]
+    fn lane_stop_to(gap: f64, speed: f64, decel: f64, reaction: f64, coast_s: f64, power_s: f64, accel: f64, peak_max: f64) -> f64 {
         let travel = speed * reaction;
         if speed <= decel * coast_s {
             return gap - travel - speed * speed / (2. * decel);
         }
         let coasted = speed - decel * coast_s;
-        let peak = pmin(coasted + accel * power_s, pmax(coasted, LANE_PUSH_MAX_MPS));
+        let peak = pmin(coasted + accel * power_s, pmax(coasted, peak_max));
         gap - travel - (speed + coasted) / 2. * coast_s - peak * power_s - peak * peak / (2. * decel)
     }
 
@@ -1677,8 +1685,10 @@ impl Maneuver {
         // the pushes' measured responses.
         let after_light = kind == "finish" && restarted;
         // once no launch power can be left in the ESC pipeline
-        let relaxed = after_light
-            && (self._lane_topup_motor.is_some() || self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S));
+        // Round y20: the light's approach too (no launch before it).
+        let relaxed = kind == "light"
+            || after_light
+                && (self._lane_topup_motor.is_some() || self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S));
         let long_lag = if relaxed { LANE_FINISH_ESC_LAG_S } else { ESC_LAG_S };
         let strong = self._lane_topup_motor == Some(TRIAL_MOTOR) && self._power_cmd_motor == Some(TRIAL_MOTOR);
         // round y15: the launch's 1560 still acts through its 1550 tail
@@ -1698,7 +1708,7 @@ impl Maneuver {
             None => LANE_KICK_ACCEL_MAX_MPS2,
             Some(r) => pmax(LANE_STRONG_PUSH_ACCEL_MIN_MPS2, LANE_PUSH_RATE_MARGIN * r),
         };
-        let late = gap.is_some_and(|g| g <= goal.zone_gap);
+        let late = kind == "finish" && gap.is_some_and(|g| g <= goal.zone_gap); // round y20: the finish's only
         let guard_accel = if strong {
             strong_accel
         } else if launch {
@@ -1733,6 +1743,15 @@ impl Maneuver {
             && (self._lane_creeps < goal.creep_max || !rested);
         // Round y2: the light stop ends stopped only; so does the finish after a
         // restart from a light wait (the launch's own coast fit reads low).
+        // Round y20 (rules 2.4.2: 红灯亮起立即停车): after a red frame taken with the front in
+        // the light's zone, no power once the whole car is in; with the rear out it only comes in.
+        if kind == "light" && in_zone {
+            let zone_at = *self._light_zone_at.get_or_insert(now);
+            if self._light_frames.last().is_some_and(|f| f.at(2).f() >= LIGHT_RED_MIN_SCORE && f.at(1).f() >= zone_at) {
+                self._light_red_hold = true;
+            }
+        }
+        let red_hold = kind == "light" && self._light_red_hold && body_in_zone;
         let mut basis: Option<String> = None;
         if speed_known && stopped && body_in_zone {
             basis = Some(format!("stopped_with_the_whole_car_in_the_{kind}_zone"));
@@ -1768,14 +1787,16 @@ impl Maneuver {
             "push_rates_mps2" => V::list(vec![V::from(rate_slow), V::from(rate_strong)]),
             "guard_accel_mps2" => guard_accel, "tail_lag_s" => long_lag,
             "motor_before" => self.lane_motor, "swept_path_certified" => false, "traffic_light_vision" => self.light_vision,
-            "creep_room" => creep_room, "creeps" => self._lane_creeps, "goal" => kind,
+            "creep_room" => creep_room, "creeps" => self._lane_creeps, "goal" => kind, "red_hold" => red_hold,
         };
         if basis.is_some() {
             return (basis, feedback);
         }
         let launching = self._light_launch_until.is_some_and(|until| now < until);
         let mut topup_motor: Option<i64> = None; // round y15: this scan's output continues or starts a top-up
-        if gap.is_none() && kind == "light" {
+        if red_hold {
+            self.lane_motor = NEUTRAL; // round y20: in the red with the whole car in: no power
+        } else if gap.is_none() && kind == "light" {
             self.lane_motor = NEUTRAL; // round y2: no light line this scan: coast
         } else if gap.is_some() && (stop_gap.unwrap() <= goal.target_gap || worst_gap.unwrap() <= goal.min_gap) {
             self.lane_motor = NEUTRAL;
@@ -1822,8 +1843,9 @@ impl Maneuver {
         if self.lane_motor != TRIAL_MOTOR && self.lane_motor != LIGHT_LAUNCH_MOTOR && self._light_launch_until.is_some() {
             self._light_launch_until = None; // after the launch: the lane's own pushes and kicks
         }
-        if self.lane_motor == NEUTRAL {
-            self._light_launch_from = None; // the launch's powered run has ended: the car rolls
+        // the launch's powered run has ended (round y20: its power out of the ESC pipeline too)
+        if self.lane_motor == NEUTRAL && self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S) {
+            self._light_launch_from = None;
         }
         if DRIVE_MOTORS.contains(&self.lane_motor) {
             self._lane_topup_motor = topup_motor;

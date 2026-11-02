@@ -205,8 +205,9 @@ pub const OPEN_STAGES: [&str; 3] = ["open_transfer", "second_loop", "light_entry
 // Round y2: the traffic-light stop (maneuver_sequence.py has the derivations;
 // only with control['light'], the race program's read-only YOLO process).
 pub const LIGHT_ZONE_M: f64 = 1.;
-pub const LIGHT_STOP_TARGET_GAP_M: f64 = 0.48;
-pub const LIGHT_STOP_MIN_GAP_M: f64 = 0.40;
+// Round y20: one motion into the zone (the guard's floor the line itself), a red there holds.
+pub const LIGHT_STOP_TARGET_GAP_M: f64 = 0.45;
+pub const LIGHT_STOP_MIN_GAP_M: f64 = 0.05;
 pub const LIGHT_STOP_BODY_GAP_M: f64 = LIGHT_ZONE_M - (FRONT_BODY_EXTENT_M + REAR_BODY_EXTENT_M) - 0.06;
 pub const LIGHT_STOP_ZONE_GAP_M: f64 = LIGHT_ZONE_M - 0.02;
 pub const LIGHT_POST_MAX_BINS: usize = 8;
@@ -626,6 +627,8 @@ pub struct Maneuver {
     pub _light_seen: bool,
     pub _light_gantry_since: Option<f64>,
     pub _light_red_at: Option<f64>,
+    pub _light_zone_at: Option<f64>,
+    pub _light_red_hold: bool,
     pub _light_stop_red_frames: i64,
     pub _light_center_shift_m: f64,
     pub _light_rearm_min_m: Option<f64>,
@@ -944,6 +947,8 @@ impl Maneuver {
             _light_seen: false,
             _light_gantry_since: None,
             _light_red_at: None,
+            _light_zone_at: None,
+            _light_red_hold: false,
             _light_stop_red_frames: 0,
             _light_center_shift_m: 0.,
             _light_rearm_min_m: None,

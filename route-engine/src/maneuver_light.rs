@@ -457,6 +457,7 @@ impl Maneuver {
         self.light_stop_state = Some("approach");
         (self._light_gantry_since, self._light_red_frames, self._light_seen) = (Some(now), 0, false);
         self._light_red_at = None;
+        (self._light_zone_at, self._light_red_hold) = (None, false);
         let base = if self.light_stop_evidence.truthy() { self.light_stop_evidence.clone() } else { V::dict() };
         self.light_stop_evidence = base.merged(&dict! {"gantry" => evidence.clone()});
         self.route_event("light_gantry", scan, control, evidence);
