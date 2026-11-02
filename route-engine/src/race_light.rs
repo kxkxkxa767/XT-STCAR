@@ -142,6 +142,8 @@ pub struct RaceLight {
     pub ranges: RangeHistory,
     pub last_speed: Option<(f64, f64)>,
     imu_history: Vec<(f64, f64)>,
+    /// When the front was first estimated past the photo beam (y34).
+    pub beam_at: Option<f64>,
 }
 impl RaceLight {
     pub fn measure_speed(&mut self, scan: &V, reference: Option<f64>, forward_integral: Option<f64>, axis_cos: f64)

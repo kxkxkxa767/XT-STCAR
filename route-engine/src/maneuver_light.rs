@@ -15,6 +15,9 @@ const LIGHT_TOPUP_BAND_M: f64 = 0.10;
 const LIGHT_RESTART_MPS: f64 = 0.15;
 const NEAR_POST_EDGE_M: f64 = 0.04; // measured close to both boards at the static gantry pose
 const VISIBLE_LIGHT_STOP_GAP_M: f64 = 0.55; // head visible at 0.52 m, out of frame at the y29 stop at 0.20 m
+// y34: the practice red follows the beam by 1.0-1.3 s, then a 3.6 Hz frame and
+// inference; y32 decided it 1.36 s after the crossing but had refilled at 1.0 s.
+const LIGHT_RED_DUE_S: f64 = 2.0;
 
 /// _thin_posts(ranges): isolated thin posts (car frame, left +), nearest first.
 pub fn thin_posts(ranges: &[V]) -> Vec<(f64, f64)> {
@@ -489,6 +492,7 @@ impl Maneuver {
                         self._light_gantry_since = Some(now);
                         self.race_light.ranges.clear();
                         self.race_light.last_speed = None;
+                        self.race_light.beam_at = None;
                         self.route_event("light_divider_prediction", scan, control, dict! {
                             "basis" => "first_loop_board_end_relative_to_end_wall", "along_m" => d,
                             "end_wall_offset_m" => self.race_light.landmark().map(|v| v.1),
@@ -544,7 +548,10 @@ impl Maneuver {
                 self._light_rearm_min_m = Some(LIGHT_REARM_MIN_M);
             }
             self.lane_speed(scan, None, 2);
-            if self.race_inputs.is_some() { self.race_light.ranges.clear(); }
+            if self.race_inputs.is_some() {
+                self.race_light.ranges.clear();
+                self.race_light.beam_at = None;
+            }
             self.light_entry_coast_ack_dropped();
             if self.route_stage != "light_lane" {
                 self.lane_motor = ROUTE_SLOW_MOTOR;
@@ -611,6 +618,16 @@ impl Maneuver {
             g - (v+release)*tail/2. - release*release/(2.*decel)
         });
         let red = self._light_red_hold;
+        // A leg sighting can move the estimate back upstream; small noise at the beam cannot.
+        match to_sensor {
+            Some(s) if s <= 0. => {
+                self.race_light.beam_at.get_or_insert(now);
+            }
+            Some(s) if s > LIGHT_LINE_JUMP_M => self.race_light.beam_at = None,
+            _ => {}
+        }
+        let crossed = self.race_light.beam_at.is_some();
+        let red_due = self.race_light.beam_at.is_some_and(|at| now - at >= LIGHT_RED_DUE_S);
         if !red {
             let cut = predicted.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
             let rolling_short = tail == 0. && v.is_some_and(|s| s < beam_speed)
@@ -620,14 +637,20 @@ impl Maneuver {
                 LightRoll::Cruise if cut => LightRoll::Coast,
                 LightRoll::Coast if rolling_short => LightRoll::Topup,
                 LightRoll::Topup if cut => LightRoll::FinalCoast,
-                // No red: do not park to wait for an unlit gantry. Keep the
-                // through command until a camera red or the end of the approach.
-                LightRoll::Coast | LightRoll::FinalCoast if running_out => LightRoll::Through,
+                // No red: do not park to wait for an unlit gantry. Short of the
+                // beam push through to trigger it; past it, wait for the red
+                // the beam has started, and keep going only once that is overdue.
+                LightRoll::Coast | LightRoll::FinalCoast if running_out && (!crossed || red_due) => LightRoll::Through,
+                LightRoll::Through if crossed && !red_due => LightRoll::FinalCoast,
                 phase => phase,
             };
         }
         let motor = if red || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::FinalCoast) {
             NEUTRAL
+        } else if matches!(self.race_light.phase, LightRoll::Through)
+            && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
+        {
+            TRIAL_MOTOR // y34: 1550 does not start the car from rest (y33 sim short5 sat at 1550 for 26 s)
         } else { ROUTE_SLOW_MOTOR };
         self.lane_motor = motor;
         let stopped = red && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
@@ -638,6 +661,7 @@ impl Maneuver {
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
             "divider_gantry_ahead_m" => self.race_light.prior_ahead, "approach_phase" => self.race_light.phase.label(),
+            "beam_crossed_s_ago" => self.race_light.beam_at.map(|at| now - at), "red_due" => red_due,
             "red_hold" => red, "motor" => motor, "creeps" => 0,
             "whole_car_in_finish_zone" => gap.is_some_and(|g| (0.0..=LIGHT_STOP_BODY_GAP_M).contains(&g))};
         (basis, feedback)

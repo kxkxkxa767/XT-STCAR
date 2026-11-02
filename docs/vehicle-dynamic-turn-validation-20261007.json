@@ -26080,5 +26080,91 @@
       "the practice light: red not triggered in y21-y24 (user will fix it); the light code (one motion into the zone, red hold once in, green release) worked when it did trigger (y20)",
       "outdoor concrete for the video (user): a first trial run to check the crosswalk prior (.6 m/s2 before any measured coast), 1600 launch and brake traction, lidar/YOLO/photo sensor in sunlight, steering"
     ]
+  },
+  "y34_light_red_due_restart_20261102": {
+    "date": "2026-11-02",
+    "author": "Claude",
+    "baseline": "48a2a85 y33 (car: y32 / engine 139, 94b4b83)",
+    "engine_round": 141,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "你可以在此基础上改y34",
+      "你改完提交，你可以仿真一下看看他解耦后的逻辑对不对，我睡觉去",
+      "你修改的y34我多跑几轮，用于你的测试"
+    ],
+    "change": [
+      "Light approach only (route-engine/src/maneuver_light.rs, race_light.rs). RaceLight records when the front is first estimated past the photo beam (reset when the estimate jumps back > LIGHT_LINE_JUMP_M upstream or a new approach starts). Past the beam, running out of momentum no longer switches to unlit_continue until LIGHT_RED_DUE_S = 2.0 s after the crossing; short of the beam it still pushes through. y32 car: under .15 m/s ~1.0 s after the crossing at .631 m, two 1550 frames, red decided 1.36 s after the crossing, stop .515 m (the practice red follows the beam by 1.0-1.3 s plus a 3.6 Hz frame).",
+      "unlit_continue from rest (< .15 m/s) commands 1560 (TRIAL_MOTOR), 1550 once rolling. y33 in the short5 simulation coasted to .165 m from the gantry with the lamp out of view and sat at 1550 for 26 s until the drive budget (1550 does not start the car from rest).",
+      "Not changed: transfer, crosswalk, finish and the release rules. A race-mode red-gone release was rejected: during the y32 car wait the red still on went undetected for 3 consecutive frames (RRRR.R.R..RRR..RR.RR..R...RRRRRR..RRGG), which would release before green (+30 s). The 10.5 s red fallback stays (user, y30).",
+      "A speed-based finish brake start (gap <= target + v*.3 + v^2/(2*1.0)) was tried in simulation and reverted: the brake began 2.3-2.8 m out and the simulated car still overshot (-.24..-.36 m instead of -.46..-.67 m); the simulated 1600 launch reaches the brake point faster (1.6-2.1 m/s vs 1.17-1.4 m/s on the car in y27/y32), so the simulation cannot judge the finish."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
+    "simulation": {
+      "method": "Mac closed loop: route-engine race --demo with scripts/sim-vehicle-bridge.py, SIM_RACE4=1, layouts user8/doc8x4/mid64/short5, --start ready --ready-hold-s 1 --initial-presteer-pwm 1670 --max-drive-s 40. Real time, not bit-reproducible; physics and camera are models (red .8 s after the beam, green at 10 s, lamp visible from .60 m lidar-to-gantry). y32 = 94b4b83 and y33 = 48a2a85 built in work/y34-sim/wt-*; y34b = y34 + the reverted finish brake start; y34f = this commit.",
+      "evidence": "work/y34-sim/runs/<label>-<layout>-s<seed>/ (summaries by work/y34-sim/summarize.py)",
+      "decoupling_check": "y32 vs y33 on the same layouts and seeds: stage times within the run-to-run scatter, no systematic difference; both reach the light, stop on red, release on green, and both end every run with probe_obstacle_close_body at the finish (pre-existing in y32 under the simulated launch).",
+      "short5_second_cone": "First series: y33 7/7 passed the second cone, y34 (y34f) 3/7. Same-seed reruns (r* runs) show the outcome is not reproducible per binary (a y34 seed that hit the wall before passed on rerun); the light code runs only from light_entry on. Hits: the transfer 1600 boost lands just before the turn, ~2 m/s into it, the wider arc meets the end wall. The short layout leaves the transfer boost marginal.",
+      "short_light_approach": "short5 light stops .17-.39 m (lamp out of view): y33 sat at 1550 26 s to the drive timeout once; y34 does not stall, but with no red seen it passes after 2 s (a red-light violation in the race). Pre-existing since y32 (no room to coast, speed history reset at the light entry); not changed.",
+      "runs": {
+        "ry33-short5-s1": "probe_obstacle_close_body; handover 7.1, second loop 11.33, light entry 15.15, stop 18.02, go 28.05; pre-red 1550 frames 0; true light stop front/rear [0.285, 0.665]; finish brake (29.35, 1.197, 1.89), true end gap -0.666",
+        "ry33-short5-s2": "probe_obstacle_close_body; handover 6.87, second loop 11.24, light entry 15.79, stop 18.85, go 28.84; pre-red 1550 frames 0; true light stop front/rear [0.364, 0.743]; finish brake (30.31, 1.163, 1.6), true end gap -0.062",
+        "ry34-short5-s1": "probe_obstacle_close_body; handover 7.24, second loop 11.57, light entry 16.22, stop 19.32, go 29.22; pre-red 1550 frames 0; true light stop front/rear [0.293, 0.672]; finish brake (30.51, 1.155, 2.02), true end gap -1.257",
+        "ry34f-short5-s1": "probe_obstacle_close_body; handover 6.96, second loop 11.5, light entry 16.45, stop 19.32, go 29.45; pre-red 1550 frames 0; true light stop front/rear [0.377, 0.756]; finish brake (30.72, 1.134, 2.09), true end gap -1.689",
+        "ry34f-short5-s2": "probe_obstacle_close_body; handover 6.95, second loop 11.44, light entry 16.23, stop 19.1, go 28.68; pre-red 1550 frames 0; true light stop front/rear [0.546, 0.918]; finish brake (33.01, 0.187, 0.68), true end gap -0.109",
+        "y32-doc8x4-s0": "probe_obstacle_close_body; handover 9.84, second loop 15.47, light entry 19.69, stop 24.45, go 33.99; pre-red 1550 frames 0; true light stop front/rear [0.524, 0.904]; finish brake (35.75, 1.014, 1.89), true end gap -1.059",
+        "y32-user8-s0": "probe_obstacle_close_body; handover 9.67, second loop 14.35, light entry 18.26, stop 23.84, go 33.05; pre-red 1550 frames 0; true light stop front/rear [0.48, 0.86]; finish brake (34.97, 0.934, 1.72), true end gap -0.682",
+        "y32-user8-s1": "probe_obstacle_close_body; handover 10.09, second loop 15.85, light entry 18.6, stop 23.59, go 32.77; pre-red 1550 frames 2; true light stop front/rear [0.601, 0.981]; finish brake (34.7, 0.9, 1.63), true end gap -0.711",
+        "y32-user8-s2": "probe_obstacle_close_body; handover 9.92, second loop 15.64, light entry 19.34, stop 24.25, go 33.69; pre-red 1550 frames 0; true light stop front/rear [0.552, 0.931]; finish brake (35.62, 0.996, 1.59), true end gap -0.364",
+        "y33-doc8x4-s0": "probe_obstacle_close_body; handover 9.26, second loop 13.62, light entry 17.67, stop 22.51, go 31.97; pre-red 1550 frames 0; true light stop front/rear [0.526, 0.906]; finish brake (33.7, 1.179, 1.95), true end gap -1.096",
+        "y33-mid64-s0": "probe_obstacle_close_body; handover 8.84, second loop 12.71, light entry 17.6, stop 21.11, go 30.51; pre-red 1550 frames 0; true light stop front/rear [0.446, 0.819]; finish brake (32.46, 1.186, 1.56), true end gap -0.023",
+        "y33-short5-s0": "maneuver_cumulative_drive_timeout; handover 6.95, second loop 11.22, light entry 14.93, stop None, go None; pre-red 1550 frames 161; true light stop front/rear [0.165, 0.543]; finish brake None, true end gap 2.69",
+        "y33-short5-s1": "probe_obstacle_close_body; handover 8.2, second loop 11.61, light entry 15.6, stop 18.64, go 28.67; pre-red 1550 frames 1; true light stop front/rear [0.37, 0.747]; finish brake (30.15, 1.113, 1.52), true end gap -0.21",
+        "y33-short5-s2": "probe_obstacle_close_body; handover 6.8, second loop 11.28, light entry 15.03, stop 17.68, go 27.78; pre-red 1550 frames 0; true light stop front/rear [0.33, 0.708]; finish brake (29.27, 1.071, 1.56), true end gap -0.234",
+        "y33-short5-s3": "route_finish_zone_stop; handover 7.11, second loop 11.47, light entry 15.04, stop 17.62, go 27.84; pre-red 1550 frames 0; true light stop front/rear [0.342, 0.716]; finish brake (29.31, 1.181, 1.48), true end gap 0.121",
+        "y33-short5-s4": "probe_obstacle_close_body; handover 7.07, second loop 11.41, light entry 15.16, stop 18.02, go 28.07; pre-red 1550 frames 0; true light stop front/rear [0.388, 0.762]; finish brake (29.66, 1.032, 1.47), true end gap -0.059",
+        "y33-short5-s5": "probe_obstacle_close_body; handover 6.84, second loop 11.34, light entry 16.31, stop 19.36, go 29.54; pre-red 1550 frames 0; true light stop front/rear [0.364, 0.743]; finish brake (31.0, 1.075, 1.65), true end gap -0.293",
+        "y33-short5-s6": "probe_obstacle_close_body; handover 6.99, second loop 11.36, light entry 15.25, stop 17.84, go 28.12; pre-red 1550 frames 0; true light stop front/rear [0.37, 0.748]; finish brake (29.57, 1.163, 1.49), true end gap -0.002",
+        "y33-user8-s0": "probe_obstacle_close_body; handover 9.46, second loop 14.28, light entry 18.26, stop 23.88, go 33.16; pre-red 1550 frames 0; true light stop front/rear [0.57, 0.95]; finish brake (34.94, 1.19, 1.63), true end gap -0.217",
+        "y33-user8-s1": "probe_obstacle_close_body; handover 9.36, second loop 14.03, light entry 18.31, stop 23.79, go 33.31; pre-red 1550 frames 0; true light stop front/rear [0.519, 0.899]; finish brake (35.26, 0.987, 1.69), true end gap -0.649",
+        "y33-user8-s2": "probe_obstacle_close_body; handover 9.8, second loop 15.25, light entry 19.33, stop 24.66, go 33.86; pre-red 1550 frames 1; true light stop front/rear [0.497, 0.877]; finish brake (35.63, 1.192, 1.75), true end gap -0.445",
+        "y34-doc8x4-s0": "probe_obstacle_close_body; handover 9.93, second loop 15.33, light entry 19.67, stop 24.45, go 33.9; pre-red 1550 frames 0; true light stop front/rear [0.634, 1.014]; finish brake (35.85, 1.071, 1.72), true end gap -0.622",
+        "y34-mid64-s0": "probe_obstacle_close_body; handover 8.88, second loop 12.46, light entry 17.27, stop 20.99, go 30.27; pre-red 1550 frames 0; true light stop front/rear [0.474, 0.846]; finish brake (32.18, 1.06, 1.66), true end gap -0.416",
+        "y34-short5-s0": "probe_obstacle_close_body; handover 7.15, second loop 11.37, light entry 15.03, stop 17.57, go 27.72; pre-red 1550 frames 0; true light stop front/rear [0.268, 0.641]; finish brake (29.2, 1.078, 1.47), true end gap -0.066",
+        "y34-user8-s0": "probe_obstacle_close_body; handover 9.3, second loop 13.39, light entry 17.39, stop 22.73, go 32.03; pre-red 1550 frames 0; true light stop front/rear [0.471, 0.851]; finish brake (33.81, 1.132, 1.77), true end gap -0.578",
+        "y34-user8-s1": "probe_obstacle_close_body; handover 9.82, second loop 14.83, light entry 19.03, stop 24.21, go 33.84; pre-red 1550 frames 0; true light stop front/rear [0.446, 0.825]; finish brake (35.61, 1.045, 1.64), true end gap -0.464",
+        "y34-user8-s2": "probe_obstacle_close_body; handover 9.7, second loop 14.17, light entry 18.17, stop 23.38, go 32.83; pre-red 1550 frames 0; true light stop front/rear [0.532, 0.912]; finish brake (34.6, 1.158, 1.74), true end gap -0.667",
+        "y34b-doc8x4-s0": "probe_obstacle_close_body; handover 9.92, second loop 15.62, light entry 19.7, stop 24.57, go 34.0; pre-red 1550 frames 0; true light stop front/rear [0.582, 0.961]; finish brake (34.96, 2.649, 1.9), true end gap -0.242",
+        "y34b-mid64-s0": "probe_obstacle_close_body; handover 9.17, second loop 13.21, light entry 18.21, stop 21.93, go 31.45; pre-red 1550 frames 0; true light stop front/rear [0.423, 0.802]; finish brake (32.58, 2.323, 2.04), true end gap -0.305",
+        "y34b-short5-s0": "probe_obstacle_close_body; handover 6.95, second loop 11.34, light entry 15.2, stop 17.75, go 28.07; pre-red 1550 frames 0; true light stop front/rear [0.353, 0.731]; finish brake (29.06, 1.826, 1.75), true end gap -0.048",
+        "y34b-user8-s0": "probe_obstacle_close_body; handover 9.76, second loop 14.55, light entry 19.12, stop 24.54, go 33.9; pre-red 1550 frames 0; true light stop front/rear [0.582, 0.962]; finish brake (35.06, 2.461, 2.11), true end gap -0.359",
+        "y34b-user8-s1": "probe_obstacle_close_body; handover 9.2, second loop 13.83, light entry 17.8, stop 22.83, go 32.32; pre-red 1550 frames 0; true light stop front/rear [0.525, 0.905]; finish brake (33.13, 2.848, 1.58), true end gap -0.249",
+        "y34b-user8-s2": "probe_obstacle_close_body; handover 9.21, second loop 13.46, light entry 17.16, stop 21.96, go 31.5; pre-red 1550 frames 0; true light stop front/rear [0.592, 0.972]; finish brake (32.46, 2.659, 1.97), true end gap -0.241",
+        "y34f-doc8x4-s0": "probe_obstacle_close_body; handover 9.7, second loop 15.36, light entry 19.01, stop 23.96, go 33.58; pre-red 1550 frames 0; true light stop front/rear [0.576, 0.956]; finish brake (35.31, 1.041, 1.87), true end gap -1.143",
+        "y34f-mid64-s0": "probe_obstacle_close_body; handover 9.06, second loop 13.05, light entry 17.77, stop 21.46, go 30.85; pre-red 1550 frames 0; true light stop front/rear [0.416, 0.789]; finish brake (32.76, 0.97, 1.7), true end gap -0.506",
+        "y34f-short5-s0": "probe_obstacle_close_body; handover 7.11, second loop 11.33, light entry None, stop None, go None; pre-red 1550 frames 0; true light stop front/rear None; finish brake None, true end gap 6.413",
+        "y34f-short5-s1": "probe_obstacle_close_body; handover 7.1, second loop 11.27, light entry None, stop None, go None; pre-red 1550 frames 0; true light stop front/rear None; finish brake None, true end gap 3.904",
+        "y34f-short5-s2": "probe_obstacle_close_body; handover 6.96, second loop 11.27, light entry None, stop None, go None; pre-red 1550 frames 0; true light stop front/rear None; finish brake None, true end gap 4.611",
+        "y34f-short5-s3": "probe_obstacle_close_body; handover 7.01, second loop 11.4, light entry 15.4, stop 18.41, go 28.52; pre-red 1550 frames 0; true light stop front/rear [0.339, 0.717]; finish brake (29.98, 0.989, 1.54), true end gap -0.041",
+        "y34f-short5-s4": "route_finish_zone_stop; handover 6.96, second loop 11.39, light entry 15.48, stop None, go 19.24; pre-red 1550 frames 3; true light stop front/rear [0.24, 0.617]; finish brake None, true end gap 0.129",
+        "y34f-short5-s5": "probe_obstacle_close_body; handover 6.96, second loop 11.36, light entry 15.09, stop 17.84, go 27.86; pre-red 1550 frames 0; true light stop front/rear [0.287, 0.664]; finish brake (29.12, 1.076, 1.67), true end gap -0.527",
+        "y34f-short5-s6": "probe_obstacle_close_body; handover 7.07, second loop 11.46, light entry None, stop None, go None; pre-red 1550 frames 0; true light stop front/rear None; finish brake None, true end gap 4.439",
+        "y34f-user8-s0": "probe_obstacle_close_body; handover 9.89, second loop 15.38, light entry 19.7, stop 24.89, go 34.19; pre-red 1550 frames 0; true light stop front/rear [0.57, 0.949]; finish brake (36.12, 0.914, 1.8), true end gap -0.963",
+        "y34f-user8-s1": "probe_obstacle_close_body; handover 9.73, second loop 14.45, light entry 18.28, stop 23.52, go 32.81; pre-red 1550 frames 0; true light stop front/rear [0.555, 0.935]; finish brake (34.73, 1.005, 1.69), true end gap -0.74",
+        "y34f-user8-s2": "probe_obstacle_close_body; handover 9.63, second loop 14.31, light entry 18.34, stop 23.38, go 32.82; pre-red 1550 frames 0; true light stop front/rear [0.54, 0.92]; finish brake (34.57, 1.178, 1.77), true end gap -0.622"
+      }
+    },
+    "risks": [
+      "Coasting to rest past the beam can now sit up to 2 s before a dark light is passed (practice light failures y21-y24).",
+      "The visible-light stop window is about .50 m (lamp in view; y31 at .495 got one green frame) to .62 m (whole car in a 1.0 m rule zone); without the y32 refill that run would have stopped near .61-.63 m.",
+      "Finish: y27 stopped .099 m from the board on the car; the simulated finish overshoots in every run."
+    ],
+    "next": "User runs y34 several times: per run the beam-to-red time (beam_crossed_s_ago, red_hold), any pre-red push, the stop gap and green frames, the release basis, and the finish gap. Packages claude-turn141 / y34 after this commit."
   }
 }
