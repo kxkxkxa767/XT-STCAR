@@ -12,6 +12,7 @@ pub struct RaceTransfer {
     history: Vec<(f64, f64, f64)>,
     speed: Option<f64>,
     phase: TransferPhase,
+    pub imu_yaw_rate: Option<f64>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -46,7 +47,7 @@ impl RaceTransfer {
         self.speed.is_some_and(|v| v >= LANE_SPEED_RESTART_MPS)
     }
 
-    pub fn drive(&mut self, now: f64, distance: Option<f64>, straight: bool, decel: f64) -> (i64, V) {
+    pub fn drive(&mut self, now: f64, distance: Option<f64>, entering: bool, continuing: bool, decel: f64) -> (i64, V) {
         let coast_m = self.speed.map(|v| {
             let lag = CROSSWALK_AIM_LAG_S; // measured mean cut lag on the car
             let powered = match self.phase {
@@ -56,18 +57,18 @@ impl RaceTransfer {
             let release_v = v + STRAIGHT_ACCEL_MAX_MPS2 * powered;
             (v + release_v) * lag / 2. + (release_v * release_v - ENTRY_MPS * ENTRY_MPS).max(0.) / (2. * decel)
         });
-        let room = straight && self.rolling() && distance.zip(coast_m).is_some_and(|(d, coast)| d > coast);
+        let room = self.rolling() && distance.zip(coast_m).is_some_and(|(d, coast)| d > coast);
         self.phase = match self.phase {
-            TransferPhase::Approach if room => TransferPhase::Boost(now),
+            TransferPhase::Approach if entering && room => TransferPhase::Boost(now),
             TransferPhase::Approach if distance == Some(0.) => TransferPhase::Bend,
-            TransferPhase::Boost(_) if !room => TransferPhase::Coast,
+            TransferPhase::Boost(_) if !room || !continuing => TransferPhase::Coast,
             other => other,
         };
         if matches!(self.phase, TransferPhase::Coast) && self.speed.is_none_or(|v| v <= ENTRY_MPS) {
             self.phase = TransferPhase::Bend;
         }
         let motor = match self.phase {
-            TransferPhase::Boost(_) => STRAIGHT_MOTOR,
+            TransferPhase::Boost(_) => TRANSFER_BOOST_MOTOR,
             TransferPhase::Coast => NEUTRAL,
             _ => ROUTE_SLOW_MOTOR,
         };
@@ -82,7 +83,7 @@ impl RaceTransfer {
             TransferPhase::Coast => ("coast", None),
             TransferPhase::Bend => ("bend", None),
         };
-        dict! {"speed_mps" => self.speed, "phase" => phase, "boost_since" => since,
+        dict! {"speed_mps" => self.speed, "phase" => phase, "boost_since" => since, "imu_yaw_rate" => self.imu_yaw_rate,
                "history" => V::list(self.history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect())}
     }
 }

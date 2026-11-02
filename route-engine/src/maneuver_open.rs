@@ -1106,9 +1106,15 @@ impl Maneuver {
     fn transfer_drive(&mut self, scan: &V, now: f64, remaining: Option<f64>, target_pwm: i64) {
         let decel = self.lane_decels().0;
         let Some(transfer) = &mut self.race_transfer else { return };
-        let straight = (target_pwm - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM
-            && self.compass.rate.abs() <= OPEN_PROBE_MAX_RATE_RAD_S;
-        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, straight, decel);
+        let yaw = transfer.imu_yaw_rate.unwrap_or(self.compass.rate);
+        let low_yaw = yaw.abs() <= OPEN_PROBE_MAX_RATE_RAD_S;
+        let steer_near_center = (target_pwm - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM;
+        let entering = low_yaw && (steer_near_center || (self.servo - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM);
+        // y25's first run ended a push at 0.61 rad/s while steering 1496 and
+        // over 2 m short of the divider. A small correction can continue the push.
+        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, entering, low_yaw || steer_near_center, decel);
+        self.open_feedback.set("yaw_rate_radps", yaw);
+        self.open_feedback.set("yaw_source", if transfer.imu_yaw_rate.is_some() { "calibrated_imu" } else { "lidar_compass" });
         self.open_feedback.set("stage", self.route_stage);
         self.open_feedback.set("source_seq", scan.idx("seq").clone());
     }

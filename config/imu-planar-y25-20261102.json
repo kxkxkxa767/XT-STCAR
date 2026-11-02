@@ -1,0 +1,241 @@
+{
+  "application": "yaw_rate = yaw_rate_gain * dot(gyro - gyro_bias, up); forward_accel = forward_acceleration_gain * dot(accel - stationary_specific_force, forward)",
+  "frame": "imu_link",
+  "leave_one_run_out": [
+    {
+      "forward": {
+        "correlation": 0.9932269658781069,
+        "mae": 0.03011203709274615,
+        "quantity": "change in adjacent mean longitudinal speeds, m/s",
+        "reference_rms": 0.2992386540600599,
+        "rmse": 0.03652394257151124,
+        "windows": 62
+      },
+      "held_out": "left-cone-trial-20261102-y25",
+      "imu_samples": 3971,
+      "max_sample_gap_s": 0.018000000000000682,
+      "mean_rate_hz": 99.81394881078091,
+      "stationary_gyro_radps": [
+        0.0003799252100835567,
+        0.0002726618425815192,
+        -0.000732011072876518
+      ],
+      "stationary_samples": 1301,
+      "stationary_specific_force_mps2": [
+        0.3416844314469634,
+        0.1514992974154492,
+        9.821527686034807
+      ],
+      "training_parameters": {
+        "body_axes_in_sensor": {
+          "forward": [
+            0.9973222989802556,
+            0.05926237490579321,
+            -0.04285093788078127
+          ],
+          "left": [
+            -0.05984924175760283,
+            0.9981286102411905,
+            -0.01254375059657356
+          ],
+          "up": [
+            0.04202737462389689,
+            0.0150747583235766,
+            0.9990027284465784
+          ]
+        },
+        "forward_acceleration_gain": 0.974937974573826,
+        "forward_imu_minus_lidar_receive_s": 0.0,
+        "gyro_bias_radps": [
+          0.0003833081830493479,
+          0.00012158855396445507,
+          -0.00013691734073159652
+        ],
+        "stationary_specific_force_mps2": [
+          0.41322938523407327,
+          0.1482208482054877,
+          9.822580806377857
+        ],
+        "yaw_imu_minus_lidar_receive_s": -0.055,
+        "yaw_rate_gain": 1.0006466048647669
+      },
+      "yaw": {
+        "correlation": 0.9991172370653286,
+        "mae": 1.015785181014186,
+        "quantity": "change of lidar heading, degrees",
+        "reference_rms": 32.962668328321676,
+        "rmse": 1.3930244021159752,
+        "windows": 65
+      }
+    },
+    {
+      "forward": {
+        "correlation": 0.9910189787909193,
+        "mae": 0.03470895507990638,
+        "quantity": "change in adjacent mean longitudinal speeds, m/s",
+        "reference_rms": 0.3118363112713402,
+        "rmse": 0.0423363760655289,
+        "windows": 60
+      },
+      "held_out": "left-cone-trial-20261102-y25-3",
+      "imu_samples": 3925,
+      "max_sample_gap_s": 0.019000000000000128,
+      "mean_rate_hz": 99.8041559630694,
+      "stationary_gyro_radps": [
+        0.0003371198295554126,
+        0.0003533768771735683,
+        -0.0007033312180064754
+      ],
+      "stationary_samples": 1245,
+      "stationary_specific_force_mps2": [
+        0.3845997270331328,
+        0.12215792858935745,
+        9.823203203438739
+      ],
+      "training_parameters": {
+        "body_axes_in_sensor": {
+          "forward": [
+            0.9984083764321037,
+            0.03927342830177558,
+            -0.040476063292225195
+          ],
+          "left": [
+            -0.0399074964357656,
+            0.9990911144365384,
+            -0.0149778764244272
+          ],
+          "up": [
+            0.039851042626765525,
+            0.01656933563488134,
+            0.9990682416722986
+          ]
+        },
+        "forward_acceleration_gain": 0.9657311535580203,
+        "forward_imu_minus_lidar_receive_s": 0.0,
+        "gyro_bias_radps": [
+          0.0004047108733134199,
+          0.00008123103666843052,
+          -0.00015125726816661786
+        ],
+        "stationary_specific_force_mps2": [
+          0.3917717374409886,
+          0.16289153261853356,
+          9.821743047675891
+        ],
+        "yaw_imu_minus_lidar_receive_s": -0.05,
+        "yaw_rate_gain": 1.002665219414024
+      },
+      "yaw": {
+        "correlation": 0.9989325693160138,
+        "mae": 1.2378144663577015,
+        "quantity": "change of lidar heading, degrees",
+        "reference_rms": 33.582119885011956,
+        "rmse": 1.5513366663505717,
+        "windows": 66
+      }
+    },
+    {
+      "forward": {
+        "correlation": 0.9929089169351306,
+        "mae": 0.03675175400482977,
+        "quantity": "change in adjacent mean longitudinal speeds, m/s",
+        "reference_rms": 0.30565278126197676,
+        "rmse": 0.042387086679350754,
+        "windows": 57
+      },
+      "held_out": "left-cone-trial-20261102-y25-4",
+      "imu_samples": 2967,
+      "max_sample_gap_s": 0.019000000000000128,
+      "mean_rate_hz": 99.8115493336923,
+      "stationary_gyro_radps": [
+        0.00042949653654328313,
+        -0.00011019976924465815,
+        0.0004294965365432823
+      ],
+      "stationary_samples": 377,
+      "stationary_specific_force_mps2": [
+        0.44185904343501375,
+        0.17428376782161795,
+        9.821958409316977
+      ],
+      "training_parameters": {
+        "body_axes_in_sensor": {
+          "forward": [
+            0.9982449446864351,
+            0.04579820638035696,
+            -0.03754403681436264
+          ],
+          "left": [
+            -0.04628509730788829,
+            0.9988537295986711,
+            -0.012203140334518628
+          ],
+          "up": [
+            0.0369421192566872,
+            0.013919452545516069,
+            0.9992204604919066
+          ]
+        },
+        "forward_acceleration_gain": 0.9714330908127236,
+        "forward_imu_minus_lidar_receive_s": -0.005,
+        "gyro_bias_radps": [
+          0.00035852251981948466,
+          0.0003130193598775438,
+          -0.0007176711454414968
+        ],
+        "stationary_specific_force_mps2": [
+          0.3631420792400481,
+          0.13682861300240334,
+          9.822365444736773
+        ],
+        "yaw_imu_minus_lidar_receive_s": -0.05,
+        "yaw_rate_gain": 1.0023665019449328
+      },
+      "yaw": {
+        "correlation": 0.9992450071370003,
+        "mae": 1.0615173829074962,
+        "quantity": "change of lidar heading, degrees",
+        "reference_rms": 34.078855479479856,
+        "rmse": 1.3256453549741116,
+        "windows": 62
+      }
+    }
+  ],
+  "method": "flat-floor planar calibration against lidar",
+  "observability": "rest acceleration includes gravity and bias; separate 3-D accelerometer biases and translational lever arm are not estimated",
+  "parameters": {
+    "body_axes_in_sensor": {
+      "forward": [
+        0.9980279085695875,
+        0.04813004128723717,
+        -0.040296313006326356
+      ],
+      "left": [
+        -0.04869873648510025,
+        0.9987256010181764,
+        -0.013251676710388958
+      ],
+      "up": [
+        0.03960715567886372,
+        0.015187922720726011,
+        0.9990998950167392
+      ]
+    },
+    "forward_acceleration_gain": 0.9705743214958452,
+    "forward_imu_minus_lidar_receive_s": 0.0,
+    "gyro_bias_radps": [
+      0.00038218052539408417,
+      0.0001719463168368098,
+      -0.000335281918113237
+    ],
+    "stationary_specific_force_mps2": [
+      0.38938106730503663,
+      0.14931366460880818,
+      9.822229766263508
+    ],
+    "yaw_imu_minus_lidar_receive_s": -0.05,
+    "yaw_rate_gain": 1.0019115389499718
+  },
+  "schema": 1,
+  "time_convention": "IMU query time = lidar scan receive time + fitted signed offset; these include scan/processing latency"
+}

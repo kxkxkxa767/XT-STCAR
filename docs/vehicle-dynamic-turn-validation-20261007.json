@@ -25660,8 +25660,8 @@
     "author": "Codex",
     "baseline": "48e7152; car last confirmed round 131 + y24",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "basis": "The y22 and y24 second-support handovers still had 2.75 m and 3.12 m to the planned tangent. In both logs, the return-axis end wall behind remained visible even when the centre ray hit the first cone.",
     "change": [
       "Standalone Rust race mode only. Measure return-axis speed from nine projected rear-wall rays and the existing five-scan pairwise slope. Seed on the first loop, carry speed and motor across the second handover.",
@@ -25684,7 +25684,40 @@
       "cargo_test_release": "7 passed",
       "clippy_warnings": 32
     },
-    "release_order": "User: build the car packages and push to main before the physical trial. Deploy when connected and start only after the user confirms placement."
+    "release_order": "User: build the car packages and push to main before the physical trial. Deploy when connected and start only after the user confirms placement.",
+    "car_run_y25": {
+      "engine_round": 132,
+      "local_evidence_root": "work/vehicle-dynamic-deploy-20261008",
+      "driven_evidence": ["left-cone-trial-20261102-y25", "left-cone-trial-20261102-y25-3", "left-cone-trial-20261102-y25-4"],
+      "stationary_only": "left-cone-trial-20261102-y25-2: left_corridor_unknown alternated with ready until the prestart timeout. No drive. 2025 samples; excluded from the three calibration runs.",
+      "finish_gaps_m": [0.363, 0.343, 0.370],
+      "all_finished_and_locked": true,
+      "start_to_finish_event_s": [35.464, 35.756, 26.265],
+      "first_to_second_pass_event_s": [4.396, 4.495, 4.594],
+      "sampled_transfer_1590_command_and_ack_frames": [0, 3, 2],
+      "sampled_transfer_speed_peaks_mps": [1.479, 1.971, 1.709],
+      "imu_samples": [3971, 3925, 2967],
+      "imu_checksum_errors": [0, 0, 0],
+      "imu_thread_fraction_one_core": [0.02350, 0.02392, 0.02378],
+      "max_control_compute_ms": [7.75, 9.94, 9.83],
+      "max_control_interval_ms": [21.80, 23.64, 22.45],
+      "calibration": "config/imu-planar-y25-20261102.json",
+      "calibration_tool": "tools/scan-geometry/examples/imu-calibration.rs",
+      "note": "Second driven run used 1590 at transfer and 1600 after the light. Third had a transfer recovery hold and a shorter light wait; compare segment times, not raw total times."
+    }
+  },
+  "y26_transfer_1620_calibrated_yaw_20261102": {
+    "date": "2026-11-02",
+    "author": "Codex",
+    "baseline": "dd9766a; round 132 / y25 driven three times",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": "Try 1620 between the cones; increase the chance of sustained high throttle on the straight.",
+    "change": "Use calibrated IMU yaw rate at the current control time, with lidar fallback. Near-centre current or requested steering can start the push at low measured yaw. During a push, a single yaw or steering correction no longer ends it when distance to coast remains. Only the race transfer can command 1620. The 1.24 m/s bend target and single coast remain.",
+    "evidence": "y25 first driven run at 14.07 s: target servo 1496, 2.20 m available, predicted coast 0.78 m, lidar yaw 0.61 rad/s against a 0.60 gate, IMU about 0.56 rad/s. Motor returned to 1550 and did not resume the straight push.",
+    "calibration_scope": "Live yaw only; forward acceleration calibrated on level ground and retained in the calibration file. The effective yaw offset of -50 ms is for timestamp alignment with old lidar scans; use the current gyro sample for current turning.",
+    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32}
   },
   "next_tasks_20261102": {
     "date": "2026-11-02",
