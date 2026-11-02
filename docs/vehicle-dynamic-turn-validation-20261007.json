@@ -26110,14 +26110,17 @@
       "method": "Mac closed loop: route-engine race --demo with scripts/sim-vehicle-bridge.py, SIM_RACE4=1, layouts user8/doc8x4/mid64/short5, --start ready --ready-hold-s 1 --initial-presteer-pwm 1670 --max-drive-s 40. Real time, not bit-reproducible; physics and camera are models (red .8 s after the beam, green at 10 s, lamp visible from .60 m lidar-to-gantry). y32 = 94b4b83 and y33 = 48a2a85 built in work/y34-sim/wt-*; y34b = y34 + the reverted finish brake start; y34f = this commit.",
       "evidence": "work/y34-sim/runs/<label>-<layout>-s<seed>/ (summaries by work/y34-sim/summarize.py)",
       "decoupling_check": "y32 vs y33 on the same layouts and seeds: stage times within the run-to-run scatter, no systematic difference; both reach the light, stop on red, release on green, and both end every run with probe_obstacle_close_body at the finish (pre-existing in y32 under the simulated launch).",
-      "short5_second_cone": "First series: y33 7/7 passed the second cone, y34 (y34f) 3/7. Same-seed reruns (r* runs) show the outcome is not reproducible per binary (a y34 seed that hit the wall before passed on rerun); the light code runs only from light_entry on. Hits: the transfer 1600 boost lands just before the turn, ~2 m/s into it, the wider arc meets the end wall. The short layout leaves the transfer boost marginal.",
+      "short5_second_cone": "First series: y33 7/7 passed the second cone, y34 (y34f) 3/7. Same-seed reruns (r* runs): the three y34 seeds that hit the wall (1, 2, 6) all passed (3/3), y33 2/2, the light-only y34 build 3/3, so the outcome is not reproducible per binary; the light code runs only from light_entry on. Hits: the transfer 1600 boost lands just before the turn, ~2 m/s into it, the wider arc meets the end wall. The short layout leaves the transfer boost marginal.",
       "short_light_approach": "short5 light stops .17-.39 m (lamp out of view): y33 sat at 1550 26 s to the drive timeout once; y34 does not stall, but with no red seen it passes after 2 s (a red-light violation in the race). Pre-existing since y32 (no room to coast, speed history reset at the light entry); not changed.",
       "runs": {
         "ry33-short5-s1": "probe_obstacle_close_body; handover 7.1, second loop 11.33, light entry 15.15, stop 18.02, go 28.05; pre-red 1550 frames 0; true light stop front/rear [0.285, 0.665]; finish brake (29.35, 1.197, 1.89), true end gap -0.666",
         "ry33-short5-s2": "probe_obstacle_close_body; handover 6.87, second loop 11.24, light entry 15.79, stop 18.85, go 28.84; pre-red 1550 frames 0; true light stop front/rear [0.364, 0.743]; finish brake (30.31, 1.163, 1.6), true end gap -0.062",
         "ry34-short5-s1": "probe_obstacle_close_body; handover 7.24, second loop 11.57, light entry 16.22, stop 19.32, go 29.22; pre-red 1550 frames 0; true light stop front/rear [0.293, 0.672]; finish brake (30.51, 1.155, 2.02), true end gap -1.257",
+        "ry34-short5-s2": "probe_obstacle_close_body; handover 7.11, second loop 11.42, light entry 15.3, stop 17.82, go 27.83; pre-red 1550 frames 0; true light stop front/rear [0.319, 0.693]; finish brake (29.29, 1.066, 1.58), true end gap -0.225",
+        "ry34-short5-s6": "probe_obstacle_close_body; handover 7.27, second loop 11.47, light entry 16.48, stop 19.37, go 29.43; pre-red 1550 frames 0; true light stop front/rear [0.379, 0.753]; finish brake (31.03, 1.014, 1.52), true end gap -0.102",
         "ry34f-short5-s1": "probe_obstacle_close_body; handover 6.96, second loop 11.5, light entry 16.45, stop 19.32, go 29.45; pre-red 1550 frames 0; true light stop front/rear [0.377, 0.756]; finish brake (30.72, 1.134, 2.09), true end gap -1.689",
         "ry34f-short5-s2": "probe_obstacle_close_body; handover 6.95, second loop 11.44, light entry 16.23, stop 19.1, go 28.68; pre-red 1550 frames 0; true light stop front/rear [0.546, 0.918]; finish brake (33.01, 0.187, 0.68), true end gap -0.109",
+        "ry34f-short5-s6": "probe_obstacle_close_body; handover 6.93, second loop 11.42, light entry 15.13, stop 17.73, go 27.87; pre-red 1550 frames 0; true light stop front/rear [0.372, 0.75]; finish brake (29.3, 1.08, 1.56), true end gap -0.228",
         "y32-doc8x4-s0": "probe_obstacle_close_body; handover 9.84, second loop 15.47, light entry 19.69, stop 24.45, go 33.99; pre-red 1550 frames 0; true light stop front/rear [0.524, 0.904]; finish brake (35.75, 1.014, 1.89), true end gap -1.059",
         "y32-user8-s0": "probe_obstacle_close_body; handover 9.67, second loop 14.35, light entry 18.26, stop 23.84, go 33.05; pre-red 1550 frames 0; true light stop front/rear [0.48, 0.86]; finish brake (34.97, 0.934, 1.72), true end gap -0.682",
         "y32-user8-s1": "probe_obstacle_close_body; handover 10.09, second loop 15.85, light entry 18.6, stop 23.59, go 32.77; pre-red 1550 frames 2; true light stop front/rear [0.601, 0.981]; finish brake (34.7, 0.9, 1.63), true end gap -0.711",
@@ -26165,6 +26168,23 @@
       "The visible-light stop window is about .50 m (lamp in view; y31 at .495 got one green frame) to .62 m (whole car in a 1.0 m rule zone); without the y32 refill that run would have stopped near .61-.63 m.",
       "Finish: y27 stopped .099 m from the board on the car; the simulated finish overshoots in every run."
     ],
-    "next": "User runs y34 several times: per run the beam-to-red time (beam_crossed_s_ago, red_hold), any pre-red push, the stop gap and green frames, the release basis, and the finish gap. Packages claude-turn141 / y34 after this commit."
+    "next": "User runs y34 several times: per run the beam-to-red time (beam_crossed_s_ago, red_hold), any pre-red push, the stop gap and green frames, the release basis, and the finish gap. Packages claude-turn141 / y34 after this commit.",
+    "build": {
+      "source_commit": "068c7893a1c222147ddff5dd3d78a84ce73980f9",
+      "engine_package": "claude-turn141-package.json",
+      "vision_package": "claude-y34-package.json",
+      "archive": "XT-STCAR-claude-turn141-068c789.tar.gz",
+      "archive_sha256": "d2c61288126193aa383c5841683c3f40ec542f52042ef3783de6dc6f3c33183b",
+      "engine_stage": "/home/bianbu/xt-stcar-console/stage-claude-turn141-20261102-232754",
+      "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y34-20261102-232801",
+      "vision_light_stop": true,
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "elf_check": "passed, lp64d, maximum GLIBC 2.34",
+      "y33_engine_bytes": 2715080,
+      "y34_engine_bytes": 2716952,
+      "bytes_change": 1872,
+      "logs": "work/y34-sim/build-race-141.log, work/y34-sim/build-vision-y34.log",
+      "deploy_then_run": "python3 work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn141 141; python3 work/vehicle-dynamic-deploy-20261008/deploy-vision.py y34; after the user confirms the car at the start and the light reset: python3 scripts/start-round.py y34 (background, no pipe)"
+    }
   }
 }
