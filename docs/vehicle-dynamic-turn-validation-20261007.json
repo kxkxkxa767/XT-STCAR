@@ -25560,8 +25560,8 @@
     "date": "2026-11-02",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "0d98df0 + y21 record (car: round 128 + y21)",
     "user": [
       "现在电调模式不是带刹车的吗，你可以还是按照上一轮的逻辑来，但在距离很近的时候刹车",
@@ -25576,10 +25576,18 @@
     ],
     "note": "the vehicle-bridge binary is the race program's only output path (route-engine race spawns it): kept, only its motor range opened; the brake's strength is unmeasured (10-16: 1450/.3 s, 1400/.5 s did nothing useful within the ESC lag)",
     "validation": {
-      "python_full_suite": "see commit",
+      "python_full_suite": "968 OK",
       "cargo_test": "route-engine 7, robot-core 258, runner all passed",
       "clippy_warnings": 32
     },
-    "commit": "(this commit)"
+    "commit": "(this commit)",
+    "deployment": "build-race.py claude-turn128 claude-turn129 129 --rebuild-bridge, build-vision.py y22; deploy-matched.py 129, deploy-vision.py y22",
+    "car_run_y22": {
+      "start": "rear .31, front 7.89 m (user: car placed, light set)",
+      "end": "route_finish_zone_stop, .274 m from the end board, whole car in the finish zone, 0 creeps; 29.5 s from the start (user: 这次刹车的效果很好)",
+      "crosswalk": "stopped 4.67 s, ~.205 m before the stripes by the board behind (2.748 - 2.543)",
+      "light": "one motion into the zone, stopped 22.09 s at .373 m (whole car in, 0 creeps); the light did not trigger (user: 红绿灯的问题; 0 red, 0 green frames): released after 4.09 s, no light seen since the gantry",
+      "after_green": "1600 launch at 26.24 s cut at +.48 s, the speed then 1.87 m/s; brake 1300 from 28.00 s (gap 1.198 m, 1.475 m/s, aimed stop -.30) to 29.28 s (1.28 s, .40 m/s, aimed stop .26 >= target .25); stopped at .274 m by ~29.6 s; by the rear lidar ~1.5+ m/s2 just after the ESC lag, then ~.6-.9; launch to stop 3.35 s (y19 5.9 s with two creeps)"
+    }
   }
 }
