@@ -41,7 +41,13 @@ pub const ROUTE_SLOW_MOTOR: i64 = MIN_FORWARD_PWM;
 pub const START_LAUNCH_MOTOR: i64 = 1600;
 // Round y18: the launch after green in the light lane (round y20: 1600, the start lane's).
 pub const LIGHT_LAUNCH_MOTOR: i64 = START_LAUNCH_MOTOR;
-pub const DRIVE_MOTORS: [i64; 4] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR];
+// Round y23: the straights' push (the start lane after the crosswalk, the transfer).
+pub const STRAIGHT_MOTOR: i64 = 1590;
+pub const DRIVE_MOTORS: [i64; 5] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR];
+pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
+pub const STRAIGHT_LAG_S: f64 = 0.3;
+pub const STRAIGHT_TURN_MPS: f64 = 1.1;
+pub const STRAIGHT_TRANSFER_MPS: f64 = 1.4;
 pub const POST_PASS_STAGES: [&str; 8] =
     ["right_align", "corridor_follow", "second_orbit", "light_turn", "light_lane", "open_transfer", "second_loop", "light_entry"];
 pub const ROUTE_MAX_DRIVE_S: f64 = 40.0;
@@ -691,6 +697,7 @@ pub struct Maneuver {
     pub _lane_start_ticks: i64,
     pub _lane_start_slow: bool,
     pub _start_motor: i64,
+    pub _transfer_motor: i64,
     pub _start_speed_measured: bool,
     pub _start_speed_last: Option<(f64, f64)>,
     pub start_lane_coast_steering: V,
@@ -1013,6 +1020,7 @@ impl Maneuver {
             _lane_start_ticks: 0,
             _lane_start_slow: false,
             _start_motor: TRIAL_MOTOR,
+            _transfer_motor: ROUTE_SLOW_MOTOR,
             _start_speed_measured: false,
             _start_speed_last: None,
             start_lane_coast_steering: V::None,
@@ -1440,6 +1448,9 @@ impl Maneuver {
         }
         if self.continue_route && self.phase == "drive" && self.route_stage == "start_lane" {
             return self._start_motor;
+        }
+        if self.continue_route && self.phase == "drive" && self.route_stage == "open_transfer" && !self.quality_resume_pending {
+            return self._transfer_motor; // round y23
         }
         if self.continue_route && self.phase == "drive" && slow_stage && !self.quality_resume_pending {
             ROUTE_SLOW_MOTOR

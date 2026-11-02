@@ -76,7 +76,11 @@ START_LAUNCH_MOTOR = 1600
 # 后面过红绿灯后你可以1600起步): the start lane's 1600 (car runs y18/y19: the 1580 launch
 # cut by its guard after .48/.64 s, peaks 1.4/1.3 m/s, then 1550 top-ups).
 LIGHT_LAUNCH_MOTOR = START_LAUNCH_MOTOR
-DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR)
+# Round y23 (user: 在绕桶的那个任务中有很大部分的路程都接近于直道，可不可以开放到1590，在快到桶要绕弯的
+# 时候减速按照原来的pwm来跑; 1和2): the straights' push (_straight_motor), the start lane after
+# the crosswalk up to the first handover and the transfer between the loops only.
+STRAIGHT_MOTOR = 1590
+DRIVE_MOTORS = (TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR)
 POST_PASS_STAGES = ('right_align', 'corridor_follow', 'second_orbit', 'light_turn', 'light_lane',
                     'open_transfer', 'second_loop', 'light_entry')
 # Route mode alone may extend the cumulative drive budget (user permitted a
@@ -727,6 +731,20 @@ LANE_START_PUSH_BAND_MPS = .4
 # from rest in run 99), so the cut comes early rather than late.
 START_LAUNCH_MAX_MPS = .2
 START_LAUNCH_ACCEL_MPS2 = 2.5
+# Round y23: car run y22 crept out of the crosswalk wait (one 1600 scan, then 1550 for its
+# .75 s settling: .6 m/s after .8 s) and drove the first approach at 1550 (~.8-1.1 m/s,
+# 7.7-10.9 s for 2.75 m), the transfer at 1550 (~1.1). There _straight_motor pushes
+# STRAIGHT_MOTOR, else 1560, else 1550 (else neutral where the stage may coast), each only
+# while the speed plus the pipeline's rise plus its own over STRAIGHT_LAG_S (the measured
+# cut lag, twenty cuts y10-y14: <= .3 s) stays under the cap: after the crosswalk the start
+# lane's board cap, approaching the first support also the speed that coasts at
+# LANE_START_STOP_DECEL_MPS2 to STRAIGHT_TURN_MPS by OPEN_HANDOVER_MAX_RANGE_M (the loop's
+# own speed, 1550 there before); the transfer STRAIGHT_TRANSFER_MPS. 1590's bound is
+# assumed (1580 ~1.6-2.6 m/s2, 1600 ~4 from rest, car runs y19-y20).
+STRAIGHT_ACCEL_MAX_MPS2 = 3.
+STRAIGHT_LAG_S = .3
+STRAIGHT_TURN_MPS = 1.1
+STRAIGHT_TRANSFER_MPS = 1.4
 # Round y18: the 1580 launch after green is guarded at 1600's bound (not measured) and
 # aimed at this (between 1560's LANE_POWER_ACCEL_MPS2 and that bound). Round y20: the
 # launch is 1600 itself (car run y19's 1580: ~1.3 m/s from rest after ~.8 s of power,
@@ -2158,6 +2176,7 @@ class ManeuverSequence(TurnMotion):
         self._lane_start_slow = False
         # Searching for the first support near the start lane's stopping range.
         self._start_motor = TRIAL_MOTOR
+        self._transfer_motor = ROUTE_SLOW_MOTOR  # round y23: the transfer's motor (_straight_motor)
         self._start_speed_measured = False
         self._start_speed_last = None  # round 100: (time, speed) of the last start-lane measurement
         self.start_lane_coast_steering = None
@@ -4486,6 +4505,8 @@ class ManeuverSequence(TurnMotion):
             # and slows a faster car.
             rise = (LANE_POWER_ACCEL_MPS2*(reaction-LANE_REACTION_BASE_S)
                     if self._power_cmd_motor == TRIAL_MOTOR else
+                    STRAIGHT_ACCEL_MAX_MPS2*(reaction-LANE_REACTION_BASE_S)
+                    if self._power_cmd_motor == STRAIGHT_MOTOR else  # round y23
                     START_LAUNCH_ACCEL_MPS2*(reaction-LANE_REACTION_BASE_S)
                     if self._power_cmd_motor == START_LAUNCH_MOTOR else 0.)
             if self._launch_cmd_at is not None:
@@ -4512,7 +4533,8 @@ class ManeuverSequence(TurnMotion):
                 self._start_speed_last = (now, speed)
             settling = (self._launch_cmd_at is not None
                         and now-self._launch_cmd_at < ESC_LAG_S+START_LAUNCH_SETTLE_S)
-            self._start_motor = self._start_governor(speed, rise, allowed, self._start_speed_measured, settling)
+            self._start_motor = (self._straight_motor(speed, now, allowed) if self.crosswalk_state == 'done'
+                                 else self._start_governor(speed, rise, allowed, self._start_speed_measured, settling))
             if self.crosswalk_state in ('search', 'approach'):
                 last = self._crosswalk_speed_last
                 if cw_speed is not None:
@@ -4527,6 +4549,14 @@ class ManeuverSequence(TurnMotion):
                     # round y10: 1560 to start, then 1550 until the crosswalk stop
                     self._start_motor = (TRIAL_MOTOR if v_crosswalk < CROSSWALK_CRUISE_MPS-CROSSWALK_CRUISE_BAND_MPS
                                          else ROUTE_SLOW_MOTOR)
+        elif self.crosswalk_state == 'done' and approach is not None:
+            # Round y23: towards the first support under the board's cap and the speed
+            # that coasts down to STRAIGHT_TURN_MPS by the handover range.
+            allowed = self._start_allowed_speed(ahead)
+            turn = math.sqrt(STRAIGHT_TURN_MPS**2+2*LANE_START_STOP_DECEL_MPS2
+                             * max(0., approach['range_m']-OPEN_HANDOVER_MAX_RANGE_M))
+            allowed = turn if allowed is None else min(allowed, turn)
+            self._start_motor = self._straight_motor(speed, now, allowed)
         else:
             # The approach drives on at 1550 (a stopped car restarts at 1560).
             self._start_motor = (TRIAL_MOTOR if speed is not None and speed < LANE_SPEED_RESTART_MPS
@@ -5077,6 +5107,7 @@ class ManeuverSequence(TurnMotion):
                    else _overshoot_guard(self._open_heading_hold(heading, math.pi),
                                          self._open_heading_hold(heading+pose[2], math.pi)))
         ahead, speed, stop_at = self._open_front_stop(scan)
+        self._transfer_motor = self._straight_motor(speed, now, STRAIGHT_TRANSFER_MPS, coast=False)  # round y23
         self.open_feedback = {'source_seq': scan['seq'], 'stage': 'open_transfer', 'compass_heading_rad': heading,
             'channel': channel, 'nominal_target_pwm': natural, 'front_range_m': ahead, 'speed_mps': speed,
             'front_stop_range_m': stop_at, 'second_acquisition_reason': self.second_acquisition_reason}
@@ -5526,6 +5557,9 @@ class ManeuverSequence(TurnMotion):
         if self.continue_route and self.phase == 'drive' and self.route_stage == 'start_lane':
             # Round 64: the start lane at 1560; slow from the first approach on.
             return self._start_motor
+        if (self.continue_route and self.phase == 'drive' and self.route_stage == 'open_transfer'
+                and not self.quality_resume_pending):
+            return self._transfer_motor  # round y23
         return (ROUTE_SLOW_MOTOR if (self.continue_route and self.phase == 'drive' and slow_stage
                                      and not self.quality_resume_pending)
                 else TRIAL_MOTOR)
@@ -6525,6 +6559,23 @@ class ManeuverSequence(TurnMotion):
         push_rise = max(rise, LANE_POWER_ACCEL_MPS2*ESC_LAG_S)
         if speed < LANE_SPEED_RESTART_MPS or (speed+rise < cap-LANE_START_PUSH_BAND_MPS
                                                and speed+push_rise < cap):
+            return TRIAL_MOTOR
+        return ROUTE_SLOW_MOTOR
+
+    def _straight_motor(self, speed, now, cap, coast=True):
+        """Round y23: STRAIGHT_MOTOR, 1560 or 1550 for the measured speed under cap (each
+        while the speed, the pipeline's rise and its own over STRAIGHT_LAG_S stay under
+        it), else neutral (1550 where the stage may not coast)."""
+        if speed is None or cap is None:
+            return ROUTE_SLOW_MOTOR
+        left = 0. if self._power_cmd_at is None else max(0., STRAIGHT_LAG_S-(now-self._power_cmd_at))
+        rise = left*(STRAIGHT_ACCEL_MAX_MPS2 if self._power_cmd_motor in (STRAIGHT_MOTOR, START_LAUNCH_MOTOR)
+                     else LANE_POWER_ACCEL_MPS2 if self._power_cmd_motor == TRIAL_MOTOR else 0.)
+        if speed+rise >= cap:
+            return NEUTRAL if coast else ROUTE_SLOW_MOTOR
+        if speed+rise+STRAIGHT_ACCEL_MAX_MPS2*STRAIGHT_LAG_S < cap:
+            return STRAIGHT_MOTOR
+        if speed+rise+LANE_POWER_ACCEL_MPS2*STRAIGHT_LAG_S < cap:
             return TRIAL_MOTOR
         return ROUTE_SLOW_MOTOR
 

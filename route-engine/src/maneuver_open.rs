@@ -361,6 +361,8 @@ impl Maneuver {
             let reaction = self.reaction_s(now);
             let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) {
                 LANE_POWER_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S)
+            } else if self._power_cmd_motor == Some(STRAIGHT_MOTOR) {
+                STRAIGHT_ACCEL_MAX_MPS2 * (reaction - LANE_REACTION_BASE_S) // round y23
             } else if self._power_cmd_motor == Some(START_LAUNCH_MOTOR) {
                 START_LAUNCH_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S)
             } else {
@@ -389,7 +391,11 @@ impl Maneuver {
                 self._start_speed_last = Some((now, s));
             }
             let settling = self._launch_cmd_at.is_some_and(|at| now - at < ESC_LAG_S + START_LAUNCH_SETTLE_S);
-            self._start_motor = Self::start_governor(speed, rise, allowed, self._start_speed_measured, settling);
+            self._start_motor = if self.crosswalk_state == Some("done") {
+                self.straight_motor(speed, now, allowed, true) // round y23
+            } else {
+                Self::start_governor(speed, rise, allowed, self._start_speed_measured, settling)
+            };
             if matches!(self.crosswalk_state, Some("search" | "approach")) {
                 let last = self._crosswalk_speed_last;
                 let vc = if let Some(s) = cw_speed {
@@ -409,6 +415,18 @@ impl Maneuver {
                         if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
                 }
             }
+        } else if self.crosswalk_state == Some("done") && !approach.is_none() {
+            // Round y23: towards the first support under the board's cap and the speed
+            // that coasts down to STRAIGHT_TURN_MPS by the handover range.
+            let turn = sqrt(
+                sq(STRAIGHT_TURN_MPS)
+                    + 2. * LANE_START_STOP_DECEL_MPS2 * pmax(0., approach.idx("range_m").f() - OPEN_HANDOVER_MAX_RANGE_M),
+            );
+            allowed = Some(match Self::start_allowed_speed(ahead) {
+                Some(board) => pmin(board, turn),
+                None => turn,
+            });
+            self._start_motor = self.straight_motor(speed, now, allowed, true);
         } else {
             self._start_motor =
                 if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
@@ -1104,6 +1122,7 @@ impl Maneuver {
             overshoot_guard(Self::open_heading_hold(heading, PI), Self::open_heading_hold(heading + pose.2, PI))
         };
         let (ahead, speed, stop_at) = self.open_front_stop(scan);
+        self._transfer_motor = self.straight_motor(speed, now, Some(STRAIGHT_TRANSFER_MPS), false); // round y23
         self.open_feedback = dict! {
             "source_seq" => scan.idx("seq").clone(), "stage" => "open_transfer", "compass_heading_rad" => heading,
             "channel" => channel.clone(), "nominal_target_pwm" => natural, "front_range_m" => ahead, "speed_mps" => speed,

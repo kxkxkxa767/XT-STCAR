@@ -1335,6 +1335,30 @@ impl Maneuver {
         Some(pmin(LANE_START_MAX_MPS, -r * a + sqrt(sq(r * a) + 2. * a * room)))
     }
 
+    /// _straight_motor(speed, now, cap, coast) (round y23).
+    pub fn straight_motor(&self, speed: Option<f64>, now: f64, cap: Option<f64>, coast: bool) -> i64 {
+        let (Some(speed), Some(cap)) = (speed, cap) else { return ROUTE_SLOW_MOTOR };
+        let left = self._power_cmd_at.map_or(0., |at| pmax(0., STRAIGHT_LAG_S - (now - at)));
+        let rise = left
+            * if self._power_cmd_motor == Some(STRAIGHT_MOTOR) || self._power_cmd_motor == Some(START_LAUNCH_MOTOR) {
+                STRAIGHT_ACCEL_MAX_MPS2
+            } else if self._power_cmd_motor == Some(TRIAL_MOTOR) {
+                LANE_POWER_ACCEL_MPS2
+            } else {
+                0.
+            };
+        if speed + rise >= cap {
+            return if coast { NEUTRAL } else { ROUTE_SLOW_MOTOR };
+        }
+        if speed + rise + STRAIGHT_ACCEL_MAX_MPS2 * STRAIGHT_LAG_S < cap {
+            return STRAIGHT_MOTOR;
+        }
+        if speed + rise + LANE_POWER_ACCEL_MPS2 * STRAIGHT_LAG_S < cap {
+            return TRIAL_MOTOR;
+        }
+        ROUTE_SLOW_MOTOR
+    }
+
     /// _start_governor(speed, rise, allowed, measured_before, settling).
     pub fn start_governor(speed: Option<f64>, rise: f64, allowed: Option<f64>, measured_before: bool, settling: bool) -> i64 {
         let cap = allowed.unwrap_or(LANE_START_MAX_MPS);

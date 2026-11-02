@@ -37,7 +37,8 @@ from turn_motion import TurnMotion, parse_trial_goal, validate_initial_presteer_
 from maneuver_sequence import (ManeuverSequence, PRESTEER_MAX_S as MANEUVER_PRESTEER_MAX_S, LANE_WALL_PLAY_PWM,
                                FIRST_LOOP_STEER_GAIN,
                                DEFAULT_INITIAL_PWM, RIGHT_EXIT_MIN_PWM, validate_maneuver_initial_pwm,
-                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, LANE_BRAKE_MOTOR, POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
+                               DRIVE_MOTORS, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, LANE_BRAKE_MOTOR, STRAIGHT_MOTOR,
+                               POST_PASS_STAGES, ROUTE_MAX_DRIVE_S,
                                OPEN_STAGES)
 from route_engine import RouteEngine, RustManeuverSequence
 
@@ -1793,7 +1794,11 @@ class Console:
                          and decision.get('quality_resume_pending') is False)
         allowed_motors = (1500, TRIAL_MOTOR, ROUTE_SLOW_MOTOR) if slow_allowed else (1500, TRIAL_MOTOR)
         if launch_allowed:
-            allowed_motors += (START_LAUNCH_MOTOR,)
+            allowed_motors += (START_LAUNCH_MOTOR, STRAIGHT_MOTOR)  # round y23: the start lane's straight
+        # Round y23: the transfer's straight push.
+        if (route and decision['phase'] == 'drive' and route_stage == 'open_transfer'
+                and decision.get('quality_resume_pending') is False):
+            allowed_motors += (STRAIGHT_MOTOR,)
         if light_launch_allowed:
             allowed_motors += (LIGHT_LAUNCH_MOTOR,)
         if brake_allowed:

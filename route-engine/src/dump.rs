@@ -171,7 +171,7 @@ impl Maneuver {
             "compass" => self.compass.dump(), "entry_kind" => self.entry_kind,
             "_lane_start_steering" => self._lane_start_steering.dump(), "_lane_start_settle_since" => self._lane_start_settle_since,
             "_lane_start_ticks" => self._lane_start_ticks, "_lane_start_slow" => self._lane_start_slow,
-            "_start_motor" => self._start_motor, "_start_speed_measured" => self._start_speed_measured, "_start_speed_last" => opt_pair(&self._start_speed_last),
+            "_start_motor" => self._start_motor, "_transfer_motor" => self._transfer_motor, "_start_speed_measured" => self._start_speed_measured, "_start_speed_last" => opt_pair(&self._start_speed_last),
             "start_lane_coast_steering" => self.start_lane_coast_steering.clone(), "start_side_wall" => self.start_side_wall.clone(),
             "_front_track" => self._front_track.as_ref().map(|(at, sector, value)| {
                 let mut s = V::dict();

@@ -1435,6 +1435,11 @@ impl Supervisor {
         let mut motors: Vec<i64> = if slow_allowed { vec![NEUTRAL, TRIAL_MOTOR, ROUTE_SLOW_MOTOR] } else { vec![NEUTRAL, TRIAL_MOTOR] };
         if launch_allowed {
             motors.push(START_LAUNCH_MOTOR);
+            motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
+        }
+        // Round y23: the transfer's straight push.
+        if phase == "drive" && stage_is("open_transfer") && decision.get("quality_resume_pending").is_false() {
+            motors.push(STRAIGHT_MOTOR);
         }
         if light_launch_allowed {
             motors.push(LIGHT_LAUNCH_MOTOR);

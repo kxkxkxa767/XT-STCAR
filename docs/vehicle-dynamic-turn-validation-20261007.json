@@ -25589,5 +25589,31 @@
       "light": "one motion into the zone, stopped 22.09 s at .373 m (whole car in, 0 creeps); the light did not trigger (user: 红绿灯的问题; 0 red, 0 green frames): released after 4.09 s, no light seen since the gantry",
       "after_green": "1600 launch at 26.24 s cut at +.48 s, the speed then 1.87 m/s; brake 1300 from 28.00 s (gap 1.198 m, 1.475 m/s, aimed stop -.30) to 29.28 s (1.28 s, .40 m/s, aimed stop .26 >= target .25); stopped at .274 m by ~29.6 s; by the rear lidar ~1.5+ m/s2 just after the ESC lag, then ~.6-.9; launch to stop 3.35 s (y19 5.9 s with two creeps)"
     }
+  },
+  "y23_straight_1590_20261102": {
+    "date": "2026-11-02",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "11884f6 (car: round 129 + y22)",
+    "user": [
+      "在绕桶的那个任务中有很大部分的路程都接近于直道，可不可以开放到1590，在快到桶要绕弯的时候减速按照原来的pwm来跑",
+      "1和2"
+    ],
+    "analysis": "car run y22, the cone task at 1550: the start lane after the crosswalk to the first handover 7.7-10.9 s for ~2.75 m (one 1600 scan out of the wait, then 1550 through its .75 s settling: .6 m/s after .8 s; the first approach at fixed 1550 ~.8-1.1 m/s); the transfer 13.5-14.4 s ~1.1 m/s; the second loop straight 14.6-16.2 s (not changed, user chose 1 and 2)",
+    "change": [
+      "_straight_motor: 1590 (STRAIGHT_MOTOR), else 1560, else 1550, else neutral (1550 in the transfer, which may not coast), each only while speed + the pipeline rise + its own over the measured .3 s cut lag (1590 at an assumed 3 m/s2, 1560 at 1.0) stays under the cap",
+      "start lane after the crosswalk (crosswalk done): cap = the board-ahead cap; first approach (support found): also sqrt(1.1^2 + 2 * .5 * (support range - 2.5 m handover range)), i.e. back to ~1.1 m/s (the loop speed at 1550 before) by the handover",
+      "transfer: cap 1.4 m/s",
+      "the start lane board cut counts 1590 rise (3 m/s2); DRIVE_MOTORS += 1590; server/supervisor allow 1590 in the start lane with the launch rule and in the transfer"
+    ],
+    "validation": {
+      "python_full_suite": "968 OK",
+      "cargo_test": "7 passed",
+      "clippy_warnings": 32,
+      "simulation": "not run (user: 别仿真)"
+    },
+    "commit": "(this commit)"
   }
 }
