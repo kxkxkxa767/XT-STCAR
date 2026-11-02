@@ -20,13 +20,14 @@ pub struct Status {
 }
 pub struct Guard {
     pub status: Status,
-    reverse: bool,
     received: u64,
     last_time: u64,
     stopped_at: Option<u64>,
 }
 impl Guard {
-    pub fn new(reverse: bool) -> Self {
+    /// `_reverse` is kept for the callers; since round y22 (user: 这个bridge上过度的限制你都给删了)
+    /// the motor takes 1000-2000 (the ESC's brake below neutral) either way.
+    pub fn new(_reverse: bool) -> Self {
         Self {
             status: Status {
                 tick: 0,
@@ -36,7 +37,6 @@ impl Guard {
                 servo: 1500,
                 reason: "locked".into(),
             },
-            reverse,
             received: 0,
             last_time: 0,
             stopped_at: None,
@@ -71,9 +71,8 @@ impl Guard {
             return;
         }
         self.status.seq = req.seq;
-        if req.motor > 1620
-            || req.motor < if self.reverse { 1350 } else { 1500 }
-            // Candidate manual range authorized for static endpoint observation.
+        if !(1000..=2000).contains(&req.motor)
+            // Servo: candidate manual range authorized for static endpoint observation.
             // Acceptance does not establish mechanical limits or a moving sweep.
             || !(1200..=1800).contains(&req.servo)
         {
@@ -122,7 +121,10 @@ mod tests {
             (1500, 1800, true),
             (1350, 1270, true),
             (1350, 1720, true),
-            (1349, 1500, false),
+            (1000, 1500, true),
+            (2000, 1500, true),
+            (999, 1500, false),
+            (2001, 1500, false),
             (1500, 1199, false),
             (1500, 1801, false),
         ] {
@@ -139,10 +141,12 @@ mod tests {
                 assert_eq!(g.status.reason, "pwm_out_of_range");
             }
         }
+        // round y22: below neutral (the ESC's brake) without the reverse flag too
         let mut g = Guard::new(false);
         g.apply(req(1, 0, "arm", 1500), 0);
         g.apply(req(2, 50, "drive", 1400), 50);
-        assert!(!g.status.armed);
+        assert!(g.status.armed);
+        assert_eq!(g.status.motor, 1400);
     }
     #[test]
     fn wider_candidate_steering_does_not_bypass_arm_or_fault_fences() {
@@ -226,8 +230,8 @@ mod tests {
             req(1, 0, "drive", 1550),
             req(2, 1000, "drive", 1550),
             req(2, 0, "drive", 1550),
-            req(2, 300, "drive", 1490),
-            req(2, 300, "drive", 1621),
+            req(2, 300, "drive", 999),
+            req(2, 300, "drive", 2001),
         ] {
             let mut g = Guard::new(false);
             g.apply(req(1, 100, "arm", 1500), 100);

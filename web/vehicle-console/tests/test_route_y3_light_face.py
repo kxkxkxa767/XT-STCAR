@@ -154,13 +154,9 @@ class LightLaunch(unittest.TestCase):
 
     def test_from_rest_the_kick_bound_keeps_the_launch_going(self):
         self.assertLess(self.guard(None), ms.LANE_FINISH_MIN_GAP_M)  # as on the car: cut
-        # Round y21: at the 1600 launch's measured bound (car run y20: ~4 m/s2) the bound
-        # keeps only an early launch going (.39 s in); .64 s in, it no longer caps the
-        # rate (the 1600 then near 1.9 m/s): the guard cuts as without it.
-        bounded = self.guard(26.8)
+        bounded = self.guard(26.55)
         self.assertGreater(bounded, ms.LANE_FINISH_MIN_GAP_M)
-        self.assertLess(bounded, 1.3)
-        self.assertEqual(self.guard(26.55), self.guard(None))
+        self.assertLess(bounded, 1.3)  # still a 1.2 m/s peak at the weakest coast
         self.assertEqual(self.guard(20.), self.guard(None))  # long powered: the rate itself
 
     def test_the_launch_sets_the_bound_and_lasts_longer(self):

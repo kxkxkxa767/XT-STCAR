@@ -1439,6 +1439,15 @@ impl Supervisor {
         if light_launch_allowed {
             motors.push(LIGHT_LAUNCH_MOTOR);
         }
+        // Round y22: the finish brake after the light (light lane only).
+        let brake_allowed = phase == "drive"
+            && stage_is("light_lane")
+            && m.light_stop_evidence.is_dict()
+            && m.light_stop_evidence.has("go")
+            && decision.get("quality_resume_pending").is_false();
+        if brake_allowed {
+            motors.push(LANE_BRAKE_MOTOR);
+        }
         if !in_motors(&motor, &motors) || !(minimum_servo as f64 <= num(&servo) && num(&servo) <= SERVO_MAX as f64) {
             value_error("invalid_turn_trial_output")
         }

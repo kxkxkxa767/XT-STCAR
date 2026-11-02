@@ -188,6 +188,9 @@ impl Maneuver {
             motors.push(NEUTRAL);
         }
         motors.extend_from_slice(&DRIVE_MOTORS);
+        if self.route_stage == "light_lane" {
+            motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
+        }
         let adopted = motor_in(control.get("motor"), &motors)
             && eq_i(control.get("servo"), self.servo)
             && control.get("command_acked").is_true();
@@ -1463,8 +1466,10 @@ impl Maneuver {
 
     /// _coast_fit_window(now) (round y15).
     pub(crate) fn coast_fit_window(&self, now: f64) -> bool {
+        let braked = self._lane_brake_since.is_some() || self._lane_brake_end.is_some_and(|end| now - end < ESC_LAG_S + LANE_ESC_SKEW_S);
         self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S)
             && (self.servo - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM
+            && !braked
     }
 
     /// _coast_measure(scan, coasting, front, rear) (round y15).
@@ -1794,8 +1799,20 @@ impl Maneuver {
         }
         let launching = self._light_launch_until.is_some_and(|until| now < until);
         let mut topup_motor: Option<i64> = None; // round y15: this scan's output continues or starts a top-up
+        let braking = self._lane_brake_since.is_some();
+        let brake = after_light
+            && self._lane_brake_end.is_none()
+            && gap.is_some()
+            && speed.is_some_and(|s| s >= LANE_BRAKE_MIN_MPS)
+            && stop_gap.is_some_and(|s| s < goal.target_gap)
+            && match self._lane_brake_since {
+                Some(since) => now - since < LANE_BRAKE_MAX_S,
+                None => gap.unwrap() <= LANE_BRAKE_START_GAP_M,
+            };
         if red_hold {
             self.lane_motor = NEUTRAL; // round y20: in the red with the whole car in: no power
+        } else if brake {
+            self.lane_motor = LANE_BRAKE_MOTOR; // round y22: the coast would end past the target
         } else if gap.is_none() && kind == "light" {
             self.lane_motor = NEUTRAL; // round y2: no light line this scan: coast
         } else if gap.is_some() && (stop_gap.unwrap() <= goal.target_gap || worst_gap.unwrap() <= goal.min_gap) {
@@ -1850,6 +1867,13 @@ impl Maneuver {
         if DRIVE_MOTORS.contains(&self.lane_motor) {
             self._lane_topup_motor = topup_motor;
         }
+        if self.lane_motor == LANE_BRAKE_MOTOR {
+            if self._lane_brake_since.is_none() {
+                self._lane_brake_since = Some(now);
+            }
+        } else if braking {
+            (self._lane_brake_since, self._lane_brake_end) = (None, Some(now)); // round y22: once per run
+        }
         let frames = if self._lane_creep { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
         if self.lane_motor == TRIAL_MOTOR && (launching || topup_motor == Some(TRIAL_MOTOR)) {
             self._lane_pulse = 0;
@@ -1870,6 +1894,7 @@ impl Maneuver {
         }
         feedback.set("motor", self.lane_motor);
         feedback.set("creeps", self._lane_creeps);
+        feedback.set("brake", V::list(vec![V::from(self._lane_brake_since), V::from(self._lane_brake_end)]));
         (None, feedback)
     }
 

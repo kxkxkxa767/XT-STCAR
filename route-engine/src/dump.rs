@@ -140,6 +140,7 @@ impl Maneuver {
             "_light_launch_until" => self._light_launch_until, "_light_launch_from" => self._light_launch_from, "_light_seen" => self._light_seen,
             "_light_gantry_since" => self._light_gantry_since, "_light_red_at" => self._light_red_at,
             "_light_zone_at" => self._light_zone_at, "_light_red_hold" => self._light_red_hold,
+            "_lane_brake_since" => self._lane_brake_since, "_lane_brake_end" => self._lane_brake_end,
             "_light_stop_red_frames" => self._light_stop_red_frames, "_light_center_shift_m" => self._light_center_shift_m,
             "_light_rearm_min_m" => self._light_rearm_min_m, "light_wait_credit_s" => self.light_wait_credit_s,
             "_light_wait_tick" => self._light_wait_tick,

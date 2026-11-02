@@ -732,9 +732,22 @@ START_LAUNCH_ACCEL_MPS2 = 2.5
 # launch is 1600 itself (car run y19's 1580: ~1.3 m/s from rest after ~.8 s of power,
 # ~1.6 m/s2). Round y21 (user: 可以): car run y20's 1600, cut .47 s after green, still
 # reached 1.9 m/s (~4 m/s2 over its powered time; the 2.5 bound foresaw ~1.45) and met
-# the end board at ~.65 m/s; its bound and aim now the measured one.
-LIGHT_LAUNCH_ACCEL_MAX_MPS2 = 4.5
-LIGHT_LAUNCH_ACCEL_MPS2 = 4.
+# the end board at ~.65 m/s; y21 bound and aimed it at 4.5/4.0: cut at +.16 s, 1.0 m/s,
+# then 1550 top-ups (user: 断断续续, 后面那一段比之前的慢了不少). Round y22 (user: 按照上一轮
+# 的逻辑来，但在距离很近的时候刹车): y20's launch again, the finish brake below.
+LIGHT_LAUNCH_ACCEL_MAX_MPS2 = START_LAUNCH_ACCEL_MPS2
+LIGHT_LAUNCH_ACCEL_MPS2 = 1.5
+# Round y22 (user: 现在电调模式不是带刹车的吗; the ESC kept bidirectional with brake since
+# round 100; the bridge now takes 1000-2000): after the light the finish brakes at
+# LANE_BRAKE_MOTOR when, within LANE_BRAKE_START_GAP_M of the end board at LANE_BRAKE_MIN_MPS
+# or more, the aimed coast would stop nearer than the target; released once it reaches the
+# target, after LANE_BRAKE_MAX_S or under the speed floor, and only once (below neutral
+# again after neutral reverses in that mode). Its strength is not measured (10-16: 1450 for
+# .3 s and 1400 for .5 s did nothing useful, within the ESC lag); the coast fit leaves it out.
+LANE_BRAKE_MOTOR = 1300
+LANE_BRAKE_START_GAP_M = 1.2
+LANE_BRAKE_MIN_MPS = .3
+LANE_BRAKE_MAX_S = 1.5
 # After the last 1600 frame: no 1560 for the ESC lag plus this (the closing-
 # rate estimate trails a hard launch; course-sim with a .6 s ESC lag: 1560
 # right after the burst reached 2.1 m/s and the stopping range cut the lane).
@@ -2078,6 +2091,8 @@ class ManeuverSequence(TurnMotion):
         self._light_red_frames = 0  # red frames taken since the gantry
         self._light_launch_until = None
         self._light_launch_from = None  # the light launch's first output: a powered run from rest
+        self._lane_brake_since = None  # round y22: the finish brake's first output while it lasts
+        self._lane_brake_end = None  # round y22: when it ended (once per run)
         self._light_seen = False  # a red or green frame taken since the gantry
         self._light_gantry_since = None
         self._light_red_at = None  # capture time of the first red frame since the gantry
@@ -3026,8 +3041,9 @@ class ManeuverSequence(TurnMotion):
                 or control.get('armed') is not True
                 # round y2: the light stop coasts and waits at neutral from the
                 # light entry on (a quality fault there halted the run)
-                or control.get('motor') not in ((NEUTRAL,)+DRIVE_MOTORS if self.route_stage == 'light_lane'
-                                                or (self.route_stage == 'light_entry' and self._light_stop_active())
+                or control.get('motor') not in ((NEUTRAL, LANE_BRAKE_MOTOR)+DRIVE_MOTORS if self.route_stage == 'light_lane'
+                                                else (NEUTRAL,)+DRIVE_MOTORS if (self.route_stage == 'light_entry'
+                                                                                 and self._light_stop_active())
                                                 else DRIVE_MOTORS)
                 or control.get('command_acked') is not True
                 or not RIGHT_EXIT_MIN_PWM <= control.get('servo', 0) == self.servo <= SERVO_MAX
@@ -5524,6 +5540,8 @@ class ManeuverSequence(TurnMotion):
         coasting_stage = (self.route_stage in ('light_lane', 'start_lane')
                           or (self.route_stage == 'light_entry' and self._light_stop_active()))
         motors = (NEUTRAL,)+DRIVE_MOTORS if coasting_stage else DRIVE_MOTORS
+        if self.route_stage == 'light_lane':
+            motors += (LANE_BRAKE_MOTOR,)  # round y22: the finish brake
         adopted = (control.get('motor') in motors and control.get('servo') == self.servo
                    and control.get('command_acked') is True)
         if not adopted:
@@ -6597,8 +6615,10 @@ class ManeuverSequence(TurnMotion):
     def _coast_fit_window(self, now):
         """Round y15: nothing of a push left in the ESC pipeline (the longest lag)
         and the steering near centre: a straight coast."""
+        braked = self._lane_brake_since is not None or (
+            self._lane_brake_end is not None and now-self._lane_brake_end < ESC_LAG_S+LANE_ESC_SKEW_S)
         return ((self._power_cmd_at is None or now-self._power_cmd_at >= ESC_LAG_S+LANE_ESC_SKEW_S)
-                and abs(self.servo-NEUTRAL) <= COAST_FIT_STRAIGHT_PWM)
+                and abs(self.servo-NEUTRAL) <= COAST_FIT_STRAIGHT_PWM and not braked)
 
     def _coast_measure(self, scan, coasting, front, rear):
         """Round y15: this scan's positions (``front``: lidar to the board ahead,
@@ -7240,8 +7260,14 @@ class ManeuverSequence(TurnMotion):
             return basis, feedback
         launching = self._light_launch_until is not None and now < self._light_launch_until
         topup_motor = None  # round y15: this scan's output continues or starts a top-up at this PWM
+        braking = self._lane_brake_since is not None
+        brake = (after_light and self._lane_brake_end is None and gap is not None and speed is not None
+                 and speed >= LANE_BRAKE_MIN_MPS and stop_gap < target_gap
+                 and (now-self._lane_brake_since < LANE_BRAKE_MAX_S if braking else gap <= LANE_BRAKE_START_GAP_M))
         if red_hold:
             self.lane_motor = NEUTRAL  # round y20: in the red with the whole car in: no power
+        elif brake:
+            self.lane_motor = LANE_BRAKE_MOTOR  # round y22: the coast would end past the target
         elif gap is None and kind == 'light':
             self.lane_motor = NEUTRAL  # round y2: no light line this scan: coast
         elif gap is not None and (stop_gap <= target_gap or worst_gap <= min_gap):
@@ -7297,6 +7323,11 @@ class ManeuverSequence(TurnMotion):
             self._light_launch_from = None
         if self.lane_motor in DRIVE_MOTORS:
             self._lane_topup_motor = topup_motor
+        if self.lane_motor == LANE_BRAKE_MOTOR:
+            if self._lane_brake_since is None:
+                self._lane_brake_since = now
+        elif self._lane_brake_since is not None:
+            self._lane_brake_since, self._lane_brake_end = None, now  # round y22: once per run
         if self.lane_motor == TRIAL_MOTOR and (launching or topup_motor == TRIAL_MOTOR):
             self._lane_pulse, self._lane_creep = 0, False
         elif self.lane_motor == TRIAL_MOTOR and self._lane_pulse >= (LANE_CREEP_FRAMES if self._lane_creep
@@ -7309,7 +7340,8 @@ class ManeuverSequence(TurnMotion):
             self._lane_pulse += 1
         else:
             self._lane_pulse, self._lane_creep = 0, False
-        feedback.update(motor=self.lane_motor, creeps=self._lane_creeps)
+        feedback.update(motor=self.lane_motor, creeps=self._lane_creeps,
+                        brake=[self._lane_brake_since, self._lane_brake_end])
         return None, feedback
 
     def _light_update(self, scan, now, control):

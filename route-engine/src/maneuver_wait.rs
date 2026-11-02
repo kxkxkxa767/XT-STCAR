@@ -514,6 +514,9 @@ impl Maneuver {
         if self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()) {
             motors.push(NEUTRAL);
         }
+        if self.route_stage == "light_lane" {
+            motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
+        }
         motors.extend_from_slice(&DRIVE_MOTORS);
         let servo = if control.get("servo").is_none() { V::Int(0) } else { control.get("servo").clone() };
         if !self.continue_route

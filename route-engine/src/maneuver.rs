@@ -167,8 +167,14 @@ pub const START_LAUNCH_MAX_MPS: f64 = 0.2;
 pub const START_LAUNCH_ACCEL_MPS2: f64 = 2.5;
 // Round y18: the 1580 launch's guard bound and aim.
 // Round y21: car run y20's 1600 launch reached 1.9 m/s (~4 m/s2): bound and aim measured.
-pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = 4.5;
-pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 4.;
+// Round y22: y20's launch again (y21's 4.5/4.0 cut it at +.16 s and pushed on in 1550 top-ups).
+pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = START_LAUNCH_ACCEL_MPS2;
+pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 1.5;
+// Round y22: the finish brake after the light (once; the bridge takes 1000-2000).
+pub const LANE_BRAKE_MOTOR: i64 = 1300;
+pub const LANE_BRAKE_START_GAP_M: f64 = 1.2;
+pub const LANE_BRAKE_MIN_MPS: f64 = 0.3;
+pub const LANE_BRAKE_MAX_S: f64 = 1.5;
 pub const START_LAUNCH_SETTLE_S: f64 = 0.3;
 pub const OPEN_LEFT_RADIUS_M: (f64, f64) = (0.90, 0.95);
 pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.90, 1.40);
@@ -629,6 +635,8 @@ pub struct Maneuver {
     pub _light_gantry_since: Option<f64>,
     pub _light_red_at: Option<f64>,
     pub _light_zone_at: Option<f64>,
+    pub _lane_brake_since: Option<f64>,
+    pub _lane_brake_end: Option<f64>,
     pub _light_red_hold: bool,
     pub _light_stop_red_frames: i64,
     pub _light_center_shift_m: f64,
@@ -949,6 +957,8 @@ impl Maneuver {
             _light_gantry_since: None,
             _light_red_at: None,
             _light_zone_at: None,
+            _lane_brake_since: None,
+            _lane_brake_end: None,
             _light_red_hold: false,
             _light_stop_red_frames: 0,
             _light_center_shift_m: 0.,

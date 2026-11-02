@@ -25530,8 +25530,8 @@
     "date": "2026-11-02",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "0455b41 + y20 record (car: round 127 + y20)",
     "user": [
       "可以 (the 1600 launch bound 4.5 and aim 4.0 from car run y20)",
@@ -25548,6 +25548,38 @@
       "clippy_warnings": 32
     },
     "outdoor_note": "user will move to outdoor concrete for the video: the first coast (crosswalk) uses the tile prior .6 m/s2 before any measurement; 1600 traction, lidar in sunlight, YOLO lighting, the photo sensor in sunlight and the steering all to be checked on a first outdoor run",
+    "commit": "(this commit)",
+    "car_run_y21": {
+      "start": "rear .43, front 7.78 m",
+      "end": "route_finish_zone_stop, .337 m from the end board, 0 creeps; 39.2 s from the start",
+      "light": "the light did not trigger (user: 红绿灯自身的问题没触发; 0 red frames), released on green",
+      "after_green": "1600 launch cut at +.16 s by the 4.5 bound (1.0 m/s peak), then 1550 top-ups at +.96, +1.92, +3.04 s and a 1560 kick at +4.96 from rest: stop-and-go (user: 还是断断续续的; 后面那一段我觉得比之前的慢了不少)"
+    }
+  },
+  "y22_finish_brake_20261102": {
+    "date": "2026-11-02",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "0d98df0 + y21 record (car: round 128 + y21)",
+    "user": [
+      "现在电调模式不是带刹车的吗，你可以还是按照上一轮的逻辑来，但在距离很近的时候刹车",
+      "你可以删除这个限制，这个桥你都可以删掉，比赛也用不上",
+      "这个bridge上过度的限制你都给删了",
+      "别仿真，直接跑一遍测试更快"
+    ],
+    "change": [
+      "light launch back to y20's (bound 2.5, aim 1.5)",
+      "finish brake after the light: LANE_BRAKE_MOTOR 1300 when within 1.2 m of the end board at >= .3 m/s the aimed coast would stop nearer than the target; released once it reaches the target, after 1.5 s or under .3 m/s; once per run (below neutral again after neutral reverses in the bidirectional-with-brake ESC mode); the coast fit leaves the brake and its ESC lag out; the server and the supervisor allow 1300 in the light lane after the light go only; the light lane adoption and quality checks take it",
+      "vehicle-bridge guard (crates/robot-core/src/teleop.rs): motor 1000-2000 always (was 1500-1620, 1350 with --allow-reverse); kept: the heartbeat (300 ms), stale/reordered requests, the control gap, arming from 1500/1500 only, the servo's 1200-1800"
+    ],
+    "note": "the vehicle-bridge binary is the race program's only output path (route-engine race spawns it): kept, only its motor range opened; the brake's strength is unmeasured (10-16: 1450/.3 s, 1400/.5 s did nothing useful within the ESC lag)",
+    "validation": {
+      "python_full_suite": "see commit",
+      "cargo_test": "route-engine 7, robot-core 258, runner all passed",
+      "clippy_warnings": 32
+    },
     "commit": "(this commit)"
   }
 }
