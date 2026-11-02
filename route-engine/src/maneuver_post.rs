@@ -1656,7 +1656,7 @@ impl Maneuver {
             return self.result(now);
         }
         if self.light_stop_state == Some("approach") {
-            let (basis, speed_feedback) = self.lane_goal_control(scan, light_ahead, now, &LIGHT_GOAL);
+            let (basis, speed_feedback) = self.light_approach_control(scan, light_ahead, now);
             self.lane_feedback = steering.merged(&speed_feedback);
             if let Some(basis) = basis {
                 self.light_stop_reached(scan, now, control, &basis);
@@ -1713,7 +1713,7 @@ impl Maneuver {
         let powered = DRIVE_MOTORS.contains(&self.lane_motor);
         let (aim_coast, aim_power) = self.lane_pipeline(now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, 0.);
         let coasting = !powered && self._power_cmd_at.is_none_or(|at| now >= at + ESC_LAG_S + LANE_ESC_SKEW_S);
-        let restarted = self.light_stop_evidence.is_dict() && self.light_stop_evidence.has("go");
+        let restarted = self.light_stop_evidence.has("go") || self.light_stop_state == Some("passed");
         // Round y15: after the light the finish's tail lag, its 1560 top-ups and
         // the pushes' measured responses.
         let after_light = kind == "finish" && restarted;

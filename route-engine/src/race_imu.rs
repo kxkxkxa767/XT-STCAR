@@ -10,12 +10,12 @@ use xt_stcar_robot_core::protocol::imu::{ImuConfig, ImuDecoder};
 use xt_stcar_robot_core::{FrameId, Timestamp, Vec3};
 
 #[derive(Default)]
-pub struct LatestYaw(AtomicU64);
+pub struct TimedValue(AtomicU64);
 
-impl LatestYaw {
-    fn publish(&self, at_ms: u64, rate: f64) {
-        // One atomic snapshot pairs each rate with its own receive timestamp.
-        self.0.store((at_ms << 32) | u64::from((rate as f32).to_bits()), Ordering::Relaxed);
+impl TimedValue {
+    fn publish(&self, at_ms: u64, value: f64) {
+        // Pair each scalar with its own receive timestamp in one atomic load.
+        self.0.store((at_ms << 32) | u64::from((value as f32).to_bits()), Ordering::Relaxed);
     }
 
     pub fn at(&self, now: f64) -> Option<f64> {
@@ -25,7 +25,13 @@ impl LatestYaw {
     }
 }
 
-pub fn record(out: &Path, base: Instant, stop: &AtomicBool, latest: &LatestYaw) {
+#[derive(Default)]
+pub struct LiveImu {
+    pub yaw: TimedValue,
+    pub forward_integral: TimedValue,
+}
+
+pub fn record(out: &Path, base: Instant, stop: &AtomicBool, latest: &LiveImu) {
     let device = Path::new("/dev/imu");
     let (mut samples, mut checksum_errors) = (0_u64, 0_usize);
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
@@ -35,6 +41,11 @@ pub fn record(out: &Path, base: Instant, stop: &AtomicBool, latest: &LatestYaw) 
         let up: [f64; 3] = serde_json::from_value(params["body_axes_in_sensor"]["up"].clone())?;
         let bias: [f64; 3] = serde_json::from_value(params["gyro_bias_radps"].clone())?;
         let gain: f64 = serde_json::from_value(params["yaw_rate_gain"].clone())?;
+        let forward: [f64; 3] = serde_json::from_value(params["body_axes_in_sensor"]["forward"].clone())?;
+        let rest: [f64; 3] = serde_json::from_value(params["stationary_specific_force_mps2"].clone())?;
+        let accel_gain: f64 = serde_json::from_value(params["forward_acceleration_gain"].clone())?;
+        let mut last_accel: Option<(u64, f64)> = None;
+        let mut integral = 0.;
         let zero = Vec3 { x: 0., y: 0., z: 0. };
         let mut decoder = ImuDecoder::new(ImuConfig {
             frame_id: FrameId("imu_link".into()),
@@ -52,7 +63,15 @@ pub fn record(out: &Path, base: Instant, stop: &AtomicBool, latest: &LatestYaw) 
                 for sample in batch.samples {
                     let w = sample.angular_velocity_radps;
                     let rate = up[0]*(w.x-bias[0]) + up[1]*(w.y-bias[1]) + up[2]*(w.z-bias[2]);
-                    latest.publish(sample.captured_at.0, gain*rate);
+                    let at = sample.captured_at.0;
+                    latest.yaw.publish(at, gain * rate);
+                    let a = sample.acceleration_mps2;
+                    let accel = accel_gain * (forward[0]*(a.x-rest[0]) + forward[1]*(a.y-rest[1]) + forward[2]*(a.z-rest[2]));
+                    if let Some((previous_at, previous_a)) = last_accel {
+                        integral += (previous_a + accel) * 0.0005 * (at - previous_at) as f64;
+                    }
+                    last_accel = Some((at, accel));
+                    latest.forward_integral.publish(at, integral);
                     serde_json::to_writer(&mut log, &sample)?;
                     log.write_all(b"\n")?;
                     samples += 1;

@@ -416,10 +416,6 @@ impl Maneuver {
                         if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
                 }
             }
-        } else if self.race_transfer.is_some() && self.crosswalk_state == Some("done") && self.first_approach.is_some() {
-            let decel = self.lane_decels().0;
-            let before = self.first_approach.idx("before_tangent_point_m").f();
-            (self._start_motor, first_drive) = self.race_transfer.as_mut().unwrap().first_approach_drive(speed, before, decel);
         } else if self.crosswalk_state == Some("done") && !approach.is_none() {
             // Round y23: towards the first support under the board's cap and the speed
             // that coasts down to STRAIGHT_TURN_MPS by the handover range.
@@ -433,7 +429,23 @@ impl Maneuver {
             self._start_motor =
                 if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
         }
-        let crosswalk = self.crosswalk_control(scan, now, control, cw_track, cw_speed, v_crosswalk);
+        let waiting_at_stripes = self.crosswalk_state == Some("waiting")
+            && self.crosswalk_evidence.get("stop").get("basis").os() != Some("stopped_in_the_first_turn_fallback");
+        let mut crosswalk = self.crosswalk_control(scan, now, control, cw_track, cw_speed, v_crosswalk);
+        if self.crosswalk_state == Some("done") && let Some(exit) = self.race_transfer.as_mut() {
+            let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2);
+            if waiting_at_stripes { exit.release_crosswalk(now); }
+            if exit.crosswalk_released() || self.first_approach.is_some() {
+                let planned = approach.get("before_tangent_point_m").of();
+                let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - LANE_FINISH_GAP_M - LANE_START_SEARCH_M).max(0.)));
+                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, decel, now);
+                first_drive.set("distance_source", if planned.is_some() { "first_tangent" } else { "board_search_room" });
+                allowed = None;
+                if planned.is_none() {
+                    stop_at = first_drive.get("board_stop_range_m").of().or(stop_at);
+                }
+            }
+        }
         // Round 103: the board-ahead cut is per scan (was a terminal coast).
         let cut = matches!((stop_at, ahead), (Some(stop), Some(a)) if a <= stop);
         if cut {
@@ -444,6 +456,7 @@ impl Maneuver {
             };
             self.route_event("start_lane_board_ahead_cut", scan, control, evidence);
         }
+        if crosswalk.is_dict() && first_drive.is_some() { crosswalk.set("motor", self._start_motor); }
         self.start_lane_feedback = dict! {
             "source_seq" => scan.idx("seq").clone(), "steering_source" => source,
             "nominal_target_pwm" => natural, "walls" => walls, "compass_heading_rad" => heading,
@@ -1231,6 +1244,9 @@ impl Maneuver {
         {
             let heading = heading.unwrap();
             if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose), None) {
+                if self.race_transfer.is_some() && self.light_vision {
+                    self.light_line_ahead(scan, heading, &lane, now);
+                }
                 let kappa = (NEUTRAL - self.servo) as f64 / ROUTE_PWM_PER_CURVATURE;
                 let remaining_lateral =
                     if kappa > 0. && 0. <= heading && heading <= PI / 2. { Some((1. - heading.pcos()) / kappa) } else { None };
@@ -1578,7 +1594,7 @@ impl Maneuver {
         if self.light_stop_state == Some("approach") {
             // Round y2: the light lane's stop control on the light line drives
             // the motor from the entry on (the coast must start ~2-3 m before).
-            let (basis, feedback) = self.lane_goal_control(scan, light_ahead, now, &LIGHT_GOAL);
+            let (basis, feedback) = self.light_approach_control(scan, light_ahead, now);
             self.lane_feedback = feedback;
             if let Some(basis) = basis {
                 self.light_stop_reached(scan, now, control, &basis);

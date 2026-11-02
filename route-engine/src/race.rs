@@ -338,7 +338,7 @@ struct Program {
     o: Options,
     sup: Supervisor,
     base: Instant,
-    imu_yaw: std::sync::Arc<crate::race_imu::LatestYaw>,
+    imu: std::sync::Arc<crate::race_imu::LiveImu>,
     rx: Receiver<Event>,
     files: Sender<FileOp>,
     failed: Vec<&'static str>,
@@ -588,7 +588,7 @@ pub fn main(args: &[String]) -> i32 {
         o,
         sup,
         base: Instant::now(),
-        imu_yaw: Default::default(),
+        imu: Default::default(),
         rx,
         files,
         failed: Vec::new(),
@@ -607,9 +607,9 @@ pub fn main(args: &[String]) -> i32 {
     let imu = if p.o.demo {
         None
     } else {
-        let (out, base, stop, yaw) = (p.o.out.clone(), p.base, imu_stop.clone(), p.imu_yaw.clone());
+        let (out, base, stop, imu) = (p.o.out.clone(), p.base, imu_stop.clone(), p.imu.clone());
         thread::Builder::new().name("imu-log".into())
-            .spawn(move || crate::race_imu::record(&out, base, &stop, &yaw))
+            .spawn(move || crate::race_imu::record(&out, base, &stop, &imu))
             .inspect_err(|e| eprintln!("IMU recorder: {e}")).ok()
     };
     let code = run(&mut p);
@@ -780,7 +780,8 @@ fn run(p: &mut Program) -> i32 {
             (waits, wait_sum, wait_max) = (waits + 1, wait_sum + waited, wait_max.max(waited));
         }
         if let Some(transfer) = p.sup.session.as_mut().and_then(|s| s.motion.race_transfer.as_mut()) {
-            transfer.imu_yaw_rate = p.imu_yaw.at(tick_at);
+            transfer.imu_yaw_rate = p.imu.yaw.at(tick_at);
+            transfer.imu_forward_integral = p.imu.forward_integral.at(tick_at);
         }
         if let Err(error) = py_try(|| p.sup.autonomy_tick(&V::Float(tick_at))) {
             p.sup.halt(&format!("tick_internal_error_{}: {}", error.kind.name(), error.msg));

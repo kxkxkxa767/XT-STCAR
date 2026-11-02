@@ -1436,6 +1436,9 @@ impl Supervisor {
         if launch_allowed {
             motors.push(START_LAUNCH_MOTOR);
             motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
+            if m.race_transfer.as_ref().is_some_and(|t| t.crosswalk_released()) {
+                motors.push(TRANSFER_BOOST_MOTOR);
+            }
         }
         // Round y23: the transfer's straight push.
         if phase == "drive" && (stage_is("open_transfer") || m.transfer_stage()) && decision.get("quality_resume_pending").is_false() {
@@ -1448,7 +1451,7 @@ impl Supervisor {
         let brake_allowed = phase == "drive"
             && stage_is("light_lane")
             && m.light_stop_evidence.is_dict()
-            && m.light_stop_evidence.has("go")
+            && (m.light_stop_evidence.has("go") || m.light_stop_state == Some("passed"))
             && decision.get("quality_resume_pending").is_false();
         if brake_allowed {
             motors.push(LANE_BRAKE_MOTOR);
