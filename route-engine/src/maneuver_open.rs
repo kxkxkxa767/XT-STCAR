@@ -385,7 +385,7 @@ impl Maneuver {
                 LANE_SPEED_UNKNOWN_MPS
             };
             let v = base + rise;
-            stop_at = Some(FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * reaction);
+            stop_at = Some(FRONT_BODY_EXTENT_M + FIRST_APPROACH_BOARD_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * reaction);
             allowed = Self::start_allowed_speed(ahead);
             if let Some(s) = speed {
                 self._start_speed_measured = true;
@@ -432,13 +432,14 @@ impl Maneuver {
         let waiting_at_stripes = self.crosswalk_state == Some("waiting")
             && self.crosswalk_evidence.get("stop").get("basis").os() != Some("stopped_in_the_first_turn_fallback");
         let mut crosswalk = self.crosswalk_control(scan, now, control, cw_track, cw_speed, v_crosswalk);
-        if self.crosswalk_state == Some("done") && let Some(exit) = self.race_transfer.as_mut() {
+        if self.crosswalk_state == Some("done") && let Some(input) = self.race_inputs {
+            let exit = &mut self.race_crosswalk;
             let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2);
-            if waiting_at_stripes { exit.release_crosswalk(now); }
+            if waiting_at_stripes { exit.release_crosswalk(now, input.forward_integral); }
             if exit.crosswalk_released() || self.first_approach.is_some() {
                 let planned = approach.get("before_tangent_point_m").of();
-                let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - LANE_FINISH_GAP_M - LANE_START_SEARCH_M).max(0.)));
-                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, decel, now);
+                let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - FIRST_APPROACH_BOARD_GAP_M - LANE_START_SEARCH_M).max(0.)));
+                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, decel, now, input.forward_integral);
                 first_drive.set("distance_source", if planned.is_some() { "first_tangent" } else { "board_search_room" });
                 allowed = None;
                 if planned.is_none() {
@@ -806,7 +807,7 @@ impl Maneuver {
     /// _open_first_loop_update(scan, now, control).
     pub fn open_first_loop_update(&mut self, scan: &V, now: f64, control: &V) -> V {
         let heading = self.compass.current(scan);
-        if self.race_transfer.is_some() && let Some(h) = heading {
+        if self.race_inputs.is_some() && let Some(h) = heading {
             self.race_light.observe_first(scan, h);
         }
         let progress = heading;
@@ -928,13 +929,13 @@ impl Maneuver {
         let ahead = self.lane_front_range(scan);
         // history only: the light lane continues it (round y2: not while the
         // light stop's own history runs)
-        let speed = if self.light_stop_active() || (self.route_stage == "open_transfer" && self.race_transfer.is_some()) {
+        let speed = if self.light_stop_active() || (self.route_stage == "open_transfer" && self.race_inputs.is_some()) {
             None
         } else {
             self.lane_speed(scan, ahead, 2)
         };
         let v = LANE_SPEED_UNKNOWN_MPS;
-        let stop_at = FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * LANE_REACTION_S;
+        let stop_at = FRONT_BODY_EXTENT_M + OPEN_BOARD_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * LANE_REACTION_S;
         (ahead, speed, stop_at)
     }
 
@@ -1124,21 +1125,18 @@ impl Maneuver {
     }
 
     pub fn transfer_stage(&self) -> bool {
-        self.race_transfer.is_some() && matches!(self.route_stage, "open_transfer" | "second_loop")
+        self.race_inputs.is_some() && matches!(self.route_stage, "open_transfer" | "second_loop")
     }
 
     fn transfer_drive(&mut self, scan: &V, now: f64, remaining: Option<f64>, target_pwm: i64) {
         let decel = self.lane_decels().0;
-        let Some(transfer) = &mut self.race_transfer else { return };
-        let yaw = transfer.imu_yaw_rate.unwrap_or(self.compass.rate);
-        let low_yaw = yaw.abs() <= OPEN_PROBE_MAX_RATE_RAD_S;
-        let steer_near_center = (target_pwm - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM;
-        let entering = low_yaw && (steer_near_center || (self.servo - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM);
-        // y25's first run ended a push at 0.61 rad/s while steering 1496 and
-        // over 2 m short of the divider. A small correction can continue the push.
-        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, entering, low_yaw || steer_near_center, decel);
+        let Some(input) = self.race_inputs else { return };
+        let transfer = &mut self.race_transfer;
+        let yaw = input.yaw_rate.unwrap_or(self.compass.rate);
+        let (entering, continuing) = crate::race_transfer::steering_window(yaw, target_pwm, self.servo);
+        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, entering, continuing, decel, input.forward_integral);
         self.open_feedback.set("yaw_rate_radps", yaw);
-        self.open_feedback.set("yaw_source", if transfer.imu_yaw_rate.is_some() { "calibrated_imu" } else { "lidar_compass" });
+        self.open_feedback.set("yaw_source", if input.yaw_rate.is_some() { "calibrated_imu" } else { "lidar_compass" });
         self.open_feedback.set("stage", self.route_stage);
         self.open_feedback.set("source_seq", scan.idx("seq").clone());
     }
@@ -1167,7 +1165,7 @@ impl Maneuver {
             overshoot_guard(Self::open_heading_hold(heading, PI), Self::open_heading_hold(heading + pose.2, PI))
         };
         let (ahead, speed, stop_at) = self.open_front_stop(scan);
-        if self.race_transfer.is_some() {
+        if self.race_inputs.is_some() {
             let proof = &self.role_distinct_evidence;
             let remaining = if py_eq(proof.get("source_seq"), scan.get("seq")) {
                 proof.get("second_along_axis_m").of()
@@ -1247,7 +1245,7 @@ impl Maneuver {
         {
             let heading = heading.unwrap();
             if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose), None) {
-                if self.race_transfer.is_some() && self.light_vision {
+                if self.race_inputs.is_some() && self.light_vision {
                     self.light_line_ahead(scan, heading, &lane, now);
                 }
                 let kappa = (NEUTRAL - self.servo) as f64 / ROUTE_PWM_PER_CURVATURE;

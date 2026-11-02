@@ -116,8 +116,8 @@ impl Maneuver {
             "second_return_preparing" => self.second_return_preparing, "second_return_evidence" => self.second_return_evidence.clone(),
             "route_end_coast_servo" => self.route_end_coast_servo, "light_since" => self.light_since,
             "light_turn_started" => self.light_turn_started, "_lane_steering" => self._lane_steering.dump(),
-            "_lane_speed_last" => opt_pair(&self._lane_speed_last),
-            "_lane_pulse" => self._lane_pulse, "_lane_creep" => self._lane_creep, "_lane_creeps" => self._lane_creeps, "_light_history" => rows_v(&self._light_history),
+            "_lane_speed_last" => opt_pair(&self.finish.last_speed),
+            "_lane_pulse" => self.finish.pulse, "_lane_creep" => self.finish.creeping, "_lane_creeps" => self.finish.creeps, "_light_history" => rows_v(&self._light_history),
             "_light_heading" => self._light_heading, "light_feedback" => self.light_feedback.clone(),
             "light_alignment_evidence" => self.light_alignment_evidence.clone(), "lane_motor" => self.lane_motor,
             "_coast_fit_front" => self._coast_fit_front.dump(), "_coast_fit_rear" => self._coast_fit_rear.dump(),
@@ -131,16 +131,16 @@ impl Maneuver {
             },
             "_lane_push_rate_slow" => self._lane_push_rate_slow, "_lane_push_rate_strong" => self._lane_push_rate_strong,
             "_lane_coast_decel" => self._lane_coast_decel, "_lane_coast_decel_se" => self._lane_coast_decel_se,
-            "_lane_ranges" => V::list(self._lane_ranges.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect()),
+            "_lane_ranges" => V::list(self.finish.ranges.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect()),
             "lane_feedback" => self.lane_feedback.clone(), "finish_evidence" => self.finish_evidence.clone(),
             "light_vision" => self.light_vision, "_light_frames" => V::list(self._light_frames.clone()),
             "light_stop_state" => self.light_stop_state, "light_stop_evidence" => self.light_stop_evidence.clone(),
             "_light_gantry_seen" => V::list(self._light_gantry_seen.clone()), "_light_line" => self._light_line.clone(),
             "_light_wait_since" => self._light_wait_since, "_light_red_frames" => self._light_red_frames,
-            "_light_launch_until" => self._light_launch_until, "_light_launch_from" => self._light_launch_from, "_light_seen" => self._light_seen,
+            "_light_launch_until" => self.finish.launch_until, "_light_launch_from" => self.finish.launch_from, "_light_seen" => self._light_seen,
             "_light_gantry_since" => self._light_gantry_since, "_light_red_at" => self._light_red_at,
             "_light_zone_at" => self._light_zone_at, "_light_red_hold" => self._light_red_hold,
-            "_lane_brake_since" => self._lane_brake_since, "_lane_brake_end" => self._lane_brake_end,
+            "_lane_brake_since" => self.finish.brake_since, "_lane_brake_end" => self.finish.brake_end,
             "_light_stop_red_frames" => self._light_stop_red_frames, "_light_center_shift_m" => self._light_center_shift_m,
             "_light_rearm_min_m" => self._light_rearm_min_m, "light_wait_credit_s" => self.light_wait_credit_s,
             "_light_wait_tick" => self._light_wait_tick,
@@ -205,8 +205,14 @@ impl Maneuver {
             self._exit_release_cache.as_ref().map(|(s, v)| V::list(vec![s.clone(), V::Int(*v)])),
         );
         d.set("_path_cache", self._path_cache.as_ref().map(|(k, v)| V::list(vec![k.clone(), V::Int(*v)])));
-        if let Some(t) = &self.race_transfer {
-            d.set("race_transfer", t.dump());
+        if let Some(input) = self.race_inputs {
+            // Preserve the existing diagnostic format without sharing control state.
+            let mut view = self.race_transfer.dump();
+            self.race_crosswalk.append_diagnostics(&mut view);
+            view.set("imu_yaw_rate", input.yaw_rate);
+            view.set("imu_forward_integral", input.forward_integral);
+            view.set("lane_imu_history", self.race_light.imu_history_dump());
+            d.set("race_transfer", view);
             d.set("first_loop_divider", crate::dict! {
                 "end_wall_offset_m" => self.race_light.landmark().map(|v| v.1),
                 "observations" => self.race_light.landmark().map(|v| v.0 as i64),

@@ -5,6 +5,8 @@ use crate::maneuver::{
     LIGHT_GANTRY_EDGE_M, LIGHT_LINE_JUMP_M, LIGHT_POST_JUMP_M, OPEN_LANE_WIDTH_M,
 };
 use crate::py::V;
+use crate::motion_sensors::{RangeHistory, lane_range_speed};
+use crate::maneuver::LANE_SPEED_HISTORY;
 
 struct ScanAxis<'a> {
     ranges: &'a [V],
@@ -137,8 +139,40 @@ pub struct RaceLight {
     pub phase: LightRoll,
     pub prior_ahead: Option<f64>,
     pub passed_hint: bool,
+    pub ranges: RangeHistory,
+    pub last_speed: Option<(f64, f64)>,
+    imu_history: Vec<(f64, f64)>,
 }
 impl RaceLight {
+    pub fn measure_speed(&mut self, scan: &V, reference: Option<f64>, forward_integral: Option<f64>, axis_cos: f64)
+        -> (Option<f64>, Option<f64>) {
+        let raw = lane_range_speed(&mut self.ranges, scan, reference, 2);
+        let at = scan.idx("at_ms").i() as f64 * 0.001;
+        let midpoint = self.ranges.first().map_or(at, |r| (r.0+at)/2.);
+        (raw, self.adjusted_speed(forward_integral, at, midpoint, raw, axis_cos))
+    }
+
+    /// The lane's range slope is centred on its short scan history. Move it
+    /// to the current frame using only the IMU change over that same interval.
+    fn adjusted_speed(&mut self, forward_integral: Option<f64>, at: f64, midpoint: f64, raw: Option<f64>, axis_cos: f64) -> Option<f64> {
+        let Some(current) = forward_integral else { self.imu_history.clear(); return None };
+        let h = &mut self.imu_history;
+        if h.last().is_none_or(|&(t, _)| t != at) {
+            if h.last().is_some_and(|&(t, _)| at < t || at - t > crate::helpers::SCAN_AGE_S) { h.clear(); }
+            h.push((at, current));
+            if h.len() > LANE_SPEED_HISTORY { h.remove(0); }
+        }
+        let lidar = raw?;
+        let pair = h.windows(2).find(|p| p[0].0 <= midpoint && midpoint <= p[1].0)?;
+        let ((t0, a), (t1, b)) = (pair[0], pair[1]);
+        let centre = a + (b-a)*(midpoint-t0)/(t1-t0);
+        Some((lidar + (current-centre)*axis_cos).max(0.))
+    }
+
+    pub fn imu_history_dump(&self) -> V {
+        V::list(self.imu_history.iter().map(|r| V::from(vec![r.0,r.1])).collect())
+    }
+
     pub fn observe_first(&mut self, scan: &V, heading: f64) {
         let seq = scan.idx("seq").i();
         if self.last_seq == Some(seq) {

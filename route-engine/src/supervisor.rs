@@ -1486,7 +1486,7 @@ impl Supervisor {
         // Round y18: the launch after green in the light lane may use 1580 (y20: 1600), while it lasts.
         let light_launch_allowed = phase == "drive"
             && stage_is("light_lane")
-            && m._light_launch_until.is_some()
+            && m.finish.has_launch()
             && decision.get("quality_resume_pending").is_false();
         let mut motors: Vec<i64> = if slow_allowed { vec![NEUTRAL, TRIAL_MOTOR, ROUTE_SLOW_MOTOR] } else { vec![NEUTRAL, TRIAL_MOTOR] };
         if launch_allowed {

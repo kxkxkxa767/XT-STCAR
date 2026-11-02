@@ -26032,6 +26032,32 @@
       "limits": "The observer did not save every 10 Hz scan. Equal recorded scan means no resolved time difference, not proof of identical physical stopping, scoring, or generalization to another layout."
     }
   },
+  "y33_stage_control_isolation_20261102": {
+    "date": "2026-11-02",
+    "author": "Codex",
+    "baseline": "61014fc; deployed reference y32 was built from 94b4b83",
+    "engine_round": 140,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "scope": "Operator requested stage isolation and accepted code size growth. Commit and push tonight; defer deployment, physical motion and vehicle CPU measurements until tomorrow.",
+    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "7 passed", "clippy_warnings": 32},
+    "change": "A race-only input snapshot provides the existing yaw rate and longitudinal IMU integral read once per control tick. CrosswalkExit owns the launch origin and first-tangent approach; RaceTransfer owns the two-cone speed estimate, drive phase and steering eligibility; RaceLight owns gantry geometry and its own range/IMU speed histories. FinishControl owns the end-board estimate, launch, brake and creep states. The light wait and subsequent release explicitly hand over to the finish controller. Transfer recovery no longer resets another controller's state. Shared code for the range slope and ESC delay represents sensor/vehicle physics, not competing motor commands.",
+    "settings": "No changes to speed settings or steering geometry: two straight boosts 1600, cone-two entry target 1.24 m/s, green launch 1600 and terminal brake 1300. Finish and start launch settings have independent names/values.",
+    "verification": {
+      "light_logic": "In the same Mac sensor-input comparison used for y32, the y32 and y33 Rust output files matched byte-for-byte on saved y27 and y32 logs: 26 light-entry/approach samples each, first neutral at scan 177 and 203 respectively. These are fixed-input results, not y33 vehicle measurements.",
+      "local_evidence": "work/y32-first-cone-gap-vrsuCXnS/{ref-y32,refactor-y33}-{y27,y32}.json"
+    },
+    "y32_vehicle_cpu_reference": {
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y32/run/summary.json",
+      "control_thread_fraction_of_one_core": 0.15914367223638715,
+      "imu_thread_fraction_of_one_core": 0.023511124251511122,
+      "scan_receive_to_decision_mean_ms": 1.42146,
+      "scan_receive_to_decision_max_ms": 9.21565,
+      "max_control_compute_ms": 9.85288,
+      "y33_vehicle_cpu_measured": false
+    }
+  },
   "next_tasks_20261102": {
     "date": "2026-11-02",
     "author": "Claude",

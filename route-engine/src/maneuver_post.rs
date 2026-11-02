@@ -1275,45 +1275,9 @@ impl Maneuver {
         pairwise_track_speed(&mut self._track_history, scan, track)
     }
 
-    /// _lane_speed(scan, ahead, min_rates).
-    pub(super) fn imu_adjusted_lane_speed(&mut self, scan: &V, raw: Option<f64>) -> Option<f64> {
-        let at = scan.idx("at_ms").i() as f64 * 0.001;
-        let midpoint = self._lane_ranges.first().map_or(at, |r| (r.0+at)/2.);
-        let axis_cos = self.compass.current(scan).map_or(1., |h| h.pcos());
-        self.race_transfer.as_mut()?.current_lane_speed(at, midpoint, raw, axis_cos)
-    }
-
+    /// The terminal lane tracks its own fixed reference, the end board.
     pub fn lane_speed(&mut self, scan: &V, ahead: Option<f64>, min_rates: usize) -> Option<f64> {
-        let Some(ahead) = ahead else {
-            self._lane_ranges.clear();
-            return None;
-        };
-        let row = (scan.idx("at_ms").i() as f64 / 1000., scan.idx("received_at").f(), ahead);
-        if let Some(&last) = self._lane_ranges.last() {
-            let dt = row.0 - last.0;
-            let rate = if dt > 0. { Some((last.2 - ahead) / dt) } else { None };
-            let dr = row.1 - last.1;
-            if !(0.05 <= dt && dt <= SCAN_AGE_S + 0.05)
-                || !(0.05 <= dr && dr <= SCAN_AGE_S + 0.05)
-                || rate.is_none_or(|r| !(-0.4 <= r && r <= LANE_MAX_CLOSING_MPS))
-            {
-                self._lane_ranges.clear();
-            }
-        }
-        self._lane_ranges.push(row);
-        if self._lane_ranges.len() > LANE_SPEED_HISTORY {
-            let n = self._lane_ranges.len();
-            self._lane_ranges.drain(..n - LANE_SPEED_HISTORY);
-        }
-        let n = self._lane_ranges.len();
-        if n < 3 || n - LANE_SPEED_BASELINE.min(n - 2) < min_rates {
-            return None;
-        }
-        let step = LANE_SPEED_BASELINE.min(n - 2);
-        let h = &self._lane_ranges;
-        let mut rates: Vec<f64> = h.iter().zip(h[step..].iter()).map(|(a, b)| (a.2 - b.2) / (b.0 - a.0)).collect();
-        sort_floats(&mut rates);
-        Some(pmax(0., rates[rates.len() / 2]))
+        crate::motion_sensors::lane_range_speed(&mut self.finish.ranges, scan, ahead, min_rates)
     }
 
     /// _begin_light_lane(scan, now, control, evidence).
@@ -1324,7 +1288,7 @@ impl Maneuver {
         if !self.light_stop_active() {
             // round y2: a light stop's coast or wait goes on unchanged
             self.lane_motor = ROUTE_SLOW_MOTOR;
-            self._lane_pulse = 0;
+            self.finish.pulse = 0;
         }
         self._lane_steering = CorridorSteering::default();
         let e = dict! {"source_seq" => scan.idx("seq").clone()};
@@ -1337,7 +1301,7 @@ impl Maneuver {
     /// _start_allowed_speed(ahead).
     pub fn start_allowed_speed(ahead: Option<f64>) -> Option<f64> {
         let ahead = ahead?;
-        let room = ahead - FRONT_BODY_EXTENT_M - LANE_FINISH_GAP_M - LANE_START_SEARCH_M;
+        let room = ahead - FRONT_BODY_EXTENT_M - FIRST_APPROACH_BOARD_GAP_M - LANE_START_SEARCH_M;
         if room <= 0. {
             return Some(0.);
         }
@@ -1442,66 +1406,9 @@ impl Maneuver {
         (pmax(0., start - now), end - pmax(now, start))
     }
 
-    /// _lane_speed_now(speed, now, onset, offset, decel, accel).
-    fn lane_speed_now(&self, speed: f64, now: f64, onset: f64, offset: f64, decel: f64, accel: f64) -> f64 {
-        let history = &self._lane_ranges;
-        let lag = if history.is_empty() { 0. } else { (history[history.len() - 1].0 - history[0].0) / 2. };
-        let mut powered_s = 0.;
-        if let Some(cmd_at) = self._power_cmd_at {
-            let since = self._power_since.unwrap_or(cmd_at);
-            powered_s = pmax(0., pmin(now, cmd_at + offset) - pmax(now - lag, since + onset));
-            if let Some(prev_end) = self._power_prev_end {
-                powered_s += pmax(0., pmin(pmin(now, prev_end + offset), since + onset) - (now - lag));
-            }
-        }
-        powered_s = pmin(lag, powered_s);
-        pmax(0., speed + accel * powered_s - decel * (lag - powered_s))
-    }
-
-    /// _lane_worst_gap(gap, speed, now, decel, accel, reaction, push_s, long_lag).
-    #[allow(clippy::too_many_arguments)]
-    fn lane_worst_gap(&self, gap: f64, speed: f64, now: f64, decel: f64, accel: f64, reaction: f64, push_s: f64, long_lag: f64) -> f64 {
-        let mut worst: Option<f64> = None;
-        for lag in [LANE_ESC_LAG_MIN_S, long_lag] {
-            let (onset, offset) = (lag - LANE_ESC_SKEW_S, lag + LANE_ESC_SKEW_S);
-            let mut v = self.lane_speed_now(speed, now, onset, offset, decel, accel);
-            if let Some(from) = self._light_launch_from {
-                // round y3: from rest, no faster than the kick's bound while its power has acted
-                v = pmin(v, LIGHT_LAUNCH_ACCEL_MAX_MPS2 * pmax(0., now - (from + onset)));
-            }
-            v += LANE_SPEED_GUARD_MARGIN_MPS;
-            let (coast_s, power_s) = self.lane_pipeline(now, onset, offset, push_s);
-            // round y20: the launch's peak not capped at LANE_PUSH_MAX_MPS
-            let peak_max = if self._light_launch_from.is_some() { f64::INFINITY } else { LANE_PUSH_MAX_MPS };
-            let value = Self::lane_stop_to(gap, v, decel, reaction, coast_s, power_s, accel, peak_max);
-            worst = Some(match worst {
-                None => value,
-                Some(w) => pmin(w, value),
-            });
-        }
-        worst.unwrap()
-    }
-
-    /// _lane_stop(gap, speed, decel, reaction, coast_s, power_s, accel).
-    fn lane_stop(gap: f64, speed: f64, decel: f64, reaction: f64, coast_s: f64, power_s: f64, accel: f64) -> f64 {
-        Self::lane_stop_to(gap, speed, decel, reaction, coast_s, power_s, accel, LANE_PUSH_MAX_MPS)
-    }
-
-    /// _lane_stop with its peak_max.
-    #[allow(clippy::too_many_arguments)]
-    fn lane_stop_to(gap: f64, speed: f64, decel: f64, reaction: f64, coast_s: f64, power_s: f64, accel: f64, peak_max: f64) -> f64 {
-        let travel = speed * reaction;
-        if speed <= decel * coast_s {
-            return gap - travel - speed * speed / (2. * decel);
-        }
-        let coasted = speed - decel * coast_s;
-        let peak = pmin(coasted + accel * power_s, pmax(coasted, peak_max));
-        gap - travel - (speed + coasted) / 2. * coast_s - peak * power_s - peak * peak / (2. * decel)
-    }
-
     /// _coast_fit_window(now) (round y15).
     pub(crate) fn coast_fit_window(&self, now: f64) -> bool {
-        let braked = self._lane_brake_since.is_some() || self._lane_brake_end.is_some_and(|end| now - end < ESC_LAG_S + LANE_ESC_SKEW_S);
+        let braked = self.finish.brake_since.is_some() || self.finish.brake_end.is_some_and(|end| now - end < ESC_LAG_S + LANE_ESC_SKEW_S);
         self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S)
             && (self.servo - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM
             && !braked
@@ -1543,64 +1450,6 @@ impl Maneuver {
                 Some(pmax(LANE_COAST_DECEL_FLOOR_MPS2, pmin(LANE_COAST_DECEL_CAP_MPS2, (self._coast_runs_wd + w * decel) / total)));
             self._lane_coast_decel_se = Some(sqrt(1. / total));
         }
-    }
-
-    /// _lane_coast_observe(scan, now, speed) (round y15: the board ahead and behind).
-    fn lane_coast_observe(&mut self, scan: &V, now: f64, speed: Option<f64>) {
-        let coasting = self.lane_motor == NEUTRAL
-            && speed.is_none_or(|s| s >= LANE_SPEED_RESTART_MPS)
-            && self.coast_fit_window(now);
-        if !coasting {
-            self.coast_measure(scan, false, None, None);
-            return;
-        }
-        let front = self.lane_front_range(scan);
-        let rear = self.lane_rear_range(scan);
-        self.coast_measure(scan, true, front, rear);
-    }
-
-    /// _lane_push_observe(now, speed) (round y15).
-    fn lane_push_observe(&mut self, now: f64, speed: Option<f64>) {
-        let Some((motor, since, mut low, mut end, mut high)) = self._lane_push_probe else {
-            return;
-        };
-        if end.is_none() && self.lane_motor != motor {
-            if DRIVE_MOTORS.contains(&self.lane_motor) {
-                self._lane_push_probe = None; // turned into another push
-                return;
-            }
-            end = self._power_cmd_at;
-        } else if let Some(e) = end
-            && (DRIVE_MOTORS.contains(&self.lane_motor) || now - e > LANE_PUSH_PROBE_S)
-        {
-            self._lane_push_probe = None;
-            if let (Some(l), Some(h)) = (low, high)
-                && now - e >= LANE_PUSH_PROBE_MIN_S
-            {
-                let rate = pmax(LANE_PUSH_RATE_MIN_MPS2, (h - l) / (e - since + LANE_PUSH_MIN_S));
-                if motor == TRIAL_MOTOR {
-                    self._lane_push_rate_strong = Some(rate);
-                } else {
-                    self._lane_push_rate_slow = Some(rate);
-                }
-            }
-            return;
-        }
-        if let Some(sp) = speed {
-            if now - since <= LANE_PUSH_PROBE_S {
-                low = Some(match low {
-                    None => sp,
-                    Some(l) => pmin(l, sp),
-                });
-            }
-            if end.is_some() {
-                high = Some(match high {
-                    None => sp,
-                    Some(h) => pmax(h, sp),
-                });
-            }
-        }
-        self._lane_push_probe = Some((motor, since, low, end, high));
     }
 
     /// _light_lane_update(scan, now, control).
@@ -1675,7 +1524,7 @@ impl Maneuver {
             return self.result(now);
         }
         let ahead = self.lane_front_range(scan);
-        let (basis, speed_feedback) = self.lane_goal_control(scan, ahead, now, &FINISH_GOAL);
+        let (basis, speed_feedback) = self.finish_control(scan, ahead, now);
         self.lane_feedback = steering.merged(&speed_feedback);
         if let Some(basis) = basis {
             let mut finish = self.lane_feedback.clone();
@@ -1694,243 +1543,6 @@ impl Maneuver {
         self.reason = "light_lane_follow_straight".into();
         self.slew(now);
         self.result(now)
-    }
-
-    /// _lane_goal_control(scan, ahead, now, goal): the light lane's
-    /// coast/push/kick/creep control toward a line ``ahead`` (the end board,
-    /// round y2 also the light line): (basis, feedback).
-    pub fn lane_goal_control(&mut self, scan: &V, ahead: Option<f64>, now: f64, goal: &Goal) -> (Option<String>, V) {
-        let kind = goal.kind;
-        let speed = self.lane_speed(scan, ahead, 2);
-        self.lane_coast_observe(scan, now, speed);
-        self.lane_push_observe(now, speed);
-        let held = self._lane_speed_last;
-        let mut speed_known = true;
-        let v = if let Some(s) = speed {
-            self._lane_speed_last = Some((now, s));
-            s
-        } else if let Some(h) = held.filter(|h| 0. <= now - h.0 && now - h.0 <= LANE_SPEED_HOLD_S) {
-            h.1 + LANE_SPEED_HOLD_MARGIN_MPS
-        } else {
-            speed_known = false;
-            LANE_SPEED_UNKNOWN_MPS
-        };
-        let gap = ahead.map(|a| a - FRONT_BODY_EXTENT_M);
-        let (decel, guard_decel, strong_decel) = self.lane_decels();
-        let powered = DRIVE_MOTORS.contains(&self.lane_motor);
-        let (aim_coast, aim_power) = self.lane_pipeline(now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, 0.);
-        let coasting = !powered && self._power_cmd_at.is_none_or(|at| now >= at + ESC_LAG_S + LANE_ESC_SKEW_S);
-        let restarted = self.light_stop_evidence.has("go") || self.light_stop_state == Some("passed");
-        // Round y15: after the light the finish's tail lag, its 1560 top-ups and
-        // the pushes' measured responses.
-        let after_light = kind == "finish" && restarted;
-        // once no launch power can be left in the ESC pipeline
-        // Round y20: the light's approach too (no launch before it).
-        let relaxed = kind == "light"
-            || after_light
-                && (self._lane_topup_motor.is_some() || self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S));
-        let long_lag = if relaxed { LANE_FINISH_ESC_LAG_S } else { ESC_LAG_S };
-        let strong = self._lane_topup_motor == Some(TRIAL_MOTOR) && self._power_cmd_motor == Some(TRIAL_MOTOR);
-        // round y15: the launch's 1560 still acts through its 1550 tail
-        let kick = self._power_cmd_motor == Some(TRIAL_MOTOR) && !strong || self._light_launch_from.is_some();
-        let launch = self._light_launch_from.is_some(); // round y18: the launch's powered run (y20: 1600)
-        let (rate_slow, rate_strong) = (self._lane_push_rate_slow, self._lane_push_rate_strong);
-        let aim_accel = if strong {
-            rate_strong.unwrap_or(LANE_POWER_ACCEL_MPS2)
-        } else if launch {
-            LIGHT_LAUNCH_ACCEL_MPS2
-        } else if kick {
-            LANE_POWER_ACCEL_MPS2
-        } else {
-            rate_slow.unwrap_or(LANE_PUSH_ACCEL_MPS2)
-        };
-        let strong_accel = match rate_strong {
-            None => LANE_KICK_ACCEL_MAX_MPS2,
-            Some(r) => pmax(LANE_STRONG_PUSH_ACCEL_MIN_MPS2, LANE_PUSH_RATE_MARGIN * r),
-        };
-        let late = kind == "finish" && gap.is_some_and(|g| g <= goal.zone_gap); // round y20: the finish's only
-        let guard_accel = if strong {
-            strong_accel
-        } else if launch {
-            LIGHT_LAUNCH_ACCEL_MAX_MPS2
-        } else if kick {
-            LANE_KICK_ACCEL_MAX_MPS2
-        } else if late {
-            LANE_PUSH_LATE_ACCEL_MAX_MPS2
-        } else {
-            LANE_PUSH_ACCEL_MAX_MPS2
-        };
-        let mut v_aim = v;
-        if speed.is_some() {
-            v_aim = self.lane_speed_now(v, now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, decel, aim_accel);
-        }
-        let guard_reaction = if powered { LANE_REACTION_BASE_S } else { LANE_AIM_REACTION_S };
-        let (mut stop_gap, mut worst_gap) = (None, None);
-        if let Some(g) = gap {
-            stop_gap = Some(Self::lane_stop(g, v_aim, decel, if powered { LANE_AIM_REACTION_S } else { 0. }, aim_coast, aim_power, aim_accel));
-            worst_gap = Some(self.lane_worst_gap(g, v, now, guard_decel, guard_accel, guard_reaction, 0., long_lag));
-        }
-        let stopped = speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS);
-        let in_zone = gap.is_some_and(|g| g <= goal.zone_gap);
-        let body_in_zone = gap.is_some_and(|g| g <= goal.body_gap);
-        let kick_room = gap.is_some_and(|g| g >= goal.min_gap + LANE_KICK_TRAVEL_M);
-        let rested = self._power_cmd_at.is_none_or(|at| now - at >= LANE_KICK_REST_S);
-        // Round 105: the finish creep.
-        let creep_room = in_zone
-            && !body_in_zone
-            && !kick_room
-            && gap.unwrap() >= goal.min_gap + goal.creep_travel
-            && (self._lane_creeps < goal.creep_max || !rested);
-        // Round y2: the light stop ends stopped only; so does the finish after a
-        // restart from a light wait (the launch's own coast fit reads low).
-        // Round y20 (rules 2.4.2: 红灯亮起立即停车): after a red frame taken with the front in
-        // the light's zone, no power once the whole car is in; with the rear out it only comes in.
-        if kind == "light" && in_zone {
-            let zone_at = *self._light_zone_at.get_or_insert(now);
-            if self._light_frames.last().is_some_and(|f| f.at(2).f() >= LIGHT_RED_MIN_SCORE && f.at(1).f() >= zone_at) {
-                self._light_red_hold = true;
-            }
-        }
-        let red_hold = kind == "light" && self._light_red_hold && body_in_zone;
-        let mut basis: Option<String> = None;
-        if speed_known && stopped && body_in_zone {
-            basis = Some(format!("stopped_with_the_whole_car_in_the_{kind}_zone"));
-        } else if speed_known && stopped && in_zone && !kick_room && !creep_room {
-            basis = Some(if self._lane_creeps != 0 {
-                format!("stopped_front_in_{kind}_zone_creeps_used")
-            } else {
-                format!("stopped_front_in_{kind}_zone_restart_could_reach_the_{}", if kind == "finish" { "board" } else { "line" })
-            });
-        } else if kind == "light" && gap.is_none() && speed_known && stopped {
-            basis = Some("stopped_with_the_light_line_lost_in_the_zone".into());
-        } else if kind == "finish"
-            && !restarted
-            && speed_known
-            && coasting
-            && !stopped
-            && strong_decel.is_some()
-            && gap.is_some()
-            && stop_gap.unwrap() >= goal.min_gap
-            && Self::lane_stop(gap.unwrap(), v_aim, strong_decel.unwrap(), 0., 0., 0., 0.) <= goal.body_gap
-        {
-            basis = Some("coast_stops_the_whole_car_in_the_finish_zone".into());
-        }
-        let mut feedback = dict! {
-            "front_range_m" => ahead, "front_gap_m" => gap, "speed_mps" => speed, "speed_for_cut_mps" => v,
-            "speed_aim_mps" => v_aim, "speed_known" => speed_known,
-            "speed_basis" => if kind == "finish" { "closing_rate_on_board_ahead_axis" } else { "closing_rate_on_light_line_axis" },
-            "predicted_stop_gap_m" => stop_gap, "worst_stop_gap_m" => worst_gap, "in_finish_zone" => in_zone,
-            "whole_car_in_finish_zone" => body_in_zone, "pipeline_power_s" => aim_power,
-            "coast_decel_mps2" => decel, "guard_decel_mps2" => guard_decel, "strong_decel_mps2" => strong_decel,
-            "coast_decel_se_mps2" => self._lane_coast_decel_se,
-            "coast_decel_measured" => self._lane_coast_decel.is_some(), "coast_fit" => fit_value(self._coast_fit),
-            "push_rates_mps2" => V::list(vec![V::from(rate_slow), V::from(rate_strong)]),
-            "guard_accel_mps2" => guard_accel, "tail_lag_s" => long_lag,
-            "motor_before" => self.lane_motor, "swept_path_certified" => false, "traffic_light_vision" => self.light_vision,
-            "creep_room" => creep_room, "creeps" => self._lane_creeps, "goal" => kind, "red_hold" => red_hold,
-        };
-        if basis.is_some() {
-            return (basis, feedback);
-        }
-        let launching = self._light_launch_until.is_some_and(|until| now < until);
-        let mut topup_motor: Option<i64> = None; // round y15: this scan's output continues or starts a top-up
-        let braking = self._lane_brake_since.is_some();
-        let brake = after_light
-            && self._lane_brake_end.is_none()
-            && gap.is_some()
-            && speed.is_some_and(|s| s >= LANE_BRAKE_MIN_MPS)
-            && stop_gap.is_some_and(|s| s < goal.target_gap)
-            && match self._lane_brake_since {
-                Some(since) => now - since < LANE_BRAKE_MAX_S,
-                None => gap.unwrap() <= LANE_BRAKE_START_GAP_M,
-            };
-        if red_hold {
-            self.lane_motor = NEUTRAL; // round y20: in the red with the whole car in: no power
-        } else if brake {
-            self.lane_motor = LANE_BRAKE_MOTOR; // round y22: the coast would end past the target
-        } else if gap.is_none() && kind == "light" {
-            self.lane_motor = NEUTRAL; // round y2: no light line this scan: coast
-        } else if gap.is_some() && (stop_gap.unwrap() <= goal.target_gap || worst_gap.unwrap() <= goal.min_gap) {
-            self.lane_motor = NEUTRAL;
-        } else if launching {
-            self.lane_motor = LIGHT_LAUNCH_MOTOR; // round y2: the launch after green (y18: 1580, y20: 1600)
-        } else if self._light_launch_until.is_some() && (self.lane_motor == TRIAL_MOTOR || self.lane_motor == LIGHT_LAUNCH_MOTOR) {
-            self.lane_motor = ROUTE_SLOW_MOTOR; // the launch goes on at 1550
-        } else if speed.is_none() {
-            self.lane_motor = ROUTE_SLOW_MOTOR;
-        } else if stopped {
-            self.lane_motor = if (kick_room || creep_room) && (rested || self._lane_pulse > 0) { TRIAL_MOTOR } else { NEUTRAL };
-        } else if self.lane_motor == ROUTE_SLOW_MOTOR || self.lane_motor == TRIAL_MOTOR && strong {
-            // the straight, or a push (round y15: also a 1560 top-up), until the coast is aimed
-            if self._lane_topup_motor == Some(self.lane_motor) {
-                topup_motor = Some(self.lane_motor);
-            }
-        } else if self.lane_motor == NEUTRAL
-            && stop_gap.unwrap() > goal.target_gap + LANE_TOPUP_BAND_M
-            && v_aim - decel * LANE_ESC_LAG_NOMINAL_S >= LANE_PUSH_ROLLING_MPS
-            // round y19: after the light not while the launch's power may still act
-            && (relaxed || !after_light)
-        {
-            // it would stop short: push again while it rolls (round y15: after the
-            // light at 1560 where that push's guard passes, outside the zone)
-            let g = gap.unwrap();
-            if after_light
-                && !late
-                && self.lane_worst_gap(g, v, now, guard_decel, pmax(guard_accel, strong_accel), guard_reaction, LANE_STRONG_PUSH_MIN_S, long_lag)
-                    > goal.min_gap
-            {
-                self.lane_motor = TRIAL_MOTOR;
-            } else if self.lane_worst_gap(g, v, now, guard_decel, guard_accel, guard_reaction, LANE_PUSH_MIN_S, long_lag) > goal.min_gap {
-                self.lane_motor = ROUTE_SLOW_MOTOR;
-            } else {
-                self.lane_motor = NEUTRAL;
-            }
-            if self.lane_motor != NEUTRAL {
-                topup_motor = Some(self.lane_motor);
-                self._lane_push_probe = Some((self.lane_motor, now, speed, None, None));
-            }
-        } else {
-            self.lane_motor = NEUTRAL;
-        }
-        if self.lane_motor != TRIAL_MOTOR && self.lane_motor != LIGHT_LAUNCH_MOTOR && self._light_launch_until.is_some() {
-            self._light_launch_until = None; // after the launch: the lane's own pushes and kicks
-        }
-        // the launch's powered run has ended (round y20: its power out of the ESC pipeline too)
-        if self.lane_motor == NEUTRAL && self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S) {
-            self._light_launch_from = None;
-        }
-        if DRIVE_MOTORS.contains(&self.lane_motor) {
-            self._lane_topup_motor = topup_motor;
-        }
-        if self.lane_motor == LANE_BRAKE_MOTOR {
-            if self._lane_brake_since.is_none() {
-                self._lane_brake_since = Some(now);
-            }
-        } else if braking {
-            (self._lane_brake_since, self._lane_brake_end) = (None, Some(now)); // round y22: once per run
-        }
-        let frames = if self._lane_creep { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
-        if self.lane_motor == TRIAL_MOTOR && (launching || topup_motor == Some(TRIAL_MOTOR)) {
-            self._lane_pulse = 0;
-            self._lane_creep = false;
-        } else if self.lane_motor == TRIAL_MOTOR && self._lane_pulse >= frames {
-            self.lane_motor = NEUTRAL;
-            self._lane_pulse = 0;
-            self._lane_creep = false;
-        } else if self.lane_motor == TRIAL_MOTOR {
-            if self._lane_pulse == 0 && !kick_room && creep_room {
-                self._lane_creep = true;
-                self._lane_creeps += 1;
-            }
-            self._lane_pulse += 1;
-        } else {
-            self._lane_pulse = 0;
-            self._lane_creep = false;
-        }
-        feedback.set("motor", self.lane_motor);
-        feedback.set("creeps", self._lane_creeps);
-        feedback.set("brake", V::list(vec![V::from(self._lane_brake_since), V::from(self._lane_brake_end)]));
-        (None, feedback)
     }
 
     /// _light_update(scan, now, control).
@@ -1965,7 +1577,7 @@ impl Maneuver {
             let ahead = self.lane_front_range(scan);
             self.lane_speed(scan, ahead, 2);
         } else {
-            self._lane_ranges.clear();
+            self.finish.ranges.clear();
         }
         if aligned && mature_observation(&mut self._light_history, scan, 0.20) {
             let mut evidence = space.clone();

@@ -9,6 +9,10 @@ use crate::maneuver::*;
 use crate::py::*;
 use crate::race_light::LightRoll;
 
+// Pre-red approach settings, independent of the terminal board controller.
+const LIGHT_CRUISE_ACCEL_MPS2: f64 = 0.35;
+const LIGHT_TOPUP_BAND_M: f64 = 0.10;
+const LIGHT_RESTART_MPS: f64 = 0.15;
 const NEAR_POST_EDGE_M: f64 = 0.04; // measured close to both boards at the static gantry pose
 const VISIBLE_LIGHT_STOP_GAP_M: f64 = 0.55; // head visible at 0.52 m, out of frame at the y29 stop at 0.20 m
 
@@ -171,7 +175,7 @@ impl Maneuver {
         if n > keep {
             self._light_frames.drain(..n - keep);
         }
-        let fresh_race_red = self.race_transfer.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
+        let fresh_race_red = self.race_inputs.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
             && !matches!(self.light_stop_state, Some("waiting" | "released" | "passed"))
             && red.f() >= LIGHT_RED_MIN_SCORE && (0.0..=LIGHT_FRAME_MAX_AGE_S).contains(&(now - captured.f()))
             && self.light_since.is_some_and(|entry| captured.f() >= entry);
@@ -227,7 +231,7 @@ impl Maneuver {
         let legs: Vec<(f64, f64)> = lane_posts(scan.idx("ranges").l(), heading)
             .into_iter()
             .filter(|&(along, lateral)| {
-                FRONT_BODY_EXTENT_M < along && (self.race_transfer.is_some() || along <= LIGHT_GANTRY_REACH_M)
+                FRONT_BODY_EXTENT_M < along && (self.race_inputs.is_some() || along <= LIGHT_GANTRY_REACH_M)
                     && band.0 <= lateral && lateral <= band.1
             })
             .collect();
@@ -249,7 +253,7 @@ impl Maneuver {
         // At the near bench pose each post stood just 4–10 cm off its
         // neighbouring returns. Accept these shallow edges only as a pair
         // on opposite measured boards, never as a new single-leg landmark.
-        if self.race_transfer.is_some() && let Some(inner) = lane.get("inner_lateral_m").of() {
+        if self.race_inputs.is_some() && let Some(inner) = lane.get("inner_lateral_m").of() {
             let outer = lane.idx("outer_lateral_m").f();
             let posts = project_posts(post_runs(scan.idx("ranges").l(), NEAR_POST_EDGE_M, NEAR_POST_EDGE_M), heading);
             let near = |x: f64| (FRONT_BODY_EXTENT_M..=LIGHT_SENSOR_TO_GANTRY_M + FRONT_BODY_EXTENT_M).contains(&x);
@@ -386,7 +390,7 @@ impl Maneuver {
             return Some(near);
         }
         let mut line = self._light_line.clone();
-        let posts = if self.race_transfer.is_some() && line.idx("legs").l().len() == 2
+        let posts = if self.race_inputs.is_some() && line.idx("legs").l().len() == 2
             && line.idx("along_m").f() <= LIGHT_SENSOR_TO_GANTRY_M + FRONT_BODY_EXTENT_M {
             project_posts(post_runs(scan.idx("ranges").l(), NEAR_POST_EDGE_M, NEAR_POST_EDGE_M), heading)
         } else {
@@ -452,7 +456,7 @@ impl Maneuver {
             line.set("leg_offsets_m", V::list(legs.iter().map(|leg| V::Float(leg.0 - near)).collect()));
             self._light_center_shift_m = Self::light_center_offset(&legs, lane, self._light_center_shift_m);
         }
-        let held_speed = self._lane_speed_last;
+        let held_speed = if self.race_inputs.is_some() { self.race_light.last_speed } else { self.finish.last_speed };
         line.update(&dict! {
             "along_m" => near, "at_s" => at, "source" => "legs", "board_m" => board,
             "speed_mps" => match held_speed {
@@ -472,10 +476,10 @@ impl Maneuver {
         if !self.light_vision || matches!(self.light_stop_state, Some("waiting" | "released" | "passed")) {
             return None;
         }
-        let prior = if self.race_transfer.is_some() { self.race_light.project(scan, heading) } else { None };
+        let prior = if self.race_inputs.is_some() { self.race_light.project(scan, heading) } else { None };
         let ahead = self.light_line_ahead(scan, heading, lane, now);
         let approach = self.light_stop_state == Some("approach");
-        let red_latched = self.race_transfer.is_some() && self._light_red_hold;
+        let red_latched = self.race_inputs.is_some() && self._light_red_hold;
         let preview = self.light_stop_state == Some("divider_approach");
         if ahead.is_none() && (preview || self.light_stop_state.is_none()) && !self.race_light.passed_hint {
             if let Some(d) = prior {
@@ -483,8 +487,8 @@ impl Maneuver {
                     if !preview {
                         self.light_stop_state = Some("divider_approach");
                         self._light_gantry_since = Some(now);
-                        self._lane_ranges.clear();
-                        self._lane_speed_last = None;
+                        self.race_light.ranges.clear();
+                        self.race_light.last_speed = None;
                         self.route_event("light_divider_prediction", scan, control, dict! {
                             "basis" => "first_loop_board_end_relative_to_end_wall", "along_m" => d,
                             "end_wall_offset_m" => self.race_light.landmark().map(|v| v.1),
@@ -530,7 +534,7 @@ impl Maneuver {
                 self.race_light.passed_hint = true;
                 self.race_light.phase = LightRoll::Cruise;
             }
-            if passed && self.race_transfer.is_some() {
+            if passed && self.race_inputs.is_some() {
                 self.light_stop_state = Some("passed");
                 self.route_event("light_pass_without_red", scan, control, ended);
             }
@@ -540,6 +544,7 @@ impl Maneuver {
                 self._light_rearm_min_m = Some(LIGHT_REARM_MIN_M);
             }
             self.lane_speed(scan, None, 2);
+            if self.race_inputs.is_some() { self.race_light.ranges.clear(); }
             self.light_entry_coast_ack_dropped();
             if self.route_stage != "light_lane" {
                 self.lane_motor = ROUTE_SLOW_MOTOR;
@@ -567,12 +572,18 @@ impl Maneuver {
         // A direct sighting corrects the target position. When already tracking
         // the end wall, keep its velocity history through that correction.
         if !preview || prior.is_none() {
-            self._lane_ranges = self._light_gantry_seen.iter()
-                .map(|row| (row.idx("at_s").f(), row.idx("received_at").f(), row.idx("along_m").f()))
-                .collect();
-            self._lane_speed_last = None;
+            let seed = self._light_gantry_seen.iter()
+                .map(|row| (row.idx("at_s").f(), row.idx("received_at").f(), row.idx("along_m").f()));
+            if self.race_inputs.is_some() {
+                self.race_light.ranges.clear();
+                self.race_light.ranges.extend(seed);
+                self.race_light.last_speed = None;
+            } else {
+                self.finish.ranges = seed.collect();
+                self.finish.last_speed = None;
+                (self.finish.pulse, self.finish.creeping, self.finish.creeps) = (0, false, 0);
+            }
         }
-        (self._lane_pulse, self._lane_creep, self._lane_creeps) = (0, false, 0);
         if self.route_stage != "light_lane" && !red_latched && !preview {
             self.lane_motor = ROUTE_SLOW_MOTOR; // the light entry drives at 1550 until the coast is aimed
         }
@@ -581,32 +592,30 @@ impl Maneuver {
 
     /// Coast through the optical beam into view of the light. Only camera red can hold.
     pub fn light_approach_control(&mut self, scan: &V, ahead: Option<f64>, now: f64) -> (Option<String>, V) {
-        if self.race_transfer.is_none() {
-            return self.lane_goal_control(scan, ahead, now, &LIGHT_GOAL);
-        }
+        let Some(input) = self.race_inputs else { return self.reference_light_goal(scan, ahead, now) };
         let gap = ahead.map(|a| a - FRONT_BODY_EXTENT_M);
         let to_sensor = gap.map(|g| g - LIGHT_SENSOR_TO_GANTRY_M);
         // A constant offset preserves closing rate when live legs replace the prior.
         let reference = self.race_light.prior_ahead.or(ahead).or_else(|| self.lane_front_range(scan));
-        let speed = self.lane_speed(scan, reference, 2);
-        let current_speed = self.imu_adjusted_lane_speed(scan, speed);
-        if let Some(v) = speed { self._lane_speed_last = Some((now, v)); }
-        let held = self._lane_speed_last.filter(|(at, _)| now-at <= LANE_SPEED_HOLD_S).map(|(_,v)| v);
+        let axis_cos = self.compass.current(scan).map_or(1., |h| h.pcos());
+        let (speed, current_speed) = self.race_light.measure_speed(scan, reference, input.forward_integral, axis_cos);
+        if let Some(v) = speed { self.race_light.last_speed = Some((now, v)); }
+        let held = self.race_light.last_speed.filter(|(at, _)| now-at <= LANE_SPEED_HOLD_S).map(|(_,v)| v);
         let v = current_speed.or(speed).or(held);
         let decel = self.lane_decels().0;
-        let lag = CROSSWALK_AIM_LAG_S;
+        let lag = crate::motion_sensors::ESC_COAST_DELAY_S;
         let beam_speed = (2.*decel*(LIGHT_SENSOR_TO_GANTRY_M-VISIBLE_LIGHT_STOP_GAP_M)).sqrt();
         let (_, tail) = self.lane_pipeline(now, lag, lag, 0.);
         let predicted = gap.zip(v).map(|(g,v)| {
-            let release = v + LANE_PUSH_ACCEL_MPS2*tail;
+            let release = v + LIGHT_CRUISE_ACCEL_MPS2*tail;
             g - (v+release)*tail/2. - release*release/(2.*decel)
         });
         let red = self._light_red_hold;
         if !red {
             let cut = predicted.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
             let rolling_short = tail == 0. && v.is_some_and(|s| s < beam_speed)
-                && predicted.is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LANE_TOPUP_BAND_M);
-            let running_out = tail == 0. && current_speed.or(speed).is_some_and(|s| s < LANE_SPEED_RESTART_MPS);
+                && predicted.is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LIGHT_TOPUP_BAND_M);
+            let running_out = tail == 0. && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS);
             self.race_light.phase = match self.race_light.phase {
                 LightRoll::Cruise if cut => LightRoll::Coast,
                 LightRoll::Coast if rolling_short => LightRoll::Topup,
@@ -621,7 +630,7 @@ impl Maneuver {
             NEUTRAL
         } else { ROUTE_SLOW_MOTOR };
         self.lane_motor = motor;
-        let stopped = red && current_speed.or(speed).is_some_and(|s| s < LANE_SPEED_RESTART_MPS)
+        let stopped = red && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
             && self._power_cmd_at.is_none_or(|at| now-at >= lag);
         let basis = stopped.then(|| "stopped_after_camera_red".to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
@@ -646,10 +655,9 @@ impl Maneuver {
         self._light_wait_tick = Some(now);
         self._light_stop_red_frames = 0;
         self.lane_motor = NEUTRAL;
-        (self._lane_pulse, self._lane_creep) = (0, false);
+        self.prepare_finish_wait(scan);
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"stop" => stop.clone()});
         self.route_event("light_stop", scan, control, stop);
-        self.lane_speed(scan, None, 2); // the wait follows the board ahead: the restart's speed
     }
 
     /// _light_wait(scan, now, control): True once released.
@@ -681,7 +689,7 @@ impl Maneuver {
         let waited = now - wait_since;
         let no_light = !self._light_seen && waited >= LIGHT_NO_LIGHT_WAIT_S;
         let race_fallback = red_s.is_some_and(|s| s >= LIGHT_RED_GO_S) && !red_now;
-        let wait = if self.race_transfer.is_some() { !green && !race_fallback }
+        let wait = if self.race_inputs.is_some() { !green && !race_fallback }
             else { !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S };
         if wait {
             // the board ahead's history for the restart
@@ -689,17 +697,12 @@ impl Maneuver {
             self.lane_speed(scan, ahead, 2);
             return false;
         }
-        let board = self.lane_front_range(scan);
-        if self.route_stage == "light_lane" && board.is_some_and(|b| b - FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M) {
-            // (in the light entry the open stages' own resume launch applies)
-            self._light_launch_until = Some(now + ESC_LAG_S + LIGHT_LAUNCH_S);
-            self._light_launch_from = Some(now);
-        }
+        self.prepare_finish_release(scan, now);
         let basis = if green && self._light_red_frames != 0 {
             "green_in_fresh_frames_after_the_stop"
         } else if green {
             "green_without_red_since_the_gantry_looking_again"
-        } else if self.race_transfer.is_some() && race_fallback {
+        } else if self.race_inputs.is_some() && race_fallback {
             "red_seen_10_5s_no_fresh_red"
         } else if red_ended {
             "red_gone_from_fresh_frames_after_the_stop"
@@ -718,11 +721,10 @@ impl Maneuver {
             "frames" => V::list(self._light_frames[self._light_frames.len().saturating_sub(LIGHT_GREEN_FRAMES.max(LIGHT_RED_GONE_FRAMES))..].to_vec()),
             "red_frames_since_gantry" => self._light_red_frames, "red_frames_since_stop" => self._light_stop_red_frames,
             "red_since_s" => red_s, "route_stage" => self.route_stage,
-            "launch" => self._light_launch_until.is_some(),
+            "launch" => self.finish.launch_until.is_some(),
         };
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"go" => go.clone()});
         self.route_event("light_go", scan, control, go.clone());
-        self._lane_creeps = 0;
         if (no_light && !green) || (green && self._light_red_frames == 0) {
             // not the light: a later gantry may start a new stop
             let rearmed = appended(&self.light_stop_evidence, "rearmed", go);

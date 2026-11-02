@@ -585,7 +585,7 @@ impl Maneuver {
     }
 
     pub fn crosswalk_exit_stage(&self) -> bool {
-        self.route_stage == "start_lane" && self.race_transfer.as_ref().is_some_and(|r| r.crosswalk_released())
+        self.route_stage == "start_lane" && self.race_inputs.is_some() && self.race_crosswalk.crosswalk_released()
     }
 
     pub fn begin_start_lane_pause(&mut self, now: f64, scan: &V, control: &V) -> bool {
@@ -604,7 +604,7 @@ impl Maneuver {
     #[allow(clippy::too_many_arguments)]
     fn enter_neutral_pause(&mut self, kind: &'static str, reason: &str, now: f64, scan: &V, control: &V, cause: &str, resume_requires: &str) {
         if self.transfer_stage() {
-            self.race_transfer = Some(Default::default());
+            self.race_transfer = Default::default(); // recovery belongs to the cone transfer only
             self._transfer_motor = ROUTE_SLOW_MOTOR;
         }
         self.neutral_pause_kind = Some(kind);

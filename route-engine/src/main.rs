@@ -31,6 +31,9 @@ pub mod race;
 mod race_imu;
 mod race_light;
 mod race_transfer;
+mod motion_sensors;
+mod race_crosswalk;
+mod maneuver_finish;
 pub mod supervisor;
 
 use std::io::{BufRead, BufWriter, Write};

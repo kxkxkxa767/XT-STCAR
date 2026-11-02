@@ -40,11 +40,11 @@ pub const ROUTE_SLOW_MOTOR: i64 = MIN_FORWARD_PWM;
 // Round 100: the open start lane launches at 1600 (Python's comment).
 pub const START_LAUNCH_MOTOR: i64 = 1600;
 // Round y18: the launch after green in the light lane (round y20: 1600, the start lane's).
-pub const LIGHT_LAUNCH_MOTOR: i64 = START_LAUNCH_MOTOR;
+pub const LIGHT_LAUNCH_MOTOR: i64 = 1600; // finish launch after a light release
 // Round y23: the straights' push (the start lane after the crosswalk, the transfer).
 pub const STRAIGHT_MOTOR: i64 = 1590;
 pub const TRANSFER_BOOST_MOTOR: i64 = 1600;
-pub const DRIVE_MOTORS: [i64; 5] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR];
+pub const DRIVE_MOTORS: [i64; 6] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
 pub const STRAIGHT_TURN_MPS: f64 = 1.1;
@@ -85,7 +85,8 @@ pub const LANE_REACTION_BASE_S: f64 = 0.2;
 pub const LANE_REACTION_S: f64 = LANE_REACTION_BASE_S + ESC_LAG_S;
 pub const LANE_POWER_ACCEL_MPS2: f64 = 1.;
 pub const LANE_LAUNCH_S: f64 = 0.4;
-pub const LANE_FINISH_GAP_M: f64 = 0.15;
+pub const OPEN_BOARD_GAP_M: f64 = 0.15; // clearance used by the open-path stopping estimate
+pub const FIRST_APPROACH_BOARD_GAP_M: f64 = 0.15; // board ahead before acquiring cone one
 pub const LANE_STOP_DECEL_MIN_MPS2: f64 = 0.45;
 pub const LANE_COAST_MIN_SPAN_S: f64 = 0.4;
 // Round y15: a grippier floor (rubber track) coasts shorter.
@@ -178,7 +179,7 @@ pub const START_LAUNCH_ACCEL_MPS2: f64 = 2.5;
 // Round y18: the 1580 launch's guard bound and aim.
 // Round y21: car run y20's 1600 launch reached 1.9 m/s (~4 m/s2): bound and aim measured.
 // Round y22: y20's launch again (y21's 4.5/4.0 cut it at +.16 s and pushed on in 1550 top-ups).
-pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = START_LAUNCH_ACCEL_MPS2;
+pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = 2.5;
 pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 1.5;
 // Round y22: the finish brake after the light (once; the bridge takes 1000-2000).
 pub const LANE_BRAKE_MOTOR: i64 = 1300;
@@ -315,7 +316,7 @@ pub const CROSSWALK_CRUISE_BAND_MPS: f64 = 0.25;
 pub const CROSSWALK_SPEED_HOLD_S: f64 = 1.;
 pub const CROSSWALK_REAR_MAX_M: f64 = 4.;
 // Round y20: the mean lag of seven measured crosswalk coasts (.07-.30 s); the guard keeps .3.
-pub const CROSSWALK_AIM_LAG_S: f64 = 0.2;
+pub const CROSSWALK_AIM_LAG_S: f64 = crate::motion_sensors::ESC_COAST_DELAY_S;
 pub const CROSSWALK_AIM_DECEL_MPS2: f64 = 0.6;
 // Round y19: the measured cut lag (0-.3 s), stops ~.2-.3 m before the stripes.
 pub const CROSSWALK_TARGET_GAP_M: f64 = 0.15;
@@ -608,10 +609,6 @@ pub struct Maneuver {
     pub light_since: Option<f64>,
     pub light_turn_started: Option<f64>,
     pub _lane_steering: CorridorSteering,
-    pub _lane_speed_last: Option<(f64, f64)>,
-    pub _lane_pulse: i64,
-    pub _lane_creep: bool,
-    pub _lane_creeps: i64,
     pub _light_history: Vec<Row>,
     pub _light_heading: Option<f64>,
     pub light_feedback: V,
@@ -629,7 +626,6 @@ pub struct Maneuver {
     pub _lane_push_probe: Option<PushProbe>,
     pub _lane_push_rate_slow: Option<f64>,
     pub _lane_push_rate_strong: Option<f64>,
-    pub _lane_ranges: Vec<(f64, f64, f64)>,
     pub lane_feedback: V,
     pub finish_evidence: V,
     // Round y2: the traffic-light stop.
@@ -641,14 +637,10 @@ pub struct Maneuver {
     pub _light_line: V,
     pub _light_wait_since: Option<f64>,
     pub _light_red_frames: i64,
-    pub _light_launch_until: Option<f64>,
-    pub _light_launch_from: Option<f64>,
     pub _light_seen: bool,
     pub _light_gantry_since: Option<f64>,
     pub _light_red_at: Option<f64>,
     pub _light_zone_at: Option<f64>,
-    pub _lane_brake_since: Option<f64>,
-    pub _lane_brake_end: Option<f64>,
     pub _light_red_hold: bool,
     pub _light_stop_red_frames: i64,
     pub _light_center_shift_m: f64,
@@ -704,7 +696,10 @@ pub struct Maneuver {
     pub _lane_start_slow: bool,
     pub _start_motor: i64,
     pub _transfer_motor: i64,
-    pub race_transfer: Option<crate::race_transfer::RaceTransfer>,
+    pub(crate) race_inputs: Option<crate::motion_sensors::RaceInputs>,
+    pub(crate) race_crosswalk: crate::race_crosswalk::CrosswalkExit,
+    pub(crate) race_transfer: crate::race_transfer::RaceTransfer,
+    pub(crate) finish: crate::maneuver_finish::FinishControl,
     pub(crate) race_light: crate::race_light::RaceLight,
     pub _start_speed_measured: bool,
     pub _start_speed_last: Option<(f64, f64)>,
@@ -934,10 +929,6 @@ impl Maneuver {
             light_since: None,
             light_turn_started: None,
             _lane_steering: CorridorSteering::default(),
-            _lane_speed_last: None,
-            _lane_pulse: 0,
-            _lane_creep: false,
-            _lane_creeps: 0,
             _light_history: Vec::new(),
             _light_heading: None,
             light_feedback: V::None,
@@ -955,7 +946,6 @@ impl Maneuver {
             _lane_push_probe: None,
             _lane_push_rate_slow: None,
             _lane_push_rate_strong: None,
-            _lane_ranges: Vec::new(),
             lane_feedback: V::None,
             finish_evidence: V::None,
             light_vision: false,
@@ -966,14 +956,10 @@ impl Maneuver {
             _light_line: V::None,
             _light_wait_since: None,
             _light_red_frames: 0,
-            _light_launch_until: None,
-            _light_launch_from: None,
             _light_seen: false,
             _light_gantry_since: None,
             _light_red_at: None,
             _light_zone_at: None,
-            _lane_brake_since: None,
-            _lane_brake_end: None,
             _light_red_hold: false,
             _light_stop_red_frames: 0,
             _light_center_shift_m: 0.,
@@ -1029,7 +1015,10 @@ impl Maneuver {
             _lane_start_slow: false,
             _start_motor: TRIAL_MOTOR,
             _transfer_motor: ROUTE_SLOW_MOTOR,
-            race_transfer: None,
+            race_inputs: None,
+            race_crosswalk: Default::default(),
+            race_transfer: Default::default(),
+            finish: Default::default(),
             race_light: Default::default(),
             _start_speed_measured: false,
             _start_speed_last: None,
@@ -1288,7 +1277,7 @@ impl Maneuver {
             // y26 restored 1550 above 1 m/s, then handed 1560 to the first
             // loop because it mistook the preceding coast for a start from rest.
             let rolling = self.route_stage == "start_lane" && motor == ROUTE_SLOW_MOTOR
-                && self.race_transfer.as_ref().is_some_and(|t| t.first_rolling_hold())
+                && self.race_inputs.is_some() && self.race_crosswalk.first_rolling_hold()
                 && self.start_lane_feedback.get("speed_mps").of().is_some_and(|v| v >= LANE_SPEED_RESTART_MPS);
             self._launch_until = Some(if rolling { now } else { now + ESC_LAG_S + LANE_LAUNCH_S });
             self._power_since = Some(now);
@@ -1299,7 +1288,7 @@ impl Maneuver {
             && self.entry_kind == Some("lane")
             && now < self._launch_until.unwrap_or_else(|| type_error("'<' not supported between float and NoneType"))
             && ["first_target", "open_transfer", "second_loop", "light_entry"].contains(&self.route_stage)
-            && !(self.transfer_stage() && self.race_transfer.as_ref().is_some_and(|t| t.rolling()))
+            && !(self.transfer_stage() && self.race_transfer.rolling())
             && !self.light_stop_active()
         {
             result.set("motor", TRIAL_MOTOR);
@@ -1850,9 +1839,9 @@ impl Maneuver {
         }
         if self.continue_route {
             if self.entry_kind == Some("lane") && matches!(self.route_stage, "first_target" | "open_transfer" | "second_loop")
-                && let Some(t) = self.race_transfer.as_mut()
+                && self.race_inputs.is_some()
             {
-                t.observe(scan, self.compass.current(scan));
+                self.race_transfer.observe(scan, self.compass.current(scan));
             }
             match self.route_stage {
                 "light_turn" => return self.light_update(scan, now, control),
