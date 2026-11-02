@@ -729,10 +729,12 @@ START_LAUNCH_MAX_MPS = .2
 START_LAUNCH_ACCEL_MPS2 = 2.5
 # Round y18: the 1580 launch after green is guarded at 1600's bound (not measured) and
 # aimed at this (between 1560's LANE_POWER_ACCEL_MPS2 and that bound). Round y20: the
-# launch is 1600 itself, the same bound and aim (car run y19's 1580: ~1.3 m/s from
-# rest after ~.8 s of power, ~1.6 m/s2).
-LIGHT_LAUNCH_ACCEL_MAX_MPS2 = START_LAUNCH_ACCEL_MPS2
-LIGHT_LAUNCH_ACCEL_MPS2 = 1.5
+# launch is 1600 itself (car run y19's 1580: ~1.3 m/s from rest after ~.8 s of power,
+# ~1.6 m/s2). Round y21 (user: 可以): car run y20's 1600, cut .47 s after green, still
+# reached 1.9 m/s (~4 m/s2 over its powered time; the 2.5 bound foresaw ~1.45) and met
+# the end board at ~.65 m/s; its bound and aim now the measured one.
+LIGHT_LAUNCH_ACCEL_MAX_MPS2 = 4.5
+LIGHT_LAUNCH_ACCEL_MPS2 = 4.
 # After the last 1600 frame: no 1560 for the ESC lag plus this (the closing-
 # rate estimate trails a hard launch; course-sim with a .6 s ESC lag: 1560
 # right after the burst reached 2.1 m/s and the stopping range cut the lane).

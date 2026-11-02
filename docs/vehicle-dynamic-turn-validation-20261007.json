@@ -25479,8 +25479,8 @@
     "date": "2026-11-02",
     "author": "Claude",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "baseline": "9f15546 (y20's first part; car: round 126 + y19)",
     "round": "y20 (second part, same deploy label)",
     "user": [
@@ -25513,6 +25513,41 @@
       "the launch's guard is more conservative: the 1600 launch may end a scan earlier"
     ],
     "next": "deploy round 127 + y20 and run (the user confirms the car at the start, the light on); check: one motion into the light zone, no move after the stop, the 1600 launch peak and the finish; the crosswalk stop distance",
+    "commit": "(this commit)",
+    "deployment": "build-race.py claude-turn126 claude-turn127 127, build-vision.py y20; deploy-matched.py 127, deploy-vision.py y20",
+    "car_run_y20": {
+      "start": "rear .30, front 7.72 m (user: car placed, light reset)",
+      "end": "probe_obstacle_close_body in light_lane after light_go (user: 最后轻轻的撞了一下板子)",
+      "total_s": 35.2,
+      "light_wait_s": 9.99,
+      "effective_s": 25.2,
+      "crosswalk": "cut at 2.89 s (1.007 m/s, aim -.133, worst -.233), stopped 4.66 s ~.145 m before the stripes by the board behind (2.748 - 2.603; y19 .424)",
+      "light": "one motion from the gantry (1550 pushes, coast into the zone), first red captured with the front .563 m out at .47 m/s (coasting), red hold latched at .496, stopped at .427 at 22.26 s (y19 24.94 after 3 creeps), basis stopped_with_the_whole_car_in_the_light_zone, rear lidar unchanged (4.032) until the launch; go on green after 9.99 s",
+      "after_green": "1600 launch cut at +.47 s by the guard (2.5 m/s2 bound), the speed then rose to 1.88-1.91 m/s (+.79-1.11 s; ~4 m/s2 over the powered time), no top-up, coasted at ~.58-.61 m/s2 from 3.7 m and met the 8 cm body gate at ~.65 m/s by the end board"
+    }
+  },
+  "y21_light_launch_measured_bound_20261102": {
+    "date": "2026-11-02",
+    "author": "Claude",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "baseline": "0455b41 + y20 record (car: round 127 + y20)",
+    "user": [
+      "可以 (the 1600 launch bound 4.5 and aim 4.0 from car run y20)",
+      "在室内测好后我要搬到户外水泥地上拍比赛的视频"
+    ],
+    "change": [
+      "1600 launch after green: guard bound LIGHT_LAUNCH_ACCEL_MAX_MPS2 2.5 -> 4.5, aim LIGHT_LAUNCH_ACCEL_MPS2 1.5 -> 4.0 (car run y20: 1.9 m/s after a .47 s launch, ~4 m/s2)",
+      "test_route_y3_light_face's launch-bound test now at the 1600 bound: the bound keeps a launch .39 s in going, not .64 s in"
+    ],
+    "expected": "the launch cut ~.15-.2 s earlier, a peak ~1.4-1.5 m/s, the coast into the finish zone",
+    "validation": {
+      "python_full_suite": "968 OK",
+      "cargo_test": "7 passed",
+      "clippy_warnings": 32
+    },
+    "outdoor_note": "user will move to outdoor concrete for the video: the first coast (crosswalk) uses the tile prior .6 m/s2 before any measurement; 1600 traction, lidar in sunlight, YOLO lighting, the photo sensor in sunlight and the steering all to be checked on a first outdoor run",
     "commit": "(this commit)"
   }
 }

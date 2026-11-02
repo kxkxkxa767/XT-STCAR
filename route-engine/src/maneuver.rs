@@ -166,8 +166,9 @@ pub const LANE_START_PUSH_BAND_MPS: f64 = 0.4;
 pub const START_LAUNCH_MAX_MPS: f64 = 0.2;
 pub const START_LAUNCH_ACCEL_MPS2: f64 = 2.5;
 // Round y18: the 1580 launch's guard bound and aim.
-pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = START_LAUNCH_ACCEL_MPS2;
-pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 1.5;
+// Round y21: car run y20's 1600 launch reached 1.9 m/s (~4 m/s2): bound and aim measured.
+pub const LIGHT_LAUNCH_ACCEL_MAX_MPS2: f64 = 4.5;
+pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 4.;
 pub const START_LAUNCH_SETTLE_S: f64 = 0.3;
 pub const OPEN_LEFT_RADIUS_M: (f64, f64) = (0.90, 0.95);
 pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.90, 1.40);
