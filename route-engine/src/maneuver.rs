@@ -43,8 +43,8 @@ pub const START_LAUNCH_MOTOR: i64 = 1600;
 pub const LIGHT_LAUNCH_MOTOR: i64 = START_LAUNCH_MOTOR;
 // Round y23: the straights' push (the start lane after the crosswalk, the transfer).
 pub const STRAIGHT_MOTOR: i64 = 1590;
-pub const TRANSFER_BOOST_MOTOR: i64 = 1620;
-pub const DRIVE_MOTORS: [i64; 6] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR];
+pub const TRANSFER_BOOST_MOTOR: i64 = 1600;
+pub const DRIVE_MOTORS: [i64; 5] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
 pub const STRAIGHT_TURN_MPS: f64 = 1.1;
@@ -183,6 +183,7 @@ pub const LIGHT_LAUNCH_ACCEL_MPS2: f64 = 1.5;
 // Round y22: the finish brake after the light (once; the bridge takes 1000-2000).
 pub const LANE_BRAKE_MOTOR: i64 = 1300;
 pub const LANE_BRAKE_START_GAP_M: f64 = 1.2;
+pub const FINISH_BRAKE_DECEL_MPS2: f64 = 0.8; // y25–y27 calibrated IMU, mean during 1300 ACKs
 pub const LANE_BRAKE_MIN_MPS: f64 = 0.3;
 pub const LANE_BRAKE_MAX_S: f64 = 1.5;
 pub const START_LAUNCH_SETTLE_S: f64 = 0.3;

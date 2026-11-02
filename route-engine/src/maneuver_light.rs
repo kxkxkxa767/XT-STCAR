@@ -546,9 +546,10 @@ impl Maneuver {
         let to_sensor = gap.map(|g| g - LIGHT_SENSOR_TO_GANTRY_M);
         let reference = ahead.or_else(|| self.lane_front_range(scan));
         let speed = self.lane_speed(scan, reference, 2);
+        let current_speed = self.imu_adjusted_lane_speed(scan, speed);
         if let Some(v) = speed { self._lane_speed_last = Some((now, v)); }
         let held = self._lane_speed_last.filter(|(at, _)| now - at <= LANE_SPEED_HOLD_S).map(|(_, v)| v);
-        let v = speed.or(held).unwrap_or(LANE_SPEED_UNKNOWN_MPS);
+        let v = current_speed.or(speed).or(held).unwrap_or(LANE_SPEED_UNKNOWN_MPS);
         let decel = self.lane_decels().0;
         let lag = CROSSWALK_AIM_LAG_S;
         let camera_age = self._light_frames.last().map_or(LANE_ESC_LAG_NOMINAL_S, |f| (now - f.at(1).f()).clamp(0., LIGHT_FRAME_MAX_AGE_S));
@@ -562,15 +563,17 @@ impl Maneuver {
             ((tail*tail + beam_speed*beam_speed + 2.*decel*d.max(0.)).sqrt() - tail) * axis_cos
         });
         let was_coasting = self.lane_motor == NEUTRAL;
+        let (_, pending_power_s) = self.lane_pipeline(now, lag, lag, 0.);
+        let pending_speed = v + LANE_PUSH_LATE_ACCEL_MAX_MPS2 * pending_power_s;
         let red = self._light_red_hold;
         let motor = if red {
             NEUTRAL
-        } else if speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS) {
+        } else if current_speed.or(speed).is_some_and(|s| s < LANE_SPEED_RESTART_MPS) {
             TRIAL_MOTOR
         } else if let Some(d) = to_sensor {
             if d > 0. {
-                if v >= permitted.unwrap() || (was_coasting && v > beam_speed) { NEUTRAL } else { ROUTE_SLOW_MOTOR }
-            } else if v > beam_speed || (was_coasting && v > LANE_PUSH_ROLLING_MPS) {
+                if pending_speed >= permitted.unwrap() || (was_coasting && pending_speed > beam_speed) { NEUTRAL } else { ROUTE_SLOW_MOTOR }
+            } else if pending_speed > beam_speed || (was_coasting && pending_speed > LANE_PUSH_ROLLING_MPS) {
                 NEUTRAL
             } else {
                 ROUTE_SLOW_MOTOR
@@ -579,11 +582,12 @@ impl Maneuver {
             ROUTE_SLOW_MOTOR
         };
         self.lane_motor = motor;
-        let stopped = red && speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS);
+        let stopped = red && current_speed.or(speed).is_some_and(|s| s < LANE_SPEED_RESTART_MPS)
+            && self._power_cmd_at.is_none_or(|at| now-at >= lag);
         let basis = stopped.then(|| "stopped_after_camera_red".to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
-            "speed_mps" => speed, "beam_speed_mps" => beam_speed, "allowed_axis_speed_mps" => permitted,
+            "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_speed_mps" => beam_speed, "allowed_axis_speed_mps" => permitted,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "beam_to_red_exposure_s" => BEAM_TO_RED_EXPOSURE_S,
             "camera_age_s" => camera_age, "red_hold" => red, "motor" => motor, "creeps" => self._lane_creeps,
             "whole_car_in_finish_zone" => gap.is_some_and(|g| (0.0..=LIGHT_STOP_BODY_GAP_M).contains(&g))};

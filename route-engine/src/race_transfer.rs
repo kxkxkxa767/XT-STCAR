@@ -12,10 +12,11 @@ pub struct RaceTransfer {
     history: Vec<(f64, f64, f64)>,
     speed: Option<f64>,
     phase: TransferPhase,
+    transfer_anchor: Option<(f64, f64)>,
+    lane_imu_history: Vec<(f64, f64)>,
     pub imu_yaw_rate: Option<f64>,
     pub imu_forward_integral: Option<f64>,
     crosswalk_release: Option<(f64, Option<f64>)>,
-    crosswalk_upshifted: bool,
     first_approach: FirstApproach,
 }
 
@@ -37,9 +38,25 @@ enum TransferPhase {
 }
 
 impl RaceTransfer {
+    /// The lane's range slope is centred on its short scan history. Move it
+    /// to the current frame using only the IMU change over that same interval.
+    pub fn current_lane_speed(&mut self, at: f64, midpoint: f64, raw: Option<f64>, axis_cos: f64) -> Option<f64> {
+        let Some(current) = self.imu_forward_integral else { self.lane_imu_history.clear(); return None };
+        let h = &mut self.lane_imu_history;
+        if h.last().is_none_or(|&(t, _)| t != at) {
+            if h.last().is_some_and(|&(t, _)| at < t || at - t > crate::helpers::SCAN_AGE_S) { h.clear(); }
+            h.push((at, current));
+            if h.len() > LANE_SPEED_HISTORY { h.remove(0); }
+        }
+        let lidar = raw?;
+        let pair = h.windows(2).find(|p| p[0].0 <= midpoint && midpoint <= p[1].0)?;
+        let ((t0, a), (t1, b)) = (pair[0], pair[1]);
+        let centre = a + (b-a)*(midpoint-t0)/(t1-t0);
+        Some((lidar + (current-centre)*axis_cos).max(0.))
+    }
+
     pub fn release_crosswalk(&mut self, now: f64) {
         self.crosswalk_release = Some((now, self.imu_forward_integral));
-        self.crosswalk_upshifted = false;
     }
 
     pub fn crosswalk_released(&self) -> bool { self.crosswalk_release.is_some() }
@@ -72,21 +89,14 @@ impl RaceTransfer {
             self.first_approach = FirstApproach::Hold;
         }
         let phase = self.first_phase();
-        // y29 lost six adjacent lidar bins during the initial 1620 push;
-        // it later accepted 1620 while rolling at 1.10 m/s. Start at 1600.
-        if self.first_approach == FirstApproach::Cruise && boosted && speed.is_some_and(|v| v >= STRAIGHT_TURN_MPS) {
-            self.crosswalk_upshifted = true;
-        }
         let motor = if self.first_approach == FirstApproach::Coast { NEUTRAL }
-            else if self.first_approach == FirstApproach::Cruise && boosted {
-                if self.crosswalk_upshifted { TRANSFER_BOOST_MOTOR } else { START_LAUNCH_MOTOR }
-            }
+            else if self.first_approach == FirstApproach::Cruise && boosted { START_LAUNCH_MOTOR }
             else if speed.is_some_and(|v| v < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR }
             else { ROUTE_SLOW_MOTOR };
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
                        "speed_source" => if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
-                       "upshifted" => self.crosswalk_upshifted, "entry_target_mps" => STRAIGHT_TURN_MPS})
+                       "entry_target_mps" => STRAIGHT_TURN_MPS})
     }
 
     fn first_phase(&self) -> &'static str {
@@ -118,24 +128,36 @@ impl RaceTransfer {
     }
 
     pub fn drive(&mut self, now: f64, distance: Option<f64>, entering: bool, continuing: bool, decel: f64) -> (i64, V) {
-        let coast_m = self.speed.map(|v| {
+        // The five-scan lidar slope lagged the y30 push: it still reported
+        // 1.44 m/s while the IMU change from the pre-push anchor implied 2.52.
+        let imu_speed = self.transfer_anchor.zip(self.imu_forward_integral)
+            .map(|((radar, origin), current)| (radar + current - origin).max(0.));
+        let cut_speed = match (self.speed, imu_speed) {
+            (Some(lidar), Some(live)) => Some(lidar.max(live)),
+            (lidar, live) => lidar.or(live),
+        };
+        let coast_m = cut_speed.map(|v| {
             let lag = CROSSWALK_AIM_LAG_S; // measured mean cut lag on the car
             let powered = match self.phase {
                 TransferPhase::Boost(since) => (now - since).clamp(0., lag),
                 _ => 0.,
             };
-            let release_v = v + STRAIGHT_ACCEL_MAX_MPS2 * powered;
+            let release_v = v + 4.0 * powered; // measured 1600 launch acceleration
             (v + release_v) * lag / 2. + (release_v * release_v - ENTRY_MPS * ENTRY_MPS).max(0.) / (2. * decel)
         });
         let room = self.rolling() && distance.zip(coast_m).is_some_and(|(d, coast)| d > coast);
         self.phase = match self.phase {
-            TransferPhase::Approach if entering && room => TransferPhase::Boost(now),
+            TransferPhase::Approach if entering && room => {
+                self.transfer_anchor = self.speed.zip(self.imu_forward_integral);
+                TransferPhase::Boost(now)
+            }
             TransferPhase::Approach if distance == Some(0.) => TransferPhase::Bend,
             TransferPhase::Boost(_) if !room || !continuing => TransferPhase::Coast,
             other => other,
         };
-        if matches!(self.phase, TransferPhase::Coast) && self.speed.is_none_or(|v| v <= ENTRY_MPS) {
+        if matches!(self.phase, TransferPhase::Coast) && cut_speed.is_none_or(|v| v <= ENTRY_MPS) {
             self.phase = TransferPhase::Bend;
+            self.transfer_anchor = None;
         }
         let motor = match self.phase {
             TransferPhase::Boost(_) => TRANSFER_BOOST_MOTOR,
@@ -143,20 +165,22 @@ impl RaceTransfer {
             _ => ROUTE_SLOW_MOTOR,
         };
         (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",
+                       "imu_anchored_speed_mps" => imu_speed, "speed_for_cut_mps" => cut_speed,
                        "straight_remaining_m" => distance, "coast_to_entry_m" => coast_m, "transfer_motor" => motor})
     }
 
     pub fn dump(&self) -> V {
         let (phase, since) = match self.phase {
             TransferPhase::Approach => ("approach", None),
-            TransferPhase::Boost(t) => ("boost", Some(t)),
+            TransferPhase::Boost(since) => ("boost", Some(since)),
             TransferPhase::Coast => ("coast", None),
             TransferPhase::Bend => ("bend", None),
         };
         dict! {"speed_mps" => self.speed, "phase" => phase, "boost_since" => since, "imu_yaw_rate" => self.imu_yaw_rate,
                "first_approach_phase" => self.first_phase(), "imu_forward_integral" => self.imu_forward_integral,
-               "crosswalk_upshifted" => self.crosswalk_upshifted,
                "crosswalk_release" => self.crosswalk_release.map(|(t, v)| V::list(vec![t.into(), v.into()])),
+               "transfer_anchor" => self.transfer_anchor.map(|(radar, imu)| V::from(vec![radar, imu])),
+               "lane_imu_history" => V::list(self.lane_imu_history.iter().map(|r| V::from(vec![r.0,r.1])).collect()),
                "history" => V::list(self.history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect())}
     }
 }

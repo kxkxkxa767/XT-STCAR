@@ -373,6 +373,7 @@ class MeasuredVehicle(Vehicle):
     def __init__(self, x, y, psi, *, speed_scale=1., decel=.7, delay=.15, steer_tau=.1, seed=0,
                  play_pwm=40., gain_scale=1., esc_lag_s=.45, drift_per_mps=.025, turn_drag=.5,
                  speed_tau_s=1.1, near_center_gain=1., near_center_width_pwm=100., initial_wheel_pwm=1500.,
+                 accel_max_mps2=2.5, brake_decel_mps2=None,
                  **_):
         super().__init__(x, y, psi, speed_scale=speed_scale, decel=decel, delay=delay, steer_tau=steer_tau,
                          seed=seed)
@@ -391,6 +392,8 @@ class MeasuredVehicle(Vehicle):
         self.near_center_width_pwm = near_center_width_pwm
         self.motor_queue = []
         self.motor_phys = 1500
+        self.accel_max_mps2 = accel_max_mps2
+        self.brake_decel_mps2 = brake_decel_mps2
         self.kappa = 0.
 
     def target_speed(self, motor):
@@ -421,9 +424,10 @@ class MeasuredVehicle(Vehicle):
             self.motor_phys = self.motor_queue.pop(0)[1]
         vt = self.target_speed(self.motor_phys)/(1+self.turn_drag*abs(self.kappa))
         if vt > 0 and (self.v > .05 or self.motor_phys >= 1560):
-            self.v += max(-self.decel, min(2.5, (vt-self.v)/self.speed_tau_s))*dt
+            self.v += max(-self.decel, min(self.accel_max_mps2, (vt-self.v)/self.speed_tau_s))*dt
         else:
-            self.v = max(0., self.v-self.decel*dt)
+            rate = self.brake_decel_mps2 if self.motor_phys < 1500 and self.brake_decel_mps2 is not None else self.decel
+            self.v = max(0., self.v-rate*dt)
         n = 4
         for _ in range(n):
             self.psi += self.kappa*self.v*dt/n

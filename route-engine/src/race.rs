@@ -388,6 +388,12 @@ impl Program {
                             self.sup.set_light(&self.light);
                         }
                     } else {
+                        if self.o.demo && let Some(pair) = value.get("sim_imu").ol() && pair.len() == 2
+                            && let (Some(yaw), Some(dv)) = (pair[0].of(), pair[1].of()) {
+                            let at_ms = (now * 1000.) as u64;
+                            self.imu.yaw.publish(at_ms, yaw);
+                            self.imu.forward_integral.publish(at_ms, dv);
+                        }
                         self.sup.accept_lidar(value, now);
                     }
                 });

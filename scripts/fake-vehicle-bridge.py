@@ -35,7 +35,7 @@ def emit(row):
     sys.stdout.flush()
 
 
-def control():
+def control(motor_range=(1500, 1620)):
     shared = Path(os.environ.get('FAKE_SHARED', '.'))
     status = {'tick': 0, 'seq': 0, 'armed': False, 'motor': 1500, 'servo': 1500, 'reason': 'locked'}
     state = {'received': 0, 'last': 0, 'stopped_at': None, 'closed': False}
@@ -63,7 +63,7 @@ def control():
             stop('stale_request')
             return
         status['seq'] = req['seq']
-        if req['motor'] > 1620 or req['motor'] < 1500 or not 1200 <= req['servo'] <= 1800:
+        if not motor_range[0] <= req['motor'] <= motor_range[1] or not 1200 <= req['servo'] <= 1800:
             stop('pwm_out_of_range')
             return
         if (req['op'] == 'arm' and req['motor'] == 1500 and req['servo'] == 1500 and not status['armed']

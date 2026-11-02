@@ -13,7 +13,7 @@ use xt_stcar_robot_core::{FrameId, Timestamp, Vec3};
 pub struct TimedValue(AtomicU64);
 
 impl TimedValue {
-    fn publish(&self, at_ms: u64, value: f64) {
+    pub(super) fn publish(&self, at_ms: u64, value: f64) {
         // Pair each scalar with its own receive timestamp in one atomic load.
         self.0.store((at_ms << 32) | u64::from((value as f32).to_bits()), Ordering::Relaxed);
     }

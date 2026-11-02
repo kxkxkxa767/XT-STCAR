@@ -603,7 +603,40 @@ impl Supervisor {
         (V::None, self.turn_front_lane(s, now, true).is_true())
     }
 
-    /// turn_route_quality_scope(session, now).
+    /// Bridge one far side gap on the crosswalk restart using its preceding scan.
+    fn start_lane_far_gap(&self, s: &Session, clearance: &V) -> bool {
+        if !s.motion.crosswalk_exit_stage() || s.phase != "drive"
+            || (s.motion.servo - NEUTRAL).abs() > COAST_FIT_STRAIGHT_PWM {
+            return false;
+        }
+        let seq = self.scan.idx("seq").i();
+        let cached = s.report.get("start_lane_far_gap_seq").oi();
+        if cached == Some(seq) { return true; } // more control ticks on the same lidar publication
+        let prev = &s.motion._current_scan;
+        if prev.get("seq").oi() != Some(seq - 1) || cached == Some(seq - 1) { return false; }
+        let dt = (self.scan.idx("at_ms").i() - prev.idx("at_ms").i()) as f64 * 0.001;
+        let missing = clearance.idx("front_open_unknown_bins").l();
+        if !(0. < dt && dt < SCAN_AGE_S) || missing.is_empty() || missing.len() > crate::clearance::MANEUVER_TOLERABLE_FRONT_UNKNOWN
+            || clearance.idx("largest_open_gap_deg").i() > crate::clearance::FRONT_FAR_BRIDGE_MAX_BINS {
+            return false;
+        }
+        let Some(stop) = s.motion.start_lane_feedback.get("front_stop_range_m").of() else { return false };
+        let horizon = stop + LANE_MAX_CLOSING_MPS * dt;
+        let old = prev.idx("ranges").l();
+        let new = self.scan.idx("ranges").l();
+        let flank = missing[0].i().signum();
+        // Same flank, clear forward core, and the missing rays plus their shoulders
+        // were beyond the stopping range one scan ago. Known current hits still
+        // went through the body check; current shoulders must also be outside it.
+        missing.iter().all(|angle| {
+            let i = angle.i();
+            i.signum() == flank && i.abs() > LANE_FRONT_HALF_BINS && (-1..=1).all(|j| {
+                let k = imod(i+j, 360) as usize;
+                old[k].of().is_some_and(|v| v > horizon) && new[k].of().is_none_or(|v| v > horizon)
+            })
+        })
+    }
+
     fn turn_route_quality_scope(&self, s: &Session, now: f64) -> Option<&'static str> {
         let m = &s.motion;
         if !m.continue_route {
@@ -1084,14 +1117,32 @@ impl Supervisor {
             incr_or_zero(&mut s.report, "target_contact_tolerated_count");
         }
         let issues = issues_set(clearance.idx("quality_issues"));
-        let tolerable: Vec<&str> = ["scan_incomplete", "front_sparse"]
+        let mut tolerable: Vec<&str> = ["scan_incomplete", "front_sparse"]
             .into_iter()
             .filter(|issue| {
                 issues.iter().any(|i| i == issue) && clearance.get(&format!("{issue}_tolerable")).is_true()
             })
             .collect();
-        let scope = if !tolerable.is_empty() { self.turn_route_quality_scope(s, t) } else { None };
+        let far_side_gap = issues.as_slice() == ["front_sparse"] && !tolerable.contains(&"front_sparse")
+            && self.start_lane_far_gap(s, &clearance);
+        if far_side_gap { tolerable.push("front_sparse"); }
+        let scope = if !tolerable.is_empty() {
+            self.turn_route_quality_scope(s, t).or_else(|| {
+                let fits = clearance.get("front_wall_projection").get("fits");
+                (far_side_gap && fits.get("left").is_dict() && fits.get("right").is_dict())
+                    .then_some("start_lane_two_side_walls_previous_far_rays")
+            })
+        } else {
+            None
+        };
         if let Some(scope) = scope {
+            if far_side_gap {
+                let seq = self.scan.idx("seq").i();
+                if s.report.get("start_lane_far_gap_seq").oi() != Some(seq) {
+                    incr_or_zero(&mut s.report, "start_lane_far_gap_scans");
+                }
+                s.report.set("start_lane_far_gap_seq", seq);
+            }
             clearance.set("quality_tolerance_scope", scope);
             let kept: Vec<V> = clearance
                 .idx("quality_issues")
@@ -1441,9 +1492,6 @@ impl Supervisor {
         if launch_allowed {
             motors.push(START_LAUNCH_MOTOR);
             motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
-            if m.race_transfer.as_ref().is_some_and(|t| t.crosswalk_released()) {
-                motors.push(TRANSFER_BOOST_MOTOR);
-            }
         }
         // Round y23: the transfer's straight push.
         if phase == "drive" && (stage_is("open_transfer") || m.transfer_stage()) && decision.get("quality_resume_pending").is_false() {
