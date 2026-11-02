@@ -25867,6 +25867,16 @@
     "implemented": true,
     "deployed": false,
     "physical_trial_executed": false,
+    "build": {
+      "source_commit": "de36a56bfdc53d0fc69439af9d9e059b304951be",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "elf_maximum_glibc": "2.34",
+      "engine_bytes": 2713024,
+      "archive": "XT-STCAR-claude-turn138-de36a56.tar.gz",
+      "engine_package": "claude-turn138-package.json",
+      "vision_package": "claude-y31-package.json",
+      "vision_light_stop": true
+    },
     "user": "Lower the cone transition to 1600 and keep the powered post-crosswalk straight at 1600. Simulate, cross-compile and push while the operator is away.",
     "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32},
     "change": "Both straight boosts are 1600. During the cone transfer use the larger of current lidar speed and IMU delta-v from a pre-push lidar anchor for the cutoff. A single off-centre start-lane dropout can use immediately preceding clear rays beyond the stopping horizon; repeated or uncorroborated faults keep neutral recovery. Known current-body clearance is checked first.",
