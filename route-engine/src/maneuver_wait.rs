@@ -511,7 +511,7 @@ impl Maneuver {
         };
         let mut motors = Vec::new();
         // round y2: the light stop coasts and waits at neutral from the light entry on
-        if self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()) {
+        if self.transfer_stage() || self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()) {
             motors.push(NEUTRAL);
         }
         if self.route_stage == "light_lane" {
@@ -587,6 +587,10 @@ impl Maneuver {
     /// _enter_neutral_pause(kind, reason, now, scan, control, cause, resume_requires).
     #[allow(clippy::too_many_arguments)]
     fn enter_neutral_pause(&mut self, kind: &'static str, reason: &str, now: f64, scan: &V, control: &V, cause: &str, resume_requires: &str) {
+        if self.transfer_stage() {
+            self.race_transfer = Some(Default::default());
+            self._transfer_motor = ROUTE_SLOW_MOTOR;
+        }
         self.neutral_pause_kind = Some(kind);
         self._pause_steer_target = None;
         self.recovery_count += 1;

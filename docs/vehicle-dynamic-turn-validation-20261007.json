@@ -25655,6 +25655,27 @@
       "user": "感觉第一段没有多大的收益，我觉得主要可以提速的是第一个桶到第二个桶的过渡，那个距离很大而且是直道"
     }
   },
+  "y25_transfer_imu_20261102": {
+    "date": "2026-11-02",
+    "author": "Codex",
+    "baseline": "48e7152; car last confirmed round 131 + y24",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "basis": "The y22 and y24 second-support handovers still had 2.75 m and 3.12 m to the planned tangent. In both logs, the return-axis end wall behind remained visible even when the centre ray hit the first cone.",
+    "change": [
+      "Standalone Rust race mode only. Measure return-axis speed from nine projected rear-wall rays and the existing five-scan pairwise slope. Seed on the first loop, carry speed and motor across the second handover.",
+      "Use the divider open end until a current second-support observation is available, then the planned tangent. Apply 1590 on the straight, cut to coast using measured deceleration and a 0.2 s mean cutoff lag, and resume 1550 at the 1.24 m/s entry target. No transfer brake.",
+      "Read /dev/imu at 115200 in a separate Rust thread. Buffer accelerometer, gyroscope and orientation samples in run/imu.jsonl. Host-receive timestamps and lidar.received_program_s share the race Instant. Acquisition errors are recorded separately from route results."
+    ],
+    "after_run": "Compare straight/turn segment times, entry speed, final stop, tick timing and per-thread CPU. Align IMU with lidar translation and heading, estimate stationary bias, forward/yaw axes and relative delay before using inertial estimates for control.",
+    "validation": {
+      "python_full_suite": "968 passed",
+      "cargo_test_release": "7 passed",
+      "clippy_warnings": 32
+    },
+    "release_order": "User: build the car packages and push to main before the physical trial. Deploy when connected and start only after the user confirms placement."
+  },
   "next_tasks_20261102": {
     "date": "2026-11-02",
     "author": "Claude",

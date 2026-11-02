@@ -3,7 +3,7 @@
 # compact_target.py and the helpers they use from autonomy_live.py). The
 # console runs it as a subprocess per session and keeps every service-side
 # protection. Standalone, outside crates/, so the deployed bridge sources and
-# its build stay unchanged. No dependencies.
+# its build stay unchanged. The IMU recorder reuses the vehicle's serial I/O and decoder.
 [package]
 name = "xt-stcar-route-engine"
 version = "0.1.0"
@@ -11,6 +11,11 @@ edition = "2024"
 publish = false
 
 [workspace]
+
+[dependencies]
+xt-stcar-device-io = { path = "../crates/device-io" }
+xt-stcar-robot-core = { path = "../crates/robot-core" }
+serde_json = "1"
 
 [[bin]]
 name = "route-engine"

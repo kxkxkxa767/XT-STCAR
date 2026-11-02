@@ -28,6 +28,8 @@ pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
 pub mod race;
+mod race_imu;
+mod race_transfer;
 pub mod supervisor;
 
 use std::io::{BufRead, BufWriter, Write};

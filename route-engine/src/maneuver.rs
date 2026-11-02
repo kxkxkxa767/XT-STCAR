@@ -701,6 +701,7 @@ pub struct Maneuver {
     pub _lane_start_slow: bool,
     pub _start_motor: i64,
     pub _transfer_motor: i64,
+    pub race_transfer: Option<crate::race_transfer::RaceTransfer>,
     pub _start_speed_measured: bool,
     pub _start_speed_last: Option<(f64, f64)>,
     pub start_lane_coast_steering: V,
@@ -1024,6 +1025,7 @@ impl Maneuver {
             _lane_start_slow: false,
             _start_motor: TRIAL_MOTOR,
             _transfer_motor: ROUTE_SLOW_MOTOR,
+            race_transfer: None,
             _start_speed_measured: false,
             _start_speed_last: None,
             start_lane_coast_steering: V::None,
@@ -1287,6 +1289,7 @@ impl Maneuver {
             && self.entry_kind == Some("lane")
             && now < self._launch_until.unwrap_or_else(|| type_error("'<' not supported between float and NoneType"))
             && ["first_target", "open_transfer", "second_loop", "light_entry"].contains(&self.route_stage)
+            && !(self.transfer_stage() && self.race_transfer.as_ref().is_some_and(|t| t.rolling()))
             && !self.light_stop_active()
         {
             result.set("motor", TRIAL_MOTOR);
@@ -1452,8 +1455,8 @@ impl Maneuver {
         if self.continue_route && self.phase == "drive" && self.route_stage == "start_lane" {
             return self._start_motor;
         }
-        if self.continue_route && self.phase == "drive" && self.route_stage == "open_transfer" && !self.quality_resume_pending {
-            return self._transfer_motor; // round y23
+        if self.continue_route && self.phase == "drive" && (self.route_stage == "open_transfer" || self.transfer_stage()) && !self.quality_resume_pending {
+            return self._transfer_motor;
         }
         if self.continue_route && self.phase == "drive" && slow_stage && !self.quality_resume_pending {
             ROUTE_SLOW_MOTOR
@@ -1836,6 +1839,11 @@ impl Maneuver {
             return self.result(now);
         }
         if self.continue_route {
+            if self.entry_kind == Some("lane") && matches!(self.route_stage, "first_target" | "open_transfer" | "second_loop")
+                && let Some(t) = self.race_transfer.as_mut()
+            {
+                t.observe(scan, self.compass.current(scan));
+            }
             match self.route_stage {
                 "light_turn" => return self.light_update(scan, now, control),
                 "light_lane" => return self.light_lane_update(scan, now, control),

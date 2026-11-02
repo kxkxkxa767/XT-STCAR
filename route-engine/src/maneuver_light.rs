@@ -117,6 +117,7 @@ impl Maneuver {
         if self.route_stage == "light_entry"
             && !self.light_stop_active()
             && self._route_center_ack.is_dict()
+            && !self._route_center_ack.get("transfer_coast").is_true()
             && eq_i(self._route_center_ack.get("motor"), NEUTRAL)
         {
             self._route_center_ack = V::None;

@@ -205,6 +205,9 @@ impl Maneuver {
             self._exit_release_cache.as_ref().map(|(s, v)| V::list(vec![s.clone(), V::Int(*v)])),
         );
         d.set("_path_cache", self._path_cache.as_ref().map(|(k, v)| V::list(vec![k.clone(), V::Int(*v)])));
+        if let Some(t) = &self.race_transfer {
+            d.set("race_transfer", t.dump());
+        }
         d
     }
 }

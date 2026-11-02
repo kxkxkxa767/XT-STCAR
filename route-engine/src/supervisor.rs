@@ -1246,7 +1246,7 @@ impl Supervisor {
                 // the ACKed command, re-check, resume.
                 let light_entry_stop = s.motion.route_stage == "light_entry"
                     && (if s.report.get("turn").truthy() { s.report.get("turn").get("light_stop_active").is_true() } else { false });
-                let entry_neutral = (s.motion.route_stage == "light_lane" || light_entry_stop)
+                let entry_neutral = (s.motion.transfer_stage() || s.motion.route_stage == "light_lane" || light_entry_stop)
                     && py_eq(control.get("motor"), &V::Int(NEUTRAL));
                 Supervisor::enter_quality_wait(s, "post_pass_pause", entry_neutral);
                 let trigger = dict! {
@@ -1353,7 +1353,7 @@ impl Supervisor {
             s.quality_wait_kind =
                 Some(if s.motion.neutral_pause_kind == Some("recovery") { "recovery_hold" } else { "orbit_wait" });
             s.quality_wait_entry_neutral = Some(
-                (s.motion.route_stage == "light_lane"
+                (s.motion.transfer_stage() || s.motion.route_stage == "light_lane"
                     || (s.motion.route_stage == "light_entry" && decision.get("light_stop_active").is_true()))
                     && py_eq(control.get("motor"), &V::Int(NEUTRAL)),
             );
@@ -1383,10 +1383,10 @@ impl Supervisor {
             && py_eq(route_center.get("servo"), &V::Int(NEUTRAL))
             // Round 82: the coasting light lane may prove centre at neutral.
             && (in_motors(route_center.get("motor"), &DRIVE_MOTORS)
-                || (stage_is("light_lane") && py_eq(route_center.get("motor"), &V::Int(NEUTRAL)))
+                || ((m.transfer_stage() || stage_is("light_lane")) && py_eq(route_center.get("motor"), &V::Int(NEUTRAL)))
                 // Round y2: the light stop coasts from the light entry on.
                 || (stage_is("light_entry")
-                    && decision.get("light_stop_active").is_true()
+                    && (decision.get("light_stop_active").is_true() || route_center.get("transfer_coast").is_true())
                     && py_eq(route_center.get("motor"), &V::Int(NEUTRAL))))
             && route_center.get("seq").is_int()
             && self.arm_sequence as f64 <= route_center.get("seq").f()
@@ -1438,7 +1438,7 @@ impl Supervisor {
             motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
         }
         // Round y23: the transfer's straight push.
-        if phase == "drive" && stage_is("open_transfer") && decision.get("quality_resume_pending").is_false() {
+        if phase == "drive" && (stage_is("open_transfer") || m.transfer_stage()) && decision.get("quality_resume_pending").is_false() {
             motors.push(STRAIGHT_MOTOR);
         }
         if light_launch_allowed {

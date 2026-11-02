@@ -904,7 +904,11 @@ impl Maneuver {
         let ahead = self.lane_front_range(scan);
         // history only: the light lane continues it (round y2: not while the
         // light stop's own history runs)
-        let speed = if self.light_stop_active() { None } else { self.lane_speed(scan, ahead, 2) };
+        let speed = if self.light_stop_active() || (self.route_stage == "open_transfer" && self.race_transfer.is_some()) {
+            None
+        } else {
+            self.lane_speed(scan, ahead, 2)
+        };
         let v = LANE_SPEED_UNKNOWN_MPS;
         let stop_at = FRONT_BODY_EXTENT_M + LANE_FINISH_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * LANE_REACTION_S;
         (ahead, speed, stop_at)
@@ -1095,6 +1099,20 @@ impl Maneuver {
         (radius * turn.psin(), radius * (1. - turn.pcos()), turn, horizon)
     }
 
+    pub fn transfer_stage(&self) -> bool {
+        self.race_transfer.is_some() && matches!(self.route_stage, "open_transfer" | "second_loop")
+    }
+
+    fn transfer_drive(&mut self, scan: &V, now: f64, remaining: Option<f64>, target_pwm: i64) {
+        let decel = self.lane_decels().0;
+        let Some(transfer) = &mut self.race_transfer else { return };
+        let straight = (target_pwm - NEUTRAL).abs() <= COAST_FIT_STRAIGHT_PWM
+            && self.compass.rate.abs() <= OPEN_PROBE_MAX_RATE_RAD_S;
+        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, straight, decel);
+        self.open_feedback.set("stage", self.route_stage);
+        self.open_feedback.set("source_seq", scan.idx("seq").clone());
+    }
+
     /// _open_transfer_update(scan, now, control).
     pub fn open_transfer_update(&mut self, scan: &V, now: f64, control: &V) -> V {
         if !self.route_adopted(control, now) {
@@ -1119,12 +1137,24 @@ impl Maneuver {
             overshoot_guard(Self::open_heading_hold(heading, PI), Self::open_heading_hold(heading + pose.2, PI))
         };
         let (ahead, speed, stop_at) = self.open_front_stop(scan);
-        self._transfer_motor = self.straight_motor(speed, now, Some(STRAIGHT_TRANSFER_MPS), false); // round y23
-        self.open_feedback = dict! {
-            "source_seq" => scan.idx("seq").clone(), "stage" => "open_transfer", "compass_heading_rad" => heading,
-            "channel" => channel.clone(), "nominal_target_pwm" => natural, "front_range_m" => ahead, "speed_mps" => speed,
-            "front_stop_range_m" => stop_at, "second_acquisition_reason" => self.second_acquisition_reason.clone(),
-        };
+        if self.race_transfer.is_some() {
+            let proof = &self.role_distinct_evidence;
+            let remaining = if py_eq(proof.get("source_seq"), scan.get("seq")) {
+                proof.get("second_along_axis_m").of()
+            } else {
+                channel.get("divider_open_end_along_m").of()
+            };
+            self.transfer_drive(scan, now, remaining, natural);
+        } else {
+            self._transfer_motor = self.straight_motor(speed, now, Some(STRAIGHT_TRANSFER_MPS), false);
+            self.open_feedback = dict! {"source_seq" => scan.idx("seq").clone(), "stage" => "open_transfer", "speed_mps" => speed};
+        }
+        self.open_feedback.set("compass_heading_rad", heading);
+        self.open_feedback.set("channel", channel.clone());
+        self.open_feedback.set("nominal_target_pwm", natural);
+        self.open_feedback.set("front_range_m", ahead);
+        self.open_feedback.set("front_stop_range_m", stop_at);
+        self.open_feedback.set("second_acquisition_reason", self.second_acquisition_reason.clone());
         let maturing = self.open_second_maturing(scan, ahead, stop_at);
         self.open_feedback.set("second_confirm_grace", maturing);
         if ahead.is_some_and(|a| a <= stop_at) && !maturing {
@@ -1158,6 +1188,7 @@ impl Maneuver {
             self.open_loop_geometry(scan, &target, &id, -1, PI, Some(pose))
         };
         if lp.is_none() {
+            self.transfer_drive(scan, now, None, self.servo);
             if progress.is_some_and(|p| p >= PI - open_late_exit_rad()) {
                 return self.open_second_pass(scan, now, control, "support_lost_near_heading_reversal");
             }
@@ -1176,6 +1207,11 @@ impl Maneuver {
         }
         self._open_lost_since = None;
         self.open_loop = lp.clone();
+        let remaining = match lp.idx("pursuit_mode").s() {
+            "approach_line" | "approach_line_to_circle" | "tangent" => lp.idx("before_tangent_point_m").of(),
+            _ => Some(0.),
+        };
+        self.transfer_drive(scan, now, remaining, lp.idx("target_pwm").i());
         if let Some(p) = progress
             && p >= OPEN_LIGHT_HANDOFF_PROGRESS_RAD
         {

@@ -474,7 +474,8 @@ impl Program {
     }
 
     fn lidar(&self) -> V {
-        dict! {"scan" => self.sup.scan.clone(), "age_s" => self.mono() - self.sup.scan_at.f()}
+        dict! {"scan" => self.sup.scan.clone(), "age_s" => self.mono() - self.sup.scan_at.f(),
+               "received_program_s" => self.sup.scan_at.clone()}
     }
 
     fn row(&mut self, started: f64) -> String {
@@ -600,7 +601,17 @@ pub fn main(args: &[String]) -> i32 {
         light_updates: 0,
         light_invalid: 0,
     };
+    let imu_stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let imu = if p.o.demo {
+        None
+    } else {
+        let (out, base, stop) = (p.o.out.clone(), p.base, imu_stop.clone());
+        thread::Builder::new().name("imu-log".into())
+            .spawn(move || crate::race_imu::record(&out, base, &stop))
+            .inspect_err(|e| eprintln!("IMU recorder: {e}")).ok()
+    };
     let code = run(&mut p);
+    imu_stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = p.files.send(FileOp::Stop);
     let _ = writer_thread.join();
     // Closing the bridges' input: each stops at neutral and exits.
@@ -619,6 +630,9 @@ pub fn main(args: &[String]) -> i32 {
                 }
             }
         }
+    }
+    if let Some(thread) = imu {
+        let _ = thread.join();
     }
     code
 }
@@ -715,6 +729,9 @@ fn run(p: &mut Program) -> i32 {
             return 2;
         }
     };
+    if let Some(session) = &mut p.sup.session {
+        session.motion.race_transfer = Some(Default::default());
+    }
     p.say(&format!("started run {run_id}"));
     let run_v = V::from(run_id.as_str());
     let t0 = now;

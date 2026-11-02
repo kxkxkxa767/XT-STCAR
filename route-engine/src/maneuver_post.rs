@@ -181,7 +181,7 @@ impl Maneuver {
             }
         }
         let mut motors = Vec::new();
-        let coasting_stage = self.route_stage == "light_lane"
+        let coasting_stage = self.transfer_stage() || self.route_stage == "light_lane"
             || self.route_stage == "start_lane"
             || (self.route_stage == "light_entry" && self.light_stop_active());
         if coasting_stage {
@@ -211,10 +211,13 @@ impl Maneuver {
             self._route_center_ack = V::None;
         } else if self.servo == NEUTRAL
             && (motor_in(control.get("motor"), &DRIVE_MOTORS)
-                || ((self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()))
+                || ((self.transfer_stage() || self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()))
                     && eq_i(control.get("motor"), NEUTRAL)))
         {
             self._route_center_ack = control.pick(&["servo", "motor", "tick", "seq"]);
+            if self.transfer_stage() && eq_i(control.get("motor"), NEUTRAL) {
+                self._route_center_ack.set("transfer_coast", true);
+            }
         }
         self.light_entry_coast_ack_dropped();
         true
