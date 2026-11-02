@@ -6,6 +6,8 @@
 
 **y25 接续（Codex，11-02）**　第 2 节①已在 Rust 比赛程序实现。机读记录键是 `y25_transfer_imu_20261102`。按用户新指令，y25 新增实时逻辑只在 `route-engine race` 运行，Python 参考方式保留 y24 的行为。IMU 采集与控制分线程，`run/imu.jsonl` 的 `captured_at`（毫秒）和反馈中 `lidar.received_program_s`（秒）同源。用下一轮同车雷达数据标定 IMU。车用包完成后先推送，连车后部署。开跑仍等用户确认。
 
+第 132 轮引擎和 y25 助手已从 `dd9766a` 构建。两个包都在 `work/vehicle-dynamic-deploy-20261008/`，下一步从第 4 节第 3 步的 `deploy-matched.py` 和 `deploy-vision.py` 开始。
+
 ---
 
 ## 0. 不要多余的限制，不要多余的测试（用户明确要求）

@@ -25669,6 +25669,16 @@
       "Read /dev/imu at 115200 in a separate Rust thread. Buffer accelerometer, gyroscope and orientation samples in run/imu.jsonl. Host-receive timestamps and lidar.received_program_s share the race Instant. Acquisition errors are recorded separately from route results."
     ],
     "after_run": "Compare straight/turn segment times, entry speed, final stop, tick timing and per-thread CPU. Align IMU with lidar translation and heading, estimate stationary bias, forward/yaw axes and relative delay before using inertial estimates for control.",
+    "build": {
+      "source_commit": "dd9766ac4b5a09421c6f9ce4bb7ce8a64495c259",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "engine_bytes": 2637760,
+      "elf_maximum_glibc": "2.34",
+      "archive": "XT-STCAR-claude-turn132-dd9766a.tar.gz",
+      "engine_package": "claude-turn132-package.json",
+      "vision_package": "claude-y25-package.json",
+      "light_stop": true
+    },
     "validation": {
       "python_full_suite": "968 passed",
       "cargo_test_release": "7 passed",
