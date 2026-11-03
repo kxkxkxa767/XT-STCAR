@@ -26728,8 +26728,8 @@
     },
     "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "10 passed", "clippy_warnings": 32},
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "request": "Borrow the idea of a single continuous within-transfer distance reference. Retain the current corner speed and prepare the next car package for later physical testing.",
     "control": {
       "settings": {
@@ -26801,6 +26801,27 @@
       ]
     },
     "performance_estimate": "Order of magnitude 0.1 to 0.3 s on the transfer, not a measured result: for example 2 m at 1.50 versus 1.80 m/s differs by 0.222 s. Extra drive changes subsequent speed, path and coasting. Physical transfer time and CPU remain open.",
-    "next": "Build for direct installation from engine 146 (y39). Confirm placement and signal reset before any new run; compare straight time, measured tangent entry speed, second-loop body clearance and control latency."
+    "car_run_y41": {
+      "run": "2026-11-03 21:33 Asia/Taipei, engine 148 and vision y41 from ea7a807, installed over y39",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y41",
+      "result": "second-cone contact reported by operator; second pass and finish not reached; maneuver_cumulative_drive_timeout after neutral recovery",
+      "completed": false,
+      "effective_lap_s": null,
+      "operator_observation": "From the first cone the car veered left, approached the original straight, turned right and hit the second cone.",
+      "crosswalk": {"estimated_stop_gap_m": 0.158, "waited_s": 3.096},
+      "events_seq": {"first_pass": 135, "second_handover": 148, "last_fresh_second_target": 152, "recovery_neutral": 158, "first_saved_return_inside_nominal_body": 160},
+      "transfer": {
+        "saved_1600_acks": [141, 142],
+        "saved_1600_acks_y39_both_runs": [141],
+        "snapshots": "At 144 the bridge was back at 1550. At 149 the new second-loop planner requested left 1615 while the actual servo still read right 1386. At 150 it requested 1646, with actual 1466. At 152 the plan requested 1544 and actual was 1500. Axial lidar speed at 149/150/152 was 1.925/2.013/2.031 m/s, respectively. Each successful y39 run at 152 had 1.70/1.77 m/s. These are approach speeds; no fresh second-cone tangent or complete transfer time was observed.",
+        "raw_scan": "At 152 two compact groups appeared at (1.57,-0.11) and (1.71,-0.41) m in the lidar frame (forward,left). The tracker took the latter. At 153, 155 and 157 current compact returns ahead were (1.36,-0.05), (0.96,-0.07) and (0.69,-0.09) m. No fresh second-cone observation reached the steering planner. The physical identity of both groups in scan 152 is unresolved.",
+        "contact": "Recovery neutral at 158 with nearest return 0.119 m outside the nominal vehicle rectangle. At 160 (+0.203 s) bin 26 measured 0.222 m, at (0.200,-0.097) m inside the front-right body envelope before rounding. Camera frames 48/49/50 had blue-cone boxes moving into the forward view and growing from 83 to 271 pixels wide; saved frame 51 shows the blue cone at the right front.",
+        "interpretation": "The late switch from the divider-guided right turn to countersteer, higher approach speed, and loss of association occurred in the same run. Their individual causal contributions have not been isolated."
+      },
+      "runtime": {"control_single_core_percent": 16.26, "imu_single_core_percent": 2.08, "mean_scan_to_tick_ms": 1.652, "max_tick_ms": 10.604, "imu_samples": 4600, "imu_checksum_errors": 0},
+      "retrieved_files_verified": 56,
+      "post_run": {"armed": false, "motor": 1500, "servo": 1500}
+    },
+    "next": "Use the measured second-cone approach to examine the transition from divider guidance to the clockwise tangent and the lost target around scan 153. A full-lap benefit is still unmeasured."
   }
 }
