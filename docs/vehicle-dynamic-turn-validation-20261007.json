@@ -26888,6 +26888,27 @@
       "runtime": {"control_single_core_percent": 16.41, "imu_single_core_percent": 2.34, "mean_scan_to_tick_ms": 1.432, "max_tick_ms": 8.370, "recovery_count": 0, "quality_wait_used": false, "imu_samples": 3786, "imu_checksum_errors": 0},
       "retrieved_files_verified": 91, "post_run": {"armed": false, "motor": 1500, "servo": 1500},
       "comparison_limit": "One completed run. The start rear range differed from y41 (0.55 vs 0.37 m), and the heading at the first pass was 158.4 vs 164.0 degrees."
+    },
+    "car_run_y42_2": {
+      "time_local": "2026-11-03 22:40 Asia/Taipei",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y42-2",
+      "source_commit": "3b4289622198dca01d0599e634d95a6e48d6af28", "engine_round": 149, "completed": true, "reason": "route_finish_zone_stop",
+      "start_front_rear_m": [7.687, 0.300], "first_pass_heading_deg": 160.41,
+      "sampled_timing_s": {"basis": "Same saved-feedback convention as car_run_y42 and the reported y39 22.462 s; before penalties.", "start_to_stop": 34.652, "red_wait": 10.386, "less_red": 24.266, "difference_vs_y42_first": 0.700, "first_pass_to_second_pass": 3.694, "second_pass_to_light_stop": 4.491, "light_go_to_finish": 3.792},
+      "event_timing_s": {"basis": "Exact scan receive times of the route events.", "start_to_stop": 34.851, "red_wait": 10.286, "less_red": 24.564, "second_pass_to_light_stop": 4.591},
+      "crosswalk": {"estimated_stop_gap_m": 0.464, "waited_s": 3.097},
+      "cones": {"first_pass_seq": 142, "second_handover_seq": 155, "first_fresh_clockwise_tangent_seq": 169, "second_pass_seq": 179, "saved_transfer_1600_ack_seq": [148], "tangent_speed_mps": 1.745, "forward_right_m_and_speed_mps_at_approach_seq_158": [1.625, 0.977, 1.764], "second_loop_min_body_gap_m": 0.277, "second_loop_min_fresh_second_target_gap_m": 0.382},
+      "light": {"estimated_stop_gap_m": 0.563, "stop_stage": "light_lane", "estimated_whole_car_in_zone": true, "stop_zone_certified": false, "red_score": 0.8736, "go_basis": "green_in_fresh_frames_after_the_stop", "green_frames": [107, 108], "green_scores": [0.8754, 0.8787]},
+      "light_approach_analysis": {
+        "saved_phase_entries_seq": {"cruise": 180, "coast": 185, "rolling_topup": 193, "final_coast": 201, "rolling_rear_into_zone": 210, "zone_coast": 215},
+        "first_saved_neutral": {"seq": 185, "gantry_gap_m": 3.333, "predicted_stop_gap_m": 1.646, "predicted_gap_if_renewed_m": 1.519, "speed_now_mps": 1.267},
+        "first_saved_topup": {"seq": 193, "pwm": 1550, "speed_now_mps": 0.784, "seconds_since_first_saved_neutral": 0.798},
+        "gantry_3p20_to_1p10_s_first_repeat": [1.852, 2.375],
+        "basis": "Linear interpolation of gantry gaps at the saved scan timestamps. The first cut was between scans 183 and 185. Its triggering input at 184 is not in the log. On the first run there was a single coast at a saved gap of 2.145 m and no topup."
+      },
+      "finish": {"whole_car_in_zone": true, "front_gap_m": 0.355, "creeps": 0},
+      "runtime": {"control_single_core_percent": 16.09, "imu_single_core_percent": 2.43, "mean_scan_to_tick_ms": 1.481, "max_tick_ms": 12.007, "quality_wait_used": false, "recovery_count": 0, "imu_samples": 3940, "imu_checksum_errors": 0},
+      "retrieved_files_verified": 92, "post_run": {"armed": false, "motor": 1500, "servo": 1500}
     }
   }
 }
