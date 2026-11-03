@@ -181,14 +181,12 @@ impl Maneuver {
             }
         }
         let mut motors = Vec::new();
-        let coasting_stage = self.transfer_stage() || self.route_stage == "light_lane"
-            || self.route_stage == "start_lane"
-            || (self.route_stage == "light_entry" && self.light_stop_active());
+        let coasting_stage = self.transfer_stage() || self.light_motor_stage() || self.route_stage == "start_lane";
         if coasting_stage {
             motors.push(NEUTRAL);
         }
         motors.extend_from_slice(&DRIVE_MOTORS);
-        if self.route_stage == "light_lane" {
+        if self.route_stage == "light_lane" || self.released_light_entry() {
             motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
         }
         let adopted = motor_in(control.get("motor"), &motors)
@@ -211,7 +209,7 @@ impl Maneuver {
             self._route_center_ack = V::None;
         } else if self.servo == NEUTRAL
             && (motor_in(control.get("motor"), &DRIVE_MOTORS)
-                || ((self.transfer_stage() || self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()))
+                || ((self.transfer_stage() || self.light_motor_stage())
                     && eq_i(control.get("motor"), NEUTRAL)))
         {
             self._route_center_ack = control.pick(&["servo", "motor", "tick", "seq"]);
@@ -1284,8 +1282,11 @@ impl Maneuver {
     pub fn begin_light_lane(&mut self, scan: &V, now: f64, control: &V, evidence: V) -> V {
         self.light_alignment_evidence = evidence.clone();
         self.route_event("light_aligned", scan, control, evidence);
+        let waiting_on_entry = self.race_inputs.is_some() && self.route_stage == "light_entry"
+            && self.light_stop_state == Some("waiting");
+        let finish_already_driving = self.released_light_entry();
         self.route_stage = "light_lane";
-        if !self.light_stop_active() {
+        if !self.light_stop_active() && !finish_already_driving {
             // round y2: a light stop's coast or wait goes on unchanged
             self.lane_motor = ROUTE_SLOW_MOTOR;
             self.finish.pulse = 0;
@@ -1295,6 +1296,10 @@ impl Maneuver {
         self.route_event("light_lane", scan, control, e);
         self.steering_target = self.servo;
         self.reason = "light_lane_started_keep_adopted_command".into();
+        if waiting_on_entry {
+            // Alignment and the second green frame can arrive on the same scan.
+            return self.light_lane_update(scan, now, control);
+        }
         self.result(now)
     }
 
@@ -1524,8 +1529,19 @@ impl Maneuver {
             return self.result(now);
         }
         let ahead = self.lane_front_range(scan);
-        let (basis, speed_feedback) = self.finish_control(scan, ahead, now);
-        self.lane_feedback = steering.merged(&speed_feedback);
+        if let Some(result) = self.update_finish_output(scan, ahead, now, control, Some(&steering)) {
+            return result;
+        }
+        self.steering_target = target;
+        self.natural_steering_target = Some(natural);
+        self.reason = "light_lane_follow_straight".into();
+        self.slew(now);
+        self.result(now)
+    }
+
+    pub(super) fn update_finish_output(&mut self, scan: &V, ahead: Option<f64>, now: f64, control: &V, steering: Option<&V>) -> Option<V> {
+        let (basis, feedback) = self.finish_control(scan, ahead, now);
+        self.lane_feedback = match steering { Some(s) => s.merged(&feedback), None => feedback };
         if let Some(basis) = basis {
             let mut finish = self.lane_feedback.clone();
             finish.update(&dict! {
@@ -1536,13 +1552,9 @@ impl Maneuver {
             self.finish_evidence = finish;
             let e = self.finish_evidence.clone();
             self.route_event("finish_stop", scan, control, e);
-            return self.end_light_stage("route_finish_zone_stop", now, control);
+            return Some(self.end_light_stage("route_finish_zone_stop", now, control));
         }
-        self.steering_target = target;
-        self.natural_steering_target = Some(natural);
-        self.reason = "light_lane_follow_straight".into();
-        self.slew(now);
-        self.result(now)
+        None
     }
 
     /// _light_update(scan, now, control).

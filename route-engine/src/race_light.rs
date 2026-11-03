@@ -1,12 +1,83 @@
 //! The open end of the light lane's inner board, observed while passing cone one.
 //! Store its distance from the end wall, not its bearing in a turning car.
-use crate::helpers::{OPEN_LANE_MIN_SPAN_M, OPEN_LINE_MIN_POINTS, SIDE_BODY_EXTENT_M, dcos, dsin};
+use crate::helpers::{FRONT_BODY_EXTENT_M, OPEN_LANE_MIN_SPAN_M, OPEN_LINE_MIN_POINTS, SIDE_BODY_EXTENT_M, dcos, dsin};
 use crate::maneuver::{
-    LIGHT_GANTRY_EDGE_M, LIGHT_LINE_JUMP_M, LIGHT_POST_JUMP_M, OPEN_LANE_WIDTH_M,
+    LIGHT_GANTRY_EDGE_M, LIGHT_GANTRY_SPAN_M, LIGHT_GANTRY_ALONG_DIFF_M, LIGHT_LEG_LATERAL_M,
+    LIGHT_LINE_JUMP_M, LIGHT_POST_JUMP_M, LIGHT_SENSOR_TO_GANTRY_M, OPEN_LANE_WIDTH_M,
 };
 use crate::py::V;
 use crate::motion_sensors::{RangeHistory, lane_range_speed};
 use crate::maneuver::LANE_SPEED_HISTORY;
+
+type Post = (f64, f64); // longitudinal and leftward distances in the lane frame
+
+#[derive(Clone, Copy)]
+pub(super) struct StationPair {
+    pub legs: [Post; 2], // left, right
+    pub beam_along: Option<f64>,
+}
+
+impl StationPair {
+    pub fn along(self) -> f64 {
+        (self.legs[0].0 + self.legs[1].0) * 0.5
+    }
+}
+
+fn across_lane(a: Post, b: Post) -> bool {
+    (LIGHT_GANTRY_SPAN_M.0..=LIGHT_GANTRY_SPAN_M.1).contains(&(a.1 - b.1).abs())
+        && (a.0 - b.0).abs() <= LIGHT_GANTRY_ALONG_DIFF_M
+}
+
+pub(super) fn at_predicted_beam(along: f64, gantry: Option<f64>) -> bool {
+    gantry.is_some_and(|g| (g - along - LIGHT_SENSOR_TO_GANTRY_M).abs() <= LIGHT_LINE_JUMP_M)
+}
+
+/// A matching post one beam spacing upstream on each side identifies the
+/// downstream pair, even if another station was tracked first. With just one
+/// pair, use the first-cone divider or the tracked line to resolve its role.
+pub(super) fn station_pair(posts: &[Post], predicted: Option<f64>) -> Option<StationPair> {
+    if posts.len() < 2 {
+        return None;
+    }
+    let upstream: Vec<Option<Post>> = posts
+        .iter()
+        .map(|&(x, y)| {
+            posts
+                .iter()
+                .copied()
+                .filter(|&(u, v)| (y - v).abs() <= LIGHT_LEG_LATERAL_M && at_predicted_beam(u, Some(x)))
+                .min_by(|a, b| {
+                    (x - a.0 - LIGHT_SENSOR_TO_GANTRY_M)
+                        .abs()
+                        .total_cmp(&(x - b.0 - LIGHT_SENSOR_TO_GANTRY_M).abs())
+                })
+        })
+        .collect();
+    let mut best: Option<(StationPair, f64)> = None;
+    for (i, &a) in posts.iter().enumerate() {
+        for (j, &b) in posts[..i].iter().enumerate() {
+            if a.0 <= FRONT_BODY_EXTENT_M || b.0 <= FRONT_BODY_EXTENT_M || !across_lane(a, b) {
+                continue;
+            }
+            let beam_along =
+                upstream[i].zip(upstream[j]).filter(|&(l, r)| across_lane(l, r)).map(|(l, r)| (l.0 + r.0) * 0.5);
+            let pair = StationPair { legs: if a.1 > b.1 { [a, b] } else { [b, a] }, beam_along };
+            let along = pair.along();
+            if beam_along.is_none() && at_predicted_beam(along, predicted) {
+                continue;
+            }
+            let error = predicted.map_or(along, |g| (along - g).abs()) + (a.0 - b.0).abs();
+            if best.as_ref().is_none_or(|(old, score)| match (beam_along.is_some(), old.beam_along.is_some()) {
+                (true, false) => true,
+                (false, true) => false,
+                _ => error < *score,
+            }) {
+                best = Some((pair, error));
+            }
+        }
+    }
+    best.map(|(pair, _)| pair)
+}
 
 struct ScanAxis<'a> {
     ranges: &'a [V],
@@ -117,6 +188,8 @@ pub enum LightRoll {
     Coast,
     Topup,
     FinalCoast,
+    EnterZone,
+    ZoneCoast,
     Through,
 }
 
@@ -127,6 +200,8 @@ impl LightRoll {
             Self::Coast => "coast",
             Self::Topup => "rolling_topup",
             Self::FinalCoast => "final_coast",
+            Self::EnterZone => "rolling_rear_into_zone",
+            Self::ZoneCoast => "zone_coast",
             Self::Through => "unlit_continue",
         }
     }
@@ -144,8 +219,25 @@ pub struct RaceLight {
     imu_history: Vec<(f64, f64)>,
     /// When the front was first estimated past the photo beam (y34).
     pub beam_at: Option<f64>,
+    approach_sample: Option<(i64, f64, Option<f64>)>,
 }
 impl RaceLight {
+    /// Divide by sequence distance if a scan was skipped.
+    pub fn approach_step(&mut self, scan: &V, integral: Option<f64>, axis_cos: f64) -> (f64, Option<f64>) {
+        let seq = scan.idx("seq").i();
+        let at = scan.idx("at_ms").f() / 1000.;
+        if self.approach_sample.is_some_and(|(last_seq, last_at, _)| seq == last_seq && at == last_at) {
+            return (0., None);
+        }
+        let prev = self.approach_sample.replace((seq, at, integral));
+        let Some((prev_seq, prev_at, prev_integral)) = prev else { return (0., None) };
+        let dt = at - prev_at;
+        if seq <= prev_seq || dt <= 0. || dt > crate::helpers::SCAN_AGE_S {
+            return (0., None);
+        }
+        (dt / (seq - prev_seq) as f64, integral.zip(prev_integral).map(|(v, p)| (v - p) * axis_cos / dt))
+    }
+
     pub fn measure_speed(&mut self, scan: &V, reference: Option<f64>, forward_integral: Option<f64>, axis_cos: f64)
         -> (Option<f64>, Option<f64>) {
         let raw = lane_range_speed(&mut self.ranges, scan, reference, 2);

@@ -43,6 +43,17 @@ impl FinishControl {
 }
 
 impl Maneuver {
+    /// The entry continues steering into the lane; a valid light release hands
+    /// longitudinal control to the finish planner immediately.
+    pub(crate) fn released_light_entry(&self) -> bool {
+        self.race_inputs.is_some() && self.route_stage == "light_entry" && self.light_stop_state == Some("released")
+    }
+
+    pub(crate) fn light_motor_stage(&self) -> bool {
+        self.route_stage == "light_lane"
+            || (self.route_stage == "light_entry" && (self.light_stop_active() || self.released_light_entry()))
+    }
+
     pub(super) fn finish_control(&mut self, scan: &V, ahead: Option<f64>, now: f64) -> (Option<String>, V) {
         self.lane_goal_control(scan, ahead, now, &FINISH_GOAL)
     }
@@ -60,7 +71,8 @@ impl Maneuver {
 
     pub(super) fn prepare_finish_release(&mut self, scan: &V, now: f64) {
         let board = self.lane_front_range(scan);
-        if self.route_stage == "light_lane" && board.is_some_and(|b| b - FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M) {
+        let release_stage = self.route_stage == "light_lane" || (self.race_inputs.is_some() && self.route_stage == "light_entry");
+        if release_stage && board.is_some_and(|b| b - FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M) {
             self.finish.launch_until = Some(now + ESC_LAG_S + LIGHT_LAUNCH_S);
             self.finish.launch_from = Some(now);
         }

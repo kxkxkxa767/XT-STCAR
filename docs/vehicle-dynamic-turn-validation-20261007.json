@@ -26639,5 +26639,63 @@
       "slow_start_after_light": "prepare_finish_release sets the 1600 launch only in light_lane; released in light_entry, the finish began with the plan 1560 holds (1.3-1.4 m/s by 1.4 s) from ~4.1 m: 4.49 s release to stop.",
       "stability": "Not stable: run 1 22.46 s (light stop .259 m by legs, lamp out of view), run 2 24.56 s (stop outside the zone)."
     }
+  },
+  "y40_light_station_identity_entry_release_20261103": {
+    "date": "2026-11-03",
+    "author": "Codex",
+    "baseline": "0d606a5, vehicle engine 146/y39 built from b44bd7d",
+    "engine_round": 147,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user_order": "Build the vehicle package first; physical test later. Keep the light work isolated from two-cone tuning.",
+    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "8 passed", "clippy_warnings": 32},
+    "change": [
+      "Race-only post association uses the longitudinal separation and lateral correspondence of both post pairs. A live paired observation can replace an earlier beam lock. A single pair consistent with the expected beam is excluded from gantry acquisition and partial tracking. Without a corroborating reference a provisional pair cannot declare the actual signal passed.",
+      "The light approach compares the projected stopping gap if 1550 were held for one further scan, using the measured scan period and forward IMU acceleration. Uses the oriented body footprint and can top up while rolling before red if a passive stop would leave the rear outside the 1 m zone. A fresh red overrides all propulsion.",
+      "A valid light release can start the finish planner immediately during light_entry, using its end-board room check. The entry retains its steering and obstacle geometry. Finish commands, brake, neutral ACKs and center-steering eligibility share the same active stages in the Rust supervisor and maneuver. Alignment preserves an already-issued launch."
+    ],
+    "evidence_review": {
+      "y39_2_image": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y39-2/vision/frames/frame-000073.jpg",
+      "camera_estimate": "The photographed uprights meet the lamp crossbar. With the project camera calibration, approximately 0.94 m between the uprights, hand-read columns 127 and 625 at row 247, and pitch around 7.5 degrees from the end wall, the nose-to-gantry distance is about 0.65 m. This is an image-based estimate. The saved light_stop reports 0.676 m to the tracked line, consistent with the rear approximately 0.06 m beyond the 1 m zone. The user observed the stop outside the zone; a full upstream station misidentification was not established.",
+      "field_pair_coverage": "No saved approach scan in the two focused y39 runs established both longitudinal stations together. Four-post identification, a wrong prior, an unrelated farther pair, and a lone beam were checked using specified synthetic post geometry."
+    },
+    "fixed_input_checks": {
+      "evidence": "work/y40-light-VQkyWfTP",
+      "method": "Use the saved lidar scans, compass and synchronized calibrated IMU integral on the historical vehicle trajectories. Counterfactual motor outputs do not change the recorded poses.",
+      "y39_first_sampled_neutral": {
+        "old_scan": 184,
+        "old_since_start_s": 16.776,
+        "new_scan": 182,
+        "new_since_start_s": 16.573,
+        "new_projected_front_gap_m": 2.418
+      },
+      "y39_2": {
+        "first_sampled_neutral_scan": 182,
+        "rolling_zone_entry_scan": 201,
+        "first_pending_red_saved_scan": 216,
+        "all_sampled_red_commands_pwm": 1500
+      },
+      "entry_release": {
+        "saved_event_scan": 319,
+        "source": "y39-2 actual green frames, recorded neutral control, event scan and preceding stationary telemetry. Supervisor::autonomy_tick on the Mac with no hardware writer",
+        "old_launch_flag": false,
+        "new_supervisor_emitted_pwm": 1600,
+        "on_alignment_pwm": 1600
+      }
+    },
+    "transfer_note": {
+      "actuator_settings": "Separate from this change. Transfer high PWM 1600 and entry target 1.8 m/s as in y39.",
+      "first_pass_to_fresh_second_tangent_s": [
+        2.797,
+        2.697
+      ],
+      "first_fresh_zero_distance_scan": [
+        163,
+        163
+      ],
+      "method": "Match both open_feedback.source_seq and open_loop.source_seq to the live second_loop scan. The earlier zero seen at handover belonged to an old first-cone plan."
+    },
+    "next": "Install the prepared y40 packages when the vehicle is available, wait for operator confirmation, then compare the actual stop position (front/rear), fresh red/green frames, release-stage PWM, and finish gap."
   }
 }

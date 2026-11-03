@@ -935,7 +935,7 @@ impl Maneuver {
         let ahead = self.lane_front_range(scan);
         // history only: the light lane continues it (round y2: not while the
         // light stop's own history runs)
-        let speed = if self.light_stop_active() || (self.route_stage == "open_transfer" && self.race_inputs.is_some()) {
+        let speed = if self.light_stop_active() || self.released_light_entry() || (self.route_stage == "open_transfer" && self.race_inputs.is_some()) {
             None
         } else {
             self.lane_speed(scan, ahead, 2)
@@ -1606,6 +1606,9 @@ impl Maneuver {
             if let Some(basis) = basis {
                 self.light_stop_reached(scan, now, control, &basis);
             }
+        } else if self.released_light_entry()
+            && let Some(result) = self.update_finish_output(scan, axis_ahead, now, control, None) {
+            return result;
         }
         self.natural_steering_target = Some(natural);
         self.steering_target = self.open_right_gate(natural);

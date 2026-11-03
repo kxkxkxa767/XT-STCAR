@@ -1291,7 +1291,7 @@ impl Maneuver {
             && now < self._launch_until.unwrap_or_else(|| type_error("'<' not supported between float and NoneType"))
             && ["first_target", "open_transfer", "second_loop", "light_entry"].contains(&self.route_stage)
             && !(self.transfer_stage() && self.race_transfer.rolling())
-            && !self.light_stop_active()
+            && !self.light_stop_active() && !self.released_light_entry()
         {
             result.set("motor", TRIAL_MOTOR);
         }
@@ -1449,7 +1449,7 @@ impl Maneuver {
         if self.continue_route
             && self.phase == "drive"
             && !self.quality_resume_pending
-            && (self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()))
+            && self.light_motor_stage()
         {
             return self.lane_motor;
         }

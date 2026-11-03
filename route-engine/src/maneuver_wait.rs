@@ -511,10 +511,10 @@ impl Maneuver {
         };
         let mut motors = Vec::new();
         // round y2: the light stop coasts and waits at neutral from the light entry on
-        if self.transfer_stage() || self.route_stage == "light_lane" || (self.route_stage == "light_entry" && self.light_stop_active()) {
+        if self.transfer_stage() || self.light_motor_stage() {
             motors.push(NEUTRAL);
         }
-        if self.route_stage == "light_lane" {
+        if self.route_stage == "light_lane" || self.released_light_entry() {
             motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
         }
         motors.extend_from_slice(&DRIVE_MOTORS);

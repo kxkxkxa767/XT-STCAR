@@ -1303,7 +1303,7 @@ impl Supervisor {
                 // the ACKed command, re-check, resume.
                 let light_entry_stop = s.motion.route_stage == "light_entry"
                     && (if s.report.get("turn").truthy() { s.report.get("turn").get("light_stop_active").is_true() } else { false });
-                let entry_neutral = (s.motion.transfer_stage() || s.motion.route_stage == "light_lane" || light_entry_stop)
+                let entry_neutral = (s.motion.transfer_stage() || s.motion.route_stage == "light_lane" || light_entry_stop || s.motion.released_light_entry())
                     && py_eq(control.get("motor"), &V::Int(NEUTRAL));
                 Supervisor::enter_quality_wait(s, "post_pass_pause", entry_neutral);
                 let trigger = dict! {
@@ -1410,7 +1410,7 @@ impl Supervisor {
                 Some(if s.motion.neutral_pause_kind == Some("recovery") { "recovery_hold" } else { "orbit_wait" });
             s.quality_wait_entry_neutral = Some(
                 (s.motion.transfer_stage() || s.motion.route_stage == "light_lane"
-                    || (s.motion.route_stage == "light_entry" && decision.get("light_stop_active").is_true()))
+                    || (s.motion.route_stage == "light_entry" && (decision.get("light_stop_active").is_true() || s.motion.released_light_entry())))
                     && py_eq(control.get("motor"), &V::Int(NEUTRAL)),
             );
             s.quality_wait_front_sparse_entry = Some(false);
@@ -1442,7 +1442,7 @@ impl Supervisor {
                 || ((m.transfer_stage() || stage_is("light_lane")) && py_eq(route_center.get("motor"), &V::Int(NEUTRAL)))
                 // Round y2: the light stop coasts from the light entry on.
                 || (stage_is("light_entry")
-                    && (decision.get("light_stop_active").is_true() || route_center.get("transfer_coast").is_true())
+                    && (decision.get("light_stop_active").is_true() || m.released_light_entry() || route_center.get("transfer_coast").is_true())
                     && py_eq(route_center.get("motor"), &V::Int(NEUTRAL))))
             && route_center.get("seq").is_int()
             && self.arm_sequence as f64 <= route_center.get("seq").f()
@@ -1483,9 +1483,10 @@ impl Supervisor {
             && m.first_pass_evidence.is_none()
             && !m.handover_observed
             && decision.get("quality_resume_pending").is_false();
-        // Round y18: the launch after green in the light lane may use 1580 (y20: 1600), while it lasts.
+        // The finish controller owns the launch once the signal releases the car.
+        let finish_stage = stage_is("light_lane") || (stage_is("light_entry") && m.released_light_entry());
         let light_launch_allowed = phase == "drive"
-            && stage_is("light_lane")
+            && finish_stage
             && m.finish.has_launch()
             && decision.get("quality_resume_pending").is_false();
         let mut motors: Vec<i64> = if slow_allowed { vec![NEUTRAL, TRIAL_MOTOR, ROUTE_SLOW_MOTOR] } else { vec![NEUTRAL, TRIAL_MOTOR] };
@@ -1500,9 +1501,9 @@ impl Supervisor {
         if light_launch_allowed {
             motors.push(LIGHT_LAUNCH_MOTOR);
         }
-        // Round y22: the finish brake after the light (light lane only).
+        // The one finish brake is available after the light release.
         let brake_allowed = phase == "drive"
-            && stage_is("light_lane")
+            && finish_stage
             && m.light_stop_evidence.is_dict()
             && (m.light_stop_evidence.has("go") || m.light_stop_state == Some("passed"))
             && decision.get("quality_resume_pending").is_false();
