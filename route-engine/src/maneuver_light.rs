@@ -741,16 +741,20 @@ impl Maneuver {
         let beam_speed = (2.*decel*(LIGHT_SENSOR_TO_GANTRY_M-VISIBLE_LIGHT_STOP_GAP_M)).sqrt();
         let (_, tail) = self.lane_pipeline(now, lag, lag, 0.);
         let (step, acceleration) = self.race_light.approach_step(scan, input.forward_integral, axis_cos);
-        let coast_travel = |v: f64| {
-            let release = v + LIGHT_CRUISE_ACCEL_MPS2 * tail;
-            (v + release) * tail / 2. + release * release / (2. * axial_decel)
+        let coast_travel = |v: f64, powered_s: f64| {
+            let release = v + LIGHT_CRUISE_ACCEL_MPS2 * powered_s;
+            (v + release) * powered_s / 2. + release * release / (2. * axial_decel)
         };
-        let predicted = gap.zip(v).map(|(g,v)| g - coast_travel(v));
+        let predicted = gap.zip(v).map(|(g,v)| g - coast_travel(v, tail));
         // Decide whether to renew the cruise for another scan. A late cut in
         // y39 left the light housing above the camera after the car coasted.
+        // When reconsidering the first coast, budget a new 1550 command and
+        // its full ESC tail: the acceleration measured in neutral may be negative.
+        let first_coast = matches!(self.race_light.phase, LightRoll::Coast);
+        let (accel_floor, renewed_tail) = if first_coast { (LIGHT_CRUISE_ACCEL_MPS2, lag) } else { (0., tail) };
         let if_renewed = gap.zip(v).map(|(g,v)| {
-            let next = v + acceleration.unwrap_or(LIGHT_CRUISE_ACCEL_MPS2).max(0.) * step;
-            g - (v+next)*step/2. - coast_travel(next)
+            let next = v + acceleration.unwrap_or(LIGHT_CRUISE_ACCEL_MPS2).max(accel_floor) * step;
+            g - (v+next)*step/2. - coast_travel(next, renewed_tail)
         });
         let rear_gap = ahead.map(|a| a + rear_extent);
         let rear_if_coast = predicted.map(|g| g + front_extent + rear_extent);
@@ -765,6 +769,10 @@ impl Maneuver {
         }
         let crossed = self.race_light.beam_at.is_some();
         let red_due = self.race_light.beam_at.is_some_and(|at| now - at >= LIGHT_RED_DUE_S);
+        // At y42's repeat the first coast would have stopped upstream of the
+        // beam. Resume the existing rolling top-up while there is still speed.
+        let resume_before_beam = first_coast && !red && !crossed && step > 0. && current_speed.or(speed).is_some()
+            && if_renewed.is_some_and(|g| g > LIGHT_SENSOR_TO_GANTRY_M);
         if !red {
             let cut = if_renewed.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
             let rolling_short = tail == 0. && v.is_some_and(|s| s < beam_speed)
@@ -778,7 +786,7 @@ impl Maneuver {
                 LightRoll::Coast | LightRoll::FinalCoast if rear_short => LightRoll::EnterZone,
                 LightRoll::EnterZone if predicted.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M)
                     || rear_gap.is_some_and(|g| g <= LIGHT_ZONE_M) => LightRoll::ZoneCoast,
-                LightRoll::Coast if rolling_short => LightRoll::Topup,
+                LightRoll::Coast if resume_before_beam || rolling_short => LightRoll::Topup,
                 LightRoll::Topup if cut => LightRoll::FinalCoast,
                 // No red: do not park to wait for an unlit gantry. Short of the
                 // beam push through to trigger it; past it, wait for the red
@@ -804,7 +812,7 @@ impl Maneuver {
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
-            "stop_gap_if_renewed_m" => if_renewed, "rear_to_gantry_m" => rear_gap,
+            "stop_gap_if_renewed_m" => if_renewed, "resume_before_beam" => resume_before_beam, "rear_to_gantry_m" => rear_gap,
             "divider_gantry_ahead_m" => self.race_light.prior_ahead, "approach_phase" => self.race_light.phase.label(),
             "beam_crossed_s_ago" => self.race_light.beam_at.map(|at| now - at), "red_due" => red_due,
             "red_hold" => red, "motor" => motor, "creeps" => 0,

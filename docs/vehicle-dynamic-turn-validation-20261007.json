@@ -26910,5 +26910,19 @@
       "runtime": {"control_single_core_percent": 16.09, "imu_single_core_percent": 2.43, "mean_scan_to_tick_ms": 1.481, "max_tick_ms": 12.007, "quality_wait_used": false, "recovery_count": 0, "imu_samples": 3940, "imu_checksum_errors": 0},
       "retrieved_files_verified": 92, "post_run": {"armed": false, "motor": 1500, "servo": 1500}
     }
+  },
+  "y43_resume_light_cruise_before_beam_20261103": {
+    "date": "2026-11-03", "author": "Codex", "engine_round": 150,
+    "source_baseline": "d08f816, vehicle y42 / engine 149",
+    "deployed": false, "physical_trial_executed": false,
+    "change": "After the second cone, reconsider the first neutral coast upstream of the optical beam. With a fresh axial speed and a measured scan interval, predict the stop after renewing 1550 for one scan and paying its full 0.2 s ESC tail. If it still falls upstream of the beam, enter the existing rolling top-up immediately. Camera red overrides propulsion.",
+    "fixed_input": {
+      "evidence": "work/y43-light-hAIATey0",
+      "method": "Run the actual old and new light_approach_control on the same saved coast states. Restore measured speed, corrected speed, range, heading and fitted drag. Reconstruct the effective prior ESC tail and positive acceleration from the two logged forecasts. Saved pre-beam neutral coast samples with live velocity were considered independently. The missing triggering scan 184 was not reconstructed.",
+      "first_run": {"coast_samples": 6, "resumes_y42": 0, "resumes_y43": 0},
+      "repeat": {"coast_samples": 5, "first_y43_resume_seq": 185, "old_pwm": 1500, "new_pwm": 1550, "speed_mps": 1.267, "gantry_gap_m": 3.333, "new_stop_gap_if_renewed_m": 1.209, "beam_to_gantry_m": 1.10, "first_saved_physical_topup_seq": 193, "earlier_command_s": 0.798},
+      "observed_time_difference_s": 0.523,
+      "time_basis": "Actual y42 repeat minus first run from gantry gap 3.20 m to 1.10 m (interpolated); not a prediction of y43 race time."
+    }
   }
 }
