@@ -26618,6 +26618,26 @@
       "note_tangent": "The first zero tangent sample came 1.0 s after the first pass (tangent speed sample 0), so the two cone-2 segments are reported together.",
       "finish": "Launch 1600 three frames to ~1.55 m/s (IMU); plan: 1560 hold two frames, neutral band, one more 1560 frame, 1300 from 1.086 m at 1.17 m/s held 1.5 s (LANE_BRAKE_MAX_S) to rest at .32-.335 m: 3.69 s release to stop.",
       "light": "Coast at 1.972 m and 1.38 m/s; red 1.10 s after the beam; stopped .259 m from the gantry (y34 run 1: .313); the lamp out of view: red frames 4, green 0 in the whole run; released by red_seen_10_5s_no_fresh_red after 9.99 s. The practice red lasts ~10 s; with a 3-10 s race red this fallback would release up to 7.5 s after green."
+    },
+    "car_run_y39_2": {
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y39-2",
+      "start_rear_front_m": [
+        0.31,
+        7.68
+      ],
+      "result": "route_finish_zone_stop, .315 m from the board, 0 creeps; effective 24.563 s (run 1 22.462)",
+      "segments_s": {
+        "move_to_crosswalk_stop": 3.896,
+        "crosswalk_wait": 2.993,
+        "crosswalk_go_to_first_pass": 4.994,
+        "first_pass_to_second_pass": 3.696,
+        "second_pass_to_light_stop": 4.493,
+        "light_wait_excluded": 10.186,
+        "light_go_to_finish_stop": 4.492
+      },
+      "light_stop_outside_zone": "User: the car clearly did not reach the stop zone in front of the photo sensor. The stop came in light_entry, before light_aligned (events: light_gantry 178, light_stop 217, light_go 319, light_aligned 325). The tracked leg pair ended at along 1.025-1.10 m, lateral +.49/-.50; the car stood .676 m before it (program: .42 m past the beam). With the user observation, the pair was most likely the photo-sensor posts (a pair at the lane edges 1.10 m before the gantry), not the gantry legs: the front stood ~1.78 m from the gantry, ~.68 m before the beam (+20 s in the rules). Red came .64 s after the stop; released on fresh green after 10.19 s.",
+      "slow_start_after_light": "prepare_finish_release sets the 1600 launch only in light_lane; released in light_entry, the finish began with the plan 1560 holds (1.3-1.4 m/s by 1.4 s) from ~4.1 m: 4.49 s release to stop.",
+      "stability": "Not stable: run 1 22.46 s (light stop .259 m by legs, lamp out of view), run 2 24.56 s (stop outside the zone)."
     }
   }
 }

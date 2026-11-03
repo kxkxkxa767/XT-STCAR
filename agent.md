@@ -1,5 +1,12 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-03 Claude：y39 重跑不稳定——第 2 轮 24.56 s，灯前停在停车区外）
+
+- 证据目录 `left-cone-trial-20261103-y39-2`，机读键 `car_run_y39_2`。
+- 停车发生在 `light_entry`，还没对正灯道。追踪到的"门腿"很可能是门架前 1.10 m 的光电传感器立柱，车头离光电线还差约 .68 m（用户亲眼看到没进停车区）。
+- 放行时还在 `light_entry`，`prepare_finish_release` 只在 `light_lane` 设 1600，所以只有 1560 起步，放行到停车 4.49 s。
+- 已写入 `memoryshare.md`，作为 Codex 第一项待办。
+
 ## 当前接手入口（2026-11-03 Claude：y39 实车 22.46 s，比 y27 快 .21 s；已交接 Codex，见 memoryshare.md）
 
 - **车上：** 引擎 146 / y39（`b44bd7d`），锁定中位。证据目录 `left-cone-trial-20261103-y39`，机读键 `y39_finish_brake_owned_by_plan_20261103.car_run_y39`。
