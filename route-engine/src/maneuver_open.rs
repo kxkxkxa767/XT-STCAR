@@ -445,7 +445,8 @@ impl Maneuver {
             if exit.crosswalk_released() || self.first_approach.is_some() {
                 let planned = approach.get("before_tangent_point_m").of();
                 let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - FIRST_APPROACH_BOARD_GAP_M - LANE_START_SEARCH_M).max(0.)));
-                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, decel, now, input.forward_integral);
+                let rolling_tangent = planned.is_some() && self._launch_cmd_at.is_none_or(|at| now - at >= CROSSWALK_AIM_LAG_S);
+                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, rolling_tangent, decel, now, input.forward_integral);
                 first_drive.set("distance_source", if planned.is_some() { "first_tangent" } else { "board_search_room" });
                 allowed = None;
                 if planned.is_none() {

@@ -26936,5 +26936,19 @@
       "finish": {"release_seq": 320, "finish_stop_seq": 366, "estimated_nose_gap_m": 0.243, "brake_pwm": 1300, "brake_command_s": 0.109, "rolling_1550_ack_after_brake_seq": [355,356], "creep_counter": 0, "neutral_ack": true, "standstill_detail": "During post-stop verification, most saved pairs had parallel or insufficient associated planes or a superseded result. One recorded low-motion pair yielded 99 ms, below the 500 ms verification window."},
       "runtime": {"control_single_core_percent": 16.03, "imu_single_core_percent": 2.23, "mean_scan_to_tick_ms": 1.391, "imu_samples": 4284, "imu_checksum_errors": 0}, "retrieved_files_verified": 89, "post_run": {"armed": false, "motor": 1500, "servo": 1500}
     }
+  },
+  "y44_crosswalk_release_finish_drive_20261103": {
+    "date": "2026-11-03", "author": "Codex", "engine_round": 151,
+    "source_baseline": "5e29211, vehicle y43 / engine 150", "deployed": false, "physical_trial_executed": false,
+    "request": "Reduce interruptions on the crosswalk restart and restore one continuous forward run into a committed brake after green. Commit now; vehicle testing is deferred to tomorrow by the operator.",
+    "changes": {
+      "crosswalk_restart": "In a straight crosswalk exit, a bounded one-sided missing scan can use two measured flanking returns beyond the current axial stopping horizon. Both lane-wall fits and a clear forward corridor are required; a known preceding close return within the corridor vetoes it. Existing central, opposite-side, repeated and stale scan handling remains in the supervisor. Once the actual first tangent is seen and the previous 1600 tail is out, a 1550 rolling hold may resume if its projected tail fits before the bend.",
+      "finish": "After green use live IMU/lidar and braking distance to hand off 1600 to a steady 1560 while there is room, followed by a committed neutral interval and one 1300 brake. The steady command bypasses the legacy three-frame kick limiter. Budget residual 1600 torque before the neutral and brake. Do not end a moving brake before its measured onset plus IMU response window solely on a changed forecast. If the car really stops short of the whole-car zone it may reposition; a rolling car projected to finish inside does not refill."
+    },
+    "fixed_input": {
+      "evidence": "work/y44-exits-PXRrDeAp",
+      "crosswalk": {"y43_dropout_seq": 88, "original_plan_seq": 87, "available_previous_raw_seq": 86, "axial_horizon_m": 3.489, "approved_with_last_saved_raw": true, "rejected_with_close_previous_obstacle": true, "rejected_with_insufficient_current_shoulders": true, "y43_measured_tangent_hold_seq_old_new": [107, 102], "y42_measured_tangent_hold_seq_old_new": [99, 94], "note": "Scan 87's raw ranges were not saved. The real front stopping distance is from its controller output; #86 supplies the preceding raw points for the offline close-obstacle veto. Straight measurements replay the captured states, not a new vehicle trajectory."},
+      "finish": {"method": "Replay the normal Rust finish controller on saved ranges, measured range slopes, IMU speed and fitted drag. Carry each variant's own throttle and brake state. Sparse snapshots do not determine the vehicle's closed-loop trajectory.", "y43_actual_brake_s": 0.109, "y43_new_pwm": [1600, 1560, 1500, 1300, 1500], "y43_new_edges_seq": [320, 324, 335, 342, 347], "y43_new_brake_s_on_saved_inputs": 0.499, "y39_new_pwm": [1600, 1500, 1300, 1500], "y39_new_edges_seq": [305, 310, 324, 340]}
+    }
   }
 }

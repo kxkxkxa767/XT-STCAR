@@ -625,16 +625,15 @@ impl Supervisor {
         let old = prev.idx("ranges").l();
         let new = self.scan.idx("ranges").l();
         let flank = missing[0].i().signum();
-        // Same flank, clear forward core, and the missing rays plus their shoulders
-        // were beyond the stopping range one scan ago. Known current hits still
-        // went through the body check; current shoulders must also be outside it.
+        if missing.iter().any(|angle| angle.i().signum() != flank || angle.i().abs() <= LANE_FRONT_HALF_BINS) {
+            return false;
+        }
         missing.iter().all(|angle| {
-            let i = angle.i();
-            i.signum() == flank && i.abs() > LANE_FRONT_HALF_BINS && (-1..=1).all(|j| {
-                let k = imod(i+j, 360) as usize;
+            (-1..=1).all(|j| {
+                let k = imod(angle.i()+j, 360) as usize;
                 old[k].of().is_some_and(|v| v > horizon) && new[k].of().is_none_or(|v| v > horizon)
             })
-        })
+        }) || crate::race_crosswalk::flank_beyond_stop(clearance, old, new, missing, horizon)
     }
 
     fn turn_route_quality_scope(&self, s: &Session, now: f64) -> Option<&'static str> {
@@ -1130,7 +1129,7 @@ impl Supervisor {
             self.turn_route_quality_scope(s, t).or_else(|| {
                 let fits = clearance.get("front_wall_projection").get("fits");
                 (far_side_gap && fits.get("left").is_dict() && fits.get("right").is_dict())
-                    .then_some("start_lane_two_side_walls_previous_far_rays")
+                    .then_some("start_lane_two_side_walls_far_flank")
             })
         } else {
             None
