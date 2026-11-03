@@ -26940,6 +26940,8 @@
   "y44_crosswalk_release_finish_drive_20261103": {
     "date": "2026-11-03", "author": "Codex", "engine_round": 151,
     "source_baseline": "5e29211, vehicle y43 / engine 150", "deployed": false, "physical_trial_executed": false,
+    "build": {"source_commit": "ac7bc24c12bb99623f74299cc858daaff9a44bf6", "base": "claude-turn150", "engine": "claude-turn151", "vision": "y44", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2750680, "engine_sha256": "18b161b48533ff65e9171bc4708f984d0b6a9d792b455f178b628cfe835e16e0", "combined_archive": "XT-STCAR-y44-ac7bc24.tar.gz", "combined_archive_bytes": 10912914},
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 10, "clippy_warnings": 32},
     "request": "Reduce interruptions on the crosswalk restart and restore one continuous forward run into a committed brake after green. Commit now; vehicle testing is deferred to tomorrow by the operator.",
     "changes": {
       "crosswalk_restart": "In a straight crosswalk exit, a bounded one-sided missing scan can use two measured flanking returns beyond the current axial stopping horizon. Both lane-wall fits and a clear forward corridor are required; a known preceding close return within the corridor vetoes it. Existing central, opposite-side, repeated and stale scan handling remains in the supervisor. Once the actual first tangent is seen and the previous 1600 tail is out, a 1550 rolling hold may resume if its projected tail fits before the bend.",
