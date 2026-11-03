@@ -26915,6 +26915,8 @@
     "date": "2026-11-03", "author": "Codex", "engine_round": 150,
     "source_baseline": "d08f816, vehicle y42 / engine 149",
     "deployed": false, "physical_trial_executed": false,
+    "build": {"source_commit": "645ca48c296237a77cee79863f7ed65d7b96ff7b", "base": "claude-turn149", "engine": "claude-turn150", "vision": "y43", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2746400, "engine_sha256": "5bb53d0fcd292d7092ebd41c995667d7fac0e773863f47a5f5dd851b0b8744fc", "combined_archive": "XT-STCAR-y43-645ca48.tar.gz", "combined_archive_bytes": 10904450},
+    "validation": {"console_tests_passed": 968, "rust_tests_passed": 8, "clippy_warnings": 32, "red_on_the_same_fresh_inputs": "1500 in all 11 cases for both controllers"},
     "change": "After the second cone, reconsider the first neutral coast upstream of the optical beam. With a fresh axial speed and a measured scan interval, predict the stop after renewing 1550 for one scan and paying its full 0.2 s ESC tail. If it still falls upstream of the beam, enter the existing rolling top-up immediately. Camera red overrides propulsion.",
     "fixed_input": {
       "evidence": "work/y43-light-hAIATey0",
