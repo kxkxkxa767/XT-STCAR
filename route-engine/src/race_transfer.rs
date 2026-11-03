@@ -6,7 +6,11 @@ use crate::maneuver_post::pairwise_track_speed;
 use crate::py::*;
 use crate::dict;
 
-const ENTRY_MPS: f64 = 1.24; // y22, second-support handover
+// y36: y27 entered the second loop at 2.10 m/s without contact and y30 touched the
+// board at ~2.5 (IMU). The 1.24 of y25-y35 (y22's natural 1550 handover speed) was met
+// ~2 m before the tangent (the divider's open end lies ~.9 m short of it), so y31-y35
+// crawled at 1550: first pass to tangent 3.3-3.8 s against y27's 2.0.
+const ENTRY_MPS: f64 = 1.8;
 const ROLLING_MPS: f64 = 0.15;
 const STRAIGHT_YAW_RAD_S: f64 = 0.6;
 const STRAIGHT_STEER_BAND_PWM: i64 = 60;

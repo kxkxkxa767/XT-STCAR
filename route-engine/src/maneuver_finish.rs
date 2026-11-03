@@ -18,16 +18,10 @@ pub(crate) struct FinishControl {
     pub pulse: i64,
     pub creeping: bool,
     pub creeps: i64,
-    /// Round y35: the IMU's forward integral at the light release (the car stood),
-    /// its speed since then over the last moments and the launch's measured rise.
+    /// Round y35: the IMU's forward integral at the light release (the car stood).
     pub imu_zero: Option<f64>,
-    pub imu_history: Vec<(f64, f64)>,
-    pub imu_accel: Option<f64>,
 }
 
-// Round y35: y34's first run (12.0 V, y32 11.8 V) launched to 1.97 m/s where the
-// launch's 1.5/2.5 m/s2 aim and bound expected less; the IMU measures the rise.
-const IMU_SLOPE_S: f64 = 0.2;
 // The single 1300 brake's deceleration on the car's IMU, y25-y27: .71-.82 m/s2.
 const LANE_BRAKE_DECEL_MPS2: f64 = 0.71;
 
@@ -59,26 +53,12 @@ impl Maneuver {
         }
         self.finish.creeps = 0;
         self.finish.imu_zero = self.race_inputs.and_then(|i| i.forward_integral); // standing at the light
-        self.finish.imu_history.clear();
-        self.finish.imu_accel = None;
     }
 
-    /// Round y35: the IMU's forward speed since the light release, and the launch's
-    /// measured rise (its slope over the last IMU_SLOPE_S while the launch acts).
-    fn finish_imu_speed(&mut self, now: f64) -> Option<f64> {
+    /// Round y35: the IMU's forward speed since the light release.
+    fn finish_imu_speed(&self) -> Option<f64> {
         let integral = self.race_inputs.and_then(|i| i.forward_integral)?;
-        let v = (integral - self.finish.imu_zero?).max(0.);
-        let h = &mut self.finish.imu_history;
-        h.push((now, v));
-        while h.len() > 2 && h[1].0 <= now - IMU_SLOPE_S {
-            h.remove(0);
-        }
-        let (t0, v0) = h[0];
-        if self.finish.launch_from.is_some() && now - t0 >= IMU_SLOPE_S / 2. {
-            let rise = (v - v0) / (now - t0);
-            self.finish.imu_accel = Some(self.finish.imu_accel.map_or(rise, |a| pmax(a, rise)));
-        }
-        Some(v)
+        Some((integral - self.finish.imu_zero?).max(0.))
     }
 
     /// _lane_speed_now(speed, now, onset, offset, decel, accel).
@@ -106,9 +86,7 @@ impl Maneuver {
             let mut v = self.lane_speed_now(speed, now, onset, offset, decel, accel);
             if let Some(from) = self.finish.launch_from {
                 // round y3: from rest, no faster than the kick's bound while its power has acted
-                // (round y35: or the launch's rise the IMU measured)
-                let bound = self.finish.imu_accel.map_or(LIGHT_LAUNCH_ACCEL_MAX_MPS2, |a| pmax(LIGHT_LAUNCH_ACCEL_MAX_MPS2, a));
-                v = pmin(v, bound * pmax(0., now - (from + onset)));
+                v = pmin(v, LIGHT_LAUNCH_ACCEL_MAX_MPS2 * pmax(0., now - (from + onset)));
             }
             v += LANE_SPEED_GUARD_MARGIN_MPS;
             let (coast_s, power_s) = self.lane_pipeline(now, onset, offset, push_s);
@@ -219,7 +197,7 @@ impl Maneuver {
         };
         // Round y35: after a light stop the IMU's speed from that rest (the lidar slope
         // runs behind it, low while the launch pushes and high while the car slows)
-        let imu = if kind == "finish" { self.finish_imu_speed(now) } else { None };
+        let imu = if kind == "finish" { self.finish_imu_speed() } else { None };
         let v = imu.map_or(v, |i| pmax(v, i));
         let gap = ahead.map(|a| a - FRONT_BODY_EXTENT_M);
         let (decel, guard_decel, strong_decel) = self.lane_decels();
@@ -241,11 +219,10 @@ impl Maneuver {
         let kick = self._power_cmd_motor == Some(TRIAL_MOTOR) && !strong || self.finish.launch_from.is_some();
         let launch = self.finish.launch_from.is_some(); // round y18: the launch's powered run (y20: 1600)
         let (rate_slow, rate_strong) = (self._lane_push_rate_slow, self._lane_push_rate_strong);
-        let launch_rise = self.finish.imu_accel; // round y35: the launch's rise on the IMU
         let aim_accel = if strong {
             rate_strong.unwrap_or(LANE_POWER_ACCEL_MPS2)
         } else if launch {
-            launch_rise.map_or(LIGHT_LAUNCH_ACCEL_MPS2, |a| pmax(LIGHT_LAUNCH_ACCEL_MPS2, a))
+            LIGHT_LAUNCH_ACCEL_MPS2
         } else if kick {
             LANE_POWER_ACCEL_MPS2
         } else {
@@ -259,7 +236,7 @@ impl Maneuver {
         let guard_accel = if strong {
             strong_accel
         } else if launch {
-            launch_rise.map_or(LIGHT_LAUNCH_ACCEL_MAX_MPS2, |a| pmax(LIGHT_LAUNCH_ACCEL_MAX_MPS2, a))
+            LIGHT_LAUNCH_ACCEL_MAX_MPS2
         } else if kick {
             LANE_KICK_ACCEL_MAX_MPS2
         } else if late {
@@ -268,8 +245,11 @@ impl Maneuver {
             LANE_PUSH_ACCEL_MAX_MPS2
         };
         let mut v_aim = v;
-        if let Some(i) = imu {
-            v_aim = i; // round y35: the speed now, measured
+        if let Some(i) = imu.filter(|_| !launch) {
+            // round y36: the speed now, measured, once the launch's power is out; the
+            // launch keeps y34's aim (y35's IMU launch cut ended 1600 after .3 s at 12 V,
+            // then 1550 top-ups and two creeps: 6.4 s from the release)
+            v_aim = i;
         } else if speed.is_some() {
             v_aim = self.lane_speed_now(v, now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, decel, aim_accel);
         }
@@ -443,7 +423,6 @@ impl Maneuver {
         }
         if imu.is_some() {
             feedback.set("imu_speed_mps", imu);
-            feedback.set("imu_launch_rise_mps2", launch_rise);
         }
         feedback.set("motor", self.lane_motor);
         feedback.set("creeps", self.finish.creeps);

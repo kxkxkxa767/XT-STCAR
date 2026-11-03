@@ -30,7 +30,8 @@ Round y11: and the distance from the car's front to the stripes' near edge
 (crosswalk_front_m), when the box's bottom stands clear of the frame's.
 Round y35: and, when both are found, the undistorted image heights of the
 stripes' near edge and of the board straight ahead's base ("crosswalk_edge_y",
-"board_base_y"); the race program ranges the stripes against that board.
+"board_base_y"); the race program ranges the stripes against that board
+(round y36: measured from the best crosswalk box scoring at least .15).
 
 Before anything else the model must match its handoff files: sha256 of
 race4.onnx equal to race4.provenance.json's, the class order of race4.json
@@ -120,6 +121,9 @@ def crosswalk_front_m(box):
 BOARD_BASE_COLUMNS = range(330, 391, 10)  # scripts/camera-pitch-check.py's
 BOARD_BLUE_MIN = 45  # blue minus red: the boards
 EDGE_CONTRAST_MIN = 25  # grey levels between the paper and the floor just below it
+# Round y36: y35's start frames scored the crosswalk about .25 (y34 .35, y32 .29), at the
+# --conf edge; the edge is measured from the best box down to this, the logs keep --conf.
+CROSSWALK_PLAN_MIN_SCORE = .15
 
 
 def board_base_y(frame):
@@ -293,7 +297,8 @@ def main():
             t0 = time.monotonic()
             result = session.run(['output0'], {'images': tensor})[0]
             infer_ms = (time.monotonic()-t0)*1000
-            detections = decode(result, args.conf, scale, left, top, w, h)
+            candidates = decode(result, min(args.conf, CROSSWALK_PLAN_MIN_SCORE), scale, left, top, w, h)
+            detections = [d for d in candidates if d['score'] >= args.conf]
             stats['frames'] += 1
             stats['infer_ms'].append(infer_ms)
             seen = {d['cls'] for d in detections}
@@ -322,8 +327,12 @@ def main():
                     metres = crosswalk_front_m(top['box'])
                     if metres is not None:
                         state['crosswalk_m'] = round(metres, 3)  # round y11
-                    # round y35: the stripes' edge and the board ahead's base in this frame
-                    edge = crosswalk_edge_y(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), top['box'])
+                # round y35: the stripes' edge and the board ahead's base in this frame
+                # (y36: from the best crosswalk box down to CROSSWALK_PLAN_MIN_SCORE)
+                planned = [d for d in candidates if d['cls'] == 'crosswalk']
+                if planned:
+                    best_box = max(planned, key=lambda d: d['score'])['box']
+                    edge = crosswalk_edge_y(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), best_box)
                     base = board_base_y(frame)
                     if edge is not None and base is not None:
                         state.update(crosswalk_edge_y=round(edge, 6), board_base_y=round(base, 6))
