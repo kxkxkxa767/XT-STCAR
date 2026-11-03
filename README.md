@@ -1,4 +1,4 @@
-# XT-STCAR（y37 = 终点 IMU+雷达融合：一段 1550 保持或一次刹车后滑行停稳；y36 第 1 轮扣红灯 24.86 s，y27 最快 22.67 s）
+# XT-STCAR（y38 = 终点 1560 保持到刹车点再一次刹到停、第一桶入口 1.3 m/s；y37 第 1 轮扣红灯 24.46 s，y27 最快 22.67 s）
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。激光雷达提供路线几何和门架位置，相机识别斑马线与信号灯，IMU 补偿短时车速变化。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。

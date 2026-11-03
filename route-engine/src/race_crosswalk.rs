@@ -4,6 +4,11 @@ use crate::maneuver::*;
 use crate::py::*;
 use crate::dict;
 
+// y38 (user: the crosswalk start felt slow): y27 reached the first support at ~1.2-1.3 m/s
+// after a 1560/1550 cruise; y31-y37 boosted 1600 for .4 s, then coasted 1.2 s to the
+// y23 straight's 1.1 before the 1550 hold.
+const FIRST_ENTRY_MPS: f64 = 1.3;
+
 #[derive(Clone, Debug, Default)]
 pub struct CrosswalkExit {
     crosswalk_release: Option<(f64, Option<f64>)>,
@@ -39,7 +44,7 @@ impl CrosswalkExit {
             .map_or(0., |(since, _)| 4.0 * (now - since).clamp(0., lag));
         let coast_m = speed.map(|v| {
             let released = v + pending_rise;
-            (v + released)*lag/2. + (released*released - STRAIGHT_TURN_MPS*STRAIGHT_TURN_MPS).max(0.)/(2.*decel)
+            (v + released)*lag/2. + (released*released - FIRST_ENTRY_MPS*FIRST_ENTRY_MPS).max(0.)/(2.*decel)
         });
         let board_stop_m = speed.map(|v| {
             let released = v + pending_rise;
@@ -49,7 +54,7 @@ impl CrosswalkExit {
             && (before.zip(coast_m).is_some_and(|(d,c)| d <= c) || (boosted && (before.is_none() || speed.is_none()))) {
             self.first_approach = FirstApproach::Coast;
         }
-        if self.first_approach == FirstApproach::Coast && (before.is_some_and(|d| d <= 0.) || speed.is_none_or(|v| v <= STRAIGHT_TURN_MPS)) {
+        if self.first_approach == FirstApproach::Coast && (before.is_some_and(|d| d <= 0.) || speed.is_none_or(|v| v <= FIRST_ENTRY_MPS)) {
             self.first_approach = FirstApproach::Hold;
         }
         let phase = self.first_phase();
@@ -60,7 +65,7 @@ impl CrosswalkExit {
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
                        "speed_source" => if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
-                       "entry_target_mps" => STRAIGHT_TURN_MPS})
+                       "entry_target_mps" => FIRST_ENTRY_MPS})
     }
 
     fn first_phase(&self) -> &'static str {

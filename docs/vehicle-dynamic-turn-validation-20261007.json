@@ -26404,8 +26404,8 @@
     "baseline": "3f640a5 y36 (car: engine 143 / y36)",
     "engine_round": 144,
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "最后那一段和斑马线起步还是比之前慢，这次斑马线停车应该是推算出来的吧",
       "终点那个你可以imu和雷达复用"
@@ -26423,6 +26423,80 @@
       "The hold at 1550 sets the late speed (~1.0-1.2 m/s at 12 V): steady, but the finish may be a few tenths slower than a launch-and-brake plan.",
       "The crosswalk-exit front_sparse pause (a one-scan side-wall dropout) is unchanged."
     ],
-    "next": "Per run: the finish launch peak, plan_holding span, plan_stop_gap_m, coast_decel_imu_mps2, imu_bias_mps, brake start/end, the end gap and release-to-stop time (y27 3.50, y32 3.69)."
+    "next": "Per run: the finish launch peak, plan_holding span, plan_stop_gap_m, coast_decel_imu_mps2, imu_bias_mps, brake start/end, the end gap and release-to-stop time (y27 3.50, y32 3.69).",
+    "car_run_y37": {
+      "deployed": "2026-11-03 10:09, deploy-matched claude-turn144 144 + deploy-vision y37",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y37",
+      "battery_v": 12.0,
+      "start_rear_front_m": [
+        0.39,
+        7.62
+      ],
+      "result": "route_finish_zone_stop, .333 m from the board, whole car in the zone, 0 creeps, no quality waits",
+      "effective_s": 24.461,
+      "segments_s_vs_y27": {
+        "move_to_crosswalk_stop": [
+          3.894,
+          3.793
+        ],
+        "crosswalk_wait": [
+          3.092,
+          3.194
+        ],
+        "crosswalk_go_to_first_pass": [
+          5.292,
+          5.096
+        ],
+        "first_pass_to_tangent": [
+          2.699,
+          1.996
+        ],
+        "tangent_to_second_pass": [
+          1.494,
+          1.097
+        ],
+        "second_pass_to_light_stop": [
+          3.997,
+          3.995
+        ],
+        "light_go_to_finish_stop": [
+          3.993,
+          3.5
+        ],
+        "total_less_light": [
+          24.461,
+          22.672
+        ]
+      },
+      "finish": "Launch to 1.77 m/s (IMU) at gap 3.19; plan: 1550 hold 2 frames, coast, 1300 one frame at 1.12 m (1.08 m/s), 1550 one frame, then .4-.7 m/s over the last .6 m to .333 m: 3.99 s. Bias -.07..-.15 m/s, coast decel .52-.62. y27: 1600 one frame longer (peak ~1.9-2.0), coast to 1.40 m/s at .97 m, 1300 held ~1.5 s to rest at .10 m: 3.50 s.",
+      "crosswalk_exit": "y37: 1600 .4 s to 1.7 m/s, coast 1.2 s to the 1.1 entry speed, 1550 hold ~1.1 m/s. y27: 1560/1550 to 1.42-1.56 m/s, coast to 1.21, 1550 hold. User: the finish and the crosswalk start still not fast enough."
+    }
+  },
+  "y38_finish_hold_to_brake_first_entry_1p3_20261103": {
+    "date": "2026-11-03",
+    "author": "Claude",
+    "baseline": "4009d74 y37 (car: engine 144 / y37)",
+    "engine_round": 145,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "感觉还是终点还有斑马线起步不够快"
+    ],
+    "change": [
+      "Finish plan (maneuver_finish.rs, race only, after the launch on the fused speed): hold 1560 until the brake point (.25 + v*.2 + v^2/(2*.71), max 1.2 m) with .2 s of neutral before it; the single 1300 when the coast would end past the target; it brakes on while braking to rest (the brake deceleration measured on the IMU after .2 s of braking, else .71) ends within target + .15 m, or while a release would coast past .05 m, else it coasts; after the brake a coast that would stop short of the zone gets the 1550 hold.",
+      "Crosswalk exit (race_crosswalk.rs): the first-support entry speed 1.1 -> 1.3 m/s (race-only FIRST_ENTRY_MPS; y27 reached the first support at ~1.2-1.3).",
+      "Not changed: launch, crosswalk stop, transfer ENTRY 1.8, light, release rules."
+    ],
+    "validation": {
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
+    "risks": [
+      "1560 hold to the brake point and a longer brake: the stop relies on the single brake (IMU-measured decel).",
+      "A 1.3 m/s first-support entry is above y31-y37 (1.1); y27 entered at ~1.2-1.3."
+    ],
+    "next": "Per run: finish hold span and speed, brake start gap/speed, brake_decel_imu_mps2, end gap and release-to-stop; crosswalk go to first pass."
   }
 }
