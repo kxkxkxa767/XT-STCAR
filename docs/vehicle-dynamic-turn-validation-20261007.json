@@ -26714,6 +26714,18 @@
     "author": "Codex",
     "source_baseline": "c51f1e3 (y40 lamp and release fixes); y39/146 remains on vehicle",
     "engine_round": 148,
+    "build": {
+      "source_commit": "ea7a8075955b88d2540543c5ec6e6b906d7bc4cc",
+      "installed_base": "claude-turn146 (y39)",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "elf_maximum_glibc": "2.34",
+      "engine_bytes": 2761896,
+      "engine_package": "claude-turn148-package.json",
+      "vision_package": "claude-y41-package.json",
+      "vision_light_stop": true,
+      "combined_archive": "XT-STCAR-y41-ea7a807.tar.gz",
+      "combined_archive_bytes": 10909741
+    },
     "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "10 passed", "clippy_warnings": 32},
     "implemented": true,
     "deployed": false,
