@@ -26845,10 +26845,49 @@
     "date": "2026-11-03",
     "author": "Codex",
     "engine_round": 149,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "change": "Restore the y39 longitudinal decision between the cones after the y41 contact. Use this scan's confirmed second-cone station, or the divider endpoint before handover, then the current clockwise plan. An ongoing 1600 push requires current lidar rolling evidence. Entry speed target 1.8 m/s. Steering and the lamp/finish code are the y40 implementation.",
     "control_source": "The four Rust files changed for y41 now match c128888 (y40). The transfer controller matches b44bd7d (y39). Build from the installed y41 engine 148.",
-    "evidence_directory": "work/y42-transfer-IvtIGMdb"
+    "evidence_directory": "work/y42-transfer-IvtIGMdb",
+    "validation": {
+      "host_release": true, "console_tests_passed": 968, "rust_tests_passed": 8, "clippy_warnings": 32,
+      "y41_scans": [141, 142], "y41_actual_pwm": [1600, 1600], "y42_same_input_pwm": [1550, 1550],
+      "comparison": "Replay of the observed boost state with the y42 Rust controller and the failed run's old-style decision distances and speed inputs. Same-input output saved in same-input.json."
+    },
+    "build": {
+      "source_commit": "3b4289622198dca01d0599e634d95a6e48d6af28",
+      "base": "claude-turn148", "engine": "claude-turn149", "vision": "y42",
+      "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2745648,
+      "engine_sha256": "be96b5d1d2178d6117c0dc1353c2ceb3dcc999233dccccd56b79b2d7c88c1d87",
+      "combined_archive": "XT-STCAR-y42-3b42896.tar.gz", "combined_archive_bytes": 10904095
+    },
+    "car_run_y42": {
+      "time_local": "2026-11-03 22:26 Asia/Taipei", "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y42",
+      "reason": "route_finish_zone_stop", "completed": true,
+      "start_front_rear_m": [7.438, 0.555], "first_pass_heading_deg": 158.40,
+      "sampled_timing_s": {
+        "basis": "Same convention as the reported y39 22.462 s: first saved nonneutral motor acknowledgement to saved finish, deduct the time between the first saved scans at/after each red-stop and release event. Penalties not assessed.",
+        "start_to_stop": 34.154, "red_wait": 10.588, "less_red": 23.566, "difference_vs_y39_first": 1.104
+      },
+      "event_timing_s": {
+        "basis": "Monotonic scan receive times in route_events, from start_lane to finish_stop, red hold from light_stop to light_go.",
+        "start_to_stop": 34.356, "red_wait": 10.489, "less_red": 23.867,
+        "first_pass_to_second_pass": 4.094, "second_pass_to_light_stop": 3.795, "light_go_to_finish": 4.095
+      },
+      "crosswalk": {"estimated_stop_gap_m": 0.262, "waited_s": 3.003},
+      "cones": {
+        "first_pass_seq": 134, "second_handover_seq": 146, "first_fresh_clockwise_tangent_seq": 164, "second_pass_seq": 175,
+        "saved_transfer_1600_ack_seq": [138], "tangent_speed_mps": 1.641,
+        "closest_saved_approach_to_1p7_m": {"seq": 151, "forward_m": 1.651, "right_m": 1.156, "axial_speed_mps": 1.562},
+        "second_loop_min_body_gap_m": 0.279, "second_loop_min_fresh_second_target_gap_m": 0.363,
+        "gap_basis": "Minimum distance from a saved raw lidar return to the nominal body rectangle. Overall minimum at seq 155 bin 289. Minimum among the same-scan second-target support bins at seq 162 bin 74."
+      },
+      "light": {"stop_stage": "light_entry", "gantry_estimated_front_gap_m": 0.553, "estimated_whole_car_in_zone": true, "stop_zone_certified": false, "red_score": 0.8840, "go_stage": "light_lane", "green_release_frames": [103, 104], "green_scores": [0.8867, 0.8846], "release_pwm_ack": 1600},
+      "finish": {"whole_car_in_zone": true, "front_gap_m": 0.323, "brake_pwm": 1300, "final_creeps": 0},
+      "runtime": {"control_single_core_percent": 16.41, "imu_single_core_percent": 2.34, "mean_scan_to_tick_ms": 1.432, "max_tick_ms": 8.370, "recovery_count": 0, "quality_wait_used": false, "imu_samples": 3786, "imu_checksum_errors": 0},
+      "retrieved_files_verified": 91, "post_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "comparison_limit": "One completed run. The start rear range differed from y41 (0.55 vs 0.37 m), and the heading at the first pass was 158.4 vs 164.0 degrees."
+    }
   }
 }
