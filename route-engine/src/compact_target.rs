@@ -343,18 +343,6 @@ pub fn candidates(ranges: &V, args: CandidateArgs) -> Vec<V> {
     if !args.max_range_m.is_finite() || !(MAX_RANGE_M <= args.max_range_m && args.max_range_m <= EXTENDED_MAX_RANGE_M) {
         value_error("max_range_m must be within the acquisition bounds")
     }
-    collect_candidates(ranges, args, bearing_min, bearing_max)
-}
-
-/// Extra reach for a speed-plan preview. The steering tracker still receives
-/// only candidates whose actual support returns meet its acquisition range.
-pub(crate) fn second_preview_candidates(ranges: &V, mut args: CandidateArgs, reach: f64) -> Vec<V> {
-    args.max_range_m = reach;
-    let (lo, hi) = args.bearing_range_rad;
-    collect_candidates(ranges, args, lo, hi)
-}
-
-fn collect_candidates(ranges: &V, args: CandidateArgs, bearing_min: f64, bearing_max: f64) -> Vec<V> {
     let floats = floats(ranges);
     let (points, groups) = scan_groups(&floats, args.tolerant);
     let list = ranges.l();

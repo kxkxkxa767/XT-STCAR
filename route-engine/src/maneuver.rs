@@ -1843,7 +1843,7 @@ impl Maneuver {
             if self.entry_kind == Some("lane") && matches!(self.route_stage, "first_target" | "open_transfer" | "second_loop")
                 && self.race_inputs.is_some()
             {
-                self.race_transfer.observe(scan, self.compass.current(scan), self.race_inputs.and_then(|i| i.forward_integral));
+                self.race_transfer.observe(scan, self.compass.current(scan));
             }
             match self.route_stage {
                 "light_turn" => return self.light_update(scan, now, control),

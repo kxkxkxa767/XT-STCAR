@@ -1,7 +1,7 @@
 //! Start lane and the open-course stages (first loop, transfer, second
 //! loop, light-lane entry) of ManeuverSequence.
 
-use crate::compact_target::{candidates, second_preview_candidates, CandidateArgs, EXTENDED_MAX_RANGE_M};
+use crate::compact_target::{candidates, CandidateArgs};
 use crate::dict;
 use crate::helpers::*;
 use crate::maneuver::*;
@@ -17,32 +17,6 @@ struct Board {
 
 fn round3_list(values: &[f64]) -> V {
     V::from(values.iter().map(|v| round_n(*v, 3)).collect::<Vec<f64>>())
-}
-
-fn loop_probe(
-    points: &[(f64, f64)],
-    center: (f64, f64),
-    skip: f64,
-    e1: (f64, f64),
-    e2: (f64, f64),
-    theta: f64,
-) -> f64 {
-    let (c, s) = (theta.pcos(), theta.psin());
-    let free = probe_free(points, center, (c * e1.0 + s * e2.0, c * e1.1 + s * e2.1), skip);
-    if free == INF { free } else { floor(free / OPEN_PROBE_QUANTUM_M) as f64 * OPEN_PROBE_QUANTUM_M }
-}
-
-/// Project the same clockwise entry geometry used by the steering planner,
-/// once per associated preliminary target, without touching its steering slot.
-fn preview_axis_offset(ranges: &[Option<f64>], center: (f64, f64), radius: f64, heading: f64) -> Option<f64> {
-    let (e1, e2) = axis_frame(PI, heading, -1.);
-    let points = scan_points(ranges, hypot(center.0, center.1) + OPEN_PROBE_REACH_M);
-    let free = open_probe_directions_rad()
-        .map(|theta| (theta, loop_probe(&points, center, radius + OPEN_SUPPORT_SKIP_M, e1, e2, theta)));
-    let approach = (-(center.0 * e1.0 + center.1 * e1.1), -(center.0 * e2.0 + center.1 * e2.1));
-    let plan = plan_loop(&free, radius, OPEN_RIGHT_RADIUS_M, Some(approach));
-    plan.get("board_slack_m").of().filter(|gap| *gap >= 0.)?;
-    plan.get("offset_axis_m").of()
 }
 
 impl Maneuver {
@@ -544,7 +518,11 @@ impl Maneuver {
             if known.is_some() && rate.abs() > OPEN_PROBE_MAX_RATE_RAD_S {
                 continue;
             }
-            let free = loop_probe(&points, center, skip, e1, e2, theta);
+            let (c, s) = (theta.pcos(), theta.psin());
+            let mut free = probe_free(&points, center, (c * e1.0 + s * e2.0, c * e1.1 + s * e2.1), skip);
+            if free != INF {
+                free = floor(free / OPEN_PROBE_QUANTUM_M) as f64 * OPEN_PROBE_QUANTUM_M;
+            }
             if known.is_none_or(|k| free < k) {
                 slot.free_set(theta, free);
                 changed = true;
@@ -996,27 +974,22 @@ impl Maneuver {
         let mut ahead: Vec<(V, f64, f64)> = Vec::new();
         let mut boards: Option<std::rc::Rc<Vec<Line>>> = None;
         let floats = Self::ranges_floats(scan);
-        let preview = self.race_inputs.is_some() && matches!(self.route_stage, "first_target" | "open_transfer")
-            && (first.is_some() || self.first_pass_evidence.is_some());
-        let args = CandidateArgs {
-            bearing_range_rad: (-PI / 2., PI / 2.), tolerant: true,
-            min_points: Some(SECOND_ACQUISITION_MIN_POINTS), max_range_m: EXTENDED_MAX_RANGE_M,
-            ..CandidateArgs::default()
-        };
-        let objects = if preview {
-            second_preview_candidates(scan.idx("ranges"), args, OPEN_LINE_REACH_M)
-        } else {
-            candidates(scan.idx("ranges"), args)
-        };
-        let mut preview_count = 0;
-        let mut preview_target = None;
-        for target in objects {
+        for target in candidates(
+            scan.idx("ranges"),
+            CandidateArgs {
+                bearing_range_rad: (-PI / 2., PI / 2.),
+                tolerant: true,
+                min_points: Some(SECOND_ACQUISITION_MIN_POINTS),
+                max_range_m: crate::compact_target::EXTENDED_MAX_RANGE_M,
+                ..CandidateArgs::default()
+            },
+        ) {
             let p = target.idx("point_left_m").l();
             let (x, y) = (p[0].f(), p[1].f());
             let (along, lateral) = (e1.0 * x + e1.1 * y, e1.0 * y - e1.1 * x);
             if !(x > FRONT_BODY_EXTENT_M
                 && FRONT_BODY_EXTENT_M < along
-                && (preview || along <= OPEN_SECOND_BAND_REACH_M)
+                && along <= OPEN_SECOND_BAND_REACH_M
                 && lateral.abs() <= OPEN_SECOND_BAND_HALF_M
                 && first_along.is_none_or(|fa| along >= fa + OPEN_SECOND_BEYOND_FIRST_M))
             {
@@ -1025,32 +998,12 @@ impl Maneuver {
             if boards.is_none() {
                 boards = Some(self.scan_axis_lines(scan, heading));
             }
-            let bins = ints_of(target.idx("support_bins"));
             if on_board_run((x, y), boards.as_ref().unwrap(), heading)
-                || support_depth(&floats, &bins) > OPEN_SUPPORT_MAX_DEPTH_M
+                || support_depth(&floats, &ints_of(target.idx("support_bins"))) > OPEN_SUPPORT_MAX_DEPTH_M
             {
                 continue;
             }
-            if preview {
-                preview_count += 1;
-                preview_target = Some(target.clone());
-                // Only the speed preview looks farther. Keep the tracker's
-                // original range test on every raw return as well as its centre.
-                if along > OPEN_SECOND_BAND_REACH_M || target.idx("range_m").f() > EXTENDED_MAX_RANGE_M
-                    || bins.iter().any(|&i| floats[i as usize].is_none_or(|r| r > EXTENDED_MAX_RANGE_M)) {
-                    continue;
-                }
-            }
             ahead.push((target, along, lateral));
-        }
-        if preview_count == 1 && let Some(target) = preview_target {
-            let bins = bins_of(target.idx("support_bins"));
-            let (center, radius) = support_center(&floats, &bins, target.get("diameter_m"));
-            let along = e1.0*center.0 + e1.1*center.1;
-            let lateral = e1.0*center.1 - e1.1*center.0;
-            self.race_transfer.see_cone(scan.idx("seq").i(), now, along, lateral, || {
-                preview_axis_offset(&floats, center, radius, heading)
-            });
         }
         let mut proof = V::None;
         if ahead.len() == 1 {
@@ -1219,7 +1172,13 @@ impl Maneuver {
         };
         let (ahead, speed, stop_at) = self.open_front_stop(scan);
         if self.race_inputs.is_some() {
-            self.transfer_drive(scan, now, None, natural);
+            let proof = &self.role_distinct_evidence;
+            let remaining = if py_eq(proof.get("source_seq"), scan.get("seq")) {
+                proof.get("second_along_axis_m").of()
+            } else {
+                channel.get("divider_open_end_along_m").of()
+            };
+            self.transfer_drive(scan, now, remaining, natural);
         } else {
             self._transfer_motor = self.straight_motor(speed, now, Some(STRAIGHT_TRANSFER_MPS), false);
             self.open_feedback = dict! {"source_seq" => scan.idx("seq").clone(), "stage" => "open_transfer", "speed_mps" => speed};

@@ -26840,5 +26840,15 @@
       "post_run": {"armed": false, "motor": 1500, "servo": 1500}
     },
     "next": "Use the measured second-cone approach to examine the transition from divider guidance to the clockwise tangent and the lost target around scan 153. A full-lap benefit is still unmeasured."
+  },
+  "y42_y39_transfer_timing_20261103": {
+    "date": "2026-11-03",
+    "author": "Codex",
+    "engine_round": 149,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": "Restore the y39 longitudinal decision between the cones after the y41 contact. Use this scan's confirmed second-cone station, or the divider endpoint before handover, then the current clockwise plan. An ongoing 1600 push requires current lidar rolling evidence. Entry speed target 1.8 m/s. Steering and the lamp/finish code are the y40 implementation.",
+    "control_source": "The four Rust files changed for y41 now match c128888 (y40). The transfer controller matches b44bd7d (y39). Build from the installed y41 engine 148.",
+    "evidence_directory": "work/y42-transfer-IvtIGMdb"
   }
 }
