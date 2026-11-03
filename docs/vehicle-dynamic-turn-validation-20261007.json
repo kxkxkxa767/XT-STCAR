@@ -26552,8 +26552,8 @@
     "baseline": "851d8b8 y38 (car: engine 145 / y38)",
     "engine_round": 146,
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "你对比下，我觉得还是最后终点的部分拖慢了",
       "这轮改完测试、分析、更新共同记忆，我交给codex"
@@ -26571,6 +26571,53 @@
     "risks": [
       "A real brake deceleration near .71 would end ~.2 m nearer the board than planned at 1.5 m/s."
     ],
-    "next": "Run: finish release-to-stop (y27 3.50, y38 4.50), brake start gap/speed, brake_decel_imu_mps2, end gap."
+    "next": "Run: finish release-to-stop (y27 3.50, y38 4.50), brake start gap/speed, brake_decel_imu_mps2, end gap.",
+    "car_run_y39": {
+      "deployed": "2026-11-03 10:29, deploy-matched claude-turn146 146 + deploy-vision y39 (source b44bd7d)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y39",
+      "battery_v": 12.0,
+      "start_rear_front_m": [
+        0.38,
+        7.62
+      ],
+      "result": "route_finish_zone_stop, .335 m from the board, 0 creeps, no quality waits",
+      "start_to_stop_s": 32.6,
+      "light_stop_to_go_s": 9.987,
+      "effective_s": 22.462,
+      "compared_with_y27_s": -0.21,
+      "segments_s_vs_y27": {
+        "move_to_crosswalk_stop": [
+          3.895,
+          3.793
+        ],
+        "crosswalk_wait": [
+          2.996,
+          3.194
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.994,
+          5.096
+        ],
+        "first_pass_to_second_pass": [
+          3.694,
+          3.093
+        ],
+        "second_pass_to_light_stop": [
+          3.195,
+          3.995
+        ],
+        "light_go_to_finish_stop": [
+          3.688,
+          3.5
+        ],
+        "total_less_light": [
+          22.462,
+          22.672
+        ]
+      },
+      "note_tangent": "The first zero tangent sample came 1.0 s after the first pass (tangent speed sample 0), so the two cone-2 segments are reported together.",
+      "finish": "Launch 1600 three frames to ~1.55 m/s (IMU); plan: 1560 hold two frames, neutral band, one more 1560 frame, 1300 from 1.086 m at 1.17 m/s held 1.5 s (LANE_BRAKE_MAX_S) to rest at .32-.335 m: 3.69 s release to stop.",
+      "light": "Coast at 1.972 m and 1.38 m/s; red 1.10 s after the beam; stopped .259 m from the gantry (y34 run 1: .313); the lamp out of view: red frames 4, green 0 in the whole run; released by red_seen_10_5s_no_fresh_red after 9.99 s. The practice red lasts ~10 s; with a 3-10 s race red this fallback would release up to 7.5 s after green."
+    }
   }
 }
