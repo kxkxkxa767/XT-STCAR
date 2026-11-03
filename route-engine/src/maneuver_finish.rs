@@ -29,8 +29,9 @@ pub(crate) struct FinishControl {
     pub brake_decel: Option<f64>,
 }
 
-// The single 1300 brake's deceleration on the car's IMU, y25-y27: .71-.82 m/s2.
-const LANE_BRAKE_DECEL_MPS2: f64 = 0.71;
+// The single 1300 brake's deceleration: y25-y27 on the IMU .71-.82 m/s2 over the whole
+// brake; y34/y38 about .85 once it acts (round y39: the plan's brake point and default).
+const LANE_BRAKE_DECEL_MPS2: f64 = 0.8;
 // Round y37: the IMU slope over this much coasting is the coast's own deceleration
 // (y36's finish coast: .63 m/s2 where the run's earlier coasts gave .58).
 const COAST_SLOPE_S: f64 = 0.4;
@@ -117,7 +118,9 @@ impl Maneuver {
         let rested = self._power_cmd_at.is_none_or(|p| now - p >= lag);
         let (motor, holding) = match self.finish.brake_since {
             Some(since) => {
-                let brake_stop = gap - v * v / (2. * self.finish.brake_decel.unwrap_or(LANE_BRAKE_DECEL_MPS2));
+                // round y39: the ESC's onset still to come counts at the present speed
+                let onset = v * pmax(0., lag - (now - since));
+                let brake_stop = gap - onset - v * v / (2. * self.finish.brake_decel.unwrap_or(LANE_BRAKE_DECEL_MPS2));
                 let on = now - since < LANE_BRAKE_MAX_S
                     && (brake_stop <= goal.target_gap + LANE_TOPUP_BAND_M || coast_stop < goal.min_gap);
                 (if on { LANE_BRAKE_MOTOR } else { NEUTRAL }, false)
@@ -414,12 +417,9 @@ impl Maneuver {
             && stop_gap.is_some_and(|s| s < goal.target_gap)
             && match self.finish.brake_since {
                 Some(since) => now - since < LANE_BRAKE_MAX_S,
-                // Round y35: farther out once the measured speed needs more than 1.2 m (y34's
-                // first run met 1.2 m at 1.63 m/s and reached the board); the brake still ends
-                // on the predicted coast, so an early start does not stop it short.
-                None => gap.unwrap() <= LANE_BRAKE_START_GAP_M
-                    || imu.is_some()
-                        && gap.unwrap() <= goal.target_gap + v * ESC_COAST_DELAY_S + v * v / (2. * LANE_BRAKE_DECEL_MPS2),
+                // round y39: y34's 1.2 m again; y38's y35 speed-based start here spent the single
+                // brake at 2.54 m in the launch's ESC tail, before the plan below could use it
+                None => gap.unwrap() <= LANE_BRAKE_START_GAP_M,
             };
         // Round y37: after the launch the coast plan on the fused speed decides (y36's
         // 1550 pulses, one-frame brake and creep came from the lane's top-up rule)

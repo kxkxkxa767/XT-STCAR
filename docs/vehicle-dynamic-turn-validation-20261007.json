@@ -26478,8 +26478,8 @@
     "baseline": "4009d74 y37 (car: engine 144 / y37)",
     "engine_round": 145,
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "感觉还是终点还有斑马线起步不够快"
     ],
@@ -26497,6 +26497,80 @@
       "1560 hold to the brake point and a longer brake: the stop relies on the single brake (IMU-measured decel).",
       "A 1.3 m/s first-support entry is above y31-y37 (1.1); y27 entered at ~1.2-1.3."
     ],
-    "next": "Per run: finish hold span and speed, brake start gap/speed, brake_decel_imu_mps2, end gap and release-to-stop; crosswalk go to first pass."
+    "next": "Per run: finish hold span and speed, brake start gap/speed, brake_decel_imu_mps2, end gap and release-to-stop; crosswalk go to first pass.",
+    "car_run_y38": {
+      "deployed": "2026-11-03 10:20 (after the SSH master was reopened), deploy-matched claude-turn145 145 + deploy-vision y38",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y38",
+      "battery_v": 12.0,
+      "start_rear_front_m": [
+        0.52,
+        7.47
+      ],
+      "result": "route_finish_zone_stop, .271 m from the board, 0 creeps, no quality waits",
+      "effective_s": 23.868,
+      "segments_s_vs_y27": {
+        "move_to_crosswalk_stop": [
+          3.894,
+          3.793
+        ],
+        "crosswalk_wait": [
+          3.094,
+          3.194
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.894,
+          5.096
+        ],
+        "first_pass_to_tangent": [
+          2.697,
+          1.996
+        ],
+        "tangent_to_second_pass": [
+          0.897,
+          1.097
+        ],
+        "second_pass_to_light_stop": [
+          3.896,
+          3.995
+        ],
+        "light_go_to_finish_stop": [
+          4.495,
+          3.5
+        ],
+        "total_less_light": [
+          23.868,
+          22.672
+        ]
+      },
+      "crosswalk_exit": "FIRST_ENTRY 1.3: crosswalk go to first pass 4.894 s (y37 5.292, y27 5.096).",
+      "finish": "Launch to 1.85 m/s (IMU) at 3.04 m; the y35 speed-based brake start left in the lane chain fired in the launch's ESC tail at 2.54 m (1.65 m/s) for ~.2 s, spending the single brake; the plan then had no brake, held 1550 two short spells and coasted 1.3 -> 0 m/s over ~2.1 m: 4.50 s release to stop."
+    }
+  },
+  "y39_finish_brake_owned_by_plan_20261103": {
+    "date": "2026-11-03",
+    "author": "Claude",
+    "baseline": "851d8b8 y38 (car: engine 145 / y38)",
+    "engine_round": 146,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "你对比下，我觉得还是最后终点的部分拖慢了",
+      "这轮改完测试、分析、更新共同记忆，我交给codex"
+    ],
+    "change": [
+      "Finish (maneuver_finish.rs): the lane chain brake start is y34 1.2 m again (the y35 speed-based start there spent the single brake in y38 launch tail); the plan owns the speed-based brake.",
+      "Plan brake deceleration .8 m/s2 (y34/y38 about .85 once acting; y25-y27 IMU .71-.82 over the whole brake) for the brake point and the default; the brake stop counts the ESC onset still to come at the present speed.",
+      "Not changed: launch, 1560 hold to the brake point, crosswalk, transfer ENTRY 1.8, first entry 1.3, light."
+    ],
+    "validation": {
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
+    "risks": [
+      "A real brake deceleration near .71 would end ~.2 m nearer the board than planned at 1.5 m/s."
+    ],
+    "next": "Run: finish release-to-stop (y27 3.50, y38 4.50), brake start gap/speed, brake_decel_imu_mps2, end gap."
   }
 }
