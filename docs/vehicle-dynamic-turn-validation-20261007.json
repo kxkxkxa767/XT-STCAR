@@ -26813,6 +26813,23 @@
       "transfer": {
         "saved_1600_acks": [141, 142],
         "saved_1600_acks_y39_both_runs": [141],
+        "y39_y41_same_failure_inputs": {
+          "evidence": "work/y41-transfer-7yvjWgGC/y41-contact-compare.json",
+          "method": "One motor decision per saved scan, starting from the same ongoing boost and using the failed run's speed, IMU anchor, steering input and coast fit. The y39 distance is reconstructed from its current near-cone proof or the divider endpoint. The y41 tangent distance and anchor are from the logged live state.",
+          "seq": [141, 142],
+          "y39_pwm": [1550, 1550], "y41_pwm": [1600, 1600], "vehicle_ack": [1600, 1600],
+          "y39_remaining_m": [null, 0.269], "y41_remaining_m": [3.928, 3.818],
+          "y41_recorded_coast_to_entry_m": [0.267, 1.787],
+          "steering_acquisition": "14 saved first-loop/transfer observations on this run gave the same near tracker and distinct-role evidence with the preview enabled and disabled.",
+          "approach_comparison": {
+            "order": ["y39", "y39-2", "y41"],
+            "heading_deg_at_first_pass": [163.63, 157.54, 163.95],
+            "axial_speed_mps_at_152": [1.701, 1.769, 2.031],
+            "tracked_center_forward_m_at_152": [1.698, 1.638, 1.744],
+            "tracked_center_right_m_at_152": [0.774, 0.835, 0.419]
+          },
+          "limit": "These fixed-input decisions do not establish the trajectory y39 would have driven from this placement. Both sources use 1.3 m/s in open-stage steering response prediction."
+        },
         "snapshots": "At 144 the bridge was back at 1550. At 149 the new second-loop planner requested left 1615 while the actual servo still read right 1386. At 150 it requested 1646, with actual 1466. At 152 the plan requested 1544 and actual was 1500. Axial lidar speed at 149/150/152 was 1.925/2.013/2.031 m/s, respectively. Each successful y39 run at 152 had 1.70/1.77 m/s. These are approach speeds; no fresh second-cone tangent or complete transfer time was observed.",
         "raw_scan": "At 152 two compact groups appeared at (1.57,-0.11) and (1.71,-0.41) m in the lidar frame (forward,left). The tracker took the latter. At 153, 155 and 157 current compact returns ahead were (1.36,-0.05), (0.96,-0.07) and (0.69,-0.09) m. No fresh second-cone observation reached the steering planner. The physical identity of both groups in scan 152 is unresolved.",
         "contact": "Recovery neutral at 158 with nearest return 0.119 m outside the nominal vehicle rectangle. At 160 (+0.203 s) bin 26 measured 0.222 m, at (0.200,-0.097) m inside the front-right body envelope before rounding. Camera frames 48/49/50 had blue-cone boxes moving into the forward view and growing from 83 to 271 pixels wide; saved frame 51 shows the blue cone at the right front.",
