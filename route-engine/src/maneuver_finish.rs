@@ -20,10 +20,19 @@ pub(crate) struct FinishControl {
     pub creeps: i64,
     /// Round y35: the IMU's forward integral at the light release (the car stood).
     pub imu_zero: Option<f64>,
+    /// Round y37: the IMU speed of the last moments, its offset from the lidar slope,
+    /// and the one 1550 hold of the coast plan.
+    pub imu_history: Vec<(f64, f64)>,
+    pub imu_bias: Option<f64>,
+    pub holding: bool,
 }
 
 // The single 1300 brake's deceleration on the car's IMU, y25-y27: .71-.82 m/s2.
 const LANE_BRAKE_DECEL_MPS2: f64 = 0.71;
+// Round y37: the IMU slope over this much coasting is the coast's own deceleration
+// (y36's finish coast: .63 m/s2 where the run's earlier coasts gave .58).
+const COAST_SLOPE_S: f64 = 0.4;
+const IMU_HISTORY_S: f64 = 1.;
 
 impl FinishControl {
     pub fn has_launch(&self) -> bool { self.launch_until.is_some() }
@@ -53,6 +62,54 @@ impl Maneuver {
         }
         self.finish.creeps = 0;
         self.finish.imu_zero = self.race_inputs.and_then(|i| i.forward_integral); // standing at the light
+        self.finish.imu_history.clear();
+        self.finish.imu_bias = None;
+        self.finish.holding = false;
+    }
+
+    /// Round y37 (user: 终点 IMU 和雷达复用): the IMU speed since the light release, less
+    /// its drift against the lidar slope (the slope stands for the speed half its scan
+    /// history ago), and the coast's deceleration on the IMU once it has coasted long enough.
+    fn finish_fused(&mut self, now: f64, lidar: Option<f64>, launch: bool) -> Option<(f64, Option<f64>)> {
+        let v = self.finish_imu_speed()?;
+        let lag = match self.finish.ranges.as_slice() {
+            [first, .., last] => (last.0 - first.0) / 2.,
+            _ => 0.,
+        };
+        let h = &mut self.finish.imu_history;
+        h.push((now, v));
+        while h.first().is_some_and(|f| f.0 < now - IMU_HISTORY_S) {
+            h.remove(0);
+        }
+        let at = |t: f64| h.windows(2).find(|w| w[0].0 <= t && t <= w[1].0)
+            .map(|w| if w[1].0 > w[0].0 { w[0].1 + (w[1].1 - w[0].1) * (t - w[0].0) / (w[1].0 - w[0].0) } else { w[0].1 });
+        if let (Some(l), Some(then)) = (lidar.filter(|_| !launch), at(now - lag)) {
+            let sample = l - then;
+            self.finish.imu_bias = Some(self.finish.imu_bias.map_or(sample, |b| 0.7 * b + 0.3 * sample));
+        }
+        let coasting = self._power_cmd_at.is_none_or(|p| now - p >= COAST_SLOPE_S + ESC_COAST_DELAY_S)
+            && self.finish.brake_since.is_none()
+            && self.finish.brake_end.is_none_or(|e| now - e >= COAST_SLOPE_S + ESC_COAST_DELAY_S);
+        let decel = at(now - COAST_SLOPE_S).filter(|_| coasting).map(|then| (then - v) / COAST_SLOPE_S).filter(|d| *d > 0.);
+        Some(((v + self.finish.imu_bias.unwrap_or(0.)).max(0.), decel))
+    }
+
+    /// Round y37: after the launch, one coast toward the target on the fused speed: a single
+    /// 1550 hold while the coast would stop short (held until it would reach the target),
+    /// the single 1300 brake while it would end past the target, else neutral.
+    fn finish_plan_motor(&mut self, gap: f64, v: f64, decel: f64, now: f64, goal: &Goal) -> (i64, f64) {
+        let pred = gap - v * ESC_COAST_DELAY_S - v * v / (2. * decel);
+        let brake_room = goal.target_gap + v * ESC_COAST_DELAY_S + v * v / (2. * LANE_BRAKE_DECEL_MPS2);
+        let brake = self.finish.brake_end.is_none()
+            && pred < goal.target_gap
+            && match self.finish.brake_since {
+                Some(since) => now - since < LANE_BRAKE_MAX_S,
+                None => gap <= pmax(LANE_BRAKE_START_GAP_M, brake_room),
+            };
+        self.finish.holding = !brake
+            && (pred > goal.target_gap + LANE_TOPUP_BAND_M || self.finish.holding && pred > goal.target_gap);
+        let motor = if brake { LANE_BRAKE_MOTOR } else if self.finish.holding { ROUTE_SLOW_MOTOR } else { NEUTRAL };
+        (motor, pred)
     }
 
     /// Round y35: the IMU's forward speed since the light release.
@@ -198,6 +255,8 @@ impl Maneuver {
         // Round y35: after a light stop the IMU's speed from that rest (the lidar slope
         // runs behind it, low while the launch pushes and high while the car slows)
         let imu = if kind == "finish" { self.finish_imu_speed() } else { None };
+        let launch = self.finish.launch_from.is_some(); // round y18: the launch's powered run (y20: 1600)
+        let fused = if kind == "finish" { self.finish_fused(now, speed, launch) } else { None };
         let v = imu.map_or(v, |i| pmax(v, i));
         let gap = ahead.map(|a| a - FRONT_BODY_EXTENT_M);
         let (decel, guard_decel, strong_decel) = self.lane_decels();
@@ -217,7 +276,6 @@ impl Maneuver {
         let strong = self._lane_topup_motor == Some(TRIAL_MOTOR) && self._power_cmd_motor == Some(TRIAL_MOTOR);
         // round y15: the launch's 1560 still acts through its 1550 tail
         let kick = self._power_cmd_motor == Some(TRIAL_MOTOR) && !strong || self.finish.launch_from.is_some();
-        let launch = self.finish.launch_from.is_some(); // round y18: the launch's powered run (y20: 1600)
         let (rate_slow, rate_strong) = (self._lane_push_rate_slow, self._lane_push_rate_strong);
         let aim_accel = if strong {
             rate_strong.unwrap_or(LANE_POWER_ACCEL_MPS2)
@@ -245,11 +303,11 @@ impl Maneuver {
             LANE_PUSH_ACCEL_MAX_MPS2
         };
         let mut v_aim = v;
-        if let Some(i) = imu.filter(|_| !launch) {
+        if let Some((f, _)) = fused.filter(|_| !launch) {
             // round y36: the speed now, measured, once the launch's power is out; the
             // launch keeps y34's aim (y35's IMU launch cut ended 1600 after .3 s at 12 V,
-            // then 1550 top-ups and two creeps: 6.4 s from the release)
-            v_aim = i;
+            // then 1550 top-ups and two creeps: 6.4 s from the release); y37: fused
+            v_aim = f;
         } else if speed.is_some() {
             v_aim = self.lane_speed_now(v, now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, decel, aim_accel);
         }
@@ -338,8 +396,16 @@ impl Maneuver {
                     || imu.is_some()
                         && gap.unwrap() <= goal.target_gap + v * ESC_COAST_DELAY_S + v * v / (2. * LANE_BRAKE_DECEL_MPS2),
             };
+        // Round y37: after the launch the coast plan on the fused speed decides (y36's
+        // 1550 pulses, one-frame brake and creep came from the lane's top-up rule)
+        let plan = (kind == "finish" && after_light && !launch && !stopped).then_some(()).and(fused).zip(gap);
+        let mut plan_stop = None;
         if red_hold {
             self.lane_motor = NEUTRAL; // round y20: in the red with the whole car in: no power
+        } else if let Some(((f, coast), g)) = plan {
+            let (motor, pred) = self.finish_plan_motor(g, f, coast.unwrap_or(decel), now, goal);
+            self.lane_motor = motor;
+            plan_stop = Some(pred);
         } else if brake {
             self.lane_motor = LANE_BRAKE_MOTOR; // round y22: the coast would end past the target
         } else if gap.is_none() && kind == "light" {
@@ -423,6 +489,11 @@ impl Maneuver {
         }
         if imu.is_some() {
             feedback.set("imu_speed_mps", imu);
+            feedback.set("fused_speed_mps", fused.map(|f| f.0));
+            feedback.set("imu_bias_mps", self.finish.imu_bias);
+            feedback.set("coast_decel_imu_mps2", fused.and_then(|f| f.1));
+            feedback.set("plan_stop_gap_m", plan_stop);
+            feedback.set("plan_holding", self.finish.holding);
         }
         feedback.set("motor", self.lane_motor);
         feedback.set("creeps", self.finish.creeps);

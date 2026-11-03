@@ -26326,9 +26326,13 @@
     "baseline": "5094b3c y35 (car: engine 142 / y35)",
     "engine_round": 143,
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
-    "validation": {"console_suite": "968 passed", "rust_release_tests": "7 passed", "clippy_warnings": 32},
+    "deployed": true,
+    "physical_trial_executed": true,
+    "validation": {
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
     "user": [
       "多少s,感觉最后停车还是断断续续的，没有之前的好",
       "最快的那次22.7s，你可以对照一下看看哪里慢了，改进"
@@ -26343,6 +26347,82 @@
       "A 1.8 m/s second-loop entry is new on this car since y27 (2.1, 1620); watch the blue-board clearance at cone 2.",
       "The finish brake now starts earlier at 12 V (from ~2.7-3.2 m at 1.8-1.9 m/s); one brake only."
     ],
-    "next": "Per run: crosswalk_planned_at_rest, first pass to tangent and the tangent speed, cone-2 clearance, the finish launch peak, brake start/end and the end gap; segment times against y27."
+    "next": "Per run: crosswalk_planned_at_rest, first pass to tangent and the tangent speed, cone-2 clearance, the finish launch peak, brake start/end and the end gap; segment times against y27.",
+    "car_run_y36": {
+      "deployed": "2026-11-03 09:56, deploy-matched claude-turn143 143 + deploy-vision y36",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y36",
+      "battery_v": 12.0,
+      "start_rear_front_m": [
+        0.33,
+        7.87
+      ],
+      "result": "route_finish_zone_stop, .398 m from the board, 1 creep",
+      "effective_s": 24.859,
+      "segments_s_vs_y27": {
+        "move_to_crosswalk_stop": [
+          3.897,
+          3.793
+        ],
+        "crosswalk_wait": [
+          3.191,
+          3.194
+        ],
+        "crosswalk_go_to_first_pass": [
+          5.896,
+          5.096
+        ],
+        "first_pass_to_tangent": [
+          2.895,
+          1.996
+        ],
+        "tangent_to_second_pass": [
+          0.799,
+          1.097
+        ],
+        "second_pass_to_light_stop": [
+          3.79,
+          3.995
+        ],
+        "light_go_to_finish_stop": [
+          4.391,
+          3.5
+        ],
+        "total_less_light": [
+          24.859,
+          22.672
+        ]
+      },
+      "crosswalk": "Planned at rest (crosswalk_planned_at_rest): 3 fixes front-to-edge 2.3173-2.3202 m; board ahead 7.886 m (.24 m farther than y34/y35; the edge from the start board stays 2.84-2.88 m). Cut at IMU .998 m/s, next scan .098 m; stopped .134 m before the edge (target .15).",
+      "crosswalk_exit": "One scan after the release (1600) missed 9 rays at 16-27 deg left (the lane wall at 1.0-1.6 m; valid .975): front_sparse neutral pause ~.3 s and a relaunch; y31 far-gap rule needs the rays beyond the stopping range. About .5 s of the +.80 s against y27.",
+      "transfer": "ENTRY 1.8: tangent speed 1.738 m/s; first pass to tangent 2.895 s (y35 3.297, y27 1.996); tangent to second pass .799 s (y27 1.097).",
+      "finish": "Launch (y34 aim) to 1.78 m/s (IMU) at 32.0; the IMU-aimed coast predicted .24-.76 m short (lane decel .58, the coast ran .63), two 1550 pulses, a .2 s brake, stopped .446 m, one creep: 4.39 s release to stop."
+    }
+  },
+  "y37_finish_fused_imu_lidar_coast_plan_20261103": {
+    "date": "2026-11-03",
+    "author": "Claude",
+    "baseline": "3f640a5 y36 (car: engine 143 / y36)",
+    "engine_round": 144,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "最后那一段和斑马线起步还是比之前慢，这次斑马线停车应该是推算出来的吧",
+      "终点那个你可以imu和雷达复用"
+    ],
+    "change": [
+      "Finish after the light (maneuver_finish.rs, race only): the launch keeps y34. Then one coast plan on a fused speed: the IMU speed since the release less its drift against the lidar slope (compared half the slope history back, EMA .3), the board gap from the lidar, and the coast deceleration measured on the IMU over .4 s of coasting (else the lane decel). A single 1550 hold starts when the coast would stop > .15 m short of the .25 m target and lasts until it would reach the target; the single 1300 brakes while it would end past the target, from max(1.2 m, .25 + v*.2 + v^2/(2*.71)); else neutral. The lane top-up pulses are not used after the launch; a stop outside the zone still creeps.",
+      "Not changed: crosswalk plan and cut, transfer ENTRY 1.8, light approach, release rules, the crosswalk-exit quality gate."
+    ],
+    "validation": {
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
+    "risks": [
+      "The hold at 1550 sets the late speed (~1.0-1.2 m/s at 12 V): steady, but the finish may be a few tenths slower than a launch-and-brake plan.",
+      "The crosswalk-exit front_sparse pause (a one-scan side-wall dropout) is unchanged."
+    ],
+    "next": "Per run: the finish launch peak, plan_holding span, plan_stop_gap_m, coast_decel_imu_mps2, imu_bias_mps, brake start/end, the end gap and release-to-stop time (y27 3.50, y32 3.69)."
   }
 }
