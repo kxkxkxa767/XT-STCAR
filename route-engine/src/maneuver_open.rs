@@ -407,6 +407,12 @@ impl Maneuver {
                 } else {
                     LANE_SPEED_UNKNOWN_MPS + rise
                 };
+                // Round y35: the IMU's speed from the start's rest where higher (at 12 V the
+                // 1550 approach ran 1.03 m/s while the lidar slope read a scan behind)
+                let vc = match self.race_inputs.and_then(|i| self.race_crosswalk_stop.imu_speed(i.forward_integral)) {
+                    Some(imu) => pmax(vc, imu + rise),
+                    None => vc,
+                };
                 v_crosswalk = Some(vc);
                 if self._start_motor != NEUTRAL
                     && (self.crosswalk_state == Some("approach") || !self._crosswalk_search_passed)

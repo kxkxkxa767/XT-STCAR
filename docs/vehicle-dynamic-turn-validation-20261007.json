@@ -26087,8 +26087,8 @@
     "baseline": "48a2a85 y33 (car: y32 / engine 139, 94b4b83)",
     "engine_round": 141,
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "你可以在此基础上改y34",
       "你改完提交，你可以仿真一下看看他解耦后的逻辑对不对，我睡觉去",
@@ -26185,6 +26185,77 @@
       "bytes_change": 1872,
       "logs": "work/y34-sim/build-race-141.log, work/y34-sim/build-vision-y34.log",
       "deploy_then_run": "python3 work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn141 141; python3 work/vehicle-dynamic-deploy-20261008/deploy-vision.py y34; after the user confirms the car at the start and the light reset: python3 scripts/start-round.py y34 (background, no pipe)"
+    },
+    "car_run_y34": {
+      "deployed": "2026-11-03: deploy-matched claude-turn140 140 first (deploy-claude-turn141.py checks the files of the engine-140 state it was built on; the car had 139), then claude-turn141 141 and deploy-vision y34; all deployed, 0 mismatched",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y34",
+      "battery_v": {
+        "this_run": 12.0,
+        "y32": 11.8,
+        "source": "user"
+      },
+      "start_rear_front_m": [
+        0.34,
+        7.63
+      ],
+      "result": "probe_obstacle_close_body at the finish (the board hit; +10 s in the rules)",
+      "program_elapsed_s": 39.858,
+      "crosswalk": "Pressed the stripes (user). Cut at 1.03 m/s (y32 .93), stop front range 5.254 m (y32 5.584, y31-2 5.274 at 12.0 V; the farthest forward since y20). The cut came ~.1 m late (10 scans/s while the aim fell .16 m per scan) and the coast ran .05 m long (.567 vs .6 m/s2). The crosswalk code is unchanged since y20 (y33 renamed constants only).",
+      "cones": "First pass to the first sampled zero tangent 3.400 s (y32 3.794, y31-2 3.695, y27 2.096); tangent to second pass 1.099 s; lidar speed at the tangent 1.223 m/s. Same 1600, IMU cut at ~1.77 m/s, 1550 crawl since y31.",
+      "light": "Gantry legs moved the estimate .24 m closer after the coast plan; coast at 1.745 m, 1.29 m/s; beam crossed (estimate) at 19.55 s, red at 20.67 s (1.1 s, still rolling: the y34 red-due wait did not act); stopped .313 m from the gantry; green scores .38-.43 (< .5): released on the 10.5 s fallback.",
+      "finish": "1600 for ~.6 s (time limited), peak 1.97 m/s (y32 1.79); 1300 from gap 1.001 m at 1.63 m/s (y32 .994 m at 1.17); at .135 m still .81 m/s: body gate, then the board.",
+      "cpu": {
+        "route_engine_core_pct": 14.76,
+        "imu_log_core_pct": 2.11,
+        "scan_to_tick_mean_ms": 1.44,
+        "scan_to_tick_max_ms": 7.21,
+        "max_tick_compute_ms": 7.63,
+        "y32": [
+          15.91,
+          2.35,
+          1.42,
+          9.22,
+          9.85
+        ],
+        "note": "the run ended early at the finish, so the shares are approximate"
+      },
+      "imu_samples": 3605,
+      "imu_checksum_errors": 0,
+      "decoupling_question": "User asked whether y33 changed other stages: no. maneuver_crosswalk.rs unchanged; race_crosswalk.rs and race_transfer.rs moved verbatim (same constants: .6 rad/s, 60 PWM, .15 m/s, .2 s); the finish moved with renamed fields and the same lidar-slope speed. The differences come from the 12.0 V battery."
     }
+  },
+  "y35_crosswalk_rest_plan_finish_imu_20261103": {
+    "date": "2026-11-03",
+    "author": "Claude",
+    "baseline": "068c789 y34 (car: engine 141 / y34 since 11-03)",
+    "engine_round": 142,
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "这个斑马线的位置目前是写死的，能不能根据雷达得出左转出口挡板的位置，识别出斑马线后，用摄像头估算斑马线位置再根据imu和雷达得出的速度/位置，得出应该在哪停",
+      "得出要停车的位置后，可以不管摄像头了，这样车体的晃动造成的摄像头识别的问题可以忽略了，这个东西在启动还没有动的时候就可以算了，但是就算没算好也要启动，不能把它当成启动的条件",
+      "你跑的时候12v，之前跑的时候11.8v"
+    ],
+    "finding": "scripts/vision-log.py ranged the stripes with a fixed pitch (9.1 deg) on the YOLO box bottom. The pitch measured at rest from the board ahead (scripts/camera-pitch-check.py) was 7.51 (y34 run 1), 8.31 (y32) and 8.18 deg (11-03 at the start); at 2.3 m one degree is ~.5 m, and the box bottom sat ~3 rows above the paper edge at the start. Ranged against the board ahead in the same still frame (the pitch cancels), the stripes edge was 5.111-5.116 m (y32, 6 frames), 5.134-5.137 m (y34, 7 frames) and 5.153 m (now) from the board; the stops agree: y34 ~.08 m past the edge (pressed, user), y32 .27 m before it. The fixed pitch put the edge 3.03-3.07 m (y34) / 2.47-2.50 m (y32) away instead of 2.31 / 2.25 m.",
+    "change": [
+      "scripts/vision-log.py: with a crosswalk box, the undistorted image heights of the stripes near edge (per paper column, where the brightness falls half way from the paper to the floor just below it; median) and of the board ahead base (camera-pitch-check.py rule) as crosswalk_edge_y / board_base_y in the light state. race.rs parses them.",
+      "route-engine/src/race_crosswalk_stop.rs (race only): frames captured while the car is still at the start (track within .02 m of its rest) give the front-to-edge distance from the two heights and the lidar range straight ahead (median of the 7 centre rays); three such fixes plan the stop (median) on the crosswalk track, and from then on the camera is left out. Not a start condition: without a plan the camera fixes in motion place it as before.",
+      "Crosswalk cut (race only): the speed is the larger of the lidar slope and the IMU speed since the start rest, and the travel to the next scan counts (cut when aim - v * scan_dt <= .15 m).",
+      "Finish after a light stop (race only, maneuver_finish.rs): the IMU speed from the release is the aimed speed (the guard takes the larger of it and the lidar slope); the launch rise measured on the IMU replaces the 1.5/2.5 m/s2 aim and bound where higher; the one 1300 brake may start farther than 1.2 m when target + v*.2 + v^2/(2*.71) needs it (it still ends on the predicted coast).",
+      "Not changed: the transfer, the light approach, the release rules, the crosswalk wait."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
+    "risks": [
+      "The plan needs the crosswalk box at rest (score >= .25; y34 .36-.38, y32 .28-.30) and the blue board base in the centre columns; a farther crosswalk (random in the race) may not be planned at rest and falls back to the old camera fixes.",
+      "Camera height .195 m is still fixed: 1 cm is ~8 cm at 2.3 m.",
+      "The finish IMU speed drifts from the release (y25 calibration: interval speed RMSE .034-.042 m/s)."
+    ],
+    "next": "Deploy claude-turn142 / y35; per run: crosswalk_planned_at_rest (front_to_edge_m, fixes), the stop front range (target edge 5.11-5.15 m from the board ahead + .2 + .15), the cut scan, the finish launch peak, brake start and end gap."
   }
 }

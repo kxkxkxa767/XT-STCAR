@@ -171,6 +171,12 @@ impl Maneuver {
             if n > 8 {
                 self._crosswalk_raw.drain(..n - 8);
             }
+            // round y35: the frame's stripes' edge against the board ahead, for the plan at rest
+            if self.race_inputs.is_some()
+                && let (Some(edge), Some(base)) = (light.get("crosswalk_edge_y").of(), light.get("board_base_y").of())
+            {
+                self.race_crosswalk_stop.push_frame(captured.f(), edge, base);
+            }
         }
         self._light_frames.push(V::list(vec![frame.clone(), captured.clone(), red.clone(), green.clone()]));
         let n = self._light_frames.len();

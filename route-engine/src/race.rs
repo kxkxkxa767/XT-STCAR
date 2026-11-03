@@ -225,6 +225,12 @@ fn light_of(text: &str, now: f64) -> Option<V> {
         if let Some(metres) = num("crosswalk_m").filter(|m| (0. ..=20.).contains(m)) {
             light.set("crosswalk_m", metres);
         }
+        // round y35: the stripes' edge and the board ahead's base, undistorted image heights
+        if let (Some(edge), Some(base)) = (num("crosswalk_edge_y").filter(|y| (-1. ..=1.).contains(y)),
+                                           num("board_base_y").filter(|y| (-1. ..=1.).contains(y))) {
+            light.set("crosswalk_edge_y", edge);
+            light.set("board_base_y", base);
+        }
     }
     Some(light)
 }

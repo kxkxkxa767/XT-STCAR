@@ -76,6 +76,23 @@ impl Maneuver {
         while self._crosswalk_track.first().is_some_and(|h| h.0 < received - CROSSWALK_TRACK_S) {
             self._crosswalk_track.remove(0);
         }
+        // Round y35 (user): the stop planned at rest against the board ahead; from then
+        // on the camera is left out (not a start condition: without it, as before).
+        if let Some(input) = self.race_inputs {
+            let rest = self._crosswalk_rest;
+            if let Some(evidence) = self.race_crosswalk_stop.observe(scan, received, track, rest, input.forward_integral) {
+                self._crosswalk_board_m = self.race_crosswalk_stop.planned;
+                self._crosswalk_board_sigma = Some(0.);
+                if self.crosswalk_state == Some("search") {
+                    self.crosswalk_state = Some("approach");
+                }
+                self.route_event("crosswalk_planned_at_rest", scan, &V::None, evidence);
+            }
+            if self.race_crosswalk_stop.planned.is_some() {
+                self._crosswalk_raw.clear();
+                return;
+            }
+        }
         let raw = std::mem::take(&mut self._crosswalk_raw);
         let mut added = false;
         for f in &raw {
@@ -216,6 +233,13 @@ impl Maneuver {
         let measured = self._lane_coast_decel.is_some();
         let decel = self._lane_coast_decel.unwrap_or(CROSSWALK_AIM_DECEL_MPS2);
         let guard_decel = if measured { pmax(CROSSWALK_GUARD_DECEL_MPS2, self.lane_decels().1) } else { CROSSWALK_GUARD_DECEL_MPS2 };
+        // Round y35: a cut waits for the next scan unless made on this one, so the travel to
+        // it counts (y34's first run cut ~.1 m past its aim at 1.03 m/s).
+        let next_scan_m = if self.race_inputs.is_some() {
+            v.zip(self.race_crosswalk_stop.scan_s).map_or(0., |(v, dt)| v * dt)
+        } else {
+            0.
+        };
         if state == "approach" {
             if let (Some(v), Some(g)) = (v, gap) {
                 aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * decel));
@@ -257,7 +281,7 @@ impl Maneuver {
                             _ => false,
                         };
                         self._start_motor = if topup { ROUTE_SLOW_MOTOR } else { NEUTRAL }; // else round y8: one coast
-                    } else if aim.is_none_or(|a| a <= CROSSWALK_TARGET_GAP_M) || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M) {
+                    } else if aim.is_none_or(|a| a - next_scan_m <= CROSSWALK_TARGET_GAP_M) || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M) {
                         self._start_motor = NEUTRAL;
                         // round y11: held on a measured speed or once the car has left the start
                         let moved = matches!((self._crosswalk_rest, track),
@@ -310,13 +334,19 @@ impl Maneuver {
                 self.route_event("crosswalk_go", scan, control, go);
             }
         }
-        dict! {
+        let mut out = dict! {
             "state" => state, "gap_m" => gap, "board_m" => self._crosswalk_board_m, "speed_mps" => speed,
             "speed_for_cut_mps" => v, "aimed_stop_gap_m" => aim, "worst_stop_gap_m" => worst,
             "coast_decel_mps2" => decel, "guard_decel_mps2" => guard_decel,
             "coast_fit" => crate::maneuver_post::fit_value(self._coast_fit),
             "motor" => self._start_motor,
+        };
+        if let Some(input) = self.race_inputs {
+            out.set("planned_at_rest", self.race_crosswalk_stop.planned.is_some());
+            out.set("imu_speed_mps", self.race_crosswalk_stop.imu_speed(input.forward_integral));
+            out.set("next_scan_m", next_scan_m);
         }
+        out
     }
 
     /// _crosswalk_stopped(scan, now, control, gap, basis).

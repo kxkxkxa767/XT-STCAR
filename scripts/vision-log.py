@@ -28,6 +28,9 @@ lane's crosswalk stop.
 Round y11: and the distance from the car's front to the stripes' near edge
 ("crosswalk_m", metres along the ground) by the calibrated camera model
 (crosswalk_front_m), when the box's bottom stands clear of the frame's.
+Round y35: and, when both are found, the undistorted image heights of the
+stripes' near edge and of the board straight ahead's base ("crosswalk_edge_y",
+"board_base_y"); the race program ranges the stripes against that board.
 
 Before anything else the model must match its handoff files: sha256 of
 race4.onnx equal to race4.provenance.json's, the class order of race4.json
@@ -106,6 +109,73 @@ def crosswalk_front_m(box):
     if down <= 1e-6:
         return None
     return CAMERA_HEIGHT_M*(math.cos(pitch)+point[1]*math.sin(pitch))/down-CAMERA_BEHIND_FRONT_M
+
+
+# Round y35 (user, 2026-11-03): the crosswalk stop is planned at rest against
+# the board straight ahead (the left-turn exit board). Both heights below are
+# undistorted image heights (tan of the angle below the optical axis); route-engine
+# race takes the board's lidar range for its base, which fixes the pitch of this
+# frame, so the mount's pitch (9.1 above; 8.18 measured at the start on 11-03)
+# drops out of the stripes' distance.
+BOARD_BASE_COLUMNS = range(330, 391, 10)  # scripts/camera-pitch-check.py's
+BOARD_BLUE_MIN = 45  # blue minus red: the boards
+EDGE_CONTRAST_MIN = 25  # grey levels between the paper and the floor just below it
+
+
+def board_base_y(frame):
+    """Undistorted height of the board ahead's base (camera-pitch-check.py: in
+    the centre columns the lowest blue run longer than five rows ending above
+    row 340, its last row and a half), or None."""
+    rows = []
+    for u in BOARD_BASE_COLUMNS:
+        strip = frame[200:400, u-1:u+2].astype(int)
+        blue = (strip[:, :, 0]-strip[:, :, 2]).mean(axis=1) > BOARD_BLUE_MIN
+        best, start = None, None
+        for i, b in enumerate(list(blue)+[False]):
+            if b and start is None:
+                start = i
+            elif not b and start is not None:
+                if i-start > 5 and 200+i-1 < 340:
+                    best = 200+i-1
+                start = None
+        if best is not None:
+            rows.append(best+.5)
+    if len(rows) < 4:
+        return None
+    rows.sort()
+    row = rows[len(rows)//2] if len(rows) % 2 else (rows[len(rows)//2-1]+rows[len(rows)//2])/2
+    point = undistort(CAMERA_FX_FY_CX_CY[2], row)
+    return None if point is None else point[1]
+
+
+def crosswalk_edge_y(gray, box):
+    """Undistorted height of the stripes' near edge: in every second column of
+    the box, down from the brightest row near the box's bottom (the paper) to
+    where the brightness falls half way to the floor just below it; the median
+    over the columns with that contrast (gaps between papers have none), or None."""
+    x1, _, x2, y2 = box
+    top, bottom = max(0, int(y2)-24), min(gray.shape[0]-1, int(y2)+12)
+    heights = []
+    for u in range(max(1, int(x1)+2), min(gray.shape[1]-1, int(x2)-1), 2):
+        col = gray[top:bottom+1, u-1:u+2].mean(axis=1)
+        peak = int(col.argmax())
+        floor = col[peak:].min()
+        if col[peak]-floor < EDGE_CONTRAST_MIN:
+            continue
+        half = (col[peak]+floor)/2
+        i = peak
+        while i+1 < len(col) and col[i+1] >= half:
+            i += 1
+        if i+1 >= len(col):
+            continue
+        row = top+i+(col[i]-half)/(col[i]-col[i+1])
+        point = undistort(u, row) if row < CROSSWALK_CLIPPED_ROW else None
+        if point is not None:
+            heights.append(point[1])
+    if len(heights) < 5:
+        return None
+    heights.sort()
+    return heights[len(heights)//2]
 
 
 def check_model(model_dir):
@@ -252,6 +322,11 @@ def main():
                     metres = crosswalk_front_m(top['box'])
                     if metres is not None:
                         state['crosswalk_m'] = round(metres, 3)  # round y11
+                    # round y35: the stripes' edge and the board ahead's base in this frame
+                    edge = crosswalk_edge_y(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), top['box'])
+                    base = board_base_y(frame)
+                    if edge is not None and base is not None:
+                        state.update(crosswalk_edge_y=round(edge, 6), board_base_y=round(base, 6))
                 light_state = Path(args.light_state)
                 temporary = light_state.with_name(light_state.name+'.tmp')
                 temporary.write_text(json.dumps(state))

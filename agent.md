@@ -1,5 +1,18 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-03 Claude：y34 实车第 1 轮；y35 = 斑马线起点静止时对前方挡板定位 + 终点用 IMU 车速）
+
+- **y34 已上车**（引擎 141）。车上原是 139，`deploy-claude-turn141.py` 核对的是它打包时依据的引擎 140 状态，所以先 `deploy-matched.py claude-turn140 140`，再 `claude-turn141 141` 和 `deploy-vision.py y34`。第 1 轮证据 `left-cone-trial-20261102-y34`：电池 12.0 V（y32 时 11.8 V，用户告知）。斑马线压线；终点 1.0 m 处 1.63 m/s 才开始刹车，车身门触发后撞板。桶间（第一桶出弯到第二桶切点）3.400 s，比 y32 的 3.794 s 快。灯前停在门架前 .313 m，绿灯分数 .38–.43，靠 10.5 s 兜底放行；y34 的等红灯没触发（过线 1.1 s 后就见红，车还在滚）。CPU：主线程 14.76%、IMU 2.11%、雷达到决策 1.44 ms（y32 是 15.91%、2.35%、1.42 ms）。详见记录键 `y34_light_red_due_restart_20261102.car_run_y34`。
+- **用户问 y33 解耦是否改动了别处：没有。** `maneuver_crosswalk.rs` 自 y20 起未改；`race_crosswalk.rs`、`race_transfer.rs` 是原样搬过去的，常量值相同；终点搬到 `maneuver_finish.rs`，只改了字段名。差别来自电池电压。
+- **斑马线的位置原来靠写死的摄像头俯角**（`vision-log.py` 的 9.1°）加 YOLO 框底测距。用 `scripts/camera-pitch-check.py`（雷达测前方挡板距离 + 图中挡板底边）实测，俯角在 7.51°（y34）、8.31°（y32）、8.18°（11-03 起点）之间变化；2.3 m 处差 1° 测距约差 .5 m。改成在同一帧里以前方挡板为参照测斑马线近边（俯角抵消）后，三次得到的近边到前挡板距离为 5.111–5.153 m，和两次实际停点一致（y34 越线约 .08 m，y32 停在线前 .27 m）。
+- **y35（用户的方案，记录键 `y35_crosswalk_rest_plan_finish_imu_20261103`，引擎 142）：**
+  - `vision-log.py` 每帧报白纸近边和前方挡板底边的去畸变高度（`crosswalk_edge_y` / `board_base_y`）。
+  - `route-engine/src/race_crosswalk_stop.rs`：起点静止时（跟踪距离离静止位置不超过 .02 m）用这两个高度和雷达正前 7 条射线中位数算车头到近边距离，3 帧取中位数后锁定停车点，之后不再使用摄像头。没算好也照常起步，此时按原来的行驶中摄像头定位。
+  - 斑马线收油：车速取雷达和 IMU（从起点静止开始积分）中较大的一个，并把到下一帧扫描之前要走的距离算进去。
+  - 终点（`maneuver_finish.rs`）：红灯放行时 IMU 清零；预测停点用 IMU 车速；起步加速度用 IMU 实测（大于原来的 1.5/2.5 m/s² 时）；刹车起点为 max(1.2 m, .25 + v·.2 + v²/(2·.71))，仍只刹一次，刹车结束仍按预测滑行停点判断。
+  - 桶间、灯前、放行规则都没改。
+- 每轮要看：`crosswalk_planned_at_rest` 事件（`front_to_edge_m`、各帧）、斑马线停点前方测距（目标约 5.13 + .2 + .15 ≈ 5.48 m）、终点起步峰值、刹车起点和最终离板距离。
+
 ## 当前接手入口（2026-11-02 夜 Claude：y34 = y33 + 灯前两处修正；仿真核对 y33 解耦与 y32 一致；未部署，明天用户多跑几轮 y34）
 
 - 记录键 `y34_light_red_due_restart_20261102`，源码 `068c789`，引擎 141（RISC-V 2,716,952 字节，比 y33 多 1,872），车包 `claude-turn141-package.json` / `claude-y34-package.json` 已构建。上车：`deploy-matched.py claude-turn141 141`、`deploy-vision.py y34`，等用户确认车在起点、红绿灯已复位，再 `python3 scripts/start-round.py y34`。只改 `route-engine/src/maneuver_light.rs`、`race_light.rs`，斑马线、桶间、终点和放行规则不动。
