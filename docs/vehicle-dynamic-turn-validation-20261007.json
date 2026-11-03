@@ -26708,5 +26708,87 @@
       "method": "Match both open_feedback.source_seq and open_loop.source_seq to the live second_loop scan. The earlier zero seen at handover belonged to an old first-cone plan."
     },
     "next": "Install the prepared y40 packages when the vehicle is available, wait for operator confirmation, then compare the actual stop position (front/rear), fresh red/green frames, release-stage PWM, and finish gap."
+  },
+  "y41_continuous_second_tangent_20261103": {
+    "date": "2026-11-03",
+    "author": "Codex",
+    "source_baseline": "c51f1e3 (y40 lamp and release fixes); y39/146 remains on vehicle",
+    "engine_round": 148,
+    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "10 passed", "clippy_warnings": 32},
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "request": "Borrow the idea of a single continuous within-transfer distance reference. Retain the current corner speed and prepare the next car package for later physical testing.",
+    "control": {
+      "settings": {
+        "boost_pwm": 1600,
+        "corner_entry_target_mps": 1.8
+      },
+      "geometry": "One candidate extraction in the late first turn / transfer. Speed-only preview uses up to the existing 6 m geometry range, the normal reversed-axis cone band and compact/board discrimination. Two distinct agreeing observations enable the same local clockwise circle planner once per associated preview. The axis coordinate of its tangent is the measured support centre plus the circle's longitudinal offset; turn radius offsets perpendicular to that axis do not enter this distance.",
+      "continuity": "Progress is along the return-lane axis. Advance it with valid paired rear-wall displacement, or trapezoidal short-window lidar-anchored IMU speed where displacement breaks. Losing both invalidates the preview. Carry the nearer of the projected tangent and a fresh local estimate through tracker handover. The divider's open end guides steering. Single unsupported sightings do not start a boost.",
+      "velocity": "Keep the original laser speed for starting a boost. Only an already active boost can continue on IMU delta-v during a lidar dropout, anchored to a running lidar measurement no older than SCAN_AGE_S (0.30 s), with the existing fresh IMU input. Keep the original 1600 pulse/ESC-tail coasting model, steering eligibility and exit speed.",
+      "isolation": "The extra reach supplies only preview observations. Ordinary target handover retains its 3.2 m along-axis and 3.5 m range limits and existing tracker. Crosswalk, traffic light, finish and bridge are the y40 implementation."
+    },
+    "fixed_input": {
+      "evidence_directory": "work/y41-transfer-7yvjWgGC",
+      "recorded_runs": [
+        "left-cone-trial-20261103-y39",
+        "left-cone-trial-20261103-y39-2"
+      ],
+      "method": "Reprocess saved lidar and synchronized calibrated IMU data without a hardware writer. For the matched one-step comparison, seed the already-active 1600 boost from frame 141; at 142 use the logged velocities and the same recorded stopping-distance budget in both Rust decisions. The effective deceleration is reconstructed to reproduce that budget, not independently measured in this comparison. Positions after a changed motor command are historical inputs.",
+      "columns": [
+        "run",
+        "scan",
+        "y39_ack",
+        "y40_decision",
+        "y41_decision",
+        "old_remaining_m",
+        "new_remaining_m",
+        "unchanged_coast_m",
+        "speed_for_cut_mps",
+        "rolling_source"
+      ],
+      "rows": [
+        [
+          "y39",
+          142,
+          1550,
+          1550,
+          1600,
+          2.14096,
+          3.62799,
+          1.9433,
+          1.48352,
+          "anchored_imu"
+        ],
+        [
+          "y39-2",
+          142,
+          1550,
+          1550,
+          1600,
+          2.28021,
+          3.874,
+          2.78396,
+          1.62698,
+          "lidar"
+        ]
+      ],
+      "new_preview_plans_each_run": [
+        1,
+        1
+      ],
+      "steering_role_and_tracker_equal_saved_scans": [
+        12,
+        12
+      ],
+      "first_fresh_second_tangent_s_y27_y39_y39_2": [
+        2.096,
+        2.797,
+        2.697
+      ]
+    },
+    "performance_estimate": "Order of magnitude 0.1 to 0.3 s on the transfer, not a measured result: for example 2 m at 1.50 versus 1.80 m/s differs by 0.222 s. Extra drive changes subsequent speed, path and coasting. Physical transfer time and CPU remain open.",
+    "next": "Build for direct installation from engine 146 (y39). Confirm placement and signal reset before any new run; compare straight time, measured tangent entry speed, second-loop body clearance and control latency."
   }
 }
