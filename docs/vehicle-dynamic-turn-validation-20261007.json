@@ -26914,7 +26914,7 @@
   "y43_resume_light_cruise_before_beam_20261103": {
     "date": "2026-11-03", "author": "Codex", "engine_round": 150,
     "source_baseline": "d08f816, vehicle y42 / engine 149",
-    "deployed": false, "physical_trial_executed": false,
+    "deployed": true, "physical_trial_executed": true,
     "build": {"source_commit": "645ca48c296237a77cee79863f7ed65d7b96ff7b", "base": "claude-turn149", "engine": "claude-turn150", "vision": "y43", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2746400, "engine_sha256": "5bb53d0fcd292d7092ebd41c995667d7fac0e773863f47a5f5dd851b0b8744fc", "combined_archive": "XT-STCAR-y43-645ca48.tar.gz", "combined_archive_bytes": 10904450},
     "validation": {"console_tests_passed": 968, "rust_tests_passed": 8, "clippy_warnings": 32, "red_on_the_same_fresh_inputs": "1500 in all 11 cases for both controllers"},
     "change": "After the second cone, reconsider the first neutral coast upstream of the optical beam. With a fresh axial speed and a measured scan interval, predict the stop after renewing 1550 for one scan and paying its full 0.2 s ESC tail. If it still falls upstream of the beam, enter the existing rolling top-up immediately. Camera red overrides propulsion.",
@@ -26925,6 +26925,16 @@
       "repeat": {"coast_samples": 5, "first_y43_resume_seq": 185, "old_pwm": 1500, "new_pwm": 1550, "speed_mps": 1.267, "gantry_gap_m": 3.333, "new_stop_gap_if_renewed_m": 1.209, "beam_to_gantry_m": 1.10, "first_saved_physical_topup_seq": 193, "earlier_command_s": 0.798},
       "observed_time_difference_s": 0.523,
       "time_basis": "Actual y42 repeat minus first run from gantry gap 3.20 m to 1.10 m (interpolated); not a prediction of y43 race time."
+    },
+    "car_run_y43": {
+      "time_local": "2026-11-03 22:57 Asia/Taipei", "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y43",
+      "finish_stop_event": true, "terminal_reason": "coast_standstill_unconfirmed", "whole_car_in_finish_zone_estimated": true, "standstill_confirmed": false,
+      "sampled_timing_s": {"start_to_finish_event": 34.946, "red_wait": 10.288, "less_red_before_penalties": 24.658, "crosswalk_go_to_first_pass": 5.492, "first_pass_to_second_pass": 3.796, "second_pass_to_light_stop": 3.991, "light_go_to_finish_event": 4.589},
+      "light": {"gantry_3p20_to_1p10_s": 1.902, "interval_y42_first_repeat_s": [1.852, 2.375], "first_saved_coast_seq": 190, "first_saved_coast_gap_m": 2.264, "early_resume_observed": false, "legacy_topup_seq": 199, "at_topup_speed_mps": 0.773, "rear_entry_topup_seq": 204, "estimated_stop_gap_m": 0.539, "green_release_frames": [104, 105]},
+      "cones": {"second_pass_seq": 177, "tangent_seq": 166, "tangent_speed_mps": 1.774, "min_saved_second_target_to_body_m": 0.350},
+      "crosswalk": {"waited_s": 3.002, "range_m": 0.429, "release_seq": 84, "front_sparse_seq": 88, "cleared_on_saved_scan": 89, "resume_request_seq": 93, "pause_to_resume_request_s": 0.509, "open_unknown_left_angles_deg": [-27,-26,-22,-21,-20,-19,-18,-17,-16,-15]},
+      "finish": {"release_seq": 320, "finish_stop_seq": 366, "estimated_nose_gap_m": 0.243, "brake_pwm": 1300, "brake_command_s": 0.109, "rolling_1550_ack_after_brake_seq": [355,356], "creep_counter": 0, "neutral_ack": true, "standstill_detail": "During post-stop verification, most saved pairs had parallel or insufficient associated planes or a superseded result. One recorded low-motion pair yielded 99 ms, below the 500 ms verification window."},
+      "runtime": {"control_single_core_percent": 16.03, "imu_single_core_percent": 2.23, "mean_scan_to_tick_ms": 1.391, "imu_samples": 4284, "imu_checksum_errors": 0}, "retrieved_files_verified": 89, "post_run": {"armed": false, "motor": 1500, "servo": 1500}
     }
   }
 }
