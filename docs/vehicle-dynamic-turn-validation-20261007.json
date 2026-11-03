@@ -26645,6 +26645,17 @@
     "author": "Codex",
     "baseline": "0d606a5, vehicle engine 146/y39 built from b44bd7d",
     "engine_round": 147,
+    "build": {
+      "source_commit": "c128888c784cf9d2c3095c209ddba745965d487d",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "elf_maximum_glibc": "2.34",
+      "engine_bytes": 2745648,
+      "engine_package": "claude-turn147-package.json",
+      "vision_package": "claude-y40-package.json",
+      "vision_light_stop": true,
+      "combined_archive": "XT-STCAR-y40-c128888.tar.gz",
+      "combined_bytes": 10903043
+    },
     "implemented": true,
     "deployed": false,
     "physical_trial_executed": false,
