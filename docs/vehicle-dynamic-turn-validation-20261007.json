@@ -27315,8 +27315,8 @@
     "engine_round": 157,
     "baseline": "y49 / engine 156 on the car",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "第二个桶没绕过去，沿切线方向撞到挡板了"
     ],
@@ -27330,6 +27330,69 @@
       "rust_tests_passed": 9,
       "clippy_warnings": 32
     },
-    "next": "Cone two: plan offsets over the approach, turn-in seq vs the cone range, nearest cone/board gaps; cone-one exit gap (y49 .094 m); the finish (untested since y48)."
+    "next": "Cone two: plan offsets over the approach, turn-in seq vs the cone range, nearest cone/board gaps; cone-one exit gap (y49 .094 m); the finish (untested since y48).",
+    "car_run_y50": {
+      "deployed": "2026-11-04 13:50, deploy-matched claude-turn157 157 + deploy-vision y50 (from y49 / 156)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y50",
+      "evidence_files_ok": 92,
+      "result": "route_finish_zone_stop, .270 m from the board, finished and locked",
+      "effective_s": 22.764,
+      "light_wait_s": 10.282,
+      "segments_s_vs_y39": {
+        "move_to_crosswalk_stop": [
+          3.993,
+          3.895
+        ],
+        "crosswalk_wait": [
+          3.195,
+          2.996
+        ],
+        "crosswalk_go_to_first_pass": [
+          3.994,
+          4.994
+        ],
+        "first_pass_to_tangent": [
+          0.999,
+          0.999
+        ],
+        "tangent_to_second_pass": [
+          2.498,
+          2.695
+        ],
+        "second_pass_to_light_stop": [
+          3.494,
+          3.195
+        ],
+        "light_go_to_finish_stop": [
+          4.592,
+          3.688
+        ],
+        "total_less_light": [
+          22.764,
+          22.462
+        ]
+      },
+      "nearest_body_gaps_m": {
+        "cone_one_loop": {
+          "cone": 0.281,
+          "other": 0.364
+        },
+        "transfer": {
+          "cone": 0.271,
+          "other": 0.285
+        },
+        "cone_two_loop": {
+          "cone": 0.393,
+          "other": 0.286
+        },
+        "light_entry_other": 0.247
+      },
+      "cone_one_entry_mps": 1.8,
+      "finish": "1600 .5 s to 1.76 m/s at 3.22 m; neutral .4 s; 1565 .3 s (2.46 -> 2.20 m); neutral; 1300 at 1.78 m (1.45 m/s, planned with .8 m/s2) for .4 s to .95 m/s at 1.20 m; released (stop predicted short), coasted 1.4 s to .41 m, 1550 .3 s, stop .27 m: 4.59 s (y39 3.69). The brake acted at about 1.25 m/s2.",
+      "quality_waits": {
+        "front_sparse": 6,
+        "note": "neutral_pause_start_lane after the crosswalk release again"
+      }
+    }
   }
 }
