@@ -26983,8 +26983,8 @@
     "engine_round": 152,
     "baseline": "25bb690 (car: y44 / engine 151, ac7bc24)",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "排查并修改 (the y44 cone-2 collision handed over by Codex in memoryshare.md 2026-11-04 noon)"
     ],
@@ -27011,6 +27011,93 @@
       "rust_tests_passed": 10,
       "clippy_warnings": 32
     },
-    "next": "Car run: second loop rejected_loosening frames, tangent -> second pass (y42-2 1.10 s), nearest echo at the exit; first car test of the y44 finish (1600 -> 1560 -> one 1300) and crosswalk gap rule."
+    "next": "Car run: second loop rejected_loosening frames, tangent -> second pass (y42-2 1.10 s), nearest echo at the exit; first car test of the y44 finish (1600 -> 1560 -> one 1300) and crosswalk gap rule.",
+    "car_run_y45": {
+      "deployed": "2026-11-04 12:38, deploy-matched claude-turn152 152 + deploy-vision y45 (from y44 / 151)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y45",
+      "evidence_files_ok": 90,
+      "start_rear_front_m": [
+        0.49,
+        7.52
+      ],
+      "result": "route_finish_zone_stop, .386 m from the board, finished and locked",
+      "effective_s": 23.472,
+      "light_wait_s": 10.086,
+      "segments_s_vs_y39": {
+        "move_to_crosswalk_stop": [
+          3.695,
+          3.895
+        ],
+        "crosswalk_wait": [
+          3.197,
+          2.996
+        ],
+        "crosswalk_go_to_first_pass": [
+          5.291,
+          4.994
+        ],
+        "first_pass_to_tangent": [
+          2.698,
+          0.999
+        ],
+        "tangent_to_second_pass": [
+          0.8,
+          2.695
+        ],
+        "second_pass_to_light_stop": [
+          3.691,
+          3.195
+        ],
+        "light_go_to_finish_stop": [
+          4.1,
+          3.688
+        ],
+        "total_less_light": [
+          23.472,
+          22.462
+        ]
+      },
+      "second_loop": "No mid-loop re-plan this run (the radius key changed while approaching), so rejected_loosening did not fire. Tangent to second pass .80 s (y42-2 1.10); steering 1341-1323 then 1395; exit seq 174 heading 87 deg.",
+      "crosswalk": "Program wait 3.094 s; IMU standstill ~3.1 s (decel end ~5.43 s, motion 8.56 s). After the release front_sparse paused seq 89-92 at neutral (y44 flank rule did not pass it), resume 1560 then the 1550 hold from 1.25 m/s; 1.51 m/s at the cone-one handover.",
+      "light": {
+        "basis": "stopped_after_camera_red",
+        "front_gap_m": 0.42946460209650344,
+        "rear_to_gantry_m": 0.8198440163800359,
+        "release": "green_in_fresh_frames_after_the_stop"
+      },
+      "finish": "First car test of the y44 finish: 1600 -> 1560 -> neutral at 2.79 m (1.72 m/s) -> 1300 at 1.04 m (.94 m/s) for .4 s -> neutral -> 1560 at .45 m (.07 m/s) -> stop .386 m; 4.10 s (y39 3.69).",
+      "quality_waits": {
+        "front_sparse": 6
+      }
+    }
+  },
+  "y46_first_approach_1570_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 153,
+    "baseline": "y45 / engine 152 on the car",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "斑马线起步到第一个桶那里你pwm应该用的是1550吧，慢了，用1565到1580行不行"
+    ],
+    "finding": "Every run since y36 drives 1600 -> neutral -> 1550 to cone one; the 1550 hold starts ~1.3 m/s (y39 1.6 m before the tangent, handed to first_target at 1550). y45: the launch was cut by a front_sparse pause and 1550 ran the last 2.6 m from 1.25 m/s. Handover speeds y36-y45 1.13-1.51 m/s; first-loop nearest body gaps .17-.35 m (the cone).",
+    "change": [
+      "FIRST_APPROACH_MOTOR 1570 (race only): the start-lane hold after the crosswalk (was 1550) and first_target after the handover while the cone-one loop is still approaching (before its tangent point). The loop on the circle keeps 1550. Added to DRIVE_MOTORS and the supervisor whitelist (start lane, first_target after handover).",
+      "The hold tail (board stop range, early hold room) uses the 1560 push 1 m/s2; no 1570 measurement yet.",
+      "A 1570 start while rolling sets no launch window (else the loop 1550 would become 1560).",
+      "Kept: the 1600 launch and its coast to FIRST_ENTRY 1.3 m/s, y45 second-loop rule, light, finish."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 10,
+      "clippy_warnings": 32
+    },
+    "risks": [
+      "Cone-one entry above the measured 1.13-1.51 m/s; watch the first-loop clearance and the outer board."
+    ],
+    "next": "Crosswalk go -> first pass (y39 4.99, y45 5.29), speed at the cone-one tangent, first-loop body gap."
   }
 }

@@ -360,7 +360,7 @@ impl Maneuver {
         let mut first_drive = V::None;
         if approach.is_none() && source != "first_support_missing_frame_hold" {
             let reaction = self.reaction_s(now);
-            let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) {
+            let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) || self._power_cmd_motor == Some(FIRST_APPROACH_MOTOR) {
                 LANE_POWER_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S)
             } else if self._power_cmd_motor == Some(STRAIGHT_MOTOR) {
                 STRAIGHT_ACCEL_MAX_MPS2 * (reaction - LANE_REACTION_BASE_S) // round y23

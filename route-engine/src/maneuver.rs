@@ -44,7 +44,11 @@ pub const LIGHT_LAUNCH_MOTOR: i64 = 1600; // finish launch after a light release
 // Round y23: the straights' push (the start lane after the crosswalk, the transfer).
 pub const STRAIGHT_MOTOR: i64 = 1590;
 pub const TRANSFER_BOOST_MOTOR: i64 = 1600;
-pub const DRIVE_MOTORS: [i64; 6] = [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR];
+// User 11-04: 1550 from the crosswalk to cone one is slow (asked 1565-1580). Race only:
+// the approach holds 1570 up to the cone's tangent point; the loop keeps 1550.
+pub const FIRST_APPROACH_MOTOR: i64 = 1570;
+pub const DRIVE_MOTORS: [i64; 7] =
+    [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR, FIRST_APPROACH_MOTOR];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
 pub const STRAIGHT_TURN_MPS: f64 = 1.1;
@@ -1278,8 +1282,9 @@ impl Maneuver {
         } else if self._launch_until.is_none() {
             // y26 restored 1550 above 1 m/s, then handed 1560 to the first
             // loop because it mistook the preceding coast for a start from rest.
-            let rolling = self.route_stage == "start_lane" && motor == ROUTE_SLOW_MOTOR
-                && self.race_inputs.is_some() && self.race_crosswalk.first_rolling_hold()
+            let rolling = ((self.route_stage == "start_lane" && motor == ROUTE_SLOW_MOTOR && self.race_crosswalk.first_rolling_hold())
+                    || motor == FIRST_APPROACH_MOTOR)
+                && self.race_inputs.is_some()
                 && self.start_lane_feedback.get("speed_mps").of().is_some_and(|v| v >= LANE_SPEED_RESTART_MPS);
             self._launch_until = Some(if rolling { now } else { now + ESC_LAG_S + LANE_LAUNCH_S });
             self._power_since = Some(now);
@@ -1460,10 +1465,18 @@ impl Maneuver {
             return self._transfer_motor;
         }
         if self.continue_route && self.phase == "drive" && slow_stage && !self.quality_resume_pending {
-            ROUTE_SLOW_MOTOR
+            if self.first_approach_push() { FIRST_APPROACH_MOTOR } else { ROUTE_SLOW_MOTOR }
         } else {
             TRIAL_MOTOR
         }
+    }
+
+    /// Race: cone one handed over but its loop not yet reached (before the tangent point).
+    pub fn first_approach_push(&self) -> bool {
+        self.race_inputs.is_some()
+            && self.route_stage == "first_target"
+            && self.handover_observed
+            && self._open_slots.iter().any(|(side, slot)| *side > 0 && slot.approaching == Some(true))
     }
 
     // ------------------------------------------------------------ input contract

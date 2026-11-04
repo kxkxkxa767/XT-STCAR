@@ -1493,6 +1493,13 @@ impl Supervisor {
             motors.push(START_LAUNCH_MOTOR);
             motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
         }
+        // User 11-04: the race approach to cone one holds 1570 up to its tangent point.
+        if m.race_inputs.is_some()
+            && (launch_allowed || (phase == "drive" && stage_is("first_target") && m.handover_observed
+                && decision.get("quality_resume_pending").is_false()))
+        {
+            motors.push(FIRST_APPROACH_MOTOR);
+        }
         // Round y23: the transfer's straight push.
         if phase == "drive" && (stage_is("open_transfer") || m.transfer_stage()) && decision.get("quality_resume_pending").is_false() {
             motors.push(if m.transfer_stage() { TRANSFER_BOOST_MOTOR } else { STRAIGHT_MOTOR });
