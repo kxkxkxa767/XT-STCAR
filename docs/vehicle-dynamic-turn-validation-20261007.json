@@ -27281,8 +27281,8 @@
     "engine_round": 156,
     "baseline": "y48 / engine 155 on the car",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "第一个桶绕过后停了"
     ],
@@ -27297,6 +27297,39 @@
       "rust_tests_passed": 9,
       "clippy_warnings": 32
     },
-    "next": "Cone-one entry ~1.5 m/s and outer gap >= .3 m; crosswalk go -> first pass vs y39 4.99; the y48 finish."
+    "next": "Cone-one entry ~1.5 m/s and outer gap >= .3 m; crosswalk go -> first pass vs y39 4.99; the y48 finish.",
+    "car_run_y49": {
+      "deployed": "2026-11-04 13:42, deploy-matched claude-turn156 156 + deploy-vision y49 (from y48 / 155)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y49",
+      "evidence_files_ok": 46,
+      "result": "probe_obstacle_close_body at seq 164 in second_loop (left front 40 deg, .040 m); operator: did not go round cone two, ran along the tangent into the board.",
+      "crosswalk_go_to_first_pass_s": 4.294,
+      "cone_one": "1600 to 1.86 m/s, coast to 1.49, 1570 one frame, then 1550 from 1.56 rose to 1.71 m/s at the handover (1550 itself accelerates past 1.5 at 12 V). Loop in circle mode at 1690-1713; first pass at heading 162 with 1709 kept, over-rotated to 211 deg; cone one at .094 m (seq 128).",
+      "cone_two": "Plan (R 1.05, axis +.20, side .45) chosen at seq 138 and kept by the y48 hysteresis through 152 (gains .000-.014 < .05); steering 1517-1580 (straight/left) while the cone closed to .18 m; at 153 the plan (axis -.10) was taken (gain .15), but the servo needed .8 s to reach 1308; the car kept the tangent (heading 186 -> 172) and the left front reached the board.",
+      "quality_waits": {}
+    }
+  },
+  "y50_earlier_turn_plans_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 157,
+    "baseline": "y49 / engine 156 on the car",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "第二个桶没绕过去，沿切线方向撞到挡板了"
+    ],
+    "change": [
+      "Loop-plan hysteresis made asymmetric (race, both cones): a candidate with a smaller axis offset (its tangent point comes sooner, so the turn starts earlier) replaces the plan at once; a later or same-offset candidate still needs a gain of at least one probe quantum (.05 m). Loosening and reversal rules on the circle kept.",
+      "Kept: cone-one entry logic of y49 (1570 below 1.5 m/s), inner-side scan gaps, finish 1600 -> 1565 -> 1300."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
+    "next": "Cone two: plan offsets over the approach, turn-in seq vs the cone range, nearest cone/board gaps; cone-one exit gap (y49 .094 m); the finish (untested since y48)."
   }
 }

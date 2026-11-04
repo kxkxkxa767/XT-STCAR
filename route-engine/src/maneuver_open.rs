@@ -630,15 +630,18 @@ impl Maneuver {
             }
             // y44/y46/y47: the optimum flipped between axis offsets of about +-.25 on near-equal
             // scores, moving the circle .5 m and swinging the steering (y47 seq 148-151 passed
-            // cone two at .09 m). Race: a plan that still scores >= 0 on the current inputs is
-            // kept unless the new one scores at least one probe quantum better.
+            // cone two at .09 m). y49: holding every plan kept a late one (+.2) while an earlier
+            // one gained .01; the turn came at seq 153 and the car ran the tangent into the board.
+            // Race: an earlier turn (smaller axis offset: the tangent point comes sooner) is taken
+            // at once; a later one only when it scores at least one probe quantum better.
             let mut kept_settled = false;
             if race && old_plan.is_some() && same_identity && !reject_reversal && !reject_loosening {
                 let (old_r, old_a, old_b) =
                     (old_plan.idx("radius_m").f(), old_plan.idx("offset_axis_m").f(), old_plan.idx("offset_side_m").f());
                 let old_score = LoopScorer::new(&free_list, radius, radii, Some(approach)).score(old_r, old_a, old_b);
                 let gain = candidate.idx("min_slack_m").f() - old_score;
-                kept_settled = old_score >= 0. && gain < OPEN_PROBE_QUANTUM_M;
+                let earlier = candidate.idx("offset_axis_m").f() < old_a - 1e-6;
+                kept_settled = old_score >= 0. && !earlier && gain < OPEN_PROBE_QUANTUM_M;
                 update.set("candidate_gain_m", if gain.is_finite() { V::Float(gain) } else { V::None });
                 update.set("kept_settled_plan", kept_settled);
             }
