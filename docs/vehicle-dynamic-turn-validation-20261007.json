@@ -26939,7 +26939,7 @@
   },
   "y44_crosswalk_release_finish_drive_20261103": {
     "date": "2026-11-03", "author": "Codex", "engine_round": 151,
-    "source_baseline": "5e29211, vehicle y43 / engine 150", "deployed": false, "physical_trial_executed": false,
+    "source_baseline": "5e29211, vehicle y43 / engine 150", "deployed": true, "physical_trial_executed": true,
     "build": {"source_commit": "ac7bc24c12bb99623f74299cc858daaff9a44bf6", "base": "claude-turn150", "engine": "claude-turn151", "vision": "y44", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2750680, "engine_sha256": "18b161b48533ff65e9171bc4708f984d0b6a9d792b455f178b628cfe835e16e0", "combined_archive": "XT-STCAR-y44-ac7bc24.tar.gz", "combined_archive_bytes": 10912914},
     "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 10, "clippy_warnings": 32},
     "request": "Reduce interruptions on the crosswalk restart and restore one continuous forward run into a committed brake after green. Commit now; vehicle testing is deferred to tomorrow by the operator.",
@@ -26951,6 +26951,30 @@
       "evidence": "work/y44-exits-PXRrDeAp",
       "crosswalk": {"y43_dropout_seq": 88, "original_plan_seq": 87, "available_previous_raw_seq": 86, "axial_horizon_m": 3.489, "approved_with_last_saved_raw": true, "rejected_with_close_previous_obstacle": true, "rejected_with_insufficient_current_shoulders": true, "y43_measured_tangent_hold_seq_old_new": [107, 102], "y42_measured_tangent_hold_seq_old_new": [99, 94], "note": "Scan 87's raw ranges were not saved. The real front stopping distance is from its controller output; #86 supplies the preceding raw points for the offline close-obstacle veto. Straight measurements replay the captured states, not a new vehicle trajectory."},
       "finish": {"method": "Replay the normal Rust finish controller on saved ranges, measured range slopes, IMU speed and fitted drag. Carry each variant's own throttle and brake state. Sparse snapshots do not determine the vehicle's closed-loop trajectory.", "y43_actual_brake_s": 0.109, "y43_new_pwm": [1600, 1560, 1500, 1300, 1500], "y43_new_edges_seq": [320, 324, 335, 342, 347], "y43_new_brake_s_on_saved_inputs": 0.499, "y39_new_pwm": [1600, 1500, 1300, 1500], "y39_new_edges_seq": [305, 310, 324, 340]}
+    },
+    "car_run_y44": {
+      "time_local": "2026-11-04 12:07 Asia/Taipei", "engine_round": 151, "source_commit": "ac7bc24c12bb99623f74299cc858daaff9a44bf6",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y44",
+      "date_note": "The packaged helper's evidence path contains its build date 20261103. The trial and Mac preflight are dated 20261104.",
+      "completed": false, "effective_lap_s": null, "terminal_reason": "probe_obstacle_close_body",
+      "operator_observation": "After rounding cone 2 the car hit the barrier on the transition into the light lane.",
+      "events_seq": {"crosswalk_stop": 57, "crosswalk_go": 88, "start_lane_pause": 92, "resume_request": 97, "first_pass": 136, "second_handover": 147, "first_saved_second_tangent": 163, "second_pass": 179, "body_proximity_stop": 180},
+      "second_exit": {
+        "first_to_second_pass_s": 4.293, "tangent_axial_speed_mps": 1.707,
+        "handoff_t_s": 17.922189368, "handoff_basis": "adopted_arc_reaches_light_lane", "handoff_command": "open_second_pass_keep_command",
+        "motor_ack": 1550, "servo_ack": 1340, "heading_deg": 87.07, "tracked_support_forward_left_m": [-1.413,-1.389],
+        "minimum_known_body_gap_m_at_handoff": 0.199893, "handoff_nearest_bin": 345,
+        "stop_t_s": 18.021453495, "after_handoff_s": 0.099264, "nearest_bin_clockwise_deg": 325, "laser_range_m": 0.286,
+        "nearest_point_forward_left_m": [0.234277,0.164043], "distance_to_nominal_body_m": 0.041869, "gate_m": 0.08,
+        "camera_after_stop": "vision/frames/frame-000061.jpg",
+        "distances_note": "Each minimum is over its own scan. Neither is a tracked point velocity or the instant of physical contact."
+      },
+      "successful_reference": {"run": "left-cone-trial-20261103-y42-2", "second_pass_seq": 179, "handoff_basis": "light_lane_pursuit_needs_less_right", "heading_deg": 86.88, "motor_ack": 1550, "servo_ack": 1338, "tracked_support_forward_left_m": [-0.110,-1.262], "minimum_known_body_gap_m_at_handoff": 0.614594},
+      "crosswalk": {"stop_gap_m": 0.358, "waited_s": 3.099, "quality_counts": {"front_sparse": 6}, "open_unknown_at_92_deg": [-24,-23,-22,-21,-20,-19], "quality_pause_to_resume_request_s": 0.506, "recorded_early_rolling_hold_seq": 102},
+      "lamp_and_finish": "No light_stop, light_go or finish_stop event. The new post-green brake was not physically exercised.",
+      "evidence_files_sha256_ok": 41, "imu_samples": 1927, "imu_checksum_errors": 0,
+      "post_run": {"console_healthy": true, "neutral_samples": 6, "armed": false, "motor": 1500, "servo": 1500},
+      "handoff": "Unresolved collision. Operator handed further diagnosis and repair to Claude. Compare the cone-2 sweep, steering response and outgoing lane geometry on this run against y42 run 2, then reassess the transition into light_entry."
     }
   }
 }
