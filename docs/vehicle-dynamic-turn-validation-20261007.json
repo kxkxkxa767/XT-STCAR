@@ -27401,8 +27401,8 @@
     "engine_round": 158,
     "baseline": "y50 / engine 157 on the car (22.76 s)",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "分析好改完你更新自己记忆然后提交",
       "有些阈值你可以根据当前位置做动态调整，力求跑到最快"
@@ -27421,6 +27421,115 @@
       "rust_tests_passed": 9,
       "clippy_warnings": 32
     },
-    "next": "Finish release-to-stop (y39 3.69, y50 4.59), brake start gap and speed, stop gap; crosswalk go -> first pass without a front_sparse pause."
+    "next": "Finish release-to-stop (y39 3.69, y50 4.59), brake start gap and speed, stop gap; crosswalk go -> first pass without a front_sparse pause.",
+    "car_run_y51": {
+      "deployed": "2026-11-04 21:48, deploy-matched claude-turn158 158 + deploy-vision y51 (from y50 / 157)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y51",
+      "evidence_files_ok": 82,
+      "result": "route_finish_zone_stop, .324 m from the board, 0 creeps; operator: still pauses",
+      "effective_s": 23.088,
+      "light_wait_s": 10.09,
+      "segments_s_vs_y39": {
+        "move_to_crosswalk_stop": [
+          3.899,
+          3.895
+        ],
+        "crosswalk_wait": [
+          3.198,
+          2.996
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.298,
+          4.994
+        ],
+        "first_pass_to_tangent": [
+          2.596,
+          0.999
+        ],
+        "tangent_to_second_pass": [
+          1.399,
+          2.695
+        ],
+        "second_pass_to_light_stop": [
+          4.0,
+          3.195
+        ],
+        "light_go_to_finish_stop": [
+          3.698,
+          3.688
+        ],
+        "total_less_light": [
+          23.088,
+          22.462
+        ]
+      },
+      "pwm_share_of_driving_s": {
+        "1550": 10.4,
+        "1500": 6.01,
+        "1300": 1.6,
+        "1600": 0.99,
+        "1565": 0.5,
+        "1560": 0.4,
+        "driving_total": 19.89,
+        "note": "crosswalk and light waits excluded"
+      },
+      "pwm_by_segment_s": {
+        "start_to_crosswalk": {
+          "1550": 1.9,
+          "1500": 1.6,
+          "1560": 0.4
+        },
+        "crosswalk_go_to_first_pass": {
+          "1550": 3.2,
+          "1500": 0.71,
+          "1600": 0.39
+        },
+        "transfer": {
+          "1550": 3.9,
+          "1600": 0.1
+        },
+        "second_pass_to_light_stop": {
+          "1500": 2.6,
+          "1550": 1.4
+        },
+        "finish": {
+          "1300": 1.6,
+          "1500": 1.1,
+          "1600": 0.5,
+          "1565": 0.5
+        }
+      },
+      "finish": "Brake model y51: release to stop 3.70 s (y50 4.59, y39 3.69), .324 m, no creep.",
+      "crosswalk_exit": "Pause seq 89-92 again: one flank was the left wall end (.80 m ahead, .43 m left), inside the stop horizon (1.82-3.22 m) though outside the corridor, so far_flank_gap refused it.",
+      "crosswalk_approach": "1560 one frame then 1550: .97 m/s after 2.3 s, coast from 1.07 m, stop .31 m before the edge (aim .15); y49 .49 m."
+    }
+  },
+  "y52_crosswalk_launch_planned_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 159,
+    "baseline": "y51 / engine 158 on the car (23.09 s)",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "跑完了，还是有停顿，pwm哪个档位的占比最大，跑完用时多少",
+      "有些阈值你可以根据当前位置做动态调整，力求跑到最快"
+    ],
+    "change": [
+      "Crosswalk approach (race, stripes planned at rest, approach state): START_LAUNCH_MOTOR 1600 while the cut speed vc (IMU or lidar plus the pending 1600 rise) is below CROSSWALK_RACE_CRUISE_MPS 1.2, else 1550; the aimed coast cut and the top-ups are unchanged.",
+      "far_flank_gap: a flank return also clears the corridor when it lies outside the corridor half width (not only beyond the stopping range).",
+      "Kept: y51 finish brake model, loops, light."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
+    "risks": [
+      "Faster crosswalk approach: watch the stop gap to the stripes (aim .15 m; y49/y51 stopped .31-.49 m)."
+    ],
+    "next": "Start -> crosswalk stop (y51 3.90), stop gap; crosswalk go -> first pass without a front_sparse pause."
   }
 }

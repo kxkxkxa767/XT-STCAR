@@ -27,12 +27,14 @@ pub(crate) fn far_flank_gap(clearance: &V, old: &[V], new: &[V], missing: &[V], 
     if !clearance.get("corridor_front_m").of().is_some_and(|d| d > horizon) {
         return false;
     }
+    // A flank beside the corridor (y51 seq 87: the left wall's end .80 m ahead, .43 m left)
+    // clears the corridor along its own ray as well as one beyond the stopping range.
     missing.chunk_by(|a, b| b.i() == a.i() + 1).all(|run| {
         let left = run[0].i() - 1;
         let right = run[run.len() - 1].i() + 1;
         [left, right].into_iter().all(|angle| {
             let i = imod(angle, 360) as usize;
-            new[i].of().is_some_and(|r| r * dcos(i) > horizon)
+            new[i].of().is_some_and(|r| r * dcos(i) > horizon || (r * dsin(i)).abs() > half_width)
         }) && (left..=right).all(|angle| {
             let i = imod(angle, 360) as usize;
             old[i].of().is_none_or(|r| r * dcos(i) > horizon || (r * dsin(i)).abs() > half_width)

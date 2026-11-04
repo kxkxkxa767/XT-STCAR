@@ -322,6 +322,8 @@ pub const CROSSWALK_SIGMA_PER_M2: f64 = 0.02;
 pub const CROSSWALK_CAMERA_LAG_S: f64 = 0.15;
 pub const CROSSWALK_TRACK_S: f64 = 3.;
 pub const CROSSWALK_CRUISE_MPS: f64 = 0.45;
+// Race, stripes planned at rest: 1600 until this speed (with the pending ESC rise) on the way in.
+pub const CROSSWALK_RACE_CRUISE_MPS: f64 = 1.2;
 pub const CROSSWALK_CRUISE_BAND_MPS: f64 = 0.25;
 pub const CROSSWALK_SPEED_HOLD_S: f64 = 1.;
 pub const CROSSWALK_REAR_MAX_M: f64 = 4.;

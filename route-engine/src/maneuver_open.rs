@@ -420,6 +420,14 @@ impl Maneuver {
                     // round y10: 1560 to start, then 1550 until the crosswalk stop
                     self._start_motor =
                         if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
+                    // 11-04: with the stripes planned at rest the distance is known; 1550 took 2.3 s to
+                    // reach .95 m/s (y51). Race: 1600 up to the cruise speed (its ESC tail is in vc),
+                    // then 1550; the aimed cut and the top-ups below are unchanged.
+                    if self.race_inputs.is_some() && self.race_crosswalk_stop.planned.is_some()
+                        && self.crosswalk_state == Some("approach") && vc < CROSSWALK_RACE_CRUISE_MPS
+                    {
+                        self._start_motor = START_LAUNCH_MOTOR;
+                    }
                 }
             }
         } else if self.crosswalk_state == Some("done") && !approach.is_none() {
