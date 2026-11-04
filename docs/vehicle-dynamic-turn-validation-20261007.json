@@ -27547,8 +27547,8 @@
     "engine_round": 160,
     "baseline": "y52 / engine 159 on the car",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "和之前的某次一样，撞到第二个桩前面的挡板了",
       "是不是转弯的时候速度不够导致的",
@@ -27566,6 +27566,66 @@
       "rust_tests_passed": 9,
       "clippy_warnings": 32
     },
-    "next": "Cone two: turn-in seq vs the cone range, steering continuity, gaps; start -> crosswalk stop (y51 3.90)."
+    "next": "Cone two: turn-in seq vs the cone range, steering continuity, gaps; start -> crosswalk stop (y51 3.90).",
+    "car_run_y53": {
+      "deployed": "2026-11-04 22:08, deploy-matched claude-turn160 160 + deploy-vision y53 (from y52 / 159)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y53",
+      "evidence_files_ok": 56,
+      "result": "route_finish_zone_stop, .310 m from the board, 0 creeps, no quality waits; best effective time so far",
+      "effective_s": 21.776,
+      "start_to_stop_s": 31.5,
+      "light_wait_s": 9.686,
+      "segments_s_vs_y39": {
+        "move_to_crosswalk_stop": [
+          3.098,
+          3.895
+        ],
+        "crosswalk_wait": [
+          2.995,
+          2.996
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.596,
+          4.994
+        ],
+        "first_pass_to_tangent": [
+          2.697,
+          0.999
+        ],
+        "tangent_to_second_pass": [
+          0.999,
+          2.695
+        ],
+        "second_pass_to_light_stop": [
+          3.696,
+          3.195
+        ],
+        "light_go_to_finish_stop": [
+          3.696,
+          3.688
+        ],
+        "total_less_light": [
+          21.776,
+          22.462
+        ]
+      },
+      "crosswalk_stop_gap_m": 0.616,
+      "cone_one_entry_mps": 1.65,
+      "nearest_body_gaps_m": {
+        "cone_one_loop": {
+          "cone": 0.317,
+          "other": 0.463
+        },
+        "transfer": {
+          "cone": 0.226,
+          "other": 0.22
+        },
+        "cone_two_loop": {
+          "cone": 0.306,
+          "other": 0.363
+        },
+        "light_entry_other": 0.259
+      }
+    }
   }
 }
