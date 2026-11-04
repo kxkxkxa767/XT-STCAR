@@ -27077,8 +27077,8 @@
     "engine_round": 153,
     "baseline": "y45 / engine 152 on the car",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "斑马线起步到第一个桶那里你pwm应该用的是1550吧，慢了，用1565到1580行不行"
     ],
@@ -27098,6 +27098,52 @@
     "risks": [
       "Cone-one entry above the measured 1.13-1.51 m/s; watch the first-loop clearance and the outer board."
     ],
-    "next": "Crosswalk go -> first pass (y39 4.99, y45 5.29), speed at the cone-one tangent, first-loop body gap."
+    "next": "Crosswalk go -> first pass (y39 4.99, y45 5.29), speed at the cone-one tangent, first-loop body gap.",
+    "car_run_y46": {
+      "deployed": "2026-11-04 12:54, deploy-matched claude-turn153 153 + deploy-vision y46 (from y45 / 152)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y46",
+      "evidence_files_ok": 51,
+      "start_rear_front_m": [
+        0.53,
+        7.46
+      ],
+      "result": "probe_obstacle_close_body in second_loop; not finished. Operator: hit cone one; around cone two not enough right turn.",
+      "crosswalk_go_to_first_pass_s": [
+        3.897,
+        4.994,
+        "y46 vs y39"
+      ],
+      "cone_one": "1570 from seq 98 (1.50 m/s) to 108; 2.04 m/s at the handover (y45 1.51). Steering 1544 (seq 108) -> 1720 (115), .7 s ~1.4 m; loop outside the planned R .95 circle (tangent_to_circle) at full lock, yaw 2.0-2.5 rad/s. Seq 120: 334 returns, 14-bin gap (bins 300-313) -> scan_incomplete not tolerable (max run 12) -> quality wait seq 120-124, neutral with 1720-1660 held while yawing 2.25-2.5 rad/s; exit heading 194-199 deg (y45 176-187); seq 128-129 left-front return .013-.017 m from the body (the cone).",
+      "cone_two": "Cone nearly ahead (y -0.24 at 1.43 m); approach_line overshoot guard steered left 1563-1646 (seq 144-153), then right limit 1308 from 158; seq ~166 left front 37 deg .228 m -> body gate.",
+      "quality_waits": {
+        "scan_incomplete": 6
+      }
+    }
+  },
+  "y47_first_loop_speed_lookahead_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 154,
+    "baseline": "y46 / engine 153 on the car",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "快了后第一个转弯半径要小点",
+      "这次撞到第一个桶，第二个桶绕的时候右转不够"
+    ],
+    "change": [
+      "maneuver_open.rs open_loop_geometry, race cone one: lookahead = 1.1 m * max(1, entry speed / 1.3) (entry = the start lane first_approach_drive speed, stale in first_target = the handover speed): the carrot moves onto the circle earlier, so the turn starts earlier at speed (2.04 m/s -> 1.73 m).",
+      "FIRST_LOOP_RACE_RADIUS_M (0.85, 0.90) for race cone one (was 0.90-0.95).",
+      "supervisor: in race first_target / second_loop a scan_incomplete with >= 324 returns and a gap <= 16 bins (RACE_LOOP_MAX_NULL_RUN_BINS) is tolerated instead of a neutral wait with the steering held.",
+      "Kept: 1570 approach, cone two (its y46 trouble followed the cone-one exit; y45 cone two .80 s)."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 10,
+      "clippy_warnings": 32
+    },
+    "next": "Cone one: handover speed, servo at the tangent, loop body gap, exit heading (y45 176-187); cone two clean."
   }
 }

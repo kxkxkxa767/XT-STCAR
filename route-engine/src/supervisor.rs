@@ -17,12 +17,15 @@
 
 use std::collections::BTreeMap;
 
-use crate::clearance::{front_gap_evidence, probe_clearance, ClearanceReuse, Probe};
+use crate::clearance::{front_gap_evidence, probe_clearance, ClearanceReuse, Probe, MANEUVER_TOLERABLE_MIN_VALID};
 use crate::coast::{CoastWorker, COAST_MIN_VALID_POINTS};
 use crate::dict;
 use crate::helpers::*;
 use crate::maneuver::*;
 use crate::py::*;
+
+/// Race cone loops: one scan may miss up to this many adjacent bins (y46 seq 120: 14).
+const RACE_LOOP_MAX_NULL_RUN_BINS: i64 = 16;
 
 pub const HEARTBEAT_S: f64 = 0.20;
 pub const QUALITY_CONFIRM_S: f64 = 2.0;
@@ -1116,10 +1119,19 @@ impl Supervisor {
             incr_or_zero(&mut s.report, "target_contact_tolerated_count");
         }
         let issues = issues_set(clearance.idx("quality_issues"));
+        // y46 seq 120: one scan in cone one's loop (2.5 rad/s) had 334 returns and a 14-bin
+        // gap; the wait held full left lock at neutral for .4 s and the car curled into the
+        // cone. Race loops take a single such scan up to a 16-bin gap.
+        let race_loop_scan = s.motion.race_inputs.is_some()
+            && matches!(s.motion.route_stage, "first_target" | "second_loop")
+            && clearance.get("valid_returns").oi().is_some_and(|n| n >= MANEUVER_TOLERABLE_MIN_VALID as i64)
+            && clearance.get("longest_null_run_bins").oi().is_some_and(|n| n <= RACE_LOOP_MAX_NULL_RUN_BINS);
         let mut tolerable: Vec<&str> = ["scan_incomplete", "front_sparse"]
             .into_iter()
             .filter(|issue| {
-                issues.iter().any(|i| i == issue) && clearance.get(&format!("{issue}_tolerable")).is_true()
+                issues.iter().any(|i| i == issue)
+                    && (clearance.get(&format!("{issue}_tolerable")).is_true()
+                        || (*issue == "scan_incomplete" && race_loop_scan))
             })
             .collect();
         let far_side_gap = issues.as_slice() == ["front_sparse"] && !tolerable.contains(&"front_sparse")

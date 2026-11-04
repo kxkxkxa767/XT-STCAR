@@ -503,6 +503,14 @@ impl Maneuver {
         }
         let rate = self.compass.rate;
         let race = self.race_inputs.is_some();
+        // y46: the 1570 approach reached cone one at 2.04 m/s, turned in late and ran wide.
+        // Race cone one looks ahead in proportion to its entry speed (earlier turn-in).
+        let first_entry = if race && side > 0 {
+            self.start_lane_feedback.get("first_approach_drive").get("speed_now_mps").of()
+        } else {
+            None
+        };
+        let lookahead = OPEN_LOOKAHEAD_M * first_entry.map_or(1., |v| pmax(1., v / OPEN_PREDICT_SPEED_MPS));
         let floats = Self::ranges_floats(scan);
         let bins = bins_of(target.idx("support_bins"));
         let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));
@@ -550,7 +558,13 @@ impl Maneuver {
             let _ = changed;
         } else if changed || slot.plan.is_none() || key_differs || slot.approaching.unwrap_or(true) {
             let free_list: Vec<(f64, f64)> = directions.iter().map(|&t| (t, slot.free_get(t).unwrap_or(INF))).collect();
-            let radii = if side > 0 { OPEN_LEFT_RADIUS_M } else { OPEN_RIGHT_RADIUS_M };
+            let radii = if side < 0 {
+                OPEN_RIGHT_RADIUS_M
+            } else if race {
+                FIRST_LOOP_RACE_RADIUS_M
+            } else {
+                OPEN_LEFT_RADIUS_M
+            };
             let candidate = plan_loop(&free_list, radius, radii, Some(approach));
             let old_plan = slot.plan.clone();
             let mut reject_reversal = false;
@@ -595,7 +609,7 @@ impl Maneuver {
                             pc,
                             value.idx("radius_m").f(),
                             sidef,
-                            OPEN_LOOKAHEAD_M,
+                            lookahead,
                             e1,
                             e2,
                             Some((center, radius + SIDE_BODY_EXTENT_M + OPEN_CARROT_SUPPORT_GAP_M)),
@@ -631,7 +645,7 @@ impl Maneuver {
         let loop_center = (center.0 + a * e1.0 + b * e2.0, center.1 + a * e1.1 + b * e2.1);
         let support = Some((center, radius + SIDE_BODY_EXTENT_M + OPEN_CARROT_SUPPORT_GAP_M));
         let plan_radius = plan.idx("radius_m").f();
-        let (carrot, mode, before) = loop_carrot(loop_center, plan_radius, sidef, OPEN_LOOKAHEAD_M, e1, e2, support);
+        let (carrot, mode, before) = loop_carrot(loop_center, plan_radius, sidef, lookahead, e1, e2, support);
         slot.approaching = Some(before > 0.);
         let free_m = {
             let mut d = V::dict();
@@ -651,7 +665,7 @@ impl Maneuver {
                 in_pose(loop_center, pose),
                 plan_radius,
                 sidef,
-                OPEN_LOOKAHEAD_M,
+                lookahead,
                 turned(e1, pose.2),
                 turned(e2, pose.2),
                 Some((in_pose(center, pose), radius + SIDE_BODY_EXTENT_M + OPEN_CARROT_SUPPORT_GAP_M)),

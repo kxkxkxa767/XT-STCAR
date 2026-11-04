@@ -192,6 +192,8 @@ pub const LANE_BRAKE_MIN_MPS: f64 = 0.3;
 pub const LANE_BRAKE_MAX_S: f64 = 1.5;
 pub const START_LAUNCH_SETTLE_S: f64 = 0.3;
 pub const OPEN_LEFT_RADIUS_M: (f64, f64) = (0.90, 0.95);
+// User 11-04 (y46 at 2.04 m/s ran wide and hit cone one): race cone one plans a smaller circle.
+pub const FIRST_LOOP_RACE_RADIUS_M: (f64, f64) = (0.85, 0.90);
 pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.90, 1.40);
 pub const OPEN_PROBE_QUANTUM_M: f64 = 0.05;
 pub const OPEN_PROBE_MAX_RATE_RAD_S: f64 = 0.6;
