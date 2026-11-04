@@ -628,12 +628,26 @@ impl Maneuver {
                     reject_loosening = race && sidef * candidate_k < sidef * prior_k;
                 }
             }
+            // y44/y46/y47: the optimum flipped between axis offsets of about +-.25 on near-equal
+            // scores, moving the circle .5 m and swinging the steering (y47 seq 148-151 passed
+            // cone two at .09 m). Race: a plan that still scores >= 0 on the current inputs is
+            // kept unless the new one scores at least one probe quantum better.
+            let mut kept_settled = false;
+            if race && old_plan.is_some() && same_identity && !reject_reversal && !reject_loosening {
+                let (old_r, old_a, old_b) =
+                    (old_plan.idx("radius_m").f(), old_plan.idx("offset_axis_m").f(), old_plan.idx("offset_side_m").f());
+                let old_score = LoopScorer::new(&free_list, radius, radii, Some(approach)).score(old_r, old_a, old_b);
+                let gain = candidate.idx("min_slack_m").f() - old_score;
+                kept_settled = old_score >= 0. && gain < OPEN_PROBE_QUANTUM_M;
+                update.set("candidate_gain_m", if gain.is_finite() { V::Float(gain) } else { V::None });
+                update.set("kept_settled_plan", kept_settled);
+            }
             update.set("rejected_task_direction_reversal", reject_reversal);
             if race {
                 update.set("rejected_loosening", reject_loosening);
             }
             plan_update = update;
-            if !reject_reversal && !reject_loosening {
+            if !reject_reversal && !reject_loosening && !kept_settled {
                 slot.plan = candidate;
                 slot.key = Some(key.clone());
                 slot.plan_source_seq = Some(scan.idx("seq").i());

@@ -1188,21 +1188,33 @@ pub fn loop_extent(a: f64, b: f64, radius: f64, theta: f64) -> f64 {
     projection + sqrt(pmax(0., projection * projection - (a * a + b * b) + radius * radius))
 }
 
-/// _plan_loop(free, support_radius, radii, approach).
-pub fn plan_loop(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), approach: Option<(f64, f64)>) -> V {
-    let lo = support_radius + SIDE_BODY_EXTENT_M + OPEN_INNER_GAP_M;
-    let bands: Vec<(f64, f64)> =
-        free.iter().map(|&(theta, distance)| (theta, distance - SIDE_BODY_EXTENT_M - OPEN_OUTER_GAP_M)).collect();
-    let inner_floor =
-        if bands.iter().any(|&(_, hi)| hi < lo) { support_radius + SIDE_BODY_EXTENT_M } else { lo };
-    let trig: Vec<(f64, f64, f64, bool)> = bands.iter().map(|&(theta, hi)| (theta.pcos(), theta.psin(), hi, hi >= lo)).collect();
-    let score = |radius: f64, a: f64, b: f64| -> f64 {
+/// The score plan_loop maximizes; also re-scores a kept plan on the current inputs (race, y48).
+pub struct LoopScorer {
+    lo: f64,
+    inner_floor: f64,
+    trig: Vec<(f64, f64, f64, bool)>,
+    approach: Option<(f64, f64)>,
+    radii: (f64, f64),
+}
+
+impl LoopScorer {
+    pub fn new(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), approach: Option<(f64, f64)>) -> Self {
+        let lo = support_radius + SIDE_BODY_EXTENT_M + OPEN_INNER_GAP_M;
+        let bands = loop_bands(free);
+        let inner_floor =
+            if bands.iter().any(|&(_, hi)| hi < lo) { support_radius + SIDE_BODY_EXTENT_M } else { lo };
+        let trig = bands.iter().map(|&(theta, hi)| (theta.pcos(), theta.psin(), hi, hi >= lo)).collect();
+        LoopScorer { lo, inner_floor, trig, approach, radii }
+    }
+
+    pub fn score(&self, radius: f64, a: f64, b: f64) -> f64 {
+        let (lo, inner_floor, approach, radii) = (self.lo, self.inner_floor, self.approach, self.radii);
         if hypot(a, b) > radius - inner_floor {
             return f64::NEG_INFINITY;
         }
         let mut worst = INF;
         let (ab, rr) = (a * a + b * b, radius * radius);
-        for &(c, s, hi, comfort) in &trig {
+        for &(c, s, hi, comfort) in &self.trig {
             let projection = a * c + b * s;
             let d = projection * projection - ab + rr;
             let t = projection + (if d > 0. { d } else { 0. }).sqrt();
@@ -1223,7 +1235,19 @@ pub fn plan_loop(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), ap
             worst -= if descent > 0. { descent } else { 0. };
         }
         worst - 0.01 * hypot(a, b) - OPEN_RADIUS_PREFERENCE * (radii.1 - radius)
-    };
+    }
+}
+
+fn loop_bands(free: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    free.iter().map(|&(theta, distance)| (theta, distance - SIDE_BODY_EXTENT_M - OPEN_OUTER_GAP_M)).collect()
+}
+
+/// _plan_loop(free, support_radius, radii, approach).
+pub fn plan_loop(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), approach: Option<(f64, f64)>) -> V {
+    let bands = loop_bands(free);
+    let scorer = LoopScorer::new(free, support_radius, radii, approach);
+    let (lo, inner_floor) = (scorer.lo, scorer.inner_floor);
+    let score = |radius: f64, a: f64, b: f64| -> f64 { scorer.score(radius, a, b) };
     let sweep = |radius: f64, offsets: &[f64], a: Option<f64>, b: Option<f64>| -> f64 {
         let limit = radius - inner_floor;
         let mut choice = offsets[0];

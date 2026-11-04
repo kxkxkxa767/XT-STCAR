@@ -27126,8 +27126,8 @@
     "engine_round": 154,
     "baseline": "y46 / engine 153 on the car",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "快了后第一个转弯半径要小点",
       "这次撞到第一个桶，第二个桶绕的时候右转不够"
@@ -27144,6 +27144,85 @@
       "rust_tests_passed": 10,
       "clippy_warnings": 32
     },
-    "next": "Cone one: handover speed, servo at the tangent, loop body gap, exit heading (y45 176-187); cone two clean."
+    "next": "Cone one: handover speed, servo at the tangent, loop body gap, exit heading (y45 176-187); cone two clean.",
+    "car_run_y47": {
+      "deployed": "2026-11-04 13:16, deploy-matched claude-turn154 154 + deploy-vision y47 (from y46 / 153)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y47",
+      "evidence_files_ok": 89,
+      "result": "route_finish_zone_stop, .158 m from the board; operator: several near misses with cones or boards",
+      "effective_s": 23.471,
+      "light_wait_s": 9.984,
+      "segments_s_vs_y39": {
+        "move_to_crosswalk_stop": [
+          3.596,
+          3.895
+        ],
+        "crosswalk_wait": [
+          2.997,
+          2.996
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.193,
+          4.994
+        ],
+        "first_pass_to_tangent": [
+          2.596,
+          0.999
+        ],
+        "tangent_to_second_pass": [
+          1.101,
+          2.695
+        ],
+        "second_pass_to_light_stop": [
+          3.395,
+          3.195
+        ],
+        "light_go_to_finish_stop": [
+          5.593,
+          3.688
+        ],
+        "total_less_light": [
+          23.471,
+          22.462
+        ]
+      },
+      "cone_one": "Handover speed 1.87 m/s; turn-in from seq 104 (1533) to 1707 at 111, still outside the R .90 circle from 114. Seq 117: 334 returns, a 19-bin gap (bins 283-301, 59-77 deg left, the inner side) beyond the 16-bin race limit -> quality wait 117-124 (.7 s, neutral, 1708-1628 held); right front came to .134 m of the outer board; exit heading up to 211.5 deg.",
+      "cone_two": "Plan offsets flipped -0.25 -> +0.25 -> -0.25 (seq 140-151): steering 1357 -> 1561 -> 1358 while yawing right; cone two passed at .092 m (seq 152); then 1308; light entry left board at .156 m.",
+      "finish": "y44 finish: 1600 .5 s to 1.72 m/s at 3.3 m, then the coast-to-brake latch (peak 2.5 m/s2 tail) coasted 3.0 s to rest at .9 m, 1560 from rest, 1300 at .46 m, stop .158 m: 5.59 s (y45 4.10, y39 3.69).",
+      "light": {
+        "basis": "stopped_after_camera_red",
+        "front_gap_m": 0.5059533639738732,
+        "rear_to_gantry_m": 0.9130139210742936
+      },
+      "quality_waits": {
+        "scan_incomplete": 5
+      }
+    }
+  },
+  "y48_stable_arcs_finish_1565_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 155,
+    "baseline": "y47 / engine 154 on the car",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "我觉得圆弧轨迹可以优化一下，好几次快要撞上桶or挡板",
+      "1600冲一下然后保持1565最后再刹车行不行"
+    ],
+    "change": [
+      "Arcs (race, both cones): plan_loop score extracted into helpers::LoopScorer (same arithmetic). A re-plan replaces the current plan only if the current one scores < 0 on the present probes/approach or the candidate scores at least OPEN_PROBE_QUANTUM_M (.05 m) better; open_loop.plan_update.kept_settled_plan / candidate_gain_m. y45 loosening and reversal rules kept.",
+      "Loop scans (race first_target/second_loop): scan_incomplete with >= 324 returns is tolerated when the longest gap <= 16 bins or every gap over 12 bins lies on the loop inner half (left for cone one, right for cone two).",
+      "Finish: Codex y44 finish-plan changes reverted (coast_to_brake latch, launch handoff); y39 plan back with the hold at FINISH_HOLD_MOTOR 1565 (user; not chopped by the 1560 kick limiter) and the brake held through ESC onset + IMU slope window (Codex y43 lesson). 1565 added to DRIVE_MOTORS and the finish whitelist.",
+      "Kept: y47 cone-one lookahead and radius .85-.90, 1570 approach, light, crosswalk."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
+    "next": "Loop body gaps to cones and boards, plan switches per loop, quality waits in loops, finish release-to-stop (y39 3.69)."
   }
 }

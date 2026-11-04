@@ -17,7 +17,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::clearance::{front_gap_evidence, probe_clearance, ClearanceReuse, Probe, MANEUVER_TOLERABLE_MIN_VALID};
+use crate::clearance::{
+    front_gap_evidence, probe_clearance, ClearanceReuse, Probe, MANEUVER_TOLERABLE_MAX_NULL_RUN, MANEUVER_TOLERABLE_MIN_VALID,
+};
 use crate::coast::{CoastWorker, COAST_MIN_VALID_POINTS};
 use crate::dict;
 use crate::helpers::*;
@@ -26,6 +28,28 @@ use crate::py::*;
 
 /// Race cone loops: one scan may miss up to this many adjacent bins (y46 seq 120: 14).
 const RACE_LOOP_MAX_NULL_RUN_BINS: i64 = 16;
+
+/// Every null run longer than the maneuver limit lies on the loop's inner half, toward the
+/// circled cone (bins clockwise from forward; y47 seq 117: 19 bins at 59-77 deg left in cone
+/// one's left loop).
+fn long_gaps_inside(ranges: &[V], left_inner: bool) -> bool {
+    let inner = |i: usize| if left_inner { (181..360).contains(&i) } else { (1..180).contains(&i) };
+    let mut i = 0;
+    while i < ranges.len() {
+        if ranges[i].is_num() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < ranges.len() && !ranges[i].is_num() {
+            i += 1;
+        }
+        if (i - start) as i64 > MANEUVER_TOLERABLE_MAX_NULL_RUN && !(start..i).all(inner) {
+            return false;
+        }
+    }
+    true
+}
 
 pub const HEARTBEAT_S: f64 = 0.20;
 pub const QUALITY_CONFIRM_S: f64 = 2.0;
@@ -1125,7 +1149,8 @@ impl Supervisor {
         let race_loop_scan = s.motion.race_inputs.is_some()
             && matches!(s.motion.route_stage, "first_target" | "second_loop")
             && clearance.get("valid_returns").oi().is_some_and(|n| n >= MANEUVER_TOLERABLE_MIN_VALID as i64)
-            && clearance.get("longest_null_run_bins").oi().is_some_and(|n| n <= RACE_LOOP_MAX_NULL_RUN_BINS);
+            && (clearance.get("longest_null_run_bins").oi().is_some_and(|n| n <= RACE_LOOP_MAX_NULL_RUN_BINS)
+                || self.scan.get("ranges").ol().is_some_and(|r| long_gaps_inside(r, s.motion.route_stage == "first_target")));
         let mut tolerable: Vec<&str> = ["scan_incomplete", "front_sparse"]
             .into_iter()
             .filter(|issue| {
@@ -1518,6 +1543,10 @@ impl Supervisor {
         }
         if light_launch_allowed {
             motors.push(LIGHT_LAUNCH_MOTOR);
+        }
+        // User 11-04: the race finish holds 1565 after the launch, up to its brake point.
+        if phase == "drive" && finish_stage && m.race_inputs.is_some() && decision.get("quality_resume_pending").is_false() {
+            motors.push(FINISH_HOLD_MOTOR);
         }
         // The one finish brake is available after the light release.
         let brake_allowed = phase == "drive"

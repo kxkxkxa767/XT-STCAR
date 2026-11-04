@@ -20,13 +20,11 @@ pub(crate) struct FinishControl {
     pub creeps: i64,
     /// Round y35: the IMU's forward integral at the light release (the car stood).
     pub imu_zero: Option<f64>,
-    /// Recent IMU speeds and their offset from the delayed lidar slope.
+    /// Round y37: the IMU speed of the last moments, its offset from the lidar slope,
+    /// and the one 1550 hold of the coast plan.
     pub imu_history: Vec<(f64, f64)>,
     pub imu_bias: Option<f64>,
     pub holding: bool,
-    /// Power has been released for the terminal brake. A rolling speed change
-    /// cannot restart forward drive after this point.
-    pub coast_to_brake: bool,
     /// Round y38: the single brake's deceleration on the IMU, once it has acted.
     pub brake_decel: Option<f64>,
 }
@@ -83,7 +81,6 @@ impl Maneuver {
         self.finish.imu_history.clear();
         self.finish.imu_bias = None;
         self.finish.holding = false;
-        self.finish.coast_to_brake = false;
         self.finish.brake_decel = None;
     }
 
@@ -121,47 +118,39 @@ impl Maneuver {
         Some(((v + self.finish.imu_bias.unwrap_or(0.)).max(0.), decel))
     }
 
-    /// Step down from the green launch to a continuous 1560 while there is brake
-    /// room. Once power is cut, coast into the single 1300 application.
-    fn finish_plan_motor(&mut self, gap: f64, v: f64, decel: f64, now: f64, goal: &Goal, stopped: bool) -> (i64, f64) {
+    /// Round y37/y38: after the launch, on the fused speed (user: y37's coast-to-target plan
+    /// crawled the last .6 m at .4-.7 m/s, 3.99 s from the release; y27 braked from 1.4 m/s to
+    /// the stop, 3.50 s): hold 1565 until the brake point (with ESC_COAST_DELAY_S of neutral
+    /// before it), then the single 1300; it brakes on while braking to rest ends within the
+    /// target band or while a release would coast into the board, else it coasts.
+    fn finish_plan_motor(&mut self, gap: f64, v: f64, decel: f64, now: f64, goal: &Goal) -> (i64, f64) {
         let lag = ESC_COAST_DELAY_S;
         let coast_stop = gap - v * lag - v * v / (2. * decel);
         let brake_room = goal.target_gap + v * lag + v * v / (2. * LANE_BRAKE_DECEL_MPS2);
         let rested = self._power_cmd_at.is_none_or(|p| now - p >= lag);
-        let at_rest = stopped && v < LANE_SPEED_RESTART_MPS;
         let (motor, holding) = match self.finish.brake_since {
             Some(since) => {
-                let elapsed = now - since;
-                let onset = v * pmax(0., lag - elapsed);
+                // round y39: the ESC's onset still to come counts at the present speed
+                let onset = v * pmax(0., lag - (now - since));
                 let brake_stop = gap - onset - v * v / (2. * self.finish.brake_decel.unwrap_or(LANE_BRAKE_DECEL_MPS2));
-                // The y43 pulse ended at 0.109 s, before the 0.2 s ESC onset.
-                // Allow the existing IMU slope window to observe the brake.
-                let on = !at_rest && elapsed < LANE_BRAKE_MAX_S
-                    && (elapsed < lag + BRAKE_SLOPE_S || brake_stop <= goal.body_gap || coast_stop < goal.min_gap);
+                // y43 (Codex): a .109 s pulse ended before the ESC onset; hold it through the
+                // onset and the IMU slope window. y45/y47: y44's early coast-to-brake latch
+                // stopped short (4.10/5.59 s), so the y39 plan is back otherwise.
+                let on = now - since < LANE_BRAKE_MAX_S
+                    && (now - since < lag + BRAKE_SLOPE_S
+                        || brake_stop <= goal.target_gap + LANE_TOPUP_BAND_M || coast_stop < goal.min_gap);
                 (if on { LANE_BRAKE_MOTOR } else { NEUTRAL }, false)
             }
-            None if self.finish.brake_end.is_some() => {
-                // Reposition only from a measured standstill outside the full-car
-                // zone. y43 refilled at 0.45 m while rolling into that zone.
-                let short = coast_stop > goal.body_gap && (at_rest && rested || self.finish.holding);
-                let motor = if !short { NEUTRAL } else if at_rest { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
-                (motor, short)
+            None if self.finish.brake_end.is_none() && gap <= pmax(LANE_BRAKE_START_GAP_M, brake_room) => {
+                (if coast_stop < goal.target_gap && rested { LANE_BRAKE_MOTOR } else { NEUTRAL }, false)
             }
+            // user 11-04: hold 1565, a value of its own, so the 1560 kick limiter cannot chop it
+            None if self.finish.brake_end.is_none() && gap > brake_room + v * lag => (FINISH_HOLD_MOTOR, true),
+            None if self.finish.brake_end.is_none() => (NEUTRAL, false), // the neutral before the brake
+            // after the brake: only a coast that would stop short of the zone gets a 1550 hold
             None => {
-                // Include the part of the last 1600 command still in the ESC,
-                // one neutral interval and the brake onset in the release point.
-                let high_tail = self._launch_cmd_at.map_or(0., |at| (lag - (now - at)).clamp(0., lag));
-                let peak = v + LIGHT_LAUNCH_ACCEL_MAX_MPS2 * high_tail;
-                let cut_room = goal.target_gap + (v + peak) * lag / 2. + peak * lag
-                    + peak * peak / (2. * LANE_BRAKE_DECEL_MPS2);
-                if at_rest && rested && coast_stop > goal.body_gap { self.finish.coast_to_brake = false; }
-                self.finish.coast_to_brake |= gap <= cut_room;
-                if self.finish.coast_to_brake {
-                    let brake = rested && !at_rest && gap <= pmax(LANE_BRAKE_START_GAP_M, brake_room) && coast_stop < goal.target_gap;
-                    (if brake { LANE_BRAKE_MOTOR } else { NEUTRAL }, false)
-                } else {
-                    (TRIAL_MOTOR, true)
-                }
+                let hold = coast_stop > goal.target_gap + LANE_TOPUP_BAND_M || self.finish.holding && coast_stop > goal.target_gap;
+                (if hold { ROUTE_SLOW_MOTOR } else { NEUTRAL }, hold)
             }
         };
         self.finish.holding = holding;
@@ -449,34 +438,16 @@ impl Maneuver {
                 // brake at 2.54 m in the launch's ESC tail, before the plan below could use it
                 None => gap.unwrap() <= LANE_BRAKE_START_GAP_M,
             };
-        let green_finish = after_light && self.race_inputs.is_some() && self.light_stop_evidence.has("go");
-        // Decide the 1600 -> 1560 handoff before the emergency coast. Account
-        // for the next scan, the remaining 1600 response, and brake onset.
-        let launch_stop_gap = if green_finish && launch && launching {
-            gap.zip(imu.or(speed)).map(|(g, speed)| {
-                let powered_s = LANE_AIM_REACTION_S + ESC_COAST_DELAY_S;
-                let peak = speed + LIGHT_LAUNCH_ACCEL_MAX_MPS2 * powered_s;
-                g - (speed + peak) * powered_s / 2. - peak * ESC_COAST_DELAY_S
-                    - peak * peak / (2. * LANE_BRAKE_DECEL_MPS2)
-            })
-        } else { None };
-        let keep_launch = launch && launching && stop_gap.is_some_and(|g| g > goal.target_gap)
-            && worst_gap.is_some_and(|g| g > goal.min_gap)
-            && launch_stop_gap.is_none_or(|g| g > goal.target_gap);
-        let terminal_plan = green_finish && !keep_launch;
+        // Round y37: after the launch the coast plan on the fused speed decides (y36's
+        // 1550 pulses, one-frame brake and creep came from the lane's top-up rule)
+        let plan = (kind == "finish" && after_light && !launch && !stopped).then_some(()).and(fused).zip(gap);
         let mut plan_stop = None;
         if red_hold {
             self.lane_motor = NEUTRAL; // round y20: in the red with the whole car in: no power
-        } else if terminal_plan {
-            // The 1600-to-cruise handoff retains the stationary IMU anchor.
-            self.finish.launch_until = None;
-            self.finish.launch_from = None;
-            let live = fused.map(|f| f.0).or(speed);
-            self.lane_motor = if let Some((g, motion)) = gap.zip(live) {
-                let (motor, predicted) = self.finish_plan_motor(g, motion, fused.and_then(|f| f.1).unwrap_or(decel), now, goal, stopped);
-                plan_stop = Some(predicted);
-                motor
-            } else { NEUTRAL };
+        } else if let Some(((f, coast), g)) = plan {
+            let (motor, pred) = self.finish_plan_motor(g, f, coast.unwrap_or(decel), now, goal);
+            self.lane_motor = motor;
+            plan_stop = Some(pred);
         } else if brake {
             self.lane_motor = LANE_BRAKE_MOTOR; // round y22: the coast would end past the target
         } else if gap.is_none() && kind == "light" {
@@ -541,7 +512,7 @@ impl Maneuver {
             (self.finish.brake_since, self.finish.brake_end) = (None, Some(now)); // round y22: once per run
         }
         let frames = if self.finish.creeping { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
-        if self.lane_motor == TRIAL_MOTOR && (launching || terminal_plan || topup_motor == Some(TRIAL_MOTOR)) {
+        if self.lane_motor == TRIAL_MOTOR && (launching || topup_motor == Some(TRIAL_MOTOR)) {
             self.finish.pulse = 0;
             self.finish.creeping = false;
         } else if self.lane_motor == TRIAL_MOTOR && self.finish.pulse >= frames {
@@ -567,30 +538,9 @@ impl Maneuver {
             feedback.set("plan_holding", self.finish.holding);
             feedback.set("brake_decel_imu_mps2", self.finish.brake_decel);
         }
-        if green_finish {
-            feedback.set("coast_to_brake", self.finish.coast_to_brake);
-            feedback.set("stop_gap_after_launch_scan_m", launch_stop_gap);
-        }
         feedback.set("motor", self.lane_motor);
         feedback.set("creeps", self.finish.creeps);
         feedback.set("brake", V::list(vec![V::from(self.finish.brake_since), V::from(self.finish.brake_end)]));
         (None, feedback)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_rolling_finish_keeps_its_brake_through_onset_and_coasts_afterwards() {
-        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
-        m.finish.brake_since = Some(1.0);
-        assert_eq!(m.finish_plan_motor(1.0, 0.75, 0.56, 1.109, &FINISH_GOAL, false).0, LANE_BRAKE_MOTOR);
-        m.finish.brake_since = None;
-        m.finish.brake_end = Some(1.5);
-        assert_eq!(m.finish_plan_motor(0.451, 0.21, 0.56, 2.0, &FINISH_GOAL, false).0, NEUTRAL);
-        // A stopped car whose rear is still outside must be able to finish.
-        assert_eq!(m.finish_plan_motor(0.65, 0., 0.56, 2.4, &FINISH_GOAL, true).0, TRIAL_MOTOR);
     }
 }

@@ -47,8 +47,12 @@ pub const TRANSFER_BOOST_MOTOR: i64 = 1600;
 // User 11-04: 1550 from the crosswalk to cone one is slow (asked 1565-1580). Race only:
 // the approach holds 1570 up to the cone's tangent point; the loop keeps 1550.
 pub const FIRST_APPROACH_MOTOR: i64 = 1570;
-pub const DRIVE_MOTORS: [i64; 7] =
-    [TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR, FIRST_APPROACH_MOTOR];
+// User 11-04: after green, 1600 briefly, then hold 1565 to the brake point (race finish plan).
+pub const FINISH_HOLD_MOTOR: i64 = 1565;
+pub const DRIVE_MOTORS: [i64; 8] = [
+    TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR,
+    FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR,
+];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
 pub const STRAIGHT_TURN_MPS: f64 = 1.1;
