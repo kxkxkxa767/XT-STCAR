@@ -421,12 +421,13 @@ impl Maneuver {
                     self._start_motor =
                         if vc < CROSSWALK_CRUISE_MPS - CROSSWALK_CRUISE_BAND_MPS { TRIAL_MOTOR } else { ROUTE_SLOW_MOTOR };
                     // 11-04: with the stripes planned at rest the distance is known; 1550 took 2.3 s to
-                    // reach .95 m/s (y51). Race: 1600 up to the cruise speed (its ESC tail is in vc),
-                    // then 1550; the aimed cut and the top-ups below are unchanged.
+                    // reach .95 m/s (y51). y52's 1600 frame put its .45 s launch rise (1.1 m/s) into
+                    // vc, so the aim cut at once and the run went 1500/1550 by turns (4.19 s). Race:
+                    // 1570 (rise on the 1 m/s2 push) up to the cruise speed, then 1550.
                     if self.race_inputs.is_some() && self.race_crosswalk_stop.planned.is_some()
                         && self.crosswalk_state == Some("approach") && vc < CROSSWALK_RACE_CRUISE_MPS
                     {
-                        self._start_motor = START_LAUNCH_MOTOR;
+                        self._start_motor = FIRST_APPROACH_MOTOR;
                     }
                 }
             }
@@ -512,13 +513,24 @@ impl Maneuver {
         let rate = self.compass.rate;
         let race = self.race_inputs.is_some();
         // y46: the 1570 approach reached cone one at 2.04 m/s, turned in late and ran wide.
-        // Race cone one looks ahead in proportion to its entry speed (earlier turn-in).
-        let first_entry = if race && side > 0 {
+        // y52: at 1.7-1.8 m/s cone two's 1.1 m pursuit swung right, left, then right and the
+        // turn began abeam of the cone. Race loops look ahead in proportion to the speed
+        // (cone one: its entry; cone two: the rear-wall speed), held for the loop.
+        let measured = if !race {
+            None
+        } else if side > 0 {
             self.start_lane_feedback.get("first_approach_drive").get("speed_now_mps").of()
         } else {
-            None
+            self.open_feedback.get("speed_mps").of()
         };
-        let lookahead = OPEN_LOOKAHEAD_M * first_entry.map_or(1., |v| pmax(1., v / OPEN_PREDICT_SPEED_MPS));
+        let loop_speed = {
+            let slot = self.slot_mut(side);
+            if measured.is_some() {
+                slot.speed = measured;
+            }
+            slot.speed
+        };
+        let lookahead = OPEN_LOOKAHEAD_M * loop_speed.map_or(1., |v| pmax(1., v / OPEN_PREDICT_SPEED_MPS));
         let floats = Self::ranges_floats(scan);
         let bins = bins_of(target.idx("support_bins"));
         let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));

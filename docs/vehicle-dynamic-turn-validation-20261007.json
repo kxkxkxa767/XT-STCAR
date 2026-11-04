@@ -27510,8 +27510,8 @@
     "engine_round": 159,
     "baseline": "y51 / engine 158 on the car (23.09 s)",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "跑完了，还是有停顿，pwm哪个档位的占比最大，跑完用时多少",
       "有些阈值你可以根据当前位置做动态调整，力求跑到最快"
@@ -27530,6 +27530,42 @@
     "risks": [
       "Faster crosswalk approach: watch the stop gap to the stripes (aim .15 m; y49/y51 stopped .31-.49 m)."
     ],
-    "next": "Start -> crosswalk stop (y51 3.90), stop gap; crosswalk go -> first pass without a front_sparse pause."
+    "next": "Start -> crosswalk stop (y51 3.90), stop gap; crosswalk go -> first pass without a front_sparse pause.",
+    "car_run_y52": {
+      "deployed": "2026-11-04 21:57, deploy-matched claude-turn159 159 + deploy-vision y52 (from y51 / 158)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y52",
+      "evidence_files_ok": 42,
+      "result": "probe_obstacle_close_body at seq 168 in second_loop (left front 42 deg, .046 m); operator: hit the board in front of cone two, like an earlier run.",
+      "crosswalk_exit": "No quality wait (lateral flank rule works).",
+      "crosswalk_approach": "1600 one frame; vc carried the .45 s launch rise (1.1 m/s), the aim fell to -.46 and cut at once; 1500/1550 by turns plus a board-ahead cut on a 2.58 m front reading (seq 30): start to stop 4.19 s (y51 3.90), stop .50 m before the stripes.",
+      "cone_two": "Approach speed 1.70-1.81 m/s (y45 1.62-1.75). Plan (axis 0, side .45, R 1.05) kept 145-155 (later candidates gained < .05). 1.1 m pursuit: right 1438-1455 (144-147, heading 196 -> 175), left 1513-1530 (149-154, carrot left of the car), servo 1512-1514 cleared the centre ack, the right gate and path avoidance held 1500-1510 for 155-158; right 1460 only at 160 with the cone already abeam (-.38 m); tangent into the board."
+    }
+  },
+  "y53_loop_speed_lookahead_crosswalk_1570_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 160,
+    "baseline": "y52 / engine 159 on the car",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "和之前的某次一样，撞到第二个桩前面的挡板了",
+      "是不是转弯的时候速度不够导致的",
+      "pwm你可以多开放几个值"
+    ],
+    "answer": "Not too slow: cone two came at 1.70-1.81 m/s (y45 1.62-1.75); the turn began too late after a right-left swing of the 1.1 m pursuit.",
+    "change": [
+      "open_loop_geometry (race, both loops): lookahead = 1.1 m * max(1, v / 1.3) with v the loop speed held in Slot.speed (cone one: the start-lane first-approach speed; cone two: the rear-wall transfer speed), so the pursuit damps and the turn starts earlier at speed (1.75 m/s -> 1.48 m).",
+      "Crosswalk approach (race, planned at rest): FIRST_APPROACH_MOTOR 1570 below 1.2 m/s instead of 1600 (its rise is the 1 m/s2 push, not the .45 s launch).",
+      "More PWM steps (user): planned next for the transfer cruise once cone two is confirmed."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
+    "next": "Cone two: turn-in seq vs the cone range, steering continuity, gaps; start -> crosswalk stop (y51 3.90)."
   }
 }

@@ -445,6 +445,8 @@ pub struct Slot {
     pub plan_inputs: Option<V>,
     pub approaching: Option<bool>,
     pub plan_source_seq: Option<i64>,
+    /// Race: the loop's last measured approach speed, for its lookahead.
+    pub speed: Option<f64>,
 }
 
 impl Slot {
