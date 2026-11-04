@@ -502,6 +502,7 @@ impl Maneuver {
             return V::None;
         }
         let rate = self.compass.rate;
+        let race = self.race_inputs.is_some();
         let floats = Self::ranges_floats(scan);
         let bins = bins_of(target.idx("support_bins"));
         let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));
@@ -553,6 +554,7 @@ impl Maneuver {
             let candidate = plan_loop(&free_list, radius, radii, Some(approach));
             let old_plan = slot.plan.clone();
             let mut reject_reversal = false;
+            let mut reject_loosening = false;
             let mut update = dict! {
                 "checked_source_seq" => scan.idx("seq").clone(),
                 "constraint_basis" => "existing_low_yaw_probe_history_running_minimum",
@@ -602,13 +604,22 @@ impl Maneuver {
                     };
                     let (candidate_carrot, prior_carrot) = (plan_carrot(&candidate), plan_carrot(&old_plan));
                     reject_reversal = sidef * candidate_carrot.1 < 0. && 0. <= sidef * prior_carrot.1;
-                    update.set("candidate_curvature_per_m", pursuit_pwm(candidate_carrot).0);
-                    update.set("prior_curvature_per_m", pursuit_pwm(prior_carrot).0);
+                    let (candidate_k, prior_k) = (pursuit_pwm(candidate_carrot).0, pursuit_pwm(prior_carrot).0);
+                    update.set("candidate_curvature_per_m", candidate_k);
+                    update.set("prior_curvature_per_m", prior_k);
+                    // y44 seq 165: on the circle, a 7 mm larger cone re-keyed the plan.
+                    // The new centre lay .5 m further along the axis and steered nearly
+                    // straight (-0.17 vs -1.19 /m); the car left the turn toward the
+                    // board. A feasible loop is kept unless the new one turns as hard.
+                    reject_loosening = race && sidef * candidate_k < sidef * prior_k;
                 }
             }
             update.set("rejected_task_direction_reversal", reject_reversal);
+            if race {
+                update.set("rejected_loosening", reject_loosening);
+            }
             plan_update = update;
-            if !reject_reversal {
+            if !reject_reversal && !reject_loosening {
                 slot.plan = candidate;
                 slot.key = Some(key.clone());
                 slot.plan_source_seq = Some(scan.idx("seq").i());

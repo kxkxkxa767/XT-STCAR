@@ -26976,5 +26976,41 @@
       "post_run": {"console_healthy": true, "neutral_samples": 6, "armed": false, "motor": 1500, "servo": 1500},
       "handoff": "Unresolved collision. Operator handed further diagnosis and repair to Claude. Compare the cone-2 sweep, steering response and outgoing lane geometry on this run against y42 run 2, then reassess the transition into light_entry."
     }
+  },
+  "y45_second_loop_keep_feasible_turn_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 152,
+    "baseline": "25bb690 (car: y44 / engine 151, ac7bc24)",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "排查并修改 (the y44 cone-2 collision handed over by Codex in memoryshare.md 2026-11-04 noon)"
+    ],
+    "diagnosis": {
+      "evidence": [
+        "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y44 (crash)",
+        "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y42-2 (same loop code, finished)"
+      ],
+      "trigger": "Seq 165, already on the circle (before_tangent 0, heading 157 deg, yaw -1.6 rad/s): the cone support radius grew .081 -> .088 m, so the plan key round(radius, 2) changed .08 -> .09 and the loop was re-planned with the free-space probes unchanged.",
+      "replacement": "Prior plan R 1.10, offsets (axis -0.25, side .55), still feasible (margins: enclosing .117, inner .135, outer .139 m). Candidate R 1.10, offsets (+0.25, .55): centre .5 m further along the approach axis. Pursuit curvature at the pose -0.17 vs -1.19 /m. Only a direction reversal was rejected, so the candidate replaced a feasible loop.",
+      "effect": "Steering target 1331 (seq 163) -> 1473 (165) -> 1565/1578 (168/169); heading stayed ~114 deg from seq 169 to 174 (about .5 s straight at ~1.6 m/s) before full right 1308 from 173. Tangent to second pass 1.594 s (y42-2 1.100). Exit at 179 heading 87 deg with the nearest echo .20 m (y42-2 .615); seq 180 left front 35 deg .042 m from the body -> probe_obstacle_close_body.",
+      "y42_2": "Its radius key change (.078 -> .088 at seq 164) came while still approaching, so the plan was replaced before the turn; on the circle it held 1308 from seq 169 to 177.",
+      "history": "Saved mid-loop re-plans y22-y44: 21. All prior plans feasible. Same curvature 16; tighter 2 (y31 seq 193 -0.84 -> -1.28, y39 seq 130 1.16 -> 1.38); looser 3 (y29 127 .82 -> .71, y44 120 1.43 -> 1.37, y44 165 -1.19 -> -0.17, the crash).",
+      "not_the_cause": "Code between y42 and y44 does not touch the loops; y44 changed the crosswalk gap rule, the cone-1 rolling hold and the finish."
+    },
+    "change": [
+      "maneuver_open.rs open_loop_geometry (race only): on the circle, same track, prior plan feasible against the current probes and support radius -> a re-plan that turns less into the loop than the prior (side * k_candidate < side * k_prior) is rejected and the prior is kept; equal or tighter re-plans, and any re-plan when the prior is infeasible, are taken as before. Feedback open_loop.plan_update.rejected_loosening.",
+      "At y44 seq 165 the kept plan gives -1.19 /m -> right limit (~1308) instead of 1473.",
+      "Not changed: y44 crosswalk gap rule, cone-1 rolling hold, finish, light; the Python reference."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 10,
+      "clippy_warnings": 32
+    },
+    "next": "Car run: second loop rejected_loosening frames, tangent -> second pass (y42-2 1.10 s), nearest echo at the exit; first car test of the y44 finish (1600 -> 1560 -> one 1300) and crosswalk gap rule."
   }
 }
