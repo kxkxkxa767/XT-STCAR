@@ -1477,9 +1477,12 @@ impl Maneuver {
         }
     }
 
-    /// Race: cone one handed over but its loop not yet reached (before the tangent point).
+    /// Race: cone one handed over but its loop not yet reached (before the tangent point),
+    /// below the cone's entry speed on the IMU since the crosswalk release.
     pub fn first_approach_push(&self) -> bool {
-        self.race_inputs.is_some()
+        self.race_inputs.is_some_and(|i| {
+            self.race_crosswalk.imu_speed(i.forward_integral).is_some_and(|v| v < crate::race_crosswalk::FIRST_ENTRY_MPS)
+        })
             && self.route_stage == "first_target"
             && self.handover_observed
             && self._open_slots.iter().any(|(side, slot)| *side > 0 && slot.approaching == Some(true))

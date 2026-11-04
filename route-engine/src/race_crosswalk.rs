@@ -6,8 +6,9 @@ use crate::dict;
 
 // y38 (user: the crosswalk start felt slow): y27 reached the first support at ~1.2-1.3 m/s
 // after a 1560/1550 cruise; y31-y37 boosted 1600 for .4 s, then coasted 1.2 s to the
-// y23 straight's 1.1 before the 1550 hold.
-const FIRST_ENTRY_MPS: f64 = 1.3;
+// y23 straight's 1.1 before the 1550 hold. 11-04: cone one took 1.30-1.51 m/s with .35-.49 m to
+// the outer board; at 1.87-2.11 (the 1570 hold) it ran wide, .08-.13 m (y47, y48 stopped).
+pub(crate) const FIRST_ENTRY_MPS: f64 = 1.5;
 
 // A side opening can put the two real returns bounding a missing run at quite
 // different ranges. Compare both to this launch's stopping distance along the
@@ -82,8 +83,10 @@ impl CrosswalkExit {
         // Once the 1600 tail has expired and the actual first tangent is visible,
         // switch to the single rolling hold if its tail fits before the bend.
         let hold_room = self.first_approach == FirstApproach::Coast && rolling_tangent && before.zip(speed).is_some_and(|(d, v)| {
+            v <= FIRST_ENTRY_MPS && {
             let release = v + LANE_POWER_ACCEL_MPS2 * lag;
             d > (v + release) * lag / 2. + (release * release - FIRST_ENTRY_MPS * FIRST_ENTRY_MPS).max(0.) / (2. * decel)
+            }
         });
         if self.first_approach == FirstApproach::Coast && (hold_room || before.is_some_and(|d| d <= 0.) || speed.is_none_or(|v| v <= FIRST_ENTRY_MPS)) {
             self.first_approach = FirstApproach::Hold;
@@ -92,7 +95,8 @@ impl CrosswalkExit {
         let motor = if self.first_approach == FirstApproach::Coast { NEUTRAL }
             else if self.first_approach == FirstApproach::Cruise && boosted { START_LAUNCH_MOTOR }
             else if speed.is_some_and(|v| v < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR }
-            else { FIRST_APPROACH_MOTOR };
+            else if speed.is_some_and(|v| v < FIRST_ENTRY_MPS) { FIRST_APPROACH_MOTOR }
+            else { ROUTE_SLOW_MOTOR };
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
                        "speed_source" => if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
@@ -104,6 +108,11 @@ impl CrosswalkExit {
     }
 
     pub fn first_rolling_hold(&self) -> bool { self.first_approach == FirstApproach::Hold }
+
+    /// The IMU's forward speed since the crosswalk release (the car stood there).
+    pub fn imu_speed(&self, forward_integral: Option<f64>) -> Option<f64> {
+        self.crosswalk_release.and_then(|(_, zero)| zero).zip(forward_integral).map(|(zero, i)| (i - zero).max(0.))
+    }
 
 
     pub fn append_diagnostics(&self, out: &mut V) {

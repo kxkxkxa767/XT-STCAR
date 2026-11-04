@@ -27205,8 +27205,8 @@
     "engine_round": 155,
     "baseline": "y47 / engine 154 on the car",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "我觉得圆弧轨迹可以优化一下，好几次快要撞上桶or挡板",
       "1600冲一下然后保持1565最后再刹车行不行"
@@ -27223,6 +27223,80 @@
       "rust_tests_passed": 9,
       "clippy_warnings": 32
     },
-    "next": "Loop body gaps to cones and boards, plan switches per loop, quality waits in loops, finish release-to-stop (y39 3.69)."
+    "next": "Loop body gaps to cones and boards, plan switches per loop, quality waits in loops, finish release-to-stop (y39 3.69).",
+    "car_run_y48": {
+      "deployed": "2026-11-04 13:30, deploy-matched claude-turn155 155 + deploy-vision y48 (from y47 / 154)",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y48",
+      "evidence_files_ok": 38,
+      "result": "probe_obstacle_close_body at seq 124 in first_target (right front 35 deg, .033 m to the body); operator: stopped after going round cone one.",
+      "cone_one": "Entry 2.11 m/s. Plan kept by the new hysteresis seq 99-109 (gains .004-.014), replaced at 110 (gain .218). No quality wait (inner-side gaps tolerated). Full left lock from 112, outside the R .90 circle from 115 (tangent_to_circle), cone .70-.93 m away; outer board .394 -> .081 m (seq 120-123), stop 124.",
+      "entry_vs_first_loop": {
+        "y39": [
+          1.3,
+          0.168,
+          0.347
+        ],
+        "y42": [
+          1.39,
+          0.353,
+          0.487
+        ],
+        "y42_2": [
+          1.36,
+          0.222,
+          0.458
+        ],
+        "y44": [
+          1.48,
+          0.268,
+          0.476
+        ],
+        "y45": [
+          1.51,
+          0.205,
+          0.387
+        ],
+        "y46": [
+          2.04,
+          1.09,
+          0.44
+        ],
+        "y47": [
+          1.87,
+          0.794,
+          0.134
+        ],
+        "y48": [
+          2.11,
+          0.699,
+          0.081
+        ],
+        "columns": "entry m/s, min body gap to cone one m, min to the outer (right) side m"
+      }
+    }
+  },
+  "y49_first_entry_1p5_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 156,
+    "baseline": "y48 / engine 155 on the car",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "第一个桶绕过后停了"
+    ],
+    "change": [
+      "race_crosswalk.rs FIRST_ENTRY_MPS 1.3 -> 1.5 (coast target to cone one; the fastest entry that kept the outer side, y45 1.51 m/s).",
+      "The approach hold uses 1570 only below 1.5 m/s (IMU since the crosswalk release), else 1550; the same in first_target before the tangent. The early rolling hold (y44) needs the speed at or below 1.5.",
+      "Kept: y48 plan hysteresis, inner-side scan gaps, finish 1600 -> 1565 -> one 1300; y47 lookahead and radius."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
+    "next": "Cone-one entry ~1.5 m/s and outer gap >= .3 m; crosswalk go -> first pass vs y39 4.99; the y48 finish."
   }
 }
