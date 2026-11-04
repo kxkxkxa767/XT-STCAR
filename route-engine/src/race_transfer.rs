@@ -97,6 +97,9 @@ impl RaceTransfer {
         let motor = match self.phase {
             TransferPhase::Boost(_) => TRANSFER_BOOST_MOTOR,
             TransferPhase::Coast => NEUTRAL,
+            // User 11-04 (open PWM steps): out of cone one and straight again, hold toward the
+            // cone-two entry speed instead of 1550 (y53: 1550 at 1.29-1.41 m/s for .5 s).
+            TransferPhase::Approach if continuing => hold_pwm(cut_speed, ENTRY_MPS),
             _ => ROUTE_SLOW_MOTOR,
         };
         (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",

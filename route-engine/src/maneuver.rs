@@ -47,11 +47,24 @@ pub const TRANSFER_BOOST_MOTOR: i64 = 1600;
 // User 11-04: 1550 from the crosswalk to cone one is slow (asked 1565-1580). Race only:
 // the approach holds 1570 up to the cone's tangent point; the loop keeps 1550.
 pub const FIRST_APPROACH_MOTOR: i64 = 1570;
+// User 11-04 ("pwm你可以多开放几个值"): race speed holds pick 1550-1590 in steps of 5.
+pub const HOLD_PWM_STEP: i64 = 5;
+pub const HOLD_PWM_MAX: i64 = 1590;
+pub const HOLD_PWM_PER_MPS: f64 = 60.;
+pub const HOLD_MOTORS: [i64; 7] = [1555, 1560, 1565, 1570, 1575, 1580, 1585];
+
+/// Race speed hold: 1550 at or above the target, more by the deficit (60 PWM per m/s), at most 1590.
+pub fn hold_pwm(speed: Option<f64>, target: f64) -> i64 {
+    let Some(v) = speed else { return ROUTE_SLOW_MOTOR };
+    let raw = ROUTE_SLOW_MOTOR as f64 + HOLD_PWM_PER_MPS * (target - v);
+    let stepped = HOLD_PWM_STEP * (raw / HOLD_PWM_STEP as f64).round() as i64;
+    stepped.clamp(ROUTE_SLOW_MOTOR, HOLD_PWM_MAX)
+}
 // User 11-04: after green, 1600 briefly, then hold 1565 to the brake point (race finish plan).
 pub const FINISH_HOLD_MOTOR: i64 = 1565;
-pub const DRIVE_MOTORS: [i64; 8] = [
+pub const DRIVE_MOTORS: [i64; 12] = [
     TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR,
-    FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR,
+    FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR, 1555, 1575, 1580, 1585,
 ];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
@@ -1293,7 +1306,7 @@ impl Maneuver {
             // y26 restored 1550 above 1 m/s, then handed 1560 to the first
             // loop because it mistook the preceding coast for a start from rest.
             let rolling = ((self.route_stage == "start_lane" && motor == ROUTE_SLOW_MOTOR && self.race_crosswalk.first_rolling_hold())
-                    || motor == FIRST_APPROACH_MOTOR)
+                    || (HOLD_MOTORS.contains(&motor) && motor != TRIAL_MOTOR))
                 && self.race_inputs.is_some()
                 && self.start_lane_feedback.get("speed_mps").of().is_some_and(|v| v >= LANE_SPEED_RESTART_MPS);
             self._launch_until = Some(if rolling { now } else { now + ESC_LAG_S + LANE_LAUNCH_S });
@@ -1475,21 +1488,20 @@ impl Maneuver {
             return self._transfer_motor;
         }
         if self.continue_route && self.phase == "drive" && slow_stage && !self.quality_resume_pending {
-            if self.first_approach_push() { FIRST_APPROACH_MOTOR } else { ROUTE_SLOW_MOTOR }
+            self.first_approach_hold().unwrap_or(ROUTE_SLOW_MOTOR)
         } else {
             TRIAL_MOTOR
         }
     }
 
-    /// Race: cone one handed over but its loop not yet reached (before the tangent point),
-    /// below the cone's entry speed on the IMU since the crosswalk release.
-    pub fn first_approach_push(&self) -> bool {
-        self.race_inputs.is_some_and(|i| {
-            self.race_crosswalk.imu_speed(i.forward_integral).is_some_and(|v| v < crate::race_crosswalk::FIRST_ENTRY_MPS)
-        })
-            && self.route_stage == "first_target"
+    /// Race: cone one handed over but its loop not yet reached (before the tangent point):
+    /// hold the entry speed on the IMU since the crosswalk release.
+    pub fn first_approach_hold(&self) -> Option<i64> {
+        let input = self.race_inputs?;
+        (self.route_stage == "first_target"
             && self.handover_observed
-            && self._open_slots.iter().any(|(side, slot)| *side > 0 && slot.approaching == Some(true))
+            && self._open_slots.iter().any(|(side, slot)| *side > 0 && slot.approaching == Some(true)))
+        .then(|| hold_pwm(self.race_crosswalk.imu_speed(input.forward_integral), crate::race_crosswalk::FIRST_ENTRY_MPS))
     }
 
     // ------------------------------------------------------------ input contract

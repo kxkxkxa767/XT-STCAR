@@ -1535,12 +1535,16 @@ impl Supervisor {
             motors.push(START_LAUNCH_MOTOR);
             motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
         }
-        // User 11-04: the race approach to cone one holds 1570 up to its tangent point.
+        // User 11-04: race speed holds (start lane, cone one's approach, the transfer) use the
+        // open PWM steps 1555-1590.
+        let transfer_drive = phase == "drive" && (stage_is("open_transfer") || m.transfer_stage())
+            && decision.get("quality_resume_pending").is_false();
         if m.race_inputs.is_some()
-            && (launch_allowed || (phase == "drive" && stage_is("first_target") && m.handover_observed
+            && (launch_allowed || transfer_drive || (phase == "drive" && stage_is("first_target") && m.handover_observed
                 && decision.get("quality_resume_pending").is_false()))
         {
-            motors.push(FIRST_APPROACH_MOTOR);
+            motors.extend_from_slice(&HOLD_MOTORS);
+            motors.push(STRAIGHT_MOTOR);
         }
         // Round y23: the transfer's straight push.
         if phase == "drive" && (stage_is("open_transfer") || m.transfer_stage()) && decision.get("quality_resume_pending").is_false() {

@@ -27627,5 +27627,37 @@
         "light_entry_other": 0.259
       }
     }
+  },
+  "y54_open_pwm_speed_holds_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 161,
+    "baseline": "y53 / engine 160 on the car (21.78 s, best)",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "pwm你可以多开放几个值",
+      "继续改，改完更新你的记忆然后上传",
+      "这一轮红灯前停车区的表现最好 (y53; light logic kept)"
+    ],
+    "finding": "y53 crosswalk go -> first pass 4.60 s (y50 3.99): after the 1600 launch (to 1.93 m/s) the coast plan, with its 4 m/s2 x .2 s pending rise, coasted .6 s to 1.54 m/s, then 1570 one frame and 1550 held 1.63; cone-one entry 1.65. Entries of 1.65-1.80 kept >= .28 m in the loop with the y50/y53 rules. The transfer held 1550 at 1.29-1.41 m/s for about .5 s after cone one.",
+    "change": [
+      "maneuver.rs hold_pwm (race): 1550 + 60 PWM per m/s below the target, rounded to steps of 5, at most 1590; HOLD_MOTORS 1555-1585 added to DRIVE_MOTORS and the supervisor whitelist (start lane, cone one after the handover, transfer stages, plus 1590).",
+      "race_crosswalk.rs FIRST_ENTRY_MPS 1.5 -> 1.75; the first-approach hold uses hold_pwm toward it (coast target and early-hold gate follow it); first_target before the tangent holds the same on the IMU speed.",
+      "race_transfer.rs: in the Approach phase, once straight (continuing), hold_pwm toward ENTRY_MPS 1.8 instead of 1550. Boost, coast and bend unchanged; the loops stay at 1550.",
+      "A rolling hold motor sets no launch window (else the loop 1550 would become 1560).",
+      "Not changed: the light approach (user: y53 was the best stop), the loops, the finish."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
+    "risks": [
+      "Cone-one entry ~1.75 m/s (proven 1.65-1.80 with the current loop rules)."
+    ],
+    "next": "Crosswalk go -> first pass (y53 4.60, y50 3.99), entry speed, loop gaps; transfer time; PWM shares."
   }
 }
