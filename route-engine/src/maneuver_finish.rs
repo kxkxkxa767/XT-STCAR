@@ -31,7 +31,10 @@ pub(crate) struct FinishControl {
 
 // The single 1300 brake's deceleration: y25-y27 on the IMU .71-.82 m/s2 over the whole
 // brake; y34/y38 about .85 once it acts (round y39: the plan's brake point and default).
-const LANE_BRAKE_DECEL_MPS2: f64 = 0.8;
+// 11-04 at 12 V it acts within a scan: y50 1.45 -> .95 m/s over .58 m from the command
+// (1.0), y39 1.17 m/s to rest over .75 m (.91), IMU .84 (y45) and .97 (y50).
+const LANE_BRAKE_DECEL_MPS2: f64 = 0.95;
+const LANE_BRAKE_ONSET_S: f64 = 0.1;
 // Round y37: the IMU slope over this much coasting is the coast's own deceleration
 // (y36's finish coast: .63 m/s2 where the run's earlier coasts gave .58).
 const COAST_SLOPE_S: f64 = 0.4;
@@ -126,19 +129,21 @@ impl Maneuver {
     fn finish_plan_motor(&mut self, gap: f64, v: f64, decel: f64, now: f64, goal: &Goal) -> (i64, f64) {
         let lag = ESC_COAST_DELAY_S;
         let coast_stop = gap - v * lag - v * v / (2. * decel);
-        let brake_room = goal.target_gap + v * lag + v * v / (2. * LANE_BRAKE_DECEL_MPS2);
+        let brake_room = goal.target_gap + v * LANE_BRAKE_ONSET_S + v * v / (2. * LANE_BRAKE_DECEL_MPS2);
         let rested = self._power_cmd_at.is_none_or(|p| now - p >= lag);
         let (motor, holding) = match self.finish.brake_since {
             Some(since) => {
                 // round y39: the ESC's onset still to come counts at the present speed
-                let onset = v * pmax(0., lag - (now - since));
+                let onset = v * pmax(0., LANE_BRAKE_ONSET_S - (now - since));
                 let brake_stop = gap - onset - v * v / (2. * self.finish.brake_decel.unwrap_or(LANE_BRAKE_DECEL_MPS2));
                 // y43 (Codex): a .109 s pulse ended before the ESC onset; hold it through the
                 // onset and the IMU slope window. y45/y47: y44's early coast-to-brake latch
-                // stopped short (4.10/5.59 s), so the y39 plan is back otherwise.
+                // stopped short (4.10/5.59 s), so the y39 plan is back otherwise. y50: released
+                // at 1.20 m (.95 m/s), then a 1.4 s coast and a 1550 creep; braking on while the
+                // rest stays inside the zone (whole car in) ends sooner.
                 let on = now - since < LANE_BRAKE_MAX_S
                     && (now - since < lag + BRAKE_SLOPE_S
-                        || brake_stop <= goal.target_gap + LANE_TOPUP_BAND_M || coast_stop < goal.min_gap);
+                        || brake_stop <= goal.body_gap || coast_stop < goal.min_gap);
                 (if on { LANE_BRAKE_MOTOR } else { NEUTRAL }, false)
             }
             None if self.finish.brake_end.is_none() && gap <= pmax(LANE_BRAKE_START_GAP_M, brake_room) => {

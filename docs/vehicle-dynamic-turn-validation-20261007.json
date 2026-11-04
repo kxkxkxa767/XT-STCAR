@@ -27394,5 +27394,33 @@
         "note": "neutral_pause_start_lane after the crosswalk release again"
       }
     }
+  },
+  "y51_finish_brake_model_far_gaps_20261104": {
+    "date": "2026-11-04",
+    "author": "Claude",
+    "engine_round": 158,
+    "baseline": "y50 / engine 157 on the car (22.76 s)",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "分析好改完你更新自己记忆然后提交",
+      "有些阈值你可以根据当前位置做动态调整，力求跑到最快"
+    ],
+    "finding": {
+      "finish": "The 1300 brake acts within a scan at about .9-1.0 m/s2: y50 1.45 -> .95 m/s over .58 m from the command, y39 1.17 m/s to rest over .75 m, IMU .84 (y45) and .97 (y50). The plan assumed .2 s onset and .8 m/s2, so y50 braked at 1.78 m, released at 1.20 m (rest would have been short) and coasted 1.4 s plus a 1550 creep: 4.59 s.",
+      "crosswalk": "y50 seq 91-92: front-left bins 336-346 dark for two scans; flanks 3.3-5.6 m ahead and 1.2-2.3 m left (the open area past the left-turn opening). The far-gap rule tolerated one scan only, so seq 92 paused .4 s (front_sparse)."
+    },
+    "change": [
+      "maneuver_finish.rs: LANE_BRAKE_DECEL_MPS2 .8 -> .95 and a .1 s brake onset (was the .2 s ESC coast delay) for the brake point and the braking-stop forecast; once braking, the brake stays on while braking to rest ends inside the zone (goal.body_gap .40, was target + band .35).",
+      "race_crosswalk.rs far_flank_gap (flank_beyond_stop without the two-wall-fit requirement); supervisor start_lane_far_gap: in race a one-sided front gap whose flanks lie beyond the stopping range, with the corridor clear past it, is tolerated on every scan it lasts."
+    ],
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
+    "next": "Finish release-to-stop (y39 3.69, y50 4.59), brake start gap and speed, stop gap; crosswalk go -> first pass without a front_sparse pause."
   }
 }

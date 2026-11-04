@@ -15,9 +15,16 @@ pub(crate) const FIRST_ENTRY_MPS: f64 = 1.5;
 // car axis. A known previous return inside the driving corridor rules it out.
 pub(crate) fn flank_beyond_stop(clearance: &V, old: &[V], new: &[V], missing: &[V], horizon: f64) -> bool {
     let fits = clearance.get("front_wall_projection").get("fits");
+    fits.get("left").is_dict() && fits.get("right").is_dict() && far_flank_gap(clearance, old, new, missing, horizon)
+}
+
+/// Every missing run is bounded by current returns beyond the stopping range along the
+/// axis, the central corridor is clear past it, and the previous scan saw nothing inside
+/// the corridor within it. y50 seq 91-92: the open area past the left-turn opening (flanks
+/// 3.3-5.6 m ahead, 1.2-2.3 m left) stayed dark for two scans and paused the launch .4 s.
+pub(crate) fn far_flank_gap(clearance: &V, old: &[V], new: &[V], missing: &[V], horizon: f64) -> bool {
     let Some(half_width) = clearance.get("corridor_half_width_m").of() else { return false };
-    if !fits.get("left").is_dict() || !fits.get("right").is_dict()
-        || !clearance.get("corridor_front_m").of().is_some_and(|d| d > horizon) {
+    if !clearance.get("corridor_front_m").of().is_some_and(|d| d > horizon) {
         return false;
     }
     missing.chunk_by(|a, b| b.i() == a.i() + 1).all(|run| {

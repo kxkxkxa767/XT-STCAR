@@ -640,7 +640,7 @@ impl Supervisor {
         let cached = s.report.get("start_lane_far_gap_seq").oi();
         if cached == Some(seq) { return true; } // more control ticks on the same lidar publication
         let prev = &s.motion._current_scan;
-        if prev.get("seq").oi() != Some(seq - 1) || cached == Some(seq - 1) { return false; }
+        if prev.get("seq").oi() != Some(seq - 1) { return false; }
         let dt = (self.scan.idx("at_ms").i() - prev.idx("at_ms").i()) as f64 * 0.001;
         let missing = clearance.idx("front_open_unknown_bins").l();
         if !(0. < dt && dt < SCAN_AGE_S) || missing.is_empty() || missing.len() > crate::clearance::MANEUVER_TOLERABLE_FRONT_UNKNOWN
@@ -655,6 +655,11 @@ impl Supervisor {
         if missing.iter().any(|angle| angle.i().signum() != flank || angle.i().abs() <= LANE_FRONT_HALF_BINS) {
             return false;
         }
+        // Race: a far gap is judged by where it lies, on every scan it lasts (y50 seq 92).
+        if s.motion.race_inputs.is_some() && crate::race_crosswalk::far_flank_gap(clearance, old, new, missing, horizon) {
+            return true;
+        }
+        if cached == Some(seq - 1) { return false; }
         missing.iter().all(|angle| {
             (-1..=1).all(|j| {
                 let k = imod(angle.i()+j, 360) as usize;
