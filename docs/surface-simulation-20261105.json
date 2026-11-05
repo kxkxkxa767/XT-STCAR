@@ -1,0 +1,1664 @@
+{
+  "date": "2026-11-05",
+  "environment": "Mac offline simulation, no vehicle connection",
+  "controller_baseline": "1a869b7 (y54 sources)",
+  "controller_candidate": "y55 plus rule correction to 1.00 m beam spacing",
+  "plant_config": "config/surface-sim-20261105.json",
+  "seeds": [
+    1
+  ],
+  "calibration": {
+    "default_train_rmse_mps": 0.3275624782953648,
+    "default_validation_rmse_mps": 0.28189174616972895,
+    "fitted_train_rmse_mps": 0.061109610405804995,
+    "fitted_validation_rmse_mps": 0.142787454566463,
+    "pwm_training_and_validation_exposure": [
+      {
+        "intervals": 20,
+        "pwm": 1300,
+        "seconds": 3.1978376399999995
+      },
+      {
+        "intervals": 55,
+        "pwm": 1500,
+        "seconds": 8.699766592000008
+      },
+      {
+        "intervals": 19,
+        "pwm": 1550,
+        "seconds": 3.1951387970000003
+      },
+      {
+        "intervals": 1,
+        "pwm": 1555,
+        "seconds": 0.20054626299999967
+      },
+      {
+        "intervals": 3,
+        "pwm": 1560,
+        "seconds": 0.3019935659999997
+      },
+      {
+        "intervals": 3,
+        "pwm": 1565,
+        "seconds": 0.5959867370000005
+      },
+      {
+        "intervals": 6,
+        "pwm": 1570,
+        "seconds": 0.9010975159999992
+      },
+      {
+        "intervals": 13,
+        "pwm": 1600,
+        "seconds": 2.0936986629999987
+      }
+    ],
+    "limitations": [
+      "Targets at 1560-1600 are extrapolated asymptotic parameters, not measured terminal speeds.",
+      "The 1560 target and time constant hit their search bounds; its separate response is poorly identified. 1555,1575,1580,1585,1590 have insufficient straight-segment observations and need interpolation/uncertainty scenarios.",
+      "No lateral tire identification. No layout/controller tuning.",
+      "Snapshots and IMU speed drift constrain accuracy. The exit segment bends, so uncorrected rear rays are excluded as displacement reference.",
+      "Finish IMU speed integration and independent front-wall displacement differ by up to ~0.33 m on y53; retain that model uncertainty before inferring stopping accuracy."
+    ]
+  },
+  "fixed_pwm_response": [
+    {
+      "accel_from_0p5_mps": 0.46923076923076623,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 2.3122185570344413,
+      "neutral_stop_seconds": 2.85,
+      "pwm": 1550,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 1.5979739784082445
+    },
+    {
+      "accel_from_0p5_mps": 0.3257307692307698,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 1.1796174465503242,
+      "neutral_stop_seconds": 1.82,
+      "pwm": 1550,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 1.2621914964616419
+    },
+    {
+      "accel_from_0p5_mps": 0.18223076923077342,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 0.549356694385736,
+      "neutral_stop_seconds": 1.1400000000000001,
+      "pwm": 1550,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 0.9264090145150411
+    },
+    {
+      "accel_from_0p5_mps": -0.1047692307692305,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 0.042311907957795825,
+      "neutral_stop_seconds": 0.29,
+      "pwm": 1550,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 0.2548440506218385
+    },
+    {
+      "accel_from_0p5_mps": 0.5064516129032248,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 2.3150994923666985,
+      "neutral_stop_seconds": 2.85,
+      "pwm": 1555,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 1.5989887415737483
+    },
+    {
+      "accel_from_0p5_mps": 0.3629516129032284,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 1.2261618974962545,
+      "neutral_stop_seconds": 1.86,
+      "pwm": 1555,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 1.2875967491282656
+    },
+    {
+      "accel_from_0p5_mps": 0.2194516129032209,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 0.6071137274355607,
+      "neutral_stop_seconds": 1.2,
+      "pwm": 1555,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 0.9762047566827836
+    },
+    {
+      "accel_from_0p5_mps": -0.06754838709677191,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 0.07384947077521531,
+      "neutral_stop_seconds": 0.37,
+      "pwm": 1555,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 0.3534207717918194
+    },
+    {
+      "accel_from_0p5_mps": 0.5499999999999949,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 2.317958960943855,
+      "neutral_stop_seconds": 2.85,
+      "pwm": 1560,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 1.5999957777406018
+    },
+    {
+      "accel_from_0p5_mps": 0.40649999999999853,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 1.2735814352090102,
+      "neutral_stop_seconds": 1.8900000000000001,
+      "pwm": 1560,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 1.312996813877193
+    },
+    {
+      "accel_from_0p5_mps": 0.2630000000000021,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 0.6677433905574617,
+      "neutral_stop_seconds": 1.26,
+      "pwm": 1560,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 1.0259978500137827
+    },
+    {
+      "accel_from_0p5_mps": -0.024000000000001798,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 0.11385596600802472,
+      "neutral_stop_seconds": 0.46,
+      "pwm": 1560,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 0.45199992228696423
+    },
+    {
+      "accel_from_0p5_mps": 0.9800000000000031,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 3.488929313020975,
+      "neutral_stop_seconds": 3.5,
+      "pwm": 1565,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 1.9699999144286848
+    },
+    {
+      "accel_from_0p5_mps": 0.8364999999999956,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 2.242267322643272,
+      "neutral_stop_seconds": 2.5100000000000002,
+      "pwm": 1565,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 1.7547499261821975
+    },
+    {
+      "accel_from_0p5_mps": 0.6929999999999992,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 1.461020790233647,
+      "neutral_stop_seconds": 1.85,
+      "pwm": 1565,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 1.5394999379357126
+    },
+    {
+      "accel_from_0p5_mps": 0.40599999999999525,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 0.59667116218111,
+      "neutral_stop_seconds": 1.03,
+      "pwm": 1565,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 1.1089999614427402
+    },
+    {
+      "accel_from_0p5_mps": 1.8399999999999972,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 4.898392799905167,
+      "neutral_stop_seconds": 4.14,
+      "pwm": 1570,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 2.3399999999756176
+    },
+    {
+      "accel_from_0p5_mps": 1.6965000000000008,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 3.482910749933467,
+      "neutral_stop_seconds": 3.13,
+      "pwm": 1570,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 2.196499999977374
+    },
+    {
+      "accel_from_0p5_mps": 1.5530000000000044,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 2.5605498999520933,
+      "neutral_stop_seconds": 2.45,
+      "pwm": 1570,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 2.0529999999791273
+    },
+    {
+      "accel_from_0p5_mps": 1.2660000000000005,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 1.455481199973974,
+      "neutral_stop_seconds": 1.6,
+      "pwm": 1570,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 1.7659999999826375
+    },
+    {
+      "accel_from_0p5_mps": 2.199473684210529,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 5.9834625999687745,
+      "neutral_stop_seconds": 4.58,
+      "pwm": 1575,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 2.589499999992665
+    },
+    {
+      "accel_from_0p5_mps": 2.0559736842105214,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 4.328702999977509,
+      "neutral_stop_seconds": 3.48,
+      "pwm": 1575,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 2.4531749999931076
+    },
+    {
+      "accel_from_0p5_mps": 1.912473684210525,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 3.2446159999832958,
+      "neutral_stop_seconds": 2.7600000000000002,
+      "pwm": 1575,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 2.3168499999935483
+    },
+    {
+      "accel_from_0p5_mps": 1.6254736842105322,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 1.9324491999903728,
+      "neutral_stop_seconds": 1.85,
+      "pwm": 1575,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 2.044199999994429
+    },
+    {
+      "accel_from_0p5_mps": 2.598888888888884,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 7.176988999991352,
+      "neutral_stop_seconds": 5.01,
+      "pwm": 1580,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 2.8389999999981237
+    },
+    {
+      "accel_from_0p5_mps": 2.4553888888888875,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 5.266322749993492,
+      "neutral_stop_seconds": 3.84,
+      "pwm": 1580,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 2.709849999998219
+    },
+    {
+      "accel_from_0p5_mps": 2.311888888888891,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 4.009549999995244,
+      "neutral_stop_seconds": 3.06,
+      "pwm": 1580,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 2.580699999998314
+    },
+    {
+      "accel_from_0p5_mps": 2.024888888888887,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 2.4768475999971713,
+      "neutral_stop_seconds": 2.09,
+      "pwm": 1580,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 2.3223999999985043
+    },
+    {
+      "accel_from_0p5_mps": 3.045294117647057,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 8.478956599998185,
+      "neutral_stop_seconds": 5.45,
+      "pwm": 1585,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 3.088499999999602
+    },
+    {
+      "accel_from_0p5_mps": 2.9017941176470607,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 6.29576049999838,
+      "neutral_stop_seconds": 4.2,
+      "pwm": 1585,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 2.9665249999996184
+    },
+    {
+      "accel_from_0p5_mps": 2.7582941176470532,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 4.855336499998771,
+      "neutral_stop_seconds": 3.37,
+      "pwm": 1585,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 2.844549999999635
+    },
+    {
+      "accel_from_0p5_mps": 2.4712941176470604,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 3.0886571999992753,
+      "neutral_stop_seconds": 2.33,
+      "pwm": 1585,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 2.600599999999671
+    },
+    {
+      "accel_from_0p5_mps": 3.5475000000000034,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 9.889384599999971,
+      "neutral_stop_seconds": 5.88,
+      "pwm": 1590,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 3.337999999999931
+    },
+    {
+      "accel_from_0p5_mps": 3.403999999999996,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 7.417016249999733,
+      "neutral_stop_seconds": 4.5600000000000005,
+      "pwm": 1590,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 3.2231999999999332
+    },
+    {
+      "accel_from_0p5_mps": 3.2604999999999995,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 5.78196789999987,
+      "neutral_stop_seconds": 3.68,
+      "pwm": 1590,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 3.108399999999936
+    },
+    {
+      "accel_from_0p5_mps": 2.9734999999999956,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 3.767877999999939,
+      "neutral_stop_seconds": 2.57,
+      "pwm": 1590,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 2.8787999999999423
+    },
+    {
+      "accel_from_0p5_mps": 4.139999999999999,
+      "coast_distance_from_1p5_mps": 1.9524365999999882,
+      "neutral_stop_distance_m": 13.035579600000062,
+      "neutral_stop_seconds": 6.75,
+      "pwm": 1600,
+      "resistance_scale": 1.0,
+      "steady_speed_mps": 3.8369999999999846
+    },
+    {
+      "accel_from_0p5_mps": 3.996500000000003,
+      "coast_distance_from_1p5_mps": 1.560446250000005,
+      "neutral_stop_distance_m": 9.934998000000007,
+      "neutral_stop_seconds": 5.2700000000000005,
+      "pwm": 1600,
+      "resistance_scale": 1.25,
+      "steady_speed_mps": 3.7365499999999847
+    },
+    {
+      "accel_from_0p5_mps": 3.8530000000000064,
+      "coast_distance_from_1p5_mps": 1.2991275000000004,
+      "neutral_stop_distance_m": 7.877824699999792,
+      "neutral_stop_seconds": 4.29,
+      "pwm": 1600,
+      "resistance_scale": 1.5,
+      "steady_speed_mps": 3.636099999999985
+    },
+    {
+      "accel_from_0p5_mps": 3.5660000000000025,
+      "coast_distance_from_1p5_mps": 0.9724780000000017,
+      "neutral_stop_distance_m": 5.328579999999988,
+      "neutral_stop_seconds": 3.06,
+      "pwm": 1600,
+      "resistance_scale": 2.0,
+      "steady_speed_mps": 3.435199999999985
+    }
+  ],
+  "baseline": [
+    {
+      "scenario": "baseline-r1.25",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 23.580000000000005,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.1000000000000005,
+        "true_gap_m": 0.6862115731261973
+      },
+      "crosswalk_stationary_s": 3.179999999999999,
+      "light_stop": {
+        "rear_past_beam_m": 0.008791202167498291,
+        "speed_mps": 0.0,
+        "t": 21.400000000000002,
+        "true_gap_m": 0.6063883837011952
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.05232750039490952,
+        "speed_mps": 0.0,
+        "t": 35.300000000000004,
+        "true_gap_m": 0.3618478454048537
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.24510944760209816,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.283101584
+    },
+    {
+      "scenario": "baseline-r1.5",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 27.48,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.5,
+        "true_gap_m": 0.7190399167929025
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.027697029832286724,
+        "speed_mps": 0.0,
+        "t": 24.8,
+        "true_gap_m": 0.5810204408561068
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.1205200483058757,
+        "speed_mps": 0.0,
+        "t": 38.800000000000004,
+        "true_gap_m": 0.29634818081628644
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.219592368108445,
+      "min_cone_gap_m": 0.2634802021288649,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.301287834
+    },
+    {
+      "scenario": "baseline-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 22.279999999999998,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.5871903678034727
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.12201300306295781,
+        "speed_mps": 0.0,
+        "t": 20.3,
+        "true_gap_m": 0.48383434575470385
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.06221347286627221,
+        "speed_mps": 0.0,
+        "t": 34.0,
+        "true_gap_m": 0.35284924145215335
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.14271946731952448,
+      "min_cone_gap_m": 0.24632214685509132,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.272972709
+    },
+    {
+      "scenario": "baseline-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 6.4,
+        "true_gap_m": 0.5591734782653548
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.5370323018125337,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.332495042
+    },
+    {
+      "scenario": "grip0.4-r1.5",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 27.48,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.5,
+        "true_gap_m": 0.7190399167929025
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.027697029832286724,
+        "speed_mps": 0.0,
+        "t": 24.8,
+        "true_gap_m": 0.5810204408561068
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.1205200483058757,
+        "speed_mps": 0.0,
+        "t": 38.800000000000004,
+        "true_gap_m": 0.29634818081628644
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.219592368108445,
+      "min_cone_gap_m": 0.2634802021288649,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.296878958
+    },
+    {
+      "scenario": "grip0.4-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 21.48,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.5871903678034727
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.20611756625112276,
+        "speed_mps": 0.0,
+        "t": 19.5,
+        "true_gap_m": 0.3923009840868579
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.11488533429333092,
+        "speed_mps": 0.0,
+        "t": 33.1,
+        "true_gap_m": 0.2972568635506425
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.11811041547816292,
+      "min_cone_gap_m": 0.25134288794914195,
+      "traction_limited_s": 0.5600000000000002,
+      "wall_seconds": 0.251000541
+    },
+    {
+      "scenario": "grip0.9-r1.5",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 27.48,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.5,
+        "true_gap_m": 0.7190399167929025
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.027697029832286724,
+        "speed_mps": 0.0,
+        "t": 24.8,
+        "true_gap_m": 0.5810204408561068
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.1205200483058757,
+        "speed_mps": 0.0,
+        "t": 38.800000000000004,
+        "true_gap_m": 0.29634818081628644
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.219592368108445,
+      "min_cone_gap_m": 0.2634802021288649,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.299620083
+    },
+    {
+      "scenario": "grip0.9-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 22.279999999999998,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.5871903678034727
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.12201300306295781,
+        "speed_mps": 0.0,
+        "t": 20.3,
+        "true_gap_m": 0.48383434575470385
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.06221347286627221,
+        "speed_mps": 0.0,
+        "t": 34.0,
+        "true_gap_m": 0.35284924145215335
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.14271946731952448,
+      "min_cone_gap_m": 0.24632214685509132,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.263279583
+    },
+    {
+      "scenario": "shifted-r1.25",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 22.78,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.4,
+        "true_gap_m": 0.7247320221847315
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.07887156647633109,
+        "speed_mps": 0.046474149148197835,
+        "t": 21.0,
+        "true_gap_m": 0.5338180416782681
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.10278986369703791,
+        "speed_mps": 0.0,
+        "t": 34.2,
+        "true_gap_m": 0.31241447906995923
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.2075550525310003,
+      "min_cone_gap_m": 0.0783206272344906,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.268198708
+    },
+    {
+      "scenario": "shifted-r1.5",
+      "modeled_task_pass": false,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 25.280000000000005,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.2,
+        "true_gap_m": 0.7004061680185807
+      },
+      "crosswalk_stationary_s": 3.1800000000000006,
+      "light_stop": {
+        "rear_past_beam_m": -0.030418962569905617,
+        "speed_mps": 0.04108742264784469,
+        "t": 22.72,
+        "true_gap_m": 0.6343559537386048
+      },
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.07685956266052951,
+        "speed_mps": 0.0,
+        "t": 36.800000000000004,
+        "true_gap_m": 0.34151902464245776
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.2143466762087354,
+      "min_cone_gap_m": 0.20712702947005115,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.285882042
+    },
+    {
+      "scenario": "shifted-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 21.680000000000003,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.6000000000000005,
+        "true_gap_m": 0.6027318792178691
+      },
+      "crosswalk_stationary_s": 3.079999999999999,
+      "light_stop": {
+        "rear_past_beam_m": 0.03625838666633108,
+        "speed_mps": 0.0,
+        "t": 19.900000000000002,
+        "true_gap_m": 0.5654211165154708
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.03782318631847037,
+        "speed_mps": 0.0,
+        "t": 33.2,
+        "true_gap_m": 0.37772984212106575
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.1387861852036343,
+      "min_cone_gap_m": 0.19947565500463096,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.25626325
+    },
+    {
+      "scenario": "shifted-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 6.1000000000000005,
+        "true_gap_m": 0.5451444213531467
+      },
+      "crosswalk_stationary_s": 3.179999999999999,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.44630211387828067,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.320871375
+    },
+    {
+      "scenario": "short5-r1.25",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "probe_obstacle_close_body",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.2,
+        "true_gap_m": 0.619712403240525
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.0616826805791055,
+      "min_cone_gap_m": 0.24904538973545667,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.113988208
+    },
+    {
+      "scenario": "short5-r1.5",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.645729747816497
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.20803350854890615,
+      "min_cone_gap_m": 0.27733157728983615,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.336140541
+    },
+    {
+      "scenario": "short5-r1",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "probe_obstacle_close_body",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 3.9,
+        "true_gap_m": 0.5852676957649583
+      },
+      "crosswalk_stationary_s": 3.0800000000000005,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.015230847568513645,
+      "min_cone_gap_m": 0.23277429153976056,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.114765208
+    },
+    {
+      "scenario": "short5-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.3,
+        "true_gap_m": 1.0168131612457878
+      },
+      "crosswalk_stationary_s": 3.080000000000001,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.18694268015615598,
+      "min_cone_gap_m": 0.22855265284498086,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.324654458
+    },
+    {
+      "scenario": "wide8x6-r1.25",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 24.179999999999996,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.1000000000000005,
+        "true_gap_m": 0.6693419761804544
+      },
+      "crosswalk_stationary_s": 3.179999999999999,
+      "light_stop": {
+        "rear_past_beam_m": 0.002663548923192316,
+        "speed_mps": 0.0,
+        "t": 21.7,
+        "true_gap_m": 0.5990396792108879
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.054644256518574075,
+        "speed_mps": 0.0,
+        "t": 35.9,
+        "true_gap_m": 0.35743204860767896
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.5727975589183787,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.278597958
+    },
+    {
+      "scenario": "wide8x6-r1.5",
+      "modeled_task_pass": false,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 29.680000000000003,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.4,
+        "true_gap_m": 0.7322602518836225
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": -0.043599451137372736,
+        "speed_mps": 0.0,
+        "t": 26.900000000000002,
+        "true_gap_m": 0.6537415355425731
+      },
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.02941514532474354,
+        "speed_mps": 0.0,
+        "t": 41.2,
+        "true_gap_m": 0.37994431529376715
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.4755123637547247,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.318192791
+    },
+    {
+      "scenario": "wide8x6-r1",
+      "modeled_task_pass": false,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 27.480000000000004,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.5981979635036372
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": true,
+      "finish_stop": {
+        "rear_past_zone_m": 0.006478263897188974,
+        "speed_mps": 0.10774412076100785,
+        "t": 28.900000000000002,
+        "true_gap_m": 0.411319947903781
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.5579875339780104,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.225122542
+    },
+    {
+      "scenario": "wide8x6-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 6.2,
+        "true_gap_m": 0.5674985498764591
+      },
+      "crosswalk_stationary_s": 3.079999999999999,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.5225547044385387,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.329003917
+    }
+  ],
+  "candidate": [
+    {
+      "scenario": "baseline-r1.25",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 23.679999999999996,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.7,
+        "true_gap_m": 0.6526728602810423
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.11341971188957656,
+        "speed_mps": 0.0,
+        "t": 21.1,
+        "true_gap_m": 0.5016023282929405
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.13018487011612656,
+        "speed_mps": 0.0,
+        "t": 35.4,
+        "true_gap_m": 0.2857944618723378
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.21898648349488745,
+      "min_cone_gap_m": 0.1343188484766845,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.276707375
+    },
+    {
+      "scenario": "baseline-r1.5",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 24.980000000000004,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.6464801335792631
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.027516067196073468,
+        "speed_mps": 0.0,
+        "t": 22.5,
+        "true_gap_m": 0.5809737577979046
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.13339340152982349,
+        "speed_mps": 0.0,
+        "t": 36.7,
+        "true_gap_m": 0.28319329363442414
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.25997891295509845,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.28568725
+    },
+    {
+      "scenario": "baseline-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 21.179999999999996,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.15135025713633166
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.1149848917838403,
+        "speed_mps": 0.006571332002177315,
+        "t": 19.2,
+        "true_gap_m": 0.49375272670964243
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.14519351237061429,
+        "speed_mps": 0.0,
+        "t": 32.9,
+        "true_gap_m": 0.27345200655806945
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.19274399461006453,
+      "min_cone_gap_m": 0.25295916462035617,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.263108333
+    },
+    {
+      "scenario": "baseline-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.9,
+        "true_gap_m": 1.0075776253405824
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.45011837875301797,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.333750291
+    },
+    {
+      "scenario": "grip0.4-r1.5",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 24.980000000000004,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.6464801335792631
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.027516067196073468,
+        "speed_mps": 0.0,
+        "t": 22.5,
+        "true_gap_m": 0.5809737577979046
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.13339340152982349,
+        "speed_mps": 0.0,
+        "t": 36.7,
+        "true_gap_m": 0.28319329363442414
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.25997891295509845,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.283113958
+    },
+    {
+      "scenario": "grip0.4-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 21.580000000000002,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.15135025713633166
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.10136150005023525,
+        "speed_mps": 0.0,
+        "t": 19.5,
+        "true_gap_m": 0.49099051073348754
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.06572385832035899,
+        "speed_mps": 0.0,
+        "t": 33.2,
+        "true_gap_m": 0.34360498350379665
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.13509681702387263,
+      "min_cone_gap_m": 0.24734141439165583,
+      "traction_limited_s": 0.5200000000000001,
+      "wall_seconds": 0.259668709
+    },
+    {
+      "scenario": "grip0.9-r1.5",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 24.980000000000004,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.6464801335792631
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.027516067196073468,
+        "speed_mps": 0.0,
+        "t": 22.5,
+        "true_gap_m": 0.5809737577979046
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.13339340152982349,
+        "speed_mps": 0.0,
+        "t": 36.7,
+        "true_gap_m": 0.28319329363442414
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.25997891295509845,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.283635458
+    },
+    {
+      "scenario": "grip0.9-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 21.179999999999996,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.15135025713633166
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.1149848917838403,
+        "speed_mps": 0.006571332002177315,
+        "t": 19.2,
+        "true_gap_m": 0.49375272670964243
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.14519351237061429,
+        "speed_mps": 0.0,
+        "t": 32.9,
+        "true_gap_m": 0.27345200655806945
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.19274399461006453,
+      "min_cone_gap_m": 0.25295916462035617,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.252267958
+    },
+    {
+      "scenario": "shifted-r1.25",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 22.080000000000002,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.4,
+        "true_gap_m": 0.32127019582753036
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.06784070584790225,
+        "speed_mps": 0.039871891162090695,
+        "t": 20.16,
+        "true_gap_m": 0.5453598834806943
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.09663071594532546,
+        "speed_mps": 0.0,
+        "t": 33.7,
+        "true_gap_m": 0.3147348114074777
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.19038453967946484,
+      "min_cone_gap_m": 0.17908464992545334,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.263798666
+    },
+    {
+      "scenario": "shifted-r1.5",
+      "modeled_task_pass": false,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 28.080000000000005,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.5,
+        "true_gap_m": 0.6908654642449652
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.034736270859218266,
+        "speed_mps": 0.0,
+        "t": 21.400000000000002,
+        "true_gap_m": 0.5735482072732605
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": -0.018847489918298876,
+        "speed_mps": 0.0,
+        "t": 39.800000000000004,
+        "true_gap_m": 0.4381663993932925
+      },
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.20587144612612332,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.310170667
+    },
+    {
+      "scenario": "shifted-r1",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 21.580000000000002,
+      "crosswalk_stop": {
+        "speed_mps": 0.0016780131665458838,
+        "t": 4.6000000000000005,
+        "true_gap_m": 0.11609115591809127
+      },
+      "crosswalk_stationary_s": 3.079999999999999,
+      "light_stop": {
+        "rear_past_beam_m": 0.04531811083712878,
+        "speed_mps": 0.0,
+        "t": 19.5,
+        "true_gap_m": 0.5518812532030353
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.13006548112474547,
+        "speed_mps": 0.0,
+        "t": 33.2,
+        "true_gap_m": 0.284079945238509
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.1147292355415851,
+      "min_cone_gap_m": 0.19359069266129117,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.257916
+    },
+    {
+      "scenario": "shifted-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.3,
+        "true_gap_m": 0.924473946492707
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.31210774638765604,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.328781125
+    },
+    {
+      "scenario": "short5-r1.25",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": false,
+      "terminal_reason": "probe_obstacle_close_body",
+      "contact": {
+        "kind": "board",
+        "pose": [
+          1.2757844357934796,
+          2.973400563213964,
+          0.24932546607543907
+        ],
+        "t": 15.1
+      },
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.0,
+        "true_gap_m": 0.3637431480031057
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.0,
+      "min_cone_gap_m": 0.22321286691051948,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.105410208
+    },
+    {
+      "scenario": "short5-r1.5",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "probe_obstacle_close_body",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.3,
+        "true_gap_m": 0.5615785610039581
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.04280714207215075,
+      "min_cone_gap_m": 0.2510786412952375,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.11678075
+    },
+    {
+      "scenario": "short5-r1",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": false,
+      "terminal_reason": "probe_obstacle_close_body",
+      "contact": {
+        "kind": "board",
+        "pose": [
+          0.22797804899111265,
+          1.2778528863801686,
+          2.7482799748194107
+        ],
+        "t": 13.1
+      },
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.2,
+        "true_gap_m": 0.25376631355484824
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.0,
+      "min_cone_gap_m": 0.24514452855559823,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.091883167
+    },
+    {
+      "scenario": "short5-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.1,
+        "true_gap_m": 0.738007627017568
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.14680358918004208,
+      "min_cone_gap_m": 0.3015655891035858,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.317542208
+    },
+    {
+      "scenario": "wide8x6-r1.25",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 23.580000000000002,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.7,
+        "true_gap_m": 0.602672860281042
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.08517169563214466,
+        "speed_mps": 0.0,
+        "t": 21.1,
+        "true_gap_m": 0.5121312807773091
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.03919315364517839,
+        "speed_mps": 0.0,
+        "t": 35.300000000000004,
+        "true_gap_m": 0.3802024201272225
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.4571484652787071,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.272728167
+    },
+    {
+      "scenario": "wide8x6-r1.5",
+      "modeled_task_pass": true,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 28.379999999999995,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.652357807615489
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.028615231020714837,
+        "speed_mps": 0.0,
+        "t": 25.6,
+        "true_gap_m": 0.5824239862413103
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.10420460493461992,
+        "speed_mps": 0.0,
+        "t": 40.0,
+        "true_gap_m": 0.3081247103094462
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.5280412165059879,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.308092
+    },
+    {
+      "scenario": "wide8x6-r1",
+      "modeled_task_pass": false,
+      "controller_finish": true,
+      "physical_contact_free": true,
+      "terminal_reason": "route_finish_zone_stop",
+      "contact": null,
+      "simulated_effective_s": 27.980000000000004,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.25896053288028
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": true,
+      "finish_stop": {
+        "rear_past_zone_m": 0.010710884930071884,
+        "speed_mps": 0.0,
+        "t": 29.400000000000002,
+        "true_gap_m": 0.4066457304615829
+      },
+      "finish_stopped_in_zone": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.5603362912073022,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.229338458
+    },
+    {
+      "scenario": "wide8x6-r2",
+      "modeled_task_pass": false,
+      "controller_finish": false,
+      "physical_contact_free": true,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "contact": null,
+      "simulated_effective_s": null,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.6000000000000005,
+        "true_gap_m": 1.0098541786025366
+      },
+      "crosswalk_stationary_s": 3.079999999999999,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.5409939926260359,
+      "traction_limited_s": 0.0,
+      "wall_seconds": 0.325772584
+    }
+  ],
+  "counts": {
+    "baseline_cases": 20,
+    "candidate_cases": 20,
+    "baseline_pass": 10,
+    "candidate_pass": 11
+  },
+  "caveat": "Scenario counts are not success probabilities. No lateral identification or real outdoor detector validation was performed."
+}

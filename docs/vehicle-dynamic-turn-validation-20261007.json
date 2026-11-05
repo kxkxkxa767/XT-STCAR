@@ -27775,5 +27775,26 @@
     "snapshot_arithmetic": {"source": "left-cone-trial-20261104-y54, scan 27", "old_imu_pending_rise_mps": 0.431052297, "new_imu_pending_rise_mps": 0.081052297, "old_cut_speed_mps": 1.380353644, "new_cut_speed_mps": 1.072004372, "new_aimed_stop_gap_m_for_the_same_snapshot": 0.810428120, "note": "The retained lidar path sets the new maximum here. This is arithmetic on a recorded snapshot, not a replay or a measured new stop."},
     "evidence_directory": "work/y55-crosswalk-ElHGWF2H",
     "next": "Measure the crosswalk stop gap, any rolling topups, launch-to-crosswalk time and first-cone entry from the changed stopping position. Compare segments against y53 21.776 s. Vehicle remains on y54 until a fresh placement and lamp-reset confirmation."
+  },
+  "y56_one_meter_beam_surface_sim_20261105": {
+    "date": "2026-11-05", "author": "Codex", "engine_round": 163,
+    "baseline": "f3a1bc1, y55 candidate; installed vehicle is y54 / engine 161",
+    "deployed": false, "physical_trial_executed": false,
+    "user_correction": "The optical beam is 1.00 m before the gantry. Prior 1.10 m instruction was a misreading.",
+    "user_scope": "Today offline only; explicitly authorized simulation including increased ground resistance, with lower acceleration and speed at the same PWM. This authorizes simulation for this task despite the older no-simulation default.",
+    "controller_change": "LIGHT_SENSOR_TO_GANTRY_M corrected to 1.00 m. Updated the corresponding existing station-pair fixture. Includes y55 crosswalk IMU compensation.",
+    "simulation": {
+      "tool": "tools/scan-geometry/examples/surface_sim/main.rs", "model": "config/surface-sim-20261105.json",
+      "report": "docs/surface-simulation-20261105.md", "results": "docs/surface-simulation-20261105.json",
+      "evidence": "work/y56-surface-puFuE2E0", "cases": 40, "scenario_pairs": 20, "seeds": [1],
+      "baseline_controller": "1a869b7 exact y54 sources",
+      "fixed_pwm_response_cases": 40,
+      "calibration": {"training_run": "y53", "validation_run": "y54", "prior_validation_speed_rmse_mps": 0.281892, "fitted_validation_speed_rmse_mps": 0.142787},
+      "nominal_candidate": {"modeled_task_pass": true, "simulated_effective_s": 21.18, "crosswalk_true_gap_m": 0.151, "light_true_gap_m": 0.494, "finish_true_gap_m": 0.273},
+      "resistance_1p5_candidate": {"modeled_task_pass": true, "simulated_effective_s": 24.98, "crosswalk_true_gap_m": 0.646},
+      "failures": "Resistance x2 caused timeouts. Short 5x4 layout failed for both controllers; candidate had two physical contacts in that layout. Some wide/shifted layouts failed light or finish-zone requirements.",
+      "limits": "No measured tire friction coefficient or lateral identification. Some PWM plateaus are extrapolated. Terminal displacement residual up to 0.33 m. Ideal semantic camera. This is not physical lap-time evidence or proof of cross-track reliability."
+    },
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_examples_build": true}
   }
 }

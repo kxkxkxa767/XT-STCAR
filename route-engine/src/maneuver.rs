@@ -246,8 +246,8 @@ pub const OPEN_STAGES: [&str; 3] = ["open_transfer", "second_loop", "light_entry
 // Round y2: the traffic-light stop (maneuver_sequence.py has the derivations;
 // only with control['light'], the race program's read-only YOLO process).
 pub const LIGHT_ZONE_M: f64 = 1.;
-// The practice beam is upstream of the gantry. The scoring zone stays 1 m long.
-pub const LIGHT_SENSOR_TO_GANTRY_M: f64 = 1.10;
+// Rule 2.4.2(4), corrected by the operator on 2026-11-05.
+pub const LIGHT_SENSOR_TO_GANTRY_M: f64 = 1.0;
 // Round y20: one motion into the zone (the guard's floor the line itself), a red there holds.
 pub const LIGHT_STOP_TARGET_GAP_M: f64 = 0.45;
 pub const LIGHT_STOP_MIN_GAP_M: f64 = 0.05;

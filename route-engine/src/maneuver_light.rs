@@ -928,13 +928,13 @@ mod tests {
     #[test]
     fn two_stations_override_a_wrong_prior_and_a_lone_beam_does_not_become_the_gantry() {
         let beam = [(1.0, 0.51), (1.02, -0.46)];
-        let gate = [(2.12, 0.47), (2.10, -0.48)];
+        let gate = [(2.02, 0.47), (2.00, -0.48)];
         let posts = [beam[1], gate[1], beam[0], gate[0], (4.3, 0.46), (4.32, -0.48)];
         let paired = station_pair(&posts, Some(1.0)).unwrap();
         assert_eq!(paired.legs, gate);
         assert!((paired.beam_along.unwrap() - 1.01).abs() < 1e-9);
-        assert!(station_pair(&beam, Some(2.11)).is_none());
-        let single = station_pair(&gate, Some(2.11)).unwrap();
+        assert!(station_pair(&beam, Some(2.01)).is_none());
+        let single = station_pair(&gate, Some(2.01)).unwrap();
         assert_eq!(single.legs, gate);
         assert!(single.beam_along.is_none());
     }

@@ -1,0 +1,77 @@
+{
+  "label": "surface-calibrated-20261105",
+  "seed": 1,
+  "max_seconds": 60,
+  "layout": {
+    "length_m": 8.0,
+    "width_m": 4.0,
+    "lane_width_m": 0.9,
+    "light_width_m": 1.0,
+    "start_divider_m": 3.2,
+    "light_divider_m": 3.2,
+    "stripe_x_m": 2.95,
+    "start_x_m": 0.40,
+    "beam_gap_m": 1.0
+  },
+  "plant": {
+    "motor_delay_s": 0.056,
+    "coast_decel_mps2": 0.5740000000000001,
+    "brake_decel_mps2": 0.956,
+    "drive_accel_max_mps2": 4.1400000000000015,
+    "resistance_scale": 1.0,
+    "traction_mu": 0.6,
+    "speed_table": [
+      [
+        1550.0,
+        1.598
+      ],
+      [
+        1560.0,
+        1.6
+      ],
+      [
+        1570.0,
+        2.34
+      ],
+      [
+        1600.0,
+        3.837
+      ]
+    ],
+    "response_table": [
+      [
+        1550.0,
+        2.34
+      ],
+      [
+        1560.0,
+        2.0
+      ],
+      [
+        1570.0,
+        1.0
+      ],
+      [
+        1600.0,
+        0.7
+      ]
+    ]
+  },
+  "camera": {
+    "fps": 3.6,
+    "capture_age_s": 0.15,
+    "latency_s": 0.24,
+    "red_on_delay_s": 0.8,
+    "red_duration_s": 10.0
+  },
+  "sensors": {
+    "range_noise_m": 0.008,
+    "scan_distortion": 1.0
+  },
+  "calibration": {
+    "training_run": "left-cone-trial-20261104-y53",
+    "validation_run": "left-cone-trial-20261104-y54",
+    "validation_speed_rmse_mps": 0.142787454566463,
+    "note": "Empirical model. High-PWM steady targets are extrapolated; terminal displacement residual up to 0.33 m remains. No lateral friction coefficient was measured."
+  }
+}
