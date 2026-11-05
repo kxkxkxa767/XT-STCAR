@@ -731,6 +731,7 @@ pub struct Maneuver {
     pub(crate) race_surface_speed: crate::race_surface_speed::SurfaceSpeed,
     pub(crate) finish: crate::maneuver_finish::FinishControl,
     pub(crate) race_light: crate::race_light::RaceLight,
+    pub(crate) race_light_brake: crate::race_light_brake::LightBrake,
     pub _start_speed_measured: bool,
     pub _start_speed_last: Option<(f64, f64)>,
     pub start_lane_coast_steering: V,
@@ -1053,6 +1054,7 @@ impl Maneuver {
             race_surface_speed: Default::default(),
             finish: Default::default(),
             race_light: Default::default(),
+            race_light_brake: Default::default(),
             _start_speed_measured: false,
             _start_speed_last: None,
             start_lane_coast_steering: V::None,
@@ -1338,6 +1340,12 @@ impl Maneuver {
             result.set("surface_speed", self.race_surface_speed.diagnostics());
         }
         let motor = result.get("motor").i();
+        if self.race_light_brake.is_active() && motor != crate::race_light_brake::LIGHT_BRAKE_MOTOR
+            && self.lane_motor == crate::race_light_brake::LIGHT_BRAKE_MOTOR {
+            // A pause must not leave a cached 1300 for its resume ACK tick.
+            self.lane_motor = NEUTRAL;
+        }
+        self.race_light_brake.output_observed(motor);
         if DRIVE_MOTORS.contains(&motor) {
             self._power_cmd_at = Some(now);
             self._power_cmd_motor = Some(motor);

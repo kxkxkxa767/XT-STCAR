@@ -27860,7 +27860,7 @@
     "date": "2026-11-05", "author": "Codex", "engine_round": 165,
     "baseline": "024b930; actual vehicle y57 / engine 164 from 7b2c0dc",
     "user_instruction": "After each confirmed problem analysis, continue fixing autonomously; do not wait for another request to change it. A new vehicle placement confirmation is still required for each drive.",
-    "deployed": true, "physical_trial_executed": false,
+    "deployed": true, "physical_trial_executed": true,
     "build": {"status": "complete", "source_commit": "04b37384fc5934215241c9e51468b4e58fe63f9d", "base": "claude-turn164", "engine": "claude-turn165", "vision": "y58", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2781656, "engine_sha256": "0cf44d2c8c3c913cbe7ab1e5c581a33fefabbd2645d1ebb5912131c760d740eb", "combined_archive": "XT-STCAR-y58-04b3738.tar.gz", "combined_archive_bytes": 10946216},
     "deployment": {"status": "complete", "engine": "claude-turn165", "vision": "y58", "evidence": "work/y58-transfer-83qFLx3K/deploy-engine.log", "next_drive": "awaiting new operator placement and light-reset confirmation"},
     "changes": [
@@ -27877,6 +27877,55 @@
       "learning_after_104": {"old_sparse_inputs": 0, "new_saved_window_endpoints": 1, "new_approximate_window": 3},
       "limits": "Fixed saved inputs, not a new closed-loop trajectory. Feedback about 6 Hz versus lidar 10 Hz; missing scans and ACKs not fabricated. Five-scan representative time and IMU consumer timestamps are approximate. Steering arithmetic has about 1 PWM rounding uncertainty. seq137 still has a small left correction."
     },
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_compile_only": true}
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_compile_only": true},
+    "car_run_y58": {
+      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y58",
+      "files_retrieved": 54, "files_checked": 54, "reason": "route_finish_zone_stop", "elapsed_saved_feedback_s": 24.665034022,
+      "effective_s": null, "invalid_full_trial_reason": "Operator confirmed photoelectric sensor malfunction; red=0 and green=0, controller passed without red.",
+      "finish_gap_m": 0.38220101876191653, "finish_creeps": 0, "quality_counts": {},
+      "first_pass_to_second_pass_s": 3.495792474,
+      "second_approach_target_max_pwm": 1477, "second_approach_ack_max_pwm": 1471,
+      "first_exit_max_saved_heading_deg": 211.05, "first_exit_first_neutral_ack_s": 0.399,
+      "surface_learning_before_after_first_cone": [17,25], "saved_compensation_max_pwm": 0,
+      "surface_extra_load_peak_mps2": 0.08281, "imu_samples": 2828, "imu_checksum_errors": 0,
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+    },
+    "car_run_y58_2": {
+      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y58-2",
+      "operator_confirmation": "Car, optical sensor and light reset ready; rerun the same y58.",
+      "files_retrieved": 54, "files_checked": 54, "reason": "route_finish_zone_stop",
+      "timing_basis": "Historical saved-feedback scan clock, first non-neutral ACK to finish, subtracting light-stop to light-go.",
+      "total_s": 30.653094981, "red_wait_s": 9.584441949999999, "effective_s": 21.068653031,
+      "start_rear_m": 0.54, "crosswalk_gap_m": 0.15602164482960879,
+      "light_gap_m": 0.06291837927288024, "light_target_gap_m": 0.55,
+      "red_detections": 4, "green_detections": 0, "release_basis": "red_seen_10_5s_no_fresh_red",
+      "operator_observation": "Stopped too close to gantry, so camera could no longer see the traffic lights.",
+      "visual_evidence": "frame-000061.jpg has red light clipped at the top edge; frame-000071.jpg cannot see the light housing.",
+      "finish_gap_m": 0.2713531404041588, "finish_creeps": 0, "quality_counts": {},
+      "first_pass_to_second_pass_s": 3.494060833, "second_approach_target_max_pwm": 1500,
+      "second_approach_ack_note": "1510 ACK at scan131 was inherited from transfer; new target was neutral, then scan132 ACK1500 and subsequent right steering. No new large left reversal.",
+      "first_exit_max_saved_heading_deg": 204.55, "first_exit_first_neutral_ack_s": 0.601,
+      "surface_learning_before_after_first_cone": [22,28], "saved_compensation_max_pwm": 0,
+      "surface_extra_load_peak_mps2": 0.03069, "cpu_main_core_percent": 16.211228035674914,
+      "mean_scan_to_tick_ms": 1.506410271641802, "imu_samples": 3598, "imu_checksum_errors": 0,
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+    }
+  },
+  "y59_light_projection_visibility_brake_20261105": {
+    "date": "2026-11-05", "author": "Codex", "engine_round": 166,
+    "baseline": "da39ae0; actual vehicle y58 / engine165 from04b3738",
+    "user_authorization": "Fix the stop that put the traffic-light housing outside the camera view; user explicitly permits 1300 braking when loss of light visibility is anticipated.",
+    "deployed": false, "physical_trial_executed": false,
+    "build": {"status": "pending", "base": "claude-turn165", "engine": "claude-turn166", "vision": "y59"},
+    "report": "docs/y59-light-visibility-brake-20261105.md", "evidence_directory": "work/y59-light-uiLXKPGm",
+    "cause": "Lane-axis velocity rises as the car straightens. The previous correction only added forward IMU velocity change and omitted changing heading projection. At y58-2 seq163 the measured gantry closing interval was about1.664 m/s, but current speed reported1.099. Seq166 had no speed and held an older raw estimate. The first neutral was visible at168, already predicting an overrun.",
+    "changes": [
+      "Light-specific range intervals integrate heading projection and IMU increment, solve current body speed, and project to the current lane axis. Missing reference can briefly propagate a recent body anchor. Store current corrected speed instead of stale raw slope for fallback.",
+      "Include heading-change acceleration in the next-scan stopping forecast.",
+      "A separate one-shot light brake starts1300 when coasting overruns the0.55m visibility stop and another scan would consume braking room; continuous until low speed, then1500. Uses the existing vehicle brake model0.95m/s2 and0.1s onset.",
+      "Fresh red frames preserve an active brake. Interruptions clear the cached brake command and retire the one-shot. Light-entry output, ACK acceptance, centre proof and pending-neutral ACK paths support the authorized brake. Finish brake remains independent."
+    ],
+    "fixed_input_evidence": {"old_seq163_current_mps": 1.09948, "midpoint_projection_only_mps": 1.41785, "sparse_new_seq163_current_mps": 1.57642, "sparse_new_seq164_current_mps": 1.59802, "limits": "Saved6Hz references and raw IMU, not full10Hz replay; missingseq165 means the real history reset cannot be reproduced exactly. Sparse seq168 gave2.118m/s and is not a validated physical speed. New stopping position requires actual trial."},
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true, "focused_regressions": "Only two new inline cases: continuous one-shot brake and no cached1300 reissue after pause."}
   }
 }

@@ -832,11 +832,12 @@ impl Supervisor {
             && py_eq(control.get("motor"), &V::Int(NEUTRAL));
         // Pending neutral only before its first ACK (round 58: a light-lane
         // wait entered during a neutral pulse may already read 1500).
-        let pending_motors: Vec<i64> = if s.quality_wait_entry_neutral == Some(true) {
+        let mut pending_motors: Vec<i64> = if s.quality_wait_entry_neutral == Some(true) {
             std::iter::once(NEUTRAL).chain(DRIVE_MOTORS).collect()
         } else {
             DRIVE_MOTORS.to_vec()
         };
+        if m.light_brake_ack_expected() { pending_motors.push(LANE_BRAKE_MOTOR); }
         let pending_neutral = in_motors(control.get("motor"), &pending_motors)
             && neutral_seq.is_none_or(|n| seq_of(&control) < n as f64);
         if !neutral_ack && !pending_neutral {
@@ -1484,7 +1485,8 @@ impl Supervisor {
                 // Round y2: the light stop coasts from the light entry on.
                 || (stage_is("light_entry")
                     && (decision.get("light_stop_active").is_true() || m.released_light_entry() || route_center.get("transfer_coast").is_true())
-                    && py_eq(route_center.get("motor"), &V::Int(NEUTRAL))))
+                    && py_eq(route_center.get("motor"), &V::Int(NEUTRAL)))
+                || (m.light_brake_ack_expected() && py_eq(route_center.get("motor"), &V::Int(LANE_BRAKE_MOTOR))))
             && route_center.get("seq").is_int()
             && self.arm_sequence as f64 <= route_center.get("seq").f()
             && route_center.get("seq").f() <= seq_of(&control)
@@ -1563,7 +1565,11 @@ impl Supervisor {
             && m.light_stop_evidence.is_dict()
             && (m.light_stop_evidence.has("go") || m.light_stop_state == Some("passed"))
             && decision.get("quality_resume_pending").is_false();
-        if brake_allowed {
+        let visibility_brake_allowed = phase == "drive"
+            && m.race_inputs.is_some() && matches!(stage, "light_entry" | "light_lane")
+            && m.light_approaching() && m.race_light_brake.is_active()
+            && decision.get("quality_resume_pending").is_false();
+        if brake_allowed || visibility_brake_allowed {
             motors.push(LANE_BRAKE_MOTOR);
         }
         if !in_motors(&motor, &motors) || !(minimum_servo as f64 <= num(&servo) && num(&servo) <= SERVO_MAX as f64) {

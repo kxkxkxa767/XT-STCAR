@@ -8,6 +8,7 @@ use crate::helpers::*;
 use crate::maneuver::*;
 use crate::py::*;
 use crate::race_light::{LightRoll, at_predicted_beam, station_pair};
+use crate::race_light_brake::{LIGHT_BRAKE_MOTOR, LIGHT_BRAKE_RESPONSE_S, LIGHT_BRAKE_DECEL_MPS2};
 
 // Pre-red approach settings, independent of the terminal board controller.
 const LIGHT_CRUISE_ACCEL_MPS2: f64 = 0.35;
@@ -144,6 +145,13 @@ impl Maneuver {
         matches!(self.light_stop_state, Some("divider_approach" | "approach"))
     }
 
+    /// Include the delayed ACK of a completed/cancelled light brake without
+    /// permitting another brake command or changing the terminal controller.
+    pub fn light_brake_ack_expected(&self) -> bool {
+        self.race_inputs.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
+            && (self.race_light_brake.is_active() || self.race_light_brake.is_used())
+    }
+
     /// _light_entry_coast_ack_dropped(): a centre ACK proven at neutral
     /// authorizes right in the light entry only while its light stop lasts.
     pub fn light_entry_coast_ack_dropped(&mut self) {
@@ -212,7 +220,9 @@ impl Maneuver {
             self._light_gantry_since.get_or_insert(captured.f());
             self._light_red_hold = true;
             self.light_stop_state = Some("approach");
-            self.lane_motor = NEUTRAL; // applies on this control tick, even on a repeated lidar scan
+            // A red frame must not interrupt an ongoing single brake with a
+            // neutral pulse, which would make the next 1300 a second ESC action.
+            self.lane_motor = if self.race_light_brake.is_active() { LIGHT_BRAKE_MOTOR } else { NEUTRAL };
         }
         if self.light_stop_active() && (fresh_race_red || captured.f() >= self._light_gantry_since.unwrap()) {
             if red.f() >= LIGHT_RED_MIN_SCORE {
@@ -730,7 +740,7 @@ impl Maneuver {
         // A constant offset preserves closing rate when live legs replace the prior.
         let reference = self.race_light.prior_ahead.or(ahead).or_else(|| self.lane_front_range(scan));
         let (speed, current_speed) = self.race_light.measure_speed(scan, reference, input.forward_integral, axis_cos);
-        if let Some(v) = speed { self.race_light.last_speed = Some((now, v)); }
+        if let Some(v) = current_speed.or(speed) { self.race_light.last_speed = Some((now, v)); }
         let held = self.race_light.last_speed.filter(|(at, _)| now-at <= LANE_SPEED_HOLD_S).map(|(_,v)| v);
         let v = current_speed.or(speed).or(held);
         let decel = self.lane_decels().0;
@@ -741,6 +751,12 @@ impl Maneuver {
         let beam_speed = (2.*decel*(LIGHT_SENSOR_TO_GANTRY_M-VISIBLE_LIGHT_STOP_GAP_M)).sqrt();
         let (_, tail) = self.lane_pipeline(now, lag, lag, 0.);
         let (step, acceleration) = self.race_light.approach_step(scan, input.forward_integral, axis_cos);
+        // d(v_body*cos(heading))/dt includes the change of projection as the
+        // car straightens, in addition to its measured forward acceleration.
+        let heading_accel = current_speed.zip(input.yaw_rate)
+            .filter(|_| axis_cos >= std::f64::consts::FRAC_1_SQRT_2)
+            .map_or(0., |(axial_speed, yaw)| -axial_speed / axis_cos * sin * yaw);
+        let acceleration = acceleration.map(|a| a + heading_accel);
         let coast_travel = |v: f64, powered_s: f64| {
             let release = v + LIGHT_CRUISE_ACCEL_MPS2 * powered_s;
             (v + release) * powered_s / 2. + release * release / (2. * axial_decel)
@@ -804,6 +820,14 @@ impl Maneuver {
         {
             TRIAL_MOTOR // y34: 1550 does not start the car from rest (y33 sim short5 sat at 1550 for 26 s)
         } else { ROUTE_SLOW_MOTOR };
+        let brake_decel = LIGHT_BRAKE_DECEL_MPS2 * (1. + axis_cos.max(0.)) * 0.5;
+        let brake_stop = gap.zip(v).map(|(g, v)| g-v*LIGHT_BRAKE_RESPONSE_S-v*v/(2.*brake_decel));
+        let next_brake_stop = gap.zip(v).map(|(g, v)| {
+            let next = (v + acceleration.unwrap_or(0.) * step).max(0.);
+            g-(v+next)*step/2.-next*LIGHT_BRAKE_RESPONSE_S-next*next/(2.*brake_decel)
+        });
+        let motor = self.race_light_brake.command(now, v, predicted, next_brake_stop, VISIBLE_LIGHT_STOP_GAP_M)
+            .unwrap_or(motor);
         self.lane_motor = motor;
         let stopped = red && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
             && self._power_cmd_at.is_none_or(|at| now-at >= lag);
@@ -813,6 +837,9 @@ impl Maneuver {
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
             "stop_gap_if_renewed_m" => if_renewed, "resume_before_beam" => resume_before_beam, "rear_to_gantry_m" => rear_gap,
+            "heading_accel_mps2" => heading_accel, "brake_stop_gap_m" => brake_stop,
+            "next_brake_stop_gap_m" => next_brake_stop, "visibility_brake" => self.race_light_brake.phase(),
+            "visibility_brake_used" => self.race_light_brake.is_used(),
             "divider_gantry_ahead_m" => self.race_light.prior_ahead, "approach_phase" => self.race_light.phase.label(),
             "beam_crossed_s_ago" => self.race_light.beam_at.map(|at| now - at), "red_due" => red_due,
             "red_hold" => red, "motor" => motor, "creeps" => 0,
@@ -924,6 +951,29 @@ mod tests {
     //! results in web/vehicle-console/tests/fixtures/light_gantry_run108_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+    #[test]
+    fn a_paused_light_brake_accepts_its_ack_without_reissuing_the_cached_brake() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.race_inputs = Some(Default::default());
+        m.route_stage = "light_entry";
+        m.light_stop_state = Some("approach");
+        m.servo = NEUTRAL;
+        m.lane_motor = LIGHT_BRAKE_MOTOR;
+        assert_eq!(m.race_light_brake.command(1., Some(1.), Some(0.2), Some(0.5), 0.55), Some(1300));
+        let ack = dict! {"motor" => 1300, "servo" => 1500, "seq" => 10, "tick" => 100,
+            "armed" => true, "command_acked" => true};
+        assert!(m.route_adopted(&ack, 1.1));
+        assert_eq!(m._route_center_ack.get("motor").i(), 1300);
+        m.phase = "quality_wait";
+        m.quality_wait_servo = Some(NEUTRAL);
+        assert_eq!(m.result(1.2).get("motor").i(), 1500);
+        assert_eq!(m.lane_motor, NEUTRAL);
+        assert!(m.race_light_brake.is_used());
+        m.phase = "drive";
+        assert_eq!(m.route_motor(), NEUTRAL);
+        assert_eq!(m.race_light_brake.command(1.3, Some(1.), Some(0.2), Some(0.4), 0.55), None);
+    }
 
     #[test]
     fn two_stations_override_a_wrong_prior_and_a_lone_beam_does_not_become_the_gantry() {

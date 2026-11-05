@@ -186,7 +186,7 @@ impl Maneuver {
             motors.push(NEUTRAL);
         }
         motors.extend_from_slice(&DRIVE_MOTORS);
-        if self.route_stage == "light_lane" || self.released_light_entry() {
+        if self.route_stage == "light_lane" || self.released_light_entry() || self.light_brake_ack_expected() {
             motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
         }
         let adopted = motor_in(control.get("motor"), &motors)
@@ -210,7 +210,8 @@ impl Maneuver {
         } else if self.servo == NEUTRAL
             && (motor_in(control.get("motor"), &DRIVE_MOTORS)
                 || ((self.transfer_stage() || self.light_motor_stage())
-                    && eq_i(control.get("motor"), NEUTRAL)))
+                    && eq_i(control.get("motor"), NEUTRAL))
+                || (self.light_brake_ack_expected() && eq_i(control.get("motor"), LANE_BRAKE_MOTOR)))
         {
             self._route_center_ack = control.pick(&["servo", "motor", "tick", "seq"]);
             if self.transfer_stage() && eq_i(control.get("motor"), NEUTRAL) {

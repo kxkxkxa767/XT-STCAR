@@ -208,6 +208,7 @@ impl Maneuver {
         if let Some(input) = self.race_inputs {
             d.set("surface_response", self.race_surface.diagnostics());
             d.set("surface_speed", self.race_surface_speed.diagnostics());
+            d.set("light_visibility_brake", self.race_light_brake.phase());
             // Preserve the existing diagnostic format without sharing control state.
             let mut view = self.race_transfer.dump();
             self.race_crosswalk.append_diagnostics(&mut view);

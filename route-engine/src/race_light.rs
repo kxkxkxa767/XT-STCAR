@@ -7,7 +7,7 @@ use crate::maneuver::{
 };
 use crate::py::V;
 use crate::motion_sensors::{RangeHistory, lane_range_speed};
-use crate::maneuver::LANE_SPEED_HISTORY;
+use crate::maneuver::{LANE_SPEED_BASELINE, LANE_SPEED_HISTORY};
 
 type Post = (f64, f64); // longitudinal and leftward distances in the lane frame
 
@@ -216,7 +216,8 @@ pub struct RaceLight {
     pub passed_hint: bool,
     pub ranges: RangeHistory,
     pub last_speed: Option<(f64, f64)>,
-    imu_history: Vec<(f64, f64)>,
+    imu_history: Vec<(f64, f64, f64)>, // scan time, body IMU integral, lane projection cos
+    body_speed_anchor: Option<(f64, f64, f64)>, // scan time, body speed, IMU integral
     /// When the front was first estimated past the photo beam (y34).
     pub beam_at: Option<f64>,
     approach_sample: Option<(i64, f64, Option<f64>)>,
@@ -242,29 +243,75 @@ impl RaceLight {
         -> (Option<f64>, Option<f64>) {
         let raw = lane_range_speed(&mut self.ranges, scan, reference, 2);
         let at = scan.idx("at_ms").i() as f64 * 0.001;
-        let midpoint = self.ranges.first().map_or(at, |r| (r.0+at)/2.);
-        (raw, self.adjusted_speed(forward_integral, at, midpoint, raw, axis_cos))
+        (raw, self.adjusted_speed(forward_integral, at, raw, axis_cos))
     }
 
-    /// The lane's range slope is centred on its short scan history. Move it
-    /// to the current frame using only the IMU change over that same interval.
-    fn adjusted_speed(&mut self, forward_integral: Option<f64>, at: f64, midpoint: f64, raw: Option<f64>, axis_cos: f64) -> Option<f64> {
-        let Some(current) = forward_integral else { self.imu_history.clear(); return None };
+    /// Range differences measure lane-axis motion, whose projection changes
+    /// while the car leaves the second loop. Correct each existing difference
+    /// interval before taking its median, then project the current body speed.
+    fn adjusted_speed(&mut self, forward_integral: Option<f64>, at: f64, raw: Option<f64>, axis_cos: f64) -> Option<f64> {
+        let Some(current) = forward_integral.filter(|v| v.is_finite()) else {
+            self.imu_history.clear();
+            self.body_speed_anchor = None;
+            return None;
+        };
+        if !at.is_finite() || !axis_cos.is_finite() { return None; }
         let h = &mut self.imu_history;
-        if h.last().is_none_or(|&(t, _)| t != at) {
-            if h.last().is_some_and(|&(t, _)| at < t || at - t > crate::helpers::SCAN_AGE_S) { h.clear(); }
-            h.push((at, current));
+        if h.last().is_none_or(|&(t, _, _)| t != at) {
+            if h.last().is_some_and(|&(t, _, _)| at < t || at - t > crate::helpers::SCAN_AGE_S) {
+                h.clear();
+                self.body_speed_anchor = None;
+            }
+            h.push((at, current, axis_cos));
             if h.len() > LANE_SPEED_HISTORY { h.remove(0); }
         }
-        let lidar = raw?;
-        let pair = h.windows(2).find(|p| p[0].0 <= midpoint && midpoint <= p[1].0)?;
-        let ((t0, a), (t1, b)) = (pair[0], pair[1]);
-        let centre = a + (b-a)*(midpoint-t0)/(t1-t0);
-        Some((lidar + (current-centre)*axis_cos).max(0.))
+        if raw.is_some() {
+            let n = self.ranges.len();
+            let step = LANE_SPEED_BASELINE.min(n.saturating_sub(2));
+            let mut bodies = [0.; LANE_SPEED_HISTORY];
+            let mut count = 0;
+            if step > 0 {
+                for (a, b) in self.ranges.iter().zip(self.ranges[step..].iter()) {
+                    let (mut projected_time, mut projected_integral, mut covered) = (0., 0., 0.);
+                    for p in h.windows(2) {
+                        let start = a.0.max(p[0].0);
+                        let end = b.0.min(p[1].0);
+                        if start >= end { continue; }
+                        let interpolate = |t: f64| {
+                            let f = (t-p[0].0)/(p[1].0-p[0].0);
+                            (p[0].1+f*(p[1].1-p[0].1), p[0].2+f*(p[1].2-p[0].2))
+                        };
+                        let ((i0, c0), (i1, c1)) = (interpolate(start), interpolate(end));
+                        let dt = end-start;
+                        projected_time += dt*(c0+c1)*0.5;
+                        // Exact product integral for linearly interpolated I and cos.
+                        projected_integral += dt*(2.*i0*c0+i0*c1+i1*c0+2.*i1*c1)/6.;
+                        covered += dt;
+                    }
+                    let duration = b.0-a.0;
+                    // Reuse the surface observer's geometric conditioning:
+                    // an interval averaging >=cos(45deg) amplifies range noise
+                    // by <=sqrt(2). No division by an instantaneous near-zero cos.
+                    if (covered-duration).abs() > 1e-8 || duration <= 0.
+                        || projected_time/duration < std::f64::consts::FRAC_1_SQRT_2
+                    { continue; }
+                    // distance = integral[(v_now + I(t)-I_now) * cos(t)] dt.
+                    let body = (a.2-b.2-projected_integral)/projected_time + current;
+                    if body.is_finite() { bodies[count] = body.max(0.); count += 1; }
+                }
+            }
+            if count > 0 {
+                bodies[..count].sort_unstable_by(f64::total_cmp);
+                self.body_speed_anchor = Some((at, bodies[count/2], current));
+            }
+        }
+        let (anchor_at, body, origin) = self.body_speed_anchor?;
+        if !(0. ..=crate::helpers::SCAN_AGE_S).contains(&(at-anchor_at)) { return None; }
+        Some(((body+current-origin).max(0.)*axis_cos).max(0.))
     }
 
     pub fn imu_history_dump(&self) -> V {
-        V::list(self.imu_history.iter().map(|r| V::from(vec![r.0,r.1])).collect())
+        V::list(self.imu_history.iter().map(|r| V::from(vec![r.0,r.1,r.2])).collect())
     }
 
     pub fn observe_first(&mut self, scan: &V, heading: f64) {

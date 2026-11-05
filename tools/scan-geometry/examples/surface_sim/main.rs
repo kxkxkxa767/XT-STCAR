@@ -47,6 +47,8 @@ mod race_surface;
 mod race_surface_speed;
 #[path = "../../../../route-engine/src/race_light.rs"]
 mod race_light;
+#[path = "../../../../route-engine/src/race_light_brake.rs"]
+mod race_light_brake;
 #[path = "../../../../route-engine/src/race_transfer.rs"]
 mod race_transfer;
 #[path = "../../../../route-engine/src/supervisor.rs"]

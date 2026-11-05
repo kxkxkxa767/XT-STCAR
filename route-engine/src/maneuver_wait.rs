@@ -514,7 +514,7 @@ impl Maneuver {
         if self.transfer_stage() || self.light_motor_stage() {
             motors.push(NEUTRAL);
         }
-        if self.route_stage == "light_lane" || self.released_light_entry() {
+        if self.route_stage == "light_lane" || self.released_light_entry() || self.light_brake_ack_expected() {
             motors.push(LANE_BRAKE_MOTOR); // round y22: the finish brake
         }
         motors.extend_from_slice(&DRIVE_MOTORS);
@@ -805,6 +805,7 @@ impl Maneuver {
             && control.get("command_acked").is_false();
         let mut motors = vec![NEUTRAL];
         motors.extend_from_slice(&DRIVE_MOTORS);
+        if self.light_brake_ack_expected() { motors.push(LANE_BRAKE_MOTOR); }
         if (!py_eq(&servo_feedback, &V::from(self.quality_wait_servo)) && !pending_step) || !motor_in(control.get("motor"), &motors) {
             self.lock(&format!("route_{kind}_pause_feedback_changed"));
             return self.result(now);
