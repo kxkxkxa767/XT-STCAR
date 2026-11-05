@@ -27803,7 +27803,7 @@
     "baseline": "5bb1eb3, y56 candidate; installed vehicle is y54 / engine 161",
     "deployed": false, "physical_trial_executed": false,
     "request": "Learn effective load from the first crosswalk approach and continue learning after release; use it to change later PWM smoothly. Today offline only.",
-    "build": {"status": "pending", "base": "claude-turn161", "engine": "claude-turn164", "vision": "y57"},
+    "build": {"status": "complete", "source_commit": "7b2c0dc384ac8c496313a21a4b8ace46d4276185", "base": "claude-turn161", "engine": "claude-turn164", "vision": "y57", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2769872, "engine_sha256": "d4f00ce9f3599397898ec3df64f6804e11209ffd38b715349d40eeeb66136c9d", "combined_archive": "XT-STCAR-y57-7b2c0dc.tar.gz", "combined_archive_bytes": 10933367},
     "implementation": {
       "module": "route-engine/src/race_surface.rs", "language": "Rust",
       "estimate": "Additional longitudinal load in m/s2; combines surface, battery and drivetrain response, not pure tire friction.",
