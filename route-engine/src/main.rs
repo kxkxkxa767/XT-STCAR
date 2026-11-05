@@ -34,6 +34,7 @@ mod race_transfer;
 mod motion_sensors;
 mod race_crosswalk;
 mod race_crosswalk_stop;
+mod race_surface;
 mod maneuver_finish;
 pub mod supervisor;
 

@@ -62,7 +62,8 @@ impl RaceTransfer {
         self.speed.is_some_and(|v| v >= ROLLING_MPS)
     }
 
-    pub fn drive(&mut self, now: f64, distance: Option<f64>, entering: bool, continuing: bool, decel: f64, forward_integral: Option<f64>) -> (i64, V) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn drive(&mut self, now: f64, distance: Option<f64>, entering: bool, continuing: bool, decel: f64, forward_integral: Option<f64>, body_speed: Option<f64>, surface: &crate::race_surface::SurfaceResponse) -> (i64, V) {
         // The five-scan lidar slope lagged the y30 push: it still reported
         // 1.44 m/s while the IMU change from the pre-push anchor implied 2.52.
         let imu_speed = self.transfer_anchor.zip(forward_integral)
@@ -71,13 +72,16 @@ impl RaceTransfer {
             (Some(lidar), Some(live)) => Some(lidar.max(live)),
             (lidar, live) => lidar.or(live),
         };
+        let hold_motor = if continuing { hold_pwm(cut_speed, ENTRY_MPS) } else { ROUTE_SLOW_MOTOR };
+        let hold_accel = surface.predicted_hold_accel(hold_motor, body_speed, now).unwrap_or(0.);
         let coast_m = cut_speed.map(|v| {
             let lag = ESC_COAST_DELAY_S; // measured mean cut lag on the car
-            let powered = match self.phase {
-                TransferPhase::Boost(since) => (now - since).clamp(0., lag),
+            let pending_rise = match self.phase {
+                TransferPhase::Boost(since) => 4.0 * (now - since).clamp(0., lag),
+                TransferPhase::Approach => hold_accel * lag,
                 _ => 0.,
             };
-            let release_v = v + 4.0 * powered; // measured 1600 launch acceleration
+            let release_v = v + pending_rise;
             (v + release_v) * lag / 2. + (release_v * release_v - ENTRY_MPS * ENTRY_MPS).max(0.) / (2. * decel)
         });
         let room = self.rolling() && distance.zip(coast_m).is_some_and(|(d, coast)| d > coast);
@@ -99,12 +103,13 @@ impl RaceTransfer {
             TransferPhase::Coast => NEUTRAL,
             // User 11-04 (open PWM steps): out of cone one and straight again, hold toward the
             // cone-two entry speed instead of 1550 (y53: 1550 at 1.29-1.41 m/s for .5 s).
-            TransferPhase::Approach if continuing => hold_pwm(cut_speed, ENTRY_MPS),
+            TransferPhase::Approach if continuing => hold_motor,
             _ => ROUTE_SLOW_MOTOR,
         };
         (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",
                        "imu_anchored_speed_mps" => imu_speed, "speed_for_cut_mps" => cut_speed,
-                       "straight_remaining_m" => distance, "coast_to_entry_m" => coast_m, "transfer_motor" => motor})
+                       "straight_remaining_m" => distance, "coast_to_entry_m" => coast_m, "transfer_motor" => motor,
+                       "hold_accel_mps2" => hold_accel})
     }
 
     pub fn dump(&self) -> V {

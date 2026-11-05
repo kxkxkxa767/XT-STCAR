@@ -67,7 +67,8 @@ impl CrosswalkExit {
 
     /// After the crosswalk the car is already rolling when the first support
     /// is acquired. Aim one coast at the planned bend, then hold cruise.
-    pub fn first_approach_drive(&mut self, radar: Option<f64>, before: Option<f64>, rolling_tangent: bool, decel: f64, now: f64, forward_integral: Option<f64>) -> (i64, V) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn first_approach_drive(&mut self, radar: Option<f64>, before: Option<f64>, rolling_tangent: bool, decel: f64, now: f64, forward_integral: Option<f64>, hold_accel: f64) -> (i64, V) {
         let inertial = self.crosswalk_release.and_then(|(_, zero)| zero)
             .zip(forward_integral).map(|(zero, integral)| (integral-zero).max(0.));
         let speed = inertial.or(radar);
@@ -75,10 +76,11 @@ impl CrosswalkExit {
         let lag = CROSSWALK_AIM_LAG_S;
         // Tile measurements near the 1620 cut showed about 4 m/s². The IMU
         // already includes the acceleration since the last lidar frame.
-        // The 1570 hold is taken at the 1560 push's 1 m/s² (no 1570 measurement yet).
+        // Preserve the original hold budget unless learned load compensation
+        // calls for a stronger current or next hold command.
         let pending_rise = self.crosswalk_release.filter(|_| boosted)
             .map_or(0., |(since, _)| 4.0 * (now - since).clamp(0., lag))
-            + if self.first_approach == FirstApproach::Hold { LANE_POWER_ACCEL_MPS2 * lag } else { 0. };
+            + if self.first_approach == FirstApproach::Hold { hold_accel * lag } else { 0. };
         let coast_m = speed.map(|v| {
             let released = v + pending_rise;
             (v + released)*lag/2. + (released*released - FIRST_ENTRY_MPS*FIRST_ENTRY_MPS).max(0.)/(2.*decel)
@@ -95,7 +97,7 @@ impl CrosswalkExit {
         // switch to the single rolling hold if its tail fits before the bend.
         let hold_room = self.first_approach == FirstApproach::Coast && rolling_tangent && before.zip(speed).is_some_and(|(d, v)| {
             v <= FIRST_ENTRY_MPS && {
-            let release = v + LANE_POWER_ACCEL_MPS2 * lag;
+            let release = v + hold_accel * lag;
             d > (v + release) * lag / 2. + (release * release - FIRST_ENTRY_MPS * FIRST_ENTRY_MPS).max(0.) / (2. * decel)
             }
         });

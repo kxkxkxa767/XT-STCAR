@@ -41,6 +41,8 @@ mod py;
 mod race_crosswalk;
 #[path = "../../../../route-engine/src/race_crosswalk_stop.rs"]
 mod race_crosswalk_stop;
+#[path = "../../../../route-engine/src/race_surface.rs"]
+mod race_surface;
 #[path = "../../../../route-engine/src/race_light.rs"]
 mod race_light;
 #[path = "../../../../route-engine/src/race_transfer.rs"]
@@ -324,6 +326,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         if let Some(session) = sup.session.as_mut() {
+            // Offline ablation only: remove the estimator's memory so the same
+            // controller and physical surface can be compared without adaptation.
+            if config["surface_adaptation"].as_bool() == Some(false) {
+                session.motion.race_surface = Default::default();
+            }
             session.motion.race_inputs = Some(motion_sensors::RaceInputs {
                 yaw_rate: Some(car.yaw_rate),
                 forward_integral: Some(
@@ -410,6 +417,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 json!({"t":t,"seq":seq,"pose":[car.pose.x,car.pose.y,car.pose.yaw],"speed":car.speed,
                 "motor":motor,"servo":servo,"wall_gap":wall,"cone_gap":cone,"stage":stage,"reason":turn.get("reason").os(),
                 "crosswalk":json_v(turn.get("start_lane_feedback").get("crosswalk")),
+                "surface_response":json_v(turn.get("surface_response")),
                 "lane":json_v(turn.get("lane_feedback")),"open":json_v(turn.get("open_feedback")),
                 "loop":json_v(turn.get("open_loop")),"quality":json_v(report.get("quality_issues"))})
             )?;
@@ -461,6 +469,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         && finish_stopped_in_zone;
     let summary = json!({
         "label":config["label"],"wall_seconds":wall_start.elapsed().as_secs_f64(),"sim_seconds":final_t,
+        "surface_adaptation":config["surface_adaptation"].as_bool().unwrap_or(true),
         "start_error":start_error,"terminal_reason":report.get("reason").os(),"controller_finished":sup.session.is_none(),
         "contact":contact,"min_wall_gap_m":min_wall,"min_cone_gap_m":min_cone,
         "crosswalk_stop_event":crosswalk_stop_event,"crosswalk_stop":crosswalk_stop,

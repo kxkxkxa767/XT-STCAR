@@ -1,0 +1,614 @@
+{
+  "baseline_model": "config/surface-sim-20261105.json",
+  "seed": 1,
+  "note": "Final paired offline experiments; not physical trial results",
+  "cases": [
+    {
+      "label": "step-down",
+      "surface_adaptation": false,
+      "plant": {
+        "resistance_scale": 1.5,
+        "resistance_steps": [
+          [
+            8.0,
+            1.0
+          ]
+        ],
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": false,
+      "simulated_effective_s": null,
+      "terminal_reason": "probe_obstacle_close_body",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.05347447599225097,
+      "min_cone_gap_m": 0.2568283752833481,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.6464801335792631
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "route_events": {
+        "crosswalk_go": 7.8,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.8,
+        "first_approach_handover": 9.8,
+        "first_pass": 11.9,
+        "light_divider_prediction": 16.2,
+        "neutral_pause_recovery": 16.4,
+        "second_handover": 13.1,
+        "second_pass": 16.1,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.5
+      }
+    },
+    {
+      "label": "step-down",
+      "surface_adaptation": true,
+      "plant": {
+        "resistance_scale": 1.5,
+        "resistance_steps": [
+          [
+            8.0,
+            1.0
+          ]
+        ],
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": false,
+      "simulated_effective_s": 24.18,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.21645840344741465,
+      "min_cone_gap_m": 0.2591445507050085,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.6464801335792631
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": true,
+      "finish_stop": {
+        "rear_past_zone_m": 0.043168254053402855,
+        "speed_mps": 0.0,
+        "t": 25.6,
+        "true_gap_m": 0.3753030713526213
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.8,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.8,
+        "finish_stop": 25.6,
+        "first_approach_handover": 9.8,
+        "first_pass": 11.9,
+        "light_aligned": 18.900000000000002,
+        "light_divider_prediction": 15.9,
+        "light_gantry": 16.4,
+        "light_lane": 18.900000000000002,
+        "light_pass_without_red": 21.6,
+        "second_handover": 13.1,
+        "second_pass": 15.8,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.5
+      }
+    },
+    {
+      "label": "constant-r1",
+      "surface_adaptation": false,
+      "plant": {
+        "resistance_scale": 1.0,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": true,
+      "simulated_effective_s": 21.179999999999996,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.19274399461006453,
+      "min_cone_gap_m": 0.25295916462035617,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.15135025713633166
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.1149848917838403,
+        "speed_mps": 0.006571332002177315,
+        "t": 19.2,
+        "true_gap_m": 0.49375272670964243
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.14519351237061429,
+        "speed_mps": 0.0,
+        "t": 32.9,
+        "true_gap_m": 0.27345200655806945
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.9,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.9,
+        "finish_stop": 32.9,
+        "first_approach_handover": 9.5,
+        "first_pass": 11.8,
+        "light_aligned": 18.7,
+        "light_divider_prediction": 15.6,
+        "light_gantry": 16.2,
+        "light_go": 29.5,
+        "light_lane": 18.7,
+        "light_stop": 19.2,
+        "second_handover": 13.0,
+        "second_pass": 15.5,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.4
+      }
+    },
+    {
+      "label": "constant-r1",
+      "surface_adaptation": true,
+      "plant": {
+        "resistance_scale": 1.0,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": true,
+      "simulated_effective_s": 20.880000000000003,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.24472039330200915,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.15135025713633166
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.07104968446478077,
+        "speed_mps": 0.0,
+        "t": 18.900000000000002,
+        "true_gap_m": 0.5432849676924993
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.050689208840632105,
+        "speed_mps": 0.0,
+        "t": 32.6,
+        "true_gap_m": 0.363447558458013
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.9,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.9,
+        "finish_stop": 32.6,
+        "first_approach_handover": 9.5,
+        "first_pass": 11.8,
+        "light_aligned": 18.5,
+        "light_gantry": 15.5,
+        "light_go": 29.2,
+        "light_lane": 18.5,
+        "light_stop": 18.900000000000002,
+        "second_handover": 13.0,
+        "second_pass": 15.4,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.4
+      }
+    },
+    {
+      "label": "constant-r1.25",
+      "surface_adaptation": false,
+      "plant": {
+        "resistance_scale": 1.25,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": true,
+      "simulated_effective_s": 23.679999999999996,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.21898648349488745,
+      "min_cone_gap_m": 0.1343188484766845,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.7,
+        "true_gap_m": 0.6526728602810423
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.11341971188957656,
+        "speed_mps": 0.0,
+        "t": 21.1,
+        "true_gap_m": 0.5016023282929405
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.13018487011612656,
+        "speed_mps": 0.0,
+        "t": 35.4,
+        "true_gap_m": 0.2857944618723378
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.7,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.7,
+        "finish_stop": 35.4,
+        "first_approach_handover": 10.1,
+        "first_pass": 12.4,
+        "light_aligned": 20.5,
+        "light_gantry": 16.8,
+        "light_go": 31.400000000000002,
+        "light_lane": 20.5,
+        "light_stop": 21.1,
+        "second_handover": 13.8,
+        "second_pass": 16.7,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.3
+      }
+    },
+    {
+      "label": "constant-r1.25",
+      "surface_adaptation": true,
+      "plant": {
+        "resistance_scale": 1.25,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": true,
+      "simulated_effective_s": 22.680000000000003,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.20801868692511435,
+      "min_cone_gap_m": 0.24639864450934004,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.7,
+        "true_gap_m": 0.6526728602810423
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.0728581728524973,
+        "speed_mps": 0.0,
+        "t": 20.6,
+        "true_gap_m": 0.528226364242327
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.0872795939129487,
+        "speed_mps": 0.0,
+        "t": 34.300000000000004,
+        "true_gap_m": 0.33230794781845496
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.7,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.7,
+        "finish_stop": 34.300000000000004,
+        "first_approach_handover": 10.1,
+        "first_pass": 12.4,
+        "light_aligned": 19.900000000000002,
+        "light_divider_prediction": 16.5,
+        "light_gantry": 16.6,
+        "light_go": 30.8,
+        "light_lane": 19.900000000000002,
+        "light_stop": 20.6,
+        "second_handover": 13.9,
+        "second_pass": 16.4,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.3
+      }
+    },
+    {
+      "label": "constant-r1.5",
+      "surface_adaptation": false,
+      "plant": {
+        "resistance_scale": 1.5,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": true,
+      "simulated_effective_s": 24.980000000000004,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.25997891295509845,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.6464801335792631
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.027516067196073468,
+        "speed_mps": 0.0,
+        "t": 22.5,
+        "true_gap_m": 0.5809737577979046
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.13339340152982349,
+        "speed_mps": 0.0,
+        "t": 36.7,
+        "true_gap_m": 0.28319329363442414
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.8,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.8,
+        "finish_stop": 36.7,
+        "first_approach_handover": 9.700000000000001,
+        "first_pass": 12.5,
+        "light_aligned": 22.0,
+        "light_divider_prediction": 17.1,
+        "light_gantry": 17.400000000000002,
+        "light_go": 32.8,
+        "light_lane": 22.0,
+        "light_stop": 22.5,
+        "second_handover": 14.1,
+        "second_pass": 17.0,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.5
+      }
+    },
+    {
+      "label": "constant-r1.5",
+      "surface_adaptation": true,
+      "plant": {
+        "resistance_scale": 1.5,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": false,
+      "simulated_effective_s": 26.38,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.19486168843324514,
+      "min_cone_gap_m": 0.29080425492278406,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.8,
+        "true_gap_m": 0.6464801335792631
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.05976893843886266,
+        "speed_mps": 0.0,
+        "t": 20.8,
+        "true_gap_m": 0.5535892368792084
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": -0.04571719856828427,
+        "speed_mps": 0.0,
+        "t": 38.1,
+        "true_gap_m": 0.4647721152137585
+      },
+      "finish_stopped_in_zone": false,
+      "route_events": {
+        "crosswalk_go": 7.8,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.8,
+        "finish_stop": 38.1,
+        "first_approach_handover": 9.700000000000001,
+        "first_pass": 12.3,
+        "light_aligned": 20.3,
+        "light_gantry": 16.3,
+        "light_go": 31.1,
+        "light_lane": 20.3,
+        "light_stop": 20.8,
+        "second_handover": 13.700000000000001,
+        "second_pass": 16.2,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.5
+      }
+    },
+    {
+      "label": "constant-r2",
+      "surface_adaptation": false,
+      "plant": {
+        "resistance_scale": 2.0,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": false,
+      "simulated_effective_s": null,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.45011837875301797,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.9,
+        "true_gap_m": 1.0075776253405824
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "route_events": {
+        "crosswalk_go": 8.9,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 5.9,
+        "first_approach_handover": 11.700000000000001,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 9.5
+      }
+    },
+    {
+      "label": "constant-r2",
+      "surface_adaptation": true,
+      "plant": {
+        "resistance_scale": 2.0,
+        "resistance_steps": null,
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": false,
+      "simulated_effective_s": null,
+      "terminal_reason": "maneuver_cumulative_drive_timeout",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.23621048834002797,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 5.9,
+        "true_gap_m": 1.0075776253405824
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": null,
+      "light_stopped_in_zone": false,
+      "light_crossed_before_green": false,
+      "finish_stop": null,
+      "finish_stopped_in_zone": false,
+      "route_events": {
+        "crosswalk_go": 8.9,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 5.9,
+        "first_approach_handover": 11.6,
+        "first_pass": 14.8,
+        "light_divider_prediction": 19.8,
+        "light_gantry": 20.0,
+        "second_handover": 16.7,
+        "second_pass": 19.7,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 9.5
+      }
+    },
+    {
+      "label": "step-up",
+      "surface_adaptation": false,
+      "plant": {
+        "resistance_scale": 1.0,
+        "resistance_steps": [
+          [
+            8.0,
+            1.5
+          ]
+        ],
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": true,
+      "simulated_effective_s": 24.98,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.27774577231877595,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.15135025713633166
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.03525819112541573,
+        "speed_mps": 0.01884729093906141,
+        "t": 22.3,
+        "true_gap_m": 0.5723915518731486
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.05071959371380075,
+        "speed_mps": 0.0,
+        "t": 36.6,
+        "true_gap_m": 0.36020636359975455
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.9,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.9,
+        "finish_stop": 36.6,
+        "first_approach_handover": 10.1,
+        "first_pass": 12.8,
+        "light_aligned": 22.2,
+        "light_gantry": 17.3,
+        "light_go": 32.5,
+        "light_lane": 22.2,
+        "light_stop": 22.3,
+        "second_handover": 14.4,
+        "second_pass": 17.2,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.4
+      }
+    },
+    {
+      "label": "step-up",
+      "surface_adaptation": true,
+      "plant": {
+        "resistance_scale": 1.0,
+        "resistance_steps": [
+          [
+            8.0,
+            1.5
+          ]
+        ],
+        "traction_mu": 0.6
+      },
+      "modeled_task_pass": true,
+      "simulated_effective_s": 24.279999999999998,
+      "terminal_reason": "route_finish_zone_stop",
+      "physical_contact_free": true,
+      "min_wall_gap_m": 0.22000000000000003,
+      "min_cone_gap_m": 0.2773039020321121,
+      "crosswalk_stop": {
+        "speed_mps": 0.0,
+        "t": 4.9,
+        "true_gap_m": 0.15135025713633166
+      },
+      "crosswalk_stationary_s": 3.08,
+      "light_stop": {
+        "rear_past_beam_m": 0.03691228740019481,
+        "speed_mps": 0.0,
+        "t": 21.7,
+        "true_gap_m": 0.5800596142438135
+      },
+      "light_stopped_in_zone": true,
+      "light_crossed_before_green": false,
+      "finish_stop": {
+        "rear_past_zone_m": 0.10045608804738304,
+        "speed_mps": 0.0,
+        "t": 36.0,
+        "true_gap_m": 0.31634472767613886
+      },
+      "finish_stopped_in_zone": true,
+      "route_events": {
+        "crosswalk_go": 7.9,
+        "crosswalk_planned_at_rest": 1.7,
+        "crosswalk_stop": 4.9,
+        "finish_stop": 36.0,
+        "first_approach_handover": 10.1,
+        "first_pass": 12.700000000000001,
+        "light_aligned": 21.400000000000002,
+        "light_gantry": 17.1,
+        "light_go": 32.0,
+        "light_lane": 21.400000000000002,
+        "light_stop": 21.7,
+        "second_handover": 14.3,
+        "second_pass": 17.0,
+        "start_lane": 1.3,
+        "start_lane_board_ahead_cut": 8.4
+      }
+    }
+  ]
+}

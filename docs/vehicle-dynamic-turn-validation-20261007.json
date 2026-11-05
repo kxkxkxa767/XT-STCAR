@@ -27797,5 +27797,31 @@
       "limits": "No measured tire friction coefficient or lateral identification. Some PWM plateaus are extrapolated. Terminal displacement residual up to 0.33 m. Ideal semantic camera. This is not physical lap-time evidence or proof of cross-track reliability."
     },
     "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_examples_build": true}
+  },
+  "y57_surface_response_compensation_20261105": {
+    "date": "2026-11-05", "author": "Codex", "engine_round": 164,
+    "baseline": "5bb1eb3, y56 candidate; installed vehicle is y54 / engine 161",
+    "deployed": false, "physical_trial_executed": false,
+    "request": "Learn effective load from the first crosswalk approach and continue learning after release; use it to change later PWM smoothly. Today offline only.",
+    "build": {"status": "pending", "base": "claude-turn161", "engine": "claude-turn164", "vision": "y57"},
+    "implementation": {
+      "module": "route-engine/src/race_surface.rs", "language": "Rust",
+      "estimate": "Additional longitudinal load in m/s2; combines surface, battery and drivetrain response, not pure tire friction.",
+      "observations": "New laser sequence, actual motor ACK, whole IMU integration interval after the ESC response. Powered residual or fresh coast fit, with neutral IMU slope fallback. Body-axis IMU velocity from crosswalk rest after release.",
+      "filter_s": 1.0, "compensation_step_pwm": 5, "maximum_compensation_rate_pwm_per_s": 20,
+      "scope": "Existing 1550..1590 holds from crosswalk release through second cone. First approach and transfer coast budgets include compensation propulsion. Original 1600, neutral, brake, light and finish control retained.",
+      "runtime": "Fixed-size state and at most nine candidate hold levels; no additional thread. Vehicle CPU not measured."
+    },
+    "simulation": {
+      "report": "docs/surface-adaptation-20261105.md", "results": "docs/surface-adaptation-20261105.json",
+      "evidence": "work/y57-surface-adapt-qVP3cmba/final-v4", "scenario_pairs": 6, "runs": 12, "seeds": [1],
+      "ablation": "Same controller and physical plant; offline only option resets SurfaceResponse every tick to disable learned compensation.",
+      "nominal_seconds_without_with": [21.18, 20.88], "resistance_1p25_seconds_without_with": [23.68, 22.68],
+      "dynamic_load_up": "At t=8 s resistance changes 1 to 1.5. Learned extra load rises from 0.010 to 0.203 m/s2; compensation reaches 15 PWM. Modeled task passes, 24.28 s.",
+      "dynamic_load_down": "At t=8 s resistance changes 1.5 to 1. Learned load falls from 0.241 to 0.098 m/s2; last compensation is 5 PWM. Model fails the light stop requirement.",
+      "failures": "Constant x1.5: cones completed 0.8 s earlier but finish rear remains 0.046 m outside zone; modeled terminal-event time 26.38 s is worse than baseline 24.98 s and is not a valid lap. Constant x2: timeout at light entry. High-to-low change: no light stop. No physical contacts among these twelve runs.",
+      "limits": "Ideal semantic camera and IMU; some response plateaus extrapolated, previous terminal displacement model residual up to 0.33 m. No outdoor or physical validation."
+    },
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_examples_build": true}
   }
 }

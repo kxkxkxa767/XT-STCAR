@@ -44,6 +44,9 @@ pub struct Plant {
     brake: f64,
     accel_max: f64,
     resistance_scale: f64,
+    resistance_steps: Vec<(f64, f64)>,
+    resistance_step: usize,
+    active_resistance_scale: f64,
     traction_mu: f64,
     physical_servo: f64,
     wheel_pwm: f64,
@@ -93,6 +96,22 @@ impl Plant {
             });
         assert!(response_table.len() >= 2 && response_table.iter().all(|p| p.1 > 0.));
         assert!(response_table.windows(2).all(|p| p[1].0 > p[0].0));
+        let resistance_scale = number(config, "resistance_scale", 1.);
+        let resistance_steps: Vec<(f64, f64)> = config["resistance_steps"]
+            .as_array()
+            .map(|rows| {
+                rows.iter()
+                    .map(|p| {
+                        assert_eq!(p.as_array().map(Vec::len), Some(2));
+                        (p[0].as_f64().unwrap(), p[1].as_f64().unwrap())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(resistance_steps.iter().all(|&(t, scale)| {
+            t.is_finite() && t >= 0. && scale.is_finite() && scale > 0.
+        }));
+        assert!(resistance_steps.windows(2).all(|p| p[1].0 > p[0].0));
         let plant = Self {
             pose,
             speed: 0.,
@@ -111,7 +130,10 @@ impl Plant {
             coast: number(config, "coast_decel_mps2", 0.58),
             brake: number(config, "brake_decel_mps2", 0.95),
             accel_max: number(config, "drive_accel_max_mps2", 4.),
-            resistance_scale: number(config, "resistance_scale", 1.),
+            resistance_scale,
+            resistance_steps,
+            resistance_step: 0,
+            active_resistance_scale: resistance_scale,
             traction_mu: number(config, "traction_mu", 0.6),
             physical_servo: 1500.,
             wheel_pwm: 1500.,
@@ -128,7 +150,7 @@ impl Plant {
     }
 
     pub fn model(&self) -> Value {
-        json!({
+        let mut model = json!({
             "speed_table": self.speed_table, "motor_delay_s": self.motor_delay,
             "servo_delay_s": self.servo_delay, "servo_tau_s": self.servo_tau,
             "steering_play_pwm": self.play, "steering_gain": self.gain, "turn_drag": self.turn_drag,
@@ -139,7 +161,12 @@ impl Plant {
             "coast_resistance_equivalent_coefficient": self.coast * self.resistance_scale / 9.80665,
             "friction_model": "Additional rolling/drive resistance is separate from the friction-circle traction bound.",
             "pwm_targets": (1550..=1600).step_by(5).map(|p| (p, interpolate(&self.speed_table, p as f64),interpolate(&self.response_table,p as f64))).collect::<Vec<_>>()
-        })
+        });
+        if !self.resistance_steps.is_empty() {
+            model["resistance_steps"] = json!(self.resistance_steps);
+            model["resistance_scale_current"] = json!(self.active_resistance_scale);
+        }
+        model
     }
 
     pub fn pose_at(&self, t: f64) -> Pose {
@@ -161,6 +188,15 @@ impl Plant {
     }
 
     pub fn step(&mut self, t: f64, dt: f64, motor: i64, servo: i64) {
+        // Surface changes are physical inputs, independent of the motor delay
+        // and unavailable to the controller's online load estimate.
+        while let Some(&(at, scale)) = self.resistance_steps.get(self.resistance_step) {
+            if at > t {
+                break;
+            }
+            self.active_resistance_scale = scale;
+            self.resistance_step += 1;
+        }
         self.motor_queue
             .push_back((t + self.motor_delay, motor as f64));
         self.servo_queue
@@ -180,7 +216,7 @@ impl Plant {
         let table = [(1200., -1.35), (1314., -1.2), (1500., 0.), (1720., 1.42)];
         let requested_k = interpolate(&table, self.wheel_pwm) * self.gain;
         let drive = self.last_motor > 1500. && (self.speed > 0.05 || self.last_motor >= 1560.);
-        let extra_drag = (self.resistance_scale - 1.) * self.coast;
+        let extra_drag = (self.active_resistance_scale - 1.) * self.coast;
         let requested_accel = if drive {
             let target = interpolate(&self.speed_table, self.last_motor)
                 / (1. + self.turn_drag * requested_k.abs());
@@ -189,7 +225,7 @@ impl Plant {
         } else if self.last_motor < 1500. {
             -self.brake - extra_drag
         } else {
-            -self.coast * self.resistance_scale
+            -self.coast * self.active_resistance_scale
         };
         let grip = self.traction_mu * 9.80665;
         let lateral = self.speed * self.speed * requested_k;

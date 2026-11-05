@@ -354,6 +354,13 @@ impl Maneuver {
         let (cw_track, cw_speed) = self.crosswalk_odometry(scan, track, speed);
         self.crosswalk_observe(scan, cw_track);
         self.crosswalk_coast_observe(scan, now, cw_track, cw_speed);
+        if let Some(input) = self.race_inputs {
+            let current = if self.crosswalk_state == Some("done") {
+                self.race_crosswalk.imu_speed(input.forward_integral).or(speed)
+            } else { self.race_crosswalk_stop.imu_speed(input.forward_integral).or(cw_speed) };
+            self.race_surface.observe(scan.idx("seq").i(), now, control.get("motor").i(),
+                current, input.forward_integral, input.yaw_rate, self._coast_fit);
+        }
         let mut stop_at = None;
         let mut allowed = None;
         let mut v_crosswalk = None;
@@ -370,6 +377,11 @@ impl Maneuver {
             } else {
                 0.
             };
+            let power_accel = if self.race_inputs.is_some() && self.crosswalk_state == Some("done") {
+                power_accel.max(self.race_surface.applied_hold_accel(
+                    self._power_cmd_motor.unwrap_or(NEUTRAL),
+                    self.race_inputs.and_then(|i| self.race_crosswalk.imu_speed(i.forward_integral)).or(speed), now))
+            } else { power_accel };
             let rise = power_accel * (reaction - LANE_REACTION_BASE_S);
             let rise = match self._launch_cmd_at {
                 Some(at) => pmax(rise, START_LAUNCH_ACCEL_MPS2 * pmax(0., pmin(ESC_LAG_S, ESC_LAG_S - (now - at)))),
@@ -460,6 +472,9 @@ impl Maneuver {
             crosswalk.set("imu_pending_rise_mps", rise);
         }
         if self.crosswalk_state == Some("done") && let Some(input) = self.race_inputs {
+            let hold_speed = self.race_crosswalk.imu_speed(input.forward_integral).or(speed);
+            let hold_accel = self.race_surface.predicted_hold_accel(
+                hold_pwm(hold_speed, crate::race_crosswalk::FIRST_ENTRY_MPS), hold_speed, now).unwrap_or(0.).max(LANE_POWER_ACCEL_MPS2);
             let exit = &mut self.race_crosswalk;
             let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2);
             if waiting_at_stripes { exit.release_crosswalk(now, input.forward_integral); }
@@ -467,7 +482,8 @@ impl Maneuver {
                 let planned = approach.get("before_tangent_point_m").of();
                 let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - FIRST_APPROACH_BOARD_GAP_M - LANE_START_SEARCH_M).max(0.)));
                 let rolling_tangent = planned.is_some() && self._launch_cmd_at.is_none_or(|at| now - at >= CROSSWALK_AIM_LAG_S);
-                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, rolling_tangent, decel, now, input.forward_integral);
+                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, rolling_tangent, decel, now, input.forward_integral, hold_accel);
+                first_drive.set("hold_accel_mps2", hold_accel);
                 first_drive.set("distance_source", if planned.is_some() { "first_tangent" } else { "board_search_room" });
                 allowed = None;
                 if planned.is_none() {
@@ -1212,10 +1228,11 @@ impl Maneuver {
     fn transfer_drive(&mut self, scan: &V, now: f64, remaining: Option<f64>, target_pwm: i64) {
         let decel = self.lane_decels().0;
         let Some(input) = self.race_inputs else { return };
+        let speed = self.race_crosswalk.imu_speed(input.forward_integral);
         let transfer = &mut self.race_transfer;
         let yaw = input.yaw_rate.unwrap_or(self.compass.rate);
         let (entering, continuing) = crate::race_transfer::steering_window(yaw, target_pwm, self.servo);
-        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, entering, continuing, decel, input.forward_integral);
+        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, entering, continuing, decel, input.forward_integral, speed, &self.race_surface);
         self.open_feedback.set("yaw_rate_radps", yaw);
         self.open_feedback.set("yaw_source", if input.yaw_rate.is_some() { "calibrated_imu" } else { "lidar_compass" });
         self.open_feedback.set("stage", self.route_stage);

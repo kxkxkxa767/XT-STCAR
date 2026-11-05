@@ -727,6 +727,7 @@ pub struct Maneuver {
     pub(crate) race_crosswalk: crate::race_crosswalk::CrosswalkExit,
     pub(crate) race_crosswalk_stop: crate::race_crosswalk_stop::CrosswalkStopPlan,
     pub(crate) race_transfer: crate::race_transfer::RaceTransfer,
+    pub(crate) race_surface: crate::race_surface::SurfaceResponse,
     pub(crate) finish: crate::maneuver_finish::FinishControl,
     pub(crate) race_light: crate::race_light::RaceLight,
     pub _start_speed_measured: bool,
@@ -1047,6 +1048,7 @@ impl Maneuver {
             race_crosswalk: Default::default(),
             race_crosswalk_stop: Default::default(),
             race_transfer: Default::default(),
+            race_surface: Default::default(),
             finish: Default::default(),
             race_light: Default::default(),
             _start_speed_measured: false,
@@ -1322,6 +1324,15 @@ impl Maneuver {
             && !self.light_stop_active() && !self.released_light_entry()
         {
             result.set("motor", TRIAL_MOTOR);
+        }
+        let motor = result.get("motor").i();
+        if self.race_inputs.is_some() {
+            let active = self.phase == "drive" && !self.quality_resume_pending
+                && ((self.route_stage == "start_lane" && self.crosswalk_state == Some("done"))
+                    || matches!(self.route_stage, "first_target" | "open_transfer" | "second_loop"));
+            let speed = self.race_inputs.and_then(|i| self.race_crosswalk.imu_speed(i.forward_integral));
+            result.set("motor", self.race_surface.compensate(motor, speed, now, active));
+            result.set("surface_response", self.race_surface.diagnostics());
         }
         let motor = result.get("motor").i();
         if DRIVE_MOTORS.contains(&motor) {
@@ -1882,6 +1893,13 @@ impl Maneuver {
                 && self.race_inputs.is_some()
             {
                 self.race_transfer.observe(scan, self.compass.current(scan));
+                if let Some(input) = self.race_inputs {
+                    // Rear-wall speed is an axis projection during the loops.
+                    // The load model needs velocity along the vehicle body.
+                    let speed = self.race_crosswalk.imu_speed(input.forward_integral);
+                    self.race_surface.observe(scan.idx("seq").i(), now, control.get("motor").i(),
+                        speed, input.forward_integral, input.yaw_rate, None);
+                }
             }
             match self.route_stage {
                 "light_turn" => return self.light_update(scan, now, control),

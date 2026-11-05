@@ -206,6 +206,7 @@ impl Maneuver {
         );
         d.set("_path_cache", self._path_cache.as_ref().map(|(k, v)| V::list(vec![k.clone(), V::Int(*v)])));
         if let Some(input) = self.race_inputs {
+            d.set("surface_response", self.race_surface.diagnostics());
             // Preserve the existing diagnostic format without sharing control state.
             let mut view = self.race_transfer.dump();
             self.race_crosswalk.append_diagnostics(&mut view);
