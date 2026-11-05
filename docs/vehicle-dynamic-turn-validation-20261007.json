@@ -27952,8 +27952,9 @@
     "date": "2026-11-05", "author": "Codex", "engine_round": 167,
     "baseline": "ec2d1cd; actual vehicle y59 /166 from46c3f66",
     "request": "Automatically correct the reported far crosswalk stop and stop-go light approach after analyzing y59.",
-    "deployed": false, "physical_trial_executed": false,
-    "build": {"status": "pending", "base": "claude-turn166", "engine": "claude-turn167", "vision": "y60"},
+    "deployed": true, "physical_trial_executed": false,
+    "build": {"status": "complete", "source_commit": "69fcfa8cabf886e0a6bb79141035023a5e2ec2cb", "base": "claude-turn166", "engine": "claude-turn167", "vision": "y60", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2787176, "engine_sha256": "3b0830f6bcc6c28a2d68f359fcebbc13c20464990b0f331b5591193bf396a77a", "combined_archive": "XT-STCAR-y60-69fcfa8.tar.gz", "combined_archive_bytes": 10952433},
+    "deployment": {"status": "complete", "engine": "claude-turn167", "vision": "y60", "evidence": "work/y60-stops-0voEb3kO/deploy-engine.log", "next_drive": "awaiting new operator placement and lamp/sensor reset confirmation"},
     "report": "docs/y60-crosswalk-light-flow-20261105.md", "evidence_directory": "work/y60-stops-0voEb3kO",
     "changes": [
       "Crosswalk approach uses the already available recent radar/short-IMU body speed plus pending ESC response, instead of taking the maximum with the biased rest-long integral. Original radar fallback remains.",
