@@ -27780,6 +27780,7 @@
     "date": "2026-11-05", "author": "Codex", "engine_round": 163,
     "baseline": "f3a1bc1, y55 candidate; installed vehicle is y54 / engine 161",
     "deployed": false, "physical_trial_executed": false,
+    "build": {"source_commit": "c762dec19c48718871637656163a0c714f085e46", "base": "claude-turn161", "engine": "claude-turn163", "vision": "y56", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2756640, "engine_sha256": "a8b381a74e804e80eabc026a6e52e13d71129c3d5bbcb329191645cbd29f2ed1", "combined_archive": "XT-STCAR-y56-c762dec.tar.gz", "combined_archive_bytes": 10927204},
     "user_correction": "The optical beam is 1.00 m before the gantry. Prior 1.10 m instruction was a misreading.",
     "user_scope": "Today offline only; explicitly authorized simulation including increased ground resistance, with lower acceleration and speed at the same PWM. This authorizes simulation for this task despite the older no-simulation default.",
     "controller_change": "LIGHT_SENSOR_TO_GANTRY_M corrected to 1.00 m. Updated the corresponding existing station-pair fixture. Includes y55 crosswalk IMU compensation.",
