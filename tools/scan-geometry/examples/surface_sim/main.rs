@@ -43,6 +43,8 @@ mod race_crosswalk;
 mod race_crosswalk_stop;
 #[path = "../../../../route-engine/src/race_surface.rs"]
 mod race_surface;
+#[path = "../../../../route-engine/src/race_surface_speed.rs"]
+mod race_surface_speed;
 #[path = "../../../../route-engine/src/race_light.rs"]
 mod race_light;
 #[path = "../../../../route-engine/src/race_transfer.rs"]

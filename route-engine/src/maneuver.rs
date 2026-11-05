@@ -728,6 +728,7 @@ pub struct Maneuver {
     pub(crate) race_crosswalk_stop: crate::race_crosswalk_stop::CrosswalkStopPlan,
     pub(crate) race_transfer: crate::race_transfer::RaceTransfer,
     pub(crate) race_surface: crate::race_surface::SurfaceResponse,
+    pub(crate) race_surface_speed: crate::race_surface_speed::SurfaceSpeed,
     pub(crate) finish: crate::maneuver_finish::FinishControl,
     pub(crate) race_light: crate::race_light::RaceLight,
     pub _start_speed_measured: bool,
@@ -1049,6 +1050,7 @@ impl Maneuver {
             race_crosswalk_stop: Default::default(),
             race_transfer: Default::default(),
             race_surface: Default::default(),
+            race_surface_speed: Default::default(),
             finish: Default::default(),
             race_light: Default::default(),
             _start_speed_measured: false,
@@ -1330,9 +1332,10 @@ impl Maneuver {
             let active = self.phase == "drive" && !self.quality_resume_pending
                 && ((self.route_stage == "start_lane" && self.crosswalk_state == Some("done"))
                     || matches!(self.route_stage, "first_target" | "open_transfer" | "second_loop"));
-            let speed = self.race_inputs.and_then(|i| self.race_crosswalk.imu_speed(i.forward_integral));
+            let speed = self.race_inputs.and_then(|i| self.race_surface_speed.speed(now, i.forward_integral));
             result.set("motor", self.race_surface.compensate(motor, speed, now, active));
             result.set("surface_response", self.race_surface.diagnostics());
+            result.set("surface_speed", self.race_surface_speed.diagnostics());
         }
         let motor = result.get("motor").i();
         if DRIVE_MOTORS.contains(&motor) {
@@ -1894,9 +1897,9 @@ impl Maneuver {
             {
                 self.race_transfer.observe(scan, self.compass.current(scan));
                 if let Some(input) = self.race_inputs {
-                    // Rear-wall speed is an axis projection during the loops.
-                    // The load model needs velocity along the vehicle body.
-                    let speed = self.race_crosswalk.imu_speed(input.forward_integral);
+                    let speed = self.race_surface_speed.observe(scan.idx("seq").i(), now,
+                        self.race_transfer.surface_axis_speed(), self.compass.current(scan),
+                        input.forward_integral, input.yaw_rate);
                     self.race_surface.observe(scan.idx("seq").i(), now, control.get("motor").i(),
                         speed, input.forward_integral, input.yaw_rate, None);
                 }

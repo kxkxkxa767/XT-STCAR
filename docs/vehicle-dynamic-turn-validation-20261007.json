@@ -27855,5 +27855,27 @@
       },
       "next": "Fix the isolated cone-two steering prediction transition and replace the adaptive module's across-bend long IMU integral with recent radar-anchored body velocity. No further code or vehicle run was performed during this analysis."
     }
+  },
+  "y58_transfer_steer_surface_speed_20261105": {
+    "date": "2026-11-05", "author": "Codex", "engine_round": 165,
+    "baseline": "024b930; actual vehicle y57 / engine 164 from 7b2c0dc",
+    "user_instruction": "After each confirmed problem analysis, continue fixing autonomously; do not wait for another request to change it. A new vehicle placement confirmation is still required for each drive.",
+    "deployed": false, "physical_trial_executed": false,
+    "build": {"status": "pending", "base": "claude-turn164", "engine": "claude-turn165", "vision": "y58"},
+    "changes": [
+      "At first-pass handover, begin existing transfer steering immediately without repeating observations or updating the transfer drive phase/motor.",
+      "Only race cone-two approach_line uses current calibrated IMU yaw for its response pose and the mean of current/predicted pursuit curvatures. The shared overshoot_guard and light-entry response remain unchanged.",
+      "Independent fixed-size SurfaceSpeed aligns a five-scan radar slope approximately to the window midpoint, converts axis to body velocity, and propagates only the recent IMU increment. Turns invalidate the old anchor; original IMU differences remain the acceleration input.",
+      "The new velocity serves surface learning, compensation and its propulsion budget. Existing first-approach and transfer base speed decisions, curve plans and speed targets are retained."
+    ],
+    "evidence": {
+      "directory": "work/y58-transfer-83qFLx3K", "report": "docs/y58-transfer-steering-speed-20261105.md",
+      "steering_snapshots": "approach-snapshots.jsonl", "speed_snapshots": "surface-snapshots.json",
+      "old_new_targets": [[131,1340,1365],[133,1352,1417],[134,1529,1466],[136,1605,1516],[137,1506,1517]],
+      "speed_seq141_old_new_mps": [0.1492,1.8919], "speed_seq145_old_new_mps": [0.1196,1.9633],
+      "learning_after_104": {"old_sparse_inputs": 0, "new_saved_window_endpoints": 1, "new_approximate_window": 3},
+      "limits": "Fixed saved inputs, not a new closed-loop trajectory. Feedback about 6 Hz versus lidar 10 Hz; missing scans and ACKs not fabricated. Five-scan representative time and IMU consumer timestamps are approximate. Steering arithmetic has about 1 PWM rounding uncertainty. seq137 still has a small left correction."
+    },
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_compile_only": true}
   }
 }

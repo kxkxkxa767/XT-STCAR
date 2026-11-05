@@ -62,6 +62,17 @@ impl RaceTransfer {
         self.speed.is_some_and(|v| v >= ROLLING_MPS)
     }
 
+    /// Metadata for the separate load observer; it does not change transfer
+    /// speed, phase, boost anchors or the existing entry-speed selection.
+    pub fn surface_axis_speed(&self) -> Option<crate::race_surface_speed::AxisSpeed> {
+        Some(crate::race_surface_speed::AxisSpeed {
+            speed_mps: self.speed?,
+            window_start_at: self.history.first()?.1,
+            window_end_at: self.history.last()?.1,
+            axis_heading_rad: PI,
+        })
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn drive(&mut self, now: f64, distance: Option<f64>, entering: bool, continuing: bool, decel: f64, forward_integral: Option<f64>, body_speed: Option<f64>, surface: &crate::race_surface::SurfaceResponse) -> (i64, V) {
         // The five-scan lidar slope lagged the y30 push: it still reported
