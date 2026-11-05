@@ -27915,8 +27915,9 @@
     "date": "2026-11-05", "author": "Codex", "engine_round": 166,
     "baseline": "da39ae0; actual vehicle y58 / engine165 from04b3738",
     "user_authorization": "Fix the stop that put the traffic-light housing outside the camera view; user explicitly permits 1300 braking when loss of light visibility is anticipated.",
-    "deployed": false, "physical_trial_executed": false,
-    "build": {"status": "pending", "base": "claude-turn165", "engine": "claude-turn166", "vision": "y59"},
+    "deployed": true, "physical_trial_executed": false,
+    "build": {"status": "complete", "source_commit": "46c3f6604e014d4ee563b8c0a806e2b5a178b72d", "base": "claude-turn165", "engine": "claude-turn166", "vision": "y59", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2786752, "engine_sha256": "8b08eac33c156c55876bd541544e928c1fc6fad1c4e021fab027ed584bb08d27", "combined_archive": "XT-STCAR-y59-46c3f66.tar.gz", "combined_archive_bytes": 10951239},
+    "deployment": {"status": "complete", "engine": "claude-turn166", "vision": "y59", "evidence": "work/y59-light-uiLXKPGm/deploy-engine.log", "next_drive": "awaiting new operator placement and lamp/sensor reset confirmation"},
     "report": "docs/y59-light-visibility-brake-20261105.md", "evidence_directory": "work/y59-light-uiLXKPGm",
     "cause": "Lane-axis velocity rises as the car straightens. The previous correction only added forward IMU velocity change and omitted changing heading projection. At y58-2 seq163 the measured gantry closing interval was about1.664 m/s, but current speed reported1.099. Seq166 had no speed and held an older raw estimate. The first neutral was visible at168, already predicting an overrun.",
     "changes": [
