@@ -12,10 +12,13 @@ use crate::race_light_brake::{LIGHT_BRAKE_MOTOR, LIGHT_BRAKE_RESPONSE_S, LIGHT_B
 
 // Pre-red approach settings, independent of the terminal board controller.
 const LIGHT_CRUISE_ACCEL_MPS2: f64 = 0.35;
-const LIGHT_TOPUP_BAND_M: f64 = 0.10;
 const LIGHT_RESTART_MPS: f64 = 0.15;
 const NEAR_POST_EDGE_M: f64 = 0.04; // measured close to both boards at the static gantry pose
 const VISIBLE_LIGHT_STOP_GAP_M: f64 = 0.55; // head visible at 0.52 m, out of frame at the y29 stop at 0.20 m
+// y59 frames94/95 visibly show green and score0.356/0.302. After observed red,
+// accept the detector's existing publication threshold, still on two fresh
+// consecutive green frames with no red in either frame.
+const RACE_GREEN_AFTER_RED_MIN_SCORE: f64 = 0.25;
 // y34: the practice red follows the beam by 1.0-1.3 s, then a 3.6 Hz frame and
 // inference; y32 decided it 1.36 s after the crossing but had refilled at 1.0 s.
 const LIGHT_RED_DUE_S: f64 = 2.0;
@@ -762,18 +765,17 @@ impl Maneuver {
             (v + release) * powered_s / 2. + release * release / (2. * axial_decel)
         };
         let predicted = gap.zip(v).map(|(g,v)| g - coast_travel(v, tail));
-        // Decide whether to renew the cruise for another scan. A late cut in
-        // y39 left the light housing above the camera after the car coasted.
-        // When reconsidering the first coast, budget a new 1550 command and
-        // its full ESC tail: the acceleration measured in neutral may be negative.
-        let first_coast = matches!(self.race_light.phase, LightRoll::Coast);
-        let (accel_floor, renewed_tail) = if first_coast { (LIGHT_CRUISE_ACCEL_MPS2, lag) } else { (0., tail) };
+        let brake_decel = LIGHT_BRAKE_DECEL_MPS2 * (1. + axis_cos.max(0.)) * 0.5;
+        // The light now has its own active brake. Keep one continuous hold
+        // until the neutral tail plus that brake fits the visible stopping
+        // point, instead of aiming a long coast and then refilling it twice.
         let if_renewed = gap.zip(v).map(|(g,v)| {
-            let next = v + acceleration.unwrap_or(LIGHT_CRUISE_ACCEL_MPS2).max(accel_floor) * step;
-            g - (v+next)*step/2. - coast_travel(next, renewed_tail)
+            let next = (v + acceleration.unwrap_or(LIGHT_CRUISE_ACCEL_MPS2) * step).max(0.);
+            let release = next + LIGHT_CRUISE_ACCEL_MPS2 * lag;
+            g-(v+next)*step/2.-(next+release)*lag/2.
+                -release*LIGHT_BRAKE_RESPONSE_S-release*release/(2.*brake_decel)
         });
         let rear_gap = ahead.map(|a| a + rear_extent);
-        let rear_if_coast = predicted.map(|g| g + front_extent + rear_extent);
         let red = self._light_red_hold;
         // A leg sighting can move the estimate back upstream; small noise at the beam cannot.
         match to_sensor {
@@ -785,42 +787,27 @@ impl Maneuver {
         }
         let crossed = self.race_light.beam_at.is_some();
         let red_due = self.race_light.beam_at.is_some_and(|at| now - at >= LIGHT_RED_DUE_S);
-        // At y42's repeat the first coast would have stopped upstream of the
-        // beam. Resume the existing rolling top-up while there is still speed.
-        let resume_before_beam = first_coast && !red && !crossed && step > 0. && current_speed.or(speed).is_some()
-            && if_renewed.is_some_and(|g| g > LIGHT_SENSOR_TO_GANTRY_M);
         if !red {
             let cut = if_renewed.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
-            let rolling_short = tail == 0. && v.is_some_and(|s| s < beam_speed)
-                && predicted.is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LIGHT_TOPUP_BAND_M);
             let running_out = tail == 0. && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS);
-            let rear_short = crossed && tail == 0. && v.is_some_and(|s| s < beam_speed)
-                && rear_gap.is_some_and(|g| g > LIGHT_ZONE_M)
-                && rear_if_coast.is_some_and(|g| g > LIGHT_ZONE_M);
             self.race_light.phase = match self.race_light.phase {
                 LightRoll::Cruise if cut => LightRoll::Coast,
-                LightRoll::Coast | LightRoll::FinalCoast if rear_short => LightRoll::EnterZone,
-                LightRoll::EnterZone if predicted.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M)
-                    || rear_gap.is_some_and(|g| g <= LIGHT_ZONE_M) => LightRoll::ZoneCoast,
-                LightRoll::Coast if resume_before_beam || rolling_short => LightRoll::Topup,
-                LightRoll::Topup if cut => LightRoll::FinalCoast,
                 // No red: do not park to wait for an unlit gantry. Short of the
                 // beam push through to trigger it; past it, wait for the red
                 // the beam has started, and keep going only once that is overdue.
-                LightRoll::Coast | LightRoll::FinalCoast | LightRoll::ZoneCoast
-                    if running_out && (!crossed || red_due || rear_gap.is_some_and(|g| g > LIGHT_ZONE_M)) => LightRoll::Through,
+                LightRoll::Coast | LightRoll::ZoneCoast
+                    if running_out && (!crossed || red_due) => LightRoll::Through,
                 LightRoll::Through if crossed && !red_due && rear_gap.is_some_and(|g| g <= LIGHT_ZONE_M) => LightRoll::ZoneCoast,
                 phase => phase,
             };
         }
-        let motor = if red || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::FinalCoast | LightRoll::ZoneCoast) {
+        let motor = if red || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::ZoneCoast) {
             NEUTRAL
-        } else if matches!(self.race_light.phase, LightRoll::Through | LightRoll::EnterZone)
+        } else if matches!(self.race_light.phase, LightRoll::Through)
             && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
         {
             TRIAL_MOTOR // y34: 1550 does not start the car from rest (y33 sim short5 sat at 1550 for 26 s)
         } else { ROUTE_SLOW_MOTOR };
-        let brake_decel = LIGHT_BRAKE_DECEL_MPS2 * (1. + axis_cos.max(0.)) * 0.5;
         let brake_stop = gap.zip(v).map(|(g, v)| g-v*LIGHT_BRAKE_RESPONSE_S-v*v/(2.*brake_decel));
         let next_brake_stop = gap.zip(v).map(|(g, v)| {
             let next = (v + acceleration.unwrap_or(0.) * step).max(0.);
@@ -836,7 +823,8 @@ impl Maneuver {
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
-            "stop_gap_if_renewed_m" => if_renewed, "resume_before_beam" => resume_before_beam, "rear_to_gantry_m" => rear_gap,
+            "stop_gap_if_renewed_m" => if_renewed, "renewal_stop_basis" => "neutral_tail_then_light_brake",
+            "rear_to_gantry_m" => rear_gap,
             "heading_accel_mps2" => heading_accel, "brake_stop_gap_m" => brake_stop,
             "next_brake_stop_gap_m" => next_brake_stop, "visibility_brake" => self.race_light_brake.phase(),
             "visibility_brake_used" => self.race_light_brake.is_used(),
@@ -874,11 +862,14 @@ impl Maneuver {
         self.lane_motor = NEUTRAL;
         let wait_since = self._light_wait_since.unwrap();
         let frames: Vec<V> = self._light_frames[self._light_frames.len().saturating_sub(LIGHT_GREEN_FRAMES)..].to_vec();
+        let green_min_score = if self.race_inputs.is_some() && self._light_red_frames > 0 {
+            RACE_GREEN_AFTER_RED_MIN_SCORE
+        } else { LIGHT_GREEN_MIN_SCORE };
         let green = frames.len() == LIGHT_GREEN_FRAMES
             && frames.iter().all(|f| {
                 f.at(1).f() >= wait_since
                     && now - f.at(1).f() <= LIGHT_FRAME_MAX_AGE_S
-                    && f.at(3).f() >= LIGHT_GREEN_MIN_SCORE
+                    && f.at(3).f() >= green_min_score
                     && f.at(2).f() < LIGHT_RED_MIN_SCORE
             });
         let recent: Vec<&V> = self._light_frames[self._light_frames.len().saturating_sub(LIGHT_RED_GONE_FRAMES)..]
@@ -927,6 +918,8 @@ impl Maneuver {
             "red_since_s" => red_s, "route_stage" => self.route_stage,
             "launch" => self.finish.launch_until.is_some(),
         };
+        let mut go = go;
+        if self.race_inputs.is_some() { go.set("green_min_score", green_min_score); }
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"go" => go.clone()});
         self.route_event("light_go", scan, control, go.clone());
         if (no_light && !green) || (green && self._light_red_frames == 0) {

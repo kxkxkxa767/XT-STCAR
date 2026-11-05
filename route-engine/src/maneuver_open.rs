@@ -427,16 +427,17 @@ impl Maneuver {
                 } else {
                     LANE_SPEED_UNKNOWN_MPS + rise
                 };
-                // The laser slope still carries its original lag correction.
-                // The IMU measures the current speed from the start's rest, so
-                // add only propulsion remaining within the measured ESC response.
-                let vc = match self.race_inputs.and_then(|i| self.race_crosswalk_stop.imu_speed(i.forward_integral)) {
-                    Some(imu) => {
+                // y59: a one-degree pitch change left +0.157 m/s² at rest,
+                // so a start-long integral cut early and also vetoed the top-up.
+                // A fresh rear-radar anchor already corrects the slope's lag;
+                // add only the propulsion still pending after this current speed.
+                let vc = match self.race_inputs.and_then(|i| self.race_surface_speed.speed(now, i.forward_integral)) {
+                    Some(current) => {
                         let response = crate::race_crosswalk_stop::IMU_POWER_RESPONSE_S;
                         let tail = |command_at: Option<f64>| command_at.map_or(0., |at| (response - (now - at)).clamp(0., response));
                         let imu_rise = pmax(power_accel * tail(self._power_cmd_at), START_LAUNCH_ACCEL_MPS2 * tail(self._launch_cmd_at));
                         crosswalk_imu_rise = Some(imu_rise);
-                        pmax(vc, imu + imu_rise)
+                        current + imu_rise
                     }
                     None => vc,
                 };
@@ -476,6 +477,7 @@ impl Maneuver {
         let mut crosswalk = self.crosswalk_control(scan, now, control, cw_track, cw_speed, v_crosswalk);
         if crosswalk.is_dict() && let Some(rise) = crosswalk_imu_rise {
             crosswalk.set("imu_pending_rise_mps", rise);
+            crosswalk.set("speed_basis", "recent_radar_anchor_with_short_imu_change");
         }
         if self.crosswalk_state == Some("done") && let Some(input) = self.race_inputs {
             let hold_speed = self.race_crosswalk.imu_speed(input.forward_integral).or(speed);

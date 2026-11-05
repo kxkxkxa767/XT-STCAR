@@ -186,9 +186,6 @@ pub enum LightRoll {
     #[default]
     Cruise,
     Coast,
-    Topup,
-    FinalCoast,
-    EnterZone,
     ZoneCoast,
     Through,
 }
@@ -198,9 +195,6 @@ impl LightRoll {
         match self {
             Self::Cruise => "cruise",
             Self::Coast => "coast",
-            Self::Topup => "rolling_topup",
-            Self::FinalCoast => "final_coast",
-            Self::EnterZone => "rolling_rear_into_zone",
             Self::ZoneCoast => "zone_coast",
             Self::Through => "unlit_continue",
         }
