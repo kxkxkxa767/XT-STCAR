@@ -27634,8 +27634,8 @@
     "engine_round": 161,
     "baseline": "y53 / engine 160 on the car (21.78 s, best)",
     "implemented": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "pwm你可以多开放几个值",
       "继续改，改完更新你的记忆然后上传",
@@ -27658,6 +27658,110 @@
     "risks": [
       "Cone-one entry ~1.75 m/s (proven 1.65-1.80 with the current loop rules)."
     ],
-    "next": "Crosswalk go -> first pass (y53 4.60, y50 3.99), entry speed, loop gaps; transfer time; PWM shares."
+    "next": "Crosswalk go -> first pass (y53 4.60, y50 3.99), entry speed, loop gaps; transfer time; PWM shares.",
+    "car_run_y54": {
+      "deployed": "2026-11-05 09:35, deploy-matched claude-turn161 161 + deploy-vision y54 (from y53 / 160); run 09:36",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261104-y54 (dir dated by the build; run on 11-05)",
+      "evidence_files_ok": 90,
+      "result": "route_finish_zone_stop, .278 m from the board, 0 creeps, no quality waits; .11 s slower than y53 (best stays y53)",
+      "effective_s": 21.887,
+      "start_to_stop_s": 31.9,
+      "light_wait_s": 10.095,
+      "segments_s_vs_y53": {
+        "move_to_crosswalk_stop": [
+          3.7,
+          3.098
+        ],
+        "crosswalk_wait": [
+          3.198,
+          2.995
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.296,
+          4.596
+        ],
+        "first_pass_to_tangent": [
+          2.399,
+          2.697
+        ],
+        "tangent_to_second_pass": [
+          1.301,
+          0.999
+        ],
+        "second_pass_to_light_stop": [
+          3.297,
+          3.696
+        ],
+        "light_go_to_finish_stop": [
+          3.696,
+          3.696
+        ],
+        "total_less_light": [
+          21.887,
+          21.776
+        ]
+      },
+      "tangent_speed_mps_vs_y53": [
+        1.504,
+        1.766
+      ],
+      "cone_one_entry_mps_vs_y53": [
+        1.72,
+        1.65
+      ],
+      "crosswalk_stop_gap_m_vs_y53": [
+        0.755,
+        0.616
+      ],
+      "crosswalk_program_wait_s_vs_y53": [
+        3.099,
+        3.094
+      ],
+      "nearest_body_gaps_m": {
+        "cone_one_loop": {
+          "cone": 0.113,
+          "other": 0.449
+        },
+        "transfer": {
+          "cone": 0.14,
+          "other": 0.275
+        },
+        "cone_two_loop": {
+          "cone": 0.258,
+          "other": 0.264
+        },
+        "light_entry_other": 0.235
+      },
+      "pwm_share_driving_frames": {
+        "y54": {
+          "1550": 0.39,
+          "1500": 0.38,
+          "1300": 0.09,
+          "1600": 0.07,
+          "1570": 0.02,
+          "1565": 0.02,
+          "1555/1560/1575/1580": ".01 each"
+        },
+        "y53": {
+          "1550": 0.45,
+          "1500": 0.34,
+          "1300": 0.09,
+          "1600": 0.08,
+          "1570": 0.03,
+          "1565": 0.02
+        }
+      },
+      "findings": [
+        "Crosswalk approach: the cut (seq 27, 1.1 s after the move) used speed_for_cut 1.38 = IMU .949 + rise .43 (maneuver_open.rs start lane: LANE_POWER_ACCEL_MPS2 1.0 x the remaining ESC_LAG_S .45 since the last power command). The IMU speed after the cut was .964 (seq 29), then fell: the IMU speed already held the push, no further rise. y53 the same (vc 1.436 on IMU 1.005; then 1.007). The coast then ran .55-.60 m/s2 (CROSSWALK_AIM_DECEL .6 fits), so both stopped short of the .15 aim (y53 .616, y54 .755). y54 topped up 1550 twice (seq 35-37, 45-46): start to stop 3.70 s against 3.10. The program waits were the same (go evidence waited_s 3.099, y53 3.094); the table's 3.20/3.00 is the stored-frame quantization of the event seqs.",
+        "Transfer: after cone one hold_pwm 1580/1575, the 1600 boost to 2.03 m/s, 1500 coast 1.1 s to 1.69, then 1550; the tangent came .3 s earlier but at 1.50 m/s (target 1.8; y53 1.77 on steady 1550), and the cone-two loop slowed (lidar 1.5 -> 1.14) and took 1.30 s (y53 1.00). Exit to exit 3.70 s in both.",
+        "Cone one: entry 1.72 m/s; the plan took the earlier tangent (axis -.2, side -.35; y53 0, -.4) and the body came .113 m from the cone at heading 143 deg (y53 .317).",
+        "Light approach 3.30 s (y53 3.70) with the light logic unchanged; not analysed."
+      ],
+      "next_proposed": [
+        "Race crosswalk cut: add to the IMU speed only the ESC onset (about .1 s x the push accel) instead of the .45 s pending rise the lidar speed needs; keep the lidar path as it is. Expected stop near .15-.25 m without top-ups.",
+        "Transfer: hold toward ENTRY 1.8 to the tangent instead of 1600 then a long coast; check why 1550 lost speed in the cone-two loop after the coast.",
+        "Cone one at 1.7+ m/s: watch the inner gap (.113 m); the earlier-tangent plan rule (y50) and the speed lookahead (y53) both move the path inward."
+      ]
+    }
   }
 }
