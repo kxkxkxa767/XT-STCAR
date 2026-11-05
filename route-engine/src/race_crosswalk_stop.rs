@@ -17,6 +17,9 @@ const CAMERA_AHEAD_OF_LIDAR_M: f64 = FRONT_BODY_EXTENT_M - CAMERA_BEHIND_FRONT_M
 const BOARD_AHEAD_HALF_BINS: i64 = 3; // scripts/camera-pitch-check.py's rays
 const STILL_TRACK_M: f64 = 0.02; // lidar range noise: the car has not left its rest
 const FRAMES_KEPT: usize = 8;
+// y53/y54: the IMU already measured the launch rise. Only the short ESC
+// response still ahead of the current sample belongs in its cut-speed estimate.
+pub(crate) const IMU_POWER_RESPONSE_S: f64 = 0.1;
 
 #[derive(Clone, Debug, Default)]
 pub struct CrosswalkStopPlan {

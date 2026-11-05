@@ -357,18 +357,20 @@ impl Maneuver {
         let mut stop_at = None;
         let mut allowed = None;
         let mut v_crosswalk = None;
+        let mut crosswalk_imu_rise = None;
         let mut first_drive = V::None;
         if approach.is_none() && source != "first_support_missing_frame_hold" {
             let reaction = self.reaction_s(now);
-            let rise = if self._power_cmd_motor == Some(TRIAL_MOTOR) || self._power_cmd_motor == Some(FIRST_APPROACH_MOTOR) {
-                LANE_POWER_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S)
+            let power_accel = if self._power_cmd_motor == Some(TRIAL_MOTOR) || self._power_cmd_motor == Some(FIRST_APPROACH_MOTOR) {
+                LANE_POWER_ACCEL_MPS2
             } else if self._power_cmd_motor == Some(STRAIGHT_MOTOR) {
-                STRAIGHT_ACCEL_MAX_MPS2 * (reaction - LANE_REACTION_BASE_S) // round y23
+                STRAIGHT_ACCEL_MAX_MPS2
             } else if self._power_cmd_motor == Some(START_LAUNCH_MOTOR) {
-                START_LAUNCH_ACCEL_MPS2 * (reaction - LANE_REACTION_BASE_S)
+                START_LAUNCH_ACCEL_MPS2
             } else {
                 0.
             };
+            let rise = power_accel * (reaction - LANE_REACTION_BASE_S);
             let rise = match self._launch_cmd_at {
                 Some(at) => pmax(rise, START_LAUNCH_ACCEL_MPS2 * pmax(0., pmin(ESC_LAG_S, ESC_LAG_S - (now - at)))),
                 None => rise,
@@ -407,10 +409,17 @@ impl Maneuver {
                 } else {
                     LANE_SPEED_UNKNOWN_MPS + rise
                 };
-                // Round y35: the IMU's speed from the start's rest where higher (at 12 V the
-                // 1550 approach ran 1.03 m/s while the lidar slope read a scan behind)
+                // The laser slope still carries its original lag correction.
+                // The IMU measures the current speed from the start's rest, so
+                // add only propulsion remaining within the measured ESC response.
                 let vc = match self.race_inputs.and_then(|i| self.race_crosswalk_stop.imu_speed(i.forward_integral)) {
-                    Some(imu) => pmax(vc, imu + rise),
+                    Some(imu) => {
+                        let response = crate::race_crosswalk_stop::IMU_POWER_RESPONSE_S;
+                        let tail = |command_at: Option<f64>| command_at.map_or(0., |at| (response - (now - at)).clamp(0., response));
+                        let imu_rise = pmax(power_accel * tail(self._power_cmd_at), START_LAUNCH_ACCEL_MPS2 * tail(self._launch_cmd_at));
+                        crosswalk_imu_rise = Some(imu_rise);
+                        pmax(vc, imu + imu_rise)
+                    }
                     None => vc,
                 };
                 v_crosswalk = Some(vc);
@@ -447,6 +456,9 @@ impl Maneuver {
         let waiting_at_stripes = self.crosswalk_state == Some("waiting")
             && self.crosswalk_evidence.get("stop").get("basis").os() != Some("stopped_in_the_first_turn_fallback");
         let mut crosswalk = self.crosswalk_control(scan, now, control, cw_track, cw_speed, v_crosswalk);
+        if crosswalk.is_dict() && let Some(rise) = crosswalk_imu_rise {
+            crosswalk.set("imu_pending_rise_mps", rise);
+        }
         if self.crosswalk_state == Some("done") && let Some(input) = self.race_inputs {
             let exit = &mut self.race_crosswalk;
             let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2);

@@ -27763,5 +27763,15 @@
         "Cone one at 1.7+ m/s: watch the inner gap (.113 m); the earlier-tangent plan rule (y50) and the speed lookahead (y53) both move the path inward."
       ]
     }
+  },
+  "y55_crosswalk_imu_response_20261105": {
+    "date": "2026-11-05", "author": "Codex", "engine_round": 162,
+    "baseline": "1a869b7, following Claude's y54 / engine 161", "implemented": true, "deployed": false, "physical_trial_executed": false,
+    "request": "Continue from Claude's shared handoff. Start with the crosswalk approach cut-speed correction.",
+    "finding": "At y54 scan 27, raw lidar speed was 0.641 m/s and current IMU speed was 0.949 m/s. Adding the older 0.431 m/s launch-lag compensation to the IMU made the cut speed 1.380 m/s. The IMU peaked at about 0.964 m/s after that cut, and the recorded final gap was 0.755 m.",
+    "change": "For the race crosswalk search/approach, add only the remaining part of a 0.10 s ESC response to current IMU speed, using the recorded last forward command and acceleration for that PWM. A recent 1600 command has its own short tail after a step-down. The existing lidar estimate and fallback remain the other candidate in the maximum. Log imu_pending_rise_mps in crosswalk feedback.",
+    "snapshot_arithmetic": {"source": "left-cone-trial-20261104-y54, scan 27", "old_imu_pending_rise_mps": 0.431052297, "new_imu_pending_rise_mps": 0.081052297, "old_cut_speed_mps": 1.380353644, "new_cut_speed_mps": 1.072004372, "new_aimed_stop_gap_m_for_the_same_snapshot": 0.810428120, "note": "The retained lidar path sets the new maximum here. This is arithmetic on a recorded snapshot, not a replay or a measured new stop."},
+    "evidence_directory": "work/y55-crosswalk-ElHGWF2H",
+    "next": "Measure the crosswalk stop gap, any rolling topups, launch-to-crosswalk time and first-cone entry from the changed stopping position. Compare segments against y53 21.776 s. Vehicle remains on y54 until a fresh placement and lamp-reset confirmation."
   }
 }
