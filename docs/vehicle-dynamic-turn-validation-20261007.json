@@ -27801,7 +27801,7 @@
   "y57_surface_response_compensation_20261105": {
     "date": "2026-11-05", "author": "Codex", "engine_round": 164,
     "baseline": "5bb1eb3, y56 candidate; installed vehicle is y54 / engine 161",
-    "deployed": false, "physical_trial_executed": false,
+    "deployed": true, "physical_trial_executed": true,
     "request": "Learn effective load from the first crosswalk approach and continue learning after release; use it to change later PWM smoothly. Today offline only.",
     "build": {"status": "complete", "source_commit": "7b2c0dc384ac8c496313a21a4b8ace46d4276185", "base": "claude-turn161", "engine": "claude-turn164", "vision": "y57", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2769872, "engine_sha256": "d4f00ce9f3599397898ec3df64f6804e11209ffd38b715349d40eeeb66136c9d", "combined_archive": "XT-STCAR-y57-7b2c0dc.tar.gz", "combined_archive_bytes": 10933367},
     "implementation": {
@@ -27820,8 +27820,40 @@
       "dynamic_load_up": "At t=8 s resistance changes 1 to 1.5. Learned extra load rises from 0.010 to 0.203 m/s2; compensation reaches 15 PWM. Modeled task passes, 24.28 s.",
       "dynamic_load_down": "At t=8 s resistance changes 1.5 to 1. Learned load falls from 0.241 to 0.098 m/s2; last compensation is 5 PWM. Model fails the light stop requirement.",
       "failures": "Constant x1.5: cones completed 0.8 s earlier but finish rear remains 0.046 m outside zone; modeled terminal-event time 26.38 s is worse than baseline 24.98 s and is not a valid lap. Constant x2: timeout at light entry. High-to-low change: no light stop. No physical contacts among these twelve runs.",
-      "limits": "Ideal semantic camera and IMU; some response plateaus extrapolated, previous terminal displacement model residual up to 0.33 m. No outdoor or physical validation."
+      "limits": "Ideal semantic camera and IMU; some response plateaus extrapolated, previous terminal displacement model residual up to 0.33 m. Simulation alone did not validate outdoor or physical performance. Later indoor evidence is recorded below."
     },
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_examples_build": true}
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_examples_build": true},
+    "car_run_y57": {
+      "date": "2026-11-05", "source_commit": "7b2c0dc384ac8c496313a21a4b8ace46d4276185", "engine_round": 164,
+      "operator_confirmation": "User asked to test indoors and said car was placed and connected.",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y57",
+      "files_retrieved": 83, "file_checks_passed": 83, "reason": "route_finish_zone_stop",
+      "timing_basis": "Historical saved-feedback scan clock: first non-neutral ACK through first saved finish event, excluding saved light-stop to light-go interval.",
+      "total_s": 31.67748781, "red_wait_s": 10.295110785999999, "effective_s": 21.382377024,
+      "comparison_y53_same_basis_s": 21.775505753999997, "comparison_y54_same_basis_s": 21.886594808,
+      "precise_route_event_net_s": 21.381788888,
+      "crosswalk_stop_gap_m": 0.2845596671129216, "crosswalk_wait_s": 3.000702902,
+      "light_stop_gap_m": 0.556523511608497, "light_rear_to_gantry_m": 0.95624876463781,
+      "light_release_basis": "green_in_fresh_frames_after_the_stop", "finish_gap_m": 0.19545729576281118,
+      "finish_whole_car_in_zone": true, "finish_creeps": 0, "quality_counts": {},
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "cpu_main_core_percent": 15.954418910596974, "mean_scan_to_tick_ms": 1.4508261976048726,
+      "imu_samples": 3594, "imu_checksum_errors": 0,
+      "operator_observation": "While approaching cone two the car briefly steered left, almost returning to the starting channel.",
+      "steering_findings": [
+        "First-pass scan 120 kept left 1710. Scan 121 requested neutral; ACK was still 1550 at scans 123/125. Heading reached about 220.8 degrees versus about 210.5 in y54 and 204.9 in y53.",
+        "Cone-two approach scan 134 current-pose right 1379 became predicted left 1529; scan 136 current-pose right 1461 became target left 1605. The saved physical ACK at 136 is 1500, later 1506/1529, not 1605.",
+        "The existing overshoot_guard ignores a predicted same-direction reduction but accepts the prediction after crossing neutral. At 133 the prediction already needed less right; at 134 its sign changed and the target jumped left.",
+        "The cone-two plan chosen at 131 was retained through 141; it changed at 142. Target identity did not rebind. The left correction preceded that replan."
+      ],
+      "surface_findings": {
+        "saved_snapshots": 209, "maximum_saved_compensation_pwm": 0,
+        "maximum_extra_load_mps2": 0.02736, "initial_wait_load_mps2": 0.0212,
+        "learning_updates": 25, "last_learning_scan": 104,
+        "failure": "After the first bend, velocity integrated since crosswalk rest was far below the radar speed, preventing further load learning. Scan 121 IMU reconstruction 0.054 versus rear-axis lidar 1.250 m/s; scan 141 0.149 versus 1.864 m/s.",
+        "implication": "This run did not demonstrate positive PWM compensation or its slew behavior. The faster lap must not be attributed to adaptive load compensation."
+      },
+      "next": "Fix the isolated cone-two steering prediction transition and replace the adaptive module's across-bend long IMU integral with recent radar-anchored body velocity. No further code or vehicle run was performed during this analysis."
+    }
   }
 }
