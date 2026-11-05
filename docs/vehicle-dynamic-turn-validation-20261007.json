@@ -27860,8 +27860,9 @@
     "date": "2026-11-05", "author": "Codex", "engine_round": 165,
     "baseline": "024b930; actual vehicle y57 / engine 164 from 7b2c0dc",
     "user_instruction": "After each confirmed problem analysis, continue fixing autonomously; do not wait for another request to change it. A new vehicle placement confirmation is still required for each drive.",
-    "deployed": false, "physical_trial_executed": false,
-    "build": {"status": "pending", "base": "claude-turn164", "engine": "claude-turn165", "vision": "y58"},
+    "deployed": true, "physical_trial_executed": false,
+    "build": {"status": "complete", "source_commit": "04b37384fc5934215241c9e51468b4e58fe63f9d", "base": "claude-turn164", "engine": "claude-turn165", "vision": "y58", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2781656, "engine_sha256": "0cf44d2c8c3c913cbe7ab1e5c581a33fefabbd2645d1ebb5912131c760d740eb", "combined_archive": "XT-STCAR-y58-04b3738.tar.gz", "combined_archive_bytes": 10946216},
+    "deployment": {"status": "complete", "engine": "claude-turn165", "vision": "y58", "evidence": "work/y58-transfer-83qFLx3K/deploy-engine.log", "next_drive": "awaiting new operator placement and light-reset confirmation"},
     "changes": [
       "At first-pass handover, begin existing transfer steering immediately without repeating observations or updating the transfer drive phase/motor.",
       "Only race cone-two approach_line uses current calibrated IMU yaw for its response pose and the mean of current/predicted pursuit curvatures. The shared overshoot_guard and light-entry response remain unchanged.",
