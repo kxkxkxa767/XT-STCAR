@@ -215,6 +215,7 @@ impl Maneuver {
             view.set("imu_yaw_rate", input.yaw_rate);
             view.set("imu_forward_integral", input.forward_integral);
             view.set("lane_imu_history", self.race_light.imu_history_dump());
+            view.set("light_speed_uses_gantry", self.race_light.speed_uses_gantry);
             d.set("race_transfer", view);
             d.set("first_loop_divider", crate::dict! {
                 "end_wall_offset_m" => self.race_light.landmark().map(|v| v.1),

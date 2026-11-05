@@ -209,6 +209,7 @@ pub struct RaceLight {
     pub prior_ahead: Option<f64>,
     pub passed_hint: bool,
     pub ranges: RangeHistory,
+    pub speed_uses_gantry: bool,
     pub last_speed: Option<(f64, f64)>,
     imu_history: Vec<(f64, f64, f64)>, // scan time, body IMU integral, lane projection cos
     body_speed_anchor: Option<(f64, f64, f64)>, // scan time, body speed, IMU integral
@@ -235,7 +236,11 @@ impl RaceLight {
 
     pub fn measure_speed(&mut self, scan: &V, reference: Option<f64>, forward_integral: Option<f64>, axis_cos: f64)
         -> (Option<f64>, Option<f64>) {
-        let raw = lane_range_speed(&mut self.ranges, scan, reference, 2);
+        // Missing legs are not a new position sample. Keep the real samples
+        // across a short gap; the existing dt checks reset stale histories
+        // when a real leg returns. The IMU anchor still has its own short age.
+        let raw = if self.speed_uses_gantry && reference.is_none() { None }
+            else { lane_range_speed(&mut self.ranges, scan, reference, 2) };
         let at = scan.idx("at_ms").i() as f64 * 0.001;
         (raw, self.adjusted_speed(forward_integral, at, raw, axis_cos))
     }

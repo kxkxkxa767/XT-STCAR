@@ -27952,7 +27952,7 @@
     "date": "2026-11-05", "author": "Codex", "engine_round": 167,
     "baseline": "ec2d1cd; actual vehicle y59 /166 from46c3f66",
     "request": "Automatically correct the reported far crosswalk stop and stop-go light approach after analyzing y59.",
-    "deployed": true, "physical_trial_executed": false,
+    "deployed": true, "physical_trial_executed": true,
     "build": {"status": "complete", "source_commit": "69fcfa8cabf886e0a6bb79141035023a5e2ec2cb", "base": "claude-turn166", "engine": "claude-turn167", "vision": "y60", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2787176, "engine_sha256": "3b0830f6bcc6c28a2d68f359fcebbc13c20464990b0f331b5591193bf396a77a", "combined_archive": "XT-STCAR-y60-69fcfa8.tar.gz", "combined_archive_bytes": 10952433},
     "deployment": {"status": "complete", "engine": "claude-turn167", "vision": "y60", "evidence": "work/y60-stops-0voEb3kO/deploy-engine.log", "next_drive": "awaiting new operator placement and lamp/sensor reset confirmation"},
     "report": "docs/y60-crosswalk-light-flow-20261105.md", "evidence_directory": "work/y60-stops-0voEb3kO",
@@ -27962,6 +27962,33 @@
       "After observed red, two fresh non-red green frames may use detector publication threshold0.25. Keep0.5 without prior red and in the Python reference. Log the selected threshold."
     ],
     "fixed_input_evidence": {"crosswalk_seq28_old_cut_mps": 1.27018, "recent_radar_body_mps": 1.07134, "limits": "Changed commands alter subsequent vehicle motion; no new closed-loop trajectory or stop distance has been measured."},
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true}
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true},
+    "car_run_y60": {
+      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y60",
+      "prelaunch_attempt": "Initial check rejected a5.1cm return at right-front45deg; car stayed locked and did not start. Operator cleared it and explicitly confirmed retry.",
+      "files_retrieved": 87, "files_checked": 87, "reason": "route_finish_zone_stop",
+      "total_saved_feedback_s": 30.959233927000003, "light_wait_saved_feedback_s": 10.687356657000002,
+      "net_before_penalties_s": 20.27187727, "valid_record": false,
+      "operator_observation": "Stopped before the whole car entered the1m traffic-light parking zone.",
+      "crosswalk_gap_m": 0.18003933682238182, "light_gap_m": 0.7528260024526667,
+      "light_rear_to_gantry_m": 1.1537024893171608, "light_whole_body_in_zone": false,
+      "light_brake": "One continuous1300; no topup or Through sequence. Brake preceded first red decision by about1.7s.",
+      "light_release_basis": "red_seen_10_5s_no_fresh_red", "red_detections": 37, "green_detections": 1,
+      "green_note": "First green frame101 was captured after release; this was not vision-based green release.",
+      "finish_gap_m": 0.21742714552741182, "finish_creeps": 0, "finish_brake_duration_s": 1.597145959,
+      "quality_counts": {}, "cpu_main_core_percent": 16.2006216057212,
+      "root_cause": "At scans162->163 actual gantry distance closed at1.434m/s, but prior/end-wall reference changed at2.808m/s. The contaminated speed window later reported1.724m/s and triggered early braking.",
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+    }
+  },
+  "y61_light_gantry_speed_reference_20261105": {
+    "date": "2026-11-05", "author": "Codex", "engine_round": 168,
+    "baseline": "8cea1ee; actual vehicle y60 /167 from69fcfa8",
+    "request": "Correct light-zone early stop; operator explicitly confirmed the car placed and requested direct deployment/test after the fix.",
+    "deployed": false, "physical_trial_executed": false,
+    "build": {"status": "pending", "base": "claude-turn167", "engine": "claude-turn168", "vision": "y61"},
+    "report": "docs/y61-light-speed-reference-20261105.md", "evidence_directory": "work/y61-light-reference-MZUWHL0m",
+    "change": "After confirmed live gantry legs, switch the velocity reference to real legs before normal early returns. Clear prior-reference history, seed only earlier true observations, retain only short IMU velocity propagation. Missing legs do not clear true samples or inject board/held positions. Reset source on lost/rearmed targets. Keep stopping/braking targets and other stages.",
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32}
   }
 }

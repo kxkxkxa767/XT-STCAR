@@ -610,6 +610,19 @@ impl Maneuver {
             return None;
         }
         let ahead = self.light_line_ahead(scan, heading, lane, now);
+        if self.race_inputs.is_some() && !self.race_light.speed_uses_gantry
+            && ahead.is_some() && self._light_line.has("confirmed_seq")
+            && self._light_line.get("source").os() == Some("legs") {
+            // y60: the end-wall/divider reference jumped13.7cm while the real
+            // legs moved smoothly, producing a false speed rise before braking.
+            // Switch before the normal approach early-return, and never mix
+            // two position references in one velocity history.
+            self.race_light.speed_uses_gantry = true;
+            self.race_light.ranges.clear();
+            self.race_light.ranges.extend(self._light_gantry_seen.iter()
+                .filter(|row| row.idx("seq").i() < scan.idx("seq").i())
+                .map(|row| (row.idx("at_s").f(), row.idx("received_at").f(), row.idx("along_m").f())));
+        }
         let prior = self.race_light.prior_ahead;
         let approach = self.light_stop_state == Some("approach");
         let red_latched = self.race_inputs.is_some() && self._light_red_hold;
@@ -621,6 +634,7 @@ impl Maneuver {
                         self.light_stop_state = Some("divider_approach");
                         self._light_gantry_since = Some(now);
                         self.race_light.ranges.clear();
+                        self.race_light.speed_uses_gantry = false;
                         self.race_light.last_speed = None;
                         self.race_light.beam_at = None;
                         self.route_event("light_divider_prediction", scan, control, dict! {
@@ -682,6 +696,7 @@ impl Maneuver {
             self.lane_speed(scan, None, 2);
             if self.race_inputs.is_some() {
                 self.race_light.ranges.clear();
+                self.race_light.speed_uses_gantry = false;
                 self.race_light.beam_at = None;
             }
             self.light_entry_coast_ack_dropped();
@@ -708,20 +723,14 @@ impl Maneuver {
         let base = if self.light_stop_evidence.truthy() { self.light_stop_evidence.clone() } else { V::dict() };
         self.light_stop_evidence = base.merged(&dict! {"gantry" => evidence.clone()});
         self.route_event("light_gantry", scan, control, evidence);
-        // A direct sighting corrects the target position. When already tracking
-        // the end wall, keep its velocity history through that correction.
-        if !preview || prior.is_none() {
+        // Reference-mode behavior is unchanged. Race mode has already switched
+        // to real legs above, preserving only its recent IMU velocity anchor.
+        if self.race_inputs.is_none() && (!preview || prior.is_none()) {
             let seed = self._light_gantry_seen.iter()
                 .map(|row| (row.idx("at_s").f(), row.idx("received_at").f(), row.idx("along_m").f()));
-            if self.race_inputs.is_some() {
-                self.race_light.ranges.clear();
-                self.race_light.ranges.extend(seed);
-                self.race_light.last_speed = None;
-            } else {
-                self.finish.ranges = seed.collect();
-                self.finish.last_speed = None;
-                (self.finish.pulse, self.finish.creeping, self.finish.creeps) = (0, false, 0);
-            }
+            self.finish.ranges = seed.collect();
+            self.finish.last_speed = None;
+            (self.finish.pulse, self.finish.creeping, self.finish.creeps) = (0, false, 0);
         }
         if self.route_stage != "light_lane" && !red_latched && !preview {
             self.lane_motor = ROUTE_SLOW_MOTOR; // the light entry drives at 1550 until the coast is aimed
@@ -740,8 +749,9 @@ impl Maneuver {
             + if axis_cos >= 0. { REAR_BODY_EXTENT_M * axis_cos } else { -FRONT_BODY_EXTENT_M * axis_cos };
         let gap = ahead.map(|a| a - front_extent);
         let to_sensor = gap.map(|g| g - LIGHT_SENSOR_TO_GANTRY_M);
-        // A constant offset preserves closing rate when live legs replace the prior.
-        let reference = self.race_light.prior_ahead.or(ahead).or_else(|| self.lane_front_range(scan));
+        let reference = if self.race_light.speed_uses_gantry {
+            (self._light_line.get("source").os() == Some("legs")).then_some(ahead).flatten()
+        } else { self.race_light.prior_ahead.or(ahead).or_else(|| self.lane_front_range(scan)) };
         let (speed, current_speed) = self.race_light.measure_speed(scan, reference, input.forward_integral, axis_cos);
         if let Some(v) = current_speed.or(speed) { self.race_light.last_speed = Some((now, v)); }
         let held = self.race_light.last_speed.filter(|(at, _)| now-at <= LANE_SPEED_HOLD_S).map(|(_,v)| v);
@@ -820,6 +830,8 @@ impl Maneuver {
             && self._power_cmd_at.is_none_or(|at| now-at >= lag);
         let basis = stopped.then(|| "stopped_after_camera_red".to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
+            "speed_reference_source" => if self.race_light.speed_uses_gantry { "confirmed_gantry_legs" } else { "pre_gantry_preview" },
+            "speed_reference_m" => reference,
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
@@ -930,6 +942,10 @@ impl Maneuver {
             self._light_line = V::None;
             self._light_gantry_seen.clear();
             self._light_rearm_min_m = Some(LIGHT_REARM_MIN_M);
+            if self.race_inputs.is_some() {
+                self.race_light.ranges.clear();
+                self.race_light.speed_uses_gantry = false;
+            }
         } else {
             self.light_stop_state = Some("released");
         }
