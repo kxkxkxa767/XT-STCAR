@@ -760,6 +760,13 @@ impl Maneuver {
         // The range slope is along the lane. Approximate the longitudinal
         // component of drag over the coast from the present heading to straight.
         let axial_decel = decel * (1. + axis_cos.max(0.)) * 0.5;
+        let brake_decel = LIGHT_BRAKE_DECEL_MPS2 * (1. + axis_cos.max(0.)) * 0.5;
+        // Fuse observation corrections once, then let cruise and brake use
+        // the same continuous position estimate. Zone checks below keep the
+        // measured front/rear gaps, never a filtered declaration of success.
+        self.race_light_brake.observe(now, gap, current_speed.or(speed), input.forward_integral, axis_cos,
+            axial_decel, brake_decel, VISIBLE_LIGHT_STOP_GAP_M);
+        let control_gap = self.race_light_brake.control_gap(now, input.forward_integral).or(gap);
         let lag = crate::motion_sensors::ESC_COAST_DELAY_S;
         let beam_speed = (2.*decel*(LIGHT_SENSOR_TO_GANTRY_M-VISIBLE_LIGHT_STOP_GAP_M)).sqrt();
         let (_, tail) = self.lane_pipeline(now, lag, lag, 0.);
@@ -774,12 +781,11 @@ impl Maneuver {
             let release = v + LIGHT_CRUISE_ACCEL_MPS2 * powered_s;
             (v + release) * powered_s / 2. + release * release / (2. * axial_decel)
         };
-        let predicted = gap.zip(v).map(|(g,v)| g - coast_travel(v, tail));
-        let brake_decel = LIGHT_BRAKE_DECEL_MPS2 * (1. + axis_cos.max(0.)) * 0.5;
+        let predicted = control_gap.zip(v).map(|(g,v)| g - coast_travel(v, tail));
         // The light now has its own active brake. Keep one continuous hold
         // until the neutral tail plus that brake fits the visible stopping
         // point, instead of aiming a long coast and then refilling it twice.
-        let if_renewed = gap.zip(v).map(|(g,v)| {
+        let if_renewed = control_gap.zip(v).map(|(g,v)| {
             let next = (v + acceleration.unwrap_or(LIGHT_CRUISE_ACCEL_MPS2) * step).max(0.);
             let release = next + LIGHT_CRUISE_ACCEL_MPS2 * lag;
             g-(v+next)*step/2.-(next+release)*lag/2.
@@ -818,29 +824,29 @@ impl Maneuver {
         {
             TRIAL_MOTOR // y34: 1550 does not start the car from rest (y33 sim short5 sat at 1550 for 26 s)
         } else { ROUTE_SLOW_MOTOR };
-        let brake_stop = gap.zip(v).map(|(g, v)| g-v*LIGHT_BRAKE_RESPONSE_S-v*v/(2.*brake_decel));
-        let next_brake_stop = gap.zip(v).map(|(g, v)| {
+        let brake_stop = control_gap.zip(v).map(|(g, v)| g-v*LIGHT_BRAKE_RESPONSE_S-v*v/(2.*brake_decel));
+        let next_brake_stop = control_gap.zip(v).map(|(g, v)| {
             let next = (v + acceleration.unwrap_or(0.) * step).max(0.);
             g-(v+next)*step/2.-next*LIGHT_BRAKE_RESPONSE_S-next*next/(2.*brake_decel)
         });
-        // A held fallback may guide the existing approach, but must not renew
-        // the control-tick brake anchor as if a fresh speed had arrived.
-        self.race_light_brake.observe(now, gap, current_speed.or(speed), input.forward_integral, axis_cos,
-            axial_decel, brake_decel, VISIBLE_LIGHT_STOP_GAP_M);
         let motor = self.race_light_brake.command(now, input.forward_integral)
             .unwrap_or(motor);
         self.lane_motor = motor;
+        let rear_past_sensor = rear_gap.map(|g| LIGHT_ZONE_M-g);
+        let whole_in_zone = gap.is_some_and(|g| g >= 0.) && rear_past_sensor.is_some_and(|d| d > 0.);
         let stopped = red && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
             && self._power_cmd_at.is_none_or(|at| now-at >= lag);
-        let basis = stopped.then(|| "stopped_after_camera_red".to_string());
+        let basis = stopped.then(|| if whole_in_zone { "stopped_after_camera_red" }
+            else { "stopped_after_camera_red_outside_zone" }.to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
+            "control_front_gap_m" => control_gap, "speed_fusion" => self.race_light.speed_fusion_diagnostics(),
             "speed_reference_source" => if self.race_light.speed_uses_gantry { "confirmed_gantry_legs" } else { "pre_gantry_preview" },
             "speed_reference_m" => reference,
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
             "stop_gap_if_renewed_m" => if_renewed, "renewal_stop_basis" => "neutral_tail_then_light_brake",
-            "rear_to_gantry_m" => rear_gap,
+            "rear_to_gantry_m" => rear_gap, "rear_past_sensor_m" => rear_past_sensor,
             "heading_accel_mps2" => heading_accel, "brake_stop_gap_m" => brake_stop,
             "next_brake_stop_gap_m" => next_brake_stop, "visibility_brake" => self.race_light_brake.phase(),
             "brake_timing_basis" => "current_control_tick_prediction",
@@ -848,7 +854,7 @@ impl Maneuver {
             "divider_gantry_ahead_m" => self.race_light.prior_ahead, "approach_phase" => self.race_light.phase.label(),
             "beam_crossed_s_ago" => self.race_light.beam_at.map(|at| now - at), "red_due" => red_due,
             "red_hold" => red, "motor" => motor, "creeps" => 0,
-            "whole_car_in_finish_zone" => gap.is_some_and(|g| g >= 0.) && rear_gap.is_some_and(|g| g <= LIGHT_ZONE_M)};
+            "whole_car_in_finish_zone" => whole_in_zone};
         (basis, feedback)
     }
 

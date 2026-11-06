@@ -28048,13 +28048,64 @@
   "y63_transfer_coast_steer_handover_20261106": {
     "date": "2026-11-06", "author": "Codex", "engine_round": 170,
     "baseline": "7a21e07; installed/tested y62 /169 from8b9810d",
-    "deployed": false, "physical_trial_executed": false,
+    "deployed": true, "physical_trial_executed": true,
     "build": {"status": "complete", "source_commit": "6116d891b1d3692747d1747225b0bef91a299a2d", "base": "claude-turn169", "engine": "claude-turn170", "vision": "y63", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2802168, "engine_sha256": "3d59db188b24f669b39abff6c34d16b8a6d2a3d5afd3b2de30f3546136a2c044", "combined_archive": "XT-STCAR-y63-6116d89.tar.gz", "combined_archive_bytes": 10963962},
     "report": "docs/y63-transfer-recovery-20261106.md", "evidence_directory": "work/y63-transfer-recovery-9ZnlvEkC",
     "scope": "Local fix/build/push while the operator is away eating; no further vehicle operation before a new placement confirmation.",
     "change": "In race open_transfer only, board-ahead/second-support geometry waiting keeps drive state, neutral motor and current channel steering. A waiting flag prevents low/missing speed or temporary threshold changes from restoring power. Normal identity-confirmed handover clears the flag and retains the existing coast-to-entry policy. Speed history/IMU anchor are not reset; no generic maturity/resume1560 handshake for this case.",
     "preserved": "Original target confirmation, entry-speed targets, actual quality-fault handling,8cm body stop and all other stage controllers.",
     "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 12, "clippy_warnings": 32, "new_test_files": 0, "focused_regression": "Neutral motor while steering continues, no restart pause, and missing speed cannot release the support-wait latch."},
-    "remaining_validation": "Changed trajectory and clearance to the left-front obstacle must be verified on the next operator-confirmed physical run. The y62 light changes have not yet been reached in a physical run."
+    "remaining_validation": "The new support-wait branch was not activated in either recorded y63 run. Normal transfers succeeded; the second run still stopped short of the light zone and failed terminal standstill confirmation.",
+    "car_run_y63": {
+      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y63",
+      "files_retrieved": 54, "files_checked": 54, "reason": "route_finish_zone_stop", "effective_s": null,
+      "invalid_light_trial_reason": "Operator confirmed lights were not powered on; repeated same software after explicit reset confirmation.",
+      "first_pass_to_second_handover_s": 1.001, "motion_recovery_count": 0, "support_wait_branch_seen": false,
+      "second_loop_min_left_clearance_m": 0.30086, "avoid_count": 0, "path_override_count": 0,
+      "light_brake_start_s": 17.618771, "light_brake_end_s": 18.012800, "light_brake_end_reason": "coast_reaches_target",
+      "finish_gap_m": 0.371, "finish_creeps": 1,
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+    },
+    "car_run_y63_2": {
+      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y63-2",
+      "files_retrieved": 93, "files_checked": 93, "reason": "coast_standstill_unconfirmed",
+      "total_saved_feedback_s": 31.471704991, "light_wait_saved_feedback_s": 10.391434053000001,
+      "net_before_penalties_s": 21.080270937999998, "valid_record": false,
+      "crosswalk_gap_m": 0.27883019904966755,
+      "first_pass_to_second_handover_s": 1.100068497, "motion_recovery_count": 0, "support_wait_branch_seen": false,
+      "second_loop_min_left_clearance_m": 0.23561,
+      "light_gap_m": 0.685767133445124, "light_rear_to_gantry_m": 1.0933551555891319,
+      "operator_confirmation": "Rear wheels had not completely crossed the photoelectric beam; resting on the beam line is not inside the parking zone.",
+      "operator_photo_attachment": "1793957727527.jpg",
+      "light_brake_start_s": 17.050021254, "light_brake_end_s": 17.751711638,
+      "light_brake_end_reason": "coast_reaches_target", "light_brake_release_speed_mps": 0.818997,
+      "light_release_basis": "green_in_fresh_frames_after_the_stop", "green_scores": [0.8992,0.898],
+      "light_min_body_clearance_m": 0.17544,
+      "finish_gap_m": 0.29432161970351406, "finish_creeps": 0,
+      "standstill_issue": "After finish event, about4.8s at1500. Front range only0.495–0.496m, but plane association discarded duplicate short front-board fits and left parallel walls; no valid measured-motion output proved movement.",
+      "cpu_main_core_percent": 16.134212703898346,
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+    }
+  },
+  "y64_light_innovation_coast_association_20261106": {
+    "date": "2026-11-06", "author": "Codex", "engine_round": 171,
+    "baseline": "da5f7d9; actual vehicle y63 /170 from6116d89",
+    "deployed": false, "physical_trial_executed": false,
+    "build": {"status": "pending", "base": "claude-turn170", "engine": "claude-turn171", "vision": "y64"},
+    "report": "docs/y64-light-fusion-standstill-20261106.md", "evidence_directory": "work/y64-light-fusion-ORut51yj",
+    "changes": [
+      "Filter only radar velocity innovation relative to the short-IMU prediction, retaining immediate physical acceleration. Fuse measured gap innovation against the prior projected gap. Both use candidate0.2s response constants.",
+      "Cruise and active brake share the continuous control gap. Raw front/rear distances still determine zone diagnostics; rear clearance must be strictly positive. Outside-zone red stops are explicitly marked, not relabelled as success.",
+      "Unify same-board plane consolidation candidate angle with the existing registration angle. Keep joint-fit residuals, distance checks, all low-motion thresholds and timeout unchanged."
+    ],
+    "fixed_input_evidence": {
+      "local_first_brake_seq170": {"old_axis_speed_mps": 1.722642, "new_axis_speed_mps": 1.614732, "old_brake_stop_gap_m": 0.434326, "new_brake_stop_gap_m": 0.668883, "old_motor": 1300, "new_brake_request": null},
+      "local_release_seq177": {"old_release_stop_gap_m": 0.817467, "new_release_stop_gap_m": 0.62056, "jump_reduction_fraction": 0.636, "still_releases_in_local_check": true},
+      "limits": "Missing scans are not synthesized; local checks do not establish the full changed trajectory, exact first brake frame or actual in-zone stop.0.2s is not a physically calibrated parameter."
+    },
+    "standstill_evidence": {"saved_frames": 31, "old_standstill_confirmed": false, "new_first_stationary_seq": 340, "new_stable_pairs": 5, "new_stable_both_clocks_s": 0.799, "real_0p02m_translation_detected": true, "thresholds_relaxed": false, "evidence": "work/y64-coast-association"},
+    "position_history": {"report": "docs/light-position-history-20261106.md", "results": "docs/light-position-history-20261106.json", "historical_offline_reference_m": 3.225, "note": "This was an offline map comparison, not an old onboard fixed gantry coordinate. y27 used live legs. Final-position stability is not full-trajectory accuracy.", "recent_stop_position_range_m": [3.190804430219196,3.2037810355721517], "moving_saved_difference_range_m": [-0.1823,0.1427], "beam_spacing_change_m": [1.10,1.00]},
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 13, "clippy_warnings": 32, "new_test_files": 0, "new_inline_regressions": 1},
+    "remaining_validation": "Actual rear-wheel clearance past the beam, visible-light stop, brake trajectory and vehicle CPU require operator-confirmed physical testing."
   }
 }

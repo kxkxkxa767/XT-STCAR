@@ -1,8 +1,9 @@
 //! coast_motion.py (round 97, part B): scan-to-scan low-motion evidence for
 //! the coast standstill check (CoastMotion, _planes, _register, _fit) and the
 //! worker's queue semantics (CoastMotionWorker: one latest pending scan, a
-//! result usable only for the exact current scan). Line for line, same
-//! results, key order and types as Python. The worker computes on
+//! result usable only for the exact current scan). Scan clocks and worker
+//! queue semantics retain the Python contract; noisy sub-windows of one board
+//! are consolidated before one-to-one registration. The worker computes on
 //! `run_pending` (the deterministic offline mode); the standalone program
 //! runs it on its own thread.
 
@@ -24,6 +25,7 @@ const MAX_LOW_YAW_RATE_RPS: f64 = 0.03;
 const MAX_LOW_PAIR_TRANSLATION_M: f64 = 0.008;
 const MAX_STABLE_TOTAL_TRANSLATION_M: f64 = 0.02;
 const MAX_STABLE_TOTAL_ROTATION_RAD: f64 = 0.02;
+const PLANE_ASSOCIATION_ANGLE_RAD: f64 = 0.15;
 
 /// SOFTWARE_THRESHOLDS, in its key order.
 pub fn software_thresholds() -> V {
@@ -153,7 +155,12 @@ fn planes(ranges: &[Option<f64>]) -> Vec<Line> {
         let mut joined_into = false;
         for index in 0..merged.len() {
             let old = &merged[index];
-            if wrap_angle(line.angle - old.angle).abs() < radians(2.) && (line.rho - old.rho).abs() < 0.035 {
+            // Short, noisy windows of the same board can differ by more than
+            // two degrees while their joint fit still describes one plane.
+            // Leaving them split inside the wider registration gate makes
+            // every window ambiguous and discards that whole board (y63-2).
+            // Joint residual limits below still decide whether they can merge.
+            if wrap_angle(line.angle - old.angle).abs() <= PLANE_ASSOCIATION_ANGLE_RAD && (line.rho - old.rho).abs() < 0.035 {
                 // list(dict.fromkeys(old + line)): first occurrences, in order.
                 let mut seen = HashSet::new();
                 let points: Vec<Point> =
@@ -187,7 +194,7 @@ fn nonparallel(lines: &[&Line]) -> bool {
 /// _register(previous, current, dt): (motion, error).
 fn register(previous: &[Line], current: &[Line], dt: f64) -> Result<V, &'static str> {
     let near = |old: &Line, line: &Line| {
-        wrap_angle(old.angle - line.angle).abs() <= 0.15 && (old.rho - line.rho).abs() <= pmin(0.80, 5. * dt + 0.035)
+        wrap_angle(old.angle - line.angle).abs() <= PLANE_ASSOCIATION_ANGLE_RAD && (old.rho - line.rho).abs() <= pmin(0.80, 5. * dt + 0.035)
     };
     let mut matches: Vec<(&Line, &Line)> = Vec::new();
     for line in current {
@@ -661,5 +668,68 @@ impl CoastFitter {
         };
         let processing_ms = started.elapsed().as_secs_f64() * 1000.;
         to_json(&dict! {"result" => result, "processing_ms" => processing_ms})
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn noisy_front_board_windows_keep_a_nonparallel_standstill_reference() {
+        // y63-2, scan 370: the same front board produced two short fits
+        // 3.18 degrees apart, both inside the registration association gate.
+        // Their joint residual fits the existing plane limits. Previously the
+        // two ambiguous front fits were discarded, leaving parallel side walls.
+        const RANGES_MM: [u16; 360] = [
+            495, 495, 495, 495, 495, 495, 512, 512, 512, 512, 527, 527, 527, 527, 527, 527, 544,
+            544, 544, 544, 559, 559, 559, 559, 575, 575, 592, 592, 592, 592, 607, 607, 624, 624,
+            624, 639, 655, 655, 655, 672, 687, 687, 704, 687, 672, 672, 655, 639, 639, 639, 624,
+            607, 607, 607, 607, 592, 592, 592, 592, 575, 575, 559, 559, 559, 559, 544, 544, 544,
+            544, 544, 544, 544, 544, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527,
+            527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527,
+            527, 544, 544, 544, 544, 544, 559, 559, 559, 559, 559, 559, 559, 575, 575, 575, 575,
+            592, 592, 607, 607, 624, 624, 639, 639, 655, 672, 672, 687, 704, 719, 735, 735, 752,
+            767, 784, 799, 832, 847, 864, 896, 911, 941, 956, 1002, 1002, 1048, 1064, 1110, 1126,
+            1156, 1187, 1234, 1327, 1388, 1451, 1512, 1620, 1698, 1744, 1806, 1945, 2192, 2363,
+            2487, 2703, 2688, 7583, 7567, 7536, 7536, 7521, 7505, 7474, 7474, 7474, 7474, 7458,
+            7521, 7458, 6567, 5673, 5066, 4320, 3588, 3340, 2656, 2688, 2487, 2363, 2285, 2069,
+            1852, 1775, 1698, 1620, 1496, 1419, 1358, 1311, 1187, 1142, 1110, 1095, 1048, 1018,
+            1002, 971, 941, 926, 896, 880, 847, 847, 816, 816, 784, 752, 752, 735, 719, 704, 704,
+            687, 655, 655, 639, 639, 624, 607, 607, 592, 591, 574, 575, 559, 559, 544, 544, 544,
+            527, 527, 527, 527, 512, 512, 512, 495, 495, 495, 495, 495, 495, 495, 479, 479, 479,
+            479, 479, 479, 479, 463, 479, 479, 463, 463, 463, 463, 463, 463, 463, 463, 463, 479,
+            479, 479, 479, 479, 479, 479, 479, 479, 479, 479, 495, 495, 495, 495, 495, 495, 512,
+            527, 527, 527, 527, 527, 544, 544, 544, 559, 559, 575, 575, 592, 592, 607, 607, 624,
+            624, 639, 639, 655, 655, 672, 672, 672, 672, 655, 655, 639, 639, 624, 624, 607, 592,
+            592, 592, 575, 575, 559, 559, 559, 559, 544, 544, 544, 527, 527, 527, 527, 512, 512,
+            512, 512, 512, 512, 512, 495, 495, 495, 495, 495, 495, 495, 495, 495, 495, 495,
+        ];
+        let ranges: Vec<Option<f64>> = RANGES_MM
+            .iter()
+            .map(|r| Some(f64::from(*r) / 1000.))
+            .collect();
+        let lines = planes(&ranges);
+        let same = register(&lines, &lines, 0.1).expect("front and side boards remain associated");
+        assert!(same.get("matched_planes").i() >= 3);
+
+        let mut estimator = CoastMotion::new();
+        for seq in 0..=5 {
+            let scan = dict! {
+                "frame_id" => FRAME, "seq" => seq, "at_ms" => seq * 100,
+                "ranges" => V::list(ranges.iter().map(|r| V::from(*r)).collect()),
+            };
+            let motion = estimator.update(&scan, &V::Float(0.), &V::Float(seq as f64 * 0.1));
+            assert_eq!(motion.get("stationary").is_true(), seq == 5);
+        }
+
+        // Merging noisy sub-windows must not erase real movement.
+        let shifted: Vec<Line> = lines
+            .iter()
+            .map(|line| fit(line.points.iter().map(|&(x, y)| (x - 0.02, y)).collect()))
+            .collect();
+        let moved = register(&lines, &shifted, 0.1).expect("the translated boards still register");
+        assert!((moved.get("translation_m").f() - 0.02).abs() < 1e-8);
+        assert!(moved.get("speed_mps").f() > MAX_LOW_SPEED_MPS);
     }
 }

@@ -11,6 +11,10 @@ pub const LIGHT_BRAKE_RESPONSE_S: f64 = 0.1;
 pub const LIGHT_BRAKE_DECEL_MPS2: f64 = 0.95;
 // Same rest criterion as maneuver_light::LIGHT_RESTART_MPS.
 const STOP_SPEED_MPS: f64 = 0.15;
+// Observation-fusion response, not a calibrated braking parameter. Verify
+// against fixed recorded inputs; stopping targets and brake rates stay separate.
+const GAP_FUSION_RESPONSE_S: f64 = 0.2;
+const MIN_AXIS_COS: f64 = std::f64::consts::FRAC_1_SQRT_2;
 
 #[derive(Clone, Copy, Debug, Default)]
 enum BrakeState {
@@ -63,6 +67,7 @@ struct Anchor {
 #[derive(Clone, Copy, Debug)]
 struct Projection {
     at: f64,
+    anchor_at: f64,
     age: f64,
     gap: f64,
     speed: f64,
@@ -70,6 +75,15 @@ struct Projection {
     brake_stop: f64,
     release_stop: f64,
     imu_delta: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct GapFusion {
+    at: f64,
+    measured: f64,
+    predicted: Option<f64>,
+    weight: f64,
+    control: f64,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -80,6 +94,7 @@ pub struct LightBrake {
     started_at: Option<f64>,
     ended_at: Option<f64>,
     end_reason: Option<&'static str>,
+    gap_fusion: Option<GapFusion>,
 }
 
 impl LightBrake {
@@ -108,10 +123,34 @@ impl LightBrake {
         {
             return;
         }
+        let integral = forward_integral.filter(|v| v.is_finite());
+        let prediction = self.anchor.filter(|old| {
+            (0. ..=SCAN_AGE_S).contains(&(now-old.at)) && old.axis_cos >= MIN_AXIS_COS
+        }).and_then(|old| {
+            let (origin, current) = old.integral.zip(integral)?;
+            let dt = now-old.at;
+            // Transport the old body speed into the current lane projection
+            // before integrating displacement. A near-transverse old axis
+            // cannot identify body speed and therefore starts a new anchor.
+            let projected_speed = ((old.speed/old.axis_cos+current-origin).max(0.)*axis_cos).max(0.);
+            let predicted_gap = old.gap-(old.speed+projected_speed)*dt*0.5;
+            predicted_gap.is_finite().then_some((predicted_gap, dt))
+        });
+        let weight = prediction.map_or(1., |(_, dt)| dt/(GAP_FUSION_RESPONSE_S+dt));
+        let control_gap = prediction.map_or(gap, |(predicted, _)| predicted+weight*(gap-predicted));
+        self.gap_fusion = Some(GapFusion {
+            at: now, measured: gap, predicted: prediction.map(|p| p.0), weight, control: control_gap,
+        });
         self.anchor = Some(Anchor {
-            at: now, gap, speed, integral: forward_integral.filter(|v| v.is_finite()),
+            at: now, gap: control_gap, speed, integral,
             axis_cos, coast_decel, brake_decel, target,
         });
+    }
+
+    /// Read the same short projection used by the brake, for the approach's
+    /// coast budget. The caller keeps measured front/rear gaps for zone checks.
+    pub fn control_gap(&self, now: f64, forward_integral: Option<f64>) -> Option<f64> {
+        self.project(now, forward_integral).map(|p| p.gap)
     }
 
     fn project(&self, now: f64, forward_integral: Option<f64>) -> Option<Projection> {
@@ -131,7 +170,7 @@ impl LightBrake {
         let release_stop = gap - (speed + release_speed) * response * 0.5
             - release_speed * release_speed / (2. * anchor.coast_decel);
         if ![speed, gap, coast_stop, brake_stop, release_stop].iter().all(|v| v.is_finite()) { return None; }
-        Some(Projection { at: now, age, gap, speed, coast_stop, brake_stop, release_stop, imu_delta: change.is_some() })
+        Some(Projection { at: now, anchor_at: anchor.at, age, gap, speed, coast_stop, brake_stop, release_stop, imu_delta: change.is_some() })
     }
 
     /// Advance on the existing control tick, without waiting another scan.
@@ -196,6 +235,7 @@ impl LightBrake {
             "ended_at" => self.ended_at, "end_reason" => self.end_reason,
             "anchor_at" => self.anchor.map(|a| a.at),
             "projection_at" => self.projection.map(|p| p.at),
+            "projection_anchor_at" => self.projection.map(|p| p.anchor_at),
             "projection_age_s" => self.projection.map(|p| p.age),
             "projected_gap_m" => self.projection.map(|p| p.gap),
             "projected_speed_mps" => self.projection.map(|p| p.speed),
@@ -203,6 +243,15 @@ impl LightBrake {
             "brake_stop_gap_m" => self.projection.map(|p| p.brake_stop),
             "release_stop_gap_m" => self.projection.map(|p| p.release_stop),
             "projection_basis" => self.projection.map(|p| if p.imu_delta { "short_imu_delta" } else { "constant_anchor_speed" }),
+            "gap_observed_at" => self.gap_fusion.map(|g| g.at),
+            "measured_gap_m" => self.gap_fusion.map(|g| g.measured),
+            "predicted_gap_m" => self.gap_fusion.and_then(|g| g.predicted),
+            "gap_innovation_m" => self.gap_fusion.and_then(|g| g.predicted.map(|p| g.measured-p)),
+            "gap_correction_m" => self.gap_fusion.and_then(|g| g.predicted.map(|p| g.control-p)),
+            "control_gap_m" => self.gap_fusion.map(|g| g.control),
+            "gap_innovation_weight" => self.gap_fusion.map(|g| g.weight),
+            "gap_fusion_response_s" => GAP_FUSION_RESPONSE_S,
+            "gap_fusion_basis" => "candidate_range_innovation_fusion_on_imu_propagation",
         }
     }
 

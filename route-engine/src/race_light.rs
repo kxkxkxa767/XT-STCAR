@@ -9,6 +9,10 @@ use crate::py::V;
 use crate::motion_sensors::{RangeHistory, lane_range_speed};
 use crate::maneuver::{LANE_SPEED_BASELINE, LANE_SPEED_HISTORY};
 
+// Observation-fusion response, not a measured vehicle parameter. Check it
+// against the recorded inputs before attributing a physical improvement.
+const SPEED_FUSION_RESPONSE_S: f64 = 0.2;
+
 type Post = (f64, f64); // longitudinal and leftward distances in the lane frame
 
 #[derive(Clone, Copy)]
@@ -213,10 +217,21 @@ pub struct RaceLight {
     pub last_speed: Option<(f64, f64)>,
     imu_history: Vec<(f64, f64, f64)>, // scan time, body IMU integral, lane projection cos
     body_speed_anchor: Option<(f64, f64, f64)>, // scan time, body speed, IMU integral
+    speed_fusion: Option<SpeedFusion>,
     /// When the front was first estimated past the photo beam (y34).
     pub beam_at: Option<f64>,
     approach_sample: Option<(i64, f64, Option<f64>)>,
 }
+
+#[derive(Clone, Copy, Debug)]
+struct SpeedFusion {
+    at: f64,
+    measured: f64,
+    predicted: Option<f64>,
+    weight: f64,
+    filtered: f64,
+}
+
 impl RaceLight {
     /// Divide by sequence distance if a scan was skipped.
     pub fn approach_step(&mut self, scan: &V, integral: Option<f64>, axis_cos: f64) -> (f64, Option<f64>) {
@@ -301,7 +316,21 @@ impl RaceLight {
             }
             if count > 0 {
                 bodies[..count].sort_unstable_by(f64::total_cmp);
-                self.body_speed_anchor = Some((at, bodies[count/2], current));
+                let measured = bodies[count/2];
+                // Keep physical acceleration on the IMU path. Only the new
+                // radar correction is filtered; missing radar never advances
+                // this update clock or renews the anchor's validity.
+                let prior = self.body_speed_anchor.filter(|(previous_at, _, _)| {
+                    0. < at-previous_at && at-previous_at <= crate::helpers::SCAN_AGE_S
+                });
+                let predicted = prior.map(|(_, body, origin)| (body+current-origin).max(0.));
+                let weight = prior.map_or(1., |(previous_at, _, _)| {
+                    let dt = at-previous_at;
+                    dt/(SPEED_FUSION_RESPONSE_S+dt)
+                });
+                let filtered = predicted.map_or(measured, |v| v+weight*(measured-v)).max(0.);
+                self.speed_fusion = Some(SpeedFusion { at, measured, predicted, weight, filtered });
+                self.body_speed_anchor = Some((at, filtered, current));
             }
         }
         let (anchor_at, body, origin) = self.body_speed_anchor?;
@@ -311,6 +340,20 @@ impl RaceLight {
 
     pub fn imu_history_dump(&self) -> V {
         V::list(self.imu_history.iter().map(|r| V::from(vec![r.0,r.1,r.2])).collect())
+    }
+
+    pub fn speed_fusion_diagnostics(&self) -> V {
+        crate::dict! {
+            "observed_at" => self.speed_fusion.map(|v| v.at),
+            "radar_body_speed_mps" => self.speed_fusion.map(|v| v.measured),
+            "predicted_body_speed_mps" => self.speed_fusion.and_then(|v| v.predicted),
+            "innovation_mps" => self.speed_fusion.and_then(|v| v.predicted.map(|p| v.measured-p)),
+            "correction_mps" => self.speed_fusion.and_then(|v| v.predicted.map(|p| v.filtered-p)),
+            "filtered_body_speed_mps" => self.speed_fusion.map(|v| v.filtered),
+            "innovation_weight" => self.speed_fusion.map(|v| v.weight),
+            "response_s" => SPEED_FUSION_RESPONSE_S,
+            "basis" => "candidate_radar_innovation_fusion_with_imu_acceleration",
+        }
     }
 
     pub fn observe_first(&mut self, scan: &V, heading: f64) {

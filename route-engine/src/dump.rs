@@ -210,6 +210,7 @@ impl Maneuver {
             d.set("surface_speed", self.race_surface_speed.diagnostics());
             d.set("light_visibility_brake", self.race_light_brake.phase());
             d.set("light_brake_control", self.race_light_brake.diagnostics());
+            d.set("light_speed_fusion", self.race_light.speed_fusion_diagnostics());
             // Preserve the existing diagnostic format without sharing control state.
             let mut view = self.race_transfer.dump();
             self.race_crosswalk.append_diagnostics(&mut view);
