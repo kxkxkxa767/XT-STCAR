@@ -630,42 +630,78 @@ impl Supervisor {
         (V::None, self.turn_front_lane(s, now, true).is_true())
     }
 
-    /// Bridge one far side gap on the crosswalk restart using its preceding scan.
-    fn start_lane_far_gap(&self, s: &Session, clearance: &V) -> bool {
-        if !s.motion.crosswalk_exit_stage() || s.phase != "drive"
-            || (s.motion.servo - NEUTRAL).abs() > COAST_FIT_STRAIGHT_PWM {
-            return false;
+    /// Bridge one far side gap on the crosswalk restart using its preceding scan: why it
+    /// refuses this scan, None when the gap is bridged.
+    fn start_lane_far_gap_refusal(&self, s: &Session, clearance: &V) -> Option<&'static str> {
+        if !s.motion.crosswalk_exit_stage() || s.phase != "drive" {
+            return Some("not_crosswalk_exit_drive");
+        }
+        if (s.motion.servo - NEUTRAL).abs() > COAST_FIT_STRAIGHT_PWM {
+            return Some("steering_not_straight");
         }
         let seq = self.scan.idx("seq").i();
         let cached = s.report.get("start_lane_far_gap_seq").oi();
-        if cached == Some(seq) { return true; } // more control ticks on the same lidar publication
+        if cached == Some(seq) { return None; } // more control ticks on the same lidar publication
         let prev = &s.motion._current_scan;
-        if prev.get("seq").oi() != Some(seq - 1) { return false; }
+        if prev.get("seq").oi() != Some(seq - 1) { return Some("previous_scan_not_consecutive"); }
         let dt = (self.scan.idx("at_ms").i() - prev.idx("at_ms").i()) as f64 * 0.001;
         let missing = clearance.idx("front_open_unknown_bins").l();
-        if !(0. < dt && dt < SCAN_AGE_S) || missing.is_empty() || missing.len() > crate::clearance::MANEUVER_TOLERABLE_FRONT_UNKNOWN
-            || clearance.idx("largest_open_gap_deg").i() > crate::clearance::FRONT_FAR_BRIDGE_MAX_BINS {
-            return false;
+        let race = s.motion.race_inputs.is_some();
+        if !(0. < dt && dt < SCAN_AGE_S) { return Some("scan_interval"); }
+        if missing.is_empty() { return Some("no_front_unknown_bins"); }
+        // y67 (race): each run is judged by where it lies (far_flank_gap), so the front count
+        // cap and the one-side rule no longer refuse it; the scan-wide limits (324 returns, no
+        // run over 12 bins) still come through scan_incomplete. y66 seq 84 bridged 14 dark bins
+        // past the left-turn opening (5-7 m); seq 85 (not saved) paused the 1600 launch .3 s.
+        if !race && missing.len() > crate::clearance::MANEUVER_TOLERABLE_FRONT_UNKNOWN {
+            return Some("front_unknown_over_cap");
         }
-        let Some(stop) = s.motion.start_lane_feedback.get("front_stop_range_m").of() else { return false };
+        if clearance.idx("largest_open_gap_deg").i() > crate::clearance::FRONT_FAR_BRIDGE_MAX_BINS {
+            return Some("open_gap_too_wide");
+        }
+        let Some(stop) = s.motion.start_lane_feedback.get("front_stop_range_m").of() else { return Some("no_stop_range") };
         let horizon = stop + LANE_MAX_CLOSING_MPS * dt;
         let old = prev.idx("ranges").l();
         let new = self.scan.idx("ranges").l();
+        if missing.iter().any(|angle| angle.i().abs() <= LANE_FRONT_HALF_BINS) {
+            return Some("gap_at_centre");
+        }
         let flank = missing[0].i().signum();
-        if missing.iter().any(|angle| angle.i().signum() != flank || angle.i().abs() <= LANE_FRONT_HALF_BINS) {
-            return false;
+        let two_sided = missing.iter().any(|angle| angle.i().signum() != flank);
+        if two_sided && !race {
+            return Some("gaps_on_both_sides");
         }
         // Race: a far gap is judged by where it lies, on every scan it lasts (y50 seq 92).
-        if s.motion.race_inputs.is_some() && crate::race_crosswalk::far_flank_gap(clearance, old, new, missing, horizon) {
-            return true;
+        if race && crate::race_crosswalk::far_flank_gap(clearance, old, new, missing, horizon) {
+            return None;
         }
-        if cached == Some(seq - 1) { return false; }
-        missing.iter().all(|angle| {
+        if two_sided || cached == Some(seq - 1) { return Some("flank_within_stop_or_corridor"); }
+        let bridged = missing.iter().all(|angle| {
             (-1..=1).all(|j| {
                 let k = imod(angle.i()+j, 360) as usize;
                 old[k].of().is_some_and(|v| v > horizon) && new[k].of().is_none_or(|v| v > horizon)
             })
-        }) || crate::race_crosswalk::flank_beyond_stop(clearance, old, new, missing, horizon)
+        }) || crate::race_crosswalk::flank_beyond_stop(clearance, old, new, missing, horizon);
+        if bridged { None } else { Some("flank_within_stop_or_corridor") }
+    }
+
+    /// y67: what a refused far gap looked like (the pausing scan is often not in the saved frames).
+    fn far_gap_refusal_record(&self, clearance: &V, reason: &str) -> V {
+        let ranges = self.scan.idx("ranges").l();
+        let missing = clearance.idx("front_open_unknown_bins").l();
+        let flanks: Vec<V> = missing.chunk_by(|a, b| b.i() == a.i() + 1).map(|run| {
+            let (left, right) = (run[0].i() - 1, run[run.len() - 1].i() + 1);
+            let at = |angle: i64| ranges[imod(angle, 360) as usize].clone();
+            V::list(vec![V::Int(left), at(left), V::Int(right), at(right)])
+        }).collect();
+        crate::dict! {
+            "seq" => self.scan.idx("seq").clone(), "reason" => reason,
+            "front_open_unknown_bins" => clearance.idx("front_open_unknown_bins").clone(),
+            "largest_open_gap_deg" => clearance.idx("largest_open_gap_deg").clone(),
+            "flanks_bin_range" => V::list(flanks),
+            "corridor_front_m" => clearance.get("corridor_front_m").clone(),
+            "corridor_half_width_m" => clearance.get("corridor_half_width_m").clone(),
+        }
     }
 
     fn turn_route_quality_scope(&self, s: &Session, now: f64) -> Option<&'static str> {
@@ -1165,8 +1201,19 @@ impl Supervisor {
                         || (*issue == "scan_incomplete" && race_loop_scan))
             })
             .collect();
-        let far_side_gap = issues.as_slice() == ["front_sparse"] && !tolerable.contains(&"front_sparse")
-            && self.start_lane_far_gap(s, &clearance);
+        let far_refusal = (issues.as_slice() == ["front_sparse"] && !tolerable.contains(&"front_sparse"))
+            .then(|| self.start_lane_far_gap_refusal(s, &clearance));
+        let far_side_gap = far_refusal == Some(None);
+        if let Some(Some(reason)) = far_refusal
+            && s.motion.crosswalk_exit_stage()
+        {
+            let mut refusals: Vec<V> = s.report.get("start_lane_far_gap_refusals").ol().map(|l| l.to_vec()).unwrap_or_default();
+            refusals.push(self.far_gap_refusal_record(&clearance, reason));
+            if refusals.len() > 8 {
+                refusals.remove(0);
+            }
+            s.report.set("start_lane_far_gap_refusals", V::list(refusals));
+        }
         if far_side_gap { tolerable.push("front_sparse"); }
         let scope = if !tolerable.is_empty() {
             self.turn_route_quality_scope(s, t).or_else(|| {

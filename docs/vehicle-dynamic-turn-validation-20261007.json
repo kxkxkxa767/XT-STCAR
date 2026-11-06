@@ -28223,8 +28223,8 @@
       "因为我没有在室外跑过，室内应该不会补偿",
       "你改吧，暂时不到室外"
     ],
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": [
       "y57-y64 indoors (10 runs): learned extra load at most .005-.083 m/s2; compensation 0 in every stored frame except one +5 (y63-2 seq 95). The smoother runs came from other stages (e.g. start to crosswalk motor changes 8 in y54, 2-4 from y57).",
       "The 1550 reference (1.598 m/s, 2.34 s, from short y53 segments) is low: 43 learner-gated 1550 pairs at 1.62-2.21 m/s fit a = .608 - .335 v (1.814 m/s, 2.98 s, residual .079); the old model read -.09 on average, -.1 to -.3 right after the crosswalk (y64 seq 97-102 -.28 to -.31), so the load learned on the crosswalk coast went back to 0 when compensation began.",
@@ -28253,6 +28253,100 @@
       "clippy_warnings": 32,
       "new_test_file": false
     },
-    "remaining_validation": "Indoors the holds should stay uncompensated (diagnostics compensation_pwm 0) with the y65 cone-two tracking; outdoors untested."
+    "remaining_validation": "Indoors the holds should stay uncompensated (diagnostics compensation_pwm 0) with the y65 cone-two tracking; outdoors untested.",
+    "car_run_y66": {
+      "deployed": "2026-11-06 21:14, deploy-matched claude-turn173 173 + deploy-vision y66 (from y64 / 171); run 21:22",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y66",
+      "evidence_files_ok": 93,
+      "operator": "感觉中途停顿了很多次",
+      "result": "route_finish_zone_stop, .209 m from the board, 0 creeps, standstill confirmed; front_sparse quality pause once",
+      "effective_s": 21.581,
+      "start_to_stop_s": 31.9,
+      "light_wait_s": 10.094,
+      "segments_s_vs_y64": {
+        "move_to_crosswalk_stop": [
+          3.397,
+          3.496
+        ],
+        "crosswalk_wait": [
+          3.197,
+          3.198
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.096,
+          3.793
+        ],
+        "first_pass_to_tangent": [
+          2.9,
+          2.396
+        ],
+        "tangent_to_second_pass": [
+          0.801,
+          1.298
+        ],
+        "second_pass_to_light_stop": [
+          3.395,
+          3.292
+        ],
+        "light_go_to_finish_stop": [
+          3.794,
+          3.795
+        ],
+        "total_less_light": [
+          21.581,
+          21.268
+        ]
+      },
+      "cone_two_tracking": "second_loop 17 stored frames all open_second_loop: no missing-frame hold, no identity recovery, no rebind (y64: lost 133-136, recovery pause .50 s). Transfer exit to exit 3.70 s (y64 3.69).",
+      "surface": "compensation_pwm 0 in every frame; learned load .036 by the crosswalk, .099 after the light coasts (inactive stages); IMU rest bias from the crosswalk standstill",
+      "pause": "seq 84 (1600 launch): 14 left-front bins dark (330-347, flanks 4.9/3.8/6.95/6.8 m past the left-turn opening), bridged by far_flank_gap; seq 85 (not saved) paused: start_lane_pause_trigger front_sparse only (so no run over 12 bins, >= 324 returns). Motor 1600 -> 1500 (.3 s) -> 1560 -> 1600 -> 1500 -> 1600 -> 1550; go to first pass +.30 s on y64. In y52-y64 the same dark area (5-14 bins, runs up to 11) never paused.",
+      "other_neutral_periods": "the planned ones as in y53/y64: crosswalk coast, transfer coast .8 s, light coast + 1300, finish 1600 -> 1500 -> 1565 -> 1500 -> 1300 (same sequence since y53)",
+      "light_stop": {
+        "front_gap_m": 0.597,
+        "rear_past_beam_m": 0.0089,
+        "basis": "stopped_after_camera_red",
+        "go": "two fresh greens",
+        "note": "rear only 9 mm past the beam (y64 .110 m): inside by the program, within measurement error"
+      },
+      "crosswalk_stop_gap_m": 0.232,
+      "crosswalk_program_wait_s": 3.098,
+      "nearest_body_gaps_m": {
+        "cone_one_loop": {
+          "cone": 0.183,
+          "other": 0.355
+        },
+        "transfer": {
+          "cone": 0.186,
+          "other": 0.325
+        },
+        "cone_two_loop": {
+          "cone": 0.385,
+          "other": 0.21
+        },
+        "light_entry_other": 0.22
+      }
+    }
+  },
+  "y67_crosswalk_far_gap_by_position_20261106": {
+    "date": "2026-11-06",
+    "author": "Claude",
+    "engine_round": 174,
+    "baseline": "y66 / engine 173 (004b337) on the car",
+    "user": "跑完了，多少秒，感觉中途停顿了很多次",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": "y66 car_run: the only new pause was the front_sparse quality pause at the 1600 launch after the crosswalk (seq 85, not saved). It had front_sparse alone, and seq 84 with the same dark area was bridged, so the refusing part was the race far gap's count cap (15 front unknown bins) or its one-side rule; which one cannot be told from the saved frames.",
+    "change": [
+      "supervisor.rs start_lane_far_gap (race, crosswalk exit only): the 15-bin front-unknown cap and the one-side rule no longer refuse; every missing run is judged by far_flank_gap (flanks beyond the stopping horizon or beside the corridor, corridor clear past the horizon, previous scan clear inside the corridor). Kept: centre ±3 bins refused, largest open gap <= 12, scan_incomplete (324 returns, run <= 12) still pauses, steering straight, consecutive scans.",
+      "Diagnostics: start_lane_far_gap_refusals (last 8) keep the reason, the dark bins, each run's flank ranges and the corridor of a refused scan.",
+      "Not changed: light (the y64 stop), finish, cone tracking, surface model."
+    ],
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_file": false
+    },
+    "remaining_validation": "On the car: no start-lane pause on a far dark gap; if one happens, start_lane_far_gap_refusals names why."
   }
 }
