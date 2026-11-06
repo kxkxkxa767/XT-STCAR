@@ -15,6 +15,11 @@ const LIGHT_CRUISE_ACCEL_MPS2: f64 = 0.35;
 const LIGHT_RESTART_MPS: f64 = 0.15;
 const NEAR_POST_EDGE_M: f64 = 0.04; // measured close to both boards at the static gantry pose
 const VISIBLE_LIGHT_STOP_GAP_M: f64 = 0.55; // head visible at 0.52 m, out of frame at the y29 stop at 0.20 m
+// y69: a coast before the beam is revoked once the renewed stop is this far past the visible
+// point. Coasting before the beam, renew peaked .70-1.40 m in the runs that stopped short or
+// re-pushed (y59 .92, y60 .98, y61 .76, y63 .80, y63-2 .71, y68 1.40 from a cut at seq 162) and at
+// most .59 m in the good stops (y64 .44, y66 .59, y67 .47).
+const LIGHT_COAST_REVOKE_BAND_M: f64 = 0.15;
 // y59 frames94/95 visibly show green and score0.356/0.302. After observed red,
 // accept the detector's existing publication threshold, still on two fresh
 // consecutive green frames with no red in either frame.
@@ -806,8 +811,11 @@ impl Maneuver {
         if !red {
             let cut = if_renewed.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
             let running_out = tail == 0. && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS);
+            let revoke = !crossed && !running_out
+                && if_renewed.is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LIGHT_COAST_REVOKE_BAND_M);
             self.race_light.phase = match self.race_light.phase {
                 LightRoll::Cruise if cut => LightRoll::Coast,
+                LightRoll::Coast if revoke => LightRoll::Cruise,
                 // No red: do not park to wait for an unlit gantry. Short of the
                 // beam push through to trigger it; past it, wait for the red
                 // the beam has started, and keep going only once that is overdue.
