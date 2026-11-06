@@ -28090,8 +28090,8 @@
   "y64_light_innovation_coast_association_20261106": {
     "date": "2026-11-06", "author": "Codex", "engine_round": 171,
     "baseline": "da5f7d9; actual vehicle y63 /170 from6116d89",
-    "deployed": false, "physical_trial_executed": false,
-    "build": {"status": "pending", "base": "claude-turn170", "engine": "claude-turn171", "vision": "y64"},
+    "deployed": true, "physical_trial_executed": true,
+    "build": {"status": "complete", "source_commit": "20da889b2f7e8021bb3dd042d6359b2568b09791", "base": "claude-turn170", "engine": "claude-turn171", "vision": "y64", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2815944, "engine_sha256": "3165bebed77d44fc8797d0c57e25e200205c951b312bd637f36ca021dd19786c", "combined_archive": "XT-STCAR-y64-20da889.tar.gz", "combined_archive_bytes": 10970131},
     "report": "docs/y64-light-fusion-standstill-20261106.md", "evidence_directory": "work/y64-light-fusion-ORut51yj",
     "changes": [
       "Filter only radar velocity innovation relative to the short-IMU prediction, retaining immediate physical acceleration. Fuse measured gap innovation against the prior projected gap. Both use candidate0.2s response constants.",
@@ -28106,6 +28106,34 @@
     "standstill_evidence": {"saved_frames": 31, "old_standstill_confirmed": false, "new_first_stationary_seq": 340, "new_stable_pairs": 5, "new_stable_both_clocks_s": 0.799, "real_0p02m_translation_detected": true, "thresholds_relaxed": false, "evidence": "work/y64-coast-association"},
     "position_history": {"report": "docs/light-position-history-20261106.md", "results": "docs/light-position-history-20261106.json", "historical_offline_reference_m": 3.225, "note": "This was an offline map comparison, not an old onboard fixed gantry coordinate. y27 used live legs. Final-position stability is not full-trajectory accuracy.", "recent_stop_position_range_m": [3.190804430219196,3.2037810355721517], "moving_saved_difference_range_m": [-0.1823,0.1427], "beam_spacing_change_m": [1.10,1.00]},
     "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 13, "clippy_warnings": 32, "new_test_files": 0, "new_inline_regressions": 1},
-    "remaining_validation": "Actual rear-wheel clearance past the beam, visible-light stop, brake trajectory and vehicle CPU require operator-confirmed physical testing."
+    "remaining_validation": "One real run has accepted light position and normal standstill confirmation. Repeated light-stop accuracy, the earlier rolling-release path and cross-course robustness remain unproven. The user requested handoff to Claude after this run, so no next change or run was initiated.",
+    "car_run_y64": {
+      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y64",
+      "operator_confirmation": "Car placed; run once, analyze and write memoryshare for Claude handoff.",
+      "files_retrieved": 91, "files_checked": 91, "reason": "route_finish_zone_stop",
+      "timing_basis": "Historical saved-feedback scan clock; subtract program light-stop to light-go waiting. Not an official timing/adjudication result.",
+      "total_s": 31.352083056, "red_wait_s": 10.084168109, "effective_s": 21.267914947,
+      "crosswalk_gap_m": 0.33341479036380983, "crosswalk_wait_s": 3.1019398649999994,
+      "light_gap_m": 0.48145798190749944, "rear_past_sensor_m": 0.10982555605394384,
+      "light_whole_body_in_zone": true, "operator_light_position_feedback": "This round's position is acceptable.",
+      "light_release_basis": "green_in_fresh_frames_after_the_stop", "green_scores": [0.8984,0.8974],
+      "light_brake_start_s": 18.149245731, "light_brake_end_s": 19.106625086,
+      "light_brake_duration_s": 0.957379355, "light_brake_end_reason": "stopped",
+      "light_brake_end_speed_mps": 0.12652, "rolling_release_verified_this_run": false,
+      "light_min_body_clearance_m": 0.2542,
+      "fusion_observation": {"speed_seq165_innovation_mps": -0.104922, "speed_correction_mps": -0.034974, "gap_seq170_innovation_m": -0.08520, "gap_correction_m": -0.02735},
+      "finish_gap_m": 0.33127091248943324, "finish_creeps": 0, "finish_brake_duration_s": 1.500713,
+      "standstill_confirmed": true, "standstill_seq": 336, "matched_planes": 3,
+      "stable_pairs": 6, "stable_publication_ms": 599, "stable_receive_ms": 597,
+      "stable_translation_m": 0.003756, "stable_rotation_rad": 0.00614,
+      "prior_seq335_not_yet_stationary": "Receive clock499ms was still below original500ms threshold.",
+      "quality_counts": {}, "motion_recovery_count": 1,
+      "remaining_recovery": {"cause": "open_second_support_lost", "stage": "second_loop", "handover_seq": 132, "pause_seq": 138, "resume_request_seq": 143, "pause_s": 0.502238268, "held_servo": 1459, "resume_motor": 1560, "tracking": "Track1 confirmed132; stale target holds134/135; new track2 unconfirmed137; confirmed/rebound140. Software rebind is not independent physical identity verification."},
+      "cpu_main_core_percent": 17.05429156541052, "mean_scan_to_tick_ms": 1.4057592469135605,
+      "imu_samples": 3492, "imu_checksum_errors": 0,
+      "position_audit": {"divider_offset_m": 3.19181, "first_gantry_offset_m": 3.21171, "stop_gantry_offset_m": 3.19941, "moving_difference_from_3p225_m": [-0.06407,0.07131]},
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "handoff": "User explicitly requested Claude continuation. memoryshare.md appended in Traditional Chinese; Claude private memory/index synchronized without deleting history. Next new build numbers y65/172, baseline claude-turn171. Fresh placement confirmation required for any new run."
+    }
   }
 }
