@@ -28333,8 +28333,8 @@
     "engine_round": 174,
     "baseline": "y66 / engine 173 (004b337) on the car",
     "user": "跑完了，多少秒，感觉中途停顿了很多次",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": "y66 car_run: the only new pause was the front_sparse quality pause at the 1600 launch after the crosswalk (seq 85, not saved). It had front_sparse alone, and seq 84 with the same dark area was bridged, so the refusing part was the race far gap's count cap (15 front unknown bins) or its one-side rule; which one cannot be told from the saved frames.",
     "change": [
       "supervisor.rs start_lane_far_gap (race, crosswalk exit only): the 15-bin front-unknown cap and the one-side rule no longer refuse; every missing run is judged by far_flank_gap (flanks beyond the stopping horizon or beside the corridor, corridor clear past the horizon, previous scan clear inside the corridor). Kept: centre ±3 bins refused, largest open gap <= 12, scan_incomplete (324 returns, run <= 12) still pauses, steering straight, consecutive scans.",
@@ -28347,6 +28347,64 @@
       "clippy_warnings": 32,
       "new_test_file": false
     },
-    "remaining_validation": "On the car: no start-lane pause on a far dark gap; if one happens, start_lane_far_gap_refusals names why."
+    "remaining_validation": "On the car: no start-lane pause on a far dark gap; if one happens, start_lane_far_gap_refusals names why.",
+    "car_run_y67": {
+      "deployed": "2026-11-06 21:50, deploy-matched claude-turn174 174 + deploy-vision y67 (from y66 / 173); run 21:51",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y67",
+      "evidence_files_ok": 88,
+      "result": "route_finish_zone_stop, .323 m from the board, 0 creeps, no quality waits; best effective time so far",
+      "effective_s": 20.973,
+      "start_to_stop_s": 31.2,
+      "light_wait_s": 10.084,
+      "segments_s_vs_y64": {
+        "move_to_crosswalk_stop": [
+          3.394,
+          3.496
+        ],
+        "crosswalk_wait": [
+          2.999,
+          3.198
+        ],
+        "crosswalk_go_to_first_pass": [
+          3.992,
+          3.793
+        ],
+        "first_pass_to_tangent": [
+          2.598,
+          2.396
+        ],
+        "tangent_to_second_pass": [
+          0.8,
+          1.298
+        ],
+        "second_pass_to_light_stop": [
+          3.493,
+          3.292
+        ],
+        "light_go_to_finish_stop": [
+          3.697,
+          3.795
+        ],
+        "total_less_light": [
+          20.973,
+          21.268
+        ]
+      },
+      "tangent_speed_mps": 1.773,
+      "cone_two_tracking": "second_loop 13 stored frames all open_second_loop (no hold, recovery or rebind); exit to exit 3.40 s (y64 3.69, y66 3.70)",
+      "crosswalk": {
+        "stop_gap_m": 0.07,
+        "program_wait_s": 3.002,
+        "basis": "stopped_before_the_crosswalk",
+        "note": "front 7 cm before the stripes (aim .15) and the wait only 2 ms over 3 s"
+      },
+      "release": "one dark left-front bin (seq 83, bin 345) only: the far-gap change was not exercised; launch 1600 -> 1500 -> 1555 -> 1550",
+      "light_stop": {
+        "front_gap_m": 0.525,
+        "rear_past_beam_m": 0.0751,
+        "go": "green_in_fresh_frames_after_the_stop"
+      },
+      "surface": "compensation_pwm 0 all run"
+    }
   }
 }
