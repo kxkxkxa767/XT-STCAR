@@ -28049,7 +28049,7 @@
     "date": "2026-11-06", "author": "Codex", "engine_round": 170,
     "baseline": "7a21e07; installed/tested y62 /169 from8b9810d",
     "deployed": false, "physical_trial_executed": false,
-    "build": {"status": "pending", "base": "claude-turn169", "engine": "claude-turn170", "vision": "y63"},
+    "build": {"status": "complete", "source_commit": "6116d891b1d3692747d1747225b0bef91a299a2d", "base": "claude-turn169", "engine": "claude-turn170", "vision": "y63", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2802168, "engine_sha256": "3d59db188b24f669b39abff6c34d16b8a6d2a3d5afd3b2de30f3546136a2c044", "combined_archive": "XT-STCAR-y63-6116d89.tar.gz", "combined_archive_bytes": 10963962},
     "report": "docs/y63-transfer-recovery-20261106.md", "evidence_directory": "work/y63-transfer-recovery-9ZnlvEkC",
     "scope": "Local fix/build/push while the operator is away eating; no further vehicle operation before a new placement confirmation.",
     "change": "In race open_transfer only, board-ahead/second-support geometry waiting keeps drive state, neutral motor and current channel steering. A waiting flag prevents low/missing speed or temporary threshold changes from restoring power. Normal identity-confirmed handover clears the flag and retains the existing coast-to-entry policy. Speed history/IMU anchor are not reset; no generic maturity/resume1560 handshake for this case.",
