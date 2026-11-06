@@ -28013,7 +28013,7 @@
     "date": "2026-11-06", "author": "Codex", "engine_round": 169,
     "baseline": "4260117, actual vehicle y61 /168",
     "deployed": false, "physical_trial_executed": false,
-    "build": {"status": "pending", "base": "claude-turn168", "engine": "claude-turn169", "vision": "y62"},
+    "build": {"status": "complete", "source_commit": "8b9810dfc134d8a0de8cc1f23bd3ae96a701fcbd", "base": "claude-turn168", "engine": "claude-turn169", "vision": "y62", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2801336, "engine_sha256": "4a2561265aaf9adbd46c5484d155e6fdc40bac626302709b82c687b943d198ba", "combined_archive": "XT-STCAR-y62-8b9810d.tar.gz", "combined_archive_bytes": 10962515},
     "scope": "Local fix, cross-build and repository push only. No vehicle connection or operation; current user placement permission from y61 is consumed.",
     "report": "docs/y62-light-brake-entry-20261106.md", "evidence_directory": "work/y62-light-control-Sbqh8etA",
     "changes": [
