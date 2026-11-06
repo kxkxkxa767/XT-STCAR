@@ -28,6 +28,7 @@ pub struct RaceTransfer {
     speed: Option<f64>,
     phase: TransferPhase,
     transfer_anchor: Option<(f64, f64)>,
+    waiting_for_support: bool,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -61,6 +62,18 @@ impl RaceTransfer {
     pub fn rolling(&self) -> bool {
         self.speed.is_some_and(|v| v >= ROLLING_MPS)
     }
+
+    /// Geometry can temporarily lack a confirmed second support while the
+    /// vehicle is still moving. Keep measurements and steering alive, but do
+    /// not reapply power until the normal identity-confirmed handover.
+    pub fn coast_for_support(&mut self) {
+        self.waiting_for_support = true;
+        self.phase = TransferPhase::Coast;
+    }
+
+    pub fn waiting_for_support(&self) -> bool { self.waiting_for_support }
+
+    pub fn support_handed_over(&mut self) { self.waiting_for_support = false; }
 
     /// Metadata for the separate load observer; it does not change transfer
     /// speed, phase, boost anchors or the existing entry-speed selection.
@@ -105,22 +118,22 @@ impl RaceTransfer {
             TransferPhase::Boost(_) if !room || !continuing => TransferPhase::Coast,
             other => other,
         };
-        if matches!(self.phase, TransferPhase::Coast) && cut_speed.is_none_or(|v| v <= ENTRY_MPS) {
+        if !self.waiting_for_support && matches!(self.phase, TransferPhase::Coast) && cut_speed.is_none_or(|v| v <= ENTRY_MPS) {
             self.phase = TransferPhase::Bend;
             self.transfer_anchor = None;
         }
-        let motor = match self.phase {
+        let motor = if self.waiting_for_support { NEUTRAL } else { match self.phase {
             TransferPhase::Boost(_) => TRANSFER_BOOST_MOTOR,
             TransferPhase::Coast => NEUTRAL,
             // User 11-04 (open PWM steps): out of cone one and straight again, hold toward the
             // cone-two entry speed instead of 1550 (y53: 1550 at 1.29-1.41 m/s for .5 s).
             TransferPhase::Approach if continuing => hold_motor,
             _ => ROUTE_SLOW_MOTOR,
-        };
+        }};
         (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",
                        "imu_anchored_speed_mps" => imu_speed, "speed_for_cut_mps" => cut_speed,
                        "straight_remaining_m" => distance, "coast_to_entry_m" => coast_m, "transfer_motor" => motor,
-                       "hold_accel_mps2" => hold_accel})
+                       "hold_accel_mps2" => hold_accel, "waiting_for_second_support" => self.waiting_for_support})
     }
 
     pub fn dump(&self) -> V {
@@ -131,6 +144,7 @@ impl RaceTransfer {
             TransferPhase::Bend => ("bend", None),
         };
         dict! {"speed_mps" => self.speed, "phase" => phase, "boost_since" => since,
+               "waiting_for_second_support" => self.waiting_for_support,
                "transfer_anchor" => self.transfer_anchor.map(|(radar, imu)| V::from(vec![radar, imu])),
                "history" => V::list(self.history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect())}
     }

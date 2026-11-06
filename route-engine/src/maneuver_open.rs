@@ -1024,6 +1024,7 @@ impl Maneuver {
 
     /// _open_begin_second_loop(scan, now, control).
     fn open_begin_second_loop(&mut self, scan: &V, now: f64, control: &V) {
+        if self.race_inputs.is_some() { self.race_transfer.support_handed_over(); }
         let target = self.second_target.clone();
         self.second_track_id = target.idx("track_id").clone();
         let id = self.second_track_id.clone();
@@ -1321,13 +1322,32 @@ impl Maneuver {
         self.open_feedback.set("second_acquisition_reason", self.second_acquisition_reason.clone());
         let maturing = self.open_second_maturing(scan, ahead, stop_at);
         self.open_feedback.set("second_confirm_grace", maturing);
-        if ahead.is_some_and(|a| a <= stop_at) && !maturing {
+        let board_without_support = ahead.is_some_and(|a| a <= stop_at) && !maturing;
+        if self.race_inputs.is_some() && (board_without_support || self.race_transfer.waiting_for_support()) {
+            return self.open_transfer_coast_for_support(now, natural);
+        }
+        if board_without_support {
             self.begin_recovery_hold("open_board_ahead_without_second_support", now, control);
             return self.result(now);
         }
         self.natural_steering_target = Some(natural);
         self.steering_target = self.open_right_gate(natural);
         self.reason = if channel.is_some() { "open_transfer_channel_entry".into() } else { "open_transfer_reversed_axis_hold".into() };
+        self.slew(now);
+        self.result(now)
+    }
+
+    fn open_transfer_coast_for_support(&mut self, now: f64, natural: i64) -> V {
+        // y62 slid about1.35m while the generic recovery held the wheel at
+        // neutral. This is a geometry wait with fresh scans: coast along the
+        // current channel and hand over as soon as the tracker confirms.
+        self.race_transfer.coast_for_support();
+        self._transfer_motor = NEUTRAL;
+        self.open_feedback.set("transfer_motor", NEUTRAL);
+        self.open_feedback.set("waiting_for_second_support", true);
+        self.natural_steering_target = Some(natural);
+        self.steering_target = self.open_right_gate(natural);
+        self.reason = "open_transfer_coast_awaiting_second_support".into();
         self.slew(now);
         self.result(now)
     }
@@ -1798,6 +1818,30 @@ mod round106_tests {
     //! web/vehicle-console/tests/fixtures/transfer_axis_support_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+    #[test]
+    fn a_missing_transfer_support_coasts_with_steering_without_a_restart_pause() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.race_inputs = Some(Default::default());
+        m.entry_kind = Some("lane");
+        m.phase = "drive";
+        m.route_stage = "open_transfer";
+        m.first_pass_evidence = dict! {};
+        m.open_feedback = dict! {};
+        m.servo = NEUTRAL;
+        m._route_center_ack = dict! {"motor" => 1500, "servo" => 1500, "seq" => 10, "tick" => 100};
+        let decision = crate::py::py_try(|| m.open_transfer_coast_for_support(1., 1400))
+            .expect("rolling transfer coast decision");
+        assert_eq!(decision.get("phase").s(), "drive");
+        assert_eq!(decision.get("motor").i(), NEUTRAL);
+        assert!(decision.get("servo").i() < NEUTRAL);
+        assert!(!m.quality_resume_pending);
+        assert!(m.neutral_pause_kind.is_none());
+        assert_eq!(m.race_transfer.drive(1.1, Some(2.), true, true, 0.6, None, None, &m.race_surface).0, NEUTRAL);
+        assert!(m.race_transfer.waiting_for_support());
+        m.race_transfer.support_handed_over();
+        assert!(!m.race_transfer.waiting_for_support());
+    }
 
     fn frames() -> V {
         let path = concat!(

@@ -28012,9 +28012,9 @@
   "y62_light_tick_brake_continuous_entry_20261106": {
     "date": "2026-11-06", "author": "Codex", "engine_round": 169,
     "baseline": "4260117, actual vehicle y61 /168",
-    "deployed": false, "physical_trial_executed": false,
+    "deployed": true, "physical_trial_executed": true,
     "build": {"status": "complete", "source_commit": "8b9810dfc134d8a0de8cc1f23bd3ae96a701fcbd", "base": "claude-turn168", "engine": "claude-turn169", "vision": "y62", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2801336, "engine_sha256": "4a2561265aaf9adbd46c5484d155e6fdc40bac626302709b82c687b943d198ba", "combined_archive": "XT-STCAR-y62-8b9810d.tar.gz", "combined_archive_bytes": 10962515},
-    "scope": "Local fix, cross-build and repository push only. No vehicle connection or operation; current user placement permission from y61 is consumed.",
+    "scope": "Initial build was local only. On2026-11-06 user subsequently authorized deployment/test and freshly confirmed SSH, start placement and light/sensor reset.",
     "report": "docs/y62-light-brake-entry-20261106.md", "evidence_directory": "work/y62-light-control-Sbqh8etA",
     "changes": [
       "Project current gap/speed from fresh light observations and short IMU changes on the existing20ms control tick. Trigger1300 at the current brake point rather than the next-lidar-frame threshold.",
@@ -28024,6 +28024,37 @@
     ],
     "fixed_input_steering": {"old_new_targets": [[164,1520,1458],[166,1541,1425],[174,1514,1471],[175,1586,1505]], "imu_timing_variation_ms": [-10,20], "new_ranges": [[1458,1461],[1422,1429],[1470,1471],[1497,1508]], "limits": "Original outputs fully reproduced from saved geometry; these are fixed-input calculations, not the changed closed-loop trajectory."},
     "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true, "new_test_files": 0, "note": "Updated existing brake regression for between-scan trigger, rolling release, stale observations and no repeat1300; existing pause/cache test still passes."},
-    "remaining_validation": "Actual stop position,0.10s neutral-release response model, left-board clearance and vehicle CPU require next physical trial."
+    "remaining_validation": "Light control was not reached in the first physical trial; actual stop position and lateral light-entry clearance remain untested.",
+    "car_run_y62": {
+      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y62",
+      "deployment_note": "First SSH attempt timed out before upload; user reconnected and explicitly confirmed car, beam and lights ready before successful deployment/start.",
+      "files_retrieved": 46, "files_checked": 46, "reason": "probe_obstacle_close_body",
+      "effective_lap_s": null, "operator_reported_collision": true,
+      "operator_observation": "After cone one, hit a cone near the crosswalk side; user asked whether changes elsewhere had coupled into this section.",
+      "event_scans": {"first_pass": 123, "neutral_pause_recovery": 132, "first_saved_second_confirmed": 134, "resume_request": 138, "second_handover": 139, "near_obstacle_end": 142},
+      "recovery_cause": "open_board_ahead_without_second_support", "motion_recovery_count": 1,
+      "pause_to_handover_s": 0.699, "estimated_translation_during_pause_m": 1.35,
+      "identity": "Second tracker stayed on a right-front target, no rebind. The near obstacle was left-front, distinct from that tracked target; tracker-local ID1 does not mean both trackers represent the same object.",
+      "minimum_body_gap_m": 0.04962570914409667, "nearest_bin": 318,
+      "body_point_m": [0.20956684078462515,0.18869483099319798],
+      "light_control_executed": false, "light_control_evidence": "light_stop_state null, brake ready, all brake anchors/start/projection null; no second_pass or light events.",
+      "control_timing": {"cpu_main_core_percent": 15.012371498869314, "max_actual_gap_s": 0.022197117000000155, "max_compute_s": 0.007618337000000253, "mean_scan_to_tick_ms": 1.4895243461538297},
+      "imu_samples": 1553, "imu_checksum_errors": 0,
+      "comparison": "y61 first_pass122 to second handover133:11frames; y62 first_pass123 to confirmed134:11frames. y62's old recovery added about5frames before handing over139. y61 front ranges131/132 were5.110/4.954m; y62 scan132 reached2.885m threshold.",
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "next_user_scope": "User went to eat, requested careful analysis and autonomous fixing, with physical testing only after returning."
+    }
+  },
+  "y63_transfer_coast_steer_handover_20261106": {
+    "date": "2026-11-06", "author": "Codex", "engine_round": 170,
+    "baseline": "7a21e07; installed/tested y62 /169 from8b9810d",
+    "deployed": false, "physical_trial_executed": false,
+    "build": {"status": "pending", "base": "claude-turn169", "engine": "claude-turn170", "vision": "y63"},
+    "report": "docs/y63-transfer-recovery-20261106.md", "evidence_directory": "work/y63-transfer-recovery-9ZnlvEkC",
+    "scope": "Local fix/build/push while the operator is away eating; no further vehicle operation before a new placement confirmation.",
+    "change": "In race open_transfer only, board-ahead/second-support geometry waiting keeps drive state, neutral motor and current channel steering. A waiting flag prevents low/missing speed or temporary threshold changes from restoring power. Normal identity-confirmed handover clears the flag and retains the existing coast-to-entry policy. Speed history/IMU anchor are not reset; no generic maturity/resume1560 handshake for this case.",
+    "preserved": "Original target confirmation, entry-speed targets, actual quality-fault handling,8cm body stop and all other stage controllers.",
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 12, "clippy_warnings": 32, "new_test_files": 0, "focused_regression": "Neutral motor while steering continues, no restart pause, and missing speed cannot release the support-wait latch."},
+    "remaining_validation": "Changed trajectory and clearance to the left-front obstacle must be verified on the next operator-confirmed physical run. The y62 light changes have not yet been reached in a physical run."
   }
 }
