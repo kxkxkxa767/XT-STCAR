@@ -366,6 +366,11 @@ impl Maneuver {
                 input.forward_integral, input.yaw_rate);
             self.race_surface.observe(scan.idx("seq").i(), now, control.get("motor").i(),
                 current, input.forward_integral, input.yaw_rate, self._coast_fit);
+            if self.crosswalk_state == Some("waiting")
+                && self._crosswalk_stop_at.is_some_and(|at| now - at >= crate::race_surface::REST_SETTLE_S)
+            {
+                self.race_surface.observe_rest(now, input.forward_integral);
+            }
         }
         let mut stop_at = None;
         let mut allowed = None;

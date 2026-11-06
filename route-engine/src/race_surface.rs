@@ -8,19 +8,30 @@ use crate::maneuver::{HOLD_PWM_MAX, HOLD_PWM_STEP, LANE_COAST_DECEL_SE_MAX_MPS2,
 use crate::motion_sensors::ESC_COAST_DELAY_S;
 use crate::py::V;
 
-const REFERENCE_COAST_MPS2: f64 = 0.574;
+// y65: the indoor coast decel of y57-y64 pooled, IMU pairs .588 (n 86) and the lidar coast
+// fits .615 (n 46); y57 had .574 from y53.
+const REFERENCE_COAST_MPS2: f64 = 0.60;
 const REFERENCE_ACCEL_MAX_MPS2: f64 = 4.14;
 const FILTER_RESPONSE_S: f64 = 1.0;
 const COMPENSATION_PWM_PER_S: f64 = 20.0;
 const LEARNING_MIN_SPEED_MPS: f64 = 0.2;
 const LEARNING_MAX_YAW_RADPS: f64 = 0.6;
+// y65: only the load beyond the indoor floor is compensated. Replaying y57-y64 through this
+// reference, the filtered load reached at most .065 m/s2 (its noise about .017); the indoor tile
+// is the reference surface, so it should not change a hold.
+const LOAD_DEADBAND_MPS2: f64 = 0.08;
+/// Seconds after the crosswalk stop before the standstill measures the IMU forward bias.
+pub const REST_SETTLE_S: f64 = 0.6;
+const REST_MIN_WINDOW_S: f64 = 1.0;
 
-// The short y53 response segments fit these anchors, with y54 held out.
-// The high-PWM target speeds are model parameters, not measured steady speeds.
-// (PWM, asymptotic target m/s, first-order response s)
-const RESPONSE: [(i64, f64, f64); 4] = [
-    (1550, 1.598, 2.34),
-    (1560, 1.600, 2.00),
+// (PWM, asymptotic target m/s, first-order response s). 1570 and 1600 are y53's short response
+// segments (y54 held out); the 1570 fit still matches y57-y64 (9 pushes, mean +.04 m/s2).
+// y65: 1550 from the y57-y64 holds (43 learner-gated pairs at 1.62-2.21 m/s: a = .608 - .335 v,
+// residual .079 m/s2); y53's 1.598 m/s made every 1550 sample above 1.6 m/s read -.1 to -.3 and
+// pulled the learned load to 0 after the crosswalk. y53's 1560 anchor (1.600 m/s, weaker than
+// 1550) has no gated sample in y57-y64, so 1555-1565 are interpolated between 1550 and 1570.
+const RESPONSE: [(i64, f64, f64); 3] = [
+    (1550, 1.814, 2.98),
     (1570, 2.340, 1.00),
     (1600, 3.837, 0.70),
 ];
@@ -66,9 +77,27 @@ pub struct SurfaceResponse {
     compensation_credit: f64,
     compensation_at: Option<f64>,
     last_compensated_command: Option<(i64, f64)>,
+    rest_anchor: Option<(f64, f64)>,
+    rest_bias_mps2: f64,
 }
 
 impl SurfaceResponse {
+    /// y65: called each scan of the crosswalk standstill (from REST_SETTLE_S after the stop):
+    /// the forward integral's slope there is the IMU forward bias at this spot (mounting pitch
+    /// and floor slope; y57-y64 indoors -.135 to +.039 m/s2). The learner's IMU samples subtract
+    /// it; the other stages read the integral unchanged.
+    pub fn observe_rest(&mut self, now: f64, integral: Option<f64>) {
+        let Some(integral) = integral.filter(|v| v.is_finite()) else { return };
+        if !now.is_finite() {
+            return;
+        }
+        match self.rest_anchor {
+            None => self.rest_anchor = Some((now, integral)),
+            Some((at, start)) if now - at >= REST_MIN_WINDOW_S => self.rest_bias_mps2 = (integral - start) / (now - at),
+            Some(_) => {}
+        }
+    }
+
     /// The caller supplies the current velocity and a coast fit only while the
     /// neutral coast that produced it is still observable. A repeated laser
     /// sequence cannot contribute another learning update.
@@ -120,11 +149,11 @@ impl SurfaceResponse {
                     && rolling.is_finite() && *rolling >= LEARNING_MIN_SPEED_MPS
             }).map(|(decel, _, _)| (decel - REFERENCE_COAST_MPS2, "neutral_coast_fit"))
                 .or_else(|| previous.integral.zip(current.integral).map(|(before, after)| {
-                    (-(after - before) / dt - REFERENCE_COAST_MPS2, "neutral_imu_response")
+                    (-((after - before) / dt - self.rest_bias_mps2) - REFERENCE_COAST_MPS2, "neutral_imu_response")
                 }))
         } else if hold_motor(acknowledged_motor) {
             previous.integral.zip(current.integral).map(|(before, after)| {
-                let measured_accel = (after - before) / dt;
+                let measured_accel = (after - before) / dt - self.rest_bias_mps2;
                 let mean_speed = (previous.speed.unwrap() + current.speed.unwrap()) * 0.5;
                 if measured_accel.is_finite() {
                     self.latest_actual_accel = Some((now, acknowledged_motor, measured_accel));
@@ -182,7 +211,7 @@ impl SurfaceResponse {
     }
 
     fn required_pwm(&self, base_pwm: i64, speed: f64) -> i64 {
-        let wanted_accel = reference_acceleration(base_pwm, speed) + self.extra_load_mps2;
+        let wanted_accel = reference_acceleration(base_pwm, speed) + (self.extra_load_mps2 - LOAD_DEADBAND_MPS2).max(0.);
         (base_pwm..=HOLD_PWM_MAX).step_by(HOLD_PWM_STEP as usize)
             .min_by(|a, b| {
                 let a_error = (reference_acceleration(*a, speed) - wanted_accel).abs();
@@ -230,6 +259,8 @@ impl SurfaceResponse {
             "latest_actual_accel_mps2" => self.latest_actual_accel.map(|v| v.2),
             "source_seq" => self.previous.map(|p| p.seq),
             "compensation_pwm" => self.compensation_pwm,
+            "load_deadband_mps2" => LOAD_DEADBAND_MPS2,
+            "imu_rest_bias_mps2" => self.rest_bias_mps2,
             "basis" => "local_longitudinal_response_including_surface_battery_and_drivetrain",
         }
     }

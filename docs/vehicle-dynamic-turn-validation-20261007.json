@@ -28212,5 +28212,47 @@
       "new_test_file": false
     },
     "remaining_validation": "On the car: no cone-two recovery pause, the cone-two loop and light entry; the light stop and finish standstill as in y64."
+  },
+  "y66_surface_reference_recalibration_20261106": {
+    "date": "2026-11-06",
+    "author": "Claude",
+    "engine_round": 173,
+    "baseline": "y64 / engine 171 on the car; contains y65 (d7d3581, engine 172 built, not deployed)",
+    "user": [
+      "对场地的摩擦阻力做了自适应，且不断的学习，小幅度的修改目标pwm，你看是否可行",
+      "因为我没有在室外跑过，室内应该不会补偿",
+      "你改吧，暂时不到室外"
+    ],
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": [
+      "y57-y64 indoors (10 runs): learned extra load at most .005-.083 m/s2; compensation 0 in every stored frame except one +5 (y63-2 seq 95). The smoother runs came from other stages (e.g. start to crosswalk motor changes 8 in y54, 2-4 from y57).",
+      "The 1550 reference (1.598 m/s, 2.34 s, from short y53 segments) is low: 43 learner-gated 1550 pairs at 1.62-2.21 m/s fit a = .608 - .335 v (1.814 m/s, 2.98 s, residual .079); the old model read -.09 on average, -.1 to -.3 right after the crosswalk (y64 seq 97-102 -.28 to -.31), so the load learned on the crosswalk coast went back to 0 when compensation began.",
+      "The 1560 anchor (1.600 m/s) made 1555/1560 weaker than 1550, so a load jumped the hold straight to 1565 (+15).",
+      "1570 still fits (9 pushes, mean +.04 m/s2). Coast: IMU pairs .588 (n 86), lidar coast fits .615 (n 46) against .574.",
+      "IMU forward bias over the crosswalk standstill: -.135 to +.039 m/s2 (y58 -.135); the learner used the fixed 11-02 rest offset."
+    ],
+    "change": [
+      "race_surface.rs RESPONSE: 1550 (1.814, 2.98); the 1560 anchor dropped (1555-1565 interpolated between 1550 and 1570); 1570 and 1600 kept. REFERENCE_COAST .574 -> .60.",
+      "LOAD_DEADBAND .08 m/s2: only the load beyond it is compensated (indoor replay with the new reference: at most .065, noise about .017). Rate limit, +5 steps, the 1590 cap and the active stages unchanged.",
+      "observe_rest: over the crosswalk standstill (from .6 s after the stop, a window of at least 1 s) the forward-integral slope is the IMU forward bias; the learner's IMU samples subtract it. Other stages read the integral unchanged.",
+      "maneuver_open.rs start lane (race): calls observe_rest while waiting at the crosswalk. Diagnostics add load_deadband_mps2 and imu_rest_bias_mps2."
+    ],
+    "offline_check": {
+      "replay": "stored-frame learning inputs of y57-y64 through the filter and compensation (Python), and y64/y58 through the real Rust SurfaceResponse (temporary local test, not committed)",
+      "indoor": "new: max load .000-.065, compensation 0 in all 10 runs (old: one run +5); Rust: y64 .045 (bias +.027), y58 .065 (bias -.135), 0 frames",
+      "synthetic_extra_load": {
+        "0.2": "old +10..+15, new +5..+10",
+        "0.3": "old +15, new +10..+15",
+        "note": "measured accel lowered and coast fits raised by the load; both learn .18-.30"
+      }
+    },
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_file": false
+    },
+    "remaining_validation": "Indoors the holds should stay uncompensated (diagnostics compensation_pwm 0) with the y65 cone-two tracking; outdoors untested."
   }
 }
