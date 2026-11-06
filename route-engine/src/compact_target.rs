@@ -681,6 +681,21 @@ impl CompactTargetTracker {
 
     /// update(scan, now, acquire=..., heading_rad=..., only_support_bins=...).
     pub fn update(&mut self, scan: &V, now: f64, acquire: bool, heading_rad: Option<f64>, only_support_bins: Option<&[i64]>) -> V {
+        self.update_with_reference(scan, now, acquire, heading_rad, only_support_bins, None)
+    }
+
+    /// update() with the previous observation's position predicted in this scan's body frame
+    /// (race y65: carried through a static landmark). It replaces the rotation-only reference for
+    /// association; the gate, the hold and the confirmation are unchanged.
+    pub fn update_with_reference(
+        &mut self,
+        scan: &V,
+        now: f64,
+        acquire: bool,
+        heading_rad: Option<f64>,
+        only_support_bins: Option<&[i64]>,
+        predicted: Option<(f64, f64)>,
+    ) -> V {
         if let Some(bins) = only_support_bins
             && (bins.is_empty() || bins.iter().any(|&i| !(0..360).contains(&i)))
         {
@@ -809,6 +824,12 @@ impl CompactTargetTracker {
             && old.get("compass_heading_rad").is_num()
         {
             reference = rotated_observation(&old, Some(heading - old.get("compass_heading_rad").f()));
+        }
+        if let Some(point) = predicted.filter(|p| p.0.is_finite() && p.1.is_finite())
+            && old.is_some()
+        {
+            reference.set("point_left_m", V::from(point));
+            reference.set("bearing_left_rad", point.1.atan2(point.0));
         }
         if self.select_associated && allow_boundary_gap {
             found.retain(|c| associated(c, &reference, slack));

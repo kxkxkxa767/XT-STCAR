@@ -517,6 +517,26 @@ impl Maneuver {
         if self.first_landmark(scan).is_some() { first.idx("point_left_m").clone() } else { V::None }
     }
 
+    /// A cone-two observation's point carried to this scan through the first cone: the offset
+    /// between the two static cones turns with the heading only (the recovery prior's arithmetic).
+    fn landmark_carry(observation: &V, heading: f64, landmark: (f64, f64)) -> Option<(f64, f64)> {
+        let prior = observation.get("first_landmark_left_m");
+        if !observation.is_dict()
+            || !observation.get("compass_heading_rad").is_num()
+            || !prior.is_list()
+            || !observation.get("point_left_m").is_list()
+        {
+            return None;
+        }
+        let turn = -(heading - observation.idx("compass_heading_rad").f());
+        let (c, s) = (turn.pcos(), turn.psin());
+        let rp = observation.idx("point_left_m").l();
+        let pl = prior.l();
+        let dx = rp[0].f() - pl[0].f();
+        let dy = rp[1].f() - pl[1].f();
+        Some((landmark.0 + c * dx - s * dy, landmark.1 + s * dx + c * dy))
+    }
+
     /// _second_prior(observation, scan).
     pub fn second_prior(&self, observation: &V, scan: &V) -> V {
         let mut prior = observation.clone();
@@ -539,7 +559,20 @@ impl Maneuver {
             return;
         }
         let heading = self.tracking_heading(scan);
-        self.second_target = self.second_tracker_mut().update(scan, now, false, heading, None);
+        // y65 (race): the rotation-only reference keeps cone two at its old range. At 2.05 m/s
+        // (y64 seq 134/135) it missed the seen cone by .53/.67 m against a .45/.60 m gate, the
+        // track expired and a new one took until seq 140 to confirm (recovery pause .50 s; the
+        // same misses in y41, y46, y49, y57). Both cones are static, so the last complete
+        // cone-two observation carried through the first cone also takes in the car's own travel
+        // (y64: .18/.10 m). Without the first cone in this scan the rotation-only reference stays.
+        let predicted = if self.race_inputs.is_some() {
+            heading
+                .zip(self.first_landmark(scan))
+                .and_then(|(h, landmark)| Self::landmark_carry(&self._second_role_anchor, h, landmark))
+        } else {
+            None
+        };
+        self.second_target = self.second_tracker_mut().update_with_reference(scan, now, false, heading, None, predicted);
         if self.full_target_points(&self.second_target.clone(), scan, &self.second_track_id.clone()).is_some() {
             self._second_role_anchor = self.second_prior(&self.second_target.clone(), scan);
         } else if self.second_target.is_none() {

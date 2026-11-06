@@ -28135,5 +28135,82 @@
       "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
       "handoff": "User explicitly requested Claude continuation. memoryshare.md appended in Traditional Chinese; Claude private memory/index synchronized without deleting history. Next new build numbers y65/172, baseline claude-turn171. Fresh placement confirmation required for any new run."
     }
+  },
+  "y65_cone_two_landmark_tracking_20261106": {
+    "date": "2026-11-06",
+    "author": "Claude",
+    "engine_round": 172,
+    "baseline": "y64 / engine 171 (20da889, run recorded in e5b8ca4) on the car",
+    "user": "請接續查第二桶132–143幀的丟目標、重綁與恢復，保留本輪好的燈前停點和終點確認。維持Rust、低CPU、分段解耦",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": [
+      "y64 seq 132: cone two confirmed (track 1, 3 returns at 2.63 m). Seq 134 (bins 26-29, 2.23-2.26 m) and 135 (bins 21-25, 2.03-2.09 m) show the cone isolated in the scan, but maintenance (update_second_tracking) compared it with the old point rotated by the compass heading change only. At 2.05 m/s that missed by .53/.67 m against the .45/.60 m gate (.30 + 1.5 m/s x slack): missing_held, the old observation aged out (.30 s), maintenance cannot acquire, identity recovery started track 2 at 137, confirmed at 140 (3 counts, .25 s), rebind 1->2; the route recovery hold (open_second_support_lost, 138) resumed at 143 (.50 s).",
+      "Cone-one-anchored positions of track 1 (seq 129-132) and track 2 (137-142) agree within .04 m: the same cone.",
+      "The same rotation-only miss at the first cone-two missing-frame hold of y41 (seq 153-155, the cone-two crash), y46 (150), y49 (145) and y57 (139)."
+    ],
+    "change": [
+      "maneuver_post.rs update_second_tracking (race only): when the first cone is confirmed in this scan, the last complete cone-two observation (_second_role_anchor, which holds the first-cone point of its scan) is carried through the first cone (rotation by the heading change plus the car's own travel, the recovery prior's arithmetic) and used as the association reference via compact_target.rs update_with_reference.",
+      "Gate, hold, confirmation and identity recovery unchanged; without the first cone in the scan the rotation-only reference stays. Python reference unchanged.",
+      "Not changed: crosswalk, transfer, light (y64 stop kept), finish (y64 standstill kept), the first-cone tracker."
+    ],
+    "fixed_input_check": {
+      "method": "the real Rust second tracker fed y64 saved scans 129-145 (temporary local test, not committed)",
+      "old": "134/135 compact_target_missing_held, 137 compact_target_missing, then acquisition_disabled (as on the car)",
+      "new": "track 1 kept 134-145 (counts 4-11); its points equal the car's later track-2 points (137 [1.544, -0.623], 140 [1.018, -0.497])",
+      "landmark_carry_miss_m": {
+        "y64": [
+          0.18,
+          0.1,
+          0.01,
+          0.05,
+          0.02
+        ],
+        "y41": [
+          0.32,
+          0.29,
+          0.23
+        ],
+        "y46": [
+          0.14
+        ],
+        "y49": [
+          0.27,
+          0.13
+        ],
+        "y57": [
+          0.24,
+          0.17
+        ]
+      },
+      "rotation_only_miss_m": {
+        "y64": [
+          0.53,
+          0.67,
+          1.06
+        ],
+        "y41": [
+          0.42,
+          0.8,
+          1.06
+        ],
+        "y46": [
+          0.49
+        ],
+        "y49": [
+          0.34
+        ],
+        "y57": [
+          0.52
+        ]
+      }
+    },
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_file": false
+    },
+    "remaining_validation": "On the car: no cone-two recovery pause, the cone-two loop and light entry; the light stop and finish standstill as in y64."
   }
 }
