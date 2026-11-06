@@ -27985,10 +27985,45 @@
     "date": "2026-11-05", "author": "Codex", "engine_round": 168,
     "baseline": "8cea1ee; actual vehicle y60 /167 from69fcfa8",
     "request": "Correct light-zone early stop; operator explicitly confirmed the car placed and requested direct deployment/test after the fix.",
-    "deployed": false, "physical_trial_executed": false,
-    "build": {"status": "pending", "base": "claude-turn167", "engine": "claude-turn168", "vision": "y61"},
+    "deployed": true, "physical_trial_executed": true,
+    "build": {"status": "complete", "source_commit": "42601177de35edefe6fbfce90fb98a8635535145", "base": "claude-turn167", "engine": "claude-turn168", "vision": "y61", "maximum_glibc": "2.34", "engine_bytes": 2789528, "engine_sha256": "83bf6c0842d9a125f9fa0b9df653f6f9b37441618472023278c89a37e756c612"},
     "report": "docs/y61-light-speed-reference-20261105.md", "evidence_directory": "work/y61-light-reference-MZUWHL0m",
     "change": "After confirmed live gantry legs, switch the velocity reference to real legs before normal early returns. Clear prior-reference history, seed only earlier true observations, retain only short IMU velocity propagation. Missing legs do not clear true samples or inject board/held positions. Reset source on lost/rearmed targets. Keep stopping/braking targets and other stages.",
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32}
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32},
+    "car_run_y61": {
+      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y61",
+      "files_retrieved": 88, "files_checked": 88, "reason": "route_finish_zone_stop",
+      "total_saved_feedback_s": 31.751256272, "light_wait_saved_feedback_s": 10.380520264000001,
+      "net_before_penalties_s": 21.370736007999998, "valid_record": false,
+      "crosswalk_gap_m": 0.16686296820691737, "light_gap_m": 0.7995802215020291,
+      "light_rear_to_gantry_m": 1.2128774835744571, "light_whole_body_in_zone": false,
+      "light_release_basis": "green_in_fresh_frames_after_the_stop", "green_scores": [0.9055,0.9048],
+      "finish_gap_m": 0.18746825948477458, "finish_creeps": 0,
+      "quality_counts": {}, "recovery_ticks": 0, "minimum_saved_left_board_clearance_m": 0.09834,
+      "near_obstacle_stop_requested": false,
+      "cpu_main_core_percent": 15.717705735296436, "mean_scan_to_tick_ms": 1.4247195357143614,
+      "operator_observation": "Stopped far outside the light parking zone and close to the left board; operator suspected near-obstacle stop.",
+      "finding": "Proximity did cause steering avoidance, but not a stop or recovery. Light controller commanded continuous1300 before waiting for red. At savedscan172 current brake stop gap0.6587m, next-frame forecast0.4879m; actual stop0.7996m. Actual first brake command may precede172 because171 was not saved.",
+      "lateral_finding": "Old light-entry radar-yaw overshoot selection reversed current right corrections to left targets1520/1541/1514/1586 at164/166/174/175.",
+      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "next_user_scope": "Data retrieval was confirmed complete; user may switch off car. Fix, cross-build and push locally, no more deployment or driving until a new request and placement confirmation."
+    }
+  },
+  "y62_light_tick_brake_continuous_entry_20261106": {
+    "date": "2026-11-06", "author": "Codex", "engine_round": 169,
+    "baseline": "4260117, actual vehicle y61 /168",
+    "deployed": false, "physical_trial_executed": false,
+    "build": {"status": "pending", "base": "claude-turn168", "engine": "claude-turn169", "vision": "y62"},
+    "scope": "Local fix, cross-build and repository push only. No vehicle connection or operation; current user placement permission from y61 is consumed.",
+    "report": "docs/y62-light-brake-entry-20261106.md", "evidence_directory": "work/y62-light-control-Sbqh8etA",
+    "changes": [
+      "Project current gap/speed from fresh light observations and short IMU changes on the existing20ms control tick. Trigger1300 at the current brake point rather than the next-lidar-frame threshold.",
+      "During the same brake application, release once to1500 when its neutral-tail/coast prediction reaches the target, allowing remaining rolling travel instead of always braking to zero. Used/cancelled applications cannot restart.",
+      "Only race light_entry steering uses immediate IMU yaw and mean current/predicted pursuit curvature. Shared guarded_pursuit, second-loop exit preview and other stages are retained.",
+      "Log actual brake start/end times, release reason and control-tick predictions. No additional thread or phase timeout."
+    ],
+    "fixed_input_steering": {"old_new_targets": [[164,1520,1458],[166,1541,1425],[174,1514,1471],[175,1586,1505]], "imu_timing_variation_ms": [-10,20], "new_ranges": [[1458,1461],[1422,1429],[1470,1471],[1497,1508]], "limits": "Original outputs fully reproduced from saved geometry; these are fixed-input calculations, not the changed closed-loop trajectory."},
+    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true, "new_test_files": 0, "note": "Updated existing brake regression for between-scan trigger, rolling release, stale observations and no repeat1300; existing pause/cache test still passes."},
+    "remaining_validation": "Actual stop position,0.10s neutral-release response model, left-board clearance and vehicle CPU require next physical trial."
   }
 }

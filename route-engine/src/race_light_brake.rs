@@ -1,8 +1,10 @@
 //! One continuous brake application for the traffic-light approach.
-//! The light controller owns the stopping-distance prediction and permission
-//! to start; this state is independent of the finish controller's brake.
+//! Fresh light geometry anchors the existing control tick's stopping prediction.
+//! This state is independent of the finish controller's brake.
 
-use crate::helpers::NEUTRAL;
+use crate::dict;
+use crate::helpers::{NEUTRAL, SCAN_AGE_S};
+use crate::py::V;
 
 pub const LIGHT_BRAKE_MOTOR: i64 = 1300;
 pub const LIGHT_BRAKE_RESPONSE_S: f64 = 0.1;
@@ -27,46 +29,126 @@ mod tests {
     #[test]
     fn a_light_brake_remains_continuous_and_cannot_be_applied_twice() {
         let mut brake = LightBrake::default();
-        assert_eq!(brake.command(1., Some(1.), Some(0.2), Some(0.8), 0.55), None);
-        assert_eq!(brake.command(1.1, Some(1.), Some(0.2), Some(0.5), 0.55), Some(1300));
+        // No new scan is needed to reach the brake point between 10 Hz frames.
+        brake.observe(1., Some(1.2), Some(1.), Some(0.), 1., 0.6, 1., 0.55);
+        assert_eq!(brake.command(1., Some(0.)), None);
+        assert_eq!(brake.command(1.04, Some(0.)), None);
+        assert_eq!(brake.command(1.06, Some(0.)), Some(1300));
         brake.output_observed(1300);
-        assert_eq!(brake.command(1.15, Some(0.1), None, None, 0.55), Some(1300));
-        assert_eq!(brake.command(1.3, None, None, None, 0.55), Some(1300));
-        assert_eq!(brake.command(1.4, Some(0.1), None, None, 0.55), Some(1500));
-        assert_eq!(brake.command(1.5, Some(1.), Some(0.1), Some(0.1), 0.55), None);
+        assert_eq!(brake.command(1.1, Some(-0.04)), Some(1300));
+        // A stale or missing observation cannot insert a neutral pulse.
+        assert_eq!(brake.command(1.4, None), Some(1300));
+        // Release while still rolling: 0.1 s of brake response and the coast
+        // now stop at the target. Holding 1300 to zero would stop too far away.
+        brake.observe(1.42, Some(0.82), Some(0.6), Some(-0.4), 1., 0.6, 1., 0.55);
+        assert_eq!(brake.command(1.42, Some(-0.4)), Some(1500));
+        assert!(brake.is_used());
+        brake.observe(1.5, Some(0.8), Some(1.), Some(0.), 1., 0.6, 1., 0.55);
+        assert_eq!(brake.command(1.5, Some(0.)), None);
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Anchor {
+    at: f64,
+    gap: f64,
+    speed: f64,
+    integral: Option<f64>,
+    axis_cos: f64,
+    coast_decel: f64,
+    brake_decel: f64,
+    target: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Projection {
+    at: f64,
+    age: f64,
+    gap: f64,
+    speed: f64,
+    coast_stop: f64,
+    brake_stop: f64,
+    release_stop: f64,
+    imu_delta: bool,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct LightBrake {
     state: BrakeState,
+    anchor: Option<Anchor>,
+    projection: Option<Projection>,
+    started_at: Option<f64>,
+    ended_at: Option<f64>,
+    end_reason: Option<&'static str>,
 }
 
 impl LightBrake {
-    /// Distances are predicted remaining gaps to the gantry, in metres.
-    /// `next_brake_stop` includes waiting for the next scan before braking,
-    /// then LIGHT_BRAKE_RESPONSE_S and LIGHT_BRAKE_DECEL_MPS2. This permits a
-    /// brake only when coasting would overrun the target and another scan of
-    /// delay would use up the remaining braking distance.
-    ///
-    /// Call on each updated light-approach decision even if range is missing.
-    /// Between scans the caller preserves the selected 1300 command.
-    pub fn command(
+    /// Observe once per new scan. All distances, speeds and decelerations are
+    /// along the light-lane axis. An unavailable observation does not renew the
+    /// preceding anchor's age; missing geometry is never replaced by a timer.
+    #[allow(clippy::too_many_arguments)]
+    pub fn observe(
         &mut self,
         now: f64,
+        gap: Option<f64>,
         speed: Option<f64>,
-        coast_stop: Option<f64>,
-        next_brake_stop: Option<f64>,
+        forward_integral: Option<f64>,
+        axis_cos: f64,
+        coast_decel: f64,
+        brake_decel: f64,
         target: f64,
-    ) -> Option<i64> {
-        let speed = speed.filter(|v| v.is_finite());
+    ) {
+        let (Some(gap), Some(speed)) = (gap.filter(|v| v.is_finite()), speed.filter(|v| v.is_finite() && *v >= 0.)) else {
+            return;
+        };
+        if !now.is_finite() || !axis_cos.is_finite() || !target.is_finite()
+            || !coast_decel.is_finite() || coast_decel <= 0.
+            || !brake_decel.is_finite() || brake_decel <= 0.
+            || self.anchor.is_some_and(|old| now <= old.at)
+        {
+            return;
+        }
+        self.anchor = Some(Anchor {
+            at: now, gap, speed, integral: forward_integral.filter(|v| v.is_finite()),
+            axis_cos, coast_decel, brake_decel, target,
+        });
+    }
+
+    fn project(&self, now: f64, forward_integral: Option<f64>) -> Option<Projection> {
+        let anchor = self.anchor?;
+        let age = now - anchor.at;
+        if !now.is_finite() || !(0. ..=SCAN_AGE_S).contains(&age) { return None; }
+        let change = anchor.integral.zip(forward_integral.filter(|v| v.is_finite()))
+            .map(|(start, current)| (current - start) * anchor.axis_cos);
+        let speed = (anchor.speed + change.unwrap_or(0.)).max(0.);
+        let gap = anchor.gap - (anchor.speed + speed) * age * 0.5;
+        let coast_stop = gap - speed * speed / (2. * anchor.coast_decel);
+        let brake_stop = gap - speed * LIGHT_BRAKE_RESPONSE_S - speed * speed / (2. * anchor.brake_decel);
+        // After commanding neutral, the current braking response lasts briefly
+        // before normal coasting takes over. Never integrate speed below zero.
+        let response = LIGHT_BRAKE_RESPONSE_S.min(speed / anchor.brake_decel);
+        let release_speed = (speed - anchor.brake_decel * response).max(0.);
+        let release_stop = gap - (speed + release_speed) * response * 0.5
+            - release_speed * release_speed / (2. * anchor.coast_decel);
+        if ![speed, gap, coast_stop, brake_stop, release_stop].iter().all(|v| v.is_finite()) { return None; }
+        Some(Projection { at: now, age, gap, speed, coast_stop, brake_stop, release_stop, imu_delta: change.is_some() })
+    }
+
+    /// Advance on the existing control tick, without waiting another scan.
+    /// An active application remains continuous through missing observations;
+    /// the existing data supervisor still owns a stale-input pause or stop.
+    pub fn command(&mut self, now: f64, forward_integral: Option<f64>) -> Option<i64> {
+        if self.is_used() { return None; }
+        self.projection = self.project(now, forward_integral);
         match self.state {
             BrakeState::Used => None,
             BrakeState::Active { since } => {
-                if now - since >= LIGHT_BRAKE_RESPONSE_S
-                    && speed.is_some_and(|v| v < STOP_SPEED_MPS)
-                {
+                let release = self.projection.filter(|p| now - since >= LIGHT_BRAKE_RESPONSE_S
+                    && (p.speed < STOP_SPEED_MPS || p.release_stop >= self.anchor.unwrap().target));
+                if let Some(projected) = release {
                     self.state = BrakeState::Used;
+                    self.ended_at = Some(now);
+                    self.end_reason = Some(if projected.speed < STOP_SPEED_MPS { "stopped" } else { "coast_reaches_target" });
                     Some(NEUTRAL)
                 } else {
                     // Missing speed does not insert a neutral pulse between
@@ -76,15 +158,14 @@ impl LightBrake {
                 }
             }
             BrakeState::Ready => {
-                let coast_stop = coast_stop.filter(|gap| gap.is_finite())?;
-                let next_brake_stop = next_brake_stop.filter(|gap| gap.is_finite())?;
-                if now.is_finite()
-                    && target.is_finite()
-                    && speed.is_some_and(|v| v >= STOP_SPEED_MPS)
-                    && coast_stop < target
-                    && next_brake_stop <= target
+                let projected = self.projection?;
+                let target = self.anchor.unwrap().target;
+                if projected.speed >= STOP_SPEED_MPS
+                    && projected.coast_stop < target
+                    && projected.brake_stop <= target
                 {
                     self.state = BrakeState::Active { since: now };
+                    self.started_at = Some(now);
                     Some(LIGHT_BRAKE_MOTOR)
                 } else {
                     None
@@ -109,11 +190,30 @@ impl LightBrake {
         }
     }
 
+    pub fn diagnostics(&self) -> V {
+        dict! {
+            "phase" => self.phase(), "started_at" => self.started_at,
+            "ended_at" => self.ended_at, "end_reason" => self.end_reason,
+            "anchor_at" => self.anchor.map(|a| a.at),
+            "projection_at" => self.projection.map(|p| p.at),
+            "projection_age_s" => self.projection.map(|p| p.age),
+            "projected_gap_m" => self.projection.map(|p| p.gap),
+            "projected_speed_mps" => self.projection.map(|p| p.speed),
+            "coast_stop_gap_m" => self.projection.map(|p| p.coast_stop),
+            "brake_stop_gap_m" => self.projection.map(|p| p.brake_stop),
+            "release_stop_gap_m" => self.projection.map(|p| p.release_stop),
+            "projection_basis" => self.projection.map(|p| if p.imu_delta { "short_imu_delta" } else { "constant_anchor_speed" }),
+        }
+    }
+
     /// A quality pause or another controller taking over permanently retires
     /// this brake application. The caller owns the replacement motor command.
     pub fn cancel_active(&mut self) {
         if self.is_active() {
             self.state = BrakeState::Used;
+            // The compatibility callback has no clock. Do not invent an end
+            // timestamp for an external override; normal release is timed.
+            self.end_reason = Some("command_overridden");
         }
     }
 

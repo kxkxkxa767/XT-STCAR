@@ -1298,6 +1298,14 @@ impl Maneuver {
 
     /// ManeuverSequence._result.
     pub fn result(&mut self, now: f64) -> V {
+        if self.phase == "drive" && !self.quality_resume_pending && self.light_approaching()
+            && matches!(self.route_stage, "light_entry" | "light_lane")
+            && let Some(input) = self.race_inputs
+            && let Some(motor) = self.race_light_brake.command(now, input.forward_integral) {
+            // Use the existing control ticks between scans to choose the brake
+            // boundary. A whole extra lidar period is no longer charged early.
+            self.lane_motor = motor;
+        }
         if self.phase == "drive" && self.adopted_presteer_pwm.is_none() {
             self.adopted_presteer_pwm = Some(self.servo);
         }
@@ -1338,6 +1346,7 @@ impl Maneuver {
             result.set("motor", self.race_surface.compensate(motor, speed, now, active));
             result.set("surface_response", self.race_surface.diagnostics());
             result.set("surface_speed", self.race_surface_speed.diagnostics());
+            result.set("light_brake_control", self.race_light_brake.diagnostics());
         }
         let motor = result.get("motor").i();
         if self.race_light_brake.is_active() && motor != crate::race_light_brake::LIGHT_BRAKE_MOTOR

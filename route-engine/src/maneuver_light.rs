@@ -823,7 +823,11 @@ impl Maneuver {
             let next = (v + acceleration.unwrap_or(0.) * step).max(0.);
             g-(v+next)*step/2.-next*LIGHT_BRAKE_RESPONSE_S-next*next/(2.*brake_decel)
         });
-        let motor = self.race_light_brake.command(now, v, predicted, next_brake_stop, VISIBLE_LIGHT_STOP_GAP_M)
+        // A held fallback may guide the existing approach, but must not renew
+        // the control-tick brake anchor as if a fresh speed had arrived.
+        self.race_light_brake.observe(now, gap, current_speed.or(speed), input.forward_integral, axis_cos,
+            axial_decel, brake_decel, VISIBLE_LIGHT_STOP_GAP_M);
+        let motor = self.race_light_brake.command(now, input.forward_integral)
             .unwrap_or(motor);
         self.lane_motor = motor;
         let stopped = red && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
@@ -839,6 +843,7 @@ impl Maneuver {
             "rear_to_gantry_m" => rear_gap,
             "heading_accel_mps2" => heading_accel, "brake_stop_gap_m" => brake_stop,
             "next_brake_stop_gap_m" => next_brake_stop, "visibility_brake" => self.race_light_brake.phase(),
+            "brake_timing_basis" => "current_control_tick_prediction",
             "visibility_brake_used" => self.race_light_brake.is_used(),
             "divider_gantry_ahead_m" => self.race_light.prior_ahead, "approach_phase" => self.race_light.phase.label(),
             "beam_crossed_s_ago" => self.race_light.beam_at.map(|at| now - at), "red_due" => red_due,
@@ -969,7 +974,8 @@ mod tests {
         m.light_stop_state = Some("approach");
         m.servo = NEUTRAL;
         m.lane_motor = LIGHT_BRAKE_MOTOR;
-        assert_eq!(m.race_light_brake.command(1., Some(1.), Some(0.2), Some(0.5), 0.55), Some(1300));
+        m.race_light_brake.observe(1., Some(1.1), Some(1.), Some(0.), 1., 0.6, 0.95, 0.55);
+        assert_eq!(m.race_light_brake.command(1., Some(0.)), Some(1300));
         let ack = dict! {"motor" => 1300, "servo" => 1500, "seq" => 10, "tick" => 100,
             "armed" => true, "command_acked" => true};
         assert!(m.route_adopted(&ack, 1.1));
@@ -981,7 +987,7 @@ mod tests {
         assert!(m.race_light_brake.is_used());
         m.phase = "drive";
         assert_eq!(m.route_motor(), NEUTRAL);
-        assert_eq!(m.race_light_brake.command(1.3, Some(1.), Some(0.2), Some(0.4), 0.55), None);
+        assert_eq!(m.race_light_brake.command(1.3, Some(0.)), None);
     }
 
     #[test]

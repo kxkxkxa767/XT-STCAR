@@ -1498,7 +1498,7 @@ impl Maneuver {
         pose: Option<(f64, f64, f64, f64)>,
         lateral: Option<f64>,
     ) -> Option<(V, (f64, f64), f64, i64)> {
-        let lane = self.open_lane_target(scan, heading);
+        let mut lane = self.open_lane_target(scan, heading);
         if lane.is_none() {
             return None;
         }
@@ -1525,7 +1525,26 @@ impl Maneuver {
             (along * u.0 - lateral * u.1, along * u.1 + lateral * u.0)
         };
         let point = lane_point(0., 0.);
-        let (curvature, pwm) = guarded_pursuit(point, &lane_point, pose, u);
+        let (curvature, pwm) = if self.race_inputs.is_some() && self.route_stage == "light_entry" {
+            // y61: old radar-yaw/cross-neutral selection turned a current
+            // right correction into large left commands near the outer board.
+            // Only the entry controller uses current IMU yaw and continuous
+            // curvature anticipation; second-loop exit previews stay unchanged.
+            let yaw = self.race_inputs.and_then(|i| i.yaw_rate).filter(|r| r.is_finite());
+            let response = yaw.map(|r| self.response_pose_with_rate(r)).or(pose);
+            let current = pursuit_pwm(point);
+            if let Some(response) = response {
+                let moved = (response.0*u.0+response.1*u.1, response.1*u.0-response.0*u.1);
+                let predicted = pursuit_pwm(in_pose(lane_point(moved.0,moved.1), response));
+                let curvature = (current.0+predicted.0)*0.5;
+                lane.set("entry_steering_response", dict! {
+                    "current_pwm" => current.1, "predicted_pwm" => predicted.1,
+                    "yaw_source" => if yaw.is_some() { "calibrated_imu" } else { "lidar_compass" },
+                    "basis" => "mean_curvature_over_response"
+                });
+                (curvature, clampi(NEUTRAL+round(ROUTE_PWM_PER_CURVATURE*curvature), nominal_right_limit_pwm(), SERVO_MAX))
+            } else { current }
+        } else { guarded_pursuit(point, &lane_point, pose, u) };
         Some((lane, point, curvature, pwm))
     }
 
