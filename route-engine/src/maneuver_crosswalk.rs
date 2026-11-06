@@ -240,6 +240,17 @@ impl Maneuver {
         } else {
             0.
         };
+        // y68 (race): a cut left to the next scan also carries that scan's speed gain while the
+        // push still accelerates. All six cuts of y60-y67 came a scan late: the aim at the first
+        // coast frame was -.09 to .15 against the .15 target (y67: .37 -> .06 m between seq 28
+        // and 30 at 1.2-1.5 m/s2, stopped .07 m before the stripes).
+        let next_scan_gain_m = match (self.race_inputs, v, self.race_crosswalk_stop.scan_s, self.race_crosswalk_stop.imu_accel) {
+            (Some(_), Some(v), Some(dt), Some(accel)) if self._start_motor != NEUTRAL => {
+                let rise = pmax(0., accel) * dt;
+                rise * CROSSWALK_AIM_LAG_S + ((v + rise) * (v + rise) - v * v) / (2. * decel)
+            }
+            _ => 0.,
+        };
         if state == "approach" {
             if let (Some(v), Some(g)) = (v, gap) {
                 aim = Some(g - v * CROSSWALK_AIM_LAG_S - v * v / (2. * decel));
@@ -281,7 +292,9 @@ impl Maneuver {
                             _ => false,
                         };
                         self._start_motor = if topup { ROUTE_SLOW_MOTOR } else { NEUTRAL }; // else round y8: one coast
-                    } else if aim.is_none_or(|a| a - next_scan_m <= CROSSWALK_TARGET_GAP_M) || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M) {
+                    } else if aim.is_none_or(|a| a - next_scan_m - next_scan_gain_m <= CROSSWALK_TARGET_GAP_M)
+                        || worst.is_some_and(|w| w <= CROSSWALK_MIN_GAP_M)
+                    {
                         self._start_motor = NEUTRAL;
                         // round y11: held on a measured speed or once the car has left the start
                         let moved = matches!((self._crosswalk_rest, track),
@@ -321,7 +334,10 @@ impl Maneuver {
             self.drive_since = Some(since + waited_now); // standing is not drive time
             self.crosswalk_wait_credit_s += waited_now;
             let stop_at = self._crosswalk_stop_at.unwrap();
-            if now - stop_at >= CROSSWALK_WAIT_S {
+            // y68 (race): 3.1 s. y60-y67 showed 3.00-3.10 s (the 10 Hz scan after 3 s); the
+            // IMU standstill ran 3.11-3.34 s, y67's 3.11 s the least.
+            let wait_s = if self.race_inputs.is_some() { CROSSWALK_RACE_WAIT_S } else { CROSSWALK_WAIT_S };
+            if now - stop_at >= wait_s {
                 state = "done";
                 self.crosswalk_state = Some(state);
                 let go = dict! {
@@ -345,6 +361,8 @@ impl Maneuver {
             out.set("planned_at_rest", self.race_crosswalk_stop.planned.is_some());
             out.set("imu_speed_mps", self.race_crosswalk_stop.imu_speed(input.forward_integral));
             out.set("next_scan_m", next_scan_m);
+            out.set("next_scan_gain_m", next_scan_gain_m);
+            out.set("imu_accel_mps2", self.race_crosswalk_stop.imu_accel);
         }
         out
     }

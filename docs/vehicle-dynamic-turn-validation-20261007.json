@@ -28406,5 +28406,35 @@
       },
       "surface": "compensation_pwm 0 all run"
     }
+  },
+  "y68_crosswalk_margins_20261106": {
+    "date": "2026-11-06",
+    "author": "Claude",
+    "engine_round": 175,
+    "baseline": "y67 / engine 174 (1fbad04) on the car; y67 run 20.97 s",
+    "user": [
+      "把这两处余量加回来吧",
+      "改完后直接上传"
+    ],
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": [
+      "y67 crosswalk: front .070 m before the stripes (aim .15), program wait 3.002 s.",
+      "Wait: the program waits from the stop decision to the first 10 Hz scan past 3 s, 3.00-3.10 s in y60-y67; the IMU standstill (speed < .03 relative to the rest level) began .005-.20 s before the decision and ended .08-.10 s after the go, 3.11-3.34 s in all (y67 3.114 s).",
+      "Stop: all six cuts of y60-y67 came a scan late. The aim at the first coast frame was -.088/-.009/.145/.010/.083/.061 against the .15 target (last push frames .38-.73); the cut test counted the travel to the next scan but not the speed that scan adds under the 1570 push (1.2-1.5 m/s2, y67 IMU 1.07 -> 1.19 m/s). A weaker real coast usually covered it (stops .17-.33 m); in y67 the coast matched the model and it stopped at .07 m."
+    ],
+    "change": [
+      "maneuver_crosswalk.rs (race): the cut also counts next_scan_gain_m, the extra stop of the speed gained over the next scan at the measured IMU acceleration (>= 0) while the start motor still pushes. y67 seq 28 (aim .368, 1.35 m/s2) would have cut there.",
+      "Race crosswalk wait CROSSWALK_RACE_WAIT_S 3.1 s (program), i.e. about 3.2-3.45 s of standstill by the IMU.",
+      "race_crosswalk_stop.rs: imu_accel per scan from the forward integral. Feedback: next_scan_gain_m, imu_accel_mps2.",
+      "Not changed: target .15, coast model, the light, finish, transfer, cone tracking, far-gap rule."
+    ],
+    "expected": "crosswalk stops about .15-.5 m before the stripes instead of .07-.33; about +.05-.1 s for the wait",
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_file": false
+    }
   }
 }

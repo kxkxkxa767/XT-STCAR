@@ -34,6 +34,9 @@ pub struct CrosswalkStopPlan {
     imu_zero: Option<f64>,
     last_scan_at: Option<f64>,
     pub scan_s: Option<f64>,
+    last_integral: Option<f64>,
+    /// y68: the IMU forward acceleration over the last scan interval.
+    pub imu_accel: Option<f64>,
 }
 
 /// The front's distance to the stripes' edge and the frame's pitch, from the two image
@@ -86,13 +89,16 @@ impl CrosswalkStopPlan {
     /// evidence on the scan that makes it.
     pub fn observe(&mut self, scan: &V, received: f64, track: Option<f64>, rest: Option<(f64, f64)>,
                    forward_integral: Option<f64>) -> Option<V> {
+        self.imu_accel = None;
         if let Some(last) = self.last_scan_at {
             let dt = received - last;
             if 0. < dt && dt <= SCAN_AGE_S {
                 self.scan_s = Some(dt);
+                self.imu_accel = self.last_integral.zip(forward_integral).map(|(before, now)| (now - before) / dt);
             }
         }
         self.last_scan_at = Some(received);
+        self.last_integral = forward_integral;
         let (_, rest_track) = rest?;
         match track {
             _ if self.moved_at.is_some() => {}

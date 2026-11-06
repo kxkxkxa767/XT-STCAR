@@ -352,6 +352,8 @@ pub const CROSSWALK_TOPUP_BAND_M: f64 = 0.15;
 pub const CROSSWALK_MOVED_M: f64 = 0.1;
 pub const CROSSWALK_ZONE_M: f64 = 1.;
 pub const CROSSWALK_WAIT_S: f64 = 3.;
+/// y68: race crosswalk wait with a margin over the rule's 3 s (user: 把这两处余量加回来).
+pub const CROSSWALK_RACE_WAIT_S: f64 = 3.1;
 pub const CROSSWALK_STOP_MAX_S: f64 = 3.;
 pub const OPEN_SUPPORT_MAX_DEPTH_M: f64 = 0.15;
 
