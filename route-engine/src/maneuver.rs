@@ -349,6 +349,7 @@ pub const CROSSWALK_MIN_GAP_M: f64 = 0.08;
 pub const CROSSWALK_GUARD_REACTION_S: f64 = 0.3;
 pub const CROSSWALK_GUARD_DECEL_MPS2: f64 = 0.6;
 pub const CROSSWALK_TOPUP_BAND_M: f64 = 0.15;
+pub const CROSSWALK_RACE_TOPUP_GAP_M: f64 = 0.8;
 pub const CROSSWALK_MOVED_M: f64 = 0.1;
 pub const CROSSWALK_ZONE_M: f64 = 1.;
 pub const CROSSWALK_WAIT_S: f64 = 3.;

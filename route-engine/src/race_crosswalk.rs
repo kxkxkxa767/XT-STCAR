@@ -1,5 +1,5 @@
 //! Drive from the crosswalk release to the first cone; no cone-transfer or light state.
-use crate::helpers::{FRONT_BODY_EXTENT_M, NEUTRAL, TRIAL_MOTOR, dcos, dsin};
+use crate::helpers::{FRONT_BODY_EXTENT_M, NEUTRAL, SCAN_AGE_S, TRIAL_MOTOR, dcos, dsin};
 use crate::maneuver::*;
 use crate::py::*;
 use crate::dict;
@@ -26,21 +26,26 @@ pub(crate) fn flank_beyond_stop(clearance: &V, old: &[V], new: &[V], missing: &[
 /// 3.3-5.6 m ahead, 1.2-2.3 m left) stayed dark for two scans and paused the launch .4 s.
 pub(crate) fn far_flank_gap(clearance: &V, old: &[V], new: &[V], missing: &[V], horizon: f64) -> bool {
     let Some(half_width) = clearance.get("corridor_half_width_m").of() else { return false };
-    if !clearance.get("corridor_front_m").of().is_some_and(|d| d > horizon) {
-        return false;
-    }
+    let corridor_clear = clearance.get("corridor_front_m").of().is_some_and(|d| d > horizon);
+    let beside = |i: usize, r: f64| (r * dsin(i)).abs() > half_width;
     // A flank beside the corridor (y51 seq 87: the left wall's end .80 m ahead, .43 m left)
     // clears the corridor along its own ray as well as one beyond the stopping range.
     missing.chunk_by(|a, b| b.i() == a.i() + 1).all(|run| {
         let left = run[0].i() - 1;
         let right = run[run.len() - 1].i() + 1;
-        [left, right].into_iter().all(|angle| {
+        let flanks = [left, right].map(|angle| {
             let i = imod(angle, 360) as usize;
-            new[i].of().is_some_and(|r| r * dcos(i) > horizon || (r * dsin(i)).abs() > half_width)
-        }) && (left..=right).all(|angle| {
-            let i = imod(angle, 360) as usize;
-            old[i].of().is_none_or(|r| r * dcos(i) > horizon || (r * dsin(i)).abs() > half_width)
-        })
+            (i, new[i].of())
+        });
+        // y70 seq 90: cone one stood in the corridor 3.57 m ahead, inside the 4.6 m horizon, and
+        // paused the launch .5 s. The corridor's front says nothing about a dark run off to the
+        // side: with both flanks beside the corridor only the previous scan's returns matter.
+        (corridor_clear || flanks.iter().all(|&(i, r)| r.is_some_and(|r| beside(i, r))))
+            && flanks.iter().all(|&(i, r)| r.is_some_and(|r| r * dcos(i) > horizon || beside(i, r)))
+            && (left..=right).all(|angle| {
+                let i = imod(angle, 360) as usize;
+                old[i].of().is_none_or(|r| r * dcos(i) > horizon || beside(i, r))
+            })
     })
 }
 
@@ -48,6 +53,7 @@ pub(crate) fn far_flank_gap(clearance: &V, old: &[V], new: &[V], missing: &[V], 
 pub struct CrosswalkExit {
     crosswalk_release: Option<(f64, Option<f64>)>,
     first_approach: FirstApproach,
+    last_drive_at: Option<f64>,
 }
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,6 +75,13 @@ impl CrosswalkExit {
     /// is acquired. Aim one coast at the planned bend, then hold cruise.
     #[allow(clippy::too_many_arguments)]
     pub fn first_approach_drive(&mut self, radar: Option<f64>, before: Option<f64>, rolling_tangent: bool, decel: f64, now: f64, forward_integral: Option<f64>, hold_accel: f64) -> (i64, V) {
+        // y70: a quality pause (seq 90-95) left the phase in Cruise, so the 1600 launch came
+        // back at 1.49 m/s and cone one was entered at 1.90 (y67, y68: 1.73). A pause ends the boost.
+        if self.last_drive_at.replace(now).is_some_and(|last| now - last > SCAN_AGE_S)
+            && self.first_approach == FirstApproach::Cruise
+        {
+            self.first_approach = FirstApproach::Hold;
+        }
         let inertial = self.crosswalk_release.and_then(|(_, zero)| zero)
             .zip(forward_integral).map(|(zero, integral)| (integral-zero).max(0.));
         let speed = inertial.or(radar);

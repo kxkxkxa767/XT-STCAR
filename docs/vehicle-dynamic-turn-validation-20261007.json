@@ -28520,8 +28520,8 @@
       "问一个点，雷达的点云图有没有加卡尔曼滤波……",
       "那能不能其他的不变就测速的单独弄卡尔曼滤波，其他的正常进行"
     ],
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": {
       "lidar_rest_jitter_per_bin_std_mm": {
         "head_on": "3-7",
@@ -28573,6 +28573,117 @@
       },
       "cpu": "One update is about 10 floating point operations; a 3-state version measured 4.4 ns per update on the Mac. Not measured on the car."
     },
-    "remaining_validation": "On the car: the light stop .48-.60 m with the rear in the zone, measurement_noise_scale above 1 only on single-frame jumps, no change in the other stages."
+    "remaining_validation": "On the car: the light stop .48-.60 m with the rear in the zone, measurement_noise_scale above 1 only on single-frame jumps, no change in the other stages.",
+    "car_run_y70": {
+      "deployed": "2026-11-08 16:47, deploy-matched claude-turn177 177 + deploy-vision y70 (from y68 / 175); run 16:47",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261108-y70",
+      "evidence_files_ok": 89,
+      "result": "route_finish_zone_stop, .229 m from the board, 0 creeps",
+      "effective_s": 21.475,
+      "start_to_stop_s": 31.5,
+      "light_wait_s": 9.992,
+      "segments_s_y67_y68_y70": {
+        "move_to_crosswalk_stop": [
+          3.394,
+          3.492,
+          3.796
+        ],
+        "crosswalk_wait": [
+          2.999,
+          3.197,
+          3.197
+        ],
+        "crosswalk_go_to_first_pass": [
+          3.992,
+          4.296,
+          3.994
+        ],
+        "first_pass_to_tangent": [
+          2.598,
+          2.199,
+          2.7
+        ],
+        "tangent_to_second_pass": [
+          0.8,
+          0.997,
+          0.999
+        ],
+        "second_pass_to_light_stop": [
+          3.493,
+          4.592,
+          3.294
+        ],
+        "light_go_to_finish_stop": [
+          3.697,
+          3.694,
+          3.495
+        ],
+        "total_less_light": [
+          20.973,
+          22.468,
+          21.475
+        ]
+      },
+      "user_saw": [
+        "斑马线多补进次",
+        "绕过第一个桶的时候差点回到斑马线那个直道"
+      ],
+      "crosswalk": "Cut at seq 27 with the aim at .449 m (the next scan would have been -.009): stop .454 m. The top-up fired at seq 43 and 48 (1550 at .3 m/s, aim .61 and .48 against the .30 top-up line) and the car crept to seq 54.",
+      "launch_pause": "seq 90 front_sparse, dark bins -30,-29,-25..-20, refused flank_within_stop_or_corridor: cone one stood in the corridor at 3.57 m, inside the 4.6 m horizon, though every flank was 1.7-2.8 m beside the corridor. Neutral seq 90-95 (.5 s).",
+      "cone_one": "After the pause the phase was still Cruise: 1600 again at seq 97 (1.49 m/s), then 1.90 m/s into cone one (y67, y68: 1.73), plan radius .85 from seq 112, yaw rate 2.25 rad/s at the release, heading peak 221.8 deg (13 runs: 200.6-221.8).",
+      "light": {
+        "stop_front_gap_m": 0.456,
+        "rear_past_beam_m": 0.136,
+        "stop_basis": "stopped_after_camera_red",
+        "release": "fresh greens"
+      },
+      "speed_kalman": "seq 177: lidar 1.855 against 1.371 predicted (+.484), gain .11, noise scale 3.99, filtered 1.425 (the fixed weight would have given 1.532); next scan lidar 1.250 against 1.261. Every other update had scale 1 and gain .33-.40.",
+      "cpu": {
+        "route_engine_core_fraction": 0.1601,
+        "max_tick_compute_s": 0.008
+      }
+    }
+  },
+  "y71_crosswalk_launch_cleanup_20261108": {
+    "date": "2026-11-08",
+    "author": "Claude",
+    "engine_round": 178,
+    "baseline": "y70 / engine 177 (0f4aa7c) on the car",
+    "user": [
+      "斑马线多补进次，绕过第一个桶的时候差点回到斑马线那个直道"
+    ],
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": "See car_run_y70 in the y70 key: the crosswalk top-ups, a false quality pause after the launch, and the 1600 launch resuming after that pause.",
+    "change": [
+      "maneuver_crosswalk.rs (race): the top-up needs a coast that would stop more than .8 m short (CROSSWALK_RACE_TOPUP_GAP_M; was .30). The rules ask only for a stop before the stripes; y53, y54 and y59 stopped .62-.76 m short without any issue.",
+      "race_crosswalk.rs far_flank_gap: a dark run with both flanks beside the corridor no longer needs the corridor clear past the horizon. A flank inside the corridor still does, and the previous-scan check on every dark ray stays.",
+      "race_crosswalk.rs first_approach_drive: a gap over .30 s between calls (a quality pause) moves Cruise to Hold, so 1600 does not resume.",
+      "Not changed: the crosswalk cut and wait, the cone loops and their exit, transfer, light, finish, surface model, speed Kalman filter."
+    ],
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "temporary_checks_removed_before_commit": "y70 seq 90 scans bridged by far_flank_gap, refused with a corridor return in the previous scan or a flank inside the corridor; first_approach_drive gives 1570 / hold after a .9 s gap and keeps 1600 without one"
+    },
+    "whole_run_speed_reference_assessment": {
+      "question": "A whole-run Kalman speed as reference with the raw speeds in use and small corrections.",
+      "imu_integral_error_across_a_loop_mps": {
+        "loops": 24,
+        "runs": 13,
+        "mean": -0.95,
+        "rms": 0.98,
+        "max_abs": 1.41,
+        "after_one_lever_arm_term": {
+          "coefficient_m": 0.189,
+          "rms": 0.195,
+          "max_abs": 0.555
+        }
+      },
+      "conclusion": "Across a loop the reference carries almost no speed information, so it restarts on each straight, where every stage already has IMU plus lidar. Not built."
+    },
+    "remaining_validation": "On the car: no 1550 top-up at the crosswalk, stop before the stripes (expected .15-.7 m), no pause after the launch, cone one entered near 1.75 m/s."
   }
 }

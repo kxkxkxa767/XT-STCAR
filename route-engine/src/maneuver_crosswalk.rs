@@ -285,7 +285,12 @@ impl Maneuver {
                                 let push = v + LANE_SPEED_GUARD_MARGIN_MPS + LANE_PUSH_ACCEL_MAX_MPS2 * (ESC_LAG_S + LANE_PUSH_MIN_S);
                                 let push_worst = g - push * (CROSSWALK_GUARD_REACTION_S + LANE_PUSH_MIN_S)
                                     - push * push / (2. * guard_decel);
-                                a > CROSSWALK_TARGET_GAP_M + CROSSWALK_TOPUP_BAND_M
+                                // y70 (race): the cut made a scan early left .45-.6 m, and 1550 fired twice at
+                                // .3 m/s (seq 43, 48: .7 s of creeping). The rules only ask for a stop before
+                                // the stripes, so a race top-up is for a stop that would fall far short.
+                                let short_of = if self.race_inputs.is_some() { CROSSWALK_RACE_TOPUP_GAP_M }
+                                    else { CROSSWALK_TARGET_GAP_M + CROSSWALK_TOPUP_BAND_M };
+                                a > short_of
                                     && s >= LANE_PUSH_ROLLING_MPS
                                     && push_worst > CROSSWALK_MIN_GAP_M
                             }
