@@ -31,6 +31,7 @@ pub mod race;
 mod race_imu;
 mod race_light;
 mod race_light_brake;
+mod race_speed_kalman;
 mod race_transfer;
 mod motion_sensors;
 mod race_crosswalk;

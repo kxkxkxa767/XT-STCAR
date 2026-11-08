@@ -8,10 +8,7 @@ use crate::maneuver::{
 use crate::py::V;
 use crate::motion_sensors::{RangeHistory, lane_range_speed};
 use crate::maneuver::{LANE_SPEED_BASELINE, LANE_SPEED_HISTORY};
-
-// Observation-fusion response, not a measured vehicle parameter. Check it
-// against the recorded inputs before attributing a physical improvement.
-const SPEED_FUSION_RESPONSE_S: f64 = 0.2;
+use crate::race_speed_kalman::SpeedKalman;
 
 type Post = (f64, f64); // longitudinal and leftward distances in the lane frame
 
@@ -216,20 +213,10 @@ pub struct RaceLight {
     pub speed_uses_gantry: bool,
     pub last_speed: Option<(f64, f64)>,
     imu_history: Vec<(f64, f64, f64)>, // scan time, body IMU integral, lane projection cos
-    body_speed_anchor: Option<(f64, f64, f64)>, // scan time, body speed, IMU integral
-    speed_fusion: Option<SpeedFusion>,
+    speed_kalman: SpeedKalman,
     /// When the front was first estimated past the photo beam (y34).
     pub beam_at: Option<f64>,
     approach_sample: Option<(i64, f64, Option<f64>)>,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct SpeedFusion {
-    at: f64,
-    measured: f64,
-    predicted: Option<f64>,
-    weight: f64,
-    filtered: f64,
 }
 
 impl RaceLight {
@@ -266,7 +253,7 @@ impl RaceLight {
     fn adjusted_speed(&mut self, forward_integral: Option<f64>, at: f64, raw: Option<f64>, axis_cos: f64) -> Option<f64> {
         let Some(current) = forward_integral.filter(|v| v.is_finite()) else {
             self.imu_history.clear();
-            self.body_speed_anchor = None;
+            self.speed_kalman.clear();
             return None;
         };
         if !at.is_finite() || !axis_cos.is_finite() { return None; }
@@ -274,7 +261,7 @@ impl RaceLight {
         if h.last().is_none_or(|&(t, _, _)| t != at) {
             if h.last().is_some_and(|&(t, _, _)| at < t || at - t > crate::helpers::SCAN_AGE_S) {
                 h.clear();
-                self.body_speed_anchor = None;
+                self.speed_kalman.clear();
             }
             h.push((at, current, axis_cos));
             if h.len() > LANE_SPEED_HISTORY { h.remove(0); }
@@ -316,24 +303,12 @@ impl RaceLight {
             }
             if count > 0 {
                 bodies[..count].sort_unstable_by(f64::total_cmp);
-                let measured = bodies[count/2];
-                // Keep physical acceleration on the IMU path. Only the new
-                // radar correction is filtered; missing radar never advances
-                // this update clock or renews the anchor's validity.
-                let prior = self.body_speed_anchor.filter(|(previous_at, _, _)| {
-                    0. < at-previous_at && at-previous_at <= crate::helpers::SCAN_AGE_S
-                });
-                let predicted = prior.map(|(_, body, origin)| (body+current-origin).max(0.));
-                let weight = prior.map_or(1., |(previous_at, _, _)| {
-                    let dt = at-previous_at;
-                    dt/(SPEED_FUSION_RESPONSE_S+dt)
-                });
-                let filtered = predicted.map_or(measured, |v| v+weight*(measured-v)).max(0.);
-                self.speed_fusion = Some(SpeedFusion { at, measured, predicted, weight, filtered });
-                self.body_speed_anchor = Some((at, filtered, current));
+                // Keep physical acceleration on the IMU path; only the radar correction is
+                // filtered. Missing radar never reaches the filter (race_speed_kalman).
+                self.speed_kalman.update(at, current, bodies[count/2]);
             }
         }
-        let (anchor_at, body, origin) = self.body_speed_anchor?;
+        let (anchor_at, body, origin) = self.speed_kalman.anchor()?;
         if !(0. ..=crate::helpers::SCAN_AGE_S).contains(&(at-anchor_at)) { return None; }
         Some(((body+current-origin).max(0.)*axis_cos).max(0.))
     }
@@ -343,16 +318,18 @@ impl RaceLight {
     }
 
     pub fn speed_fusion_diagnostics(&self) -> V {
+        let last = self.speed_kalman.last();
         crate::dict! {
-            "observed_at" => self.speed_fusion.map(|v| v.at),
-            "radar_body_speed_mps" => self.speed_fusion.map(|v| v.measured),
-            "predicted_body_speed_mps" => self.speed_fusion.and_then(|v| v.predicted),
-            "innovation_mps" => self.speed_fusion.and_then(|v| v.predicted.map(|p| v.measured-p)),
-            "correction_mps" => self.speed_fusion.and_then(|v| v.predicted.map(|p| v.filtered-p)),
-            "filtered_body_speed_mps" => self.speed_fusion.map(|v| v.filtered),
-            "innovation_weight" => self.speed_fusion.map(|v| v.weight),
-            "response_s" => SPEED_FUSION_RESPONSE_S,
-            "basis" => "candidate_radar_innovation_fusion_with_imu_acceleration",
+            "observed_at" => last.map(|v| v.at),
+            "radar_body_speed_mps" => last.map(|v| v.measured),
+            "predicted_body_speed_mps" => last.and_then(|v| v.predicted),
+            "innovation_mps" => last.and_then(|v| v.predicted.map(|p| v.measured-p)),
+            "correction_mps" => last.and_then(|v| v.predicted.map(|p| v.filtered-p)),
+            "filtered_body_speed_mps" => last.map(|v| v.filtered),
+            "innovation_weight" => last.map(|v| v.gain),
+            "measurement_noise_scale" => last.map(|v| v.noise_scale),
+            "speed_variance" => last.map(|v| v.variance),
+            "basis" => "kalman_imu_prediction_radar_correction_with_scaled_outliers",
         }
     }
 
