@@ -17,6 +17,7 @@ pub struct World {
     pub gantry_x: f64,
     pub beam_x: f64,
     pub light_y: f64,
+    pub post_ys: (f64, f64),
     pub segments: Vec<Segment>,
     pub cones: Vec<(f64, f64, f64)>,
 }
@@ -72,6 +73,14 @@ impl World {
             yaw: number(config, "start_yaw_rad", 0.),
         };
         let gantry_x = number(config, "gantry_x_m", length - light_divider - 0.025);
+        // Posts stand at the lane edges unless a narrower gantry is centred in the lane.
+        let post_ys = match config["gantry_post_span_m"].as_f64() {
+            Some(span) => (
+                width - light_width / 2. - span / 2.,
+                width - light_width / 2. + span / 2.,
+            ),
+            None => (width - light_width + 0.07, width - 0.11),
+        };
         let mut world = Self {
             length,
             width,
@@ -82,6 +91,7 @@ impl World {
             gantry_x,
             beam_x: gantry_x - number(config, "beam_gap_m", 1.),
             light_y: width - light_width / 2.,
+            post_ys,
             segments: vec![
                 ((0., 0.), (length, 0.)),
                 ((length, 0.), (length, width)),
@@ -108,7 +118,7 @@ impl World {
             width - light_width - 0.01,
             width - light_width + 0.01,
         );
-        for y in [width - 0.11, width - light_width + 0.07] {
+        for y in [post_ys.1, post_ys.0] {
             world.board(gantry_x - 0.025, gantry_x + 0.025, y - 0.025, y + 0.025);
             if config["beam_posts"].as_bool().unwrap_or(true) {
                 world.board(
@@ -132,7 +142,7 @@ impl World {
     pub fn description(&self) -> Value {
         json!({"length_m":self.length,"width_m":self.width,"lane_width_m":self.lane_width,
                "light_width_m":self.light_width,"stripe_x_m":self.stripe_x,"gantry_x_m":self.gantry_x,
-               "beam_x_m":self.beam_x,"start":[self.start.x,self.start.y,self.start.yaw],
+               "beam_x_m":self.beam_x,"post_ys":[self.post_ys.0,self.post_ys.1],"start":[self.start.x,self.start.y,self.start.yaw],
                "cones":self.cones,"segments":self.segments})
     }
 
@@ -217,9 +227,6 @@ impl World {
             let (dx, dy) = (self.beam_x - pose.x, y - pose.y);
             (c * dx + s * dy, -s * dx + c * dy)
         };
-        segment_hits_rectangle(
-            local(self.width - self.light_width + 0.07),
-            local(self.width - 0.11),
-        )
+        segment_hits_rectangle(local(self.post_ys.0), local(self.post_ys.1))
     }
 }

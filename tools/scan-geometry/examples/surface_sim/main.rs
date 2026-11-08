@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_imports)]
+#![recursion_limit = "256"]
 //! Offline, deterministic closed-loop surface experiments. No vehicle connection.
 //! cargo run --release --manifest-path tools/scan-geometry/Cargo.toml --example surface_sim -- CONFIG OUT
 //! The real Rust Supervisor owns commands. Ray casting and a fitted empirical plant
@@ -41,6 +42,8 @@ mod py;
 mod race_crosswalk;
 #[path = "../../../../route-engine/src/race_crosswalk_stop.rs"]
 mod race_crosswalk_stop;
+#[path = "../../../../route-engine/src/race_speed_kalman.rs"]
+mod race_speed_kalman;
 #[path = "../../../../route-engine/src/race_surface.rs"]
 mod race_surface;
 #[path = "../../../../route-engine/src/race_surface_speed.rs"]
@@ -259,6 +262,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let max_t = number(&config, "max_seconds", 60.);
     let mut forward_after_brake = false;
     let mut brake_seen = false;
+    // Rule timing and the 10 s stationary rule, judged on the true pose.
+    let start_line_x = number(&config["layout"], "start_line_x_m", 0.8);
+    let mut start_line_at = None;
+    let mut finish_line_at = None;
+    let mut still_since: Option<f64> = None;
+    let mut stopped_elsewhere_s = 0_f64;
+    // A real IMU sits ahead of the rotation centre, so its forward integral
+    // loses lever * w^2 dt through every loop (car runs: about -.95 m/s a loop).
+    let imu_lever = number(&config["sensors"], "imu_lever_arm_m", 0.);
+    let mut imu_lever_loss = 0_f64;
     for tick in 0..=(max_t / 0.02).ceil() as usize {
         let t = tick as f64 * 0.02;
         final_t = t;
@@ -290,6 +303,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if armed { motor } else { 1500 },
                 if armed { servo } else { 1500 },
             );
+            imu_lever_loss += imu_lever * car.yaw_rate * car.yaw_rate * 0.02;
         }
         let (front, rear) = world.front_rear_x(car.pose);
         if trigger.is_none() && world.intersects_beam(car.pose) {
@@ -338,7 +352,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             session.motion.race_inputs = Some(motion_sensors::RaceInputs {
                 yaw_rate: Some(car.yaw_rate),
                 forward_integral: Some(
-                    car.speed + number(&config["sensors"], "imu_drift_mps2", 0.) * t,
+                    car.speed + number(&config["sensors"], "imu_drift_mps2", 0.) * t
+                        - imu_lever_loss,
                 ),
             });
             sup.renew_owner(t);
@@ -372,6 +387,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         if move_at.is_none() && car.speed > 0.02 {
             move_at = Some(t);
+        }
+        if start_line_at.is_none() && front >= start_line_x && car.pose.yaw.cos() > 0. {
+            start_line_at = Some(t);
+        }
+        if finish_line_at.is_none()
+            && front >= world.length - 0.8
+            && car.pose.yaw.cos() > 0.
+            && car.pose.y >= world.width - world.light_width
+        {
+            finish_line_at = Some(t);
+        }
+        if move_at.is_some()
+            && car.speed < 0.02
+            && cross != "waiting"
+            && lamp != "waiting"
+            && sup.session.is_some()
+        {
+            let since = *still_since.get_or_insert(t);
+            stopped_elsewhere_s = stopped_elsewhere_s.max(t - since);
+        } else {
+            still_since = None;
         }
         if crosswalk_stop_event.is_none() && cross == "waiting" {
             crosswalk_stop_event =
@@ -483,6 +519,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "controller_finish":controller_finish,"physical_contact_free":contact.is_none(),
         "finish_stopped_in_zone":finish_stopped_in_zone,"modeled_task_pass":modeled_task_pass,
         "simulated_effective_s":lap,"light_wait_s":light_wait,"forward_after_brake":forward_after_brake,
+        "start_line_at":start_line_at,"finish_line_at":finish_line_at,"stopped_elsewhere_s":stopped_elsewhere_s,
+        "beam_trigger_at":trigger,
         "max_traction_demand_ratio":car.max_traction_ratio,"traction_limited_s":car.slip_s,
         "stage_changes":stage_changes,"world":world.description(),"plant":car.model(),
         "sensors":{
