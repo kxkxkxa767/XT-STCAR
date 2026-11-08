@@ -69,6 +69,7 @@ pub struct SurfaceResponse {
     previous: Option<Observation>,
     motor_since: Option<f64>,
     extra_load_mps2: f64,
+    initial_load_mps2: f64,
     last_load_sample_mps2: Option<f64>,
     learned_samples: u64,
     learning_source: Option<&'static str>,
@@ -82,6 +83,13 @@ pub struct SurfaceResponse {
 }
 
 impl SurfaceResponse {
+    /// The load measured on this floor before the race (scripts/t-ground-drag.py); the
+    /// learner carries on from it. Zero, the default, is the indoor reference floor.
+    pub fn set_initial_load(&mut self, load_mps2: f64) {
+        self.initial_load_mps2 = load_mps2.max(0.);
+        self.extra_load_mps2 = self.initial_load_mps2;
+    }
+
     /// y65: called each scan of the crosswalk standstill (from REST_SETTLE_S after the stop):
     /// the forward integral's slope there is the IMU forward bias at this spot (mounting pitch
     /// and floor slope; y57-y64 indoors -.135 to +.039 m/s2). The learner's IMU samples subtract
@@ -260,6 +268,7 @@ impl SurfaceResponse {
             "source_seq" => self.previous.map(|p| p.seq),
             "compensation_pwm" => self.compensation_pwm,
             "load_deadband_mps2" => LOAD_DEADBAND_MPS2,
+            "initial_load_mps2" => self.initial_load_mps2,
             "imu_rest_bias_mps2" => self.rest_bias_mps2,
             "basis" => "local_longitudinal_response_including_surface_battery_and_drivetrain",
         }

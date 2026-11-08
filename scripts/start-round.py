@@ -130,6 +130,9 @@ def main():
     turn = result.get('turn') or {}
     events = turn.get('route_events') or {}
     seq = {name: event['scan']['seq'] for name, event in events.items()}
+    surface = helper.get('surface_initial')
+    say(f"初始阻力补偿 {surface['extra_load_mps2']:.3f} m/s²（{surface.get('source')}，{surface.get('measured')}）"
+        if surface else '初始阻力补偿 0（车上没有测量结果）')
     say(f"路线到达：{turn.get('route_stage')}，经过阶段 {list(seq)}")
     finish = turn.get('finish_evidence') or {}
     if 'finish_stop' in seq and 'start_lane' in seq:

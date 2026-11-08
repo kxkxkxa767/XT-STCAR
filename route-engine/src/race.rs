@@ -66,11 +66,12 @@ struct Options {
     max_wait_s: f64,
     status_s: f64,
     light_state: Option<PathBuf>,
+    surface_initial_load: f64,
 }
 
 const USAGE: &str = "usage: route-engine race --bridge PATH --out NEW_DIR [--start enter|ready|never] [--ready-hold-s 3] \
 [--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
-[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH]";
+[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--surface-initial-load MPS2]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
     let mut o = Options {
@@ -86,6 +87,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         max_wait_s: 300.,
         status_s: 0.5,
         light_state: None,
+        surface_initial_load: 0.,
     };
     let mut i = 0;
     let value = |i: usize| args.get(i + 1).cloned().ok_or_else(|| format!("{} needs a value", args[i]));
@@ -108,6 +110,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--control-device" => o.control_device = value(i)?,
             "--lidar-device" => o.lidar_device = value(i)?,
             "--light-state" => o.light_state = Some(PathBuf::from(value(i)?)),
+            "--surface-initial-load" => o.surface_initial_load = number(i)?,
             "--demo" => {
                 o.demo = true;
                 i += 1;
@@ -142,9 +145,13 @@ enum Event {
 /// The console's spawn(mode, device): device identity and ownership checks,
 /// then the bridge in its own process group.
 fn spawn(o: &Options, mode: &'static str, device: &str, expected: &str) -> Result<Child, String> {
-    let mut command = Command::new(&o.bridge);
+    spawn_bridge(&o.bridge, o.demo, mode, device, expected)
+}
+
+pub(crate) fn spawn_bridge(bridge: &str, demo: bool, mode: &'static str, device: &str, expected: &str) -> Result<Child, String> {
+    let mut command = Command::new(bridge);
     command.arg(mode);
-    if !o.demo {
+    if !demo {
         let real = std::fs::canonicalize(device).map_err(|e| format!("device {device}: {e}"))?;
         if real != Path::new(expected) {
             return Err(format!("device identity changed: {device}"));
@@ -236,13 +243,13 @@ fn light_of(text: &str, now: f64) -> Option<V> {
     Some(light)
 }
 
-enum FileOp {
+pub(crate) enum FileOp {
     Put(&'static str, String),
     Append(&'static str, String),
     Stop,
 }
 
-fn writer(dir: PathBuf) -> (Sender<FileOp>, thread::JoinHandle<()>) {
+pub(crate) fn writer(dir: PathBuf) -> (Sender<FileOp>, thread::JoinHandle<()>) {
     let (tx, rx) = mpsc::channel::<FileOp>();
     let handle = spawn_named("evidence-write", move || {
         let mut files: Vec<(&'static str, std::fs::File)> = Vec::new();
@@ -364,7 +371,7 @@ struct Program {
 }
 
 /// thread::spawn with a name (it shows in /proc and in the CPU account).
-fn spawn_named<T: Send + 'static>(name: &str, f: impl FnOnce() -> T + Send + 'static) -> thread::JoinHandle<T> {
+pub(crate) fn spawn_named<T: Send + 'static>(name: &str, f: impl FnOnce() -> T + Send + 'static) -> thread::JoinHandle<T> {
     thread::Builder::new().name(name.to_string()).spawn(f).expect("thread spawn")
 }
 
@@ -746,6 +753,7 @@ fn run(p: &mut Program) -> i32 {
     };
     if let Some(session) = &mut p.sup.session {
         session.motion.race_inputs = Some(Default::default());
+        session.motion.race_surface.set_initial_load(p.o.surface_initial_load);
     }
     p.say(&format!("started run {run_id}"));
     let run_v = V::from(run_id.as_str());

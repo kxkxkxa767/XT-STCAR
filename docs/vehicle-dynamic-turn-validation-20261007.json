@@ -28775,5 +28775,46 @@
       "new_test_file": false
     },
     "remaining_validation": "On the car: if the wait runs, neutral only for the scans without cone two in the grace; tangent near 1.7-1.8 m/s; second-loop clearance as in y67."
+  },
+  "y73_ground_drag_test_20261108": {
+    "date": "2026-11-08",
+    "author": "Claude",
+    "engine_round": 180,
+    "baseline": "y71 / engine 178 (7ddee9b) on the car; carries y72 (aaa4296), which was never run on its own",
+    "user": [
+      "你再弄个脚本，这个脚本用来测地面的阻力的，比赛前应该能在空地上试试，应该有段直到，可以用这个测完再改初始的阻力补偿，用t开头",
+      "改完后更新你的记忆和共同记忆然后上传"
+    ],
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "New route-engine/src/t_drag.rs, `route-engine tdrag`: rest, one straight push at 1550-1600, neutral coast to a stop, rest; the gyro holds the heading. Ends early on the free length given, on a return ahead inside the stopping distance (coast at a weak .45 m/s2, brake 1300 if nearer) or at the body. No route logic.",
+      "New scripts/t-ground-drag.py (Mac): runs one measurement tN with the console stopped and restored, fetches work/t-ground/tN-<time>/, prints the coast deceleration and the extra load against .60; --show, --apply (writes surface-initial.json on the car), --clear, --drop.",
+      "route-engine race --surface-initial-load; race_surface.rs set_initial_load: the load learner starts from it (default 0, the indoor floor). race-trial.py passes the file on and records it; start-round.py prints it each run.",
+      "Not changed: all race control when the file is absent, y72 included."
+    ],
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "demo": "tdrag ran against the dry-run bridge with a simulated IMU: rest, push, coast, rest in order; the push ended on the free length (2 and 4 m).",
+      "analysis_on_saved_indoor_launches": {
+        "runs": "y59-y71 without a top-up, 9",
+        "coast_decel_mps2": {
+          "median": 0.607,
+          "min": 0.578,
+          "max": 0.649
+        },
+        "coast_extra_median": 0.007,
+        "power_extra_min_max": [
+          -0.885,
+          0.12
+        ],
+        "decision": "The result uses the coast only; the powered shortfall is printed for reference."
+      },
+      "not_run_on_the_car": true
+    },
+    "remaining_validation": "Deploy y73, then a first real measurement on a floor with the straight free ahead."
   }
 }

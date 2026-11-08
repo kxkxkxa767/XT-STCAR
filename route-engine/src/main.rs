@@ -33,6 +33,7 @@ mod race_light;
 mod race_light_brake;
 mod race_speed_kalman;
 mod race_transfer;
+mod t_drag;
 mod motion_sensors;
 mod race_crosswalk;
 mod race_crosswalk_stop;
@@ -471,6 +472,9 @@ fn function(name: &str, args: &[V]) -> V {
 fn main() {
     install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("tdrag") {
+        std::process::exit(t_drag::main(&args[2..]));
+    }
     if args.get(1).map(String::as_str) == Some("race") {
         std::process::exit(race::main(&args[2..]));
     }

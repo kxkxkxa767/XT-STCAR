@@ -149,6 +149,11 @@ def main():
                    '--max-drive-s', args.max_drive_s, '--initial-presteer-pwm', args.initial_presteer_pwm,
                    '--status-s', '.5', '--max-wait-s', '20']
         command += ['--start', 'never'] if args.check_only else ['--start', 'ready', '--ready-hold-s', args.ready_hold_s]
+        # scripts/t-ground-drag.py --apply: this floor's measured load, the learner's starting point.
+        surface_initial = BASE/'surface-initial.json'
+        if surface_initial.is_file():
+            result['surface_initial'] = json.loads(surface_initial.read_text())
+            command += ['--surface-initial-load', str(float(result['surface_initial']['extra_load_mps2']))]
         light_state = out/'light-state.json'
         if args.vision_script is not None:
             vision = subprocess.Popen([sys.executable, args.vision_script, '--model-dir', args.vision_model,
