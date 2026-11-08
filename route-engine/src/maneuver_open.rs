@@ -1307,6 +1307,10 @@ impl Maneuver {
         let pose = self.response_pose();
         let (channel, natural) = self.open_transfer_steering(scan, heading, pose);
         let (ahead, speed, stop_at) = self.open_front_stop(scan);
+        let maturing = self.open_second_maturing(scan, ahead, stop_at);
+        if self.race_inputs.is_some() && maturing {
+            self.race_transfer.support_handed_over();
+        }
         if self.race_inputs.is_some() {
             let proof = &self.role_distinct_evidence;
             let remaining = if py_eq(proof.get("source_seq"), scan.get("seq")) {
@@ -1325,7 +1329,6 @@ impl Maneuver {
         self.open_feedback.set("front_range_m", ahead);
         self.open_feedback.set("front_stop_range_m", stop_at);
         self.open_feedback.set("second_acquisition_reason", self.second_acquisition_reason.clone());
-        let maturing = self.open_second_maturing(scan, ahead, stop_at);
         self.open_feedback.set("second_confirm_grace", maturing);
         let board_without_support = ahead.is_some_and(|a| a <= stop_at) && !maturing;
         if self.race_inputs.is_some() && (board_without_support || self.race_transfer.waiting_for_support()) {

@@ -29,6 +29,7 @@ pub struct RaceTransfer {
     phase: TransferPhase,
     transfer_anchor: Option<(f64, f64)>,
     waiting_for_support: bool,
+    phase_before_wait: Option<TransferPhase>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -65,15 +66,26 @@ impl RaceTransfer {
 
     /// Geometry can temporarily lack a confirmed second support while the
     /// vehicle is still moving. Keep measurements and steering alive, but do
-    /// not reapply power until the normal identity-confirmed handover.
+    /// not reapply power until the support is back in view or confirmed.
     pub fn coast_for_support(&mut self) {
+        if !self.waiting_for_support {
+            self.phase_before_wait = Some(self.phase);
+        }
         self.waiting_for_support = true;
         self.phase = TransferPhase::Coast;
     }
 
     pub fn waiting_for_support(&self) -> bool { self.waiting_for_support }
 
-    pub fn support_handed_over(&mut self) { self.waiting_for_support = false; }
+    /// The wait ends in the phase it interrupted; a boost is not resumed. y71: cone two appeared
+    /// one scan after the board came inside the stop range and the latched coast ran from
+    /// seq 132 to 138, cutting the tangent speed to 1.48 m/s (y67: 1.77).
+    pub fn support_handed_over(&mut self) {
+        self.waiting_for_support = false;
+        if let Some(phase) = self.phase_before_wait.take().filter(|p| !matches!(p, TransferPhase::Boost(_))) {
+            self.phase = phase;
+        }
+    }
 
     /// Metadata for the separate load observer; it does not change transfer
     /// speed, phase, boost anchors or the existing entry-speed selection.

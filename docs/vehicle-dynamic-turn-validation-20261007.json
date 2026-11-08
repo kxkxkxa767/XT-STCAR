@@ -28652,8 +28652,8 @@
     "user": [
       "斑马线多补进次，绕过第一个桶的时候差点回到斑马线那个直道"
     ],
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": "See car_run_y70 in the y70 key: the crosswalk top-ups, a false quality pause after the launch, and the 1600 launch resuming after that pause.",
     "change": [
       "maneuver_crosswalk.rs (race): the top-up needs a coast that would stop more than .8 m short (CROSSWALK_RACE_TOPUP_GAP_M; was .30). The rules ask only for a stop before the stripes; y53, y54 and y59 stopped .62-.76 m short without any issue.",
@@ -28684,6 +28684,96 @@
       },
       "conclusion": "Across a loop the reference carries almost no speed information, so it restarts on each straight, where every stage already has IMU plus lidar. Not built."
     },
-    "remaining_validation": "On the car: no 1550 top-up at the crosswalk, stop before the stripes (expected .15-.7 m), no pause after the launch, cone one entered near 1.75 m/s."
+    "remaining_validation": "On the car: no 1550 top-up at the crosswalk, stop before the stripes (expected .15-.7 m), no pause after the launch, cone one entered near 1.75 m/s.",
+    "car_run_y71": {
+      "deployed": "2026-11-08 17:09, deploy-matched claude-turn178 178 + deploy-vision y71 (from y70 / 177); run 17:09",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261108-y71",
+      "evidence_files_ok": 88,
+      "result": "route_finish_zone_stop, .202 m from the board, 0 creeps, no quality waits",
+      "effective_s": 21.173,
+      "start_to_stop_s": 31.3,
+      "light_wait_s": 10.088,
+      "segments_s_y67_y70_y71": {
+        "move_to_crosswalk_stop": [
+          3.394,
+          3.796,
+          3.195
+        ],
+        "crosswalk_wait": [
+          2.999,
+          3.197,
+          3.194
+        ],
+        "crosswalk_go_to_first_pass": [
+          3.992,
+          3.994,
+          4.197
+        ],
+        "first_pass_to_tangent": [
+          2.598,
+          2.7,
+          2.697
+        ],
+        "tangent_to_second_pass": [
+          0.8,
+          0.999,
+          1.198
+        ],
+        "second_pass_to_light_stop": [
+          3.493,
+          3.294,
+          3.097
+        ],
+        "light_go_to_finish_stop": [
+          3.697,
+          3.495,
+          3.594
+        ],
+        "total_less_light": [
+          20.973,
+          21.475,
+          21.173
+        ]
+      },
+      "crosswalk": "No top-up (1500 from seq 27): stop .470 m, program wait 3.194 s.",
+      "launch": "No pause; one far-gap scan bridged, no refusals. Cone one entered at 1.74 m/s, plan radius .9.",
+      "cone_one_exit": "Release at heading 156.8 deg, .80 rad/s; heading peak 203.6 deg (y70 221.8, y67 216.7).",
+      "cone_two": "seq 132 (unsaved): board inside the 2.89 m stop range with cone two not yet in view, so the y63 support wait latched neutral; cone two appeared at 133 (grace true at 133, 134), confirmed at 136, motor 1500 until 138. Tangent 1.48 m/s (y67 1.77), tangent to second pass 1.198 s (y67 .800).",
+      "light": {
+        "stop_front_gap_m": 0.464,
+        "rear_past_beam_m": 0.125,
+        "stop_basis": "stopped_after_camera_red",
+        "release": "fresh greens"
+      },
+      "speed_kalman": "16 updates; noise scale above 1 on seq 168, 169, 171 (+.203, +.157, +.210 m/s, same sign, gains reduced).",
+      "cpu": {
+        "route_engine_core_fraction": 0.1705,
+        "max_tick_compute_s": 0.0082
+      }
+    }
+  },
+  "y72_second_support_wait_release_20261108": {
+    "date": "2026-11-08",
+    "author": "Claude",
+    "engine_round": 179,
+    "baseline": "y71 / engine 178 (7ddee9b) on the car",
+    "user": [
+      "跑完了，多少秒"
+    ],
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": "The y63 support wait latched neutral until the handover even when cone two came into view one scan later and the normal maturing grace held; other runs saw cone two before the board crossed the stop range and never waited. y71 was the first car run to execute this branch.",
+    "change": [
+      "maneuver_open.rs open_transfer_update (race): when the unconfirmed cone two is maturing, the support wait ends and the normal transfer drive applies, on the same grace as a run that saw it earlier. Outside the .5 m grace or without the cone the coast comes back.",
+      "race_transfer.rs: the wait saves the phase it interrupts and restores it at the end (never a boost).",
+      "Not changed: stop_at, the grace, confirmation counts, recovery, loops, crosswalk, light, finish, speed Kalman filter."
+    ],
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_file": false
+    },
+    "remaining_validation": "On the car: if the wait runs, neutral only for the scans without cone two in the grace; tangent near 1.7-1.8 m/s; second-loop clearance as in y67."
   }
 }
