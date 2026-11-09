@@ -28821,7 +28821,7 @@
     "date": "2026-11-09",
     "author": "Claude",
     "engine_round": 181,
-    "baseline": "y73 / engine 180 (e544223), built and never deployed; the car still has y71 / engine 178 (7ddee9b)",
+    "baseline": "code on y73 / engine 180 (e544223), built and never deployed; the package is built against claude-turn178, y71 / engine 178 (7ddee9b), which is what the car has",
     "user": [
       "你来改吧",
       "5先不要改"

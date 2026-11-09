@@ -3,116 +3,122 @@
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。激光雷达提供路线几何和门架位置，相机识别斑马线与信号灯，IMU 补偿短时车速变化。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。
 
-## 现状（2026-10-25）
+## 现状（2026-11-09）
 
-**路线**：起步直道 → 逆时针绕第一个桶 → 过渡 → 顺时针绕第二个桶 → 灯区入口（红绿灯龙门架）→ 光区直道 → 停进终点区。不针对某一块赛道调参；起步、绕桶、灯区和终点都按当场雷达几何决定。
+**路线**：起步直道 → 斑马线前停够 3 s → 逆时针绕第一个桶 → 过渡 → 顺时针绕第二个桶 → 进灯道 → 过光电线后见红灯停车、绿灯放行 → 停进终点区。起步、绕桶、灯区和终点都按当场的雷达和相机决定，不写赛道坐标。
 
-**车上版本**：第106轮（源提交 c0843c4，引擎 `7f4e2306…`，桥 `fe5c0056…`）。
+**版本**：车上是 y71／引擎 178（源提交 `7ddee9b`），已跑完并锁定中位。y74／引擎 181（`883ea31`）已编译，还没上车。
 
-| 轮 | 日期 | 结果 | 起步→停车 | 说明 |
+| 版本／引擎 | 日期 | 扣红灯用时 | 离终点板 | 说明 |
 | --- | --- | --- | --- | --- |
-| 98 | 10-21 | 跑完全程，停车后静止确认未通过 | 17.4 s | 第一次用独立程序 `route-engine race`；停在离终点板 .715 m（只有车头进区） |
-| 99 | 10-21 | 同上 | 18.3 s | 离板 .701 m |
-| 100 | 10-21 | 停进终点区 | 20.1 s | 离板 .743 m；光区直道停了三次再走 |
-| 101 | 10-22 | 灯区入口车身门停车 | — | 追踪线擦到龙门架外侧腿 |
-| 102 | 10-22 | 起步直道误判"前方有板"滑停 | — | 远处测距跳变被当成 1.77 m/s 接近速度 |
-| 103 | 10-23 | 整条路线一次跑完，停进终点区 | 19.7 s | 绕第一个桶和过桶后各有一次约 .5 s 的雷达质量等待；离板 .404 m |
-| 104 | 10-23 | 整条路线一次跑完，停进终点区 | 18.7 s | 全程没有任何等待或暂停；离板 .459 m，车尾在区外约 6 cm |
-| 105 | 10-23 | 整条路线一次跑完，整车停进终点区 | 18.6 s | 离板 .363 m（滑行直接停在区里，补进没用上）；过渡段等第二个桶暂停约 .4 s |
-| 106 | 10-23 | 整条路线一次跑完，整车停进终点区 | 18.8 s | 过渡段不再暂停；补进第一次用上（离板 .46 → .394 m）；车头过线 17.2 s（第105轮 16.4 s，两圈绕桶随摆放各慢约 .4 s） |
-| 106-2 | 10-24 | 同一程序再跑一次，整车停进终点区 | 18.3 s | 车头过线 16.8 s；补进一次（离板 .397 m）；无等待；起步直道第43帧整包缺失 11 格，已补上 |
-| 106-3…8 | 10-24/25 | 演示期间又跑6次，5次整车停进终点区 | 18.5–20.9 s | 106-5（第一次演示）撞了第一个桶；106-7 约 13 s 时断电中断 |
+| y64／171 | 11-06 | 21.27 s | .331 m | 灯前整车入区、见绿放行，终点静止确认通过 |
+| y66／173 | 11-06 | 21.58 s | .209 m | 第二桶全程跟住；斑马线起步后有一次雷达质量暂停 |
+| **y67／174** | 11-06 | **20.97 s** | .323 m | 目前最快，全程没有质量等待 |
+| y68／175 | 11-06 | 22.47 s | .300 m | 加回斑马线余量后，灯前误收油多花约 1.1 s |
+| y70／177 | 11-08 | 21.48 s | .229 m | 灯前测速换成卡尔曼滤波 |
+| y71／178 | 11-08 | 21.17 s | .202 m | 斑马线不再补进，放行后不再暂停 |
+
+用时是程序保存帧的口径，不是官方计时。更早的参考：y27 为 22.77 s，y53 为 21.78 s。每轮的完整记录在[机器记录](docs/vehicle-dynamic-turn-validation-20261007.json)里。
+
+**规则范围赛道的仿真**（y73 和 y74 的代码，电脑模型，没有室外地面和室外相机，雷达也没有模拟缺测）：
+
+| 场景 | y73 完赛／零罚时 | y74 完赛／零罚时 |
+| --- | ---: | ---: |
+| 练习场 | 99%／75% | 99%／75% |
+| 《赛道搭建细节》8×4 m 示例，斑马线和灯随机 | 98%／74% | 98%／74% |
+| 规则范围随机，车道 0.9 m | 51%／25% | 73%／34% |
+| 规则范围随机，车道 1–2 m | 33%／15% | 62%／29% |
+| 规则图 5 的比例，8×4.75 m，车道 0.9 m | 32%／20% | 80%／37% |
+| 规则图 5 的比例，7×4.2 m，车道 0.9 m | 39%／15% | 61%／24% |
+| 规则图 5 的比例，6×4 m，车道 0.9 m | 0 | 11%／3% |
+| 规则图 5 的比例，5×4 m，车道 0.9 m | 0 | 0 |
+
+零罚时率偏低，因为模型的灯前停距比实车远约 7 cm。比赛场地只会是其中一种布局，这些数字说明代码对规格的适应范围，不是比赛预测。报告和复现方法见 [docs/track-spec-simulation-20261108.md](docs/track-spec-simulation-20261108.md)。
 
 **最近几轮改了什么**
-- 第101轮：光区直道一口气跑完：滑行按"整车停进区"瞄准，车还在滚动时短推补足（原先停三次再爬）。
-- 第102轮：灯区入口的追踪线被挡（龙门架两腿相距 .96 m）时，沿车道轴找最近的够宽空隙，挪过去的路径通才走，否则照旧停车等待。
-- 第103轮：起步直道"停车距离够到前方挡板、还没看到第一个桶"只断这一帧的电，下一帧重判（原先直接结束整轮）。
-- 第104轮：
-  - 桥补雷达 0° 接缝的漏点。按包分圈时，每帧在原始 0–12° 会漏掉 1–3°，偶尔整包约 12°，车头右前方因此常判"前方看不全"而断电等待。现在每帧覆盖都是 360°。
-  - 起步直道新给 1560 前，先确认这次加油在电调延迟内带来的增速不超过许可速度。
-- 第105轮：
-  - 终点补进：车头进区、车尾在区外、离板不到 .50 m 时，补 2 帧 1560（行程上限 .27 m，最多 3 次）。规则要求停车时四轮都在区内，否则加 5 s。
-  - 新增本机一条命令启动一轮（见下节）。
+- y64（171）：灯前融合雷达与 IMU 的观测差，严格判断车尾过光电线；修正终点同板聚合，静止确认通过。
+- y65–y66（172–173）：第二桶追踪由第一桶带出预测点，实车全程跟住；地面模型重新标定，室内不做补偿。
+- y67（174）：斑马线放行后的远处暗区按位置放行，不再无故暂停。
+- y68–y71（175–178）：加回斑马线余量；灯前误收油可撤销；灯前测速换卡尔曼滤波；去掉斑马线补进和放行后的误暂停。
+- y72–y73（179–180）：第二桶看见后不再继续空档；新增地面阻力测试 `scripts/t-ground-drag.py`。这两版都没有单独上车。
+- y74（181）：针对规则范围赛道的修正。
+  - 宽起步道不再拒绝起步。
+  - 离端墙太近时，算到再不打满就来不及才打满方向，两个桶都这样处理。
+  - 桶被隔板挡住、看见时已在身旁的，立刻快打方向并以 1.2 m/s 过桶。
+  - 第二桶靠起步隔板一侧的通道窄时降低入弯速度。
+  - 灯道入口靠近桶时，先对准隔板端头旁的入口点，滑行通过。
+  - 离预测的门架 1.5 m 还没确认到门腿，就不再按预测刹车。
 
 **已知问题与下一步**
-- 起步直道：远处测距偶尔跳变，会多断一帧电。还没看到第一个桶时，离尽头约 4.4 m 起限速，是为了没看到桶也能停在板前 1.6 m（设计如此）。
-- 雷达整包缺失（原始 0–11°）第106轮第二次跑时在起步直道出现一次（第43帧，补了 11 格），覆盖仍是 360°，没有触发等待。
-- 过渡段：第98、99、101、105轮的约 .4 s 暂停（第二个桶站在轴线上被当成前方挡板）第106轮已改，实车不再暂停。
-- 第一个桶：第104–106-8轮车身到桶最近 .051–.095 m（底座更宽，轮子会碰到），演示时撞了一次。原因是实车第一圈转得比标定紧 1.2–1.4 倍、跑进计划圆里；第107轮把第一圈左转舵量在输出时除以 1.2（已推送，未上车）。
-- **人行横道和红绿灯还没接入**：由队友的 YOLO 模型负责，模型还没训练好。现在路线纯雷达，开过斑马线、穿过龙门架都不停。按规则每跑一次约 +80 s：斑马线不停 +30 s，红绿灯不停 +50 s。模型到了以后：
-  - 给 `route-engine race` 接摄像头；
-  - 灯前停车位置用雷达看龙门架两腿来定，模型给出绿灯再走；
-  - 斑马线前停够 3 s 再走。
-  - 详见记录键 `crosswalk_light_yolo_pending_20261023`。
-- 终点补进第106轮两次都用上：2 帧 1560 从静止前进约 .06–.07 m。
-- 第107轮分析（10-24，没改代码，记录键 `turn107_analysis_20261024`）：
-  - 两圈绕桶每轮差约 .4 s 来自摆放：绕桶速度几轮都约 1.3 m/s，第105轮第一个桶离起点近约 1 m。
-  - 光区直道受保护减速度 .45 限制（设计要求减速度 .35 的弱车也不碰板），实车滑行 .54–.60；放宽到 .50 约快 .15 s，但弱车会擦板。
-  - 起步直道受停车限速带限制，改电调模型后仿真没有变快。
-  - 每项剩余提速约 .1–.2 s，都要放松某条保护；红绿灯不停车 +50 s 才是大头。
-  - 用户 10-24：10-25 要演示，先不改；演示后做雷达红绿灯停车（看龙门架两腿定位，四轮停进灯前区域），绿灯由队友的 YOLO 模型判断。
+- y74 还没上车。用 y60–y71 共 11 轮实车保存帧回算，端墙转向和第二桶降速在练习场不会触发，有门腿记录的 10 轮都在 2.7 m 以外就确认了门腿。练习场是否完全不变要实跑确认，逐段对比 y67 和 y71。
+- 第二桶切点车速：y71 为 1.48 m/s，y67 为 1.77 m/s。y72 的修复还没上车。
+- 第一桶出弯过转：各轮车头最大 200–222°。y68 只到约 200°，到第二桶切点快约 0.4 s。
+- 规则范围仿真里还没解决的：
+  - 第二桶离灯道隔板起点不足 0.3 m 时，完赛只有约 18%。
+  - 6×4、5×4 m 的规则图 5 比例基本跑不完。
+  - 车道 0.9 m 时，到达灯前停车的约一半车尾在光电线外（+20 s）。模型停得偏远，实车没有这个偏差，所以灯前目标距离没动。
+  - 宽灯道（1.2 m 以上）会把光电立柱当成门架，要先确认比赛的横梁长度，暂未改。
+- 比赛前要用 `scripts/t-ground-drag.py` 测一次地面阻力，这个脚本还没在车上跑过。室外地面和室外相机都没有实测。
 
 ## 跑一轮：改代码 → 验证 → 打包 → 部署 → 启动
 
-`work/`（构建/部署脚本、部署包、取回的证据）只在本机，不进 Git。
+`work/`（构建/部署脚本、部署包、取回的证据）只在本机，不进 Git。下面的命令在工程根目录执行，先设 `W=work/vehicle-dynamic-deploy-20261008`。
 
-1. **改代码**：路线的 Python 参考实现 `web/vehicle-console/maneuver_sequence.py` 和车上引擎 `route-engine/src/` 两边同步改。桥在 `crates/runner/`。
+1. **改代码**：比赛逻辑只写在 `route-engine/src/` 的 Rust 里，用 `race_inputs` 或 `race_program` 隔开；Python 参考实现不动。桥在 `crates/runner/`。
 2. **验证**：
-   - 控制台全量测试：`cd web/vehicle-console && python3 -m unittest discover -s tests`，必须 0 失败。
-   - 引擎：`cd route-engine && cargo test && cargo build --release`。
-   - Python/Rust 逐位对比：`python3 scripts/route-engine-parity-sweep.py OUT all`，不要和全量测试同时跑。
-   - 改了 `crates/` 时，还要跑工作区的 `cargo fmt --all --check`、`cargo test --workspace --locked`、`cargo clippy --workspace --all-targets -- -D warnings`。
-3. **记录并推送**：机器记录加新键，更新 `agent.md` 顶部和本文件第一行，提交并推送 `main`。
-4. **打包**：`python3 work/vehicle-dynamic-deploy-20261008/build-race.py claude-turn<上一轮> claude-turn<N> <N> <记录键>`。改了 `crates/` 时加 `--rebuild-bridge` 重编桥。打包会交叉编译引擎（和桥）、检查 ELF、写 19 个文件的 SHA256SUMS，并生成本轮的车上助手 `trial<N>.py`。
-5. **部署**：`python3 work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn<N> <N>`，有备份和回滚。部署前后都用 `read-fresh-engine.py` + `validate-fresh-engine.py` 核对：6 个新鲜的锁定中位样本，17 个安装哈希和部署包一致。
-6. **启动**：车摆到起点后，在 **Mac 终端**（不是 SSH 到车上的终端）输入：
+   - `cd route-engine && cargo build --release`（Python 的对比测试要用这个程序）。
+   - `cd web/vehicle-console/tests && python3 -m unittest discover -s . -p 'test_*.py'`，现在 968 项全过。
+   - `cd route-engine && cargo test --release`（17 项）和 `cargo clippy --release`（32 条警告，不能增加）。
+   - 只有改了 `crates/` 才需要 `cargo test -p robot-core`。
+3. **记录并提交**：机器记录加新键，更新 `agent.md` 顶部和本文件第一行，然后提交。构建要求工作区和 HEAD 一致。
+4. **构建**（基线用车上实际的版本）：
+   - `python3 $W/build-race.py claude-turn<车上版本> claude-turn<N> <N> <记录键>`，改了 `crates/` 时加 `--rebuild-bridge`。
+   - `python3 $W/build-vision.py claude-turn<N> y<K> race4_vehicle_handoff_20261024.zip --light-stop`
+5. **部署**：`python3 $W/deploy-matched.py claude-turn<N> <N>`，再 `python3 $W/deploy-vision.py y<K>`。
+6. **启动**：确认车在起点、光电和红绿灯已复位后，在 Mac 终端运行：
 
 ```bash
-python3 /Users/yuhaojin/Documents/XT-STCAR/scripts/start-round.py 106
+python3 scripts/start-round.py y<K>
 ```
 
-已经 SSH 在车上的终端里，直接跑本轮的车上助手（可以重复跑、开跑前自查；证据留在车上，之后由 Mac 取回）：
+输出不要接管道，否则脚本会在取回证据前被杀掉。一轮约 70 s，其中车跑 30–40 s，跑完自动锁定。
 
-```bash
-python3 /home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625/trial106.py
-```
+`scripts/start-round.py` 的流程：
+- 先核对车上状态和这一轮的部署，不符就不启动。
+- 然后跑这一轮的车上助手：停掉控制台，跑 `route-engine race`，跑完必定恢复控制台。
+- 最后取回证据目录并打印小结：总用时、离终点板距离、各类识别的帧数。
+- 不限次数：每次在车上建新的证据目录，再跑时目录名加 `-2`、`-3`，旧目录不覆盖；同时只能跑一个。
+- SSH 优先用 `work/vehicle-test-ssh.sock`。
 
-两条只选一条。
+证据在 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-<日期>-y<K>[-n]/`。助手的文件在顶层，程序的文件在 `run/`（`summary.json`、`feedback.jsonl`、`imu.jsonl`、`light.jsonl`、`cli-result.json`），相机保存的画面在 `vision/`。分析工具有 `scripts/trial-timeline.py`、`trial-map.py`、`route-replay.py`。
 
-`scripts/start-round.py N` 的流程：
-- 先核对车上状态和第 N 轮部署（锁定、中位、就绪、17 个哈希），不符就不启动。
-- 然后跑本轮的 `trial<N>.py`。车上助手会再核对一遍哈希和起点、停掉控制台、跑 `route-engine race`、跑完必定恢复控制台。
-- 最后取回证据目录，逐个文件校验 sha256，读跑后车况，打印结果小结。
-- 不限次数（10-24 起）：每次跑在车上建新的证据目录（`left-cone-trial-<日期>-<N>`，再跑是 `-<N>-2`、`-<N>-3`…，旧目录不覆盖），同时只能跑一个；本机文件名带开跑时间。
-- SSH 优先用 `work/vehicle-test-ssh.sock`，否则用普通 ssh（可能在终端里要密码）。
+## 上车的硬保护
 
-证据在 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-<日期>-<N>[-k]/`：助手的文件在顶层，程序的文件在 `run/`（`summary.json`、`feedback.jsonl`、`cli-result.json`）。分析工具有 `scripts/trial-timeline.py`、`trial-map.py`、`route-replay.py`。
+只保留下面这些。不再加新的限速、停车门或阶段时钟，除非实车数据证明需要。
 
-## 上车的硬保护（各轮都不改）
-
-- **桥**（`crates/robot-core/src/teleop.rs`）：300 ms 命令租约、250 ms 过期请求、150 ms 控制间隔；电机 1500–1620（`--allow-reverse` 时下限 1350），舵机 1200–1800；任何违规都锁定在中位。
+- **桥**（`crates/robot-core/src/teleop.rs`）：300 ms 命令租约、250 ms 过期请求、150 ms 控制间隔，只从 1500/1500 解锁；电机 1000–2000，舵机 1200–1800；任何违规都锁定在中位。
 - **控制程序**：
   - 20 ms 一拍，控制间隔超过 .12 s 就停；50 ms 一次健康检查。
   - 传感器过期即停；命令有 arm/锁定和 ACK 序列。
-  - 输出检查：只有起步直道允许 1600。
+  - 输出检查：各段只允许自己的电机档位，1300 只用于灯前和终点的刹车。
   - 累计行驶 40 s 上限，服务另有总期限。
 - **8 cm 车身门**：已知回波离车身矩形不到 5 cm 净距加 3 cm 测距余量就停（左转内侧另有放宽）。目标桶允许贴近，碰板必停。
-- **助手**：每个证据目录只用一次；跑完必定恢复控制台，并要求 6 个健康的锁定样本。
+- **助手**：每次跑用新的证据目录；跑完必定恢复控制台，并要求 6 个健康的锁定样本。
 - **路线等待和暂停**：不设时间上限，只由累计行驶预算结束。
 
-## Rust化状态（2026-10-23）
+## Rust化状态（2026-11-09）
 
 | 部分 | 做什么 | 状态 |
 | --- | --- | --- |
-| `crates/runner` vehicle-bridge | 底盘串口、雷达整圈（第104轮起补 0° 接缝）、原生扫描几何（通道/墙候选、左转开口、前方边界） | 第104轮重编上车 |
-| `route-engine/`（`route-engine race`） | 整套路线决策（ManeuverSequence+TurnMotion、目标跟踪、罗盘、车道/单侧墙、绕桶规划、灯区、终点）、车身间隙检查、滑行静止、控制台监管的逐行移植，以及独立程序本身 | 第98轮起每轮上车 |
-| `crates/vision` + vision-shadow | 车上 YOLO（ONNX Runtime），只做感知；路线不用 | 已部署 |
-| `tools/scan-geometry` | Mac/仿真用的桥几何（不部署） | 已有 |
+| `crates/runner` vehicle-bridge | 底盘串口、雷达整圈（第104轮起补 0° 接缝）、原生扫描几何（通道/墙候选、左转开口、前方边界） | 每轮随部署包上车 |
+| `route-engine/`（`route-engine race`） | 整套路线决策、车身间隙检查、滑行静止、监管，以及独立程序本身 | 第98轮起每轮上车 |
+| `scripts/vision-log.py`（race4 YOLO） | 相机识别斑马线和红绿灯，把结果写到状态文件，由 `route-engine race --light-state` 读取；只读，不碰底盘和雷达 | y2 起比赛使用 |
+| `crates/vision` + vision-shadow | 车上 YOLO（ONNX Runtime），只做感知；控制台使用，比赛路径不用 | 已部署 |
+| `tools/scan-geometry` | Mac/仿真用的桥几何（不部署）；`examples/surface_sim` 是比赛程序的离线闭环仿真 | 已有 |
 
-- Python 的 `maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`、`autonomy_live.py`、`server.py` 保留为参考实现和后备，Rust 与它们逐位一致。
-- 当前对比 185 个场景（仿真加实车录像）184 个一致，唯一不一致的是第75轮回放（那轮车没开动）。
+- 比赛专用的逻辑从 y25 起只写在 Rust。Python 的 `maneuver_sequence.py`、`turn_motion.py`、`compact_target.py`、`autonomy_live.py`、`server.py` 保留为参考实现和后备，停在 y24。非比赛分支由 `tests/test_route_96_engine.py` 继续逐位对比。
 - 监管、间隙检查和滑行另有专门的对比工具（`route-engine-supervisor-parity.py`、`-clearance-parity.py`、`-coast-parity.py`）。
-- 测试数量：控制台 Python 887 个，Rust 工作区 658 个（另有 3 个按设计忽略），引擎 3 个单元测试加上面的逐位对比。
+- 测试数量：控制台 Python 968 个，`route-engine` 单元测试 17 个，`robot-core` 258 个。
 - 不改成 Rust 的部分：
   - 控制台的 HTTP、网页、摄像头采集和录制（比赛时不启动控制台）；
   - `autonomy-control.py`、`stop_goal.py`（路线不用）；
@@ -122,7 +128,7 @@ python3 /home/bianbu/xt-stcar-console/stage-claude-turn106-20261023-213625/trial
 ## 代码结构：模块在哪、负责什么
 
 第98轮起，上车跑路线的是两个 Rust 程序：`crates/runner` 的车上桥 `vehicle-bridge`（底盘串口、雷达和原生扫描几何），以及 `route-engine/` 的独立程序 `route-engine race`（路线决策和全部控制保护）。
-Python 控制台 `web/vehicle-console/` 用于遥控、采图和录像，同时是路线控制器的参考实现；Rust 引擎与它逐位一致。比赛时不启动控制台。
+Python 控制台 `web/vehicle-console/` 用于遥控、采图和录像，同时是路线控制器的参考实现；比赛专用逻辑只在 Rust，其余分支与它逐位一致。比赛时不启动控制台。
 
 ```text
 XT-STCAR/
@@ -159,6 +165,7 @@ XT-STCAR/
 1. 车上助手 `scripts/race-trial.py`（每轮由 `work/…/build-race.py` 写死参数，部署后是 `trial<轮>.py`）核对已装引擎和桥的哈希、控制台的新鲜锁定中位和起点检查，然后停掉控制台。
 2. `route-engine race` 在自己的进程组里启动 `vehicle-bridge control`（底盘串口）和 `vehicle-bridge lidar`（雷达整圈和原生几何）。
 3. 控制线程每 20ms 一拍，收到新扫描立即决策（距上一拍结束至少 5ms）：监管（起步准入、质量等待/滑行、停车、输出检查、ACK 序列、转向标定）→ ManeuverSequence 路线决策 → 底盘命令。
+   相机结果由只读的 `scripts/vision-log.py` 写到状态文件，`--light-state` 读取；IMU 由 `race_imu.rs` 记录并提供校准后的偏航角速度。
 4. 证据写到 `left-cone-trial-<日期>-<轮>/`：助手的文件在顶层，程序的文件在 `run/`；助手结束时必定恢复控制台。
 
 **控制台路径（遥控、采图、对比）**：浏览器 ↔ `server.py`（HTTP、两个桥、摄像头、`vision_shadow.py`）。路线会话由 `route_engine.py` 为每个会话起一个 `route-engine` 子进程，按逐行 JSON 调用；Python 的 `maneuver_sequence.py` 等保留为后备和对比基准。
@@ -174,6 +181,17 @@ XT-STCAR/
 | [`route-engine/src/maneuver_wait.rs`](route-engine/src/maneuver_wait.rs) | 路线等待和暂停：首目标质量等待、重绑、中位暂停及恢复规则 |
 | [`route-engine/src/maneuver_path.rs`](route-engine/src/maneuver_path.rs) | 转向变化率、近距避让、预测弧线的路径检查 |
 | [`route-engine/src/maneuver_post.rs`](route-engine/src/maneuver_post.rs) | 首过之后：出口通道、第二支撑（通道证明、恢复、绕圈）、光区转向和光区直道到终点 |
+| [`route-engine/src/maneuver_crosswalk.rs`](route-engine/src/maneuver_crosswalk.rs) | 斑马线：相机测近边，起步直道上收油、停车和等待 |
+| [`route-engine/src/maneuver_light.rs`](route-engine/src/maneuver_light.rs) | 红绿灯：门腿定灯线，见红才停，绿灯放行 |
+| [`route-engine/src/maneuver_finish.rs`](route-engine/src/maneuver_finish.rs) | 终点：放行起步、预测滑行和单次刹车 |
+| [`route-engine/src/race_start_lane.rs`](route-engine/src/race_start_lane.rs) | y74：原生检测器认不出宽车道时，用避开端墙的扇区判断能否起步 |
+| [`route-engine/src/race_crosswalk.rs`](route-engine/src/race_crosswalk.rs)、[`race_crosswalk_stop.rs`](route-engine/src/race_crosswalk_stop.rs) | 斑马线放行到第一桶的驱动；起点静止时推算斑马线停车点 |
+| [`route-engine/src/race_first_cone.rs`](route-engine/src/race_first_cone.rs) | y74：端墙太近时的最晚打满方向（两个桶）、第一桶被隔板挡住时的处理 |
+| [`route-engine/src/race_transfer.rs`](route-engine/src/race_transfer.rs) | 第一桶出弯到第二桶切点的纵向控制 |
+| [`route-engine/src/race_light.rs`](route-engine/src/race_light.rs)、[`race_light_brake.rs`](route-engine/src/race_light_brake.rs)、[`race_speed_kalman.rs`](route-engine/src/race_speed_kalman.rs) | 灯前：首桶记录板端、门架身份和测速；单次连续制动；车速卡尔曼滤波 |
+| [`route-engine/src/race_surface.rs`](route-engine/src/race_surface.rs)、[`race_surface_speed.rs`](route-engine/src/race_surface_speed.rs) | 地面负载估计和它用的车速（室内不做补偿） |
+| [`route-engine/src/race_imu.rs`](route-engine/src/race_imu.rs)、[`motion_sensors.rs`](route-engine/src/motion_sensors.rs) | IMU 记录和偏航角速度；各段共用的只读测量 |
+| [`route-engine/src/t_drag.rs`](route-engine/src/t_drag.rs) | `route-engine tdrag`：比赛前测地面阻力的一次直线推进和滑行 |
 | [`route-engine/src/clearance.rs`](route-engine/src/clearance.rs) | 第97轮：控制台每拍的车身间隙检查 probe_clearance 及 ClearanceReuse |
 | [`route-engine/src/coast.rs`](route-engine/src/coast.rs) | 滑行静止判断 CoastMotion 及其队列语义；独立程序里在自己的线程上算 |
 | [`route-engine/src/compact_target.rs`](route-engine/src/compact_target.rs) | compact_target.py 的移植：雷达小目标（桶）的提取、关联和角色 |
@@ -186,7 +204,7 @@ XT-STCAR/
 | [`crates/runner/src/bin/vision-shadow.rs`](crates/runner/src/bin/vision-shadow.rs) | 有界 JPEG 进程通信 → 常驻感知 → JSON；不接触设备或运动输出 |
 | [`web/vehicle-console/server.py`](web/vehicle-console/server.py) | 车上控制台服务：HTTP 和网页、两个桥进程、遥控、路线会话的监管（独立程序的参考实现）；Rust 独占底盘串口 |
 | [`web/vehicle-console/route_engine.py`](web/vehicle-console/route_engine.py) | 控制台调用 Rust 引擎的适配层：子进程、逐行 JSON、应答超时 |
-| [`web/vehicle-console/maneuver_sequence.py`](web/vehicle-console/maneuver_sequence.py)、[`turn_motion.py`](web/vehicle-console/turn_motion.py) | 路线控制器的 Python 参考实现，引擎与它逐位一致；改路线时两边同步修改 |
+| [`web/vehicle-console/maneuver_sequence.py`](web/vehicle-console/maneuver_sequence.py)、[`turn_motion.py`](web/vehicle-console/turn_motion.py) | 路线控制器的 Python 参考实现，停在 y24；比赛逻辑只改 Rust |
 | [`web/vehicle-console/compact_target.py`](web/vehicle-console/compact_target.py) | 雷达小目标的形状/关联门限（实验值，不是实测桶尺寸） |
 | [`web/vehicle-console/autonomy_live.py`](web/vehicle-console/autonomy_live.py) | 车身间隙检查 probe_clearance、通道墙与转向、QualityLatch/QualityRecovery |
 | [`web/vehicle-console/coast_motion.py`](web/vehicle-console/coast_motion.py) | 滑行静止证据：相邻扫描的低运动配准，不用轮速 |
@@ -197,7 +215,9 @@ XT-STCAR/
 | [`web/vehicle-console/tests/`](web/vehicle-console/tests) | 控制台、路线、引擎和独立程序的单元测试（全量须 0 失败才能上车）；`fixtures/` 是实车扫描片段 |
 | [`scripts/race-trial.py`](scripts/race-trial.py) | 车上助手：先核对哈希，再查新鲜锁定中位和起点检查，停控制台跑一次 race，必定恢复控制台并要求 6 个健康锁定样本；打包后带任何参数都拒绝；可重复跑，每次新的证据目录、同时只跑一个 |
 | [`scripts/vision-log.py`](scripts/vision-log.py) | y1：车上只读识别记录，相机加 race4 YOLO（斑马线/蓝桶/红灯/绿灯），逐帧记检出和耗时；不碰控制和雷达设备 |
-| [`scripts/start-round.py`](scripts/start-round.py) | 第105轮：本机一条命令启动已部署的第 N 轮：核对车上状态与部署、跑 `trial<N>.py`、取回并逐个校验证据、打印小结；可重复跑 |
+| [`scripts/start-round.py`](scripts/start-round.py) | 本机一条命令启动已部署的一轮（`start-round.py y<K>`）：核对车上状态与部署、跑车上助手、取回证据、打印小结；可重复跑 |
+| [`scripts/t-ground-drag.py`](scripts/t-ground-drag.py) | 比赛前在直道上测地面阻力（t1、t2……），`--apply` 把结果写到车上 |
+| [`scripts/track-spec-sim.py`](scripts/track-spec-sim.py)、[`tools/scan-geometry/examples/surface_sim/`](tools/scan-geometry/examples/surface_sim) | 按比赛规则抽样不同规格的赛道，用真实比赛程序离线闭环仿真，统计完赛率和罚时 |
 | [`scripts/course-sim.py`](scripts/course-sim.py)、[`route-sim.py`](scripts/route-sim.py) | 闭环赛道仿真：真实控制台服务（演示模式）加车辆模型（名义/实测）；不连车 |
 | [`scripts/route-engine-parity.py`](scripts/route-engine-parity.py)、`route-engine-parity-sweep.py`、`route-engine-supervisor-parity.py`、`route-engine-clearance-parity.py`、`route-engine-coast-parity.py` | Python 与 Rust 逐位对比：路线、监管、间隙检查、滑行；sweep 在仿真和录像上并行跑（不要和全量测试同时跑） |
 | [`scripts/sim-vehicle-bridge.py`](scripts/sim-vehicle-bridge.py)、[`fake-vehicle-bridge.py`](scripts/fake-vehicle-bridge.py) | Mac 上测 `route-engine race` 用的闭环仿真桥和假桥 |
@@ -930,9 +950,58 @@ eMMC 5.1 策略以正常运行/比赛为先：计算与队列在内存，默认�
 
 现场视觉尺寸参照：[2026-09-23人行横道](docs/现场人行横道尺寸.md)：单条297×105毫米、边缘净间隙108毫米，供画面对照；尚未完成图像识别或投影标定验收。
 
-## 历史记录（2026-09-16 至 10-17）
+## 历史记录（2026-09-16 至 10-25）
 
 以下按原样保留当时写在本文件开头的日期条目和接车说明；当前状态以上文和 [agent.md](agent.md) 为准。
+
+### 2026-10-25 的现状（第 98–107 轮，原文）
+
+**路线**：起步直道 → 逆时针绕第一个桶 → 过渡 → 顺时针绕第二个桶 → 灯区入口（红绿灯龙门架）→ 光区直道 → 停进终点区。不针对某一块赛道调参；起步、绕桶、灯区和终点都按当场雷达几何决定。
+
+**车上版本**：第106轮（源提交 c0843c4，引擎 `7f4e2306…`，桥 `fe5c0056…`）。
+
+| 轮 | 日期 | 结果 | 起步→停车 | 说明 |
+| --- | --- | --- | --- | --- |
+| 98 | 10-21 | 跑完全程，停车后静止确认未通过 | 17.4 s | 第一次用独立程序 `route-engine race`；停在离终点板 .715 m（只有车头进区） |
+| 99 | 10-21 | 同上 | 18.3 s | 离板 .701 m |
+| 100 | 10-21 | 停进终点区 | 20.1 s | 离板 .743 m；光区直道停了三次再走 |
+| 101 | 10-22 | 灯区入口车身门停车 | — | 追踪线擦到龙门架外侧腿 |
+| 102 | 10-22 | 起步直道误判"前方有板"滑停 | — | 远处测距跳变被当成 1.77 m/s 接近速度 |
+| 103 | 10-23 | 整条路线一次跑完，停进终点区 | 19.7 s | 绕第一个桶和过桶后各有一次约 .5 s 的雷达质量等待；离板 .404 m |
+| 104 | 10-23 | 整条路线一次跑完，停进终点区 | 18.7 s | 全程没有任何等待或暂停；离板 .459 m，车尾在区外约 6 cm |
+| 105 | 10-23 | 整条路线一次跑完，整车停进终点区 | 18.6 s | 离板 .363 m（滑行直接停在区里，补进没用上）；过渡段等第二个桶暂停约 .4 s |
+| 106 | 10-23 | 整条路线一次跑完，整车停进终点区 | 18.8 s | 过渡段不再暂停；补进第一次用上（离板 .46 → .394 m）；车头过线 17.2 s（第105轮 16.4 s，两圈绕桶随摆放各慢约 .4 s） |
+| 106-2 | 10-24 | 同一程序再跑一次，整车停进终点区 | 18.3 s | 车头过线 16.8 s；补进一次（离板 .397 m）；无等待；起步直道第43帧整包缺失 11 格，已补上 |
+| 106-3…8 | 10-24/25 | 演示期间又跑6次，5次整车停进终点区 | 18.5–20.9 s | 106-5（第一次演示）撞了第一个桶；106-7 约 13 s 时断电中断 |
+
+**最近几轮改了什么**
+- 第101轮：光区直道一口气跑完：滑行按"整车停进区"瞄准，车还在滚动时短推补足（原先停三次再爬）。
+- 第102轮：灯区入口的追踪线被挡（龙门架两腿相距 .96 m）时，沿车道轴找最近的够宽空隙，挪过去的路径通才走，否则照旧停车等待。
+- 第103轮：起步直道"停车距离够到前方挡板、还没看到第一个桶"只断这一帧的电，下一帧重判（原先直接结束整轮）。
+- 第104轮：
+  - 桥补雷达 0° 接缝的漏点。按包分圈时，每帧在原始 0–12° 会漏掉 1–3°，偶尔整包约 12°，车头右前方因此常判"前方看不全"而断电等待。现在每帧覆盖都是 360°。
+  - 起步直道新给 1560 前，先确认这次加油在电调延迟内带来的增速不超过许可速度。
+- 第105轮：
+  - 终点补进：车头进区、车尾在区外、离板不到 .50 m 时，补 2 帧 1560（行程上限 .27 m，最多 3 次）。规则要求停车时四轮都在区内，否则加 5 s。
+  - 新增本机一条命令启动一轮（见下节）。
+
+**已知问题与下一步**
+- 起步直道：远处测距偶尔跳变，会多断一帧电。还没看到第一个桶时，离尽头约 4.4 m 起限速，是为了没看到桶也能停在板前 1.6 m（设计如此）。
+- 雷达整包缺失（原始 0–11°）第106轮第二次跑时在起步直道出现一次（第43帧，补了 11 格），覆盖仍是 360°，没有触发等待。
+- 过渡段：第98、99、101、105轮的约 .4 s 暂停（第二个桶站在轴线上被当成前方挡板）第106轮已改，实车不再暂停。
+- 第一个桶：第104–106-8轮车身到桶最近 .051–.095 m（底座更宽，轮子会碰到），演示时撞了一次。原因是实车第一圈转得比标定紧 1.2–1.4 倍、跑进计划圆里；第107轮把第一圈左转舵量在输出时除以 1.2（已推送，未上车）。
+- **人行横道和红绿灯还没接入**：由队友的 YOLO 模型负责，模型还没训练好。现在路线纯雷达，开过斑马线、穿过龙门架都不停。按规则每跑一次约 +80 s：斑马线不停 +30 s，红绿灯不停 +50 s。模型到了以后：
+  - 给 `route-engine race` 接摄像头；
+  - 灯前停车位置用雷达看龙门架两腿来定，模型给出绿灯再走；
+  - 斑马线前停够 3 s 再走。
+  - 详见记录键 `crosswalk_light_yolo_pending_20261023`。
+- 终点补进第106轮两次都用上：2 帧 1560 从静止前进约 .06–.07 m。
+- 第107轮分析（10-24，没改代码，记录键 `turn107_analysis_20261024`）：
+  - 两圈绕桶每轮差约 .4 s 来自摆放：绕桶速度几轮都约 1.3 m/s，第105轮第一个桶离起点近约 1 m。
+  - 光区直道受保护减速度 .45 限制（设计要求减速度 .35 的弱车也不碰板），实车滑行 .54–.60；放宽到 .50 约快 .15 s，但弱车会擦板。
+  - 起步直道受停车限速带限制，改电调模型后仿真没有变快。
+  - 每项剩余提速约 .1–.2 s，都要放松某条保护；红绿灯不停车 +50 s 才是大头。
+  - 用户 10-24：10-25 要演示，先不改；演示后做雷达红绿灯停车（看龙门架两腿定位，四轮停进灯前区域），绿灯由队友的 YOLO 模型判断。
 
 ### 2026-10-21 的 Rust 化计划与进度（原文）
 
