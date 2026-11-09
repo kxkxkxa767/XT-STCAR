@@ -28826,8 +28826,8 @@
       "你来改吧",
       "5先不要改"
     ],
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "change": [
       "Item 1, wide start lane refused: route-engine/src/race_start_lane.rs. When the native detector reports no lane (the end wall behind the car takes over the 45-135 degree side sectors), the start is judged from side-wall fits 40 degrees ahead to 10 degrees behind abeam. New Supervisor.race_program, set by the race program before the start check, since race_inputs does not exist yet.",
       "Items 2 and 4, an end wall close past a cone: route-engine/src/race_first_cone.rs wall_turn_command. Full lock when the wall leaves no room for a later arc (lane axis, cone's own bins excluded, second nearest return), stepping 120 PWM per 0.1 s, no push above 1.1 m/s, no first-loop output gain. Off the first pass: left off the lane axis; right off the reversed axis for cone two.",
@@ -28960,7 +28960,147 @@
       },
       "not_run_on_the_car": true
     },
-    "remaining_validation": "Deploy y74 and confirm the practice field is unchanged on the car: go, cone one, cone two, light stop, finish against y67 and y71.",
-    "open_question_for_user": "The gantry crossbar length in light lanes wider than 0.9 m (item 5)."
+    "remaining_validation": "Rule-range logic on a real track of another layout; item 5 (sensor posts taken for the gantry in wide light lanes) still needs the real crossbar length; scripts/t-ground-drag.py has not run on the car.",
+    "open_question_for_user": "The gantry crossbar length in light lanes wider than 0.9 m (item 5).",
+    "car_run_y74": {
+      "deployed": "2026-11-09 18:03, deploy-matched claude-turn181 181 + deploy-vision y74 (from y71 / 178); run 18:04",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261109-y74",
+      "evidence_files_ok": 88,
+      "result": "route_finish_zone_stop, .242 m from the board, whole car in the finish zone, 0 creeps, no quality waits; locked at neutral",
+      "effective_s": 21.29,
+      "move_to_stop_s": 31.181,
+      "start_to_stop_s": 31.3,
+      "light_wait_s": 9.891,
+      "timing_basis": "stored-frame program clock as in earlier rounds, not an official time; penalties not added",
+      "segments_s_y67_y71_y74": {
+        "move_to_crosswalk_stop": [
+          3.394,
+          3.195,
+          3.199
+        ],
+        "crosswalk_wait": [
+          2.999,
+          3.194,
+          3.196
+        ],
+        "crosswalk_go_to_first_pass": [
+          3.992,
+          4.197,
+          4.3
+        ],
+        "first_pass_to_tangent": [
+          2.598,
+          2.697,
+          2.399
+        ],
+        "tangent_to_second_pass": [
+          0.8,
+          1.198,
+          1.298
+        ],
+        "second_pass_to_light_stop": [
+          3.493,
+          3.097,
+          2.999
+        ],
+        "light_go_to_finish_stop": [
+          3.697,
+          3.594,
+          3.899
+        ],
+        "total_less_light": [
+          20.973,
+          21.173,
+          21.29
+        ]
+      },
+      "tangent_speed_mps_y67_y71_y74": [
+        1.773,
+        1.484,
+        1.658
+      ],
+      "segment_notes": [
+        "Single segments carry about .1 s of stored-frame quantization. From the events' own times the light go to finish stop is 3.697, 3.694 and 3.800 s (y67, y71, y74).",
+        "Tangent to red stop is nearly constant: y67 4.293, y70 4.293, y71 4.295, y74 4.297 s; the second-pass event only moves the boundary between its two segments.",
+        "First pass to red stop: y67 6.891, y71 6.992, y74 6.696 s.",
+        "Against y67 (+.317 s): crosswalk wait +.197, go to first pass +.308 (y67 stopped .07 m from the stripes, y74 .50 m), finish +.202; move to crosswalk stop -.195, first pass to red stop -.195.",
+        "work/y36/segments.py took the handover frame (seq 134, reason open_second_loop_plan_next_tick, cone one's old plan with tangent 0) as the tangent and printed .997 / 2.700 s, 1.742 m/s. It now needs reason open_second_loop; y67 and y71 are unchanged and the table uses the corrected definition."
+      ],
+      "crosswalk": {
+        "stop_gap_m": 0.503,
+        "program_wait_s": 3.192,
+        "basis": "stopped_before_the_crosswalk"
+      },
+      "cone_one": {
+        "entry_mps_imu": 1.71,
+        "plan_radius_m": 0.9,
+        "heading_peak_deg": 207.0,
+        "nearest_body_gap_m": 0.052,
+        "nearest_at": "seq 126, bin 250, left flank, cone one's own support bins, stored frames; lidar range allowance .03 m",
+        "same_measure_y64_to_y71_m": {
+          "y64": 0.124,
+          "y66": 0.183,
+          "y67": 0.136,
+          "y68": 0.149,
+          "y70": 0.092,
+          "y71": 0.206
+        },
+        "target_contact_tolerated_count": 20,
+        "note": "The user reported no contact and no near-obstacle stop occurred. y74 did not change this loop on the practice field (radius .9 as in y71)."
+      },
+      "transfer_y72_first_on_car": "No second-support wait in the stored frames. Motor ack 1550 from seq 127 to 169 (one 1600 ack at seq 129). Exit to exit 3.70 s (y71 3.90, y67 3.40).",
+      "cone_two": {
+        "tangent_seq": 148,
+        "tangent_heading_deg": 166.0,
+        "plan": {
+          "radius_m": 1.1,
+          "offset_axis_m": -0.25,
+          "offset_side_m": 0.55
+        },
+        "board_side_free_m": [
+          0.95,
+          1.0
+        ],
+        "tight_entry_line_m": 0.85
+      },
+      "rule_range_logic_on_practice_field": {
+        "wall_turn_active_frames": 0,
+        "late_sight_frames": 0,
+        "light_entry": "Motor 1550 until the normal light coast at seq 170, so no entry-gate coast acted; entry_gate itself is not in the feedback.",
+        "meaning": "The run shows the practice field did not regress. The new rule-range logic has model results only."
+      },
+      "light": {
+        "stop_front_gap_m": 0.468,
+        "rear_past_beam_m": 0.124,
+        "stop_basis": "stopped_after_camera_red",
+        "release": "green_in_fresh_frames_after_the_stop",
+        "waited_s": 9.891
+      },
+      "finish": {
+        "front_gap_m": 0.242,
+        "creeps": 0,
+        "brake_s": [
+          30.735,
+          31.535
+        ],
+        "note": "Brake from about 1.53 m, released near .65 m because braking to rest would have ended short of the zone, then coasted 1.3 s. y71 braked from about 1.18 m to rest."
+      },
+      "cpu": {
+        "route_engine_core_fraction": 0.1635,
+        "max_tick_compute_s": 0.00996,
+        "scan_to_tick_mean_s": 0.00142,
+        "scan_to_tick_max_s": 0.00719
+      },
+      "imu": {
+        "samples": 3491,
+        "checksum_errors": 0
+      },
+      "surface": "no surface-initial.json on the car; initial load 0"
+    },
+    "user_decision_after_run": {
+      "date": "2026-11-09",
+      "quote": "不改了，就这样吧，感觉到20s以内应该不可能，更新共同记忆然后上传吧",
+      "meaning": "Tuning stops at y74 / engine 181, which stays on the car. No y75 was started. Next build, if the user resumes, is y75 / 182 from base claude-turn181."
+    }
   }
 }
