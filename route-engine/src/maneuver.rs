@@ -226,10 +226,15 @@ pub const OPEN_SECOND_CONFIRM_GRACE_M: f64 = 0.5;
 pub const OPEN_SECOND_LOOKOUT_RAD: f64 = PI / 2.;
 pub const OPEN_HANDOFF_MIN_PROGRESS_RAD: f64 = 2. * PI / 3.;
 pub const OPEN_LIGHT_HANDOFF_PROGRESS_RAD: f64 = PI / 2.;
+pub const LIGHT_GATE_HANDOFF_PROGRESS_RAD: f64 = PI / 4.;
 pub const OPEN_HEADING_HOLD_PWM: i64 = 120;
 pub const OPEN_CHANNEL_OFFSET_M: (f64, f64) = (0.40, 0.60);
 pub const OPEN_CHANNEL_MAX_LATERAL_M: f64 = 3.5;
 pub const OPEN_CHANNEL_SLOPE: f64 = 1.5;
+/// Less than the gap from the divider to the outer wall beyond it (a lane is .9 m or more).
+pub const CHANNEL_BOARD_DRIFT_M: f64 = 0.5;
+/// A real divider runs on ahead; a scrap of the outer wall seen through the opening does not.
+pub const CHANNEL_BOARD_AHEAD_M: f64 = 0.8;
 pub const OPEN_PWM_STEP: i64 = 40;
 pub const OPEN_STEER_LAG_S: f64 = 0.3;
 pub const OPEN_RELEASE_PWM_STEP: i64 = ROUTE_RETURN_RELEASE_PWM_STEP;
@@ -241,6 +246,15 @@ pub const OPEN_LANE_PURSUIT_MIN_M: f64 = 1.4;
 pub const OPEN_LANE_WIDTH_M: (f64, f64) = (0.65, 2.2);
 pub const OPEN_LANE_INSIDE_MARGIN_M: f64 = 0.05;
 pub const OPEN_LANE_SHIFT_MIN_GAP_M: f64 = 0.20;
+/// The body strip's half width plus a return's noise, off the light divider's near end.
+pub const LIGHT_ENTRY_GATE_CLEAR_M: f64 = SIDE_BODY_EXTENT_M + OPEN_APPROACH_MARGIN_M + 0.14;
+pub const LIGHT_ENTRY_GATE_MPS: f64 = 1.05;
+/// Start turning along the lane this far short of the corner: the wheels answer about .3 s late.
+pub const LIGHT_ENTRY_GATE_RELEASE_M: f64 = 0.6;
+pub const LIGHT_ENTRY_CORNER_REACH_M: f64 = 4.;
+pub const LIGHT_ENTRY_CORNER_RUN_M: f64 = 0.6;
+pub const LIGHT_ENTRY_CORNER_BAND_M: f64 = 0.15;
+pub const LIGHT_ENTRY_CORNER_MIN_POINTS: usize = 3;
 pub const OPEN_LINE_REACH_M: f64 = 6.;
 pub const OPEN_STAGES: [&str; 3] = ["open_transfer", "second_loop", "light_entry"];
 // Round y2: the traffic-light stop (maneuver_sequence.py has the derivations;
@@ -292,6 +306,7 @@ pub const LIGHT_CREEP_TRAVEL_M: f64 = 0.15;
 pub const LIGHT_CREEP_MAX: i64 = 6;
 pub const LIGHT_LINE_HOLD_S: f64 = 0.5;
 pub const LIGHT_PASSED_M: f64 = 0.05;
+pub const LIGHT_PRIOR_UNCONFIRMED_M: f64 = 1.5;
 pub fn light_gantry_max_heading_rad() -> f64 {
     radians(45.)
 }
@@ -727,6 +742,10 @@ pub struct Maneuver {
     pub _start_motor: i64,
     pub _transfer_motor: i64,
     pub(crate) race_inputs: Option<crate::motion_sensors::RaceInputs>,
+    /// Known from the first preview, before `race_inputs` exists.
+    pub(crate) race_program: bool,
+    pub(crate) wall_turn: crate::race_first_cone::WallTurn,
+    pub(crate) light_entry_coast: bool,
     pub(crate) race_crosswalk: crate::race_crosswalk::CrosswalkExit,
     pub(crate) race_crosswalk_stop: crate::race_crosswalk_stop::CrosswalkStopPlan,
     pub(crate) race_transfer: crate::race_transfer::RaceTransfer,
@@ -1050,6 +1069,9 @@ impl Maneuver {
             _start_motor: TRIAL_MOTOR,
             _transfer_motor: ROUTE_SLOW_MOTOR,
             race_inputs: None,
+            race_program: false,
+            wall_turn: Default::default(),
+            light_entry_coast: false,
             race_crosswalk: Default::default(),
             race_crosswalk_stop: Default::default(),
             race_transfer: Default::default(),
@@ -1348,6 +1370,7 @@ impl Maneuver {
             let speed = self.race_inputs.and_then(|i| self.race_surface_speed.speed(now, i.forward_integral));
             result.set("motor", self.race_surface.compensate(motor, speed, now, active));
             result.set("surface_response", self.race_surface.diagnostics());
+            result.set("wall_turn", self.wall_turn.diagnostics());
             result.set("surface_speed", self.race_surface_speed.diagnostics());
             result.set("light_brake_control", self.race_light_brake.diagnostics());
         }
@@ -1522,6 +1545,11 @@ impl Maneuver {
             return self._transfer_motor;
         }
         if self.continue_route && self.phase == "drive" && slow_stage && !self.quality_resume_pending {
+            let loop_speed = self.race_inputs.and_then(|i| self.race_surface_speed.speed(self.last_now, i.forward_integral));
+            if (self.route_stage == "first_target" && (self.wall_turn.stop_pushing() || self.wall_turn.slow_loop(loop_speed)))
+                || (self.light_entry_coast && self.route_stage == "light_entry") {
+                return NEUTRAL;
+            }
             self.first_approach_hold().unwrap_or(ROUTE_SLOW_MOTOR)
         } else {
             TRIAL_MOTOR
@@ -1535,7 +1563,7 @@ impl Maneuver {
         (self.route_stage == "first_target"
             && self.handover_observed
             && self._open_slots.iter().any(|(side, slot)| *side > 0 && slot.approaching == Some(true)))
-        .then(|| hold_pwm(self.race_crosswalk.imu_speed(input.forward_integral), crate::race_crosswalk::FIRST_ENTRY_MPS))
+        .then(|| hold_pwm(self.race_crosswalk.imu_speed(input.forward_integral), self.wall_turn.first_entry_mps()))
     }
 
     // ------------------------------------------------------------ input contract

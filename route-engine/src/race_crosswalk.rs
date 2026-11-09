@@ -74,7 +74,7 @@ impl CrosswalkExit {
     /// After the crosswalk the car is already rolling when the first support
     /// is acquired. Aim one coast at the planned bend, then hold cruise.
     #[allow(clippy::too_many_arguments)]
-    pub fn first_approach_drive(&mut self, radar: Option<f64>, before: Option<f64>, rolling_tangent: bool, decel: f64, now: f64, forward_integral: Option<f64>, hold_accel: f64) -> (i64, V) {
+    pub fn first_approach_drive(&mut self, radar: Option<f64>, before: Option<f64>, rolling_tangent: bool, decel: f64, now: f64, forward_integral: Option<f64>, hold_accel: f64, entry_mps: f64) -> (i64, V) {
         // y70: a quality pause (seq 90-95) left the phase in Cruise, so the 1600 launch came
         // back at 1.49 m/s and cone one was entered at 1.90 (y67, y68: 1.73). A pause ends the boost.
         if self.last_drive_at.replace(now).is_some_and(|last| now - last > SCAN_AGE_S)
@@ -96,7 +96,7 @@ impl CrosswalkExit {
             + if self.first_approach == FirstApproach::Hold { hold_accel * lag } else { 0. };
         let coast_m = speed.map(|v| {
             let released = v + pending_rise;
-            (v + released)*lag/2. + (released*released - FIRST_ENTRY_MPS*FIRST_ENTRY_MPS).max(0.)/(2.*decel)
+            (v + released)*lag/2. + (released*released - entry_mps*entry_mps).max(0.)/(2.*decel)
         });
         let board_stop_m = speed.map(|v| {
             let released = v + pending_rise;
@@ -109,23 +109,23 @@ impl CrosswalkExit {
         // Once the 1600 tail has expired and the actual first tangent is visible,
         // switch to the single rolling hold if its tail fits before the bend.
         let hold_room = self.first_approach == FirstApproach::Coast && rolling_tangent && before.zip(speed).is_some_and(|(d, v)| {
-            v <= FIRST_ENTRY_MPS && {
+            v <= entry_mps && {
             let release = v + hold_accel * lag;
-            d > (v + release) * lag / 2. + (release * release - FIRST_ENTRY_MPS * FIRST_ENTRY_MPS).max(0.) / (2. * decel)
+            d > (v + release) * lag / 2. + (release * release - entry_mps * entry_mps).max(0.) / (2. * decel)
             }
         });
-        if self.first_approach == FirstApproach::Coast && (hold_room || before.is_some_and(|d| d <= 0.) || speed.is_none_or(|v| v <= FIRST_ENTRY_MPS)) {
+        if self.first_approach == FirstApproach::Coast && (hold_room || before.is_some_and(|d| d <= 0.) || speed.is_none_or(|v| v <= entry_mps)) {
             self.first_approach = FirstApproach::Hold;
         }
         let phase = self.first_phase();
         let motor = if self.first_approach == FirstApproach::Coast { NEUTRAL }
             else if self.first_approach == FirstApproach::Cruise && boosted { START_LAUNCH_MOTOR }
             else if speed.is_some_and(|v| v < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR }
-            else { hold_pwm(speed, FIRST_ENTRY_MPS) };
+            else { hold_pwm(speed, entry_mps) };
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
                        "speed_source" => if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
-                       "entry_target_mps" => FIRST_ENTRY_MPS, "early_rolling_hold" => hold_room})
+                       "entry_target_mps" => entry_mps, "early_rolling_hold" => hold_room})
     }
 
     fn first_phase(&self) -> &'static str {

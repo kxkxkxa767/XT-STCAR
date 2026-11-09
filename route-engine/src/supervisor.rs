@@ -287,6 +287,8 @@ pub struct Session {
 /// The console's state for route runs (one vehicle, one owner at a time).
 pub struct Supervisor {
     pub demo: bool,
+    /// The race program owns this supervisor (set before the start check).
+    pub race_program: bool,
     pub boot: String,
     pub route_controller: String,
     pub owner: Option<String>,
@@ -392,6 +394,7 @@ impl Supervisor {
     pub fn new(demo: bool, boot: &str, route_controller: &str) -> Supervisor {
         Supervisor {
             demo,
+            race_program: false,
             boot: boot.to_string(),
             route_controller: route_controller.to_string(),
             owner: None,
@@ -1722,6 +1725,7 @@ impl Supervisor {
             }
             let initial = if initial.is_none() { V::Int(DEFAULT_INITIAL_PWM) } else { initial.clone() };
             let mut motion = Maneuver::new(now, max_drive_s, &initial, &V::Bool(continue_route));
+            motion.race_program = self.race_program;
             let scan = self.received_scan();
             let f = V::Bool(false);
             let decision = motion.update(&scan, ages.idx("lidar"), now, &control, &V::Bool(true), false, &f, &f, &f);

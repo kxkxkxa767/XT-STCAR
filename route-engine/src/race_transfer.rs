@@ -11,6 +11,19 @@ use crate::dict;
 // ~2 m before the tangent (the divider's open end lies ~.9 m short of it), so y31-y35
 // crawled at 1550: first pass to tangent 3.3-3.8 s against y27's 2.0.
 const ENTRY_MPS: f64 = 1.8;
+// Rule-range simulation (wide lanes): the passage between cone two and the start divider's top,
+// measured by the free-space probe, was the strongest predictor of contact. Below .9 m the car
+// has under 60 cm of play, and the 1.8 m/s tangent runs wide. The practice field measures .85 or more.
+const PASSAGE_FULL_M: f64 = 0.85;
+const PASSAGE_TIGHT_M: f64 = 0.6;
+const TIGHT_ENTRY_MPS: f64 = 1.1;
+
+/// Cone two's entry speed for this passage on the board side.
+pub fn passage_entry_mps(passage: f64) -> Option<f64> {
+    (passage < PASSAGE_FULL_M).then(|| {
+        TIGHT_ENTRY_MPS + (ENTRY_MPS - TIGHT_ENTRY_MPS) * ((passage - PASSAGE_TIGHT_M) / (PASSAGE_FULL_M - PASSAGE_TIGHT_M)).clamp(0., 1.)
+    })
+}
 const ROLLING_MPS: f64 = 0.15;
 const STRAIGHT_YAW_RAD_S: f64 = 0.6;
 const STRAIGHT_STEER_BAND_PWM: i64 = 60;
@@ -30,6 +43,10 @@ pub struct RaceTransfer {
     transfer_anchor: Option<(f64, f64)>,
     waiting_for_support: bool,
     phase_before_wait: Option<TransferPhase>,
+    /// The channel's board as last identified (lateral, metres).
+    pub channel_board: Option<f64>,
+    /// Cone two's entry speed when the passage on its board side is narrow.
+    pub tight_entry: Option<f64>,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -108,7 +125,8 @@ impl RaceTransfer {
             (Some(lidar), Some(live)) => Some(lidar.max(live)),
             (lidar, live) => lidar.or(live),
         };
-        let hold_motor = if continuing { hold_pwm(cut_speed, ENTRY_MPS) } else { ROUTE_SLOW_MOTOR };
+        let entry_mps = self.tight_entry.unwrap_or(ENTRY_MPS);
+        let hold_motor = if continuing { hold_pwm(cut_speed, entry_mps) } else { ROUTE_SLOW_MOTOR };
         let hold_accel = surface.predicted_hold_accel(hold_motor, body_speed, now).unwrap_or(0.);
         let coast_m = cut_speed.map(|v| {
             let lag = ESC_COAST_DELAY_S; // measured mean cut lag on the car
@@ -118,7 +136,7 @@ impl RaceTransfer {
                 _ => 0.,
             };
             let release_v = v + pending_rise;
-            (v + release_v) * lag / 2. + (release_v * release_v - ENTRY_MPS * ENTRY_MPS).max(0.) / (2. * decel)
+            (v + release_v) * lag / 2. + (release_v * release_v - entry_mps * entry_mps).max(0.) / (2. * decel)
         });
         let room = self.rolling() && distance.zip(coast_m).is_some_and(|(d, coast)| d > coast);
         self.phase = match self.phase {
@@ -130,7 +148,7 @@ impl RaceTransfer {
             TransferPhase::Boost(_) if !room || !continuing => TransferPhase::Coast,
             other => other,
         };
-        if !self.waiting_for_support && matches!(self.phase, TransferPhase::Coast) && cut_speed.is_none_or(|v| v <= ENTRY_MPS) {
+        if !self.waiting_for_support && matches!(self.phase, TransferPhase::Coast) && cut_speed.is_none_or(|v| v <= entry_mps) {
             self.phase = TransferPhase::Bend;
             self.transfer_anchor = None;
         }
@@ -140,6 +158,7 @@ impl RaceTransfer {
             // User 11-04 (open PWM steps): out of cone one and straight again, hold toward the
             // cone-two entry speed instead of 1550 (y53: 1550 at 1.29-1.41 m/s for .5 s).
             TransferPhase::Approach if continuing => hold_motor,
+            _ if self.tight_entry.is_some_and(|e| cut_speed.is_some_and(|v| v > e)) => NEUTRAL,
             _ => ROUTE_SLOW_MOTOR,
         }};
         (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",

@@ -327,6 +327,9 @@ impl Maneuver {
             if avoid_target != self.steering_target {
                 step = step.max(ROUTE_AVOID_PWM_STEP);
             }
+            if self.wall_turn.fast_steering(self.route_stage, target, self.servo) {
+                step = step.max(crate::race_first_cone::WALL_TURN_PWM_STEP);
+            }
             if reducing_left && target < NEUTRAL {
                 target = NEUTRAL;
             }

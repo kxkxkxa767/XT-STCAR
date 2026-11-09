@@ -742,6 +742,7 @@ fn run(p: &mut Program) -> i32 {
     let run_id = token();
     let now = p.mono();
     p.sup.mono = now;
+    p.sup.race_program = true;
     let started = match p.sup.start_turn_cone(&data, &V::Float(now), &run_id) {
         Ok(result) => result,
         Err((error, clearance)) => {

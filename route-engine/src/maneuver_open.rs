@@ -90,7 +90,10 @@ impl Maneuver {
         if scan.get("left_turn_goal").is_some() {
             return (false, dict! {"reason" => "start_lane_native_left_opening_present"});
         }
-        let forward = Self::forward_lanes(values.l(), false);
+        let mut forward = Self::forward_lanes(values.l(), false);
+        if self.race_program && forward.is_empty() && let Some(lane) = crate::race_start_lane::wide_start_lane(ranges.l()) {
+            forward.push(lane);
+        }
         if forward.len() != 1 {
             return (false, dict! {"reason" => "start_lane_unique_lane_missing", "forward_lanes" => forward.len()});
         }
@@ -253,6 +256,7 @@ impl Maneuver {
     /// first_loop_output_active() (round 107).
     pub fn first_loop_output_active(&self) -> bool {
         self.continue_route && self.entry_kind == Some("lane") && self.route_stage == "first_target" && self.phase == "drive"
+            && !self.wall_turn.active
     }
 
     /// lane_wall_output_active().
@@ -316,6 +320,10 @@ impl Maneuver {
         let mut walls = V::None;
         let (natural, source): (i64, &str);
         if approach.is_some() {
+            if self.race_inputs.is_some() && self.first_approach.is_none()
+                && approach.idx("bearing_left_rad").f() >= crate::race_first_cone::LATE_SIGHT_BEARING_RAD {
+                self.wall_turn.late_sight = true;
+            }
             self.first_approach = approach.clone();
             self._lane_start_slow = true;
             natural = approach.idx("target_pwm").i();
@@ -348,6 +356,12 @@ impl Maneuver {
         if target < NEUTRAL && (self._route_center_ack.is_none() || self.servo > NEUTRAL) {
             target = NEUTRAL;
         }
+        let cone = if approach.is_some() { self.compact_target.clone() } else { V::None };
+        let wall_turn = self.wall_turn_command(scan, now, 1, &cone);
+        if let Some(pwm) = wall_turn {
+            target = if self.wall_turn.active { target.max(pwm) } else { pwm };
+        }
+        let source = if wall_turn.is_some() { "first_wall_turn" } else { source };
         let ahead = self.lane_front_range(scan);
         let track = self.lane_front_track(scan, ahead);
         let speed = self.track_speed(scan, track);
@@ -488,7 +502,7 @@ impl Maneuver {
             let hold_speed = self.race_crosswalk.imu_speed(input.forward_integral).or(speed);
             let body_speed = self.race_surface_speed.speed(now, input.forward_integral);
             let hold_accel = self.race_surface.predicted_hold_accel(
-                hold_pwm(hold_speed, crate::race_crosswalk::FIRST_ENTRY_MPS), body_speed, now).unwrap_or(0.).max(LANE_POWER_ACCEL_MPS2);
+                hold_pwm(hold_speed, self.wall_turn.first_entry_mps()), body_speed, now).unwrap_or(0.).max(LANE_POWER_ACCEL_MPS2);
             let exit = &mut self.race_crosswalk;
             let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2);
             if waiting_at_stripes { exit.release_crosswalk(now, input.forward_integral); }
@@ -496,7 +510,7 @@ impl Maneuver {
                 let planned = approach.get("before_tangent_point_m").of();
                 let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - FIRST_APPROACH_BOARD_GAP_M - LANE_START_SEARCH_M).max(0.)));
                 let rolling_tangent = planned.is_some() && self._launch_cmd_at.is_none_or(|at| now - at >= CROSSWALK_AIM_LAG_S);
-                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, rolling_tangent, decel, now, input.forward_integral, hold_accel);
+                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, rolling_tangent, decel, now, input.forward_integral, hold_accel, self.wall_turn.first_entry_mps());
                 first_drive.set("hold_accel_mps2", hold_accel);
                 first_drive.set("distance_source", if planned.is_some() { "first_tangent" } else { "board_search_room" });
                 allowed = None;
@@ -515,6 +529,7 @@ impl Maneuver {
             };
             self.route_event("start_lane_board_ahead_cut", scan, control, evidence);
         }
+        if self.wall_turn.stop_pushing() { self._start_motor = NEUTRAL; }
         if crosswalk.is_dict() && first_drive.is_some() { crosswalk.set("motor", self._start_motor); }
         self.start_lane_feedback = dict! {
             "source_seq" => scan.idx("seq").clone(), "steering_source" => source,
@@ -986,6 +1001,7 @@ impl Maneuver {
             }
         }
         let t = lp.idx("target_pwm").i();
+        let t = self.wall_turn_command(scan, now, 1, &target).map_or(t, |wall| t.max(wall));
         self.natural_steering_target = Some(t);
         self.steering_target = NEUTRAL.max(t);
         self.reason = "open_first_loop".into();
@@ -1212,12 +1228,23 @@ impl Maneuver {
     /// _open_channel_target(scan, heading, pose).
     fn open_channel_target(&mut self, scan: &V, heading: f64, pose: Option<(f64, f64, f64, f64)>) -> V {
         let reverse = heading - PI;
-        let lines: Vec<Line> = self
-            .scan_axis_lines(scan, reverse)
-            .iter()
-            .filter(|l| SIDE_BODY_EXTENT_M < l.lateral_m && l.lateral_m <= OPEN_CHANNEL_MAX_LATERAL_M && l.along_m.0 > FRONT_BODY_EXTENT_M)
-            .cloned()
-            .collect();
+        let axis_lines = self.scan_axis_lines(scan, reverse);
+        let beside = |l: &&Line| SIDE_BODY_EXTENT_M < l.lateral_m && l.lateral_m <= OPEN_CHANNEL_MAX_LATERAL_M;
+        let mut lines: Vec<Line> = axis_lines.iter().filter(beside).filter(|l| l.along_m.0 > FRONT_BODY_EXTENT_M).cloned().collect();
+        if self.race_inputs.is_some() {
+            // Race: where the start divider ends beside cone one (rules Fig. 5) the car passes its near
+            // end at once, and it still has to cross toward that divider before cone two. Stay with
+            // the board already identified, once it runs alongside; not the outer wall beyond it.
+            if lines.is_empty() {
+                let seen = self.race_transfer.channel_board;
+                lines = axis_lines.iter().filter(beside)
+                    .filter(|l| l.along_m.1 > FRONT_BODY_EXTENT_M + CHANNEL_BOARD_AHEAD_M && seen.is_some_and(|lateral| l.lateral_m <= lateral + CHANNEL_BOARD_DRIFT_M))
+                    .cloned().collect();
+            }
+            if let Some(l) = argmin_first(&lines, |l| l.lateral_m) {
+                self.race_transfer.channel_board = Some(lines[l].lateral_m);
+            }
+        }
         if lines.is_empty() {
             return V::None;
         }
@@ -1290,6 +1317,7 @@ impl Maneuver {
 
     /// _open_transfer_update(scan, now, control).
     pub fn open_transfer_update(&mut self, scan: &V, now: f64, control: &V) -> V {
+        self.wall_turn.active = false;
         if !self.route_adopted(control, now) {
             return self.result(now);
         }
@@ -1409,16 +1437,24 @@ impl Maneuver {
                 "mean_curvature_over_response" } else { "current_path" });
         }
         self.open_loop = lp.clone();
+        if self.race_inputs.is_some() {
+            self.race_transfer.tight_entry = lp.get("free_m").get("-90").of().and_then(crate::race_transfer::passage_entry_mps);
+        }
         let remaining = match lp.idx("pursuit_mode").s() {
             "approach_line" | "approach_line_to_circle" | "tangent" => lp.idx("before_tangent_point_m").of(),
             _ => Some(0.),
         };
         self.transfer_drive(scan, now, remaining, lp.idx("target_pwm").i());
+        let earliest = if self.race_inputs.is_some() { LIGHT_GATE_HANDOFF_PROGRESS_RAD } else { OPEN_LIGHT_HANDOFF_PROGRESS_RAD };
         if let Some(p) = progress
-            && p >= OPEN_LIGHT_HANDOFF_PROGRESS_RAD
+            && p >= earliest
         {
             let heading = heading.unwrap();
-            if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose), None) {
+            // With the divider's end close, the right turn must end before heading 90 degrees: wheels
+            // answer about .3 s late, 40 degrees of yaw at 2.5 rad/s, and the car needs to leave the
+            // loop already pointing at the entry gate.
+            if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose), None)
+                .filter(|(lane, ..)| p >= OPEN_LIGHT_HANDOFF_PROGRESS_RAD || lane.get("entry_gate").is_true()) {
                 if self.race_inputs.is_some() && self.light_vision {
                     self.light_line_ahead(scan, heading, &lane, now);
                 }
@@ -1433,6 +1469,10 @@ impl Maneuver {
             }
         }
         let t = lp.idx("target_pwm").i();
+        let t = self.wall_turn_command(scan, now, -1, &target).map_or(t, |wall| t.min(wall));
+        if self.wall_turn.stop_pushing() {
+            self._transfer_motor = NEUTRAL;
+        }
         self.natural_steering_target = Some(t);
         self.steering_target = self.open_right_gate(t);
         self.reason = "open_second_loop".into();
@@ -1518,6 +1558,23 @@ impl Maneuver {
         }
     }
 
+    /// The light divider's near end, (along, lateral) on the lane axis: the closest return ahead on
+    /// the car's left in the band a lane's width below the outer wall, with a run of returns behind it.
+    fn light_divider_corner(&self, scan: &V, heading: f64, outer: f64) -> Option<(f64, f64)> {
+        let (c, s) = ((-heading).pcos(), (-heading).psin());
+        let floats = Self::ranges_floats(scan);
+        let band = outer - OPEN_LANE_WIDTH_M.1..=outer - OPEN_LANE_WIDTH_M.0;
+        let mut points: Vec<(f64, f64)> = scan_points(&floats, LIGHT_ENTRY_CORNER_REACH_M).iter()
+            .map(|&(x, y)| (c * x + s * y, -s * x + c * y))
+            .filter(|&(along, lateral)| along > FRONT_BODY_EXTENT_M && lateral > SIDE_BODY_EXTENT_M && band.contains(&lateral))
+            .collect();
+        points.sort_by(|a, b| a.0.total_cmp(&b.0));
+        points.iter().copied().find(|&(along, lateral)| {
+            points.iter().filter(|&&(a, l)| a > along && a <= along + LIGHT_ENTRY_CORNER_RUN_M && (l - lateral).abs() <= LIGHT_ENTRY_CORNER_BAND_M).count()
+                >= LIGHT_ENTRY_CORNER_MIN_POINTS
+        })
+    }
+
     /// _open_light_pursuit(scan, heading, pose, lateral): (lane, point, curvature, pwm).
     pub fn open_light_pursuit(
         &mut self,
@@ -1541,7 +1598,13 @@ impl Maneuver {
             }
         });
         let start0 = lane.idx("inner_start_along_m").of();
-        let lane_point = |moved_along: f64, moved_lateral: f64| -> (f64, f64) {
+        // Rule-range simulation: with the divider starting close past the cone, a straight line to
+        // the lane centre beyond its start ran below the divider's end (1 % finished within .25 m).
+        // The fitted divider line is often missing here: while the car still yaws fast the scan's
+        // twist spreads it beyond the line band, so the near end comes from the raw returns.
+        let gate = if self.race_inputs.is_some() { self.light_divider_corner(scan, heading, lane.idx("outer_lateral_m").f()) } else { None };
+        // Where along the lane axis the car aims from this offset, and whether that is the gate.
+        let aim = |moved_along: f64, moved_lateral: f64| -> (f64, f64, bool) {
             let start = start0.map(|s| s - moved_along);
             let mut along = match start {
                 None => OPEN_LANE_LOOKAHEAD_M.1,
@@ -1549,9 +1612,24 @@ impl Maneuver {
                 Some(s) => pmax(OPEN_LANE_PURSUIT_MIN_M, pmin(OPEN_LANE_LOOKAHEAD_M.1, s)),
             };
             along = pmin(along, pmax(OPEN_LANE_LOOKAHEAD_M.0, OPEN_LOOKAHEAD_M + (lateral - moved_lateral).abs()));
-            along += moved_along;
-            (along * u.0 - lateral * u.1, along * u.1 + lateral * u.0)
+            if let Some((corner, inner)) = gate {
+                let s = corner - moved_along;
+                // A body strip passing the corner at an angle needs more offset along the normal.
+                let rise = inner + LIGHT_ENTRY_GATE_CLEAR_M - moved_lateral;
+                let clear = pmin(LIGHT_ENTRY_GATE_CLEAR_M / rise.atan2(s).pcos().max(0.3), lateral - inner);
+                if s > LIGHT_ENTRY_GATE_RELEASE_M && s < along && moved_lateral + (lateral - moved_lateral) * s / along < inner + clear {
+                    return (s + moved_along, inner + clear, true);
+                }
+            }
+            (along + moved_along, lateral, false)
         };
+        let lane_point = |moved_along: f64, moved_lateral: f64| -> (f64, f64) {
+            let (aim_along, aim_lateral, _) = aim(moved_along, moved_lateral);
+            (aim_along * u.0 - aim_lateral * u.1, aim_along * u.1 + aim_lateral * u.0)
+        };
+        if gate.is_some() {
+            lane.set("entry_gate", aim(0., 0.).2);
+        }
         let point = lane_point(0., 0.);
         let (curvature, pwm) = if self.race_inputs.is_some() && self.route_stage == "light_entry" {
             // y61: old radar-yaw/cross-neutral selection turned a current
@@ -1764,6 +1842,7 @@ impl Maneuver {
             self.slew(now);
             return self.result(now);
         }
+        let gate_phase = lane.get("entry_gate").is_true();
         let walls = corridor_walls(scan);
         let (axis_ahead, speed, stop_at) = self.open_front_stop(scan);
         let mut ahead = self.open_entry_path_hit(scan, point, heading, stop_at, axis_ahead);
@@ -1781,7 +1860,14 @@ impl Maneuver {
             "front_range_m" => ahead, "axis_front_range_m" => axis_ahead, "speed_mps" => speed,
             "front_stop_range_m" => stop_at, "line_shift" => shift, "swept_path_certified" => false,
         };
-        if ahead.is_some_and(|a| a <= stop_at) {
+        // Race: the fixed range assumes 1.3 m/s; at a standstill it blocked the entry for good.
+        let gate_speed = self.race_inputs.and_then(|i| self.race_surface_speed.speed(now, i.forward_integral));
+        let stop_at = match gate_speed {
+            Some(v) if self.race_inputs.is_some() => pmin(stop_at, FRONT_BODY_EXTENT_M + OPEN_BOARD_GAP_M + v * v / (2. * LANE_START_STOP_DECEL_MPS2) + v * LANE_REACTION_S),
+            _ => stop_at,
+        };
+        let blocked = ahead.is_some_and(|a| a <= stop_at);
+        if blocked && self.race_inputs.is_none() {
             self.begin_recovery_hold("open_board_ahead_before_light_lane", now, control);
             return self.result(now);
         }
@@ -1796,6 +1882,13 @@ impl Maneuver {
         } else if self.released_light_entry()
             && let Some(result) = self.update_finish_output(scan, axis_ahead, now, control, None) {
             return result;
+        }
+        // Race: the neutral hold ran straight on into the outer board or under the divider
+        // (rule-range simulation). Coast and keep steering at the lane instead, and take the
+        // gate slowly enough that the turn along the lane fits between it and the outer board.
+        self.light_entry_coast = self.race_inputs.is_some() && (blocked || (gate_phase && gate_speed.is_none_or(|v| v > LIGHT_ENTRY_GATE_MPS)));
+        if self.light_entry_coast && DRIVE_MOTORS.contains(&self.lane_motor) {
+            self.lane_motor = NEUTRAL;
         }
         self.natural_steering_target = Some(natural);
         self.steering_target = self.open_right_gate(natural);

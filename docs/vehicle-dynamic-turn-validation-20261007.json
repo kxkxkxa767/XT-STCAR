@@ -28816,5 +28816,151 @@
       "not_run_on_the_car": true
     },
     "remaining_validation": "Deploy y73, then a first real measurement on a floor with the straight free ahead."
+  },
+  "y74_rule_range_geometry_20261109": {
+    "date": "2026-11-09",
+    "author": "Claude",
+    "engine_round": 181,
+    "baseline": "y73 / engine 180 (e544223), built and never deployed; the car still has y71 / engine 178 (7ddee9b)",
+    "user": [
+      "你来改吧",
+      "5先不要改"
+    ],
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "Item 1, wide start lane refused: route-engine/src/race_start_lane.rs. When the native detector reports no lane (the end wall behind the car takes over the 45-135 degree side sectors), the start is judged from side-wall fits 40 degrees ahead to 10 degrees behind abeam. New Supervisor.race_program, set by the race program before the start check, since race_inputs does not exist yet.",
+      "Items 2 and 4, an end wall close past a cone: route-engine/src/race_first_cone.rs wall_turn_command. Full lock when the wall leaves no room for a later arc (lane axis, cone's own bins excluded, second nearest return), stepping 120 PWM per 0.1 s, no push above 1.1 m/s, no first-loop output gain. Off the first pass: left off the lane axis; right off the reversed axis for cone two.",
+      "Item 2, cone one hidden by the divider: first seen beyond 60 degrees of bearing sets late_sight: entry 1.2 m/s, fast leftward steering. With no cone at all when the wall forces the turn, the turn continues blind and runs along the wall until one is tracked.",
+      "Item 3, entering the light lane with the divider's near end close: light_divider_corner finds the end in raw returns (the fitted line breaks up while the car yaws), the pursuit aims at a gate beside it until 0.6 m short, the second loop may hand over from 45 degrees of progress when the gate applies, and the car coasts above 1.05 m/s there. A blocked entry now coasts and keeps steering instead of a neutral hold, using a stopping range from the measured speed.",
+      "Item 6: the divider-end gantry estimate is dropped when no legs are confirmed by 1.5 m (10 saved real runs y60-y71 confirmed them from 2.7 m or more; y62 ended before the light).",
+      "Transfer: when the start divider ends beside cone one the channel stays on that board once it runs alongside (rules Fig. 5). Cone two's entry speed falls to 1.1 m/s as the passage measured on the board side narrows below 0.85 m (0.6 m and under).",
+      "Stalls found in the simulation: a light approach revoked to Cruise at a standstill now restarts at 1560 (1550 cannot start from rest).",
+      "Item 5 not changed at the user's request."
+    ],
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 17,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation": {
+        "command": "python3 scripts/track-spec-sim.py --out work/track-spec-y74 --report docs/track-spec-simulation-20261109.json",
+        "finish_rate_then_zero_penalty_percent": {
+          "practice_field": {
+            "before": [
+              99.0,
+              75.0
+            ],
+            "after": [
+              99.0,
+              75.0
+            ]
+          },
+          "guide_8x4_random_areas": {
+            "before": [
+              98.0,
+              74.0
+            ],
+            "after": [
+              98.0,
+              74.0
+            ]
+          },
+          "rule_range_lane_0.9": {
+            "before": [
+              51.3,
+              25.1
+            ],
+            "after": [
+              73.4,
+              34.4
+            ]
+          },
+          "rule_range_lane_1_to_2": {
+            "before": [
+              32.8,
+              15.1
+            ],
+            "after": [
+              61.8,
+              28.6
+            ]
+          },
+          "fig5_L8_W4.75_lane_0.9": {
+            "before": [
+              32,
+              20
+            ],
+            "after": [
+              80,
+              37
+            ]
+          },
+          "fig5_L8_W4.75_lane_1.1": {
+            "before": [
+              48,
+              15
+            ],
+            "after": [
+              61,
+              29
+            ]
+          },
+          "fig5_L7_W4.2_lane_0.9": {
+            "before": [
+              39,
+              15
+            ],
+            "after": [
+              61,
+              24
+            ]
+          },
+          "fig5_L6_W4_lane_0.9": {
+            "before": [
+              0,
+              0
+            ],
+            "after": [
+              11,
+              3
+            ]
+          },
+          "fig5_L5_W4_lane_0.9": {
+            "before": [
+              0,
+              0
+            ],
+            "after": [
+              0,
+              0
+            ]
+          }
+        },
+        "commands_identical_to_old_controller": {
+          "practice_field": "199 of 200 runs; one run differs by one frame of steering",
+          "guide_8x4": "198 of 200"
+        },
+        "runs_gained": 990,
+        "runs_lost": 79,
+        "note": "Model only: indoor floor, no outdoor camera, no lidar dropouts. The light stop is about 7 cm long in the model."
+      },
+      "checked_against_saved_real_runs_y60_y71": {
+        "wall_turn_margin_minimum_m": 0.38,
+        "would_fire": false,
+        "gantry_legs_confirmed_from_m": [
+          2.71,
+          4.02
+        ],
+        "cone_two_board_side_free_m": [
+          0.95,
+          1.05
+        ],
+        "board_ahead_before_light_lane_in_saved_feedback": 0
+      },
+      "not_run_on_the_car": true
+    },
+    "remaining_validation": "Deploy y74 and confirm the practice field is unchanged on the car: go, cone one, cone two, light stop, finish against y67 and y71.",
+    "open_question_for_user": "The gantry crossbar length in light lanes wider than 0.9 m (item 5)."
   }
 }

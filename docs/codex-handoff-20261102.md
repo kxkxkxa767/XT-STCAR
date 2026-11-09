@@ -2,6 +2,8 @@
 
 用户：“把全部的告诉codex，并写明不要多余的限制/测试”。
 
+**2026-11-09 · y74 规则范围赛道修正（Claude）**　用户让 Claude 接手 11-08 的清单，第 5 项暂不动。y74／181 已编译未部署，车上仍是 y71／178。模型结果：车道 0.9 m 完赛 73.4%（改前 51.3%），车道 1–2 m 61.8%（32.8%），图 5 的 8 m 布局 80%（32%），练习场与搭建示例不变。说明见 `docs/track-spec-simulation-20261108.md`，机读 `y74_rule_range_geometry_20261109`。
+
 **2026-11-08 晚 · 规则范围赛道仿真，待 Codex 接手（Claude）**　用户要求按比赛规则跑不同规格赛道的通过率，车道 1–2 m 和 0.9 m 都试。y73 代码在模型里：练习场完赛 99%，规则范围随机布局车道 0.9 m 完赛 51%（零罚时 25%），车道 1–2 m 完赛 33%（15%）。失败集中在几个几何条件，待修清单在 `memoryshare.md` 文末，报告 `docs/track-spec-simulation-20261108.md`，复现 `python3 scripts/track-spec-sim.py`。全部离线，比赛控制代码未改，车上仍是 y71／178。
 
 **2026-11-08 · y71 已实跑，y73 已建包（Claude）**　车上 y71／178（`7ddee9b`），扣红灯 21.17 s，已锁定；最好仍是 y67／174 的 20.97 s。y73／180 带 y72 的第二桶空档修复和地面阻力测试，未部署：`deploy-matched.py claude-turn180 180`、`deploy-vision.py y73`、`start-round.py y73`（基线 `claude-turn178`）。下一版从 y74／181 起。y70 起灯前测速是卡尔曼滤波（`race_speed_kalman.rs`）。比赛前可用 `scripts/t-ground-drag.py --length 4` 测地面阻力，再 `--apply`，详见 `agent.md` 顶部和 `memoryshare.md` 文末。

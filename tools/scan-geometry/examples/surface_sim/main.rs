@@ -44,6 +44,10 @@ mod race_crosswalk;
 mod race_crosswalk_stop;
 #[path = "../../../../route-engine/src/race_speed_kalman.rs"]
 mod race_speed_kalman;
+#[path = "../../../../route-engine/src/race_first_cone.rs"]
+mod race_first_cone;
+#[path = "../../../../route-engine/src/race_start_lane.rs"]
+mod race_start_lane;
 #[path = "../../../../route-engine/src/race_surface.rs"]
 mod race_surface;
 #[path = "../../../../route-engine/src/race_surface_speed.rs"]
@@ -231,6 +235,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut events_file = BufWriter::new(File::create(out.join("decisions.jsonl"))?);
     let mut sup = supervisor::Supervisor::new(true, "surface-sim", "rust_engine");
     sup.camera = false;
+    sup.race_program = true;
     let mut camera = Camera {
         next: 0.,
         frame: 0,
@@ -458,7 +463,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "motor":motor,"servo":servo,"wall_gap":wall,"cone_gap":cone,"stage":stage,"reason":turn.get("reason").os(),
                 "crosswalk":json_v(turn.get("start_lane_feedback").get("crosswalk")),
                 "surface_response":json_v(turn.get("surface_response")),
-                "lane":json_v(turn.get("lane_feedback")),"open":json_v(turn.get("open_feedback")),
+                "lane":json_v(turn.get("lane_feedback")),"open":json_v(turn.get("open_feedback")),"light":json_v(turn.get("light_feedback")),"wall_turn":json_v(turn.get("wall_turn")),
                 "loop":json_v(turn.get("open_loop")),"quality":json_v(report.get("quality_issues"))})
             )?;
         }

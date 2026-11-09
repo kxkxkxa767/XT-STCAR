@@ -634,7 +634,10 @@ impl Maneuver {
         let preview = self.light_stop_state == Some("divider_approach");
         if ahead.is_none() && (preview || self.light_stop_state.is_none()) && !self.race_light.passed_hint {
             if let Some(d) = prior {
-                if d > FRONT_BODY_EXTENT_M {
+                // The estimate assumes the gantry stands at the divider's near end. The legs are
+                // confirmed from 2.2 m or more when it does (simulated practice field, 200 runs); this
+                // close with none in view it stands somewhere else, so stop coasting for this spot.
+                if d > LIGHT_PRIOR_UNCONFIRMED_M {
                     if !preview {
                         self.light_stop_state = Some("divider_approach");
                         self._light_gantry_since = Some(now);
@@ -827,10 +830,12 @@ impl Maneuver {
         }
         let motor = if red || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::ZoneCoast) {
             NEUTRAL
-        } else if matches!(self.race_light.phase, LightRoll::Through)
+        } else if matches!(self.race_light.phase, LightRoll::Through | LightRoll::Cruise)
             && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
         {
-            TRIAL_MOTOR // y34: 1550 does not start the car from rest (y33 sim short5 sat at 1550 for 26 s)
+            // y34: 1550 does not start the car from rest (y33 sim short5 sat at 1550 for 26 s).
+            // The rule-range simulation found the same stall in Cruise after a coast was revoked.
+            TRIAL_MOTOR
         } else { ROUTE_SLOW_MOTOR };
         let brake_stop = control_gap.zip(v).map(|(g, v)| g-v*LIGHT_BRAKE_RESPONSE_S-v*v/(2.*brake_decel));
         let next_brake_stop = control_gap.zip(v).map(|(g, v)| {
