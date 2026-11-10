@@ -29380,7 +29380,51 @@
       "One-scan plan flip at the approach-to-circle transition of loop one (offset_axis 0.25 for one scan) swings the physical servo about 100 PWM through the play compensation. Left as it is.",
       "Crosswalk: the program wait is 3.19 s (32 scans at a 3.1 s threshold) and the car stands 0.1-0.2 s longer than that. Left as it is: a stopwatch needs the margin."
     ],
-    "for_codex": "Build 182 / y75 from base claude-turn181 (on the car), then run it on the practice field when the user confirms; compare loop one against y74: open_loop.held_circle, cone-one body gap (y74 0.052 m), radius against plan, time from crosswalk go to first pass. Then the light items above, with real data first.",
-    "remaining_validation": "Everything on the car: the held circle (expected cone-one gap 0.12-0.22 m, wall side unchanged), no change at cone two, light stop and finish as in y74."
+    "for_codex": "182 / y75 has been built from 400c917 with baseline claude-turn181 and locally checked by Codex on 2026-11-10. After the user confirms start position, photoelectric reset and light reset, deploy the existing package and run y75; do not rebuild merely for this record update.",
+    "remaining_validation": "Everything on the car: the held circle (expected cone-one gap 0.12-0.22 m, wall side unchanged), no change at cone two, light stop and finish as in y74.",
+    "codex_review_20261110": {
+      "date": "2026-11-10",
+      "source_commit": "400c917e7c19f7ebe2a710c0e5c2b6861cde962f",
+      "result": "Local source and package review passed; no vehicle-code correction or rebuild required.",
+      "source_review": {
+        "held_radius": "Race inputs present, side > 0, circle mode, no late sight, progress >= 35 degrees; radius + clamp(1.5 * (plan_radius - 0.10 - measured_radius), 0, 0.25), used before curvature/PWM calculation. Second loop/reference mode unchanged.",
+        "held_circle_diagnostic": "Presence means evaluated; actual correction requires held_circle.radius_m > open_loop.plan.radius_m. Check source_seq because later stages may retain stale loop snapshots.",
+        "speed_bridge": "Kalman correction history bridges positive gaps <= 1.0 s. Missing lidar does not refresh the anchor. Current-speed output retains the old 0.30 s age; IMU or scan interruption still clears history. The change filters the first returning sample, not 1 s of continuously fresh output."
+      },
+      "package_review": {
+        "passed": true,
+        "engine_source_files_matched": 33,
+        "archive_files_matched": 19,
+        "vision_files_matched": 6,
+        "runtime_changed": [
+          "payload/route-engine"
+        ],
+        "elf": "ELF64 little-endian RISC-V",
+        "helpers": "Match race-trial.py except packaged fixed args; 40 s / 1670 / 1 s and vision --light-stop match.",
+        "evidence": "work/codex-y75-review-20261110/package-review.json"
+      },
+      "y74_baseline_rechecked": {
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261109-y74",
+        "effective_s_saved_frames": 21.29,
+        "crosswalk_go_to_first_pass_s": 4.3,
+        "cone_one_seq": 126,
+        "cone_one_bin": 250,
+        "cone_one_body_gap_m": 0.051697294640325325,
+        "second_tangent_speed_mps": 1.658,
+        "timing_tool": "work/y36/segments.py",
+        "copy": "work/codex-y75-review-20261110/y74-baseline.json"
+      },
+      "checks_scope": "Source/packages and existing y74 data only; no new tests, simulation sweep, or repeat of Claude's recorded 968 console tests / 18 Rust tests / clippy.",
+      "unchanged": [
+        "vehicle runtime code",
+        "11-08 list item 5: wide light lane / beam-post identity",
+        "light stop target and braking",
+        "crosswalk wait"
+      ],
+      "vehicle_connected": false,
+      "vehicle_deployed": false,
+      "physical_trial_executed": false,
+      "next": "User must confirm start position, photoelectric reset and light reset for this launch; then deploy existing claude-turn182 and y75, run start-round.py y75, and compare actual held-radius correction, body/wall clearances and all segment times with y74."
+    }
   }
 }
