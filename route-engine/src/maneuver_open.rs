@@ -1247,11 +1247,16 @@ impl Maneuver {
         let beside = |l: &&Line| SIDE_BODY_EXTENT_M < l.lateral_m && l.lateral_m <= OPEN_CHANNEL_MAX_LATERAL_M;
         let mut lines: Vec<Line> = axis_lines.iter().filter(beside).filter(|l| l.along_m.0 > FRONT_BODY_EXTENT_M).cloned().collect();
         if self.race_inputs.is_some() {
+            // y75 seq 126 -> 128: the divider at 1.19 m disappeared and a fragment of
+            // the outer wall at 2.17 m passed the ordinary ahead-end selection. Its
+            // channel led back into the start lane. Keep the existing board identity
+            // rule here too; a missing divider uses the existing reversed-axis hold.
+            let seen = self.race_transfer.channel_board;
+            lines.retain(|l| seen.is_none_or(|lateral| l.lateral_m <= lateral + CHANNEL_BOARD_DRIFT_M));
             // Race: where the start divider ends beside cone one (rules Fig. 5) the car passes its near
             // end at once, and it still has to cross toward that divider before cone two. Stay with
             // the board already identified, once it runs alongside; not the outer wall beyond it.
             if lines.is_empty() {
-                let seen = self.race_transfer.channel_board;
                 lines = axis_lines.iter().filter(beside)
                     .filter(|l| l.along_m.1 > FRONT_BODY_EXTENT_M + CHANNEL_BOARD_AHEAD_M && seen.is_some_and(|lateral| l.lateral_m <= lateral + CHANNEL_BOARD_DRIFT_M))
                     .cloned().collect();

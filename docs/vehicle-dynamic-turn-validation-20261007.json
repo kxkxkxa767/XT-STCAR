@@ -29112,8 +29112,8 @@
       "你继续修改，修改完后交给codex，并说明你的模型向codex问好",
       "你完成了的话就更新记忆交给codex，测试可以让codex来"
     ],
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": {
       "cone_one_real_runs_y53_to_y74": {
         "runs": 15,
@@ -29380,7 +29380,7 @@
       "One-scan plan flip at the approach-to-circle transition of loop one (offset_axis 0.25 for one scan) swings the physical servo about 100 PWM through the play compensation. Left as it is.",
       "Crosswalk: the program wait is 3.19 s (32 scans at a 3.1 s threshold) and the car stands 0.1-0.2 s longer than that. Left as it is: a stopwatch needs the margin."
     ],
-    "for_codex": "182 / y75 has been built from 400c917 with baseline claude-turn181 and locally checked by Codex on 2026-11-10. After the user confirms start position, photoelectric reset and light reset, deploy the existing package and run y75; do not rebuild merely for this record update.",
+    "for_codex": "y75 deployed and run on 2026-11-10; unfinished after exit-channel board identity jumped to outer wall. See car_run_y75 and y76_channel_board_identity_20261110.",
     "remaining_validation": "Everything on the car: the held circle (expected cone-one gap 0.12-0.22 m, wall side unchanged), no change at cone two, light stop and finish as in y74.",
     "codex_review_20261110": {
       "date": "2026-11-10",
@@ -29425,6 +29425,162 @@
       "vehicle_deployed": false,
       "physical_trial_executed": false,
       "next": "User must confirm start position, photoelectric reset and light reset for this launch; then deploy existing claude-turn182 and y75, run start-round.py y75, and compare actual held-radius correction, body/wall clearances and all segment times with y74."
+    },
+    "car_run_y75": {
+      "deployed": true,
+      "source_commit": "400c917e7c19f7ebe2a710c0e5c2b6861cde962f",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261110-y75",
+      "evidence_files_ok": 44,
+      "result": "unfinished: probe_obstacle_close_body, after turning toward the start/crosswalk lane",
+      "operator_observation": "为什么改完后绕过第一个桶后回到了斑马线的那条直道",
+      "program_stage_at_stop": "second_loop (logical stage, not proof of physical arrival at cone two)",
+      "effective_s": null,
+      "completed": false,
+      "segments_s_y74_y75": {
+        "move_to_crosswalk_stop": [
+          3.199,
+          3.096
+        ],
+        "crosswalk_wait": [
+          3.196,
+          3.194
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.3,
+          4.3
+        ]
+      },
+      "cone_one": {
+        "nearest_body_gap_m": 0.16134013429658683,
+        "nearest_at": "seq 124, bin 264, fresh cone-one support",
+        "y74_gap_m": 0.051697294640325325,
+        "held_radius_m_fresh_saved_frames": [
+          0.9248679346310955,
+          0.9907738996446802
+        ],
+        "plan_radius_m": 0.9,
+        "fresh_saved_frames_with_actual_held_correction": 7,
+        "additional_held_snapshot": "first_pass event stores seq 122",
+        "heading_peak_deg_y74_y75": [
+          206.9551718749503,
+          217.8383953228885
+        ]
+      },
+      "failure": {
+        "sequence": [
+          {
+            "seq": 126,
+            "selected_board_lateral_m": 1.188179764995994,
+            "natural_pwm": 1333
+          },
+          {
+            "seq": 128,
+            "selected_board_lateral_m": 2.167271709884722,
+            "natural_pwm": 1494
+          },
+          {
+            "seq": 129,
+            "selected_board_lateral_m": 2.072013065740749,
+            "natural_pwm": 1492
+          },
+          {
+            "seq": 131,
+            "selected_board_lateral_m": 1.8435446118293575,
+            "natural_pwm": 1501
+          },
+          {
+            "seq": 134,
+            "selected_board_lateral_m": 1.5174477378108961,
+            "natural_pwm": 1497
+          }
+        ],
+        "cause": "The wider loop changed the exit trajectory. The ordinary ahead-end board selection lacked the identity condition already applied in the alongside fallback: missing divider returns were replaced with outer-wall fragments and the channel pursuit remained nearly straight while pointing toward the start lane. Single-run causality is bounded; frame geometry and commands establish this failed exit sequence.",
+        "stop_seq": 142,
+        "stop_bin": 49,
+        "nearest_body_gap_m": 0.028300236389678157,
+        "physical_contact_confirmed": false
+      },
+      "not_reached": [
+        "second-cone tangent",
+        "light approach",
+        "green release",
+        "finish"
+      ],
+      "light_speed_bridge_validated": false,
+      "cpu": {
+        "route_engine_core_fraction": 0.1518947898805702,
+        "max_tick_compute_s": 0.009371868999999755,
+        "scan_to_tick_mean_s": 0.0015260575230769018
+      },
+      "imu": {
+        "samples": 1548,
+        "checksum_errors": 0
+      },
+      "after": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "trajectory": "work/codex-y75-review-20261110/y74-y75-first-cone.png",
+      "trajectory_basis": "First-cone support-circle centre fixed at the origin, saved compass heading, fresh target observations; local lidar reconstruction, not external localization. Plain unconstrained ICP map drifted and was not used for quantitative conclusions."
     }
+  },
+  "y76_channel_board_identity_20261110": {
+    "date": "2026-11-10",
+    "author": "Codex",
+    "engine_round": 183,
+    "baseline": "y75 / engine 182 (400c917), now on the car",
+    "user": "我放好了，编译完你可以直接跑",
+    "launch_authorized_for_this_round": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": "In y75 at seq 128/129/131/134 the selected left board jumped farther than the existing CHANNEL_BOARD_DRIFT_M from the known divider; the normal ahead-end branch did not apply the existing identity condition.",
+    "change": [
+      "Race only, maneuver_open.rs open_channel_target: apply the existing remembered-board / CHANNEL_BOARD_DRIFT_M condition to ordinary ahead-end candidates as well as the alongside fallback.",
+      "If the divider is temporarily absent, use the existing reversed-axis steering hold; accept it normally when seen again.",
+      "No motor change, no new threshold or stage, no Python reference change; keep y75 held circle and speed filter. Item 5 and crosswalk wait unchanged."
+    ],
+    "recorded_frame_check": {
+      "evidence": "work/codex-y75-review-20261110/channel-association-review.json",
+      "rejected_outer_wall_frames": [
+        128,
+        129,
+        131,
+        134
+      ],
+      "natural_pwm_old_new": [
+        [
+          1494,
+          1384
+        ],
+        [
+          1492,
+          1381
+        ],
+        [
+          1501,
+          1383
+        ],
+        [
+          1497,
+          1391
+        ]
+      ],
+      "unchanged_valid_divider_frames": [
+        126,
+        132
+      ],
+      "scope": "Geometric selection on recorded frames, not closed-loop simulation or proof of future car trajectory."
+    },
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 18,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation_sweep": false
+    },
+    "build_status": "source ready for cross-compilation",
+    "next": "Build 183 / y76 from claude-turn182, deploy and run once using the user's fresh placement/start authorization. Verify the first exit follows the divider or reversed axis and reaches the real second cone; continue through light and finish."
   }
 }
