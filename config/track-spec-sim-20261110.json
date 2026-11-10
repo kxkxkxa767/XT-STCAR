@@ -1,0 +1,148 @@
+{
+ "label": "track-spec-20261110",
+ "seed": 1,
+ "max_seconds": 90,
+ "layout": {
+  "length_m": 8.0,
+  "width_m": 4.0,
+  "lane_width_m": 0.9,
+  "light_width_m": 0.9,
+  "start_divider_m": 3.2,
+  "light_divider_m": 3.2,
+  "stripe_x_m": 2.95,
+  "start_x_m": 0.4,
+  "beam_gap_m": 1.0
+ },
+ "plant": {
+  "motor_delay_s": 0.056,
+  "coast_decel_mps2": 0.6,
+  "brake_decel_mps2": 0.956,
+  "drive_accel_max_mps2": 4.14,
+  "resistance_scale": 1.0,
+  "traction_mu": 0.6,
+  "speed_table": [
+   [
+    1550.0,
+    1.814
+   ],
+   [
+    1570.0,
+    2.34
+   ],
+   [
+    1600.0,
+    3.837
+   ]
+  ],
+  "response_table": [
+   [
+    1550.0,
+    2.98
+   ],
+   [
+    1570.0,
+    1.0
+   ],
+   [
+    1600.0,
+    0.7
+   ]
+  ],
+  "steering_gain": 1.2,
+  "steering_gain_left": 1.5,
+  "turn_scrub": 0.06,
+  "servo_delay_s": 0.1,
+  "servo_tau_s": 0.06
+ },
+ "camera": {
+  "fps": 3.6,
+  "capture_age_s": 0.15,
+  "latency_s": 0.24,
+  "red_on_delay_s": 0.8,
+  "red_duration_s": 10.0
+ },
+ "sensors": {
+  "range_noise_m": 0.008,
+  "scan_distortion": 1.0,
+  "imu_lever_arm_m": 0.19
+ },
+ "calibration": {
+  "note": "Longitudinal targets, coast and lever arm as in track-spec-sim-20261108.json. Steering and the speed lost in a turn are fitted to the cone loops of 15 real runs (y53-y74) on the practice field: left gain 1.5 (1.35 and 1.65 bracket the widest and tightest runs), right gain 1.2, servo delay 0.10 s and time constant 0.06 s, tyre scrub 0.06 of the lateral acceleration.",
+  "real_against_model_practice_field": {
+   "cone_one_pass_lidar_to_centre_m_p10_median_p90": {
+    "real": [
+     0.29,
+     0.37,
+     0.46
+    ],
+    "model_20261110": [
+     0.36,
+     0.38,
+     0.41
+    ],
+    "model_20261108": [
+     0.51,
+     0.54,
+     0.58
+    ]
+   },
+   "loop_one_radius_minus_plan_m_heading_45_to_150_deg": {
+    "real": [
+     -0.17,
+     -0.11,
+     -0.02
+    ],
+    "model_20261110": [
+     -0.19,
+     -0.1,
+     -0.04
+    ],
+    "model_20261108": [
+     0.02,
+     0.17,
+     0.35
+    ]
+   },
+   "speed_at_first_pass_mps": {
+    "real": [
+     1.25,
+     1.3,
+     1.41
+    ],
+    "model_20261110": [
+     1.3,
+     1.33,
+     1.37
+    ],
+    "model_20261108": [
+     1.5,
+     1.55,
+     1.6
+    ]
+   },
+   "cone_two_pass_lidar_to_centre_m": {
+    "real": [
+     0.39,
+     0.51,
+     0.71
+    ],
+    "model_20261110": [
+     0.4,
+     0.48,
+     0.59
+    ],
+    "model_20261108": [
+     0.44,
+     0.53,
+     0.59
+    ]
+   },
+   "practice_field_finish": {
+    "real_y57_to_y74_complete_runs": "13 of 13",
+    "model_20261110": "48 of 48",
+    "model_20261108": "46 of 48"
+   }
+  },
+  "limits": "Fitted on one field and one floor. The real spread between runs is wider than one model shows. Loop two and the light entry were matched on pass distance only."
+ }
+}

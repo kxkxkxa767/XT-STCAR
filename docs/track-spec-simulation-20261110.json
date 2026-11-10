@@ -1,0 +1,568 @@
+{
+ "date": "2026-11-10",
+ "note": "finish and zero-penalty per cent; model 20261108 = config/track-spec-sim-20261108.json, model 20261110 = config/track-spec-sim-20261110.json (steering fitted to real cone loops)",
+ "runs": {
+  "y74_model_20261108": {
+   "fig5_L5_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 0.0,
+    "zero_penalty_pct": 0.0,
+    "failures_by_stage": {
+     "second_loop": 90,
+     "first_target": 10
+    },
+    "penalties": {}
+   },
+   "fig5_L6_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 11.0,
+    "zero_penalty_pct": 3.0,
+    "failures_by_stage": {
+     "second_loop": 84,
+     "start_lane": 2,
+     "first_target": 3
+    },
+    "penalties": {
+     "light_wheel_outside": 6,
+     "light_no_stop": 2
+    }
+   },
+   "fig5_L7_W4.2_lane0.9": {
+    "n": 100,
+    "finish_pct": 61.0,
+    "zero_penalty_pct": 24.0,
+    "failures_by_stage": {
+     "light_lane": 7,
+     "start_lane": 12,
+     "first_target": 16,
+     "second_loop": 4
+    },
+    "penalties": {
+     "light_no_stop": 9,
+     "light_wheel_outside": 28,
+     "light_before_green": 3
+    }
+   },
+   "fig5_L8_W4.75_lane0.9": {
+    "n": 100,
+    "finish_pct": 80.0,
+    "zero_penalty_pct": 37.0,
+    "failures_by_stage": {
+     "first_target": 8,
+     "light_lane": 3,
+     "open_transfer": 2,
+     "start_lane": 5,
+     "light_entry": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 40,
+     "light_no_stop": 3,
+     "light_before_green": 2
+    }
+   },
+   "fig5_L8_W4.75_lane1.1": {
+    "n": 100,
+    "finish_pct": 61.0,
+    "zero_penalty_pct": 29.0,
+    "failures_by_stage": {
+     "start_lane": 20,
+     "light_lane": 4,
+     "first_target": 13,
+     "light_entry": 2
+    },
+    "penalties": {
+     "light_no_stop": 18,
+     "light_wheel_outside": 14,
+     "light_before_green": 3
+    }
+   },
+   "guide_8x4_random_areas": {
+    "n": 200,
+    "finish_pct": 98.0,
+    "zero_penalty_pct": 74.0,
+    "failures_by_stage": {
+     "light_lane": 2,
+     "light_entry": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 38,
+     "light_no_stop": 10,
+     "light_before_green": 1,
+     "crosswalk_over_line": 1
+    }
+   },
+   "lane0.9": {
+    "n": 1500,
+    "finish_pct": 73.4,
+    "zero_penalty_pct": 34.4,
+    "failures_by_stage": {
+     "light_entry": 260,
+     "second_loop": 38,
+     "start_lane": 18,
+     "first_target": 42,
+     "light_lane": 39,
+     "open_transfer": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 529,
+     "light_no_stop": 55,
+     "light_before_green": 4,
+     "crosswalk_over_line": 3,
+     "finish_outside_zone": 2
+    }
+   },
+   "lane1-2": {
+    "n": 1500,
+    "finish_pct": 61.8,
+    "zero_penalty_pct": 28.6,
+    "failures_by_stage": {
+     "light_lane": 23,
+     "open_transfer": 32,
+     "start_lane": 40,
+     "second_loop": 280,
+     "first_target": 110,
+     "light_entry": 88
+    },
+    "penalties": {
+     "light_wheel_outside": 238,
+     "light_no_stop": 256,
+     "light_before_green": 50,
+     "crosswalk_over_line": 8,
+     "finish_outside_zone": 24
+    }
+   },
+   "practice_field": {
+    "n": 200,
+    "finish_pct": 99.0,
+    "zero_penalty_pct": 75.0,
+    "failures_by_stage": {
+     "light_entry": 1,
+     "light_lane": 1
+    },
+    "penalties": {
+     "light_wheel_outside": 37,
+     "light_no_stop": 11
+    }
+   }
+  },
+  "y75_model_20261108": {
+   "fig5_L5_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 0.0,
+    "zero_penalty_pct": 0.0,
+    "failures_by_stage": {
+     "second_loop": 90,
+     "first_target": 10
+    },
+    "penalties": {}
+   },
+   "fig5_L6_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 11.0,
+    "zero_penalty_pct": 3.0,
+    "failures_by_stage": {
+     "second_loop": 84,
+     "start_lane": 2,
+     "first_target": 3
+    },
+    "penalties": {
+     "light_wheel_outside": 6,
+     "light_no_stop": 2
+    }
+   },
+   "fig5_L7_W4.2_lane0.9": {
+    "n": 100,
+    "finish_pct": 61.0,
+    "zero_penalty_pct": 25.0,
+    "failures_by_stage": {
+     "light_lane": 7,
+     "start_lane": 17,
+     "first_target": 11,
+     "second_loop": 4
+    },
+    "penalties": {
+     "light_no_stop": 9,
+     "light_wheel_outside": 27,
+     "light_before_green": 3
+    }
+   },
+   "fig5_L8_W4.75_lane0.9": {
+    "n": 100,
+    "finish_pct": 79.0,
+    "zero_penalty_pct": 40.0,
+    "failures_by_stage": {
+     "first_target": 6,
+     "start_lane": 9,
+     "light_lane": 3,
+     "light_entry": 2,
+     "open_transfer": 1
+    },
+    "penalties": {
+     "light_no_stop": 4,
+     "light_wheel_outside": 35,
+     "light_before_green": 2
+    }
+   },
+   "fig5_L8_W4.75_lane1.1": {
+    "n": 100,
+    "finish_pct": 59.0,
+    "zero_penalty_pct": 28.0,
+    "failures_by_stage": {
+     "start_lane": 22,
+     "light_lane": 4,
+     "first_target": 13,
+     "light_entry": 2
+    },
+    "penalties": {
+     "light_no_stop": 16,
+     "light_wheel_outside": 15,
+     "light_before_green": 2
+    }
+   },
+   "guide_8x4_random_areas": {
+    "n": 200,
+    "finish_pct": 99.5,
+    "zero_penalty_pct": 75.5,
+    "failures_by_stage": {
+     "light_entry": 1
+    },
+    "penalties": {
+     "light_no_stop": 9,
+     "light_wheel_outside": 39,
+     "crosswalk_over_line": 1
+    }
+   },
+   "lane0.9": {
+    "n": 1500,
+    "finish_pct": 72.9,
+    "zero_penalty_pct": 35.8,
+    "failures_by_stage": {
+     "light_entry": 260,
+     "second_loop": 40,
+     "start_lane": 21,
+     "first_target": 41,
+     "light_lane": 43,
+     "open_transfer": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 493,
+     "light_no_stop": 62,
+     "light_before_green": 4,
+     "crosswalk_over_line": 3,
+     "finish_outside_zone": 1
+    }
+   },
+   "lane1-2": {
+    "n": 1500,
+    "finish_pct": 61.6,
+    "zero_penalty_pct": 29.3,
+    "failures_by_stage": {
+     "light_lane": 25,
+     "open_transfer": 33,
+     "start_lane": 40,
+     "second_loop": 278,
+     "first_target": 114,
+     "light_entry": 86
+    },
+    "penalties": {
+     "light_no_stop": 245,
+     "light_wheel_outside": 236,
+     "light_before_green": 46,
+     "crosswalk_over_line": 7,
+     "finish_outside_zone": 23
+    }
+   },
+   "practice_field": {
+    "n": 200,
+    "finish_pct": 99.0,
+    "zero_penalty_pct": 74.5,
+    "failures_by_stage": {
+     "light_entry": 1,
+     "light_lane": 1
+    },
+    "penalties": {
+     "light_wheel_outside": 35,
+     "light_no_stop": 14
+    }
+   }
+  },
+  "y74_model_20261110": {
+   "fig5_L5_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 18.0,
+    "zero_penalty_pct": 4.0,
+    "failures_by_stage": {
+     "light_entry": 79,
+     "second_loop": 1,
+     "light_lane": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 12,
+     "light_no_stop": 2
+    }
+   },
+   "fig5_L6_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 96.0,
+    "zero_penalty_pct": 27.0,
+    "failures_by_stage": {
+     "light_lane": 4
+    },
+    "penalties": {
+     "light_wheel_outside": 68,
+     "light_no_stop": 1,
+     "light_before_green": 2,
+     "crosswalk_over_line": 2
+    }
+   },
+   "fig5_L7_W4.2_lane0.9": {
+    "n": 100,
+    "finish_pct": 65.0,
+    "zero_penalty_pct": 34.0,
+    "failures_by_stage": {
+     "start_lane": 29,
+     "first_target": 2,
+     "light_lane": 3,
+     "second_loop": 1
+    },
+    "penalties": {
+     "light_wheel_outside": 25,
+     "light_no_stop": 5,
+     "crosswalk_over_line": 1,
+     "light_before_green": 1
+    }
+   },
+   "fig5_L8_W4.75_lane0.9": {
+    "n": 100,
+    "finish_pct": 84.0,
+    "zero_penalty_pct": 34.0,
+    "failures_by_stage": {
+     "start_lane": 14,
+     "light_entry": 1,
+     "first_target": 1
+    },
+    "penalties": {
+     "light_wheel_outside": 49,
+     "light_no_stop": 1
+    }
+   },
+   "fig5_L8_W4.75_lane1.1": {
+    "n": 100,
+    "finish_pct": 70.0,
+    "zero_penalty_pct": 31.0,
+    "failures_by_stage": {
+     "start_lane": 24,
+     "open_transfer": 6
+    },
+    "penalties": {
+     "light_before_green": 5,
+     "light_wheel_outside": 36,
+     "light_no_stop": 3
+    }
+   },
+   "guide_8x4_random_areas": {
+    "n": 200,
+    "finish_pct": 99.0,
+    "zero_penalty_pct": 83.5,
+    "failures_by_stage": {
+     "light_entry": 1,
+     "light_lane": 1
+    },
+    "penalties": {
+     "light_wheel_outside": 24,
+     "crosswalk_over_line": 1,
+     "light_no_stop": 6
+    }
+   },
+   "lane0.9": {
+    "n": 1500,
+    "finish_pct": 79.5,
+    "zero_penalty_pct": 35.5,
+    "failures_by_stage": {
+     "light_entry": 219,
+     "second_loop": 10,
+     "start_lane": 31,
+     "light_lane": 39,
+     "first_target": 6,
+     "open_transfer": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 608,
+     "light_before_green": 9,
+     "light_no_stop": 51,
+     "finish_outside_zone": 1,
+     "crosswalk_over_line": 2
+    }
+   },
+   "lane1-2": {
+    "n": 1500,
+    "finish_pct": 67.5,
+    "zero_penalty_pct": 31.0,
+    "failures_by_stage": {
+     "first_target": 176,
+     "start_lane": 42,
+     "light_entry": 76,
+     "second_loop": 134,
+     "light_lane": 29,
+     "open_transfer": 30
+    },
+    "penalties": {
+     "light_no_stop": 267,
+     "finish_outside_zone": 16,
+     "light_wheel_outside": 277,
+     "light_before_green": 51,
+     "crosswalk_over_line": 9
+    }
+   },
+   "practice_field": {
+    "n": 200,
+    "finish_pct": 100.0,
+    "zero_penalty_pct": 83.0,
+    "failures_by_stage": {},
+    "penalties": {
+     "light_wheel_outside": 29,
+     "light_no_stop": 5
+    }
+   }
+  },
+  "y75_model_20261110": {
+   "fig5_L5_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 18.0,
+    "zero_penalty_pct": 4.0,
+    "failures_by_stage": {
+     "light_entry": 79,
+     "second_loop": 1,
+     "light_lane": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 12,
+     "light_no_stop": 2
+    }
+   },
+   "fig5_L6_W4_lane0.9": {
+    "n": 100,
+    "finish_pct": 96.0,
+    "zero_penalty_pct": 27.0,
+    "failures_by_stage": {
+     "light_lane": 4
+    },
+    "penalties": {
+     "light_wheel_outside": 68,
+     "light_no_stop": 1,
+     "light_before_green": 2,
+     "crosswalk_over_line": 2
+    }
+   },
+   "fig5_L7_W4.2_lane0.9": {
+    "n": 100,
+    "finish_pct": 64.0,
+    "zero_penalty_pct": 38.0,
+    "failures_by_stage": {
+     "start_lane": 30,
+     "light_lane": 4,
+     "first_target": 1,
+     "second_loop": 1
+    },
+    "penalties": {
+     "light_wheel_outside": 22,
+     "light_no_stop": 3,
+     "crosswalk_over_line": 1,
+     "light_before_green": 1
+    }
+   },
+   "fig5_L8_W4.75_lane0.9": {
+    "n": 100,
+    "finish_pct": 84.0,
+    "zero_penalty_pct": 35.0,
+    "failures_by_stage": {
+     "start_lane": 15,
+     "light_entry": 1
+    },
+    "penalties": {
+     "light_wheel_outside": 46,
+     "light_no_stop": 3
+    }
+   },
+   "fig5_L8_W4.75_lane1.1": {
+    "n": 100,
+    "finish_pct": 70.0,
+    "zero_penalty_pct": 30.0,
+    "failures_by_stage": {
+     "start_lane": 24,
+     "open_transfer": 6
+    },
+    "penalties": {
+     "light_before_green": 5,
+     "light_wheel_outside": 35,
+     "light_no_stop": 5
+    }
+   },
+   "guide_8x4_random_areas": {
+    "n": 200,
+    "finish_pct": 99.0,
+    "zero_penalty_pct": 79.0,
+    "failures_by_stage": {
+     "light_entry": 1,
+     "light_lane": 1
+    },
+    "penalties": {
+     "crosswalk_over_line": 1,
+     "light_wheel_outside": 32,
+     "light_no_stop": 7
+    }
+   },
+   "lane0.9": {
+    "n": 1500,
+    "finish_pct": 79.3,
+    "zero_penalty_pct": 37.3,
+    "failures_by_stage": {
+     "light_entry": 219,
+     "second_loop": 12,
+     "light_lane": 38,
+     "start_lane": 32,
+     "first_target": 7,
+     "open_transfer": 2
+    },
+    "penalties": {
+     "light_wheel_outside": 573,
+     "light_no_stop": 57,
+     "finish_outside_zone": 2,
+     "light_before_green": 9,
+     "crosswalk_over_line": 2
+    }
+   },
+   "lane1-2": {
+    "n": 1500,
+    "finish_pct": 70.3,
+    "zero_penalty_pct": 33.1,
+    "failures_by_stage": {
+     "first_target": 116,
+     "start_lane": 42,
+     "open_transfer": 47,
+     "light_entry": 77,
+     "light_lane": 33,
+     "second_loop": 131
+    },
+    "penalties": {
+     "light_no_stop": 265,
+     "light_wheel_outside": 287,
+     "light_before_green": 57,
+     "finish_outside_zone": 17,
+     "crosswalk_over_line": 9
+    }
+   },
+   "practice_field": {
+    "n": 200,
+    "finish_pct": 100.0,
+    "zero_penalty_pct": 81.5,
+    "failures_by_stage": {},
+    "penalties": {
+     "light_wheel_outside": 30,
+     "light_no_stop": 7,
+     "finish_outside_zone": 1
+    }
+   }
+  }
+ }
+}

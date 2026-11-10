@@ -65,6 +65,28 @@ impl WallTurn {
     }
 }
 
+/// Loop one in a race: a car running inside its plan's circle pursues a wider one.
+///
+/// y53-y74, 15 runs: between headings 45 and 150 degrees the car held 0.02-0.19 m inside the
+/// plan's circle in every run (median 0.11) and passed cone one that much nearer than planned:
+/// 0.27-0.47 m from its centre where the plan meant 0.50 (y74 0.29, a 0.052 m body gap; y57
+/// 0.27). With the play taken up the wheels turn the car about 1.3 times the steering table (54
+/// settled frames, quartiles 1.26-1.33, single runs to 1.48) against the 1.2 this loop's output
+/// assumes, and a pursuit whose car over-turns settles inside its circle. A car within
+/// RADIAL_DEADBAND_M of the plan (y53, y58, y61, y71) is left as it is; loop two is balanced
+/// between its cone and the outer wall and is not touched. A cone that came into view late is
+/// rounded as before: no real run has done that, and in the model it only moved cases around.
+pub const RADIAL_GAIN: f64 = 1.5;
+pub const RADIAL_DEADBAND_M: f64 = 0.10;
+pub const RADIAL_MAX_M: f64 = 0.25;
+/// The loop is entered from inside its circle; the car has settled on its arc by this heading.
+pub const RADIAL_FROM_RAD: f64 = 35. * PI / 180.;
+
+/// The radius the carrot is placed on for a car `r_now` from the plan's centre.
+pub fn held_radius(plan_radius: f64, r_now: f64) -> f64 {
+    plan_radius + (RADIAL_GAIN * (plan_radius - RADIAL_DEADBAND_M - r_now)).clamp(0., RADIAL_MAX_M)
+}
+
 /// Metres to spare before a full-lock arc starting after the steering response would no longer
 /// clear the wall ahead. `ahead` is measured along the axis, `turned` from it toward the turn.
 pub fn wall_room(ahead: f64, turned: f64, speed: f64, servo: i64, full: i64, radius: f64) -> f64 {
@@ -148,6 +170,15 @@ mod tests {
         assert!(room(1.8, 0., 1.0, NEUTRAL) > straight);
         assert!(room(1.8, 0.5, 1.5, NEUTRAL) > straight);
         assert!(room(1.8, 0., 1.5, SERVO_MAX) > straight);
+    }
+
+    #[test]
+    fn a_car_well_inside_its_circle_is_held_on_a_wider_one() {
+        assert_eq!(held_radius(0.9, 0.86), 0.9); // y71
+        assert_eq!(held_radius(0.9, 1.05), 0.9);
+        let y74 = held_radius(0.9, 0.70);
+        assert!((y74 - 1.05).abs() < 1e-9, "{y74}");
+        assert_eq!(held_radius(0.9, 0.5), 0.9 + RADIAL_MAX_M);
     }
 
     #[test]

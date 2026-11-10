@@ -463,7 +463,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "motor":motor,"servo":servo,"wall_gap":wall,"cone_gap":cone,"stage":stage,"reason":turn.get("reason").os(),
                 "crosswalk":json_v(turn.get("start_lane_feedback").get("crosswalk")),
                 "surface_response":json_v(turn.get("surface_response")),
-                "lane":json_v(turn.get("lane_feedback")),"open":json_v(turn.get("open_feedback")),"light":json_v(turn.get("light_feedback")),"wall_turn":json_v(turn.get("wall_turn")),
+                "lane":json_v(turn.get("lane_feedback")),"open":json_v(turn.get("open_feedback")),"light":json_v(turn.get("light_feedback")),"wall_turn":json_v(turn.get("wall_turn")),"light_line":json_v(turn.get("light_line")),
                 "loop":json_v(turn.get("open_loop")),"quality":json_v(report.get("quality_issues"))})
             )?;
         }

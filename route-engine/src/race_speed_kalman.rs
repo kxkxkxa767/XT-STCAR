@@ -14,6 +14,15 @@ const MEASUREMENT_VARIANCE: f64 = 0.033 * 0.033;
 const PROCESS_VARIANCE_PER_S: f64 = 0.0018;
 const GATE_SIGMA: f64 = 3.0;
 const SCAN_S: f64 = 0.1;
+/// The IMU carries the last corrected speed across lidar speeds missing for this long.
+///
+/// Calibrated simulation of the practice field, 2026-11-10: in 6-15% of light approaches the
+/// leg line was displaced for a few scans while the car straightened, the lidar speed was
+/// missing for 0.4 s, and the first one after it read 2.4-3.3 m/s at a true 1.1-1.3. With the
+/// anchor older than one scan age the filter started afresh on that sample, the single brake
+/// fired 1.8 m from the gantry and the car stood 0.3 m short of the beam. Bridged, the sample
+/// meets the prediction and is weighed as the displaced range it is.
+const BRIDGE_S: f64 = 1.0;
 
 /// The variance after a correction once the filter has settled at the lidar's rate, so
 /// that the second scan already has the settled gain, as the fixed weight did.
@@ -57,7 +66,7 @@ impl SpeedKalman {
     /// One lidar body speed at scan time `at`, with the IMU integral of the same moment.
     /// Missing lidar never calls this, so it neither advances the clock nor renews the anchor.
     pub fn update(&mut self, at: f64, integral: f64, measured: f64) {
-        let prior = self.anchor.filter(|(previous, _, _)| 0. < at - previous && at - previous <= SCAN_AGE_S);
+        let prior = self.anchor.filter(|(previous, _, _)| 0. < at - previous && at - previous <= BRIDGE_S.max(SCAN_AGE_S));
         let Some((previous, body, origin)) = prior else {
             let filtered = measured.max(0.);
             self.variance = settled_variance();

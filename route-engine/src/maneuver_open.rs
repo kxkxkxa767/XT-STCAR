@@ -569,6 +569,7 @@ impl Maneuver {
         }
         let rate = self.compass.rate;
         let race = self.race_inputs.is_some();
+        let late_sight = self.wall_turn.late_sight;
         // y46: the 1570 approach reached cone one at 2.04 m/s, turned in late and ran wide.
         // y52: at 1.7-1.8 m/s cone two's 1.1 m pursuit swung right, left, then right and the
         // turn began abeam of the cone. Race loops look ahead in proportion to the speed
@@ -739,8 +740,18 @@ impl Maneuver {
         let loop_center = (center.0 + a * e1.0 + b * e2.0, center.1 + a * e1.1 + b * e2.1);
         let support = Some((center, radius + SIDE_BODY_EXTENT_M + OPEN_CARROT_SUPPORT_GAP_M));
         let plan_radius = plan.idx("radius_m").f();
-        let (carrot, mode, before) = loop_carrot(loop_center, plan_radius, sidef, lookahead, e1, e2, support);
+        let (mut carrot, mode, before) = loop_carrot(loop_center, plan_radius, sidef, lookahead, e1, e2, support);
         slot.approaching = Some(before > 0.);
+        // Race, loop one: a car inside its circle pursues a wider one (see race_first_cone).
+        let mut held = None;
+        if race && side > 0 && mode == "circle" && !late_sight && heading - axis >= crate::race_first_cone::RADIAL_FROM_RAD {
+            let r_now = hypot(loop_center.0, loop_center.1);
+            let radius = crate::race_first_cone::held_radius(plan_radius, r_now);
+            if radius > plan_radius {
+                carrot = loop_carrot(loop_center, radius, sidef, lookahead, e1, e2, support).0;
+            }
+            held = Some(dict! {"radius_m" => radius, "from_center_m" => r_now});
+        }
         let free_m = {
             let mut d = V::dict();
             for (t, v) in slot.free.iter() {
@@ -789,7 +800,7 @@ impl Maneuver {
             }
             d
         };
-        dict! {
+        let mut out = dict! {
             "source_seq" => scan.idx("seq").clone(), "track_id" => identity.clone(),
             "direction" => if side > 0 { "anticlockwise" } else { "clockwise" }, "axis_rad" => axis,
             "compass_heading_rad" => heading, "progress_rad" => sidef * (heading - axis),
@@ -804,7 +815,11 @@ impl Maneuver {
             "response_carrot_left_m" => command.map(|c| round3_list(&[c.0, c.1])),
             "pursuit_curvature_per_m" => curvature, "target_pwm" => pwm, "current_pose_pwm" => current_pose_pwm,
             "basis" => "support_loop_planned_from_probed_free_space", "swept_path_certified" => false,
+        };
+        if let Some(held) = held {
+            out.set("held_circle", held);
         }
+        out
     }
 
     /// _tracking_heading(scan).

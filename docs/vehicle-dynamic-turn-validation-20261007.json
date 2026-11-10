@@ -29102,5 +29102,285 @@
       "quote": "不改了，就这样吧，感觉到20s以内应该不可能，更新共同记忆然后上传吧",
       "meaning": "Tuning stops at y74 / engine 181, which stays on the car. No y75 was started. Next build, if the user resumes, is y75 / 182 from base claude-turn181."
     }
+  },
+  "y75_first_loop_held_circle_light_speed_bridge_20261110": {
+    "date": "2026-11-10",
+    "author": "Claude (model claude-fable-5-2)",
+    "engine_round": 182,
+    "baseline": "y74 / engine 181 (883ea31) on the car, run on 11-09 (21.29 s)",
+    "user": [
+      "你继续修改，修改完后交给codex，并说明你的模型向codex问好",
+      "你完成了的话就更新记忆交给codex，测试可以让codex来"
+    ],
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": {
+      "cone_one_real_runs_y53_to_y74": {
+        "runs": 15,
+        "loop_radius_minus_plan_m_heading_45_to_150_deg": {
+          "median": -0.11,
+          "range": [
+            -0.19,
+            -0.02
+          ],
+          "y74": -0.19
+        },
+        "pass_lidar_to_cone_centre_m": {
+          "median": 0.37,
+          "range": [
+            0.27,
+            0.47
+          ],
+          "plan": 0.5,
+          "y74": 0.29,
+          "y57": 0.27
+        },
+        "relation": "The pass equals the radius held less the plan's 0.40 m offset, run by run (within 0.04 m).",
+        "steering": "Per-frame path curvature against the modelled wheel angle: the 40 PWM play fits best (rms 0.099 at 0.2 s lag); settled gain against the steering table 1.29 in loop one (quartiles 1.26-1.33, single runs 1.22-1.48, y74 1.48), 1.34 in loop two (11 frames). The loop-one output assumes 1.2.",
+        "other_side": "Loop one has 0.28-0.45 m to the nearest board. Loop two is balanced: cone 0.14-0.25 m, outer wall at the light entry 0.10-0.21 m; it is not changed."
+      },
+      "light_speed": "y74 seq 172-174: the legs were lost for two saved frames (board odometry) and the next lidar speed read 1.63 against 1.26 predicted; y70 seq 177 1.85 against 1.37. The filter weighed both down because its anchor was under 0.30 s old. With an older anchor it restarted on the sample."
+    },
+    "change": [
+      "race_first_cone.rs held_radius; maneuver_open.rs open_loop_geometry: race, loop one, pursuit mode circle, heading past 35 deg, cone not sighted late: a car more than 0.10 m inside its plan circle has its carrot on a wider circle, radius + 1.5 x (the excess), at most + 0.25 m. Diagnostics open_loop.held_circle.",
+      "race_speed_kalman.rs: the IMU carries the last corrected speed across lidar speeds missing for up to 1.0 s (was one scan age, 0.30 s), so the first sample after a short dropout meets a prediction.",
+      "Simulation only: plant.rs turn_scrub and steering_gain_left (defaults keep the 11-08 model bit for bit); main.rs trace adds light_line; scripts/track-spec-sim.py --config and --no-beam-posts; config/track-spec-sim-20261110.json.",
+      "Not changed: crosswalk stop and wait, loop two, transfer, light stop target and brake, finish, surface model."
+    ],
+    "replay_on_real_frames": "The pursuit replica matches the logged curvature to 0.001 /m. Loop-one command with the change: y74 down 10-53 PWM from heading 45 deg, y57 3-30, y70 0-28, y67 0-17; y71 and y61 unchanged.",
+    "calibrated_model": {
+      "config": "config/track-spec-sim-20261110.json: right gain 1.2, left gain 1.5, servo delay 0.10 s, time constant 0.06 s, tyre scrub 0.06 of the lateral acceleration",
+      "why": "The 11-08 model ran loop one outside its plan and passed cone one at 0.54 m; the car runs inside and passes at 0.37.",
+      "practice_field_p10_median_p90": {
+        "cone_one_pass_m": {
+          "real": [
+            0.29,
+            0.37,
+            0.46
+          ],
+          "model_20261110": [
+            0.36,
+            0.38,
+            0.41
+          ],
+          "model_20261108": [
+            0.51,
+            0.54,
+            0.58
+          ]
+        },
+        "loop_radius_minus_plan_m": {
+          "real": [
+            -0.17,
+            -0.11,
+            -0.02
+          ],
+          "model_20261110": [
+            -0.19,
+            -0.1,
+            -0.04
+          ],
+          "model_20261108": [
+            0.02,
+            0.17,
+            0.35
+          ]
+        },
+        "speed_at_first_pass_mps": {
+          "real": [
+            1.25,
+            1.3,
+            1.41
+          ],
+          "model_20261110": [
+            1.3,
+            1.33,
+            1.37
+          ],
+          "model_20261108": [
+            1.5,
+            1.55,
+            1.6
+          ]
+        },
+        "cone_two_pass_m": {
+          "real": [
+            0.39,
+            0.51,
+            0.71
+          ],
+          "model_20261110": [
+            0.4,
+            0.48,
+            0.59
+          ],
+          "model_20261108": [
+            0.44,
+            0.53,
+            0.59
+          ]
+        }
+      }
+    },
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 18,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "cone_one_body_gap_m_200_practice_cases_min_p10_median": {
+        "left_gain_1.65_like_y74": {
+          "y74_code": [
+            0.05,
+            0.07,
+            0.1
+          ],
+          "y75_code": [
+            0.12,
+            0.16,
+            0.21
+          ],
+          "runs_under_0.10_m": [
+            111,
+            0
+          ]
+        },
+        "left_gain_1.5_median_car": {
+          "y74_code": [
+            0.11,
+            0.13,
+            0.14
+          ],
+          "y75_code": [
+            0.15,
+            0.17,
+            0.2
+          ]
+        },
+        "left_gain_1.35_like_y71": {
+          "y74_code": [
+            0.19,
+            0.2,
+            0.21
+          ],
+          "y75_code": [
+            0.2,
+            0.21,
+            0.22
+          ]
+        },
+        "finish": "200 of 200 in all six",
+        "cost": "crosswalk go to first pass at most one scan (0.1 s) later"
+      },
+      "full_runs_finish_and_zero_penalty_percent_y74_then_y75": {
+        "model_20261108": {
+          "practice": [
+            "99.0/75.0",
+            "99.0/74.5"
+          ],
+          "guide_8x4": [
+            "98.0/74.0",
+            "99.5/75.5"
+          ],
+          "lanes_0.9": [
+            "73.4/34.4",
+            "72.9/35.8"
+          ],
+          "lanes_1_to_2": [
+            "61.8/28.6",
+            "61.6/29.3"
+          ],
+          "fig5_8x4.75": [
+            "80/37",
+            "79/40"
+          ],
+          "fig5_7x4.2": [
+            "61/24",
+            "61/25"
+          ],
+          "fig5_6x4": [
+            "11/3",
+            "11/3"
+          ],
+          "fig5_5x4": [
+            "0/0",
+            "0/0"
+          ],
+          "fig5_8x4.75_lane_1.1": [
+            "61/29",
+            "59/28"
+          ]
+        },
+        "model_20261110": {
+          "practice": [
+            "100/83.0",
+            "100/81.5"
+          ],
+          "guide_8x4": [
+            "99.0/83.5",
+            "99.0/79.0"
+          ],
+          "lanes_0.9": [
+            "79.5/35.5",
+            "79.3/37.3"
+          ],
+          "lanes_1_to_2": [
+            "67.5/31.0",
+            "70.3/33.1"
+          ],
+          "fig5_8x4.75": [
+            "84/34",
+            "84/35"
+          ],
+          "fig5_7x4.2": [
+            "65/34",
+            "64/38"
+          ],
+          "fig5_6x4": [
+            "96/27",
+            "96/27"
+          ],
+          "fig5_5x4": [
+            "18/4",
+            "18/4"
+          ],
+          "fig5_8x4.75_lane_1.1": [
+            "70/31",
+            "70/30"
+          ]
+        },
+        "note": "The zero-penalty changes are reshuffles of the light-stop penalty (see open_findings), not an effect of loop one. Wide lanes on the calibrated model gain 2.8 points from fewer cone-one contacts.",
+        "results": [
+          "work/track-spec-y74",
+          "work/track-spec-y75",
+          "work/track-spec-y74-c",
+          "work/track-spec-y75-c"
+        ]
+      },
+      "light_speed_bridge_200_practice_cases_without_beam_posts": {
+        "brakes_begun_beyond_1.35_m": [
+          73,
+          65
+        ],
+        "standstill_before_the_stop": [
+          5,
+          0
+        ],
+        "rear_on_the_beam": [
+          23,
+          18
+        ]
+      },
+      "not_run_on_the_car": true
+    },
+    "open_findings": [
+      "Light stop, model: the +20 s \"rear on the beam\" follows the single light brake starting early. Started within 1.35 m of the gantry it ends 0.49/0.54/0.58 m out and 0-8% leave the rear on the beam; started earlier, 23-65%.",
+      "The model stands two 3 cm posts at the beam. With them the practice field reports two_stations; the car reports divider_and_pair (y67, y71, y74), which the model only does without them. So the real practice field shows the lidar no beam posts, and the post confusion behind 11-08 items 5 and 6 may largely be a model artifact. Without posts, early brakes in 0.9 m lanes fall from 78% to 22%. What stands at the beam on the race field is not known.",
+      "A fast arrival (1.2-1.3 m/s) brakes from 1.5-1.7 m and releases for the coast, which ends 0.47/0.56/0.64 m out. Aiming that coast 0.06 m deeper was tried and withdrawn: the model lost the lamp (under 0.40 m) and runs without a light stop rose from 11 to 20 of 200.",
+      "Model, practice field without posts: 5.5% of runs do not stop at the light. Trace s3: the leg line is held, then re-acquired 0.88 m too far; the car cruises to the gantry. Not seen on the car in y64-y74.",
+      "One-scan plan flip at the approach-to-circle transition of loop one (offset_axis 0.25 for one scan) swings the physical servo about 100 PWM through the play compensation. Left as it is.",
+      "Crosswalk: the program wait is 3.19 s (32 scans at a 3.1 s threshold) and the car stands 0.1-0.2 s longer than that. Left as it is: a stopwatch needs the margin."
+    ],
+    "for_codex": "Build 182 / y75 from base claude-turn181 (on the car), then run it on the practice field when the user confirms; compare loop one against y74: open_loop.held_circle, cone-one body gap (y74 0.052 m), radius against plan, time from crosswalk go to first pass. Then the light items above, with real data first.",
+    "remaining_validation": "Everything on the car: the held circle (expected cone-one gap 0.12-0.22 m, wall side unchanged), no change at cone two, light stop and finish as in y74."
   }
 }

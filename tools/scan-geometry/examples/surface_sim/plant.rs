@@ -39,6 +39,9 @@ pub struct Plant {
     servo_tau: f64,
     play: f64,
     gain: f64,
+    /// Left turns only; `gain` when absent.
+    gain_left: f64,
+    turn_scrub: f64,
     turn_drag: f64,
     coast: f64,
     brake: f64,
@@ -126,7 +129,11 @@ impl Plant {
             servo_tau: number(config, "servo_tau_s", 0.10),
             play: number(config, "steering_play_pwm", 40.),
             gain: number(config, "steering_gain", 1.2),
+            gain_left: number(config, "steering_gain_left", number(config, "steering_gain", 1.2)),
             turn_drag: number(config, "turn_drag", 0.5),
+            // Tyre scrub: a share of the lateral acceleration acts against the motion at once
+            // (the y53-y74 loops lost about 0.4 m/s in 1.3 s; turn_drag alone loses 0.2).
+            turn_scrub: number(config, "turn_scrub", 0.),
             coast: number(config, "coast_decel_mps2", 0.58),
             brake: number(config, "brake_decel_mps2", 0.95),
             accel_max: number(config, "drive_accel_max_mps2", 4.),
@@ -153,7 +160,7 @@ impl Plant {
         let mut model = json!({
             "speed_table": self.speed_table, "motor_delay_s": self.motor_delay,
             "servo_delay_s": self.servo_delay, "servo_tau_s": self.servo_tau,
-            "steering_play_pwm": self.play, "steering_gain": self.gain, "turn_drag": self.turn_drag,
+            "steering_play_pwm": self.play, "steering_gain": self.gain, "steering_gain_left": self.gain_left, "turn_drag": self.turn_drag, "turn_scrub": self.turn_scrub,
             "response_table": self.response_table,
             "coast_decel_mps2": self.coast, "brake_decel_mps2": self.brake,
             "drive_accel_max_mps2": self.accel_max, "resistance_scale": self.resistance_scale,
@@ -214,7 +221,7 @@ impl Plant {
             self.physical_servo + self.play,
         );
         let table = [(1200., -1.35), (1314., -1.2), (1500., 0.), (1720., 1.42)];
-        let requested_k = interpolate(&table, self.wheel_pwm) * self.gain;
+        let requested_k = interpolate(&table, self.wheel_pwm) * if self.wheel_pwm > 1500. { self.gain_left } else { self.gain };
         let drive = self.last_motor > 1500. && (self.speed > 0.05 || self.last_motor >= 1560.);
         let extra_drag = (self.active_resistance_scale - 1.) * self.coast;
         let requested_accel = if drive {
@@ -229,6 +236,7 @@ impl Plant {
         };
         let grip = self.traction_mu * 9.80665;
         let lateral = self.speed * self.speed * requested_k;
+        let requested_accel = requested_accel - self.turn_scrub * lateral.abs();
         let demand = lateral.hypot(requested_accel);
         self.max_traction_ratio = self.max_traction_ratio.max(demand / grip);
         let scale = if demand > grip { grip / demand } else { 1. };

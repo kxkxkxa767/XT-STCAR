@@ -3,6 +3,12 @@
 
     cargo build --release --manifest-path tools/scan-geometry/Cargo.toml --example surface_sim
     python3 scripts/track-spec-sim.py --out work/track-spec-NEW [--n 1500] [--jobs 8]
+    python3 scripts/track-spec-sim.py --out work/track-spec-NEW --config config/track-spec-sim-20261110.json
+
+--no-beam-posts leaves out the two posts the model otherwise stands at the light beam.
+--config picks the vehicle model. The default is the 11-08 one, so runs stay comparable with the
+11-08 and 11-09 reports; config/track-spec-sim-20261110.json has the steering fitted to the cone
+loops of the real runs y53-y74 (see its calibration note).
 
 Every layout is a random draw from the rule figures (rules Fig. 5, the table the user confirmed
 on 2026-11-08). The real Supervisor drives; surface_sim supplies lidar, camera, IMU and the car.
@@ -306,7 +312,13 @@ def main():
     ap.add_argument('--jobs', type=int, default=8)
     ap.add_argument('--seed', default='20261108')
     ap.add_argument('--report', help='write the compact JSON here')
+    ap.add_argument('--config', help='vehicle model JSON (default config/track-spec-sim-20261108.json)')
+    ap.add_argument('--no-beam-posts', action='store_true',
+                    help='no posts at the light beam: the real practice field shows the lidar none (y67, y71, y74 report divider_and_pair)')
     a = ap.parse_args()
+    if a.config:
+        global BASE
+        BASE = json.loads(Path(a.config).read_text())
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=False)
 
@@ -317,6 +329,9 @@ def main():
             layout = draw_layout(rng, mode)
             jobs.append((f'lane{mode}/{i:05d}', case_config(rng, 1000 + i, layout), out))
     jobs += sweep_jobs(out)
+    if a.no_beam_posts:
+        for _, cfg, _ in jobs:
+            cfg['layout']['beam_posts'] = False
     print(f'{len(jobs)} runs on {a.jobs} workers')
 
     rows, kept = [], collections.Counter()
