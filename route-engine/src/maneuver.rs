@@ -43,7 +43,9 @@ pub const START_LAUNCH_MOTOR: i64 = 1600;
 pub const LIGHT_LAUNCH_MOTOR: i64 = 1600; // finish launch after a light release
 // Round y23: the straights' push (the start lane after the crosswalk, the transfer).
 pub const STRAIGHT_MOTOR: i64 = 1590;
-pub const TRANSFER_BOOST_MOTOR: i64 = 1600;
+// y77: user-approved 1620 trial only in RaceTransfer's straight boost phase;
+// both cone loops keep ROUTE_SLOW_MOTOR and the existing measured-speed cut.
+pub const TRANSFER_BOOST_MOTOR: i64 = 1620;
 // User 11-04: 1550 from the crosswalk to cone one is slow (asked 1565-1580). Race only:
 // the approach holds 1570 up to the cone's tangent point; the loop keeps 1550.
 pub const FIRST_APPROACH_MOTOR: i64 = 1570;

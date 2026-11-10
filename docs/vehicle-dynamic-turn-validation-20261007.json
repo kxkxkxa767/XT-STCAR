@@ -29532,8 +29532,8 @@
     "baseline": "y75 / engine 182 (400c917), now on the car",
     "user": "我放好了，编译完你可以直接跑",
     "launch_authorized_for_this_round": true,
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": "In y75 at seq 128/129/131/134 the selected left board jumped farther than the existing CHANNEL_BOARD_DRIFT_M from the known divider; the normal ahead-end branch did not apply the existing identity condition.",
     "change": [
       "Race only, maneuver_open.rs open_channel_target: apply the existing remembered-board / CHANNEL_BOARD_DRIFT_M condition to ordinary ahead-end candidates as well as the alongside fallback.",
@@ -29580,7 +29580,219 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
+    "build_status": "cross-compiled 183 / y76 from bdbdef0, deployed and tested",
+    "next": "Car remains y76 / 183, locked. y77 / 184 changes transfer boost only; user requested build/push tonight and test tomorrow after fresh placement/reset confirmation.",
+    "source_commit": "bdbdef05fd04df92408bf82d926e1284d85d2de8",
+    "car_run_y76": {
+      "deployed": true,
+      "source_commit": "bdbdef05fd04df92408bf82d926e1284d85d2de8",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261110-y76",
+      "evidence_files_ok": 83,
+      "result": "route_finish_zone_stop",
+      "completed": true,
+      "operator_observation": "路线正常，没有碰桶或碰板",
+      "effective_s": 21.571136851000002,
+      "move_to_stop_s": 31.658631101,
+      "light_wait_s": 10.087494249999999,
+      "timing_basis": "Same saved-frame mapping as y74 via work/y36/segments.py; segment boundary uncertainty about one scan. Software timing; not an official penalty-certified score.",
+      "segments_s_y74_y76": {
+        "move_to_crosswalk_stop": [
+          3.1988349560000007,
+          3.495274545
+        ],
+        "crosswalk_wait": [
+          3.1956661089999994,
+          3.0951391719999997
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.299979244000001,
+          4.297630419000001
+        ],
+        "first_pass_to_tangent": [
+          2.3994010269999997,
+          2.3960906349999984
+        ],
+        "tangent_to_second_pass": [
+          1.2981076049999984,
+          1.100960176000001
+        ],
+        "second_pass_to_light_stop": [
+          2.9989003479999994,
+          3.492845751000001
+        ],
+        "light_wait": [
+          9.890615123,
+          10.087494249999999
+        ],
+        "light_go_to_finish_stop": [
+          3.899069934,
+          3.6931961530000024
+        ]
+      },
+      "net_delta_from_y74_s": 0.28117762800000534,
+      "crosswalk": {
+        "front_gap_m": 0.467681585789105,
+        "program_wait_s": 3.1874676400000004,
+        "note": "Stored-frame wait 3.095 s maps the unsaved stop seq 50 to seq 51; program wait remains 3.187 s, threshold unchanged."
+      },
+      "cone_one": {
+        "nearest_body_gap_m": 0.14261215833554436,
+        "nearest_seq": 123,
+        "nearest_bin": 267,
+        "actual_held_in_fresh_saved_frames": [
+          {
+            "seq": 118,
+            "radius_m": 0.9086711777584983,
+            "from_center_m": 0.7942192148276679
+          },
+          {
+            "seq": 120,
+            "radius_m": 0.9981408043518538,
+            "from_center_m": 0.7345727970987642
+          },
+          {
+            "seq": 122,
+            "radius_m": 0.9808326966753773,
+            "from_center_m": 0.7461115355497485
+          },
+          {
+            "seq": 123,
+            "radius_m": 0.9969328043327581,
+            "from_center_m": 0.735378130444828
+          }
+        ],
+        "median_radius_minus_plan_m_held_eligible_frames": -0.10578078517233214,
+        "heading_peak_deg": 204.45120416033492
+      },
+      "transfer": {
+        "observations": [
+          {
+            "seq": 125,
+            "heading_deg": 163.5109621223353,
+            "board_lateral_m": null,
+            "natural_pwm": 1487
+          },
+          {
+            "seq": 126,
+            "heading_deg": 174.56617569920903,
+            "board_lateral_m": 1.375744620462577,
+            "natural_pwm": 1438
+          },
+          {
+            "seq": 128,
+            "heading_deg": 193.45603987129908,
+            "board_lateral_m": 1.3025168718275144,
+            "natural_pwm": 1406
+          },
+          {
+            "seq": 130,
+            "heading_deg": 204.45120416033492,
+            "board_lateral_m": 1.3427839376444632,
+            "natural_pwm": 1458
+          },
+          {
+            "seq": 131,
+            "heading_deg": 204.29279774796964,
+            "board_lateral_m": 1.2605433019326056,
+            "natural_pwm": 1494
+          },
+          {
+            "seq": 133,
+            "heading_deg": 203.2047348157264,
+            "board_lateral_m": 1.12977031533454,
+            "natural_pwm": 1514
+          }
+        ],
+        "saved_frames_show_outer_wall_jump": false,
+        "note": "The car completed the exit without the y75 failure. Saved frames show continuous divider selection; this one run does not isolate every unsaved invocation of the new association condition.",
+        "boost_ack": "1600 in seq 131 and 133; 1500 in 134-141, 1550 again at 142; about 0.3 s boost then 0.8 s coast by saved-frame boundaries."
+      },
+      "cone_two": {
+        "tangent_speed_mps": 1.4627340843250933,
+        "nearest_body_gap_m": 0.13574672833422152,
+        "nearest_seq": 152,
+        "nearest_bin": 103
+      },
+      "light": {
+        "stop_front_gap_m": 0.5924256483236212,
+        "rear_past_beam_m": 0.001268234298889337,
+        "release_basis": "green_in_fresh_frames_after_the_stop",
+        "green_frames": [
+          [
+            94,
+            28.906567576000064,
+            0.0,
+            0.7997
+          ],
+          [
+            95,
+            29.221866548999802,
+            0.0,
+            0.794
+          ]
+        ],
+        "brake_started_at_s": 16.814354032,
+        "brake_ended_at_s": 17.230522408,
+        "brake_end_reason": "coast_reaches_target",
+        "extended_0p3_to_1p0_s_bridge_exercised": "not established from saved snapshots",
+        "remaining_observation": "Estimated tail margin is only 1.27 mm, below lidar/geometry accuracy. Operator confirmed route and no contacts, but did not specifically confirm rear wheels fully across beam. Check physically tomorrow; light settings and item 5 unchanged."
+      },
+      "finish": {
+        "front_gap_m": 0.2589300920767835,
+        "creeps": 0,
+        "standstill_confirmed": true
+      },
+      "cpu": {
+        "route_engine_core_fraction": 0.15992550341721443,
+        "max_tick_compute_s": 0.008151131000005307,
+        "scan_to_tick_mean_s": 0.0013536890458716454
+      },
+      "imu": {
+        "checksum_errors": 0,
+        "clock": "captured_at in ms from the same Instant as lidar.received_program_s",
+        "device": "/dev/imu",
+        "error": null,
+        "samples": 3518
+      },
+      "quality_counts": {},
+      "after": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "trajectory": "work/codex-y75-review-20261110/y74-y75-y76-two-cones.png",
+      "trajectory_basis": "Fresh cone-one/second-cone support centres with logged compass heading; second cone fixed from common-visibility median. Local reconstruction through two cones, not external localization or the full course."
+    }
+  },
+  "y77_transfer_boost1620_20261110": {
+    "date": "2026-11-10",
+    "author": "Codex",
+    "engine_round": 184,
+    "baseline": "y76 / engine 183 (bdbdef0), physically completed 21.571 s less red-light wait",
+    "user": [
+      "绕桶和两个桶衔接的时候你觉得pwm能不能调到1620",
+      "你改完后编译上传记录，明天再测"
+    ],
+    "agreed_scope": "After the assistant proposed testing 1620 only in the inter-cone straight boost and keeping both bends at 1550, the user requested completion, build and push tonight; physical test tomorrow.",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "Rust TRANSFER_BOOST_MOTOR 1600 -> 1620. RaceTransfer::Boost is the only output site; the supervisor transfer whitelist and DRIVE_MOTORS consume the same constant.",
+      "Keep physical cone bends at ROUTE_SLOW_MOTOR 1550, existing 1.8 m/s tangent target and measured-speed/coast selection, first-loop held circle, y76 channel identity fix, crosswalk, lights, finish and surface logic.",
+      "No console Python code or new test file. No new limit or safety gate. No additional real run tonight."
+    ],
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 18,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation_sweep": false
+    },
     "build_status": "source ready for cross-compilation",
-    "next": "Build 183 / y76 from claude-turn182, deploy and run once using the user's fresh placement/start authorization. Verify the first exit follows the divider or reversed axis and reaches the real second cone; continue through light and finish."
+    "vehicle_baseline_label": "claude-turn183",
+    "next": "Cross-compile 184 / y77 from claude-turn183, update shared records and push origin/main. Do not deploy or launch tonight. Tomorrow needs a new start-position, photoelectric and light reset confirmation.",
+    "expected_effect": "Experimental stronger straight boost; no promised time gain. y76 boosted only about 0.3 s before an estimated stopping-distance cut, so 1620 may also cut sooner. Measure actual tangent speed, first-to-second time and board clearance.",
+    "remaining_light_observation": "y76 stop gap 0.592 m and estimated tail past beam 0.00127 m; check rear-wheel position physically tomorrow, not a reason to alter item 5 or light settings in this PWM-only candidate."
   }
 }
