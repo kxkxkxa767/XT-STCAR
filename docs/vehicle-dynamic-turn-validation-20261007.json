@@ -29789,10 +29789,22 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
-    "build_status": "source ready for cross-compilation",
+    "build_status": "cross-compiled and vision helper built; not deployed, not run",
     "vehicle_baseline_label": "claude-turn183",
     "next": "Cross-compile 184 / y77 from claude-turn183, update shared records and push origin/main. Do not deploy or launch tonight. Tomorrow needs a new start-position, photoelectric and light reset confirmation.",
     "expected_effect": "Experimental stronger straight boost; no promised time gain. y76 boosted only about 0.3 s before an estimated stopping-distance cut, so 1620 may also cut sooner. Measure actual tangent speed, first-to-second time and board clearance.",
-    "remaining_light_observation": "y76 stop gap 0.592 m and estimated tail past beam 0.00127 m; check rear-wheel position physically tomorrow, not a reason to alter item 5 or light settings in this PWM-only candidate."
+    "remaining_light_observation": "y76 stop gap 0.592 m and estimated tail past beam 0.00127 m; check rear-wheel position physically tomorrow, not a reason to alter item 5 or light settings in this PWM-only candidate.",
+    "source_commit": "9e95c7d6e146d00dfc807c3d3d46b0d102d2fb6d",
+    "package": {
+      "engine_label": "claude-turn184",
+      "vision_label": "y77",
+      "runtime_base_label": "claude-turn183",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn184-9e95c7d.tar.gz",
+      "engine_manifest": "work/vehicle-dynamic-deploy-20261008/claude-turn184-package.json",
+      "vision_manifest": "work/vehicle-dynamic-deploy-20261008/claude-y77-package.json",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    }
   }
 }
