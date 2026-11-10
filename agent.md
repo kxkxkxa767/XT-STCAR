@@ -1,5 +1,12 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-10 Claude：y75 已编译，交给 Codex 检查和实测）
+
+- **y75／182（`400c917`，已编译，未部署，基线 `claude-turn181`）**，机读 `y75_first_loop_held_circle_light_speed_bridge_20261110`。车上仍是 y74／181。用户 11-10 改为“你继续修改，修改完后交给codex”，并说测试和核对交给 Codex。
+- 两处改动（比赛模式）：第一圈比规划圆靠内超过 0.10 m 时追更大的圆（`race_first_cone.rs` `held_radius`）；灯前测速在雷达车速缺测不到 1 s 时由 IMU 带过去（`race_speed_kalman.rs`）。
+- 仿真车辆模型按 15 轮实车绕桶数据校准：`config/track-spec-sim-20261110.json`，脚本加了 `--config`、`--no-beam-posts`。
+- 完整说明和待办在 `memoryshare.md` 文末；建置后的套件没有再核对。
+
 ## 当前接手入口（2026-11-09 晚 Claude：y74 实跑 21.29 s，用户决定不再调整）
 
 - **车上是 y74／181（`883ea31`），已跑完、锁定。** 扣红灯 21.29 s（y71 21.17，y67 20.97），离板 0.242 m，零补进，无质量等待。证据 `left-cone-trial-20261109-y74`，机读 `y74_rule_range_geometry_20261109.car_run_y74`。
