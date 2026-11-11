@@ -22,7 +22,7 @@ const SCAN_S: f64 = 0.1;
 /// anchor older than one scan age the filter started afresh on that sample, the single brake
 /// fired 1.8 m from the gantry and the car stood 0.3 m short of the beam. Bridged, the sample
 /// meets the prediction and is weighed as the displaced range it is.
-const BRIDGE_S: f64 = 1.0;
+pub(crate) const BRIDGE_S: f64 = 1.0;
 
 /// The variance after a correction once the filter has settled at the lidar's rate, so
 /// that the second scan already has the settled gain, as the fixed weight did.

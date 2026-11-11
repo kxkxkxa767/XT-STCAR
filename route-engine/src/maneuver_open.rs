@@ -592,6 +592,11 @@ impl Maneuver {
         let floats = Self::ranges_floats(scan);
         let bins = bins_of(target.idx("support_bins"));
         let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));
+        if side < 0 && self.route_stage == "second_loop"
+            && py_eq(target.get("source_seq"), scan.get("seq"))
+            && let Some(input) = self.race_inputs {
+            self.race_light.entry_motion.observe(scan, self.last_now, identity, center, input);
+        }
         let sidef = side as f64;
         let (e1, e2) = axis_frame(axis, heading, sidef);
         let points = scan_points(&floats, hypot(center.0, center.1) + OPEN_PROBE_REACH_M);
@@ -1061,6 +1066,7 @@ impl Maneuver {
     /// _open_begin_second_loop(scan, now, control).
     fn open_begin_second_loop(&mut self, scan: &V, now: f64, control: &V) {
         if self.race_inputs.is_some() { self.race_transfer.support_handed_over(); }
+        self.race_light.entry_motion = Default::default();
         let target = self.second_target.clone();
         self.second_track_id = target.idx("track_id").clone();
         let id = self.second_track_id.clone();
@@ -1297,9 +1303,13 @@ impl Maneuver {
     }
 
     fn response_pose_with_rate(&self, rate: f64) -> (f64, f64, f64, f64) {
+        self.response_pose_with_speed(rate, OPEN_PREDICT_SPEED_MPS)
+    }
+
+    fn response_pose_with_speed(&self, rate: f64, speed: f64) -> (f64, f64, f64, f64) {
         let horizon = OPEN_STEER_LAG_S + (self.servo - NEUTRAL).abs() as f64 / OPEN_RELEASE_PWM_PER_S / 2.;
         let turn = rate * horizon;
-        let distance = OPEN_PREDICT_SPEED_MPS * horizon;
+        let distance = speed * horizon;
         if turn.abs() < 1e-6 {
             return (distance, 0., 0., horizon);
         }
@@ -1651,13 +1661,16 @@ impl Maneuver {
             lane.set("entry_gate", aim(0., 0.).2);
         }
         let point = lane_point(0., 0.);
-        let (curvature, pwm) = if self.race_inputs.is_some() && self.route_stage == "light_entry" {
+        let (curvature, pwm) = if let Some(input) = self.race_inputs && self.route_stage == "light_entry" {
             // y61: old radar-yaw/cross-neutral selection turned a current
             // right correction into large left commands near the outer board.
             // Only the entry controller uses current IMU yaw and continuous
             // curvature anticipation; second-loop exit previews stay unchanged.
             let yaw = self.race_inputs.and_then(|i| i.yaw_rate).filter(|r| r.is_finite());
-            let response = yaw.map(|r| self.response_pose_with_rate(r)).or(pose);
+            let entry_speed = self.race_light.entry_motion.speed(self.last_now, input.forward_integral);
+            let response_rate = yaw.or_else(|| self.compass.rate.is_finite().then_some(self.compass.rate));
+            let response_speed = if response_rate.is_some() { entry_speed.unwrap_or(OPEN_PREDICT_SPEED_MPS) } else { OPEN_PREDICT_SPEED_MPS };
+            let response = response_rate.map(|r| self.response_pose_with_speed(r, response_speed)).or(pose);
             let current = pursuit_pwm(point);
             if let Some(response) = response {
                 let moved = (response.0*u.0+response.1*u.1, response.1*u.0-response.0*u.1);
@@ -1665,7 +1678,10 @@ impl Maneuver {
                 let curvature = (current.0+predicted.0)*0.5;
                 lane.set("entry_steering_response", dict! {
                     "current_pwm" => current.1, "predicted_pwm" => predicted.1,
-                    "yaw_source" => if yaw.is_some() { "calibrated_imu" } else { "lidar_compass" },
+                    "response_speed_mps" => response_speed,
+                    "speed_source" => if entry_speed.is_some() && response_rate.is_some() { "second_cone_motion_plus_short_imu" } else { "original_speed_fallback" },
+                    "speed_observation" => self.race_light.entry_motion.diagnostics(self.last_now, input.forward_integral),
+                    "yaw_source" => if yaw.is_some() { "calibrated_imu" } else if response_rate.is_some() { "lidar_compass" } else { "original_pose_fallback" },
                     "basis" => "mean_curvature_over_response"
                 });
                 (curvature, clampi(NEUTRAL+round(ROUTE_PWM_PER_CURVATURE*curvature), nominal_right_limit_pwm(), SERVO_MAX))

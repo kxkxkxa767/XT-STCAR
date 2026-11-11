@@ -30350,8 +30350,8 @@
     "author": "Codex",
     "engine_round": 188,
     "baseline": "y80 / engine 187 (0412bab), currently installed and locked",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": "y80 ran wide in the first-cone bend under 1570 before the quality pause; target track 1 stayed fresh, there was no first_pass, and the 0.2071 s from wait to obstacle stop was shorter than recovery qualification.",
     "change": [
       "Restore 1550 only while actually turning around cone one; leave the first-cone approach speed-control loop unchanged.",
@@ -30367,8 +30367,8 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
-    "build_status": "188/y81 cross-compiled and helper built; not deployed or run",
-    "next": "Await a new placement/photoelectric/light-reset/start confirmation, deploy claude-turn188 and y81, then run once. Car remains y80/187 locked.",
+    "build_status": "188/y81 built, deployed and run; incomplete after light-entry obstacle exit",
+    "next": "Car remains y81/188 with outputs locked. Prepare y82/189 using live second-cone exit velocity in light-entry prediction; checks/build pending and no new launch authorized. Keep the post-stop observation discrepancy and active fault-braking question as separate follow-ups.",
     "source_commit": "2894fe7831cea66b5437499c3ae9fe247130861c",
     "package": {
       "engine_label": "claude-turn188",
@@ -30378,6 +30378,173 @@
       "runtime_changed": [
         "payload/route-engine"
       ]
+    },
+    "car_run_y81": {
+      "run_date": "2026-11-11",
+      "source_commit": "2894fe7831cea66b5437499c3ae9fe247130861c",
+      "engine_round": 188,
+      "deployed": true,
+      "completed": false,
+      "effective_s": null,
+      "result": "probe_obstacle_close_body",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261111-y81",
+      "evidence_files_ok": 48,
+      "last_route_stage": "light_entry",
+      "quality_counts": {},
+      "operator_observation": [
+        "用户描述等红灯变绿后又起步，随后才停下",
+        "用户明确全程自动、没有人工干预"
+      ],
+      "first_pass": {
+        "seq": 124,
+        "at_s": 12.4501541
+      },
+      "second_pass": {
+        "seq": 157,
+        "at_s": 15.745171722
+      },
+      "first_pass_to_second_pass_event_s": 3.2950176219999996,
+      "stop": {
+        "seq": 163,
+        "at_s": 16.347270826,
+        "bin": 319,
+        "body_gap_m": 0.06817924740583489,
+        "side": "front-left",
+        "physical_collision_confirmed": null
+      },
+      "light_events": {
+        "light_stop_present": false,
+        "light_go_present": false,
+        "red_detections": 2,
+        "green_detections": 0,
+        "red_frames": [
+          {
+            "frame": 55,
+            "program_time_s": 18.144
+          },
+          {
+            "frame": 56,
+            "program_time_s": 18.42
+          }
+        ],
+        "frame71_note": "Camera frame 71 shows the view after the lamp; this is not a recorded green release.",
+        "camera_coverage_end_program_s_approx": 22.57
+      },
+      "after_stop": {
+        "actuator_locked": true,
+        "physical_standstill_confirmed": false,
+        "samples": [
+          {
+            "scan_seq": 165,
+            "received_program_s": 16.543252175,
+            "armed": false,
+            "motor": 1500,
+            "servo": 1500,
+            "control_seq": 772,
+            "front_range_m": 2.895
+          },
+          {
+            "scan_seq": 167,
+            "received_program_s": 16.741913441,
+            "armed": false,
+            "motor": 1500,
+            "servo": 1500,
+            "control_seq": 772,
+            "front_range_m": 5.6770000000000005
+          },
+          {
+            "scan_seq": 169,
+            "received_program_s": 16.941224509,
+            "armed": false,
+            "motor": 1500,
+            "servo": 1500,
+            "control_seq": 772,
+            "front_range_m": 5.3020000000000005
+          },
+          {
+            "scan_seq": 171,
+            "received_program_s": 17.144082091,
+            "armed": false,
+            "motor": 1500,
+            "servo": 1500,
+            "control_seq": 772,
+            "front_range_m": 4.960000000000001
+          },
+          {
+            "scan_seq": 173,
+            "received_program_s": 17.340795618,
+            "armed": false,
+            "motor": 1500,
+            "servo": 1500,
+            "control_seq": 772,
+            "front_range_m": 4.633
+          },
+          {
+            "scan_seq": 175,
+            "received_program_s": 17.540264188,
+            "armed": false,
+            "motor": 1500,
+            "servo": 1500,
+            "control_seq": 772,
+            "front_range_m": 4.307
+          }
+        ],
+        "verified_motion_window_s": [
+          16.741913441,
+          17.540264188
+        ],
+        "front_range_change_m": [
+          5.677,
+          4.307
+        ],
+        "duration_s": 0.7983507469999971,
+        "range_decrease_m": 1.3699999999999992,
+        "control_seq_unchanged": 772,
+        "interpretation": "After near-obstacle exit the outputs were locked at 1500 with armed=false, but the car still coasted automatically; neutral/locked output is not physical standstill."
+      },
+      "observation_boundary": "Race records contain no normal light_stop/light_go and camera logged no green. The verified post-stop coasting window is 16.74–17.54 s. It does not fully explain or disprove the operator report of waiting for green and restarting: camera coverage ends near 22.57 s and the helper later restarts the console, so a later process may be outside these records. Preserve the discrepancy as unresolved; do not infer manual intervention from an operator_stop label.",
+      "diagnosis": {
+        "leading_mechanism": "The light-entry steering-response prediction still used fixed 1.3 m/s while the measured second-cone exit motion was about 2.3–2.4 m/s, underestimating travel during steering response and releasing right steering early.",
+        "old_prediction_speed_mps": 1.3,
+        "second_cone_exit_speed_estimate_mps": [
+          2.3,
+          2.4
+        ],
+        "direction_sign_error_found": false,
+        "scope": "Correct live motion used by the existing entry prediction; do not alter formal track dimensions, exit angle or average-curvature rule."
+      },
+      "fault_stop_followup": "Generic fault stop currently neutralizes/disarms; active fault braking would require a separate armed braking state and acknowledgement-before-lock design. No bridge-protocol change is included in the present candidate."
     }
+  },
+  "y82_light_entry_live_speed_20261111": {
+    "date": "2026-11-11",
+    "author": "Codex",
+    "engine_round": 189,
+    "baseline": "y81 / engine 188 (2894fe7), currently installed with outputs locked",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": "At second-cone exit the observed motion was about 2.3–2.4 m/s while entry-response travel was projected at fixed 1.3 m/s, so right steering was released early; direction was not reversed.",
+    "change": [
+      "Use a live speed estimate from fitted cone-two centres and IMU yaw, then transport it briefly into the light-entry response prediction.",
+      "The proposed observer keeps a fixed three-sample window and O(1) work; it is local motion estimation, not full-course SLAM.",
+      "Keep the existing average-curvature steering rule and planned circle, first-cone bend 1550, other race cruise 1570, inter-cone 1620, moving hold 1530 and current braking model.",
+      "Do not encode formal/practice track coordinates, lengths or an exit-angle constant. Do not change the bridge protocol or add active fault braking in this candidate."
+    ],
+    "implementation_status": "implemented: fresh cone-two fitted-centre motion and aligned IMU yaw/integral provide entry response speed; three transported samples, existing short bridge, fallback diagnostic",
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 24,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "test_changes": "Two in-file checks cover midpoint/control-clock alignment, rotation compensation, duplicate frames, expiry and identity rebinding. Equivalent if-let binding removed the added unwrap lint.",
+      "simulation_sweep": false
+    },
+    "build_status": "source ready for cross-compilation",
+    "followups": [
+      "Resolve the difference between the operator report of waiting for green/restarting and the limited controller/camera timeline; confirmed coasting alone is not a complete explanation.",
+      "Consider active fault braking only as a separately designed armed state with suitable acknowledgements; disarmed neutral output must not be described as physical standstill."
+    ],
+    "next": "Complete implementation and required checks, build 189/y82 from claude-turn188. No new start is authorized; await fresh placement, photoelectric/light reset and start confirmation."
   }
 }

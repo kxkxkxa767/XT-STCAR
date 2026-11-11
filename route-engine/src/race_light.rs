@@ -10,6 +10,138 @@ use crate::motion_sensors::{RangeHistory, lane_range_speed};
 use crate::maneuver::{LANE_SPEED_BASELINE, LANE_SPEED_HISTORY};
 use crate::race_speed_kalman::SpeedKalman;
 
+#[derive(Clone, Debug)]
+struct ConeMotionSample {
+    seq: i64,
+    observed_at: f64,
+    at: f64,
+    identity: V,
+    center: (f64, f64),
+    yaw: f64,
+    integral: f64,
+}
+
+/// Motion at cone two for the entry response, independent of route decisions.
+#[derive(Clone, Debug, Default)]
+pub struct EntryMotionSpeed {
+    previous: Option<ConeMotionSample>,
+    anchors: [Option<(f64, f64, f64)>; 3], // control time, body speed, IMU integral
+    next: usize,
+}
+
+impl EntryMotionSpeed {
+    pub fn observe(&mut self, scan: &V, now: f64, identity: &V, center: (f64, f64), input: crate::motion_sensors::RaceInputs) {
+        let seq = scan.get("seq").i();
+        let observed_at = scan.get("received_at").f();
+        if self.previous.as_ref().is_some_and(|old| old.seq == seq && crate::py::py_eq(&old.identity, identity)) { return; }
+        let (Some(yaw), Some(integral)) = (input.yaw_rate, input.forward_integral) else {
+            *self = Self::default();
+            return;
+        };
+        if ![now, observed_at, center.0, center.1, yaw, integral].iter().all(|v| v.is_finite()) {
+            *self = Self::default();
+            return;
+        }
+        let sample = ConeMotionSample { seq, observed_at, at: now, identity: identity.clone(), center, yaw, integral };
+        let Some(old) = self.previous.replace(sample) else { return };
+        let dt = observed_at - old.observed_at;
+        let imu_dt = now - old.at;
+        if seq <= old.seq || !(0. < dt && dt <= crate::helpers::SCAN_AGE_S)
+            || !(0. < imu_dt && imu_dt <= crate::helpers::SCAN_AGE_S)
+            || !crate::py::py_eq(&old.identity, identity) {
+            self.anchors = [None; 3];
+            self.next = 0;
+            return;
+        }
+        // Same stationary support: rotate the new centre into the old car
+        // frame. The translation's midpoint-forward component is body motion;
+        // the sensor's lateral motion from yaw does not enter that component.
+        let midpoint = (old.observed_at + observed_at) * 0.5;
+        // Align the yaw trapezoid to the actual scan interval; the current
+        // control sample can be a few milliseconds later than scan receipt.
+        let mean_yaw = old.yaw + (yaw - old.yaw) * (midpoint - old.at) / imu_dt;
+        let angle = mean_yaw * dt;
+        let (sin, cos) = angle.sin_cos();
+        let displacement = (old.center.0 - (cos * center.0 - sin * center.1),
+                            old.center.1 - (sin * center.0 + cos * center.1));
+        let half = angle * 0.5;
+        let (sh, ch) = half.sin_cos();
+        let sinc = if half.abs() < 1e-6 { 1. } else { sh / half };
+        let mean = (displacement.0 * ch + displacement.1 * sh) / (dt * sinc);
+        // Geometry gives interval-mean speed, not current speed. Transport it
+        // from the interval midpoint to this control/IMU sample before use.
+        let speed = mean + (integral - old.integral) / imu_dt * (now - midpoint);
+        if !speed.is_finite() || speed < 0. { return; }
+        self.anchors[self.next] = Some((now, speed, integral));
+        self.next = (self.next + 1) % self.anchors.len();
+    }
+
+    pub fn speed(&self, now: f64, integral: Option<f64>) -> Option<f64> {
+        let current = integral.filter(|v| v.is_finite())?;
+        let previous = self.previous.as_ref()?;
+        // Reuse the existing short IMU bridge. Reading a prediction never
+        // renews the true target-observation timestamp.
+        if !(0. ..=crate::race_speed_kalman::BRIDGE_S).contains(&(now - previous.observed_at)) { return None; }
+        let mut values = [0.; 3];
+        let mut n = 0;
+        for &(at, speed, origin) in self.anchors.iter().flatten() {
+            if (0. ..=crate::race_speed_kalman::BRIDGE_S).contains(&(now - at)) {
+                values[n] = (speed + current - origin).max(0.);
+                n += 1;
+            }
+        }
+        if n == 0 { return None; }
+        values[..n].sort_unstable_by(f64::total_cmp);
+        Some(values[n / 2])
+    }
+
+    pub fn diagnostics(&self, now: f64, integral: Option<f64>) -> V {
+        crate::dict! {"source_seq" => self.previous.as_ref().map(|v| v.seq),
+            "observed_at" => self.previous.as_ref().map(|v| v.observed_at),
+            "track_id" => self.previous.as_ref().map(|v| v.identity.clone()),
+            "body_speed_mps" => self.speed(now, integral),
+            "basis" => "fresh_cone_center_displacement_imu_yaw_midpoint_to_current"}
+    }
+}
+
+#[cfg(test)]
+mod entry_motion_tests {
+    use super::*;
+    use crate::motion_sensors::RaceInputs;
+
+    fn scan(seq: i64, at: f64) -> V { crate::dict! {"seq" => seq, "received_at" => at} }
+
+    #[test]
+    fn entry_speed_aligns_interval_midpoint_to_the_later_control_sample() {
+        let mut speed = EntryMotionSpeed::default();
+        // v(t)=1+2t. Scans at 0/.1, control/IMU samples at .02/.12.
+        speed.observe(&scan(1, 0.), 0.02, &1.into(), (3., 0.),
+            RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.04) });
+        speed.observe(&scan(2, 0.1), 0.12, &1.into(), (2.89, 0.),
+            RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.24) });
+        assert!((speed.speed(0.12, Some(0.24)).unwrap() - 1.24).abs() < 1e-10);
+        assert!((speed.speed(0.17, Some(0.34)).unwrap() - 1.34).abs() < 1e-10);
+    }
+
+    #[test]
+    fn entry_speed_removes_yaw_and_does_not_renew_old_or_rebound_targets() {
+        let mut speed = EntryMotionSpeed::default();
+        let (v, yaw, dt): (f64, f64, f64) = (2.4, -1.8, 0.1);
+        let angle = yaw * dt;
+        let shift = (v / yaw * angle.sin(), v / yaw * (1. - angle.cos()));
+        let p = (2. - shift.0, -1. - shift.1);
+        let next = (angle.cos() * p.0 + angle.sin() * p.1, -angle.sin() * p.0 + angle.cos() * p.1);
+        let input = RaceInputs { yaw_rate: Some(yaw), forward_integral: Some(0.) };
+        speed.observe(&scan(1, 0.), 0., &1.into(), (2., -1.), input);
+        speed.observe(&scan(2, dt), dt, &1.into(), next, input);
+        assert!((speed.speed(dt, Some(0.)).unwrap() - v).abs() < 1e-10);
+        speed.observe(&scan(2, dt), 0.8, &1.into(), next, input);
+        assert_eq!(speed.speed(1.11, Some(0.)), None);
+        speed.observe(&scan(3, 0.2), 0.2, &2.into(), (8., 8.), input);
+        assert_eq!(speed.speed(0.2, Some(0.)), None);
+    }
+}
+
 type Post = (f64, f64); // longitudinal and leftward distances in the lane frame
 
 #[derive(Clone, Copy)]
@@ -204,6 +336,7 @@ impl LightRoll {
 
 #[derive(Clone, Default, Debug)]
 pub struct RaceLight {
+    pub entry_motion: EntryMotionSpeed,
     votes: [(u32, f64); 2],
     last_seq: Option<i64>,
     pub phase: LightRoll,
