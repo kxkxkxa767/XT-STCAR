@@ -480,7 +480,7 @@ impl Maneuver {
         if after_light && let Some(input) = self.race_inputs {
             // User, 11-11: while moving, reduce forward PWM rather than
             // inserting neutral coasts. The measured 1530 cannot launch a car.
-            // Keep the existing launch cutoff, then use 1565/1530 until the
+            // Keep the existing launch cutoff, then use race cruise/1530 until the
             // finish's own continuous brake. Its boundary also runs at 20 ms.
             let current = fused.map_or(v_aim, |f| f.0);
             if self.finish.launch_from.is_some()
@@ -490,16 +490,16 @@ impl Maneuver {
                 self.finish.launch_from = None;
             }
             self.finish.race_brake.observe(now, gap, Some(current), input.forward_integral,
-                1., decel, LANE_BRAKE_DECEL_MPS2, goal.target_gap);
+                1., decel, crate::race_light_brake::BrakeModel::finish(decel), goal.target_gap);
             let motor = self.finish.race_brake_motor(now, input.forward_integral).unwrap_or_else(|| {
                 if self.finish.race_brake.is_used() { NEUTRAL }
                 else if self.finish.launch_until.is_some() { LIGHT_LAUNCH_MOTOR }
                 else if gap.is_some_and(|g| g <= goal.target_gap + current * (LANE_BRAKE_ONSET_S + ESC_COAST_DELAY_S)
-                    + current * current / (2. * LANE_BRAKE_DECEL_MPS2)) { ROLLING_HOLD_MOTOR }
-                else { FINISH_HOLD_MOTOR }
+                    + crate::race_light_brake::BrakeModel::finish(decel).distance(current)) { ROLLING_HOLD_MOTOR }
+                else { RACE_CRUISE_MOTOR }
             });
             self.lane_motor = motor;
-            self.finish.holding = matches!(motor, FINISH_HOLD_MOTOR | ROLLING_HOLD_MOTOR);
+            self.finish.holding = matches!(motor, RACE_CRUISE_MOTOR | ROLLING_HOLD_MOTOR);
             self.finish.pulse = 0;
             self.finish.creeping = false;
             self._lane_topup_motor = None;

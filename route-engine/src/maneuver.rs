@@ -37,6 +37,9 @@ pub const ROUTE_ENTRY_RELEASE_FRAMES: usize = 2;
 pub const ROUTE_POST_PASS_PWM_STEP: i64 = 40;
 pub const ROUTE_ORBIT_LEFT_PWM_STEP: i64 = ROUTE_POST_PASS_PWM_STEP;
 pub const ROUTE_SLOW_MOTOR: i64 = MIN_FORWARD_PWM;
+// User 11-11: ordinary race cruising/turning uses 1570. The reference
+// controller and explicit speed holds retain their calibrated 1550 base.
+pub const RACE_CRUISE_MOTOR: i64 = 1570;
 // Round 100: the open start lane launches at 1600 (Python's comment).
 pub const START_LAUNCH_MOTOR: i64 = 1600;
 // Round y18: the launch after green in the light lane (round y20: 1600, the start lane's).
@@ -44,7 +47,7 @@ pub const LIGHT_LAUNCH_MOTOR: i64 = 1600; // finish launch after a light release
 // Round y23: the straights' push (the start lane after the crosswalk, the transfer).
 pub const STRAIGHT_MOTOR: i64 = 1590;
 // y77: user-approved 1620 trial only in RaceTransfer's straight boost phase;
-// both cone loops keep ROUTE_SLOW_MOTOR and the existing measured-speed cut.
+// The straight boost remains separate from ordinary race cruise and speed holds.
 pub const TRANSFER_BOOST_MOTOR: i64 = 1620;
 // User 11-04: 1550 from the crosswalk to cone one is slow (asked 1565-1580). Race only:
 // the approach holds 1570 up to the cone's tangent point; the loop keeps 1550.
@@ -1554,6 +1557,10 @@ impl Maneuver {
         result
     }
 
+    pub(super) fn cruise_motor(&self) -> i64 {
+        if self.race_inputs.is_some() { RACE_CRUISE_MOTOR } else { ROUTE_SLOW_MOTOR }
+    }
+
     /// _route_motor.
     pub fn route_motor(&self) -> i64 {
         let slow_stage = (self.handover_observed && self.route_stage == "first_target")
@@ -1577,7 +1584,7 @@ impl Maneuver {
                 || (self.light_entry_coast && self.route_stage == "light_entry") {
                 return NEUTRAL;
             }
-            self.first_approach_hold().unwrap_or(ROUTE_SLOW_MOTOR)
+            self.first_approach_hold().unwrap_or_else(|| self.cruise_motor())
         } else {
             TRIAL_MOTOR
         }

@@ -248,6 +248,19 @@ impl SurfaceResponse {
         Some((reference_acceleration(next_pwm, speed) - self.extra_load_mps2).max(measured).max(0.))
     }
 
+    /// Forward-throttle forecast including the base command, not just its load
+    /// compensation. In particular, uncompensated 1570 still accelerates the
+    /// car. The 1530 rolling hold has no fitted response and is not extrapolated
+    /// from the 1550 anchor; its consumers use the current IMU slope instead.
+    pub fn predicted_drive_accel(&self, pwm: i64, speed: Option<f64>, now: f64) -> Option<f64> {
+        let speed = speed.filter(|v| v.is_finite() && *v >= 0.)?;
+        if !hold_motor(pwm) || !now.is_finite() { return None; }
+        let measured = self.latest_actual_accel
+            .filter(|(at, motor, _)| *motor == pwm && (0. ..=SCAN_AGE_S).contains(&(now - at)))
+            .map_or(0., |(_, _, acceleration)| acceleration);
+        Some((reference_acceleration(pwm, speed) - self.extra_load_mps2).max(measured).max(0.))
+    }
+
     pub fn applied_hold_accel(&self, pwm: i64, speed: Option<f64>, now: f64) -> f64 {
         let Some(speed) = speed.filter(|v| v.is_finite() && *v >= 0.) else { return 0.; };
         if !hold_motor(pwm) || !self.last_compensated_command.is_some_and(|(motor, at)|

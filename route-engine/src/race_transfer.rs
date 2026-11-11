@@ -164,8 +164,9 @@ impl RaceTransfer {
             .unwrap_or(4.0);
         if let Some(current) = integral { self.previous_integral = Some((now, current)); }
         let entry_mps = self.tight_entry.unwrap_or(ENTRY_MPS);
-        let hold_motor = if continuing { hold_pwm(cut_speed, entry_mps) } else { ROUTE_SLOW_MOTOR };
-        let hold_accel = surface.predicted_hold_accel(hold_motor, body_speed, now).unwrap_or(0.);
+        let hold_motor = if continuing { hold_pwm(cut_speed, entry_mps) } else { RACE_CRUISE_MOTOR };
+        let hold_accel = surface.predicted_hold_accel(hold_motor, body_speed, now)
+            .or_else(|| surface.predicted_drive_accel(hold_motor, body_speed, now)).unwrap_or(0.);
         let anchor = DriveAnchor { at: now, distance, speed: cut_speed, integral,
             acceleration, decel, entry_mps, continuing, hold_accel };
         let coast_m = self.coast_budget(now, cut_speed, anchor);
@@ -230,7 +231,7 @@ impl RaceTransfer {
             // y77 still had over 2 m to travel when the old state fixed 1550.
             TransferPhase::Bend if a.continuing && distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
             _ if self.tight_entry.is_some_and(|e| speed.is_some_and(|v| v > e)) => NEUTRAL,
-            _ => ROUTE_SLOW_MOTOR,
+            _ => RACE_CRUISE_MOTOR,
         }};
         self.control = Some(TransferControl { at: now, speed, distance, coast, motor });
         Some(motor)

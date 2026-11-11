@@ -8,10 +8,9 @@ use crate::helpers::*;
 use crate::maneuver::*;
 use crate::py::*;
 use crate::race_light::{LightRoll, at_predicted_beam, station_pair};
-use crate::race_light_brake::{LIGHT_BRAKE_MOTOR, LIGHT_BRAKE_RESPONSE_S, LIGHT_BRAKE_DECEL_MPS2};
+use crate::race_light_brake::{LIGHT_BRAKE_MOTOR, LIGHT_BRAKE_RESPONSE_S, BrakeModel};
 
 // Pre-red approach settings, independent of the terminal board controller.
-const LIGHT_CRUISE_ACCEL_MPS2: f64 = 0.35;
 const LIGHT_RESTART_MPS: f64 = 0.15;
 const NEAR_POST_EDGE_M: f64 = 0.04; // measured close to both boards at the static gantry pose
 const VISIBLE_LIGHT_STOP_GAP_M: f64 = 0.55; // head visible at 0.52 m, out of frame at the y29 stop at 0.20 m
@@ -659,7 +658,7 @@ impl Maneuver {
                 if preview {
                     self.light_stop_state = None;
                     self.race_light.phase = LightRoll::Cruise;
-                    self.lane_motor = ROUTE_SLOW_MOTOR;
+                    self.lane_motor = self.cruise_motor();
                     self.light_entry_coast_ack_dropped();
                 }
             }
@@ -709,7 +708,7 @@ impl Maneuver {
             }
             self.light_entry_coast_ack_dropped();
             if self.route_stage != "light_lane" {
-                self.lane_motor = ROUTE_SLOW_MOTOR;
+                self.lane_motor = self.cruise_motor();
             }
             return None;
         }
@@ -741,7 +740,7 @@ impl Maneuver {
             (self.finish.pulse, self.finish.creeping, self.finish.creeps) = (0, false, 0);
         }
         if self.route_stage != "light_lane" && !red_latched && !preview {
-            self.lane_motor = ROUTE_SLOW_MOTOR; // the light entry drives at 1550 until the coast is aimed
+            self.lane_motor = self.cruise_motor();
         }
         ahead
     }
@@ -768,12 +767,12 @@ impl Maneuver {
         // The range slope is along the lane. Approximate the longitudinal
         // component of drag over the coast from the present heading to straight.
         let axial_decel = decel * (1. + axis_cos.max(0.)) * 0.5;
-        let brake_decel = LIGHT_BRAKE_DECEL_MPS2 * (1. + axis_cos.max(0.)) * 0.5;
+        let brake_model = BrakeModel::light(axis_cos, axial_decel);
         // Fuse observation corrections once, then let cruise and brake use
         // the same continuous position estimate. Zone checks below keep the
         // measured front/rear gaps, never a filtered declaration of success.
         self.race_light_brake.observe(now, gap, current_speed.or(speed), input.forward_integral, axis_cos,
-            axial_decel, brake_decel, VISIBLE_LIGHT_STOP_GAP_M);
+            axial_decel, brake_model, VISIBLE_LIGHT_STOP_GAP_M);
         let control_gap = self.race_light_brake.control_gap(now, input.forward_integral).or(gap);
         let lag = crate::motion_sensors::ESC_COAST_DELAY_S;
         let beam_speed = (2.*decel*(LIGHT_SENSOR_TO_GANTRY_M-VISIBLE_LIGHT_STOP_GAP_M)).sqrt();
@@ -785,8 +784,19 @@ impl Maneuver {
             .filter(|_| axis_cos >= std::f64::consts::FRAC_1_SQRT_2)
             .map_or(0., |(axial_speed, yaw)| -axial_speed / axis_cos * sin * yaw);
         let acceleration = acceleration.map(|a| a + heading_accel);
+        // 1570 has its own measured response in SurfaceResponse. Forecast its
+        // base propulsion even when load compensation is zero; the old 0.35
+        // constant described 1550. Project body acceleration into the lane.
+        let body_speed = v.filter(|_| axis_cos > 0.).map(|v| v / axis_cos);
+        let drive_acceleration = |pwm| self.race_surface.predicted_drive_accel(pwm, body_speed, now)
+            .map(|a| a * axis_cos.max(0.) + heading_accel);
+        let cruise_accel = drive_acceleration(RACE_CRUISE_MOTOR).or(acceleration).unwrap_or(0.);
+        // 1530 sustains motion but has no fitted force curve. Its current IMU
+        // slope, not either the 1550 model or coast drag, describes this tail.
+        let pending_accel = drive_acceleration(self._power_cmd_motor.unwrap_or(RACE_CRUISE_MOTOR))
+            .or(acceleration).unwrap_or(0.);
         let coast_travel = |v: f64, powered_s: f64| {
-            let release = v + LIGHT_CRUISE_ACCEL_MPS2 * powered_s;
+            let release = (v + pending_accel * powered_s).max(0.);
             (v + release) * powered_s / 2. + release * release / (2. * axial_decel)
         };
         let predicted = control_gap.zip(v).map(|(g,v)| g - coast_travel(v, tail));
@@ -794,10 +804,10 @@ impl Maneuver {
         // until the neutral tail plus that brake fits the visible stopping
         // point, instead of aiming a long coast and then refilling it twice.
         let if_renewed = control_gap.zip(v).map(|(g,v)| {
-            let next = (v + acceleration.unwrap_or(LIGHT_CRUISE_ACCEL_MPS2) * step).max(0.);
-            let release = next + LIGHT_CRUISE_ACCEL_MPS2 * lag;
+            let next = (v + acceleration.unwrap_or(cruise_accel) * step).max(0.);
+            let release = (next + cruise_accel * lag).max(0.);
             g-(v+next)*step/2.-(next+release)*lag/2.
-                -release*LIGHT_BRAKE_RESPONSE_S-release*release/(2.*brake_decel)
+                -release*LIGHT_BRAKE_RESPONSE_S-brake_model.distance(release)
         });
         let rear_gap = ahead.map(|a| a + rear_extent);
         let red = self._light_red_hold;
@@ -813,7 +823,10 @@ impl Maneuver {
         let red_due = self.race_light.beam_at.is_some_and(|at| now - at >= LIGHT_RED_DUE_S);
         if !red {
             let cut = if_renewed.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
-            let running_out = tail == 0. && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS);
+            // A powered 1530 hold continually renews the old power-tail clock.
+            // It must still use the existing restart path if motion runs out.
+            let running_out = (tail == 0. || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::ZoneCoast))
+                && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS);
             let revoke = !crossed && !running_out
                 && if_renewed.is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LIGHT_COAST_REVOKE_BAND_M);
             self.race_light.phase = match self.race_light.phase {
@@ -841,11 +854,11 @@ impl Maneuver {
             // y34: 1550 does not start the car from rest (y33 sim short5 sat at 1550 for 26 s).
             // The rule-range simulation found the same stall in Cruise after a coast was revoked.
             TRIAL_MOTOR
-        } else { ROUTE_SLOW_MOTOR };
-        let brake_stop = control_gap.zip(v).map(|(g, v)| g-v*LIGHT_BRAKE_RESPONSE_S-v*v/(2.*brake_decel));
+        } else { RACE_CRUISE_MOTOR };
+        let brake_stop = control_gap.zip(v).map(|(g, v)| g-brake_model.stop_travel(v, acceleration.unwrap_or(0.)));
         let next_brake_stop = control_gap.zip(v).map(|(g, v)| {
             let next = (v + acceleration.unwrap_or(0.) * step).max(0.);
-            g-(v+next)*step/2.-next*LIGHT_BRAKE_RESPONSE_S-next*next/(2.*brake_decel)
+            g-(v+next)*step/2.-brake_model.stop_travel(next, acceleration.unwrap_or(0.))
         });
         let motor = self.race_light_brake.command(now, input.forward_integral)
             .unwrap_or(motor);
@@ -864,6 +877,8 @@ impl Maneuver {
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
             "rolling_hold_pwm" => ROLLING_HOLD_MOTOR,
+            "cruise_pwm" => RACE_CRUISE_MOTOR, "cruise_accel_mps2" => cruise_accel,
+            "pending_power_accel_mps2" => pending_accel,
             "stop_gap_if_renewed_m" => if_renewed, "renewal_stop_basis" => "neutral_tail_then_light_brake",
             "rear_to_gantry_m" => rear_gap, "rear_past_sensor_m" => rear_past_sensor,
             "heading_accel_mps2" => heading_accel, "brake_stop_gap_m" => brake_stop,
@@ -999,7 +1014,7 @@ mod tests {
         m.light_stop_state = Some("approach");
         m.servo = NEUTRAL;
         m.lane_motor = LIGHT_BRAKE_MOTOR;
-        m.race_light_brake.observe(1., Some(1.1), Some(1.), Some(0.), 1., 0.6, 0.95, 0.55);
+        m.race_light_brake.observe(1., Some(1.1), Some(1.), Some(0.), 1., 0.6, BrakeModel::light(1., 0.6), 0.55);
         assert_eq!(m.race_light_brake.command(1., Some(0.)), Some(1300));
         let ack = dict! {"motor" => 1300, "servo" => 1500, "seq" => 10, "tick" => 100,
             "armed" => true, "command_acked" => true};

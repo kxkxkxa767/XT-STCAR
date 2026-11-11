@@ -30061,8 +30061,8 @@
     "engine_round": 186,
     "baseline": "y78 / engine 185 (5ef485b), currently on car, locked after incomplete run",
     "user": "改好后直接上传，待会再测",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "change": [
       "Race-only transfer quality pause keeps using the current observed channel or existing reversed-axis steering instead of holding the old servo.",
       "The confirmed second-cone plan already computed by pause_stage_ready now supplies pause steering rather than discarding its result.",
@@ -30078,9 +30078,9 @@
       "added_in_file_test": "A paused race transfer preserves divider identity and issues acknowledged steering changes toward the return axis.",
       "simulation_sweep": false
     },
-    "build_status": "cross-compiled 186/y79, not deployed, not run",
+    "build_status": "186/y79 built, deployed and run on 2026-11-11; not completed because both stopping positions were short",
     "remaining_validation": "Physical transfer through/after a quality dropout; then the still-unreached y78 1530/continuous-brake light and finish behavior.",
-    "next": "Code/package/records ready. Wait for the user's new placement, photoelectric and light-reset/start confirmation, then deploy claude-turn186 / y79 and run once. Car stays y78/185 until then.",
+    "next": "Car remains y79/186, locked. User resumed analysis after a pause and authorized a race-cruise 1570 candidate with brake correction; y80/187 implementation and build are not complete. No new physical launch authorized; require a new placement/photoelectric/light-reset/start confirmation.",
     "source_commit": "eb58a270a59385a22c5c00d4396e40ea0e43267b",
     "package": {
       "engine_label": "claude-turn186",
@@ -30090,6 +30090,159 @@
       "runtime_changed": [
         "payload/route-engine"
       ]
+    },
+    "car_run_y79": {
+      "run_date": "2026-11-11",
+      "source_commit": "eb58a270a59385a22c5c00d4396e40ea0e43267b",
+      "engine_round": 186,
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261111-y79",
+      "evidence_files_ok": 91,
+      "deployed": true,
+      "completed": false,
+      "effective_s": null,
+      "result": "maneuver_cumulative_drive_timeout",
+      "operator_observation": "红绿灯那个地方反向刹车早了点，后轮有些不在停车区",
+      "move_at_s": 1.717684819,
+      "light_wait_event_s": 10.390409957000003,
+      "net_to_first_stable_terminal_range_estimate_s": 20.183493425,
+      "estimate_note": "First saved terminal gap plateau around seq 323; not a valid finish event or completed race time.",
+      "first_pass_to_second_pass_event_s": 3.297942654,
+      "second_pass_to_light_stop_event_s": 2.8977436569999995,
+      "light": {
+        "front_gap_m": 0.6996752923638487,
+        "rear_past_beam_m": -0.10856456684070181,
+        "basis": "stopped_after_camera_red_outside_zone",
+        "brake": {
+          "phase": "used",
+          "started_at": 17.004558719,
+          "ended_at": 18.583638116,
+          "end_reason": "stopped",
+          "anchor_at": 18.710343439,
+          "projection_at": 18.583638116,
+          "projection_anchor_at": 18.503096628,
+          "projection_age_s": 0.08054148799999794,
+          "projected_gap_m": 0.7227572805837585,
+          "projected_speed_mps": 0.1333981417305488,
+          "coast_stop_gap_m": 0.7072636927004586,
+          "brake_stop_gap_m": 0.700020666148423,
+          "release_stop_gap_m": 0.7128470549503234,
+          "projection_basis": "short_imu_delta",
+          "gap_observed_at": 18.710343439,
+          "measured_gap_m": 0.6996752923638487,
+          "predicted_gap_m": 0.7071922963639484,
+          "gap_innovation_m": -0.007517004000099692,
+          "gap_correction_m": -0.002639726839746337,
+          "control_gap_m": 0.7045525695242021,
+          "gap_innovation_weight": 0.3511674118719777,
+          "gap_fusion_response_s": 0.2,
+          "gap_fusion_basis": "candidate_range_innovation_fusion_on_imu_propagation"
+        },
+        "release_basis": "green_in_fresh_frames_after_the_stop"
+      },
+      "finish": {
+        "last_front_gap_m": 0.4719999999999999,
+        "whole_car_in_zone": false,
+        "last_speed_mps": 0.0,
+        "brake": {
+          "phase": "used",
+          "started_at": 30.015552933,
+          "ended_at": 32.174498323,
+          "end_reason": "stopped",
+          "anchor_at": 55.070206761,
+          "projection_at": 32.174498323,
+          "projection_anchor_at": 32.093994813,
+          "projection_age_s": 0.08050350999999978,
+          "projected_gap_m": 0.48439772050769275,
+          "projected_speed_mps": 0.13903175148841523,
+          "coast_stop_gap_m": 0.46762334382636134,
+          "brake_stop_gap_m": 0.4603209517157268,
+          "release_stop_gap_m": 0.4735620637504702,
+          "projection_basis": "short_imu_delta",
+          "gap_observed_at": 55.070206761,
+          "measured_gap_m": 0.4719999999999999,
+          "predicted_gap_m": 0.46528173468011097,
+          "gap_innovation_m": 0.00671826531988895,
+          "gap_correction_m": 0.0022223719669614006,
+          "control_gap_m": 0.46750410664707237,
+          "gap_innovation_weight": 0.33079550466431085,
+          "gap_fusion_response_s": 0.2,
+          "gap_fusion_basis": "candidate_range_innovation_fusion_on_imu_propagation"
+        },
+        "failure": "Stopped short; consumed brake stayed neutral, finish event never occurred and cumulative drive budget expired."
+      },
+      "quality_counts": {},
+      "pause_fix_exercised": false,
+      "pause_note": "No quality pause in this run; passing both cones does not specifically validate dropout steering.",
+      "after": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "new_user_requests": [
+        "我感觉很多地方你用1550很慢看看能不能把常态从1550提升到1570或者1580",
+        "暂停后用户已说继续，恢复刹车分析和比赛常态1570候选工作"
+      ],
+      "cpu": {
+        "cpu_s": 9.130644112999999,
+        "core_fraction": 0.16963640771410302
+      },
+      "max_tick_compute_s": 0.010363804999999005
     }
+  },
+  "y80_race_cruise1570_speed_braking_20261111": {
+    "date": "2026-11-11",
+    "author": "Codex",
+    "engine_round": 187,
+    "baseline": "y79 / engine 186 (eb58a27), installed and locked; y79 stopped short and timed out",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "继续",
+      "你不能对这个赛道过拟合，现在还不清楚现场赛道的规格",
+      "大部分地方我觉得可以用1570替换1550"
+    ],
+    "change": [
+      "Independent race cruise 1570 in normal cone bends/unregulated transfer cruising/light approach/normal finish hold. Existing explicit speed-target holds can still choose lower forward PWM; start1600, boost1620, rolling1530 and brake1300 stay separately owned.",
+      "Update light cruise propulsion forecast using existing measured 1570 response; actual 1530 tail uses current IMU slope. Low1530 restart detection no longer depends on an always-renewed power-tail clock.",
+      "Replace fixed race braking deceleration with separate light/finish speed-dependent models b(v)=b0+k*v. Analytic distance D=v/k-b0/k^2*ln(1+k*v/b0); retains 0.1 s response and transports already-observed negative acceleration through that response.",
+      "Each run measured coast drag replaces the calibrated floor contribution; light projection uses the measured heading. Goal gaps 0.55/0.25 and strict whole-car/standstill criteria unchanged; no stopped top-up added.",
+      "Only Rust race behavior changed. No course coordinates, barrel spacing, board lengths, fixed turn timers, new speed cap or extra stop gate; Python reference and list item5 remain unchanged."
+    ],
+    "vehicle_brake_prior": {
+      "fit_run": "y79 only",
+      "coast_reference_mps2": 0.5761712726842791,
+      "light": {
+        "base_at_reference": 0.668863,
+        "speed_gain_per_s": 0.315219,
+        "acceleration_rms_mps2": 0.0537
+      },
+      "finish": {
+        "base_at_reference": 0.583426,
+        "speed_gain_per_s": 0.378253,
+        "acceleration_rms_mps2": 0.0478
+      },
+      "response_s": 0.1,
+      "reconstructed_start_body_speed_mps": [
+        1.53785,
+        2.10804
+      ],
+      "finish_predicted_travel_m": 2.27091,
+      "finish_reconstructed_travel_m": 2.273,
+      "old_finish_prediction_m_approx": 2.55,
+      "light_geometry_uncertainty_m_approx": 0.05,
+      "limitations": "Single-run vehicle prior, not cross-floor/course validation; no promised time or stopping accuracy. Measured ground drag adapts the base term, but traction/battery/observation changes still require field verification.",
+      "evidence": "work/codex-y79-trial-20261111/brake-fit-y79.json"
+    },
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 22,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "test_change": "One in-file analytic stopping-distance vs numerical integration check, including stronger measured floor drag; existing continuous-brake/launch/pause tests retained.",
+      "simulation_sweep": false
+    },
+    "build_status": "source ready for cross-compilation",
+    "next": "Build187/y80 from claude-turn186, update records and push. New deployment/run needs fresh operator placement, photoelectric/light reset and go; y79 authorization was consumed."
   }
 }
