@@ -30521,8 +30521,8 @@
     "author": "Codex",
     "engine_round": 189,
     "baseline": "y81 / engine 188 (2894fe7), currently installed with outputs locked",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": "At second-cone exit the observed motion was about 2.3–2.4 m/s while entry-response travel was projected at fixed 1.3 m/s, so right steering was released early; direction was not reversed.",
     "change": [
       "Use a live speed estimate from fitted cone-two centres and IMU yaw, then transport it briefly into the light-entry response prediction.",
@@ -30540,12 +30540,12 @@
       "test_changes": "Two in-file checks cover midpoint/control-clock alignment, rotation compensation, duplicate frames, expiry and identity rebinding. Equivalent if-let binding removed the added unwrap lint.",
       "simulation_sweep": false
     },
-    "build_status": "189/y82 cross-compiled, helper built; not deployed or run",
+    "build_status": "189/y82 built, deployed and run; unfinished with operator-confirmed entry collision",
     "followups": [
       "Resolve the difference between the operator report of waiting for green/restarting and the limited controller/camera timeline; confirmed coasting alone is not a complete explanation.",
       "Consider active fault braking only as a separately designed armed state with suitable acknowledgements; disarmed neutral output must not be described as physical standstill."
     ],
-    "next": "Package ready. Wait for a new placement/photoelectric/light-reset/start confirmation before deploying189/y82. Car remains y81/188 with outputs locked.",
+    "next": "Car remains y82/189 with outputs locked. Prepare y83/190 to preserve current entry curvature while it is still correcting heading and the future-pose prediction would weaken or reverse that correction. Checks/build pending; new launch requires new operator confirmation.",
     "source_commit": "94262057ca0eabd3356406a6e48188985c376d10",
     "package": {
       "engine_label": "claude-turn189",
@@ -30555,6 +30555,121 @@
       "runtime_changed": [
         "payload/route-engine"
       ]
+    },
+    "car_run_y82": {
+      "run_date": "2026-11-11",
+      "source_commit": "94262057ca0eabd3356406a6e48188985c376d10",
+      "engine_round": 189,
+      "deployed": true,
+      "completed": false,
+      "effective_s": null,
+      "result": "probe_obstacle_close_body",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261111-y82",
+      "evidence_files_ok": 48,
+      "operator_observation": "用户明确第二桶后舵不够，撞到挡板",
+      "physical_collision_confirmed": true,
+      "last_route_stage": "light_entry",
+      "quality_counts": {},
+      "first_pass": {
+        "seq": 123,
+        "at_s": 12.333176382
+      },
+      "second_pass": {
+        "seq": 156,
+        "at_s": 15.633741496
+      },
+      "first_pass_to_second_pass_event_s": 3.300565114000001,
+      "stop": {
+        "seq": 162,
+        "at_s": 16.228184478,
+        "bin": 321,
+        "body_gap_m": 0.01481281619826011,
+        "side": "front-left"
+      },
+      "live_speed_validation": {
+        "active": true,
+        "saved_entry_speed_samples_mps": [
+          2.136,
+          2.092,
+          2.01,
+          1.978
+        ],
+        "fallback_1p3_used": false,
+        "note": "The live velocity change was used by entry prediction. Its use alone did not resolve the entry collision; do not continue attributing this run to a fixed 1.3 m/s fallback."
+      },
+      "steering_evidence": [
+        {
+          "seq": 160,
+          "current_geometry_pwm": 1323,
+          "predicted_pose_pwm": 1425,
+          "mean_pwm": 1374,
+          "actual_pwm": 1371
+        },
+        {
+          "seq": 161,
+          "current_geometry_pwm": 1318,
+          "predicted_pose_pwm": 1457,
+          "mean_pwm": 1388,
+          "path_override_pwm": 1308,
+          "actual_pwm": 1331,
+          "note": "The later path correction asked for more right steering, but it arrived too late before the next near-obstacle frame."
+        }
+      ],
+      "diagnosis": {
+        "primary": "Averaging the current right-turn curvature with a weaker future-pose prediction weakened right steering before the current heading error had been corrected.",
+        "direction_sign_error": false,
+        "live_speed_not_applied": false,
+        "scope": "Retain measured speed and inspect how current and predicted steering are combined; no track-coordinate or exit-angle adjustment."
+      },
+      "after": {
+        "outputs_locked": true,
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "physical_standstill_confirmed": null
+      },
+      "analysis_figure": {
+        "path": "work/codex-y82-trial-20261111/y82-entry-path-and-steering.png",
+        "status": "being prepared by root"
+      },
+      "not_reached": [
+        "normal light stop/release",
+        "finish"
+      ]
+    }
+  },
+  "y83_light_entry_current_curvature_20261111": {
+    "date": "2026-11-11",
+    "author": "Codex",
+    "engine_round": 190,
+    "baseline": "y82 / engine 189 (9426205), currently installed with outputs locked",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": "y82 entry used live speeds 2.136/2.092/2.010/1.978 m/s, but averaging a weaker future prediction cut the current right-turn demand. Seq160 current1323/predicted1425 became mean1374; seq161 current1318/predicted1457 became1388, followed by a late path override1308 and collision.",
+    "change": [
+      "Race light_entry only: when current_k * wrap(-heading) > 0 and the future-pose prediction is weaker or reverses correction, use the current curvature; otherwise preserve the existing mean-curvature rule.",
+      "Keep live speed, planned circle, geometric lane selection, steering limits and response parameters. No new fixed exit angle, track coordinate or track dimension.",
+      "Keep first-cone bend1550, normal race cruise1570, boost1620, moving hold1530 and current braking model. Source change is confined to maneuver_open.rs, with one check inside that existing file."
+    ],
+    "implementation_status": "implemented in race light_entry only: preserve current axis-correcting curvature when prediction weakens/reverses it; otherwise retain averaging",
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 25,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "test_change": "One in-file test covers symmetric axis corrections, stronger prediction and normal averaging once the heading error changes side.",
+      "simulation_sweep": false
+    },
+    "build_status": "source ready for cross-compilation",
+    "analysis_workflow": "For each subsequent run, combine trustworthy local trajectory reconstruction with PWM/heading evidence; distinguish reconstructed estimates from original measurements on the figure and in the explanation.",
+    "next": "Complete checks and build190/y83 from claude-turn189. No fresh physical launch authorized; wait for new placement, photoelectric/light reset and start confirmation.",
+    "trajectory_review": {
+      "image": "work/codex-y82-trial-20261111/y82-entry-path-and-steering.png",
+      "data": "work/codex-y82-trial-20261111/y82-entry-plot-data.json",
+      "plot_script": "work/codex-y82-trial-20261111/plot_entry.py",
+      "basis": "Fresh cone-two centre plus logged heading; after handover use only a unique rear-right compact support in raw scans. Last reconstructed y82 frame160, obstacle stop162. Not external positioning.",
+      "finding": "y81/y82 exit path is wider than y79; input speed alone did not recover the old path. Mean prediction dilution is directly observed; whether the new correction is sufficient remains a physical validation question."
     }
   }
 }

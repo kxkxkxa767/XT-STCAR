@@ -1675,14 +1675,23 @@ impl Maneuver {
             if let Some(response) = response {
                 let moved = (response.0*u.0+response.1*u.1, response.1*u.0-response.0*u.1);
                 let predicted = pursuit_pwm(in_pose(lane_point(moved.0,moved.1), response));
-                let curvature = (current.0+predicted.0)*0.5;
+                // y82: current right 1318 and predicted 1457 averaged to 1388
+                // while the car still needed to turn into the lane. Let the
+                // prediction strengthen a turn, not release current correction
+                // before the observed heading has reached the lane axis.
+                let (curvature, kept_current) = entry_response_curvature(current.0, predicted.0, heading);
                 lane.set("entry_steering_response", dict! {
                     "current_pwm" => current.1, "predicted_pwm" => predicted.1,
+                    "current_curvature_per_m" => current.0,
+                    "predicted_curvature_per_m" => predicted.0,
+                    "selected_curvature_per_m" => curvature,
+                    "axis_heading_error_rad" => wrap(-heading),
+                    "kept_current_correction" => kept_current,
                     "response_speed_mps" => response_speed,
                     "speed_source" => if entry_speed.is_some() && response_rate.is_some() { "second_cone_motion_plus_short_imu" } else { "original_speed_fallback" },
                     "speed_observation" => self.race_light.entry_motion.diagnostics(self.last_now, input.forward_integral),
                     "yaw_source" => if yaw.is_some() { "calibrated_imu" } else if response_rate.is_some() { "lidar_compass" } else { "original_pose_fallback" },
-                    "basis" => "mean_curvature_over_response"
+                    "basis" => if kept_current { "current_correction_toward_lane_axis" } else { "mean_curvature_over_response" }
                 });
                 (curvature, clampi(NEUTRAL+round(ROUTE_PWM_PER_CURVATURE*curvature), nominal_right_limit_pwm(), SERVO_MAX))
             } else { current }
@@ -1934,6 +1943,15 @@ impl Maneuver {
     }
 }
 
+/// The entry prediction may anticipate a stronger turn. A weaker or reversed
+/// prediction must not dilute current steering that reduces the measured lane
+/// heading error. Once that error changes side, ordinary anticipation resumes.
+fn entry_response_curvature(current: f64, predicted: f64, heading: f64) -> (f64, bool) {
+    let toward_axis = current * wrap(-heading) > 0.;
+    let weakens = current * predicted <= 0. || predicted.abs() < current.abs();
+    if toward_axis && weakens { (current, true) } else { ((current + predicted) * 0.5, false) }
+}
+
 /// _guarded_pursuit(point, build, pose, u).
 fn guarded_pursuit(
     point: (f64, f64),
@@ -1955,6 +1973,25 @@ mod round106_tests {
     //! web/vehicle-console/tests/fixtures/transfer_axis_support_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+    #[test]
+    fn entry_prediction_preserves_axis_correction_and_releases_after_crossing() {
+        for (heading, current, predicted, expected, held) in [
+            (0.7, -0.8, -0.2, -0.8, true),
+            (-0.7, 0.8, 0.2, 0.8, true),
+            (0.7, -0.8, 0.2, -0.8, true),
+            (-0.7, 0.8, -0.2, 0.8, true),
+            (0.7, -0.8, -1.2, -1.0, false),
+            (-0.7, 0.8, 1.2, 1.0, false),
+            (-0.1, -0.8, 0.2, -0.3, false),
+            (0.1, 0.8, -0.2, 0.3, false),
+            (0.0, -0.8, 0.2, -0.3, false),
+        ] {
+            let (selected, kept_current) = entry_response_curvature(current, predicted, heading);
+            assert!((selected - expected).abs() < 1e-12);
+            assert_eq!(kept_current, held);
+        }
+    }
 
     #[test]
     fn a_missing_transfer_support_coasts_with_steering_without_a_restart_pause() {
