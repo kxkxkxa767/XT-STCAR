@@ -30242,7 +30242,17 @@
       "test_change": "One in-file analytic stopping-distance vs numerical integration check, including stronger measured floor drag; existing continuous-brake/launch/pause tests retained.",
       "simulation_sweep": false
     },
-    "build_status": "source ready for cross-compilation",
-    "next": "Build187/y80 from claude-turn186, update records and push. New deployment/run needs fresh operator placement, photoelectric/light reset and go; y79 authorization was consumed."
+    "build_status": "187/y80 cross-compiled and vision helper built, not deployed or physically tested",
+    "next": "Package ready. Await fresh operator placement/photoelectric/light reset and launch confirmation before deploying claude-turn187 and y80. Car remains y79/186.",
+    "source_commit": "0412bab4d7bdcbf8079f8449ba530358e80a1c96",
+    "package": {
+      "engine_label": "claude-turn187",
+      "vision_label": "y80",
+      "baseline": "claude-turn186",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn187-0412bab.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    }
   }
 }
