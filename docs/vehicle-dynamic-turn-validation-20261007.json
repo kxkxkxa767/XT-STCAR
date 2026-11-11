@@ -30078,8 +30078,18 @@
       "added_in_file_test": "A paused race transfer preserves divider identity and issues acknowledged steering changes toward the return axis.",
       "simulation_sweep": false
     },
-    "build_status": "source ready for cross-compilation",
+    "build_status": "cross-compiled 186/y79, not deployed, not run",
     "remaining_validation": "Physical transfer through/after a quality dropout; then the still-unreached y78 1530/continuous-brake light and finish behavior.",
-    "next": "Build 186/y79 from claude-turn185 and push code/records. User said test later; do not deploy or start until a new placement/reset/start confirmation."
+    "next": "Code/package/records ready. Wait for the user's new placement, photoelectric and light-reset/start confirmation, then deploy claude-turn186 / y79 and run once. Car stays y78/185 until then.",
+    "source_commit": "eb58a270a59385a22c5c00d4396e40ea0e43267b",
+    "package": {
+      "engine_label": "claude-turn186",
+      "vision_label": "y79",
+      "baseline": "claude-turn185",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn186-eb58a27.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    }
   }
 }
