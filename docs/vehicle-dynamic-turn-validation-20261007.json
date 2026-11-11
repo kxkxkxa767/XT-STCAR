@@ -30661,15 +30661,25 @@
       "test_change": "One in-file test covers symmetric axis corrections, stronger prediction and normal averaging once the heading error changes side.",
       "simulation_sweep": false
     },
-    "build_status": "source ready for cross-compilation",
+    "build_status": "190/y83 cross-compiled, helper built; not deployed or run",
     "analysis_workflow": "For each subsequent run, combine trustworthy local trajectory reconstruction with PWM/heading evidence; distinguish reconstructed estimates from original measurements on the figure and in the explanation.",
-    "next": "Complete checks and build190/y83 from claude-turn189. No fresh physical launch authorized; wait for new placement, photoelectric/light reset and start confirmation.",
+    "next": "Await new placement/photoelectric/light-reset/start confirmation before deploying190/y83. Car remains y82/189 with outputs locked; compare entry path and steering with the saved plot.",
     "trajectory_review": {
       "image": "work/codex-y82-trial-20261111/y82-entry-path-and-steering.png",
       "data": "work/codex-y82-trial-20261111/y82-entry-plot-data.json",
       "plot_script": "work/codex-y82-trial-20261111/plot_entry.py",
       "basis": "Fresh cone-two centre plus logged heading; after handover use only a unique rear-right compact support in raw scans. Last reconstructed y82 frame160, obstacle stop162. Not external positioning.",
       "finding": "y81/y82 exit path is wider than y79; input speed alone did not recover the old path. Mean prediction dilution is directly observed; whether the new correction is sufficient remains a physical validation question."
+    },
+    "source_commit": "85adb2121ccfbe45829692dc11760b1e5e3ec9c6",
+    "package": {
+      "engine_label": "claude-turn190",
+      "vision_label": "y83",
+      "baseline": "claude-turn189",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn190-85adb21.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
     }
   }
 }
