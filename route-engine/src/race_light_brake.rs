@@ -1,6 +1,6 @@
-//! One continuous brake application for the traffic-light approach.
+//! One continuous brake application, with a separate instance for each stopping stage.
 //! Fresh light geometry anchors the existing control tick's stopping prediction.
-//! This state is independent of the finish controller's brake.
+//! The light and finish controllers never share brake state or observations.
 
 use crate::dict;
 use crate::helpers::{NEUTRAL, SCAN_AGE_S};
@@ -42,13 +42,15 @@ mod tests {
         assert_eq!(brake.command(1.1, Some(-0.04)), Some(1300));
         // A stale or missing observation cannot insert a neutral pulse.
         assert_eq!(brake.command(1.4, None), Some(1300));
-        // Release while still rolling: 0.1 s of brake response and the coast
-        // now stop at the target. Holding 1300 to zero would stop too far away.
+        // The moving approach now stays powered until braking. Do not split
+        // the single brake with a rolling neutral phase.
         brake.observe(1.42, Some(0.82), Some(0.6), Some(-0.4), 1., 0.6, 1., 0.55);
-        assert_eq!(brake.command(1.42, Some(-0.4)), Some(1500));
+        assert_eq!(brake.command(1.42, Some(-0.4)), Some(1300));
+        brake.observe(1.8, Some(0.57), Some(0.1), Some(-0.9), 1., 0.6, 1., 0.55);
+        assert_eq!(brake.command(1.8, Some(-0.9)), Some(1500));
         assert!(brake.is_used());
-        brake.observe(1.5, Some(0.8), Some(1.), Some(0.), 1., 0.6, 1., 0.55);
-        assert_eq!(brake.command(1.5, Some(0.)), None);
+        brake.observe(1.9, Some(0.8), Some(1.), Some(0.), 1., 0.6, 1., 0.55);
+        assert_eq!(brake.command(1.9, Some(0.)), None);
     }
 }
 
@@ -183,11 +185,11 @@ impl LightBrake {
             BrakeState::Used => None,
             BrakeState::Active { since } => {
                 let release = self.projection.filter(|p| now - since >= LIGHT_BRAKE_RESPONSE_S
-                    && (p.speed < STOP_SPEED_MPS || p.release_stop >= self.anchor.unwrap().target));
-                if let Some(projected) = release {
+                    && p.speed < STOP_SPEED_MPS);
+                if release.is_some() {
                     self.state = BrakeState::Used;
                     self.ended_at = Some(now);
-                    self.end_reason = Some(if projected.speed < STOP_SPEED_MPS { "stopped" } else { "coast_reaches_target" });
+                    self.end_reason = Some("stopped");
                     Some(NEUTRAL)
                 } else {
                     // Missing speed does not insert a neutral pulse between

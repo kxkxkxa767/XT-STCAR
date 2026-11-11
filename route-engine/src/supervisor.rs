@@ -1598,6 +1598,10 @@ impl Supervisor {
             motors.extend_from_slice(&HOLD_MOTORS);
             motors.push(STRAIGHT_MOTOR);
         }
+        if m.race_inputs.is_some() && phase == "drive"
+            && (stage_is("light_entry") || stage_is("light_lane")) {
+            motors.push(ROLLING_HOLD_MOTOR);
+        }
         // Round y23: the transfer's straight push.
         if phase == "drive" && (stage_is("open_transfer") || m.transfer_stage()) && decision.get("quality_resume_pending").is_false() {
             motors.push(if m.transfer_stage() { TRANSFER_BOOST_MOTOR } else { STRAIGHT_MOTOR });

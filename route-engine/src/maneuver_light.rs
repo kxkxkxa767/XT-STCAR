@@ -828,8 +828,13 @@ impl Maneuver {
                 phase => phase,
             };
         }
-        let motor = if red || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::ZoneCoast) {
+        let motor = if red || self.race_light_brake.is_used() {
             NEUTRAL
+        } else if matches!(self.race_light.phase, LightRoll::Coast | LightRoll::ZoneCoast) {
+            // y77 spent a second in neutral from 2.14 m to the brake point.
+            // The operator measured 1530 as a moving hold; braking still uses
+            // current measured speed, never the unpowered coast deceleration.
+            ROLLING_HOLD_MOTOR
         } else if matches!(self.race_light.phase, LightRoll::Through | LightRoll::Cruise)
             && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
         {
@@ -858,6 +863,7 @@ impl Maneuver {
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
+            "rolling_hold_pwm" => ROLLING_HOLD_MOTOR,
             "stop_gap_if_renewed_m" => if_renewed, "renewal_stop_basis" => "neutral_tail_then_light_brake",
             "rear_to_gantry_m" => rear_gap, "rear_past_sensor_m" => rear_past_sensor,
             "heading_accel_mps2" => heading_accel, "brake_stop_gap_m" => brake_stop,

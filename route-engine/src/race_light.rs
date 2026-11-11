@@ -195,8 +195,8 @@ impl LightRoll {
     pub fn label(self) -> &'static str {
         match self {
             Self::Cruise => "cruise",
-            Self::Coast => "coast",
-            Self::ZoneCoast => "zone_coast",
+            Self::Coast => "rolling_low",
+            Self::ZoneCoast => "zone_rolling_low",
             Self::Through => "unlit_continue",
         }
     }

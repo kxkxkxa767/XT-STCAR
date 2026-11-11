@@ -29774,8 +29774,8 @@
       "你改完后编译上传记录，明天再测"
     ],
     "agreed_scope": "After the assistant proposed testing 1620 only in the inter-cone straight boost and keeping both bends at 1550, the user requested completion, build and push tonight; physical test tomorrow.",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "change": [
       "Rust TRANSFER_BOOST_MOTOR 1600 -> 1620. RaceTransfer::Boost is the only output site; the supervisor transfer whitelist and DRIVE_MOTORS consume the same constant.",
       "Keep physical cone bends at ROUTE_SLOW_MOTOR 1550, existing 1.8 m/s tangent target and measured-speed/coast selection, first-loop held circle, y76 channel identity fix, crosswalk, lights, finish and surface logic.",
@@ -29791,7 +29791,7 @@
     },
     "build_status": "cross-compiled and vision helper built; not deployed, not run",
     "vehicle_baseline_label": "claude-turn183",
-    "next": "Cross-compile 184 / y77 from claude-turn183, update shared records and push origin/main. Do not deploy or launch tonight. Tomorrow needs a new start-position, photoelectric and light reset confirmation.",
+    "next": "y77 is on the car, locked after completion. User requested fixes for the brief 1620/long neutral interval, faster light approach and moving PWM 1530 instead of neutral at the finish. See y78_rolling_hold_and_tick_transfer_20261111.",
     "expected_effect": "Experimental stronger straight boost; no promised time gain. y76 boosted only about 0.3 s before an estimated stopping-distance cut, so 1620 may also cut sooner. Measure actual tangent speed, first-to-second time and board clearance.",
     "remaining_light_observation": "y76 stop gap 0.592 m and estimated tail past beam 0.00127 m; check rear-wheel position physically tomorrow, not a reason to alter item 5 or light settings in this PWM-only candidate.",
     "source_commit": "9e95c7d6e146d00dfc807c3d3d46b0d102d2fb6d",
@@ -29805,6 +29805,202 @@
       "runtime_changed": [
         "payload/route-engine"
       ]
+    },
+    "car_run_y77": {
+      "run_date": "2026-11-11",
+      "source_commit": "9e95c7d6e146d00dfc807c3d3d46b0d102d2fb6d",
+      "deployed": true,
+      "completed": true,
+      "result": "route_finish_zone_stop",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261110-y77",
+      "evidence_directory_date_note": "The helper retains its package creation date in the directory name; actual run was 2026-11-11 at 15:42.",
+      "evidence_files_ok": 83,
+      "retrieval_resumed_after_chat_interruption": true,
+      "effective_s": 21.678342432,
+      "move_to_stop_s": 31.765894019,
+      "light_wait_s": 10.087551587,
+      "delta_from_y76_s": 0.10720558099999877,
+      "timing_basis": "Same saved-frame event mapping as work/y36/segments.py; segment uncertainty about one scan, software timing, penalties not certified.",
+      "segments_s_y76_y77": {
+        "move_to_crosswalk_stop": [
+          3.495274545,
+          3.2954567610000005
+        ],
+        "crosswalk_wait": [
+          3.0951391719999997,
+          3.1958862939999992
+        ],
+        "crosswalk_go_to_first_pass": [
+          4.297630419000001,
+          4.196948219000001
+        ],
+        "first_pass_to_tangent": [
+          2.3960906349999984,
+          2.703182387
+        ],
+        "tangent_to_second_pass": [
+          1.100960176000001,
+          0.9937446940000001
+        ],
+        "second_pass_to_light_stop": [
+          3.492845751000001,
+          3.497751062999999
+        ],
+        "light_wait": [
+          10.087494249999999,
+          10.087551587
+        ],
+        "light_go_to_finish_stop": [
+          3.6931961530000024,
+          3.7953730140000026
+        ]
+      },
+      "operator_observation": [
+        "两桶之间的直道加了1620后有明显停顿还没有保持1620",
+        "第二个桶绕过去后速度太慢了"
+      ],
+      "crosswalk": {
+        "front_gap_m": 0.5376108686691925,
+        "program_wait_s": 3.1958237510000007
+      },
+      "cone_body_minima": {
+        "first": {
+          "gap_m": 0.13192503300399788,
+          "seq": 126,
+          "bin": 258
+        },
+        "second": {
+          "gap_m": 0.4086602276429032,
+          "seq": 150,
+          "bin": 86
+        }
+      },
+      "transfer": {
+        "tangent_speed_mps": 1.5495070190132976,
+        "1620_saved_seq": [
+          128
+        ],
+        "neutral_saved_seq": [
+          129,
+          131,
+          132,
+          134,
+          135
+        ],
+        "first_1550_again_seq": 137,
+        "neutral_saved_boundary_s": 0.798,
+        "cut_seq_129": {
+          "speed_mps": 1.801051281848387,
+          "remaining_m": 2.445255882459357,
+          "predicted_coast_to_entry_m": 3.287270571173514,
+          "old_pending_rise_mps": 0.8
+        },
+        "lagging_radar_seq_134": {
+          "radar_mps": 2.037474464558399,
+          "imu_current_mps": 1.709451042571501
+        },
+        "root_cause": "A fixed 4 m/s2 * 0.2 s pending rise caused an early cut; max(radar,IMU) then kept neutral through the delayed radar peak, and the post-cut state fixed 1550 while more than 2 m remained."
+      },
+      "light": {
+        "first_saved_neutral_seq": 174,
+        "first_saved_neutral_front_gap_m": 2.14214601803718,
+        "brake_started_at_s": 18.393399578,
+        "brake_ended_at_s": 19.429861967,
+        "brake_end_reason": "stopped",
+        "stop_front_gap_m": 0.4280842271883041,
+        "rear_past_beam_m": 0.17610239706574438,
+        "release_basis": "green_in_fresh_frames_after_the_stop",
+        "note": "Compared with y76, second-pass to red-stop was essentially unchanged at 3.498 s; user asks for a faster powered approach rather than the long neutral segment."
+      },
+      "finish": {
+        "front_gap_m": 0.20444496157560238,
+        "creeps": 0,
+        "standstill_confirmed": true
+      },
+      "quality_counts": {},
+      "cpu": {
+        "route_engine_core_fraction": 0.1673132646464016,
+        "max_tick_compute_s": 0.010979994000003046
+      },
+      "imu": {
+        "checksum_errors": 0,
+        "clock": "captured_at in ms from the same Instant as lidar.received_program_s",
+        "device": "/dev/imu",
+        "error": null,
+        "samples": 3519
+      },
+      "after": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "imu_response_review": "work/codex-y77-trial-20261111/imu-response-review.json"
     }
+  },
+  "y78_rolling_hold_and_tick_transfer_20261111": {
+    "date": "2026-11-11",
+    "author": "Codex",
+    "engine_round": 185,
+    "baseline": "y77 / engine 184 (9e95c7d), run on 2026-11-11, 21.678 s less light wait",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user": [
+      "第二个桶绕过去后速度可以快点，毕竟有1300的反向刹车兜底",
+      "还有停车区也是可以降低pwm但不能回到1500，反正有反向减速",
+      "实测1530下无法从静止开始止启动，但运动时候可以保持前进"
+    ],
+    "change": [
+      "RaceTransfer: observed short-interval IMU acceleration and 0.10 s boost-cut response replace fixed 4.0 * 0.20 prediction; cached geometry/speed transported on existing 20 ms control ticks.",
+      "While slowing, prefer current IMU speed over delayed radar peak; before the actual tangent maintain the existing entry-speed hold rather than fixing 1550 immediately after a cut. The necessary inter-cone deceleration coast and support-wait behavior remain; 1530 is used for the light/finish moving approach, not modelled as neutral coast.",
+      "Light approach: replace the normal pre-brake neutral phase with user-measured 1530 moving hold; keep 1550 cruise. One continuous 1300 application now ends at low-speed stop, not early rolling release.",
+      "Finish race branch: existing standstill launch, then 1565 or 1530 moving hold, then one continuous 1300 to stop. A separate brake instance uses existing 20 ms ticks; no brake state shared with light approach. Legacy Python/reference behavior unchanged.",
+      "Add 1530 to the Rust drive list and race light-entry/light-lane supervisor whitelist. Stop/wait, fault handling and lock still use neutral. No new timer limit or speed cap; no change to cone steering or item 5."
+    ],
+    "empirical_basis": [
+      {
+        "run": "y76",
+        "cut_reference_s": 13.34,
+        "cut_timing_uncertainty_s": 0.03,
+        "post_cut_rise_mps": 0.18261014384486707,
+        "time_to_peak_s": 0.09200000000000053,
+        "preceding_0p10_s_accel": 2.4828092471267036,
+        "light_brake_span_s": [
+          16.814354032,
+          17.230522408
+        ],
+        "light_brake_imu_mean_accel": -1.0877824262932492,
+        "light_brake_after_response_mean_accel": -1.1178775993565933
+      },
+      {
+        "run": "y77",
+        "cut_reference_s": 12.94,
+        "cut_timing_uncertainty_s": 0.03,
+        "post_cut_rise_mps": 0.14769421160908647,
+        "time_to_peak_s": 0.05600000000000094,
+        "preceding_0p10_s_accel": 3.5688553580874913,
+        "light_brake_span_s": [
+          18.393399578,
+          19.429861967
+        ],
+        "light_brake_imu_mean_accel": -0.7541050973149074,
+        "light_brake_after_response_mean_accel": -0.7531652437331832
+      }
+    ],
+    "checks": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 20,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "test_changes": "Updated existing continuous-brake case and added two in-file checks for inter-scan cut/current-speed coast exit and standstill launch/moving finish hold/continuous brake.",
+      "simulation_sweep": false
+    },
+    "build_status": "source ready for cross-compilation",
+    "remaining_validation": [
+      "Actual 1620 duration and inter-cone deceleration on the next vehicle run",
+      "1530 moving response and light/finish stopping positions with continuous 1300",
+      "CPU and per-tick latency under the added constant-time projections"
+    ],
+    "next": "Build 185/y78 from claude-turn184, update shared records and push. A new physical launch requires fresh start-position, photoelectric and light-reset confirmation; the y77 launch authorization is consumed."
   }
 }

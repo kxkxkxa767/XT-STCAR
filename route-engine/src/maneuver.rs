@@ -64,9 +64,11 @@ pub fn hold_pwm(speed: Option<f64>, target: f64) -> i64 {
 }
 // User 11-04: after green, 1600 briefly, then hold 1565 to the brake point (race finish plan).
 pub const FINISH_HOLD_MOTOR: i64 = 1565;
-pub const DRIVE_MOTORS: [i64; 12] = [
+// User measured on 11-11: 1530 sustains an already moving car, but cannot launch it.
+pub const ROLLING_HOLD_MOTOR: i64 = 1530;
+pub const DRIVE_MOTORS: [i64; 13] = [
     TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR,
-    FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR, 1555, 1575, 1580, 1585,
+    FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR, ROLLING_HOLD_MOTOR, 1555, 1575, 1580, 1585,
 ];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
@@ -1325,6 +1327,17 @@ impl Maneuver {
 
     /// ManeuverSequence._result.
     pub fn result(&mut self, now: f64) -> V {
+        if self.phase == "drive" && !self.quality_resume_pending && self.transfer_stage()
+            && let Some(input) = self.race_inputs
+            && let Some(motor) = self.race_transfer.command(now, input.forward_integral) {
+            self._transfer_motor = motor;
+        }
+        if self.phase == "drive" && !self.quality_resume_pending && self.light_motor_stage()
+            && matches!(self.light_stop_state, Some("released" | "passed"))
+            && let Some(input) = self.race_inputs
+            && let Some(motor) = self.finish.race_brake_motor(now, input.forward_integral) {
+            self.lane_motor = motor;
+        }
         if self.phase == "drive" && !self.quality_resume_pending && self.light_approaching()
             && matches!(self.route_stage, "light_entry" | "light_lane")
             && let Some(input) = self.race_inputs
@@ -1375,6 +1388,12 @@ impl Maneuver {
             result.set("wall_turn", self.wall_turn.diagnostics());
             result.set("surface_speed", self.race_surface_speed.diagnostics());
             result.set("light_brake_control", self.race_light_brake.diagnostics());
+            if self.light_motor_stage() && matches!(self.light_stop_state, Some("released" | "passed")) {
+                result.set("finish_brake_control", self.finish.race_brake.diagnostics());
+            }
+            if self.transfer_stage() {
+                result.set("transfer_control", self.race_transfer.dump());
+            }
         }
         let motor = result.get("motor").i();
         if self.race_light_brake.is_active() && motor != crate::race_light_brake::LIGHT_BRAKE_MOTOR
@@ -1383,6 +1402,12 @@ impl Maneuver {
             self.lane_motor = NEUTRAL;
         }
         self.race_light_brake.output_observed(motor);
+        if self.finish.race_brake.is_active() && motor != LANE_BRAKE_MOTOR {
+            self.finish.brake_since = None;
+            self.finish.brake_end = Some(now);
+            if self.lane_motor == LANE_BRAKE_MOTOR { self.lane_motor = NEUTRAL; }
+        }
+        self.finish.race_brake.output_observed(motor);
         if DRIVE_MOTORS.contains(&motor) {
             self._power_cmd_at = Some(now);
             self._power_cmd_motor = Some(motor);

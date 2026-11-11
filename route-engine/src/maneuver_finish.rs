@@ -9,6 +9,7 @@ use crate::py::*;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FinishControl {
+    pub race_brake: crate::race_light_brake::LightBrake,
     pub ranges: crate::motion_sensors::RangeHistory,
     pub last_speed: Option<(f64, f64)>,
     pub launch_until: Option<f64>,
@@ -29,6 +30,40 @@ pub(crate) struct FinishControl {
     pub brake_decel: Option<f64>,
 }
 
+#[cfg(test)]
+mod continuous_race_tests {
+    use super::*;
+
+    #[test]
+    fn race_finish_launches_then_uses_a_moving_hold_and_one_brake() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.phase = "drive";
+        m.route_stage = "light_lane";
+        m.light_stop_state = Some("released");
+        m.light_stop_evidence = dict! {"go" => true};
+        m.race_inputs = Some(crate::motion_sensors::RaceInputs { forward_integral: Some(0.), ..Default::default() });
+        m.finish.imu_zero = Some(0.);
+        m.finish.launch_from = Some(1.);
+        m.finish.launch_until = Some(2.);
+        m.finish.ranges = vec![(0.7, 0.7, 4.), (0.8, 0.8, 4.), (0.9, 0.9, 4.)];
+        let scan = |seq: i64, at: f64| dict! {"seq" => seq, "at_ms" => (at * 1000.) as i64,
+            "received_at" => at, "ranges" => V::from(vec![4.; 360])};
+        m.finish_control(&scan(10, 1.), Some(4.), 1.);
+        assert_eq!(m.lane_motor, LIGHT_LAUNCH_MOTOR, "1530 is not a standstill launch");
+        m.finish.launch_until = None;
+        m.finish.launch_from = None;
+        m.finish.ranges.clear();
+        m.race_inputs.as_mut().unwrap().forward_integral = Some(1.6);
+        m.finish_control(&scan(20, 2.), Some(2.2), 2.);
+        assert_eq!(m.lane_motor, ROLLING_HOLD_MOTOR);
+        m.finish_control(&scan(22, 2.2), Some(1.85), 2.2);
+        assert_eq!(m.lane_motor, LANE_BRAKE_MOTOR);
+        m.race_inputs.as_mut().unwrap().forward_integral = Some(1.45);
+        m.finish_control(&scan(24, 2.4), Some(1.54), 2.4);
+        assert_eq!(m.lane_motor, LANE_BRAKE_MOTOR, "rolling brake stays continuous");
+    }
+}
+
 // The single 1300 brake's deceleration: y25-y27 on the IMU .71-.82 m/s2 over the whole
 // brake; y34/y38 about .85 once it acts (round y39: the plan's brake point and default).
 // 11-04 at 12 V it acts within a scan: y50 1.45 -> .95 m/s over .58 m from the command
@@ -43,6 +78,17 @@ const IMU_HISTORY_S: f64 = 1.;
 
 impl FinishControl {
     pub fn has_launch(&self) -> bool { self.launch_until.is_some() }
+
+    pub fn race_brake_motor(&mut self, now: f64, integral: Option<f64>) -> Option<i64> {
+        let motor = self.race_brake.command(now, integral)?;
+        if motor == LANE_BRAKE_MOTOR {
+            self.brake_since.get_or_insert(now);
+        } else if self.brake_since.take().is_some() {
+            self.brake_end = Some(now);
+        }
+        self.holding = false;
+        Some(motor)
+    }
 }
 
 impl Maneuver {
@@ -85,6 +131,7 @@ impl Maneuver {
         self.finish.imu_bias = None;
         self.finish.holding = false;
         self.finish.brake_decel = None;
+        self.finish.race_brake = Default::default();
     }
 
     /// Round y37 (user: 终点 IMU 和雷达复用): the IMU speed since the light release, less
@@ -430,6 +477,42 @@ impl Maneuver {
             return (basis, feedback);
         }
         let launching = self.finish.launch_until.is_some_and(|until| now < until);
+        if after_light && let Some(input) = self.race_inputs {
+            // User, 11-11: while moving, reduce forward PWM rather than
+            // inserting neutral coasts. The measured 1530 cannot launch a car.
+            // Keep the existing launch cutoff, then use 1565/1530 until the
+            // finish's own continuous brake. Its boundary also runs at 20 ms.
+            let current = fused.map_or(v_aim, |f| f.0);
+            if self.finish.launch_from.is_some()
+                && (!launching || stop_gap.is_some_and(|s| s <= goal.target_gap)
+                    || worst_gap.is_some_and(|s| s <= goal.min_gap)) {
+                self.finish.launch_until = None;
+                self.finish.launch_from = None;
+            }
+            self.finish.race_brake.observe(now, gap, Some(current), input.forward_integral,
+                1., decel, LANE_BRAKE_DECEL_MPS2, goal.target_gap);
+            let motor = self.finish.race_brake_motor(now, input.forward_integral).unwrap_or_else(|| {
+                if self.finish.race_brake.is_used() { NEUTRAL }
+                else if self.finish.launch_until.is_some() { LIGHT_LAUNCH_MOTOR }
+                else if gap.is_some_and(|g| g <= goal.target_gap + current * (LANE_BRAKE_ONSET_S + ESC_COAST_DELAY_S)
+                    + current * current / (2. * LANE_BRAKE_DECEL_MPS2)) { ROLLING_HOLD_MOTOR }
+                else { FINISH_HOLD_MOTOR }
+            });
+            self.lane_motor = motor;
+            self.finish.holding = matches!(motor, FINISH_HOLD_MOTOR | ROLLING_HOLD_MOTOR);
+            self.finish.pulse = 0;
+            self.finish.creeping = false;
+            self._lane_topup_motor = None;
+            feedback.set("motor", motor);
+            feedback.set("imu_speed_mps", imu);
+            feedback.set("fused_speed_mps", current);
+            feedback.set("imu_bias_mps", self.finish.imu_bias);
+            feedback.set("plan_holding", self.finish.holding);
+            feedback.set("rolling_hold_pwm", ROLLING_HOLD_MOTOR);
+            feedback.set("finish_brake_control", self.finish.race_brake.diagnostics());
+            feedback.set("brake", V::list(vec![V::from(self.finish.brake_since), V::from(self.finish.brake_end)]));
+            return (None, feedback);
+        }
         let mut topup_motor: Option<i64> = None; // round y15: this scan's output continues or starts a top-up
         let braking = self.finish.brake_since.is_some();
         let brake = after_light

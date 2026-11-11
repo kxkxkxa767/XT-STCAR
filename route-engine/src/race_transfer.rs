@@ -1,5 +1,5 @@
 //! Longitudinal control from the first loop's exit to the second loop's tangent.
-use crate::helpers::NEUTRAL;
+use crate::helpers::{NEUTRAL, SCAN_AGE_S};
 use crate::motion_sensors::ESC_COAST_DELAY_S;
 use crate::maneuver::*;
 use crate::maneuver_post::pairwise_track_speed;
@@ -27,6 +27,31 @@ pub fn passage_entry_mps(passage: f64) -> Option<f64> {
 const ROLLING_MPS: f64 = 0.15;
 const STRAIGHT_YAW_RAD_S: f64 = 0.6;
 const STRAIGHT_STEER_BAND_PWM: i64 = 60;
+// y76/y77: after the cut the IMU speed peaked in 0.092/0.056 s and gained
+// 0.183/0.148 m/s, not the old fixed 4 * 0.2 = 0.8 m/s prediction.
+const BOOST_CUT_RESPONSE_S: f64 = 0.1;
+
+#[derive(Clone, Copy, Debug)]
+struct DriveAnchor {
+    at: f64,
+    distance: Option<f64>,
+    speed: Option<f64>,
+    integral: Option<f64>,
+    acceleration: f64,
+    decel: f64,
+    entry_mps: f64,
+    continuing: bool,
+    hold_accel: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TransferControl {
+    at: f64,
+    speed: Option<f64>,
+    distance: Option<f64>,
+    coast: Option<f64>,
+    motor: i64,
+}
 
 /// A small steering correction can continue a push already in progress.
 pub fn steering_window(yaw: f64, target_pwm: i64, servo: i64) -> (bool, bool) {
@@ -43,6 +68,9 @@ pub struct RaceTransfer {
     transfer_anchor: Option<(f64, f64)>,
     waiting_for_support: bool,
     phase_before_wait: Option<TransferPhase>,
+    previous_integral: Option<(f64, f64)>,
+    drive_anchor: Option<DriveAnchor>,
+    control: Option<TransferControl>,
     /// The channel's board as last identified (lateral, metres).
     pub channel_board: Option<f64>,
     /// Cone two's entry speed when the passage on its board side is narrow.
@@ -121,23 +149,26 @@ impl RaceTransfer {
         // 1.44 m/s while the IMU change from the pre-push anchor implied 2.52.
         let imu_speed = self.transfer_anchor.zip(forward_integral)
             .map(|((radar, origin), current)| (radar + current - origin).max(0.));
-        let cut_speed = match (self.speed, imu_speed) {
+        let cut_speed = if matches!(self.phase, TransferPhase::Coast) {
+            // The range slope still shows the earlier peak while slowing. y77
+            // seq 134: radar 2.04, current IMU 1.71; max() prolonged neutral.
+            imu_speed.or(body_speed).or(self.speed)
+        } else { match (self.speed, imu_speed) {
             (Some(lidar), Some(live)) => Some(lidar.max(live)),
             (lidar, live) => lidar.or(live),
-        };
+        }};
+        let integral = forward_integral.filter(|v| v.is_finite());
+        let acceleration = self.previous_integral.zip(integral)
+            .filter(|((at, _), _)| 0. < now - at && now - at <= SCAN_AGE_S)
+            .map(|((at, before), current)| ((current - before) / (now - at)).max(0.))
+            .unwrap_or(4.0);
+        if let Some(current) = integral { self.previous_integral = Some((now, current)); }
         let entry_mps = self.tight_entry.unwrap_or(ENTRY_MPS);
         let hold_motor = if continuing { hold_pwm(cut_speed, entry_mps) } else { ROUTE_SLOW_MOTOR };
         let hold_accel = surface.predicted_hold_accel(hold_motor, body_speed, now).unwrap_or(0.);
-        let coast_m = cut_speed.map(|v| {
-            let lag = ESC_COAST_DELAY_S; // measured mean cut lag on the car
-            let pending_rise = match self.phase {
-                TransferPhase::Boost(since) => 4.0 * (now - since).clamp(0., lag),
-                TransferPhase::Approach => hold_accel * lag,
-                _ => 0.,
-            };
-            let release_v = v + pending_rise;
-            (v + release_v) * lag / 2. + (release_v * release_v - entry_mps * entry_mps).max(0.) / (2. * decel)
-        });
+        let anchor = DriveAnchor { at: now, distance, speed: cut_speed, integral,
+            acceleration, decel, entry_mps, continuing, hold_accel };
+        let coast_m = self.coast_budget(now, cut_speed, anchor);
         let room = self.rolling() && distance.zip(coast_m).is_some_and(|(d, coast)| d > coast);
         self.phase = match self.phase {
             TransferPhase::Approach if entering && room => {
@@ -145,10 +176,47 @@ impl RaceTransfer {
                 TransferPhase::Boost(now)
             }
             TransferPhase::Approach if distance == Some(0.) => TransferPhase::Bend,
-            TransferPhase::Boost(_) if !room || !continuing => TransferPhase::Coast,
             other => other,
         };
-        if !self.waiting_for_support && matches!(self.phase, TransferPhase::Coast) && cut_speed.is_none_or(|v| v <= entry_mps) {
+        self.drive_anchor = Some(anchor);
+        let motor = self.command(now, integral).unwrap_or(hold_motor);
+        let coast_m = self.control.and_then(|c| c.coast).or(coast_m);
+        (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",
+                       "imu_anchored_speed_mps" => imu_speed, "speed_for_cut_mps" => cut_speed,
+                       "straight_remaining_m" => distance, "coast_to_entry_m" => coast_m, "transfer_motor" => motor,
+                       "hold_accel_mps2" => hold_accel, "boost_accel_mps2" => acceleration,
+                       "boost_cut_response_s" => BOOST_CUT_RESPONSE_S,
+                       "waiting_for_second_support" => self.waiting_for_support})
+    }
+
+    fn coast_budget(&self, now: f64, speed: Option<f64>, a: DriveAnchor) -> Option<f64> {
+        speed.map(|v| {
+            let (lag, acceleration) = match self.phase {
+                TransferPhase::Boost(since) => (BOOST_CUT_RESPONSE_S,
+                    if now - since <= BOOST_CUT_RESPONSE_S { 4.0 } else { a.acceleration }),
+                TransferPhase::Approach => (ESC_COAST_DELAY_S, a.hold_accel),
+                _ => (0., 0.),
+            };
+            let release = v + acceleration * lag;
+            (v + release) * lag / 2. + (release * release - a.entry_mps * a.entry_mps).max(0.) / (2. * a.decel)
+        })
+    }
+
+    /// Re-evaluate the one boost/cut on the existing 20 ms tick. A fresh scan
+    /// still owns geometry; the IMU transports speed and distance between scans.
+    pub fn command(&mut self, now: f64, integral: Option<f64>) -> Option<i64> {
+        let a = self.drive_anchor?;
+        let age = now - a.at;
+        if !(0. ..=SCAN_AGE_S).contains(&age) { return None; }
+        let speed = a.speed.map(|v| (v + a.integral.zip(integral)
+            .map_or(0., |(before, current)| current - before)).max(0.));
+        let distance = a.distance.map(|d| (d - a.speed.zip(speed).map_or(0., |(old, v)| (old + v) * age / 2.)).max(0.));
+        let coast = self.coast_budget(now, speed, a);
+        if matches!(self.phase, TransferPhase::Boost(_))
+            && (!a.continuing || !distance.zip(coast).is_some_and(|(d, c)| d > c)) {
+            self.phase = TransferPhase::Coast;
+        }
+        if !self.waiting_for_support && matches!(self.phase, TransferPhase::Coast) && speed.is_none_or(|v| v <= a.entry_mps) {
             self.phase = TransferPhase::Bend;
             self.transfer_anchor = None;
         }
@@ -157,14 +225,15 @@ impl RaceTransfer {
             TransferPhase::Coast => NEUTRAL,
             // User 11-04 (open PWM steps): out of cone one and straight again, hold toward the
             // cone-two entry speed instead of 1550 (y53: 1550 at 1.29-1.41 m/s for .5 s).
-            TransferPhase::Approach if continuing => hold_motor,
-            _ if self.tight_entry.is_some_and(|e| cut_speed.is_some_and(|v| v > e)) => NEUTRAL,
+            TransferPhase::Approach if a.continuing => hold_pwm(speed, a.entry_mps),
+            // Cutting the boost does not mean the physical bend has begun:
+            // y77 still had over 2 m to travel when the old state fixed 1550.
+            TransferPhase::Bend if a.continuing && distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
+            _ if self.tight_entry.is_some_and(|e| speed.is_some_and(|v| v > e)) => NEUTRAL,
             _ => ROUTE_SLOW_MOTOR,
         }};
-        (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",
-                       "imu_anchored_speed_mps" => imu_speed, "speed_for_cut_mps" => cut_speed,
-                       "straight_remaining_m" => distance, "coast_to_entry_m" => coast_m, "transfer_motor" => motor,
-                       "hold_accel_mps2" => hold_accel, "waiting_for_second_support" => self.waiting_for_support})
+        self.control = Some(TransferControl { at: now, speed, distance, coast, motor });
+        Some(motor)
     }
 
     pub fn dump(&self) -> V {
@@ -176,7 +245,34 @@ impl RaceTransfer {
         };
         dict! {"speed_mps" => self.speed, "phase" => phase, "boost_since" => since,
                "waiting_for_second_support" => self.waiting_for_support,
+               "control_at" => self.control.map(|c| c.at), "control_speed_mps" => self.control.and_then(|c| c.speed),
+               "control_remaining_m" => self.control.and_then(|c| c.distance), "control_coast_to_entry_m" => self.control.and_then(|c| c.coast),
+               "control_motor" => self.control.map(|c| c.motor),
                "transfer_anchor" => self.transfer_anchor.map(|(radar, imu)| V::from(vec![radar, imu])),
                "history" => V::list(self.history.iter().map(|r| V::from(vec![r.0, r.1, r.2])).collect())}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn boost_cuts_between_scans_and_current_speed_ends_the_coast() {
+        let mut transfer = RaceTransfer {
+            speed: Some(2.2), phase: TransferPhase::Boost(0.5),
+            transfer_anchor: Some((2., 0.)),
+            drive_anchor: Some(DriveAnchor { at: 1., distance: Some(1.4), speed: Some(2.),
+                integral: Some(0.), acceleration: 1., decel: 0.6, entry_mps: 1.8,
+                continuing: true, hold_accel: 0. }),
+            ..Default::default()
+        };
+        assert_eq!(transfer.command(1., Some(0.)), Some(TRANSFER_BOOST_MOTOR));
+        assert_eq!(transfer.command(1.06, Some(0.06)), Some(NEUTRAL));
+        let (motor, _) = transfer.drive(1.2, Some(1.), false, true, 0.6, Some(-0.3), None,
+            &crate::race_surface::SurfaceResponse::default());
+        assert!(motor > NEUTRAL && motor < TRANSFER_BOOST_MOTOR,
+            "a delayed radar peak must not extend the coast after current speed falls below entry speed");
+        assert_eq!(transfer.command(1.6, Some(-0.4)), None);
     }
 }
