@@ -30367,7 +30367,17 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
-    "build_status": "source ready for cross-compilation",
-    "next": "Finish the minimal race-only implementation, run required checks and build 188/y81 from claude-turn187. No new launch is authorized yet; retain y80 locked and wait for a new placement/photoelectric/light-reset/start confirmation."
+    "build_status": "188/y81 cross-compiled and helper built; not deployed or run",
+    "next": "Await a new placement/photoelectric/light-reset/start confirmation, deploy claude-turn188 and y81, then run once. Car remains y80/187 locked.",
+    "source_commit": "2894fe7831cea66b5437499c3ae9fe247130861c",
+    "package": {
+      "engine_label": "claude-turn188",
+      "vision_label": "y81",
+      "baseline": "claude-turn187",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn188-2894fe7.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    }
   }
 }
