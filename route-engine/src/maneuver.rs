@@ -1584,7 +1584,13 @@ impl Maneuver {
                 || (self.light_entry_coast && self.route_stage == "light_entry") {
                 return NEUTRAL;
             }
-            self.first_approach_hold().unwrap_or_else(|| self.cruise_motor())
+            // y80: 1570 in cone one's actual arc raised speed to 1.8-1.9 m/s;
+            // the existing left steering saturated and the car ran wide before
+            // the quality pause. Keep its proven 1550 arc, independently of the
+            // approach speed hold and the other stages' 1570 cruise.
+            self.first_approach_hold().unwrap_or_else(|| {
+                if self.route_stage == "first_target" { ROUTE_SLOW_MOTOR } else { self.cruise_motor() }
+            })
         } else {
             TRIAL_MOTOR
         }

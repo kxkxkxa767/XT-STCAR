@@ -30194,8 +30194,8 @@
     "author": "Codex",
     "engine_round": 187,
     "baseline": "y79 / engine 186 (eb58a27), installed and locked; y79 stopped short and timed out",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "继续",
       "你不能对这个赛道过拟合，现在还不清楚现场赛道的规格",
@@ -30242,8 +30242,8 @@
       "test_change": "One in-file analytic stopping-distance vs numerical integration check, including stronger measured floor drag; existing continuous-brake/launch/pause tests retained.",
       "simulation_sweep": false
     },
-    "build_status": "187/y80 cross-compiled and vision helper built, not deployed or physically tested",
-    "next": "Package ready. Await fresh operator placement/photoelectric/light reset and launch confirmation before deploying claude-turn187 and y80. Car remains y79/186.",
+    "build_status": "187/y80 cross-compiled, deployed and run; unfinished during first loop",
+    "next": "Car remains y80/187 locked. Prepare y81/188 from claude-turn187: restore 1550 only in the physical first-cone bend, keeping the approach speed loop and other y80 changes. A new launch requires fresh operator placement/reset confirmation.",
     "source_commit": "0412bab4d7bdcbf8079f8449ba530358e80a1c96",
     "package": {
       "engine_label": "claude-turn187",
@@ -30253,6 +30253,121 @@
       "runtime_changed": [
         "payload/route-engine"
       ]
+    },
+    "car_run_y80": {
+      "run_date": "2026-11-11",
+      "source_commit": "0412bab4d7bdcbf8079f8449ba530358e80a1c96",
+      "engine_round": 187,
+      "deployed": true,
+      "completed": false,
+      "effective_s": null,
+      "result": "probe_obstacle_close_body",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261111-y80",
+      "evidence_files_ok": 39,
+      "operator_observation": "用户先描述车辆停在两桶之间，随后明确确认“靠近挡板停下，没碰到”",
+      "last_route_stage": "first_target",
+      "first_pass_event_present": false,
+      "quality_counts": {
+        "front_sparse": 5
+      },
+      "diagnosis": {
+        "primary": "First-loop 1570 increased the turning speed and the car ran outside its planned circle before quality_wait. The failure precedes any transfer-recovery opportunity.",
+        "observations": [
+          {
+            "seq": 118,
+            "steering_pwm": 1720
+          },
+          {
+            "seq": 120,
+            "distance_from_planned_circle_centre_m": 0.949,
+            "plan_radius_m": 0.9
+          },
+          {
+            "seq": 121,
+            "distance_from_planned_circle_centre_m": 1.005,
+            "non_target_board_body_gap_m": 0.325
+          },
+          {
+            "seq": 122,
+            "phase": "quality_wait"
+          },
+          {
+            "seq": 124,
+            "stop": "probe_obstacle_close_body"
+          }
+        ],
+        "first_target_track": 1,
+        "target_fresh_through_failure": true,
+        "speed_mps_estimate": {
+          "y80": [
+            1.76,
+            1.9
+          ],
+          "y79": [
+            1.26,
+            1.48
+          ],
+          "basis": "IMU-based reconstruction reported in this analysis"
+        },
+        "dynamic_radius_m_estimate": {
+          "y80": [
+            0.88,
+            1.0
+          ],
+          "y79": [
+            0.69,
+            0.77
+          ]
+        },
+        "quality_wait_to_stop_s": 0.207099331,
+        "recovery_qualification_s_approx": 0.3,
+        "recovery_note": "The obstacle stop followed before the approximate recovery qualification interval had elapsed. Do not attribute this run to transfer steering or a recovery branch failing to execute."
+      },
+      "stop": {
+        "scan_seq": 124,
+        "bin": 40,
+        "body_gap_m": 0.050516225112446515,
+        "physical_contact_confirmed": false
+      },
+      "not_reached": [
+        "first_pass",
+        "inter-cone transfer",
+        "second-cone loop",
+        "light approach",
+        "finish"
+      ],
+      "after": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "new_brake_model_physical_validation": "not reached in this run",
+      "physical_collision_confirmed": false
     }
+  },
+  "y81_first_loop_drive_restore_20261111": {
+    "date": "2026-11-11",
+    "author": "Codex",
+    "engine_round": 188,
+    "baseline": "y80 / engine 187 (0412bab), currently installed and locked",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "finding": "y80 ran wide in the first-cone bend under 1570 before the quality pause; target track 1 stayed fresh, there was no first_pass, and the 0.2071 s from wait to obstacle stop was shorter than recovery qualification.",
+    "change": [
+      "Restore 1550 only while actually turning around cone one; leave the first-cone approach speed-control loop unchanged.",
+      "Retain other normal race cruise 1570, inter-cone boost 1620, moving hold 1530, y80 braking model and the existing pause-steering correction for subsequent validation.",
+      "Use the control stage/approach-versus-bend distinction, not practice-track coordinates, cone separation or a fixed turning time."
+    ],
+    "implementation_status": "implemented: only the actual first-loop default returns 1550; approach speed hold unchanged",
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 22,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation_sweep": false
+    },
+    "build_status": "source ready for cross-compilation",
+    "next": "Finish the minimal race-only implementation, run required checks and build 188/y81 from claude-turn187. No new launch is authorized yet; retain y80 locked and wait for a new placement/photoelectric/light-reset/start confirmation."
   }
 }
