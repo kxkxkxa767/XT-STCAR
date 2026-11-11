@@ -30540,11 +30540,21 @@
       "test_changes": "Two in-file checks cover midpoint/control-clock alignment, rotation compensation, duplicate frames, expiry and identity rebinding. Equivalent if-let binding removed the added unwrap lint.",
       "simulation_sweep": false
     },
-    "build_status": "source ready for cross-compilation",
+    "build_status": "189/y82 cross-compiled, helper built; not deployed or run",
     "followups": [
       "Resolve the difference between the operator report of waiting for green/restarting and the limited controller/camera timeline; confirmed coasting alone is not a complete explanation.",
       "Consider active fault braking only as a separately designed armed state with suitable acknowledgements; disarmed neutral output must not be described as physical standstill."
     ],
-    "next": "Complete implementation and required checks, build 189/y82 from claude-turn188. No new start is authorized; await fresh placement, photoelectric/light reset and start confirmation."
+    "next": "Package ready. Wait for a new placement/photoelectric/light-reset/start confirmation before deploying189/y82. Car remains y81/188 with outputs locked.",
+    "source_commit": "94262057ca0eabd3356406a6e48188985c376d10",
+    "package": {
+      "engine_label": "claude-turn189",
+      "vision_label": "y82",
+      "baseline": "claude-turn188",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn189-9426205.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    }
   }
 }
