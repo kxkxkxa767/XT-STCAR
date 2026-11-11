@@ -29942,8 +29942,8 @@
     "author": "Codex",
     "engine_round": 185,
     "baseline": "y77 / engine 184 (9e95c7d), run on 2026-11-11, 21.678 s less light wait",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "user": [
       "第二个桶绕过去后速度可以快点，毕竟有1300的反向刹车兜底",
       "还有停车区也是可以降低pwm但不能回到1500，反正有反向减速",
@@ -29995,12 +29995,91 @@
       "test_changes": "Updated existing continuous-brake case and added two in-file checks for inter-scan cut/current-speed coast exit and standstill launch/moving finish hold/continuous brake.",
       "simulation_sweep": false
     },
-    "build_status": "source ready for cross-compilation",
+    "build_status": "185/y78 cross-compiled, deployed and run; unfinished after collision",
     "remaining_validation": [
       "Actual 1620 duration and inter-cone deceleration on the next vehicle run",
       "1530 moving response and light/finish stopping positions with continuous 1300",
       "CPU and per-tick latency under the added constant-time projections"
     ],
-    "next": "Build 185/y78 from claude-turn184, update shared records and push. A new physical launch requires fresh start-position, photoelectric and light-reset confirmation; the y77 launch authorization is consumed."
+    "next": "y79/186 fixes steering during the transfer quality pause. User requested compile/push now and test later with a new placement/reset confirmation.",
+    "source_commit": "5ef485bf457bd918fccf081911f428edd7dee8b3",
+    "car_run_y78": {
+      "run_date": "2026-11-11",
+      "source_commit": "5ef485bf457bd918fccf081911f428edd7dee8b3",
+      "deployed": true,
+      "completed": false,
+      "effective_s": null,
+      "result": "probe_obstacle_close_body",
+      "operator_observation": "第一个桶到第二个桶的直道撞到斑马线的挡板了",
+      "physical_collision_confirmed": true,
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261111-y78",
+      "evidence_files_ok": 44,
+      "quality_counts": {
+        "front_sparse": 6
+      },
+      "failure": {
+        "pause_entry_seq": 132,
+        "pause_resume_seq": 139,
+        "pause_duration_s": 0.7077534290000003,
+        "held_servo": 1499,
+        "pause_local_displacement_m": 1.495993240351085,
+        "stop_seq": 141,
+        "nearest_bin": 322,
+        "nearest_body_gap_m": 0.00529610817685533,
+        "mechanism": "front_sparse triggered a post-pass neutral pause while the car still rolled. The pause froze servo 1499, ignored observed transfer steering, discarded the computed second-cone steering result, and reset the known divider identity. It coasted about 1.50 m before resuming close to the start/crosswalk divider.",
+        "relation_to_y78_tick": "During the failure pause phase was quality_wait, so the new drive-only 20 ms motor hook did not override neutral. This does not excuse the unhandled pause/navigation interaction at the higher transfer speed."
+      },
+      "transfer_before_pause": {
+        "boost_saved_seq": 129,
+        "coast_saved_seq": 131,
+        "seq131_current_speed_mps": 2.146057934730127,
+        "seq131_remaining_m": null,
+        "note": "A missing channel distance at seq 131 also ended the boost. No complete inter-cone timing or normal-flow speed benefit can be concluded from this interrupted run; y79 first fixes the collision path rather than extending power through uncertain geometry."
+      },
+      "not_reached": [
+        "second-cone tangent",
+        "light approach",
+        "finish"
+      ],
+      "new_light_finish_controls_physically_validated": false,
+      "after": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "cpu": {
+        "core_fraction": 0.14971594363895036,
+        "max_tick_compute_s": 0.006473383999999527
+      },
+      "trajectory": "work/codex-y78-trial-20261111/y78-pause-path.png",
+      "trajectory_basis": "Local lidar reconstruction anchored to fresh first-cone observations and recorded heading; displacement is approximate, not external positioning."
+    }
+  },
+  "y79_transfer_pause_steering_20261111": {
+    "date": "2026-11-11",
+    "author": "Codex",
+    "engine_round": 186,
+    "baseline": "y78 / engine 185 (5ef485b), currently on car, locked after incomplete run",
+    "user": "改好后直接上传，待会再测",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "Race-only transfer quality pause keeps using the current observed channel or existing reversed-axis steering instead of holding the old servo.",
+      "The confirmed second-cone plan already computed by pause_stage_ready now supplies pause steering rather than discarding its result.",
+      "Reset boost/speed state on entering pause, while preserving identified divider and tight-entry geometry. Existing neutral pause, feedback acknowledgements, clean-input recovery and body-clearance handling remain.",
+      "No motor/1530/braking/turn-radius change relative to y78, and no Python control changes."
+    ],
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 21,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "added_in_file_test": "A paused race transfer preserves divider identity and issues acknowledged steering changes toward the return axis.",
+      "simulation_sweep": false
+    },
+    "build_status": "source ready for cross-compilation",
+    "remaining_validation": "Physical transfer through/after a quality dropout; then the still-unreached y78 1530/continuous-brake light and finish behavior.",
+    "next": "Build 186/y79 from claude-turn185 and push code/records. User said test later; do not deploy or start until a new placement/reset/start confirmation."
   }
 }

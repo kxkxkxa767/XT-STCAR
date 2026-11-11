@@ -8,6 +8,37 @@ use crate::maneuver::*;
 use crate::maneuver_tm::{consecutive_fresh, mature_observation};
 use crate::py::*;
 
+#[cfg(test)]
+mod race_pause_tests {
+    use super::*;
+
+    #[test]
+    fn a_paused_transfer_keeps_its_divider_and_steers_while_rolling() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.race_inputs = Some(Default::default());
+        m.phase = "drive";
+        m.route_stage = "open_transfer";
+        m.first_pass_evidence = dict! {};
+        m.servo = 1499;
+        m.race_transfer.channel_board = Some(1.34);
+        m.compass.heading = Some(3.5);
+        m.compass.at_s = Some(1.);
+        m.compass.measured_at_s = Some(1.);
+        let scan = dict! {"seq" => 20, "at_ms" => 1000, "received_at" => 1.,
+            "ranges" => V::list(vec![V::None; 360])};
+        let control = dict! {"motor" => 1500, "servo" => 1499, "seq" => 10, "tick" => 100};
+        m.enter_neutral_pause("post_pass", "quality", 1., &scan, &control, "quality", "fresh stage input");
+        assert_eq!(m.race_transfer.channel_board, Some(1.34));
+        m._pause_steer_target = m.transfer_pause_hold(&scan);
+        let base = m.pause_wait_base();
+        assert!(base < 1499, "a heading past the return axis needs a right correction");
+        m.wait_steer(1.1, &1499.into(), true, base);
+        assert!(m.servo < 1499);
+        assert_eq!(m.phase, "quality_wait");
+        assert_eq!(m.quality_wait_previous_servo, Some(1499));
+    }
+}
+
 impl Maneuver {
     /// In-place change of recovery_evidence. Python's _enter_neutral_pause
     /// stores ONE dict as recovery_evidence and as the left-turn or post-pass
@@ -604,7 +635,12 @@ impl Maneuver {
     #[allow(clippy::too_many_arguments)]
     fn enter_neutral_pause(&mut self, kind: &'static str, reason: &str, now: f64, scan: &V, control: &V, cause: &str, resume_requires: &str) {
         if self.transfer_stage() {
+            let (board, tight_entry) = (self.race_transfer.channel_board, self.race_transfer.tight_entry);
             self.race_transfer = Default::default(); // recovery belongs to the cone transfer only
+            // Retire the powered-motion prediction, not the divider's identity.
+            // It is still needed to steer the moving car during this pause.
+            self.race_transfer.channel_board = board;
+            self.race_transfer.tight_entry = tight_entry;
             self._transfer_motor = ROUTE_SLOW_MOTOR;
         }
         self.neutral_pause_kind = Some(kind);
@@ -720,7 +756,10 @@ impl Maneuver {
             let second = if stage == "open_transfer" { self.open_confirmed_second(scan) } else { V::None };
             if second.is_some() {
                 let id = second.idx("track_id").clone();
-                self.open_loop_geometry(scan, &second, &id, -1, PI, None);
+                let next = self.open_loop_geometry(scan, &second, &id, -1, PI, None);
+                if self.race_inputs.is_some() && next.is_some() {
+                    self._pause_steer_target = next.get("target_pwm").oi();
+                }
             }
             return !board_ahead || second.is_some();
         }
@@ -757,7 +796,7 @@ impl Maneuver {
         if self.route_stage == "second_orbit" && self.second_return_preparing {
             return self.quality_wait_servo.unwrap().min(NEUTRAL);
         }
-        if self.route_stage == "light_entry"
+        if (self.route_stage == "light_entry" || (self.race_inputs.is_some() && self.route_stage == "open_transfer"))
             && let Some(t) = self._pause_steer_target
         {
             return t;
@@ -770,6 +809,15 @@ impl Maneuver {
         let heading = self.compass.current(scan)?;
         let pose = self.response_pose();
         Some(overshoot_guard(Self::open_heading_hold(heading, 0.), Self::open_heading_hold(heading + pose.2, 0.)))
+    }
+
+    fn transfer_pause_hold(&mut self, scan: &V) -> Option<i64> {
+        if self.race_inputs.is_none() || self.route_stage != "open_transfer" { return None; }
+        let heading = self.compass.current(scan)?;
+        // y78 seq 132-139: neutral removed thrust, but a fixed 1499 servo
+        // carried the car into the start divider while it was still rolling.
+        // Use the same observed channel / reversed axis as normal transfer.
+        Some(self.open_transfer_steering(scan, heading, self.response_pose()).1)
     }
 
     /// _neutral_pause_update(...).
@@ -842,6 +890,8 @@ impl Maneuver {
         if self.route_stage == "light_entry"
             && let Some(hold) = self.light_entry_pause_hold(scan)
         {
+            self._pause_steer_target = Some(hold);
+        } else if let Some(hold) = self.transfer_pause_hold(scan) {
             self._pause_steer_target = Some(hold);
         }
         let stage_ready = if quality_clear.is_true() && neutral { self.pause_stage_ready(scan, now) } else { false };

@@ -1307,7 +1307,7 @@ impl Maneuver {
         (radius * turn.psin(), radius * (1. - turn.pcos()), turn, horizon)
     }
 
-    fn open_transfer_steering(&mut self, scan: &V, heading: f64, pose: (f64, f64, f64, f64)) -> (V, i64) {
+    pub(super) fn open_transfer_steering(&mut self, scan: &V, heading: f64, pose: (f64, f64, f64, f64)) -> (V, i64) {
         let channel = self.open_channel_target(scan, heading, Some(pose));
         let natural = if channel.is_some() {
             channel.idx("target_pwm").i()
