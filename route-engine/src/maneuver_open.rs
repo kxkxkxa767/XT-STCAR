@@ -1354,10 +1354,15 @@ impl Maneuver {
         let decel = self.lane_decels().0;
         let Some(input) = self.race_inputs else { return };
         let speed = self.race_surface_speed.speed(now, input.forward_integral);
+        // Once cone two is observed, its local motion replaces the old boost
+        // anchor for the approach. y86's boost anchor said 1.81 m/s while
+        // reconstruction from the same cone and IMU gave about 2.16 m/s.
+        let cone_speed = (self.route_stage == "second_loop" && remaining.is_some_and(|d| d > 0.))
+            .then(|| self.race_light.entry_motion.speed(now, input.forward_integral)).flatten();
         let transfer = &mut self.race_transfer;
         let yaw = input.yaw_rate.unwrap_or(self.compass.rate);
         let (entering, continuing) = crate::race_transfer::steering_window(yaw, target_pwm, self.servo);
-        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, entering, continuing, decel, input.forward_integral, speed, &self.race_surface);
+        (self._transfer_motor, self.open_feedback) = transfer.drive(now, remaining, entering, continuing, decel, input.forward_integral, speed, cone_speed, &self.race_surface);
         self.open_feedback.set("yaw_rate_radps", yaw);
         self.open_feedback.set("yaw_source", if input.yaw_rate.is_some() { "calibrated_imu" } else { "lidar_compass" });
         self.open_feedback.set("stage", self.route_stage);
@@ -2042,7 +2047,7 @@ mod round106_tests {
         assert!(decision.get("servo").i() < NEUTRAL);
         assert!(!m.quality_resume_pending);
         assert!(m.neutral_pause_kind.is_none());
-        assert_eq!(m.race_transfer.drive(1.1, Some(2.), true, true, 0.6, None, None, &m.race_surface).0, NEUTRAL);
+        assert_eq!(m.race_transfer.drive(1.1, Some(2.), true, true, 0.6, None, None, None, &m.race_surface).0, NEUTRAL);
         assert!(m.race_transfer.waiting_for_support());
         m.race_transfer.support_handed_over();
         assert!(!m.race_transfer.waiting_for_support());

@@ -31269,7 +31269,7 @@
     "engine_round": 193,
     "baseline": "installedclaude-turn192/y85/a50ce68",
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "change": [
       "Race light entry retains current correction only while the predicted response heading stays on the same side of the lane axis; unwind before predicted crossing. Earlier y82 failure frames retain the current-correction floor.",
       "Race lateral steering follows the board-defined lane centre; gantry observations still locate the longitudinal stop, but inferred-leg centre offset no longer pulls steering15cm right. Station-pair role logic unchanged.",
@@ -31283,9 +31283,9 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
-    "build_status": "193/y86 built and deployed; locked, awaiting new 好了",
+    "build_status": "193/y86 deployed and tested; collision after cone two, outputs locked",
     "deployment_policy": "User explicitly: after every completed fix/build deploy by default, keep locked; start only after new 好了.",
-    "next": "On a fresh operator start confirmation, run scripts/start-round.py y86 in background.",
+    "next": "Build/deploy y87/194 from installed claude-turn193; await a fresh 好了 before another trial.",
     "source_commit": "f5d43fb53c34777425cd43f051771bc59333ec00",
     "package": {
       "engine": "claude-turn193",
@@ -31302,6 +31302,81 @@
       "deployed": true,
       "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn193-20261112-142841",
       "motion_requested": false
+    },
+    "car_run_y86": {
+      "date": "2026-11-12",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y86",
+      "retrieved_files": 56,
+      "completed": false,
+      "effective_s": null,
+      "reason": "probe_obstacle_close_body",
+      "final_stage": "light_entry",
+      "physical_collision_confirmed": true,
+      "operator_report": "这轮第二个桶转出后撞到挡板了",
+      "collision_location": "board after second cone",
+      "max_actual_gap_s": 0.022754774999999672,
+      "scan_to_tick": {
+        "scans": 143,
+        "mean_s": 0.001545033958041955,
+        "max_s": 0.006936480000000245,
+        "basis": "reader receive time -> start of the tick that decided on it"
+      },
+      "quality_waits": 0,
+      "light_stop": false,
+      "light_go": false,
+      "last_saved_seq": 154,
+      "second_pass_program_s": 15.534,
+      "last_saved_program_s": 15.734912815,
+      "after_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "diagnosis": {
+        "approach_hold_ended_on_steering_correction": true,
+        "remaining_to_tangent_m": 1.275,
+        "resumed_motor": 1570,
+        "old_speed_for_cut_mps": 1.807,
+        "same_cone_imu_reconstructed_speed_mps": 2.16,
+        "reconstructed_exit_radius_m": 1.38,
+        "planned_radius_m": 1.1,
+        "y86_early_unwind_activated_before_collision": false,
+        "last_response_heading_rad": 0.229,
+        "last_servo": 1308,
+        "provenance": "The continuing steering flag already governed approach hold before ROS2; y80/0412bab changed its fallback from1550 to1570. Same-cone speed is reconstructed from saved observations and IMU, not a separately measured ground-truth velocity.",
+        "migration": "No control-loop stall observed; this run does not by itself prove every migration path equivalent."
+      },
+      "plot": "work/codex-y86-trial-20261112/y86-second-cone-comparison.png"
     }
+  },
+  "y87_second_approach_speed_hold_20261112": {
+    "date": "2026-11-12",
+    "author": "Codex",
+    "engine_round": 194,
+    "baseline": "installed claude-turn193/y86/f5d43fb",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "Race only: before cone-two geometric tangent, keep existing approach speed hold even when a heading correction ends the straight steering window. Boost eligibility stays unchanged.",
+      "Use existing fresh cone-centre/IMU EntryMotionSpeed before the second tangent, instead of allowing the old low boost anchor to end the coast early; keep original speed fallback when unavailable."
+    ],
+    "unchanged": [
+      "Live circle selection and target geometry",
+      "Cruise1570/boost1620/first-loop1550",
+      "Entry-speed targets",
+      "y86 light-entry and finish fixes",
+      "ROS2 transport, Guard and8cm body gate"
+    ],
+    "validation": {
+      "native_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 31,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation_sweep": false
+    },
+    "build_status": "Source ready for194/y87 cross-build; automatic deployment authorized, no new start authorization",
+    "deployment_policy": "Deploy after build and keep locked; only launch after a fresh operator 好了.",
+    "next": "Cross-build from installed claude-turn193, build y87 helper, deploy both and lock."
   }
 }

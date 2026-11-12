@@ -144,19 +144,19 @@ impl RaceTransfer {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn drive(&mut self, now: f64, distance: Option<f64>, entering: bool, continuing: bool, decel: f64, forward_integral: Option<f64>, body_speed: Option<f64>, surface: &crate::race_surface::SurfaceResponse) -> (i64, V) {
+    pub fn drive(&mut self, now: f64, distance: Option<f64>, entering: bool, continuing: bool, decel: f64, forward_integral: Option<f64>, body_speed: Option<f64>, cone_speed: Option<f64>, surface: &crate::race_surface::SurfaceResponse) -> (i64, V) {
         // The five-scan lidar slope lagged the y30 push: it still reported
         // 1.44 m/s while the IMU change from the pre-push anchor implied 2.52.
         let imu_speed = self.transfer_anchor.zip(forward_integral)
             .map(|((radar, origin), current)| (radar + current - origin).max(0.));
-        let cut_speed = if matches!(self.phase, TransferPhase::Coast) {
+        let cut_speed = cone_speed.or_else(|| if matches!(self.phase, TransferPhase::Coast) {
             // The range slope still shows the earlier peak while slowing. y77
             // seq 134: radar 2.04, current IMU 1.71; max() prolonged neutral.
             imu_speed.or(body_speed).or(self.speed)
         } else { match (self.speed, imu_speed) {
             (Some(lidar), Some(live)) => Some(lidar.max(live)),
             (lidar, live) => lidar.or(live),
-        }};
+        }});
         let integral = forward_integral.filter(|v| v.is_finite());
         let acceleration = self.previous_integral.zip(integral)
             .filter(|((at, _), _)| 0. < now - at && now - at <= SCAN_AGE_S)
@@ -164,9 +164,10 @@ impl RaceTransfer {
             .unwrap_or(4.0);
         if let Some(current) = integral { self.previous_integral = Some((now, current)); }
         let entry_mps = self.tight_entry.unwrap_or(ENTRY_MPS);
-        let hold_motor = if continuing { hold_pwm(cut_speed, entry_mps) } else { RACE_CRUISE_MOTOR };
-        let hold_accel = surface.predicted_hold_accel(hold_motor, body_speed, now)
-            .or_else(|| surface.predicted_drive_accel(hold_motor, body_speed, now)).unwrap_or(0.);
+        let before_tangent = distance.is_some_and(|d| d > 0.);
+        let hold_motor = if continuing || before_tangent { hold_pwm(cut_speed, entry_mps) } else { RACE_CRUISE_MOTOR };
+        let hold_accel = surface.predicted_hold_accel(hold_motor, cone_speed.or(body_speed), now)
+            .or_else(|| surface.predicted_drive_accel(hold_motor, cone_speed.or(body_speed), now)).unwrap_or(0.);
         let anchor = DriveAnchor { at: now, distance, speed: cut_speed, integral,
             acceleration, decel, entry_mps, continuing, hold_accel };
         let coast_m = self.coast_budget(now, cut_speed, anchor);
@@ -184,6 +185,7 @@ impl RaceTransfer {
         let coast_m = self.control.and_then(|c| c.coast).or(coast_m);
         (motor, dict! {"speed_mps" => self.speed, "speed_basis" => "rear_wall_return_axis",
                        "imu_anchored_speed_mps" => imu_speed, "speed_for_cut_mps" => cut_speed,
+                       "cone_body_speed_mps" => cone_speed,
                        "straight_remaining_m" => distance, "coast_to_entry_m" => coast_m, "transfer_motor" => motor,
                        "hold_accel_mps2" => hold_accel, "boost_accel_mps2" => acceleration,
                        "boost_cut_response_s" => BOOST_CUT_RESPONSE_S,
@@ -226,10 +228,14 @@ impl RaceTransfer {
             TransferPhase::Coast => NEUTRAL,
             // User 11-04 (open PWM steps): out of cone one and straight again, hold toward the
             // cone-two entry speed instead of 1550 (y53: 1550 at 1.29-1.41 m/s for .5 s).
-            TransferPhase::Approach if a.continuing => hold_pwm(speed, a.entry_mps),
+            TransferPhase::Approach if a.continuing || distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
             // Cutting the boost does not mean the physical bend has begun:
             // y77 still had over 2 m to travel when the old state fixed 1550.
-            TransferPhase::Bend if a.continuing && distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
+            // Steering eligibility ends the boost, not the approach speed hold.
+            // y86 resumed 1570 with 1.28 m still to its tangent because a heading
+            // correction made continuing=false. The geometric tangent owns
+            // this handover, even while correcting the approach heading.
+            TransferPhase::Bend if distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
             _ if self.tight_entry.is_some_and(|e| speed.is_some_and(|v| v > e)) => NEUTRAL,
             _ => RACE_CRUISE_MOTOR,
         }};
@@ -259,6 +265,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn heading_correction_does_not_end_the_hold_before_the_actual_tangent() {
+        let mut transfer = RaceTransfer {
+            phase: TransferPhase::Bend,
+            drive_anchor: Some(DriveAnchor { at: 1., distance: Some(1.28), speed: Some(2.06),
+                integral: Some(0.), acceleration: 0., decel: 0.6, entry_mps: 1.8,
+                continuing: false, hold_accel: 0. }),
+            ..Default::default()
+        };
+        assert_eq!(transfer.command(1., Some(0.)), Some(ROUTE_SLOW_MOTOR));
+        transfer.drive_anchor.as_mut().unwrap().continuing = true;
+        assert_eq!(transfer.command(1., Some(0.)), Some(ROUTE_SLOW_MOTOR));
+        transfer.drive_anchor.as_mut().unwrap().distance = Some(0.);
+        assert_eq!(transfer.command(1., Some(0.)), Some(RACE_CRUISE_MOTOR));
+        transfer.phase = TransferPhase::Coast;
+        transfer.speed = Some(2.06);
+        transfer.transfer_anchor = Some((1.75, 0.));
+        let (motor, _) = transfer.drive(2., Some(1.28), false, false, 0.6, Some(0.), None,
+            Some(2.16), &crate::race_surface::SurfaceResponse::default());
+        assert_eq!(motor, NEUTRAL, "fresh cone motion must not be replaced by the old low boost anchor");
+    }
+
+    #[test]
     fn boost_cuts_between_scans_and_current_speed_ends_the_coast() {
         let mut transfer = RaceTransfer {
             speed: Some(2.2), phase: TransferPhase::Boost(0.5),
@@ -271,6 +299,7 @@ mod tests {
         assert_eq!(transfer.command(1., Some(0.)), Some(TRANSFER_BOOST_MOTOR));
         assert_eq!(transfer.command(1.06, Some(0.06)), Some(NEUTRAL));
         let (motor, _) = transfer.drive(1.2, Some(1.), false, true, 0.6, Some(-0.3), None,
+            None,
             &crate::race_surface::SurfaceResponse::default());
         assert!(motor > NEUTRAL && motor < TRANSFER_BOOST_MOTOR,
             "a delayed radar peak must not extend the coast after current speed falls below entry speed");
