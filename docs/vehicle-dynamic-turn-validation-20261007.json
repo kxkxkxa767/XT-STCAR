@@ -31268,7 +31268,7 @@
     "author": "Codex",
     "engine_round": 193,
     "baseline": "installedclaude-turn192/y85/a50ce68",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "change": [
       "Race light entry retains current correction only while the predicted response heading stays on the same side of the lane axis; unwind before predicted crossing. Earlier y82 failure frames retain the current-correction floor.",
@@ -31283,8 +31283,25 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
-    "build_status": "checks complete; prepare193/y86",
+    "build_status": "193/y86 built and deployed; locked, awaiting new 好了",
     "deployment_policy": "User explicitly: after every completed fix/build deploy by default, keep locked; start only after new 好了.",
-    "next": "Build and deploy193/y86 fromclaude-turn192, then wait for new start confirmation."
+    "next": "On a fresh operator start confirmation, run scripts/start-round.py y86 in background.",
+    "source_commit": "f5d43fb53c34777425cd43f051771bc59333ec00",
+    "package": {
+      "engine": "claude-turn193",
+      "vision": "y86",
+      "baseline": "claude-turn192",
+      "runtime_changed": [
+        "payload/route-engine"
+      ],
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn193-f5d43fb.tar.gz"
+    },
+    "deployment": {
+      "result_file": "work/vehicle-dynamic-deploy-20261008/claude-turn193-deployment-result.json",
+      "source_commit": "f5d43fb53c34777425cd43f051771bc59333ec00",
+      "deployed": true,
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn193-20261112-142841",
+      "motion_requested": false
+    }
   }
 }
