@@ -1,5 +1,12 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-12 Claude Opus 5.5 / Gemini 4 Argon：y85／192 ROS2复核、时延优化与冗余防御清理已完成并建包）
+
+- **功能等价性与控制时序审查通过**：原 Rust 比赛控制（y84 算法、20ms 节拍、5ms 新扫描立即唤醒、IMU 积分、视觉 `--light-state` 读取、N10 解码/标定与 `Guard` 250ms 过期/300ms 心跳/退出 20 包 1500 中位）无遗漏；控制主线程只与本地 `mpsc` 通道交互，不接触 `rclrs` 锁或 `rcl_publish`。
+- **清理 Codex 过度防御性编程与打包缺陷**：① 删掉 `race_hardware.rs` 中因 `BestEffort` 状态发布通道忙就调用 `guard.stop("status_backpressure")` 断动力锁车的错误防御；② 删掉底盘命令回调队列满时直接置 `stopped=true` 杀死底盘驱动进程的防御，收发队列均放宽至 16（每次 tick 排空最多 16 条，过期/断连交由 `Guard` 原有 250ms/300ms 机制处理）；③ 修复 `build-ros2-race.py` 复制 `payload/route-engine` 未设 `0755` 导致 `ros2 launch` 找不到可执行文件的问题。
+- **ROS2 通信时延优化（实车板端实测）**：① 订阅统一改为 `worker.create_subscription` 在 `WaitSet::wait` 内同步回调，消除 `node.create_subscription` 每帧装箱 `BoxFuture`/`Arc<Task>` 及跨线程唤醒开销；② 硬件节点直接调用 `publisher.publish`，去掉多余的 `ros2-publish` 线程与通道中转；③ 启动环境由 `ROS_LOCALHOST_ONLY=1`（在 Humble 下会禁用 Fast DDS 共享内存 SHM 退化为 UDP 回环）改为 `ROS_DOMAIN_ID=217` 保留 SHM。实测两进程 128B@50Hz RTT：**Reliable 从 2.914ms（p95 5.775ms，max 9.915ms）降至 1.614ms（p95 2.222ms，max 4.045ms）**；**实际状态/雷达采用的 BestEffort RTT 降至 1.459ms（单向约 0.73ms，p95 2.359ms，CPU 占用由 15.4% 降至 7.6%）**，12KB@10Hz BestEffort RTT 降至 1.864ms（单向约 0.93ms）。
+- **包状态**：已从 `a50ce68` 完整构建 `claude-turn192`（含 ROS2 overlay 归档）与视觉助手 `y85`。车上仍为 `y83／190`，未部署、未发车；新实测等用户确认摆放与复位。
+
 ## 当前接手入口（2026-11-12 Codex：ROS2＋Rust迁移候选，待Claude复核）
 
 - **车上正式版本仍y83／190，未替换或发车。** 已建y84／191的算法候选保持为迁移算法基线；本轮用户授权ROS2迁移，要求收尾记录后由新Claude窗口复核。省赛新8×6m赛道仿真仍暂停，不能拿此前28组结果代替。

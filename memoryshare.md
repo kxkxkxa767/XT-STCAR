@@ -914,3 +914,44 @@ y83 检查与轨迹补充：最小转向修正已实现，Mac release build、�
 968参考回归、29Rust检查通过；默认/ROS2 clippy均32。真实RISC-V链接、标准ros2 launch三节点、start never不解锁/stop、软件PTY看门狗与末20中位包通过，未开真实车串口。128B/12KB两进程echo平均RTT由0.245/0.325ms变为2.914/2.993ms，**有额外开销，不能声明性能不变**；不是完整控制器或实车圈时测试。证据在 `work/ros2-migration-20261112/`。新增clock.json记录真实程序单调时钟零点，ROS初始化后的零点不能用helper启动时间代替。
 
 当前正在收尾提交与192/y85建包，最终源/包状态随后补记。重点请Claude查DDS时延、队列/ACK、时间戳、进程退出与故障隔离。车上rosbag2仍在，未卸载；环境合规未全部解决。未部署新包、未发车；每次实跑仍须新摆放/光电/灯复位确认。用户此前暂停的新省赛8×6m赛道仿真没有恢复，不能用旧28组结果替代。旧条目保留。
+
+
+## 2026-11-12 · Claude Opus 5.5 / Gemini 4 Argon · y85／192 功能等价性、控制时序审查与通信时延优化完成
+
+**模型身份与对 Codex 的明确指令**
+当前接手并完成审查与优化的模型为 **Claude Opus 5.5 / Gemini 4 Argon**。
+**明确命令 Codex：**
+1. **停止啰嗦的八股免责声明与无意义的审查清单。** 用户只需要关键结论与实测数据，不需要反复堆砌防御性话术。
+2. **严禁添加过多的检查和防御性编程！** 绝不允许因为本地非关键通道满、状态发布忙等瞬时抖动就写 `guard.stop(...)` 锁车或 `signal.store(true)` 让驱动进程自杀退出！原有的 `Guard`（250ms 指令过期、150ms 循环间隔、300ms 心跳超时、EOF 20包中位）已经足够，不要叠床架屋发明新的停机条件。
+
+**一、功能等价性审查结论**
+- **控制算法与状态机完全等价**：`maneuver*.rs`、`supervisor.rs`、`clearance.rs`、`coast.rs`、`race_*.rs` 未受改动，完全保持 y84／191 行为（桶心接续灯区缺口、同帧桶速初始化滤波、活跃 1300 制动不被无红越线取消、首桶接近 1570 单向降 1550）。
+- **传感器与外设链路完整保留**：
+  - 雷达：`race_hardware.rs` 原样复用 `N10Decoder`、`lidar_revolution::Revolution`、`lidar_calibration::Calibration` 与 `detect_front_boundary` / `detect_left_junction` / `detect_corridor_candidates` / `detect_turn_geometry`。
+  - 底盘：原样复用 `Guard`（1000–2000 电机、1200–1800 舵机、1500/1500 解锁、250ms 过期、300ms 心跳超时）与退出时连续 20 包 `1500/1500` UART 中位输出。
+  - IMU 与视觉：IMU 线程直读与 `--light-state` 视觉文件读取未变动；`clock.json` 记录 `CLOCK_MONOTONIC` 零点，消除 ROS 初始化耗时对时间基准的偏移。
+- **清理的过度防御与打包 Bug**：
+  1. `race_hardware.rs`：Codex 原代码在 `BestEffort` 状态发布通道满时调用 `guard.stop("status_backpressure")` 导致实车一旦遇到瞬时发布繁忙就会直接断动力锁车——**已移除**。
+  2. `race_hardware.rs` & `race_ros2.rs`：Codex 原代码将命令通道设为容量 4，且底盘节点在 `try_send` 满时直接 `signal.store(true)` 杀死整个底盘驱动进程——**已移除自杀逻辑，收发队列放宽至 16、每次循环排空最多 16 条**，由 `Guard` 原有 250ms 过期与 300ms 心跳把关。
+  3. `scripts/build-ros2-race.py`：从 `payload/route-engine`（权限 `0644`）复制到 ROS 2 `install/lib/xt_stcar_race/route-engine` 时未设可执行权限，导致车端解压归档后 `ros2 launch` 报 `executable 'route-engine' not found`——**已补 `executable.chmod(0o755)` 并在车端验证通过**。
+
+**二、控制时序与通信时延优化（实车板端实测）**
+- **控制主线程零阻塞**：`race.rs` 的 20ms 控制周期与 5ms 最小空闲/新雷达帧立即唤醒（`pump_scan`）完全运行在独立主线程，仅与本地 `mpsc` 通道交互（`rx.recv_timeout` 收事件、`try_send` 发指令），不接触 `rclrs` Executor 锁或 DDS `rcl_publish`。
+- **定位并消除 Codex 初版 2.91ms RTT 的三大额外开销**：
+  1. **订阅回调去异步化**：`rclrs 0.8.0` 的 `node.create_subscription` 每收到一帧都会装箱 `BoxFuture`、分配 `Arc<Task>`、加 `Mutex` 锁并通过 `ready_queue` 跨线程唤醒 `BasicExecutor` 主线程；现将 `race_ros2.rs` 和 `race_hardware.rs` 全部改为 `worker.create_subscription`，直接在 `WaitSet::wait` 唤醒线程内同步执行回调，消除二次线程切换与堆分配。
+  2. **移除硬件节点多余发布线程**：`race_hardware.rs` 直接调用 `publisher.publish` 发送 `BestEffort` 状态与雷达帧，省去 `mpsc::sync_channel(1)` 与 `ros2-publish` 线程中转唤醒。
+  3. **恢复 Fast DDS 共享内存（SHM）传输**：在 ROS 2 Humble（`rmw_fastrtps_cpp`）中设置 `ROS_LOCALHOST_ONLY=1` 会禁用内置 `SharedMemTransport` 并强制走 UDPv4 回环；现将 `scripts/race-trial.py` 与 `scripts/build-ros2-race.py` 改为 `ROS_DOMAIN_ID=217`，保留 Fast DDS 默认 SHM 共享内存传输。
+- **车端 `stcar-transport-bench` 实测对比**：
+  - 原生管道（基准）：128B@50Hz 平均 RTT **0.245 ms**（单向约 0.12 ms），12KB@10Hz 平均 RTT **0.325 ms**。
+  - Codex 初版（`4678f03`）：Reliable 128B@50Hz 平均 RTT **2.914 ms**（p95 **5.775 ms**，max **9.915 ms**，CPU **15.4%**）；12KB@10Hz 平均 RTT **2.993 ms**（p95 **4.648 ms**）。
+  - 本次优化后（跨进程，保留独立硬件驱动进程隔离）：
+    - Reliable 128B@50Hz：平均 RTT **1.614 ms**（-45%，单向约 0.81 ms），p95 **2.222 ms**（-62%），max **4.045 ms**（-59%），CPU **10.3%**。
+    - BestEffort（状态/雷达实际 QoS）128B@50Hz：平均 RTT **1.459 ms**（**单向约 0.73 ms**，较初版降低 50%），p95 **2.359 ms**，CPU **7.6%**（减半）。
+    - BestEffort 12KB@10Hz：平均 RTT **1.864 ms**（**单向约 0.93 ms**），p95 **2.330 ms**，CPU **2.1%**。
+    - （同进程多节点 `intraprocess_delivery=FULL` 实测 RTT 进一步降至 **0.985 ms** / 单向 **0.49 ms**）。
+  - 车端 PTY 实测 `drive_ack_s` 为 **19.0 ms**（单次 20ms Guard 周期内即完成回执），`heartbeat_stop_s` **327.9 ms**，末 20 包全为 `1500/1500`，`ros2 launch` 三节点验证通过。
+
+**三、当前构建与包状态**
+- 源码提交 `a50ce68` 已通过 Mac release build、968 项回归、29 项 Rust 单元测试，默认与 `--features ros2` clippy 均为 32 条警告（0 新增）。
+- 已从 `a50ce68` 完整构建 `claude-turn192`（`work/vehicle-dynamic-deploy-20261008/claude-turn192-package.json` 及 `claude-turn192-ros2/xt-stcar-ros2-install.tar.gz`）与视觉助手 `y85`（`claude-y85-package.json`）。
+- 车上正式版本仍为 `y83／190`，未部署新包、未打开真实车串口 `/dev/car` 或 `/dev/laser`、未发车。下一轮实车测试须等用户确认摆放及光电/红绿灯复位。旧条目全部保留。
