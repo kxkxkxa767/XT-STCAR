@@ -1,5 +1,16 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-12：Claude Opus 4.6 Thinking（Antigravity），y87轨迹与灯刹分析完成，y88／195源码已提交，按用户指令暂不编译）
+
+- **本轮执行模型身份**：**Claude Opus 4.6 Thinking**（运行于 Google Antigravity IDE）。
+- **y87／194 灯前越线 5cm 轨迹与根因定位**（已生成轨迹与 PWM/航向/刹车联合诊断图 `work/codex-y87-trial-20261112/y87-light-approach-and-brake.png` 及数据 `y87-plot-data.json`）：
+  1. **出第二桶进灯道 `1570` 推力持续过久（`16.059s -> 16.561s`，`seq 158..162`）**：切出第二桶时（`h = 84.3° -> 43.3°`）车体总速度已达 `2.043 -> 2.067 m/s`，按该总速度自然滑行（约 `3.88 m`）从 `gap = 4.197 m` 出发已到达 `+0.55 m` 停车区；但旧 `LightRoll` 只有 `Cruise(1570)` 与 `Coast(1530)` 两档，且 `if_renewed` 仅看投影速度 `v_now = v_body * cos(h)`（大航向角下仅 `0.55 -> 1.19 m/s`，`|h| > 45°` 时 `heading_accel = 0`），导致 `1570` 多推了 `0.50 s` 直至 `16.561 s`（`seq 163`，`gap = 3.526 m`）才切 `1530`，车头回正后轴向速度冲高至 `1.922 m/s`（`seq 166`，`gap = 2.981 m`）。
+  2. **门腿确认切换时 `LightBrake` 距离融合残留 `+10.1 cm` 预告正偏置（`17.156 s`，`seq 169`）**：`pre_gantry_preview` 比真实门腿偏远 `+10.6 ~ +12.7 cm`（`seq 169` 真实 `gap = 2.2645 m`，融合输出 `control_front_gap_m = 2.3657 m` 偏大 `+10.1 cm`）；旧代码切 `confirmed_gantry_legs` 时只清了 `race_light.ranges`，未重置 `race_light_brake` 的 `gap_fusion`，导致 `1300` 推迟到 `17.257 s`（`seq 171`，真实 `gap = 2.041 m`）才触发，最终停在 `-0.0498 m`。
+- **y88／195 源码改动（`route-engine/src/race_light.rs`、`race_light_brake.rs`、`maneuver_light.rs`）**：
+  1. `LightRoll` 新增单向保持档 `Hold`（`1550`，`"approach_hold"`）与 `RaceLight::body_speed()`：进入灯区见有效距离且按车体总速度 `body_speed` 自然滑行已能到达可视停车区时，**立即从 `1570` 单次降到 `1550` 并单向锁死（绝不跳回 `1570`）**；后续即使 `Coast(1530)` 触发 `revoke` 也只回到 `Hold(1550)`，再接 `1530` 减速与连续 `1300` 刹停。
+  2. `LightBrake::reset_gap_fusion()`：`speed_uses_gantry` 首次切换为 `true` 时同步重置 `LightBrake` 的 `gap_fusion`（保留 `imu_slope_bias`），消除预告切门腿的 `+10 cm` 距离滞后。
+- **验证与状态**：Mac 本地 `cargo build --release`、`cargo test --release`（33 项全过）、`cargo clippy --release`（32 警告无新增）、`web/vehicle-console/tests`（968 项全过）均通过。**按用户指令“先不编译了”，本轮未交叉编译车用包、未部署上车**；车上仍保持 `y87／194` 锁定状态。同时已在 `memoryshare.md` 文末附上整圈回放的无损稳定性提速点分析（起步至斑马线省 `0.45~0.65 s`、斑马线出弯至第一桶省 `0.15~0.25 s`）。
+
 ## 当前接手入口（2026-11-12：Codex／GPT-6交Gemini 4，y87灯前越线）
 
 - y87／194（12f376e）实跑到终点，49份证据已取回，车已锁定。总时30.048s，扣灯等待20.667s未计罚时；用户确认灯前没刹住，日志越灯架约5cm、超时放行，不能记为合格成绩。终点距板0.367m。

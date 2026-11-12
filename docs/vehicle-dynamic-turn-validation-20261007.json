@@ -31480,7 +31480,64 @@
         "servo": 1500
       },
       "analysis_file": "work/codex-y87-trial-20261112/y87-compact-timeline.json",
-      "trajectory_status": "Gemini4 must generate y87 trajectory and correlate with PWM/heading per user instruction; no y87 trajectory image generated in this handoff."
+      "trajectory_plot": "work/codex-y87-trial-20261112/y87-light-approach-and-brake.png",
+      "trajectory_data": "work/codex-y87-trial-20261112/y87-plot-data.json",
+      "trajectory_status": "Generated y87 local trajectory + PWM/heading/brake/speed diagnostic figure (work/codex-y87-trial-20261112/y87-light-approach-and-brake.png) by Claude Opus 4.6 Thinking."
     }
+  },
+  "y88_light_approach_hold_and_gantry_fusion_20261112": {
+    "date": "2026-11-12",
+    "author": "Claude",
+    "author_model": "Claude Opus 4.6 Thinking (Antigravity)",
+    "turn": 195,
+    "helper": "y88",
+    "deployed_baseline": "claude-turn194",
+    "summary": "Step 1570 down once to 1550 (LightRoll::Hold) when entering the traffic-light approach and body-speed natural coast reaches the visible stop zone, latching one-way without toggling back to 1570 before 1530 coast and continuous 1300 brake; reset LightBrake gap fusion when switching from pre_gantry_preview to confirmed_gantry_legs so the +10.1 cm preview positive bias does not delay 1300 initiation.",
+    "y87_root_cause": {
+      "trajectory_plot": "work/codex-y87-trial-20261112/y87-light-approach-and-brake.png",
+      "prolonged_1570_in_entry_turn": {
+        "seq_range": [
+          158,
+          162
+        ],
+        "program_s_range": [
+          16.059351,
+          16.459668
+        ],
+        "heading_deg_range": [
+          84.3,
+          43.3
+        ],
+        "body_speed_mps_range": [
+          2.043,
+          2.067
+        ],
+        "front_gap_m_range": [
+          4.197,
+          3.679
+        ],
+        "note": "Old LightRoll only had Cruise(1570) and Coast(1530) and checked axial v_now = v_body * cos(h) with heading_accel=0 for |h|>45 deg, keeping 1570 for 0.50 s until seq 163 (16.561 s, gap 3.526 m) so axial speed surged to 1.922 m/s at seq 166 (gap 2.981 m)."
+      },
+      "gantry_confirmation_fusion_bias": {
+        "seq": 169,
+        "program_s": 17.156114,
+        "raw_gantry_front_gap_m": 2.264516,
+        "fused_control_front_gap_m": 2.365742,
+        "stale_preview_bias_m": 0.101226,
+        "note": "Switching from pre_gantry_preview to confirmed_gantry_legs cleared race_light.ranges but did not reset race_light_brake.gap_fusion, keeping control_front_gap_m +10.1 cm too high at seq 169 (+10.3 cm at seq 171) and delaying 1300 brake until 17.257 s."
+      }
+    },
+    "changes": [
+      "route-engine/src/race_light.rs: add LightRoll::Hold (1550, approach_hold) and RaceLight::body_speed()",
+      "route-engine/src/race_light_brake.rs: add LightBrake::reset_gap_fusion() and unit test for switching from preview to confirmed gantry legs",
+      "route-engine/src/maneuver_light.rs: step LightRoll::Cruise (1570) down once to LightRoll::Hold (1550) when body-speed coast reaches VISIBLE_LIGHT_STOP_GAP_M without toggling back to 1570, and call reset_gap_fusion() when speed_uses_gantry becomes true"
+    ],
+    "verification": {
+      "cargo_build_release": "passed",
+      "cargo_test_release": "33 passed, 0 failed",
+      "cargo_clippy_release": "32 warnings (unchanged)",
+      "python_reference_tests": "968 passed"
+    },
+    "package_and_deployment_status": "Source committed and pushed per user instruction ('先不编译了'); cross-compilation and vehicle deployment intentionally skipped for now."
   }
 }

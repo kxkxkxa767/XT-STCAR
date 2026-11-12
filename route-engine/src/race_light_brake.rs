@@ -92,6 +92,17 @@ mod tests {
         brake.observe(1.9, Some(0.8), Some(1.), Some(0.), 1., 0.6, BrakeModel { base: 1., rate: 0. }, 0.55);
         assert_eq!(brake.command(1.9, Some(0.)), None);
     }
+
+    #[test]
+    fn switching_to_confirmed_gantry_legs_resets_preview_gap_bias_while_keeping_imu_slope() {
+        let mut brake = LightBrake::default();
+        let model = BrakeModel::light(1., 0.5914163596473377);
+        brake.observe(17.057, Some(2.395), Some(1.80), Some(0.), 1., 0.5914163596473377, model, 0.55);
+        brake.reset_gap_fusion();
+        brake.observe(17.156, Some(2.15), Some(1.80), Some(-0.05886), 1., 0.5914163596473377, model, 0.55);
+        assert!((brake.control_gap(17.156, Some(-0.05886)).unwrap() - 2.15).abs() < 1e-9);
+        assert_eq!(brake.command(17.156, Some(-0.05886)), Some(LIGHT_BRAKE_MOTOR));
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -138,9 +149,16 @@ pub struct LightBrake {
     ended_at: Option<f64>,
     end_reason: Option<&'static str>,
     gap_fusion: Option<GapFusion>,
+    gap_reference_reset: bool,
 }
 
 impl LightBrake {
+    /// Drop the upstream preview gap anchor when switching to confirmed gantry legs
+    /// so the physical leg plane is not blended with a stale preview offset.
+    pub fn reset_gap_fusion(&mut self) {
+        self.gap_reference_reset = true;
+    }
+
     /// Observe once per new scan. All distances, speeds and decelerations are
     /// along the light-lane axis. An unavailable observation does not renew the
     /// preceding anchor's age; missing geometry is never replaced by a timer.
@@ -166,6 +184,7 @@ impl LightBrake {
         {
             return;
         }
+        let reset = std::mem::take(&mut self.gap_reference_reset);
         let integral = forward_integral.filter(|v| v.is_finite());
         // 1530 was already slowing the car before y79's light brake. Carry
         // that measured negative slope through the response; don't add a
@@ -174,7 +193,7 @@ impl LightBrake {
             .and_then(|old| old.integral.zip(integral).map(|(before,current)|
                 ((current-before)/(now-old.at)*axis_cos.max(0.)).min(0.))).unwrap_or(0.);
         let prediction = self.anchor.filter(|old| {
-            (0. ..=SCAN_AGE_S).contains(&(now-old.at)) && old.axis_cos >= MIN_AXIS_COS
+            !reset && (0. ..=SCAN_AGE_S).contains(&(now-old.at)) && old.axis_cos >= MIN_AXIS_COS
         }).and_then(|old| {
             let (origin, current) = old.integral.zip(integral)?;
             let dt = now-old.at;

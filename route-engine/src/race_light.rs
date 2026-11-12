@@ -373,10 +373,11 @@ impl<'a> ScanAxis<'a> {
     }
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub enum LightRoll {
     #[default]
     Cruise,
+    Hold,
     Coast,
     ZoneCoast,
     Through,
@@ -386,6 +387,7 @@ impl LightRoll {
     pub fn label(self) -> &'static str {
         match self {
             Self::Cruise => "cruise",
+            Self::Hold => "approach_hold",
             Self::Coast => "rolling_low",
             Self::ZoneCoast => "zone_rolling_low",
             Self::Through => "unlit_continue",
@@ -516,6 +518,20 @@ impl RaceLight {
         let (anchor_at, body, origin) = self.speed_kalman.anchor()?;
         if !(0. ..=crate::helpers::SCAN_AGE_S).contains(&(at-anchor_at)) { return None; }
         Some(((body+current-origin).max(0.)*axis_cos).max(0.))
+    }
+
+    pub fn body_speed(&self, scan: &V, now: f64, forward_integral: Option<f64>) -> Option<f64> {
+        let current = forward_integral.filter(|v| v.is_finite())?;
+        let at = scan.idx("at_ms").i() as f64 * 0.001;
+        let kalman = self.speed_kalman.anchor()
+            .filter(|&(anchor_at, _, _)| (0. ..=crate::helpers::SCAN_AGE_S).contains(&(at - anchor_at)))
+            .map(|(_, body, origin)| (body + current - origin).max(0.));
+        let entry = self.entry_motion.speed(now, forward_integral);
+        if self.speed_kalman.last().is_some_and(|v| (v.at - at).abs() < 1e-6) {
+            kalman.or(entry)
+        } else {
+            entry.or(kalman)
+        }
     }
 
     pub fn imu_history_dump(&self) -> V {

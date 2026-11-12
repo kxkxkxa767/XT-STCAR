@@ -1007,3 +1007,55 @@ y87第二桶接近修正本轮已生效：148帧距切点0.104m、桶心速度�
 **用户给Gemini 4的修改方向：接近红灯停车区时可将1570单次降到1550，不能1550/1570反复跳变。用户另明确要求：分析时也生成轨迹图，必须结合轨迹图与PWM、航向、刹车时刻定位问题。** y87图尚未生成，接手者请基于本轮数据生成；可参考 `work/codex-y86-trial-20261112/y86-second-cone-comparison.png` 及 `work/codex-y85-trial-20261112/y85-light-entry-and-finish.png` 的局部重建方法，不把全局ICP漂移当真路线。
 
 车上仍y87／194锁定，下一版y88／195，基线claude-turn194。新逻辑只改Rust比赛分支；每次改好默认部署并锁定，下一次发车仍须用户新的“好了”。不加冗余防御/停机门、不强推、不动根目录未跟踪队友文件，清单第5项不改，省赛新赛道仿真仍暂停。旧条目保留。
+
+
+## 2026-11-12 · Claude Opus 4.6 Thinking（Antigravity） · y87灯前越线轨迹/PWM/航向/制动时刻分析、y88／195单次1570→1550降档与灯架融合重置、全圈回放提速空间评估（按用户指令暂不交叉编译）
+
+**作者模型声明：我是 Claude Opus 4.6 Thinking（运行在 Antigravity 环境中）。明确告知其他模型（Codex / GPT-6）：严禁添加多余的检查、冗余限制、自杀式超时门或防御性编程，只针对实车证据暴露的具体物理与控制原因做最小精确修改。**
+
+### 一、y87／194（`12f376e`）灯前越线 5.0 cm 根因定位（结合轨迹图、PWM、航向与刹车时刻）
+
+已生成局部重建轨迹与时序诊断图：`work/codex-y87-trial-20261112/y87-light-approach-and-brake.png`（数据 `work/codex-y87-trial-20261112/y87-plot-data.json`，脚本 `work/codex-y87-trial-20261112/plot_y87.py`）。利用 `seq 143–174` 第二桶支撑拟合与 `seq 169–174` 已确认灯架立柱的 6 帧同步观测对齐局部坐标（灯架平面位于第二桶前方 `x = 2.74 m`），还原 `seq 143–191` 完整局部轨迹：
+
+1. **入道大航向角阶段（`16.059 s → 16.561 s`，`seq 158–162`）维持 `1570` 推力达 0.50 s，掩盖 `2.07 m/s` 车体动能**：
+   - `seq 158`（`16.059 s`，`heading = 84.3°`）完成 `second_pass` 进入 `light_entry`，`seq 159`（`16.158 s`，`heading = 74.1°`，`gap = 4.197 m`）触发 `light_divider_prediction`（`divider_approach`）。
+   - 在 `seq 159–162`（`16.158 s → 16.462 s`）转入灯道过程中，滤波车体速度 `filtered_body_speed_mps` 已高达 **`2.043 → 2.067 m/s`**（以该车体速度回正后的无制动滑行距离达 `~3.88 m`，已进入距灯架 `+0.55 m` 的目标停点包络）。
+   - 但旧版 `LightRoll` 只有 `Cruise (1570)` 与 `Coast (1530)` 两档，且 `if_renewed` 仅用投影轴向速度 `v_now = v_body * cos(heading)`（`seq 159–161` 仅 `0.546 → 0.919 → 1.194 m/s`）并在 `|heading| > 45°` 时令 `heading_accel = 0`，误判续推停点仍有 `3.80 → 2.49 m`，导致 **`1570` 一直持续到 `16.561 s`（`seq 163`，`heading = 33.0°`，`gap = 3.526 m`）才切到 `1530`**。
+   - 随着 `seq 163–166`（`16.561 s → 16.858 s`）航向由 `33.0°` 回正至 `2.3°`，原有的 `2.04 m/s` 车体动量完全对齐车道轴线，即使处于 `1530` 档，轴向速度 `v_now` 仍从 `1.662 m/s` 爬升至 **`1.922 m/s`**（`gap = 2.981 m`）。
+2. **`seq 169`（`17.156 s`）灯架立柱确认时，`LightBrake` 距离融合残留 `+10.1 cm` 预告偏置，推迟 `1300` 刹车 101 ms**：
+   - `seq 168`（`17.057 s`）前使用 `pre_gantry_preview`（由第一桶缺口跨第二桶传递），其估计的灯架位置比真实灯架立柱偏远 **`+10.6 ~ +12.7 cm`**（`seq 169` 时 `prior_ahead = 2.5787 m`，而实测双柱中点 `ahead = 2.4725 m`、实测 `front_gap_m = 2.2645 m`）。
+   - `seq 169`（`17.156 s`）`speed_uses_gantry` 由 `false` 切为 `true` 时，`maneuver_light.rs` 清空了 `race_light.ranges` 测速历史，但**未重置 `race_light_brake` 的 `gap_fusion` 距离锚点**。
+   - `LightBrake::observe` 将旧预告外推值 `2.4156 m` 与真实灯架 `2.2645 m` 按 `weight = 0.332` 融合，使 `control_front_gap_m = 2.3657 m`（比真实 `2.2645 m` 偏高 **`+10.1 cm`**，到 `seq 171` 仍偏高 **`+10.3 cm`**，`1.9182 m` vs `1.8153 m`），导致 `1300` 连续刹车推迟到 **`17.257 s`**（`seq 171`，真实 `gap = 1.815 m`，`v = 1.800 m/s`）才触发，在 `1.83 m/s` 下多走了约 `18.5 cm`，最终在 `19.292 s` 停于 `front_gap_m = -0.049843 m`（越过灯架约 `5.0 cm`）。
+
+### 二、y88／195（基线 `claude-turn194`）Rust 比赛控制修改
+
+机读键 `y88_light_approach_hold_and_gantry_fusion_20261112`，仅修改 `route-engine/src/` 下的 3 个文件：
+1. **接近红灯停车区时 `1570` 单次降到 `1550`，单向锁存绝不反复跳变（`race_light.rs`、`maneuver_light.rs`）**：
+   - `LightRoll` 新增 `Hold`（`approach_hold`，对应 `ROUTE_SLOW_MOTOR = 1550`），位于 `Cruise (1570)` 与 `Coast (1530)` 之间。
+   - `RaceLight::body_speed` 输出当前帧滤波车体速度或第二桶 2D 桶心速度 `entry_motion`；`light_approach_control` 计算以完整车体速度 `approach_speed = v.max(body_speed)` 续推一拍后的滑行停点 `coast_if_renewed`。
+   - 当接近红灯停车区、车体速度滑行停点进入目标区（`coast_if_renewed <= VISIBLE_LIGHT_STOP_GAP_M`）时，`LightRoll::Cruise (1570)` **单次降档为 `LightRoll::Hold (1550)`**；状态机中 `Hold` 无法回到 `Cruise`，且若 `Coast (1530)` 在过光电门前撤销也只回到 `Hold (1550)`，严格形成 **`1570 → 1550 → 1530 → 1300`** 单调递减序列，绝不出现 `1550/1570` 反复跳变。
+   - 同时在 `maneuver_light.rs` 确认灯架时仅当 `phase == LightRoll::Cruise` 才设 `cruise_motor()`，防止覆盖已降档的 `1550` 或 `1530`。
+2. **灯架确认切换时重置 `LightBrake` 预告距离融合偏置（`race_light_brake.rs`、`maneuver_light.rs`）**：
+   - `LightBrake` 新增 `reset_gap_fusion()`：在 `speed_uses_gantry` 由 `false` 切换到 `true`（`pre_gantry_preview → confirmed_gantry_legs`）时调用，丢弃上游隔板预告的旧位置预测锚点（使首帧真实灯架立柱 `weight = 1.0` 直接采用实测 `gap`），同时保留上一扫描的 IMU 减速斜率 `response_accel`。
+
+### 三、y87 全圈回放逐段复盘：不影响稳定性的提速空间分析
+
+`y87` 全圈总耗时 `30.048 s`，扣除红灯等待 `9.382 s` 后纯行驶耗时 **`20.667 s`**（各段拆解如下）：
+- **分段 1（起步 `start_lane` → `crosswalk_stop`：`1.783 s → 5.176 s`，耗时 `3.393 s`）——【最大无风险提速点：可省 `0.45 ~ 0.65 s`】**：
+  - 回放实况：`1.783 s` 起步（`1560 → 1550 → 1570`），`2.285 s`（`seq 20`）静止规划斑马线后，在 `2.979 s`（`seq 27`，距斑马线 `gap = 1.85 m`，车速仅 `0.97 m/s`，峰值 `1.18 m/s`）就提前切断动力切入 **`1500` 空档滑行长达 `2.197 s`**（`2.979 s → 5.176 s`），最后 1 秒以 `0.2 ~ 0.4 m/s` 蠕行至 `gap = 0.450 m` 停下（比目标 `0.15 m` 早停了 `30 cm`）。
+  - 原因与无风险提速方案：斑马线前仍使用旧的纯 `1500` 漫长空档滑行（且 `CROSSWALK_RACE_CRUISE_MPS = 1.2 m/s` 偏低、切油后无 `1530` 滚动保持或 `1300` 点刹）。该段是纯直道（航向误差 `< 2.3°`，两侧墙体约束清晰），若将斑马线前巡航上限从 `1.2 m/s` 提至 `1.45 ~ 1.55 m/s`，或像灯前/终点一样用 `1530` 滚动保持到近处再收油，可在**完全不影响转向和绕桶稳定性**的前提下直接缩短 **`0.45 ~ 0.65 s`**。
+- **分段 2（斑马线放行 `crosswalk_go` → 第一桶 `first_pass`：`8.372 s → 12.465 s`，耗时 `4.093 s`，另有固定等待余量 `0.196 s`）——【次大提速点：可省 `0.15 ~ 0.25 s`】**：
+  - **等待余量**：`CROSSWALK_RACE_WAIT_S = 3.1 s` 加帧间隔使实际等待 `3.196 s`（比规则 3.0 s 多 `0.196 s`）。若保持 `3.05 s` 可稳省 `~0.05–0.08 s`。
+  - **首桶切点前 1.00 s 空档滑行**：`8.372 s` 放行后 `1600`（`0.5 s`）→ `1570`（`0.6 s`），在 `9.470 s`（`seq 92`，`before_tangent_m = 2.405 m`，`v_imu = 2.28 m/s`，实测雷达 `body_speed = 2.12 m/s`）切入 `1500` 空档滑行整整 **`1.00 s`**（`9.470 s → 10.470 s`），到 `seq 102`（`before_tangent_m = 0.485 m`）实测 `surface_speed` 已掉到 **`1.623 m/s`**（低于 `1.75 m/s` 目标）才恢复 `1550`。
+  - 原因：`CrosswalkExit::first_approach_drive` 全程只信从静止累加的 `imu_from_crosswalk_rest`（比雷达实测 `surface_speed` 偏高 `0.12 ~ 0.16 m/s`），导致早切油、晚恢复 `1550`。若在 `Coast` 阶段融合或采用 `surface_speed` 判断恢复 `1550` 的时机（在实测速度降到 `1.75 m/s` 时立即接回 `1550`），第一桶弯内仍是已验证安全的 `1550` 和 `1.75 m/s` 入弯速度，稳定性完全不变，可省 **`0.10 ~ 0.15 s`**。
+- **分段 3（第一桶 `first_pass` → 第二桶 `second_pass`：`12.465 s → 16.059 s`，耗时 `3.594 s`）——【已接近最优，建议保持】**：
+  - `12.862 s` 触发 `1620` 直线加速，峰值 `2.25 m/s`，`13.168 s` 切 `1500` 滑行，随第二桶确认在 `14.163 s` 平顺接 `1555 → 1560 → 1555 → 1550` 控速至切点（`seq 148` 切点速度 `1.847 m/s`），`15.060 s` 入弯切 `1570`。本轮 `y87` 修正已消除 `y86` 跑宽碰板问题，衔接非常紧凑，为保证第二桶外侧挡板余量（当前 `min_slack = 0.082 m`），**不建议再提速**。
+- **分段 4（第二桶 `second_pass` → `light_stop`：`16.059 s → 19.355 s`）**：
+  - 本轮因越线 5 cm 重点在于用 `y88` 的 `1570 → 1550 → 1530 → 1300` 稳住停点（停稳本身还将省去本轮超时放行白等的 `~6 s`）。
+- **分段 5（绿灯放行 `light_go` → 终点 `finish_stop`：`28.737 s → 31.831 s`，耗时 `3.094 s`）——【历史最快，保持不动】**：
+  - `1600` 起步 → `1570` 巡航 → `1530` 滚动保持 → `1300` 一次连续刹停于 `front_gap_m = 0.367 m`，0 次补进，仅用 `3.094 s`，已是历轮最快最稳的终点段。
+
+### 四、验证与当前状态
+
+- 本地验证：`cargo build --release` 通过，`cargo test --release` **33 项全通**（新增 `light_approach_steps_1570_down_once_to_1550_without_toggling_before_1530_and_1300` 与 `switching_to_confirmed_gantry_legs_resets_preview_gap_bias_while_keeping_imu_slope`），`cargo clippy --release` 保持 32 条既有警告（0 新增），`web/vehicle-console/tests` **968 项回归全通**。
+- 按用户“先不编译了，更新共同记忆后上传仓库”指令：**本次仅提交并推送源码、轨迹图与文档，未执行交叉编译建包（`package-ros2-round.py`）和车端部署**。车上仍保持 `y87／194` 锁定状态；后续如需上车测试 `y88／195`，从当前提交交叉编译并部署即可。旧条目保留。
