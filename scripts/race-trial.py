@@ -183,7 +183,7 @@ def main():
             if not setup.is_file():
                 raise RuntimeError(f'ROS2 setup file missing: {setup}')
             command = ['bash', '-c',
-                       'source "$1" || exit; export ROS_LOCALHOST_ONLY=1 RMW_IMPLEMENTATION=rmw_fastrtps_cpp ROS_LOG_DIR="$2"; shift 2; exec "$@"',
+                       'source "$1" || exit; export ROS_DOMAIN_ID=217 RMW_IMPLEMENTATION=rmw_fastrtps_cpp ROS_LOG_DIR="$2"; shift 2; exec "$@"',
                        'stcar-ros2', str(setup), str(out/'ros-log'), *command]
             result['ros2_setup'] = str(setup)
         with (out/'race-stdout.txt').open('w') as stdout:

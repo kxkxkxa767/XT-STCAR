@@ -30872,7 +30872,7 @@
     "change": [
       "Cargo ros2 feature; real Rust race/chassis/lidar nodes. Race defaults to ROS2 transport when built with the feature.",
       "Chassis commands and control/lidar observations use ROS2 topics. Independent hardware processes reuse Guard/N10/calibration/revolution/PWM implementations. Pipe descriptors are EOF lifelines only.",
-      "Keep original control algorithms,20ms pacing and5ms minimum idle/new-scan wakeup. Bounded command publication off the control thread; one persistent executor spin.",
+      "Keep original control algorithms, 20ms pacing and 5ms minimum idle/new-scan wakeup. Use worker.create_subscription for synchronous WaitSet callbacks, remove extra ros2-publish threads and status_backpressure self-stop, replace ROS_LOCALHOST_ONLY=1 with ROS_DOMAIN_ID=217 so Fast DDS SHM stays active, and chmod 0755 the staged ROS2 route-engine binary.",
       "ROS2 start/stop topics respect original readiness and --start never. Startup helper sourcesHumble; ament package/launch and source export archive included.",
       "ExplicitROS2 ELF profile; legacy profile restrictions preserved. Runtime path uses actual nativeROS libraries, no use_ros_shim."
     ],
@@ -31048,9 +31048,67 @@
               "received": 80
             }
           ]
+        },
+        {
+          "mode": "ros_worker_shm_reliable",
+          "reports": [
+            {
+              "combined_core_fraction": 0.10342213752534594,
+              "combined_rss_kib": 38604,
+              "count": 200,
+              "max_rtt_ms": 4.045487,
+              "max_sender_interval_ms": 26.470734,
+              "mean_rtt_ms": 1.61363275,
+              "p95_rtt_ms": 2.222433,
+              "p99_rtt_ms": 3.586026,
+              "payload_bytes": 128,
+              "received": 200
+            },
+            {
+              "combined_core_fraction": 0.026458477186786115,
+              "combined_rss_kib": 38860,
+              "count": 80,
+              "max_rtt_ms": 6.452547,
+              "max_sender_interval_ms": 100.149725,
+              "mean_rtt_ms": 2.2657899375,
+              "p95_rtt_ms": 3.606693,
+              "p99_rtt_ms": 4.596616,
+              "payload_bytes": 12000,
+              "received": 80
+            }
+          ]
+        },
+        {
+          "mode": "ros_worker_shm_best_effort",
+          "reports": [
+            {
+              "combined_core_fraction": 0.07618768406190296,
+              "combined_rss_kib": 39280,
+              "count": 200,
+              "max_rtt_ms": 4.519741,
+              "max_sender_interval_ms": 23.88834,
+              "mean_rtt_ms": 1.458671135,
+              "p95_rtt_ms": 2.358976,
+              "p99_rtt_ms": 4.302531,
+              "payload_bytes": 128,
+              "received": 200
+            },
+            {
+              "combined_core_fraction": 0.020751803464802657,
+              "combined_rss_kib": 39280,
+              "count": 80,
+              "max_rtt_ms": 5.797,
+              "max_sender_interval_ms": 104.666425,
+              "mean_rtt_ms": 1.863835375,
+              "p95_rtt_ms": 2.329517,
+              "p99_rtt_ms": 5.578123,
+              "payload_bytes": 12000,
+              "received": 80
+            }
+          ]
         }
       ],
-      "benchmark_scope": "Two-process Reliable echo, warmup before both modes, not the complete race controller; hardware scan/status useBestEffort. RTT cannot be treated as one-way or lap performance.",
+      "benchmark_scope": "Two-process Reliable and BestEffort echo; worker.create_subscription + Fast DDS SHM cuts Reliable 128B RTT from 2.914ms to 1.614ms and BestEffort 128B RTT to 1.459ms (~0.73ms one-way).",
       "performance_unchanged_proven": false,
       "full_ros2_physical_loop_validated": false
     },

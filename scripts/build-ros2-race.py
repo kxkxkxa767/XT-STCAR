@@ -44,6 +44,7 @@ resource = install/'share/ament_index/resource_index/packages/xt_stcar_race'
 for path in [package, executable.parent, resource.parent]:
     path.mkdir(parents=True, exist_ok=True)
 shutil.copy2(binary, executable)
+executable.chmod(0o755)
 shutil.copy2(ROOT/'ros2/xt_stcar_race/package.xml', package/'package.xml')
 shutil.copytree(ROOT/'ros2/xt_stcar_race/launch', package/'launch', dirs_exist_ok=True)
 resource.write_text('')
@@ -51,7 +52,7 @@ resource.write_text('')
 source /opt/ros/humble/setup.bash || return
 _stcar_prefix="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export AMENT_PREFIX_PATH="${_stcar_prefix}${AMENT_PREFIX_PATH:+:$AMENT_PREFIX_PATH}"
-export ROS_LOCALHOST_ONLY=1 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export ROS_DOMAIN_ID=217 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 unset _stcar_prefix
 ''')
 source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()

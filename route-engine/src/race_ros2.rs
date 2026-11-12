@@ -23,9 +23,10 @@ pub(crate) struct Controller {
     executor: JoinHandle<()>,
     publisher: JoinHandle<()>,
     _node: Node,
-    _inputs: Vec<Subscription<RosString>>,
-    _start: Subscription<Bool>,
-    _stop: Subscription<Bool>,
+    _worker: Worker<()>,
+    _inputs: Vec<WorkerSubscription<RosString, ()>>,
+    _start: WorkerSubscription<Bool, ()>,
+    _stop: WorkerSubscription<Bool, ()>,
 }
 
 impl Controller {
@@ -45,12 +46,13 @@ pub(crate) fn connect(o: &Options, tx: mpsc::Sender<Event>) -> Result<Transport,
         let context = Context::new(std::iter::once("route-engine".to_owned()).chain(o.ros_args.iter().cloned()), InitOptions::default())?;
         let mut executor = context.create_basic_executor();
         let node = executor.create_node("xt_stcar_race")?;
+        let worker = node.create_worker(());
         let command = node.create_publisher::<RosString>(COMMAND.keep_last(4).reliable().volatile())?;
         let mut inputs = Vec::new();
         for (topic, kind) in [(CONTROL, "control"), (SCAN, "lidar")] {
             let events = tx.clone();
-            inputs.push(node.create_subscription::<RosString, _>(topic.keep_last(1).best_effort().volatile(),
-                move |msg: RosString| {
+            inputs.push(worker.create_subscription::<RosString, _>(topic.keep_last(1).best_effort().volatile(),
+                move |_: &mut (), msg: RosString| {
                     let event = if msg.data.len() > crate::race::LINE_LIMIT {
                         Event::Ended(kind, format!("{kind} ROS2 frame exceeds existing line limit"))
                     } else { Event::Line(kind, msg.data, Instant::now()) };
@@ -58,11 +60,11 @@ pub(crate) fn connect(o: &Options, tx: mpsc::Sender<Event>) -> Result<Transport,
                 })?);
         }
         let events = tx.clone();
-        let start = node.create_subscription::<Bool, _>("/xt_stcar/start".keep_last(1).reliable().volatile(),
-            move |msg: Bool| { if msg.data { let _ = events.send(Event::Enter); } })?;
+        let start = worker.create_subscription::<Bool, _>("/xt_stcar/start".keep_last(1).reliable().volatile(),
+            move |_: &mut (), msg: Bool| { if msg.data { let _ = events.send(Event::Enter); } })?;
         let events = tx.clone();
-        let stop = node.create_subscription::<Bool, _>("/xt_stcar/stop".keep_last(1).reliable().volatile(),
-            move |msg: Bool| { if msg.data { let _ = events.send(Event::Halt("ros2_operator_stop")); } })?;
+        let stop = worker.create_subscription::<Bool, _>("/xt_stcar/stop".keep_last(1).reliable().volatile(),
+            move |_: &mut (), msg: Bool| { if msg.data { let _ = events.send(Event::Halt("ros2_operator_stop")); } })?;
         let events = tx.clone();
         ctrlc::set_handler(move || { let _ = events.send(Event::Halt("ros2_shutdown")); })?;
 
@@ -107,7 +109,9 @@ pub(crate) fn connect(o: &Options, tx: mpsc::Sender<Event>) -> Result<Transport,
             }
         }
 
-        let (send, requests) = mpsc::sync_channel::<String>(4);
+        // The old pipe write never failed on a short stall. Bound only by the
+        // Guard: commands older than 250 ms are rejected there anyway.
+        let (send, requests) = mpsc::sync_channel::<String>(16);
         let events = tx.clone();
         let publisher = spawn_named("ros2-command", move || {
             for data in requests {
@@ -129,7 +133,7 @@ pub(crate) fn connect(o: &Options, tx: mpsc::Sender<Event>) -> Result<Transport,
         Ok(Transport {
             writer: Some(Box::new(move |emit| send.try_send(crate::py::to_json(&emit.row())).map_err(|e| e.to_string()))),
             children,
-            ros2: Some(Controller { commands, executor: runner, publisher, _node: node,
+            ros2: Some(Controller { commands, executor: runner, publisher, _node: node, _worker: worker,
                 _inputs: inputs, _start: start, _stop: stop }),
         })
     };

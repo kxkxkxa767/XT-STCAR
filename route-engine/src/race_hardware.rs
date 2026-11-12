@@ -66,7 +66,7 @@ fn calibrated_scan(row: &mut serde_json::Value, calibration: &lidar_calibration:
     Ok(())
 }
 
-fn lidar(mut port: Option<SerialPort>, calibration: Option<lidar_calibration::Calibration>, output: &mpsc::SyncSender<serde_json::Value>, stopped: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
+fn lidar(mut port: Option<SerialPort>, calibration: Option<lidar_calibration::Calibration>, publisher: &Publisher<RosString>, stopped: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let mut decoder = N10Decoder::new(N10Config { frame_id: FrameId("laser_link".into()),
         range_min_m: 0.02, range_max_m: 12., max_packet_age_ms: 50 })?;
@@ -85,7 +85,7 @@ fn lidar(mut port: Option<SerialPort>, calibration: Option<lidar_calibration::Ca
                             "valid_fraction":done.valid as f64/360.,"coverage":done.coverage as f64/360.,
                             "seam_filled_bins":done.seam_filled,"navigation_validated":false});
                         if let Some(calibration) = &calibration { calibrated_scan(&mut row, calibration, at)?; }
-                        if matches!(output.try_send(row), Err(mpsc::TrySendError::Disconnected(_))) { return Ok(()); }
+                        if publisher.publish(RosString { data: row.to_string() }).is_err() { return Ok(()); }
                     }
                 }
             }
@@ -94,14 +94,14 @@ fn lidar(mut port: Option<SerialPort>, calibration: Option<lidar_calibration::Ca
             let ranges: Vec<Option<f64>> = (0..360).map(|i| Some(3. + (i as f64/30.).sin()*0.3)).collect();
             let mut row = serde_json::json!({"seq":seq,"ranges":ranges,"valid_fraction":1.,"coverage":1.,"navigation_validated":false});
             if let Some(calibration) = &calibration { calibration.apply(&mut row)?; }
-            let _ = output.try_send(row);
+            let _ = publisher.publish(RosString { data: row.to_string() });
             thread::sleep(Duration::from_millis(100));
         }
     }
     Ok(())
 }
 
-fn control(mut port: Option<SerialPort>, execute: bool, reverse: bool, requests: mpsc::Receiver<Request>, output: &mpsc::SyncSender<serde_json::Value>, stopped: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
+fn control(mut port: Option<SerialPort>, execute: bool, reverse: bool, requests: mpsc::Receiver<Request>, publisher: &Publisher<RosString>, stopped: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
     let start = Instant::now();
     let mut guard = Guard::new(reverse);
     let mut problem = None;
@@ -109,16 +109,16 @@ fn control(mut port: Option<SerialPort>, execute: bool, reverse: bool, requests:
         let now = start.elapsed().as_millis() as u64;
         guard.advance(now);
         if stopped.load(Ordering::Acquire) { guard.stop("input_closed"); break; }
-        for _ in 0..4 {
+        for _ in 0..16 {
             if let Ok(request) = requests.try_recv() { guard.apply(request, now); } else { break; }
         }
         if let Some(p) = port.as_mut()
             && let Err(error) = p.write_packet_until(&PwmCommand::new(guard.status.motor, guard.status.servo)?.encode(), Instant::now()+Duration::from_millis(15)) {
             problem = Some(error); break;
         }
-        if output.try_send(serde_json::json!({"control":guard.status,"physical_output":execute,"reverse_enabled":reverse})).is_err() {
-            guard.stop("status_backpressure");
-        }
+        let _ = publisher.publish(RosString {
+            data: serde_json::json!({"control":guard.status,"physical_output":execute,"reverse_enabled":reverse}).to_string(),
+        });
         thread::sleep(Duration::from_millis(20));
     }
     if let Some(p) = port.as_mut() {
@@ -142,6 +142,7 @@ fn run(o: Options) -> Result<(), Box<dyn std::error::Error>> {
     let context = Context::new(std::iter::once("route-engine".to_owned()).chain(o.ros_args.iter().cloned()), InitOptions::default())?;
     let mut executor = context.create_basic_executor();
     let node = executor.create_node(if o.control { "xt_stcar_chassis" } else { "xt_stcar_lidar" })?;
+    let worker = node.create_worker(());
     let publisher = node.create_publisher::<RosString>((if o.control { CONTROL } else { SCAN }).keep_last(1).best_effort().volatile())?;
     let stopped = Arc::new(AtomicBool::new(false));
     let signal = stopped.clone();
@@ -153,28 +154,19 @@ fn run(o: Options) -> Result<(), Box<dyn std::error::Error>> {
             signal.store(true, Ordering::Release);
         });
     }
-    let (send, requests) = mpsc::sync_channel(4);
+    let (send, requests) = mpsc::sync_channel(16);
     let signal = stopped.clone();
     let _commands = if o.control {
-        Some(node.create_subscription::<RosString, _>(COMMAND.keep_last(4).reliable().volatile(), move |msg: RosString| {
+        Some(worker.create_subscription::<RosString, _>(COMMAND.keep_last(4).reliable().volatile(), move |_: &mut (), msg: RosString| {
             if msg.data.len() > 1024 { signal.store(true, Ordering::Release); return; }
             match serde_json::from_str::<Request>(&msg.data) {
-                Ok(request) => { if send.try_send(request).is_err() { signal.store(true, Ordering::Release); } },
+                Ok(request) => { let _ = send.try_send(request); },
                 Err(_) => signal.store(true, Ordering::Release),
             }
         })?)
     } else { None };
     // Complete ROS setup before opening any physical serial device.
     let port = if o.execute { Some(SerialPort::open(o.device.as_ref().unwrap(), if o.control { 38400 } else { 230400 })?) } else { None };
-    let (output, rows) = mpsc::sync_channel::<serde_json::Value>(1);
-    let signal = stopped.clone();
-    let writer = spawn_named("ros2-publish", move || {
-        for row in rows {
-            if publisher.publish(RosString { data: row.to_string() }).is_err() {
-                signal.store(true, Ordering::Release); break;
-            }
-        }
-    });
     let commands = executor.commands().clone();
     let signal = stopped.clone();
     let runner = spawn_named("ros2-executor", move || {
@@ -182,10 +174,8 @@ fn run(o: Options) -> Result<(), Box<dyn std::error::Error>> {
         if !errors.is_empty() { eprintln!("hardware executor: {errors:?}"); }
         signal.store(true, Ordering::Release);
     });
-    let result = if o.control { control(port, o.execute, o.reverse, requests, &output, &stopped) }
-        else { lidar(port, calibration, &output, &stopped) };
-    drop(output);
-    let _ = writer.join();
+    let result = if o.control { control(port, o.execute, o.reverse, requests, &publisher, &stopped) }
+        else { lidar(port, calibration, &publisher, &stopped) };
     commands.halt_spinning();
     let _ = runner.join();
     result
