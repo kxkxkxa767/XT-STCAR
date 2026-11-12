@@ -25688,19 +25688,63 @@
     "car_run_y25": {
       "engine_round": 132,
       "local_evidence_root": "work/vehicle-dynamic-deploy-20261008",
-      "driven_evidence": ["left-cone-trial-20261102-y25", "left-cone-trial-20261102-y25-3", "left-cone-trial-20261102-y25-4"],
+      "driven_evidence": [
+        "left-cone-trial-20261102-y25",
+        "left-cone-trial-20261102-y25-3",
+        "left-cone-trial-20261102-y25-4"
+      ],
       "stationary_only": "left-cone-trial-20261102-y25-2: left_corridor_unknown alternated with ready until the prestart timeout. No drive. 2025 samples; excluded from the three calibration runs.",
-      "finish_gaps_m": [0.363, 0.343, 0.370],
+      "finish_gaps_m": [
+        0.363,
+        0.343,
+        0.37
+      ],
       "all_finished_and_locked": true,
-      "start_to_finish_event_s": [35.464, 35.756, 26.265],
-      "first_to_second_pass_event_s": [4.396, 4.495, 4.594],
-      "sampled_transfer_1590_command_and_ack_frames": [0, 3, 2],
-      "sampled_transfer_speed_peaks_mps": [1.479, 1.971, 1.709],
-      "imu_samples": [3971, 3925, 2967],
-      "imu_checksum_errors": [0, 0, 0],
-      "imu_thread_fraction_one_core": [0.02350, 0.02392, 0.02378],
-      "max_control_compute_ms": [7.75, 9.94, 9.83],
-      "max_control_interval_ms": [21.80, 23.64, 22.45],
+      "start_to_finish_event_s": [
+        35.464,
+        35.756,
+        26.265
+      ],
+      "first_to_second_pass_event_s": [
+        4.396,
+        4.495,
+        4.594
+      ],
+      "sampled_transfer_1590_command_and_ack_frames": [
+        0,
+        3,
+        2
+      ],
+      "sampled_transfer_speed_peaks_mps": [
+        1.479,
+        1.971,
+        1.709
+      ],
+      "imu_samples": [
+        3971,
+        3925,
+        2967
+      ],
+      "imu_checksum_errors": [
+        0,
+        0,
+        0
+      ],
+      "imu_thread_fraction_one_core": [
+        0.0235,
+        0.02392,
+        0.02378
+      ],
+      "max_control_compute_ms": [
+        7.75,
+        9.94,
+        9.83
+      ],
+      "max_control_interval_ms": [
+        21.8,
+        23.64,
+        22.45
+      ],
       "calibration": "config/imu-planar-y25-20261102.json",
       "calibration_tool": "tools/scan-geometry/examples/imu-calibration.rs",
       "note": "Second driven run used 1590 at transfer and 1600 after the light. Third had a transfer recovery hold and a shorter light wait; compare segment times, not raw total times."
@@ -25721,7 +25765,10 @@
       "source_commit": "cd3f755967b77747532a66b9db293bc4c36c3932",
       "engine_round": 133,
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y26",
-      "start_rear_front_m": [0.49, 7.53],
+      "start_rear_front_m": [
+        0.49,
+        7.53
+      ],
       "start_to_finish_s": 33.554,
       "light_stop_to_go_s": 10.086,
       "elapsed_less_light_stop_s": 23.468,
@@ -25742,7 +25789,11 @@
         "forward_windows": 59
       }
     },
-    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32}
+    "validation": {
+      "python_full_suite": "968 passed",
+      "cargo_test_release": "7 passed",
+      "clippy_warnings": 32
+    }
   },
   "y27_crosswalk_first_tangent_coast_20261102": {
     "date": "2026-11-02",
@@ -25755,7 +25806,10 @@
     "engine_round": 134,
     "car_run_y27": {
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y27",
-      "start_rear_front_m": [0.36, 7.87],
+      "start_rear_front_m": [
+        0.36,
+        7.87
+      ],
       "start_to_finish_s": 32.653,
       "light_stop_to_go_s": 9.888,
       "release_basis": "green_in_fresh_frames_after_the_stop",
@@ -25778,8 +25832,12 @@
     "change": "After the crosswalk and first-support acquisition, cruise at 1550 to the measured tangent coast distance, coast once to the first-turn entry target 1.1 m/s, then resume 1550. A moving coast exit does not trigger the from-rest 1560 kick. Two-cone transfer retains y26's 1620.",
     "comparison": "y26 crosswalk_go to first handover 2.896 s. Two neutral spells before the first support, with motion throughout. At zero penalties, y26 needs another 2.468 s to reach a 21.0 s score.",
     "historical_split_budget": "For y22, y23, y24, the three driven y25 runs and y26, summing the fastest observed value of each of seven segments gives 22.968 s before penalties, excluding light wait. Even this combination is not a single observed run. The required crosswalk stop stays in the score.",
-    "validation": {"python_full_suite_foreground": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32,
-      "host_note": "The first Python run in a shell background job timed out in the SIGINT test. The isolated foreground SIGINT case and full foreground discovery then passed without changes."}
+    "validation": {
+      "python_full_suite_foreground": "968 passed",
+      "cargo_test_release": "7 passed",
+      "clippy_warnings": 32,
+      "host_note": "The first Python run in a shell background job timed out in the SIGINT test. The isolated foreground SIGINT case and full foreground discovery then passed without changes."
+    }
   },
   "y28_crosswalk_1620_sensor_gantry_20261102": {
     "date": "2026-11-02",
@@ -25807,16 +25865,58 @@
       "after": "locked and motor/servo neutral"
     },
     "user": "Try 1620 when released from the crosswalk and keep the powered straight at 1600 or more where possible. The practice beam is 1.10 m upstream of the gantry. Before the beam both lamps normally are off. Use the gantry to plan deceleration; the camera seeing red triggers the stop.",
-    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32},
+    "validation": {
+      "python_full_suite": "968 passed",
+      "cargo_test_release": "7 passed",
+      "clippy_warnings": 32
+    },
     "change": [
       "Start 1620 on the real crosswalk release tick. Use calibrated longitudinal IMU delta-v from rest (lidar fallback), dynamic free distance or the planned first tangent, measured coast deceleration, and measured high-PWM tail to choose one cutoff.",
       "Warm lidar gantry tracking late on the second loop when the light-lane pursuit is visible. At close range a shallow pair on opposite measured boards also qualifies; a new single leg still requires its original isolation.",
       "Before red, reduce speed toward the measured beam, carry rolling motion in the zone, and keep observing the camera. A fresh red in the light stage cuts drive on the control tick, even before a geometrical confirmation. An actual red wait releases on fresh green frames. A measured gantry passage without red is recorded separately and keeps finish braking available."
     ],
     "locked_bench": [
-      {"local": "work/y28-gantry-coo4a156", "frames": 6, "near_raw_leg_along_m": [0.71, 0.74], "y27_gantry_returns": 1, "y27_pairs": 0, "green_scores": [0.9043, 0.9051, 0.9049]},
-      {"local": "work/y28-gantry-pos2-or_6eahq", "frames": 6, "median_axis_to_gantry_m": 2.723, "front_to_trigger_m": 1.423, "y27_gantry_returns": 6, "y27_pairs": 4, "green_scores": [0.7838, 0.7870, 0.7777]},
-      {"local": "work/y28-gantry-pos2-yz4cgbdr", "frames": 6, "median_heading_deg": 23.2, "median_axis_to_gantry_m": 3.899, "y27_pairs": 2, "green_scores": [0.7513, 0.7519, 0.7500], "note": "Floor reflection also detected; the true head had the higher scores. Lamp left green by operator for this observation."}
+      {
+        "local": "work/y28-gantry-coo4a156",
+        "frames": 6,
+        "near_raw_leg_along_m": [
+          0.71,
+          0.74
+        ],
+        "y27_gantry_returns": 1,
+        "y27_pairs": 0,
+        "green_scores": [
+          0.9043,
+          0.9051,
+          0.9049
+        ]
+      },
+      {
+        "local": "work/y28-gantry-pos2-or_6eahq",
+        "frames": 6,
+        "median_axis_to_gantry_m": 2.723,
+        "front_to_trigger_m": 1.423,
+        "y27_gantry_returns": 6,
+        "y27_pairs": 4,
+        "green_scores": [
+          0.7838,
+          0.787,
+          0.7777
+        ]
+      },
+      {
+        "local": "work/y28-gantry-pos2-yz4cgbdr",
+        "frames": 6,
+        "median_heading_deg": 23.2,
+        "median_axis_to_gantry_m": 3.899,
+        "y27_pairs": 2,
+        "green_scores": [
+          0.7513,
+          0.7519,
+          0.75
+        ],
+        "note": "Floor reflection also detected; the true head had the higher scores. Lamp left green by operator for this observation."
+      }
     ]
   },
   "y29_start_lane_dropout_resume_20261102": {
@@ -25835,7 +25935,11 @@
       "light": "Confirmed gantry 3.466 m from lidar. First sampled deceleration at a 2.242 m front gap, estimated beam speed 1.24 m/s versus planned about 0.63. First red frame 73 scored 0.9175, captured at program 20.581 s and acted on at 20.848 s. Front gap near decision 0.325 m; stopped at 0.202 m. The gantry crossbar was visible at the top, the lamps were outside the frame. No green release and no fallback in this build."
     },
     "change": "After a confirmed crosswalk release in the Rust race start lane, bounded fresh front_sparse/scan_incomplete faults can use the existing neutral pause. Hold adopted steering (including a right correction), keep body/bridge gates and drive budget, then resume after neutral ACK and stable fresh start-lane geometry. The 1560 resume ACK precedes recomputing the normal motor on the next scan.",
-    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32}
+    "validation": {
+      "python_full_suite": "968 passed",
+      "cargo_test_release": "7 passed",
+      "clippy_warnings": 32
+    }
   },
   "y30_crosswalk_1600_visible_light_stop_20261102": {
     "date": "2026-11-02",
@@ -25857,7 +25961,11 @@
     "user": "1600 at the crosswalk restart, then try 1620. The light was too close to see: decelerate earlier and restore the red-timer fallback.",
     "change": "Start at 1600, latch 1620 only while the straight still has room and speed reaches the 1.1 m/s first-turn entry speed. Aim to stop with the front 0.55 m short of the gantry. Beam-to-red exposure took 0.81–1.17 s in y25–y29, so the planning model includes 1.0 s plus the current delivery age and power tail. Account for oblique laser range-rate on the entry and continue the coast to beam pace. Once stopped on real red, release on confirmed green or 10.5 s from the first fresh red capture with no current red.",
     "bench_reference": "Near static green visible at about 0.52 m nose-to-gantry. At the y29 0.202 m stop the lamps were above the frame.",
-    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32}
+    "validation": {
+      "python_full_suite": "968 passed",
+      "cargo_test_release": "7 passed",
+      "clippy_warnings": 32
+    }
   },
   "y31_1600_imu_transfer_cut_20261102": {
     "date": "2026-11-02",
@@ -25872,22 +25980,73 @@
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y31",
       "operator_reported_pack_voltage_v": 11.5,
       "physical_result": "route_finish_zone_stop",
-      "start_rear_front_m": [0.36, 7.61],
+      "start_rear_front_m": [
+        0.36,
+        7.61
+      ],
       "start_to_finish_s": 42.255,
       "light_stop_to_go_s": 10.293,
       "elapsed_less_light_stop_s": 31.962,
       "y27_elapsed_less_light_stop_s": 22.765,
       "slower_than_y27_s": 9.197,
       "timing_basis": "Differences of route_events[*].scan.at_ms from run/summary.json in both runs. Only the light_stop to light_go interval is subtracted. No external timing or penalties included.",
-      "split_seconds_columns": ["from", "to", "y27", "y31", "y31_minus_y27"],
+      "split_seconds_columns": [
+        "from",
+        "to",
+        "y27",
+        "y31",
+        "y31_minus_y27"
+      ],
       "splits": [
-        ["start_lane", "crosswalk_go", 6.987, 7.492, 0.505],
-        ["crosswalk_go", "first_approach_handover", 3.096, 2.199, -0.897],
-        ["first_approach_handover", "first_pass", 1.999, 3.095, 1.096],
-        ["first_pass", "second_handover", 0.998, 1.099, 0.101],
-        ["second_handover", "second_pass", 2.195, 4.196, 2.001],
-        ["second_pass", "light_stop", 3.995, 6.691, 2.696],
-        ["light_go", "finish_stop", 3.495, 7.190, 3.695]
+        [
+          "start_lane",
+          "crosswalk_go",
+          6.987,
+          7.492,
+          0.505
+        ],
+        [
+          "crosswalk_go",
+          "first_approach_handover",
+          3.096,
+          2.199,
+          -0.897
+        ],
+        [
+          "first_approach_handover",
+          "first_pass",
+          1.999,
+          3.095,
+          1.096
+        ],
+        [
+          "first_pass",
+          "second_handover",
+          0.998,
+          1.099,
+          0.101
+        ],
+        [
+          "second_handover",
+          "second_pass",
+          2.195,
+          4.196,
+          2.001
+        ],
+        [
+          "second_pass",
+          "light_stop",
+          3.995,
+          6.691,
+          2.696
+        ],
+        [
+          "light_go",
+          "finish_stop",
+          3.495,
+          7.19,
+          3.695
+        ]
       ],
       "crosswalk": "Stopped 0.118 m before the stripe, held 3.095 s. The restart ACKs were 1600, one planned coast, then 1550; no quality wait. Scan 95 cut before the first support was acquired (front board 5.109 m, predicted stopping range 5.685 m). The rest-anchored IMU estimated 1.05–1.71 m/s across sampled coast/rolling recovery frames.",
       "transfer": "1600 acknowledged at feedback elapsed 13.617 s (scan 148); 1500 at 13.776 s (scan 150; raw lidar 1.162, IMU-anchored 1.637 m/s); rolling 1550 at scan 158. No 1620 observed. At the first sampled zero distance to the second tangent the axis lidar read 1.250 m/s, versus 2.096 in y27. Both cones passed. In the second_loop feedback samples the minimum known body-to-return clearance was 0.312 m (scan 175, left-front 295 degrees). The point was 0.028 m from a 90-point lidar wall fit spanning 1.06 m. This is a sampled clearance, not continuous ground truth.",
@@ -25900,29 +26059,68 @@
       "max_control_compute_ms": 10.367,
       "max_control_interval_ms": 21.634,
       "retrieved_files_verified": 99,
-      "end_control": {"armed": false, "motor": 1500, "servo": 1500}
+      "end_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     },
     "car_run_y31_2": {
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y31-2",
       "same_engine_and_settings_as_y31_first_run": true,
       "operator_reported_replacement_pack_voltage_v": 12.0,
       "battery_context": "The operator reported 11.5 V on the first y31, 12.0 V on this fresh pack, and a freshly changed pack on y27 (no y27 voltage). There is no onboard under-load voltage trace. Start placement also differed between y31 runs. Do not attribute their entire time difference to voltage.",
-      "start_rear_front_m": [0.45, 7.54],
+      "start_rear_front_m": [
+        0.45,
+        7.54
+      ],
       "physical_result": "route_finish_zone_stop",
       "start_to_finish_s": 40.752,
       "light_stop_to_go_s": 10.285,
       "elapsed_less_light_stop_s": 30.467,
       "compared_with_y31_first_run_s": -1.495,
       "compared_with_y27_s": 7.702,
-      "split_seconds_columns": ["from", "to", "y31_2"],
+      "split_seconds_columns": [
+        "from",
+        "to",
+        "y31_2"
+      ],
       "splits": [
-        ["start_lane", "crosswalk_go", 7.292],
-        ["crosswalk_go", "first_approach_handover", 2.298],
-        ["first_approach_handover", "first_pass", 2.698],
-        ["first_pass", "second_handover", 1.196],
-        ["second_handover", "second_pass", 3.497],
-        ["second_pass", "light_stop", 7.192],
-        ["light_go", "finish_stop", 6.294]
+        [
+          "start_lane",
+          "crosswalk_go",
+          7.292
+        ],
+        [
+          "crosswalk_go",
+          "first_approach_handover",
+          2.298
+        ],
+        [
+          "first_approach_handover",
+          "first_pass",
+          2.698
+        ],
+        [
+          "first_pass",
+          "second_handover",
+          1.196
+        ],
+        [
+          "second_handover",
+          "second_pass",
+          3.497
+        ],
+        [
+          "second_pass",
+          "light_stop",
+          7.192
+        ],
+        [
+          "light_go",
+          "finish_stop",
+          6.294
+        ]
       ],
       "imu_check": "Same y31 crosswalk restart at 1600 until the board cutoff 0.501 s after release in both runs. Trapezoidal integration of calibrated forward acceleration for 0.500 s after the release scan, with per-run projection bias from the preceding [-1.0,-0.1] s of rest: delta-v 1.618 vs 1.664 m/s (11.5 vs 12.0 V). For the first 0.300 s after light_go: 0.888 vs 0.894 m/s. Single runs, lidar-receive alignment, no independent velocity or terminal voltage measurement.",
       "crosswalk_transfer": "No sensor quality waits. One post-crosswalk coast. Both boosts had 1600 ACKs. Second tangent sampled at 1.274 m/s. Both cones passed; minimum known return to body in the sampled second_loop feedback was 0.322 m.",
@@ -25935,7 +26133,11 @@
       "max_control_compute_ms": 8.343,
       "max_control_interval_ms": 23.339,
       "retrieved_files_verified": 82,
-      "end_control": {"armed": false, "motor": 1500, "servo": 1500}
+      "end_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     },
     "build": {
       "source_commit": "de36a56bfdc53d0fc69439af9d9e059b304951be",
@@ -25948,14 +26150,30 @@
       "vision_light_stop": true
     },
     "user": "Lower the cone transition to 1600 and keep the powered post-crosswalk straight at 1600. Simulate, cross-compile and push while the operator is away.",
-    "validation": {"python_full_suite": "968 passed", "cargo_test_release": "7 passed", "clippy_warnings": 32},
+    "validation": {
+      "python_full_suite": "968 passed",
+      "cargo_test_release": "7 passed",
+      "clippy_warnings": 32
+    },
     "change": "Both straight boosts are 1600. During the cone transfer use the larger of current lidar speed and IMU delta-v from a pre-push lidar anchor for the cutoff. A single off-centre start-lane dropout can use immediately preceding clear rays beyond the stopping horizon; repeated or uncorroborated faults keep neutral recovery. Known current-body clearance is checked first.",
     "simulator": "SIM_RACE4=1 with scripts/sim-vehicle-bridge.py, real Rust race --demo controller, modeled IMU and delayed camera, tile response, sensor 1.10 m before gantry, one side dropout on stripe restart. The physics and the camera are models, not a physical YOLO run.",
     "development_simulations": [
-      {"evidence": "work/y31-race-sim-DzaVO8rf", "outcome": "Finished but the injected far side-ray gap still caused a neutral wait. The dropout scan omitted native corridor candidates yet had valid raw fits on both side boards. A lagging lidar sample also prematurely released a bend coast."},
-      {"evidence": "work/y31-final-sim-YpngABHS", "outcome": "Gap bridged without a pause, no second-cone contact; terminal front-body gate fired during finish braking. Real y26/y27 had stopped with only 0.112/0.099 m gap."},
-      {"evidence": "work/y31-release-sim-j4qRE6Wb", "outcome": "The objective declared a finish while the last low-speed kick was still in the ESC/speed-estimation pipeline; the final coast approached the board. Corrected the current speed with IMU delta-v over the range-fit window and checked pending power before declaring rest."},
-      {"evidence": "work/y31-shipping-sim-rLucOFph", "outcome": "The finish brake began, but the 1600 launch tail had already accumulated too much speed to stop with one brake. Included the observed launch rise plus the next scan in the renewal decision."}
+      {
+        "evidence": "work/y31-race-sim-DzaVO8rf",
+        "outcome": "Finished but the injected far side-ray gap still caused a neutral wait. The dropout scan omitted native corridor candidates yet had valid raw fits on both side boards. A lagging lidar sample also prematurely released a bend coast."
+      },
+      {
+        "evidence": "work/y31-final-sim-YpngABHS",
+        "outcome": "Gap bridged without a pause, no second-cone contact; terminal front-body gate fired during finish braking. Real y26/y27 had stopped with only 0.112/0.099 m gap."
+      },
+      {
+        "evidence": "work/y31-release-sim-j4qRE6Wb",
+        "outcome": "The objective declared a finish while the last low-speed kick was still in the ESC/speed-estimation pipeline; the final coast approached the board. Corrected the current speed with IMU delta-v over the range-fit window and checked pending power before declaring rest."
+      },
+      {
+        "evidence": "work/y31-shipping-sim-rLucOFph",
+        "outcome": "The finish brake began, but the 1600 launch tail had already accumulated too much speed to stop with one brake. Included the observed launch rise plus the next scan in the renewal decision."
+      }
     ],
     "finish_model": "Average measured longitudinal deceleration from the first 1300 ACK until release was 0.71–0.82 m/s² in the available y25, y25-3, y26 and y27 runs. Use 0.8 m/s², a 0.2 s ESC tail and the existing 1.5 s single brake, followed by measured coasting. Check the next launch scan plus the powered tail before renewing 1600. Retiming the lane range slope with short-window IMU delta-v avoids declaring a stop during a queued pulse; near the light the rolling top-up also counts its own ESC tail.",
     "simulation_final": {
@@ -25965,9 +26183,16 @@
       "physical_output": false,
       "start_to_finish_s": 37.402,
       "crosswalk_wait_s": 3.096,
-      "red_wait_s": 9.500,
-      "crosswalk_straight_pwm_seen": [1500, 1600],
-      "transfer_pwm_seen": [1500, 1550, 1600],
+      "red_wait_s": 9.5,
+      "crosswalk_straight_pwm_seen": [
+        1500,
+        1600
+      ],
+      "transfer_pwm_seen": [
+        1500,
+        1550,
+        1600
+      ],
       "transfer_min_wall_gap_m": 0.2211,
       "transfer_min_cone_gap_m": 0.2974,
       "simulated_contact_samples": 0,
@@ -25975,7 +26200,10 @@
       "bridged_far_side_dropouts": 1,
       "quality_waits": 0,
       "light_release": "green_in_fresh_frames_after_the_stop",
-      "settled_body_front_rear_to_gantry_m": [0.4980, 0.8835],
+      "settled_body_front_rear_to_gantry_m": [
+        0.498,
+        0.8835
+      ],
       "finish_reported_front_gap_m": 0.2819,
       "end_control": "unarmed, motor and servo 1500"
     }
@@ -25993,7 +26221,10 @@
       "package": "XT-STCAR-claude-turn139-94b4b83.tar.gz",
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y32",
       "result": "route_finish_zone_stop",
-      "start_rear_front_m": [0.45,7.56],
+      "start_rear_front_m": [
+        0.45,
+        7.56
+      ],
       "start_to_finish_s": 35.247,
       "light_stop_to_go_s": 10.283,
       "elapsed_less_light_stop_s": 24.964,
@@ -26009,25 +26240,87 @@
       "max_control_compute_ms": 9.853,
       "max_control_interval_ms": 22.426,
       "retrieved_files_verified": 89,
-      "end_control": {"armed":false,"motor":1500,"servo":1500}
+      "end_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     },
-    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "7 passed", "clippy_warnings": 32},
+    "validation": {
+      "host_release_build": true,
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
     "change": "While rounding cone one, identify the upstream end of the light-lane divider: two farther returns into the opening and a downstream parallel board face spanning at least 0.50 m. Store the observed end-wall-to-opening offset from agreeing scans. Thirteen projected rays supply the end-wall range. In the light entry use that range and the offset as a prior; confirmed live gantry legs correct the target position without invalidating the ongoing velocity estimate. No map coordinate is used onboard.",
     "light": "Hold 1550 until coasting through the beam 1.10 m upstream would bring the nose to 0.55 m from the gantry. Use measured closing rate, short-window IMU correction, observed coast deceleration and remaining ESC power. Stay in coast instead of chasing a beam crawl speed. If rolling short, one sustained top-up can precede the final coast. If still dark as momentum runs out, continue through; a fresh red always cuts immediately. The existing real-red 10.5 s/no-fresh-red release fallback remains.",
     "finish": "Remove y31's dedicated early finish-launch cutoff and dynamic brake-start gate. For a real post-red release the body of lane_goal_control is the y27 implementation: the board-range slope, its calibrated ESC projection, sustained launch, coast and one 1300 brake when warranted. Retain treatment of verified passage without red. Cone and crosswalk control and PWM are unchanged.",
-    "static_gap": {"evidence": "work/y32-first-cone-gap-vrsuCXnS/capture.jsonl", "scan_seq": [7791,7793,7796,7799,7801], "complete_scans": 5, "before_after_control": "unarmed, motor 1500, servo 1500", "bearing_clockwise_deg": [110,111], "near_return_m": [0.688,0.705], "opening_return_m": [1.729,1.745]},
+    "static_gap": {
+      "evidence": "work/y32-first-cone-gap-vrsuCXnS/capture.jsonl",
+      "scan_seq": [
+        7791,
+        7793,
+        7796,
+        7799,
+        7801
+      ],
+      "complete_scans": 5,
+      "before_after_control": "unarmed, motor 1500, servo 1500",
+      "bearing_clockwise_deg": [
+        110,
+        111
+      ],
+      "near_return_m": [
+        0.688,
+        0.705
+      ],
+      "opening_return_m": [
+        1.729,
+        1.745
+      ]
+    },
     "y27_offline_comparison": {
       "input": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261102-y27/run",
       "evidence": "work/y32-first-cone-gap-vrsuCXnS/y27-compare.json",
       "method": "Mac-only Rust driver y32_compare.rs invokes the production landmark, light tracking and approach control on distinct saved lidar scans with the recorded compass, synchronized projected IMU integral, recorded control/vision and observed deceleration. No drive connection. The fixed-map comparison uses the user8 layout's 3.225 m end-wall-to-post-centre offset; y27 itself used live gantry observations. Each case uses the same recorded vehicle trajectory, not a new closed-loop drive.",
       "first_loop_agreeing_scans": 8,
       "learned_end_wall_offset_m": 3.15262,
-      "columns": ["source","first_saved_neutral_scan","since_start_s","nose_to_gantry_m","nose_to_beam_m"],
+      "columns": [
+        "source",
+        "first_saved_neutral_scan",
+        "since_start_s",
+        "nose_to_gantry_m",
+        "nose_to_beam_m"
+      ],
       "rows": [
-        ["y27_observed_bridge_ack",177,16.174,3.06629,1.96629],
-        ["y32_fixed_map_counterfactual",177,16.174,3.11008,2.01008],
-        ["y32_first_divider_only",177,16.174,3.18246,2.08246],
-        ["y32_divider_then_live_legs",177,16.174,3.06629,1.96629]
+        [
+          "y27_observed_bridge_ack",
+          177,
+          16.174,
+          3.06629,
+          1.96629
+        ],
+        [
+          "y32_fixed_map_counterfactual",
+          177,
+          16.174,
+          3.11008,
+          2.01008
+        ],
+        [
+          "y32_first_divider_only",
+          177,
+          16.174,
+          3.18246,
+          2.08246
+        ],
+        [
+          "y32_divider_then_live_legs",
+          177,
+          16.174,
+          3.06629,
+          1.96629
+        ]
       ],
       "limits": "The observer did not save every 10 Hz scan. Equal recorded scan means no resolved time difference, not proof of identical physical stopping, scoring, or generalization to another layout."
     }
@@ -26053,7 +26346,12 @@
     "deployed": false,
     "physical_trial_executed": false,
     "scope": "Operator requested stage isolation and accepted code size growth. Commit and push tonight; defer deployment, physical motion and vehicle CPU measurements until tomorrow.",
-    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "7 passed", "clippy_warnings": 32},
+    "validation": {
+      "host_release_build": true,
+      "console_suite": "968 passed",
+      "rust_release_tests": "7 passed",
+      "clippy_warnings": 32
+    },
     "change": "A race-only input snapshot provides the existing yaw rate and longitudinal IMU integral read once per control tick. CrosswalkExit owns the launch origin and first-tangent approach; RaceTransfer owns the two-cone speed estimate, drive phase and steering eligibility; RaceLight owns gantry geometry and its own range/IMU speed histories. FinishControl owns the end-board estimate, launch, brake and creep states. The light wait and subsequent release explicitly hand over to the finish controller. Transfer recovery no longer resets another controller's state. Shared code for the range slope and ESC delay represents sensor/vehicle physics, not competing motor commands.",
     "settings": "No changes to speed settings or steering geometry: two straight boosts 1600, cone-two entry target 1.24 m/s, green launch 1600 and terminal brake 1300. Finish and start launch settings have independent names/values.",
     "verification": {
@@ -26660,7 +26958,12 @@
     "deployed": false,
     "physical_trial_executed": false,
     "user_order": "Build the vehicle package first; physical test later. Keep the light work isolated from two-cone tuning.",
-    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "8 passed", "clippy_warnings": 32},
+    "validation": {
+      "host_release_build": true,
+      "console_suite": "968 passed",
+      "rust_release_tests": "8 passed",
+      "clippy_warnings": 32
+    },
     "change": [
       "Race-only post association uses the longitudinal separation and lateral correspondence of both post pairs. A live paired observation can replace an earlier beam lock. A single pair consistent with the expected beam is excluded from gantry acquisition and partial tracking. Without a corroborating reference a provisional pair cannot declare the actual signal passed.",
       "The light approach compares the projected stopping gap if 1550 were held for one further scan, using the measured scan period and forward IMU acceleration. Uses the oriented body footprint and can top up while rolling before red if a passive stop would leave the rear outside the 1 m zone. A fresh red overrides all propulsion.",
@@ -26726,7 +27029,12 @@
       "combined_archive": "XT-STCAR-y41-ea7a807.tar.gz",
       "combined_archive_bytes": 10909741
     },
-    "validation": {"host_release_build": true, "console_suite": "968 passed", "rust_release_tests": "10 passed", "clippy_warnings": 32},
+    "validation": {
+      "host_release_build": true,
+      "console_suite": "968 passed",
+      "rust_release_tests": "10 passed",
+      "clippy_warnings": 32
+    },
     "implemented": true,
     "deployed": true,
     "physical_trial_executed": true,
@@ -26808,25 +27116,83 @@
       "completed": false,
       "effective_lap_s": null,
       "operator_observation": "From the first cone the car veered left, approached the original straight, turned right and hit the second cone.",
-      "crosswalk": {"estimated_stop_gap_m": 0.158, "waited_s": 3.096},
-      "events_seq": {"first_pass": 135, "second_handover": 148, "last_fresh_second_target": 152, "recovery_neutral": 158, "first_saved_return_inside_nominal_body": 160},
+      "crosswalk": {
+        "estimated_stop_gap_m": 0.158,
+        "waited_s": 3.096
+      },
+      "events_seq": {
+        "first_pass": 135,
+        "second_handover": 148,
+        "last_fresh_second_target": 152,
+        "recovery_neutral": 158,
+        "first_saved_return_inside_nominal_body": 160
+      },
       "transfer": {
-        "saved_1600_acks": [141, 142],
-        "saved_1600_acks_y39_both_runs": [141],
+        "saved_1600_acks": [
+          141,
+          142
+        ],
+        "saved_1600_acks_y39_both_runs": [
+          141
+        ],
         "y39_y41_same_failure_inputs": {
           "evidence": "work/y41-transfer-7yvjWgGC/y41-contact-compare.json",
           "method": "One motor decision per saved scan, starting from the same ongoing boost and using the failed run's speed, IMU anchor, steering input and coast fit. The y39 distance is reconstructed from its current near-cone proof or the divider endpoint. The y41 tangent distance and anchor are from the logged live state.",
-          "seq": [141, 142],
-          "y39_pwm": [1550, 1550], "y41_pwm": [1600, 1600], "vehicle_ack": [1600, 1600],
-          "y39_remaining_m": [null, 0.269], "y41_remaining_m": [3.928, 3.818],
-          "y41_recorded_coast_to_entry_m": [0.267, 1.787],
+          "seq": [
+            141,
+            142
+          ],
+          "y39_pwm": [
+            1550,
+            1550
+          ],
+          "y41_pwm": [
+            1600,
+            1600
+          ],
+          "vehicle_ack": [
+            1600,
+            1600
+          ],
+          "y39_remaining_m": [
+            null,
+            0.269
+          ],
+          "y41_remaining_m": [
+            3.928,
+            3.818
+          ],
+          "y41_recorded_coast_to_entry_m": [
+            0.267,
+            1.787
+          ],
           "steering_acquisition": "14 saved first-loop/transfer observations on this run gave the same near tracker and distinct-role evidence with the preview enabled and disabled.",
           "approach_comparison": {
-            "order": ["y39", "y39-2", "y41"],
-            "heading_deg_at_first_pass": [163.63, 157.54, 163.95],
-            "axial_speed_mps_at_152": [1.701, 1.769, 2.031],
-            "tracked_center_forward_m_at_152": [1.698, 1.638, 1.744],
-            "tracked_center_right_m_at_152": [0.774, 0.835, 0.419]
+            "order": [
+              "y39",
+              "y39-2",
+              "y41"
+            ],
+            "heading_deg_at_first_pass": [
+              163.63,
+              157.54,
+              163.95
+            ],
+            "axial_speed_mps_at_152": [
+              1.701,
+              1.769,
+              2.031
+            ],
+            "tracked_center_forward_m_at_152": [
+              1.698,
+              1.638,
+              1.744
+            ],
+            "tracked_center_right_m_at_152": [
+              0.774,
+              0.835,
+              0.419
+            ]
           },
           "limit": "These fixed-input decisions do not establish the trajectory y39 would have driven from this placement. Both sources use 1.3 m/s in open-stage steering response prediction."
         },
@@ -26835,9 +27201,20 @@
         "contact": "Recovery neutral at 158 with nearest return 0.119 m outside the nominal vehicle rectangle. At 160 (+0.203 s) bin 26 measured 0.222 m, at (0.200,-0.097) m inside the front-right body envelope before rounding. Camera frames 48/49/50 had blue-cone boxes moving into the forward view and growing from 83 to 271 pixels wide; saved frame 51 shows the blue cone at the right front.",
         "interpretation": "The late switch from the divider-guided right turn to countersteer, higher approach speed, and loss of association occurred in the same run. Their individual causal contributions have not been isolated."
       },
-      "runtime": {"control_single_core_percent": 16.26, "imu_single_core_percent": 2.08, "mean_scan_to_tick_ms": 1.652, "max_tick_ms": 10.604, "imu_samples": 4600, "imu_checksum_errors": 0},
+      "runtime": {
+        "control_single_core_percent": 16.26,
+        "imu_single_core_percent": 2.08,
+        "mean_scan_to_tick_ms": 1.652,
+        "max_tick_ms": 10.604,
+        "imu_samples": 4600,
+        "imu_checksum_errors": 0
+      },
       "retrieved_files_verified": 56,
-      "post_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "post_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     },
     "next": "Use the measured second-cone approach to examine the transition from divider guidance to the clockwise tangent and the lost target around scan 153. A full-lap benefit is still unmeasured."
   },
@@ -26851,97 +27228,407 @@
     "control_source": "The four Rust files changed for y41 now match c128888 (y40). The transfer controller matches b44bd7d (y39). Build from the installed y41 engine 148.",
     "evidence_directory": "work/y42-transfer-IvtIGMdb",
     "validation": {
-      "host_release": true, "console_tests_passed": 968, "rust_tests_passed": 8, "clippy_warnings": 32,
-      "y41_scans": [141, 142], "y41_actual_pwm": [1600, 1600], "y42_same_input_pwm": [1550, 1550],
+      "host_release": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 8,
+      "clippy_warnings": 32,
+      "y41_scans": [
+        141,
+        142
+      ],
+      "y41_actual_pwm": [
+        1600,
+        1600
+      ],
+      "y42_same_input_pwm": [
+        1550,
+        1550
+      ],
       "comparison": "Replay of the observed boost state with the y42 Rust controller and the failed run's old-style decision distances and speed inputs. Same-input output saved in same-input.json."
     },
     "build": {
       "source_commit": "3b4289622198dca01d0599e634d95a6e48d6af28",
-      "base": "claude-turn148", "engine": "claude-turn149", "vision": "y42",
-      "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2745648,
+      "base": "claude-turn148",
+      "engine": "claude-turn149",
+      "vision": "y42",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2745648,
       "engine_sha256": "be96b5d1d2178d6117c0dc1353c2ceb3dcc999233dccccd56b79b2d7c88c1d87",
-      "combined_archive": "XT-STCAR-y42-3b42896.tar.gz", "combined_archive_bytes": 10904095
+      "combined_archive": "XT-STCAR-y42-3b42896.tar.gz",
+      "combined_archive_bytes": 10904095
     },
     "car_run_y42": {
-      "time_local": "2026-11-03 22:26 Asia/Taipei", "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y42",
-      "reason": "route_finish_zone_stop", "completed": true,
-      "start_front_rear_m": [7.438, 0.555], "first_pass_heading_deg": 158.40,
+      "time_local": "2026-11-03 22:26 Asia/Taipei",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y42",
+      "reason": "route_finish_zone_stop",
+      "completed": true,
+      "start_front_rear_m": [
+        7.438,
+        0.555
+      ],
+      "first_pass_heading_deg": 158.4,
       "sampled_timing_s": {
         "basis": "Same convention as the reported y39 22.462 s: first saved nonneutral motor acknowledgement to saved finish, deduct the time between the first saved scans at/after each red-stop and release event. Penalties not assessed.",
-        "start_to_stop": 34.154, "red_wait": 10.588, "less_red": 23.566, "difference_vs_y39_first": 1.104
+        "start_to_stop": 34.154,
+        "red_wait": 10.588,
+        "less_red": 23.566,
+        "difference_vs_y39_first": 1.104
       },
       "event_timing_s": {
         "basis": "Monotonic scan receive times in route_events, from start_lane to finish_stop, red hold from light_stop to light_go.",
-        "start_to_stop": 34.356, "red_wait": 10.489, "less_red": 23.867,
-        "first_pass_to_second_pass": 4.094, "second_pass_to_light_stop": 3.795, "light_go_to_finish": 4.095
+        "start_to_stop": 34.356,
+        "red_wait": 10.489,
+        "less_red": 23.867,
+        "first_pass_to_second_pass": 4.094,
+        "second_pass_to_light_stop": 3.795,
+        "light_go_to_finish": 4.095
       },
-      "crosswalk": {"estimated_stop_gap_m": 0.262, "waited_s": 3.003},
+      "crosswalk": {
+        "estimated_stop_gap_m": 0.262,
+        "waited_s": 3.003
+      },
       "cones": {
-        "first_pass_seq": 134, "second_handover_seq": 146, "first_fresh_clockwise_tangent_seq": 164, "second_pass_seq": 175,
-        "saved_transfer_1600_ack_seq": [138], "tangent_speed_mps": 1.641,
-        "closest_saved_approach_to_1p7_m": {"seq": 151, "forward_m": 1.651, "right_m": 1.156, "axial_speed_mps": 1.562},
-        "second_loop_min_body_gap_m": 0.279, "second_loop_min_fresh_second_target_gap_m": 0.363,
+        "first_pass_seq": 134,
+        "second_handover_seq": 146,
+        "first_fresh_clockwise_tangent_seq": 164,
+        "second_pass_seq": 175,
+        "saved_transfer_1600_ack_seq": [
+          138
+        ],
+        "tangent_speed_mps": 1.641,
+        "closest_saved_approach_to_1p7_m": {
+          "seq": 151,
+          "forward_m": 1.651,
+          "right_m": 1.156,
+          "axial_speed_mps": 1.562
+        },
+        "second_loop_min_body_gap_m": 0.279,
+        "second_loop_min_fresh_second_target_gap_m": 0.363,
         "gap_basis": "Minimum distance from a saved raw lidar return to the nominal body rectangle. Overall minimum at seq 155 bin 289. Minimum among the same-scan second-target support bins at seq 162 bin 74."
       },
-      "light": {"stop_stage": "light_entry", "gantry_estimated_front_gap_m": 0.553, "estimated_whole_car_in_zone": true, "stop_zone_certified": false, "red_score": 0.8840, "go_stage": "light_lane", "green_release_frames": [103, 104], "green_scores": [0.8867, 0.8846], "release_pwm_ack": 1600},
-      "finish": {"whole_car_in_zone": true, "front_gap_m": 0.323, "brake_pwm": 1300, "final_creeps": 0},
-      "runtime": {"control_single_core_percent": 16.41, "imu_single_core_percent": 2.34, "mean_scan_to_tick_ms": 1.432, "max_tick_ms": 8.370, "recovery_count": 0, "quality_wait_used": false, "imu_samples": 3786, "imu_checksum_errors": 0},
-      "retrieved_files_verified": 91, "post_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "light": {
+        "stop_stage": "light_entry",
+        "gantry_estimated_front_gap_m": 0.553,
+        "estimated_whole_car_in_zone": true,
+        "stop_zone_certified": false,
+        "red_score": 0.884,
+        "go_stage": "light_lane",
+        "green_release_frames": [
+          103,
+          104
+        ],
+        "green_scores": [
+          0.8867,
+          0.8846
+        ],
+        "release_pwm_ack": 1600
+      },
+      "finish": {
+        "whole_car_in_zone": true,
+        "front_gap_m": 0.323,
+        "brake_pwm": 1300,
+        "final_creeps": 0
+      },
+      "runtime": {
+        "control_single_core_percent": 16.41,
+        "imu_single_core_percent": 2.34,
+        "mean_scan_to_tick_ms": 1.432,
+        "max_tick_ms": 8.37,
+        "recovery_count": 0,
+        "quality_wait_used": false,
+        "imu_samples": 3786,
+        "imu_checksum_errors": 0
+      },
+      "retrieved_files_verified": 91,
+      "post_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
       "comparison_limit": "One completed run. The start rear range differed from y41 (0.55 vs 0.37 m), and the heading at the first pass was 158.4 vs 164.0 degrees."
     },
     "car_run_y42_2": {
       "time_local": "2026-11-03 22:40 Asia/Taipei",
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y42-2",
-      "source_commit": "3b4289622198dca01d0599e634d95a6e48d6af28", "engine_round": 149, "completed": true, "reason": "route_finish_zone_stop",
-      "start_front_rear_m": [7.687, 0.300], "first_pass_heading_deg": 160.41,
-      "sampled_timing_s": {"basis": "Same saved-feedback convention as car_run_y42 and the reported y39 22.462 s; before penalties.", "start_to_stop": 34.652, "red_wait": 10.386, "less_red": 24.266, "difference_vs_y42_first": 0.700, "first_pass_to_second_pass": 3.694, "second_pass_to_light_stop": 4.491, "light_go_to_finish": 3.792},
-      "event_timing_s": {"basis": "Exact scan receive times of the route events.", "start_to_stop": 34.851, "red_wait": 10.286, "less_red": 24.564, "second_pass_to_light_stop": 4.591},
-      "crosswalk": {"estimated_stop_gap_m": 0.464, "waited_s": 3.097},
-      "cones": {"first_pass_seq": 142, "second_handover_seq": 155, "first_fresh_clockwise_tangent_seq": 169, "second_pass_seq": 179, "saved_transfer_1600_ack_seq": [148], "tangent_speed_mps": 1.745, "forward_right_m_and_speed_mps_at_approach_seq_158": [1.625, 0.977, 1.764], "second_loop_min_body_gap_m": 0.277, "second_loop_min_fresh_second_target_gap_m": 0.382},
-      "light": {"estimated_stop_gap_m": 0.563, "stop_stage": "light_lane", "estimated_whole_car_in_zone": true, "stop_zone_certified": false, "red_score": 0.8736, "go_basis": "green_in_fresh_frames_after_the_stop", "green_frames": [107, 108], "green_scores": [0.8754, 0.8787]},
+      "source_commit": "3b4289622198dca01d0599e634d95a6e48d6af28",
+      "engine_round": 149,
+      "completed": true,
+      "reason": "route_finish_zone_stop",
+      "start_front_rear_m": [
+        7.687,
+        0.3
+      ],
+      "first_pass_heading_deg": 160.41,
+      "sampled_timing_s": {
+        "basis": "Same saved-feedback convention as car_run_y42 and the reported y39 22.462 s; before penalties.",
+        "start_to_stop": 34.652,
+        "red_wait": 10.386,
+        "less_red": 24.266,
+        "difference_vs_y42_first": 0.7,
+        "first_pass_to_second_pass": 3.694,
+        "second_pass_to_light_stop": 4.491,
+        "light_go_to_finish": 3.792
+      },
+      "event_timing_s": {
+        "basis": "Exact scan receive times of the route events.",
+        "start_to_stop": 34.851,
+        "red_wait": 10.286,
+        "less_red": 24.564,
+        "second_pass_to_light_stop": 4.591
+      },
+      "crosswalk": {
+        "estimated_stop_gap_m": 0.464,
+        "waited_s": 3.097
+      },
+      "cones": {
+        "first_pass_seq": 142,
+        "second_handover_seq": 155,
+        "first_fresh_clockwise_tangent_seq": 169,
+        "second_pass_seq": 179,
+        "saved_transfer_1600_ack_seq": [
+          148
+        ],
+        "tangent_speed_mps": 1.745,
+        "forward_right_m_and_speed_mps_at_approach_seq_158": [
+          1.625,
+          0.977,
+          1.764
+        ],
+        "second_loop_min_body_gap_m": 0.277,
+        "second_loop_min_fresh_second_target_gap_m": 0.382
+      },
+      "light": {
+        "estimated_stop_gap_m": 0.563,
+        "stop_stage": "light_lane",
+        "estimated_whole_car_in_zone": true,
+        "stop_zone_certified": false,
+        "red_score": 0.8736,
+        "go_basis": "green_in_fresh_frames_after_the_stop",
+        "green_frames": [
+          107,
+          108
+        ],
+        "green_scores": [
+          0.8754,
+          0.8787
+        ]
+      },
       "light_approach_analysis": {
-        "saved_phase_entries_seq": {"cruise": 180, "coast": 185, "rolling_topup": 193, "final_coast": 201, "rolling_rear_into_zone": 210, "zone_coast": 215},
-        "first_saved_neutral": {"seq": 185, "gantry_gap_m": 3.333, "predicted_stop_gap_m": 1.646, "predicted_gap_if_renewed_m": 1.519, "speed_now_mps": 1.267},
-        "first_saved_topup": {"seq": 193, "pwm": 1550, "speed_now_mps": 0.784, "seconds_since_first_saved_neutral": 0.798},
-        "gantry_3p20_to_1p10_s_first_repeat": [1.852, 2.375],
+        "saved_phase_entries_seq": {
+          "cruise": 180,
+          "coast": 185,
+          "rolling_topup": 193,
+          "final_coast": 201,
+          "rolling_rear_into_zone": 210,
+          "zone_coast": 215
+        },
+        "first_saved_neutral": {
+          "seq": 185,
+          "gantry_gap_m": 3.333,
+          "predicted_stop_gap_m": 1.646,
+          "predicted_gap_if_renewed_m": 1.519,
+          "speed_now_mps": 1.267
+        },
+        "first_saved_topup": {
+          "seq": 193,
+          "pwm": 1550,
+          "speed_now_mps": 0.784,
+          "seconds_since_first_saved_neutral": 0.798
+        },
+        "gantry_3p20_to_1p10_s_first_repeat": [
+          1.852,
+          2.375
+        ],
         "basis": "Linear interpolation of gantry gaps at the saved scan timestamps. The first cut was between scans 183 and 185. Its triggering input at 184 is not in the log. On the first run there was a single coast at a saved gap of 2.145 m and no topup."
       },
-      "finish": {"whole_car_in_zone": true, "front_gap_m": 0.355, "creeps": 0},
-      "runtime": {"control_single_core_percent": 16.09, "imu_single_core_percent": 2.43, "mean_scan_to_tick_ms": 1.481, "max_tick_ms": 12.007, "quality_wait_used": false, "recovery_count": 0, "imu_samples": 3940, "imu_checksum_errors": 0},
-      "retrieved_files_verified": 92, "post_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "finish": {
+        "whole_car_in_zone": true,
+        "front_gap_m": 0.355,
+        "creeps": 0
+      },
+      "runtime": {
+        "control_single_core_percent": 16.09,
+        "imu_single_core_percent": 2.43,
+        "mean_scan_to_tick_ms": 1.481,
+        "max_tick_ms": 12.007,
+        "quality_wait_used": false,
+        "recovery_count": 0,
+        "imu_samples": 3940,
+        "imu_checksum_errors": 0
+      },
+      "retrieved_files_verified": 92,
+      "post_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     }
   },
   "y43_resume_light_cruise_before_beam_20261103": {
-    "date": "2026-11-03", "author": "Codex", "engine_round": 150,
+    "date": "2026-11-03",
+    "author": "Codex",
+    "engine_round": 150,
     "source_baseline": "d08f816, vehicle y42 / engine 149",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"source_commit": "645ca48c296237a77cee79863f7ed65d7b96ff7b", "base": "claude-turn149", "engine": "claude-turn150", "vision": "y43", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2746400, "engine_sha256": "5bb53d0fcd292d7092ebd41c995667d7fac0e773863f47a5f5dd851b0b8744fc", "combined_archive": "XT-STCAR-y43-645ca48.tar.gz", "combined_archive_bytes": 10904450},
-    "validation": {"console_tests_passed": 968, "rust_tests_passed": 8, "clippy_warnings": 32, "red_on_the_same_fresh_inputs": "1500 in all 11 cases for both controllers"},
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "source_commit": "645ca48c296237a77cee79863f7ed65d7b96ff7b",
+      "base": "claude-turn149",
+      "engine": "claude-turn150",
+      "vision": "y43",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2746400,
+      "engine_sha256": "5bb53d0fcd292d7092ebd41c995667d7fac0e773863f47a5f5dd851b0b8744fc",
+      "combined_archive": "XT-STCAR-y43-645ca48.tar.gz",
+      "combined_archive_bytes": 10904450
+    },
+    "validation": {
+      "console_tests_passed": 968,
+      "rust_tests_passed": 8,
+      "clippy_warnings": 32,
+      "red_on_the_same_fresh_inputs": "1500 in all 11 cases for both controllers"
+    },
     "change": "After the second cone, reconsider the first neutral coast upstream of the optical beam. With a fresh axial speed and a measured scan interval, predict the stop after renewing 1550 for one scan and paying its full 0.2 s ESC tail. If it still falls upstream of the beam, enter the existing rolling top-up immediately. Camera red overrides propulsion.",
     "fixed_input": {
       "evidence": "work/y43-light-hAIATey0",
       "method": "Run the actual old and new light_approach_control on the same saved coast states. Restore measured speed, corrected speed, range, heading and fitted drag. Reconstruct the effective prior ESC tail and positive acceleration from the two logged forecasts. Saved pre-beam neutral coast samples with live velocity were considered independently. The missing triggering scan 184 was not reconstructed.",
-      "first_run": {"coast_samples": 6, "resumes_y42": 0, "resumes_y43": 0},
-      "repeat": {"coast_samples": 5, "first_y43_resume_seq": 185, "old_pwm": 1500, "new_pwm": 1550, "speed_mps": 1.267, "gantry_gap_m": 3.333, "new_stop_gap_if_renewed_m": 1.209, "beam_to_gantry_m": 1.10, "first_saved_physical_topup_seq": 193, "earlier_command_s": 0.798},
+      "first_run": {
+        "coast_samples": 6,
+        "resumes_y42": 0,
+        "resumes_y43": 0
+      },
+      "repeat": {
+        "coast_samples": 5,
+        "first_y43_resume_seq": 185,
+        "old_pwm": 1500,
+        "new_pwm": 1550,
+        "speed_mps": 1.267,
+        "gantry_gap_m": 3.333,
+        "new_stop_gap_if_renewed_m": 1.209,
+        "beam_to_gantry_m": 1.1,
+        "first_saved_physical_topup_seq": 193,
+        "earlier_command_s": 0.798
+      },
       "observed_time_difference_s": 0.523,
       "time_basis": "Actual y42 repeat minus first run from gantry gap 3.20 m to 1.10 m (interpolated); not a prediction of y43 race time."
     },
     "car_run_y43": {
-      "time_local": "2026-11-03 22:57 Asia/Taipei", "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y43",
-      "finish_stop_event": true, "terminal_reason": "coast_standstill_unconfirmed", "whole_car_in_finish_zone_estimated": true, "standstill_confirmed": false,
-      "sampled_timing_s": {"start_to_finish_event": 34.946, "red_wait": 10.288, "less_red_before_penalties": 24.658, "crosswalk_go_to_first_pass": 5.492, "first_pass_to_second_pass": 3.796, "second_pass_to_light_stop": 3.991, "light_go_to_finish_event": 4.589},
-      "light": {"gantry_3p20_to_1p10_s": 1.902, "interval_y42_first_repeat_s": [1.852, 2.375], "first_saved_coast_seq": 190, "first_saved_coast_gap_m": 2.264, "early_resume_observed": false, "legacy_topup_seq": 199, "at_topup_speed_mps": 0.773, "rear_entry_topup_seq": 204, "estimated_stop_gap_m": 0.539, "green_release_frames": [104, 105]},
-      "cones": {"second_pass_seq": 177, "tangent_seq": 166, "tangent_speed_mps": 1.774, "min_saved_second_target_to_body_m": 0.350},
-      "crosswalk": {"waited_s": 3.002, "range_m": 0.429, "release_seq": 84, "front_sparse_seq": 88, "cleared_on_saved_scan": 89, "resume_request_seq": 93, "pause_to_resume_request_s": 0.509, "open_unknown_left_angles_deg": [-27,-26,-22,-21,-20,-19,-18,-17,-16,-15]},
-      "finish": {"release_seq": 320, "finish_stop_seq": 366, "estimated_nose_gap_m": 0.243, "brake_pwm": 1300, "brake_command_s": 0.109, "rolling_1550_ack_after_brake_seq": [355,356], "creep_counter": 0, "neutral_ack": true, "standstill_detail": "During post-stop verification, most saved pairs had parallel or insufficient associated planes or a superseded result. One recorded low-motion pair yielded 99 ms, below the 500 ms verification window."},
-      "runtime": {"control_single_core_percent": 16.03, "imu_single_core_percent": 2.23, "mean_scan_to_tick_ms": 1.391, "imu_samples": 4284, "imu_checksum_errors": 0}, "retrieved_files_verified": 89, "post_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "time_local": "2026-11-03 22:57 Asia/Taipei",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y43",
+      "finish_stop_event": true,
+      "terminal_reason": "coast_standstill_unconfirmed",
+      "whole_car_in_finish_zone_estimated": true,
+      "standstill_confirmed": false,
+      "sampled_timing_s": {
+        "start_to_finish_event": 34.946,
+        "red_wait": 10.288,
+        "less_red_before_penalties": 24.658,
+        "crosswalk_go_to_first_pass": 5.492,
+        "first_pass_to_second_pass": 3.796,
+        "second_pass_to_light_stop": 3.991,
+        "light_go_to_finish_event": 4.589
+      },
+      "light": {
+        "gantry_3p20_to_1p10_s": 1.902,
+        "interval_y42_first_repeat_s": [
+          1.852,
+          2.375
+        ],
+        "first_saved_coast_seq": 190,
+        "first_saved_coast_gap_m": 2.264,
+        "early_resume_observed": false,
+        "legacy_topup_seq": 199,
+        "at_topup_speed_mps": 0.773,
+        "rear_entry_topup_seq": 204,
+        "estimated_stop_gap_m": 0.539,
+        "green_release_frames": [
+          104,
+          105
+        ]
+      },
+      "cones": {
+        "second_pass_seq": 177,
+        "tangent_seq": 166,
+        "tangent_speed_mps": 1.774,
+        "min_saved_second_target_to_body_m": 0.35
+      },
+      "crosswalk": {
+        "waited_s": 3.002,
+        "range_m": 0.429,
+        "release_seq": 84,
+        "front_sparse_seq": 88,
+        "cleared_on_saved_scan": 89,
+        "resume_request_seq": 93,
+        "pause_to_resume_request_s": 0.509,
+        "open_unknown_left_angles_deg": [
+          -27,
+          -26,
+          -22,
+          -21,
+          -20,
+          -19,
+          -18,
+          -17,
+          -16,
+          -15
+        ]
+      },
+      "finish": {
+        "release_seq": 320,
+        "finish_stop_seq": 366,
+        "estimated_nose_gap_m": 0.243,
+        "brake_pwm": 1300,
+        "brake_command_s": 0.109,
+        "rolling_1550_ack_after_brake_seq": [
+          355,
+          356
+        ],
+        "creep_counter": 0,
+        "neutral_ack": true,
+        "standstill_detail": "During post-stop verification, most saved pairs had parallel or insufficient associated planes or a superseded result. One recorded low-motion pair yielded 99 ms, below the 500 ms verification window."
+      },
+      "runtime": {
+        "control_single_core_percent": 16.03,
+        "imu_single_core_percent": 2.23,
+        "mean_scan_to_tick_ms": 1.391,
+        "imu_samples": 4284,
+        "imu_checksum_errors": 0
+      },
+      "retrieved_files_verified": 89,
+      "post_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     }
   },
   "y44_crosswalk_release_finish_drive_20261103": {
-    "date": "2026-11-03", "author": "Codex", "engine_round": 151,
-    "source_baseline": "5e29211, vehicle y43 / engine 150", "deployed": true, "physical_trial_executed": true,
-    "build": {"source_commit": "ac7bc24c12bb99623f74299cc858daaff9a44bf6", "base": "claude-turn150", "engine": "claude-turn151", "vision": "y44", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2750680, "engine_sha256": "18b161b48533ff65e9171bc4708f984d0b6a9d792b455f178b628cfe835e16e0", "combined_archive": "XT-STCAR-y44-ac7bc24.tar.gz", "combined_archive_bytes": 10912914},
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 10, "clippy_warnings": 32},
+    "date": "2026-11-03",
+    "author": "Codex",
+    "engine_round": 151,
+    "source_baseline": "5e29211, vehicle y43 / engine 150",
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "source_commit": "ac7bc24c12bb99623f74299cc858daaff9a44bf6",
+      "base": "claude-turn150",
+      "engine": "claude-turn151",
+      "vision": "y44",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2750680,
+      "engine_sha256": "18b161b48533ff65e9171bc4708f984d0b6a9d792b455f178b628cfe835e16e0",
+      "combined_archive": "XT-STCAR-y44-ac7bc24.tar.gz",
+      "combined_archive_bytes": 10912914
+    },
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 10,
+      "clippy_warnings": 32
+    },
     "request": "Reduce interruptions on the crosswalk restart and restore one continuous forward run into a committed brake after green. Commit now; vehicle testing is deferred to tomorrow by the operator.",
     "changes": {
       "crosswalk_restart": "In a straight crosswalk exit, a bounded one-sided missing scan can use two measured flanking returns beyond the current axial stopping horizon. Both lane-wall fits and a clear forward corridor are required; a known preceding close return within the corridor vetoes it. Existing central, opposite-side, repeated and stale scan handling remains in the supervisor. Once the actual first tangent is seen and the previous 1600 tail is out, a 1550 rolling hold may resume if its projected tail fits before the bend.",
@@ -26949,31 +27636,146 @@
     },
     "fixed_input": {
       "evidence": "work/y44-exits-PXRrDeAp",
-      "crosswalk": {"y43_dropout_seq": 88, "original_plan_seq": 87, "available_previous_raw_seq": 86, "axial_horizon_m": 3.489, "approved_with_last_saved_raw": true, "rejected_with_close_previous_obstacle": true, "rejected_with_insufficient_current_shoulders": true, "y43_measured_tangent_hold_seq_old_new": [107, 102], "y42_measured_tangent_hold_seq_old_new": [99, 94], "note": "Scan 87's raw ranges were not saved. The real front stopping distance is from its controller output; #86 supplies the preceding raw points for the offline close-obstacle veto. Straight measurements replay the captured states, not a new vehicle trajectory."},
-      "finish": {"method": "Replay the normal Rust finish controller on saved ranges, measured range slopes, IMU speed and fitted drag. Carry each variant's own throttle and brake state. Sparse snapshots do not determine the vehicle's closed-loop trajectory.", "y43_actual_brake_s": 0.109, "y43_new_pwm": [1600, 1560, 1500, 1300, 1500], "y43_new_edges_seq": [320, 324, 335, 342, 347], "y43_new_brake_s_on_saved_inputs": 0.499, "y39_new_pwm": [1600, 1500, 1300, 1500], "y39_new_edges_seq": [305, 310, 324, 340]}
+      "crosswalk": {
+        "y43_dropout_seq": 88,
+        "original_plan_seq": 87,
+        "available_previous_raw_seq": 86,
+        "axial_horizon_m": 3.489,
+        "approved_with_last_saved_raw": true,
+        "rejected_with_close_previous_obstacle": true,
+        "rejected_with_insufficient_current_shoulders": true,
+        "y43_measured_tangent_hold_seq_old_new": [
+          107,
+          102
+        ],
+        "y42_measured_tangent_hold_seq_old_new": [
+          99,
+          94
+        ],
+        "note": "Scan 87's raw ranges were not saved. The real front stopping distance is from its controller output; #86 supplies the preceding raw points for the offline close-obstacle veto. Straight measurements replay the captured states, not a new vehicle trajectory."
+      },
+      "finish": {
+        "method": "Replay the normal Rust finish controller on saved ranges, measured range slopes, IMU speed and fitted drag. Carry each variant's own throttle and brake state. Sparse snapshots do not determine the vehicle's closed-loop trajectory.",
+        "y43_actual_brake_s": 0.109,
+        "y43_new_pwm": [
+          1600,
+          1560,
+          1500,
+          1300,
+          1500
+        ],
+        "y43_new_edges_seq": [
+          320,
+          324,
+          335,
+          342,
+          347
+        ],
+        "y43_new_brake_s_on_saved_inputs": 0.499,
+        "y39_new_pwm": [
+          1600,
+          1500,
+          1300,
+          1500
+        ],
+        "y39_new_edges_seq": [
+          305,
+          310,
+          324,
+          340
+        ]
+      }
     },
     "car_run_y44": {
-      "time_local": "2026-11-04 12:07 Asia/Taipei", "engine_round": 151, "source_commit": "ac7bc24c12bb99623f74299cc858daaff9a44bf6",
+      "time_local": "2026-11-04 12:07 Asia/Taipei",
+      "engine_round": 151,
+      "source_commit": "ac7bc24c12bb99623f74299cc858daaff9a44bf6",
       "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261103-y44",
       "date_note": "The packaged helper's evidence path contains its build date 20261103. The trial and Mac preflight are dated 20261104.",
-      "completed": false, "effective_lap_s": null, "terminal_reason": "probe_obstacle_close_body",
+      "completed": false,
+      "effective_lap_s": null,
+      "terminal_reason": "probe_obstacle_close_body",
       "operator_observation": "After rounding cone 2 the car hit the barrier on the transition into the light lane.",
-      "events_seq": {"crosswalk_stop": 57, "crosswalk_go": 88, "start_lane_pause": 92, "resume_request": 97, "first_pass": 136, "second_handover": 147, "first_saved_second_tangent": 163, "second_pass": 179, "body_proximity_stop": 180},
+      "events_seq": {
+        "crosswalk_stop": 57,
+        "crosswalk_go": 88,
+        "start_lane_pause": 92,
+        "resume_request": 97,
+        "first_pass": 136,
+        "second_handover": 147,
+        "first_saved_second_tangent": 163,
+        "second_pass": 179,
+        "body_proximity_stop": 180
+      },
       "second_exit": {
-        "first_to_second_pass_s": 4.293, "tangent_axial_speed_mps": 1.707,
-        "handoff_t_s": 17.922189368, "handoff_basis": "adopted_arc_reaches_light_lane", "handoff_command": "open_second_pass_keep_command",
-        "motor_ack": 1550, "servo_ack": 1340, "heading_deg": 87.07, "tracked_support_forward_left_m": [-1.413,-1.389],
-        "minimum_known_body_gap_m_at_handoff": 0.199893, "handoff_nearest_bin": 345,
-        "stop_t_s": 18.021453495, "after_handoff_s": 0.099264, "nearest_bin_clockwise_deg": 325, "laser_range_m": 0.286,
-        "nearest_point_forward_left_m": [0.234277,0.164043], "distance_to_nominal_body_m": 0.041869, "gate_m": 0.08,
+        "first_to_second_pass_s": 4.293,
+        "tangent_axial_speed_mps": 1.707,
+        "handoff_t_s": 17.922189368,
+        "handoff_basis": "adopted_arc_reaches_light_lane",
+        "handoff_command": "open_second_pass_keep_command",
+        "motor_ack": 1550,
+        "servo_ack": 1340,
+        "heading_deg": 87.07,
+        "tracked_support_forward_left_m": [
+          -1.413,
+          -1.389
+        ],
+        "minimum_known_body_gap_m_at_handoff": 0.199893,
+        "handoff_nearest_bin": 345,
+        "stop_t_s": 18.021453495,
+        "after_handoff_s": 0.099264,
+        "nearest_bin_clockwise_deg": 325,
+        "laser_range_m": 0.286,
+        "nearest_point_forward_left_m": [
+          0.234277,
+          0.164043
+        ],
+        "distance_to_nominal_body_m": 0.041869,
+        "gate_m": 0.08,
         "camera_after_stop": "vision/frames/frame-000061.jpg",
         "distances_note": "Each minimum is over its own scan. Neither is a tracked point velocity or the instant of physical contact."
       },
-      "successful_reference": {"run": "left-cone-trial-20261103-y42-2", "second_pass_seq": 179, "handoff_basis": "light_lane_pursuit_needs_less_right", "heading_deg": 86.88, "motor_ack": 1550, "servo_ack": 1338, "tracked_support_forward_left_m": [-0.110,-1.262], "minimum_known_body_gap_m_at_handoff": 0.614594},
-      "crosswalk": {"stop_gap_m": 0.358, "waited_s": 3.099, "quality_counts": {"front_sparse": 6}, "open_unknown_at_92_deg": [-24,-23,-22,-21,-20,-19], "quality_pause_to_resume_request_s": 0.506, "recorded_early_rolling_hold_seq": 102},
+      "successful_reference": {
+        "run": "left-cone-trial-20261103-y42-2",
+        "second_pass_seq": 179,
+        "handoff_basis": "light_lane_pursuit_needs_less_right",
+        "heading_deg": 86.88,
+        "motor_ack": 1550,
+        "servo_ack": 1338,
+        "tracked_support_forward_left_m": [
+          -0.11,
+          -1.262
+        ],
+        "minimum_known_body_gap_m_at_handoff": 0.614594
+      },
+      "crosswalk": {
+        "stop_gap_m": 0.358,
+        "waited_s": 3.099,
+        "quality_counts": {
+          "front_sparse": 6
+        },
+        "open_unknown_at_92_deg": [
+          -24,
+          -23,
+          -22,
+          -21,
+          -20,
+          -19
+        ],
+        "quality_pause_to_resume_request_s": 0.506,
+        "recorded_early_rolling_hold_seq": 102
+      },
       "lamp_and_finish": "No light_stop, light_go or finish_stop event. The new post-green brake was not physically exercised.",
-      "evidence_files_sha256_ok": 41, "imu_samples": 1927, "imu_checksum_errors": 0,
-      "post_run": {"console_healthy": true, "neutral_samples": 6, "armed": false, "motor": 1500, "servo": 1500},
+      "evidence_files_sha256_ok": 41,
+      "imu_samples": 1927,
+      "imu_checksum_errors": 0,
+      "post_run": {
+        "console_healthy": true,
+        "neutral_samples": 6,
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
       "handoff": "Unresolved collision. Operator handed further diagnosis and repair to Claude. Compare the cone-2 sweep, steering response and outgoing lane geometry on this run against y42 run 2, then reassess the transition into light_entry."
     }
   },
@@ -27765,80 +28567,206 @@
     }
   },
   "y55_crosswalk_imu_response_20261105": {
-    "date": "2026-11-05", "author": "Codex", "engine_round": 162,
-    "baseline": "1a869b7, following Claude's y54 / engine 161", "implemented": true, "deployed": false, "physical_trial_executed": false,
-    "build": {"source_commit": "f4f319a1de904a6cd3e4d6f307fdccaf30ab1d91", "base": "claude-turn161", "engine": "claude-turn162", "vision": "y55", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2756624, "engine_sha256": "bdfedede9949828fa1007c08c65d9ca53507c6defb618a9e94fd72d0baf510af", "combined_archive": "XT-STCAR-y55-f4f319a.tar.gz", "combined_archive_bytes": 10927868},
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32},
+    "date": "2026-11-05",
+    "author": "Codex",
+    "engine_round": 162,
+    "baseline": "1a869b7, following Claude's y54 / engine 161",
+    "implemented": true,
+    "deployed": false,
+    "physical_trial_executed": false,
+    "build": {
+      "source_commit": "f4f319a1de904a6cd3e4d6f307fdccaf30ab1d91",
+      "base": "claude-turn161",
+      "engine": "claude-turn162",
+      "vision": "y55",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2756624,
+      "engine_sha256": "bdfedede9949828fa1007c08c65d9ca53507c6defb618a9e94fd72d0baf510af",
+      "combined_archive": "XT-STCAR-y55-f4f319a.tar.gz",
+      "combined_archive_bytes": 10927868
+    },
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32
+    },
     "request": "Continue from Claude's shared handoff. Start with the crosswalk approach cut-speed correction.",
     "finding": "At y54 scan 27, raw lidar speed was 0.641 m/s and current IMU speed was 0.949 m/s. Adding the older 0.431 m/s launch-lag compensation to the IMU made the cut speed 1.380 m/s. The IMU peaked at about 0.964 m/s after that cut, and the recorded final gap was 0.755 m.",
     "change": "For the race crosswalk search/approach, add only the remaining part of a 0.10 s ESC response to current IMU speed, using the recorded last forward command and acceleration for that PWM. A recent 1600 command has its own short tail after a step-down. The existing lidar estimate and fallback remain the other candidate in the maximum. Log imu_pending_rise_mps in crosswalk feedback.",
-    "snapshot_arithmetic": {"source": "left-cone-trial-20261104-y54, scan 27", "old_imu_pending_rise_mps": 0.431052297, "new_imu_pending_rise_mps": 0.081052297, "old_cut_speed_mps": 1.380353644, "new_cut_speed_mps": 1.072004372, "new_aimed_stop_gap_m_for_the_same_snapshot": 0.810428120, "note": "The retained lidar path sets the new maximum here. This is arithmetic on a recorded snapshot, not a replay or a measured new stop."},
+    "snapshot_arithmetic": {
+      "source": "left-cone-trial-20261104-y54, scan 27",
+      "old_imu_pending_rise_mps": 0.431052297,
+      "new_imu_pending_rise_mps": 0.081052297,
+      "old_cut_speed_mps": 1.380353644,
+      "new_cut_speed_mps": 1.072004372,
+      "new_aimed_stop_gap_m_for_the_same_snapshot": 0.81042812,
+      "note": "The retained lidar path sets the new maximum here. This is arithmetic on a recorded snapshot, not a replay or a measured new stop."
+    },
     "evidence_directory": "work/y55-crosswalk-ElHGWF2H",
     "next": "Measure the crosswalk stop gap, any rolling topups, launch-to-crosswalk time and first-cone entry from the changed stopping position. Compare segments against y53 21.776 s. Vehicle remains on y54 until a fresh placement and lamp-reset confirmation."
   },
   "y56_one_meter_beam_surface_sim_20261105": {
-    "date": "2026-11-05", "author": "Codex", "engine_round": 163,
+    "date": "2026-11-05",
+    "author": "Codex",
+    "engine_round": 163,
     "baseline": "f3a1bc1, y55 candidate; installed vehicle is y54 / engine 161",
-    "deployed": false, "physical_trial_executed": false,
-    "build": {"source_commit": "c762dec19c48718871637656163a0c714f085e46", "base": "claude-turn161", "engine": "claude-turn163", "vision": "y56", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2756640, "engine_sha256": "a8b381a74e804e80eabc026a6e52e13d71129c3d5bbcb329191645cbd29f2ed1", "combined_archive": "XT-STCAR-y56-c762dec.tar.gz", "combined_archive_bytes": 10927204},
+    "deployed": false,
+    "physical_trial_executed": false,
+    "build": {
+      "source_commit": "c762dec19c48718871637656163a0c714f085e46",
+      "base": "claude-turn161",
+      "engine": "claude-turn163",
+      "vision": "y56",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2756640,
+      "engine_sha256": "a8b381a74e804e80eabc026a6e52e13d71129c3d5bbcb329191645cbd29f2ed1",
+      "combined_archive": "XT-STCAR-y56-c762dec.tar.gz",
+      "combined_archive_bytes": 10927204
+    },
     "user_correction": "The optical beam is 1.00 m before the gantry. Prior 1.10 m instruction was a misreading.",
     "user_scope": "Today offline only; explicitly authorized simulation including increased ground resistance, with lower acceleration and speed at the same PWM. This authorizes simulation for this task despite the older no-simulation default.",
     "controller_change": "LIGHT_SENSOR_TO_GANTRY_M corrected to 1.00 m. Updated the corresponding existing station-pair fixture. Includes y55 crosswalk IMU compensation.",
     "simulation": {
-      "tool": "tools/scan-geometry/examples/surface_sim/main.rs", "model": "config/surface-sim-20261105.json",
-      "report": "docs/surface-simulation-20261105.md", "results": "docs/surface-simulation-20261105.json",
-      "evidence": "work/y56-surface-puFuE2E0", "cases": 40, "scenario_pairs": 20, "seeds": [1],
+      "tool": "tools/scan-geometry/examples/surface_sim/main.rs",
+      "model": "config/surface-sim-20261105.json",
+      "report": "docs/surface-simulation-20261105.md",
+      "results": "docs/surface-simulation-20261105.json",
+      "evidence": "work/y56-surface-puFuE2E0",
+      "cases": 40,
+      "scenario_pairs": 20,
+      "seeds": [
+        1
+      ],
       "baseline_controller": "1a869b7 exact y54 sources",
       "fixed_pwm_response_cases": 40,
-      "calibration": {"training_run": "y53", "validation_run": "y54", "prior_validation_speed_rmse_mps": 0.281892, "fitted_validation_speed_rmse_mps": 0.142787},
-      "nominal_candidate": {"modeled_task_pass": true, "simulated_effective_s": 21.18, "crosswalk_true_gap_m": 0.151, "light_true_gap_m": 0.494, "finish_true_gap_m": 0.273},
-      "resistance_1p5_candidate": {"modeled_task_pass": true, "simulated_effective_s": 24.98, "crosswalk_true_gap_m": 0.646},
+      "calibration": {
+        "training_run": "y53",
+        "validation_run": "y54",
+        "prior_validation_speed_rmse_mps": 0.281892,
+        "fitted_validation_speed_rmse_mps": 0.142787
+      },
+      "nominal_candidate": {
+        "modeled_task_pass": true,
+        "simulated_effective_s": 21.18,
+        "crosswalk_true_gap_m": 0.151,
+        "light_true_gap_m": 0.494,
+        "finish_true_gap_m": 0.273
+      },
+      "resistance_1p5_candidate": {
+        "modeled_task_pass": true,
+        "simulated_effective_s": 24.98,
+        "crosswalk_true_gap_m": 0.646
+      },
       "failures": "Resistance x2 caused timeouts. Short 5x4 layout failed for both controllers; candidate had two physical contacts in that layout. Some wide/shifted layouts failed light or finish-zone requirements.",
       "limits": "No measured tire friction coefficient or lateral identification. Some PWM plateaus are extrapolated. Terminal displacement residual up to 0.33 m. Ideal semantic camera. This is not physical lap-time evidence or proof of cross-track reliability."
     },
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_examples_build": true}
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32,
+      "host_simulation_examples_build": true
+    }
   },
   "y57_surface_response_compensation_20261105": {
-    "date": "2026-11-05", "author": "Codex", "engine_round": 164,
+    "date": "2026-11-05",
+    "author": "Codex",
+    "engine_round": 164,
     "baseline": "5bb1eb3, y56 candidate; installed vehicle is y54 / engine 161",
-    "deployed": true, "physical_trial_executed": true,
+    "deployed": true,
+    "physical_trial_executed": true,
     "request": "Learn effective load from the first crosswalk approach and continue learning after release; use it to change later PWM smoothly. Today offline only.",
-    "build": {"status": "complete", "source_commit": "7b2c0dc384ac8c496313a21a4b8ace46d4276185", "base": "claude-turn161", "engine": "claude-turn164", "vision": "y57", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2769872, "engine_sha256": "d4f00ce9f3599397898ec3df64f6804e11209ffd38b715349d40eeeb66136c9d", "combined_archive": "XT-STCAR-y57-7b2c0dc.tar.gz", "combined_archive_bytes": 10933367},
+    "build": {
+      "status": "complete",
+      "source_commit": "7b2c0dc384ac8c496313a21a4b8ace46d4276185",
+      "base": "claude-turn161",
+      "engine": "claude-turn164",
+      "vision": "y57",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2769872,
+      "engine_sha256": "d4f00ce9f3599397898ec3df64f6804e11209ffd38b715349d40eeeb66136c9d",
+      "combined_archive": "XT-STCAR-y57-7b2c0dc.tar.gz",
+      "combined_archive_bytes": 10933367
+    },
     "implementation": {
-      "module": "route-engine/src/race_surface.rs", "language": "Rust",
+      "module": "route-engine/src/race_surface.rs",
+      "language": "Rust",
       "estimate": "Additional longitudinal load in m/s2; combines surface, battery and drivetrain response, not pure tire friction.",
       "observations": "New laser sequence, actual motor ACK, whole IMU integration interval after the ESC response. Powered residual or fresh coast fit, with neutral IMU slope fallback. Body-axis IMU velocity from crosswalk rest after release.",
-      "filter_s": 1.0, "compensation_step_pwm": 5, "maximum_compensation_rate_pwm_per_s": 20,
+      "filter_s": 1.0,
+      "compensation_step_pwm": 5,
+      "maximum_compensation_rate_pwm_per_s": 20,
       "scope": "Existing 1550..1590 holds from crosswalk release through second cone. First approach and transfer coast budgets include compensation propulsion. Original 1600, neutral, brake, light and finish control retained.",
       "runtime": "Fixed-size state and at most nine candidate hold levels; no additional thread. Vehicle CPU not measured."
     },
     "simulation": {
-      "report": "docs/surface-adaptation-20261105.md", "results": "docs/surface-adaptation-20261105.json",
-      "evidence": "work/y57-surface-adapt-qVP3cmba/final-v4", "scenario_pairs": 6, "runs": 12, "seeds": [1],
+      "report": "docs/surface-adaptation-20261105.md",
+      "results": "docs/surface-adaptation-20261105.json",
+      "evidence": "work/y57-surface-adapt-qVP3cmba/final-v4",
+      "scenario_pairs": 6,
+      "runs": 12,
+      "seeds": [
+        1
+      ],
       "ablation": "Same controller and physical plant; offline only option resets SurfaceResponse every tick to disable learned compensation.",
-      "nominal_seconds_without_with": [21.18, 20.88], "resistance_1p25_seconds_without_with": [23.68, 22.68],
+      "nominal_seconds_without_with": [
+        21.18,
+        20.88
+      ],
+      "resistance_1p25_seconds_without_with": [
+        23.68,
+        22.68
+      ],
       "dynamic_load_up": "At t=8 s resistance changes 1 to 1.5. Learned extra load rises from 0.010 to 0.203 m/s2; compensation reaches 15 PWM. Modeled task passes, 24.28 s.",
       "dynamic_load_down": "At t=8 s resistance changes 1.5 to 1. Learned load falls from 0.241 to 0.098 m/s2; last compensation is 5 PWM. Model fails the light stop requirement.",
       "failures": "Constant x1.5: cones completed 0.8 s earlier but finish rear remains 0.046 m outside zone; modeled terminal-event time 26.38 s is worse than baseline 24.98 s and is not a valid lap. Constant x2: timeout at light entry. High-to-low change: no light stop. No physical contacts among these twelve runs.",
       "limits": "Ideal semantic camera and IMU; some response plateaus extrapolated, previous terminal displacement model residual up to 0.33 m. Simulation alone did not validate outdoor or physical performance. Later indoor evidence is recorded below."
     },
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_examples_build": true},
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32,
+      "host_simulation_examples_build": true
+    },
     "car_run_y57": {
-      "date": "2026-11-05", "source_commit": "7b2c0dc384ac8c496313a21a4b8ace46d4276185", "engine_round": 164,
+      "date": "2026-11-05",
+      "source_commit": "7b2c0dc384ac8c496313a21a4b8ace46d4276185",
+      "engine_round": 164,
       "operator_confirmation": "User asked to test indoors and said car was placed and connected.",
       "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y57",
-      "files_retrieved": 83, "file_checks_passed": 83, "reason": "route_finish_zone_stop",
+      "files_retrieved": 83,
+      "file_checks_passed": 83,
+      "reason": "route_finish_zone_stop",
       "timing_basis": "Historical saved-feedback scan clock: first non-neutral ACK through first saved finish event, excluding saved light-stop to light-go interval.",
-      "total_s": 31.67748781, "red_wait_s": 10.295110785999999, "effective_s": 21.382377024,
-      "comparison_y53_same_basis_s": 21.775505753999997, "comparison_y54_same_basis_s": 21.886594808,
+      "total_s": 31.67748781,
+      "red_wait_s": 10.295110785999999,
+      "effective_s": 21.382377024,
+      "comparison_y53_same_basis_s": 21.775505753999997,
+      "comparison_y54_same_basis_s": 21.886594808,
       "precise_route_event_net_s": 21.381788888,
-      "crosswalk_stop_gap_m": 0.2845596671129216, "crosswalk_wait_s": 3.000702902,
-      "light_stop_gap_m": 0.556523511608497, "light_rear_to_gantry_m": 0.95624876463781,
-      "light_release_basis": "green_in_fresh_frames_after_the_stop", "finish_gap_m": 0.19545729576281118,
-      "finish_whole_car_in_zone": true, "finish_creeps": 0, "quality_counts": {},
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
-      "cpu_main_core_percent": 15.954418910596974, "mean_scan_to_tick_ms": 1.4508261976048726,
-      "imu_samples": 3594, "imu_checksum_errors": 0,
+      "crosswalk_stop_gap_m": 0.2845596671129216,
+      "crosswalk_wait_s": 3.000702902,
+      "light_stop_gap_m": 0.556523511608497,
+      "light_rear_to_gantry_m": 0.95624876463781,
+      "light_release_basis": "green_in_fresh_frames_after_the_stop",
+      "finish_gap_m": 0.19545729576281118,
+      "finish_whole_car_in_zone": true,
+      "finish_creeps": 0,
+      "quality_counts": {},
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "cpu_main_core_percent": 15.954418910596974,
+      "mean_scan_to_tick_ms": 1.4508261976048726,
+      "imu_samples": 3594,
+      "imu_checksum_errors": 0,
       "operator_observation": "While approaching cone two the car briefly steered left, almost returning to the starting channel.",
       "steering_findings": [
         "First-pass scan 120 kept left 1710. Scan 121 requested neutral; ACK was still 1550 at scans 123/125. Heading reached about 220.8 degrees versus about 210.5 in y54 and 204.9 in y53.",
@@ -27847,9 +28775,12 @@
         "The cone-two plan chosen at 131 was retained through 141; it changed at 142. Target identity did not rebind. The left correction preceded that replan."
       ],
       "surface_findings": {
-        "saved_snapshots": 209, "maximum_saved_compensation_pwm": 0,
-        "maximum_extra_load_mps2": 0.02736, "initial_wait_load_mps2": 0.0212,
-        "learning_updates": 25, "last_learning_scan": 104,
+        "saved_snapshots": 209,
+        "maximum_saved_compensation_pwm": 0,
+        "maximum_extra_load_mps2": 0.02736,
+        "initial_wait_load_mps2": 0.0212,
+        "learning_updates": 25,
+        "last_learning_scan": 104,
         "failure": "After the first bend, velocity integrated since crosswalk rest was far below the radar speed, preventing further load learning. Scan 121 IMU reconstruction 0.054 versus rear-axis lidar 1.250 m/s; scan 141 0.149 versus 1.864 m/s.",
         "implication": "This run did not demonstrate positive PWM compensation or its slew behavior. The faster lap must not be attributed to adaptive load compensation."
       },
@@ -27857,12 +28788,33 @@
     }
   },
   "y58_transfer_steer_surface_speed_20261105": {
-    "date": "2026-11-05", "author": "Codex", "engine_round": 165,
+    "date": "2026-11-05",
+    "author": "Codex",
+    "engine_round": 165,
     "baseline": "024b930; actual vehicle y57 / engine 164 from 7b2c0dc",
     "user_instruction": "After each confirmed problem analysis, continue fixing autonomously; do not wait for another request to change it. A new vehicle placement confirmation is still required for each drive.",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"status": "complete", "source_commit": "04b37384fc5934215241c9e51468b4e58fe63f9d", "base": "claude-turn164", "engine": "claude-turn165", "vision": "y58", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2781656, "engine_sha256": "0cf44d2c8c3c913cbe7ab1e5c581a33fefabbd2645d1ebb5912131c760d740eb", "combined_archive": "XT-STCAR-y58-04b3738.tar.gz", "combined_archive_bytes": 10946216},
-    "deployment": {"status": "complete", "engine": "claude-turn165", "vision": "y58", "evidence": "work/y58-transfer-83qFLx3K/deploy-engine.log", "next_drive": "awaiting new operator placement and light-reset confirmation"},
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "status": "complete",
+      "source_commit": "04b37384fc5934215241c9e51468b4e58fe63f9d",
+      "base": "claude-turn164",
+      "engine": "claude-turn165",
+      "vision": "y58",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2781656,
+      "engine_sha256": "0cf44d2c8c3c913cbe7ab1e5c581a33fefabbd2645d1ebb5912131c760d740eb",
+      "combined_archive": "XT-STCAR-y58-04b3738.tar.gz",
+      "combined_archive_bytes": 10946216
+    },
+    "deployment": {
+      "status": "complete",
+      "engine": "claude-turn165",
+      "vision": "y58",
+      "evidence": "work/y58-transfer-83qFLx3K/deploy-engine.log",
+      "next_drive": "awaiting new operator placement and light-reset confirmation"
+    },
     "changes": [
       "At first-pass handover, begin existing transfer steering immediately without repeating observations or updating the transfer drive phase/motor.",
       "Only race cone-two approach_line uses current calibrated IMU yaw for its response pose and the mean of current/predicted pursuit curvatures. The shared overshoot_guard and light-entry response remain unchanged.",
@@ -27870,55 +28822,165 @@
       "The new velocity serves surface learning, compensation and its propulsion budget. Existing first-approach and transfer base speed decisions, curve plans and speed targets are retained."
     ],
     "evidence": {
-      "directory": "work/y58-transfer-83qFLx3K", "report": "docs/y58-transfer-steering-speed-20261105.md",
-      "steering_snapshots": "approach-snapshots.jsonl", "speed_snapshots": "surface-snapshots.json",
-      "old_new_targets": [[131,1340,1365],[133,1352,1417],[134,1529,1466],[136,1605,1516],[137,1506,1517]],
-      "speed_seq141_old_new_mps": [0.1492,1.8919], "speed_seq145_old_new_mps": [0.1196,1.9633],
-      "learning_after_104": {"old_sparse_inputs": 0, "new_saved_window_endpoints": 1, "new_approximate_window": 3},
+      "directory": "work/y58-transfer-83qFLx3K",
+      "report": "docs/y58-transfer-steering-speed-20261105.md",
+      "steering_snapshots": "approach-snapshots.jsonl",
+      "speed_snapshots": "surface-snapshots.json",
+      "old_new_targets": [
+        [
+          131,
+          1340,
+          1365
+        ],
+        [
+          133,
+          1352,
+          1417
+        ],
+        [
+          134,
+          1529,
+          1466
+        ],
+        [
+          136,
+          1605,
+          1516
+        ],
+        [
+          137,
+          1506,
+          1517
+        ]
+      ],
+      "speed_seq141_old_new_mps": [
+        0.1492,
+        1.8919
+      ],
+      "speed_seq145_old_new_mps": [
+        0.1196,
+        1.9633
+      ],
+      "learning_after_104": {
+        "old_sparse_inputs": 0,
+        "new_saved_window_endpoints": 1,
+        "new_approximate_window": 3
+      },
       "limits": "Fixed saved inputs, not a new closed-loop trajectory. Feedback about 6 Hz versus lidar 10 Hz; missing scans and ACKs not fabricated. Five-scan representative time and IMU consumer timestamps are approximate. Steering arithmetic has about 1 PWM rounding uncertainty. seq137 still has a small left correction."
     },
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 9, "clippy_warnings": 32, "host_simulation_compile_only": true},
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 9,
+      "clippy_warnings": 32,
+      "host_simulation_compile_only": true
+    },
     "car_run_y58": {
-      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y58",
-      "files_retrieved": 54, "files_checked": 54, "reason": "route_finish_zone_stop", "elapsed_saved_feedback_s": 24.665034022,
-      "effective_s": null, "invalid_full_trial_reason": "Operator confirmed photoelectric sensor malfunction; red=0 and green=0, controller passed without red.",
-      "finish_gap_m": 0.38220101876191653, "finish_creeps": 0, "quality_counts": {},
+      "date": "2026-11-05",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y58",
+      "files_retrieved": 54,
+      "files_checked": 54,
+      "reason": "route_finish_zone_stop",
+      "elapsed_saved_feedback_s": 24.665034022,
+      "effective_s": null,
+      "invalid_full_trial_reason": "Operator confirmed photoelectric sensor malfunction; red=0 and green=0, controller passed without red.",
+      "finish_gap_m": 0.38220101876191653,
+      "finish_creeps": 0,
+      "quality_counts": {},
       "first_pass_to_second_pass_s": 3.495792474,
-      "second_approach_target_max_pwm": 1477, "second_approach_ack_max_pwm": 1471,
-      "first_exit_max_saved_heading_deg": 211.05, "first_exit_first_neutral_ack_s": 0.399,
-      "surface_learning_before_after_first_cone": [17,25], "saved_compensation_max_pwm": 0,
-      "surface_extra_load_peak_mps2": 0.08281, "imu_samples": 2828, "imu_checksum_errors": 0,
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "second_approach_target_max_pwm": 1477,
+      "second_approach_ack_max_pwm": 1471,
+      "first_exit_max_saved_heading_deg": 211.05,
+      "first_exit_first_neutral_ack_s": 0.399,
+      "surface_learning_before_after_first_cone": [
+        17,
+        25
+      ],
+      "saved_compensation_max_pwm": 0,
+      "surface_extra_load_peak_mps2": 0.08281,
+      "imu_samples": 2828,
+      "imu_checksum_errors": 0,
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     },
     "car_run_y58_2": {
-      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y58-2",
+      "date": "2026-11-05",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y58-2",
       "operator_confirmation": "Car, optical sensor and light reset ready; rerun the same y58.",
-      "files_retrieved": 54, "files_checked": 54, "reason": "route_finish_zone_stop",
+      "files_retrieved": 54,
+      "files_checked": 54,
+      "reason": "route_finish_zone_stop",
       "timing_basis": "Historical saved-feedback scan clock, first non-neutral ACK to finish, subtracting light-stop to light-go.",
-      "total_s": 30.653094981, "red_wait_s": 9.584441949999999, "effective_s": 21.068653031,
-      "start_rear_m": 0.54, "crosswalk_gap_m": 0.15602164482960879,
-      "light_gap_m": 0.06291837927288024, "light_target_gap_m": 0.55,
-      "red_detections": 4, "green_detections": 0, "release_basis": "red_seen_10_5s_no_fresh_red",
+      "total_s": 30.653094981,
+      "red_wait_s": 9.584441949999999,
+      "effective_s": 21.068653031,
+      "start_rear_m": 0.54,
+      "crosswalk_gap_m": 0.15602164482960879,
+      "light_gap_m": 0.06291837927288024,
+      "light_target_gap_m": 0.55,
+      "red_detections": 4,
+      "green_detections": 0,
+      "release_basis": "red_seen_10_5s_no_fresh_red",
       "operator_observation": "Stopped too close to gantry, so camera could no longer see the traffic lights.",
       "visual_evidence": "frame-000061.jpg has red light clipped at the top edge; frame-000071.jpg cannot see the light housing.",
-      "finish_gap_m": 0.2713531404041588, "finish_creeps": 0, "quality_counts": {},
-      "first_pass_to_second_pass_s": 3.494060833, "second_approach_target_max_pwm": 1500,
+      "finish_gap_m": 0.2713531404041588,
+      "finish_creeps": 0,
+      "quality_counts": {},
+      "first_pass_to_second_pass_s": 3.494060833,
+      "second_approach_target_max_pwm": 1500,
       "second_approach_ack_note": "1510 ACK at scan131 was inherited from transfer; new target was neutral, then scan132 ACK1500 and subsequent right steering. No new large left reversal.",
-      "first_exit_max_saved_heading_deg": 204.55, "first_exit_first_neutral_ack_s": 0.601,
-      "surface_learning_before_after_first_cone": [22,28], "saved_compensation_max_pwm": 0,
-      "surface_extra_load_peak_mps2": 0.03069, "cpu_main_core_percent": 16.211228035674914,
-      "mean_scan_to_tick_ms": 1.506410271641802, "imu_samples": 3598, "imu_checksum_errors": 0,
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "first_exit_max_saved_heading_deg": 204.55,
+      "first_exit_first_neutral_ack_s": 0.601,
+      "surface_learning_before_after_first_cone": [
+        22,
+        28
+      ],
+      "saved_compensation_max_pwm": 0,
+      "surface_extra_load_peak_mps2": 0.03069,
+      "cpu_main_core_percent": 16.211228035674914,
+      "mean_scan_to_tick_ms": 1.506410271641802,
+      "imu_samples": 3598,
+      "imu_checksum_errors": 0,
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     }
   },
   "y59_light_projection_visibility_brake_20261105": {
-    "date": "2026-11-05", "author": "Codex", "engine_round": 166,
+    "date": "2026-11-05",
+    "author": "Codex",
+    "engine_round": 166,
     "baseline": "da39ae0; actual vehicle y58 / engine165 from04b3738",
     "user_authorization": "Fix the stop that put the traffic-light housing outside the camera view; user explicitly permits 1300 braking when loss of light visibility is anticipated.",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"status": "complete", "source_commit": "46c3f6604e014d4ee563b8c0a806e2b5a178b72d", "base": "claude-turn165", "engine": "claude-turn166", "vision": "y59", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2786752, "engine_sha256": "8b08eac33c156c55876bd541544e928c1fc6fad1c4e021fab027ed584bb08d27", "combined_archive": "XT-STCAR-y59-46c3f66.tar.gz", "combined_archive_bytes": 10951239},
-    "deployment": {"status": "complete", "engine": "claude-turn166", "vision": "y59", "evidence": "work/y59-light-uiLXKPGm/deploy-engine.log", "next_drive": "awaiting new operator placement and lamp/sensor reset confirmation"},
-    "report": "docs/y59-light-visibility-brake-20261105.md", "evidence_directory": "work/y59-light-uiLXKPGm",
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "status": "complete",
+      "source_commit": "46c3f6604e014d4ee563b8c0a806e2b5a178b72d",
+      "base": "claude-turn165",
+      "engine": "claude-turn166",
+      "vision": "y59",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2786752,
+      "engine_sha256": "8b08eac33c156c55876bd541544e928c1fc6fad1c4e021fab027ed584bb08d27",
+      "combined_archive": "XT-STCAR-y59-46c3f66.tar.gz",
+      "combined_archive_bytes": 10951239
+    },
+    "deployment": {
+      "status": "complete",
+      "engine": "claude-turn166",
+      "vision": "y59",
+      "evidence": "work/y59-light-uiLXKPGm/deploy-engine.log",
+      "next_drive": "awaiting new operator placement and lamp/sensor reset confirmation"
+    },
+    "report": "docs/y59-light-visibility-brake-20261105.md",
+    "evidence_directory": "work/y59-light-uiLXKPGm",
     "cause": "Lane-axis velocity rises as the car straightens. The previous correction only added forward IMU velocity change and omitted changing heading projection. At y58-2 seq163 the measured gantry closing interval was about1.664 m/s, but current speed reported1.099. Seq166 had no speed and held an older raw estimate. The first neutral was visible at168, already predicting an overrun.",
     "changes": [
       "Light-specific range intervals integrate heading projection and IMU increment, solve current body speed, and project to the current lane axis. Missing reference can briefly propagate a recent body anchor. Store current corrected speed instead of stale raw slope for fallback.",
@@ -27926,213 +28988,601 @@
       "A separate one-shot light brake starts1300 when coasting overruns the0.55m visibility stop and another scan would consume braking room; continuous until low speed, then1500. Uses the existing vehicle brake model0.95m/s2 and0.1s onset.",
       "Fresh red frames preserve an active brake. Interruptions clear the cached brake command and retire the one-shot. Light-entry output, ACK acceptance, centre proof and pending-neutral ACK paths support the authorized brake. Finish brake remains independent."
     ],
-    "fixed_input_evidence": {"old_seq163_current_mps": 1.09948, "midpoint_projection_only_mps": 1.41785, "sparse_new_seq163_current_mps": 1.57642, "sparse_new_seq164_current_mps": 1.59802, "limits": "Saved6Hz references and raw IMU, not full10Hz replay; missingseq165 means the real history reset cannot be reproduced exactly. Sparse seq168 gave2.118m/s and is not a validated physical speed. New stopping position requires actual trial."},
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true, "focused_regressions": "Only two new inline cases: continuous one-shot brake and no cached1300 reissue after pause."},
+    "fixed_input_evidence": {
+      "old_seq163_current_mps": 1.09948,
+      "midpoint_projection_only_mps": 1.41785,
+      "sparse_new_seq163_current_mps": 1.57642,
+      "sparse_new_seq164_current_mps": 1.59802,
+      "limits": "Saved6Hz references and raw IMU, not full10Hz replay; missingseq165 means the real history reset cannot be reproduced exactly. Sparse seq168 gave2.118m/s and is not a validated physical speed. New stopping position requires actual trial."
+    },
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 11,
+      "clippy_warnings": 32,
+      "host_simulation_compile_only": true,
+      "focused_regressions": "Only two new inline cases: continuous one-shot brake and no cached1300 reissue after pause."
+    },
     "car_run_y59": {
-      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y59",
+      "date": "2026-11-05",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y59",
       "operator_confirmation": "Car, optical sensor and lights ready; run y59.",
-      "files_retrieved": 92, "files_checked": 92, "reason": "route_finish_zone_stop",
+      "files_retrieved": 92,
+      "files_checked": 92,
+      "reason": "route_finish_zone_stop",
       "timing_basis": "Historical saved-feedback scan clock, first non-neutral ACK through finish, subtract light waiting.",
-      "total_s": 31.260349341999998, "red_wait_s": 10.384512523999998, "effective_s": 20.875836818,
-      "start_rear_m": 0.45, "crosswalk_stop_gap_m": 0.6872715947887014,
-      "light_stop_event_gap_m": 0.5987696348108121, "light_stop_event_rear_to_gantry_m": 1.0069957846081563,
-      "light_stop_event_current_speed_mps": 0.14803605958182656, "light_whole_body_at_event": false,
-      "light_release_basis": "red_seen_10_5s_no_fresh_red", "red_detections": 37, "green_detections": 7,
-      "green_scores_initial": [0.3556,0.3018], "green_image": "vision/frames/frame-000094.jpg",
-      "finish_gap_m": 0.17149018692870144, "finish_creeps": 0, "quality_counts": {},
-      "cpu_main_core_percent": 15.768264882783992, "mean_scan_to_tick_ms": 1.353019330246827,
+      "total_s": 31.260349341999998,
+      "red_wait_s": 10.384512523999998,
+      "effective_s": 20.875836818,
+      "start_rear_m": 0.45,
+      "crosswalk_stop_gap_m": 0.6872715947887014,
+      "light_stop_event_gap_m": 0.5987696348108121,
+      "light_stop_event_rear_to_gantry_m": 1.0069957846081563,
+      "light_stop_event_current_speed_mps": 0.14803605958182656,
+      "light_whole_body_at_event": false,
+      "light_release_basis": "red_seen_10_5s_no_fresh_red",
+      "red_detections": 37,
+      "green_detections": 7,
+      "green_scores_initial": [
+        0.3556,
+        0.3018
+      ],
+      "green_image": "vision/frames/frame-000094.jpg",
+      "finish_gap_m": 0.17149018692870144,
+      "finish_creeps": 0,
+      "quality_counts": {},
+      "cpu_main_core_percent": 15.768264882783992,
+      "mean_scan_to_tick_ms": 1.353019330246827,
       "operator_observation": "Crosswalk stop was too far away; repeated slow/forward movement before the light stop.",
       "light_sequence": "1550,1500,1550 rolling topup,1500,1550 rear-zone topup,1500,one continuous1300,1500 waiting. No red-frame brake interruption or adoption/quality failure.",
-      "finish_brake_duration_s": 1.597211603, "finish_brake_independent": true,
+      "finish_brake_duration_s": 1.597211603,
+      "finish_brake_independent": true,
       "crosswalk_cause": "Static IMU forward residual +0.15748m/s2 (y58-2 +0.00137). Rest-long velocity caused early1570-to1550 and early neutral; it also vetoed a rolling topup. World stripe plan differed by only0.018m from y58-2.",
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     }
   },
   "y60_crosswalk_anchor_light_continuous_brake_20261105": {
-    "date": "2026-11-05", "author": "Codex", "engine_round": 167,
+    "date": "2026-11-05",
+    "author": "Codex",
+    "engine_round": 167,
     "baseline": "ec2d1cd; actual vehicle y59 /166 from46c3f66",
     "request": "Automatically correct the reported far crosswalk stop and stop-go light approach after analyzing y59.",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"status": "complete", "source_commit": "69fcfa8cabf886e0a6bb79141035023a5e2ec2cb", "base": "claude-turn166", "engine": "claude-turn167", "vision": "y60", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2787176, "engine_sha256": "3b0830f6bcc6c28a2d68f359fcebbc13c20464990b0f331b5591193bf396a77a", "combined_archive": "XT-STCAR-y60-69fcfa8.tar.gz", "combined_archive_bytes": 10952433},
-    "deployment": {"status": "complete", "engine": "claude-turn167", "vision": "y60", "evidence": "work/y60-stops-0voEb3kO/deploy-engine.log", "next_drive": "awaiting new operator placement and lamp/sensor reset confirmation"},
-    "report": "docs/y60-crosswalk-light-flow-20261105.md", "evidence_directory": "work/y60-stops-0voEb3kO",
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "status": "complete",
+      "source_commit": "69fcfa8cabf886e0a6bb79141035023a5e2ec2cb",
+      "base": "claude-turn166",
+      "engine": "claude-turn167",
+      "vision": "y60",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2787176,
+      "engine_sha256": "3b0830f6bcc6c28a2d68f359fcebbc13c20464990b0f331b5591193bf396a77a",
+      "combined_archive": "XT-STCAR-y60-69fcfa8.tar.gz",
+      "combined_archive_bytes": 10952433
+    },
+    "deployment": {
+      "status": "complete",
+      "engine": "claude-turn167",
+      "vision": "y60",
+      "evidence": "work/y60-stops-0voEb3kO/deploy-engine.log",
+      "next_drive": "awaiting new operator placement and lamp/sensor reset confirmation"
+    },
+    "report": "docs/y60-crosswalk-light-flow-20261105.md",
+    "evidence_directory": "work/y60-stops-0voEb3kO",
     "changes": [
       "Crosswalk approach uses the already available recent radar/short-IMU body speed plus pending ESC response, instead of taking the maximum with the biased rest-long integral. Original radar fallback remains.",
       "Light approach holds1550 until next-scan motion plus neutral tail and active braking reaches0.55m. Remove normal rolling_topup and rolling_rear_into_zone states. Preserve unlit continuation only before the beam or after the existing red-due time, not just for a few millimetres of rear-zone difference.",
       "After observed red, two fresh non-red green frames may use detector publication threshold0.25. Keep0.5 without prior red and in the Python reference. Log the selected threshold."
     ],
-    "fixed_input_evidence": {"crosswalk_seq28_old_cut_mps": 1.27018, "recent_radar_body_mps": 1.07134, "limits": "Changed commands alter subsequent vehicle motion; no new closed-loop trajectory or stop distance has been measured."},
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true},
+    "fixed_input_evidence": {
+      "crosswalk_seq28_old_cut_mps": 1.27018,
+      "recent_radar_body_mps": 1.07134,
+      "limits": "Changed commands alter subsequent vehicle motion; no new closed-loop trajectory or stop distance has been measured."
+    },
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 11,
+      "clippy_warnings": 32,
+      "host_simulation_compile_only": true
+    },
     "car_run_y60": {
-      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y60",
+      "date": "2026-11-05",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y60",
       "prelaunch_attempt": "Initial check rejected a5.1cm return at right-front45deg; car stayed locked and did not start. Operator cleared it and explicitly confirmed retry.",
-      "files_retrieved": 87, "files_checked": 87, "reason": "route_finish_zone_stop",
-      "total_saved_feedback_s": 30.959233927000003, "light_wait_saved_feedback_s": 10.687356657000002,
-      "net_before_penalties_s": 20.27187727, "valid_record": false,
+      "files_retrieved": 87,
+      "files_checked": 87,
+      "reason": "route_finish_zone_stop",
+      "total_saved_feedback_s": 30.959233927000003,
+      "light_wait_saved_feedback_s": 10.687356657000002,
+      "net_before_penalties_s": 20.27187727,
+      "valid_record": false,
       "operator_observation": "Stopped before the whole car entered the1m traffic-light parking zone.",
-      "crosswalk_gap_m": 0.18003933682238182, "light_gap_m": 0.7528260024526667,
-      "light_rear_to_gantry_m": 1.1537024893171608, "light_whole_body_in_zone": false,
+      "crosswalk_gap_m": 0.18003933682238182,
+      "light_gap_m": 0.7528260024526667,
+      "light_rear_to_gantry_m": 1.1537024893171608,
+      "light_whole_body_in_zone": false,
       "light_brake": "One continuous1300; no topup or Through sequence. Brake preceded first red decision by about1.7s.",
-      "light_release_basis": "red_seen_10_5s_no_fresh_red", "red_detections": 37, "green_detections": 1,
+      "light_release_basis": "red_seen_10_5s_no_fresh_red",
+      "red_detections": 37,
+      "green_detections": 1,
       "green_note": "First green frame101 was captured after release; this was not vision-based green release.",
-      "finish_gap_m": 0.21742714552741182, "finish_creeps": 0, "finish_brake_duration_s": 1.597145959,
-      "quality_counts": {}, "cpu_main_core_percent": 16.2006216057212,
+      "finish_gap_m": 0.21742714552741182,
+      "finish_creeps": 0,
+      "finish_brake_duration_s": 1.597145959,
+      "quality_counts": {},
+      "cpu_main_core_percent": 16.2006216057212,
       "root_cause": "At scans162->163 actual gantry distance closed at1.434m/s, but prior/end-wall reference changed at2.808m/s. The contaminated speed window later reported1.724m/s and triggered early braking.",
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     }
   },
   "y61_light_gantry_speed_reference_20261105": {
-    "date": "2026-11-05", "author": "Codex", "engine_round": 168,
+    "date": "2026-11-05",
+    "author": "Codex",
+    "engine_round": 168,
     "baseline": "8cea1ee; actual vehicle y60 /167 from69fcfa8",
     "request": "Correct light-zone early stop; operator explicitly confirmed the car placed and requested direct deployment/test after the fix.",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"status": "complete", "source_commit": "42601177de35edefe6fbfce90fb98a8635535145", "base": "claude-turn167", "engine": "claude-turn168", "vision": "y61", "maximum_glibc": "2.34", "engine_bytes": 2789528, "engine_sha256": "83bf6c0842d9a125f9fa0b9df653f6f9b37441618472023278c89a37e756c612"},
-    "report": "docs/y61-light-speed-reference-20261105.md", "evidence_directory": "work/y61-light-reference-MZUWHL0m",
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "status": "complete",
+      "source_commit": "42601177de35edefe6fbfce90fb98a8635535145",
+      "base": "claude-turn167",
+      "engine": "claude-turn168",
+      "vision": "y61",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2789528,
+      "engine_sha256": "83bf6c0842d9a125f9fa0b9df653f6f9b37441618472023278c89a37e756c612"
+    },
+    "report": "docs/y61-light-speed-reference-20261105.md",
+    "evidence_directory": "work/y61-light-reference-MZUWHL0m",
     "change": "After confirmed live gantry legs, switch the velocity reference to real legs before normal early returns. Clear prior-reference history, seed only earlier true observations, retain only short IMU velocity propagation. Missing legs do not clear true samples or inject board/held positions. Reset source on lost/rearmed targets. Keep stopping/braking targets and other stages.",
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32},
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 11,
+      "clippy_warnings": 32
+    },
     "car_run_y61": {
-      "date": "2026-11-05", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y61",
-      "files_retrieved": 88, "files_checked": 88, "reason": "route_finish_zone_stop",
-      "total_saved_feedback_s": 31.751256272, "light_wait_saved_feedback_s": 10.380520264000001,
-      "net_before_penalties_s": 21.370736007999998, "valid_record": false,
-      "crosswalk_gap_m": 0.16686296820691737, "light_gap_m": 0.7995802215020291,
-      "light_rear_to_gantry_m": 1.2128774835744571, "light_whole_body_in_zone": false,
-      "light_release_basis": "green_in_fresh_frames_after_the_stop", "green_scores": [0.9055,0.9048],
-      "finish_gap_m": 0.18746825948477458, "finish_creeps": 0,
-      "quality_counts": {}, "recovery_ticks": 0, "minimum_saved_left_board_clearance_m": 0.09834,
+      "date": "2026-11-05",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261105-y61",
+      "files_retrieved": 88,
+      "files_checked": 88,
+      "reason": "route_finish_zone_stop",
+      "total_saved_feedback_s": 31.751256272,
+      "light_wait_saved_feedback_s": 10.380520264000001,
+      "net_before_penalties_s": 21.370736007999998,
+      "valid_record": false,
+      "crosswalk_gap_m": 0.16686296820691737,
+      "light_gap_m": 0.7995802215020291,
+      "light_rear_to_gantry_m": 1.2128774835744571,
+      "light_whole_body_in_zone": false,
+      "light_release_basis": "green_in_fresh_frames_after_the_stop",
+      "green_scores": [
+        0.9055,
+        0.9048
+      ],
+      "finish_gap_m": 0.18746825948477458,
+      "finish_creeps": 0,
+      "quality_counts": {},
+      "recovery_ticks": 0,
+      "minimum_saved_left_board_clearance_m": 0.09834,
       "near_obstacle_stop_requested": false,
-      "cpu_main_core_percent": 15.717705735296436, "mean_scan_to_tick_ms": 1.4247195357143614,
+      "cpu_main_core_percent": 15.717705735296436,
+      "mean_scan_to_tick_ms": 1.4247195357143614,
       "operator_observation": "Stopped far outside the light parking zone and close to the left board; operator suspected near-obstacle stop.",
       "finding": "Proximity did cause steering avoidance, but not a stop or recovery. Light controller commanded continuous1300 before waiting for red. At savedscan172 current brake stop gap0.6587m, next-frame forecast0.4879m; actual stop0.7996m. Actual first brake command may precede172 because171 was not saved.",
       "lateral_finding": "Old light-entry radar-yaw overshoot selection reversed current right corrections to left targets1520/1541/1514/1586 at164/166/174/175.",
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
       "next_user_scope": "Data retrieval was confirmed complete; user may switch off car. Fix, cross-build and push locally, no more deployment or driving until a new request and placement confirmation."
     }
   },
   "y62_light_tick_brake_continuous_entry_20261106": {
-    "date": "2026-11-06", "author": "Codex", "engine_round": 169,
+    "date": "2026-11-06",
+    "author": "Codex",
+    "engine_round": 169,
     "baseline": "4260117, actual vehicle y61 /168",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"status": "complete", "source_commit": "8b9810dfc134d8a0de8cc1f23bd3ae96a701fcbd", "base": "claude-turn168", "engine": "claude-turn169", "vision": "y62", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2801336, "engine_sha256": "4a2561265aaf9adbd46c5484d155e6fdc40bac626302709b82c687b943d198ba", "combined_archive": "XT-STCAR-y62-8b9810d.tar.gz", "combined_archive_bytes": 10962515},
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "status": "complete",
+      "source_commit": "8b9810dfc134d8a0de8cc1f23bd3ae96a701fcbd",
+      "base": "claude-turn168",
+      "engine": "claude-turn169",
+      "vision": "y62",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2801336,
+      "engine_sha256": "4a2561265aaf9adbd46c5484d155e6fdc40bac626302709b82c687b943d198ba",
+      "combined_archive": "XT-STCAR-y62-8b9810d.tar.gz",
+      "combined_archive_bytes": 10962515
+    },
     "scope": "Initial build was local only. On2026-11-06 user subsequently authorized deployment/test and freshly confirmed SSH, start placement and light/sensor reset.",
-    "report": "docs/y62-light-brake-entry-20261106.md", "evidence_directory": "work/y62-light-control-Sbqh8etA",
+    "report": "docs/y62-light-brake-entry-20261106.md",
+    "evidence_directory": "work/y62-light-control-Sbqh8etA",
     "changes": [
       "Project current gap/speed from fresh light observations and short IMU changes on the existing20ms control tick. Trigger1300 at the current brake point rather than the next-lidar-frame threshold.",
       "During the same brake application, release once to1500 when its neutral-tail/coast prediction reaches the target, allowing remaining rolling travel instead of always braking to zero. Used/cancelled applications cannot restart.",
       "Only race light_entry steering uses immediate IMU yaw and mean current/predicted pursuit curvature. Shared guarded_pursuit, second-loop exit preview and other stages are retained.",
       "Log actual brake start/end times, release reason and control-tick predictions. No additional thread or phase timeout."
     ],
-    "fixed_input_steering": {"old_new_targets": [[164,1520,1458],[166,1541,1425],[174,1514,1471],[175,1586,1505]], "imu_timing_variation_ms": [-10,20], "new_ranges": [[1458,1461],[1422,1429],[1470,1471],[1497,1508]], "limits": "Original outputs fully reproduced from saved geometry; these are fixed-input calculations, not the changed closed-loop trajectory."},
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 11, "clippy_warnings": 32, "host_simulation_compile_only": true, "new_test_files": 0, "note": "Updated existing brake regression for between-scan trigger, rolling release, stale observations and no repeat1300; existing pause/cache test still passes."},
+    "fixed_input_steering": {
+      "old_new_targets": [
+        [
+          164,
+          1520,
+          1458
+        ],
+        [
+          166,
+          1541,
+          1425
+        ],
+        [
+          174,
+          1514,
+          1471
+        ],
+        [
+          175,
+          1586,
+          1505
+        ]
+      ],
+      "imu_timing_variation_ms": [
+        -10,
+        20
+      ],
+      "new_ranges": [
+        [
+          1458,
+          1461
+        ],
+        [
+          1422,
+          1429
+        ],
+        [
+          1470,
+          1471
+        ],
+        [
+          1497,
+          1508
+        ]
+      ],
+      "limits": "Original outputs fully reproduced from saved geometry; these are fixed-input calculations, not the changed closed-loop trajectory."
+    },
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 11,
+      "clippy_warnings": 32,
+      "host_simulation_compile_only": true,
+      "new_test_files": 0,
+      "note": "Updated existing brake regression for between-scan trigger, rolling release, stale observations and no repeat1300; existing pause/cache test still passes."
+    },
     "remaining_validation": "Light control was not reached in the first physical trial; actual stop position and lateral light-entry clearance remain untested.",
     "car_run_y62": {
-      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y62",
+      "date": "2026-11-06",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y62",
       "deployment_note": "First SSH attempt timed out before upload; user reconnected and explicitly confirmed car, beam and lights ready before successful deployment/start.",
-      "files_retrieved": 46, "files_checked": 46, "reason": "probe_obstacle_close_body",
-      "effective_lap_s": null, "operator_reported_collision": true,
+      "files_retrieved": 46,
+      "files_checked": 46,
+      "reason": "probe_obstacle_close_body",
+      "effective_lap_s": null,
+      "operator_reported_collision": true,
       "operator_observation": "After cone one, hit a cone near the crosswalk side; user asked whether changes elsewhere had coupled into this section.",
-      "event_scans": {"first_pass": 123, "neutral_pause_recovery": 132, "first_saved_second_confirmed": 134, "resume_request": 138, "second_handover": 139, "near_obstacle_end": 142},
-      "recovery_cause": "open_board_ahead_without_second_support", "motion_recovery_count": 1,
-      "pause_to_handover_s": 0.699, "estimated_translation_during_pause_m": 1.35,
+      "event_scans": {
+        "first_pass": 123,
+        "neutral_pause_recovery": 132,
+        "first_saved_second_confirmed": 134,
+        "resume_request": 138,
+        "second_handover": 139,
+        "near_obstacle_end": 142
+      },
+      "recovery_cause": "open_board_ahead_without_second_support",
+      "motion_recovery_count": 1,
+      "pause_to_handover_s": 0.699,
+      "estimated_translation_during_pause_m": 1.35,
       "identity": "Second tracker stayed on a right-front target, no rebind. The near obstacle was left-front, distinct from that tracked target; tracker-local ID1 does not mean both trackers represent the same object.",
-      "minimum_body_gap_m": 0.04962570914409667, "nearest_bin": 318,
-      "body_point_m": [0.20956684078462515,0.18869483099319798],
-      "light_control_executed": false, "light_control_evidence": "light_stop_state null, brake ready, all brake anchors/start/projection null; no second_pass or light events.",
-      "control_timing": {"cpu_main_core_percent": 15.012371498869314, "max_actual_gap_s": 0.022197117000000155, "max_compute_s": 0.007618337000000253, "mean_scan_to_tick_ms": 1.4895243461538297},
-      "imu_samples": 1553, "imu_checksum_errors": 0,
+      "minimum_body_gap_m": 0.04962570914409667,
+      "nearest_bin": 318,
+      "body_point_m": [
+        0.20956684078462515,
+        0.18869483099319798
+      ],
+      "light_control_executed": false,
+      "light_control_evidence": "light_stop_state null, brake ready, all brake anchors/start/projection null; no second_pass or light events.",
+      "control_timing": {
+        "cpu_main_core_percent": 15.012371498869314,
+        "max_actual_gap_s": 0.022197117000000155,
+        "max_compute_s": 0.007618337000000253,
+        "mean_scan_to_tick_ms": 1.4895243461538297
+      },
+      "imu_samples": 1553,
+      "imu_checksum_errors": 0,
       "comparison": "y61 first_pass122 to second handover133:11frames; y62 first_pass123 to confirmed134:11frames. y62's old recovery added about5frames before handing over139. y61 front ranges131/132 were5.110/4.954m; y62 scan132 reached2.885m threshold.",
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
       "next_user_scope": "User went to eat, requested careful analysis and autonomous fixing, with physical testing only after returning."
     }
   },
   "y63_transfer_coast_steer_handover_20261106": {
-    "date": "2026-11-06", "author": "Codex", "engine_round": 170,
+    "date": "2026-11-06",
+    "author": "Codex",
+    "engine_round": 170,
     "baseline": "7a21e07; installed/tested y62 /169 from8b9810d",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"status": "complete", "source_commit": "6116d891b1d3692747d1747225b0bef91a299a2d", "base": "claude-turn169", "engine": "claude-turn170", "vision": "y63", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2802168, "engine_sha256": "3d59db188b24f669b39abff6c34d16b8a6d2a3d5afd3b2de30f3546136a2c044", "combined_archive": "XT-STCAR-y63-6116d89.tar.gz", "combined_archive_bytes": 10963962},
-    "report": "docs/y63-transfer-recovery-20261106.md", "evidence_directory": "work/y63-transfer-recovery-9ZnlvEkC",
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "status": "complete",
+      "source_commit": "6116d891b1d3692747d1747225b0bef91a299a2d",
+      "base": "claude-turn169",
+      "engine": "claude-turn170",
+      "vision": "y63",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2802168,
+      "engine_sha256": "3d59db188b24f669b39abff6c34d16b8a6d2a3d5afd3b2de30f3546136a2c044",
+      "combined_archive": "XT-STCAR-y63-6116d89.tar.gz",
+      "combined_archive_bytes": 10963962
+    },
+    "report": "docs/y63-transfer-recovery-20261106.md",
+    "evidence_directory": "work/y63-transfer-recovery-9ZnlvEkC",
     "scope": "Local fix/build/push while the operator is away eating; no further vehicle operation before a new placement confirmation.",
     "change": "In race open_transfer only, board-ahead/second-support geometry waiting keeps drive state, neutral motor and current channel steering. A waiting flag prevents low/missing speed or temporary threshold changes from restoring power. Normal identity-confirmed handover clears the flag and retains the existing coast-to-entry policy. Speed history/IMU anchor are not reset; no generic maturity/resume1560 handshake for this case.",
     "preserved": "Original target confirmation, entry-speed targets, actual quality-fault handling,8cm body stop and all other stage controllers.",
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 12, "clippy_warnings": 32, "new_test_files": 0, "focused_regression": "Neutral motor while steering continues, no restart pause, and missing speed cannot release the support-wait latch."},
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 12,
+      "clippy_warnings": 32,
+      "new_test_files": 0,
+      "focused_regression": "Neutral motor while steering continues, no restart pause, and missing speed cannot release the support-wait latch."
+    },
     "remaining_validation": "The new support-wait branch was not activated in either recorded y63 run. Normal transfers succeeded; the second run still stopped short of the light zone and failed terminal standstill confirmation.",
     "car_run_y63": {
-      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y63",
-      "files_retrieved": 54, "files_checked": 54, "reason": "route_finish_zone_stop", "effective_s": null,
+      "date": "2026-11-06",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y63",
+      "files_retrieved": 54,
+      "files_checked": 54,
+      "reason": "route_finish_zone_stop",
+      "effective_s": null,
       "invalid_light_trial_reason": "Operator confirmed lights were not powered on; repeated same software after explicit reset confirmation.",
-      "first_pass_to_second_handover_s": 1.001, "motion_recovery_count": 0, "support_wait_branch_seen": false,
-      "second_loop_min_left_clearance_m": 0.30086, "avoid_count": 0, "path_override_count": 0,
-      "light_brake_start_s": 17.618771, "light_brake_end_s": 18.012800, "light_brake_end_reason": "coast_reaches_target",
-      "finish_gap_m": 0.371, "finish_creeps": 1,
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "first_pass_to_second_handover_s": 1.001,
+      "motion_recovery_count": 0,
+      "support_wait_branch_seen": false,
+      "second_loop_min_left_clearance_m": 0.30086,
+      "avoid_count": 0,
+      "path_override_count": 0,
+      "light_brake_start_s": 17.618771,
+      "light_brake_end_s": 18.0128,
+      "light_brake_end_reason": "coast_reaches_target",
+      "finish_gap_m": 0.371,
+      "finish_creeps": 1,
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     },
     "car_run_y63_2": {
-      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y63-2",
-      "files_retrieved": 93, "files_checked": 93, "reason": "coast_standstill_unconfirmed",
-      "total_saved_feedback_s": 31.471704991, "light_wait_saved_feedback_s": 10.391434053000001,
-      "net_before_penalties_s": 21.080270937999998, "valid_record": false,
+      "date": "2026-11-06",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y63-2",
+      "files_retrieved": 93,
+      "files_checked": 93,
+      "reason": "coast_standstill_unconfirmed",
+      "total_saved_feedback_s": 31.471704991,
+      "light_wait_saved_feedback_s": 10.391434053000001,
+      "net_before_penalties_s": 21.080270937999998,
+      "valid_record": false,
       "crosswalk_gap_m": 0.27883019904966755,
-      "first_pass_to_second_handover_s": 1.100068497, "motion_recovery_count": 0, "support_wait_branch_seen": false,
+      "first_pass_to_second_handover_s": 1.100068497,
+      "motion_recovery_count": 0,
+      "support_wait_branch_seen": false,
       "second_loop_min_left_clearance_m": 0.23561,
-      "light_gap_m": 0.685767133445124, "light_rear_to_gantry_m": 1.0933551555891319,
+      "light_gap_m": 0.685767133445124,
+      "light_rear_to_gantry_m": 1.0933551555891319,
       "operator_confirmation": "Rear wheels had not completely crossed the photoelectric beam; resting on the beam line is not inside the parking zone.",
       "operator_photo_attachment": "1793957727527.jpg",
-      "light_brake_start_s": 17.050021254, "light_brake_end_s": 17.751711638,
-      "light_brake_end_reason": "coast_reaches_target", "light_brake_release_speed_mps": 0.818997,
-      "light_release_basis": "green_in_fresh_frames_after_the_stop", "green_scores": [0.8992,0.898],
+      "light_brake_start_s": 17.050021254,
+      "light_brake_end_s": 17.751711638,
+      "light_brake_end_reason": "coast_reaches_target",
+      "light_brake_release_speed_mps": 0.818997,
+      "light_release_basis": "green_in_fresh_frames_after_the_stop",
+      "green_scores": [
+        0.8992,
+        0.898
+      ],
       "light_min_body_clearance_m": 0.17544,
-      "finish_gap_m": 0.29432161970351406, "finish_creeps": 0,
+      "finish_gap_m": 0.29432161970351406,
+      "finish_creeps": 0,
       "standstill_issue": "After finish event, about4.8s at1500. Front range only0.495–0.496m, but plane association discarded duplicate short front-board fits and left parallel walls; no valid measured-motion output proved movement.",
       "cpu_main_core_percent": 16.134212703898346,
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500}
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     }
   },
   "y64_light_innovation_coast_association_20261106": {
-    "date": "2026-11-06", "author": "Codex", "engine_round": 171,
+    "date": "2026-11-06",
+    "author": "Codex",
+    "engine_round": 171,
     "baseline": "da5f7d9; actual vehicle y63 /170 from6116d89",
-    "deployed": true, "physical_trial_executed": true,
-    "build": {"status": "complete", "source_commit": "20da889b2f7e8021bb3dd042d6359b2568b09791", "base": "claude-turn170", "engine": "claude-turn171", "vision": "y64", "target": "riscv64gc-unknown-linux-gnu.2.38", "maximum_glibc": "2.34", "engine_bytes": 2815944, "engine_sha256": "3165bebed77d44fc8797d0c57e25e200205c951b312bd637f36ca021dd19786c", "combined_archive": "XT-STCAR-y64-20da889.tar.gz", "combined_archive_bytes": 10970131},
-    "report": "docs/y64-light-fusion-standstill-20261106.md", "evidence_directory": "work/y64-light-fusion-ORut51yj",
+    "deployed": true,
+    "physical_trial_executed": true,
+    "build": {
+      "status": "complete",
+      "source_commit": "20da889b2f7e8021bb3dd042d6359b2568b09791",
+      "base": "claude-turn170",
+      "engine": "claude-turn171",
+      "vision": "y64",
+      "target": "riscv64gc-unknown-linux-gnu.2.38",
+      "maximum_glibc": "2.34",
+      "engine_bytes": 2815944,
+      "engine_sha256": "3165bebed77d44fc8797d0c57e25e200205c951b312bd637f36ca021dd19786c",
+      "combined_archive": "XT-STCAR-y64-20da889.tar.gz",
+      "combined_archive_bytes": 10970131
+    },
+    "report": "docs/y64-light-fusion-standstill-20261106.md",
+    "evidence_directory": "work/y64-light-fusion-ORut51yj",
     "changes": [
       "Filter only radar velocity innovation relative to the short-IMU prediction, retaining immediate physical acceleration. Fuse measured gap innovation against the prior projected gap. Both use candidate0.2s response constants.",
       "Cruise and active brake share the continuous control gap. Raw front/rear distances still determine zone diagnostics; rear clearance must be strictly positive. Outside-zone red stops are explicitly marked, not relabelled as success.",
       "Unify same-board plane consolidation candidate angle with the existing registration angle. Keep joint-fit residuals, distance checks, all low-motion thresholds and timeout unchanged."
     ],
     "fixed_input_evidence": {
-      "local_first_brake_seq170": {"old_axis_speed_mps": 1.722642, "new_axis_speed_mps": 1.614732, "old_brake_stop_gap_m": 0.434326, "new_brake_stop_gap_m": 0.668883, "old_motor": 1300, "new_brake_request": null},
-      "local_release_seq177": {"old_release_stop_gap_m": 0.817467, "new_release_stop_gap_m": 0.62056, "jump_reduction_fraction": 0.636, "still_releases_in_local_check": true},
+      "local_first_brake_seq170": {
+        "old_axis_speed_mps": 1.722642,
+        "new_axis_speed_mps": 1.614732,
+        "old_brake_stop_gap_m": 0.434326,
+        "new_brake_stop_gap_m": 0.668883,
+        "old_motor": 1300,
+        "new_brake_request": null
+      },
+      "local_release_seq177": {
+        "old_release_stop_gap_m": 0.817467,
+        "new_release_stop_gap_m": 0.62056,
+        "jump_reduction_fraction": 0.636,
+        "still_releases_in_local_check": true
+      },
       "limits": "Missing scans are not synthesized; local checks do not establish the full changed trajectory, exact first brake frame or actual in-zone stop.0.2s is not a physically calibrated parameter."
     },
-    "standstill_evidence": {"saved_frames": 31, "old_standstill_confirmed": false, "new_first_stationary_seq": 340, "new_stable_pairs": 5, "new_stable_both_clocks_s": 0.799, "real_0p02m_translation_detected": true, "thresholds_relaxed": false, "evidence": "work/y64-coast-association"},
-    "position_history": {"report": "docs/light-position-history-20261106.md", "results": "docs/light-position-history-20261106.json", "historical_offline_reference_m": 3.225, "note": "This was an offline map comparison, not an old onboard fixed gantry coordinate. y27 used live legs. Final-position stability is not full-trajectory accuracy.", "recent_stop_position_range_m": [3.190804430219196,3.2037810355721517], "moving_saved_difference_range_m": [-0.1823,0.1427], "beam_spacing_change_m": [1.10,1.00]},
-    "validation": {"host_release_build": true, "console_tests_passed": 968, "rust_tests_passed": 13, "clippy_warnings": 32, "new_test_files": 0, "new_inline_regressions": 1},
+    "standstill_evidence": {
+      "saved_frames": 31,
+      "old_standstill_confirmed": false,
+      "new_first_stationary_seq": 340,
+      "new_stable_pairs": 5,
+      "new_stable_both_clocks_s": 0.799,
+      "real_0p02m_translation_detected": true,
+      "thresholds_relaxed": false,
+      "evidence": "work/y64-coast-association"
+    },
+    "position_history": {
+      "report": "docs/light-position-history-20261106.md",
+      "results": "docs/light-position-history-20261106.json",
+      "historical_offline_reference_m": 3.225,
+      "note": "This was an offline map comparison, not an old onboard fixed gantry coordinate. y27 used live legs. Final-position stability is not full-trajectory accuracy.",
+      "recent_stop_position_range_m": [
+        3.190804430219196,
+        3.2037810355721517
+      ],
+      "moving_saved_difference_range_m": [
+        -0.1823,
+        0.1427
+      ],
+      "beam_spacing_change_m": [
+        1.1,
+        1.0
+      ]
+    },
+    "validation": {
+      "host_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 13,
+      "clippy_warnings": 32,
+      "new_test_files": 0,
+      "new_inline_regressions": 1
+    },
     "remaining_validation": "One real run has accepted light position and normal standstill confirmation. Repeated light-stop accuracy, the earlier rolling-release path and cross-course robustness remain unproven. The user requested handoff to Claude after this run, so no next change or run was initiated.",
     "car_run_y64": {
-      "date": "2026-11-06", "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y64",
+      "date": "2026-11-06",
+      "evidence_directory": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261106-y64",
       "operator_confirmation": "Car placed; run once, analyze and write memoryshare for Claude handoff.",
-      "files_retrieved": 91, "files_checked": 91, "reason": "route_finish_zone_stop",
+      "files_retrieved": 91,
+      "files_checked": 91,
+      "reason": "route_finish_zone_stop",
       "timing_basis": "Historical saved-feedback scan clock; subtract program light-stop to light-go waiting. Not an official timing/adjudication result.",
-      "total_s": 31.352083056, "red_wait_s": 10.084168109, "effective_s": 21.267914947,
-      "crosswalk_gap_m": 0.33341479036380983, "crosswalk_wait_s": 3.1019398649999994,
-      "light_gap_m": 0.48145798190749944, "rear_past_sensor_m": 0.10982555605394384,
-      "light_whole_body_in_zone": true, "operator_light_position_feedback": "This round's position is acceptable.",
-      "light_release_basis": "green_in_fresh_frames_after_the_stop", "green_scores": [0.8984,0.8974],
-      "light_brake_start_s": 18.149245731, "light_brake_end_s": 19.106625086,
-      "light_brake_duration_s": 0.957379355, "light_brake_end_reason": "stopped",
-      "light_brake_end_speed_mps": 0.12652, "rolling_release_verified_this_run": false,
+      "total_s": 31.352083056,
+      "red_wait_s": 10.084168109,
+      "effective_s": 21.267914947,
+      "crosswalk_gap_m": 0.33341479036380983,
+      "crosswalk_wait_s": 3.1019398649999994,
+      "light_gap_m": 0.48145798190749944,
+      "rear_past_sensor_m": 0.10982555605394384,
+      "light_whole_body_in_zone": true,
+      "operator_light_position_feedback": "This round's position is acceptable.",
+      "light_release_basis": "green_in_fresh_frames_after_the_stop",
+      "green_scores": [
+        0.8984,
+        0.8974
+      ],
+      "light_brake_start_s": 18.149245731,
+      "light_brake_end_s": 19.106625086,
+      "light_brake_duration_s": 0.957379355,
+      "light_brake_end_reason": "stopped",
+      "light_brake_end_speed_mps": 0.12652,
+      "rolling_release_verified_this_run": false,
       "light_min_body_clearance_m": 0.2542,
-      "fusion_observation": {"speed_seq165_innovation_mps": -0.104922, "speed_correction_mps": -0.034974, "gap_seq170_innovation_m": -0.08520, "gap_correction_m": -0.02735},
-      "finish_gap_m": 0.33127091248943324, "finish_creeps": 0, "finish_brake_duration_s": 1.500713,
-      "standstill_confirmed": true, "standstill_seq": 336, "matched_planes": 3,
-      "stable_pairs": 6, "stable_publication_ms": 599, "stable_receive_ms": 597,
-      "stable_translation_m": 0.003756, "stable_rotation_rad": 0.00614,
+      "fusion_observation": {
+        "speed_seq165_innovation_mps": -0.104922,
+        "speed_correction_mps": -0.034974,
+        "gap_seq170_innovation_m": -0.0852,
+        "gap_correction_m": -0.02735
+      },
+      "finish_gap_m": 0.33127091248943324,
+      "finish_creeps": 0,
+      "finish_brake_duration_s": 1.500713,
+      "standstill_confirmed": true,
+      "standstill_seq": 336,
+      "matched_planes": 3,
+      "stable_pairs": 6,
+      "stable_publication_ms": 599,
+      "stable_receive_ms": 597,
+      "stable_translation_m": 0.003756,
+      "stable_rotation_rad": 0.00614,
       "prior_seq335_not_yet_stationary": "Receive clock499ms was still below original500ms threshold.",
-      "quality_counts": {}, "motion_recovery_count": 1,
-      "remaining_recovery": {"cause": "open_second_support_lost", "stage": "second_loop", "handover_seq": 132, "pause_seq": 138, "resume_request_seq": 143, "pause_s": 0.502238268, "held_servo": 1459, "resume_motor": 1560, "tracking": "Track1 confirmed132; stale target holds134/135; new track2 unconfirmed137; confirmed/rebound140. Software rebind is not independent physical identity verification."},
-      "cpu_main_core_percent": 17.05429156541052, "mean_scan_to_tick_ms": 1.4057592469135605,
-      "imu_samples": 3492, "imu_checksum_errors": 0,
-      "position_audit": {"divider_offset_m": 3.19181, "first_gantry_offset_m": 3.21171, "stop_gantry_offset_m": 3.19941, "moving_difference_from_3p225_m": [-0.06407,0.07131]},
-      "locked_after_run": {"armed": false, "motor": 1500, "servo": 1500},
+      "quality_counts": {},
+      "motion_recovery_count": 1,
+      "remaining_recovery": {
+        "cause": "open_second_support_lost",
+        "stage": "second_loop",
+        "handover_seq": 132,
+        "pause_seq": 138,
+        "resume_request_seq": 143,
+        "pause_s": 0.502238268,
+        "held_servo": 1459,
+        "resume_motor": 1560,
+        "tracking": "Track1 confirmed132; stale target holds134/135; new track2 unconfirmed137; confirmed/rebound140. Software rebind is not independent physical identity verification."
+      },
+      "cpu_main_core_percent": 17.05429156541052,
+      "mean_scan_to_tick_ms": 1.4057592469135605,
+      "imu_samples": 3492,
+      "imu_checksum_errors": 0,
+      "position_audit": {
+        "divider_offset_m": 3.19181,
+        "first_gantry_offset_m": 3.21171,
+        "stop_gantry_offset_m": 3.19941,
+        "moving_difference_from_3p225_m": [
+          -0.06407,
+          0.07131
+        ]
+      },
+      "locked_after_run": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
       "handoff": "User explicitly requested Claude continuation. memoryshare.md appended in Traditional Chinese; Claude private memory/index synchronized without deleting history. Next new build numbers y65/172, baseline claude-turn171. Fresh placement confirmation required for any new run."
     }
   },
@@ -31621,6 +33071,54 @@
       },
       "trajectory_plot": "work/codex-y87-trial-20261112/y88-light-approach-and-brake.png",
       "trajectory_data": "work/codex-y87-trial-20261112/y88-plot-data.json"
+    }
+  },
+  "y89_light_kalman_turn_anchor_20261112": {
+    "date": "2026-11-12",
+    "author": "Claude",
+    "author_model": "Claude Opus 5.5 (Antigravity)",
+    "turn": 196,
+    "helper": "y89",
+    "deployed_baseline": "claude-turn195",
+    "summary": "RaceLight::adjusted_speed: compute the aligned radar body speed first; until an aligned radar speed has corrected the light speed Kalman, every fresh second-cone speed restarts it (clear + seed) instead of bridging the anchor across the hard entry turn with the turn-coupled IMU forward integral.",
+    "y88_evidence": {
+      "seed_seq": 156,
+      "seed_at_s": 15.584,
+      "seed_mps": 1.9634,
+      "imu_integral_drop_156_to_160_mps": -0.519,
+      "first_radar_seq": 160,
+      "radar_mps": 1.935,
+      "filtered_seq161_mps": 1.544,
+      "radar_seq161_mps": 1.869,
+      "stop_front_gap_m": 0.2129,
+      "target_m": 0.55
+    },
+    "replay_of_y88_kalman": {
+      "baseline_vf": {
+        "160": 1.552,
+        "161": 1.544,
+        "162": 1.571,
+        "164": 1.682,
+        "166": 1.739,
+        "167": 1.772
+      },
+      "y89_vf": {
+        "160": 1.841,
+        "161": 1.776,
+        "162": 1.747,
+        "164": 1.753,
+        "166": 1.796,
+        "167": 1.806
+      },
+      "note": "Replayed with logged radar speeds and the IMU integral rebuilt from run/imu.jsonl; cone seed restarted at seq 159 (1.951 m/s). Filtered speed now within 0.03-0.1 m/s of radar, so 1550->1530 and 1300 come earlier; brake distance under-prediction (~15 cm in y87/y88) is largely this speed bias and is not separately retuned."
+    },
+    "files": [
+      "route-engine/src/race_light.rs"
+    ],
+    "verification": {
+      "cargo_test": "34 passed",
+      "clippy_warnings": 32,
+      "python_unittest": "968 OK"
     }
   }
 }

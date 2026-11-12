@@ -171,6 +171,23 @@ mod entry_motion_tests {
     }
 
     #[test]
+    fn cone_speeds_restart_the_filter_until_an_aligned_radar_speed_corrects_it() {
+        // y88 seq 156-159: the turning IMU integral fell 0.37 m/s while the cone speed held.
+        let mut light = RaceLight::default();
+        light.adjusted_speed(Some(0.591), 15.584, None, 0.23, Some(1.963));
+        light.adjusted_speed(Some(0.511), 15.684, None, 0.38, Some(1.883));
+        light.adjusted_speed(Some(0.223), 15.886, None, 0.73, Some(1.951));
+        let (at, body, origin) = light.speed_kalman.anchor().unwrap();
+        assert_eq!((at, body, origin), (15.886, 1.951, 0.223));
+        // Once a radar speed has corrected it, a cone speed no longer replaces the filter.
+        light.speed_kalman.update(15.984, 0.072, 1.935);
+        light.speed_from_cone = false;
+        let before = light.speed_kalman.anchor();
+        light.adjusted_speed(Some(-0.036), 16.085, None, 0.94, Some(1.0));
+        assert_eq!(light.speed_kalman.anchor().map(|a| a.0), before.map(|a| a.0));
+    }
+
+    #[test]
     fn entry_speed_aligns_interval_midpoint_to_the_later_control_sample() {
         let mut speed = EntryMotionSpeed::default();
         // v(t)=1+2t. Scans at 0/.1, control/IMU samples at .02/.12.
@@ -414,6 +431,8 @@ pub struct RaceLight {
     pub last_speed: Option<(f64, f64)>,
     imu_history: Vec<(f64, f64, f64)>, // scan time, body IMU integral, lane projection cos
     speed_kalman: SpeedKalman,
+    /// The filter has only been set by cone speeds, never by an aligned radar speed.
+    speed_from_cone: bool,
     /// When the front was first estimated past the photo beam (y34).
     pub beam_at: Option<f64>,
     approach_sample: Option<(i64, f64, Option<f64>)>,
@@ -468,12 +487,8 @@ impl RaceLight {
             h.push((at, current, axis_cos));
             if h.len() > LANE_SPEED_HISTORY { h.remove(0); }
         }
-        // Initialize from this scan's identified physical cone. Otherwise the
-        // first displaced gantry range gets gain 1 before any prior exists.
-        // Do not count two correlated lidar observations at the same time.
-        let seeded = self.speed_kalman.anchor().is_none() && seed.is_some();
-        if seeded { self.speed_kalman.update(at, current, seed.unwrap()); }
-        if raw.is_some() && !seeded {
+        let mut radar = None;
+        if raw.is_some() {
             let n = self.ranges.len();
             let step = LANE_SPEED_BASELINE.min(n.saturating_sub(2));
             let mut bodies = [0.; LANE_SPEED_HISTORY];
@@ -510,10 +525,36 @@ impl RaceLight {
             }
             if count > 0 {
                 bodies[..count].sort_unstable_by(f64::total_cmp);
+                radar = Some(bodies[count/2]);
+            }
+        }
+        // Initialize from this scan's identified physical cone. Otherwise the
+        // first displaced gantry range gets gain 1 before any prior exists.
+        // Do not count two correlated lidar observations at the same time.
+        // y88: seeded at 89 deg, the anchor then carried 0.5 s of hard-turn IMU
+        // integral (-0.52 m/s) into the first aligned radar speed, which was
+        // scaled as an outlier: 1.54 m/s filtered at a true 1.87, the step-down
+        // and the brake came late and the car stopped 0.21 m from the gantry.
+        // Until an aligned radar speed has corrected it, each fresh cone speed
+        // restarts the filter instead of being bridged by the turning IMU.
+        let anchored = self.speed_kalman.anchor().is_some();
+        match (radar, seed) {
+            (Some(body), _) if anchored => {
                 // Keep physical acceleration on the IMU path; only the radar correction is
                 // filtered. Missing radar never reaches the filter (race_speed_kalman).
-                self.speed_kalman.update(at, current, bodies[count/2]);
+                self.speed_kalman.update(at, current, body);
+                self.speed_from_cone = false;
             }
+            (_, Some(cone)) if !anchored || self.speed_from_cone => {
+                self.speed_kalman.clear();
+                self.speed_kalman.update(at, current, cone);
+                self.speed_from_cone = true;
+            }
+            (Some(body), None) => {
+                self.speed_kalman.update(at, current, body);
+                self.speed_from_cone = false;
+            }
+            _ => {}
         }
         let (anchor_at, body, origin) = self.speed_kalman.anchor()?;
         if !(0. ..=crate::helpers::SCAN_AGE_S).contains(&(at-anchor_at)) { return None; }
