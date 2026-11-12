@@ -31,6 +31,13 @@ ALLOWED_NEEDED = {
     "libc.so.6", "libpthread.so.0", "libdl.so.2", "libm.so.6", "librt.so.1",
     "libgcc_s.so.1", "ld-linux-riscv64-lp64d.so.1",
 }
+ROS2_HUMBLE_NEEDED = {
+    'librcl.so', 'librcl_action.so', 'librcl_yaml_param_parser.so', 'librcutils.so',
+    'librmw.so', 'librmw_implementation.so', 'librosidl_runtime_c.so',
+    *{f'lib{package}__rosidl_{kind}_c.so'
+      for package in ('std_msgs', 'std_srvs', 'rcl_interfaces', 'rosgraph_msgs', 'builtin_interfaces', 'action_msgs', 'unique_identifier_msgs')
+      for kind in ('typesupport', 'generator')},
+}
 
 
 class ElfError(ValueError):
@@ -262,10 +269,14 @@ class Elf:
         }
 
 
-def inspect_bytes(data, name="xt-stcar"):
+def inspect_bytes(data, name="xt-stcar", profile="native"):
+    if profile not in ('native', 'ros2-humble'):
+        raise ElfError('Unknown deployment profile')
     if len(data) > MAX_ELF_BYTES:
         raise ElfError("ELF input exceeds the 64 MiB size limit")
     report = Elf(data).inspect()
+    allowed = ALLOWED_NEEDED | (ROS2_HUMBLE_NEEDED if profile == 'ros2-humble' else set())
+    valid_rpath = report['rpath'] == ['/opt/ros/humble/lib'] if profile == 'ros2-humble' else not report['rpath']
     errors = []
     for condition, error in (
         (report["machine"] == 243, "ELF machine must be RISC-V (243)"),
@@ -274,8 +285,9 @@ def inspect_bytes(data, name="xt-stcar"):
         (report["pie"] and report["entry"] != 0, "Expected PIE executable with a nonzero entry"),
         (report["loader"] == LOADER, f"Expected loader {LOADER}"),
         ("libc.so.6" in report["needed"], "Expected dynamic libc dependency"),
-        (not set(report["needed"]) - ALLOWED_NEEDED, "Unreviewed dynamic library dependency"),
-        (not report["rpath"], "RPATH/RUNPATH is not permitted in this deployment package"),
+        (not set(report["needed"]) - allowed, "Unreviewed dynamic library dependency"),
+        (valid_rpath, "RPATH/RUNPATH is not permitted in this deployment package" if profile == 'native'
+         else "ROS2 Humble RPATH must be exactly /opt/ros/humble/lib"),
         (bool(report["glibc_versions"]), "No GNU GLIBC version requirements found"),
     ):
         if not condition:
@@ -283,11 +295,11 @@ def inspect_bytes(data, name="xt-stcar"):
     if report["maximum_glibc"] and tuple(map(int, report["maximum_glibc"].split("."))) > tuple(map(int, GLIBC_BASELINE.split("."))):
         errors.append(f"Required GLIBC exceeds the locked {GLIBC_BASELINE} baseline")
     report.update(schema_version=1, glibc_baseline=GLIBC_BASELINE, file=name, sha256=hashlib.sha256(data).hexdigest(),
-                  size_bytes=len(data), passed=not errors, errors=errors)
+                  size_bytes=len(data), profile=profile, passed=not errors, errors=errors)
     return report
 
 
-def inspect(path):
+def inspect(path, profile="native"):
     if not hasattr(os, "O_NONBLOCK") or not hasattr(os, "O_NOFOLLOW"):
         raise ElfError("Path inspection requires POSIX nonblocking, no-follow open")
     flags = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
@@ -300,7 +312,7 @@ def inspect(path):
             raise ElfError("ELF input exceeds the 64 MiB size limit")
         # Check the actual bytes too: a regular file may grow after fstat.
         data = handle.read(MAX_ELF_BYTES + 1)
-    return inspect_bytes(data, Path(path).name)
+    return inspect_bytes(data, Path(path).name, profile)
 
 
 def checked_output(binary, output):
@@ -343,12 +355,13 @@ def write_report(binary, output, rendered):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
+    parser.add_argument('--profile', choices=['native', 'ros2-humble'], default='native')
     parser.add_argument("--output", type=Path, help="Atomically save a passed JSON report; preserve it on failure")
     args = parser.parse_args()
     try:
         if args.output:
             checked_output(args.binary, args.output)
-        report = inspect(args.binary)
+        report = inspect(args.binary, args.profile)
         if args.output and report["passed"]:
             write_report(args.binary, args.output, json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     except (OSError, ValueError, RuntimeError, struct.error) as exc:

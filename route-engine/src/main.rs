@@ -28,6 +28,10 @@ pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
 pub mod race;
+#[cfg(feature = "ros2")]
+mod race_ros2;
+#[cfg(feature = "ros2")]
+mod race_hardware;
 mod race_imu;
 mod race_light;
 mod race_light_brake;
@@ -474,6 +478,10 @@ fn function(name: &str, args: &[V]) -> V {
 fn main() {
     install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(feature = "ros2")]
+    if args.get(1).map(String::as_str) == Some("ros2-hardware") {
+        std::process::exit(race_hardware::main(&args[2..]));
+    }
     if args.get(1).map(String::as_str) == Some("tdrag") {
         std::process::exit(t_drag::main(&args[2..]));
     }

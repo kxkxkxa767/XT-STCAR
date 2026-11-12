@@ -1,5 +1,14 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-12 Codex：ROS2＋Rust迁移候选，待Claude复核）
+
+- **车上正式版本仍y83／190，未替换或发车。** 已建y84／191的算法候选保持为迁移算法基线；本轮用户授权ROS2迁移，要求收尾记录后由新Claude窗口复核。省赛新8×6m赛道仿真仍暂停，不能拿此前28组结果代替。
+- **y85／192候选**，机读 `y85_ros2_rust_hardware_migration_20261112`，部署基线实际是claude-turn190。默认ROS2构建运行race/chassis/lidar三个Rust节点，底盘/雷达数据与指令走ROS2；原bridge不再执行，Guard/协议/解码/标定复用。独立硬件进程保留控制器崩溃后的超时中位和EOF收尾。
+- 选择Humble＋rclrs0.8.0＋FastDDS；车上已有Humble和PREEMPT_RT，不升级OS。新发行版C++/Python执行器不是Rust自动收益。控制算法与20ms/新扫描唤醒不改，但两进程echo平均RTT从0.245/0.325ms增到2.914/2.993ms（128B/12KB），**不能声称性能完全不变**。
+- 968参考回归、29Rust检查通过；默认/ROS2特性clippy均32。真实RISC-V链接、标准ros2 launch三节点、start never不解锁、stop退出、软件PTY回执/300ms心跳/末20中位包通过；真实车串口未打开。没有完整ROS2实车闭环或圈时验证。
+- 构建收尾中，最终source/package另记。详读 `docs/ros2-rust-migration-20261112.md`，证据 `work/ros2-migration-20261112/`。车端ros2bag/rosbag2仍在，没有卸载；环境合规另需处理。用户要求给可直接粘贴至新Claude窗口的交接指令。
+
+
 ## 当前接手入口（2026-11-12 Codex：y83灯前制动被取消；y84缺口接续与首桶接近候选）
 
 - **车上y83／190（85adb21）输出锁定，未完赛。** 46文件取回 `left-cone-trial-20261111-y83`，实际发车日期11月12日。202帧距车身0.066809 m近障退出；锁定不是物理停稳证明，无有效圈时。

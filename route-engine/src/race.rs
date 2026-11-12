@@ -51,29 +51,38 @@ const TICK_S: f64 = 0.02;
 const MIN_IDLE_S: f64 = 0.005;
 const HEALTH_S: f64 = 0.05;
 const EVIDENCE_S: f64 = 0.15;
-const LINE_LIMIT: usize = 65536;
+pub(crate) const LINE_LIMIT: usize = 65536;
 
-struct Options {
-    bridge: String,
+pub(crate) struct Options {
+    pub bridge: String,
     out: PathBuf,
     max_drive_s: f64,
     initial_presteer_pwm: i64,
     start: String,
     ready_hold_s: f64,
-    demo: bool,
-    control_device: String,
-    lidar_device: String,
+    pub demo: bool,
+    pub control_device: String,
+    pub lidar_device: String,
+    #[cfg(feature = "ros2")]
+    pub lidar_calibration: Option<PathBuf>,
     max_wait_s: f64,
     status_s: f64,
     light_state: Option<PathBuf>,
     surface_initial_load: f64,
+    ros2: bool,
+    #[cfg(feature = "ros2")]
+    pub ros_args: Vec<String>,
 }
 
-const USAGE: &str = "usage: route-engine race --bridge PATH --out NEW_DIR [--start enter|ready|never] [--ready-hold-s 3] \
+const USAGE: &str = "usage: route-engine race --out NEW_DIR [--bridge PATH (legacy)] [--start enter|ready|never|ros] [--ready-hold-s 3] \
 [--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
-[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--surface-initial-load MPS2]";
+[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--surface-initial-load MPS2] [--transport legacy|ros2]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
+    #[cfg(feature = "ros2")]
+    let (plain_args, ros_args) = split_ros_args(args);
+    #[cfg(feature = "ros2")]
+    let args = &plain_args;
     let mut o = Options {
         bridge: String::new(),
         out: PathBuf::new(),
@@ -84,10 +93,15 @@ fn parse(args: &[String]) -> Result<Options, String> {
         demo: false,
         control_device: "/dev/car".into(),
         lidar_device: "/dev/laser".into(),
+        #[cfg(feature = "ros2")]
+        lidar_calibration: None,
         max_wait_s: 300.,
         status_s: 0.5,
         light_state: None,
         surface_initial_load: 0.,
+        ros2: cfg!(feature = "ros2"),
+        #[cfg(feature = "ros2")]
+        ros_args,
     };
     let mut i = 0;
     let value = |i: usize| args.get(i + 1).cloned().ok_or_else(|| format!("{} needs a value", args[i]));
@@ -109,8 +123,15 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--status-s" => o.status_s = number(i)?,
             "--control-device" => o.control_device = value(i)?,
             "--lidar-device" => o.lidar_device = value(i)?,
+            #[cfg(feature = "ros2")]
+            "--lidar-calibration" => o.lidar_calibration = Some(PathBuf::from(value(i)?)),
             "--light-state" => o.light_state = Some(PathBuf::from(value(i)?)),
             "--surface-initial-load" => o.surface_initial_load = number(i)?,
+            "--transport" => o.ros2 = match value(i)?.as_str() {
+                "legacy" => false,
+                "ros2" if cfg!(feature = "ros2") => true,
+                _ => return Err("transport must be legacy, or ros2 in a ROS2-enabled build".into()),
+            },
             "--demo" => {
                 o.demo = true;
                 i += 1;
@@ -120,11 +141,10 @@ fn parse(args: &[String]) -> Result<Options, String> {
         }
         i += 2;
     }
-    if o.bridge.is_empty() || o.out.as_os_str().is_empty() {
-        return Err("--bridge and --out are required".into());
-    }
-    if !["enter", "ready", "never"].contains(&o.start.as_str()) {
-        return Err("--start must be enter, ready or never".into());
+    if o.out.as_os_str().is_empty() { return Err("--out is required".into()); }
+    if !o.ros2 && o.bridge.is_empty() { return Err("legacy transport requires --bridge".into()); }
+    if !["enter", "ready", "never", "ros"].contains(&o.start.as_str()) || (o.start == "ros" && !o.ros2) {
+        return Err("--start must be enter, ready, never, or ros with ROS2 transport".into());
     }
     // autonomy-control.py's route drive limit (1..ROUTE_MAX_DRIVE_S).
     if !(1. ..=ROUTE_MAX_DRIVE_S).contains(&o.max_drive_s) {
@@ -133,13 +153,90 @@ fn parse(args: &[String]) -> Result<Options, String> {
     Ok(o)
 }
 
-enum Event {
+/// ROS launch appends a --ros-args block. Pass that block to rcl, while the
+/// existing race parser keeps ownership of its own options after an optional --.
+#[cfg(any(feature = "ros2", test))]
+pub(crate) fn split_ros_args(args: &[String]) -> (Vec<String>, Vec<String>) {
+    let (mut plain, mut ros) = (Vec::new(), Vec::new());
+    let mut in_ros = false;
+    for arg in args {
+        if arg == "--ros-args" { in_ros = true; ros.push(arg.clone()); }
+        else if in_ros {
+            ros.push(arg.clone());
+            if arg == "--" { in_ros = false; }
+        } else { plain.push(arg.clone()); }
+    }
+    (plain, ros)
+}
+
+pub(crate) enum Event {
     Line(&'static str, String, Instant),
     Light(String, Instant),
     Coast(u64, String),
     Ended(&'static str, String),
     Enter,
     StdinClosed,
+    #[cfg(feature = "ros2")]
+    Halt(&'static str),
+}
+
+pub(crate) type CommandWriter = Box<dyn FnMut(&crate::supervisor::Emit) -> Result<(), String>>;
+
+pub(crate) struct Transport {
+    pub writer: Option<CommandWriter>,
+    pub children: Vec<(&'static str, Child)>,
+    #[cfg(feature = "ros2")]
+    pub ros2: Option<crate::race_ros2::Controller>,
+}
+
+impl Transport {
+    fn legacy(o: &Options, tx: &Sender<Event>) -> Result<Self, String> {
+        let mut control = spawn(o, "control", &o.control_device, "/dev/ttyUSB1")?;
+        let mut lidar = match spawn(o, "lidar", &o.lidar_device, "/dev/ttyACM0") {
+            Ok(child) => child,
+            Err(error) => { drop(control.stdin.take()); let _ = control.wait(); return Err(error); }
+        };
+        reader("control", control.stdout.take().unwrap(), tx.clone());
+        reader("lidar", lidar.stdout.take().unwrap(), tx.clone());
+        let mut input = control.stdin.take().unwrap();
+        Ok(Self {
+            writer: Some(Box::new(move |emit| {
+                let mut text = to_json(&emit.row());
+                text.push('\n');
+                input.write_all(text.as_bytes()).and_then(|_| input.flush()).map_err(|e| e.to_string())
+            })),
+            children: vec![("control", control), ("lidar", lidar)],
+            #[cfg(feature = "ros2")]
+            ros2: None,
+        })
+    }
+
+    fn close(&mut self) {
+        self.writer = None;
+        for (_, child) in &mut self.children {
+            drop(child.stdin.take());
+            let deadline = Instant::now() + Duration::from_secs(3);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_)) => break,
+                    Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(20)),
+                    _ => { let _ = child.kill(); let _ = child.wait(); break; }
+                }
+            }
+        }
+        #[cfg(feature = "ros2")]
+        if let Some(ros2) = self.ros2.take() { ros2.close(); }
+    }
+}
+
+pub(crate) fn check_device(device: &str, expected: &str) -> Result<(), String> {
+    let real = std::fs::canonicalize(device).map_err(|e| format!("device {device}: {e}"))?;
+    if real != Path::new(expected) { return Err(format!("device identity changed: {device}")); }
+    let check = Command::new("fuser").arg(device).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    if !matches!(check.map(|s| s.code()), Ok(Some(1))) {
+        return Err(format!("device busy or owner check failed: {device} (stop the console service first)"));
+    }
+    Ok(())
 }
 
 /// The console's spawn(mode, device): device identity and ownership checks,
@@ -152,14 +249,7 @@ pub(crate) fn spawn_bridge(bridge: &str, demo: bool, mode: &'static str, device:
     let mut command = Command::new(bridge);
     command.arg(mode);
     if !demo {
-        let real = std::fs::canonicalize(device).map_err(|e| format!("device {device}: {e}"))?;
-        if real != Path::new(expected) {
-            return Err(format!("device identity changed: {device}"));
-        }
-        let check = Command::new("fuser").arg(device).stdout(Stdio::null()).stderr(Stdio::null()).status();
-        if !matches!(check.map(|s| s.code()), Ok(Some(1))) {
-            return Err(format!("device busy or owner check failed: {device} (stop the console service first)"));
-        }
+        check_device(device, expected)?;
         command.args(["--device", device, "--execute"]);
     }
     command
@@ -352,6 +442,7 @@ struct Program {
     o: Options,
     sup: Supervisor,
     base: Instant,
+    base_monotonic_s: Option<f64>,
     imu: std::sync::Arc<crate::race_imu::LiveImu>,
     rx: Receiver<Event>,
     files: Sender<FileOp>,
@@ -368,6 +459,7 @@ struct Program {
     light: V,
     light_updates: i64,
     light_invalid: i64,
+    external_stop: bool,
 }
 
 /// thread::spawn with a name (it shows in /proc and in the CPU account).
@@ -451,6 +543,11 @@ impl Program {
             }
             Event::Enter => self.entered = true,
             Event::StdinClosed => self.stdin_closed = true,
+            #[cfg(feature = "ros2")]
+            Event::Halt(reason) => {
+                self.external_stop = true;
+                self.sup.halt(reason);
+            }
         }
         false
     }
@@ -544,24 +641,14 @@ pub fn main(args: &[String]) -> i32 {
         return 66;
     }
     let (tx, rx) = mpsc::channel::<Event>();
-    let mut control = match spawn(&o, "control", &o.control_device, "/dev/ttyUSB1") {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("{e}");
-            return 69;
-        }
+    #[cfg(feature = "ros2")]
+    let transport = if o.ros2 { crate::race_ros2::connect(&o, tx.clone()) } else { Transport::legacy(&o, &tx) };
+    #[cfg(not(feature = "ros2"))]
+    let transport = Transport::legacy(&o, &tx);
+    let mut transport = match transport {
+        Ok(link) => link,
+        Err(error) => { eprintln!("{error}"); return 69; }
     };
-    let mut lidar = match spawn(&o, "lidar", &o.lidar_device, "/dev/ttyACM0") {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("{e}");
-            drop(control.stdin.take());
-            let _ = control.wait();
-            return 69;
-        }
-    };
-    reader("control", control.stdout.take().unwrap(), tx.clone());
-    reader("lidar", lidar.stdout.take().unwrap(), tx.clone());
     if let Some(path) = &o.light_state {
         light_reader(path.clone(), tx.clone());
     }
@@ -592,22 +679,26 @@ pub fn main(args: &[String]) -> i32 {
     }
     drop(tx);
     let (files, writer_thread) = writer(o.out.clone());
-    let mut bridge_in = control.stdin.take().unwrap();
     let mut sup = Supervisor::new(o.demo, &token(), "rust_program");
     sup.unix_time = unix_s;
     sup.camera = false;
-    sup.writer = Some(Box::new(move |emit| {
-        let mut text = to_json(&emit.row());
-        text.push('\n');
-        bridge_in.write_all(text.as_bytes()).and_then(|_| bridge_in.flush()).map_err(|e| e.to_string())
-    }));
+    sup.writer = transport.writer.take();
     let max_drive_v = V::Float(o.max_drive_s);
     let initial_v = V::Int(o.initial_presteer_pwm);
-    let bridge_pids = vec![("control", control.id()), ("lidar", lidar.id())];
+    let bridge_pids = transport.children.iter().map(|(name, child)| (*name, child.id())).collect();
+    let base = Instant::now();
+    #[cfg(target_os = "linux")]
+    let base_monotonic_s = {
+        let clock = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
+        Some(clock.tv_sec as f64 + clock.tv_nsec as f64 / 1e9 - base.elapsed().as_secs_f64())
+    };
+    #[cfg(not(target_os = "linux"))]
+    let base_monotonic_s = None;
     let mut p = Program {
         o,
         sup,
-        base: Instant::now(),
+        base,
+        base_monotonic_s,
         imu: Default::default(),
         rx,
         files,
@@ -622,7 +713,14 @@ pub fn main(args: &[String]) -> i32 {
         light: V::None,
         light_updates: 0,
         light_invalid: 0,
+        external_stop: false,
     };
+    // ROS discovery/setup happens before this clock zero. The helper's spawn
+    // timestamp is not an accurate origin for matching vision/IMU evidence.
+    let _ = p.files.send(FileOp::Put("clock.json", to_json(&dict! {
+        "program_base_monotonic_s" => p.base_monotonic_s,
+        "clock" => "Linux CLOCK_MONOTONIC; same origin as Python time.monotonic",
+    })));
     let imu_stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let imu = if p.o.demo {
         None
@@ -638,21 +736,7 @@ pub fn main(args: &[String]) -> i32 {
     let _ = writer_thread.join();
     // Closing the bridges' input: each stops at neutral and exits.
     p.sup.writer = None;
-    for child in [&mut control, &mut lidar] {
-        drop(child.stdin.take());
-        let deadline = Instant::now() + Duration::from_secs(3);
-        loop {
-            match child.try_wait() {
-                Ok(Some(_)) => break,
-                Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(20)),
-                _ => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break;
-                }
-            }
-        }
-    }
+    transport.close();
     if let Some(thread) = imu {
         let _ = thread.join();
     }
@@ -665,6 +749,7 @@ fn run(p: &mut Program) -> i32 {
     while (p.sup.scan.is_none() || !p.sup.status.has("control")) && p.mono() < deadline {
         let until = p.mono() + 0.05;
         p.pump(until);
+        if p.external_stop { return 130; }
     }
     if p.sup.scan.is_none() || !p.sup.status.has("control") {
         p.say("no lidar scan or control feedback within 5 s");
@@ -679,6 +764,7 @@ fn run(p: &mut Program) -> i32 {
     let before = loop {
         let until = p.mono() + 0.1;
         p.pump(until);
+        if p.external_stop { return 130; }
         let now = p.mono();
         p.sup.health_watch(now);
         let state = p.state();
@@ -695,9 +781,10 @@ fn run(p: &mut Program) -> i32 {
             ));
             next_status = now + p.o.status_s.max(0.1);
         }
-        if p.o.start == "enter" {
+        if matches!(p.o.start.as_str(), "enter" | "ros") {
             if ready && !prompted {
-                p.say("READY: press Enter to start the route (Ctrl-C quits; the car stays locked)");
+                p.say(if p.o.start == "ros" { "READY: waiting for /xt_stcar/start=true (stop topic cancels)" }
+                    else { "READY: press Enter to start the route (Ctrl-C quits; the car stays locked)" });
                 prompted = true;
             }
             if p.entered {
@@ -707,7 +794,7 @@ fn run(p: &mut Program) -> i32 {
                 }
                 p.say("not ready; Enter again once the start check passes");
             }
-            if p.stdin_closed && !p.entered {
+            if p.o.start == "enter" && p.stdin_closed && !p.entered {
                 p.say("terminal input closed; use --start ready without a terminal");
                 return 64;
             }
@@ -856,7 +943,10 @@ fn run(p: &mut Program) -> i32 {
     let _ = p.files.send(FileOp::Put("after.json", to_json(&V::list(after.into_iter().collect()))));
     let summary = dict! {
         "run_id" => run_v.clone(), "started" => started, "reason" => result.get("reason").clone(),
-        "route_controller" => "rust_program", "max_tick_compute_s" => result.get("max_tick_compute_s").clone(),
+        "route_controller" => if p.o.ros2 { "ros2_rust" } else { "rust_program" },
+        "transport" => if p.o.ros2 { "ros2_topics" } else { "legacy_pipes" },
+        "program_base_monotonic_s" => p.base_monotonic_s,
+        "max_tick_compute_s" => result.get("max_tick_compute_s").clone(),
         "max_actual_gap_s" => result.get("max_actual_gap_s").clone(), "max_gap_breakdown" => result.get("max_gap_breakdown").clone(),
         "cpu" => cpu, "scan_to_tick" => scan_to_tick, "result" => result,
         "light" => dict! {"state_file" => p.o.light_state.as_ref().map(|path| path.display().to_string()),
@@ -870,6 +960,14 @@ fn run(p: &mut Program) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ros_launch_arguments_preserve_race_options_after_the_ros_block() {
+        let args = ["--demo", "--ros-args", "-r", "__node:=review_node", "--", "--start", "never"].map(String::from);
+        let (plain, ros) = split_ros_args(&args);
+        assert_eq!(plain, ["--demo", "--start", "never"]);
+        assert_eq!(ros, ["--ros-args", "-r", "__node:=review_node", "--"]);
+    }
 
     #[test]
     fn light_states_carry_the_crosswalk_distance() {

@@ -1,0 +1,10 @@
+<launch>
+  <arg name="evidence" description="New evidence directory, never overwritten"/>
+  <arg name="start" default="never"/>
+  <arg name="demo" default="true"/>
+  <arg name="calibration" default="/home/bianbu/xt-stcar-console/20260917/lidar-calibration.json"/>
+  <node if="$(var demo)" pkg="xt_stcar_race" exec="route-engine" output="screen"
+        args="race --transport ros2 --demo --out $(var evidence) --start $(var start)"/>
+  <node unless="$(var demo)" pkg="xt_stcar_race" exec="route-engine" output="screen"
+        args="race --transport ros2 --out $(var evidence) --start $(var start) --lidar-calibration $(var calibration)"/>
+</launch>

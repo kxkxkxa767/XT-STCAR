@@ -86,6 +86,7 @@ def main():
     parser.add_argument('--vision-model-sha256')
     parser.add_argument('--vision-camera', default='/dev/video20')
     parser.add_argument('--light-stop', action='store_true')
+    parser.add_argument('--ros2-setup', help='source this ROS2 setup.bash before launching the Rust program')
     if FIXED_ARGS is not None and sys.argv[1:]:
         raise SystemExit("this round's helper takes no arguments")
     args = parser.parse_args(FIXED_ARGS)
@@ -175,6 +176,16 @@ def main():
             result['light_stop'] = args.light_stop and ready is not None
         started = time.monotonic()
         result['program_started_monotonic_s'] = started
+        if args.ros2_setup:
+            # Startup environment only. Control and hardware nodes remain Rust.
+            # Values are positional shell arguments, never interpolated code.
+            setup = Path(args.ros2_setup)
+            if not setup.is_file():
+                raise RuntimeError(f'ROS2 setup file missing: {setup}')
+            command = ['bash', '-c',
+                       'source "$1" || exit; export ROS_LOCALHOST_ONLY=1 RMW_IMPLEMENTATION=rmw_fastrtps_cpp ROS_LOG_DIR="$2"; shift 2; exec "$@"',
+                       'stcar-ros2', str(setup), str(out/'ros-log'), *command]
+            result['ros2_setup'] = str(setup)
         with (out/'race-stdout.txt').open('w') as stdout:
             p = subprocess.run(command, stdout=stdout, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, timeout=120)
         result.update(program_exit=p.returncode, program_elapsed_s=time.monotonic()-started)

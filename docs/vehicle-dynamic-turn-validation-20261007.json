@@ -30859,5 +30859,211 @@
       ]
     },
     "simulation_plot": "work/codex-y84-fix-20261112/y84-simulation-comparison.png"
+  },
+  "y85_ros2_rust_hardware_migration_20261112": {
+    "date": "2026-11-12",
+    "author": "Codex",
+    "engine_round": 192,
+    "baseline": "Installedy83/190 (85adb21); control algorithms retained from y84/191 (3811dfe)",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "vehicle_host_software_tests_executed": true,
+    "actual_vehicle_ports_opened_in_tests": false,
+    "change": [
+      "Cargo ros2 feature; real Rust race/chassis/lidar nodes. Race defaults to ROS2 transport when built with the feature.",
+      "Chassis commands and control/lidar observations use ROS2 topics. Independent hardware processes reuse Guard/N10/calibration/revolution/PWM implementations. Pipe descriptors are EOF lifelines only.",
+      "Keep original control algorithms,20ms pacing and5ms minimum idle/new-scan wakeup. Bounded command publication off the control thread; one persistent executor spin.",
+      "ROS2 start/stop topics respect original readiness and --start never. Startup helper sourcesHumble; ament package/launch and source export archive included.",
+      "ExplicitROS2 ELF profile; legacy profile restrictions preserved. Runtime path uses actual nativeROS libraries, no use_ros_shim."
+    ],
+    "version_choice": {
+      "distribution": "humble",
+      "rust_client": "rclrs0.8.0",
+      "rmw": "rmw_fastrtps_cpp",
+      "os_changed": false,
+      "reason": "NativeHumble already present and successfully linked/run onBianbu2.2/riscv64. Newer C++/Python executors are not automatically Rust executor upgrades; no cross-distro speed ranking claimed."
+    },
+    "validation": {
+      "native_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 29,
+      "native_clippy_warnings": 32,
+      "ros2_clippy_warnings": 32,
+      "elf_native_profile_rejects_ros_binary": true,
+      "elf_ros2_humble_profile_passed": true,
+      "ros2_graph_demo": {
+        "physical_output": false,
+        "nodes": [
+          [
+            "xt_stcar_race",
+            "/"
+          ],
+          [
+            "xt_stcar_chassis",
+            "/"
+          ],
+          [
+            "xt_stcar_lidar",
+            "/"
+          ],
+          [
+            "stcar_launch_validator",
+            "/"
+          ]
+        ],
+        "topics": [
+          [
+            "/parameter_events",
+            [
+              "rcl_interfaces/msg/ParameterEvent"
+            ]
+          ],
+          [
+            "/rosout",
+            [
+              "rcl_interfaces/msg/Log"
+            ]
+          ],
+          [
+            "/xt_stcar/control_command",
+            [
+              "std_msgs/msg/String"
+            ]
+          ],
+          [
+            "/xt_stcar/control_state",
+            [
+              "std_msgs/msg/String"
+            ]
+          ],
+          [
+            "/xt_stcar/scan_frame",
+            [
+              "std_msgs/msg/String"
+            ]
+          ],
+          [
+            "/xt_stcar/start",
+            [
+              "std_msgs/msg/Bool"
+            ]
+          ],
+          [
+            "/xt_stcar/stop",
+            [
+              "std_msgs/msg/Bool"
+            ]
+          ]
+        ],
+        "start_never_ignored_start_topic": true,
+        "launch_exit_code": 0,
+        "control_frames": 21,
+        "lidar_frames": 5,
+        "passed": true
+      },
+      "software_uart_guard": {
+        "device": "/dev/pts/1",
+        "real_vehicle_devices_opened": false,
+        "nodes": [
+          [
+            "stcar_migration_validator",
+            "/"
+          ],
+          [
+            "xt_stcar_chassis",
+            "/"
+          ]
+        ],
+        "drive_ack_s": 0.019320909999805735,
+        "heartbeat_stop_s": 0.3252262259998133,
+        "heartbeat_status": {
+          "armed": false,
+          "motor": 1500,
+          "reason": "heartbeat_timeout",
+          "seq": 2,
+          "servo": 1500,
+          "tick": 369
+        },
+        "lifeline_exit_code": 0,
+        "lifeline_exit_s": 0.6220270850003544,
+        "uart_packets": 42,
+        "uart_drive_seen": true,
+        "passed": true
+      },
+      "transport_benchmark": [
+        {
+          "mode": "pipe",
+          "reports": [
+            {
+              "combined_core_fraction": 0.01513171649300143,
+              "combined_rss_kib": 26360,
+              "count": 200,
+              "max_rtt_ms": 1.6117970000000001,
+              "max_sender_interval_ms": 20.22821,
+              "mean_rtt_ms": 0.244929165,
+              "p95_rtt_ms": 0.513682,
+              "p99_rtt_ms": 1.04603,
+              "payload_bytes": 128,
+              "received": 200
+            },
+            {
+              "combined_core_fraction": 0.00412416605846433,
+              "combined_rss_kib": 26360,
+              "count": 80,
+              "max_rtt_ms": 0.5816,
+              "max_sender_interval_ms": 100.255942,
+              "mean_rtt_ms": 0.32461674999999984,
+              "p95_rtt_ms": 0.391428,
+              "p99_rtt_ms": 0.432012,
+              "payload_bytes": 12000,
+              "received": 80
+            }
+          ]
+        },
+        {
+          "mode": "ros",
+          "reports": [
+            {
+              "combined_core_fraction": 0.15404787034402015,
+              "combined_rss_kib": 39140,
+              "count": 200,
+              "max_rtt_ms": 9.915288,
+              "max_sender_interval_ms": 21.511999,
+              "mean_rtt_ms": 2.9138960049999993,
+              "p95_rtt_ms": 5.775168,
+              "p99_rtt_ms": 8.778421999999999,
+              "payload_bytes": 128,
+              "received": 200
+            },
+            {
+              "combined_core_fraction": 0.035080662888441354,
+              "combined_rss_kib": 39140,
+              "count": 80,
+              "max_rtt_ms": 5.953881,
+              "max_sender_interval_ms": 100.527592,
+              "mean_rtt_ms": 2.9927574249999997,
+              "p95_rtt_ms": 4.647594,
+              "p99_rtt_ms": 5.429824,
+              "payload_bytes": 12000,
+              "received": 80
+            }
+          ]
+        }
+      ],
+      "benchmark_scope": "Two-process Reliable echo, warmup before both modes, not the complete race controller; hardware scan/status useBestEffort. RTT cannot be treated as one-way or lap performance.",
+      "performance_unchanged_proven": false,
+      "full_ros2_physical_loop_validated": false
+    },
+    "build_status": "ROS2 cross-build/ament staging and software validations complete; prepare192/y85 release from committed source",
+    "evidence_dir": "work/ros2-migration-20261112",
+    "report": "docs/ros2-rust-migration-20261112.md",
+    "known_boundaries": [
+      "Additional mean echoRTT~2.7ms; no performance-equality claim.",
+      "String/JSON envelopes are not loanedPOD zero-copy messages.",
+      "Carstillhasros2bag/rosbag2; no packages removed.",
+      "New8x6provincial-track simulation remains paused.",
+      "No new physical launch authorization."
+    ],
+    "next": "Build192/y85 fromclaude-turn190; record and hand off toClaude for review. Actual deployment/full vehicle run requires subsequent instruction and fresh placement/reset confirmation."
   }
 }
