@@ -31354,7 +31354,7 @@
     "author": "Codex",
     "engine_round": 194,
     "baseline": "installed claude-turn193/y86/f5d43fb",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "change": [
       "Race only: before cone-two geometric tangent, keep existing approach speed hold even when a heading correction ends the straight steering window. Boost eligibility stays unchanged.",
@@ -31375,8 +31375,26 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
-    "build_status": "Source ready for194/y87 cross-build; automatic deployment authorized, no new start authorization",
+    "build_status": "194/y87 built and deployed; locked, awaiting fresh 好了",
     "deployment_policy": "Deploy after build and keep locked; only launch after a fresh operator 好了.",
-    "next": "Cross-build from installed claude-turn193, build y87 helper, deploy both and lock."
+    "next": "Only after fresh operator start confirmation, run scripts/start-round.py y87 in background.",
+    "source_commit": "12f376ecbc449f062ad8a7ea43a4ff88f063dcb5",
+    "package": {
+      "engine": "claude-turn194",
+      "vision": "y87",
+      "baseline": "claude-turn193",
+      "runtime_changed": [
+        "payload/route-engine"
+      ],
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn194-12f376e.tar.gz"
+    },
+    "deployment": {
+      "result_file": "work/vehicle-dynamic-deploy-20261008/claude-turn194-deployment-result.json",
+      "source_commit": "12f376ecbc449f062ad8a7ea43a4ff88f063dcb5",
+      "deployed": true,
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn194-20261112-150222",
+      "motion_requested": false,
+      "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y87-20261112-150230"
+    }
   }
 }
