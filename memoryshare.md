@@ -1059,3 +1059,51 @@ y87第二桶接近修正本轮已生效：148帧距切点0.104m、桶心速度�
 
 - 本地验证：`cargo build --release` 通过，`cargo test --release` **33 项全通**（新增 `light_approach_steps_1570_down_once_to_1550_without_toggling_before_1530_and_1300` 与 `switching_to_confirmed_gantry_legs_resets_preview_gap_bias_while_keeping_imu_slope`），`cargo clippy --release` 保持 32 条既有警告（0 新增），`web/vehicle-console/tests` **968 项回归全通**。
 - 按用户“先不编译了，更新共同记忆后上传仓库”指令：**本次仅提交并推送源码、轨迹图与文档，未执行交叉编译建包（`package-ros2-round.py`）和车端部署**。车上仍保持 `y87／194` 锁定状态；后续如需上车测试 `y88／195`，从当前提交交叉编译并部署即可。旧条目保留。
+
+
+## 2026-11-12 · Claude Opus 4.6 Thinking（Antigravity） → GPT-6 Astra · y88／195 实车已跑完取回，单次降1550已生效并停入区中（+0.213m），但停点偏近门架致摄像头看不到红绿灯，交接下一轮 y89／196
+
+**作者模型声明：我是 Claude Opus 4.6 Thinking（运行在 Antigravity 环境中）。明确要求接手的 GPT-6 Astra：不要加多余的检查、冗余限制、自杀式超时门或防御性编程，直接针对实车数据定位的根因做最小精确修改。**
+
+### 一、y88／195（`ee6252c`）实跑结果与证据
+
+- 用户连上 SSH 授权测试后，已从 `ee6252c` 构建 `claude-turn195`（`work/vehicle-dynamic-deploy-20261008/claude-turn195-package.json`）及视觉助手 `y88`（`claude-y88-package.json`），部署上车并执行 `python3 scripts/start-round.py y88`。
+- **取回证据**：`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y88`（**62/62 文件 SHA256 校验一致**），跑后车况 `armed=False`、电机 `1500`、舵机 `1500` 已锁定。
+- **已生成 `y88` 局部重建轨迹与 PWM/航向/速度/刹车联合诊断图**：`work/codex-y87-trial-20261112/y88-light-approach-and-brake.png`（数据 `work/codex-y87-trial-20261112/y88-plot-data.json`，脚本 `work/codex-y87-trial-20261112/plot_y88.py`）。
+- **全圈关键事件与用时**：
+  - `start_lane`：`1.745683 s`（`seq 15`）
+  - `crosswalk_stop`：`5.140725 s`（`seq 49`，`gap = 0.4620 m`）→ `crosswalk_go`：`8.335801 s`（`seq 81`，等待 `3.195 s`）
+  - `first_pass`：`12.331707 s`（`seq 121`，第一桶 `min_slack = 0.143 m`）
+  - `second_pass`：`15.727635 s`（`seq 155`，第二桶 `min_slack = 0.103 m`）
+  - `light_divider_prediction`：`15.826131 s`（`seq 156`）
+  - `light_gantry`：`16.722355 s`（`seq 165` 连续两帧双腿确认）
+  - `light_stop`：`19.025137 s`（`seq 188`，**`front_gap_m = +0.212874 m`**，`rear_past_sensor_m = +0.392462 m`，`rear_to_gantry_m = +0.607538 m`，程序判 `basis = "stopped_after_camera_red"` 整车在停车区内）
+  - `light_go`：`28.606753 s`（`seq 284`，等待 `9.575 s`，因停点距门架仅 `0.213 m` 灯头高出画面上沿，相机检出 `red_light = 3`、`green_light = 0`，走 `red_seen_10_5s_no_fresh_red` 兜底放行）
+  - `finish_stop`：`32.003423 s`（`seq 318`，`front_gap_m = 0.257721 m`，`basis = "stopped_with_the_whole_car_in_the_finish_zone"`，补进 0 次）
+  - **总行驶时间**：起步到终点 `30.258 s`，扣除红灯等待 `9.582 s` 后**净行驶时间 `20.676 s`**；全程无质量等待（`quality_waits = 0`），最大控制间隔 `25.146 ms`，雷达扫描至决策平均 `1.537 ms`。
+
+### 二、y88 已验证生效的修改与“停在 +0.213m 过近看不见灯”的精确根因
+
+1. **`y88` 两项改动均按预期生效（停点从 `y87` 的 `-0.0498 m` 提前了 `26.3 cm` 到 `+0.2129 m`）**：
+   - **单次降档无跳变**：`seq 156`（`15.826 s`，`h = 76.7°`，`gap = 4.172 m`，`v_body = 1.963 m/s`）一进入 `light_entry` 即从 `1570` 单次降到 `1550`（`approach_hold`），保持至 `seq 166`（`16.823 s`，`gap = 2.496 m`）切入 `1530`（`rolling_low`），再到 `17.045 s`（`seq 168`）切入连续 `1300` 制动至 `18.983 s` 停稳回 `1500`。全程 `1570 → 1550 → 1530 → 1300 → 1500` 单向递减，无任何跳变。
+   - **门腿确认融合重置已生效**：`seq 165/166` 切换到 `confirmed_gantry_legs` 时，`gap = 2.4960 m`、`control_front_gap_m = 2.5118 m`（仅差 `1.6 cm`，消除了 `y87` 的 `+10.1 cm` 预告残留偏置）。
+2. **为什么 `y88` 停在 `+0.213 m`（比可见灯头目标 `+0.55 m` 近了 `33.7 cm`，导致摄像头仰角看不到门架上方红绿灯，与历史 `y29` 停在 `0.202 m` 丢灯同因）？数据暴露两处明确原因**：
+   - **原因 A（主因，占约 `22 cm`）：出第二桶大航向角转弯期间（`15.584 s → 16.085 s`）IMU 纵向积分受横向/向心耦合产生 `-0.518 m/s` 伪减速，把卡尔曼滤波车速 `filtered_body_speed_mps` 拉低了 `0.32 m/s`**：
+     - `seq 155`（`15.584 s`，`h = 89.1°`）用第二桶实测车速初始化 `speed_kalman` 为 `1.963 m/s`。
+     - 在 `seq 156–159`（`15.826 s → 16.128 s`，`h = 76.7° → 43.4°`），由于 `axis_cos < cos(45°)`，`speed_kalman.observe_radar_body` 未更新，但 `speed_kalman.last_integral` 仍锚定在 `15.584 s`！这 `0.50 s` 急右转期间，车体在 `1550` 下真实速度几乎未降（`seq 161` 雷达实测 `radar_body_speed_mps = 1.869 m/s`），但 IMU `forward_integral` 因急转弯耦合累积了 `-0.518 m/s` 负增量。
+     - 当 `seq 161`（`16.325 s`，`h = 20.0°`）首次恢复 `axis_cos >= cos(45°)` 更新时，卡尔曼先验 `predicted_body_speed_mps` 被拉低到 **`1.445 m/s`**，并把雷达实测的 `1.869 m/s` 当作“离群值”（`measurement_noise_scale = 3.08`，`innovation_weight = 0.234`），导致滤波输出 `filtered_body_speed_mps` 暴跌至 **`1.544 m/s`**（比真实雷达车速低 `0.325 m/s`）！
+     - 直到 `seq 166`（`16.823 s`，`gap = 2.496 m`）和 `seq 167`（`16.928 s`，`gap = 2.310 m`），真实雷达车速 `radar_body_speed_mps` 仍高达 **`1.892 m/s` 和 `1.858 m/s`**，但滤波车速 `filtered_body_speed_mps` 仍只有 **`1.738 m/s` 和 `1.772 m/s`**（偏低 `0.09 ~ 0.15 m/s`）。
+     - 结果：在 `seq 167`（`16.928 s`，`gap = 2.310 m`），`LightBrake` 用偏低的 `projected_speed_mps = 1.747 m/s` 算出 `brake_stop_gap_m = 0.598 m > 0.55 m` 而未触发 `1300`（若按真实雷达速 `1.858 m/s` 计算，`brake_stop_gap_m ≈ 0.44 m < 0.55 m`，应在 `seq 166/167` 即提前约 `120 ms` 触发 `1300` 和更早从 `1550` 切 `1530`，直接少走约 **`22 cm`**）。
+   - **原因 B（次因，占约 `12 cm`）：`1550 → 1530` 切换与 `1300` 制动模型余量**：
+     - 在 `seq 169`（`17.125 s`，刚进 `1300` 仅 `80 ms`，`gap = 1.933 m`，`v_now = 1.727 m/s`），`LightBrake` 预测停点 `brake_stop_gap_m` 为 `0.377 m`，而实际到 `seq 188` 停在 `0.213 m`（`1300` 实测从 `1.727 m/s` 刹停滑行了 `1.720 m`，比 `BrakeModel::light` 预测多滑了约 `16 cm`）。
+
+### 三、给 GPT-6 Astra 的下一轮 `y89／196` 修改建议
+
+- **基线**：当前车上已部署并锁定的 `claude-turn195`（源码 `ee6252c`），下一版为 **`y89／196`**。
+- **建议最小修改点（只改 `route-engine/src/` 比赛分支）**：
+  1. **修复 `RaceSpeedKalman` 跨大航向角（`axis_cos < cos(45°)`）期间的 IMU 积分锚点（`race_light.rs` / `race_speed_kalman.rs`）**：
+     - 当 `axis_cos < MIN_AXIS_COS` 跳过雷达速度更新时，或者在 `second_cone_motion`（`entry_motion`）持续提供新鲜桶心车体速度期间，同步用 `entry_motion` 更新/重锚 `speed_kalman`（或在 `axis_cos` 重新达到 `MIN_AXIS_COS` 的首帧不叠加 `axis_cos < MIN_AXIS_COS` 大转弯期间的 IMU 负积分，或直接将 `speed_kalman` 锚点更新为当前帧 `forward_integral`），避免 `seq 161` 出现 `1.96 → 1.44 m/s` 的伪跌落。
+  2. **提早 `1550 (Hold) → 1530 (Coast)` 或校准灯前制动触发裕度（`maneuver_light.rs` / `race_light_brake.rs`）**：
+     - 检查 `if_renewed` 与 `LightBrake`：修正上述速度偏低后，`seq 162–164`（`gap ≈ 3.0–3.3 m`）就会更早从 `1550` 切入 `1530`，且 `1300` 会在 `gap ≈ 2.25–2.35 m` 触发；同时可核对 `y87`/`y88` 两轮实测 `1300` 减速度（从 `1.73 m/s` 刹停实测需 `1.72 m`），确保灯前稳稳停在 **`+0.45 ~ +0.60 m`** 区间，让摄像头清晰看到红绿灯。
+- **工作流程提醒**：改好编译后默认部署上车并保持锁定，等用户说“好了”再发车。旧条目全部保留。
+

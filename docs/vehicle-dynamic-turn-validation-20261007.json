@@ -31538,6 +31538,89 @@
       "cargo_clippy_release": "32 warnings (unchanged)",
       "python_reference_tests": "968 passed"
     },
-    "package_and_deployment_status": "Source committed and pushed per user instruction ('先不编译了'); cross-compilation and vehicle deployment intentionally skipped for now."
+    "package": {
+      "package_json": "work/vehicle-dynamic-deploy-20261008/claude-turn195-package.json",
+      "vision_package_json": "work/vehicle-dynamic-deploy-20261008/claude-y88-package.json",
+      "source_commit": "ee6252cf34aba86369246fcb67799e107fa1ffe8",
+      "route_engine_sha256": "3fb83de3d1a85fe56143a252aa1f188f7675e12df73d6f842e04091dcb68554b",
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn195-ee6252c.tar.gz"
+    },
+    "deployment": {
+      "result_file": "work/vehicle-dynamic-deploy-20261008/claude-turn195-deployment-result.json",
+      "source_commit": "ee6252cf34aba86369246fcb67799e107fa1ffe8",
+      "deployed": true,
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn195-20261112-181018",
+      "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y88-20261112-181018"
+    },
+    "car_run_y88": {
+      "date": "2026-11-12",
+      "author": "Claude",
+      "author_model": "Claude Opus 4.6 Thinking (Antigravity)",
+      "source_commit": "ee6252cf34aba86369246fcb67799e107fa1ffe8",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y88",
+      "retrieved_files": 62,
+      "reason": "route_finish_zone_stop",
+      "route_completed": true,
+      "traffic_light_stop_in_zone": true,
+      "traffic_light_head_visible_at_stop": false,
+      "elapsed_s": 30.25773976,
+      "light_wait_s": 9.581616093,
+      "net_without_penalty_s": 20.676123667,
+      "event_program_s": {
+        "start_lane": 1.745683022,
+        "crosswalk_planned_at_rest": 2.247451265,
+        "crosswalk_stop": 5.140724558,
+        "crosswalk_go": 8.335801295,
+        "start_lane_board_ahead_cut": 9.33509048,
+        "first_approach_handover": 9.835320918,
+        "first_pass": 12.331706562,
+        "second_handover": 13.534445854,
+        "second_pass": 15.727635473,
+        "light_divider_prediction": 15.826130551,
+        "light_gantry": 16.72235461,
+        "light_aligned": 18.329048075,
+        "light_lane": 18.329048075,
+        "light_stop": 19.025137151,
+        "light_go": 28.606753244,
+        "finish_stop": 32.003422782
+      },
+      "operator_report": "这一轮刹车后停的位置不好，摄像头看不到红绿灯",
+      "light_stop": {
+        "front_gap_m": 0.21287429401746308,
+        "rear_past_sensor_m": 0.39246198033210933,
+        "rear_to_gantry_m": 0.6075380196678907,
+        "basis": "stopped_after_camera_red",
+        "release_basis": "red_seen_10_5s_no_fresh_red",
+        "first_saved_1550_s": 15.826130551,
+        "first_saved_1530_s": 16.823,
+        "brake_started_at": 17.045450894,
+        "brake_ended_at": 18.982917445,
+        "brake_end_reason": "stopped",
+        "red_frames": 3,
+        "green_frames_total": 0
+      },
+      "finish": {
+        "front_gap_m": 0.2577209987747458,
+        "whole_car_in_finish_zone": true,
+        "basis": "stopped_with_the_whole_car_in_the_finish_zone",
+        "creeps": 0,
+        "brake_started_at": 29.555492452,
+        "brake_ended_at": 31.622408021
+      },
+      "max_actual_gap_s": 0.025145542,
+      "scan_to_tick": {
+        "scans": 312,
+        "mean_s": 0.0015365729134616264,
+        "max_s": 0.0084
+      },
+      "quality_waits": 0,
+      "after_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "trajectory_plot": "work/codex-y87-trial-20261112/y88-light-approach-and-brake.png",
+      "trajectory_data": "work/codex-y87-trial-20261112/y88-plot-data.json"
+    }
   }
 }
