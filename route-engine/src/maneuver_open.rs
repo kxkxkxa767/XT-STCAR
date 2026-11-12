@@ -1640,10 +1640,12 @@ impl Maneuver {
             return None;
         }
         let u = ((-heading).pcos(), (-heading).psin());
-        // Round y3: while stopping for the light, nearly aligned, the gantry's centre line.
+        // Race: steer along the board-defined lane. y85's turning scan put
+        // both inferred legs to the right and latched a false -0.15m shift.
+        // The lamp observation still locates the longitudinal stopping plane.
         let lateral = lateral.unwrap_or_else(|| {
             let centre = lane.idx("center_lateral_m").f();
-            if self.light_stop_active() && heading.abs() <= light_center_max_heading_rad() {
+            if self.race_inputs.is_none() && self.light_stop_active() && heading.abs() <= light_center_max_heading_rad() {
                 centre + self._light_center_shift_m
             } else {
                 centre
@@ -1701,13 +1703,15 @@ impl Maneuver {
                 // while the car still needed to turn into the lane. Let the
                 // prediction strengthen a turn, not release current correction
                 // before the observed heading has reached the lane axis.
-                let (curvature, kept_current) = entry_response_curvature(current.0, predicted.0, heading);
+                let response_heading = wrap(heading + response.2);
+                let (curvature, kept_current) = entry_response_curvature(current.0, predicted.0, heading, response_heading);
                 lane.set("entry_steering_response", dict! {
                     "current_pwm" => current.1, "predicted_pwm" => predicted.1,
                     "current_curvature_per_m" => current.0,
                     "predicted_curvature_per_m" => predicted.0,
                     "selected_curvature_per_m" => curvature,
                     "axis_heading_error_rad" => wrap(-heading),
+                    "response_heading_rad" => response_heading,
                     "kept_current_correction" => kept_current,
                     "response_speed_mps" => response_speed,
                     "speed_source" => if entry_speed.is_some() && response_rate.is_some() { "second_cone_motion_plus_short_imu" } else { "original_speed_fallback" },
@@ -1966,12 +1970,14 @@ impl Maneuver {
 }
 
 /// The entry prediction may anticipate a stronger turn. A weaker or reversed
-/// prediction must not dilute current steering that reduces the measured lane
-/// heading error. Once that error changes side, ordinary anticipation resumes.
-fn entry_response_curvature(current: f64, predicted: f64, heading: f64) -> (f64, bool) {
+/// prediction must not dilute correction while the response still leaves the
+/// car heading to the same side. Begin unwinding before the predicted crossing,
+/// rather than waiting for the measured heading to cross after the actuator lag.
+fn entry_response_curvature(current: f64, predicted: f64, heading: f64, response_heading: f64) -> (f64, bool) {
     let toward_axis = current * wrap(-heading) > 0.;
     let weakens = current * predicted <= 0. || predicted.abs() < current.abs();
-    if toward_axis && weakens { (current, true) } else { ((current + predicted) * 0.5, false) }
+    let before_crossing = wrap(heading) * wrap(response_heading) > 0.;
+    if toward_axis && weakens && before_crossing { (current, true) } else { ((current + predicted) * 0.5, false) }
 }
 
 /// _guarded_pursuit(point, build, pose, u).
@@ -1998,18 +2004,21 @@ mod round106_tests {
 
     #[test]
     fn entry_prediction_preserves_axis_correction_and_releases_after_crossing() {
-        for (heading, current, predicted, expected, held) in [
-            (0.7, -0.8, -0.2, -0.8, true),
-            (-0.7, 0.8, 0.2, 0.8, true),
-            (0.7, -0.8, 0.2, -0.8, true),
-            (-0.7, 0.8, -0.2, 0.8, true),
-            (0.7, -0.8, -1.2, -1.0, false),
-            (-0.7, 0.8, 1.2, 1.0, false),
-            (-0.1, -0.8, 0.2, -0.3, false),
-            (0.1, 0.8, -0.2, 0.3, false),
-            (0.0, -0.8, 0.2, -0.3, false),
+        for (heading, response_heading, current, predicted, expected, held) in [
+            (0.7, 0.2, -0.8, -0.2, -0.8, true),
+            (-0.7, -0.2, 0.8, 0.2, 0.8, true),
+            (0.7, 0.2, -0.8, 0.2, -0.8, true),
+            (-0.7, -0.2, 0.8, -0.2, 0.8, true),
+            // y85 crossed during the response while still holding full turn.
+            (0.5, -0.3, -0.8, 0.4, -0.2, false),
+            (-0.5, 0.3, 0.8, -0.4, 0.2, false),
+            (0.7, 0.2, -0.8, -1.2, -1.0, false),
+            (-0.7, -0.2, 0.8, 1.2, 1.0, false),
+            (-0.1, -0.2, -0.8, 0.2, -0.3, false),
+            (0.1, 0.2, 0.8, -0.2, 0.3, false),
+            (0.0, -0.2, -0.8, 0.2, -0.3, false),
         ] {
-            let (selected, kept_current) = entry_response_curvature(current, predicted, heading);
+            let (selected, kept_current) = entry_response_curvature(current, predicted, heading, response_heading);
             assert!((selected - expected).abs() < 1e-12);
             assert_eq!(kept_current, held);
         }

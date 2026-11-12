@@ -696,6 +696,7 @@ impl Maneuver {
                 self.race_light.phase = LightRoll::Cruise;
             }
             if passed && self.race_inputs.is_some() {
+                self.prepare_finish_pass(now, heading);
                 self.light_stop_state = Some("passed");
                 self.route_event("light_pass_without_red", scan, control, ended);
             }

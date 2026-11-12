@@ -960,3 +960,14 @@ y83 检查与轨迹补充：最小转向修正已实现，Mac release build、�
 ## 2026-11-12 · Codex · y85／192已部署，等待“好了”再启动
 
 按用户“先部署到车上，我说好了再启动”，已部署a50ce68的claude-turn192及视觉助手y85；部署结果成功、输出锁定中位，未发车。首次安装报missing target library，实际库已安装，只缺启动环境：工程内deploy-matched.py对ROS2包先source /opt/ros/humble/setup.bash；车端控制台服务增加 ~/.config/systemd/user/xt-stcar-console.service.d/ros2-runtime.conf，将Humble的lib/riscv64-linux-gnu与lib加入LD_LIBRARY_PATH。没有改控制代码、没有增加停机条件。原环境备份在车端 work/y85-deploy-ros-env-20261112/previous-environment.json，旧软件备份 backup-claude-turn192-20261112-134938。下一步等用户说“好了”，再后台运行start-round.py y85。
+
+
+## 2026-11-12 · Codex · y85灯区右偏、终点碰板；y86修正及默认部署流程
+
+用户说“好了”后实跑y85／192（a50ce68），47文件取回 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y85`，结束probe_obstacle_close_body，用户确认灯区往右避开光电后冲灯、最后撞到终点挡板。未完赛，成绩为空；跑后锁定1500/1500。无质量等待，最大控制间隔21.815ms、扫描至决策平均1.349ms。
+
+关键定位：161帧航向约29°，响应期预测约−17°，原规则仍给1365右舵，随后到约−25°才反打；没有入口绕障偏移或path override，另有灯架腿对带来的−0.15m横向目标修正。灯刹17.224→19.614s连续1300，本轮没有被越线逻辑中途取消；19.713s无红灯通过，终点段imu_zero始终缺失。终点1300于20.991s开始，IMU接续重建约1.63m/s，雷达滞后补偿偏低，最终碰板。图 `work/codex-y85-trial-20261112/y85-light-entry-and-finish.png` 为局部雷达/航向重建，光电按现场1m间距示意。
+
+y86／193（基线claude-turn192）：响应预计越过轴线前恢复转向提前量，较早y82碰板帧仍保留当前纠偏；比赛横向沿挡板中心，不让临时腿对偏移转向目标，柱身份逻辑不改；passed分支接续已有运动速度和IMU给终点，纯雷达回退也使用1570动力预测。未加停机门、时钟或保护条件，ROS队列/SHM优化和原Guard/8cm门不动。Mac build、968参考回归、30Rust检查通过，clippy32；准备建包并部署。
+
+**用户最新明确要求：以后每次改好编译后默认部署到车上，保持锁车；用户重新说“好了”才开始跑。** 本轮按此执行，旧发车确认已用完。省赛新赛道仿真仍暂停。旧记录保留。

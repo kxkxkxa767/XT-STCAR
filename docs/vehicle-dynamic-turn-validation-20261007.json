@@ -30866,7 +30866,7 @@
     "engine_round": 192,
     "baseline": "Installedy83/190 (85adb21); control algorithms retained from y84/191 (3811dfe)",
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "vehicle_host_software_tests_executed": true,
     "actual_vehicle_ports_opened_in_tests": false,
     "change": [
@@ -31122,7 +31122,7 @@
       "New8x6provincial-track simulation remains paused.",
       "No new physical launch authorization."
     ],
-    "next": "Await operator 好了 / start placement and reset confirmation; then start-round.py y85.",
+    "next": "y86/193 fixes entry anticipation and lane-centre steering, carries pass velocity into finish; auto-deploy after build, launch only on new 好了.",
     "source_commit": "a50ce68ef36d584959dd1038ede9e3b9255b8349",
     "deployment_20261112": {
       "result_file": "work/vehicle-dynamic-deploy-20261008/claude-turn192-deployment-result.json",
@@ -31137,6 +31137,154 @@
       },
       "vision_helper_deployed": true,
       "runtime_environment_fix": "Source /opt/ros/humble/setup.bash for ROS2 deploy subprocess; console service user drop-in ros2-runtime.conf adds /opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib to LD_LIBRARY_PATH. No controller code change."
+    },
+    "car_run_y85": {
+      "date": "2026-11-12",
+      "source_commit": "a50ce68",
+      "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y85",
+      "files_retrieved": 47,
+      "completed": false,
+      "effective_s": null,
+      "reason": "probe_obstacle_close_body",
+      "physical_collision_confirmed": true,
+      "collision_location": "finish board",
+      "operator_feedback": [
+        "红绿灯停车区往右打方向，避开光电后冲过红绿灯",
+        "最后没有刹住，撞到挡板"
+      ],
+      "events": {
+        "start_lane": {
+          "seq": 15,
+          "program_s": 1.8454716740000001
+        },
+        "crosswalk_planned_at_rest": {
+          "seq": 21,
+          "program_s": 2.445968896
+        },
+        "crosswalk_stop": {
+          "seq": 52,
+          "program_s": 5.540767684
+        },
+        "crosswalk_go": {
+          "seq": 84,
+          "program_s": 8.735009135
+        },
+        "start_lane_board_ahead_cut": {
+          "seq": 94,
+          "program_s": 9.730074051999999
+        },
+        "first_approach_handover": {
+          "seq": 106,
+          "program_s": 10.930990203
+        },
+        "first_pass": {
+          "seq": 125,
+          "program_s": 12.826602819
+        },
+        "second_handover": {
+          "seq": 137,
+          "program_s": 14.025197621
+        },
+        "second_pass": {
+          "seq": 156,
+          "program_s": 15.920833421
+        },
+        "light_divider_prediction": {
+          "seq": 157,
+          "program_s": 16.021074261
+        },
+        "light_gantry": {
+          "seq": 164,
+          "program_s": 16.719887877
+        },
+        "light_aligned": {
+          "seq": 178,
+          "program_s": 18.116875176
+        },
+        "light_lane": {
+          "seq": 178,
+          "program_s": 18.116875176
+        },
+        "light_pass_without_red": {
+          "seq": 194,
+          "program_s": 19.713382042
+        }
+      },
+      "camera_red_frames": 0,
+      "camera_green_frames": 0,
+      "quality_wait_counts": {},
+      "max_tick_compute_s": 0.008882326000001939,
+      "max_actual_gap_s": 0.021814851000000024,
+      "scan_to_tick": {
+        "scans": 209,
+        "mean_s": 0.0013492939569379099,
+        "max_s": 0.0069091659999998,
+        "basis": "reader receive time -> start of the tick that decided on it"
+      },
+      "light_brake": {
+        "phase": "used",
+        "started_at": 17.224201754,
+        "ended_at": 19.61404622,
+        "end_reason": "stopped",
+        "anchor_at": 19.61404622,
+        "brake_base_decel_mps2": 0.6577107665238143,
+        "brake_speed_gain_per_s": 0.315219,
+        "response_accel_mps2": -0.07360239441701764,
+        "projection_at": 19.61404622,
+        "projection_anchor_at": 19.61404622,
+        "projection_age_s": 0.0,
+        "projected_gap_m": -0.6118173585571762,
+        "projected_speed_mps": 0.013252701664111839,
+        "coast_stop_gap_m": -0.6119726162936618,
+        "brake_stop_gap_m": -0.6128009625871147,
+        "release_stop_gap_m": -0.6119500351050075,
+        "projection_basis": "short_imu_delta",
+        "gap_observed_at": 19.61404622,
+        "measured_gap_m": -0.5876424933602415,
+        "predicted_gap_m": -0.6236889963972008,
+        "gap_innovation_m": 0.03604650303695922,
+        "gap_correction_m": 0.01187163784002454,
+        "control_gap_m": -0.6118173585571762,
+        "gap_innovation_weight": 0.32934228953783046,
+        "gap_fusion_response_s": 0.2,
+        "gap_fusion_basis": "candidate_range_innovation_fusion_on_imu_propagation"
+      },
+      "finish_brake_start_s": 20.991165313,
+      "light_entry_min_heading_deg": -25.21,
+      "gantry_center_shift_m": -0.15,
+      "light_entry_path_overrides": 0,
+      "finish_imu_anchor_missing": true,
+      "imu_speed_at_finish_brake_reconstructed_mps": 1.634,
+      "after_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "plot": "work/codex-y85-trial-20261112/y85-light-entry-and-finish.png"
     }
+  },
+  "y86_entry_anticipation_finish_motion_20261112": {
+    "date": "2026-11-12",
+    "author": "Codex",
+    "engine_round": 193,
+    "baseline": "installedclaude-turn192/y85/a50ce68",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "Race light entry retains current correction only while the predicted response heading stays on the same side of the lane axis; unwind before predicted crossing. Earlier y82 failure frames retain the current-correction floor.",
+      "Race lateral steering follows the board-defined lane centre; gantry observations still locate the longitudinal stop, but inferred-leg centre offset no longer pulls steering15cm right. Station-pair role logic unchanged.",
+      "Unlit passed transition carries existing motion/IMU velocity into finish, instead of missing imu_zero; the range-only fallback accounts for actual1570 propulsion."
+    ],
+    "validation": {
+      "native_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 30,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation_sweep": false
+    },
+    "build_status": "checks complete; prepare193/y86",
+    "deployment_policy": "User explicitly: after every completed fix/build deploy by default, keep locked; start only after new 好了.",
+    "next": "Build and deploy193/y86 fromclaude-turn192, then wait for new start confirmation."
   }
 }

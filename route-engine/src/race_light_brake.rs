@@ -202,6 +202,10 @@ impl LightBrake {
         self.project(now, forward_integral).map(|p| p.gap)
     }
 
+    pub fn control_speed(&self, now: f64, forward_integral: Option<f64>) -> Option<f64> {
+        self.project(now, forward_integral).map(|p| p.speed)
+    }
+
     fn project(&self, now: f64, forward_integral: Option<f64>) -> Option<Projection> {
         let anchor = self.anchor?;
         let age = now - anchor.at;

@@ -35,6 +35,18 @@ mod continuous_race_tests {
     use super::*;
 
     #[test]
+    fn unlit_pass_carries_motion_instead_of_losing_the_finish_imu_anchor() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.race_inputs = Some(crate::motion_sensors::RaceInputs { forward_integral: Some(4.2), ..Default::default() });
+        m.race_light.last_speed = Some((1., 1.1));
+        m.prepare_finish_pass(1.1, 0.);
+        assert!((m.finish_imu_speed().unwrap() - 1.1).abs() < 1e-12);
+        m.race_inputs.as_mut().unwrap().forward_integral = Some(4.7);
+        assert!((m.finish_imu_speed().unwrap() - 1.6).abs() < 1e-12);
+        assert!(m.finish.launch_until.is_none());
+    }
+
+    #[test]
     fn race_finish_launches_then_uses_a_moving_hold_and_one_brake() {
         let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
         m.phase = "drive";
@@ -129,6 +141,25 @@ impl Maneuver {
         self.finish.imu_zero = self.race_inputs.and_then(|i| i.forward_integral); // standing at the light
         self.finish.imu_history.clear();
         self.finish.imu_bias = None;
+        self.finish.holding = false;
+        self.finish.brake_decel = None;
+        self.finish.race_brake = Default::default();
+    }
+
+    /// Passing without a red/green stop has no rest-at-green initialization.
+    /// Carry the existing measured velocity, including a nonzero rolling pass.
+    pub(super) fn prepare_finish_pass(&mut self, now: f64, heading: f64) {
+        let Some(input) = self.race_inputs else { return };
+        let speed = self.race_light.entry_motion.speed(now, input.forward_integral).or_else(|| {
+            self.race_light_brake.control_speed(now, input.forward_integral)
+                .or_else(|| self.race_light.last_speed.filter(|(at, _)| (0. ..=LANE_SPEED_HOLD_S).contains(&(now-at))).map(|(_, speed)| speed))
+                .filter(|_| heading.cos() > 0.).map(|speed| speed / heading.cos())
+        });
+        self.finish.imu_zero = input.forward_integral.zip(speed).map(|(integral, speed)| integral-speed);
+        self.finish.imu_history.clear();
+        self.finish.imu_bias = None;
+        self.finish.launch_from = None;
+        self.finish.launch_until = None;
         self.finish.holding = false;
         self.finish.brake_decel = None;
         self.finish.race_brake = Default::default();
@@ -374,7 +405,7 @@ impl Maneuver {
         // round y15: the launch's 1560 still acts through its 1550 tail
         let kick = self._power_cmd_motor == Some(TRIAL_MOTOR) && !strong || self.finish.launch_from.is_some();
         let (rate_slow, rate_strong) = (self._lane_push_rate_slow, self._lane_push_rate_strong);
-        let aim_accel = if strong {
+        let mut aim_accel = if strong {
             rate_strong.unwrap_or(LANE_POWER_ACCEL_MPS2)
         } else if launch {
             LIGHT_LAUNCH_ACCEL_MPS2
@@ -383,6 +414,13 @@ impl Maneuver {
         } else {
             rate_slow.unwrap_or(LANE_PUSH_ACCEL_MPS2)
         };
+        // The range-only fallback must also account for the actual1570 drive,
+        // rather than transporting an accelerating scan with the old1550 rate.
+        if after_light && self.race_inputs.is_some() && !launch && !strong
+            && let Some(acceleration) = self.race_surface.predicted_drive_accel(
+                self._power_cmd_motor.unwrap_or(RACE_CRUISE_MOTOR), Some(v), now) {
+            aim_accel = acceleration;
+        }
         let strong_accel = match rate_strong {
             None => LANE_KICK_ACCEL_MAX_MPS2,
             Some(r) => pmax(LANE_STRONG_PUSH_ACCEL_MIN_MPS2, LANE_PUSH_RATE_MARGIN * r),
