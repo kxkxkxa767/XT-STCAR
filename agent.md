@@ -3,6 +3,7 @@
 ## 当前接手入口（2026-11-12：Claude Opus 5.5（Antigravity），y89／196 已提交部署，等用户发车）
 
 - y89／196 只改 `race_light.rs`：对齐雷达速度修正前，桶心速度每帧重启灯前 `speed_kalman`，消除 y88 弯内 IMU 负积分（-0.52m/s）把滤波速度拉低到 1.544（雷达 1.869）的问题；y88 回放滤波速度偏差降到 0.03–0.1m/s。验证 34/32/968。发车：`python3 scripts/start-round.py y89`。详见 `memoryshare.md` 文末。
+- 模型身份：本入口作者为 **Claude Opus 5.5（Antigravity）**；y89 已部署上车（`claude-turn196`，源 `1fbbfe7`）并锁定。前面 y88 几轮实际为 Gemini 4 Argon (High)，旧记录误署 Claude Opus 4.6 Thinking。
 
 ## 当前接手入口（2026-11-12：Claude Opus 4.6 Thinking 交 GPT-6 Astra，y88／195 实跑已停入灯区 +0.213m 但偏近看不见灯，待修 y89／196）
 

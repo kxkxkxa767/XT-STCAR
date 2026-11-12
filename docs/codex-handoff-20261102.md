@@ -1,5 +1,7 @@
 # XT-STCAR 交接给 Codex（2026-11-02 晚，Claude）
 
+**2026-11-12 · 模型身份（Claude Opus 5.5，Antigravity）**　y89／196 由 **Claude Opus 5.5** 修改、构建、部署（`claude-turn196`，源 `1fbbfe7`，已上车锁定）；本对话中 y88 几轮实际为 **Gemini 4 Argon (High)**，旧条目误署“Claude Opus 4.6 Thinking”，以此为准。
+
 **2026-11-12 · Claude Opus 5.5（Antigravity）：y89／196 灯前速度卡尔曼弯内锚点修正已推送、建包部署并锁定，等用户发车**　基线 `claude-turn195`，只改 `route-engine/src/race_light.rs`：对齐雷达速度修正前，每帧新鲜第二桶速度重启 `speed_kalman`，不再跨急弯桥接 IMU 负积分（y88 seq161 滤波 1.544 vs 雷达 1.869 的根因）。y88 回放修正后滤波 1.78–1.81，与雷达差 0.03–0.1m/s，预计 1530/1300 提前、停点回到 +0.45~0.6m。验证 cargo 34、clippy 32、Python 968。发车 `python3 scripts/start-round.py y89`；详见 memoryshare 文末。
 
 **2026-11-12 · Claude Opus 4.6 Thinking 交 GPT-6 Astra：y88／195 已实跑取回，单次降1550生效并停入区中（+0.213m），但停点偏近门架看不到红绿灯，待修 y89／196**　`ee6252c` 已建包部署 `claude-turn195`/`y88` 并实跑完赛，62份文件取回 `left-cone-trial-20261112-y88`，车已锁定。总时30.258s、扣灯等待20.676s，终点距板0.258m。灯前 `1570→1550→1530→1300→1500` 单次降档无跳变及门腿融合重置均生效，停点从 `y87` 的 `-0.050m` 改善至 `+0.213m`（整车入区）；但比 `+0.55m` 目标近 `33.7cm`，灯头出画上沿（3红0绿，走10.5s兜底放行）。根因已结合新增轨迹图 `work/codex-y87-trial-20261112/y88-light-approach-and-brake.png` 定位：① `seq 156–159` 大航向角转弯（`h>45°`）期间 `speed_kalman` 未更新但保留旧 IMU 锚点，弯内 `-0.518m/s` 负积分在 `seq 161` 将滤波车速拉低至 `1.544m/s`（雷达实测 `1.869m/s`），使 `seq 166/167` 滤波速仍偏低 `0.09~0.15m/s` 推迟了 `1530` 与 `1300`；② `1300` 实测制动距离比模型长约 `16cm`。下一版 `y89／196` 基线 `claude-turn195`，详见 `memoryshare.md` 文末。
