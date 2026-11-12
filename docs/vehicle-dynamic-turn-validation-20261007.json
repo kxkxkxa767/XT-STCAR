@@ -30846,7 +30846,18 @@
       "limits": "Selected28 cases, not a general pass-rate estimate. 1530 equilibrium/response assumptions, ideal semantic camera and one-run brake fit; real-world validation pending."
     },
     "analysis_doc": "docs/y84-light-gap-cruise-20261112.md",
-    "build_status": "checks and paired simulation done; prepare191/y84 from committed source",
-    "next": "Cross-compile191 and buildy84 helper; commit/push records. No new physical launch authorization; do not claim whole-course simulation passed."
+    "build_status": "191/y84 cross-compiled and helper built from3811dfe; not deployed or physically run",
+    "next": "Await new placement/photoelectric/light-reset/start confirmation before deploying191/y84; candidate has unresolved simulation failures/regression and reduced first-cone margin. Vehicle remains lockedy83/190.",
+    "source_commit": "3811dfeaca938a12cb7efd601efa4ead8ead6c41",
+    "package": {
+      "engine_label": "claude-turn191",
+      "vision_label": "y84",
+      "baseline": "claude-turn190",
+      "archive": "work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn191-3811dfe.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    },
+    "simulation_plot": "work/codex-y84-fix-20261112/y84-simulation-comparison.png"
   }
 }
