@@ -31355,7 +31355,7 @@
     "engine_round": 194,
     "baseline": "installed claude-turn193/y86/f5d43fb",
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "change": [
       "Race only: before cone-two geometric tangent, keep existing approach speed hold even when a heading correction ends the straight steering window. Boost eligibility stays unchanged.",
       "Use existing fresh cone-centre/IMU EntryMotionSpeed before the second tangent, instead of allowing the old low boost anchor to end the coast early; keep original speed fallback when unavailable."
@@ -31375,9 +31375,9 @@
       "new_test_file": false,
       "simulation_sweep": false
     },
-    "build_status": "194/y87 built and deployed; locked, awaiting fresh 好了",
+    "build_status": "194/y87 tested and locked; route reached finish, light stop overshot; handed to Gemini4 at user request",
     "deployment_policy": "Deploy after build and keep locked; only launch after a fresh operator 好了.",
-    "next": "Only after fresh operator start confirmation, run scripts/start-round.py y87 in background.",
+    "next": "Gemini4: generate and inspect y87 trajectory with PWM/heading before changing light approach/braking; consider one-way1570->1550 near the parking zone as requested. No new launch authorization.",
     "source_commit": "12f376ecbc449f062ad8a7ea43a4ff88f063dcb5",
     "package": {
       "engine": "claude-turn194",
@@ -31395,6 +31395,92 @@
       "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn194-20261112-150222",
       "motion_requested": false,
       "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y87-20261112-150230"
+    },
+    "car_run_y87": {
+      "date": "2026-11-12",
+      "author": "Codex",
+      "author_model": "GPT-6 (identity supplied to this session; no finer model variant specified)",
+      "source_commit": "12f376ecbc449f062ad8a7ea43a4ff88f063dcb5",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y87",
+      "retrieved_files": 49,
+      "reason": "route_finish_zone_stop",
+      "route_completed": true,
+      "traffic_light_stop_valid": false,
+      "zero_penalty_result": false,
+      "elapsed_s": 30.048415284,
+      "light_wait_s": 9.38171892,
+      "net_without_penalty_s": 20.666696364,
+      "official_result_s": null,
+      "event_program_s": {
+        "start_lane": 1.7827320439999998,
+        "crosswalk_planned_at_rest": 2.285203714,
+        "crosswalk_stop": 5.176465503,
+        "crosswalk_go": 8.372474179,
+        "start_lane_board_ahead_cut": 9.470355458,
+        "first_approach_handover": 10.570295987,
+        "first_pass": 12.465339158,
+        "second_handover": 13.462166625,
+        "second_pass": 16.059350583,
+        "light_divider_prediction": 16.158288269,
+        "light_gantry": 17.156113673,
+        "light_aligned": 18.253196645,
+        "light_lane": 18.253196645,
+        "light_stop": 19.355348387,
+        "light_go": 28.737067307,
+        "finish_stop": 31.831147328
+      },
+      "operator_report": "没刹住，额度不够了我交给gemini4改吧，我觉得在快到红灯停车区的时候可以把1570改成1550但不反复跳",
+      "physical_collision_confirmed": null,
+      "light_stop": {
+        "front_gap_m": -0.049842652827353895,
+        "rear_past_sensor_m": 0.6564479744123972,
+        "basis": "stopped_after_camera_red_outside_zone",
+        "release_basis": "red_seen_10_5s_no_fresh_red",
+        "brake_started_at": 17.257176361,
+        "brake_ended_at": 19.291785215,
+        "brake_end_reason": "stopped",
+        "first_saved_1530_s": 16.561,
+        "red_frames": 2,
+        "green_frames_total": 1
+      },
+      "finish": {
+        "front_gap_m": 0.3672215757405978,
+        "whole_car_in_finish_zone": true,
+        "basis": "stopped_with_the_whole_car_in_the_finish_zone",
+        "creeps": 0,
+        "brake_started_at": 29.597036357,
+        "brake_ended_at": 31.541243744
+      },
+      "second_approach": {
+        "cone_motion_speed_used": true,
+        "last_saved_before_tangent": {
+          "seq": 148,
+          "remaining_m": 0.104,
+          "speed_mps": 1.847,
+          "motor": 1550
+        },
+        "first_saved_circle": {
+          "seq": 150,
+          "remaining_m": 0,
+          "motor": 1570
+        },
+        "note": "Saved frames show hold preserved before tangent; no repeat of y86 premature1570 at1.28m."
+      },
+      "max_actual_gap_s": 0.024696212000000273,
+      "scan_to_tick": {
+        "scans": 310,
+        "mean_s": 0.0014198131064516507,
+        "max_s": 0.006887681999998563,
+        "basis": "reader receive time -> start of the tick that decided on it"
+      },
+      "quality_waits": 0,
+      "after_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "analysis_file": "work/codex-y87-trial-20261112/y87-compact-timeline.json",
+      "trajectory_status": "Gemini4 must generate y87 trajectory and correlate with PWM/heading per user instruction; no y87 trajectory image generated in this handoff."
     }
   }
 }
