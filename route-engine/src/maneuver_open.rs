@@ -499,10 +499,11 @@ impl Maneuver {
             crosswalk.set("speed_basis", "recent_radar_anchor_with_short_imu_change");
         }
         if self.crosswalk_state == Some("done") && let Some(input) = self.race_inputs {
-            let hold_speed = self.race_crosswalk.imu_speed(input.forward_integral).or(speed);
-            let body_speed = self.race_surface_speed.speed(now, input.forward_integral);
-            let hold_accel = self.race_surface.predicted_hold_accel(
-                hold_pwm(hold_speed, self.wall_turn.first_entry_mps()), body_speed, now).unwrap_or(0.).max(LANE_POWER_ACCEL_MPS2);
+            let body_speed = self.race_surface_speed.speed(now, input.forward_integral)
+                .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral)).or(speed);
+            let hold_accel = self.race_surface.predicted_drive_accel(RACE_CRUISE_MOTOR, body_speed, now)
+                .unwrap_or(LANE_POWER_ACCEL_MPS2)
+                .max(self.race_surface.predicted_hold_accel(RACE_CRUISE_MOTOR, body_speed, now).unwrap_or(0.));
             let exit = &mut self.race_crosswalk;
             let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2);
             if waiting_at_stripes { exit.release_crosswalk(now, input.forward_integral); }
@@ -592,10 +593,10 @@ impl Maneuver {
         let floats = Self::ranges_floats(scan);
         let bins = bins_of(target.idx("support_bins"));
         let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));
-        if side < 0 && self.route_stage == "second_loop"
+        if side < 0
             && py_eq(target.get("source_seq"), scan.get("seq"))
             && let Some(input) = self.race_inputs {
-            self.race_light.entry_motion.observe(scan, self.last_now, identity, center, input);
+            self.race_light.observe_second(scan, self.last_now, heading, target, &self.compact_target, input);
         }
         let sidef = side as f64;
         let (e1, e2) = axis_frame(axis, heading, sidef);
@@ -964,7 +965,7 @@ impl Maneuver {
     pub fn open_first_loop_update(&mut self, scan: &V, now: f64, control: &V) -> V {
         let heading = self.compass.current(scan);
         if self.race_inputs.is_some() && let Some(h) = heading {
-            self.race_light.observe_first(scan, h);
+            self.race_light.observe_first(scan, h, &self.compact_target);
         }
         let progress = heading;
         if let Some(p) = progress
@@ -1008,6 +1009,24 @@ impl Maneuver {
             return self.result(now);
         }
         self.open_loop = lp.clone();
+        if let Some(input) = self.race_inputs {
+            if lp.get("pursuit_mode").os() == Some("circle") {
+                self.race_crosswalk.enter_first_bend();
+            } else {
+                // Keep the same one-way approach state across target handover.
+                // A noisy tangent moving farther away cannot re-enable 1570.
+                let speed = self.race_surface_speed.speed(now, input.forward_integral)
+                    .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral));
+                let acceleration = self.race_surface.predicted_drive_accel(RACE_CRUISE_MOTOR, speed, now)
+                    .unwrap_or(LANE_POWER_ACCEL_MPS2)
+                    .max(self.race_surface.predicted_hold_accel(RACE_CRUISE_MOTOR, speed, now).unwrap_or(0.));
+                let (_, feedback) = self.race_crosswalk.first_approach_drive(speed,
+                    lp.get("before_tangent_point_m").of(), true,
+                    self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2), now,
+                    input.forward_integral, acceleration, self.wall_turn.first_entry_mps());
+                self.start_lane_feedback.set("first_approach_drive", feedback);
+            }
+        }
         let second = self.open_confirmed_second(scan);
         if second.is_some() {
             let p = progress.unwrap_or_else(|| type_error("'>=' not supported between instances of 'NoneType' and 'float'"));
@@ -1512,6 +1531,9 @@ impl Maneuver {
 
     /// _open_second_pass(scan, now, control, basis).
     fn open_second_pass(&mut self, scan: &V, now: f64, control: &V, basis: &str) -> V {
+        if self.race_inputs.is_some() {
+            self.race_light.entry_tracker = self.second_tracker.clone();
+        }
         self.second_pass_evidence = dict! {
             "source_seq" => scan.idx("seq").clone(), "source_at_ms" => scan.idx("at_ms").clone(),
             "received_at" => scan.idx("received_at").clone(), "track_id" => self.second_track_id.clone(), "basis" => basis,

@@ -30643,8 +30643,8 @@
     "author": "Codex",
     "engine_round": 190,
     "baseline": "y82 / engine 189 (9426205), currently installed with outputs locked",
-    "deployed": false,
-    "physical_trial_executed": false,
+    "deployed": true,
+    "physical_trial_executed": true,
     "finding": "y82 entry used live speeds 2.136/2.092/2.010/1.978 m/s, but averaging a weaker future prediction cut the current right-turn demand. Seq160 current1323/predicted1425 became mean1374; seq161 current1318/predicted1457 became1388, followed by a late path override1308 and collision.",
     "change": [
       "Race light_entry only: when current_k * wrap(-heading) > 0 and the future-pose prediction is weaker or reverses correction, use the current curvature; otherwise preserve the existing mean-curvature rule.",
@@ -30661,9 +30661,9 @@
       "test_change": "One in-file test covers symmetric axis corrections, stronger prediction and normal averaging once the heading error changes side.",
       "simulation_sweep": false
     },
-    "build_status": "190/y83 cross-compiled, helper built; not deployed or run",
+    "build_status": "190/y83 deployed and run on2026-11-12; outputs locked; did not finish",
     "analysis_workflow": "For each subsequent run, combine trustworthy local trajectory reconstruction with PWM/heading evidence; distinguish reconstructed estimates from original measurements on the figure and in the explanation.",
-    "next": "Await new placement/photoelectric/light-reset/start confirmation before deploying190/y83. Car remains y82/189 with outputs locked; compare entry path and steering with the saved plot.",
+    "next": "y84/191 candidate: carry observed gap through static cones, retain active light braking, and latch first approach1570->1550. New start confirmation required.",
     "trajectory_review": {
       "image": "work/codex-y82-trial-20261111/y82-entry-path-and-steering.png",
       "data": "work/codex-y82-trial-20261111/y82-entry-plot-data.json",
@@ -30680,6 +30680,173 @@
       "runtime_changed": [
         "payload/route-engine"
       ]
+    },
+    "car_run_y83": {
+      "date": "2026-11-12",
+      "source_commit": "85adb2121ccfbe45829692dc11760b1e5e3ec9c6",
+      "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261111-y83",
+      "files_retrieved": 46,
+      "reason": "probe_obstacle_close_body",
+      "completed": false,
+      "effective_s": null,
+      "physical_collision_confirmed": null,
+      "operator_feedback": "红绿灯处减了一下但没停住，感觉没有1300；要求保留绕桶识别缺口的预定位，并怀疑斑马线方向缺口/参考混淆。",
+      "outputs_after": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500,
+        "not_a_measurement_of_physical_standstill_at_halt": true
+      },
+      "timeline": {
+        "start_lane": {
+          "seq": 15,
+          "program_s": 1.535258711
+        },
+        "crosswalk_planned_at_rest": {
+          "seq": 22,
+          "program_s": 2.235971583
+        },
+        "crosswalk_stop": {
+          "seq": 49,
+          "program_s": 4.935719991
+        },
+        "crosswalk_go": {
+          "seq": 81,
+          "program_s": 8.128881714
+        },
+        "start_lane_board_ahead_cut": {
+          "seq": 87,
+          "program_s": 8.729283996
+        },
+        "first_approach_handover": {
+          "seq": 99,
+          "program_s": 9.928013728
+        },
+        "first_pass": {
+          "seq": 124,
+          "program_s": 12.425237991
+        },
+        "neutral_pause_post_pass": {
+          "seq": 132,
+          "program_s": 13.215498586
+        },
+        "post_pass_pause_resume_request": {
+          "seq": 140,
+          "program_s": 14.022281372
+        },
+        "second_handover": {
+          "seq": 141,
+          "program_s": 14.122426557
+        },
+        "second_pass": {
+          "seq": 159,
+          "program_s": 15.923712164
+        },
+        "light_divider_prediction": {
+          "seq": 160,
+          "program_s": 16.031849497
+        },
+        "light_gantry": {
+          "seq": 170,
+          "program_s": 17.018761657
+        },
+        "light_aligned": {
+          "seq": 176,
+          "program_s": 17.62003481
+        },
+        "light_lane": {
+          "seq": 176,
+          "program_s": 17.62003481
+        },
+        "light_pass_without_red": {
+          "seq": 180,
+          "program_s": 18.021636757
+        }
+      },
+      "stop_seq": 202,
+      "stop_body_gap_m": 0.0668090269,
+      "light_brake_started_s": 17.119903007,
+      "light_brake_cancelled_s": 18.021636757,
+      "light_brake_end_reason": "command_overridden",
+      "light_brake_cancelled_by": "light_pass_without_red ->1570",
+      "brake_start_front_gap_m": 1.5377333,
+      "brake_start_fused_speed_mps": 2.5327118,
+      "late_red": {
+        "frame": 56,
+        "captured_at_program_s": 17.867742,
+        "red_score": 0.9372,
+        "delivered_by_seq": 182
+      },
+      "findings": [
+        "First-loop divider offset is still learned; no second-loop gap reselection. Re-selected far-wall planes jump during light entry and invalidate the preview.",
+        "An active1300 brake is cancelled by crossing without a latched red frame; vision arrives later. Which physical wall caused the far return is not established."
+      ],
+      "crosswalk_go_to_first_pass_s": 4.296356276999999,
+      "first_to_second_pass_s": 3.498474173,
+      "max_tick_compute_s": 0.00875318699999994,
+      "max_actual_gap_s": 0.02247027399999979,
+      "trajectory_plot": "work/codex-y84-fix-20261112/y83-light-gap-and-brake.png",
+      "trajectory_scope": "Physical cone support + recorded heading to172; not external localization or a y84 physical run."
     }
+  },
+  "y84_gap_anchor_brake_cruise_20261112": {
+    "date": "2026-11-12",
+    "author": "Codex",
+    "engine_round": 191,
+    "baseline": "y83 / engine190 (85adb21), installed with outputs locked",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "Race only: preserve first-loop divider-gap observation, learn offsets to physical cone centres, carry via simultaneous cone sightings and a private continuation tracker. Keep actual gantry correction and the existing short IMU bridge.",
+      "Seed initially absent light speed Kalman state from a fresh same-scan physical cone speed; no second range correction at the same time.",
+      "An active light brake cannot be retired by the no-red passed/lost-preview branch; normal stopped completion and fault/pause ownership stay unchanged.",
+      "Crosswalk1600 launch ->1570 approach ->one geometry/speed-based coast ->1550 held through cone one; state persists across target handover and cannot reboost after a tangent jump.",
+      "Host simulation optional speed-dependent brake; explicit1530 model assumptions and paired sensitivity cases. Not part of the vehicle payload."
+    ],
+    "unchanged": [
+      "Python reference/console",
+      "bridge protocol",
+      "station_pair/post identity item5",
+      "light and finish stopping goals",
+      "second-loop/transfer boost settings"
+    ],
+    "validation": {
+      "native_release_build": true,
+      "console_tests_passed": 968,
+      "rust_tests_passed": 28,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "test_change": "Three checks inside existing Rust files: gap carry ignores unrelated wall and expires true observation age, fresh speed seed; active brake survives crossing before camera; approach PWM transition latches.",
+      "simulation_authorization": "User2026-11-12: 这轮改好后你仿真一下看看。",
+      "simulation_dir": "work/codex-y84-fix-20261112/sim-comparison-v3",
+      "paired_cases_per_version": 28,
+      "simulation": {
+        "y83": {
+          "total": 28,
+          "completed": 16,
+          "clean": 6,
+          "light_stops": 16,
+          "contact": 1
+        },
+        "y84": {
+          "total": 28,
+          "completed": 19,
+          "clean": 17,
+          "light_stops": 19,
+          "contact": 0
+        }
+      },
+      "simulation_all_passed": false,
+      "new_failure_vs_baseline": "rules-0.9-1: stopped about0.35m before lamp, inside model near-visibility cutoff when delayed red starts; baseline stopped0.4006m and passed.",
+      "first_cone_min_body_gap_m": {
+        "y83": 0.0966281968642432,
+        "y84": 0.0708292737783062
+      },
+      "first_pwm_1550_to_1570_reboosts": 0,
+      "limits": "Selected28 cases, not a general pass-rate estimate. 1530 equilibrium/response assumptions, ideal semantic camera and one-run brake fit; real-world validation pending."
+    },
+    "analysis_doc": "docs/y84-light-gap-cruise-20261112.md",
+    "build_status": "checks and paired simulation done; prepare191/y84 from committed source",
+    "next": "Cross-compile191 and buildy84 helper; commit/push records. No new physical launch authorization; do not claim whole-course simulation passed."
   }
 }

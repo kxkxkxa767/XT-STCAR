@@ -1597,13 +1597,13 @@ impl Maneuver {
     }
 
     /// Race: cone one handed over but its loop not yet reached (before the tangent point):
-    /// hold the entry speed on the IMU since the crosswalk release.
+    /// continue the same latched1570 -> coast ->1550 approach across handover.
     pub fn first_approach_hold(&self) -> Option<i64> {
-        let input = self.race_inputs?;
+        self.race_inputs?;
         (self.route_stage == "first_target"
             && self.handover_observed
             && self._open_slots.iter().any(|(side, slot)| *side > 0 && slot.approaching == Some(true)))
-        .then(|| hold_pwm(self.race_crosswalk.imu_speed(input.forward_integral), self.wall_turn.first_entry_mps()))
+        .then(|| self.race_crosswalk.first_motor().unwrap_or(ROUTE_SLOW_MOTOR))
     }
 
     // ------------------------------------------------------------ input contract

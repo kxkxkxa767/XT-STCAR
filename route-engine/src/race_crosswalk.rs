@@ -9,7 +9,7 @@ use crate::dict;
 // y23 straight's 1.1 before the 1550 hold. 11-04: cone one took 1.30-1.51 m/s with .35-.49 m to
 // the outer board; at 1.87-2.11 (the 1570 hold, before the y50 plan rules) it ran wide, .08-.13 m.
 // With the y50/y53 loop rules 1.65-1.80 kept >= .28 m; y53 coasted from 1.93 to 1.54 and then
-// held 1.63 at 1550. The approach now holds 1.75 on the open PWM steps.
+// held 1.63 at1550. Use1.75 for the geometric deceleration budget, then latch1550.
 pub(crate) const FIRST_ENTRY_MPS: f64 = 1.75;
 
 // A side opening can put the two real returns bounding a missing run at quite
@@ -54,11 +54,14 @@ pub struct CrosswalkExit {
     crosswalk_release: Option<(f64, Option<f64>)>,
     first_approach: FirstApproach,
     last_drive_at: Option<f64>,
+    last_launch_at: Option<f64>,
+    first_motor: Option<i64>,
 }
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 enum FirstApproach {
     #[default]
+    Launch,
     Cruise,
     Coast,
     Hold,
@@ -78,22 +81,27 @@ impl CrosswalkExit {
         // y70: a quality pause (seq 90-95) left the phase in Cruise, so the 1600 launch came
         // back at 1.49 m/s and cone one was entered at 1.90 (y67, y68: 1.73). A pause ends the boost.
         if self.last_drive_at.replace(now).is_some_and(|last| now - last > SCAN_AGE_S)
-            && self.first_approach == FirstApproach::Cruise
+            && matches!(self.first_approach, FirstApproach::Launch | FirstApproach::Cruise)
         {
             self.first_approach = FirstApproach::Hold;
         }
         let inertial = self.crosswalk_release.and_then(|(_, zero)| zero)
             .zip(forward_integral).map(|(zero, integral)| (integral-zero).max(0.));
         let speed = inertial.or(radar);
-        let boosted = self.crosswalk_released() && self.first_approach == FirstApproach::Cruise;
         let lag = CROSSWALK_AIM_LAG_S;
-        // Tile measurements near the 1620 cut showed about 4 m/s². The IMU
-        // already includes the acceleration since the last lidar frame.
-        // Preserve the original hold budget unless learned load compensation
-        // calls for a stronger current or next hold command.
+        // End the start pulse when its measured speed plus the existing ESC
+        // tail reaches entry speed. The remaining straight uses 1570.
+        if self.first_approach == FirstApproach::Launch
+            && (!self.crosswalk_released() || speed.is_some_and(|v| v + 4. * lag >= entry_mps)) {
+            self.first_approach = FirstApproach::Cruise;
+        }
+        let boosted = self.crosswalk_released() && self.first_approach == FirstApproach::Launch;
+        let launch_tail = self.last_launch_at.map_or(0., |at| (lag - (now-at)).clamp(0., lag));
         let pending_rise = self.crosswalk_release.filter(|_| boosted)
             .map_or(0., |(since, _)| 4.0 * (now - since).clamp(0., lag))
-            + if self.first_approach == FirstApproach::Hold { hold_accel * lag } else { 0. };
+            + if self.first_approach == FirstApproach::Cruise {
+                4. * launch_tail + hold_accel * (lag-launch_tail)
+            } else { 0. };
         let coast_m = speed.map(|v| {
             let released = v + pending_rise;
             (v + released)*lag/2. + (released*released - entry_mps*entry_mps).max(0.)/(2.*decel)
@@ -102,7 +110,7 @@ impl CrosswalkExit {
             let released = v + pending_rise;
             FRONT_BODY_EXTENT_M + FIRST_APPROACH_BOARD_GAP_M + (v+released)*lag/2. + released*released/(2.*decel)
         });
-        if self.first_approach == FirstApproach::Cruise
+        if matches!(self.first_approach, FirstApproach::Launch | FirstApproach::Cruise)
             && (before.zip(coast_m).is_some_and(|(d,c)| d <= c) || (boosted && (before.is_none() || speed.is_none()))) {
             self.first_approach = FirstApproach::Coast;
         }
@@ -119,9 +127,12 @@ impl CrosswalkExit {
         }
         let phase = self.first_phase();
         let motor = if self.first_approach == FirstApproach::Coast { NEUTRAL }
-            else if self.first_approach == FirstApproach::Cruise && boosted { START_LAUNCH_MOTOR }
+            else if boosted && self.first_approach == FirstApproach::Launch { START_LAUNCH_MOTOR }
             else if speed.is_some_and(|v| v < LANE_SPEED_RESTART_MPS) { TRIAL_MOTOR }
-            else { hold_pwm(speed, entry_mps) };
+            else if self.first_approach == FirstApproach::Cruise { RACE_CRUISE_MOTOR }
+            else { ROUTE_SLOW_MOTOR };
+        if motor == START_LAUNCH_MOTOR { self.last_launch_at = Some(now); }
+        self.first_motor = Some(motor);
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
                        "speed_source" => if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
@@ -129,10 +140,17 @@ impl CrosswalkExit {
     }
 
     fn first_phase(&self) -> &'static str {
-        match self.first_approach { FirstApproach::Cruise => "cruise", FirstApproach::Coast => "coast", FirstApproach::Hold => "hold" }
+        match self.first_approach { FirstApproach::Launch => "launch", FirstApproach::Cruise => "cruise", FirstApproach::Coast => "coast", FirstApproach::Hold => "hold" }
     }
 
     pub fn first_rolling_hold(&self) -> bool { self.first_approach == FirstApproach::Hold }
+
+    pub fn first_motor(&self) -> Option<i64> { self.first_motor }
+
+    pub fn enter_first_bend(&mut self) {
+        self.first_approach = FirstApproach::Hold;
+        self.first_motor = Some(ROUTE_SLOW_MOTOR);
+    }
 
     /// The IMU's forward speed since the crosswalk release (the car stood there).
     pub fn imu_speed(&self, forward_integral: Option<f64>) -> Option<f64> {
@@ -149,6 +167,20 @@ impl CrosswalkExit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn first_cruise_ends_once_even_if_the_tangent_moves_back_or_speed_drops() {
+        let mut exit = CrosswalkExit::default();
+        exit.release_crosswalk(0., Some(0.));
+        let mut drive = |at, speed, before| exit.first_approach_drive(None, Some(before), true,
+            0.6, at, Some(speed), 0.8, FIRST_ENTRY_MPS).0;
+        assert_eq!(drive(0., 0., 4.), START_LAUNCH_MOTOR);
+        assert_eq!(drive(0.2, 1.1, 4.), RACE_CRUISE_MOTOR);
+        assert_eq!(drive(0.3, 2., 0.4), NEUTRAL);
+        assert_eq!(drive(0.4, 1.6, 0.2), ROUTE_SLOW_MOTOR);
+        assert_eq!(drive(0.5, 1.4, 5.), ROUTE_SLOW_MOTOR);
+        assert_eq!(drive(0.6, 1.7, 3.), ROUTE_SLOW_MOTOR);
+    }
 
     #[test]
     fn a_far_side_opening_does_not_hide_a_previous_return_in_the_drive_corridor() {

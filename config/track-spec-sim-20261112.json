@@ -1,0 +1,85 @@
+{
+  "label": "y84-y79-response-sensitivity-20261112",
+  "seed": 1,
+  "max_seconds": 90,
+  "layout": {
+    "length_m": 8.0,
+    "width_m": 4.0,
+    "lane_width_m": 0.9,
+    "light_width_m": 0.9,
+    "start_divider_m": 3.2,
+    "light_divider_m": 3.2,
+    "stripe_x_m": 2.95,
+    "start_x_m": 0.4,
+    "beam_gap_m": 1.0
+  },
+  "plant": {
+    "motor_delay_s": 0.056,
+    "coast_decel_mps2": 0.6,
+    "brake_decel_mps2": 0.668863,
+    "drive_accel_max_mps2": 4.14,
+    "resistance_scale": 1.0,
+    "traction_mu": 0.6,
+    "speed_table": [
+      [
+        1530.0,
+        0.4
+      ],
+      [
+        1550.0,
+        1.814
+      ],
+      [
+        1570.0,
+        2.34
+      ],
+      [
+        1600.0,
+        3.837
+      ]
+    ],
+    "response_table": [
+      [
+        1530.0,
+        2.5
+      ],
+      [
+        1550.0,
+        2.98
+      ],
+      [
+        1570.0,
+        1.0
+      ],
+      [
+        1600.0,
+        0.7
+      ]
+    ],
+    "steering_gain": 1.2,
+    "steering_gain_left": 1.5,
+    "turn_scrub": 0.06,
+    "servo_delay_s": 0.1,
+    "servo_tau_s": 0.06,
+    "brake_speed_gain_per_s": 0.315219
+  },
+  "camera": {
+    "fps": 3.6,
+    "capture_age_s": 0.15,
+    "latency_s": 0.24,
+    "red_on_delay_s": 0.8,
+    "red_duration_s": 10.0
+  },
+  "sensors": {
+    "range_noise_m": 0.008,
+    "scan_distortion": 1.0,
+    "imu_lever_arm_m": 0.19
+  },
+  "calibration": {
+    "inherited_vehicle_model": "config/track-spec-sim-20261110.json: fitted y53-y74 steering and longitudinal response; no new steering fit.",
+    "brake_evidence": "work/codex-y79-trial-20261111/brake-fit-y79.json; light-stage fit only; finish-stage coefficients are a separate sensitivity case.",
+    "y84_note": "1300 uses the saved y79 light-stage fit b(v)=0.668863+0.315219*v, shared by both controller versions. This is a single-run prior, and the finish fit differs. 1530 moving equilibrium0.4 m/s and response2.5 s are explicit assumptions consistent with sustaining motion and the y79 deceleration near1.54 m/s; steady speed was not measured. Additional cases vary them. Existing motor delay0.056 s is retained; real1300 onset was about0.1 s. Camera/light semantics and beam-post absence remain model assumptions.",
+    "not_measured": "1530 equilibrium speed and response time; no claim of outdoor or different-battery validation."
+  },
+  "limits": "Selected paired offline cases. Ideal semantic vision with a hard lidar-to-light visibility window0.60-6m. 1530 low-speed response is a stated assumption;1300 single-run fit is not an independent validation dataset."
+}

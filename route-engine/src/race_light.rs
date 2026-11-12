@@ -1,5 +1,6 @@
 //! The open end of the light lane's inner board, observed while passing cone one.
-//! Store its distance from the end wall, not its bearing in a turning car.
+//! Carry that same gap through the two stationary cones as the car turns.
+use crate::compact_target::CompactTargetTracker;
 use crate::helpers::{FRONT_BODY_EXTENT_M, OPEN_LANE_MIN_SPAN_M, OPEN_LINE_MIN_POINTS, SIDE_BODY_EXTENT_M, dcos, dsin};
 use crate::maneuver::{
     LIGHT_GANTRY_EDGE_M, LIGHT_GANTRY_SPAN_M, LIGHT_GANTRY_ALONG_DIFF_M, LIGHT_LEG_LATERAL_M,
@@ -9,6 +10,49 @@ use crate::py::V;
 use crate::motion_sensors::{RangeHistory, lane_range_speed};
 use crate::maneuver::{LANE_SPEED_BASELINE, LANE_SPEED_HISTORY};
 use crate::race_speed_kalman::SpeedKalman;
+
+fn vote(votes: &mut [(u32, f64); 2], value: f64) {
+    if let Some((n, mean)) = votes.iter_mut()
+        .filter(|(n, m)| *n > 0 && (*m - value).abs() <= LIGHT_LINE_JUMP_M)
+        .min_by(|a, b| (a.1 - value).abs().total_cmp(&(b.1 - value).abs())) {
+        *n += 1;
+        *mean += (value - *mean) / f64::from(*n);
+    } else if let Some(slot) = votes.iter_mut().min_by_key(|v| v.0) {
+        *slot = (1, value);
+    }
+}
+
+fn voted([a, b]: [(u32, f64); 2]) -> Option<(u32, f64)> {
+    let best = if a.0 > b.0 { a } else { b };
+    (best.0 >= 2 && a.0 != b.0).then_some(best)
+}
+
+/// Use the physical support, never a shifted planning circle or a held target.
+fn fresh_center(scan: &V, target: &V) -> Option<(f64, f64)> {
+    if !target.get("confirmed").is_true() || !target.get("tracking_only_boundary_gap").is_false()
+        || !crate::py::py_eq(target.get("source_seq"), scan.get("seq"))
+        || !crate::py::py_eq(target.get("source_at_ms"), scan.get("at_ms"))
+        || !crate::py::py_eq(target.get("source_received_at"), scan.get("received_at")) { return None; }
+    let ranges = scan.get("ranges").ol()?;
+    let bins = target.get("support_bins").ol()?;
+    if ranges.len() != 360 || bins.is_empty()
+        || bins.iter().any(|b| !b.is_int() || !(0..360).contains(&b.i()) || !ranges[b.i() as usize].is_num()) { return None; }
+    let ranges: Vec<_> = ranges.iter().map(V::of).collect();
+    let bins: Vec<_> = bins.iter().map(|b| b.i() as usize).collect();
+    Some(crate::helpers::support_center(&ranges, &bins, target.get("diameter_m")).0)
+}
+
+fn along(center: (f64, f64), heading: f64) -> f64 {
+    center.0 * heading.cos() - center.1 * heading.sin()
+}
+
+#[derive(Clone, Copy, Debug)]
+struct GapPosition {
+    observed_at: f64,
+    at: f64,
+    ahead: f64,
+    axial_speed: Option<f64>,
+}
 
 #[derive(Clone, Debug)]
 struct ConeMotionSample {
@@ -110,6 +154,21 @@ mod entry_motion_tests {
     use crate::motion_sensors::RaceInputs;
 
     fn scan(seq: i64, at: f64) -> V { crate::dict! {"seq" => seq, "received_at" => at} }
+
+    #[test]
+    fn a_carried_gap_ignores_a_different_wall_and_does_not_refresh_missing_observations() {
+        let input = RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) };
+        let mut light = RaceLight::default();
+        light.entry_motion.observe(&scan(1, 0.), 0., &1.into(), (3., -1.), input);
+        light.entry_motion.observe(&scan(2, 0.1), 0.1, &1.into(), (2.8, -1.), input);
+        let current = crate::dict! {"seq" => 2, "at_ms" => 100, "received_at" => 0.1};
+        assert!((light.measure_speed(&current, None, Some(0.), 1.).1.unwrap() - 2.).abs() < 1e-9);
+        light.second_gap = [(2, 2.), (0, 0.)];
+        light.gap_position = Some(GapPosition { observed_at: 0.1, at: 0.1, ahead: 2., axial_speed: Some(2.) });
+        let wrong_wall = crate::dict! {"seq" => 3, "received_at" => 0.2, "ranges" => vec![V::Float(9.); 360]};
+        assert!((light.project(&wrong_wall, 0., 0.2, input).unwrap() - 1.8).abs() < 1e-9);
+        assert_eq!(light.project(&wrong_wall, 0., 1.2, input), None);
+    }
 
     #[test]
     fn entry_speed_aligns_interval_midpoint_to_the_later_control_sample() {
@@ -337,7 +396,13 @@ impl LightRoll {
 #[derive(Clone, Default, Debug)]
 pub struct RaceLight {
     pub entry_motion: EntryMotionSpeed,
+    pub entry_tracker: Option<CompactTargetTracker>,
     votes: [(u32, f64); 2],
+    first_gap: [(u32, f64); 2],
+    second_gap: [(u32, f64); 2],
+    second_identity: V,
+    second_seq: Option<i64>,
+    gap_position: Option<GapPosition>,
     last_seq: Option<i64>,
     pub phase: LightRoll,
     pub prior_ahead: Option<f64>,
@@ -377,13 +442,15 @@ impl RaceLight {
         let raw = if self.speed_uses_gantry && reference.is_none() { None }
             else { lane_range_speed(&mut self.ranges, scan, reference, 2) };
         let at = scan.idx("at_ms").i() as f64 * 0.001;
-        (raw, self.adjusted_speed(forward_integral, at, raw, axis_cos))
+        let seed = self.entry_motion.previous.as_ref().filter(|p| p.seq == scan.idx("seq").i())
+            .and_then(|p| self.entry_motion.speed(p.at, forward_integral));
+        (raw, self.adjusted_speed(forward_integral, at, raw, axis_cos, seed))
     }
 
     /// Range differences measure lane-axis motion, whose projection changes
     /// while the car leaves the second loop. Correct each existing difference
     /// interval before taking its median, then project the current body speed.
-    fn adjusted_speed(&mut self, forward_integral: Option<f64>, at: f64, raw: Option<f64>, axis_cos: f64) -> Option<f64> {
+    fn adjusted_speed(&mut self, forward_integral: Option<f64>, at: f64, raw: Option<f64>, axis_cos: f64, seed: Option<f64>) -> Option<f64> {
         let Some(current) = forward_integral.filter(|v| v.is_finite()) else {
             self.imu_history.clear();
             self.speed_kalman.clear();
@@ -399,7 +466,12 @@ impl RaceLight {
             h.push((at, current, axis_cos));
             if h.len() > LANE_SPEED_HISTORY { h.remove(0); }
         }
-        if raw.is_some() {
+        // Initialize from this scan's identified physical cone. Otherwise the
+        // first displaced gantry range gets gain 1 before any prior exists.
+        // Do not count two correlated lidar observations at the same time.
+        let seeded = self.speed_kalman.anchor().is_none() && seed.is_some();
+        if seeded { self.speed_kalman.update(at, current, seed.unwrap()); }
+        if raw.is_some() && !seeded {
             let n = self.ranges.len();
             let step = LANE_SPEED_BASELINE.min(n.saturating_sub(2));
             let mut bodies = [0.; LANE_SPEED_HISTORY];
@@ -466,7 +538,7 @@ impl RaceLight {
         }
     }
 
-    pub fn observe_first(&mut self, scan: &V, heading: f64) {
+    pub fn observe_first(&mut self, scan: &V, heading: f64, first: &V) {
         let seq = scan.idx("seq").i();
         if self.last_seq == Some(seq) {
             return;
@@ -475,31 +547,79 @@ impl RaceLight {
         let Some(axis) = ScanAxis::new(scan, heading) else {
             return;
         };
-        let Some(span) = axis.end_wall().and_then(|w| axis.divider_span(w)) else {
+        let Some((wall, span)) = axis.end_wall().and_then(|w| Some((w, axis.divider_span(w)?))) else {
             return;
         };
         // Keep the consistent landmark across viewpoints, not an isolated gap.
-        if let Some((n, mean)) = self
-            .votes
-            .iter_mut()
-            .filter(|(n, m)| *n > 0 && (*m - span).abs() <= LIGHT_LINE_JUMP_M)
-            .min_by(|a, b| (a.1 - span).abs().total_cmp(&(b.1 - span).abs()))
-        {
-            *n += 1;
-            *mean += (span - *mean) / f64::from(*n);
-        } else if let Some(slot) = self.votes.iter_mut().min_by_key(|v| v.0) {
-            *slot = (1, span);
+        vote(&mut self.votes, span);
+        if let Some(center) = fresh_center(scan, first) {
+            vote(&mut self.first_gap, wall - span - along(center, heading));
         }
     }
     pub fn landmark(&self) -> Option<(u32, f64)> {
-        let [a, b] = self.votes;
-        let best = if a.0 > b.0 { a } else { b };
-        (best.0 >= 2 && a.0 != b.0).then_some(best)
+        voted(self.votes)
     }
-    pub fn project(&mut self, scan: &V, heading: f64) -> Option<f64> {
-        self.prior_ahead = self
-            .landmark()
-            .and_then(|(_, span)| Some(ScanAxis::new(scan, heading)?.end_wall()? - span));
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn observe_second(&mut self, scan: &V, now: f64, heading: f64, second: &V, first: &V,
+        input: crate::motion_sensors::RaceInputs) {
+        let Some(center) = fresh_center(scan, second) else { return };
+        let identity = second.get("track_id");
+        if !crate::py::py_eq(&self.second_identity, identity) {
+            self.second_gap = Default::default();
+            self.gap_position = None;
+            self.second_seq = None;
+            self.second_identity = identity.clone();
+        }
+        if self.second_seq == Some(scan.idx("seq").i()) { return; }
+        self.second_seq = Some(scan.idx("seq").i());
+        self.entry_motion.observe(scan, now, identity, center, input);
+        // Simultaneous observations cancel ego translation. The offsets are
+        // measured each run; neither cone spacing nor lamp position is preset.
+        if let Some((_, offset)) = voted(self.first_gap)
+            && let Some(first) = fresh_center(scan, first) {
+            vote(&mut self.second_gap, offset + along(first, heading) - along(center, heading));
+        }
+        if let Some((_, offset)) = voted(self.second_gap) {
+            self.gap_position = Some(GapPosition {
+                observed_at: scan.idx("received_at").f(), at: now,
+                ahead: along(center, heading) + offset,
+                axial_speed: self.entry_motion.speed(now, input.forward_integral).map(|v| v * heading.cos()),
+            });
+        }
+    }
+
+    pub fn project(&mut self, scan: &V, heading: f64, now: f64, input: crate::motion_sensors::RaceInputs) -> Option<f64> {
+        // Continue the already identified cone in a private tracker: this must
+        // not rebind a route target or start route recovery after the handover.
+        if let Some(tracker) = &mut self.entry_tracker {
+            let target = tracker.update(scan, now, false, Some(heading), None);
+            if crate::py::py_eq(target.get("track_id"), &self.second_identity) {
+                self.observe_second(scan, now, heading, &target, &V::None, input);
+            }
+        }
+        self.prior_ahead = if voted(self.second_gap).is_some() {
+            self.gap_position.as_mut().and_then(|p| {
+                if !(0. ..=crate::race_speed_kalman::BRIDGE_S).contains(&(now - p.observed_at)) { return None; }
+                let current = self.entry_motion.speed(now, input.forward_integral).map(|v| v * heading.cos());
+                if now > p.at {
+                    p.ahead -= (p.axial_speed? + current?) * (now - p.at) * 0.5;
+                    p.at = now;
+                    p.axial_speed = current;
+                }
+                Some(p.ahead)
+            })
+        } else {
+            self.landmark().and_then(|(_, span)| Some(ScanAxis::new(scan, heading)?.end_wall()? - span))
+        };
         self.prior_ahead
+    }
+
+    pub fn position_diagnostics(&self) -> V {
+        crate::dict! {"basis" => if voted(self.second_gap).is_some() { "first_gap_carried_by_cones" } else { "end_wall_offset" },
+            "gap_from_first_cone_m" => voted(self.first_gap).map(|v| v.1),
+            "gap_from_second_cone_m" => voted(self.second_gap).map(|v| v.1),
+            "observed_at" => self.gap_position.map(|v| v.observed_at),
+            "source_seq" => self.second_seq, "ahead_m" => self.prior_ahead}
     }
 }

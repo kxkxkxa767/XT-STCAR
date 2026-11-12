@@ -45,6 +45,7 @@ pub struct Plant {
     turn_drag: f64,
     coast: f64,
     brake: f64,
+    brake_speed_gain: f64,
     accel_max: f64,
     resistance_scale: f64,
     resistance_steps: Vec<(f64, f64)>,
@@ -136,6 +137,7 @@ impl Plant {
             turn_scrub: number(config, "turn_scrub", 0.),
             coast: number(config, "coast_decel_mps2", 0.58),
             brake: number(config, "brake_decel_mps2", 0.95),
+            brake_speed_gain: number(config, "brake_speed_gain_per_s", 0.),
             accel_max: number(config, "drive_accel_max_mps2", 4.),
             resistance_scale,
             resistance_steps,
@@ -150,7 +152,7 @@ impl Plant {
             motor_queue: VecDeque::new(),
             history: VecDeque::from([(0., pose)]),
         };
-        assert!(plant.servo_tau > 0. && plant.coast > 0. && plant.brake > 0.);
+        assert!(plant.servo_tau > 0. && plant.coast > 0. && plant.brake > 0. && plant.brake_speed_gain >= 0.);
         assert!(plant.resistance_scale > 0. && plant.traction_mu > 0.);
         assert!(plant.motor_delay >= 0. && plant.servo_delay >= 0.);
         plant
@@ -163,6 +165,7 @@ impl Plant {
             "steering_play_pwm": self.play, "steering_gain": self.gain, "steering_gain_left": self.gain_left, "turn_drag": self.turn_drag, "turn_scrub": self.turn_scrub,
             "response_table": self.response_table,
             "coast_decel_mps2": self.coast, "brake_decel_mps2": self.brake,
+            "brake_speed_gain_per_s": self.brake_speed_gain,
             "drive_accel_max_mps2": self.accel_max, "resistance_scale": self.resistance_scale,
             "traction_mu": self.traction_mu,
             "coast_resistance_equivalent_coefficient": self.coast * self.resistance_scale / 9.80665,
@@ -230,7 +233,7 @@ impl Plant {
             let response = interpolate(&self.response_table, self.last_motor);
             ((target - self.speed) / response).clamp(-self.coast, self.accel_max) - extra_drag
         } else if self.last_motor < 1500. {
-            -self.brake - extra_drag
+            -self.brake - self.brake_speed_gain * self.speed - extra_drag
         } else {
             -self.coast * self.active_resistance_scale
         };
