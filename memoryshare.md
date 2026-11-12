@@ -1115,3 +1115,9 @@ y87第二桶接近修正本轮已生效：148帧距切点0.104m、桶心速度�
 - **验证**：cargo test 34 通过、clippy 32、Python 968 OK。
 - **构建/部署**：`claude-turn196`／`y89` 已交叉编译部署上车并保持锁定中位；发车命令：`cd /Users/yuhaojin/Documents/XT-STCAR && python3 scripts/start-round.py y89`（可重复发，证据目录自动 -y89、-y89-2…）。
 - **待办**：用户跑 y89 后取回数据，检查灯前停点（目标 +0.55m）、`speed_fusion` seq160–167 是否与雷达一致，生成轨迹图。
+
+## 2026-11-12 · 模型身份更正（Claude Opus 5.5，Antigravity）
+
+- 本对话前面几轮（y88 分析、y88 部署与实跑、y88 记录 `708eb97`）在 Antigravity 里的模型设置是 **Gemini 4 Argon (High)**，之前的记录误写成了 “Claude Opus 4.6 Thinking”，以本条为准。
+- 从 y89／196 实现开始（`2037cb8` 起），模型设置为 **Claude Opus 5.5 (Medium)**，所以 y89 的条目署名 Claude Opus 5.5 是对的。
+- 另一方（用户提到交接给的）是 **GPT-6 Astra／Codex**，本轮没有交给它，由本方继续。
