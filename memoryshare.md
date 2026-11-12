@@ -955,3 +955,8 @@ y83 检查与轨迹补充：最小转向修正已实现，Mac release build、�
 - 源码提交 `a50ce68` 已通过 Mac release build、968 项回归、29 项 Rust 单元测试，默认与 `--features ros2` clippy 均为 32 条警告（0 新增）。
 - 已从 `a50ce68` 完整构建 `claude-turn192`（`work/vehicle-dynamic-deploy-20261008/claude-turn192-package.json` 及 `claude-turn192-ros2/xt-stcar-ros2-install.tar.gz`）与视觉助手 `y85`（`claude-y85-package.json`）。
 - 车上正式版本仍为 `y83／190`，未部署新包、未打开真实车串口 `/dev/car` 或 `/dev/laser`、未发车。下一轮实车测试须等用户确认摆放及光电/红绿灯复位。旧条目全部保留。
+
+
+## 2026-11-12 · Codex · y85／192已部署，等待“好了”再启动
+
+按用户“先部署到车上，我说好了再启动”，已部署a50ce68的claude-turn192及视觉助手y85；部署结果成功、输出锁定中位，未发车。首次安装报missing target library，实际库已安装，只缺启动环境：工程内deploy-matched.py对ROS2包先source /opt/ros/humble/setup.bash；车端控制台服务增加 ~/.config/systemd/user/xt-stcar-console.service.d/ros2-runtime.conf，将Humble的lib/riscv64-linux-gnu与lib加入LD_LIBRARY_PATH。没有改控制代码、没有增加停机条件。原环境备份在车端 work/y85-deploy-ros-env-20261112/previous-environment.json，旧软件备份 backup-claude-turn192-20261112-134938。下一步等用户说“好了”，再后台运行start-round.py y85。

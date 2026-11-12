@@ -30865,7 +30865,7 @@
     "author": "Codex",
     "engine_round": 192,
     "baseline": "Installedy83/190 (85adb21); control algorithms retained from y84/191 (3811dfe)",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "vehicle_host_software_tests_executed": true,
     "actual_vehicle_ports_opened_in_tests": false,
@@ -31112,7 +31112,7 @@
       "performance_unchanged_proven": false,
       "full_ros2_physical_loop_validated": false
     },
-    "build_status": "ROS2 cross-build/ament staging and software validations complete; prepare192/y85 release from committed source",
+    "build_status": "a50ce68: engine192 and visiony85 built and deployed; not launched",
     "evidence_dir": "work/ros2-migration-20261112",
     "report": "docs/ros2-rust-migration-20261112.md",
     "known_boundaries": [
@@ -31122,6 +31122,21 @@
       "New8x6provincial-track simulation remains paused.",
       "No new physical launch authorization."
     ],
-    "next": "Build192/y85 fromclaude-turn190; record and hand off toClaude for review. Actual deployment/full vehicle run requires subsequent instruction and fresh placement/reset confirmation."
+    "next": "Await operator 好了 / start placement and reset confirmation; then start-round.py y85.",
+    "source_commit": "a50ce68ef36d584959dd1038ede9e3b9255b8349",
+    "deployment_20261112": {
+      "result_file": "work/vehicle-dynamic-deploy-20261008/claude-turn192-deployment-result.json",
+      "source_commit": "a50ce68ef36d584959dd1038ede9e3b9255b8349",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn192-20261112-134938",
+      "motion_requested": false,
+      "arm_or_drive_requests": 0,
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      },
+      "vision_helper_deployed": true,
+      "runtime_environment_fix": "Source /opt/ros/humble/setup.bash for ROS2 deploy subprocess; console service user drop-in ros2-runtime.conf adds /opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib to LD_LIBRARY_PATH. No controller code change."
+    }
   }
 }

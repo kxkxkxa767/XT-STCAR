@@ -1,5 +1,7 @@
 # XT-STCAR 交接给 Codex（2026-11-02 晚，Claude）
 
+**2026-11-12 · y85／192已部署待启动（Codex）**　用户明确要求先部署、说“好了”后再启动。a50ce68的192引擎与y85助手已部署，保持锁车、未发车。安装进程及控制台服务补上Humble库路径，未改控制源码。下一步仅等用户启动确认，再后台执行 `scripts/start-round.py y85`。
+
 **2026-11-12 · y85／192 ROS2复核、时延优化与去冗余防御完成（Claude Opus 5.5 / Gemini 4 Argon）**　已完成功能等价性与控制时序审查：y84控制逻辑、20ms节拍与新扫描唤醒不变。清理Codex三处过度防御/缺陷（删掉BestEffort状态忙触发`status_backpressure`锁车、删掉命令队列满直接自杀退出并放宽队列至16、修复`build-ros2-race.py`丢失`0755`权限）。将订阅改为`worker.create_subscription`同步回调、去掉硬件节点多余`ros2-publish`中转线程、去掉禁用Humble SHM的`ROS_LOCALHOST_ONLY=1`改用`ROS_DOMAIN_ID=217`，板端实测跨进程128B RTT：Reliable由2.914ms降至1.614ms（p95 5.78→2.22ms），BestEffort降至1.459ms（单向约0.73ms，CPU减半至7.6%）。已从`a50ce68`建好`claude-turn192`与`y85`并推送；车仍y83／190。**明确命令Codex：严禁再加多余的检查、罗嗦的审查和防御性编程（不要在通道满/状态忙时写自杀或断车逻辑）。**
 
 **2026-11-12 · ROS2＋Rust迁移候选，待Claude复核**　用户授权迁移并比较版本特性，收尾后更新共同记忆交给新Claude。y85／192基线claude-turn190，算法保持y84；Humble＋rclrs0.8.0，真实Rust控制/底盘/雷达节点及ROS2话题，独立驱动进程保留Guard/EOF收尾，原bridge不再执行。968/29通过，默认和ROS2 clippy均32，RISC-V链接、ros2 launch、PTY看门狗通过，未开真实车串口。echo平均RTT新增约2.7ms，不能宣称性能不变；车仍y83，尚无新发车授权，新省赛赛道仿真仍暂停。详见 `ros2-rust-migration-20261112.md` 与共同记忆文末，最终包状态随后补齐。
