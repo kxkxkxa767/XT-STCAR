@@ -33315,8 +33315,20 @@
       "invocation": "start",
       "meaning": "Each manual invocation authorizes one placed/reset round; no automatic repeated runs"
     },
-    "build_status": "Local checks passed; preparing source commit and ROS2 cross-build",
+    "build_status": "197/y90 cross-built locally, not deployed; user absent and car off",
     "deployment_policy": "User absent and car off: do not SSH, uninstall or deploy until user returns and wakes the chat; each launch needs a fresh user start.",
-    "next": "Build197/y90 fromclaude-turn196, keep local, append final package status."
+    "next": "Await operator return/wake; perform vehicle bag cleanup and deploy197/y90. Only an explicit new start triggers a trial.",
+    "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
+    "package": {
+      "engine": "claude-turn197",
+      "vision": "y90",
+      "baseline": "claude-turn196",
+      "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
+      "runtime_changed": [
+        "payload/route-engine"
+      ],
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn197-a4260bf.tar.gz",
+      "ros2_install_archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/claude-turn197-ros2/xt-stcar-ros2-install.tar.gz"
+    }
   }
 }
