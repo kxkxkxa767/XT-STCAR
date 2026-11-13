@@ -33119,6 +33119,204 @@
       "cargo_test": "34 passed",
       "clippy_warnings": 32,
       "python_unittest": "968 OK"
-    }
+    },
+    "deployed": true,
+    "physical_trial_executed": true,
+    "car_runs_y89": [
+      {
+        "label": "y89",
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y89",
+        "files": 45,
+        "completed": false,
+        "effective_s": null,
+        "reason": "probe_obstacle_close_body",
+        "last_stage": "light_entry",
+        "last_saved_seq": 158,
+        "events": {
+          "start_lane": 1.9534420670000001,
+          "crosswalk_planned_at_rest": 2.355015951,
+          "crosswalk_stop": 5.450263205,
+          "crosswalk_go": 8.643163229,
+          "start_lane_board_ahead_cut": 9.641897378,
+          "first_approach_handover": 10.941269341,
+          "first_pass": 12.834885779,
+          "second_handover": 13.932005634,
+          "second_pass": 15.930496127,
+          "light_divider_prediction": 16.031708913
+        },
+        "nearest_body_m": 0.033868907119933504,
+        "nearest_bin": 325,
+        "max_actual_gap_s": 0.02216895199999991,
+        "scan_to_tick": {
+          "scans": 147,
+          "mean_s": 0.0014766721904761965,
+          "max_s": 0.007150949999999767,
+          "basis": "reader receive time -> start of the tick that decided on it"
+        },
+        "quality_counts": {},
+        "after_control": {
+          "armed": false,
+          "motor": 1500,
+          "servo": 1500
+        },
+        "operator_report": "用户2026-11-13报告三轮绕第二桶后碰挡板；第三轮控制日志在second_loop交接即近障结束，不把阶段差异隐去。"
+      },
+      {
+        "label": "y89-2",
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y89-2",
+        "files": 43,
+        "completed": false,
+        "effective_s": null,
+        "reason": "probe_obstacle_close_body",
+        "last_stage": "light_entry",
+        "last_saved_seq": 159,
+        "events": {
+          "start_lane": 1.901540746,
+          "crosswalk_planned_at_rest": 2.499586328,
+          "crosswalk_stop": 5.19791354,
+          "crosswalk_go": 8.390574312,
+          "start_lane_board_ahead_cut": 9.388946578,
+          "first_approach_handover": 10.78759965,
+          "first_pass": 12.483571903,
+          "second_handover": 14.279315193,
+          "second_pass": 15.683737052
+        },
+        "nearest_body_m": 0.0414115637766245,
+        "nearest_bin": 317,
+        "max_actual_gap_s": 0.025585715000000064,
+        "scan_to_tick": {
+          "scans": 148,
+          "mean_s": 0.0013818423513512839,
+          "max_s": 0.00717399200000024,
+          "basis": "reader receive time -> start of the tick that decided on it"
+        },
+        "quality_counts": {},
+        "after_control": {
+          "armed": false,
+          "motor": 1500,
+          "servo": 1500
+        },
+        "operator_report": "用户2026-11-13报告三轮绕第二桶后碰挡板；第三轮控制日志在second_loop交接即近障结束，不把阶段差异隐去。"
+      },
+      {
+        "label": "y89-3",
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261112-y89-3",
+        "files": 45,
+        "completed": false,
+        "effective_s": null,
+        "reason": "probe_obstacle_close_body",
+        "last_stage": "second_loop",
+        "last_saved_seq": 142,
+        "events": {
+          "start_lane": 1.795065565,
+          "crosswalk_planned_at_rest": 2.395269499,
+          "crosswalk_stop": 5.19097231,
+          "crosswalk_go": 8.387403649,
+          "start_lane_board_ahead_cut": 9.485585537,
+          "first_approach_handover": 10.381238767,
+          "first_pass": 12.683254327,
+          "second_handover": 14.473827392
+        },
+        "nearest_body_m": 0.057408238241838334,
+        "nearest_bin": 317,
+        "max_actual_gap_s": 0.02375766399999968,
+        "scan_to_tick": {
+          "scans": 131,
+          "mean_s": 0.0015965566412213677,
+          "max_s": 0.010417249999999711,
+          "basis": "reader receive time -> start of the tick that decided on it"
+        },
+        "quality_counts": {},
+        "after_control": {
+          "armed": false,
+          "motor": 1500,
+          "servo": 1500
+        },
+        "operator_report": "用户2026-11-13报告三轮绕第二桶后碰挡板；第三轮控制日志在second_loop交接即近障结束，不把阶段差异隐去。"
+      }
+    ],
+    "next": "y90/197 local correction and build; vehicle off, deployment awaits operator return."
+  },
+  "y90_second_tangent_transfer_prediction_20261113": {
+    "date": "2026-11-13",
+    "author": "Codex",
+    "author_model": "GPT-6 (session-provided identity)",
+    "engine_round": 197,
+    "baseline": "installed claude-turn196/y89, source1fbbfe7",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "Race cone-two approach passes geometric before_tangent_point_m to speed control for all modes, including tangent_to_circle; circle still reports zero.",
+      "Race transfer channel blends current and predicted pursuit curvature instead of jumping to the full opposite prediction; uses current IMU yaw and existing short-anchor speed instead of fixed1.3m/s.",
+      "Host start command selects the latest successfully deployed engine and matching vision package, then calls the existing repeatable start-round.py.",
+      "Prepare precise bag package cleanup from rule page3; no bag runtime dependency or replacement transport required."
+    ],
+    "diagnosis": {
+      "y89_seq142": {
+        "geometry_remaining_m": 0.875,
+        "old_control_remaining_m": 0
+      },
+      "y89_seq143": {
+        "geometry_remaining_m": 0.674,
+        "old_motor": 1570
+      },
+      "y89_3_seq135": {
+        "current_pursuit_pwm": 1450,
+        "old_predicted_command": 1549
+      },
+      "y89_3_seq136": {
+        "current_pursuit_pwm": 1464,
+        "old_predicted_command": 1584
+      },
+      "note": "The third failure precedes the new light-speed filter. Do not assign all three failures to ROS2 or to the y89 light filter."
+    },
+    "validation": {
+      "native_release_build": true,
+      "rust_tests_passed": 35,
+      "console_tests_passed": 968,
+      "clippy_warnings": 32,
+      "start_show_selected": "y89",
+      "cleanup_python_syntax": true,
+      "simulation": {
+        "y89": {
+          "cases": 12,
+          "completed": 6,
+          "second_pass": 7,
+          "contact": 5,
+          "light_in_zone": 4
+        },
+        "y90": {
+          "cases": 12,
+          "completed": 12,
+          "second_pass": 12,
+          "contact": 0,
+          "light_in_zone": 12
+        }
+      },
+      "simulation_dir": "work/codex-y90-fix-20261113/sim-paired",
+      "simulation_scope": "12 paired cases on the existing practice layout, varying initial pose and vehicle response; not provincial course validation",
+      "simulation_limits": "Existing empirical plant and ideal semantic camera. No external pose ground truth or real vehicle validation of y90."
+    },
+    "plots": [
+      "work/codex-y90-fix-20261113/y89-three-trials.png",
+      "work/codex-y90-fix-20261113/y90-simulation-comparison.png"
+    ],
+    "bag_cleanup": {
+      "rule": "Supplement page3: II.8 prohibits ROS1/bag use; III.3 checks installed presence",
+      "installed_bag_packages_in_20261112_snapshot": 10,
+      "script": "scripts/remove-bag-tools.py",
+      "plan_doc": "docs/ros2-bag-cleanup-20261113.md",
+      "vehicle_cleanup_executed": false
+    },
+    "start_command": {
+      "entry": "scripts/start",
+      "shell_definition": "scripts/start.zsh",
+      "zshrc_backup": "work/codex-y90-fix-20261113/zshrc-before-start",
+      "invocation": "start",
+      "meaning": "Each manual invocation authorizes one placed/reset round; no automatic repeated runs"
+    },
+    "build_status": "Local checks passed; preparing source commit and ROS2 cross-build",
+    "deployment_policy": "User absent and car off: do not SSH, uninstall or deploy until user returns and wakes the chat; each launch needs a fresh user start.",
+    "next": "Build197/y90 fromclaude-turn196, keep local, append final package status."
   }
 }

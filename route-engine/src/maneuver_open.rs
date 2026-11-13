@@ -1306,7 +1306,7 @@ impl Maneuver {
             (a * u.0 - lateral * u.1, a * u.1 + lateral * u.0)
         };
         let point = channel_point(0., 0.);
-        let (curvature, pwm) = guarded_pursuit(point, &channel_point, pose, u);
+        let (curvature, pwm) = guarded_pursuit(point, &channel_point, pose, u, self.race_inputs.is_some());
         dict! {
             "divider_lateral_m" => divider.lateral_m, "divider_open_end_along_m" => divider.along_m.0,
             "channel_offset_m" => offset, "pursuit_point_left_m" => round3_list(&[point.0, point.1]),
@@ -1337,7 +1337,23 @@ impl Maneuver {
     }
 
     pub(super) fn open_transfer_steering(&mut self, scan: &V, heading: f64, pose: (f64, f64, f64, f64)) -> (V, i64) {
-        let channel = self.open_channel_target(scan, heading, Some(pose));
+        // y89-2/-3: the old prediction jumped from current right correction
+        // straight to a full predicted left command. Use current IMU motion
+        // and the same mean-curvature handover as the cone-two approach.
+        let motion = self.race_inputs.map(|input| {
+            let rate = input.yaw_rate.filter(|v| v.is_finite()).unwrap_or(self.compass.rate);
+            let speed = self.race_surface_speed.speed(self.last_now, input.forward_integral)
+                .or_else(|| self.race_transfer.control_speed(self.last_now, input.forward_integral))
+                .unwrap_or(OPEN_PREDICT_SPEED_MPS);
+            (rate, speed)
+        });
+        let pose = motion.map_or(pose, |(rate, speed)| self.response_pose_with_speed(rate, speed));
+        let mut channel = self.open_channel_target(scan, heading, Some(pose));
+        if channel.is_some() && let Some((rate, speed)) = motion {
+            channel.set("response_speed_mps", speed);
+            channel.set("response_yaw_radps", rate);
+            channel.set("response_control", "mean_curvature_over_response");
+        }
         let natural = if channel.is_some() {
             channel.idx("target_pwm").i()
         } else {
@@ -1494,10 +1510,10 @@ impl Maneuver {
         if self.race_inputs.is_some() {
             self.race_transfer.tight_entry = lp.get("free_m").get("-90").of().and_then(crate::race_transfer::passage_entry_mps);
         }
-        let remaining = match lp.idx("pursuit_mode").s() {
-            "approach_line" | "approach_line_to_circle" | "tangent" => lp.idx("before_tangent_point_m").of(),
-            _ => Some(0.),
-        };
+        // All approach forms carry the geometric distance, including
+        // tangent_to_circle (y89 seq142/143 still had .875/.674 m left).
+        // The circle itself reports zero; a mode label must not erase distance.
+        let remaining = lp.idx("before_tangent_point_m").of();
         self.transfer_drive(scan, now, remaining, lp.idx("target_pwm").i());
         let earliest = if self.race_inputs.is_some() { LIGHT_GATE_HANDOFF_PROGRESS_RAD } else { OPEN_LIGHT_HANDOFF_PROGRESS_RAD };
         if let Some(p) = progress
@@ -1726,7 +1742,7 @@ impl Maneuver {
                 });
                 (curvature, clampi(NEUTRAL+round(ROUTE_PWM_PER_CURVATURE*curvature), nominal_right_limit_pwm(), SERVO_MAX))
             } else { current }
-        } else { guarded_pursuit(point, &lane_point, pose, u) };
+        } else { guarded_pursuit(point, &lane_point, pose, u, false) };
         Some((lane, point, curvature, pwm))
     }
 
@@ -1991,11 +2007,16 @@ fn guarded_pursuit(
     build: &dyn Fn(f64, f64) -> (f64, f64),
     pose: Option<(f64, f64, f64, f64)>,
     u: (f64, f64),
+    average: bool,
 ) -> (f64, i64) {
     let (curvature, pwm) = pursuit_pwm(point);
     let Some(pose) = pose else { return (curvature, pwm) };
     let moved = (pose.0 * u.0 + pose.1 * u.1, pose.1 * u.0 - pose.0 * u.1);
     let predicted = pursuit_pwm(in_pose(build(moved.0, moved.1), pose));
+    if average {
+        let curvature = (curvature + predicted.0) * 0.5;
+        return (curvature, clampi(NEUTRAL + round(ROUTE_PWM_PER_CURVATURE * curvature), nominal_right_limit_pwm(), SERVO_MAX));
+    }
     if overshoot_guard(pwm, predicted.1) != pwm { predicted } else { (curvature, pwm) }
 }
 
@@ -2006,6 +2027,18 @@ mod round106_tests {
     //! web/vehicle-console/tests/fixtures/transfer_axis_support_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+    #[test]
+    fn transfer_prediction_does_not_jump_to_the_full_opposite_command() {
+        let point = (0.8, -0.15);
+        let build = |along: f64, _: f64| (0.8 + along, -0.15);
+        let pose = Some((0.65, -0.12, -0.4, 0.3));
+        let current = pursuit_pwm(point).1;
+        let old = guarded_pursuit(point, &build, pose, (1., 0.), false).1;
+        let mean = guarded_pursuit(point, &build, pose, (1., 0.), true).1;
+        assert!(current < NEUTRAL && old > NEUTRAL);
+        assert!(current < mean && mean < old);
+    }
 
     #[test]
     fn entry_prediction_preserves_axis_correction_and_releases_after_crossing() {

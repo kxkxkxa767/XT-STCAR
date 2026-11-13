@@ -122,6 +122,14 @@ impl RaceTransfer {
 
     pub fn waiting_for_support(&self) -> bool { self.waiting_for_support }
 
+    /// The current transfer estimate, transported from the same short IMU
+    /// anchor already used by the longitudinal control tick.
+    pub fn control_speed(&self, now: f64, integral: Option<f64>) -> Option<f64> {
+        let a = self.drive_anchor?;
+        if !(0. ..=SCAN_AGE_S).contains(&(now - a.at)) { return None; }
+        Some((a.speed? + a.integral.zip(integral).map_or(0., |(old, current)| current - old)).max(0.))
+    }
+
     /// The wait ends in the phase it interrupted; a boost is not resumed. y71: cone two appeared
     /// one scan after the board came inside the stop range and the latched coast ran from
     /// seq 132 to 138, cutting the tangent speed to 1.48 m/s (y67: 1.77).

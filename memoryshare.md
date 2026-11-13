@@ -1127,3 +1127,20 @@ y87第二桶接近修正本轮已生效：148帧距切点0.104m、桶心速度�
 - **本条作者模型：Claude Opus 5.5（Antigravity，Medium）**。给其他模型（GPT-6 Astra／Codex、Gemini 等）：y89 的修改、构建、部署都是 Claude Opus 5.5 做的；本对话里 y88 那几轮实际是 Gemini 4 Argon (High)，旧记录误署“Claude Opus 4.6 Thinking”。
 - 部署：`claude-turn196`（源 `1fbbfe7`）＋ y89 视觉 `stage-claude-y89-20261112-195751`（6 个文件，0 不符）。部署后车是 locked、armed=false、1500/1500，没有发过任何运动或解锁请求。
 - 发车命令（用户在终点执行）：`cd /Users/yuhaojin/Documents/XT-STCAR && python3 scripts/start-round.py y89`。
+
+
+## 2026-11-13 · Codex（GPT-6）· 19:10定时本地任务：y89三轮定位，y90／197准备建包
+
+**本条作者模型：Codex，基于GPT-6，按本会话提供身份记录，不猜子型号。** 用户白天要求只取数据，随后授权19:10后分析、仿真与修改，并新增start命令和赛事bag整改；之后明确车辆关闭、本人不在，必须等回来唤醒才部署。本次全程只用本地文件，没有SSH、车端卸载、部署或发车。
+
+**y89实车证据**：车载源1fbbfe7／claude-turn196，三轮目录为 `left-cone-trial-20261112-y89`、`-y89-2`、`-y89-3`，45+43+45=133文件均已取回。用户报告第二桶后碰板；日志前两轮在light_entry近障结束，第三轮在second_loop交接就结束，不能写三轮都完成了第二桶。三轮近障最近车身距离0.033869/0.041412/0.057408m，无质量等待，最大控制间隔22.169/25.586/23.758ms；取回的跑后状态均armed=false、1500/1500。无完赛成绩。
+
+**本次定位与修正**：① y89的142/143帧为tangent_to_circle，几何切点余距仍0.875/0.674m，但open_second_loop_update按模式名漏掉该分支、传0给控速；143帧已恢复1570。现在统一使用几何余距，真正circle仍为0，不按标签猜是否到弯。② y89-2/-3桶间当前右修被旧overshoot_guard一次换成整幅预测左修；第三轮135/136帧当前追踪PWM1450/1464，却给1549/1584左修，再急打回右，接近挡板时已经来不及。比赛桶间通道改为当前/预测曲率平均，复用当前IMU角速度及既有短锚速度，替代固定1.3m/s与滞后雷达角速度。普通Python参考模式、实时规划圆、原Guard/8cm门和y88/y89灯区修正保留，未新增停机条件。第三轮在灯区新滤波执行前已失效，不能把这次简单归因于迁移或y89灯前卡尔曼修改。
+
+**轨迹与仿真**：`work/codex-y90-fix-20261113/y89-three-trials.png` 用同一第二桶支撑/航向重建五轮局部轨迹，唯一局部匹配才跨缺测接续，非全局ICP地面真值。`y90-simulation-comparison.png` 与 `sim-paired/` 是同12条件、同模型、同种子的Rust闭环对照：y89过第二桶7/12、到终点6/12、模型碰板5；y90均12/12、模型碰板0，灯停车区判定4→12。仅变更控制源码，场景是既有练习布局的小幅起点/航向与转向响应/阻力变化，没有跑暂停中的省赛新赛道大扫描。模型仍是经验车辆响应+理想语义相机，不能将这些统计当实车成功率或19秒成绩。
+
+**start与bag**：已新增 `scripts/start`、`scripts/start.zsh`；Mac的.zshrc追加加载，原文件备份在本轮work目录。现有终端先 `source /Users/yuhaojin/Documents/XT-STCAR/scripts/start.zsh`，以后输入start即可调用实际已部署版本的start-round.py；每输入一次只跑一轮，可重复，证据沿用自动递增目录。`start --show`本地验证选中y89，不会误选已建但未部署的y90。每次输入start仍代表操作者确认摆放、光电及灯复位，本次没有实际执行start。
+
+规则补充细则第3页二8、三3明确禁ROS1/bag且查环境中是否存在；11月12日快照确有10个ros-humble-ros2bag/rosbag2相关包。准备了 `scripts/remove-bag-tools.py` 和 `docs/ros2-bag-cleanup-20261113.md`：按实际包名先生成apt卸载计划，允许随bag移除聚合包，其他额外运行库移除则先处理依赖；不autoremove。现有Rust ROS2比赛链路不调用bag，JSONL/图片日志继续用；未发现规则要求更换Bianbu。车端卸载尚未执行，不能记为已整改，等用户回来再做。
+
+本地release、35Rust、968参考回归通过，clippy仍32；仅增加原Rust文件内一项转向交接检查，无新测试文件。y90／197机读 `y90_second_tangent_transfer_prediction_20261113`，基线实际车载claude-turn196，准备提交及交叉编译。旧记录保留。清单第5项不动，不强推，不动根目录队友未跟踪文件。

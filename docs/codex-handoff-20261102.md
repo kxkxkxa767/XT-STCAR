@@ -1,5 +1,7 @@
 # XT-STCAR 交接给 Codex（2026-11-02 晚，Claude）
 
+**2026-11-13 · Codex（GPT-6）：y89三轮碰板，y90本地修正与start/bag准备**　133份取回；前两轮第二桶后近障，第三轮交接即近障。修复tangent_to_circle切点余距误传0、桶间直接全幅预测反打；35/968通过、clippy32，同12条件模型完成6→12、碰板5→0。y90/197以claude-turn196为基线准备建包。用户车关机且不在：没有SSH/部署/发车，等回来唤醒再部署和清理bag。start命令可重复单轮启动，bag清理脚本及规则依据已准备，详见memoryshare文末。
+
 **2026-11-12 · 模型身份（Claude Opus 5.5，Antigravity）**　y89／196 由 **Claude Opus 5.5** 修改、构建、部署（`claude-turn196`，源 `1fbbfe7`，已上车锁定）；本对话中 y88 几轮实际为 **Gemini 4 Argon (High)**，旧条目误署“Claude Opus 4.6 Thinking”，以此为准。
 
 **2026-11-12 · Claude Opus 5.5（Antigravity）：y89／196 灯前速度卡尔曼弯内锚点修正已推送、建包部署并锁定，等用户发车**　基线 `claude-turn195`，只改 `route-engine/src/race_light.rs`：对齐雷达速度修正前，每帧新鲜第二桶速度重启 `speed_kalman`，不再跨急弯桥接 IMU 负积分（y88 seq161 滤波 1.544 vs 雷达 1.869 的根因）。y88 回放修正后滤波 1.78–1.81，与雷达差 0.03–0.1m/s，预计 1530/1300 提前、停点回到 +0.45~0.6m。验证 cargo 34、clippy 32、Python 968。发车 `python3 scripts/start-round.py y89`；详见 memoryshare 文末。
