@@ -33330,11 +33330,18 @@
       "operator_sudo_required": true
     },
     "start_command": {
-      "entry": "scripts/start",
-      "shell_definition": "scripts/start.zsh",
-      "zshrc_backup": "work/codex-y90-fix-20261113/zshrc-before-start",
-      "invocation": "start",
-      "meaning": "Each manual invocation authorizes one placed/reset round; no automatic repeated runs"
+      "entry": "scripts/start-vehicle.py",
+      "installer": "scripts/install-vehicle-start.py",
+      "scope": "vehicle SSH bash only",
+      "vehicle_command": "start",
+      "current_vehicle_terminal_setup": "source ~/.bashrc",
+      "vehicle_record": "/home/bianbu/xt-stcar-console/current-race.json",
+      "vehicle_bashrc_backup": "/home/bianbu/xt-stcar-console/work/start-command/bashrc-before-start",
+      "mac_start_removed": true,
+      "local_deploy_vision_hook": true,
+      "show_selected": "y90",
+      "trial_started": false,
+      "meaning": "Each manual start launches one installed vision helper; existing helper creates a new evidence directory on repeats."
     },
     "build_status": "197/y90 deployed successfully and locked; bag packages removed; no trial started",
     "deployment_policy": "User returned and explicitly authorized deployment.197/y90 installed; each launch still requires a new operator start or placement/reset confirmation.",

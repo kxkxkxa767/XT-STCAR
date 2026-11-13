@@ -1,5 +1,10 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口补充（2026-11-13：start仅在车端SSH终端）
+
+- 用户明确只在SSH后的车端bash输入start；Mac别名与两个旧入口文件已移除。车端当前窗口先source ~/.bashrc，新SSH自动加载。start --show已验证为y90，没有发车。
+- 新入口scripts/start-vehicle.py由scripts/install-vehicle-start.py安装，工程内deploy-vision.py已加自动更新钩子。每次start一轮，可重复且保留独立证据；证据保存在车上，后续取回。车仍y90／197，等待新的实际发车输入。
+
 ## 当前接手入口（2026-11-13：Codex／GPT-6，y90已部署、bag已清理）
 
 - 车上y90／197（源a4260bf）部署成功并锁定1500/1500，助手已上传，尚未实跑。start --show已选择y90。

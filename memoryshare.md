@@ -1162,3 +1162,12 @@ bag实际卸载计划为10个ros2bag/rosbag2包，加ros-humble-ros-base聚合�
 结果：已装bag包为空，已知ROS安装前缀及用户.local范围无剩余bag路径；ros2 --help正常，bag子命令消失，launch/run仍在；已部署route-engine的ldd无缺失库。证据 `work/codex-y90-deploy-20261113/bag-cleanup-verification.json`。这些未使用组件不参与比赛控制，清理不改变Rust控制算法和20ms节拍；本次未额外跑性能基准或车辆试验。
 
 **用户在sudo问题下回复的“好了”是卸载完成，不是车辆摆放/发车确认。车上y90／197待测，必须等用户新的start或明确发车确认。** 机读记录及清理文档已同步；旧条目保留。
+
+
+## 2026-11-13 · Codex（GPT-6）· start改为仅车端SSH终端使用
+
+用户在SSH后的bianbu bash输入start遇到command not found，因为此前Codex只配置了Mac；用户进一步明确“只有ssh连接后的终端发送start”。现已删除Mac的scripts/start、scripts/start.zsh及.zshrc中对应加载行，保留既有scripts/start-round.py供开发侧流程使用。
+
+新增scripts/start-vehicle.py与scripts/install-vehicle-start.py，已将车端入口安装到 `/home/bianbu/xt-stcar-console/start-vehicle.py`，current-race.json指向当前已部署的y90助手。车端.bashrc追加start函数；原文件备份在车端work/start-command/bashrc-before-start。当前已连接的SSH终端先执行 `source ~/.bashrc`，之后在车放好、光电/灯复位后输入start，每次一轮，结束后可重复；新SSH窗口自动加载。仍复用原race-trial.py的检查、ROS2启动、锁车和递增证据目录，没有新控制流程或停机条件。
+
+工程内deploy-vision.py已接上install-vehicle-start.py，后续成功上传助手后自动更新车端start指向。车端bash的 `start --show`返回y90，验证没有发车。此入口在车上保存证据，不自动取回Mac；后续由Codex取回。车用Rust包仍a4260bf的y90／197，本次只修改启动入口，没有重新编译引擎或实际试跑。用户这次是修入口，不能算发车确认。旧条目保留。
