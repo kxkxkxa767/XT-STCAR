@@ -1589,7 +1589,9 @@ impl Maneuver {
             // the quality pause. Keep its proven 1550 arc, independently of the
             // approach speed hold and the other stages' 1570 cruise.
             self.first_approach_hold().unwrap_or_else(|| {
-                if self.route_stage == "first_target" { ROUTE_SLOW_MOTOR } else { self.cruise_motor() }
+                if self.route_stage == "first_target" || (self.race_inputs.is_some() && self.route_stage == "light_entry") {
+                    ROUTE_SLOW_MOTOR
+                } else { self.cruise_motor() }
             })
         } else {
             TRIAL_MOTOR

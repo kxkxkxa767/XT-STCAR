@@ -26,6 +26,8 @@ const RACE_GREEN_AFTER_RED_MIN_SCORE: f64 = 0.25;
 // y34: the practice red follows the beam by 1.0-1.3 s, then a 3.6 Hz frame and
 // inference; y32 decided it 1.36 s after the crossing but had refilled at 1.0 s.
 const LIGHT_RED_DUE_S: f64 = 2.0;
+// User2026-11-13: at a known light stop, missing colour must not wait forever.
+const RACE_UNCONFIRMED_COLOR_WAIT_S: f64 = 10.0;
 
 /// _thin_posts(ranges): isolated thin posts (car frame, left +), nearest first.
 pub fn thin_posts(ranges: &[V]) -> Vec<(f64, f64)> {
@@ -849,7 +851,12 @@ impl Maneuver {
         let red_due = self.race_light.beam_at.is_some_and(|at| now - at >= LIGHT_RED_DUE_S);
         if !red {
             let step_down = coast_if_renewed.or(predicted).is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
-            let cut = if_renewed.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
+            // Begin the1530 rolling slowdown at the coast envelope, not only
+            // at the later1300 envelope. Lower speed gives the existing final
+            // brake a shorter, better observed stop without a neutral pause.
+            let cut = if_renewed.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M)
+                || (matches!(self.race_light.phase, LightRoll::Hold)
+                    && predicted.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M));
             // A powered 1530 hold continually renews the old power-tail clock.
             // It must still use the existing restart path if motion runs out.
             let running_out = (tail == 0. || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::ZoneCoast))
@@ -896,10 +903,18 @@ impl Maneuver {
         self.lane_motor = motor;
         let rear_past_sensor = rear_gap.map(|g| LIGHT_ZONE_M-g);
         let whole_in_zone = gap.is_some_and(|g| g >= 0.) && rear_past_sensor.is_some_and(|d| d > 0.);
-        let stopped = red && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
+        // Gantry location and detected colour are independent. y90-3/-4 had
+        // completed the brake inside the zone, but no red meant wait_since
+        // never started and the used brake kept neutral for another26s.
+        let confirmed_stop = self.race_light_brake.stopped() && self.light_stop_evidence.has("gantry");
+        let stopped = (red || confirmed_stop) && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
             && self._power_cmd_at.is_none_or(|at| now-at >= lag);
-        let basis = stopped.then(|| if whole_in_zone { "stopped_after_camera_red" }
-            else { "stopped_after_camera_red_outside_zone" }.to_string());
+        let basis = stopped.then(|| match (red, whole_in_zone) {
+            (true, true) => "stopped_after_camera_red",
+            (true, false) => "stopped_after_camera_red_outside_zone",
+            (false, true) => "stopped_at_confirmed_gantry_color_unconfirmed",
+            (false, false) => "stopped_at_confirmed_gantry_outside_zone_color_unconfirmed",
+        }.to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
             "position_reference" => self.race_light.position_diagnostics(),
             "control_front_gap_m" => control_gap, "speed_fusion" => self.race_light.speed_fusion_diagnostics(),
@@ -973,7 +988,9 @@ impl Maneuver {
         let waited = now - wait_since;
         let no_light = !self._light_seen && waited >= LIGHT_NO_LIGHT_WAIT_S;
         let race_fallback = red_s.is_some_and(|s| s >= LIGHT_RED_GO_S) && !red_now;
-        let wait = if self.race_inputs.is_some() { !green && !race_fallback }
+        let race_color_timeout = self.race_inputs.is_some() && red_s.is_none()
+            && waited >= RACE_UNCONFIRMED_COLOR_WAIT_S && !red_now;
+        let wait = if self.race_inputs.is_some() { !green && !race_fallback && !race_color_timeout }
             else { !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S };
         if wait {
             // the board ahead's history for the restart
@@ -988,6 +1005,8 @@ impl Maneuver {
             "green_without_red_since_the_gantry_looking_again"
         } else if self.race_inputs.is_some() && race_fallback {
             "red_seen_10_5s_no_fresh_red"
+        } else if race_color_timeout {
+            "known_gantry_color_unconfirmed_10s_after_stop"
         } else if red_ended {
             "red_gone_from_fresh_frames_after_the_stop"
         } else if red_timed && !red_now {
@@ -1011,7 +1030,8 @@ impl Maneuver {
         if self.race_inputs.is_some() { go.set("green_min_score", green_min_score); }
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"go" => go.clone()});
         self.route_event("light_go", scan, control, go.clone());
-        if (no_light && !green) || (green && self._light_red_frames == 0) {
+        let known_gantry = self.race_inputs.is_some() && self.light_stop_evidence.has("gantry");
+        if !known_gantry && ((no_light && !green) || (green && self._light_red_frames == 0)) {
             // not the light: a later gantry may start a new stop
             let rearmed = appended(&self.light_stop_evidence, "rearmed", go);
             self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"rearmed" => rearmed});
@@ -1037,6 +1057,46 @@ mod tests {
     //! results in web/vehicle-console/tests/fixtures/light_gantry_run108_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+    #[test]
+    fn a_known_gantry_stop_starts_waiting_without_colour_and_releases_after_ten_seconds() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.race_inputs = Some(crate::motion_sensors::RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) });
+        m.light_vision = true;
+        m.route_stage = "light_lane";
+        m.light_stop_state = Some("approach");
+        m.drive_since = Some(0.);
+        m.compass.heading = Some(0.);
+        m._light_gantry_since = Some(1.);
+        m.light_stop_evidence = dict! {"gantry" => dict! {"source_seq" => 1}};
+        m._light_line = dict! {"source" => "legs", "confirmed_seq" => 1};
+        m.race_light.speed_uses_gantry = true;
+        m.race_light_brake.observe(1., Some(1.1), Some(1.), Some(0.), 1., 0.6, BrakeModel::light(1., 0.6), 0.55);
+        assert_eq!(m.race_light_brake.command(1., Some(0.)), Some(1300));
+        m.race_light_brake.observe(2., Some(0.55), Some(0.1), Some(0.), 1., 0.6, BrakeModel::light(1., 0.6), 0.55);
+        assert_eq!(m.race_light_brake.command(2., Some(0.)), Some(1500));
+        m.race_light.ranges = vec![(2., 2., 0.75), (2.1, 2.1, 0.75)];
+        let scan = |at: f64| dict! {"seq" => (at*10.) as i64, "at_ms" => (at*1000.) as i64,
+            "received_at" => at, "ranges" => vec![V::Float(3.); 360]};
+        let (basis, feedback) = m.light_approach_control(&scan(2.2), Some(0.75), 2.2);
+        assert_eq!(basis.as_deref(), Some("stopped_at_confirmed_gantry_color_unconfirmed"));
+        m.lane_feedback = feedback;
+        m.light_stop_reached(&scan(2.2), 2.2, &V::None, basis.as_deref().unwrap());
+        assert!(!m.light_wait(&scan(12.1), 12.1, &V::None));
+        assert!(m.light_wait(&scan(12.3), 12.3, &V::None));
+        assert_eq!(m.light_stop_state, Some("released"));
+        assert_eq!(m.light_stop_evidence.get("go").get("basis").s(), "known_gantry_color_unconfirmed_10s_after_stop");
+        m.light_stop_state = Some("waiting");
+        m._light_red_at = Some(2.3);
+        m._light_frames = vec![V::from(vec![100., 12.4, 0.9, 0.])];
+        assert!(!m.light_wait(&scan(12.4), 12.4, &V::None), "a fresh red is not an unconfirmed colour");
+        m._light_red_at = None;
+        m._light_wait_since = Some(12.3);
+        m._light_wait_tick = Some(12.3);
+        m._light_frames = vec![V::from(vec![101., 12.4, 0., 0.9]), V::from(vec![102., 12.5, 0., 0.9])];
+        assert!(m.light_wait(&scan(12.5), 12.5, &V::None));
+        assert_eq!(m.light_stop_state, Some("released"), "known gantry remains known even without a red frame");
+    }
 
     #[test]
     fn passing_the_line_before_the_camera_reply_does_not_cancel_an_active_brake() {

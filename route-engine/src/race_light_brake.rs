@@ -294,6 +294,8 @@ impl LightBrake {
         matches!(self.state, BrakeState::Used)
     }
 
+    pub fn stopped(&self) -> bool { self.is_used() && self.end_reason == Some("stopped") }
+
     pub fn phase(&self) -> &'static str {
         match self.state {
             BrakeState::Ready => "ready",

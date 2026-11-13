@@ -77,7 +77,7 @@ impl CrosswalkExit {
     /// After the crosswalk the car is already rolling when the first support
     /// is acquired. Aim one coast at the planned bend, then hold cruise.
     #[allow(clippy::too_many_arguments)]
-    pub fn first_approach_drive(&mut self, radar: Option<f64>, before: Option<f64>, rolling_tangent: bool, decel: f64, now: f64, forward_integral: Option<f64>, hold_accel: f64, entry_mps: f64) -> (i64, V) {
+    pub fn first_approach_drive(&mut self, radar: Option<f64>, body_speed: Option<f64>, before: Option<f64>, rolling_tangent: bool, decel: f64, now: f64, forward_integral: Option<f64>, hold_accel: f64, entry_mps: f64) -> (i64, V) {
         // y70: a quality pause (seq 90-95) left the phase in Cruise, so the 1600 launch came
         // back at 1.49 m/s and cone one was entered at 1.90 (y67, y68: 1.73). A pause ends the boost.
         if self.last_drive_at.replace(now).is_some_and(|last| now - last > SCAN_AGE_S)
@@ -87,7 +87,9 @@ impl CrosswalkExit {
         }
         let inertial = self.crosswalk_release.and_then(|(_, zero)| zero)
             .zip(forward_integral).map(|(zero, integral)| (integral-zero).max(0.));
-        let speed = inertial.or(radar);
+        // y90: the rest-long integral still said1.92 while the recent
+        // radar/IMU anchor measured1.71, extending neutral past entry speed.
+        let speed = body_speed.or(inertial).or(radar);
         let lag = CROSSWALK_AIM_LAG_S;
         // End the start pulse when its measured speed plus the existing ESC
         // tail reaches entry speed. The remaining straight uses 1570.
@@ -135,7 +137,8 @@ impl CrosswalkExit {
         self.first_motor = Some(motor);
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
-                       "speed_source" => if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
+                       "speed_source" => if body_speed.is_some() { "recent_radar_anchor_with_short_imu" }
+                           else if inertial.is_some() { "imu_from_crosswalk_rest" } else { "lidar" },
                        "entry_target_mps" => entry_mps, "early_rolling_hold" => hold_room})
     }
 
@@ -146,6 +149,16 @@ impl CrosswalkExit {
     pub fn first_rolling_hold(&self) -> bool { self.first_approach == FirstApproach::Hold }
 
     pub fn first_motor(&self) -> Option<i64> { self.first_motor }
+
+    /// The board search can cut before a tangent is acquired. That is the
+    /// same approach coast, not a separate pulse that may re-enable cruise.
+    pub fn board_cut(&mut self) -> &'static str {
+        if matches!(self.first_approach, FirstApproach::Launch | FirstApproach::Cruise) {
+            self.first_approach = FirstApproach::Coast;
+        }
+        self.first_motor = Some(NEUTRAL);
+        self.first_phase()
+    }
 
     pub fn enter_first_bend(&mut self) {
         self.first_approach = FirstApproach::Hold;
@@ -172,7 +185,7 @@ mod tests {
     fn first_cruise_ends_once_even_if_the_tangent_moves_back_or_speed_drops() {
         let mut exit = CrosswalkExit::default();
         exit.release_crosswalk(0., Some(0.));
-        let mut drive = |at, speed, before| exit.first_approach_drive(None, Some(before), true,
+        let mut drive = |at, speed, before| exit.first_approach_drive(None, None, Some(before), true,
             0.6, at, Some(speed), 0.8, FIRST_ENTRY_MPS).0;
         assert_eq!(drive(0., 0., 4.), START_LAUNCH_MOTOR);
         assert_eq!(drive(0.2, 1.1, 4.), RACE_CRUISE_MOTOR);
@@ -180,6 +193,16 @@ mod tests {
         assert_eq!(drive(0.4, 1.6, 0.2), ROUTE_SLOW_MOTOR);
         assert_eq!(drive(0.5, 1.4, 5.), ROUTE_SLOW_MOTOR);
         assert_eq!(drive(0.6, 1.7, 3.), ROUTE_SLOW_MOTOR);
+
+        let mut exit = CrosswalkExit::default();
+        exit.release_crosswalk(0., Some(0.));
+        exit.first_approach_drive(None, Some(2.), Some(4.), false, 0.6, 1., Some(2.1), 0.4, FIRST_ENTRY_MPS);
+        exit.board_cut();
+        assert_eq!(exit.first_motor(), Some(NEUTRAL));
+        assert_eq!(exit.first_approach_drive(None, Some(1.70), Some(2.), true, 0.6, 1.1,
+            Some(1.92), 0.4, FIRST_ENTRY_MPS).0, ROUTE_SLOW_MOTOR);
+        assert_eq!(exit.first_approach_drive(None, Some(1.6), Some(4.), true, 0.6, 1.2,
+            Some(1.8), 0.4, FIRST_ENTRY_MPS).0, ROUTE_SLOW_MOTOR);
     }
 
     #[test]

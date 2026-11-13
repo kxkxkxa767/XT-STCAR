@@ -499,7 +499,8 @@ impl Maneuver {
             crosswalk.set("speed_basis", "recent_radar_anchor_with_short_imu_change");
         }
         if self.crosswalk_state == Some("done") && let Some(input) = self.race_inputs {
-            let body_speed = self.race_surface_speed.speed(now, input.forward_integral)
+            let recent_body = self.race_surface_speed.speed(now, input.forward_integral);
+            let body_speed = recent_body
                 .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral)).or(speed);
             let hold_accel = self.race_surface.predicted_drive_accel(RACE_CRUISE_MOTOR, body_speed, now)
                 .unwrap_or(LANE_POWER_ACCEL_MPS2)
@@ -511,7 +512,7 @@ impl Maneuver {
                 let planned = approach.get("before_tangent_point_m").of();
                 let before = planned.or_else(|| ahead.map(|d| (d - FRONT_BODY_EXTENT_M - FIRST_APPROACH_BOARD_GAP_M - LANE_START_SEARCH_M).max(0.)));
                 let rolling_tangent = planned.is_some() && self._launch_cmd_at.is_none_or(|at| now - at >= CROSSWALK_AIM_LAG_S);
-                (self._start_motor, first_drive) = exit.first_approach_drive(speed, before, rolling_tangent, decel, now, input.forward_integral, hold_accel, self.wall_turn.first_entry_mps());
+                (self._start_motor, first_drive) = exit.first_approach_drive(speed, recent_body, before, rolling_tangent, decel, now, input.forward_integral, hold_accel, self.wall_turn.first_entry_mps());
                 first_drive.set("hold_accel_mps2", hold_accel);
                 first_drive.set("distance_source", if planned.is_some() { "first_tangent" } else { "board_search_room" });
                 allowed = None;
@@ -524,6 +525,9 @@ impl Maneuver {
         let cut = matches!((stop_at, ahead), (Some(stop), Some(a)) if a <= stop);
         if cut {
             self._start_motor = NEUTRAL;
+            if self.race_inputs.is_some() && first_drive.is_some() {
+                first_drive.set("phase", self.race_crosswalk.board_cut());
+            }
             let evidence = dict! {
                 "source_seq" => scan.idx("seq").clone(), "front_range_m" => ahead, "front_stop_range_m" => stop_at,
                 "speed_mps" => speed, "basis" => "stopping_range_reaches_board_without_first_support",
@@ -1015,12 +1019,13 @@ impl Maneuver {
             } else {
                 // Keep the same one-way approach state across target handover.
                 // A noisy tangent moving farther away cannot re-enable 1570.
-                let speed = self.race_surface_speed.speed(now, input.forward_integral)
+                let recent_body = self.race_surface_speed.speed(now, input.forward_integral);
+                let speed = recent_body
                     .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral));
                 let acceleration = self.race_surface.predicted_drive_accel(RACE_CRUISE_MOTOR, speed, now)
                     .unwrap_or(LANE_POWER_ACCEL_MPS2)
                     .max(self.race_surface.predicted_hold_accel(RACE_CRUISE_MOTOR, speed, now).unwrap_or(0.));
-                let (_, feedback) = self.race_crosswalk.first_approach_drive(speed,
+                let (_, feedback) = self.race_crosswalk.first_approach_drive(speed, recent_body,
                     lp.get("before_tangent_point_m").of(), true,
                     self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2), now,
                     input.forward_integral, acceleration, self.wall_turn.first_entry_mps());
@@ -1554,6 +1559,9 @@ impl Maneuver {
     fn open_second_pass(&mut self, scan: &V, now: f64, control: &V, basis: &str) -> V {
         if self.race_inputs.is_some() {
             self.race_light.entry_tracker = self.second_tracker.clone();
+            if matches!(self.race_light.phase, crate::race_light::LightRoll::Cruise) {
+                self.race_light.phase = crate::race_light::LightRoll::Hold;
+            }
         }
         self.second_pass_evidence = dict! {
             "source_seq" => scan.idx("seq").clone(), "source_at_ms" => scan.idx("at_ms").clone(),
