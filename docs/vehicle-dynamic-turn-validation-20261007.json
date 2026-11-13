@@ -33582,7 +33582,36 @@
       "y90 first run stopped0.442m before final board and timed out; y90-2 net19.867s excludes penalties and is not a valid clean lap.",
       "The real light-speed estimate was low, particularly after y90-2 cone loss; slower entry/earlier rolling slowdown reduces the high-speed approach, but real stop repeatability remains to be verified."
     ],
-    "build_status": "Local implementation and checks complete; preparing198/y91 ROS2 package",
-    "next": "Commit and push, cross-build fromclaude-turn197; then review user-selected technical manual without changing style. Keep package local while user is asleep."
+    "build_status": "198/y91 cross-built locally and pushed; not deployed, user sleeping",
+    "next": "On operator return, deploy198/y91 from the built package. No launch without a fresh placement/reset confirmation or user start. Recheck real light stopping position and the2 early-stop model cases.",
+    "source_commit": "ee299754b93dda141293642376e75a5da86907bd",
+    "package": {
+      "engine": "claude-turn198",
+      "vision": "y91",
+      "baseline": "claude-turn197",
+      "source_commit": "ee299754b93dda141293642376e75a5da86907bd",
+      "runtime_changed": [
+        "payload/route-engine"
+      ],
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn198-ee29975.tar.gz",
+      "ros2_install_archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/claude-turn198-ros2/xt-stcar-ros2-install.tar.gz"
+    },
+    "technical_manual_review": {
+      "file": "规则/线上赛提交资料模板/任务x_学校名称_队伍编号/RISC-V 轻量无人车赛_学校名称_队伍编号_技术手册.docx",
+      "chapters": 5,
+      "structure": "Required experiment objectives/content/equipment/principles/steps; software architecture emphasized",
+      "author_and_last_modified_by": "yuhaojin的MacBook Air",
+      "original_replaced": true,
+      "original_backup_retained": false,
+      "drive_uploaded": true,
+      "drive_receipt": "work/tech-manual-review-20261113/drive-upload-receipt.json",
+      "chapter_topics": [
+        "ROS2+Rust architecture and scheduling",
+        "Asynchronous vision and crosswalk stopping",
+        "Recent motion and longitudinal response",
+        "Known light position versus colour state",
+        "Two-cone state continuity and curvature prediction"
+      ]
+    }
   }
 }
