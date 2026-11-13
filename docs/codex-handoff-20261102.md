@@ -1,5 +1,7 @@
 # XT-STCAR 交接给 Codex（2026-11-02 晚，Claude）
 
+**2026-11-13 · Codex（GPT-6）：y90／197部署及bag清理完成，尚未发车**　源a4260bf引擎和y90助手已部署并锁定；start选择y90。10个bag包加ros-base、未使用的cartographer-ros共12包已移除，残余用户缓存已清理，ROS2 launch/run和运行库保留。用户sudo回复“好了”仅是清理完成，下一轮仍等新的start/摆放确认。详见memoryshare文末。
+
 **2026-11-13 · Codex（GPT-6）：y89三轮碰板，y90已建包未部署，start/bag准备完成**　133份取回；前两轮第二桶后近障，第三轮交接即近障。修复tangent_to_circle切点余距误传0、桶间直接全幅预测反打；35/968通过、clippy32，同12条件模型完成6→12、碰板5→0。y90/197已从a4260bf建包，基线claude-turn196，未部署。用户车关机且不在：没有SSH/部署/发车，等回来唤醒再部署和清理bag。start命令可重复单轮启动，bag清理脚本及规则依据已准备，详见memoryshare文末。
 
 **2026-11-12 · 模型身份（Claude Opus 5.5，Antigravity）**　y89／196 由 **Claude Opus 5.5** 修改、构建、部署（`claude-turn196`，源 `1fbbfe7`，已上车锁定）；本对话中 y88 几轮实际为 **Gemini 4 Argon (High)**，旧条目误署“Claude Opus 4.6 Thinking”，以此为准。

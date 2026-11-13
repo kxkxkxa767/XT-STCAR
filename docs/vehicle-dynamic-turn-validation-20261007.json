@@ -33243,7 +33243,7 @@
     "author_model": "GPT-6 (session-provided identity)",
     "engine_round": 197,
     "baseline": "installed claude-turn196/y89, source1fbbfe7",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "change": [
       "Race cone-two approach passes geometric before_tangent_point_m to speed control for all modes, including tangent_to_circle; circle still reports zero.",
@@ -33306,7 +33306,28 @@
       "installed_bag_packages_in_20261112_snapshot": 10,
       "script": "scripts/remove-bag-tools.py",
       "plan_doc": "docs/ros2-bag-cleanup-20261113.md",
-      "vehicle_cleanup_executed": false
+      "vehicle_cleanup_executed": true,
+      "removed_packages": [
+        "ros-humble-cartographer-ros",
+        "ros-humble-ros-base",
+        "ros-humble-ros2bag",
+        "ros-humble-rosbag2",
+        "ros-humble-rosbag2-compression",
+        "ros-humble-rosbag2-compression-zstd",
+        "ros-humble-rosbag2-cpp",
+        "ros-humble-rosbag2-interfaces",
+        "ros-humble-rosbag2-py",
+        "ros-humble-rosbag2-storage",
+        "ros-humble-rosbag2-storage-default-plugins",
+        "ros-humble-rosbag2-transport"
+      ],
+      "allowed_dependent": "ros-humble-cartographer-ros (unused by this race pipeline)",
+      "verification": "work/codex-y90-deploy-20261113/bag-cleanup-verification.json",
+      "installed_bag_packages": [],
+      "remaining_bag_paths": [],
+      "ros2_launch_and_run_present": true,
+      "runtime_missing_libraries": [],
+      "operator_sudo_required": true
     },
     "start_command": {
       "entry": "scripts/start",
@@ -33315,9 +33336,9 @@
       "invocation": "start",
       "meaning": "Each manual invocation authorizes one placed/reset round; no automatic repeated runs"
     },
-    "build_status": "197/y90 cross-built locally, not deployed; user absent and car off",
-    "deployment_policy": "User absent and car off: do not SSH, uninstall or deploy until user returns and wakes the chat; each launch needs a fresh user start.",
-    "next": "Await operator return/wake; perform vehicle bag cleanup and deploy197/y90. Only an explicit new start triggers a trial.",
+    "build_status": "197/y90 deployed successfully and locked; bag packages removed; no trial started",
+    "deployment_policy": "User returned and explicitly authorized deployment.197/y90 installed; each launch still requires a new operator start or placement/reset confirmation.",
+    "next": "Await new placement/reset confirmation or operator start. The 好了 in the sudo-cleanup answer was cleanup completion, not a launch authorization.",
     "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
     "package": {
       "engine": "claude-turn197",
@@ -33329,6 +33350,19 @@
       ],
       "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn197-a4260bf.tar.gz",
       "ros2_install_archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/claude-turn197-ros2/xt-stcar-ros2-install.tar.gz"
+    },
+    "deployment": {
+      "result_file": "work/vehicle-dynamic-deploy-20261008/claude-turn197-deployment-result.json",
+      "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn197-20261113-192618",
+      "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y90-20261113-192632",
+      "deployed": true,
+      "motion_requested": false,
+      "after_control": {
+        "armed": false,
+        "motor": 1500,
+        "servo": 1500
+      }
     }
   }
 }

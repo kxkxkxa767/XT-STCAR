@@ -1151,3 +1151,14 @@ y87第二桶接近修正本轮已生效：148帧距切点0.104m、桶心速度�
 源码 `a4260bf` 已从实际车载claude-turn196交叉编译为claude-turn197，视觉助手y90也已建好，源提交一致；运行载荷只变化payload/route-engine。35/968通过、clippy32；同12条件仿真到终点6→12、碰板5→0，实际效果待测。源码、y89三轮证据摘要、轨迹图路径、start说明与bag整改方案均已记录并推送。
 
 **严格遵守用户最新指令：车仍按本地记录为y89／196；本次没有SSH、部署、bag卸载或发车。等用户回来明确唤醒后，先按准确安装清单处理bag，再部署197/y90；每轮发车另等用户start或新的明确确认。** start入口已配置，新终端直接可用，当前旧终端先source scripts/start.zsh；现在start --show仍选y89，部署新包后自动选对应版本。一次性19:10任务完成后移除，避免重复执行。旧记录保留。
+
+
+## 2026-11-13 · Codex（GPT-6）· y90／197已部署；bag清理完成，等待新发车确认
+
+用户回来明确说“你部署到车上吧”，已通过现有SSH复用连接部署源a4260bf的claude-turn197及视觉助手y90，均成功。引擎备份 `backup-claude-turn197-20261113-192618`，助手stage `stage-claude-y90-20261113-192632`。标准安装结果显示armed=false、电机/舵机1500/1500；没有发车或解锁。start --show现选择y90，每次手动start调用一轮既有start-round.py并独立保存证据。
+
+bag实际卸载计划为10个ros2bag/rosbag2包，加ros-humble-ros-base聚合包及依赖bag的ros-humble-cartographer-ros，共12包。源码搜索确认赛车不调用Cartographer或bag；ROS2运行库不在卸载列表，未执行autoremove。清理脚本增加 --allow-dependent 精确指定已确认未使用的依赖组件，不扩大默认卸载范围。sudo需要用户在自己终端输入密码，用户执行准备好的命令并回复完成；Codex随后移除唯一的用户所有、dpkg不拥有的rosbag2_py/__pycache__/__init__.cpython-312.pyc及其空目录。
+
+结果：已装bag包为空，已知ROS安装前缀及用户.local范围无剩余bag路径；ros2 --help正常，bag子命令消失，launch/run仍在；已部署route-engine的ldd无缺失库。证据 `work/codex-y90-deploy-20261113/bag-cleanup-verification.json`。这些未使用组件不参与比赛控制，清理不改变Rust控制算法和20ms节拍；本次未额外跑性能基准或车辆试验。
+
+**用户在sudo问题下回复的“好了”是卸载完成，不是车辆摆放/发车确认。车上y90／197待测，必须等用户新的start或明确发车确认。** 机读记录及清理文档已同步；旧条目保留。
