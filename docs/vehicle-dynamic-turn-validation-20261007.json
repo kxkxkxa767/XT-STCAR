@@ -33244,7 +33244,7 @@
     "engine_round": 197,
     "baseline": "installed claude-turn196/y89, source1fbbfe7",
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "change": [
       "Race cone-two approach passes geometric before_tangent_point_m to speed control for all modes, including tangent_to_circle; circle still reports zero.",
       "Race transfer channel blends current and predicted pursuit curvature instead of jumping to the full opposite prediction; uses current IMU yaw and existing short-anchor speed instead of fixed1.3m/s.",
@@ -33345,7 +33345,7 @@
     },
     "build_status": "197/y90 deployed successfully and locked; bag packages removed; no trial started",
     "deployment_policy": "User returned and explicitly authorized deployment.197/y90 installed; each launch still requires a new operator start or placement/reset confirmation.",
-    "next": "Await new placement/reset confirmation or operator start. The 好了 in the sudo-cleanup answer was cleanup completion, not a launch authorization.",
+    "next": "y91/198 local preparation per user going to sleep; no new drive authorization.",
     "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
     "package": {
       "engine": "claude-turn197",
@@ -33370,6 +33370,219 @@
         "motor": 1500,
         "servo": 1500
       }
-    }
+    },
+    "car_runs_y90": [
+      {
+        "label": "y90",
+        "files": 74,
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261113-y90",
+        "complete_summary": true,
+        "operator_report": "前两轮停过停车区或停位近到看不到灯；后两轮光电未触发，一直停着，用户确认手动结束。",
+        "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
+        "reason": "maneuver_cumulative_drive_timeout",
+        "completed": false,
+        "effective_s": null,
+        "net_without_penalty_s": null,
+        "events": {
+          "start_lane": 1.879891626,
+          "crosswalk_planned_at_rest": 2.680452918,
+          "crosswalk_stop": 5.376297086,
+          "crosswalk_go": 8.571423463,
+          "start_lane_board_ahead_cut": 9.66899538,
+          "first_approach_handover": 11.071033089,
+          "first_pass": 12.771830548,
+          "second_handover": 13.86845159,
+          "second_pass": 15.766911258,
+          "light_divider_prediction": 15.868495716,
+          "light_gantry": 16.56348455,
+          "light_aligned": 17.860825509,
+          "light_lane": 17.860825509,
+          "light_stop": 18.759436759,
+          "light_go": 28.24985468
+        },
+        "light_stop_gap_m": 0.13722279146089864,
+        "light_wait_s": 9.490534129,
+        "light_release_basis": "red_seen_10_5s_no_fresh_red",
+        "light_brake_started_at": 16.924607842,
+        "light_brake_ended_at": 18.701081509,
+        "finish_gap_m": null,
+        "last_lane_gap_m": 0.442118790847191,
+        "max_actual_gap_s": 0.023897625000000033,
+        "quality_counts": {}
+      },
+      {
+        "label": "y90-2",
+        "files": 64,
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261113-y90-2",
+        "complete_summary": true,
+        "operator_report": "前两轮停过停车区或停位近到看不到灯；后两轮光电未触发，一直停着，用户确认手动结束。",
+        "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
+        "reason": "route_finish_zone_stop",
+        "completed": true,
+        "effective_s": null,
+        "net_without_penalty_s": 19.866686135,
+        "events": {
+          "start_lane": 1.912584751,
+          "crosswalk_planned_at_rest": 2.410050751,
+          "crosswalk_stop": 5.109150377,
+          "crosswalk_go": 8.300013754,
+          "start_lane_board_ahead_cut": 9.400352421000001,
+          "first_approach_handover": 10.303848797,
+          "first_pass": 12.699015423,
+          "second_handover": 13.600821131,
+          "second_pass": 15.892975049,
+          "light_divider_prediction": 15.994574383,
+          "light_gantry": 16.293858633,
+          "light_aligned": 17.39183805,
+          "light_lane": 17.39183805,
+          "light_stop": 18.889903426,
+          "light_go": 27.879000305,
+          "finish_stop": 30.768367765
+        },
+        "light_stop_gap_m": -0.5698882512826645,
+        "light_wait_s": 8.990129378999999,
+        "light_release_basis": "red_seen_10_5s_no_fresh_red",
+        "light_brake_started_at": 16.690872966,
+        "light_brake_ended_at": 18.827774176,
+        "finish_gap_m": 0.34025857830222445,
+        "last_lane_gap_m": 0.34025857830222445,
+        "max_actual_gap_s": 0.022587459000000365,
+        "quality_counts": {}
+      },
+      {
+        "label": "y90-3",
+        "files": 65,
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261113-y90-3",
+        "complete_summary": false,
+        "operator_report": "前两轮停过停车区或停位近到看不到灯；后两轮光电未触发，一直停着，用户确认手动结束。",
+        "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
+        "reason": "operator_interrupted",
+        "completed": false,
+        "effective_s": null,
+        "net_without_penalty_s": null,
+        "light_stop_gap_m": 0.276983780752455,
+        "light_state": "approach",
+        "wait_credit_s": 0.0,
+        "last_saved_program_s": 45.046798271,
+        "light_brake_started_at": 17.088274799,
+        "light_brake_ended_at": 18.967589092,
+        "post_brake_until_last_frame_s": 26.079209179,
+        "summary_or_after_state_not_reconstructed": true
+      },
+      {
+        "label": "y90-4",
+        "files": 66,
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261113-y90-4",
+        "complete_summary": true,
+        "operator_report": "前两轮停过停车区或停位近到看不到灯；后两轮光电未触发，一直停着，用户确认手动结束。",
+        "source_commit": "a4260bf1f3370e29928abb0e7213c196e34af604",
+        "reason": "maneuver_cumulative_drive_timeout",
+        "completed": false,
+        "effective_s": null,
+        "net_without_penalty_s": null,
+        "light_stop_gap_m": 0.15107907025722028,
+        "light_state": "approach",
+        "wait_credit_s": 0.0,
+        "last_saved_program_s": 45.076486354,
+        "light_brake_started_at": 17.219094008,
+        "light_brake_ended_at": 19.140316009,
+        "post_brake_until_last_frame_s": 25.936170344999997,
+        "summary_or_after_state_not_reconstructed": true
+      }
+    ]
+  },
+  "y91_known_light_wait_slow_second_smooth_first_20261113": {
+    "date": "2026-11-13",
+    "author": "Codex",
+    "author_model": "GPT-6 (session-provided identity)",
+    "engine_round": 198,
+    "baseline": "installed claude-turn197 / y90 / a4260bf",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "change": [
+      "At a confirmed gantry, completed braking and measured standstill enter waiting regardless of detected light colour. Missing colour for10s releases; a fresh red still holds, normal green and seen-red fallback stay in place.",
+      "Known gantry remains known after green-without-red or timeout release; do not reclassify the recognized location as absent merely because colour was unconfirmed.",
+      "Cone-two entry target1.8->1.65m/s; actual bend1550; carry1550 into light entry before a distance prediction arrives. Live circle selection and1620 straight remain.",
+      "Light Hold1550 steps to rolling1530 at the existing coasting envelope, giving a longer moving slowdown before the single1300 brake; target0.55m unchanged.",
+      "Crosswalk exit uses existing recent radar/IMU body speed before rest-long integral; board-triggered neutral latches the same one-way approach coast so it cannot pulse1570 again before the first cone."
+    ],
+    "user_clarifications": [
+      "红绿灯到第一桶 was a typo: user confirmed crosswalk release to cone one.",
+      "Gantry position is known even when colour was not recognized.",
+      "User went to sleep: finish locally, cross-build and push; no further launch. Then review the specified technical manual preserving its style."
+    ],
+    "validation": {
+      "native_release_build": true,
+      "rust_tests_passed": 36,
+      "console_tests_passed": 968,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation": {
+        "y90": {
+          "total": 12,
+          "completed": 12,
+          "contact": 0,
+          "light_in_zone": 12,
+          "light_gaps_m": {
+            "start-0": 0.595152268818941,
+            "start-1": 0.5168436453875147,
+            "start-2": 0.5087576724581924,
+            "start-3": 0.5537994966013127,
+            "start-4": 0.44153798245149467,
+            "start-5": 0.46860709879473905,
+            "response-0": 0.5869581439053588,
+            "response-1": 0.5923342436448333,
+            "response-2": 0.5420055605738074,
+            "response-3": 0.5146850912589596,
+            "response-4": 0.5642637820434597,
+            "response-5": 0.5804796316785694
+          },
+          "second_circle_speed_median_mps": 1.678268421441392,
+          "second_circle_min_wall_gap_m": 0.35904275435837957,
+          "crosswalk_to_first_pass_median_s": 3.8000000000000007,
+          "first_to_second_pass_median_s": 3.299999999999999,
+          "noncompliant_light_stops": []
+        },
+        "y91": {
+          "total": 12,
+          "completed": 12,
+          "contact": 0,
+          "light_in_zone": 10,
+          "light_gaps_m": {
+            "start-0": 0.545936068244651,
+            "start-1": 0.5377228987066225,
+            "start-2": 0.6131466410657627,
+            "start-3": 0.6387728020126904,
+            "start-4": 0.5382972246377857,
+            "start-5": 0.5134051369482782,
+            "response-0": 0.5419676170222498,
+            "response-1": 0.5134491298376496,
+            "response-2": 0.5086275759224836,
+            "response-3": 0.5816050956386292,
+            "response-4": 0.5331141902215704,
+            "response-5": 0.732781214286935
+          },
+          "second_circle_speed_median_mps": 1.4895967779265962,
+          "second_circle_min_wall_gap_m": 0.362078016778194,
+          "crosswalk_to_first_pass_median_s": 3.8000000000000007,
+          "first_to_second_pass_median_s": 3.6000000000000005,
+          "noncompliant_light_stops": [
+            "start-3",
+            "response-5"
+          ]
+        }
+      },
+      "simulation_dir": "work/codex-y91-fix-20261113/sim-paired",
+      "simulation_all_light_stops_valid": false,
+      "limits": "Existing empirical model and ideal semantic camera.10/12 y91 light stops inside zone; start-3 and response-5 stop early at0.6388/0.7328m. Does not establish real y91 stop position. Discarded variants retained separately; final statistics only y91.json.",
+      "discarded_changes": "Adaptive speed-filter uncertainty and reset-on-gantry-reference variants were rejected; SpeedKalman and gantry identity logic unchanged."
+    },
+    "analysis_plot": "work/codex-y90-trials-20261113/y90-light-four-runs.png",
+    "real_data_open_points": [
+      "y90 first run stopped0.442m before final board and timed out; y90-2 net19.867s excludes penalties and is not a valid clean lap.",
+      "The real light-speed estimate was low, particularly after y90-2 cone loss; slower entry/earlier rolling slowdown reduces the high-speed approach, but real stop repeatability remains to be verified."
+    ],
+    "build_status": "Local implementation and checks complete; preparing198/y91 ROS2 package",
+    "next": "Commit and push, cross-build fromclaude-turn197; then review user-selected technical manual without changing style. Keep package local while user is asleep."
   }
 }
