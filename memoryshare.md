@@ -1235,3 +1235,10 @@ bag实际卸载计划为10个ros2bag/rosbag2包，加ros-humble-ros-base聚合�
 速度对照：斑马线放行到出第一桶本轮4.094s，y90前两轮4.200/4.399s；第一桶到第二桶接近交接本轮1.199s，之前1.097/0.902s。本轮桶间没有1620，过冲过程中轴向测速缺失，落入原1550保持；不能说整圈都变慢或给出未完成圈的完整成绩。1620直道与用户要求的第二桶1.65m/s/1550均保留，下一轮验证实际提速窗口是否恢复。
 
 用户本轮明确要求“不要仿真，直接部署”。本轮没有运行仿真；必要Mac release、38Rust、968参考检查通过，clippy仍32。仅改maneuver_open.rs与maneuver_path.rs，原文件内两项检查验证实际板线片段和舵量调度；Guard/8cm、ROS2、YOLO及灯区/终点不动。源码提交后从实际车载claude-turn198交叉编译199/y92并按授权部署，发车仍等用户start。机读键 `y92_first_exit_board_identity_release_cadence_20261114`；详细分析 `docs/y92-first-transfer-20261114.md`。本版与已取消的斑马线固定距离回退无关，旧条目保留。
+
+
+## 2026-11-14 · Codex（GPT-6）· y92／199已部署，等待下一次实际start
+
+源 `916c6980035b01030499f2e4bd67654f692b9974` 已按实际车载claude-turn198为基线交叉编译为199，引擎与y92助手源一致，运行载荷只变payload/route-engine。交叉编译复用工程内 `work/codex-y75-review-20261110/cargo-home` 的ROS2依赖缓存。38Rust、968参考检查通过、clippy32；遵守用户本轮指令，没有仿真。
+
+199/y92已按用户授权直接部署，视觉6文件完成，车端 `start --show` 返回y92；安装回执最终armed=false、电机/舵机1500/1500、mode=locked，运动请求0，没有发车。回执 `work/codex-y91-trial-20261114/y92-deployment-receipt.json`，轨迹 `y91-first-cone-transfer.png`，分析 `docs/y92-first-transfer-20261114.md`。本轮修正只是候选真实效果，不能把舵量调度检查当成车辆已不碰板；下一次实测看第一桶出口回正、斑马线侧内板间隙，以及1620加速是否恢复。每次实际start仍由用户摆放、光电/灯复位后触发。旧记录保留。
