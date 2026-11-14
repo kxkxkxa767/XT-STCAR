@@ -33998,7 +33998,7 @@
     "engine_round": 201,
     "label": "y94",
     "baseline": "installed claude-turn200 / y93 / 518ee76",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "changes": [
       "Keep y93 cone path and speed settings. Correct predicted stopping travel by+0.15*speed for light and-0.05*speed for finish, calibrated from prior recorded controller inputs; targets0.55/0.25m unchanged and no extra wait.",
@@ -34113,7 +34113,19 @@
             "wait_profile_error": null
           }
         }
-      ]
+      ],
+      "vehicle_profile_intervals": {
+        "2": {
+          "samples": 10,
+          "capture_interval_median_s": 0.2957499999999982,
+          "steady_file_loop_fps": 3.3812341504649406
+        },
+        "4": {
+          "samples": 11,
+          "capture_interval_median_s": 0.2632000000003245,
+          "steady_file_loop_fps": 3.7993920972597532
+        }
+      }
     },
     "new_model": {
       "archive": "race4_lights_finetune_v1_vehicle_handoff.zip",
@@ -34125,6 +34137,47 @@
     },
     "active_model_sha256": "4089dab5ed309c67c99e7aa386d2419cd4358030281d414e0a2addd6f25a8041",
     "shared_memory_updated": false,
-    "next": "Cross-build201/y94 from200 and deploy locked as explicitly requested; user start required for motion."
+    "next": "Operator may start a new round after placement/reset. Check actual light/finish stop positions, green decision timing and2/4/2 vision profile tags; no automatic launch.",
+    "source_commit": "0acb85a400101ba02e33a9dd6621f1a05502961a",
+    "build_status": "201/y94 built from200 and deployed locked; start --show=y94; original4089dab5 model retained",
+    "package": {
+      "engine": "claude-turn201",
+      "vision": "y94",
+      "source_commit": "0acb85a400101ba02e33a9dd6621f1a05502961a",
+      "baseline": "claude-turn200",
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn201-0acb85a.tar.gz",
+      "ros2_install_archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/claude-turn201-ros2/xt-stcar-ros2-install.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    },
+    "deployment": {
+      "date": "2026-11-14",
+      "source_commit": "0acb85a400101ba02e33a9dd6621f1a05502961a",
+      "engine": "claude-turn201",
+      "vision": "y94",
+      "deployed": true,
+      "baseline": "claude-turn200",
+      "runtime_changed": [
+        "payload/route-engine"
+      ],
+      "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y94-20261114-200619",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn201-20261114-200349",
+      "active_model_sha256": "4089dab5ed309c67c99e7aa386d2419cd4358030281d414e0a2addd6f25a8041",
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 8647
+      },
+      "mode": "locked",
+      "motion_requested": false,
+      "arm_or_drive_requests": 0,
+      "start_show": "y94",
+      "physical_trial_executed": false,
+      "shared_memory_updated": false
+    }
   }
 }
