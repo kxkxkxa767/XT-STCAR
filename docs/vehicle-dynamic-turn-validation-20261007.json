@@ -33786,7 +33786,7 @@
     "engine_round": 200,
     "label": "y93",
     "baseline": "installed claude-turn199 / y92 / 916c698",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "changes": [
       "Cone-two entry target1.65->1.75m/s and bend1550->1560; transfer1620 remains.",
@@ -33929,9 +33929,9 @@
       "Simulation now authorized for turning-radius/speed comparison.",
       "Do not update memoryshare.md unless explicitly requested."
     ],
-    "next": "On operator return and restored SSH, deploy200/y93; stage mkdir may have completed before timeout, so inspect that stage once rather than blindly repeating mkdir. Do not launch without fresh operator start.",
+    "next": "Operator may run repeatable trials with start in the vehicle SSH terminal after placement and light/sensor reset. Retrieve each round; verify cone-two clearance and real light stopping position.",
     "source_commit": "518ee762134aa51e509f1d93e6cb28a0f03ae0f1",
-    "build_status": "200/y93 cross-built and source pushed; deployment blocked by SSH timeout before upload",
+    "build_status": "200/y93 source518ee76 deployed locked after SSH restored; start --show=y93; no launch",
     "package": {
       "engine": "claude-turn200",
       "vision": "y93",
@@ -33949,15 +33949,28 @@
       "vision": "y93",
       "source_commit": "518ee762134aa51e509f1d93e6cb28a0f03ae0f1",
       "built": true,
-      "deployed": false,
-      "last_known_installed": "y92 / claude-turn199 / 916c698",
-      "deployment_attempt": "SSH mkdir timed out before any upload or deployment-script execution",
-      "remote_stage_creation": "unknown; check existence when connection is restored before reusing this stage",
+      "deployed": true,
+      "last_known_installed": "y93 / claude-turn200 / 518ee76",
+      "previous_attempt": "SSH mkdir timed out before upload; on resumption the stage was absent",
+      "remote_stage_creation": "created and deployed after connection restored",
       "engine_stage": "/home/bianbu/xt-stcar-console/stage-claude-turn200-20261114-170154",
       "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y93-20261114-170231",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn200-20261114-170154",
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 8892
+      },
+      "mode": "locked",
+      "start_show": "y93",
       "motion_requested": false,
-      "simulation_results": "y93-final.json",
-      "shared_memory_updated": false
+      "arm_or_drive_requests": 0,
+      "physical_trial_executed": false,
+      "shared_memory_updated": false,
+      "engine_receipt": "work/vehicle-dynamic-deploy-20261008/claude-turn200-deployment-result.json"
     }
   }
 }
