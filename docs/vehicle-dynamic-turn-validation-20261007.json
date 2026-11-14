@@ -33497,7 +33497,7 @@
     "author_model": "GPT-6 (session-provided identity)",
     "engine_round": 198,
     "baseline": "installed claude-turn197 / y90 / a4260bf",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "change": [
       "At a confirmed gantry, completed braking and measured standstill enter waiting regardless of detected light colour. Missing colour for10s releases; a fresh red still holds, normal green and seen-red fallback stay in place.",
@@ -33582,8 +33582,8 @@
       "y90 first run stopped0.442m before final board and timed out; y90-2 net19.867s excludes penalties and is not a valid clean lap.",
       "The real light-speed estimate was low, particularly after y90-2 cone loss; slower entry/earlier rolling slowdown reduces the high-speed approach, but real stop repeatability remains to be verified."
     ],
-    "build_status": "198/y91 cross-built locally and pushed; not deployed, user sleeping",
-    "next": "On operator return, deploy198/y91 from the built package. No launch without a fresh placement/reset confirmation or user start. Recheck real light stopping position and the2 early-stop model cases.",
+    "build_status": "198/y91 source ee29975 deployed on 2026-11-14; locked; no trial launched by Codex",
+    "next": "User may run repeatable one-round trials via start in the vehicle SSH terminal. Each input confirms placement and sensor/light reset. Retrieve separate evidence directories afterward; check light stop position, cone-two exit clearance and crosswalk-to-cone-one continuity.",
     "source_commit": "ee299754b93dda141293642376e75a5da86907bd",
     "package": {
       "engine": "claude-turn198",
@@ -33612,6 +33612,32 @@
         "Known light position versus colour state",
         "Two-cone state continuity and curvature prediction"
       ]
+    },
+    "deployment_20261114": {
+      "date": "2026-11-14",
+      "author_model": "Codex / GPT-6 (session-provided identity)",
+      "label": "y91",
+      "engine_round": 198,
+      "source_commit": "ee299754b93dda141293642376e75a5da86907bd",
+      "baseline": "claude-turn197 / y90",
+      "deployed": true,
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn198-20261113-221020",
+      "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y91-20261113-221149",
+      "control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 8808
+      },
+      "mode": "locked",
+      "start_show": "y91",
+      "motion_requested": false,
+      "arm_or_drive_requests": 0,
+      "physical_trial_executed": false,
+      "crosswalk_gap_fallback_present": false,
+      "engine_receipt": "work/vehicle-dynamic-deploy-20261008/claude-turn198-deployment-result.json"
     }
   }
 }
