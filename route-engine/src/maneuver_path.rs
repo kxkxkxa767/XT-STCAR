@@ -273,7 +273,17 @@ impl Maneuver {
         } else {
             self.steering_target
         };
-        if now - self.last_change + 1e-9 >= PWM_INTERVAL_S && self.servo != avoid_target {
+        let elapsed = now - self.last_change;
+        // y91: 99.797ms between seq123/124 missed the 100ms threshold,
+        // holding1619 for another scan while the car still yawed left.
+        // Unwind the first loop on the existing rate, including partial
+        // intervals. Keep the old maximum step and the neutral crossing.
+        let transfer_release = self.race_inputs.is_some() && self.continue_route
+            && self.phase == "drive" && self.route_stage == "open_transfer"
+            && self.first_pass_evidence.is_some() && self.servo > NEUTRAL && avoid_target < self.servo;
+        let release_step = (elapsed.max(0.) * OPEN_RELEASE_PWM_STEP as f64 / PWM_INTERVAL_S + 1e-9).floor() as i64;
+        let due = elapsed + 1e-9 >= PWM_INTERVAL_S || (transfer_release && release_step > 0);
+        if due && self.servo != avoid_target {
             let mut target = avoid_target;
             let reducing_left = self.servo > NEUTRAL && target < self.servo;
             let post_pass = self.continue_route
@@ -330,6 +340,7 @@ impl Maneuver {
             if self.wall_turn.fast_steering(self.route_stage, target, self.servo) {
                 step = step.max(crate::race_first_cone::WALL_TURN_PWM_STEP);
             }
+            if transfer_release { step = step.min(OPEN_RELEASE_PWM_STEP).min(release_step); }
             if reducing_left && target < NEUTRAL {
                 target = NEUTRAL;
             }

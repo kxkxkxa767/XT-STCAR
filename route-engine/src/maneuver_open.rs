@@ -19,6 +19,15 @@ fn round3_list(values: &[f64]) -> V {
     V::from(values.iter().map(|v| round_n(*v, 3)).collect::<Vec<f64>>())
 }
 
+/// First identify the inner start-lane board through its measured separation
+/// from the outer wall. A lone outer-wall fragment is not a channel divider.
+fn channel_has_lane_width_partner(divider: &Line, lines: &[Line], width: f64) -> bool {
+    lines.iter().any(|outer| {
+        outer.along_m.1 > FRONT_BODY_EXTENT_M
+            && (outer.lateral_m - divider.lateral_m - width).abs() <= 2. * OPEN_BOARD_END_LATERAL_M
+    })
+}
+
 impl Maneuver {
     /// _decide_entry(scan).
     pub fn decide_entry(&mut self, scan: &V) {
@@ -1274,6 +1283,7 @@ impl Maneuver {
     fn open_channel_target(&mut self, scan: &V, heading: f64, pose: Option<(f64, f64, f64, f64)>) -> V {
         let reverse = heading - PI;
         let axis_lines = self.scan_axis_lines(scan, reverse);
+        let width = if self._start_lane_width.is_num() { self._start_lane_width.f() } else { 2. * OPEN_CHANNEL_OFFSET_M.0 };
         let beside = |l: &&Line| SIDE_BODY_EXTENT_M < l.lateral_m && l.lateral_m <= OPEN_CHANNEL_MAX_LATERAL_M;
         let mut lines: Vec<Line> = axis_lines.iter().filter(beside).filter(|l| l.along_m.0 > FRONT_BODY_EXTENT_M).cloned().collect();
         if self.race_inputs.is_some() {
@@ -1283,6 +1293,13 @@ impl Maneuver {
             // rule here too; a missing divider uses the existing reversed-axis hold.
             let seen = self.race_transfer.channel_board;
             lines.retain(|l| seen.is_none_or(|lateral| l.lateral_m <= lateral + CHANNEL_BOARD_DRIFT_M));
+            // y91 seq123/124: only the outer wall was fitted (2.35/2.22m
+            // lateral), so the very first association led into the start lane.
+            // Until the divider has its own geometric identity, keep the
+            // existing reversed-axis steering; do not invent a nearer board.
+            if seen.is_none() {
+                lines.retain(|l| channel_has_lane_width_partner(l, &axis_lines, width));
+            }
             // Race: where the start divider ends beside cone one (rules Fig. 5) the car passes its near
             // end at once, and it still has to cross toward that divider before cone two. Stay with
             // the board already identified, once it runs alongside; not the outer wall beyond it.
@@ -1299,7 +1316,6 @@ impl Maneuver {
             return V::None;
         }
         let divider = lines[argmin_first(&lines, |l| l.lateral_m).unwrap()].clone();
-        let width = if self._start_lane_width.is_num() { self._start_lane_width.f() } else { 2. * OPEN_CHANNEL_OFFSET_M.0 };
         let offset = pmax(OPEN_CHANNEL_OFFSET_M.0, pmin(OPEN_CHANNEL_OFFSET_M.1, width / 2.));
         let lateral = divider.lateral_m - offset;
         let u = ((-reverse).pcos(), (-reverse).psin());
@@ -2035,6 +2051,51 @@ mod round106_tests {
     //! web/vehicle-console/tests/fixtures/transfer_axis_support_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+    #[test]
+    fn the_first_channel_identity_does_not_come_from_outer_wall_fragments() {
+        let line = |lateral_m, along_m, points| Line { lateral_m, along_m, points, source: "raw_axis_points" };
+        let width = 0.9383104230991111; // y91 start-lane measurement
+        // Actual y91 seq123 fits: different fragments of the same outer wall.
+        let outer_only = vec![line(2.3482396860948014, (1.139986014801658, 2.07), 15),
+            line(2.421, (0.501, 1.195), 14), line(2.483, (-1.87, -0.499), 26)];
+        assert!(outer_only.iter().all(|l| !channel_has_lane_width_partner(l, &outer_only, width)));
+        // Seq128: the inner board becomes visible at a different lateral.
+        let pair = vec![line(1.3076356307592796, (2.4299455093942237, 3.411), 8),
+            line(2.097, (-2.572, 2.132), 95)];
+        assert!(channel_has_lane_width_partner(&pair[0], &pair, width));
+        assert!(!channel_has_lane_width_partner(&pair[1], &pair, width));
+        // Translation changes both wall distances, not their identity.
+        let moved: Vec<_> = pair.iter().map(|l| line(l.lateral_m + 0.4, l.along_m, l.points)).collect();
+        assert!(channel_has_lane_width_partner(&moved[0], &moved, width));
+    }
+
+    #[test]
+    fn first_loop_release_does_not_skip_a_scan_just_under_one_pwm_interval() {
+        let setup = || {
+            let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+            m.phase = "drive";
+            m.route_stage = "open_transfer";
+            m.first_pass_evidence = dict! {};
+            m.servo = 1699;
+            m.steering_target = NEUTRAL;
+            m.last_change = 12.427529751;
+            m
+        };
+        let mut race = setup();
+        race.race_inputs = Some(Default::default());
+        // y91's first-pass and following scan times. These are actuator
+        // scheduling checks, not simulated vehicle positions or outcomes.
+        race.slew(12.526298839);
+        assert_eq!(race.servo, 1620);
+        race.slew(12.631112889);
+        assert_eq!(race.servo, 1540);
+        race.slew(12.730909575);
+        assert_eq!(race.servo, NEUTRAL);
+        let mut ordinary = setup();
+        ordinary.slew(12.526298839);
+        assert_eq!(ordinary.servo, 1699);
+    }
 
     #[test]
     fn transfer_prediction_does_not_jump_to_the_full_opposite_command() {

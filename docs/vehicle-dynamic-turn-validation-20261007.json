@@ -33498,7 +33498,7 @@
     "engine_round": 198,
     "baseline": "installed claude-turn197 / y90 / a4260bf",
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "change": [
       "At a confirmed gantry, completed braking and measured standstill enter waiting regardless of detected light colour. Missing colour for10s releases; a fresh red still holds, normal green and seen-red fallback stay in place.",
       "Known gantry remains known after green-without-red or timeout release; do not reclassify the recognized location as absent merely because colour was unconfirmed.",
@@ -33638,6 +33638,81 @@
       "physical_trial_executed": false,
       "crosswalk_gap_fallback_present": false,
       "engine_receipt": "work/vehicle-dynamic-deploy-20261008/claude-turn198-deployment-result.json"
+    },
+    "car_run_y91_20261114": {
+      "source_commit": "ee299754b93dda141293642376e75a5da86907bd",
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261113-y91",
+      "files_retrieved": 59,
+      "physical_collision_confirmed": true,
+      "operator_report": "Hit the crosswalk-side divider after cone one; felt slower.",
+      "completed": false,
+      "reason": "probe_obstacle_close_body",
+      "terminal_seq": 140,
+      "terminal_stage": "second_loop",
+      "terminal_stage_detail": "approaching cone-two tangent, not past cone two",
+      "body_gap_m": 0.07501970500715165,
+      "start_event_to_exit_s": 12.477786149,
+      "max_control_interval_s": 0.02170543700000005,
+      "scan_to_tick_mean_s": 0.0013542984453125007,
+      "quality_wait_observed": false,
+      "durations_s": {
+        "start_to_crosswalk_stop": 3.3940663050000004,
+        "crosswalk_wait": 3.194407705999999,
+        "crosswalk_go_to_first_handover": 1.7975370430000002,
+        "first_handover_to_first_pass": 2.2964013020000014,
+        "crosswalk_go_to_first_pass": 4.0939383450000015,
+        "first_pass_to_second_handover": 1.199200673
+      },
+      "comparison_durations_s": {
+        "y90": {
+          "start_to_crosswalk_stop": 3.49640546,
+          "crosswalk_wait": 3.1951263770000002,
+          "crosswalk_go_to_first_handover": 2.499609626,
+          "first_handover_to_first_pass": 1.7007974590000003,
+          "crosswalk_go_to_first_pass": 4.200407085,
+          "first_pass_to_second_handover": 1.0966210419999989
+        },
+        "y90-2": {
+          "start_to_crosswalk_stop": 3.196565626,
+          "crosswalk_wait": 3.1908633770000003,
+          "crosswalk_go_to_first_handover": 2.0038350430000005,
+          "first_handover_to_first_pass": 2.395166626,
+          "crosswalk_go_to_first_pass": 4.3990016690000004,
+          "first_pass_to_second_handover": 0.9018057079999995
+        }
+      },
+      "transfer_1620_observed": false,
+      "maximum_transfer_heading_deg": 219.1,
+      "plot": "work/codex-y91-trial-20261114/y91-first-cone-transfer.png"
     }
+  },
+  "y92_first_exit_board_identity_release_cadence_20261114": {
+    "date": "2026-11-14",
+    "author": "Codex",
+    "author_model": "GPT-6 (session-provided identity)",
+    "engine_round": 199,
+    "label": "y92",
+    "baseline": "installed claude-turn198 / y91 / ee29975",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "changes": [
+      "On the first transfer-board association, distinguish the inner divider from a lone outer-wall fragment using the measured start-lane width and parallel-board separation; otherwise keep existing reversed-axis steering.",
+      "During race open_transfer left-steer release only, apply proportional PWM steps for partial100ms intervals; retain original rate, maximum80PWM step and neutral crossing."
+    ],
+    "unchanged": "YOLO, no fixed crosswalk location, first-loop geometry,1620 straight,1.65m/s cone-two entry,1550 bends, light/finish controls, Guard and8cm body gate.",
+    "evidence": "work/codex-y91-trial-20261114",
+    "analysis_doc": "docs/y92-first-transfer-20261114.md",
+    "validation": {
+      "native_release_build": true,
+      "rust_tests_passed": 38,
+      "console_tests_passed": 968,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation_executed": false,
+      "physical_result_claimed": false,
+      "logs": "work/codex-y91-trial-20261114/y92-validation.json"
+    },
+    "user_instruction": "Do not simulate this round; cross-build and deploy after necessary checks. No launch without fresh operator start.",
+    "next": "Cross-build199/y92 from198 and deploy locked; next actual start must verify the transfer trajectory and boost."
   }
 }
