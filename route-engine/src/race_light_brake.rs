@@ -13,13 +13,16 @@ pub const LIGHT_BRAKE_RESPONSE_S: f64 = 0.1;
 /// The measured coast drag replaces y79's floor contribution each run. These
 /// coefficients describe this vehicle, not any course coordinates or lengths.
 #[derive(Clone, Copy, Debug)]
-pub struct BrakeModel { base: f64, rate: f64 }
+pub struct BrakeModel { base: f64, rate: f64, travel_correction_s: f64 }
 
 impl BrakeModel {
     pub fn light(axis_cos: f64, coast_decel: f64) -> Self {
-        Self { base: coast_decel + (0.668863 - 0.5761712726842791) * (1. + axis_cos.max(0.)) * 0.5, rate: 0.315219 }
+        Self { base: coast_decel + (0.668863 - 0.5761712726842791) * (1. + axis_cos.max(0.)) * 0.5,
+            rate: 0.315219, travel_correction_s: 0.15 }
     }
-    pub fn finish(coast_decel: f64) -> Self { Self { base: coast_decel + (0.583426 - 0.5761712726842791), rate: 0.378253 } }
+    pub fn finish(coast_decel: f64) -> Self {
+        Self { base: coast_decel + (0.583426 - 0.5761712726842791), rate: 0.378253, travel_correction_s: -0.05 }
+    }
     pub fn distance(self, speed: f64) -> f64 {
         let v = speed.max(0.);
         if self.rate == 0. { return v*v/(2.*self.base); }
@@ -29,7 +32,13 @@ impl BrakeModel {
         let a = acceleration.min(0.);
         let response = if a < 0. { LIGHT_BRAKE_RESPONSE_S.min(speed.max(0.) / -a) } else { LIGHT_BRAKE_RESPONSE_S };
         let release = (speed + a*response).max(0.);
-        (speed + release)*response*0.5 + self.distance(release)
+        // y94: command-to-stop travel residual against the speed actually
+        // available to this controller. Median prior-run residual / speed:
+        // light +0.154s, finish -0.048s (y90 variants + y92); y93 held out.
+        // This corrects prediction distance, not an actuator delay or a wait.
+        // It keeps the physical response and continuous-brake state unchanged.
+        ((speed + release)*response*0.5 + self.distance(release)
+            + speed.max(0.) * self.travel_correction_s).max(0.)
     }
     fn decel(self, speed: f64) -> f64 { self.base + self.rate*speed.max(0.) }
 }
@@ -55,6 +64,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn measured_travel_residual_advances_light_braking_but_delays_finish_braking() {
+        let light_model = BrakeModel::light(1., 0.6081911341424501);
+        let finish_model = BrakeModel::finish(0.6081911341424501);
+        for (model, gap, speed, target, corrected_command, original_command) in [
+            (light_model, 1.9, 1.52, 0.55, Some(1300), None),
+            (finish_model, 2.45, 2.114, 0.25, None, Some(1300)),
+        ] {
+            let mut corrected = LightBrake::default();
+            let mut original = LightBrake::default();
+            corrected.observe(1., Some(gap), Some(speed), Some(0.), 1., 0.6081911341424501, model, target);
+            original.observe(1., Some(gap), Some(speed), Some(0.), 1., 0.6081911341424501,
+                BrakeModel { travel_correction_s: 0., ..model }, target);
+            assert_eq!(corrected.command(1., Some(0.)), corrected_command);
+            assert_eq!(original.command(1., Some(0.)), original_command);
+        }
+    }
+
+    #[test]
     fn brake_distance_integrates_speed_dependent_deceleration_and_floor_drag() {
         for model in [BrakeModel::light(1., 0.5761712726842791), BrakeModel::finish(0.5761712726842791)] {
             for speed in [0.1, 1.0, 2.10804] {
@@ -74,7 +101,7 @@ mod tests {
     fn a_light_brake_remains_continuous_and_cannot_be_applied_twice() {
         let mut brake = LightBrake::default();
         // No new scan is needed to reach the brake point between 10 Hz frames.
-        brake.observe(1., Some(1.2), Some(1.), Some(0.), 1., 0.6, BrakeModel { base: 1., rate: 0. }, 0.55);
+        brake.observe(1., Some(1.2), Some(1.), Some(0.), 1., 0.6, BrakeModel { base: 1., rate: 0., travel_correction_s: 0. }, 0.55);
         assert_eq!(brake.command(1., Some(0.)), None);
         assert_eq!(brake.command(1.04, Some(0.)), None);
         assert_eq!(brake.command(1.06, Some(0.)), Some(1300));
@@ -84,12 +111,12 @@ mod tests {
         assert_eq!(brake.command(1.4, None), Some(1300));
         // The moving approach now stays powered until braking. Do not split
         // the single brake with a rolling neutral phase.
-        brake.observe(1.42, Some(0.82), Some(0.6), Some(-0.4), 1., 0.6, BrakeModel { base: 1., rate: 0. }, 0.55);
+        brake.observe(1.42, Some(0.82), Some(0.6), Some(-0.4), 1., 0.6, BrakeModel { base: 1., rate: 0., travel_correction_s: 0. }, 0.55);
         assert_eq!(brake.command(1.42, Some(-0.4)), Some(1300));
-        brake.observe(1.8, Some(0.57), Some(0.1), Some(-0.9), 1., 0.6, BrakeModel { base: 1., rate: 0. }, 0.55);
+        brake.observe(1.8, Some(0.57), Some(0.1), Some(-0.9), 1., 0.6, BrakeModel { base: 1., rate: 0., travel_correction_s: 0. }, 0.55);
         assert_eq!(brake.command(1.8, Some(-0.9)), Some(1500));
         assert!(brake.is_used());
-        brake.observe(1.9, Some(0.8), Some(1.), Some(0.), 1., 0.6, BrakeModel { base: 1., rate: 0. }, 0.55);
+        brake.observe(1.9, Some(0.8), Some(1.), Some(0.), 1., 0.6, BrakeModel { base: 1., rate: 0., travel_correction_s: 0. }, 0.55);
         assert_eq!(brake.command(1.9, Some(0.)), None);
     }
 
@@ -311,6 +338,7 @@ impl LightBrake {
             "anchor_at" => self.anchor.map(|a| a.at),
             "brake_base_decel_mps2" => self.anchor.map(|a| a.brake.base),
             "brake_speed_gain_per_s" => self.anchor.map(|a| a.brake.rate),
+            "brake_travel_correction_s" => self.anchor.map(|a| a.brake.travel_correction_s),
             "response_accel_mps2" => self.anchor.map(|a| a.response_accel),
             "projection_at" => self.projection.map(|p| p.at),
             "projection_anchor_at" => self.projection.map(|p| p.anchor_at),

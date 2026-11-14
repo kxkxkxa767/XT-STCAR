@@ -459,6 +459,7 @@ struct Program {
     light: V,
     light_updates: i64,
     light_invalid: i64,
+    vision_waiting: Option<bool>,
     external_stop: bool,
 }
 
@@ -468,6 +469,18 @@ pub(crate) fn spawn_named<T: Send + 'static>(name: &str, f: impl FnOnce() -> T +
 }
 
 impl Program {
+    /// Resource hint only: the existing writer owns disk I/O. The vision
+    /// process keeps its normal profile until the race actually waits at the light.
+    fn publish_vision_phase(&mut self) {
+        if self.o.light_state.is_none() { return; }
+        let waiting = self.sup.session.as_ref().is_some_and(|s| s.motion.light_stop_state == Some("waiting"));
+        if self.vision_waiting != Some(waiting) {
+            self.vision_waiting = Some(waiting);
+            let _ = self.files.send(FileOp::Put("vision-phase.txt",
+                if waiting { "light_wait\n" } else { "drive\n" }.to_string()));
+        }
+    }
+
     fn mono(&self) -> f64 {
         self.base.elapsed().as_secs_f64()
     }
@@ -713,8 +726,10 @@ pub fn main(args: &[String]) -> i32 {
         light: V::None,
         light_updates: 0,
         light_invalid: 0,
+        vision_waiting: None,
         external_stop: false,
     };
+    p.publish_vision_phase();
     // ROS discovery/setup happens before this clock zero. The helper's spawn
     // timestamp is not an accurate origin for matching vision/IMU evidence.
     let _ = p.files.send(FileOp::Put("clock.json", to_json(&dict! {
@@ -910,6 +925,7 @@ fn run(p: &mut Program) -> i32 {
         (last_end, scan_woken) = (ended, false);
         // The scan this tick submitted for the coast fit goes to its thread.
         p.dispatch();
+        p.publish_vision_phase();
         // Evidence and the terminal line in the idle time after a tick.
         let now = p.mono();
         if now >= next_evidence && p.sup.session.is_some() {
@@ -925,6 +941,7 @@ fn run(p: &mut Program) -> i32 {
             next_status = now + p.o.status_s.max(0.1);
         }
     }
+    p.publish_vision_phase();
     let cpu = cpu_report(&cpu_start, &cpu_account(&bridge_pids), p.mono() - cpu_t0);
     let scan_to_tick = dict! {"scans" => waits, "mean_s" => if waits > 0 { wait_sum / waits as f64 } else { 0. },
                               "max_s" => wait_max, "basis" => "reader receive time -> start of the tick that decided on it"};

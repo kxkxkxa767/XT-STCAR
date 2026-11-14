@@ -159,6 +159,7 @@ def main():
         if args.vision_script is not None:
             vision = subprocess.Popen([sys.executable, args.vision_script, '--model-dir', args.vision_model,
                                        '--out', str(out/'vision'), '--camera', args.vision_camera, '--max-s', '150',
+                                       *(['--phase-state', str(out/'run/vision-phase.txt'), '--wait-threads', '4'] if args.light_stop else []),
                                        *(['--light-state', str(light_state)] if args.light_stop else [])],
                                       stdout=subprocess.PIPE, stderr=(out/'vision-stderr.txt').open('w'),
                                       stdin=subprocess.DEVNULL, text=True)

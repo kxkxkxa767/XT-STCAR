@@ -232,6 +232,8 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--camera', default='/dev/video20')
     parser.add_argument('--threads', type=int, default=2)
+    parser.add_argument('--phase-state', help='Rust race resource hint: drive or light_wait')
+    parser.add_argument('--wait-threads', type=int, default=4, help='inference threads only while Rust reports light_wait')
     parser.add_argument('--max-s', type=float, default=150.)
     parser.add_argument('--conf', type=float, default=.25)
     parser.add_argument('--save-every', type=int, default=10)
@@ -253,14 +255,31 @@ def main():
     import cv2
     import numpy as np
     import onnxruntime as ort
-    options = ort.SessionOptions()
-    options.intra_op_num_threads = args.threads
-    options.inter_op_num_threads = 1
-    session = ort.InferenceSession(str(onnx), options, providers=['CPUExecutionProvider'])
+    def make_session(threads):
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = threads
+        options.inter_op_num_threads = 1
+        return ort.InferenceSession(str(onnx), options, providers=['CPUExecutionProvider'])
+    session = make_session(args.threads)
     inputs, outputs = session.get_inputs(), session.get_outputs()
     if ([i.name for i in inputs], list(inputs[0].shape), [o.name for o in outputs], list(outputs[0].shape)) != (
             ['images'], [1, 3, SIZE, SIZE], ['output0'], [1, 300, 6]):
         raise SystemExit('ONNX interface differs from the race4 contract')
+    sessions = {args.threads: session}
+    wait_profile_error = None
+    if args.phase_state and args.wait_threads != args.threads:
+        try:
+            sessions[args.wait_threads] = make_session(args.wait_threads)
+            warm = np.zeros((1, 3, SIZE, SIZE), dtype=np.float32)
+            for profile in sessions.values():
+                profile.run(['output0'], {'images': warm})
+        except Exception as error:
+            # An optional throughput profile must not disable the working detector.
+            sessions = {args.threads: session}
+            wait_profile_error = str(error)
+    phase_path = Path(args.phase_state) if args.phase_state else None
+    phase = 'drive'
+    profile_times = {threads: [] for threads in sessions}
     cap = None
     if args.images is None:
         cap = cv2.VideoCapture(args.camera, cv2.CAP_V4L2)
@@ -272,13 +291,23 @@ def main():
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     started = time.monotonic()
     print(json.dumps({'kind': 'ready', 'model_sha256': digest, 'onnxruntime': ort.__version__,
-                      'threads': args.threads, 'source': args.camera if cap is not None else 'images',
+                      'threads': args.threads, 'waiting_threads': args.wait_threads if args.wait_threads in sessions else args.threads,
+                      'source': args.camera if cap is not None else 'images',
                       'started_monotonic_s': started}), flush=True)
     stats = {'frames': 0, 'saved': 0, 'infer_ms': [], 'counts': {c: 0 for c in CLASSES}, 'first_s': {}, 'last_s': {},
              'best_score': {}}
     images = list(args.images or [])
     with (out/'detections.jsonl').open('w') as log:
         while not stop and time.monotonic()-started < args.max_s:
+            if phase_path is not None:
+                try:
+                    hint = phase_path.read_text().strip()
+                except OSError:
+                    hint = None
+                if hint in ('drive', 'light_wait'):
+                    phase = hint
+            threads = args.wait_threads if phase == 'light_wait' and args.wait_threads in sessions else args.threads
+            session = sessions[threads]
             if cap is not None:
                 ok, frame = cap.read()
                 captured = time.monotonic()
@@ -297,6 +326,7 @@ def main():
             t0 = time.monotonic()
             result = session.run(['output0'], {'images': tensor})[0]
             infer_ms = (time.monotonic()-t0)*1000
+            profile_times[threads].append(infer_ms)
             candidates = decode(result, min(args.conf, CROSSWALK_PLAN_MIN_SCORE), scale, left, top, w, h)
             detections = [d for d in candidates if d['score'] >= args.conf]
             stats['frames'] += 1
@@ -318,7 +348,7 @@ def main():
                     return max((d['score'] for d in detections if d['cls'] == cls), default=0.)
                 state = {'frame': stats['frames'], 'captured_s': round(captured, 4),
                          'written_s': round(time.monotonic(), 4), 'red': best('red_light'),
-                         'green': best('green_light')}
+                         'green': best('green_light'), 'inference_threads': threads, 'vision_phase': phase}
                 crosswalks = [d for d in detections if d['cls'] == 'crosswalk']
                 if crosswalks:
                     # round y5: the best crosswalk and its box's bottom row (image pixels)
@@ -342,6 +372,7 @@ def main():
                 os.replace(temporary, light_state)
             log.write(json.dumps({'frame': stats['frames'], 'captured_monotonic_s': round(captured, 4),
                                   'infer_ms': round(infer_ms, 1), 'detections': detections, 'saved': saved,
+                                  'inference_threads': threads, 'vision_phase': phase,
                                   'source': None if cap is not None else path}) + '\n')
             log.flush()
     if cap is not None:
@@ -353,6 +384,10 @@ def main():
                'infer_ms_median': round(ms[len(ms)//2], 1) if ms else None,
                'infer_ms_max': round(ms[-1], 1) if ms else None, 'model_sha256': digest,
                'conf': args.conf, 'started_monotonic_s': started, 'physical_output': False}
+    summary['inference_profiles'] = {str(n): {'frames': len(values),
+        'infer_ms_median': round(sorted(values)[len(values)//2], 1) if values else None}
+        for n, values in profile_times.items()}
+    summary['wait_profile_error'] = wait_profile_error
     (out/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
     print(json.dumps({'kind': 'summary', **{k: summary[k] for k in ('frames', 'fps', 'infer_ms_median', 'counts', 'ended')}}),
           flush=True)

@@ -8,7 +8,7 @@ use crate::helpers::*;
 use crate::maneuver::*;
 use crate::py::*;
 use crate::race_light::{LightRoll, at_predicted_beam, station_pair};
-use crate::race_light_brake::{LIGHT_BRAKE_MOTOR, LIGHT_BRAKE_RESPONSE_S, BrakeModel};
+use crate::race_light_brake::{LIGHT_BRAKE_MOTOR, BrakeModel};
 
 // Pre-red approach settings, independent of the terminal board controller.
 const LIGHT_RESTART_MPS: f64 = 0.15;
@@ -835,7 +835,7 @@ impl Maneuver {
             let next = (v + acceleration.unwrap_or(cruise_accel) * step).max(0.);
             let release = (next + cruise_accel * lag).max(0.);
             g-(v+next)*step/2.-(next+release)*lag/2.
-                -release*LIGHT_BRAKE_RESPONSE_S-brake_model.distance(release)
+                -brake_model.stop_travel(release, 0.)
         });
         let rear_gap = ahead.map(|a| a + rear_extent);
         let red = self._light_red_hold;
@@ -1238,8 +1238,8 @@ mod tests {
         m.race_light.speed_uses_gantry = true;
         m.race_light_brake.reset_gap_fusion();
         m._light_line = dict! {"source" => "legs"};
-        m.race_light.ranges = vec![(1.2, 1.2, 3.11), (1.3, 1.3, 2.93)];
-        let (_, fb3) = m.light_approach_control(&scan(14, 1.4), Some(2.75), 1.4);
+        m.race_light.ranges = vec![(1.2, 1.2, 3.51), (1.3, 1.3, 3.33)];
+        let (_, fb3) = m.light_approach_control(&scan(14, 1.4), Some(3.15), 1.4);
         assert_eq!(fb3.get("motor").i(), ROLLING_HOLD_MOTOR);
         assert_eq!(m.race_light.phase, LightRoll::Coast);
 

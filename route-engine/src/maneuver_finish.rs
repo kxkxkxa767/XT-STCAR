@@ -66,9 +66,9 @@ mod continuous_race_tests {
         m.finish.launch_from = None;
         m.finish.ranges.clear();
         m.race_inputs.as_mut().unwrap().forward_integral = Some(1.6);
-        m.finish_control(&scan(20, 2.), Some(2.2), 2.);
+        m.finish_control(&scan(20, 2.), Some(2.12), 2.);
         assert_eq!(m.lane_motor, ROLLING_HOLD_MOTOR);
-        m.finish_control(&scan(22, 2.2), Some(1.85), 2.2);
+        m.finish_control(&scan(22, 2.2), Some(1.80), 2.2);
         assert_eq!(m.lane_motor, LANE_BRAKE_MOTOR);
         m.race_inputs.as_mut().unwrap().forward_integral = Some(1.45);
         m.finish_control(&scan(24, 2.4), Some(1.54), 2.4);
@@ -532,8 +532,8 @@ impl Maneuver {
             let motor = self.finish.race_brake_motor(now, input.forward_integral).unwrap_or_else(|| {
                 if self.finish.race_brake.is_used() { NEUTRAL }
                 else if self.finish.launch_until.is_some() { LIGHT_LAUNCH_MOTOR }
-                else if gap.is_some_and(|g| g <= goal.target_gap + current * (LANE_BRAKE_ONSET_S + ESC_COAST_DELAY_S)
-                    + crate::race_light_brake::BrakeModel::finish(decel).distance(current)) { ROLLING_HOLD_MOTOR }
+                else if gap.is_some_and(|g| g <= goal.target_gap + current * ESC_COAST_DELAY_S
+                    + crate::race_light_brake::BrakeModel::finish(decel).stop_travel(current, 0.)) { ROLLING_HOLD_MOTOR }
                 else { RACE_CRUISE_MOTOR }
             });
             self.lane_motor = motor;

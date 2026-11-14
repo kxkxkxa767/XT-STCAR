@@ -33787,7 +33787,7 @@
     "label": "y93",
     "baseline": "installed claude-turn199 / y92 / 916c698",
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "changes": [
       "Cone-two entry target1.65->1.75m/s and bend1550->1560; transfer1620 remains.",
       "Race cone-two radius preference0.30, bounded to one existing0.05m planning step above the same-input nominal and within the observed outer-space margins; no fixed course position.",
@@ -33971,6 +33971,160 @@
       "physical_trial_executed": false,
       "shared_memory_updated": false,
       "engine_receipt": "work/vehicle-dynamic-deploy-20261008/claude-turn200-deployment-result.json"
+    },
+    "car_run_y93_20261114": {
+      "source_commit": "518ee762134aa51e509f1d93e6cb28a0f03ae0f1",
+      "files_retrieved": 68,
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261114-y93",
+      "reason": "route_finish_zone_stop",
+      "start_to_finish_s": 30.372093318,
+      "light_wait_s": 9.691356973000001,
+      "net_unpenalized_s": 20.680736345,
+      "light_stop_gap_m": 0.3034143428629388,
+      "finish_gap_m": 0.34924624411501554,
+      "red_frames": 4,
+      "green_frames": 3,
+      "green_release": false,
+      "release_basis": "red_seen_10_5s_no_fresh_red",
+      "first_green_result_after_release_s": 0.066405311,
+      "operator_report": "Finish zone80cm: rear wheels just on boundary. Wants more reliable light/finish parking; chose to keep this trajectory rather than enlarge cone-two radius again.",
+      "official_clean_result": false
     }
+  },
+  "y94_stop_prediction_wait_vision_fps_20261114": {
+    "date": "2026-11-14",
+    "author": "Codex",
+    "author_model": "GPT-6 (session-provided identity)",
+    "engine_round": 201,
+    "label": "y94",
+    "baseline": "installed claude-turn200 / y93 / 518ee76",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "changes": [
+      "Keep y93 cone path and speed settings. Correct predicted stopping travel by+0.15*speed for light and-0.05*speed for finish, calibrated from prior recorded controller inputs; targets0.55/0.25m unchanged and no extra wait.",
+      "Rust reports light_wait through the existing asynchronous evidence writer. Vision uses preloaded4-thread CPU session only while waiting, otherwise original2-thread session. No change to green confirmation or control scheduling."
+    ],
+    "parking_audit": {
+      "scope": "Static audit of recorded controller inputs and observed travel. Inputs at brake onset interpolated between saved frames. No counterfactual vehicle trajectory or guaranteed future stop point.",
+      "results": {
+        "light": {
+          "training_runs": [
+            "y90",
+            "y90-2",
+            "y90-3",
+            "y90-4",
+            "y92"
+          ],
+          "median_prior_residual_per_speed_s": 0.15441655202547538,
+          "applied_travel_correction_s": 0.15,
+          "held_out_run": "y93",
+          "old_travel_residual_m": 0.2293913875233331,
+          "new_travel_residual_m": 0.002175145692644598,
+          "interpolated_command_speed_mps": 1.5147749455379234
+        },
+        "finish": {
+          "training_runs": [
+            "y90",
+            "y90-2",
+            "y92"
+          ],
+          "median_prior_residual_per_speed_s": -0.048437654509322685,
+          "applied_travel_correction_s": -0.05,
+          "held_out_run": "y93",
+          "old_travel_residual_m": -0.07593224892098238,
+          "new_travel_residual_m": 0.02978728440376295,
+          "interpolated_command_speed_mps": 2.1143906664949066
+        }
+      },
+      "not_adopted": [
+        "Quadratic range-speed probe: unstable near the gantry transition.",
+        "Alternative force-curve fitting: retained for diagnosis; production physical base/rate unchanged."
+      ]
+    },
+    "validation": {
+      "native_release_build": true,
+      "rust_tests_passed": 41,
+      "console_tests_passed": 968,
+      "clippy_warnings": 32,
+      "simulation_executed_this_change": false,
+      "scope": "Necessary native checks, fixed-input historical parking audit, and read-only RISC-V inference benchmark. New parking behavior not driven yet.",
+      "vehicle_profile_switch": [
+        {
+          "ready_seconds": 8.212380462000056,
+          "ready": {
+            "kind": "ready",
+            "model_sha256": "4089dab5ed309c67c99e7aa386d2419cd4358030281d414e0a2addd6f25a8041",
+            "onnxruntime": "1.18.0",
+            "threads": 2,
+            "waiting_threads": 4,
+            "source": "images",
+            "started_monotonic_s": 2558.033481026
+          }
+        },
+        {
+          "sequence": [
+            2,
+            4,
+            2
+          ],
+          "summary": {
+            "frames": 24,
+            "saved": 0,
+            "counts": {
+              "crosswalk": 4,
+              "blue_cone": 0,
+              "red_light": 8,
+              "green_light": 8
+            },
+            "first_s": {
+              "crosswalk": 0.332,
+              "green_light": 0.719,
+              "red_light": 1.31
+            },
+            "last_s": {
+              "crosswalk": 5.92,
+              "green_light": 6.586,
+              "red_light": 7.165
+            },
+            "best_score": {
+              "crosswalk": 0.3003,
+              "green_light": 0.8174,
+              "red_light": 0.9295
+            },
+            "ended": "images_done",
+            "elapsed_s": 7.46,
+            "fps": 3.22,
+            "infer_ms_median": 252.8,
+            "infer_ms_max": 416.7,
+            "model_sha256": "4089dab5ed309c67c99e7aa386d2419cd4358030281d414e0a2addd6f25a8041",
+            "conf": 0.25,
+            "started_monotonic_s": 2558.033481026,
+            "physical_output": false,
+            "inference_profiles": {
+              "2": {
+                "frames": 12,
+                "infer_ms_median": 258.3
+              },
+              "4": {
+                "frames": 12,
+                "infer_ms_median": 219.6
+              }
+            },
+            "wait_profile_error": null
+          }
+        }
+      ]
+    },
+    "new_model": {
+      "archive": "race4_lights_finetune_v1_vehicle_handoff.zip",
+      "copied_from": "/Volumes/NO NAME/race4_lights_finetune_v1_vehicle_handoff.zip",
+      "sha256": "4f19c2e7506c239e5241c6d62cac6ab4f5efffe7bb4f64cbb4cc7deb258ceb8e",
+      "replaced": false,
+      "reason": "False green on unlit green lens while red is lit, plus reduced crosswalk confidence.81 same saved indoor JPEGs; not a labelled accuracy benchmark.",
+      "evaluation": "work/codex-yolo-finetune-eval-20261114/paired-summary.json"
+    },
+    "active_model_sha256": "4089dab5ed309c67c99e7aa386d2419cd4358030281d414e0a2addd6f25a8041",
+    "shared_memory_updated": false,
+    "next": "Cross-build201/y94 from200 and deploy locked as explicitly requested; user start required for motion."
   }
 }
