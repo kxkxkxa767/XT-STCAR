@@ -10,9 +10,10 @@ use crate::dict;
 // board at ~2.5 (IMU). The 1.24 of y25-y35 (y22's natural 1550 handover speed) was met
 // ~2 m before the tangent (the divider's open end lies ~.9 m short of it), so y31-y35
 // crawled at 1550: first pass to tangent 3.3-3.8 s against y27's 2.0.
-// User2026-11-13: reduce cone-two entry and hold1550 through its bend.
-// The1620 boost still belongs to the straight transfer.
-const ENTRY_MPS: f64 = 1.65;
+// y93: partial speed restoration after y92, selected by paired radius/speed
+// comparisons. The1620 boost still belongs to the straight transfer.
+const ENTRY_MPS: f64 = 1.75;
+const BEND_MOTOR: i64 = 1560;
 // Rule-range simulation (wide lanes): the passage between cone two and the start divider's top,
 // measured by the free-space probe, was the strongest predictor of contact. Below .9 m the car
 // has under 60 cm of play, and the 1.8 m/s tangent runs wide. The practice field measures .85 or more.
@@ -247,7 +248,7 @@ impl RaceTransfer {
             // this handover, even while correcting the approach heading.
             TransferPhase::Bend if distance.is_some_and(|d| d > 0.) => hold_pwm(speed, a.entry_mps),
             _ if self.tight_entry.is_some_and(|e| speed.is_some_and(|v| v > e)) => NEUTRAL,
-            TransferPhase::Bend => ROUTE_SLOW_MOTOR,
+            TransferPhase::Bend => BEND_MOTOR,
             _ => RACE_CRUISE_MOTOR,
         }};
         self.control = Some(TransferControl { at: now, speed, distance, coast, motor });
@@ -288,7 +289,7 @@ mod tests {
         transfer.drive_anchor.as_mut().unwrap().continuing = true;
         assert_eq!(transfer.command(1., Some(0.)), Some(ROUTE_SLOW_MOTOR));
         transfer.drive_anchor.as_mut().unwrap().distance = Some(0.);
-        assert_eq!(transfer.command(1., Some(0.)), Some(ROUTE_SLOW_MOTOR));
+        assert_eq!(transfer.command(1., Some(0.)), Some(BEND_MOTOR));
         transfer.phase = TransferPhase::Coast;
         transfer.speed = Some(2.06);
         transfer.transfer_anchor = Some((1.75, 0.));

@@ -219,6 +219,9 @@ pub const OPEN_LEFT_RADIUS_M: (f64, f64) = (0.90, 0.95);
 // User 11-04 (y46 at 2.04 m/s ran wide and hit cone one): race cone one plans a smaller circle.
 pub const FIRST_LOOP_RACE_RADIUS_M: (f64, f64) = (0.85, 0.90);
 pub const OPEN_RIGHT_RADIUS_M: (f64, f64) = (0.90, 1.40);
+// y93: prefer a modestly wider second loop; plan_loop_prefer limits the
+// change to one radius-grid step beyond the same measured-space nominal.
+pub const SECOND_LOOP_RADIUS_PREFERENCE: f64 = 0.30;
 pub const OPEN_PROBE_QUANTUM_M: f64 = 0.05;
 pub const OPEN_PROBE_MAX_RATE_RAD_S: f64 = 0.6;
 pub const OPEN_SUPPORT_SKIP_M: f64 = 0.08;

@@ -1195,6 +1195,7 @@ pub struct LoopScorer {
     trig: Vec<(f64, f64, f64, bool)>,
     approach: Option<(f64, f64)>,
     radii: (f64, f64),
+    radius_preference: f64,
 }
 
 impl LoopScorer {
@@ -1204,7 +1205,12 @@ impl LoopScorer {
         let inner_floor =
             if bands.iter().any(|&(_, hi)| hi < lo) { support_radius + SIDE_BODY_EXTENT_M } else { lo };
         let trig = bands.iter().map(|&(theta, hi)| (theta.pcos(), theta.psin(), hi, hi >= lo)).collect();
-        LoopScorer { lo, inner_floor, trig, approach, radii }
+        LoopScorer { lo, inner_floor, trig, approach, radii, radius_preference: OPEN_RADIUS_PREFERENCE }
+    }
+
+    pub fn with_radius_preference(mut self, preference: f64) -> Self {
+        self.radius_preference = preference;
+        self
     }
 
     pub fn score(&self, radius: f64, a: f64, b: f64) -> f64 {
@@ -1234,7 +1240,7 @@ impl LoopScorer {
             let descent = OPEN_APPROACH_SLOPE * (approach.1 - (b - radius)).abs() - (a - approach.0);
             worst -= if descent > 0. { descent } else { 0. };
         }
-        worst - 0.01 * hypot(a, b) - OPEN_RADIUS_PREFERENCE * (radii.1 - radius)
+        worst - 0.01 * hypot(a, b) - self.radius_preference * (radii.1 - radius)
     }
 }
 
@@ -1244,8 +1250,14 @@ fn loop_bands(free: &[(f64, f64)]) -> Vec<(f64, f64)> {
 
 /// _plan_loop(free, support_radius, radii, approach).
 pub fn plan_loop(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), approach: Option<(f64, f64)>) -> V {
+    plan_loop_prefer(free, support_radius, radii, approach, OPEN_RADIUS_PREFERENCE)
+}
+
+/// Bias the radius only within one existing planning step of the same-input
+/// nominal plan, and only where the measured outer-space margins still fit.
+pub fn plan_loop_prefer(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), approach: Option<(f64, f64)>, preference: f64) -> V {
     let bands = loop_bands(free);
-    let scorer = LoopScorer::new(free, support_radius, radii, approach);
+    let scorer = LoopScorer::new(free, support_radius, radii, approach).with_radius_preference(preference);
     let (lo, inner_floor) = (scorer.lo, scorer.inner_floor);
     let score = |radius: f64, a: f64, b: f64| -> f64 { scorer.score(radius, a, b) };
     let sweep = |radius: f64, offsets: &[f64], a: Option<f64>, b: Option<f64>| -> f64 {
@@ -1273,6 +1285,10 @@ pub fn plan_loop(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), ap
         }
         choice
     };
+    let base_scorer = (preference > OPEN_RADIUS_PREFERENCE)
+        .then(|| LoopScorer::new(free, support_radius, radii, approach));
+    let mut nominal: Option<(f64, f64, f64, f64)> = None;
+    let mut choices = Vec::new();
     let mut best: Option<(f64, f64, f64, f64)> = None;
     let mut radius = radii.0;
     while radius <= radii.1 + 1e-9 {
@@ -1284,10 +1300,24 @@ pub fn plan_loop(free: &[(f64, f64)], support_radius: f64, radii: (f64, f64), ap
             a = sweep(radius, &offsets, None, Some(b));
         }
         let value = score(radius, a, b);
+        if let Some(base_scorer) = &base_scorer {
+            let base = base_scorer.score(radius, a, b);
+            if nominal.is_none_or(|v| base > v.0) { nominal = Some((base, radius, a, b)); }
+            choices.push((value, radius, a, b));
+        }
         if best.is_none() || value > best.unwrap().0 {
             best = Some((value, radius, a, b));
         }
         radius += OPEN_RADIUS_STEP_M;
+    }
+    if let Some((_, r, a, b)) = nominal {
+        // One existing radius-grid step at most beyond the unbiased plan.
+        // The observed outer-space margin must remain nonnegative.
+        best = choices.into_iter().filter(|&(_, candidate_r, ca, cb)| {
+            candidate_r + 1e-9 >= r && candidate_r <= r + OPEN_RADIUS_STEP_M + 1e-9
+                && bands.iter().all(|&(theta, hi)| loop_extent(ca, cb, candidate_r, theta) <= hi)
+        }).max_by(|a,b| a.0.total_cmp(&b.0))
+            .or(Some((score(r,a,b),r,a,b)));
     }
     let (value, radius, a, b) = best.unwrap();
     let board_slack = bands.iter().map(|&(theta, hi)| hi - loop_extent(a, b, radius, theta)).fold(INF, pmin);
@@ -1612,4 +1642,25 @@ pub fn py_int_set_order(values: &[i64]) -> Vec<i64> {
         }
     }
     table.into_iter().flatten().collect()
+}
+
+#[cfg(test)]
+mod loop_radius_tests {
+    use super::*;
+
+    #[test]
+    fn a_second_loop_radius_bias_stays_one_step_from_nominal_and_inside_measured_space() {
+        for distances in [[0.95, 1.25, 2.05, 2.65, 2.15], [0.6, 0.8, 1.5, 2., 1.6], [2., 3., 3., 3., 2.]] {
+            let free: Vec<_> = [-90., -45., 0., 45., 90.].into_iter().zip(distances)
+                .map(|(angle, d)| (radians(angle), d)).collect();
+            let radii = crate::maneuver::OPEN_RIGHT_RADIUS_M;
+            let nominal = plan_loop(&free, 0.09, radii, Some((-1.5, -0.6)));
+            let preferred = plan_loop_prefer(&free, 0.09, radii, Some((-1.5, -0.6)),
+                crate::maneuver::SECOND_LOOP_RADIUS_PREFERENCE);
+            let old = nominal.idx("radius_m").f();
+            let new = preferred.idx("radius_m").f();
+            assert!(new >= old - 1e-9 && new <= old + OPEN_RADIUS_STEP_M + 1e-9);
+            if new > old + 1e-9 { assert!(preferred.idx("board_slack_m").f() >= -1e-9); }
+        }
+    }
 }

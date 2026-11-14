@@ -33694,7 +33694,7 @@
     "label": "y92",
     "baseline": "installed claude-turn198 / y91 / ee29975",
     "deployed": true,
-    "physical_trial_executed": false,
+    "physical_trial_executed": true,
     "changes": [
       "On the first transfer-board association, distinguish the inner divider from a lone outer-wall fragment using the measured start-lane width and parallel-board separation; otherwise keep existing reversed-axis steering.",
       "During race open_transfer left-steer release only, apply proportional PWM steps for partial100ms intervals; retain original rate, maximum80PWM step and neutral crossing."
@@ -33754,6 +33754,181 @@
       "arm_or_drive_requests": 0,
       "physical_trial_executed": false,
       "simulation_executed": false
+    },
+    "car_run_y92_20261114": {
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261114-y92",
+      "files_retrieved": 55,
+      "reason": "route_finish_zone_stop",
+      "finish_event_present": true,
+      "operator_report": "Start misplaced; ignore that segment. Light brake still insufficient. Restore some second-cone speed and use a moderately larger radius.",
+      "official_clean_result": false,
+      "physical_contact_status": "not explicitly confirmed by operator",
+      "start_to_finish_s": 30.445253073,
+      "light_wait_s": 9.687458952,
+      "net_unpenalized_s": 20.757794121,
+      "light_stop_front_gap_m": 0.23161892707670226,
+      "finish_front_gap_m": 0.383199648296671,
+      "first_exit_peak_heading_deg": 203.87,
+      "transfer_1620_observed": true,
+      "actual_planned_second_radius_m": 1.15,
+      "brake_started_at_s": 17.709923063,
+      "brake_ended_at_s": 19.267902455,
+      "max_control_interval_s": 0.022996063999999095,
+      "scan_to_tick_mean_s": 0.0014938651365079363,
+      "start_or_crosswalk_modified_due_to_this_run": false,
+      "plot": "work/codex-y93-second-light-20261114/y92-second-light-real.png"
     }
+  },
+  "y93_second_radius_speed_and_light_speed_20261114": {
+    "date": "2026-11-14",
+    "author": "Codex",
+    "author_model": "GPT-6 (session-provided identity)",
+    "engine_round": 200,
+    "label": "y93",
+    "baseline": "installed claude-turn199 / y92 / 916c698",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "changes": [
+      "Cone-two entry target1.65->1.75m/s and bend1550->1560; transfer1620 remains.",
+      "Race cone-two radius preference0.30, bounded to one existing0.05m planning step above the same-input nominal and within the observed outer-space margins; no fixed course position.",
+      "If no current aligned gantry speed is available, use a current physical cone speed as a correction through the established Kalman filter instead of discarding it; no fresh support means no anchor renewal."
+    ],
+    "unchanged": "Start/crosswalk/first cone; light1550->1530->1300 and0.55m target; Guard8cm and ROS2 scheduling.",
+    "validation": {
+      "native_release_build": true,
+      "rust_tests_passed": 40,
+      "console_tests_passed": 968,
+      "clippy_warnings": 32,
+      "new_test_file": false,
+      "simulation_authorized_this_turn": true,
+      "simulation_scope": "Existing model, paired radius/speed choices; not the paused independent provincial full-course audit.",
+      "simulation_final": {
+        "cases": 5,
+        "finished": 5,
+        "contact": 0,
+        "light_in_zone": 5,
+        "elapsed": 20.78,
+        "second_s": 2.1999999999999993,
+        "first_to_second_s": 3.5999999999999996,
+        "second_to_light_stop_s": 3.5,
+        "second_speed": 1.5585257399276606,
+        "plan_radius": 1.05,
+        "exit_gap": 3.8456868055962894,
+        "min_second_wall_gap": 0.14879193842307017,
+        "min_entry_wall_gap": 0.21741186217903338,
+        "light_gaps": {
+          "start-1": 0.5367782757702848,
+          "response-0": 0.506536377851031,
+          "response-2": 0.5789467612270442,
+          "response-3": 0.5574961839313692,
+          "response-4": 0.5242628314588922
+        },
+        "planned_radii": {
+          "start-1": 1.05,
+          "response-0": 1.05,
+          "response-2": 1.1,
+          "response-3": 1.05,
+          "response-4": 1.1
+        }
+      },
+      "comparison": {
+        "slow-base": {
+          "cases": 5,
+          "finished": 5,
+          "contact": 0,
+          "light_in_zone": 4,
+          "elapsed": 21.179999999999996,
+          "second_s": 2.5999999999999996,
+          "first_to_second_s": 3.799999999999999,
+          "second_to_light_stop_s": 3.5999999999999996,
+          "second_speed": 1.4604383657391566,
+          "plan_radius": 1.05,
+          "exit_gap": 3.794592052453865,
+          "min_second_wall_gap": 0.2922607257277767,
+          "min_entry_wall_gap": 0.19291178598691033,
+          "light_gaps": {
+            "start-1": 0.6522311585091813,
+            "response-0": 0.5182092659752131,
+            "response-2": 0.5380667782067121,
+            "response-3": 0.4466121016797482,
+            "response-4": 0.5162254785443929
+          },
+          "planned_radii": {
+            "start-1": 1.05,
+            "response-0": 1.05,
+            "response-2": 1.05,
+            "response-3": 1.05,
+            "response-4": 1.05
+          }
+        },
+        "fast-base": {
+          "cases": 5,
+          "finished": 5,
+          "contact": 0,
+          "light_in_zone": 4,
+          "elapsed": 20.300000000000004,
+          "second_s": 2.1999999999999993,
+          "first_to_second_s": 3.299999999999999,
+          "second_to_light_stop_s": 3.400000000000002,
+          "second_speed": 1.631338496415924,
+          "plan_radius": 1.05,
+          "exit_gap": 3.668228492936132,
+          "min_second_wall_gap": 0.12275914739217593,
+          "min_entry_wall_gap": 0.19680162566016637,
+          "light_gaps": {
+            "start-1": 0.6539715255252654,
+            "response-0": 0.5059502372150488,
+            "response-2": 0.4663110100425012,
+            "response-3": 0.5509127672993843,
+            "response-4": 0.5200965690202617
+          },
+          "planned_radii": {
+            "start-1": 1.15,
+            "response-0": 1.05,
+            "response-2": 1.1,
+            "response-3": 1.05,
+            "response-4": 1.05
+          }
+        },
+        "fast-wider": {
+          "cases": 5,
+          "finished": 5,
+          "contact": 0,
+          "light_in_zone": 5,
+          "elapsed": 20.300000000000004,
+          "second_s": 2.0999999999999996,
+          "first_to_second_s": 3.200000000000001,
+          "second_to_light_stop_s": 3.3000000000000007,
+          "second_speed": 1.623576813125919,
+          "plan_radius": 1.35,
+          "exit_gap": 3.5940754622062605,
+          "min_second_wall_gap": 0.12275914739217593,
+          "min_entry_wall_gap": 0.16870199975303452,
+          "light_gaps": {
+            "start-1": 0.6073000203965693,
+            "response-0": 0.546311266678905,
+            "response-2": 0.5221890185422291,
+            "response-3": 0.5509127672993843,
+            "response-4": 0.5396923345881124
+          },
+          "planned_radii": {
+            "start-1": 1.35,
+            "response-0": 1.1,
+            "response-2": 1.35,
+            "response-3": 1.05,
+            "response-4": 1.35
+          }
+        }
+      },
+      "limits": "Empirical plant and ideal semantic camera; simulation is not real vehicle validation. Actual y92 start misplaced, light gap0.232m remains real evidence.",
+      "logs": "work/codex-y93-second-light-20261114/validation.json"
+    },
+    "analysis_doc": "docs/y93-second-loop-speed-radius-20261114.md",
+    "user_instructions": [
+      "Push when finished; user went to eat.",
+      "Simulation now authorized for turning-radius/speed comparison.",
+      "Do not update memoryshare.md unless explicitly requested."
+    ],
+    "next": "Commit, cross-build200/y93 from199, push and deploy locked under the existing authorization; no automatic launch."
   }
 }

@@ -153,6 +153,20 @@ mod entry_motion_tests {
     use super::*;
     use crate::motion_sensors::RaceInputs;
 
+    #[test]
+    fn a_fresh_cone_corrects_a_missing_gantry_speed_without_renewing_missing_samples() {
+        let mut light = RaceLight::default();
+        light.speed_kalman.update(16.848, 0., 1.2957473688466818);
+        light.speed_from_cone = false;
+        let speed = light.adjusted_speed(Some(-0.05), 16.947, None, 1., Some(1.67702519811144)).unwrap();
+        assert!(speed > 1.2957473688466818 - 0.05 && speed < 1.67702519811144);
+        assert!(!light.speed_from_cone); // keep the established filter, not a new seed
+        let at = light.speed_kalman.anchor().unwrap().0;
+        let bridged = light.adjusted_speed(Some(-0.15), 17.047, None, 1., None).unwrap();
+        assert!((bridged - (speed - 0.1)).abs() < 1e-9);
+        assert_eq!(light.speed_kalman.anchor().unwrap().0, at);
+    }
+
     fn scan(seq: i64, at: f64) -> V { crate::dict! {"seq" => seq, "received_at" => at} }
 
     #[test]
@@ -179,12 +193,15 @@ mod entry_motion_tests {
         light.adjusted_speed(Some(0.223), 15.886, None, 0.73, Some(1.951));
         let (at, body, origin) = light.speed_kalman.anchor().unwrap();
         assert_eq!((at, body, origin), (15.886, 1.951, 0.223));
-        // Once a radar speed has corrected it, a cone speed no longer replaces the filter.
+        // Once a radar speed has corrected it, later cone observations use
+        // the same outlier weighting rather than replacing the filter.
         light.speed_kalman.update(15.984, 0.072, 1.935);
         light.speed_from_cone = false;
         let before = light.speed_kalman.anchor();
         light.adjusted_speed(Some(-0.036), 16.085, None, 0.94, Some(1.0));
-        assert_eq!(light.speed_kalman.anchor().map(|a| a.0), before.map(|a| a.0));
+        let (at, body, _) = light.speed_kalman.anchor().unwrap();
+        assert_eq!(at, 16.085);
+        assert!(body > 1.0 && body < before.unwrap().1 - 0.108);
     }
 
     #[test]
@@ -535,8 +552,14 @@ impl RaceLight {
         // integral (-0.52 m/s) into the first aligned radar speed, which was
         // scaled as an outlier: 1.54 m/s filtered at a true 1.87, the step-down
         // and the brake came late and the car stopped 0.21 m from the gantry.
-        // Until an aligned radar speed has corrected it, each fresh cone speed
-        // restarts the filter instead of being bridged by the turning IMU.
+        // A fresh aligned gantry speed owns the correction. If it is missing,
+        // a current cone speed supplies the missing correction rather than
+        // being ignored; after the first aligned observation it keeps the
+        // existing Kalman state and outlier weights.
+        // y92 seq169-173 otherwise bridged the old low anchor during missing
+        // legs (about1.01m/s against about1.5m/s measured range closure).
+        // The seed requires this scan's fresh physical cone; held predictions
+        // do not renew the observation clock.
         let anchored = self.speed_kalman.anchor().is_some();
         match (radar, seed) {
             (Some(body), _) if anchored => {
@@ -550,6 +573,7 @@ impl RaceLight {
                 self.speed_kalman.update(at, current, cone);
                 self.speed_from_cone = true;
             }
+            (None, Some(cone)) => self.speed_kalman.update(at, current, cone),
             (Some(body), None) => {
                 self.speed_kalman.update(at, current, body);
                 self.speed_from_cone = false;

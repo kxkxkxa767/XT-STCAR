@@ -662,7 +662,8 @@ impl Maneuver {
             } else {
                 OPEN_LEFT_RADIUS_M
             };
-            let candidate = plan_loop(&free_list, radius, radii, Some(approach));
+            let preference = if race && side < 0 { SECOND_LOOP_RADIUS_PREFERENCE } else { OPEN_RADIUS_PREFERENCE };
+            let candidate = plan_loop_prefer(&free_list, radius, radii, Some(approach), preference);
             let old_plan = slot.plan.clone();
             let mut reject_reversal = false;
             let mut reject_loosening = false;
@@ -735,7 +736,7 @@ impl Maneuver {
             if race && old_plan.is_some() && same_identity && !reject_reversal && !reject_loosening {
                 let (old_r, old_a, old_b) =
                     (old_plan.idx("radius_m").f(), old_plan.idx("offset_axis_m").f(), old_plan.idx("offset_side_m").f());
-                let old_score = LoopScorer::new(&free_list, radius, radii, Some(approach)).score(old_r, old_a, old_b);
+                let old_score = LoopScorer::new(&free_list, radius, radii, Some(approach)).with_radius_preference(preference).score(old_r, old_a, old_b);
                 let gain = candidate.idx("min_slack_m").f() - old_score;
                 let earlier = candidate.idx("offset_axis_m").f() < old_a - 1e-6;
                 kept_settled = old_score >= 0. && !earlier && gain < OPEN_PROBE_QUANTUM_M;
