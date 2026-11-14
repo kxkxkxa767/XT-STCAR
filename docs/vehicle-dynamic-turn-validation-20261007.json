@@ -33929,6 +33929,35 @@
       "Simulation now authorized for turning-radius/speed comparison.",
       "Do not update memoryshare.md unless explicitly requested."
     ],
-    "next": "Commit, cross-build200/y93 from199, push and deploy locked under the existing authorization; no automatic launch."
+    "next": "On operator return and restored SSH, deploy200/y93; stage mkdir may have completed before timeout, so inspect that stage once rather than blindly repeating mkdir. Do not launch without fresh operator start.",
+    "source_commit": "518ee762134aa51e509f1d93e6cb28a0f03ae0f1",
+    "build_status": "200/y93 cross-built and source pushed; deployment blocked by SSH timeout before upload",
+    "package": {
+      "engine": "claude-turn200",
+      "vision": "y93",
+      "source_commit": "518ee762134aa51e509f1d93e6cb28a0f03ae0f1",
+      "baseline": "claude-turn199",
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/XT-STCAR-claude-turn200-518ee76.tar.gz",
+      "ros2_install_archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/claude-turn200-ros2/xt-stcar-ros2-install.tar.gz",
+      "runtime_changed": [
+        "payload/route-engine"
+      ]
+    },
+    "release_status": {
+      "date": "2026-11-14",
+      "engine": "claude-turn200",
+      "vision": "y93",
+      "source_commit": "518ee762134aa51e509f1d93e6cb28a0f03ae0f1",
+      "built": true,
+      "deployed": false,
+      "last_known_installed": "y92 / claude-turn199 / 916c698",
+      "deployment_attempt": "SSH mkdir timed out before any upload or deployment-script execution",
+      "remote_stage_creation": "unknown; check existence when connection is restored before reusing this stage",
+      "engine_stage": "/home/bianbu/xt-stcar-console/stage-claude-turn200-20261114-170154",
+      "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y93-20261114-170231",
+      "motion_requested": false,
+      "simulation_results": "y93-final.json",
+      "shared_memory_updated": false
+    }
   }
 }
