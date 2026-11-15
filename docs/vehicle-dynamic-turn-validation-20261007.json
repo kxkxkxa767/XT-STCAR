@@ -34542,7 +34542,7 @@
     "label": "y100",
     "engine_round": 207,
     "baseline": "installed claude-turn206 / y99 / 355885b",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "trigger": {
       "files_retrieved": 242,
@@ -34580,6 +34580,15 @@
       "work/codex-y99-trial-20261115/y99-finish-camera.png"
     ],
     "shared_memory_updated": false,
-    "ten_minute_video_retrieved": false
+    "ten_minute_video_retrieved": false,
+    "source_commit": "5fde85843f47b457bf55c02ca5c76e9d28e7fc4d",
+    "deployment_receipt": "work/codex-y99-trial-20261115/y100-deployment-receipt.json",
+    "post_install": {
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500
+    }
   }
 }
