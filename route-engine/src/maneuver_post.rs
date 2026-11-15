@@ -1246,7 +1246,11 @@ impl Maneuver {
             for i in center - LANE_FRONT_HALF_BINS..center + LANE_FRONT_HALF_BINS + 1 {
                 let r = &list[imod(i, 360) as usize];
                 if r.is_num() && !exclude.contains(&imod(i, 360)) {
-                    let v = r.f() * radians((i - center) as f64).pcos();
+                    let ang = radians((i - center) as f64);
+                    if self.race_program && (r.f() * ang.psin()).abs() > 0.25 {
+                        continue;
+                    }
+                    let v = r.f() * ang.pcos();
                     best = Some(match best {
                         None => v,
                         Some(b) => pmin(b, v),
@@ -1259,6 +1263,9 @@ impl Maneuver {
         for i in -LANE_FRONT_HALF_BINS..LANE_FRONT_HALF_BINS + 1 {
             let r = &list[imod(i, 360) as usize];
             if r.is_num() && !exclude.contains(&imod(i, 360)) {
+                if self.race_program && (r.f() * radians(i as f64).psin()).abs() > 0.25 {
+                    continue;
+                }
                 best = Some(match best {
                     None => r.f(),
                     Some(b) => pmin(b, r.f()),
@@ -1279,7 +1286,11 @@ impl Maneuver {
         for j in -LANE_FRONT_HALF_BINS..LANE_FRONT_HALF_BINS + 1 {
             let r = &list[imod(center + j, 360) as usize];
             if r.is_num() {
-                sector.push((j, r.f() * (radians((center + j) as f64) - heading).pcos()));
+                let ang = radians((center + j) as f64) - heading;
+                if self.race_program && (r.f() * ang.psin()).abs() > 0.25 {
+                    continue;
+                }
+                sector.push((j, r.f() * ang.pcos()));
             }
         }
         let mut value = ahead;

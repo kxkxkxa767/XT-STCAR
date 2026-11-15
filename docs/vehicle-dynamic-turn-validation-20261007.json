@@ -34312,5 +34312,64 @@
       "post_console_healthy": true
     },
     "deployment_note": "Initial installer command-line preservation mismatch rolled back; fresh-stage retry succeeded with original checks unchanged."
+  },
+  "y97_solar_glare_speckle_filter_20261115": {
+    "date": "2026-11-15",
+    "author": "Gemini",
+    "author_model": "Gemini 4 Argon (High)",
+    "engine_round": 204,
+    "label": "y97",
+    "baseline": "installed claude-turn203 / y96 / 0e030b7",
+    "deployed": true,
+    "physical_trial_executed": false,
+    "trigger": {
+      "attempts": [
+        "left-cone-trial-20261115-y96",
+        "left-cone-trial-20261115-y96-2"
+      ],
+      "reason": "probe_obstacle_close_body after start_lane_board_ahead_cut stutter and premature crosswalk_stop_waiting from outdoor solar glare",
+      "y96_terminate_seq": 83,
+      "y96_terminate_elapsed_s": 2.81,
+      "y96_solar_spike_deg": 359,
+      "y96_solar_spike_range_m": 0.252,
+      "y96_2_terminate_seq": 78,
+      "y96_2_terminate_elapsed_s": 6.506,
+      "y96_2_solar_spike_deg": 358,
+      "y96_2_solar_spike_range_m": 0.25,
+      "y96_2_premature_crosswalk_stop_seq": 73,
+      "y96_2_premature_crosswalk_stop_gap_m": 0.925,
+      "in_corridor_solar_glare_points": {
+        "y96": 63,
+        "y96_2": 141,
+        "total": 204,
+        "isolated_1_or_2_ray_fraction": 1.0
+      },
+      "raw_evidence": [
+        "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261115-y96",
+        "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261115-y96-2"
+      ],
+      "plot": "work/gemini-y96-2-trial-20261115/y96-and-y96-2-solar-glare-analysis.png"
+    },
+    "changes": [
+      "Add filter_solar_speckle in helpers.rs and apply in supervisor received_scan/turn_preview when race_program is true to drop isolated 1-ray and 2-ray solar glare spikes (< 2 neighbors within +-3 deg and |dr| <= max(0.12, 0.18*d)) while keeping >=3-ray cones and walls.",
+      "Apply race_start_coverage across continue_route when race_program is true so outdoor solar forward-sector dropout does not trigger perception_recovering pauses after start_lane.",
+      "Exclude side-wall grazing returns (|y| > 0.25 m) in lane_front_range_excluding and lane_front_track when race_program is true, and fall back start_lane speed to cw_speed / race_surface_speed when front-wall speed is None due to solar dropout.",
+      "Require _crosswalk_coasting or g <= CROSSWALK_RACE_TOPUP_GAP_M (0.35 m) before latching stopped_before_the_crosswalk in race_program so uncoasted stops at 0.35..1.0 m do not prematurely enter crosswalk_stop_waiting."
+    ],
+    "preserved": [
+      "Guard and measured 8cm body gate for real multi-ray obstacles",
+      "stale/invalid/empty scan rejection",
+      "lock and exclusive ownership",
+      "y95/y96 field test settings and driving parameters"
+    ],
+    "validation": {
+      "rust_tests_passed": 47,
+      "console_tests_passed": 968,
+      "clippy_binary_warnings": 32,
+      "clippy_test_warnings": 34,
+      "solar_glare_speckle_and_side_wall_test_passed": true,
+      "near_body_stale_empty_rejections_passed": true,
+      "new_full_course_simulation": false
+    }
   }
 }

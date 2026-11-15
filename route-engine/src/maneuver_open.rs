@@ -395,6 +395,13 @@ impl Maneuver {
                 self.race_surface.observe_rest(now, input.forward_integral);
             }
         }
+        let speed = if self.race_program {
+            speed
+                .or(cw_speed)
+                .or_else(|| self.race_inputs.and_then(|i| self.race_surface_speed.speed(now, i.forward_integral)))
+        } else {
+            speed
+        };
         let mut stop_at = None;
         let mut allowed = None;
         let mut v_crosswalk = None;

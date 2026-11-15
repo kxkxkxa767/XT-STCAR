@@ -91,6 +91,56 @@ pub fn compass_gate_rad() -> f64 {
     radians(30.)
 }
 
+/// Remove isolated 1-ray or 2-ray solar glare spikes from a 360-bin scan.
+pub fn filter_solar_speckle(scan: &V) -> V {
+    if !scan.is_dict() {
+        return scan.clone();
+    }
+    let ranges_v = scan.get("ranges");
+    if !ranges_v.is_list() {
+        return scan.clone();
+    }
+    let list = ranges_v.l();
+    if list.len() != 360 {
+        return scan.clone();
+    }
+    let mut vals = [None::<f64>; 360];
+    for (i, item) in list.iter().enumerate() {
+        if item.is_num() {
+            let d = item.f();
+            if d.is_finite() && (0.02..=12.).contains(&d) {
+                vals[i] = Some(d);
+            }
+        }
+    }
+    let mut changed = false;
+    let mut out = list.to_vec();
+    for i in 0..360 {
+        let Some(d) = vals[i] else { continue };
+        let tol = pmax(0.12, 0.18 * d);
+        let mut neighbors = 0;
+        for da in -3i32..=3i32 {
+            if da == 0 {
+                continue;
+            }
+            let j = (i as i32 + da).rem_euclid(360) as usize;
+            if let Some(nd) = vals[j]
+                && (nd - d).abs() <= tol
+            {
+                neighbors += 1;
+            }
+        }
+        if neighbors < 2 {
+            out[i] = V::None;
+            changed = true;
+        }
+    }
+    if !changed {
+        return scan.clone();
+    }
+    scan.merged(&dict! {"ranges" => V::list(out)})
+}
+
 /// cos/sin of each degree (maneuver_sequence._DIRECTION_COS/_SIN,
 /// autonomy_live._BIN_COS/_BIN_SIN: the same expressions).
 pub struct Trig {

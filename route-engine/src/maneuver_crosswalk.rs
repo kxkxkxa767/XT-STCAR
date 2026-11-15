@@ -264,7 +264,9 @@ impl Maneuver {
                         state = self.crosswalk_stopped(scan, now, control, gap, "stopped_with_the_crosswalk_odometry_lost");
                     }
                 }
-                Some(g) if (stopped && settled || rolled_out) && g <= CROSSWALK_ZONE_M => {
+                Some(g) if (stopped && settled || rolled_out)
+                    && g <= CROSSWALK_ZONE_M
+                    && (!self.race_program || self._crosswalk_coasting || g <= CROSSWALK_RACE_TOPUP_GAP_M) => {
                     let basis = if g >= 0. { "stopped_before_the_crosswalk" } else { "stopped_past_the_crosswalk_edge" };
                     state = self.crosswalk_stopped(scan, now, control, gap, basis);
                 }
