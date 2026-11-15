@@ -34244,7 +34244,7 @@
     "engine_round": 203,
     "label": "y96",
     "baseline": "installed claude-turn202 / y95 / 5402554",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "trigger": {
       "attempts": [
@@ -34291,6 +34291,26 @@
       "near_body_stale_empty_rejections_passed": true,
       "new_full_course_simulation": false
     },
-    "shared_memory_updated": false
+    "shared_memory_updated": false,
+    "source_commit": "0e030b733ec59ca0cd6264b1c5dbbc756d332e7a",
+    "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y96-20261115-113812",
+    "deployment_receipt": "work/codex-y96-start-20261115/deployment-readiness-receipt.json",
+    "vehicle_readiness": {
+      "check_only": true,
+      "started": false,
+      "status_samples": {
+        "total": 40,
+        "ready": 38,
+        "close_body_refused": 2,
+        "last_close_body_m": 0.007123335707457101,
+        "last_return_angle_deg": 349,
+        "last_return_range_m": 0.211
+      },
+      "last_turn_ready": false,
+      "last_rejection": "probe_obstacle_close_body",
+      "post_console_neutral_samples": 6,
+      "post_console_healthy": true
+    },
+    "deployment_note": "Initial installer command-line preservation mismatch rolled back; fresh-stage retry succeeded with original checks unchanged."
   }
 }
