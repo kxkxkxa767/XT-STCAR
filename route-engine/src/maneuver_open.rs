@@ -518,9 +518,9 @@ impl Maneuver {
             let recent_body = self.race_surface_speed.speed(now, input.forward_integral);
             let body_speed = recent_body
                 .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral)).or(speed);
-            let hold_accel = self.race_surface.predicted_drive_accel(RACE_CRUISE_MOTOR, body_speed, now)
+            let hold_accel = self.race_surface.predicted_drive_accel(crate::race_crosswalk::APPROACH_CRUISE_MOTOR, body_speed, now)
                 .unwrap_or(LANE_POWER_ACCEL_MPS2)
-                .max(self.race_surface.predicted_hold_accel(RACE_CRUISE_MOTOR, body_speed, now).unwrap_or(0.));
+                .max(self.race_surface.predicted_hold_accel(crate::race_crosswalk::APPROACH_CRUISE_MOTOR, body_speed, now).unwrap_or(0.));
             let exit = &mut self.race_crosswalk;
             let decel = self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2);
             if waiting_at_stripes { exit.release_crosswalk(now, input.forward_integral); }
@@ -620,7 +620,11 @@ impl Maneuver {
         }
         let sidef = side as f64;
         let (e1, e2) = axis_frame(axis, heading, sidef);
-        let points = scan_points(&floats, hypot(center.0, center.1) + OPEN_PROBE_REACH_M);
+        let planning_ranges = if race {
+            self.slot_mut(side).planning_returns.update(&floats, (identity.i(), scan.idx("seq").i(),
+                scan.idx("received_at").f()), center, heading, &bins)
+        } else { floats.to_vec() };
+        let points = scan_points(&planning_ranges, hypot(center.0, center.1) + OPEN_PROBE_REACH_M);
         let directions = open_probe_directions_rad();
         let slot = self.slot_mut(side);
         let radius = pmax(radius0, slot.radius.unwrap_or(0.));
@@ -846,6 +850,9 @@ impl Maneuver {
         if let Some(held) = held {
             out.set("held_circle", held);
         }
+        if race {
+            out.set("planning_deferred_bins", V::from(slot.planning_returns.deferred_bins.clone()));
+        }
         out
     }
 
@@ -1039,9 +1046,9 @@ impl Maneuver {
                 let recent_body = self.race_surface_speed.speed(now, input.forward_integral);
                 let speed = recent_body
                     .or_else(|| self.race_crosswalk.imu_speed(input.forward_integral));
-                let acceleration = self.race_surface.predicted_drive_accel(RACE_CRUISE_MOTOR, speed, now)
+                let acceleration = self.race_surface.predicted_drive_accel(crate::race_crosswalk::APPROACH_CRUISE_MOTOR, speed, now)
                     .unwrap_or(LANE_POWER_ACCEL_MPS2)
-                    .max(self.race_surface.predicted_hold_accel(RACE_CRUISE_MOTOR, speed, now).unwrap_or(0.));
+                    .max(self.race_surface.predicted_hold_accel(crate::race_crosswalk::APPROACH_CRUISE_MOTOR, speed, now).unwrap_or(0.));
                 let (_, feedback) = self.race_crosswalk.first_approach_drive(speed, recent_body,
                     lp.get("before_tangent_point_m").of(), true,
                     self._lane_coast_decel.unwrap_or(LANE_STOP_DECEL_MPS2), now,

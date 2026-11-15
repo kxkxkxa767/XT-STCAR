@@ -34433,5 +34433,97 @@
       "motor": 1500,
       "servo": 1500
     }
+  },
+  "y99_first_approach_scan_and_recovery_20261115": {
+    "date": "2026-11-15",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y99",
+    "engine_round": 206,
+    "baseline": "installed claude-turn205 / y98 / 2e4128b",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "user_final_pwm_scope": "Only crosswalk release to first-cone tangent: forward commands +10. All other phases remain y98, including 1620 transfer, 1500 neutral, 1300 brake and steering parameters. Earlier all-stage +10 / 1290 request was superseded.",
+    "evidence": {
+      "y98": {
+        "files": 83,
+        "end_reason": "turn_perception_unavailable",
+        "loop_elapsed_s": 13.007100784,
+        "last_cone_points": 11,
+        "last_cone_confirmations": 33,
+        "stop_valid_returns": 318,
+        "old_floor": 324,
+        "stop_longest_null_run_bins": 20,
+        "stop_front_unknown_bins": [],
+        "user_report": "self-stopped"
+      },
+      "y98_2": {
+        "files": 89,
+        "end_reason": "invalid_turn_trial_output",
+        "loop_elapsed_s": 14.426172679,
+        "user_report": "hit crosswalk-side board in cone transfer",
+        "resume_ack": {
+          "motor": 1560,
+          "servo": 1490
+        },
+        "missing_centre_ack": true
+      },
+      "y98_3": {
+        "files": 192,
+        "end_reason": "maneuver_cumulative_drive_timeout",
+        "loop_elapsed_s": 43.524900115,
+        "light_stop_state": null,
+        "light_wait_credit_s": 0,
+        "brake_completed": true,
+        "last_light_gap_m": 0.6969185419440296,
+        "cause": "Fixed-wait test never entered waiting: divider prediction discarded after brake completion without gantry-leg confirmation."
+      },
+      "root": "work/codex-y98-trial-20261115",
+      "speed_1550_samples": {
+        "grass_y98": {
+          "n": 18,
+          "median_mps": 0.8330961965479886
+        },
+        "tile_y93": {
+          "n": 8,
+          "median_mps": 1.5652524409596438
+        },
+        "scope": "crosswalk done, start_lane, applied1550, near-straight heading; samples are not steady-speed calibration"
+      },
+      "figures": [
+        "work/codex-y98-trial-20261115/y98-cone-path-and-stop.png",
+        "work/codex-y98-trial-20261115/y98-2-trajectory-and-control.png",
+        "work/codex-y98-trial-20261115/y98-3-trajectory-and-control.png",
+        "work/codex-y98-trial-20261115/y98-camera-and-raw-scan.png"
+      ],
+      "trajectory_basis": "Current cone observations and measured heading, local only; discarded global corridor ICP because of longitudinal drift."
+    },
+    "changes": [
+      "Loop planning only: spatially isolated returns enter the probe running minimum after three distinct, motion-compensated observations. Raw ranges still feed target/light detection and the existing body gate.",
+      "First-loop inner dropout is tolerated only with a fresh full observation of the same cone, original outer-half coverage and no new forward-gap waiver. No fabricated missing rays.",
+      "Race neutral transfer pause records the actual acknowledged centre through existing route_adopted, retaining right-steering authorization at resume.",
+      "Fixed10s field mode starts its existing wait after stopping at the observed divider prediction even if gantry legs are not confirmed; records this explicitly as a field-test reference.",
+      "Crosswalk-to-first-tangent forward commands 1550/1560/1570/1600 become1560/1570/1580/1610. Entering the first bend resets to original1550. Acceleration estimate and allowed launch output follow the changed approach PWM."
+    ],
+    "validation": {
+      "rust_tests_passed": 51,
+      "engine_reference_tests_passed": 7,
+      "clippy_binary_warnings": 32,
+      "full_course_simulation": false,
+      "dropout_test": "Original y98 scans140/142 plus explicitly derived inner missing-ray case; terminating scan143 was not saved."
+    },
+    "video": {
+      "remote_dir": "/home/bianbu/xt-stcar-console/recordings/field-video-20261115-162133",
+      "requested_s": 600,
+      "elapsed_s": 599.986,
+      "frames": 5973,
+      "read_errors": 0,
+      "video_bytes": 212505571,
+      "ffmpeg_exit": 0,
+      "retrieved": false,
+      "service": "xt-stcar-video-20261115-162133",
+      "ssh_and_cpe_independent": true
+    },
+    "shared_memory_updated": false
   }
 }

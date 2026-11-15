@@ -51,6 +51,30 @@ fn long_gaps_inside(ranges: &[V], left_inner: bool) -> bool {
     true
 }
 
+/// The first cone can remain fully observed while the open inner half loses
+/// returns outdoors. Evaluate that half separately; never fill raw ranges or
+/// excuse a forward gap. A cloned tracker checks this scan without renewing
+/// any live observation lease.
+fn race_first_loop_inner_coverage(m: &Maneuver, scan: &V, now: f64) -> bool {
+    if m.race_inputs.is_none() || !m.open_loop_orbit() || m.phase != "drive"
+        || !scan_clock_ok(scan)
+        || !scan.get("received_at").of().is_some_and(|at| (0. ..SCAN_AGE_S).contains(&(now-at)))
+    {
+        return false;
+    }
+    let Some(ranges) = scan.get("ranges").ol().filter(|r| r.len() == 360) else { return false };
+    let outer_valid = ranges[..=180].iter().filter(|r| r.is_num()).count();
+    if outer_valid * 360 < MANEUVER_TOLERABLE_MIN_VALID * 181 || !long_gaps_inside(ranges, true) {
+        return false;
+    }
+    let mut tracker = m.target_tracker.clone();
+    let target = match except(VTK, || tracker.update(scan, now, false, m.tracking_heading(scan), None)) {
+        Ok(target) => target,
+        Err(_) => return false,
+    };
+    m.full_target_points(&target, scan, &m.orbit_track_id).is_some()
+}
+
 pub const HEARTBEAT_S: f64 = 0.20;
 pub const QUALITY_CONFIRM_S: f64 = 2.0;
 pub const QUALITY_RECOVERY_STABLE_S: f64 = 0.30;
@@ -1194,11 +1218,16 @@ impl Supervisor {
         // y46 seq 120: one scan in cone one's loop (2.5 rad/s) had 334 returns and a 14-bin
         // gap; the wait held full left lock at neutral for .4 s and the car curled into the
         // cone. Race loops take a single such scan up to a 16-bin gap.
-        let race_loop_scan = s.motion.race_inputs.is_some()
+        let inner_dropout = self.race_program && issues.iter().any(|i| i == "scan_incomplete")
+            && race_first_loop_inner_coverage(&s.motion, &clearance_scan, t);
+        if inner_dropout {
+            clearance.set("race_inner_dropout_target_observed", true);
+        }
+        let race_loop_scan = inner_dropout || (s.motion.race_inputs.is_some()
             && matches!(s.motion.route_stage, "first_target" | "second_loop")
             && clearance.get("valid_returns").oi().is_some_and(|n| n >= MANEUVER_TOLERABLE_MIN_VALID as i64)
             && (clearance.get("longest_null_run_bins").oi().is_some_and(|n| n <= RACE_LOOP_MAX_NULL_RUN_BINS)
-                || self.scan.get("ranges").ol().is_some_and(|r| long_gaps_inside(r, s.motion.route_stage == "first_target")));
+                || self.scan.get("ranges").ol().is_some_and(|r| long_gaps_inside(r, s.motion.route_stage == "first_target"))));
         let mut tolerable: Vec<&str> = ["scan_incomplete", "front_sparse"]
             .into_iter()
             .filter(|issue| {
@@ -1589,6 +1618,12 @@ impl Supervisor {
         if launch_allowed {
             motors.push(START_LAUNCH_MOTOR);
             motors.push(STRAIGHT_MOTOR); // round y23: the start lane's straight
+            if m.race_inputs.is_some() && m.crosswalk_state == Some("done") {
+                motors.push(START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD);
+            }
+        }
+        if m.first_approach_hold() == Some(START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD) {
+            motors.push(START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD);
         }
         // User 11-04: race speed holds (start lane, cone one's approach, the transfer) use the
         // open PWM steps 1555-1590.
@@ -2231,6 +2266,45 @@ mod race_start_tests {
                 assert_eq!(post.1.to_bits(), expected.at(1).f().to_bits());
             }
         }
+    }
+
+    #[test]
+    fn first_loop_inner_dropout_requires_the_current_cone_and_observed_outer_half() {
+        let fixture = parse_json(include_str!("../../web/vehicle-console/tests/fixtures/y98_first_cone_dropout.json")).unwrap();
+        let old = fixture.idx("frames").at(0);
+        let mut scan = fixture.idx("frames").at(1).idx("scan").clone();
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.phase = "drive";
+        m.entry_kind = Some("lane");
+        m.handover_observed = true;
+        m.route_stage = "first_target";
+        m.race_inputs = Some(Default::default());
+        m.orbit_track_id = old.idx("target").idx("track_id").clone();
+        m.target_tracker.target = old.idx("target").clone();
+        m.target_tracker.last_seq = old.idx("scan").idx("seq").oi();
+        m.target_tracker.last_at = old.idx("scan").idx("at_ms").oi();
+        m.target_tracker.last_received = old.idx("scan").idx("received_at").clone();
+        m.target_tracker.first_at = Some(10000);
+        m.target_tracker.first_received = 10.0.into();
+        let mut ranges = scan.idx("ranges").l().to_vec();
+        // Derived dropout case: retain every recorded cone ray; remove seven
+        // additional inner rays. This is not the unsaved terminating scan143.
+        let missing: Vec<usize> = (181..267).filter(|&i| ranges[i].is_some()).take(7).collect();
+        for i in missing { ranges[i] = V::None; }
+        assert_eq!(ranges.iter().filter(|v| v.is_some()).count(), 318);
+        scan.set("ranges", V::list(ranges.clone()));
+        let now = scan.idx("received_at").f() + 0.01;
+        assert!(race_first_loop_inner_coverage(&m, &scan, now));
+        assert_eq!(m.target_tracker.last_seq, Some(140));
+        assert!(!race_first_loop_inner_coverage(&m, &scan, now + 1.));
+        for v in &mut ranges[..30] { *v = V::None; }
+        scan.set("ranges", V::list(ranges));
+        assert!(!race_first_loop_inner_coverage(&m, &scan, now));
+        let mut scan = fixture.idx("frames").at(1).idx("scan").clone();
+        let mut ranges = scan.idx("ranges").l().to_vec();
+        for v in &mut ranges[260..290] { *v = V::None; }
+        scan.set("ranges", V::list(ranges));
+        assert!(!race_first_loop_inner_coverage(&m, &scan, now));
     }
 
 }

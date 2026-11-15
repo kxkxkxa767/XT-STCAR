@@ -28,6 +28,7 @@ pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
 pub mod race;
+pub mod race_scan;
 #[cfg(feature = "ros2")]
 mod race_ros2;
 #[cfg(feature = "ros2")]

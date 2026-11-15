@@ -11,6 +11,8 @@ use crate::dict;
 // With the y50/y53 loop rules 1.65-1.80 kept >= .28 m; y53 coasted from 1.93 to 1.54 and then
 // held 1.63 at1550. Use1.75 for the geometric deceleration budget, then latch1550.
 pub(crate) const FIRST_ENTRY_MPS: f64 = 1.75;
+pub(crate) const APPROACH_PWM_ADD: i64 = 10;
+pub(crate) const APPROACH_CRUISE_MOTOR: i64 = RACE_CRUISE_MOTOR + APPROACH_PWM_ADD;
 
 // A side opening can put the two real returns bounding a missing run at quite
 // different ranges. Compare both to this launch's stopping distance along the
@@ -134,6 +136,9 @@ impl CrosswalkExit {
             else if self.first_approach == FirstApproach::Cruise { RACE_CRUISE_MOTOR }
             else { ROUTE_SLOW_MOTOR };
         if motor == START_LAUNCH_MOTOR { self.last_launch_at = Some(now); }
+        // Field tuning is limited to release -> first-cone tangent. Entering
+        // the actual bend below resets the hold to the original 1550.
+        let motor = if motor > NEUTRAL { motor + APPROACH_PWM_ADD } else { motor };
         self.first_motor = Some(motor);
         (motor, dict! {"phase" => phase, "before_tangent_m" => before, "coast_to_entry_m" => coast_m,
                        "board_stop_range_m" => board_stop_m, "speed_now_mps" => speed,
@@ -187,12 +192,12 @@ mod tests {
         exit.release_crosswalk(0., Some(0.));
         let mut drive = |at, speed, before| exit.first_approach_drive(None, None, Some(before), true,
             0.6, at, Some(speed), 0.8, FIRST_ENTRY_MPS).0;
-        assert_eq!(drive(0., 0., 4.), START_LAUNCH_MOTOR);
-        assert_eq!(drive(0.2, 1.1, 4.), RACE_CRUISE_MOTOR);
+        assert_eq!(drive(0., 0., 4.), START_LAUNCH_MOTOR + APPROACH_PWM_ADD);
+        assert_eq!(drive(0.2, 1.1, 4.), APPROACH_CRUISE_MOTOR);
         assert_eq!(drive(0.3, 2., 0.4), NEUTRAL);
-        assert_eq!(drive(0.4, 1.6, 0.2), ROUTE_SLOW_MOTOR);
-        assert_eq!(drive(0.5, 1.4, 5.), ROUTE_SLOW_MOTOR);
-        assert_eq!(drive(0.6, 1.7, 3.), ROUTE_SLOW_MOTOR);
+        assert_eq!(drive(0.4, 1.6, 0.2), ROUTE_SLOW_MOTOR + APPROACH_PWM_ADD);
+        assert_eq!(drive(0.5, 1.4, 5.), ROUTE_SLOW_MOTOR + APPROACH_PWM_ADD);
+        assert_eq!(drive(0.6, 1.7, 3.), ROUTE_SLOW_MOTOR + APPROACH_PWM_ADD);
 
         let mut exit = CrosswalkExit::default();
         exit.release_crosswalk(0., Some(0.));
@@ -200,9 +205,9 @@ mod tests {
         exit.board_cut();
         assert_eq!(exit.first_motor(), Some(NEUTRAL));
         assert_eq!(exit.first_approach_drive(None, Some(1.70), Some(2.), true, 0.6, 1.1,
-            Some(1.92), 0.4, FIRST_ENTRY_MPS).0, ROUTE_SLOW_MOTOR);
+            Some(1.92), 0.4, FIRST_ENTRY_MPS).0, ROUTE_SLOW_MOTOR + APPROACH_PWM_ADD);
         assert_eq!(exit.first_approach_drive(None, Some(1.6), Some(4.), true, 0.6, 1.2,
-            Some(1.8), 0.4, FIRST_ENTRY_MPS).0, ROUTE_SLOW_MOTOR);
+            Some(1.8), 0.4, FIRST_ENTRY_MPS).0, ROUTE_SLOW_MOTOR + APPROACH_PWM_ADD);
     }
 
     #[test]

@@ -13,6 +13,27 @@ mod race_pause_tests {
     use super::*;
 
     #[test]
+    fn transfer_pause_records_the_acknowledged_centre_before_resuming_right() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.race_inputs = Some(Default::default());
+        m.phase = "drive";
+        m.route_stage = "open_transfer";
+        m.entry_kind = Some("lane");
+        m.drive_since = Some(0.);
+        m.first_pass_evidence = dict! {"source_seq" => 1};
+        m.servo = NEUTRAL;
+        let scan = dict! {"frame_id" => crate::compact_target::FRAME, "seq" => 20, "at_ms" => 1100,
+            "received_at" => 1.1, "ranges" => V::from(vec![3.; 360]), "corridor_candidates" => V::list(vec![])};
+        let control = dict! {"armed" => true, "motor" => 1500, "servo" => 1500,
+            "seq" => 10, "tick" => 1100, "command_acked" => true, "neutral_acked" => true};
+        m.enter_neutral_pause("post_pass", "quality", 1., &scan, &control, "quality", "current channel");
+        m.neutral_pause_update(&scan, &0.01.into(), 1.1, &control, &true.into(), &false.into(), &false.into(), &false.into());
+        assert_eq!(m._route_center_ack.get("servo").oi(), Some(NEUTRAL));
+        assert_eq!(m._route_center_ack.get("seq").oi(), Some(10));
+        assert!(m._route_center_ack.get("transfer_coast").is_true());
+    }
+
+    #[test]
     fn a_paused_transfer_keeps_its_divider_and_steers_while_rolling() {
         let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
         m.race_inputs = Some(Default::default());
@@ -880,6 +901,14 @@ impl Maneuver {
             return self.result(now);
         }
         let neutral = control.get("neutral_acked").is_true() && eq_i(control.idx("motor"), NEUTRAL);
+        // y98-2: the transfer crossed centre while coasting, but lost that
+        // acknowledged centre when leaving the wait. Preserve the existing
+        // route proof so the already-applied right correction stays legal.
+        if self.race_inputs.is_some() && neutral && self.servo == NEUTRAL
+            && eq_i(&servo_feedback, NEUTRAL) && control.get("command_acked").is_true()
+        {
+            self.route_adopted(control, now);
+        }
         if !neutral && now - self.quality_wait_since.unwrap() >= SCAN_AGE_S {
             self.lock(&format!("route_{kind}_pause_neutral_ack_timeout"));
             return self.result(now);

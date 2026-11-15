@@ -69,9 +69,10 @@ pub fn hold_pwm(speed: Option<f64>, target: f64) -> i64 {
 pub const FINISH_HOLD_MOTOR: i64 = 1565;
 // User measured on 11-11: 1530 sustains an already moving car, but cannot launch it.
 pub const ROLLING_HOLD_MOTOR: i64 = 1530;
-pub const DRIVE_MOTORS: [i64; 13] = [
+pub const DRIVE_MOTORS: [i64; 14] = [
     TRIAL_MOTOR, ROUTE_SLOW_MOTOR, START_LAUNCH_MOTOR, LIGHT_LAUNCH_MOTOR, STRAIGHT_MOTOR, TRANSFER_BOOST_MOTOR,
     FIRST_APPROACH_MOTOR, FINISH_HOLD_MOTOR, ROLLING_HOLD_MOTOR, 1555, 1575, 1580, 1585,
+    START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD,
 ];
 pub const STRAIGHT_ACCEL_MAX_MPS2: f64 = 3.;
 pub const STRAIGHT_LAG_S: f64 = 0.3;
@@ -479,6 +480,7 @@ pub fn scan_row(scan: &V) -> Row {
 /// An open-course loop slot.
 #[derive(Clone, Debug, Default)]
 pub struct Slot {
+    pub planning_returns: crate::race_scan::PlanningReturns,
     pub free: Vec<(f64, f64)>,
     pub plan: V,
     pub key: Option<(V, f64)>,
@@ -1367,7 +1369,8 @@ impl Maneuver {
         } else if self._launch_until.is_none() {
             // y26 restored 1550 above 1 m/s, then handed 1560 to the first
             // loop because it mistook the preceding coast for a start from rest.
-            let rolling = ((self.route_stage == "start_lane" && motor == ROUTE_SLOW_MOTOR && self.race_crosswalk.first_rolling_hold())
+            let rolling = (((self.route_stage == "start_lane" || self.first_approach_hold().is_some())
+                    && self.race_crosswalk.first_motor() == Some(motor) && self.race_crosswalk.first_rolling_hold())
                     || (HOLD_MOTORS.contains(&motor) && motor != TRIAL_MOTOR))
                 && self.race_inputs.is_some()
                 && self.start_lane_feedback.get("speed_mps").of().is_some_and(|v| v >= LANE_SPEED_RESTART_MPS);
@@ -1419,7 +1422,9 @@ impl Maneuver {
         if DRIVE_MOTORS.contains(&motor) {
             self._power_cmd_at = Some(now);
             self._power_cmd_motor = Some(motor);
-            if motor == START_LAUNCH_MOTOR {
+            if motor == START_LAUNCH_MOTOR
+                || (self.race_inputs.is_some() && self.race_crosswalk.first_motor() == Some(motor)
+                    && motor == START_LAUNCH_MOTOR + crate::race_crosswalk::APPROACH_PWM_ADD) {
                 self._launch_cmd_at = Some(now);
             }
         }

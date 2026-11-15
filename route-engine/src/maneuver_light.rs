@@ -643,7 +643,8 @@ impl Maneuver {
                 // The estimate assumes the gantry stands at the divider's near end. The legs are
                 // confirmed from 2.2 m or more when it does (simulated practice field, 200 runs); this
                 // close with none in view it stands somewhere else, so stop coasting for this spot.
-                if d > LIGHT_PRIOR_UNCONFIRMED_M || braking {
+                if d > LIGHT_PRIOR_UNCONFIRMED_M || braking
+                    || (self.race_test_light_fixed_wait && preview && self.race_light_brake.stopped()) {
                     if !preview {
                         self.light_stop_state = Some("divider_approach");
                         self._light_gantry_since = Some(now);
@@ -909,15 +910,20 @@ impl Maneuver {
         // Gantry location and detected colour are independent. y90-3/-4 had
         // completed the brake inside the zone, but no red meant wait_since
         // never started and the used brake kept neutral for another26s.
-        let confirmed_stop = self.race_light_brake.stopped() && self.light_stop_evidence.has("gantry");
+        let field_reference = self.race_test_light_fixed_wait
+            && self.light_stop_state == Some("divider_approach") && self.race_light.prior_ahead.is_some();
+        let confirmed_stop = self.race_light_brake.stopped()
+            && (self.light_stop_evidence.has("gantry") || field_reference);
         let stopped = (red || confirmed_stop) && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
             && self._power_cmd_at.is_none_or(|at| now-at >= lag);
-        let basis = stopped.then(|| match (red, whole_in_zone) {
+        let basis = stopped.then(|| if field_reference {
+            "field_test_stopped_at_observed_divider_reference"
+        } else { match (red, whole_in_zone) {
             (true, true) => "stopped_after_camera_red",
             (true, false) => "stopped_after_camera_red_outside_zone",
             (false, true) => "stopped_at_confirmed_gantry_color_unconfirmed",
             (false, false) => "stopped_at_confirmed_gantry_outside_zone_color_unconfirmed",
-        }.to_string());
+        }}.to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
             "position_reference" => self.race_light.position_diagnostics(),
             "control_front_gap_m" => control_gap, "speed_fusion" => self.race_light.speed_fusion_diagnostics(),
@@ -955,7 +961,9 @@ impl Maneuver {
         self._light_stop_red_frames = 0;
         self.lane_motor = NEUTRAL;
         self.prepare_finish_wait(scan);
-        self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"stop" => stop.clone()});
+        // The field-test divider reference has no gantry-leg evidence to merge.
+        let base = if self.light_stop_evidence.is_dict() { self.light_stop_evidence.clone() } else { V::dict() };
+        self.light_stop_evidence = base.merged(&dict! {"stop" => stop.clone()});
         self.route_event("light_stop", scan, control, stop);
     }
 
@@ -1063,6 +1071,37 @@ mod tests {
     //! The light-entry frames of car run 108 (seq 139..153) and the Python
     //! results in web/vehicle-console/tests/fixtures/light_gantry_run108_frames.json.
     use super::*;
+
+    #[test]
+    fn field_test_divider_brake_completion_starts_the_fixed_wait_without_visible_legs() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.race_inputs = Some(crate::motion_sensors::RaceInputs { forward_integral: Some(0.), ..Default::default() });
+        m.race_test_light_fixed_wait = true;
+        m.light_vision = true;
+        m.compass.heading = Some(0.);
+        m._light_gantry_since = Some(1.);
+        m.route_stage = "light_lane";
+        m.light_stop_state = Some("divider_approach");
+        m.drive_since = Some(0.);
+        m.race_light.prior_ahead = Some(0.75);
+        m.race_light_brake.observe(1., Some(1.1), Some(1.), Some(0.), 1., 0.6, BrakeModel::light(1., 0.6), 0.55);
+        m.race_light_brake.command(1., Some(0.));
+        m.race_light_brake.observe(2., Some(0.55), Some(0.1), Some(0.), 1., 0.6, BrakeModel::light(1., 0.6), 0.55);
+        assert_eq!(m.race_light_brake.command(2., Some(0.)), Some(NEUTRAL));
+        m.race_light.ranges = vec![(2., 2., 0.75), (2.1, 2.1, 0.75)];
+        let scan = |at: f64| dict! {"seq" => (at*10.) as i64, "at_ms" => (at*1000.) as i64,
+            "received_at" => at, "ranges" => V::from(vec![3.; 360])};
+        let mut normal = m.clone();
+        normal.race_test_light_fixed_wait = false;
+        assert!(normal.light_approach_control(&scan(2.2), Some(0.75), 2.2).0.is_none());
+        let (basis, feedback) = m.light_approach_control(&scan(2.2), Some(0.75), 2.2);
+        assert_eq!(basis.as_deref(), Some("field_test_stopped_at_observed_divider_reference"));
+        m.lane_feedback = feedback;
+        m.light_stop_reached(&scan(2.2), 2.2, &V::None, basis.as_deref().unwrap());
+        assert!(!m.light_wait(&scan(12.1), 12.1, &V::None));
+        assert!(m.light_wait(&scan(12.3), 12.3, &V::None));
+        assert!(!m.light_stop_evidence.has("gantry"));
+    }
     use crate::py::parse_json;
 
     #[test]
