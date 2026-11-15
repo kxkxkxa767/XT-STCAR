@@ -34441,7 +34441,7 @@
     "label": "y99",
     "engine_round": 206,
     "baseline": "installed claude-turn205 / y98 / 2e4128b",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "user_final_pwm_scope": "Only crosswalk release to first-cone tangent: forward commands +10. All other phases remain y98, including 1620 transfer, 1500 neutral, 1300 brake and steering parameters. Earlier all-stage +10 / 1290 request was superseded.",
     "evidence": {
@@ -34524,6 +34524,15 @@
       "service": "xt-stcar-video-20261115-162133",
       "ssh_and_cpe_independent": true
     },
-    "shared_memory_updated": false
+    "shared_memory_updated": false,
+    "source_commit": "355885ba115353599fdb5e39f85cfa4d678b60f8",
+    "deployment_receipt": "work/codex-y98-trial-20261115/y99-deployment-receipt.json",
+    "post_install": {
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500
+    }
   }
 }
