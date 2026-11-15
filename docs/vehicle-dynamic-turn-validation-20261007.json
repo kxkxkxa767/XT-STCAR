@@ -34236,5 +34236,61 @@
       "motor": 1500,
       "servo": 1500
     }
+  },
+  "y96_race_start_partial_scan_20261115": {
+    "date": "2026-11-15",
+    "author": "Codex",
+    "author_model": "GPT-6 (session-provided identity)",
+    "engine_round": 203,
+    "label": "y96",
+    "baseline": "installed claude-turn202 / y95 / 5402554",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "trigger": {
+      "attempts": [
+        "left-cone-trial-20261115-y95",
+        "left-cone-trial-20261115-y95-2"
+      ],
+      "reason": "turn_sensor_unavailable wrapping front_sparse in the console precheck",
+      "valid_returns": [
+        346,
+        346
+      ],
+      "forward_gap_degrees": [
+        13,
+        12
+      ],
+      "lidar_age_ms": [
+        56.85,
+        53.17
+      ],
+      "fixture_scan_seq": 8814,
+      "fixture_valid_returns": 343,
+      "raw_evidence": "work/codex-y95-start-rejection-20261115/start-rejections.json",
+      "plot": "work/codex-y95-start-rejection-20261115/current-lidar-front-gap.png"
+    },
+    "changes": [
+      "Remove duplicated console road-preview admission; keep healthy locked exclusive ownership, let Rust race use fresh data.",
+      "Set race_program before initial readiness. Ignore scan completeness/front-gap quality veto only in race admission/start lane, retain original observations.",
+      "Use observed geometry instead of fixed start width range and minimum1m front return.",
+      "Use existing measured side-wall fit for start-lane heading when native wall labels are missing, retaining the compass convention."
+    ],
+    "preserved": [
+      "Guard and measured8cm body gate",
+      "stale/invalid/empty scan rejection",
+      "lock and exclusive ownership",
+      "other-stage quality recovery",
+      "y95 field test settings and driving parameters"
+    ],
+    "validation": {
+      "rust_tests_passed": 46,
+      "engine_proxy_tests_passed": 7,
+      "clippy_binary_warnings": 33,
+      "clippy_test_warnings": 35,
+      "offline_actual_scan_admission_and_start_ack_replay_passed": true,
+      "near_body_stale_empty_rejections_passed": true,
+      "new_full_course_simulation": false
+    },
+    "shared_memory_updated": false
   }
 }

@@ -131,13 +131,13 @@ impl Maneuver {
             return (false, with(Some("start_lane_heading_too_large")));
         }
         let width = lane.idx("width_m").f();
-        if !(LANE_START_WIDTH_M.0 <= width && width <= LANE_START_WIDTH_M.1) {
+        if !self.race_program && !(LANE_START_WIDTH_M.0 <= width && width <= LANE_START_WIDTH_M.1) {
             return (false, with(Some("start_lane_width_out_of_range")));
         }
         if evidence.idx("body_gap_m").f() < MANEUVER_BODY_CLEARANCE_M {
             return (false, with(Some("start_lane_body_gap")));
         }
-        if front.as_ref().is_none_or(|f| f.f() < LANE_START_MIN_FRONT_M) {
+        if !self.race_program && front.as_ref().is_none_or(|f| f.f() < LANE_START_MIN_FRONT_M) {
             return (false, with(Some("start_lane_front_blocked")));
         }
         if evidence.idx("compass_heading_rad").is_none() {

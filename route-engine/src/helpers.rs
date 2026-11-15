@@ -922,6 +922,31 @@ pub struct WallCompass {
 }
 
 impl WallCompass {
+    /// Race start-lane fallback when native wall labels are absent. The two
+    /// walls are fitted from this scan, and keep the same modulo-90 heading
+    /// convention and rate update as the native wall compass.
+    pub fn observe_start_lane(&mut self, scan: &V, lane: &V) {
+        let at_ms = scan.get("at_ms").i();
+        let at = at_ms as f64 / 1000.;
+        let predicted = self.heading.unwrap_or(0.);
+        let residual = wrap90(predicted + lane.get("heading_left_rad").f());
+        if residual.abs() > compass_gate_rad() { return; }
+        let heading = predicted - residual;
+        if let Some((last_heading, last_at)) = self.last_measurement {
+            let dt = at - last_at;
+            if (COMPASS_RATE_WINDOW_S.0..=COMPASS_RATE_WINDOW_S.1).contains(&dt) {
+                self.rate = ((heading - last_heading) / dt).clamp(-COMPASS_MAX_RATE_RAD_S, COMPASS_MAX_RATE_RAD_S);
+            }
+        }
+        self.heading = Some(heading);
+        self.at_s = Some(at);
+        self.measured_at_s = Some(at);
+        self.last_measurement = Some((heading, at));
+        self.evidence = dict! {"source_at_ms" => at_ms, "heading_rad" => heading, "rate_rad_s" => self.rate,
+            "predicted_rad" => predicted, "median_residual_rad" => residual, "measured" => true,
+            "basis" => "current_start_lane_side_wall_fit", "lane" => lane.clone()};
+    }
+
     pub fn dump(&self) -> V {
         dict! {
             "heading" => self.heading, "rate" => self.rate, "at_s" => self.at_s,

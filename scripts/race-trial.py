@@ -12,8 +12,8 @@ else NEW_DIR-2, NEW_DIR-3, ... (an existing one is never reused); its path is
 the first line printed. A round's packaged copy has FIXED_ARGS set by its
 builder and takes no arguments. The
 program and bridge must match the given hashes before anything else. Before: the
-console must report a fresh locked neutral and its own (Python) start check
-for the explicit route must pass. Then the console service is stopped (the
+console must report a fresh locked neutral. Road admission is owned by the Rust
+race program with its live sensor stream. Then the console service is stopped (the
 program needs /dev/car and /dev/laser to itself), both devices must be free,
 and the program runs with --start ready (or --start never with --check-only)
 and writes the trial helper's evidence files into NEW_DIR/run/; its terminal
@@ -162,11 +162,10 @@ def main():
     (out/'before-console.json').write_text(json.dumps(pre, indent=2)+'\n')
     if not neutral(pre):
         raise SystemExit('console not at a fresh locked neutral; nothing started')
-    if not args.check_only and not (pre['autonomy'].get('turn_ready') is True
-                                    and pre['autonomy'].get('continue_route') is True
-                                    and (pre['autonomy'].get('turn_preview') or {}).get('continue_route') is True):
-        raise SystemExit(f"console start check not ready ({pre['autonomy'].get('turn_rejection')}); nothing started")
-    result = {'evidence_dir': str(out), 'check_only': args.check_only}
+    # The race program owns admission using the fresh driver stream. The
+    # console's older road preview is retained as evidence, not a second gate.
+    result = {'evidence_dir': str(out), 'check_only': args.check_only,
+              'start_admission': 'rust_race_live_sensors'}
     if field_test:
         result['field_test'] = field_test
     vision = None

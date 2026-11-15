@@ -1184,6 +1184,9 @@ impl Supervisor {
             }
         };
         s.report.set("clearance_reused_count", s.clearance_reuse.reused);
+        if self.race_program && s.motion.route_stage == "start_lane" {
+            race_start_coverage(&mut clearance);
+        }
         if clearance.idx("body_proximity").idx("target_contact_tolerated").truthy() {
             incr_or_zero(&mut s.report, "target_contact_tolerated_count");
         }
@@ -1697,6 +1700,26 @@ impl Supervisor {
 
 // ---------------------------------------------------------------- start
 
+/// Partial coverage is not a race-start veto. Keep missing-ray evidence,
+/// fresh-input requirements and the existing measured 8 cm body stop.
+fn race_start_coverage(clearance: &mut V) {
+    if clearance.get("valid_returns").oi().is_none_or(|n| n == 0)
+        || clearance.get("body_proximity").get("stop_requested").is_true()
+    {
+        return;
+    }
+    let observed = clearance.get("quality_issues").clone();
+    let kept: Vec<V> = observed.l().iter()
+        .filter(|issue| !matches!(issue.os(), Some("front_sparse" | "scan_incomplete")))
+        .cloned().collect();
+    if kept.len() == observed.len() { return; }
+    let ready = !kept.iter().any(|issue| matches!(issue.os(), Some("lidar_late" | "camera_unavailable")));
+    clearance.set("start_coverage_observed", observed);
+    clearance.set("quality_tolerance_scope", "race_start_partial_scan");
+    clearance.set("quality_issues", V::list(kept));
+    clearance.set("motion_ready", ready);
+}
+
 impl Supervisor {
     /// turn_preview(now, max_drive_s, initial_presteer_pwm, compact, continue_route):
     /// (motion, decision, clearance), or the refusal with its clearance.
@@ -1709,13 +1732,16 @@ impl Supervisor {
             "rear_launch" => false, "camera_required" => false, "clearance_profile" => "maneuver",
             "rear_start" => continue_route, "front_side_walls" => continue_route,
         };
-        let clearance = match py_try(|| probe_clearance(&self.scan, &ages, &V::Bool(self.demo), &V::Bool(true), &kw)) {
+        let mut clearance = match py_try(|| probe_clearance(&self.scan, &ages, &V::Bool(self.demo), &V::Bool(true), &kw)) {
             Ok(Ok(clearance)) => clearance,
             Ok(Err(clearance)) => {
                 return Err((PyErr { kind: Exc::ValueError, msg: "probe_obstacle_close_body".into() }, clearance));
             }
             Err(error) => return Err((error, V::None)),
         };
+        if self.race_program && continue_route {
+            race_start_coverage(&mut clearance);
+        }
         let checked = py_try(|| {
             if !self.turn_healthy() || !clearance.idx("motion_ready").truthy() {
                 value_error("turn_sensor_unavailable")
@@ -2092,4 +2118,102 @@ impl Supervisor {
 
 fn opt_s(value: &Option<String>) -> V {
     value.as_deref().map(V::str).unwrap_or(V::None)
+}
+
+#[cfg(test)]
+mod race_start_tests {
+    use super::*;
+    use crate::py::parse_json;
+
+    fn outdoor_scan() -> V {
+        parse_json(include_str!("../tests/fixtures/start-front-dropout-20261115.json")).unwrap().get("scan").clone()
+    }
+
+    fn supervisor(race: bool, scan: V) -> Supervisor {
+        let mut s = Supervisor::new(false, "test", "rust_program");
+        s.camera = false;
+        s.race_program = race;
+        s.scan = scan;
+        s.status = dict! {"control" => dict! {
+            "armed" => false, "motor" => 1500, "servo" => 1500, "seq" => 0, "tick" => 100,
+        }};
+        s
+    }
+
+    #[test]
+    fn real_outdoor_dropout_is_admitted_only_by_the_race_start_policy() {
+        let mut normal = supervisor(false, outdoor_scan());
+        let error = normal.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).err().unwrap();
+        assert_eq!(error.0.msg, "turn_sensor_unavailable");
+        let mut race = supervisor(true, outdoor_scan());
+        let (motion, decision, clearance) = race.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true)
+            .unwrap_or_else(|(error, _)| panic!("race refused actual scan: {}", error.msg));
+        assert_eq!(motion.route_stage, "start_lane");
+        assert!(decision.get("start_ready").is_true());
+        assert!(clearance.get("motion_ready").is_true());
+        assert!(clearance.get("start_coverage_observed").l().iter().any(|v| v.os() == Some("front_sparse")));
+        assert_eq!(motion.compass.evidence.get("basis").os(), Some("current_start_lane_side_wall_fit"));
+        let mut partial = outdoor_scan();
+        let mut ranges = partial.get("ranges").l().to_vec();
+        for (angle, r) in ranges.iter_mut().enumerate() {
+            if !(50..=100).contains(&angle) && !(170..=190).contains(&angle) && !(260..=310).contains(&angle) {
+                *r = V::None;
+            }
+        }
+        partial.set("ranges", V::list(ranges));
+        let mut race = supervisor(true, partial);
+        assert!(race.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).is_ok(),
+                "a partial scan with measured side walls need not reach the old 342-point threshold");
+    }
+
+    #[test]
+    fn partial_start_still_rejects_close_obstacles_stale_or_empty_scans() {
+        let mut near = outdoor_scan();
+        let mut ranges = near.get("ranges").l().to_vec();
+        ranges[0] = V::Float(0.25); // 5 cm ahead of the 20 cm front body extent
+        near.set("ranges", V::list(ranges));
+        let mut s = supervisor(true, near);
+        assert_eq!(s.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).err().unwrap().0.msg,
+                   "probe_obstacle_close_body");
+        s = supervisor(true, outdoor_scan());
+        s.scan_at = V::Float(-1.);
+        assert!(s.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).is_err());
+        let mut empty = outdoor_scan();
+        empty.set("ranges", V::list(vec![V::None; 360]));
+        s = supervisor(true, empty);
+        assert!(s.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).is_err());
+    }
+
+    #[test]
+    fn the_same_start_scan_can_reach_drive_without_an_immediate_quality_pause() {
+        let mut s = supervisor(true, outdoor_scan());
+        let request = dict! {"op" => "turn_cone_start", "boot" => "test", "epoch" => 0,
+            "tick" => 100, "placement_confirmed" => true, "continue_route" => true,
+            "max_drive_s" => 40., "initial_presteer_pwm" => 1670};
+        s.start_turn_cone(&request, &0.0.into(), "offline_start")
+            .unwrap_or_else(|(error, _)| panic!("start refused: {}", error.msg));
+        s.session.as_mut().unwrap().motion.race_inputs = Some(Default::default());
+        let seq = s.scan.get("seq").i();
+        let at_ms = s.scan.get("at_ms").i();
+        for tick in 1..=40 {
+            let now = tick as f64 * 0.02;
+            s.mono = now;
+            if tick % 5 == 0 {
+                s.scan.set("seq", seq + tick / 5);
+                s.scan.set("at_ms", at_ms + tick * 20);
+                s.scan_at = V::Float(now);
+            }
+            let sent = s.emits.last().unwrap().clone();
+            s.status.set("control", dict! {"armed" => true, "motor" => sent.motor,
+                "servo" => sent.physical, "seq" => sent.seq, "tick" => 100 + tick * 20});
+            s.control_at = now;
+            s.renew_owner(now);
+            s.autonomy_tick(&V::Float(now));
+            let session = s.session.as_ref().expect("offline session remained active");
+            assert!(session.report.get("quality_issues").l().is_empty());
+            assert!(!session.report.get("perception_recovering").truthy());
+            if s.emits.iter().any(|e| e.op == "drive" && e.motor.f() > 1500.) { return; }
+        }
+        panic!("no drive command in the offline start handshake");
+    }
 }

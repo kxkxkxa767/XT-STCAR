@@ -1758,6 +1758,14 @@ impl Maneuver {
         let now = now_v.f();
         if self.continue_route && scan.is_dict() && scan.get("at_ms").is_int() {
             self.compass.update(scan);
+            if self.race_program
+                && (self.route_stage == "start_lane" || (self.phase == "presteer" && self.entry_kind.is_none()))
+                && !self.compass.evidence.get("measured").is_true()
+                && let Some(ranges) = scan.get("ranges").ol().filter(|r| r.len() == 360)
+                && let Some(lane) = crate::race_start_lane::wide_start_lane(ranges)
+            {
+                self.compass.observe_start_lane(scan, &lane);
+            }
         }
         if self.continue_route {
             self.light_observe(control, now);

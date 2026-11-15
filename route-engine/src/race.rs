@@ -17,7 +17,7 @@
 //! input and they hold neutral themselves; their own 300 ms command lease
 //! also covers a stalled program.
 //!
-//! Start: the console's start check (turn_preview) is shown until it passes;
+//! Start: the Rust race admission (turn_preview) is shown until it passes;
 //! then `--start enter` waits for Enter on the terminal, `--start ready`
 //! starts once it has passed continuously for `--ready-hold-s`; `--start
 //! never` only shows and records the check for `--max-wait-s` and never arms
@@ -710,6 +710,7 @@ pub fn main(args: &[String]) -> i32 {
     drop(tx);
     let (files, writer_thread) = writer(o.out.clone());
     let mut sup = Supervisor::new(o.demo, &token(), "rust_program");
+    sup.race_program = true;
     sup.unix_time = unix_s;
     sup.camera = false;
     sup.writer = transport.writer.take();
@@ -861,7 +862,6 @@ fn run(p: &mut Program) -> i32 {
     let run_id = token();
     let now = p.mono();
     p.sup.mono = now;
-    p.sup.race_program = true;
     let started = match p.sup.start_turn_cone(&data, &V::Float(now), &run_id) {
         Ok(result) => result,
         Err((error, clearance)) => {
