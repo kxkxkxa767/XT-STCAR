@@ -34187,7 +34187,7 @@
     "engine_round": 202,
     "label": "y95",
     "baseline": "installed claude-turn201 / y94 / 0acb85a",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "purpose": "Explicit field-test preset; normal vision mode remains the default without enabled field-test.json",
     "layout": {
@@ -34223,6 +34223,18 @@
       "clippy_note": "warnings located in existing code sections; no changed control line flagged",
       "new_track_simulation_executed": false
     },
-    "shared_memory_updated": false
+    "shared_memory_updated": false,
+    "source_commit": "5402554267e5cc970a21f73c376943e14e302e4f",
+    "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y95-20261115-084854",
+    "field_test_enabled": true,
+    "field_test_light_mode": "fixed10s",
+    "deployment_receipt": "work/codex-y95-field-test-20261115/deployment-receipt.json",
+    "post_install": {
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500
+    }
   }
 }
