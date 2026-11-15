@@ -80,7 +80,8 @@ impl Maneuver {
         // on the camera is left out (not a start condition: without it, as before).
         if let Some(input) = self.race_inputs {
             let rest = self._crosswalk_rest;
-            if let Some(evidence) = self.race_crosswalk_stop.observe(scan, received, track, rest, input.forward_integral) {
+            if let Some(evidence) = self.race_crosswalk_stop.observe(scan, received, track, rest, input.forward_integral,
+                self._crosswalk_rear == Some(true)) {
                 self._crosswalk_board_m = self.race_crosswalk_stop.planned;
                 self._crosswalk_board_sigma = Some(0.);
                 if self.crosswalk_state == Some("search") {

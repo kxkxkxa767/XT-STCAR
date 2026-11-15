@@ -34179,5 +34179,50 @@
       "physical_trial_executed": false,
       "shared_memory_updated": false
     }
+  },
+  "y95_field_test_layout_fixed_wait_capture_20261115": {
+    "date": "2026-11-15",
+    "author": "Codex",
+    "author_model": "GPT-6 (session-provided identity)",
+    "engine_round": 202,
+    "label": "y95",
+    "baseline": "installed claude-turn201 / y94 / 0acb85a",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "purpose": "Explicit field-test preset; normal vision mode remains the default without enabled field-test.json",
+    "layout": {
+      "source": "user-confirmed offline provincial diagram",
+      "start_zone_m": 0.8,
+      "start_line_to_crosswalk_back_edge_m": 2.0,
+      "crosswalk_length_m": 0.297,
+      "start_straight_m": 3.2,
+      "crosswalk_back_edge_from_rear_wall_m": 2.8,
+      "crosswalk_far_edge_from_rear_wall_m": 3.097,
+      "reference": "existing lidar rear-wall odometry; 0.2 m lidar-to-front offset; no elapsed-time positioning"
+    },
+    "changes": [
+      "Rust race-only measured rear-wall reference places the test crosswalk independently of YOLO while preserving measured travel and y94 coast/braking logic.",
+      "Test lights stop at the existing confirmed gantry and wait 10 s from the existing standstill registration, ignoring colour for control but retaining observations.",
+      "Test capture saves every unannotated frame at JPEG95 up to 1500 per round and logs per-frame image-derived distance/timestamps; fixes save_every=1 missed-frame bug.",
+      "Vehicle start supports --test, --test-lights vision, --test-status and --normal as configuration-only operations. Bare start still launches one round."
+    ],
+    "unchanged": [
+      "y94 tile propulsion, cone trajectories and braking parameters",
+      "ROS2 20ms control cadence and scan wake-up",
+      "Guard and 8cm clearance gate",
+      "original YOLO weights"
+    ],
+    "validation": {
+      "native_release_build": true,
+      "rust_tests_passed": 43,
+      "console_tests_passed": 968,
+      "console_tests_seconds": 102.468,
+      "field_configuration_checks_passed": true,
+      "clippy_binary_warnings": 33,
+      "clippy_test_warnings": 35,
+      "clippy_note": "warnings located in existing code sections; no changed control line flagged",
+      "new_track_simulation_executed": false
+    },
+    "shared_memory_updated": false
   }
 }

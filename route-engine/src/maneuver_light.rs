@@ -214,6 +214,9 @@ impl Maneuver {
         if n > keep {
             self._light_frames.drain(..n - keep);
         }
+        if self.race_inputs.is_some() && self.race_test_light_fixed_wait {
+            return; // still log real detections; test driving uses the confirmed gantry and a fixed wait
+        }
         let fresh_race_red = self.race_inputs.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
             && !matches!(self.light_stop_state, Some("waiting" | "released" | "passed"))
             && red.f() >= LIGHT_RED_MIN_SCORE && (0.0..=LIGHT_FRAME_MAX_AGE_S).contains(&(now - captured.f()))
@@ -990,7 +993,9 @@ impl Maneuver {
         let race_fallback = red_s.is_some_and(|s| s >= LIGHT_RED_GO_S) && !red_now;
         let race_color_timeout = self.race_inputs.is_some() && red_s.is_none()
             && waited >= RACE_UNCONFIRMED_COLOR_WAIT_S && !red_now;
-        let wait = if self.race_inputs.is_some() { !green && !race_fallback && !race_color_timeout }
+        let test_fixed = self.race_inputs.is_some() && self.race_test_light_fixed_wait;
+        let wait = if test_fixed { waited < RACE_UNCONFIRMED_COLOR_WAIT_S }
+            else if self.race_inputs.is_some() { !green && !race_fallback && !race_color_timeout }
             else { !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S };
         if wait {
             // the board ahead's history for the restart
@@ -999,7 +1004,9 @@ impl Maneuver {
             return false;
         }
         self.prepare_finish_release(scan, now);
-        let basis = if green && self._light_red_frames != 0 {
+        let basis = if test_fixed {
+            "field_test_fixed_10s_after_confirmed_stop"
+        } else if green && self._light_red_frames != 0 {
             "green_in_fresh_frames_after_the_stop"
         } else if green {
             "green_without_red_since_the_gantry_looking_again"
@@ -1031,7 +1038,7 @@ impl Maneuver {
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"go" => go.clone()});
         self.route_event("light_go", scan, control, go.clone());
         let known_gantry = self.race_inputs.is_some() && self.light_stop_evidence.has("gantry");
-        if !known_gantry && ((no_light && !green) || (green && self._light_red_frames == 0)) {
+        if !test_fixed && !known_gantry && ((no_light && !green) || (green && self._light_red_frames == 0)) {
             // not the light: a later gantry may start a new stop
             let rearmed = appended(&self.light_stop_evidence, "rearmed", go);
             self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"rearmed" => rearmed});
@@ -1057,6 +1064,30 @@ mod tests {
     //! results in web/vehicle-console/tests/fixtures/light_gantry_run108_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+    #[test]
+    fn field_test_waits_ten_seconds_after_stop_regardless_of_detected_colour() {
+        for (red, green) in [(0., 0.9), (0.9, 0.), (0., 0.)] {
+            let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+            m.race_inputs = Some(Default::default());
+            m.race_test_light_fixed_wait = true;
+            m.light_vision = true;
+            m.route_stage = "light_lane";
+            m.light_stop_state = Some("waiting");
+            m.drive_since = Some(0.);
+            m.compass.heading = Some(0.);
+            m._light_wait_since = Some(1.);
+            m._light_wait_tick = Some(1.);
+            m.light_stop_evidence = dict! {"gantry" => dict! {"source_seq" => 1}};
+            m._light_frames = vec![V::from(vec![1., 10.8, red, green]), V::from(vec![2., 10.9, red, green])];
+            let scan = |at: f64| dict! {"seq" => (at*10.) as i64, "at_ms" => (at*1000.) as i64,
+                "received_at" => at, "ranges" => vec![V::Float(3.); 360]};
+            assert!(!m.light_wait(&scan(10.9), 10.9, &V::None));
+            assert!(m.light_wait(&scan(11.), 11., &V::None));
+            assert_eq!(m.light_stop_state, Some("released"));
+            assert_eq!(m.light_stop_evidence.get("go").get("basis").os(), Some("field_test_fixed_10s_after_confirmed_stop"));
+        }
+    }
 
     #[test]
     fn a_known_gantry_stop_starts_waiting_without_colour_and_releases_after_ten_seconds() {

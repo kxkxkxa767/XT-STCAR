@@ -44,6 +44,7 @@ import fcntl
 import hashlib
 import itertools
 import json
+import math
 from pathlib import Path
 import select
 import subprocess
@@ -69,6 +70,30 @@ def fresh_dir(base):
             continue
 
 
+def field_test_options(base):
+    """Explicit practice configuration; absent/disabled keeps normal vision control."""
+    path = base/'field-test.json'
+    config = json.loads(path.read_text()) if path.is_file() else {}
+    if not config.get('enabled', False):
+        return {}, [], []
+    names = ('start_zone_m', 'start_line_to_crosswalk_back_edge_m', 'crosswalk_length_m', 'start_straight_m')
+    for name in names:
+        value = config[name]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f'field-test.json: {name} must be positive metres')
+    back_edge = config['start_zone_m'] + config['start_line_to_crosswalk_back_edge_m']
+    config['crosswalk_back_edge_from_rear_wall_m'] = back_edge
+    config['crosswalk_far_edge_from_rear_wall_m'] = back_edge + config['crosswalk_length_m']
+    mode = config.get('light_mode', 'fixed10s')
+    if mode not in ('fixed10s', 'vision'):
+        raise ValueError('field-test.json: light_mode must be fixed10s or vision')
+    command = ['--test-crosswalk-from-rear-wall-m', str(back_edge)]
+    if mode == 'fixed10s':
+        command += ['--test-light-fixed-wait']
+    vision = ['--save-every', '1', '--max-saved', '1500', '--jpeg-quality', '95']
+    return config, command, vision
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--evidence', required=True)
@@ -90,6 +115,7 @@ def main():
     if FIXED_ARGS is not None and sys.argv[1:]:
         raise SystemExit("this round's helper takes no arguments")
     args = parser.parse_args(FIXED_ARGS)
+    field_test, field_command, field_vision = field_test_options(BASE)
     if (args.vision_script is None) != (args.vision_model is None):
         raise SystemExit('--vision-script and --vision-model go together; nothing started')
     if args.light_stop and args.vision_script is None:
@@ -107,6 +133,10 @@ def main():
     except BlockingIOError:
         raise SystemExit('another run is in progress; nothing started') from None
     out = fresh_dir(Path(args.evidence))
+    if field_test:
+        (out/'field-test.json').write_text(json.dumps(field_test, indent=2)+'\n')
+        print('现场测试：斑马线后沿距起点后挡板 '
+              f"{field_test['crosswalk_back_edge_from_rear_wall_m']:g} m；灯模式 {field_test.get('light_mode', 'fixed10s')}；逐帧存图。", flush=True)
     print(json.dumps({'evidence_dir': str(out)}), flush=True)
     access = json.loads((BASE/'access.json').read_text())
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -137,6 +167,8 @@ def main():
                                     and (pre['autonomy'].get('turn_preview') or {}).get('continue_route') is True):
         raise SystemExit(f"console start check not ready ({pre['autonomy'].get('turn_rejection')}); nothing started")
     result = {'evidence_dir': str(out), 'check_only': args.check_only}
+    if field_test:
+        result['field_test'] = field_test
     vision = None
     subprocess.run(['systemctl', '--user', 'stop', SERVICE], check=True, timeout=30)
     try:
@@ -150,6 +182,7 @@ def main():
                    '--max-drive-s', args.max_drive_s, '--initial-presteer-pwm', args.initial_presteer_pwm,
                    '--status-s', '.5', '--max-wait-s', '20']
         command += ['--start', 'never'] if args.check_only else ['--start', 'ready', '--ready-hold-s', args.ready_hold_s]
+        command += field_command
         # scripts/t-ground-drag.py --apply: this floor's measured load, the learner's starting point.
         surface_initial = BASE/'surface-initial.json'
         if surface_initial.is_file():
@@ -159,6 +192,7 @@ def main():
         if args.vision_script is not None:
             vision = subprocess.Popen([sys.executable, args.vision_script, '--model-dir', args.vision_model,
                                        '--out', str(out/'vision'), '--camera', args.vision_camera, '--max-s', '150',
+                                       *field_vision,
                                        *(['--phase-state', str(out/'run/vision-phase.txt'), '--wait-threads', '4'] if args.light_stop else []),
                                        *(['--light-state', str(light_state)] if args.light_stop else [])],
                                       stdout=subprocess.PIPE, stderr=(out/'vision-stderr.txt').open('w'),

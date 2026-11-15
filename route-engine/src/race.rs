@@ -69,6 +69,8 @@ pub(crate) struct Options {
     status_s: f64,
     light_state: Option<PathBuf>,
     surface_initial_load: f64,
+    test_crosswalk_from_rear_wall_m: Option<f64>,
+    test_light_fixed_wait: bool,
     ros2: bool,
     #[cfg(feature = "ros2")]
     pub ros_args: Vec<String>,
@@ -76,7 +78,8 @@ pub(crate) struct Options {
 
 const USAGE: &str = "usage: route-engine race --out NEW_DIR [--bridge PATH (legacy)] [--start enter|ready|never|ros] [--ready-hold-s 3] \
 [--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
-[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--surface-initial-load MPS2] [--transport legacy|ros2]";
+[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--surface-initial-load MPS2] [--transport legacy|ros2] \
+[--test-crosswalk-from-rear-wall-m METRES] [--test-light-fixed-wait]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
     #[cfg(feature = "ros2")]
@@ -99,6 +102,8 @@ fn parse(args: &[String]) -> Result<Options, String> {
         status_s: 0.5,
         light_state: None,
         surface_initial_load: 0.,
+        test_crosswalk_from_rear_wall_m: None,
+        test_light_fixed_wait: false,
         ros2: cfg!(feature = "ros2"),
         #[cfg(feature = "ros2")]
         ros_args,
@@ -127,6 +132,18 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--lidar-calibration" => o.lidar_calibration = Some(PathBuf::from(value(i)?)),
             "--light-state" => o.light_state = Some(PathBuf::from(value(i)?)),
             "--surface-initial-load" => o.surface_initial_load = number(i)?,
+            "--test-crosswalk-from-rear-wall-m" => {
+                let metres = number(i)?;
+                if !(0. < metres && metres <= 20.) {
+                    return Err("test crosswalk distance must be in (0, 20] metres".into());
+                }
+                o.test_crosswalk_from_rear_wall_m = Some(metres);
+            }
+            "--test-light-fixed-wait" => {
+                o.test_light_fixed_wait = true;
+                i += 1;
+                continue;
+            }
             "--transport" => o.ros2 = match value(i)?.as_str() {
                 "legacy" => false,
                 "ros2" if cfg!(feature = "ros2") => true,
@@ -857,6 +874,11 @@ fn run(p: &mut Program) -> i32 {
     if let Some(session) = &mut p.sup.session {
         session.motion.race_inputs = Some(Default::default());
         session.motion.race_surface.set_initial_load(p.o.surface_initial_load);
+        session.motion.race_crosswalk_stop.set_test_from_rear_wall(p.o.test_crosswalk_from_rear_wall_m);
+        session.motion.race_test_light_fixed_wait = p.o.test_light_fixed_wait;
+        if p.o.test_crosswalk_from_rear_wall_m.is_some() || p.o.test_light_fixed_wait {
+            session.motion.light_vision = true;
+        }
     }
     p.say(&format!("started run {run_id}"));
     let run_v = V::from(run_id.as_str());

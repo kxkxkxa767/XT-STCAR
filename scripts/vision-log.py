@@ -238,6 +238,7 @@ def main():
     parser.add_argument('--conf', type=float, default=.25)
     parser.add_argument('--save-every', type=int, default=10)
     parser.add_argument('--max-saved', type=int, default=400)
+    parser.add_argument('--jpeg-quality', type=int, choices=range(1, 101), default=80, metavar='1..100')
     parser.add_argument('--images', nargs='*', help='bench: these image files instead of the camera')
     parser.add_argument('--light-state', help='round y2: the light state file for route-engine race')
     args = parser.parse_args()
@@ -339,10 +340,11 @@ def main():
                 stats['last_s'][c] = round(captured-started, 3)
                 stats['best_score'][c] = max(stats['best_score'].get(c, 0.), d['score'])
             saved = None
-            if stats['saved'] < args.max_saved and (seen & set(LOGGED) or stats['frames'] % args.save_every == 1):
+            if stats['saved'] < args.max_saved and (seen & set(LOGGED) or (stats['frames']-1) % args.save_every == 0):
                 saved = f'frame-{stats["frames"]:06d}.jpg'
-                cv2.imwrite(str(out/'frames'/saved), frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                cv2.imwrite(str(out/'frames'/saved), frame, [cv2.IMWRITE_JPEG_QUALITY, args.jpeg_quality])
                 stats['saved'] += 1
+            state = None
             if args.light_state:
                 def best(cls):
                     return max((d['score'] for d in detections if d['cls'] == cls), default=0.)
@@ -373,6 +375,7 @@ def main():
             log.write(json.dumps({'frame': stats['frames'], 'captured_monotonic_s': round(captured, 4),
                                   'infer_ms': round(infer_ms, 1), 'detections': detections, 'saved': saved,
                                   'inference_threads': threads, 'vision_phase': phase,
+                                  'perception_state': state,
                                   'source': None if cap is not None else path}) + '\n')
             log.flush()
     if cap is not None:
