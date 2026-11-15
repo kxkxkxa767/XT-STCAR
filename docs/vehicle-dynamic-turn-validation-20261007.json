@@ -34534,5 +34534,52 @@
       "motor": 1500,
       "servo": 1500
     }
+  },
+  "y100_finish_board_reference_20261115": {
+    "date": "2026-11-15",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y100",
+    "engine_round": 207,
+    "baseline": "installed claude-turn206 / y99 / 355885b",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "trigger": {
+      "files_retrieved": 242,
+      "end_reason": "maneuver_cumulative_drive_timeout",
+      "light_wait_s": 10.085692766000001,
+      "release_to_brake_s": 0.7969407900000007,
+      "continuous_brake_s": 1.438292361000002,
+      "trigger_old_fused_speed_mps": 2.443703924871854,
+      "trigger_imu_speed_mps": 1.6457915306091309,
+      "trigger_imu_bias_mps": 0.7979123942627229,
+      "release_old_reference_m": 3.2954774646900935,
+      "release_observed_end_wall_m": 4.058535952764746,
+      "estimated_travel_before_brake_m": 0.7739824929253469,
+      "final_controller_front_gap_m": 1.8122385125304665,
+      "end_wall_estimate_at_rest_m": 2.0299501427664595,
+      "trace": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261115-y99/run/feedback.jsonl",
+      "reconstruction": "Longitudinal displacement from multi-return end-wall plane; sampled observations, not external ground truth."
+    },
+    "changes": [
+      "Race finish and its release initialization reuse the existing 13-ray common end-wall plane, rather than the closest forward-sector return. Raw obstacle protection remains unchanged.",
+      "Clear the finish range history and held speed at light release so old side-return measurements cannot contaminate the new end-board speed.",
+      "No PWM, steering, stop target, brake force or additional stop gate changes. y99 first-approach increase remains in place."
+    ],
+    "validation": {
+      "rust_tests_passed": 52,
+      "engine_reference_tests_passed": 7,
+      "clippy_binary_warnings": 32,
+      "saved_frame_regression": "y99 saved scans286..294: corrected observation does not trigger the old early brake at294; fixed inputs, not a full-course simulation.",
+      "full_course_simulation": false
+    },
+    "evidence_dir": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261115-y99",
+    "retrieval_receipt": "work/codex-y99-trial-20261115/retrieval-receipt.json",
+    "figures": [
+      "work/codex-y99-trial-20261115/y99-finish-trajectory-and-brake.png",
+      "work/codex-y99-trial-20261115/y99-finish-camera.png"
+    ],
+    "shared_memory_updated": false,
+    "ten_minute_video_retrieved": false
   }
 }

@@ -35,6 +35,43 @@ mod continuous_race_tests {
     use super::*;
 
     #[test]
+    fn recorded_y99_end_board_does_not_trigger_the_side_return_false_brake() {
+        let fixture = parse_json(include_str!("../../web/vehicle-console/tests/fixtures/y99_finish_false_brake.json")).unwrap();
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.phase = "drive";
+        m.route_stage = "light_lane";
+        m.entry_kind = Some("lane");
+        m.light_stop_state = Some("released");
+        m.light_stop_evidence = dict! {"go" => true};
+        m.race_inputs = Some(Default::default());
+        for (i, frame) in fixture.idx("frames").l().iter().enumerate() {
+            let scan = frame.idx("scan");
+            let now = scan.idx("received_at").f() + 0.01;
+            let at = scan.idx("at_ms").f() / 1000.;
+            m.compass.heading = frame.idx("heading_rad").of();
+            m.compass.at_s = Some(at);
+            m.compass.measured_at_s = Some(at);
+            m.race_inputs.as_mut().unwrap().forward_integral = frame.idx("imu_speed_mps").of();
+            if i == 0 {
+                m.finish.ranges = vec![(at-0.2, now-0.2, 3.2)];
+                m.finish.last_speed = Some((now-0.2, 2.3));
+                m.prepare_finish_release(scan, now);
+                assert!(m.finish.ranges.is_empty());
+                assert!(m.finish.last_speed.is_none());
+                assert!(m.finish_board_range(scan).unwrap() - frame.idx("old_front_m").f() > 0.7);
+            }
+            let (_, feedback) = m.finish_control(scan, frame.idx("old_front_m").of(), now);
+            if scan.idx("seq").i() == 294 {
+                assert_ne!(m.lane_motor, LANE_BRAKE_MOTOR);
+                assert_eq!(feedback.get("distance_reference").os(), Some("multi_return_end_board_plane"));
+                assert!(feedback.get("fused_speed_mps").f() < frame.idx("old_fused_speed_mps").f());
+                return;
+            }
+        }
+        panic!("recorded brake-trigger frame was not exercised");
+    }
+
+    #[test]
     fn unlit_pass_carries_motion_instead_of_losing_the_finish_imu_anchor() {
         let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
         m.race_inputs = Some(crate::motion_sensors::RaceInputs { forward_integral: Some(4.2), ..Default::default() });
@@ -58,20 +95,30 @@ mod continuous_race_tests {
         m.finish.launch_from = Some(1.);
         m.finish.launch_until = Some(2.);
         m.finish.ranges = vec![(0.7, 0.7, 4.), (0.8, 0.8, 4.), (0.9, 0.9, 4.)];
-        let scan = |seq: i64, at: f64| dict! {"seq" => seq, "at_ms" => (at * 1000.) as i64,
-            "received_at" => at, "ranges" => V::from(vec![4.; 360])};
-        m.finish_control(&scan(10, 1.), Some(4.), 1.);
+        let step = |m: &mut Maneuver, seq: i64, at: f64, ahead: f64| {
+            m.compass.heading = Some(0.);
+            m.compass.at_s = Some(at);
+            m.compass.measured_at_s = Some(at);
+            let mut ranges = vec![V::Float(4.); 360];
+            for i in -12_i64..=12 {
+                ranges[i.rem_euclid(360) as usize] = V::Float(ahead / (i as f64).to_radians().cos());
+            }
+            let scan = dict! {"seq" => seq, "at_ms" => (at * 1000.) as i64,
+                "received_at" => at, "ranges" => V::list(ranges)};
+            m.finish_control(&scan, Some(ahead), at)
+        };
+        step(&mut m, 10, 1., 4.);
         assert_eq!(m.lane_motor, LIGHT_LAUNCH_MOTOR, "1530 is not a standstill launch");
         m.finish.launch_until = None;
         m.finish.launch_from = None;
         m.finish.ranges.clear();
         m.race_inputs.as_mut().unwrap().forward_integral = Some(1.6);
-        m.finish_control(&scan(20, 2.), Some(2.12), 2.);
+        step(&mut m, 20, 2., 2.12);
         assert_eq!(m.lane_motor, ROLLING_HOLD_MOTOR);
-        m.finish_control(&scan(22, 2.2), Some(1.80), 2.2);
+        step(&mut m, 22, 2.2, 1.80);
         assert_eq!(m.lane_motor, LANE_BRAKE_MOTOR);
         m.race_inputs.as_mut().unwrap().forward_integral = Some(1.45);
-        m.finish_control(&scan(24, 2.4), Some(1.54), 2.4);
+        step(&mut m, 24, 2.4, 1.54);
         assert_eq!(m.lane_motor, LANE_BRAKE_MOTOR, "rolling brake stays continuous");
     }
 }
@@ -131,7 +178,7 @@ impl Maneuver {
     }
 
     pub(super) fn prepare_finish_release(&mut self, scan: &V, now: f64) {
-        let board = self.lane_front_range(scan);
+        let board = self.finish_board_range(scan);
         let release_stage = self.route_stage == "light_lane" || (self.race_inputs.is_some() && self.route_stage == "light_entry");
         if release_stage && board.is_some_and(|b| b - FRONT_BODY_EXTENT_M >= LIGHT_LAUNCH_MIN_GAP_M) {
             self.finish.launch_until = Some(now + ESC_LAG_S + LIGHT_LAUNCH_S);
@@ -144,6 +191,16 @@ impl Maneuver {
         self.finish.holding = false;
         self.finish.brake_decel = None;
         self.finish.race_brake = Default::default();
+        if self.race_inputs.is_some() {
+            self.finish.ranges.clear();
+            self.finish.last_speed = None;
+        }
+    }
+
+    fn finish_board_range(&self, scan: &V) -> Option<f64> {
+        if self.race_inputs.is_some() {
+            crate::race_light::observed_end_wall(scan, self.compass.current(scan)?)
+        } else { self.lane_front_range(scan) }
     }
 
     /// Passing without a red/green stop has no rest-at-green initialization.
@@ -366,6 +423,10 @@ impl Maneuver {
     /// round y2 also the light line): (basis, feedback).
     fn lane_goal_control(&mut self, scan: &V, ahead: Option<f64>, now: f64, goal: &Goal) -> (Option<String>, V) {
         let kind = goal.kind;
+        let restarted = self.light_stop_evidence.has("go") || self.light_stop_state == Some("passed");
+        let after_light = kind == "finish" && restarted;
+        let measured_board = after_light && self.race_inputs.is_some();
+        let ahead = if measured_board { self.finish_board_range(scan) } else { ahead };
         let speed = self.lane_speed(scan, ahead, 2);
         self.lane_coast_observe(scan, now, speed);
         self.lane_push_observe(now, speed);
@@ -391,10 +452,8 @@ impl Maneuver {
         let powered = DRIVE_MOTORS.contains(&self.lane_motor);
         let (aim_coast, aim_power) = self.lane_pipeline(now, LANE_ESC_LAG_NOMINAL_S, LANE_ESC_LAG_NOMINAL_S, 0.);
         let coasting = !powered && self._power_cmd_at.is_none_or(|at| now >= at + ESC_LAG_S + LANE_ESC_SKEW_S);
-        let restarted = self.light_stop_evidence.has("go") || self.light_stop_state == Some("passed");
         // Round y15: after the light the finish's tail lag, its 1560 top-ups and
         // the pushes' measured responses.
-        let after_light = kind == "finish" && restarted;
         // once no launch power can be left in the ESC pipeline
         // Round y20: the light's approach too (no launch before it).
         let relaxed = kind == "light"
@@ -511,6 +570,9 @@ impl Maneuver {
             "motor_before" => self.lane_motor, "swept_path_certified" => false, "traffic_light_vision" => self.light_vision,
             "creep_room" => creep_room, "creeps" => self.finish.creeps, "goal" => kind, "red_hold" => red_hold,
         };
+        if measured_board {
+            feedback.set("distance_reference", "multi_return_end_board_plane");
+        }
         if basis.is_some() {
             return (basis, feedback);
         }

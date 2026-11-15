@@ -312,6 +312,12 @@ struct ScanAxis<'a> {
     forward: usize,
 }
 
+/// Shared physical end-board observation. Isolated closer posts and oblique
+/// side returns must not become a changing terminal-distance reference.
+pub(crate) fn observed_end_wall(scan: &V, heading: f64) -> Option<f64> {
+    ScanAxis::new(scan, heading)?.end_wall()
+}
+
 impl<'a> ScanAxis<'a> {
     fn new(scan: &'a V, heading: f64) -> Option<Self> {
         let r = scan.get("ranges");
