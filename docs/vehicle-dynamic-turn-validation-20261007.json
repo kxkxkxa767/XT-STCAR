@@ -34580,7 +34580,7 @@
       "work/codex-y99-trial-20261115/y99-finish-camera.png"
     ],
     "shared_memory_updated": false,
-    "ten_minute_video_retrieved": false,
+    "ten_minute_video_retrieved": true,
     "source_commit": "5fde85843f47b457bf55c02ca5c76e9d28e7fc4d",
     "deployment_receipt": "work/codex-y99-trial-20261115/y100-deployment-receipt.json",
     "post_install": {
@@ -34589,6 +34589,47 @@
       "armed": false,
       "motor": 1500,
       "servo": 1500
+    },
+    "car_run_y100": {
+      "reason": "probe_obstacle_close_body",
+      "source_commit": "5fde85843f47b457bf55c02ca5c76e9d28e7fc4d",
+      "files": 220,
+      "start_to_finish_event_s": null,
+      "light_wait_s": 10.084350011000002,
+      "net_event_s": null,
+      "finish_gap_m": null,
+      "last_reported_front_gap_m": 0.5495730056422852,
+      "light_front_gap_m": 0.8656905304561072,
+      "light_rear_past_sensor_m": -0.25656861186878643,
+      "quality_counts": {},
+      "contact_confirmed_by_user": false
+    },
+    "car_run_y100_2": {
+      "reason": "route_finish_zone_stop",
+      "source_commit": "5fde85843f47b457bf55c02ca5c76e9d28e7fc4d",
+      "files": 162,
+      "start_to_finish_event_s": 29.957658248,
+      "light_wait_s": 10.094092489999998,
+      "net_event_s": 19.863565758000004,
+      "finish_gap_m": 0.3029312426239294,
+      "last_reported_front_gap_m": 0.3029312426239294,
+      "light_front_gap_m": 0.6032140132697335,
+      "light_rear_past_sensor_m": -0.0025327494303182263,
+      "quality_counts": {
+        "front_sparse": 6
+      },
+      "contact_confirmed_by_user": false
+    },
+    "latest_run_plot": "work/codex-outdoor-export-20261115/y100-two-run-finish.png",
+    "outdoor_dataset_export": {
+      "destination": "/Volumes/NO NAME/XT-STCAR_20261115_录像与人行横道",
+      "crosswalk_images": 295,
+      "rounds": 8,
+      "model_missed_frames_included": 207,
+      "video_frames": 5973,
+      "video_bytes": 212505571,
+      "vehicle_originals_retained": true,
+      "receipt": "work/codex-outdoor-export-20261115/export-receipt.json"
     }
   }
 }
