@@ -17,12 +17,15 @@ REMOTE = (ROOT/'scripts/start-vehicle-console.py').read_text()
 
 
 def connection_kind(candidate, host):
-    check = subprocess.run(['ssh', '-S', str(candidate), '-O', 'check', host], capture_output=True, timeout=5)
-    if check.returncode:
+    try:
+        check = subprocess.run(['ssh', '-S', str(candidate), '-O', 'check', host], capture_output=True, timeout=5)
+        if check.returncode:
+            return None
+        result = subprocess.run(['ssh', '-S', str(candidate), '-o', 'BatchMode=yes',
+                                 '-o', 'ProxyCommand=false', host, 'printenv SSH_CONNECTION'],
+                                capture_output=True, text=True, timeout=8)
+    except subprocess.TimeoutExpired:
         return None
-    result = subprocess.run(['ssh', '-S', str(candidate), '-o', 'BatchMode=yes',
-                             '-o', 'ProxyCommand=false', host, 'printenv SSH_CONNECTION'],
-                            capture_output=True, text=True, timeout=8)
     parts = result.stdout.split()
     if result.returncode or len(parts) != 4:
         return None

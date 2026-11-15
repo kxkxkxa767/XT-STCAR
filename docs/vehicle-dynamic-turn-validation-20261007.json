@@ -34390,7 +34390,7 @@
     "label": "y98",
     "engine_round": 205,
     "baseline": "installed claude-turn204 / y97 / cfb84a1",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "changes": [
       "Remove global solar-speckle filtering before perception and the existing 8cm body gate; preserve real single- and two-ray posts.",
@@ -34415,8 +34415,23 @@
       "rust_tests_passed": 47,
       "frontend_tests_passed": 21,
       "new_full_course_simulation": false,
-      "console_integration_tests_passed": 24
+      "console_integration_tests_passed": 24,
+      "clippy_binary_warnings": 32,
+      "cpe_forwarding_checked": true,
+      "vehicle_photo_saved": true,
+      "photo_original_downloaded": false,
+      "bluetooth_browser_radio_tested": false,
+      "manual_physical_motion_tested": false
     },
-    "shared_memory_updated": false
+    "shared_memory_updated": false,
+    "source_commit": "2e4128bc66d59d7f1e984f4c57bf6eecb00ea3f0",
+    "deployment_receipt": "work/codex-y98-console-20261115/deployment-receipt.json",
+    "post_install": {
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500
+    }
   }
 }
