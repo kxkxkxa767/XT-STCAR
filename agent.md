@@ -1,5 +1,10 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-15：y97／204已部署，等用户start）
+
+- y96两轮草坪实测（`left-cone-trial-20261115-y96`、`left-cone-trial-20261115-y96-2`）均完整取回并生成综合诊断图 `work/gemini-y96-2-trial-20261115/y96-and-y96-2-solar-glare-analysis.png`。两轮自停根因：右前方缺口强阳光直射2D雷达造成 `-12°..+12°` 前向漏点与 `0.21–1.46m` 孤立单束/双束散斑假回波（两轮通道内共204个假点，100%为1-ray/2-ray孤立点），引发 `start_lane_board_ahead_cut` 反复切1500（叠加前墙漏点时扫到 `±8°..±10°` 侧墙及 `speed_mps=None` 回退 `1.6m/s`）、`route_avoid` 误打舵、`y96-2` 在 `cw_gap=0.925m` 未进滑行即提前锁入 `stopped_before_the_crosswalk`，最终分别在 `y96` seq 83（`359°@0.252m`）和 `y96-2` seq 78（`358°@0.250m`）由单束散斑触发8cm `probe_obstacle_close_body` 停机。
+- y97／204（`cfb84a1`）新增 `filter_solar_speckle` 滤除 `<2` 邻居的1-ray/2-ray阳光散斑（保留 `>=3` 束真实近体障碍物与锥桶）、将 `race_start_coverage` 推广至 `continue_route`、在 `lane_front_range`/`lane_front_track` 排除 `|y|>0.25m` 侧墙掠射点并用 `cw_speed`/`race_surface_speed` 兜底前向速度、要求 `_crosswalk_coasting` 或 `g<=0.35m` 才锁入斑马线停稳。47/968通过、clippy 32/34。没有仿真，已直接部署至实车并锁定1500/1500，`start --show` 为 `y97`（保持 `enabled=true, light_mode=fixed10s`），没有发车。详情见 `memoryshare.md` 文末。
+
 ## 当前接手入口（2026-11-14：y92／199已部署，等用户start）
 
 - y91一轮59文件取回，140帧0.075020m近障退出，用户确认撞斑马线侧板；没有绕过第二桶。首次误选外墙，加上99.797ms未满100ms而跳过回正，最大航向219°。

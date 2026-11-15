@@ -34370,6 +34370,17 @@
       "solar_glare_speckle_and_side_wall_test_passed": true,
       "near_body_stale_empty_rejections_passed": true,
       "new_full_course_simulation": false
+    },
+    "shared_memory_updated": true,
+    "source_commit": "cfb84a1ea482a8c006771f8e5976794bf8fae8d6",
+    "vision_stage": "/home/bianbu/xt-stcar-console/stage-claude-y97-20261115-131137",
+    "deployment_receipt": "work/gemini-y96-2-trial-20261115/y97-deployment-receipt.json",
+    "post_install": {
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500
     }
   }
 }

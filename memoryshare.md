@@ -1279,3 +1279,35 @@ y94／201（0acb85a）调整了灯前和终点停车预测，并在等灯时切�
 **其他现场状态**：蓝牙完成过配对和SSH登录，1MiB上传12.171s（84.13KiB/s），下载因EAGAIN断开。已有缓冲处理变更，但用户暂停了后续蓝牙测试，不能记为稳定验证完成；本轮取数据走CPE。连接复用路径仍为工程内 `work/vehicle-test-ssh.sock`，目标 `bianbu@192.168.0.156`。无CPE时的控制台启动支持已安装。相关现状见 `docs/bluetooth-ssh-20261115.md`。
 
 用户既有工作约定继续有效：新车端控制逻辑用Rust比赛分支；每次实际发车由新的摆放/复位确认或用户在车端主动输入start触发；不强推、不动根目录未跟踪队友文件，清单第5项不改，避免重复审查和冗长报告。用户停止指令后，Codex仅做了本地交接记录，没有再检查或操作车辆。旧条目全部保留。
+
+### 2026-11-15 Gemini：草坪实测 `y96` / `y96-2` 阳光致盲与散斑假点根因分析及 `y97 / 204` 修复部署
+
+- **模型身份**：Gemini 4 Argon (High)
+- **实车证据与取回校验**：
+  - 本地已有第一轮草坪实测 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261115-y96`。
+  - 通过复用 SSH 控制套接字 `work/vehicle-test-ssh.sock` 从 `bianbu@192.168.0.156:/home/bianbu/xt-stcar-console/left-cone-trial-20261115-y96-2` 完整取回第二轮草坪实测数据至 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261115-y96-2`，全部文件与车端 `work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261115-y96-2-remote-sha256.txt` 的 SHA-256 100% 一致（`OK`）。
+  - 综合轨迹、PWM 时序、阳光散斑极坐标与实车相机帧的诊断图已生成：`work/gemini-y96-2-trial-20261115/y96-and-y96-2-solar-glare-analysis.png`。
+- **为什么两轮在草坪上跑了一段距离后自己停下（阳光对 2D 激光雷达的双重影响）**：
+  1. **相机与激光雷达同步证实阳光直射前向扇区（`-12°..+12°`）**：
+     - 相机画面（`y96` 的 `vision/frames/frame-000039.jpg`、`y96-2` 的 `vision/frames/frame-000035.jpg`）显示强阳光从跑道右前方缺口直接射入激光雷达窗口，前向通道完全无真实障碍物。
+     - 阳光饱和同时对 2D 激光雷达造成两种物理效应：
+       - **效应 A（前向漏点 / Dropout）**：`-12°..+12°` 大量射线返回 `None`，导致前墙距离测速丢失（`speed_mps = None`，回退到未知速度上限 `1.6 m/s`，使 `front_stop_range_m` 膨胀至 `2.30–4.44 m`）；同时当 `-7°..+7°` 为 `None` 时，`lane_front_range` 扫到了 `±8°..±10°` 两侧围挡边墙（`|y| ≈ 0.33–0.43 m`，距离 `2.06–2.45 m`）。
+       - **效应 B（近距阳光散斑假点 / Solar Glare Speckle）**：在阳光直射扇区内随机出现孤立单束（`1-ray`）或双束（`2-ray`）假回波，距离分布在 `0.21 m – 1.46 m`（通道半宽 `|y| < 0.28 m` 内：`y96` 共 `63` 个假点，`y96-2` 共 `141` 个假点，合计 `204` 个）。统计表明，这 `204` 个通道内阳光假点 **100%（`204/204`）** 都是孤立点（`192` 个 1-ray、`12` 个 2-ray，在 `±3°` 及 `|Δr| <= max(0.12, 0.18*d)` 内邻居数 `< 2`），而室内实测 `y90-2`、`y91`、`y92`、`y93` 的真实锥桶（`>= 3` 束）和围挡点 **99.6%–100.0%** 满足邻居数 `>= 2`。
+  2. **第一轮 `y96` 停车全过程（前进 `0.157 m`，锁车后滑行至 `0.361 m`，耗时 `2.810 s`）**：
+     - 发车后阳光散斑（`0.31–1.46 m`）和侧墙射线先后触发 `6` 次采样帧的 `start_lane_board_ahead_cut`（电机在 `1570` 与 `1500` 之间反复切断抽搐），同时 `0.31 m` 散斑触发 `route_avoid` 使舵机误打到 `1540–1584`。
+     - 在 `seq 83`（`t = 2.810 s`），`359°` 出现单束 `0.252 m` 阳光散斑假点，车体净距 `body_distance_m = 0.05196 m < 0.08 m`，直接触发 `probe_obstacle_close_body` 终止运行并锁车。
+  3. **第二轮 `y96-2` 停车全过程（前进 `1.267 m`，距离斑马线还有 `0.925 m`，耗时 `6.506 s`）**：
+     - 发车后车从后墙 `0.410 m` 前进至 `1.677 m`（前进 `1.267 m`），期间遭遇 `18` 个采样帧的 `start_lane_board_ahead_cut` 切中位与 `134` 次 `route_avoid` 误避障。
+     - 从 `seq 59` 到 `seq 71`（`t = 4.62..5.89 s`），连续 8 帧 `start_lane_board_ahead_cut` 将电机压死在 `1500`，小车在草坪较大滚阻下于 `cw_gap = 0.925 m`（刚进入 `CROSSWALK_ZONE_M = 1.0 m`）处完全停稳。
+     - 在 `seq 73`（`t = 6.05 s`），`crosswalk_control` 见车在 `g = 0.925 m <= 1.0 m` 处静止，尽管并未进入正常斑马线滑行（`_crosswalk_coasting == false`），仍提前锁入 `crosswalk_stop_waiting`（`stopped_before_the_crosswalk`）。
+     - 仅 `0.45 s` 后，在 `seq 78`（`t = 6.506 s`），`358°` 出现单束 `0.250 m` 阳光散斑假点（`body_distance_m = 0.04985 m < 0.08 m`），再次触发 `probe_obstacle_close_body` 终止运行。
+- **`y97 / claude-turn204` 代码修复（无新增限制、无仿真、保持全部既有驾驶参数）**：
+  1. **`route-engine/src/helpers.rs` & `supervisor.rs`**：新增 `filter_solar_speckle(scan)`，在 `race_program` 的 `received_scan()` 和 `turn_preview()` 中滤除 `±3°`、`max(0.12, 0.18*d)` 邻域内邻居数 `< 2` 的 1-ray / 2-ray 阳光散斑噪点，同时完整保留 `>= 3` 束的真实近体障碍物（8cm 门限对多束真实障碍物照常触发 `probe_obstacle_close_body`）、锥桶与围挡。
+  2. **`route-engine/src/supervisor.rs`**：将 `race_start_coverage` 推广至 `self.race_program && s.motion.continue_route` 全程，防止室外阳光前向漏点在离开 `start_lane` 后触发 `perception_recovering` 急停。
+  3. **`route-engine/src/maneuver_post.rs` & `maneuver_open.rs`**：在 `race_program` 下，`lane_front_range_excluding` 与 `lane_front_track` 排除 `|r * sin(ang)| > 0.25 m` 的两侧围挡掠射点，防止前向 `-7°..+7°` 被太阳致盲时把 `±8°..±10°` 的侧墙（`2.06–2.45 m`）当成正前方端墙而触发 `start_lane_board_ahead_cut`；当前墙测速因太阳致盲为 `None` 时，`speed` 回退使用后墙测速 `cw_speed` 或 `race_surface_speed`，不再盲目按 `1.6 m/s` 未知速度将停障距离拉大到 `4.44 m`。
+  4. **`route-engine/src/maneuver_crosswalk.rs`**：在 `race_program` 下，`approach` 阶段只有在已进入正常斑马线滑行（`_crosswalk_coasting == true`）或已抵达目标窗内（`g <= CROSSWALK_RACE_TOPUP_GAP_M = 0.35 m`）时才允许锁入 `stopped_before_the_crosswalk`，防止因中途切动力在 `0.925 m` 处停下时误判为已到斑马线。
+- **验证与实车部署回执**：
+  - `cargo build --release && cargo test --release && cargo clippy --release`：`47` 项 Rust 单元测试全部通过（含新增 `solar_glare_speckle_and_side_wall_rays_do_not_cut_start_lane_drive` 与单束散斑 vs 多束真障碍物对比测试）。
+  - `web/vehicle-console/tests`：`968` 项 Python 测试全部通过。
+  - 已构建并部署 `claude-turn204 / y97`（源码提交 `cfb84a1ea482a8c006771f8e5976794bf8fae8d6`，`route-engine` SHA-256 `c10ddbcf6d482af303e72560e29555375edc7e2b4beb5614ae9aacf0ff21e950`，实车 helper `/home/bianbu/xt-stcar-console/stage-claude-y97-20261115-131137/trialy97.py`）。
+  - 实车校验回执 `work/gemini-y96-2-trial-20261115/y97-deployment-receipt.json`：`start --show` 输出 `y97`；`start --test-status` 保持 `enabled=true, light_mode=fixed10s`；实车处于 `healthy=true, mode=locked, armed=false, motor=1500, servo=1500`，**未触发任何实车发车动作**。
