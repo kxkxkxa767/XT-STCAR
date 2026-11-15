@@ -3,21 +3,33 @@ const $=id=>document.getElementById(id);
 const fragment=new URLSearchParams(location.hash.slice(1));
 const token=fragment.get('token')||sessionStorage.getItem('xt-token')||'';
 if(token)sessionStorage.setItem('xt-token',token);
-history.replaceState(null,'',location.pathname);
+const query=new URLSearchParams(location.search||'');
+const requestedLink=query.get('link')||fragment.get('link')||sessionStorage.getItem('xt-link');
+const linkMode=requestedLink==='bluetooth'?'bluetooth':'cpe',lowBandwidth=linkMode==='bluetooth';
+sessionStorage.setItem('xt-link',linkMode);
+history.replaceState(null,'',location.pathname+'?link='+linkMode);
+$('transport').textContent=lowBandwidth?'蓝牙':'CPE';
+$('link-note').hidden=!lowBandwidth;
+$('preview-format').textContent=lowBandwidth?'低流量预览 · 原图保存在车上':'640 × 480 · 最多10帧/秒';
+if(lowBandwidth){$('save-camera').textContent='拍照 · 保存到车上';$('save-note').textContent='蓝牙模式只保存到车上，不下载图片。采集完成后再统一取回。';}
+const mediaRequests=new Set();
+function pauseMedia(){for(const controller of mediaRequests)controller.abort();mediaRequests.clear();}
+function mediaPaused(){return lowBandwidth&&(active||arming)||isAutoMode(state);}
+
 const client=Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>x.toString(16).padStart(2,'0')).join(''), keys=new Set();
 let arming=false, sendQueued=false, stateRequestSequence=0, stateResponseSequence=0, clockSampleDelay=0;
 let state=null, tick=0, seq=0, active=false, pending=false, generation=0, recording=false, pollAt=0, cameraURL=null, armSeq=Infinity, settingsDirty=false, cameraFreshAt=0, lidarFreshAt=0, boot=null;
 const disconnectedNotice='连接已断开，旧画面已停止；控制已锁定。';
 function notice(text){$('notice').textContent=text;}
-function isAutoMode(s){return ['auto_probe','auto_goal','auto_turn_trial'].includes(s?.autonomy?.mode);}
-async function api(path,data,timeoutMs=1000){const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeoutMs);try{const res=await fetch(path,{method:data?'POST':'GET',headers:{'X-Control-Token':token,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined,signal:ctrl.signal,cache:'no-store'});const body=await res.json();if(res.status===403)$('access-form').hidden=false;if(!res.ok)throw Error(res.status===403?'访问令牌失效，请重新打开服务入口':reasons[body.error]||body.error||res.status);return body;}finally{clearTimeout(timer);}}
+function isAutoMode(s){return ['auto_probe','auto_goal','auto_turn_trial','auto_turn_cone_trial'].includes(s?.autonomy?.mode);}
+async function api(path,data,timeoutMs=1000){const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeoutMs);try{const res=await fetch(path,{method:data?'POST':'GET',headers:{'X-Control-Token':token,'X-Console-Viewer':'1',...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined,signal:ctrl.signal,cache:'no-store'});const body=await res.json();if(res.status===403)$('access-form').hidden=false;if(!res.ok)throw Error(res.status===403?'访问令牌失效，请重新打开服务入口':reasons[body.error]||body.error||res.status);return body;}finally{clearTimeout(timer);}}
 // Charge the request duration to the existing lease, never to the bridge tick:
 // its unknown network delay cannot justify advancing a command timestamp.
 function clockSampleAge(){return performance.now()-pollAt+clockSampleDelay;}
 async function sampleState(){
  const request=++stateRequestSequence,started=performance.now();
  let s;
- try{s=await api('/api/state');}
+ try{s=await api('/api/control-state');}
  catch(error){if(request<stateResponseSequence)return null;stateResponseSequence=request;throw error;}
  const received=performance.now();
  // Polling and the unlock preflight may overlap. A late response cannot roll
@@ -44,7 +56,7 @@ async function send(force=false){if(!active)return;if(pending){sendQueued=true;r
 $('stop').onclick=()=>stop();
 $('access-form').onsubmit=e=>{e.preventDefault();const value=$('access-token').value.trim();if(!/^[A-Za-z0-9_-]{8,128}$/.test(value)){notice('请输入8–128位访问码（字母、数字、- 或 _）');return;}location.hash='token='+value;location.reload();};
 $('access-form').hidden=!!token;
-$('arm').onclick=async()=>{if(arming)return;if(active){stop();return;}keys.clear();physicalKeys.clear();paintKeys();arming=true;const attempt=++generation;notice('正在解锁…');try{const fresh=await sampleState();if(attempt!==generation)return;if(!fresh)throw Error('控制状态已过期，请重试解锁');if(isAutoMode(fresh)){await api('/api/control',{op:'takeover',boot:fresh.boot,epoch:fresh.autonomy.epoch});notice('自动会话已停止并锁定；再次点击解锁手动控制。');return;}if(!fresh.healthy)throw Error('相机、雷达或控制连接未就绪');if(fresh.owner)throw Error('已有页面占用控制，请先按停止并锁定，再解锁');const ack=await api('/api/control',{op:'arm',client,boot,seq:++seq,tick});if(attempt!==generation){stop('解锁已取消，请重新点击');return;}armSeq=ack.bridge_seq;active=true;generation++;notice('控制已解锁 · 按住方向键输出，松开回中');send();}catch(e){if(attempt===generation)notice(e.message);}finally{arming=false;}};
+$('arm').onclick=async()=>{if(arming)return;if(active){stop();return;}keys.clear();physicalKeys.clear();paintKeys();arming=true;if(lowBandwidth)pauseMedia();const attempt=++generation;notice('正在解锁…');try{const fresh=await sampleState();if(attempt!==generation)return;if(!fresh)throw Error('控制状态已过期，请重试解锁');if(isAutoMode(fresh)){await api('/api/control',{op:'takeover',boot:fresh.boot,epoch:fresh.autonomy.epoch});notice('自动会话已停止并锁定；再次点击解锁手动控制。');return;}if(!fresh.healthy)throw Error('相机、雷达或控制连接未就绪');if(fresh.owner)throw Error('已有页面占用控制，请先按停止并锁定，再解锁');const ack=await api('/api/control',{op:'arm',client,boot,seq:++seq,tick});if(attempt!==generation){stop('解锁已取消，请重新点击');return;}armSeq=ack.bridge_seq;active=true;generation++;notice('控制已解锁 · 按住方向键输出，松开回中');send();}catch(e){if(attempt===generation)notice(e.message);}finally{arming=false;}};
 const mappings={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
 const physicalKeys=new Map();
 window.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();physicalKeys.clear();stop();return;}if(['INPUT','TEXTAREA'].includes(e.target.tagName))return;const key=mappings[e.key]||mappings[e.key.toLowerCase()];if(!key)return;e.preventDefault();if(!active||e.repeat)return;if(key==='down'&&!state?.reverse_enabled){notice('倒车尚未标定，当前禁用');return;}physicalKeys.set(e.code,key);keys.add(key);paintKeys();send(true);});
@@ -56,24 +68,55 @@ document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{e.preven
 $('settings').addEventListener('input',()=>{settingsDirty=true;});
 $('settings').onsubmit=async e=>{e.preventDefault();try{const data=Object.fromEntries(['forward','reverse','left','right'].map(k=>[k,Number($(k).value)]));await api('/api/settings',data);settingsDirty=false;notice('PWM参数已应用');}catch(e){notice(e.message);}};
 $('snapshot').onclick=async()=>{try{const x=await api('/api/snapshot',{});notice('快照已保存：'+x.file);}catch(e){notice(e.message);}};
-$('record').onclick=async()=>{const stopping=recording;if(stopping){$('record').disabled=true;notice('正在打包录制…');}try{const x=await api(stopping?'/api/record/stop':'/api/record/start',{},stopping?120000:1000);if(x.file){downloadFile(x.file);notice('录制已打包并开始下载：'+x.file+'；下方列表可重新下载。');}else notice(stopping?'录制已结束':'开始录制');}catch(e){notice(e.message);}};
+$('record').onclick=async()=>{const stopping=recording;if(stopping){$('record').disabled=true;notice('正在打包录制…');}try{const x=await api(stopping?'/api/record/stop':'/api/record/start',{},stopping?120000:1000);if(x.file){if(!lowBandwidth)downloadFile(x.file);notice(lowBandwidth?'录制已保存在车上：'+x.file:'录制已打包并开始下载：'+x.file+'；下方列表可重新下载。');}else notice(stopping?'录制已结束':'开始录制');}catch(e){notice(e.message);}};
 const reasons={'stale/unowned request; unlock again':'控制会话已结束，请重新解锁','stale arm request':'解锁请求已过期，请重试','already armed; stop first':'控制已被占用，请先停止并锁定',stale_or_unowned_request:'控制会话已结束，迟到指令被拒绝',bridge_not_armed_or_invalid_request:'底盘未解锁或指令无效',invalid_keys:'无效方向指令',browser_timeout:'浏览器心跳超时',sensor_stale:'传感器数据过期',bridge_heartbeat_timeout:'底盘心跳超时',bridge_control_gap:'底盘控制循环超时',bridge_stale_request:'控制请求延迟或乱序',bridge_status_backpressure:'底盘状态通道阻塞',heartbeat_timeout:'心跳超时',control_gap:'控制循环中断',stale_request:'旧指令已拒绝',operator_stop:'已停止',locked:'已锁定',not_armed_or_invalid_request:'需要重新解锁',status_backpressure:'状态通道阻塞'};
 async function poll(){try{const s=await sampleState();if(!s)return;const c=s.status.control||{};if(active&&!c.armed&&c.seq>=armSeq){const reason=s.last_stop?.reason||c.reason;stop((reasons[reason]||reason||'控制已锁定')+'；请重新解锁');}
 if(s.healthy&&$('notice').textContent==='等待画面与雷达就绪，默认锁定。')notice('实时画面已连接，控制保持锁定。');else if(s.healthy&&$('notice').textContent===disconnectedNotice&&!active&&!arming&&c.armed===false&&!s.owner&&!isAutoMode(s))notice('连接已恢复，控制保持锁定。');$('connection').textContent=s.healthy?'● 传感器在线':'● 检查连接';$('connection').classList.toggle('good',s.healthy);$('armed').textContent=c.armed?'已解锁':'已锁定';$('arm').textContent=active?'锁定控制':isAutoMode(s)?'停止自动，准备手动':'解锁键盘控制';$('arm').disabled=false;$('arm').title=!s.healthy?'传感器或控制连接未就绪':s.owner&&s.owner!==client?'其他页面占用控制，可先停止再解锁':'';$('motor').innerHTML=(c.motor||1500)+'<span>µs</span>';$('servo').textContent=c.servo||1500;$('camera-age').textContent=s.ages.camera<5?Math.round(s.ages.camera*1000)+' ms':'无新画面';$('mode').textContent=s.demo?'模拟模式 · 无实车输出':({auto_probe:'低速自动直行验证',auto_goal:'上游目标停车直道',auto_turn_trial:'连续左转试验 · 未认证导航'}[s.autonomy?.mode]||'实时画面');$('reverse-note').textContent=s.reverse_enabled?'倒车已启用：默认1450，下限1350；先松开前进回中，再按后退。':'倒车待标定，当前锁定。↓不会自动执行电调倒车序列。';document.querySelector('[data-key="down"]').disabled=!s.reverse_enabled;
 for(const k of ['forward','reverse','left','right']){$(k).disabled=!!c.armed;if(!settingsDirty&&document.activeElement!==$(k))$(k).value=s.settings[k];}recording=s.recording;$('record').textContent=recording?'■ 结束录制':'● 开始录制';$('record').disabled=s.saving;$('record-state').textContent=s.saving?'打包中':recording?'● 正在录制':'未录制';if(s.record_error)notice('保存异常：'+s.record_error);if(Object.keys(s.errors).length)notice(Object.values(s.errors).join('；'));
-const signature=s.files.join('|');if($('files').dataset.signature!==signature){$('files').dataset.signature=signature;$('files').replaceChildren();for(const name of [...s.files].reverse()){const a=document.createElement('a');a.textContent='↓ '+name;a.href='/download/'+encodeURIComponent(name)+'?token='+encodeURIComponent(token);a.download=name;$('files').append(a);}}
+if(Array.isArray(s.files))renderFiles(s.files);
 }catch(e){if(active)stop('连接断开，已请求停止');notice(e.message==='访问令牌失效，请重新打开服务入口'?e.message:disconnectedNotice);$('arm').disabled=true;$('connection').textContent='离线';$('connection').classList.remove('good');}finally{setTimeout(poll,80);}}
-async function camera(){try{const r=await fetch('/camera.jpg',{headers:{'X-Control-Token':token},cache:'no-store',signal:AbortSignal.timeout(1500)});if(r.ok){const u=URL.createObjectURL(await r.blob());$('camera').src=u;if(cameraURL)URL.revokeObjectURL(cameraURL);cameraURL=u;cameraFreshAt=performance.now();}}catch(_){}setTimeout(camera,100);}
+async function camera(){
+ if(mediaPaused()){setTimeout(camera,lowBandwidth?500:100);return;}
+ const controller=new AbortController();mediaRequests.add(controller);
+ const timeout=setTimeout(()=>controller.abort(),1500);
+ try{
+  const r=await fetch(lowBandwidth?'/camera-preview.jpg':'/camera.jpg',{headers:{'X-Control-Token':token,'X-Console-Viewer':'1'},cache:'no-store',signal:controller.signal});
+  if(r.ok){const blob=await r.blob();if(!mediaPaused()){const u=URL.createObjectURL(blob);$('camera').src=u;if(cameraURL)URL.revokeObjectURL(cameraURL);cameraURL=u;cameraFreshAt=performance.now();}}
+ }catch(_){}finally{clearTimeout(timeout);mediaRequests.delete(controller);setTimeout(camera,lowBandwidth?2000:100);}
+}
 const canvas=$('lidar'),ctx=canvas.getContext('2d');
 function draw(scan,age){const w=640,h=480,cx=320,cy=255,scale=18;ctx.fillStyle='#0d1c24';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#29414d';ctx.lineWidth=1;ctx.fillStyle='#78929e';ctx.font='11px sans-serif';for(let m=2;m<=12;m+=2){ctx.beginPath();ctx.arc(cx,cy,m*scale,0,Math.PI*2);ctx.stroke();ctx.fillText(m+'m',cx+5,cy-m*scale+13);}ctx.beginPath();ctx.moveTo(cx,20);ctx.lineTo(cx,h-15);ctx.moveTo(30,cy);ctx.lineTo(w-30,cy);ctx.stroke();ctx.fillStyle='#72e2bc';ctx.beginPath();ctx.moveTo(cx,cy-9);ctx.lineTo(cx-6,cy+7);ctx.lineTo(cx+6,cy+7);ctx.closePath();ctx.fill();ctx.fillText('前方',cx-12,16);if(scan){ctx.fillStyle=age<1?'#72e2bc':'#6a7a7e';scan.ranges.forEach((r,i)=>{if(r===null)return;const a=i*Math.PI/180;ctx.fillRect(cx+Math.sin(a)*r*scale-1.5,cy-Math.cos(a)*r*scale-1.5,3,3);});$('lidar-quality').textContent=(age<1?'':'过期 · ')+'有效回波 '+Math.round(scan.valid_fraction*100)+'%'+(scan.calibration?' · 粗校准':'');}}
-async function lidar(){try{const x=await api('/api/lidar');draw(x.scan,x.age_s);if(x.scan&&x.age_s<1)lidarFreshAt=performance.now();}catch(_){}setTimeout(lidar,100);}
-if(!token)notice('缺少访问令牌，请使用服务生成的完整入口链接。');else notice('等待画面与雷达就绪，默认锁定。');setInterval(()=>send(),80);poll();camera();lidar();draw(null,Infinity);
+async function lidar(){
+ if(mediaPaused()){setTimeout(lidar,lowBandwidth?500:100);return;}
+ const controller=new AbortController();mediaRequests.add(controller);const timeout=setTimeout(()=>controller.abort(),1500);
+ try{const r=await fetch('/api/lidar?preview=1',{headers:{'X-Control-Token':token,'X-Console-Viewer':'1'},cache:'no-store',signal:controller.signal});
+  if(r.ok){const x=await r.json();if(!mediaPaused()){draw(x.scan,x.age_s);if(x.scan&&x.age_s<1)lidarFreshAt=performance.now();}}
+ }catch(_){}finally{clearTimeout(timeout);mediaRequests.delete(controller);setTimeout(lidar,lowBandwidth?2500:100);}
+}
+function savedFileElement(name){
+ const item=document.createElement(lowBandwidth?'span':'a');item.textContent=(lowBandwidth?'已存车端 · ':'↓ ')+name;
+ if(!lowBandwidth){item.href='/download/'+encodeURIComponent(name)+'?token='+encodeURIComponent(token);item.download=name;}
+ return item;
+}
+function renderFiles(files){const signature=files.join('|');if($('files').dataset.signature===signature)return;$('files').dataset.signature=signature;$('files').replaceChildren();for(const name of [...files].reverse())$('files').append(savedFileElement(name));}
+async function filesPoll(){try{if(!mediaPaused()){const x=await api('/api/files');renderFiles(x.files);}}catch(_){}setTimeout(filesPoll,lowBandwidth?5000:3000);}
 
-setInterval(()=>{const fresh=performance.now()-cameraFreshAt<1200&&performance.now()-pollAt<1200;document.querySelector('.camera-stage').classList.toggle('stale',!fresh);document.querySelector('.live').textContent=fresh?'● LIVE':'画面已停止';if(performance.now()-lidarFreshAt>1200)$('lidar-quality').textContent='雷达画面已停止';},250);
-function downloadFile(name){const a=document.createElement('a');a.href='/download/'+encodeURIComponent(name)+'?token='+encodeURIComponent(token);a.download=name;document.body.append(a);a.click();a.remove();}
+if(!token)notice('缺少访问令牌，请使用服务生成的完整入口链接。');else notice('等待画面与雷达就绪，默认锁定。');setInterval(()=>send(),80);poll();camera();lidar();filesPoll();draw(null,Infinity);
+
+setInterval(()=>{
+ const paused=lowBandwidth&&(active||arming),limit=lowBandwidth?4500:1200;
+ const fresh=performance.now()-cameraFreshAt<limit&&performance.now()-pollAt<1200;
+ document.querySelector('.camera-stage').classList.toggle('stale',!fresh&&!paused);
+ document.querySelector('.live').textContent=paused?'控制中 · 预览暂停':fresh?(lowBandwidth?'● 低流量预览':'● LIVE'):'画面已停止';
+ if(paused){$('camera-age').textContent='预览已暂停';$('lidar-quality').textContent='控制中 · 雷达预览暂停';}
+ else if(performance.now()-lidarFreshAt>(lowBandwidth?5500:1200))$('lidar-quality').textContent='雷达画面已停止';
+},250);
+function downloadFile(name){if(lowBandwidth){notice('文件已保存在车上，采集完成后统一取回：'+name);return;}const a=document.createElement('a');a.href='/download/'+encodeURIComponent(name)+'?token='+encodeURIComponent(token);a.download=name;document.body.append(a);a.click();a.remove();}
 async function savePhoto(kind){
- try {const result=await api('/api/photo',{kind});const a=document.createElement('a');a.href='/download/'+encodeURIComponent(result.file)+'?token='+encodeURIComponent(token);a.download=result.file;a.textContent='↓ '+result.file;$('photo-files').prepend(a);a.click();notice('单张图片已保存：'+result.file+'；下方链接可重新下载。');}
- catch(e){notice(e.message);}
+ try{const result=await api('/api/photo',{kind},lowBandwidth?5000:1500);const item=savedFileElement(result.file);$('photo-files').prepend(item);
+  if(!lowBandwidth)item.click();
+  notice(lowBandwidth?'照片已保存在车上：'+result.file:'单张图片已保存：'+result.file+'；下方链接可重新下载。');
+ }catch(e){notice(e.message);}
 }
 $('save-camera').onclick=()=>savePhoto('camera');
 $('save-lidar').onclick=()=>savePhoto('lidar');
@@ -82,6 +125,8 @@ $('save-combined').onclick=()=>savePhoto('combined');
 // Separate, slow diagnostic polling never enters the control request chain.
 let visionSequence = -1, visionURL = null;
 async function visionPoll(){
+ if(lowBandwidth){$('vision-status').textContent='蓝牙模式不传输诊断图';$('vision-info').textContent='拍照仍保存完整画面；详细推理预览可通过CPE查看。';return;}
+ if(isAutoMode(state)){setTimeout(visionPoll,500);return;}
  try {
   const s=await api('/api/vision'), r=s.result;
   $('vision-status').textContent=!s.enabled?'未启用':s.error?'推理已停止':r&&r.age_ms<1500?'● 只读推理':'等待新结果';

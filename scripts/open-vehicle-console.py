@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Open the deployed vehicle console via SSH; never arm or send drive commands."""
+"""Open the deployed console over CPE or Bluetooth SSH; never arm or drive."""
 import argparse
 import hashlib
 import json
@@ -16,6 +16,19 @@ ROOT = Path(__file__).resolve().parents[1]
 REMOTE = (ROOT/'scripts/start-vehicle-console.py').read_text()
 
 
+def connection_kind(candidate, host):
+    check = subprocess.run(['ssh', '-S', str(candidate), '-O', 'check', host], capture_output=True, timeout=5)
+    if check.returncode:
+        return None
+    result = subprocess.run(['ssh', '-S', str(candidate), '-o', 'BatchMode=yes',
+                             '-o', 'ProxyCommand=false', host, 'printenv SSH_CONNECTION'],
+                            capture_output=True, text=True, timeout=8)
+    parts = result.stdout.split()
+    if result.returncode or len(parts) != 4:
+        return None
+    return 'bluetooth' if parts[0] in ('127.0.0.1', '::1') else 'cpe'
+
+
 def run(argv, **options):
     return subprocess.run(argv, check=True, **options)
 
@@ -23,32 +36,43 @@ def run(argv, **options):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--host', default='bianbu@192.168.0.156', help='vehicle SSH user@host')
-    p.add_argument('--port', type=int, default=8081, help='local port, vehicle port remains 8081')
+    p.add_argument('--link', choices=('auto', 'cpe', 'bluetooth'), default='auto')
+    p.add_argument('--port', type=int, help='local port; default CPE 8081 / Bluetooth 8082')
     p.add_argument('--check-only', action='store_true', help='read existing connections only; no startup/tunnel/browser')
     p.add_argument('--no-open', action='store_true', help='prepare service/tunnel but do not open browser')
     args = p.parse_args()
-    if not re.fullmatch(r'[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+', args.host) or not 1024 <= args.port <= 65535:
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+', args.host) or (args.port is not None and not 1024 <= args.port <= 65535):
         p.error('invalid SSH host or local port')
+    if args.link == 'bluetooth' and args.host != 'bianbu@192.168.0.156':
+        p.error('Bluetooth uses the paired XT-STCAR SSH identity')
     if sys.platform != 'darwin' and not (args.no_open or args.check_only):
         p.error('double-click launcher supports macOS; use --no-open for connection checks')
     work = ROOT/'work'
     work.mkdir(exist_ok=True)
     selected = None
     own_socket = work / ('vehicle-console-ssh.sock' if args.host == 'bianbu@192.168.0.156' else 'console-' + hashlib.sha256(args.host.encode()).hexdigest()[:12] + '.sock')
-    candidates = [work/'vehicle-test-ssh.sock', own_socket] if args.host == 'bianbu@192.168.0.156' else [own_socket]
+    bluetooth_socket = work/'vehicle-web-bluetooth.sock'
+    candidates = [work/'vehicle-test-ssh.sock', own_socket, bluetooth_socket] if args.host == 'bianbu@192.168.0.156' else [own_socket]
     for candidate in candidates:
-        check = subprocess.run(['ssh', '-S', str(candidate), '-O', 'check', args.host], capture_output=True, timeout=5)
-        if check.returncode == 0:
+        kind = connection_kind(candidate, args.host)
+        if kind and args.link in ('auto', kind):
             selected = candidate
             break
     if selected is None:
         if args.check_only:
             raise RuntimeError('没有可复用的SSH连接；检查模式未尝试登录。')
-        selected = own_socket
+        kind = 'bluetooth' if args.link == 'bluetooth' else 'cpe'
+        selected = bluetooth_socket if kind == 'bluetooth' else own_socket
         print('需要连接车辆。若提示密码，请在此终端输入；不会保存密码。', flush=True)
-        run(['ssh', '-M', '-N', '-f', '-S', str(selected), '-o', 'ControlPersist=600', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2', args.host])
+        if kind == 'bluetooth':
+            run([sys.executable, '-B', str(ROOT/'scripts/connect-vehicle-bluetooth.py'),
+                 '--socket', str(selected), '--background'])
+        else:
+            run(['ssh', '-M', '-N', '-f', '-S', str(selected), '-o', 'ControlPersist=600', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2', args.host])
+    if args.port is None:
+        args.port = 8082 if kind == 'bluetooth' else 8081
     print('正在检查车端驾驶台…', flush=True)
-    result = run(['ssh', '-S', str(selected), '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', args.host, 'python3 -'], input='CHECK_ONLY = '+repr(args.check_only)+'\n'+REMOTE, text=True, capture_output=True, timeout=25)
+    result = run(['ssh', '-S', str(selected), '-o', 'BatchMode=yes', '-o', 'ProxyCommand=false', args.host, 'python3 -'], input='CHECK_ONLY = '+repr(args.check_only)+'\n'+REMOTE, text=True, capture_output=True, timeout=25)
     data = json.loads(result.stdout)
     if not re.fullmatch(r'[A-Za-z0-9_-]{8,128}', data.get('token', '')):
         raise RuntimeError('车端返回了无效的访问令牌。')
@@ -57,7 +81,7 @@ def main():
 
     def same_console():
         try:
-            request = urllib.request.Request(local+'/api/state', headers={'X-Control-Token': data['token']})
+            request = urllib.request.Request(local+'/api/control-state', headers={'X-Control-Token': data['token']})
             with opener.open(request, timeout=2) as response:
                 return json.loads(response.read())['boot'] == data['boot']
         except Exception:
@@ -76,12 +100,15 @@ def main():
             if time.monotonic() >= deadline:
                 raise RuntimeError('隧道已建立，但8秒内未能核对车端会话；可重新双击入口重试，或检查车端server.log。')
             time.sleep(.2)
-    print('驾驶台与隧道已就绪；未发送解锁或运动指令。', flush=True)
+    url = local+'/?link='+kind+'#token='+data['token']
+    print(('蓝牙' if kind == 'bluetooth' else 'CPE')+'驾驶台与隧道已就绪；未发送解锁或运动指令。', flush=True)
+    if kind == 'bluetooth':
+        print('照片只保存在车上，拍完后再统一取回。', flush=True)
     if not data['healthy']:
         print('部分传感器未就绪，请查看网页提示。', flush=True)
     if args.check_only or args.no_open:
         return
-    run(['open', local+'/#token='+data['token']])
+    run(['open', url])
     print('已在默认浏览器打开驾驶台。此终端窗口可以关闭。', flush=True)
 
 

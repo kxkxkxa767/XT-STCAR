@@ -24,6 +24,20 @@ python3 scripts/connect-vehicle-bluetooth.py --background
 
 连接通过项目原有 `work/vehicle-test-ssh.sock` 复用，现有传包脚本仍可使用。即使命令中保留 `192.168.0.156`，它也只是原 SSH 主机身份；实际字节由蓝牙代理提供。可由 `SSH_CONNECTION` 的两端回环地址与车端蓝牙服务收发计数核实。
 
+## 网页拍照与手动控制
+
+在Mac本地终端打开所需连接：
+
+```bash
+python3 scripts/open-vehicle-console.py --link bluetooth
+# 使用CPE时：
+python3 scripts/open-vehicle-console.py --link cpe
+```
+
+蓝牙默认本地8082，CPE默认8081；自动打开带访问凭据的网页。两者使用同一车端控制台和原有控制接口，蓝牙独立SSH连接不会替换CPE连接。已有蓝牙主连接会直接复用。
+
+蓝牙页面只传低流量预览，手动控制期间暂停相机和雷达预览。点击拍照后显示“已存车端”，原图与录制保留在`~/xt-stcar-console/recordings`，不自动下载；用户采集完通知后再通过CPE统一取回。CPE页面保持原有预览和下载方式。打开网页不会解锁或发车。
+
 ## 当前实现
 
 - 车端 `vehicle-bluetooth-ssh.py` 通过 BlueZ 注册专用 RFCOMM 服务，转发到本机现有 SSH 服务。只接受配置中的已配对 Mac；SSH 仍使用原账户鉴权。

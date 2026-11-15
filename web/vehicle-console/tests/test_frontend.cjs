@@ -4,10 +4,10 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
-function fixture(){
+function fixture(link='cpe'){
  const events={}, nodes=new Map();
  const node=()=>({textContent:'',value:'',dataset:{},classList:{toggle(){},remove(){}},addEventListener(){},getContext(){return new Proxy({}, {get:()=>()=>{},set:()=>true});},replaceChildren(){},append(){}});
- const ctx=vm.createContext({URLSearchParams,Uint8Array,crypto:require('node:crypto').webcrypto,location:{hash:'',pathname:'/'},sessionStorage:{getItem(){return ''},setItem(){}},history:{replaceState(){}},performance:{now:()=>10000},AbortController,AbortSignal,fetch:()=>new Promise(()=>{}),setInterval(){},setTimeout(){},clearTimeout(){},document:{hidden:false,hasFocus:()=>true,getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)},querySelectorAll(){return []},querySelector(){return node()},addEventListener(name,fn){events[name]=fn}},window:{addEventListener(name,fn){events[name]=fn}}});
+ const ctx=vm.createContext({URLSearchParams,Uint8Array,crypto:require('node:crypto').webcrypto,location:{hash:'',pathname:'/',search:'?link='+link},sessionStorage:{getItem(){return ''},setItem(){}},history:{replaceState(){}},performance:{now:()=>10000},AbortController,AbortSignal,fetch:()=>new Promise(()=>{}),setInterval(){},setTimeout(){},clearTimeout(){},document:{hidden:false,hasFocus:()=>true,getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)},querySelectorAll(){return []},querySelector(){return node()},addEventListener(name,fn){events[name]=fn}},window:{addEventListener(name,fn){events[name]=fn}}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),ctx);
  return {ctx,events,run:code=>vm.runInContext(code,ctx)};
 }
@@ -53,7 +53,7 @@ test('old clock sample stops rather than extrapolating indefinitely',()=>{
 });
 test('unlock samples fresh state and cancellation during sampling cannot arm',async()=>{
  const f=fixture();f.run('var requests=[],resolvers=[];api=(p,data)=>{requests.push({p,data});return new Promise(r=>resolvers.push(r))};$("arm").onclick()');
- assert.equal(f.run('requests[0].p'),'/api/state');
+ assert.equal(f.run('requests[0].p'),'/api/control-state');
  f.run('resolvers.shift()({healthy:true,owner:null,boot:"new",status:{control:{tick:900}}})');await new Promise(setImmediate);
  assert.equal(f.run('requests[1].data.op'),'arm');assert.equal(f.run('requests[1].data.tick'),900);
  const g=fixture();g.run('var requests=[],resolvers=[];api=(p,data)=>{requests.push({p,data});return new Promise(r=>resolvers.push(r))};$("arm").onclick();stop();resolvers.shift()({healthy:true,owner:null,status:{control:{tick:900}}})');await new Promise(setImmediate);
@@ -62,7 +62,7 @@ test('unlock samples fresh state and cancellation during sampling cannot arm',as
 test('manual takeover stops automatic output without silently unlocking again',async()=>{
  for(const mode of ['auto_probe','auto_goal','auto_turn_trial']){
   const f=fixture();f.ctx.takeoverState={...stateSample('takeover-boot',900),healthy:mode!=='auto_turn_trial',owner:'auto-session',autonomy:{mode}};
-  f.run('var requests=[];api=async(p,data)=>{requests.push({p,data});return p==="/api/state"?takeoverState:{ok:true}};$("arm").onclick()');
+  f.run('var requests=[];api=async(p,data)=>{requests.push({p,data});return p==="/api/control-state"?takeoverState:{ok:true}};$("arm").onclick()');
   await new Promise(setImmediate);
   assert.equal(f.run('requests.length'),2);
   assert.equal(f.run('requests[1].data.op'),'takeover');
@@ -85,7 +85,7 @@ async function respond(f,index,at,value){
 }
 test('older overlapping poll cannot rewind the fresh unlock clock or first heartbeat',async()=>{
  const f=clockFixture();f.run('poll();$("arm").onclick()');
- assert.equal(f.ctx.requests[0].p,'/api/state');assert.equal(f.ctx.requests[1].p,'/api/state');
+ assert.equal(f.ctx.requests[0].p,'/api/control-state');assert.equal(f.ctx.requests[1].p,'/api/control-state');
  await respond(f,1,1030,stateSample('same-boot',1000));
  assert.equal(f.ctx.requests[2].data.op,'arm');
  await respond(f,0,1110,stateSample('same-boot',920));
@@ -171,4 +171,24 @@ test('late unlock rejection cannot overwrite an explicit cancellation notice',as
  f.run('stop("已取消本次解锁")');f.ctx.rejectors[1](Error('late arm rejection'));await new Promise(setImmediate);
  assert.equal(f.run('$("notice").textContent'),'已取消本次解锁');assert.equal(f.run('active'),false);
  assert.equal(f.ctx.requests.some(r=>r.data?.op==='drive'),false);
+});
+
+
+test('Bluetooth previews do not compete with manual control and never fetch diagnostic images',async()=>{
+ const f=fixture('bluetooth');
+ f.run('var network=[];api=async(p,data)=>{network.push({p,data});return {}};fetch=async(p)=>{network.push({p});return {ok:false}};active=true;camera();lidar();filesPoll();visionPoll()');
+ await new Promise(setImmediate);
+ assert.equal(f.run('network.length'),0);
+ assert.equal(f.run('$("link-note").hidden'),false);
+});
+test('Bluetooth photo capture saves on vehicle without downloads or motion requests',async()=>{
+ const f=fixture('bluetooth');
+ f.run('var network=[],saved=[],clicked=0;api=async(p,data)=>{network.push({p,data});return {file:"camera-test.jpg"}};document.createElement=tag=>({tag,click(){clicked++}});$("photo-files").prepend=x=>saved.push(x);active=true;savePhoto("camera")');
+ await new Promise(setImmediate);
+ assert.equal(f.run('network.length'),1);
+ assert.equal(f.run('network[0].p'),'/api/photo');
+ assert.equal(f.run('network[0].data.kind'),'camera');
+ assert.equal(f.run('saved[0].tag'),'span');
+ assert.equal(f.run('clicked'),0);
+ assert.equal(f.run('active'),true);
 });

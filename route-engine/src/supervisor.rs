@@ -438,8 +438,7 @@ impl Supervisor {
 
     /// `{**self.scan, 'received_at': self.scan_at}`.
     fn received_scan(&self) -> V {
-        let scan = if self.race_program { filter_solar_speckle(&self.scan) } else { self.scan.clone() };
-        scan.merged(&dict! {"received_at" => self.scan_at.clone()})
+        self.scan.merged(&dict! {"received_at" => self.scan_at.clone()})
     }
 
     pub fn sensor_ages(&self, now: f64) -> V {
@@ -1185,7 +1184,7 @@ impl Supervisor {
             }
         };
         s.report.set("clearance_reused_count", s.clearance_reuse.reused);
-        if self.race_program && s.motion.continue_route {
+        if self.race_program && s.motion.route_stage == "start_lane" {
             race_start_coverage(&mut clearance);
         }
         if clearance.idx("body_proximity").idx("target_contact_tolerated").truthy() {
@@ -1733,8 +1732,7 @@ impl Supervisor {
             "rear_launch" => false, "camera_required" => false, "clearance_profile" => "maneuver",
             "rear_start" => continue_route, "front_side_walls" => continue_route,
         };
-        let preview_scan = if self.race_program && self.scan.is_dict() { self.received_scan() } else { self.scan.clone() };
-        let mut clearance = match py_try(|| probe_clearance(&preview_scan, &ages, &V::Bool(self.demo), &V::Bool(true), &kw)) {
+        let mut clearance = match py_try(|| probe_clearance(&self.scan, &ages, &V::Bool(self.demo), &V::Bool(true), &kw)) {
             Ok(Ok(clearance)) => clearance,
             Ok(Err(clearance)) => {
                 return Err((PyErr { kind: Exc::ValueError, msg: "probe_obstacle_close_body".into() }, clearance));
@@ -2170,19 +2168,9 @@ mod race_start_tests {
 
     #[test]
     fn partial_start_still_rejects_close_obstacles_stale_or_empty_scans() {
-        let mut speckle = outdoor_scan();
-        let mut speckle_ranges = speckle.get("ranges").l().to_vec();
-        speckle_ranges[358] = V::Float(0.25); // isolated 1-ray solar glare spike
-        speckle.set("ranges", V::list(speckle_ranges));
-        let mut s_speckle = supervisor(true, speckle);
-        assert!(s_speckle.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).is_ok(),
-                "isolated 1-ray solar glare spike should be filtered out");
-
         let mut near = outdoor_scan();
         let mut ranges = near.get("ranges").l().to_vec();
-        ranges[359] = V::Float(0.25);
-        ranges[0] = V::Float(0.25); // 5 cm ahead of the 20 cm front body extent (real multi-ray obstacle)
-        ranges[1] = V::Float(0.25);
+        ranges[0] = V::Float(0.25); // 5 cm ahead of the 20 cm front body extent
         near.set("ranges", V::list(ranges));
         let mut s = supervisor(true, near);
         assert_eq!(s.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).err().unwrap().0.msg,
@@ -2230,50 +2218,19 @@ mod race_start_tests {
     }
 
     #[test]
-    fn solar_glare_speckle_and_side_wall_rays_do_not_cut_start_lane_drive() {
-        let mut scan = outdoor_scan();
-        let mut ranges = scan.get("ranges").l().to_vec();
-        // Inject 1-ray close-body solar spike (y96 seq 83: 359 deg @ 0.252 m)
-        // and 2-ray in-corridor solar spike (y96-2 seq 57: 1..2 deg @ 0.61 m),
-        // plus side-wall grazing rays at +-9 deg @ 2.15 m (|y| = 0.336 m > 0.25 m).
-        ranges[359] = V::Float(0.252);
-        ranges[1] = V::Float(0.610);
-        ranges[2] = V::Float(0.615);
-        ranges[9] = V::Float(2.15);
-        ranges[10] = V::Float(2.12);
-        ranges[11] = V::Float(2.10);
-        ranges[351] = V::Float(2.15);
-        ranges[350] = V::Float(2.12);
-        ranges[349] = V::Float(2.10);
-        scan.set("ranges", V::list(ranges));
-
-        let mut s = supervisor(true, scan);
-        let request = dict! {"op" => "turn_cone_start", "boot" => "test", "epoch" => 0,
-            "tick" => 100, "placement_confirmed" => true, "continue_route" => true,
-            "max_drive_s" => 40., "initial_presteer_pwm" => 1670};
-        s.start_turn_cone(&request, &0.0.into(), "offline_start")
-            .unwrap_or_else(|(error, _)| panic!("start refused: {}", error.msg));
-        s.session.as_mut().unwrap().motion.race_inputs = Some(Default::default());
-        let seq = s.scan.get("seq").i();
-        let at_ms = s.scan.get("at_ms").i();
-        for tick in 1..=40 {
-            let now = tick as f64 * 0.02;
-            s.mono = now;
-            if tick % 5 == 0 {
-                s.scan.set("seq", seq + tick / 5);
-                s.scan.set("at_ms", at_ms + tick * 20);
-                s.scan_at = V::Float(now);
+    fn race_scan_preserves_recorded_gantry_observations() {
+        let fixture = parse_json(include_str!("../../web/vehicle-console/tests/fixtures/light_gantry_run108_frames.json")).unwrap();
+        for frame in fixture.get("frames").l() {
+            let s = supervisor(true, dict! {"ranges" => frame.get("ranges").clone()});
+            let scan = s.received_scan();
+            let posts = crate::maneuver_light::thin_posts(scan.get("ranges").l());
+            let expected = frame.get("python").get("posts").l();
+            assert_eq!(posts.len(), expected.len(), "seq {}", frame.get("seq").i());
+            for (post, expected) in posts.iter().zip(expected) {
+                assert_eq!(post.0.to_bits(), expected.at(0).f().to_bits());
+                assert_eq!(post.1.to_bits(), expected.at(1).f().to_bits());
             }
-            let sent = s.emits.last().unwrap().clone();
-            s.status.set("control", dict! {"armed" => true, "motor" => sent.motor,
-                "servo" => sent.physical, "seq" => sent.seq, "tick" => 100 + tick * 20});
-            s.control_at = now;
-            s.renew_owner(now);
-            s.autonomy_tick(&V::Float(now));
-            let session = s.session.as_ref().expect("solar glare session remained active");
-            assert_ne!(session.report.get("steering_source").os(), Some("start_lane_board_ahead_cut"));
-            if s.emits.iter().any(|e| e.op == "drive" && e.motor.f() > 1500.) { return; }
         }
-        panic!("solar glare scan failed to issue forward drive");
     }
+
 }

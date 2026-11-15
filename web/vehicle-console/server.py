@@ -1926,10 +1926,46 @@ class Console:
             if self.auto_session is None or self.auto_session.get('turn_trial') is not True:
                 self.halt('camera_failed')
 
+    def saved_files(self):
+        return sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]
+
+    def control_state(self):
+        """Small browser reply; no route preview, image or scan serialization."""
+        with self.lock:
+            now = time.monotonic()
+            control = self.status.get('control', {})
+            return {'demo': self.args.demo, 'boot': self.boot,
+                    'status': {'control': {k: control[k] for k in ('armed', 'motor', 'servo', 'tick', 'seq', 'reason') if k in control}},
+                    'settings': dict(self.settings), 'reverse_enabled': self.args.allow_reverse,
+                    'healthy': self.healthy(), 'owner': self.owner, 'last_stop': self.last_stop,
+                    'ages': {'camera': now-self.camera_at, 'lidar': now-self.scan_at, 'control': now-self.control_at},
+                    'errors': dict(self.errors), 'recording': self.record is not None,
+                    'saving': self.saving, 'record_error': self.record_error,
+                    'autonomy': {'mode': self.control_mode, 'epoch': self.control_epoch}}
+
+    def camera_preview(self):
+        """Bluetooth preview only; photo() still saves the original JPEG."""
+        with self.lock:
+            image, age = self.jpeg, time.monotonic()-self.camera_at
+        if image is None or age >= 1:
+            raise ValueError('camera stale')
+        if self.args.demo:
+            return image, 'image/svg+xml'
+        import cv2
+        import numpy as np
+        frame = cv2.imdecode(np.frombuffer(image, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            raise ValueError('camera JPEG decode failed')
+        frame = cv2.resize(frame, (240, 180), interpolation=cv2.INTER_AREA)
+        ok, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 45])
+        if not ok:
+            raise ValueError('camera preview encode failed')
+        return encoded.tobytes(), 'image/jpeg'
+
     def state(self, initial_presteer_pwm=None, trial_mode='turn-left', continue_route=False):
         # Directory I/O has no control-state authority and must not delay the
         # shared sensor/control lock used by the autonomous watchdog.
-        files = sorted(x.name for x in self.output.iterdir() if x.suffix in ('.zip', '.jpg', '.png', '.svg'))[-30:]
+        files = self.saved_files()
         with self.lock:
             now = time.monotonic()
             return {'demo': self.args.demo, 'boot': self.boot, 'status': self.status, 'settings': self.settings,
@@ -2209,10 +2245,16 @@ def serve(args):
                     self.reply(403, {'error': 'access token required'})
                     return
                 # A handler without a peer address counts as remote (paused).
-                if lan_read_paused(getattr(self, 'client_address', ('',))[0], app.auto_session):
+                browser_read = self.headers.get('X-Console-Viewer') == '1'
+                paused = lan_read_paused(getattr(self, 'client_address', ('',))[0], app.auto_session)
+                if path != '/api/control-state' and (paused or (browser_read and app.auto_session is not None)):
                     self.reply(503, {'error': 'console_paused_during_autonomy'})
                     return
-                if path == '/api/state':
+                if path == '/api/control-state':
+                    self.reply(200, app.control_state())
+                elif path == '/api/files':
+                    self.reply(200, {'files': app.saved_files()})
+                elif path == '/api/state':
                     query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
                     initial = query.get('initial_presteer_pwm')
                     mode = query.get('trial_mode')
@@ -2246,7 +2288,16 @@ def serve(args):
                 elif path == '/api/lidar':
                     with app.lock:
                         snapshot = {'scan': app.scan, 'age_s': time.monotonic() - app.scan_at}
+                    if parse_qs(urlsplit(self.path).query).get('preview') == ['1'] and snapshot['scan']:
+                        scan = snapshot['scan']
+                        snapshot['scan'] = {k: scan.get(k) for k in ('seq', 'ranges', 'valid_fraction', 'calibration')}
                     self.reply(200, snapshot)
+                elif path == '/camera-preview.jpg':
+                    try:
+                        image, content = app.camera_preview()
+                        self.reply(200, image, content)
+                    except ValueError as error:
+                        self.reply(503, {'error': str(error)})
                 elif path == '/camera.jpg':
                     with app.lock:
                         image, age = app.jpeg, time.monotonic() - app.camera_at

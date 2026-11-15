@@ -252,6 +252,25 @@ class ConsoleTests(unittest.TestCase):
         image=self.request('/download/'+name)
         self.assertTrue(image.startswith(b'<svg'))
 
+    def test_bluetooth_preview_and_vehicle_photo_storage(self):
+        for path in ('/api/control-state', '/api/files', '/camera-preview.jpg'):
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                self.request(path, token=False)
+            self.assertEqual(error.exception.code, 403)
+        compact = self.request('/api/control-state')
+        state = json.loads(compact)
+        self.assertLess(len(compact), 2048)
+        self.assertFalse(state['status']['control']['armed'])
+        self.assertIn('tick', state['status']['control'])
+        self.assertEqual(set(state['autonomy']), {'mode', 'epoch'})
+        self.assertEqual(set(self.get('/api/lidar?preview=1')['scan']),
+                         {'seq', 'ranges', 'valid_fraction', 'calibration'})
+        self.assertTrue(self.request('/camera-preview.jpg').startswith(b'<svg'))
+        name = self.post('/api/photo', {'kind': 'camera'})['file']
+        self.assertTrue((self.folder/'files'/name).read_bytes().startswith(b'<svg'))
+        self.assertIn(name, self.get('/api/files')['files'])
+        self.assertFalse(self.get('/api/control-state')['status']['control']['armed'])
+
     def auto_start(self, duration=400):
         state=self.get('/api/state')
         return self.post('/api/autonomy',{'op':'probe_start','boot':state['boot'],

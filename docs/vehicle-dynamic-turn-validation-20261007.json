@@ -34382,5 +34382,41 @@
       "motor": 1500,
       "servo": 1500
     }
+  },
+  "y98_restore_scan_and_dual_link_console_20261115": {
+    "date": "2026-11-15",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y98",
+    "engine_round": 205,
+    "baseline": "installed claude-turn204 / y97 / cfb84a1",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "changes": [
+      "Remove global solar-speckle filtering before perception and the existing 8cm body gate; preserve real single- and two-ray posts.",
+      "Restore race scan-coverage tolerance to start_lane only; retain the y96 start policy.",
+      "Retain y97 front-speed fallback, lateral grazing exclusion and crosswalk stop-registration correction.",
+      "Open the same web console over CPE or Bluetooth SSH forwarding; compact control status and idle-only small Bluetooth previews.",
+      "Bluetooth photo/record capture stays on the vehicle without download; retrieve after the user finishes collecting and asks."
+    ],
+    "evidence": {
+      "gantry_fixture": "web/vehicle-console/tests/fixtures/light_gantry_run108_frames.json",
+      "filter_review": "work/codex-y97-review-20261115/gantry-filter-replay.json",
+      "fixture_gantries_unfiltered": 7,
+      "fixture_gantries_with_y97_filter": 4
+    },
+    "preserved": [
+      "Existing Guard and 8cm gate",
+      "80ms manual command heartbeat and 250ms request freshness",
+      "y97 driving parameters and field-test configuration",
+      "N10 serial configuration; N10P not installed yet"
+    ],
+    "validation": {
+      "rust_tests_passed": 47,
+      "frontend_tests_passed": 21,
+      "new_full_course_simulation": false,
+      "console_integration_tests_passed": 24
+    },
+    "shared_memory_updated": false
   }
 }

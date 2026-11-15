@@ -1,5 +1,11 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-15：y98／205准备部署）
+
+- Codex / GPT-6：撤回y97全局单/双束滤波及全程覆盖放宽；保留前向测速回退、侧墙掠射排除和斑马线停稳修正。10帧历史门架样本中，原始点云7帧可见门架，y97滤波后仅4帧。
+- 网页控制台支持CPE和蓝牙SSH转发。蓝牙低流量预览，手动控制时暂停预览；拍照原图、录制只保存在车上，用户说拍完再取回。Mac运行`python3 scripts/open-vehicle-console.py --link bluetooth`，CPE用`--link cpe`。复用原控制接口，未改Guard时限。
+- 用户授权完成后直接部署推送，未授权本次自动发车；N10配置保留，明天换雷达。机读键`y98_restore_scan_and_dual_link_console_20261115`。按用户要求没有追加共同记忆。
+
 ## 当前接手入口（2026-11-15：y97／204已部署，等用户start）
 
 - y96两轮草坪实测（`left-cone-trial-20261115-y96`、`left-cone-trial-20261115-y96-2`）均完整取回并生成综合诊断图 `work/gemini-y96-2-trial-20261115/y96-and-y96-2-solar-glare-analysis.png`。两轮自停根因：右前方缺口强阳光直射2D雷达造成 `-12°..+12°` 前向漏点与 `0.21–1.46m` 孤立单束/双束散斑假回波（两轮通道内共204个假点，100%为1-ray/2-ray孤立点），引发 `start_lane_board_ahead_cut` 反复切1500（叠加前墙漏点时扫到 `±8°..±10°` 侧墙及 `speed_mps=None` 回退 `1.6m/s`）、`route_avoid` 误打舵、`y96-2` 在 `cw_gap=0.925m` 未进滑行即提前锁入 `stopped_before_the_crosswalk`，最终分别在 `y96` seq 83（`359°@0.252m`）和 `y96-2` seq 78（`358°@0.250m`）由单束散斑触发8cm `probe_obstacle_close_body` 停机。
