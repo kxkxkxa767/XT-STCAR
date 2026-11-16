@@ -14,7 +14,7 @@ details{margin-top:24px}summary{cursor:pointer}code{font-size:.9em}.note{font-si
 </head>
 <body>
 <h1>XT-STCAR 驾驶台</h1>
-<p>已通过 SSH 连接车辆时，使用本机入口。手机长按方向按钮，电脑使用方向键或 WASD。</p>
+<p>在这台 Mac 上输入 <code>ssh xt-stcar</code> 连接车辆，会自动建立 CPE 网页转发。然后打开下方驾驶台。</p>
 <form id="entry">
 <label>连接方式
 <select id="connection">
@@ -31,7 +31,7 @@ details{margin-top:24px}summary{cursor:pointer}code{font-size:.9em}.note{font-si
 <p class="note" id="connection-note">本机地址 127.0.0.1 通过 SSH 连接到车上，车辆的局域网监听地址变化不影响这个入口。</p>
 <details>
 <summary>SSH 已连接，但网页打不开或要求访问码？</summary>
-<p>普通 SSH 登录不会自动建立网页转发。双击工程内的 <code>打开车辆驾驶台.command</code>，或者在 <strong>Mac 本地终端</strong>（提示符为 <code>yuhaojin@…</code>）运行：</p>
+<p><code>ssh xt-stcar</code> 已配置自动网页转发；旧的直接 IP 登录命令不会自动转发。双击工程内的 <code>打开车辆驾驶台.command</code>，或者在 <strong>Mac 本地终端</strong>（提示符为 <code>yuhaojin@…</code>）运行：</p>
 <pre id="open-command">python3 /Users/yuhaojin/Documents/XT-STCAR/scripts/open-vehicle-console.py --link cpe</pre>
 <button type="button" data-copy="open-command">复制启动命令</button>
 <p>命令会复用 SSH、建立网页转发并自动带上访问码打开驾驶台。蓝牙首次连接可能需要在终端输入车辆密码。</p>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mac: Bluetooth SSH to the car, retaining Wi-Fi and the project's existing SSH socket.
+"""Mac: Bluetooth SSH to the car, retaining Wi-Fi and a separate Bluetooth socket.
 
 Run without arguments for the vehicle terminal. --check inspects an existing connection.
 """
@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SOCKET = ROOT/'work/vehicle-test-ssh.sock'
+SOCKET = ROOT/'work/vehicle-web-bluetooth.sock'
 HOST = 'bianbu@192.168.0.156'  # SSH host identity; Bluetooth ProxyCommand supplies the transport.
 WORK = ROOT/'work/bluetooth-client'
 

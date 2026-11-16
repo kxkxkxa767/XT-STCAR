@@ -22,7 +22,7 @@ python3 scripts/connect-vehicle-bluetooth.py
 python3 scripts/connect-vehicle-bluetooth.py --background
 ```
 
-连接通过项目原有 `work/vehicle-test-ssh.sock` 复用，现有传包脚本仍可使用。即使命令中保留 `192.168.0.156`，它也只是原 SSH 主机身份；实际字节由蓝牙代理提供。可由 `SSH_CONNECTION` 的两端回环地址与车端蓝牙服务收发计数核实。
+蓝牙使用独立的 `work/vehicle-web-bluetooth.sock`，CPE使用 `work/vehicle-test-ssh.sock`。这避免CPE自动网页转发误复用蓝牙链路。即使命令中保留 `192.168.0.156`，它也只是原 SSH 主机身份；实际字节由蓝牙代理提供。可由 `SSH_CONNECTION` 的两端回环地址与车端蓝牙服务收发计数核实。
 
 ## 网页拍照与手动控制
 
