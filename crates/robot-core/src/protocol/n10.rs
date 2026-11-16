@@ -1,4 +1,6 @@
-//! LSlidar N10's 58-byte, 16-return serial packet, checked against the factory source.
+//! LSlidar N10/N10P serial packets, checked against the factory source.
+//! N10P has 108 bytes with two echoes per angle. Like the vendor LaserScan,
+//! navigation uses the first echo; the second is not another angular slot.
 //!
 //! This decoder opens no device and assembles no complete revolution. Timestamps are
 //! host receive times. The two undocumented header bytes remain opaque; neither a
@@ -8,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 pub const PACKET_BYTES: usize = 58;
+pub const N10P_PACKET_BYTES: usize = 108;
 pub const POINTS_PER_PACKET: usize = 16;
 pub const MAX_CHUNK_BYTES: usize = 4096;
 /// Largest wire angle accepted. The factory driver (`.cc:579-590`) subtracts
@@ -106,7 +109,7 @@ impl N10Decoder {
         }
         Ok(Self {
             config,
-            pending: VecDeque::with_capacity(PACKET_BYTES),
+            pending: VecDeque::with_capacity(N10P_PACKET_BYTES),
             last_received: None,
         })
     }
@@ -140,30 +143,34 @@ impl N10Decoder {
                     self.discard_one(&mut batch);
                     continue;
                 }
-                if self
-                    .pending
-                    .get(2)
-                    .is_some_and(|&(b, _)| usize::from(b) != PACKET_BYTES)
-                {
-                    batch.length_errors += 1;
-                    self.discard_one(&mut batch);
-                    continue;
-                }
-                if self.pending.len() < PACKET_BYTES {
+                let (packet_bytes, point_stride, end_offset) = match self.pending.get(2) {
+                    Some(&(58, _)) => (PACKET_BYTES, 3, 55),
+                    Some(&(108, _)) => (N10P_PACKET_BYTES, 6, 105),
+                    Some(_) => {
+                        batch.length_errors += 1;
+                        self.discard_one(&mut batch);
+                        continue;
+                    }
+                    None => break,
+                };
+                if self.pending.len() < packet_bytes {
                     break;
                 }
-                let frame: [u8; PACKET_BYTES] = std::array::from_fn(|i| self.pending[i].0);
+                let mut frame = [0; N10P_PACKET_BYTES];
+                for (dst, &(byte, _)) in frame.iter_mut().zip(&self.pending) {
+                    *dst = byte;
+                }
                 // The vendor calls this CRC8, but it is a wrapping byte sum.
-                let sum = frame[..PACKET_BYTES - 1]
+                let sum = frame[..packet_bytes - 1]
                     .iter()
                     .fold(0u8, |acc, b| acc.wrapping_add(*b));
-                if sum != frame[PACKET_BYTES - 1] {
+                if sum != frame[packet_bytes - 1] {
                     batch.checksum_errors += 1;
                     self.discard_one(&mut batch);
                     continue;
                 }
                 let start = u16::from_be_bytes([frame[5], frame[6]]);
-                let end = u16::from_be_bytes([frame[55], frame[56]]);
+                let end = u16::from_be_bytes([frame[end_offset], frame[end_offset + 1]]);
                 if start > MAX_WIRE_ANGLE_CDEG || end > MAX_WIRE_ANGLE_CDEG {
                     batch.angle_errors += 1;
                     self.discard_one(&mut batch);
@@ -178,7 +185,7 @@ impl N10Decoder {
                 };
                 let (start, end) = (unwrap_turn(start), unwrap_turn(end));
                 let points = std::array::from_fn(|i| {
-                    let offset = 7 + 3 * i;
+                    let offset = 7 + point_stride * i;
                     let raw = u16::from_be_bytes([frame[offset], frame[offset + 1]]);
                     let metres = f64::from(raw) / 1000.0;
                     let valid = raw != 0
@@ -193,7 +200,7 @@ impl N10Decoder {
                 });
                 batch.packets.push(N10Packet {
                     first_received_at: self.pending[0].1,
-                    received_at: self.pending[PACKET_BYTES - 1].1,
+                    received_at: self.pending[packet_bytes - 1].1,
                     frame_id: self.config.frame_id.clone(),
                     header_bytes: [frame[3], frame[4]],
                     start_angle_cdeg: start,

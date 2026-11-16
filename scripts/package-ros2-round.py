@@ -21,6 +21,7 @@ parser.add_argument('round')
 parser.add_argument('record_key')
 parser.add_argument('--ros-prefix', type=Path, required=True)
 parser.add_argument('--interfaces', type=Path, required=True)
+parser.add_argument('--rebuild-bridge', action='store_true', help='rebuild changed shared serial/decoder code')
 args = parser.parse_args()
 base = ROOT/'work/vehicle-dynamic-deploy-20261008'
 builder = base/'build-engine.py'
@@ -29,7 +30,8 @@ if 'XT_STCAR_ROUTE_FEATURES' not in builder.read_text():
 env = dict(os.environ, XT_STCAR_ROUTE_FEATURES='ros2', ROS_DISTRO='humble',
     AMENT_PREFIX_PATH=os.pathsep.join(map(str, [args.interfaces.resolve(), args.ros_prefix.resolve()])),
     RUSTFLAGS='-C link-arg=-Wl,-rpath,/opt/ros/humble/lib -C link-arg=-Wl,--disable-new-dtags -C link-arg=-Wl,--allow-shlib-undefined')
-subprocess.run([sys.executable, '-B', str(base/'build-race.py'), args.baseline, args.label, args.round, args.record_key],
+subprocess.run([sys.executable, '-B', str(base/'build-race.py'), args.baseline, args.label, args.round, args.record_key,
+               *(['--rebuild-bridge'] if args.rebuild_bridge else [])],
     env=env, cwd=ROOT, check=True)
 path = base/(args.label+'-package.json')
 package = json.loads(path.read_text())

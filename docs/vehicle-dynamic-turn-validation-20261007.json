@@ -34780,5 +34780,45 @@
       "motor": 1500,
       "servo": 1500
     }
+  },
+  "y102_n10p_transport_20261116": {
+    "date": "2026-11-16",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "engine_round": 208,
+    "label": "y102",
+    "baseline": "installed engine207 / default y100 / dark y101",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "shared_memory_updated": false,
+    "scope": "N10P data compatibility only; user explicitly requires calibration unchanged",
+    "backup_receipt": "work/codex-n10p-20261116/backup-receipt.json",
+    "old_runtime_backup": "work/codex-n10p-20261116/n10-before-n10p-20261116.tar.gz",
+    "calibration_preserved": {
+      "schema_version": 1,
+      "status": "coarse",
+      "range_offset_m": -0.02,
+      "clockwise_yaw_bins": 5
+    },
+    "changes": [
+      "Accept 460800 serial baud in shared Rust I/O. A separate lidar-serial.json is read by console and ROS2 hardware; absent file retains N10 230400.",
+      "Decode both original 58-byte N10 and 108-byte N10P packets, keeping 16 angular slots and first echoes as the factory LaserScan does. Preserve checksum, invalid slots, direction, range limits, revolution assembly and existing control."
+    ],
+    "raw_capture": {
+      "path": "work/codex-n10p-20261116/raw-460800.bin",
+      "n10p_checksum_valid_packets": 832,
+      "at_230400_valid_packets": 0,
+      "at_460800_bytes": 89887,
+      "approximately_seconds": 2.5
+    },
+    "validation": {
+      "n10_n10p_parser_tests": 11,
+      "serial_pty_tests": 3,
+      "bridge_tests": "pending",
+      "vehicle_static_scan": "pending"
+    },
+    "new_serial_config": {
+      "baud_rate": 460800
+    }
   }
 }

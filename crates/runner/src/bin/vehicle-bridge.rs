@@ -3,6 +3,8 @@
 mod lidar_calibration;
 #[path = "support/lidar_revolution.rs"]
 mod lidar_revolution;
+#[path = "support/lidar_serial.rs"]
+mod lidar_serial;
 use std::{
     io::{self, BufRead, Read, Write},
     path::PathBuf,
@@ -93,7 +95,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut port = if execute {
         Some(SerialPort::open(
             &device.unwrap(),
-            if mode == "control" { 38400 } else { 230400 },
+            if mode == "control" {
+                38400
+            } else {
+                lidar_serial::baud_rate(&std::env::current_exe()?)?
+            },
         )?)
     } else {
         None
