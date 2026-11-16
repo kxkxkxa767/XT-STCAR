@@ -1,5 +1,7 @@
 # XT-STCAR 交接给 Codex（2026-11-02 晚，Claude）
 
+**2026-11-16 · Codex（GPT-6）：dark模型y101已部署，未发车**　`start_dark`恢复原YOLO斑马线定位，使用新三类dark模型9777d5b8，视觉源45a706c；复用已装车207引擎5fde858。独立dark配置仍等灯10s，普通start保留y100。后台单轮服务已用无运动任务验证SSH结束后继续，主动停止用stop_dark；现有SSH窗口source ~/.bashrc一次即可。21项测试通过，原图对照/部署详情见agent.md顶部和机读y101记录；没有更新memoryshare，未实现新融合/建图。
+
 **2026-11-15 · Gemini（Gemini 4 Argon (High)）：y97／204已部署待start**　草坪两轮 `y96`、`y96-2` 全部取回并生成诊断图 `work/gemini-y96-2-trial-20261115/y96-and-y96-2-solar-glare-analysis.png`。相机与雷达证实右前方缺口强阳光直射造成 `-12°..+12°` 漏点及 `0.21–1.46m` 孤立1-ray/2-ray散斑假点（通道内204/204全为 `<2` 邻居孤立点），导致 `start_lane_board_ahead_cut` 反复切1500、`route_avoid` 误打舵、`y96-2` 在 `0.925m` 未滑行即提前判停斑马线，最终分别在 `y96` seq 83（`359°@0.252m`）和 `y96-2` seq 78（`358°@0.250m`）触发 `probe_obstacle_close_body` 退出。`y97／204`（源 `cfb84a1`，基线 `claude-turn203`）新增 `filter_solar_speckle` 滤除 `<2` 邻居阳光散斑（保留 `>=3` 束近障与锥桶）、将 `race_start_coverage` 推广至 `continue_route`、排除 `|y|>0.25m` 侧墙掠射点并用 `cw_speed`/`race_surface_speed` 兜底前速、要求 `_crosswalk_coasting` 或 `g<=0.35m` 才锁入斑马线停稳。47/968通过、clippy 32/34，未仿真；已部署 `claude-turn204 / y97` 并锁定 `1500/1500`，`start --show` 为 `y97`，未发车。详见 `memoryshare.md` 文末。
 
 **2026-11-14 · Codex（GPT-6）：y92／199已部署待start**　59文件及局部轨迹已取回，初次误把外墙当内板、100ms回正门槛跳过99.797ms一拍；140帧0.075m近障，用户确认碰板。y92（916c698）修首次内板身份与部分周期回正，38/968通过、clippy32；未仿真，199/y92已直接部署并锁定，start --show为y92，没有发车。新一轮由用户start触发。见共同记忆和y92分析文档。

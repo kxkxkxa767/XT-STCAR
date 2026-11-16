@@ -34631,5 +34631,154 @@
       "vehicle_originals_retained": true,
       "receipt": "work/codex-outdoor-export-20261115/export-receipt.json"
     }
+  },
+  "y101_dark_vision_crosswalk_detached_start_20261116": {
+    "date": "2026-11-16",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y101",
+    "engine_round": 207,
+    "source_commit_vision": "45a706c902d6f0f2f7e071e93013337d431c1901",
+    "source_commit_engine": "5fde85843f47b457bf55c02ca5c76e9d28e7fc4d",
+    "deployed": true,
+    "physical_trial_executed": false,
+    "shared_memory_updated": false,
+    "profile": "dark",
+    "start_command": "start_dark",
+    "stop_command": "stop_dark",
+    "baseline_retained": {
+      "default_start": "y100",
+      "backup_dir": "work/radar-only-y100-20261116",
+      "tag": "radar-only-y100-20261116",
+      "start_r_start_m_installed": false
+    },
+    "model": {
+      "archive": "/Users/yuhaojin/Documents/XT-STCAR/work/vehicle-dynamic-deploy-20261008/dark-handoff-9777d5b8.zip",
+      "onnx_sha256": "9777d5b8d9e150526f51d7ee07b28548d48d828f2d120983ed97b930da0ef5fb",
+      "classes": {
+        "0": "crosswalk",
+        "1": "red_light_dark",
+        "2": "green_light_dark"
+      }
+    },
+    "field_config": {
+      "enabled": true,
+      "crosswalk_mode": "vision",
+      "light_mode": "fixed10s"
+    },
+    "changes": [
+      "Map declared three-class dark model IDs to crosswalk/red_light/green_light; preserve ONNX bytes and existing thresholds.",
+      "Restore original visual crosswalk positioning by omitting the fixed rear-wall distance override; keep an independent dark field file with fixed10s lights and frame capture.",
+      "Run the existing race helper under a transient systemd user service; each explicit start_dark requests one round, with existing fresh evidence-directory and cleanup flow.",
+      "No Rust algorithm, PWM, brake, Guard, clearance threshold or engine changes. No new fusion/map navigation is implemented."
+    ],
+    "validation": {
+      "python_crosswalk_tests_passed": 21,
+      "native_onnxruntime": "1.18.0",
+      "native_model_probe_images": 2,
+      "native_cold_two_image_median_ms": 278.7,
+      "continuous_fps_measured": false,
+      "detached_non_motion_job_survived_initiating_ssh_return": true,
+      "linger": true,
+      "actual_network_disconnected_during_driving": false,
+      "full_course_simulation": false
+    },
+    "comparison": {
+      "image_count": 295,
+      "round_count": 8,
+      "ordinary_crosswalk_detections_at_025": 82,
+      "static_edge_candidate_threshold_unchanged": 0.15,
+      "static_plans": {
+        "y96": {
+          "split": "test",
+          "initial_fixed_front_m": 2.092696196344676,
+          "stationary_board_m": null,
+          "still_observation_end_s": 7.477999199,
+          "rest_fixes": 0,
+          "first_three_fix_median_m": null,
+          "all_rest_median_m": null
+        },
+        "y96-2": {
+          "split": "train",
+          "initial_fixed_front_m": 2.1905618907506246,
+          "stationary_board_m": null,
+          "still_observation_end_s": 2.860335334,
+          "rest_fixes": 0,
+          "first_three_fix_median_m": null,
+          "all_rest_median_m": null
+        },
+        "y98": {
+          "split": "train",
+          "initial_fixed_front_m": 2.287428955621818,
+          "stationary_board_m": null,
+          "still_observation_end_s": 2.273669458,
+          "rest_fixes": 0,
+          "first_three_fix_median_m": null,
+          "all_rest_median_m": null
+        },
+        "y98-2": {
+          "split": "test",
+          "initial_fixed_front_m": 2.1635988933122507,
+          "stationary_board_m": 7.542000000000001,
+          "still_observation_end_s": 2.54482177,
+          "rest_fixes": 16,
+          "first_three_fix_median_m": 2.1506871893087776,
+          "all_rest_median_m": 2.1505658787684876
+        },
+        "y98-3": {
+          "split": "val",
+          "initial_fixed_front_m": 2.2225180358627705,
+          "stationary_board_m": 4.5,
+          "still_observation_end_s": 1.7760210079999998,
+          "rest_fixes": 15,
+          "first_three_fix_median_m": 2.168081878280348,
+          "all_rest_median_m": 2.168702790955622
+        },
+        "y99": {
+          "split": "test",
+          "initial_fixed_front_m": 2.179576965868324,
+          "stationary_board_m": 7.5115,
+          "still_observation_end_s": 2.614191308,
+          "rest_fixes": 0,
+          "first_three_fix_median_m": null,
+          "all_rest_median_m": null
+        },
+        "y100": {
+          "split": "train",
+          "initial_fixed_front_m": 2.2345015902798258,
+          "stationary_board_m": 7.550000000000001,
+          "still_observation_end_s": 2.582802858,
+          "rest_fixes": 17,
+          "first_three_fix_median_m": 2.2010408512129813,
+          "all_rest_median_m": 2.1951600542243956
+        },
+        "y100-2": {
+          "split": "val",
+          "initial_fixed_front_m": 2.2994125100388727,
+          "stationary_board_m": 7.614000000000001,
+          "still_observation_end_s": 2.261927045,
+          "rest_fixes": 0,
+          "first_three_fix_median_m": null,
+          "all_rest_median_m": null
+        }
+      },
+      "fixed_pitch_box_comparison": {
+        "n": 73,
+        "median": 0.09886716587852584,
+        "median_abs": 0.10334008329352518,
+        "p90_abs": 0.5309705900270767
+      },
+      "qualification": "Saved-image geometry against yesterday fixed 2.8 m configuration, not independent surveyed ground truth or a full state-machine replay. Three available static plans differ by -1.3/-5.4/-3.3 cm; five groups lack enough initial visual or forward lidar observations. All data splits explicitly retained; green has no held-out validation."
+    },
+    "evidence_dir": "work/codex-dark-model-20261116",
+    "deployment_receipt": "work/codex-dark-model-20261116/y101-deployment-receipt.json",
+    "figure": "work/codex-dark-model-20261116/dark-crosswalk-comparison.png",
+    "post_install": {
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500
+    }
   }
 }
