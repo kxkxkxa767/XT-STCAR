@@ -5,7 +5,9 @@ model (scripts/vision-log.py crosswalk_front_m, checked on the track 10-31:
 box bottoms 330/372 at 2.31-2.34/1.00-1.03 m); a sharper fix replaces the
 edge. Synthetic frames and states; no physical claim."""
 import importlib.util
+import json
 from pathlib import Path
+import tempfile
 import unittest
 
 import maneuver_sequence as ms
@@ -42,6 +44,29 @@ def board(place, metres):
 
 
 class CameraModel(unittest.TestCase):
+    def test_dark_model_class_ids_map_to_lights_without_a_blue_cone_class(self):
+        spec = importlib.util.spec_from_file_location('vision_log', ROOT/'scripts'/'vision-log.py')
+        vision = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(vision)
+        raw = [[[10., 20., 30., 40., .9, 1.], [40., 20., 60., 40., .8, 2.]]]
+        detections = vision.decode(raw, .25, 1., 0, 0, 320, 320,
+                                   ['crosswalk', 'red_light_dark', 'green_light_dark'])
+        self.assertEqual([d['cls'] for d in detections], ['red_light', 'green_light'])
+        self.assertEqual([d['model_class'] for d in detections], ['red_light_dark', 'green_light_dark'])
+
+    def test_visual_crosswalk_profile_keeps_fixed_light_wait_without_fixed_position(self):
+        spec = importlib.util.spec_from_file_location('race_trial', ROOT/'scripts'/'race-trial.py')
+        trial = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(trial)
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            profile = base/'field-test-dark.json'
+            profile.write_text(json.dumps({'enabled': True, 'crosswalk_mode': 'vision', 'light_mode': 'fixed10s'}))
+            config, command, vision = trial.field_test_options(base, profile)
+            self.assertEqual(command, ['--test-light-fixed-wait'])
+            self.assertNotIn('crosswalk_back_edge_from_rear_wall_m', config)
+            self.assertIn('--save-every', vision)
+
     def test_the_track_checks_of_10_31(self):
         spec = importlib.util.spec_from_file_location('vision_log', ROOT/'scripts'/'vision-log.py')
         vision = importlib.util.module_from_spec(spec)

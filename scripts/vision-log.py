@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only camera perception log for the race4 YOLO26n model (round y1).
+"""Read-only camera perception log for the race4-compatible YOLO models.
 
   python3 vision-log.py --model-dir DIR --out NEW_DIR [--camera /dev/video20] [--threads 2]
       [--max-s 150] [--conf .25] [--save-every 10] [--max-saved 400] [--light-state PATH]
@@ -34,8 +34,10 @@ stripes' near edge and of the board straight ahead's base ("crosswalk_edge_y",
 (round y36: measured from the best crosswalk box scoring at least .15).
 
 Before anything else the model must match its handoff files: sha256 of
-race4.onnx equal to race4.provenance.json's, the class order of race4.json
-(crosswalk, blue_cone, red_light, green_light), input images [1,3,320,320]
+race4.onnx equal to race4.provenance.json's, matching declared class names and
+order in race4.json and provenance. The original four-class model and named
+dark/light profiles map their light classes to the same control fields.
+Input images [1,3,320,320]
 float32, output output0 [1,300,6] (x1,y1,x2,y2,score,class; one-to-one, no
 NMS). Preprocessing follows crates/vision (letterbox): bilinear resize with
 the aspect kept, centred integer padding filled with 114, RGB, 0-1.
@@ -51,6 +53,9 @@ import sys
 import time
 
 CLASSES = ['crosswalk', 'blue_cone', 'red_light', 'green_light']
+CLASS_ROLES = {name: name for name in CLASSES}
+CLASS_ROLES.update({'red_light_dark': 'red_light', 'green_light_dark': 'green_light',
+                    'red_light_light': 'red_light', 'green_light_light': 'green_light'})
 SIZE = 320
 FILL = 114
 LOGGED = ('crosswalk', 'red_light', 'green_light')
@@ -191,8 +196,12 @@ def check_model(model_dir):
     problems = []
     if digest != provenance.get('sha256'):
         problems.append('race4.onnx sha256 differs from race4.provenance.json')
-    if spec.get('class_names') != CLASSES or [provenance.get('names', {}).get(str(i)) for i in range(4)] != CLASSES:
-        problems.append('class order is not crosswalk, blue_cone, red_light, green_light')
+    names = spec.get('class_names', [])
+    if (not names or len(set(names)) != len(names) or any(name not in CLASS_ROLES for name in names)
+            or spec.get('class_count') != len(names)
+            or [provenance.get('names', {}).get(str(i)) for i in range(len(names))] != names
+            or 'crosswalk' not in names):
+        problems.append('model class names/order differ from the declared supported classes')
     if (spec.get('input_width'), spec.get('input_height'), spec.get('output_layout')) != (SIZE, SIZE, 'B_N_XYXY_SCORE_CLASS'):
         problems.append('input size or output layout differs from the race4 contract')
     if problems:
@@ -212,17 +221,21 @@ def letterbox(frame_bgr, cv2, np):
     return np.ascontiguousarray(rgb.transpose(2, 0, 1)[None]), scale, left, top, w, h
 
 
-def decode(output, conf, scale, left, top, w, h):
+def decode(output, conf, scale, left, top, w, h, class_names=CLASSES):
     detections = []
     for x1, y1, x2, y2, score, cls in output[0]:
-        if not score >= conf or not 0 <= int(cls) < len(CLASSES):
+        if not score >= conf or not 0 <= int(cls) < len(class_names):
             continue
         box = [min(max((x1-left)/scale, 0.), w), min(max((y1-top)/scale, 0.), h),
                min(max((x2-left)/scale, 0.), w), min(max((y2-top)/scale, 0.), h)]
         if box[2]-box[0] < 1 or box[3]-box[1] < 1:
             continue  # padding only
-        detections.append({'cls': CLASSES[int(cls)], 'score': round(float(score), 4),
-                           'box': [round(float(v), 1) for v in box]})
+        name = class_names[int(cls)]
+        detection = {'cls': CLASS_ROLES[name], 'score': round(float(score), 4),
+                     'box': [round(float(v), 1) for v in box]}
+        if name != detection['cls']:
+            detection['model_class'] = name
+        detections.append(detection)
     return detections
 
 
@@ -328,7 +341,8 @@ def main():
             result = session.run(['output0'], {'images': tensor})[0]
             infer_ms = (time.monotonic()-t0)*1000
             profile_times[threads].append(infer_ms)
-            candidates = decode(result, min(args.conf, CROSSWALK_PLAN_MIN_SCORE), scale, left, top, w, h)
+            candidates = decode(result, min(args.conf, CROSSWALK_PLAN_MIN_SCORE), scale, left, top, w, h,
+                                spec['class_names'])
             detections = [d for d in candidates if d['score'] >= args.conf]
             stats['frames'] += 1
             stats['infer_ms'].append(infer_ms)
