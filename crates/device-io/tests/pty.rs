@@ -109,10 +109,8 @@ fn dropped_port_releases_exclusive_and_restores_termios() {
     );
     #[cfg(target_os = "linux")]
     assert_eq!(restored.line_discipline, original.line_discipline);
-    for baud in [230400, 460800] {
-        let reopened = SerialPort::open(&path, baud).unwrap();
-        assert_eq!(termios::tcgetattr(&observer).unwrap().input_speed(), baud);
-        drop(reopened);
-        assert_eq!(termios::tcgetattr(&observer).unwrap().input_speed(), 38400);
-    }
+    let reopened = SerialPort::open(&path, 230400).unwrap();
+    assert_eq!(termios::tcgetattr(&observer).unwrap().input_speed(), 230400);
+    drop(reopened);
+    assert_eq!(termios::tcgetattr(&observer).unwrap().input_speed(), 38400);
 }

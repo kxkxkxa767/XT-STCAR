@@ -19,7 +19,7 @@ impl SerialPort {
     /// Caller explicitly selects a device. Opening a tty may change modem lines;
     /// use the CLI plan before authorizing hardware capture.
     pub fn open(path: &Path, baud: u32) -> io::Result<Self> {
-        if !matches!(baud, 38400 | 115200 | 230400 | 460800) {
+        if !matches!(baud, 38400 | 115200 | 230400) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "unsupported factory baud rate",
