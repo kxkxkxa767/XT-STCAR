@@ -1311,3 +1311,62 @@ y94／201（0acb85a）调整了灯前和终点停车预测，并在等灯时切�
   - `web/vehicle-console/tests`：`968` 项 Python 测试全部通过。
   - 已构建并部署 `claude-turn204 / y97`（源码提交 `cfb84a1ea482a8c006771f8e5976794bf8fae8d6`，`route-engine` SHA-256 `c10ddbcf6d482af303e72560e29555375edc7e2b4beb5614ae9aacf0ff21e950`，实车 helper `/home/bianbu/xt-stcar-console/stage-claude-y97-20261115-131137/trialy97.py`）。
   - 实车校验回执 `work/gemini-y96-2-trial-20261115/y97-deployment-receipt.json`：`start --show` 输出 `y97`；`start --test-status` 保持 `enabled=true, light_mode=fixed10s`；实车处于 `healthy=true, mode=locked, armed=false, motor=1500, servo=1500`，**未触发任何实车发车动作**。
+
+
+## 2026-11-17 · Codex（GPT-6）· y105／210、天气模型与 N10P 替换交接
+
+**作者身份：Codex，基于 GPT-6；按本会话给出的身份记录，不猜子型号。** 本条按用户明确要求追加，旧条目保留。此前共同记忆停在 y97，不代表现在的装车版本。
+
+### 当前状态与用户决定
+
+- 工程：`/Users/yuhaojin/Documents/XT-STCAR`。已装车 **y105／引擎210**，车端代码提交 **`079a6d95d097625240e7a0a108386e840e163097`**；本条追加前仓库最新记录提交为 `439bc60`。用户已去上课并关闭车辆，之后只做本地工作，**回来恢复连接前不要 SSH、部署或发车**。
+- SSH 在 Mac 用 `ssh xt-stcar`，CPE 地址仍为 `bianbu@192.168.0.156`，复用 socket 为工程 `work/vehicle-test-ssh.sock`。每次真实发车由用户新输入启动命令触发，不连续自动重跑。
+- 当前软件仍用 **N10 的230400／58字节协议**；N10P兼容版已按用户指令归档并回滚，**没有重新启用**。雷达校准不动：`range_offset_m=-0.02`、`clockwise_yaw_bins=5`，文件SHA256 `870d4ffd334a3cde6893d961c161b47eab2dc0f200831447085c90aad59c7b67`。
+- 用户不再需要蓝牙。车端 `xt-stcar-bluetooth-ssh.service` 已 `disabled/inactive`，PAN已断开，NetworkManager配置 `XT-STCAR Bluetooth`（UUID `436e136e-40fe-4d9f-827b-ded581d226d6`）的 `connection.autoconnect=no` 已经用户sudo执行并核实。控制台不再选择蓝牙接口，默认CPE／本机；Mac其他蓝牙设备与车端工厂蓝牙驱动未动。
+- 第一次209部署因旧脚本严格比较启动argv而回滚；重试记录的前后绑定均是CPE，首轮旧argv未保存，**不能把蓝牙说成已经证实的唯一原因**。部署脚本现只允许原有启动器正常变化的 `--lan-bind` 地址，其余参数继续比较。
+
+### y105 的模型和启动方式
+
+三个命令都在 **SSH后的车端终端** 使用，调用同一个 `/home/bianbu/xt-stcar-console/20260917/route-engine`，只在发车前选择模型：
+
+| 命令 | 模型 | ONNX SHA256前缀 |
+| --- | --- | --- |
+| `start_dark` | 原阴天三类：斑马线、阴天红灯、阴天绿灯 | `9777d5b8` |
+| `start_light` | 新晴天三类：斑马线、晴天红灯、晴天绿灯 | `b6a29b28` |
+| `start_mix` | 阴晴联合训练五类：斑马线及两套红／绿灯类别 | `104a418a` |
+
+- 混合模型来自 `/Volumes/NO NAME/weather_models_dual_handoff.zip` 的 `five_class_all_weather`；晴天模型来自 `sunny_three_class`。ZIP已复制到工程 `work/codex-weather-models-20261117/`。dark来自原 `cloudy_light_baseline_v1_vehicle_handoff.zip`。五类不是五个控制状态，阴晴红灯都映射到red、阴晴绿灯都映射到green；每次只加载选中的一个模型。
+- Python的启动／单轮编排已经迁入 `route-engine/src/race_launch.rs`，通过 `start` 与 `launch-round` 子命令运行；**YOLO相机推理仍复用Python的 `scripts/vision-log.py`**。Rust入口和后台服务都显式设置Humble的 `LD_LIBRARY_PATH`，无需每次source ROS环境；仅写ELF RUNPATH不能解决间接依赖，这曾导致直接入口找不到 `librmw_implementation.so`，210已修好。
+- 后台服务为 `xt-stcar-race.service`，Linger=yes；退出SSH不会关联终止，跑完可以重新摆放复位再输入同一命令。`stop_dark`／`stop_light`／`stop_mix`停止同一个当前后台轮次；对应 `start_* --show`、`--status`只查询。新SSH自动加载函数，不必每次 `source ~/.bashrc`。
+- 天气模式斑马线已恢复视觉定位，**灯区仍沿用本轮 `fixed10s` 设置**；`start_mix --test-lights vision` 等只改变该模式配置、不发车。普通 `start`保留原模型／原练习预设，不能把它当成天气模式。`race-launch.json`保存选择表，`field-test-dark/light/mix.json`分别保存配置。
+- 两套新模型已在车端ORT **1.18.0**各用两张保存原图验证加载和推理。一次真实传感器 `start_mix --check-only` 已完整收尾：`program_exit=0`，全程没有进入解锁分支，结束前control为 `armed=false,motor=1500,servo=1500,seq=0`，恢复控制台得到6个锁定样本。**没有跑本版整圈**。
+- 这次控制程序启动前准备8.822s，视觉节点准备占7.044s；不是命令到轮子运动的实测时长，也没有做Python与Rust完整启动速度对比。证据：`work/codex-weather-models-20261117/y105-final-receipt.json`、`vehicle-model-check.json`、`y105-check-helper-result.json`。车端静态检查目录：`left-cone-trial-20261117-y105`，其 `check_only=true`，不要计作赛道成绩。
+
+较早但已保留在当前版的关键变化：y98撤回了y97的全局单／双束滤波和全程覆盖放宽；y99只在绕桶规划输入做局部滤波，处理暂停恢复回执，并且最终只将斑马线释放到第一桶切点前的前进档+10，1620、1500、1300及弯内档保持；y100修复灯后误取侧墙距离导致提前终点刹车。详情以 `agent.md` 和机读 y98～y100 条目为准，勿重新启用已经撤回的全局过滤。
+
+### N10P 文件在哪里（全部已保存，当前不用）
+
+**本地文件夹：`/Users/yuhaojin/Documents/XT-STCAR/n10p/`。** 这个文件夹当前仍是本地未跟踪目录，不能认为Git拉取就会带下二进制和证据。已推送的Git标签 **`n10p-20261116`** 指向源码提交 **`cec81bfc2d45a3b6f7651ab4ab4a83ae24b3452a`**；那是 **引擎208**，基线是 `38a989e`。主分支随后通过 `617bfda`回滚，再发展为现在的y105／210。
+
+- `n10p/source/`：该次修改的完整文件；`n10p/source.patch`：相对当时基线的完整补丁。
+- `n10p/runtime/vehicle-bridge`、`n10p/runtime/route-engine`：当时已验证的RISC-V二进制；`n10p/runtime/lidar-serial.json`：`{"baud_rate":460800}`。
+- `n10p/packages/XT-STCAR-claude-turn208-cec81bf.tar.gz`、`xt-stcar-ros2-install.tar.gz`：当时的完整安装包；同目录保留208及y102/y103助手清单。它们不是当前天气版的启动包。
+- `n10p/build-tools/`：当时能构建N10P版的 `build-engine.py`、`build-race.py`；`n10p/evidence/`：原始串口字节、控制台／ROS2扫描和安装回执；`manifest.json`及`rollback-result.json`可核实归档与回滚。
+- 修改前备份：`n10p/n10-before-n10p-20261116.tar.gz`；车端原备份 `/home/bianbu/xt-stcar-console/work/n10-before-n10p-20261116/`。**这是旧207/y100/y101备份，不是当前210的备份。** `n10p/README.md`中“已回滚到207”描述的是11月16日当时，不代表现在。
+
+已验证的协议事实：N10P是 **460800、8N1、108字节包**，并非只改波特率即可。每包仍16个角度槽，每槽6字节含两次回波；按厂商LaserScan使用第一回波，不把第二回波当成另一角度。起角在5–6字节，末角在105–106字节，最后一字节是前107字节加和模256。修改兼容原58字节N10包。230400的短采样没有合法包，460800原始样本有832个完整校验包。实车静态两条路径各30帧：控制台10.055Hz、ROS2 10.045Hz，360格采样覆盖100%，有效回波约87%；这些只证明当时静态读数，不是日照条件或整圈导航验证。
+
+### 后续怎样换成 N10P（保留现在的天气模型与Rust启动）
+
+**不要直接把 `n10p/runtime/route-engine` 覆盖到现在的车上。它是208，没有后来的 `start`／`launch-round` 及统一天气入口，会把210功能降回旧版。** 此次只记录替换方法，没有执行替换。
+
+1. 用户回来、确认使用N10P后，先保存届时当前源码、车端两个二进制、`race-launch.json`和各profile配置；校准文件原样备份。以当时已装版本为基线（本条写时210，下一未用编号为211／y106）。
+2. 从标签 `n10p-20261116` 或 `n10p/source/` **只合入雷达相关差异**：`crates/device-io/src/lib.rs`允许460800；`crates/robot-core/src/protocol/n10.rs`兼容108字节包；`crates/runner/src/bin/support/lidar_serial.rs`读取独立串口配置；`crates/runner/src/bin/vehicle-bridge.rs`与`route-engine/src/race_hardware.rs`都接入该配置；以及 `config/lidar-serial-n10p.json`和对应N10P/串口测试夹具。可以按上述文件范围取 `git diff --binary cec81bf^ cec81bf -- <文件路径>` 合并；**不要整份应用旧补丁覆盖现在的启动器、机读记录和文档。** 保留当前ROS2、Rust启动、模型、驾驶逻辑、Guard和8cm门。
+3. 必须同时重编 **控制台vehicle-bridge** 和 **ROS2 route-engine**；只换一个会造成网页能读而比赛读不到，或反过来。当前 `scripts/package-ros2-round.py`尚无 `--rebuild-bridge` 参数，需要参照归档版本加回参数并向 `build-race.py`转发，不能整文件覆盖而丢掉当前Humble库路径。另一个已遇到的构建细节：桥不依赖ROS，重编桥前需在其构建环境执行 `env.pop('RUSTFLAGS', None)`，避免继承ROS引擎的RUNPATH而被原生桥ELF检查拒绝；正确例子在 `n10p/build-tools/build-engine.py`。ROS引擎仍保留当前的库环境配置。
+4. 将从**当前源码**重编出的两个二进制安装到车端 `/home/bianbu/xt-stcar-console/20260917/`；同时把 `config/lidar-serial-n10p.json`复制成该目录内的 **`lidar-serial.json`**。驱动和ROS2节点都从各自可执行文件旁读此文件。**`lidar-calibration.json`不要改**，继续-0.02m、顺时针5格，不在这一步重新校准或修改范围／过滤／控制参数。
+5. 用当前 `scripts/package-weather-models.py`及`install-vehicle-start.py`更新匹配新引擎的包清单／启动记录，保留dark、light、mix和它们现有配置。如今走的是Rust启动，重点更新包的引擎SHA和 `race-launch.json`／`current-race*.json`，不能套用旧208的Python助手哈希。锁车状态做必要静态读取即可；真正跑一轮仍等用户新输入。
+6. 这个兼容驱动同时识别58和108字节。以后切回N10硬件时，把 `lidar-serial.json`改为230400或移走（缺省230400），再重启相应读取进程；若要完整回退源码，用**该次替换前**的新备份，不要拿旧207备份覆盖当前天气版。
+
+### 尚未完成的桌面提交副本
+
+用户刚要求把本轮整个程序复制到桌面新文件夹作为提交版，随后中断并改为更新共同记忆。**目前只收集了文件清单，桌面提交文件夹尚未创建、程序尚未复制，不能称已完成。** 后续可以在本地继续，无须唤醒车辆。当前主体材料为 `work/vehicle-dynamic-deploy-20261008/claude-turn210-package.json`、`claude-y105-package.json`、`claude-turn210-delivery-079a6d9/`、`weather-y105-079a6d9/`及最终回执；完整源码在当前仓库。副本应按y105／210收齐三天气模型、兼容default模型、编译包和原校准，不要混入停用的N10P208或根目录队友未跟踪文件。用户仍要求少量必要验证、工具缓存留工程内、不强推；共同记忆只在用户明确要求时更新。
