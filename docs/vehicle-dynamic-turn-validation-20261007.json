@@ -35198,7 +35198,7 @@
     "label": "y107",
     "engine_round": 212,
     "baseline": "claude-turn211",
-    "status": "deployed locked; awaiting user next start",
+    "status": "three user trials retrieved and recorded; current control and fixed crosswalk configuration retained",
     "user_instruction": "Treat bowed start rear and terminal front panels as a straight line through their two side-board junctions; deploy when ready, no automatic launch.",
     "evidence": {
       "run": "left-cone-trial-20261117-y106",
@@ -35238,12 +35238,12 @@
       "real_fixture": "web/vehicle-console/tests/fixtures/y106_bowed_end_boards.json"
     },
     "vehicle_deployed": true,
-    "physical_trial_started": false,
+    "physical_trial_started": true,
     "shared_memory_updated": false,
     "pending": [
-      "Deployed and locked. Actual test starts only on fresh user start_dark/light/mix.",
-      "User next start validates terminal stop and rear-board odometry.",
-      "Keep fixed crosswalk until the requested tests succeed, then restore vision retaining the fixes."
+      "Keep y107 control, calibration, fixed2.8m and fixed10s; user will decide vision restoration tomorrow.",
+      "First two rounds emitted motion_result_superseded/coast_standstill_unconfirmed after finish_stop; third confirmed standstill. This task records the result and does not modify the observer.",
+      "Actual new driving still requires the user to place/reset and enter start_dark/light/mix."
     ],
     "engine_source_commit": "13c92572b917918d3315e252e3ec85504bd3cce6",
     "route_engine_sha256": "bda0816f9b3a211b02f7d254d3b3dfbf13224ba8221ebbf01b6cc7ca987b4ab8",
@@ -35276,6 +35276,237 @@
       "known": 360,
       "min_ms": 3,
       "max_ms": 100
-    }
+    },
+    "car_runs": [
+      {
+        "label": "y107",
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107",
+        "files": 169,
+        "bytes": 19903296,
+        "profile": "mix",
+        "field_test": {
+          "crosswalk_back_edge_from_rear_wall_m": 2.8,
+          "crosswalk_far_edge_from_rear_wall_m": 3.097,
+          "crosswalk_length_m": 0.297,
+          "crosswalk_mode": "fixed",
+          "enabled": true,
+          "light_mode": "fixed10s",
+          "start_line_to_crosswalk_back_edge_m": 2.0,
+          "start_straight_m": 3.2,
+          "start_zone_m": 0.8
+        },
+        "start_to_finish_event_s": 29.062166105,
+        "light_wait_s": 10.090309647000002,
+        "excluding_light_wait_s": 18.971856457999998,
+        "light_front_gap_m": 0.39202073202624255,
+        "finish_front_gap_m": 0.3209415507957621,
+        "finish_distance_reference": "side_end_corner_chord",
+        "finish_stop_event": true,
+        "end_reason": "coast_standstill_unconfirmed",
+        "standstill_confirmed": false,
+        "standstill_reason": "motion_result_superseded",
+        "console_neutral_samples": 6,
+        "max_control_interval_s": 0.02591129700000039,
+        "vision_counts": {
+          "blue_cone": 0,
+          "crosswalk": 0,
+          "green_light": 1,
+          "red_light": 2
+        },
+        "segments_s": {
+          "crosswalk": 6.2963095729999985,
+          "first_cone": 3.6921307380000012,
+          "transfer": 0.9027253119999994,
+          "second_cone": 1.8977331150000012,
+          "light_approach": 2.892556398,
+          "finish": 3.2905526599999995
+        },
+        "event_times": {
+          "start_lane": 1.9626320590000002,
+          "crosswalk_planned_at_rest": 2.072229548,
+          "crosswalk_stop": 5.05781643,
+          "crosswalk_go": 8.258941631999999,
+          "start_lane_board_ahead_cut": 8.953406523,
+          "first_approach_handover": 9.958581174,
+          "first_pass": 11.95107237,
+          "second_handover": 12.853797682,
+          "second_pass": 14.751530797000001,
+          "light_divider_prediction": 14.849333874,
+          "light_gantry": 16.645409785,
+          "light_aligned": 17.047385283,
+          "light_lane": 17.047385283,
+          "light_stop": 17.644087195,
+          "light_go": 27.734245504,
+          "finish_stop": 31.024798164
+        },
+        "operator_report": "User reports the results of these rounds were very good; no separate per-round contact questionnaire.",
+        "photos": {
+          "light": {
+            "path": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107/vision/frames/frame-000065.jpg",
+            "program_t": 18.3392791149995
+          },
+          "finish": {
+            "path": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107/vision/frames/frame-000121.jpg",
+            "program_t": 31.60187911499952
+          }
+        }
+      },
+      {
+        "label": "y107-2",
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107-2",
+        "files": 170,
+        "bytes": 20022997,
+        "profile": "mix",
+        "field_test": {
+          "crosswalk_back_edge_from_rear_wall_m": 2.8,
+          "crosswalk_far_edge_from_rear_wall_m": 3.097,
+          "crosswalk_length_m": 0.297,
+          "crosswalk_mode": "fixed",
+          "enabled": true,
+          "light_mode": "fixed10s",
+          "start_line_to_crosswalk_back_edge_m": 2.0,
+          "start_straight_m": 3.2,
+          "start_zone_m": 0.8
+        },
+        "start_to_finish_event_s": 30.358900643000002,
+        "light_wait_s": 10.09389849,
+        "excluding_light_wait_s": 20.265002153,
+        "light_front_gap_m": 0.46865674231247834,
+        "finish_front_gap_m": 0.26604989860270806,
+        "finish_distance_reference": "side_end_corner_chord",
+        "finish_stop_event": true,
+        "end_reason": "coast_standstill_unconfirmed",
+        "standstill_confirmed": false,
+        "standstill_reason": "motion_result_superseded",
+        "console_neutral_samples": 6,
+        "max_control_interval_s": 0.026733319000001643,
+        "vision_counts": {
+          "blue_cone": 0,
+          "crosswalk": 0,
+          "green_light": 0,
+          "red_light": 2
+        },
+        "segments_s": {
+          "crosswalk": 6.590871955,
+          "first_cone": 3.4990471430000003,
+          "transfer": 0.6945944320000006,
+          "second_cone": 2.598922741999999,
+          "light_approach": 3.4966825760000013,
+          "finish": 3.387030909
+        },
+        "event_times": {
+          "start_lane": 1.750316998,
+          "crosswalk_planned_at_rest": 1.8503070240000001,
+          "crosswalk_stop": 5.14486056,
+          "crosswalk_go": 8.341188953,
+          "start_lane_board_ahead_cut": 9.040436083,
+          "first_approach_handover": 9.840173819,
+          "first_pass": 11.840236096,
+          "second_handover": 12.534830528,
+          "second_pass": 15.13375327,
+          "light_divider_prediction": 15.232096733,
+          "light_gantry": 17.728628784,
+          "light_aligned": 18.031044615,
+          "light_lane": 18.031044615,
+          "light_stop": 18.630435846,
+          "light_go": 28.722186732,
+          "finish_stop": 32.109217641
+        },
+        "operator_report": "User reports the results of these rounds were very good; no separate per-round contact questionnaire.",
+        "photos": {
+          "light": {
+            "path": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107-2/vision/frames/frame-000068.jpg",
+            "program_t": 19.42596350399981
+          },
+          "finish": {
+            "path": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107-2/vision/frames/frame-000123.jpg",
+            "program_t": 32.7018635039999
+          }
+        }
+      },
+      {
+        "label": "y107-3",
+        "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107-3",
+        "files": 156,
+        "bytes": 17890572,
+        "profile": "mix",
+        "field_test": {
+          "crosswalk_back_edge_from_rear_wall_m": 2.8,
+          "crosswalk_far_edge_from_rear_wall_m": 3.097,
+          "crosswalk_length_m": 0.297,
+          "crosswalk_mode": "fixed",
+          "enabled": true,
+          "light_mode": "fixed10s",
+          "start_line_to_crosswalk_back_edge_m": 2.0,
+          "start_straight_m": 3.2,
+          "start_zone_m": 0.8
+        },
+        "start_to_finish_event_s": 30.258442277,
+        "light_wait_s": 10.098257570999998,
+        "excluding_light_wait_s": 20.160184706000003,
+        "light_front_gap_m": 0.4255236170290094,
+        "finish_front_gap_m": 0.14219994515157786,
+        "finish_distance_reference": "side_end_corner_chord",
+        "finish_stop_event": true,
+        "end_reason": "route_finish_zone_stop",
+        "standstill_confirmed": true,
+        "standstill_reason": "stable_observed_low_motion",
+        "console_neutral_samples": 6,
+        "max_control_interval_s": 0.025417621999999973,
+        "vision_counts": {
+          "blue_cone": 0,
+          "crosswalk": 0,
+          "green_light": 48,
+          "red_light": 1
+        },
+        "segments_s": {
+          "crosswalk": 6.692576625999999,
+          "first_cone": 3.492231289000001,
+          "transfer": 0.7028144940000001,
+          "second_cone": 2.6920249069999986,
+          "light_approach": 3.195392881,
+          "finish": 3.3910211990000008
+        },
+        "event_times": {
+          "start_lane": 1.790189626,
+          "crosswalk_planned_at_rest": 1.89391719,
+          "crosswalk_stop": 5.286083509,
+          "crosswalk_go": 8.482766252,
+          "start_lane_board_ahead_cut": 9.082554857,
+          "first_approach_handover": 9.682060519,
+          "first_pass": 11.974997541,
+          "second_handover": 12.677812035,
+          "second_pass": 15.369836942,
+          "light_divider_prediction": 15.470519961,
+          "light_gantry": 17.568422801,
+          "light_aligned": 18.069704935,
+          "light_lane": 18.069704935,
+          "light_stop": 18.565229823,
+          "light_go": 28.657610704,
+          "finish_stop": 32.048631903
+        },
+        "operator_report": "User reports the results of these rounds were very good; no separate per-round contact questionnaire.",
+        "photos": {
+          "light": {
+            "path": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107-3/vision/frames/frame-000068.jpg",
+            "program_t": 19.263392555000337
+          },
+          "finish": {
+            "path": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y107-3/vision/frames/frame-000124.jpg",
+            "program_t": 32.59589255500032
+          }
+        }
+      }
+    ],
+    "real_vehicle_trials": 3,
+    "trial_initiator": "User start_mix; Codex only retrieved data during this task",
+    "retrieved_files": 495,
+    "retrieved_bytes": 57816865,
+    "retrieval_receipt": "work/codex-y107-trials-20261117/retrieval-receipt.json",
+    "trial_figure": "docs/figures/y107-three-trials-20261117.png",
+    "light_stop_photos": "docs/figures/y107-light-stops-20261117.png",
+    "average_excluding_light_wait_s": 19.799014439,
+    "operator_report": "几轮的效果都非常好",
+    "vision_restore_decision": "User replied 明天再说 on 2026-11-17; all profiles retain fixed2.8m and fixed10s. Do not restore vision tonight."
   }
 }
