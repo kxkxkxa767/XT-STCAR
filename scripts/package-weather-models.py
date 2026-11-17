@@ -36,7 +36,7 @@ def main():
     stage = BASE+f'/stage-weather-{args.label}-'+now.strftime('%Y%m%d-%H%M%S')
     shutil.copy2(ROOT/'scripts/vision-log.py', directory/'vision-log.py')
     configs = {}
-    for profile, prior in [('default', 'y100'), ('dark', 'y101')]:
+    for profile, prior in [('dark', 'y101')]:
         old = json.loads((WORK/f'claude-{prior}-package.json').read_text())
         dest = directory/'models'/profile
         dest.mkdir(parents=True)
@@ -55,11 +55,11 @@ def main():
     spec = importlib.util.spec_from_file_location('vision_log', ROOT/'scripts/vision-log.py')
     vision = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(vision)
-    for profile in ['default', 'dark', 'light', 'mix']:
+    for profile in ['dark', 'light', 'mix']:
         _, model_spec, digest = vision.check_model(directory/'models'/profile)
         configs[profile] = {'model_dir':stage+'/models/'+profile, 'model_sha256':digest,
             'classes':model_spec['class_names'], 'camera':'/dev/video20',
-            'field_config':BASE+('/field-test.json' if profile == 'default' else '/field-test-'+profile+'.json')}
+            'field_config':BASE+'/field-test-'+profile+'.json'}
     launch = {'label':args.label, 'base':BASE, 'source_commit':source,
         'evidence_prefix':f'left-cone-trial-{now:%Y%m%d}-{args.label}',
         'bridge':BASE+'/20260917/vehicle-bridge', 'vision_script':stage+'/vision-log.py', 'profiles':configs}

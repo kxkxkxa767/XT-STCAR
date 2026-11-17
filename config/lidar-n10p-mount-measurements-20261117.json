@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-17",
+  "source": "operator wall measurements",
+  "origin": "N10P rotation center",
+  "lidar_height_m": 0.25,
+  "front_wheel_line_from_lidar_m": 0.202,
+  "rear_wheel_line_from_lidar_m": [
+    0.159,
+    0.158
+  ],
+  "left_tire_outer_from_lidar_m": [
+    0.175,
+    0.163
+  ],
+  "right_tire_outer_from_lidar_m": 0.18,
+  "body_outline_parameters_modified": false,
+  "note": "Wheel lines were recorded as supplied; no assumption that they are the foremost/rearmost chassis boundary. Left measurements differ by 1.2 cm; not silently averaged into the driving geometry."
+}

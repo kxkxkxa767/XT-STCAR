@@ -5,6 +5,8 @@
 mod lidar_calibration;
 #[path = "../../crates/runner/src/bin/support/lidar_revolution.rs"]
 mod lidar_revolution;
+#[path = "../../crates/runner/src/bin/support/lidar_serial.rs"]
+mod lidar_serial;
 use rclrs::*;
 use ros_env::std_msgs::msg::String as RosString;
 use std::{
@@ -166,7 +168,8 @@ fn run(o: Options) -> Result<(), Box<dyn std::error::Error>> {
         })?)
     } else { None };
     // Complete ROS setup before opening any physical serial device.
-    let port = if o.execute { Some(SerialPort::open(o.device.as_ref().unwrap(), if o.control { 38400 } else { 230400 })?) } else { None };
+    let port = if o.execute { Some(SerialPort::open(o.device.as_ref().unwrap(),
+        if o.control { 38400 } else { lidar_serial::baud_rate(&std::env::current_exe()?)? })?) } else { None };
     let commands = executor.commands().clone();
     let signal = stopped.clone();
     let runner = spawn_named("ros2-executor", move || {

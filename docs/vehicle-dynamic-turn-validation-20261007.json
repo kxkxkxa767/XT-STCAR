@@ -35010,5 +35010,48 @@
     "receipt": "work/codex-indoor-fixed-crosswalk-20261117/indoor-fixed-crosswalk-20261117-170859.json",
     "config_readback": "all three profiles verified by deployed Rust --test-status",
     "shared_memory_updated": false
+  },
+  "n10p_active_calibration_weather_entries_20261117": {
+    "date": "2026-11-17",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "active_label": "y105",
+    "active_engine_sha256": "7d77149222e9f9f43cb369e5031f137cc0465e5a4c9ba3342b6e553df0370d6a",
+    "active_bridge_sha256": "28172bb2b24a7bcdb98b117c6bbe2265f1e76318b8d2a744b5eedef571a2c6e2",
+    "source_reproduction": "Restored only archived N10P transport changes onto current source; cross-built route-engine matches the user/Gemini-deployed 7d771492 binary byte for byte. No control fixes were in that reproduction build.",
+    "old_calibration": {
+      "schema_version": 1,
+      "status": "coarse",
+      "range_offset_m": -0.02,
+      "clockwise_yaw_bins": 5
+    },
+    "new_calibration": {
+      "schema_version": 1,
+      "status": "coarse",
+      "range_offset_m": 0.011,
+      "clockwise_yaw_bins": -3
+    },
+    "delta": {
+      "range_offset_m": 0.031,
+      "yaw_bins": -8
+    },
+    "poses": 3,
+    "scans": 60,
+    "old_wall_rms_m": 0.056208295385389045,
+    "new_wall_rms_m": 0.011476496636411154,
+    "post_check_file": "work/codex-n10p-calibration-20261117/post-calibration-check.json",
+    "applied_receipt": "work/codex-n10p-calibration-20261117/final-applied-and-verified.json",
+    "vehicle_backup": "/home/bianbu/xt-stcar-console/work/n10p-calibration-20261117-1433514468515",
+    "active_profiles": [
+      "dark",
+      "light",
+      "mix"
+    ],
+    "bare_start_disabled": true,
+    "old_default_model_sha256_prefix": "4089dab5",
+    "body_dimensions_modified": false,
+    "mount_measurements": "config/lidar-n10p-mount-measurements-20261117.json",
+    "physical_motion_requested_for_calibration": false,
+    "shared_memory_updated": false
   }
 }

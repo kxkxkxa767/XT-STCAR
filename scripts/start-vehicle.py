@@ -23,6 +23,10 @@ def launch_background(base, package, profile, unit=UNIT):
 def main():
     base = Path(__file__).resolve().parent
     if (base/'race-launch.json').is_file():
+        options = sys.argv[1:]
+        index = options.index('--profile') if '--profile' in options else -1
+        if index < 0 or index+1 >= len(options) or options[index+1] not in ('dark', 'light', 'mix'):
+            raise SystemExit('start 已停用，请使用 start_dark、start_light 或 start_mix。')
         program = str(base/'20260917/route-engine')
         environment = dict(os.environ, LD_LIBRARY_PATH='/opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib')
         os.execve(program, [program, 'start', *sys.argv[1:]], environment)

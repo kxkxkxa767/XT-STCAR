@@ -1,5 +1,5 @@
 use xt_stcar_robot_core::protocol::n10::{
-    MAX_CHUNK_BYTES, MAX_WIRE_ANGLE_CDEG, N10Config, N10Decoder,
+    MAX_CHUNK_BYTES, MAX_WIRE_ANGLE_CDEG, N10Config, N10Decoder, N10P_PACKET_BYTES,
 };
 use xt_stcar_robot_core::{FrameId, Timestamp};
 
@@ -23,6 +23,54 @@ fn config() -> N10Config {
 
 fn checksum(frame: &mut [u8; 58]) {
     frame[57] = frame[..57].iter().fold(0u8, |sum, b| sum.wrapping_add(*b));
+}
+
+// First complete checksum-valid N10P packet captured at 460800 on 2026-11-16.
+const N10P_CAPTURE: &[u8; 108] = include_bytes!("fixtures/n10p-20261116.bin");
+
+#[test]
+fn captured_n10p_packet_survives_every_fragment_boundary() {
+    for split in 0..=N10P_CAPTURE.len() {
+        let mut decoder = N10Decoder::new(config()).unwrap();
+        let mut packets = decoder
+            .feed(&N10P_CAPTURE[..split], Timestamp(10))
+            .unwrap()
+            .packets;
+        packets.extend(
+            decoder
+                .feed(&N10P_CAPTURE[split..], Timestamp(11))
+                .unwrap()
+                .packets,
+        );
+        assert_eq!(packets.len(), 1, "split {split}");
+        let p = &packets[0];
+        assert_eq!((p.start_angle_cdeg, p.end_angle_cdeg), (9794, 10807));
+        assert_eq!(p.points[0].range_m, Some(0.257));
+        assert_eq!(p.points[0].intensity, 185);
+        assert_eq!(p.points[1].range_m, Some(0.273));
+        assert_eq!(p.points[15].range_m, Some(0.223));
+        assert_eq!(p.packet_sample().unwrap().ranges_m.len(), 16);
+    }
+}
+
+#[test]
+fn n10p_second_echo_is_not_a_beam_and_bad_checksum_resynchronizes() {
+    let mut frame = *N10P_CAPTURE;
+    frame[7..9].copy_from_slice(&u16::MAX.to_be_bytes());
+    frame[10..12].copy_from_slice(&100_u16.to_be_bytes()); // valid second echo at same angle
+    frame[107] = frame[..107].iter().fold(0u8, |s, b| s.wrapping_add(*b));
+    let mut bad = frame;
+    bad[30] ^= 1;
+    let bytes = [bad.as_slice(), frame.as_slice(), GOLDEN.as_slice()].concat();
+    let batch = N10Decoder::new(config())
+        .unwrap()
+        .feed(&bytes, Timestamp(0))
+        .unwrap();
+    assert_eq!(batch.checksum_errors, 1);
+    assert_eq!(batch.packets.len(), 2);
+    assert_eq!(batch.packets[0].points[0].range_m, None);
+    assert_eq!(batch.packets[0].points[1].range_m, Some(0.273));
+    assert_eq!(batch.packets[1].points[0].range_m, Some(1.0));
 }
 
 #[test]
@@ -252,7 +300,7 @@ fn invalid_calls_do_not_mutate_state_and_noise_memory_is_bounded() {
             })
             .collect();
         decoder.feed(&noise, Timestamp(at)).unwrap();
-        assert!(decoder.buffered_len() < 58);
+        assert!(decoder.buffered_len() < N10P_PACKET_BYTES);
     }
     assert_eq!(
         decoder.feed(&GOLDEN, Timestamp(200)).unwrap().packets.len(),
