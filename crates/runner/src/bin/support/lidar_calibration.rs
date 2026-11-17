@@ -53,6 +53,13 @@ impl Calibration {
         row["valid_fraction"] =
             serde_json::json!(corrected.iter().filter(|r| r.is_some()).count() as f64 / 360.0);
         row["ranges"] = serde_json::json!(corrected);
+        if let Some(ages) = row.get("point_age_ms").and_then(|v| v.as_array()).filter(|v| v.len() == 360) {
+            let mut rotated = vec![serde_json::Value::Null; 360];
+            for (i, age) in ages.iter().enumerate() {
+                rotated[(i as i32 + self.clockwise_yaw_bins).rem_euclid(360) as usize] = age.clone();
+            }
+            row["point_age_ms"] = serde_json::json!(rotated);
+        }
         row["calibration"] = serde_json::to_value(self).map_err(|_| "calibration serialization")?;
         row["frame_id"] = serde_json::json!("lidar_origin_coarse_body_heading");
         row["navigation_validated"] = serde_json::json!(false);
@@ -78,7 +85,13 @@ mod tests {
         ranges[359] = Some(1.69);
         ranges[90] = Some(0.025);
         let mut row = serde_json::json!({"ranges":ranges,"seq":7,"at_ms":123,"coverage":0.99,"valid_fraction":3.0/360.0});
+        let mut ages = vec![None; 360];
+        ages[0] = Some(10u64);
+        ages[359] = Some(2u64);
+        row["point_age_ms"] = serde_json::json!(ages);
         calibration().apply(&mut row).unwrap();
+        assert_eq!(row["point_age_ms"][5], 10);
+        assert_eq!(row["point_age_ms"][4], 2);
         assert!((row["ranges"][5].as_f64().unwrap() - 1.15).abs() < 1e-12);
         assert!((row["ranges"][4].as_f64().unwrap() - 1.67).abs() < 1e-12);
         assert!(row["ranges"][95].is_null());

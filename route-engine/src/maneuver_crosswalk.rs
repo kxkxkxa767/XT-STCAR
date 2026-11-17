@@ -15,6 +15,13 @@ impl Maneuver {
     /// along the compass axis (+-LANE_FRONT_HALF_BINS), or None.
     pub fn lane_rear_range(&self, scan: &V) -> Option<f64> {
         let heading = self.compass.current(scan);
+        if let (Some(input), Some(heading)) = (self.race_inputs, heading) {
+            let speed = self.race_crosswalk_stop.imu_speed(input.forward_integral)
+                .or_else(|| self.race_surface_speed.speed(scan.get("received_at").f(), input.forward_integral));
+            if let Some(board) = crate::race_end_board::observe(scan, heading + PI, speed, input.yaw_rate) {
+                return Some(board.range);
+            }
+        }
         let center = 180 + heading.map_or(0, |h| round(degrees(wrap(h))));
         let list = scan.idx("ranges").l();
         let mut best: Option<f64> = None;

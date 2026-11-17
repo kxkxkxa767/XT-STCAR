@@ -127,10 +127,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     {
                         let ranges = packet.points.map(|p| p.range_m);
                         if let Some(done) =
-                            revolution.push(packet.start_angle_cdeg, packet.end_angle_cdeg, &ranges)
+                            revolution.push(packet.start_angle_cdeg, packet.end_angle_cdeg, &ranges, packet.received_at.0)
                         {
                             seq += 1;
-                            let mut row = serde_json::json!({"seq":seq,"at_ms":start.elapsed().as_millis(),"ranges":done.ranges,"valid_fraction":done.valid as f64/360.0,"coverage":done.coverage as f64/360.0,"seam_filled_bins":done.seam_filled,"navigation_validated":false});
+                            let at = start.elapsed().as_millis() as u64;
+                            let mut row = serde_json::json!({"seq":seq,"at_ms":at,"ranges":done.ranges,"point_age_ms":done.received_ms.iter().map(|t| t.map(|t| at.saturating_sub(t))).collect::<Vec<_>>(),"valid_fraction":done.valid as f64/360.0,"coverage":done.coverage as f64/360.0,"seam_filled_bins":done.seam_filled,"navigation_validated":false});
                             if let Some(calibration) = &calibration {
                                 calibration.apply(&mut row)?;
                                 let frame = FrameId("lidar_origin_coarse_body_heading".into());

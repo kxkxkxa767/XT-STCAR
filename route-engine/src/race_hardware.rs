@@ -80,10 +80,11 @@ fn lidar(mut port: Option<SerialPort>, calibration: Option<lidar_calibration::Ca
             if let Some(n) = p.read_until(&mut buf, Instant::now() + Duration::from_millis(20))? {
                 for packet in decoder.feed(&buf[..n], Timestamp(start.elapsed().as_millis() as u64))?.packets {
                     let ranges = packet.points.map(|p| p.range_m);
-                    if let Some(done) = revolution.push(packet.start_angle_cdeg, packet.end_angle_cdeg, &ranges) {
+                    if let Some(done) = revolution.push(packet.start_angle_cdeg, packet.end_angle_cdeg, &ranges, packet.received_at.0) {
                         seq += 1;
                         let at = start.elapsed().as_millis() as u64;
                         let mut row = serde_json::json!({"seq":seq,"at_ms":at,"ranges":done.ranges,
+                            "point_age_ms":done.received_ms.iter().map(|t| t.map(|t| at.saturating_sub(t))).collect::<Vec<_>>(),
                             "valid_fraction":done.valid as f64/360.,"coverage":done.coverage as f64/360.,
                             "seam_filled_bins":done.seam_filled,"navigation_validated":false});
                         if let Some(calibration) = &calibration { calibrated_scan(&mut row, calibration, at)?; }

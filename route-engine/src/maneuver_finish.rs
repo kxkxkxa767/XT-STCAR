@@ -9,6 +9,7 @@ use crate::py::*;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FinishControl {
+    pub board: Option<crate::race_end_board::EndBoard>,
     pub race_brake: crate::race_light_brake::LightBrake,
     pub ranges: crate::motion_sensors::RangeHistory,
     pub last_speed: Option<(f64, f64)>,
@@ -197,9 +198,14 @@ impl Maneuver {
         }
     }
 
-    fn finish_board_range(&self, scan: &V) -> Option<f64> {
-        if self.race_inputs.is_some() {
-            crate::race_light::observed_end_wall(scan, self.compass.current(scan)?)
+    fn finish_board_range(&mut self, scan: &V) -> Option<f64> {
+        self.finish.board = None;
+        if let Some(input) = self.race_inputs {
+            let heading = self.compass.current(scan)?;
+            let speed = self.finish.race_brake.control_speed(scan.get("received_at").f(), input.forward_integral)
+                .or_else(|| self.finish_imu_speed());
+            self.finish.board = crate::race_end_board::observe(scan, heading, speed, input.yaw_rate);
+            self.finish.board.map(|b| b.range).or_else(|| crate::race_light::observed_end_wall(scan, heading))
         } else { self.lane_front_range(scan) }
     }
 
@@ -572,6 +578,10 @@ impl Maneuver {
         };
         if measured_board {
             feedback.set("distance_reference", "multi_return_end_board_plane");
+            if let Some(board) = self.finish.board {
+                feedback.set("distance_reference", "side_end_corner_chord");
+                feedback.set("end_board", board.diagnostics());
+            }
         }
         if basis.is_some() {
             return (basis, feedback);

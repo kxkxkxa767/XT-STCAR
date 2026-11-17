@@ -35172,6 +35172,78 @@
     },
     "serial_readback": {
       "baud_rate": 460800
+    },
+    "car_run_y106": {
+      "evidence": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y106",
+      "retrieved_files": 148,
+      "retrieval_receipt": "work/codex-y106-trial-20261117/retrieval-receipt.json",
+      "profile": "mix",
+      "user_report": "Collided with terminal board",
+      "completed": false,
+      "reason": "probe_obstacle_close_body",
+      "final_body_gap_m": 0.05,
+      "finish_stop_event": false,
+      "light_stop_gap_m": 0.4292493854889774,
+      "light_wait_s": 10.086361715999999,
+      "finish_brake_started_program_s": 28.877579684,
+      "figure": "work/codex-y106-trial-20261117/end-board-virtual-line.png",
+      "control_timing_max_s": 0.023656894,
+      "scope": "Gantry stopping visibility improved; terminal collision is not a valid completion or score."
     }
+  },
+  "y107_end_board_corner_chord_point_time_20261117": {
+    "date": "2026-11-17",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y107",
+    "engine_round": 212,
+    "baseline": "claude-turn211",
+    "status": "candidate; cross build and deployment pending",
+    "user_instruction": "Treat bowed start rear and terminal front panels as a straight line through their two side-board junctions; deploy when ready, no automatic launch.",
+    "evidence": {
+      "run": "left-cone-trial-20261117-y106",
+      "static_start_rear_old_range_m": 0.4014490729713387,
+      "static_start_rear_corner_line_m": 0.363971908211547,
+      "moving_finish_sample_seq": 285,
+      "moving_finish_old_range_m": 2.6286400815494555,
+      "moving_finish_corner_line_without_deskew_m": 2.449278871718827,
+      "comparison": "work/codex-y106-trial-20261117/corner-comparison.json",
+      "image": "work/codex-y106-trial-20261117/end-board-virtual-line.png",
+      "interpretation": "Outward panel curvature is visible in stationary data. Moving scans additionally straddle a revolution and contain differently aged returns; the full 17.9 cm difference must not be attributed to panel curvature alone. Historical y106 scans have no per-return receive times, so the plot is an uncompensated corner-line comparison, not a predicted successful stop."
+    },
+    "changes": [
+      "Rust race-only endpoint line for start rear odometry and terminal front distance; use the observed two side/end-board junctions, without course coordinates or a fixed panel bow offset.",
+      "Revolution assembly retains packet receive time of each selected return, including seam carry; yaw calibration rotates ages with ranges. Both console and ROS2 publish point_age_ms.",
+      "Corner observations use existing speed and yaw to bring the two edges to the scan publication time. Original ranges and the 8 cm body gate remain unchanged.",
+      "Reuse existing multi-return distance when the two corners cannot be fitted; no new drive-admission or stop gate."
+    ],
+    "preserved": [
+      "N10P460800 and108-byte packet decoder",
+      "calibration +0.011m / -3 bins",
+      "all PWM and brake presets",
+      "y106 turn changes and light slowdown",
+      "Guard and 8 cm clearance",
+      "indoor fixed crosswalk2.8m",
+      "fixed10s lights",
+      "dark/light/mix models"
+    ],
+    "validation": {
+      "rust_tests": 58,
+      "bridge_tests": 6,
+      "robot_core_tests": 398,
+      "robot_core_ignored": 1,
+      "console_tests": 971,
+      "clippy_warnings": 32,
+      "synthetic_test_scope": "Analytic bowed panel with known scan timing tests geometry and timestamp transport only; no full-course simulation or real-stop claim.",
+      "real_fixture": "web/vehicle-console/tests/fixtures/y106_bowed_end_boards.json"
+    },
+    "vehicle_deployed": false,
+    "physical_trial_started": false,
+    "shared_memory_updated": false,
+    "pending": [
+      "Cross-compile both Rust binaries and deploy locked.",
+      "User next start validates terminal stop and rear-board odometry.",
+      "Keep fixed crosswalk until the requested tests succeed, then restore vision retaining the fixes."
+    ]
   }
 }

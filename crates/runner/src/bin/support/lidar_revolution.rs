@@ -17,6 +17,9 @@ use xt_stcar_robot_core::protocol::n10::POINTS_PER_PACKET;
 
 pub struct Published {
     pub ranges: Vec<Option<f64>>,
+    /// Packet receive time of the selected return, including carried seam bins.
+    /// This is host timing, not an inferred device measurement timestamp.
+    pub received_ms: Vec<Option<u64>>,
     pub valid: usize,
     pub coverage: usize,
     pub seam_filled: usize,
@@ -24,19 +27,25 @@ pub struct Published {
 
 pub struct Revolution {
     bins: Vec<Option<f64>>,
+    received_ms: Vec<Option<u64>>,
     seen: Vec<bool>,
     // Points past 0 deg: this revolution's (tail) and the previous one's (carry).
     tail: Vec<Option<f64>>,
+    tail_ms: Vec<Option<u64>>,
     tail_seen: Vec<bool>,
     carry: Vec<Option<f64>>,
+    carry_ms: Vec<Option<u64>>,
     carry_seen: Vec<bool>,
     prev: u16,
     synced: bool,
 }
 
-fn keep_nearest(slot: &mut Option<f64>, r: Option<f64>) {
-    if let Some(r) = r {
-        *slot = Some(slot.map_or(r, |old| old.min(r)));
+fn keep_nearest(slot: &mut Option<f64>, time: &mut Option<u64>, r: Option<f64>, at: u64) {
+    if let Some(r) = r
+        && slot.is_none_or(|old| r <= old)
+    {
+        *slot = Some(r);
+        *time = Some(at);
     }
 }
 
@@ -44,10 +53,13 @@ impl Revolution {
     pub fn new() -> Self {
         Self {
             bins: vec![None; 360],
+            received_ms: vec![None; 360],
             seen: vec![false; 360],
             tail: vec![None; 360],
+            tail_ms: vec![None; 360],
             tail_seen: vec![false; 360],
             carry: vec![None; 360],
+            carry_ms: vec![None; 360],
             carry_seen: vec![false; 360],
             prev: 0,
             synced: false,
@@ -60,6 +72,7 @@ impl Revolution {
         start_cdeg: u16,
         end_cdeg: u16,
         ranges: &[Option<f64>; POINTS_PER_PACKET],
+        received_ms: u64,
     ) -> Option<Published> {
         let mut done = None;
         if self.prev > start_cdeg.saturating_add(18000) {
@@ -69,21 +82,26 @@ impl Revolution {
                     if !self.seen[bin] && self.carry_seen[bin] {
                         self.seen[bin] = true;
                         self.bins[bin] = self.carry[bin];
+                        self.received_ms[bin] = self.carry_ms[bin];
                         seam_filled += 1;
                     }
                 }
                 done = Some(Published {
                     ranges: self.bins.clone(),
+                    received_ms: self.received_ms.clone(),
                     valid: self.bins.iter().filter(|r| r.is_some()).count(),
                     coverage: self.seen.iter().filter(|v| **v).count(),
                     seam_filled,
                 });
             }
             self.bins.fill(None);
+            self.received_ms.fill(None);
             self.seen.fill(false);
             std::mem::swap(&mut self.carry, &mut self.tail);
+            std::mem::swap(&mut self.carry_ms, &mut self.tail_ms);
             std::mem::swap(&mut self.carry_seen, &mut self.tail_seen);
             self.tail.fill(None);
+            self.tail_ms.fill(None);
             self.tail_seen.fill(false);
             self.synced = true;
         }
@@ -95,10 +113,10 @@ impl Revolution {
             let rounded = angle.round();
             let bin = (rounded as usize) % 360;
             self.seen[bin] = true;
-            keep_nearest(&mut self.bins[bin], *r);
+            keep_nearest(&mut self.bins[bin], &mut self.received_ms[bin], *r, received_ms);
             if rounded >= 360.0 {
                 self.tail_seen[bin] = true;
-                keep_nearest(&mut self.tail[bin], *r);
+                keep_nearest(&mut self.tail[bin], &mut self.tail_ms[bin], *r, received_ms);
             }
         }
         done
@@ -124,7 +142,7 @@ mod tests {
         for _ in 0..packets {
             let ranges = std::array::from_fn(|i| Some(1.0 + i as f64 / 100.0));
             if !drop(start) {
-                out.extend(revolution.push(wire(start), wire(start + 15 * step), &ranges));
+                out.extend(revolution.push(wire(start), wire(start + 15 * step), &ranges, start as u64));
             }
             start = (start + 16 * step) % 36_000;
         }
@@ -187,12 +205,14 @@ mod tests {
                         start as u16,
                         ((start + 1200) % 36_000) as u16,
                         ranges,
+                        (turn * 1000 + k) as u64,
                     ));
                 }
             }
             assert_eq!(frames.len(), 1);
             let frame = &frames[0];
             if keep_straddle {
+                assert_eq!(frame.received_ms[3], Some(1029));
                 assert_eq!(
                     (frame.seam_filled, frame.coverage, frame.ranges[3]),
                     (0, 360, Some(3.0))
@@ -204,6 +224,8 @@ mod tests {
                     (6, 355, Some(1.0))
                 );
                 assert_eq!(frame.ranges[357], None);
+                assert_eq!(frame.received_ms[3], Some(29));
+                assert_eq!(frame.received_ms[357], None);
             }
         }
     }
@@ -212,16 +234,16 @@ mod tests {
     fn nothing_is_published_before_the_first_complete_revolution() {
         let mut revolution = Revolution::new();
         let ranges = [Some(2.0); POINTS_PER_PACKET];
-        assert!(revolution.push(30_000, 31_200, &ranges).is_none());
-        assert!(revolution.push(100, 1_300, &ranges).is_none()); // first wrap: sync only
+        assert!(revolution.push(30_000, 31_200, &ranges, 0).is_none());
+        assert!(revolution.push(100, 1_300, &ranges, 1).is_none()); // first wrap: sync only
         for k in 1..30u16 {
             assert!(
                 revolution
-                    .push(100 + 1_200 * k, (100 + 1_200 * (k + 1)) % 36_000, &ranges)
+                    .push(100 + 1_200 * k, (100 + 1_200 * (k + 1)) % 36_000, &ranges, u64::from(k+1))
                     .is_none()
             );
         }
-        let first = revolution.push(500, 1_700, &ranges).unwrap();
+        let first = revolution.push(500, 1_700, &ranges, 32).unwrap();
         assert_eq!(
             (first.seam_filled, first.coverage, first.valid),
             (0, 360, 360)

@@ -39,6 +39,7 @@ mod race_light;
 mod race_light_brake;
 mod race_speed_kalman;
 mod race_first_cone;
+mod race_end_board;
 mod race_start_lane;
 mod race_transfer;
 mod t_drag;
