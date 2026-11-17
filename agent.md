@@ -1,5 +1,11 @@
 # XT-STCAR 接手与开发约定
 
+## 当前临时测试状态（2026-11-17：室内固定斑马线，等用户测试）
+
+- 用户因户外风大将赛道搬回室内，明确确认斑马线朝起点一侧的边缘仍距起点后挡板 **2.8m**（0.8m发车区＋2.0m）。已把dark/light/mix三个车端field配置切到`crosswalk_mode=fixed`，原Rust测试参数生效；无需重编译，仍y105／210（079a6d9）。灯区fixed10s、模型、PWM及校准不变，Codex没有发车。
+- 三个原配置已先备份，位置见`work/codex-indoor-fixed-crosswalk-20261117/current-session.json`及其回执的`vehicle_backup`。部署中的Rust `--test-status`已逐个读回。
+- 用户决定：实测没问题后恢复斑马线视觉识别；若有问题，先保持固定位置排查修好，然后恢复视觉并保留修好的驾驶逻辑。不要用旧代码整版覆盖，也不要在未收到结果时提前恢复。恢复只处理回执`restore_only_keys`，其余后来修改的设置保留。共同记忆未更新，机读键`y105_indoor_fixed_crosswalk_temporary_20261117`。
+
 ## 当前接手入口（2026-11-17：y105／210统一Rust入口已部署，用户关车去上课）
 
 - 源`079a6d9`，车端已装210及y105模型包。`start_dark`／`start_light`／`start_mix`共用同一个`route-engine`：分别选原阴天三类、新晴天三类、阴晴混合五类。普通`start`保留原模型和原练习配置。新SSH自动加载，当前车已关，回来连接后直接用；每次主动输入只跑一轮，systemd后台与SSH退出无关，`stop_dark/light/mix`均可停止同一轮。

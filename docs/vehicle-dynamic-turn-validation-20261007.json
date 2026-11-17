@@ -34985,5 +34985,30 @@
       "timing_scope": "8.822 s is before the race controller process starts, not command-to-wheel-motion time; vision preparation is 7.044 s. CLI --show took 28–44 ms; that is not a full startup benchmark. No claimed Python-vs-Rust speedup."
     },
     "deployment_note": "First 209 install rolled back on a strict argv comparison. Retry records show identical CPE bindings; the first pre-restart argv was not recorded, so Bluetooth is not proven to be the unique cause. Installer now compares all fixed arguments while recording dynamic --lan-bind separately. Console source now excludes Bluetooth interfaces entirely."
+  },
+  "y105_indoor_fixed_crosswalk_temporary_20261117": {
+    "date": "2026-11-17",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y105",
+    "engine_round": 210,
+    "engine_source_commit": "079a6d95d097625240e7a0a108386e840e163097",
+    "scope": "Temporary indoor test configuration only; no binary, calibration, PWM or model changes",
+    "user_confirmed_near_edge_from_start_rear_wall_m": 2.8,
+    "active_profiles": [
+      "dark",
+      "light",
+      "mix"
+    ],
+    "crosswalk_mode": "fixed",
+    "light_mode": "fixed10s (unchanged)",
+    "physical_trial_executed_by_codex": false,
+    "trial_result": "awaiting user test",
+    "pending_restore_to_vision": true,
+    "restore_policy": "After a successful user test, restore original crosswalk configuration fields. If a problem occurs, correct it under fixed positioning first, then restore vision while retaining control fixes and unrelated settings.",
+    "vehicle_backup": "/home/bianbu/xt-stcar-console/work/indoor-fixed-crosswalk-20261117-170859",
+    "receipt": "work/codex-indoor-fixed-crosswalk-20261117/indoor-fixed-crosswalk-20261117-170859.json",
+    "config_readback": "all three profiles verified by deployed Rust --test-status",
+    "shared_memory_updated": false
   }
 }
