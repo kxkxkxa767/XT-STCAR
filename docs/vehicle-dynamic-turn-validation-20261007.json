@@ -35060,7 +35060,7 @@
     "author_model": "GPT-6",
     "label": "y106",
     "engine_round": 211,
-    "status": "candidate; build and deployment pending",
+    "status": "built and source pushed; deployment pending vehicle connection",
     "baseline": "car-y105-n10p-20261117",
     "baseline_source_commit": "456b43eba39ee4aefc63ad07f5fbadc10bccc82d",
     "baseline_engine_sha256": "7d77149222e9f9f43cb369e5031f137cc0465e5a4c9ba3342b6e553df0370d6a",
@@ -35113,7 +35113,7 @@
       "rust_unit_tests": 56,
       "rust_unit_failures": 0,
       "log": "work/codex-indoor-control-fix-20261117/rust-tests-final.log",
-      "remaining": "cross build and static deployment",
+      "remaining": "static deployment; no physical test yet",
       "native_build": "passed",
       "console_tests": 971,
       "robot_core_tests": 398,
@@ -35127,6 +35127,19 @@
       "Confirm second-cone turn timing and light camera visibility with real data.",
       "Keep fixed crosswalk until user test succeeds; then restore vision settings while retaining fixes.",
       "Final standstill observer issue not changed in this candidate."
-    ]
+    ],
+    "engine_source_commit": "1f47cd99fd7eb23afd09fd7115bfb526dc41af0d",
+    "engine_package": "work/vehicle-dynamic-deploy-20261008/claude-turn211-package.json",
+    "weather_package": "work/vehicle-dynamic-deploy-20261008/claude-y106-package.json",
+    "route_engine_sha256": "8eb2feb9f6a600fc2cff1bd3286c7354055760523e3ecd614b2128a77ff9f34e",
+    "build_complete": true,
+    "profiles": [
+      "dark",
+      "light",
+      "mix"
+    ],
+    "vehicle_deployed": false,
+    "physical_trial_started": false,
+    "deployment_pending_reason": "Vehicle SSH timed out; user asked to restore connection. Vehicle remains y105 with N10P and applied calibration."
   }
 }
