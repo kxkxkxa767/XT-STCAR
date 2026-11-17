@@ -35060,7 +35060,7 @@
     "author_model": "GPT-6",
     "label": "y106",
     "engine_round": 211,
-    "status": "built and source pushed; deployment pending vehicle connection",
+    "status": "deployed locked; awaiting fresh user start_dark/light/mix",
     "baseline": "car-y105-n10p-20261117",
     "baseline_source_commit": "456b43eba39ee4aefc63ad07f5fbadc10bccc82d",
     "baseline_engine_sha256": "7d77149222e9f9f43cb369e5031f137cc0465e5a4c9ba3342b6e553df0370d6a",
@@ -35113,7 +35113,7 @@
       "rust_unit_tests": 56,
       "rust_unit_failures": 0,
       "log": "work/codex-indoor-control-fix-20261117/rust-tests-final.log",
-      "remaining": "static deployment; no physical test yet",
+      "remaining": "physical trial after user placement/reset and explicit start",
       "native_build": "passed",
       "console_tests": 971,
       "robot_core_tests": 398,
@@ -35123,7 +35123,7 @@
     "new_candidate_physical_trial": false,
     "shared_memory_updated": false,
     "pending": [
-      "Deploy locked, await fresh user start_dark/light/mix input.",
+      "Installed and locked; await fresh user start_dark/light/mix input.",
       "Confirm second-cone turn timing and light camera visibility with real data.",
       "Keep fixed crosswalk until user test succeeds; then restore vision settings while retaining fixes.",
       "Final standstill observer issue not changed in this candidate."
@@ -35138,8 +35138,40 @@
       "light",
       "mix"
     ],
-    "vehicle_deployed": false,
+    "vehicle_deployed": true,
     "physical_trial_started": false,
-    "deployment_pending_reason": "Vehicle SSH timed out; user asked to restore connection. Vehicle remains y105 with N10P and applied calibration."
+    "deployment_receipt": "work/codex-indoor-control-fix-20261117/y106-deployment-receipt.json",
+    "locked_control": {
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500,
+      "seq": 0
+    },
+    "profile_readback": {
+      "dark": {
+        "returncode": 0,
+        "output": "y106 / dark",
+        "error": ""
+      },
+      "light": {
+        "returncode": 0,
+        "output": "y106 / light",
+        "error": ""
+      },
+      "mix": {
+        "returncode": 0,
+        "output": "y106 / mix",
+        "error": ""
+      }
+    },
+    "calibration_readback": {
+      "schema_version": 1,
+      "status": "coarse",
+      "range_offset_m": 0.011,
+      "clockwise_yaw_bins": -3
+    },
+    "serial_readback": {
+      "baud_rate": 460800
+    }
   }
 }
