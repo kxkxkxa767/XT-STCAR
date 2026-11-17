@@ -1,6 +1,6 @@
-# XT-STCAR（y100／207已部署锁车，源5fde858：终点墙多点测距，修复灯后提前刹车）
+# XT-STCAR（y106／211候选：N10P新标定，修正第二桶转向预测与灯前降档）
 
-车端SSH终端输入 `start` 启动一轮；旧SSH窗口先运行 `source ~/.bashrc`。每轮摆放并复位后可再次输入，日志保存在车上。`start --show` 只看版本。
+车端SSH终端使用 `start_dark`、`start_light` 或 `start_mix`，分别选择阴天、晴天及混合模型；裸 `start` 已停用。每次摆放并复位后输入一次，后台单轮运行不受SSH退出影响。当前室内测试保留固定斑马线近边2.8m与fixed10s灯模式。
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。激光雷达提供路线几何和门架位置，相机识别斑马线与信号灯，IMU 补偿短时车速变化。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。

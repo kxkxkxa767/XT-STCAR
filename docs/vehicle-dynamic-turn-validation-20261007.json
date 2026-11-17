@@ -35053,5 +35053,80 @@
     "mount_measurements": "config/lidar-n10p-mount-measurements-20261117.json",
     "physical_motion_requested_for_calibration": false,
     "shared_memory_updated": false
+  },
+  "y106_second_approach_speed_light_body_coast_20261117": {
+    "date": "2026-11-17",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y106",
+    "engine_round": 211,
+    "status": "candidate; build and deployment pending",
+    "baseline": "car-y105-n10p-20261117",
+    "baseline_source_commit": "456b43eba39ee4aefc63ad07f5fbadc10bccc82d",
+    "baseline_engine_sha256": "7d77149222e9f9f43cb369e5031f137cc0465e5a4c9ba3342b6e553df0370d6a",
+    "baseline_reproduced_byte_identically": true,
+    "evidence": {
+      "latest_trial": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y105-7",
+      "retrieval_receipt": "work/codex-indoor-fixed-crosswalk-20261117/runs-6-7-retrieval.json",
+      "retrieved_files_runs_6_7": 247,
+      "user_report": "Entire run automatic; no manual movement and no barrier contact. Cone contact not separately confirmed.",
+      "calibration": "Run 6 old offset/yaw; run 7 new +0.011 m / -3 bins.",
+      "figure": "work/codex-indoor-fixed-crosswalk-20261117/y105-7-second-cone-and-light.png",
+      "plot_scope": "Local second-cone fitted-center + integrated IMU yaw reconstruction, not an external position truth; generic full-course ICP rejected because it diverges.",
+      "start_to_finish_event_s": 29.3691,
+      "light_wait_s": 10.08431,
+      "excluding_light_wait_s": 19.28478,
+      "completion_limit": "finish_stop observed, but final stop verification ended coast_standstill_unconfirmed; not a certified complete score.",
+      "second_confirmed_distance_m": 2.21883,
+      "second_confirmed_program_s": 12.95876,
+      "second_response_speed_old_mps": 1.3,
+      "second_measured_control_speed_mps": 2.3486,
+      "last_sample_neutral_second_range_m": 1.1035,
+      "first_saved_right_steer_range_m": 0.7737,
+      "light_stop_gap_m": 0.25817666663916533,
+      "light_target_gap_m": 0.55,
+      "light_brake_start_program_s": 16.155857068,
+      "light_brake_end_program_s": 17.953235154,
+      "light_stopped_photo": "work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261117-y105-7/vision/frames/frame-000069.jpg",
+      "end_stationary_board_range_m": [
+        0.546917,
+        0.548916
+      ],
+      "end_stationary_note": "27 saved scans span about 2 mm. Final motion_result_superseded remains an observer/confirmation issue, not evidence of user moving the car."
+    },
+    "changes": [
+      "Race second-loop response projection uses existing current transfer/cone/IMU speed, replacing fixed 1.3 m/s when measured speed is available.",
+      "Race second-loop steering advances proportionally to elapsed time at the existing PWM/s rate; sub-100 ms scans no longer lose a full update. Neutral crossing and output acknowledgement retained.",
+      "Light Hold to rolling-low uses the existing body-speed coast forecast, with matching revoke condition, so turning-axis projection does not defer slowdown or immediately cancel it."
+    ],
+    "preserved": [
+      "N10P 460800/108-byte parser",
+      "calibration +0.011 m / -3 bins",
+      "turn radius",
+      "all motor PWM presets including 1620 and 1300",
+      "Guard and 8 cm gate",
+      "fixed near crosswalk edge 2.8 m",
+      "fixed10s lights",
+      "three weather models"
+    ],
+    "validation": {
+      "rust_unit_tests": 56,
+      "rust_unit_failures": 0,
+      "log": "work/codex-indoor-control-fix-20261117/rust-tests-final.log",
+      "remaining": "cross build and static deployment",
+      "native_build": "passed",
+      "console_tests": 971,
+      "robot_core_tests": 398,
+      "robot_core_ignored": 1,
+      "clippy_warnings": 32
+    },
+    "new_candidate_physical_trial": false,
+    "shared_memory_updated": false,
+    "pending": [
+      "Deploy locked, await fresh user start_dark/light/mix input.",
+      "Confirm second-cone turn timing and light camera visibility with real data.",
+      "Keep fixed crosswalk until user test succeeds; then restore vision settings while retaining fixes.",
+      "Final standstill observer issue not changed in this candidate."
+    ]
   }
 }

@@ -1494,6 +1494,18 @@ impl Maneuver {
         self.result(now)
     }
 
+    fn second_loop_response_motion(&self, now: f64) -> Option<(f64, f64)> {
+        self.race_inputs.map(|input| {
+            let rate = input.yaw_rate.filter(|rate| rate.is_finite())
+                .unwrap_or(if self.compass.rate.is_finite() { self.compass.rate } else { 0. });
+            let speed = self.race_transfer.control_speed(now, input.forward_integral)
+                .or_else(|| self.race_light.entry_motion.speed(now, input.forward_integral))
+                .or_else(|| self.race_surface_speed.speed(now, input.forward_integral))
+                .unwrap_or(OPEN_PREDICT_SPEED_MPS);
+            (rate, speed)
+        })
+    }
+
     /// _open_second_loop_update(scan, now, control, adopted).
     pub fn open_second_loop_update(&mut self, scan: &V, now: f64, control: &V, adopted: bool) -> V {
         self._second_plan_pending = None;
@@ -1510,8 +1522,8 @@ impl Maneuver {
         // The lidar heading slope can still show a right turn after the wheels
         // have unwound. Only cone-two approach prediction uses the current IMU
         // yaw; the light-entry consumer below retains its own original pose.
-        let loop_yaw = self.race_inputs.and_then(|input| input.yaw_rate).filter(|rate| rate.is_finite());
-        let loop_pose = loop_yaw.map_or(pose, |rate| self.response_pose_with_rate(rate));
+        let loop_motion = self.second_loop_response_motion(now);
+        let loop_pose = loop_motion.map_or(pose, |(rate, speed)| self.response_pose_with_speed(rate, speed));
         let id = self.second_track_id.clone();
         let mut lp = if self.full_target_points(&target, scan, &id).is_none() {
             V::None
@@ -1538,7 +1550,8 @@ impl Maneuver {
         }
         self._open_lost_since = None;
         if self.race_inputs.is_some() {
-            lp.set("response_yaw_source", if loop_yaw.is_some() { "calibrated_imu" } else { "lidar_compass" });
+            lp.set("response_yaw_source", if self.race_inputs.and_then(|i| i.yaw_rate).filter(|rate| rate.is_finite()).is_some() { "calibrated_imu" } else { "lidar_compass" });
+            lp.set("response_speed_mps", loop_motion.map(|(_, speed)| speed));
             lp.set("response_control", if lp.get("pursuit_mode").os() == Some("approach_line") {
                 "mean_curvature_over_response" } else { "current_path" });
         }
@@ -2214,5 +2227,27 @@ mod round106_tests {
             assert!(!m.open_second_maturing(&scan, Some(stop - OPEN_SECOND_CONFIRM_GRACE_M), stop));
             assert!(python.idx("maturing_at_grace_end").is_false());
         }
+    }
+}
+
+#[cfg(test)]
+mod second_response_tests {
+    use super::*;
+
+    #[test]
+    fn second_approach_projects_measured_cone_speed_over_the_response() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.servo = NEUTRAL;
+        let input = crate::motion_sensors::RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) };
+        m.race_inputs = Some(input);
+        let scan = |seq: i64, at: f64| dict! {"seq" => seq, "at_ms" => (at*1000.) as i64, "received_at" => at};
+        m.race_light.entry_motion.observe(&scan(1, 1.0), 1.0, &1.into(), (3.0, -0.8), input);
+        m.race_light.entry_motion.observe(&scan(2, 1.1), 1.1, &1.into(), (2.78, -0.8), input);
+        let (yaw, speed) = m.second_loop_response_motion(1.1).unwrap();
+        assert!((speed-2.2).abs() < 1e-9);
+        let predicted = m.response_pose_with_speed(yaw, speed);
+        let old = m.response_pose_with_rate(yaw);
+        assert!((predicted.0-2.2*predicted.3).abs() < 1e-9);
+        assert!(predicted.0-old.0 > 0.25);
     }
 }

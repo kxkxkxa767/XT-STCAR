@@ -281,8 +281,13 @@ impl Maneuver {
         let transfer_release = self.race_inputs.is_some() && self.continue_route
             && self.phase == "drive" && self.route_stage == "open_transfer"
             && self.first_pass_evidence.is_some() && self.servo > NEUTRAL && avoid_target < self.servo;
+        // Scan intervals just below 100 ms must not postpone cone-two steering
+        // by another scan. Use the existing PWM/s rate and maximum step.
+        let second_loop_slew = self.race_inputs.is_some() && self.continue_route
+            && self.phase == "drive" && self.route_stage == "second_loop";
         let release_step = (elapsed.max(0.) * OPEN_RELEASE_PWM_STEP as f64 / PWM_INTERVAL_S + 1e-9).floor() as i64;
-        let due = elapsed + 1e-9 >= PWM_INTERVAL_S || (transfer_release && release_step > 0);
+        let due = elapsed + 1e-9 >= PWM_INTERVAL_S || (transfer_release && release_step > 0)
+            || (second_loop_slew && elapsed > 0.);
         if due && self.servo != avoid_target {
             let mut target = avoid_target;
             let reducing_left = self.servo > NEUTRAL && target < self.servo;
@@ -341,6 +346,10 @@ impl Maneuver {
                 step = step.max(crate::race_first_cone::WALL_TURN_PWM_STEP);
             }
             if transfer_release { step = step.min(OPEN_RELEASE_PWM_STEP).min(release_step); }
+            if second_loop_slew {
+                step = step.min((elapsed.max(0.) * step as f64 / PWM_INTERVAL_S + 1e-9).floor() as i64);
+                if step == 0 { return; }
+            }
             if reducing_left && target < NEUTRAL {
                 target = NEUTRAL;
             }
@@ -349,5 +358,31 @@ impl Maneuver {
             self.last_change = now;
             self.settle_since = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod second_slew_tests {
+    use super::*;
+
+    #[test]
+    fn second_loop_keeps_fractional_rate_and_neutral_crossing() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.phase = "drive";
+        m.route_stage = "second_loop";
+        m.first_pass_evidence = dict! {"source_seq" => 1};
+        m.servo = 1518;
+        m.steering_target = 1398;
+        m.last_change = 1.0;
+        // Non-race adoption retains its existing timing.
+        m.slew(1.0998);
+        assert_eq!(m.servo, 1518);
+        m.race_inputs = Some(crate::motion_sensors::RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) });
+        m.slew(1.0998);
+        assert_eq!(m.servo, NEUTRAL);
+        m.slew(1.1996);
+        assert_eq!(m.servo, 1461); // 39 PWM over 99.8 ms, preserving the existing rate.
+        m.slew(1.2196);
+        assert_eq!(m.servo, 1453); // Same 400 PWM/s over a 20 ms partial interval.
     }
 }

@@ -855,18 +855,19 @@ impl Maneuver {
         let red_due = self.race_light.beam_at.is_some_and(|at| now - at >= LIGHT_RED_DUE_S);
         if !red {
             let step_down = coast_if_renewed.or(predicted).is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M);
-            // Begin the1530 rolling slowdown at the coast envelope, not only
-            // at the later1300 envelope. Lower speed gives the existing final
+            // Begin the 1530 rolling slowdown at the coast envelope, not only
+            // at the later 1300 envelope. Lower speed gives the existing final
             // brake a shorter, better observed stop without a neutral pause.
             let cut = if_renewed.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M)
                 || (matches!(self.race_light.phase, LightRoll::Hold)
-                    && predicted.is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M));
+                    && coast_if_renewed.or(predicted).is_some_and(|g| g <= VISIBLE_LIGHT_STOP_GAP_M));
             // A powered 1530 hold continually renews the old power-tail clock.
             // It must still use the existing restart path if motion runs out.
             let running_out = (tail == 0. || matches!(self.race_light.phase, LightRoll::Coast | LightRoll::ZoneCoast))
                 && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS);
             let revoke = !crossed && !running_out
-                && if_renewed.is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LIGHT_COAST_REVOKE_BAND_M);
+                && if_renewed.is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LIGHT_COAST_REVOKE_BAND_M)
+                && coast_if_renewed.or(predicted).is_some_and(|g| g > VISIBLE_LIGHT_STOP_GAP_M + LIGHT_COAST_REVOKE_BAND_M);
             self.race_light.phase = match self.race_light.phase {
                 LightRoll::Cruise if cut => LightRoll::Coast,
                 LightRoll::Cruise if step_down => LightRoll::Hold,
@@ -932,6 +933,7 @@ impl Maneuver {
             "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
+            "body_coast_stop_if_renewed_m" => coast_if_renewed,
             "rolling_hold_pwm" => ROLLING_HOLD_MOTOR,
             "cruise_pwm" => cruise_pwm, "cruise_accel_mps2" => cruise_accel,
             "pending_power_accel_mps2" => pending_accel,
@@ -1298,10 +1300,16 @@ mod tests {
         assert_eq!(fb1.get("motor").i(), ROUTE_SLOW_MOTOR);
         assert_eq!(m.race_light.phase, LightRoll::Hold);
 
-        // Even if the apparent gap widens, Hold stays latched at 1550 and never returns to 1570.
+        // A transverse car still has 2 m/s body speed. The small lane-axis
+        // component must not keep 1550 powered until it finishes straightening.
         let (_, fb2) = m.light_approach_control(&scan(13, 1.3), Some(4.40), 1.3);
-        assert_eq!(fb2.get("motor").i(), ROUTE_SLOW_MOTOR);
-        assert_eq!(m.race_light.phase, LightRoll::Hold);
+        assert_eq!(fb2.get("motor").i(), ROLLING_HOLD_MOTOR);
+        assert_eq!(m.race_light.phase, LightRoll::Coast);
+        assert!(fb2.get("predicted_stop_gap_m").f() > VISIBLE_LIGHT_STOP_GAP_M);
+        assert!(fb2.get("body_coast_stop_if_renewed_m").f() <= VISIBLE_LIGHT_STOP_GAP_M);
+        // Do not use the smaller axis budget to revoke that body-speed cut.
+        let (_, fb2b) = m.light_approach_control(&scan(14, 1.35), Some(4.40), 1.35);
+        assert_eq!(fb2b.get("motor").i(), ROLLING_HOLD_MOTOR);
 
         // Closer in, Hold steps down to 1530 rolling hold, then 1300 continuous brake.
         m.compass.heading = Some(0.);
@@ -1309,12 +1317,12 @@ mod tests {
         m.race_light_brake.reset_gap_fusion();
         m._light_line = dict! {"source" => "legs"};
         m.race_light.ranges = vec![(1.2, 1.2, 3.51), (1.3, 1.3, 3.33)];
-        let (_, fb3) = m.light_approach_control(&scan(14, 1.4), Some(3.15), 1.4);
+        let (_, fb3) = m.light_approach_control(&scan(15, 1.4), Some(3.15), 1.4);
         assert_eq!(fb3.get("motor").i(), ROLLING_HOLD_MOTOR);
         assert_eq!(m.race_light.phase, LightRoll::Coast);
 
         m.race_light.ranges = vec![(1.3, 1.3, 2.91), (1.4, 1.4, 2.73)];
-        let (_, fb4) = m.light_approach_control(&scan(15, 1.5), Some(2.55), 1.5);
+        let (_, fb4) = m.light_approach_control(&scan(16, 1.5), Some(2.55), 1.5);
         assert_eq!(fb4.get("motor").i(), LIGHT_BRAKE_MOTOR);
     }
 }
