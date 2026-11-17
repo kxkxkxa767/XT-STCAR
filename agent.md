@@ -1,5 +1,12 @@
 # XT-STCAR 接手与开发约定
 
+## 当前接手入口（2026-11-17：y105／210统一Rust入口已部署，用户关车去上课）
+
+- 源`079a6d9`，车端已装210及y105模型包。`start_dark`／`start_light`／`start_mix`共用同一个`route-engine`：分别选原阴天三类、新晴天三类、阴晴混合五类。普通`start`保留原模型和原练习配置。新SSH自动加载，当前车已关，回来连接后直接用；每次主动输入只跑一轮，systemd后台与SSH退出无关，`stop_dark/light/mix`均可停止同一轮。
+- Python发车管理已迁入Rust的`start`／`launch-round`；YOLO推理节点保留。模型在发车前选择，驾驶/Guard/PWM/校准逻辑不变，天气模式斑马线用视觉，灯区仍沿用fixed10s（各自`--test-lights vision`只配置）。两套新模型车端ORT1.18加载/原图推理成功。一次真实传感器`--check-only`完成：未解锁、1500/1500、seq0；收尾6帧锁车。控制程序启动前准备8.822s，其中视觉7.044s；不是发车用时或实车提速结论。
+- 用户说不需要蓝牙：车辆`xt-stcar-bluetooth-ssh.service`已disabled/inactive，PAN断开且autoconnect=no（用户sudo完成）；控制台只选Wi-Fi/有线局域网和本机，Mac入口默认CPE并跳过蓝牙连接。工厂蓝牙驱动与Mac其他蓝牙设备没动。第一次209部署因旧启动参数严格比对回滚，随后修正仅忽略动态LAN绑定；没有保留首轮旧argv，不能断言蓝牙是唯一直接原因。
+- N10P仍按用户要求归档在根目录`n10p/`，没有重新启用；现在仍N10协议，校准SHA870d4ffd保持原样。共同记忆未更新。机读键`y105_weather_launcher_environment_cpe_20261117`；证据`work/codex-weather-models-20261117/`。用户已去上课并关车，此后只做本地记录和推送，回来前不再连车/部署/发车。
+
 ## 当前接手入口（2026-11-16：dark入口y101已部署，保留y100）
 
 - `start_dark` 选择 y101 视觉助手（源45a706c）和用户新 dark 模型9777d5b8，仍使用已装车207引擎（5fde858）。斑马线恢复原有YOLO定位，不再传固定2.8m参数；dark独立配置仍保留灯区fixed10s及逐帧存图。普通`start`仍为y100；已备份`work/radar-only-y100-20261116/`及同名Git标签。`start_r`、`start_m`和建图/新融合尚未实现，light模型未到。

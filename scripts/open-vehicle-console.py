@@ -55,7 +55,9 @@ def main():
     selected = None
     own_socket = work / ('vehicle-console-ssh.sock' if args.host == 'bianbu@192.168.0.156' else 'console-' + hashlib.sha256(args.host.encode()).hexdigest()[:12] + '.sock')
     bluetooth_socket = work/'vehicle-web-bluetooth.sock'
-    candidates = [work/'vehicle-test-ssh.sock', own_socket, bluetooth_socket] if args.host == 'bianbu@192.168.0.156' else [own_socket]
+    candidates = [work/'vehicle-test-ssh.sock', own_socket] if args.host == 'bianbu@192.168.0.156' else [own_socket]
+    if args.host == 'bianbu@192.168.0.156' and args.link != 'cpe':
+        candidates.append(bluetooth_socket)
     for candidate in candidates:
         kind = connection_kind(candidate, args.host)
         if kind and args.link in ('auto', kind):

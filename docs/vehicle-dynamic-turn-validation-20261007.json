@@ -34837,7 +34837,8 @@
     "evidence_dir": "work/codex-weather-models-20261117",
     "rule_note": "Local offline supplement forbids switching programs after start; this implementation selects the model before start and shares driving code. No general one-process compliance claim.",
     "source_commit": "49adc8ccbd7b168aeccb1441b5694335858b2b26",
-    "entry_runtime_issue": "ELF has RUNPATH, not transitive RPATH; raw Rust CLI lacks librmw_implementation.so unless the Humble LD_LIBRARY_PATH is supplied. No physical round executed."
+    "entry_runtime_issue": "ELF has RUNPATH, not transitive RPATH; raw Rust CLI lacks librmw_implementation.so unless the Humble LD_LIBRARY_PATH is supplied. No physical round executed.",
+    "superseded_by": "y105 / engine210 / 079a6d9"
   },
   "y105_weather_launcher_environment_cpe_20261117": {
     "date": "2026-11-17",
@@ -34846,16 +34847,143 @@
     "label": "y105",
     "engine_round": 210,
     "baseline": "installed claude-turn209 / y104",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "shared_memory_updated": false,
     "models_unchanged_from": "y104",
     "changes": [
       "Provide the installed Humble library path in both terminal Rust entry and transient systemd service; same single executable and existing driver logic.",
-      "User no longer needs Bluetooth: disable project RFCOMM service, disconnect PAN, stop selecting Bluetooth interfaces for console binding; CPE is the default webpage launcher. PAN autoconnect off requires user sudo completion."
+      "User no longer needs Bluetooth: project RFCOMM service disabled/stopped, PAN disconnected and autoconnect=no confirmed after user sudo; console excludes Bluetooth interfaces and Mac launcher defaults to CPE without probing Bluetooth."
     ],
     "calibration_changed": false,
     "n10p_reenabled": false,
-    "evidence_dir": "work/codex-weather-models-20261117"
+    "evidence_dir": "work/codex-weather-models-20261117",
+    "source_commit": "079a6d95d097625240e7a0a108386e840e163097",
+    "vehicle_check_only_executed": true,
+    "post_install": {
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500
+    },
+    "calibration_sha256": "870d4ffd334a3cde6893d961c161b47eab2dc0f200831447085c90aad59c7b67",
+    "deployment_receipt": "work/codex-weather-models-20261117/y105-final-receipt.json",
+    "native_program_exit": 0,
+    "startup_timing_ms": {
+      "before_program_ms": 8822.261232,
+      "console_stop_ms": 1021.2049430000001,
+      "devices_wait_ms": 706.5303710000001,
+      "preflight_ms": 49.656295,
+      "vision_ready_ms": 7044.376443
+    },
+    "console_neutral_samples": 6,
+    "profiles": {
+      "default": {
+        "model_sha256": "4089dab5ed309c67c99e7aa386d2419cd4358030281d414e0a2addd6f25a8041",
+        "classes": [
+          "crosswalk",
+          "blue_cone",
+          "red_light",
+          "green_light"
+        ],
+        "field_config": {
+          "enabled": true,
+          "start_zone_m": 0.8,
+          "start_line_to_crosswalk_back_edge_m": 2.0,
+          "crosswalk_length_m": 0.297,
+          "start_straight_m": 3.2,
+          "light_mode": "fixed10s"
+        }
+      },
+      "dark": {
+        "model_sha256": "9777d5b8d9e150526f51d7ee07b28548d48d828f2d120983ed97b930da0ef5fb",
+        "classes": [
+          "crosswalk",
+          "red_light_dark",
+          "green_light_dark"
+        ],
+        "field_config": {
+          "enabled": true,
+          "crosswalk_mode": "vision",
+          "light_mode": "fixed10s"
+        }
+      },
+      "light": {
+        "model_sha256": "b6a29b28aa18f6eb44e7274a26bd0cb0c9499cc371a3e933e0f13ea492f5c757",
+        "classes": [
+          "crosswalk",
+          "red_light_light",
+          "green_light_light"
+        ],
+        "field_config": {
+          "enabled": true,
+          "crosswalk_mode": "vision",
+          "light_mode": "fixed10s"
+        }
+      },
+      "mix": {
+        "model_sha256": "104a418a8ecf70dafb5c95006efbca469440c052026c862ed8843bc079fe2671",
+        "classes": [
+          "crosswalk",
+          "red_light_dark",
+          "green_light_dark",
+          "red_light_light",
+          "green_light_light"
+        ],
+        "field_config": {
+          "enabled": true,
+          "crosswalk_mode": "vision",
+          "light_mode": "fixed10s"
+        }
+      }
+    },
+    "bluetooth": {
+      "ssh_enabled": "disabled",
+      "ssh_active": "inactive",
+      "pan_autoconnect": "no",
+      "pan_disconnected": true,
+      "mac_bluetooth_untouched": true
+    },
+    "console_binding": {
+      "loopback": "127.0.0.1",
+      "lan": "192.168.0.156",
+      "motion_requested": false
+    },
+    "vehicle_shutdown_by_user": true,
+    "pending": "User went to class and powered off the car after deployment/check-only; no more vehicle connection attempts or actual rounds until user returns.",
+    "validation": {
+      "native_runtime": "ONNX Runtime 1.18.0",
+      "new_models": {
+        "light": {
+          "frames": 2,
+          "model_sha256": "b6a29b28aa18f6eb44e7274a26bd0cb0c9499cc371a3e933e0f13ea492f5c757",
+          "two_static_image_inference_median_ms": 279.3
+        },
+        "mix": {
+          "frames": 2,
+          "model_sha256": "104a418a8ecf70dafb5c95006efbca469440c052026c862ed8843bc079fe2671",
+          "two_static_image_inference_median_ms": 289.6
+        }
+      },
+      "check_only_profile": "mix",
+      "check_control": {
+        "armed": false,
+        "motor": 1500,
+        "reason": "locked",
+        "seq": 0,
+        "servo": 1500,
+        "tick": 20245,
+        "light": {
+          "frame": 74,
+          "captured_at": 20.21523610500001,
+          "red": 0.0,
+          "green": 0.3772
+        }
+      },
+      "detachment": "Initiating SSH command returned while the systemd check-only job continued and restored the console; real driving under network loss was not tested.",
+      "timing_scope": "8.822 s is before the race controller process starts, not command-to-wheel-motion time; vision preparation is 7.044 s. CLI --show took 28–44 ms; that is not a full startup benchmark. No claimed Python-vs-Rust speedup."
+    },
+    "deployment_note": "First 209 install rolled back on a strict argv comparison. Retry records show identical CPE bindings; the first pre-restart argv was not recorded, so Bluetooth is not proven to be the unique cause. Installer now compares all fixed arguments while recording dynamic --lan-bind separately. Console source now excludes Bluetooth interfaces entirely."
   }
 }
