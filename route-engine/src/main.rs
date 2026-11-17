@@ -28,6 +28,7 @@ pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
 pub mod race;
+mod race_launch;
 pub mod race_scan;
 #[cfg(feature = "ros2")]
 mod race_ros2;
@@ -479,6 +480,9 @@ fn function(name: &str, args: &[V]) -> V {
 fn main() {
     install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
+    if matches!(args.get(1).map(String::as_str), Some("start" | "launch-round")) {
+        std::process::exit(race_launch::main(&args[2..], args[1] == "launch-round"));
+    }
     #[cfg(feature = "ros2")]
     if args.get(1).map(String::as_str) == Some("ros2-hardware") {
         std::process::exit(race_hardware::main(&args[2..]));

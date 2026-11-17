@@ -34780,5 +34780,61 @@
       "motor": 1500,
       "servo": 1500
     }
+  },
+  "y104_weather_models_rust_start_20261117": {
+    "date": "2026-11-17",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y104",
+    "engine_round": 209,
+    "baseline": "last deployed engine207 / default y100 / dark y101; N10P change archived and reverted at user request",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "shared_memory_updated": false,
+    "model_handoff": "work/codex-weather-models-20261117/weather_models_dual_handoff.zip",
+    "profiles": {
+      "dark": {
+        "model_sha256": "9777d5b8d9e150526f51d7ee07b28548d48d828f2d120983ed97b930da0ef5fb",
+        "class_count": 3,
+        "meaning": "cloudy signals + crosswalk, prior model retained"
+      },
+      "light": {
+        "model_sha256": "b6a29b28aa18f6eb44e7274a26bd0cb0c9499cc371a3e933e0f13ea492f5c757",
+        "class_count": 3,
+        "meaning": "sunny signals + crosswalk"
+      },
+      "mix": {
+        "model_sha256": "104a418a8ecf70dafb5c95006efbca469440c052026c862ed8843bc079fe2671",
+        "class_count": 5,
+        "meaning": "cloudy + sunny signals, shared crosswalk"
+      }
+    },
+    "changes": [
+      "One route-engine executable owns start, launch-round and race; terminal commands choose the model before a round.",
+      "Move Python start/trial orchestration into Rust, retaining the systemd user service, mutual exclusion, independent evidence directories, same sensor admission, console release/restore and Guard. Existing Python YOLO perception remains a separate read-only camera process.",
+      "Remove setup.bash invocation from each launch; provide the same Humble/DDS environment to the child and include both installed Humble library directories in RPATH for direct Rust startup.",
+      "Keep current driving logic, N10 serial protocol, calibration, PWM, model confidence and per-profile light settings. No N10P re-enable or new visual-navigation mode."
+    ],
+    "validation": {
+      "rust_launch_option_tests": 2,
+      "local_model_probes": {
+        "light": {
+          "original_images": 2,
+          "onnxruntime": "1.29.0",
+          "physical_output": false
+        },
+        "mix": {
+          "original_images": 2,
+          "onnxruntime": "1.29.0",
+          "physical_output": false
+        }
+      },
+      "mac_launcher_smoke": "Three model selections dispatch the same executable; two repeated check-only runs use mocked console/service/camera endpoints and restore six neutral samples after the real controller rejects missing hardware. This is not vehicle execution or a speed benchmark.",
+      "vehicle_model_compatibility": "pending SSH",
+      "vehicle_launch_latency": "not measured",
+      "vehicle_network_disconnect_test": "not executed"
+    },
+    "evidence_dir": "work/codex-weather-models-20261117",
+    "rule_note": "Local offline supplement forbids switching programs after start; this implementation selects the model before start and shares driving code. No general one-process compliance claim."
   }
 }

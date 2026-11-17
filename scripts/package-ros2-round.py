@@ -28,7 +28,7 @@ if 'XT_STCAR_ROUTE_FEATURES' not in builder.read_text():
     raise SystemExit('The local round builder has no ROS2 feature support; use build-ros2-race.py or update the builder explicitly.')
 env = dict(os.environ, XT_STCAR_ROUTE_FEATURES='ros2', ROS_DISTRO='humble',
     AMENT_PREFIX_PATH=os.pathsep.join(map(str, [args.interfaces.resolve(), args.ros_prefix.resolve()])),
-    RUSTFLAGS='-C link-arg=-Wl,-rpath,/opt/ros/humble/lib -C link-arg=-Wl,--disable-new-dtags -C link-arg=-Wl,--allow-shlib-undefined')
+    RUSTFLAGS='-C link-arg=-Wl,-rpath,/opt/ros/humble/lib:/opt/ros/humble/lib/riscv64-linux-gnu -C link-arg=-Wl,--disable-new-dtags -C link-arg=-Wl,--allow-shlib-undefined')
 subprocess.run([sys.executable, '-B', str(base/'build-race.py'), args.baseline, args.label, args.round, args.record_key],
     env=env, cwd=ROOT, check=True)
 path = base/(args.label+'-package.json')

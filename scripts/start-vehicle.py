@@ -21,6 +21,10 @@ def launch_background(base, package, profile, unit=UNIT):
 
 
 def main():
+    base = Path(__file__).resolve().parent
+    if (base/'race-launch.json').is_file():
+        program = str(base/'20260917/route-engine')
+        os.execv(program, [program, 'start', *sys.argv[1:]])
     parser = argparse.ArgumentParser(description=__doc__)
     action = parser.add_mutually_exclusive_group()
     action.add_argument('--show', action='store_true', help='print the installed round without starting it')

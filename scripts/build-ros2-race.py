@@ -29,7 +29,7 @@ env = dict(os.environ, RUSTUP_TOOLCHAIN='1.97.1', ROS_DISTRO='humble',
     AMENT_PREFIX_PATH=os.pathsep.join(map(str, [interfaces, prefix])), CARGO_TARGET_DIR=str(target),
     CARGO_ZIGBUILD_ZIG_PATH=str(ROOT/'toolchains/zig-aarch64-macos-0.15.2/zig'),
     CARGO_ZIGBUILD_CACHE_DIR=str(ROOT/'tmp/cargo-zigbuild-cache'), ZIG_GLOBAL_CACHE_DIR=str(ROOT/'tmp/zig-cache'),
-    RUSTFLAGS='-C link-arg=-Wl,-rpath,/opt/ros/humble/lib -C link-arg=-Wl,--disable-new-dtags -C link-arg=-Wl,--allow-shlib-undefined')
+    RUSTFLAGS='-C link-arg=-Wl,-rpath,/opt/ros/humble/lib:/opt/ros/humble/lib/riscv64-linux-gnu -C link-arg=-Wl,--disable-new-dtags -C link-arg=-Wl,--allow-shlib-undefined')
 if args.binary is None:
     subprocess.run([str(ROOT/'toolchains/cargo-zigbuild-0.23.4/cargo-zigbuild'), 'zigbuild',
         '--manifest-path', str(ROOT/'route-engine/Cargo.toml'), '--features', 'ros2', '--release', '--locked', '--offline',
@@ -67,7 +67,9 @@ if not dirty:
     subprocess.run(['git', 'archive', '--format=tar.gz', '--output', str(source_archive), 'HEAD',
         'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'route-engine', 'crates', 'config',
         'scripts/race-trial.py', 'scripts/vision-log.py', 'scripts/build-ros2-race.py',
-        'scripts/ros2-generate-rust.py', 'scripts/package-ros2-round.py', 'scripts/inspect_elf.py', 'ros2/xt_stcar_race'],
+        'scripts/ros2-generate-rust.py', 'scripts/package-ros2-round.py', 'scripts/inspect_elf.py',
+        'scripts/package-weather-models.py', 'scripts/deploy-weather-models.py',
+        'scripts/install-vehicle-start.py', 'scripts/start-vehicle.py', 'ros2/xt_stcar_race'],
         cwd=ROOT, check=True)
     manifest['source_archive'] = str(source_archive.relative_to(install))
 (out/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')

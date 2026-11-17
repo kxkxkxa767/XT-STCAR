@@ -276,7 +276,8 @@ def inspect_bytes(data, name="xt-stcar", profile="native"):
         raise ElfError("ELF input exceeds the 64 MiB size limit")
     report = Elf(data).inspect()
     allowed = ALLOWED_NEEDED | (ROS2_HUMBLE_NEEDED if profile == 'ros2-humble' else set())
-    valid_rpath = report['rpath'] == ['/opt/ros/humble/lib'] if profile == 'ros2-humble' else not report['rpath']
+    valid_rpath = report['rpath'] in (['/opt/ros/humble/lib'],
+        ['/opt/ros/humble/lib:/opt/ros/humble/lib/riscv64-linux-gnu']) if profile == 'ros2-humble' else not report['rpath']
     errors = []
     for condition, error in (
         (report["machine"] == 243, "ELF machine must be RISC-V (243)"),
@@ -287,7 +288,7 @@ def inspect_bytes(data, name="xt-stcar", profile="native"):
         ("libc.so.6" in report["needed"], "Expected dynamic libc dependency"),
         (not set(report["needed"]) - allowed, "Unreviewed dynamic library dependency"),
         (valid_rpath, "RPATH/RUNPATH is not permitted in this deployment package" if profile == 'native'
-         else "ROS2 Humble RPATH must be exactly /opt/ros/humble/lib"),
+         else "ROS2 Humble RPATH must use the installed Humble library directories"),
         (bool(report["glibc_versions"]), "No GNU GLIBC version requirements found"),
     ):
         if not condition:
