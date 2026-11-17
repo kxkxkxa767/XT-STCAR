@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Systemd console entry. Prefer the current LAN; PAN/local-only also work without CPE."""
+"""Systemd console entry for CPE/wired LAN and loopback; no Bluetooth binding."""
 import argparse
 import ipaddress
 import json
@@ -18,15 +18,18 @@ def private_address(value):
 
 
 def lan_address():
+    def lan_interface(name):
+        return name.startswith(('wlan', 'wl', 'eth', 'en'))
     route = subprocess.run(['ip', '-j', '-4', 'route', 'get', '1.1.1.1'], capture_output=True, text=True)
     if route.returncode == 0:
         for row in json.loads(route.stdout):
-            if address := private_address(row.get('prefsrc', row.get('src', ''))):
+            if lan_interface(row.get('dev', '')) and (address := private_address(row.get('prefsrc', row.get('src', '')))):
                 return address
-    # A local Bluetooth PAN needs no default Internet route.
+    # CPE may provide only a local network, without an Internet default route.
     interfaces = json.loads(subprocess.check_output(['ip', '-j', '-4', 'address', 'show', 'scope', 'global'], text=True))
-    interfaces.sort(key=lambda row: row.get('ifname') != 'btnap0')
     for interface in interfaces:
+        if not lan_interface(interface.get('ifname', '')):
+            continue
         for row in interface.get('addr_info', []):
             if address := private_address(row.get('local', '')):
                 return address

@@ -34788,7 +34788,7 @@
     "label": "y104",
     "engine_round": 209,
     "baseline": "last deployed engine207 / default y100 / dark y101; N10P change archived and reverted at user request",
-    "deployed": false,
+    "deployed": true,
     "physical_trial_executed": false,
     "shared_memory_updated": false,
     "model_handoff": "work/codex-weather-models-20261117/weather_models_dual_handoff.zip",
@@ -34835,6 +34835,27 @@
       "vehicle_network_disconnect_test": "not executed"
     },
     "evidence_dir": "work/codex-weather-models-20261117",
-    "rule_note": "Local offline supplement forbids switching programs after start; this implementation selects the model before start and shares driving code. No general one-process compliance claim."
+    "rule_note": "Local offline supplement forbids switching programs after start; this implementation selects the model before start and shares driving code. No general one-process compliance claim.",
+    "source_commit": "49adc8ccbd7b168aeccb1441b5694335858b2b26",
+    "entry_runtime_issue": "ELF has RUNPATH, not transitive RPATH; raw Rust CLI lacks librmw_implementation.so unless the Humble LD_LIBRARY_PATH is supplied. No physical round executed."
+  },
+  "y105_weather_launcher_environment_cpe_20261117": {
+    "date": "2026-11-17",
+    "author": "Codex",
+    "author_model": "GPT-6",
+    "label": "y105",
+    "engine_round": 210,
+    "baseline": "installed claude-turn209 / y104",
+    "deployed": false,
+    "physical_trial_executed": false,
+    "shared_memory_updated": false,
+    "models_unchanged_from": "y104",
+    "changes": [
+      "Provide the installed Humble library path in both terminal Rust entry and transient systemd service; same single executable and existing driver logic.",
+      "User no longer needs Bluetooth: disable project RFCOMM service, disconnect PAN, stop selecting Bluetooth interfaces for console binding; CPE is the default webpage launcher. PAN autoconnect off requires user sudo completion."
+    ],
+    "calibration_changed": false,
+    "n10p_reenabled": false,
+    "evidence_dir": "work/codex-weather-models-20261117"
   }
 }

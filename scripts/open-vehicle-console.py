@@ -39,7 +39,7 @@ def run(argv, **options):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--host', default='bianbu@192.168.0.156', help='vehicle SSH user@host')
-    p.add_argument('--link', choices=('auto', 'cpe', 'bluetooth'), default='auto')
+    p.add_argument('--link', choices=('auto', 'cpe', 'bluetooth'), default='cpe')
     p.add_argument('--port', type=int, help='local port; default CPE 8081 / Bluetooth 8082')
     p.add_argument('--check-only', action='store_true', help='read existing connections only; no startup/tunnel/browser')
     p.add_argument('--no-open', action='store_true', help='prepare service/tunnel but do not open browser')

@@ -19,7 +19,6 @@ details{margin-top:24px}summary{cursor:pointer}code{font-size:.9em}.note{font-si
 <label>连接方式
 <select id="connection">
 <option value="cpe">SSH · CPE</option>
-<option value="bluetooth">SSH · 蓝牙</option>
 <option value="lan">局域网直连</option>
 </select>
 </label>
@@ -34,14 +33,13 @@ details{margin-top:24px}summary{cursor:pointer}code{font-size:.9em}.note{font-si
 <p><code>ssh xt-stcar</code> 已配置自动网页转发；旧的直接 IP 登录命令不会自动转发。双击工程内的 <code>打开车辆驾驶台.command</code>，或者在 <strong>Mac 本地终端</strong>（提示符为 <code>yuhaojin@…</code>）运行：</p>
 <pre id="open-command">python3 /Users/yuhaojin/Documents/XT-STCAR/scripts/open-vehicle-console.py --link cpe</pre>
 <button type="button" data-copy="open-command">复制启动命令</button>
-<p>命令会复用 SSH、建立网页转发并自动带上访问码打开驾驶台。蓝牙首次连接可能需要在终端输入车辆密码。</p>
+<p>命令会复用 CPE 的 SSH 连接、建立网页转发并自动带上访问码打开驾驶台。</p>
 <p class="note">HTML 本身不能执行 SSH 命令。本文件不保存密码或访问码。</p>
 </details>
 <script>
 'use strict';
 const profiles={
  cpe:{url:'http://127.0.0.1:8081/?link=cpe',link:'cpe',button:'打开 SSH 驾驶台',note:'本机地址 127.0.0.1 通过 SSH 连接到车上，车辆的局域网监听地址变化不影响这个入口。'},
- bluetooth:{url:'http://127.0.0.1:8082/?link=bluetooth',link:'bluetooth',button:'打开蓝牙驾驶台',note:'使用蓝牙 SSH 网页转发；拍照原图保存在车上。'},
  lan:{url:'http://192.168.0.156:8081/?link=cpe',link:'cpe',button:'打开局域网驾驶台',note:'同一局域网的手机或电脑可用。车端必须已监听这个局域网地址；SSH 连接的 Mac 建议选择上方 SSH 入口。'}
 };
 const connection=document.getElementById('connection');

@@ -29,6 +29,7 @@ base=Path({BASE!r})
 package={package!r}
 launcher=package['rust_launcher']
 program=launcher['program']
+prefix='LD_LIBRARY_PATH=/opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib '
 assert hashlib.sha256(Path(program).read_bytes()).hexdigest()==package['route_engine_sha256']
 config=Path(launcher['config']);temporary=config.with_suffix('.tmp')
 shutil.copy2(Path(package['stage'])/'race-launch.json',temporary);temporary.replace(config)
@@ -38,8 +39,8 @@ for profile, settings in launcher['profiles'].items():
  if not field.exists():
   field.write_text(json.dumps({{'enabled':True,'crosswalk_mode':'vision','light_mode':'fixed10s'}},indent=2)+'\\n')
  name='start' if profile=='default' else 'start_'+profile
- lines.append(name+'() {{ '+program+' start --profile '+profile+' "$@"; }}')
- if profile!='default': lines.append('stop_'+profile+'() {{ '+program+' start --profile '+profile+' --stop; }}')
+ lines.append(name+'() {{ '+prefix+program+' start --profile '+profile+' "$@"; }}')
+ if profile!='default': lines.append('stop_'+profile+'() {{ '+prefix+program+' start --profile '+profile+' --stop; }}')
  marker=base/('current-race.json' if profile=='default' else 'current-race-'+profile+'.json')
  marker.write_text(json.dumps({{'label':package['label'],'source_commit':package['source_commit'],
   'launcher':'rust','profile':profile,'program':program,'config':str(config)}},indent=2)+'\\n')

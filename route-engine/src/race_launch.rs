@@ -26,6 +26,7 @@ use std::{
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const CONSOLE: &str = "xt-stcar-console.service";
 const UNIT: &str = "xt-stcar-race";
+const ROS_LIBRARIES: &str = "/opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib";
 
 struct Options {
     config: PathBuf,
@@ -243,7 +244,11 @@ fn ros_environment(command: &mut Command, out: &Path) {
     command
         .env(
             "LD_LIBRARY_PATH",
-            format!("/opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib:{inherited}"),
+            if inherited.is_empty() {
+                ROS_LIBRARIES.to_owned()
+            } else {
+                format!("{ROS_LIBRARIES}:{inherited}")
+            },
         )
         .env("AMENT_PREFIX_PATH", "/opt/ros/humble")
         .env("ROS_DISTRO", "humble")
@@ -559,6 +564,7 @@ fn entry(o: Options, internal_run: bool) -> Result<()> {
         return run_round(&o, &config, profile);
     }
     let mut command = Command::new("systemd-run");
+    command.arg(format!("--setenv=LD_LIBRARY_PATH={ROS_LIBRARIES}"));
     command
         .args([
             "--user",
