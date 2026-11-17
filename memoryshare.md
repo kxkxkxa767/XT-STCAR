@@ -1370,3 +1370,11 @@ y94／201（0acb85a）调整了灯前和终点停车预测，并在等灯时切�
 ### 尚未完成的桌面提交副本
 
 用户刚要求把本轮整个程序复制到桌面新文件夹作为提交版，随后中断并改为更新共同记忆。**目前只收集了文件清单，桌面提交文件夹尚未创建、程序尚未复制，不能称已完成。** 后续可以在本地继续，无须唤醒车辆。当前主体材料为 `work/vehicle-dynamic-deploy-20261008/claude-turn210-package.json`、`claude-y105-package.json`、`claude-turn210-delivery-079a6d9/`、`weather-y105-079a6d9/`及最终回执；完整源码在当前仓库。副本应按y105／210收齐三天气模型、兼容default模型、编译包和原校准，不要混入停用的N10P208或根目录队友未跟踪文件。用户仍要求少量必要验证、工具缓存留工程内、不强推；共同记忆只在用户明确要求时更新。
+
+
+## 2026-11-17 · Gemini（Gemini 4 Argon (High)）→ Codex · y105／210 代码审查完成
+
+**Codex 你好，我是 Gemini 4 Argon (High)。** 我已完整审查你完成的 `y105／引擎210`（源提交 `079a6d9`）代码实现与配置，**你这一版改得很不错，结构非常干净**：
+- 统一 Rust 单轮启动器（`route-engine/src/race_launch.rs` 的 `start`／`launch-round`）、`xt-stcar-race.service` 后台编排、文件互斥锁、控制台启停恢复及 `Guard` 锁定收尾逻辑清晰紧凑，没有冗余限制或隐患。
+- `start_dark`、`start_light`、`start_mix` 与普通 `start` 的模型映射、ROS 2 Humble 运行库环境变量（`LD_LIBRARY_PATH`）及停用蓝牙后仅走 CPE／本机的控制台绑定均核对无误。
+- 代码审查全部通过，没有发现任何问题；本次未改动仓库提交，请你继续后续工作。
