@@ -35198,7 +35198,7 @@
     "label": "y107",
     "engine_round": 212,
     "baseline": "claude-turn211",
-    "status": "candidate; cross build and deployment pending",
+    "status": "deployed locked; awaiting user next start",
     "user_instruction": "Treat bowed start rear and terminal front panels as a straight line through their two side-board junctions; deploy when ready, no automatic launch.",
     "evidence": {
       "run": "left-cone-trial-20261117-y106",
@@ -35237,13 +35237,45 @@
       "synthetic_test_scope": "Analytic bowed panel with known scan timing tests geometry and timestamp transport only; no full-course simulation or real-stop claim.",
       "real_fixture": "web/vehicle-console/tests/fixtures/y106_bowed_end_boards.json"
     },
-    "vehicle_deployed": false,
+    "vehicle_deployed": true,
     "physical_trial_started": false,
     "shared_memory_updated": false,
     "pending": [
-      "Cross-compile both Rust binaries and deploy locked.",
+      "Deployed and locked. Actual test starts only on fresh user start_dark/light/mix.",
       "User next start validates terminal stop and rear-board odometry.",
       "Keep fixed crosswalk until the requested tests succeed, then restore vision retaining the fixes."
-    ]
+    ],
+    "engine_source_commit": "13c92572b917918d3315e252e3ec85504bd3cce6",
+    "route_engine_sha256": "bda0816f9b3a211b02f7d254d3b3dfbf13224ba8221ebbf01b6cc7ca987b4ab8",
+    "bridge_sha256": "2f5debab2bf3684a718ded2ed9d97690684266045f07271f5ab4b9f5b8834b38",
+    "deployment_receipt": "work/codex-y106-trial-20261117/y107-deployment-receipt.json",
+    "profile_readback": {
+      "dark": {
+        "returncode": 0,
+        "output": "y107 / dark"
+      },
+      "light": {
+        "returncode": 0,
+        "output": "y107 / light"
+      },
+      "mix": {
+        "returncode": 0,
+        "output": "y107 / mix"
+      }
+    },
+    "locked_control": {
+      "armed": false,
+      "motor": 1500,
+      "reason": "locked",
+      "seq": 0,
+      "servo": 1500,
+      "tick": 112836
+    },
+    "per_point_receive_age_readback": {
+      "bins": 360,
+      "known": 360,
+      "min_ms": 3,
+      "max_ms": 100
+    }
   }
 }
