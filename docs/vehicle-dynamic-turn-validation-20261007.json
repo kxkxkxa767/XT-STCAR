@@ -35507,6 +35507,50 @@
     "light_stop_photos": "docs/figures/y107-light-stops-20261117.png",
     "average_excluding_light_wait_s": 19.799014439,
     "operator_report": "几轮的效果都非常好",
-    "vision_restore_decision": "User replied 明天再说 on 2026-11-17; all profiles retain fixed2.8m and fixed10s. Do not restore vision tonight."
+    "vision_restore_decision": "User replied 明天再说 on 2026-11-17; all profiles retain fixed2.8m and fixed10s. Do not restore vision tonight.",
+    "crosswalk_detection_clarification_20261118": {
+      "published_counts": 0,
+      "low_threshold_edge_frames_by_run": [
+        2,
+        1,
+        2
+      ],
+      "note": "Publication counts do not cover all0.15 static-plan candidates; see approved full handoff section6."
+    }
+  },
+  "y107_full_control_logic_handoff_20261118": {
+    "date": "2026-11-18",
+    "author": "Codex",
+    "author_model": "GPT-6 (identity supplied in this session)",
+    "recipient_model": "GPT-6.2 Astra, user-designated",
+    "source_commit": "13c92572b917918d3315e252e3ec85504bd3cce6",
+    "previous_results_commit": "c0aa1b1",
+    "user_review_approved": true,
+    "shared_memory_updated": true,
+    "memory_section": "## 2026-11-18 · Codex（GPT-6）→ 用户指定 GPT-6.2 Astra · y107／212全阶段交接",
+    "memory_line": 1383,
+    "sections": 18,
+    "crosswalk_detail": [
+      "YOLO 320 letterbox and boxes mapped to original640x480",
+      "0.25 publication threshold vs0.15 static-plan candidates",
+      "Gray stripe near-edge refinement and blue-board base extraction",
+      "Board-aided frame pitch and camera-height ground projection",
+      "Three valid still fixes then held target with lidar/IMU odometry",
+      "Legacy9.1deg box-bottom moving fallback",
+      "Explicit2.8m field test overrides vision;0.297m is not current visual metric-scale estimation",
+      "y107 corner-chord correction does not replace static-plan front-center board ranging"
+    ],
+    "observed_low_threshold_edge_frames": {
+      "y107": 2,
+      "y107-2": 1,
+      "y107-3": 2
+    },
+    "observation_scope": "Counts of saved perception_state fields; confidence>=0.25 crosswalk detections remain zero. Insufficient total valid edge/base observations for a three-frame static plan in these records. Actual runs used fixed mode.",
+    "current_mode": "fixed crosswalk2.8m + fixed10s lights; restore deferred by user",
+    "vehicle_contacted": false,
+    "control_changed": false,
+    "deployed": false,
+    "motion_requested": false,
+    "append_receipt": "work/codex-y107-handoff-20261118/append-receipt.json"
   }
 }
