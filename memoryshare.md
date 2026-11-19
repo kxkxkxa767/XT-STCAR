@@ -1710,3 +1710,28 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
 ---
 
 **最后再给 Astra 打个气**：你既有很强的底层工程直觉，又有极高的代码把控力；只要把这份严谨精准用在“让真车跑得更稳、更连贯、遇异常能自己恢复、起跑线绝不掉链子”这几件事上，放手去改、果断落地，就一定能把这台车护送到赛场拿到最漂亮的成绩。祝你和用户在比赛现场一切顺利，加油！ —— Gemini 4 Neon（XHigh）
+
+
+## 2026-11-19 晚 · Gemini 4 Neon（XHigh）· y108／213 纯 Rust 斑马线 + 雷达左缺口定位 + 8 核双簇绑核已编译部署并静态核验
+
+**本轮任务与交付（源提交 `dd58dcb`，单一工程覆盖 `start_dark` / `start_light` / `start_mix`）**
+
+1. **纯 Rust 斑马线检测与雷达左缺口定位（`route-engine/src/race_crosswalk_vision.rs`）**：
+   - 针对比赛户外红/蓝/红蓝+白色篮球场边线场地视频，按半张 A4 贴纸规格（10.5×29.7 cm、间距 10.5 cm、21 cm 横向周期）在车道对齐米制 BEV 上做局部自适应白纸得分 + 前缀和纵向双半连续性 + 19/21/23 cm 周期方波匹配 + 灰度亚像素近边精修，彻底排除了连续篮球场白线和红/蓝丙烯酸地面。
+   - 利用激光雷达拟合双墙并沿左侧隔板前推提取斑马线出口左侧挡板缺口 `left_gap_x_m`（含柔弯曲墙追踪）辅助俯仰角标定，并专门加入亮天蓝球场地面（`B-R=171.7` 高于蓝色挡板 `99.9`）与室内瓷砖镜面反光保护；同步输出 `gap_to_crosswalk_m` 与 `front_to_edge_m`。
+   - 与 Python YOLO 并行 **OR 融合**（`race_crosswalk_stop.rs`、`maneuver_light.rs`、`supervisor.rs`）：任一路检出即参与静止规划与行进兜底；未新增任何发车门或停车门，保留 `field-test-*.json` 固定 2.8m 覆盖与全部已放宽起步条件。
+2. **SpacemiT K1 8 核物理隔离与低延迟共享内存（`race_launch.rs`、`race.rs`、`scripts/vision-log.py`）**：
+   - `vision-log.py` 在 `cap.read()` 之后、~247 ms YOLO 推理之前将原始 BGR 原子写入 `/dev/shm/xt-stcar-cw-<pid>.bgr`（921 KB 内存），且仅在 `start_lane` 阶段写入，离开即停并清理。
+   - 线程/核隔离：`vision-log.py`（8 线程 ONNX）绑 **Cluster 0（CPU 0–3，含 `_ime` 矩阵扩展）**；`route-engine race` 与 ROS2 桥/IMU/日志线程绑 **Cluster 1（CPU 4–7）**；`rust-cw-vision` 单线程独绑 **CPU 6**，一过斑马线即退出（绕桶/等灯/终点 **0% CPU**）。
+3. **离线验证与测试**：
+   - 篮球场视频负样本 FP `0/19`、贴纸正样本 `9/9`（中位误差 1.0 cm）；11-17 室内 5 轮（原户外 YOLO 0%）静止 `49/49`（100%）、接近 `37/37`（100%）；11-15 室外黄昏草地接近 `13/13`（100%）；全数据集过线后 FP `0/193`。
+   - 检查通过：Rust 单测 **63/63**、clippy 维持基线 **32** 警告、Python 控制台单测 **971/971**；`crates/` 未改动，复用 212 `vehicle-bridge`。
+4. **实车部署与锁车静态核验（无解锁、无运动）**：
+   - 已部署 `claude-turn213`（`route-engine` SHA256 `7e9ded3a3479cbd93158edea9ae456602729cab5a6425e1a4366765a04262913`）与统一天气包 `y108`：`start_dark` / `start_light` / `start_mix` `--show` 全部指向 `y108` 与同一份引擎。
+   - 在实车上执行一次不解锁的 `start_mix --check-only`（证据目录车端 `/home/bianbu/xt-stcar-console/left-cone-trial-20261119-y108`）：
+     - 实测 `taskset -apc`：`vision-log.py` 全 8 线程 `0-3`，`route-engine race` 与桥线程 `4-7`，`rust-cw-vision` 独绑 `6`；
+     - 实测 CPU：`route-engine` 主控制循环在 CPU 4 仅 **8.1%**，`rust-cw-vision` 在 CPU 6 仅 **25.4%**（处理 74 帧、3.32 fps，误报 0），`imu-log` 2.4%，YOLO 中位推理 247.1 ms，无任何报错；
+     - 退出后 `/dev/shm/xt-stcar-cw-*` 已自动清理，`xt-stcar-console.service` 恢复 `active`，回读 6 组均为 `(armed=False, motor=1500, servo=1500, reason='locked')`。
+5. **当前状态与待办**：
+   - 车端 `field-test-{dark,light,mix}.json` 仍保留此前 `crosswalk_mode: "fixed"`（2.8m）与 `light_mode: "fixed10s"`；在 fixed 模式下纯 Rust 识别仍会在起步段静默记录到 `run/rust-crosswalk.jsonl` 供核对；待现场切视觉模式时，将 `crosswalk_mode` 改为 `"vision"` 或直接运行 `start_mix --normal` 即可由纯 Rust + YOLO OR 融合规划停车点。
+   - 下一轮实跑需等用户确认摆放并亲自发车；下个版本从 `y109 / 214` 起编。旧条目全部保留。

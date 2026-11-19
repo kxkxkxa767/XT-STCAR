@@ -35581,6 +35581,60 @@
       "console_python_tests": 971
     },
     "crates_changed": false,
-    "rebuild_bridge": false
+    "rebuild_bridge": false,
+    "source_commit": "dd58dcb67e4fa14dfbb8498eb28848517de2661d",
+    "deployment": {
+      "deployed": true,
+      "engine_package": "work/vehicle-dynamic-deploy-20261008/claude-turn213-package.json",
+      "weather_package": "work/vehicle-dynamic-deploy-20261008/claude-y108-package.json",
+      "route_engine_sha256": "7e9ded3a3479cbd93158edea9ae456602729cab5a6425e1a4366765a04262913",
+      "vehicle_bridge_reused_sha256": "2f5debab",
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn213-20261119-230109",
+      "weather_stage": "/home/bianbu/xt-stcar-console/stage-weather-y108-20261119-230110",
+      "profiles_updated": [
+        "dark",
+        "light",
+        "mix"
+      ],
+      "start_commands_verified": [
+        "start_dark --show -> y108 / dark",
+        "start_light --show -> y108 / light",
+        "start_mix --show -> y108 / mix"
+      ],
+      "field_test_preserved": {
+        "crosswalk_mode": "fixed",
+        "light_mode": "fixed10s",
+        "crosswalk_back_edge_from_rear_wall_m": 2.8
+      },
+      "check_only_live_verification": {
+        "evidence_dir": "/home/bianbu/xt-stcar-console/left-cone-trial-20261119-y108",
+        "profile": "mix",
+        "started": false,
+        "motion_requested": false,
+        "program_exit": 0,
+        "vision_exit": 0,
+        "vision_frames": 74,
+        "vision_fps": 3.32,
+        "vision_infer_ms_median": 247.1,
+        "cpu_affinity_verified_live_taskset": {
+          "vision_python_8_threads": "0-3",
+          "route_engine_race_and_bridges": "4-7",
+          "rust_cw_vision_tid_74398": "6"
+        },
+        "live_thread_cpu_pct": {
+          "route_engine_main_psr4": 8.1,
+          "rust_cw_vision_psr6": 25.4,
+          "imu_log_psr4": 2.4,
+          "evidence_write_psr4": 0.0,
+          "coast_fit_psr4": 0.0
+        },
+        "shm_peak_size_bytes": 921632,
+        "shm_cleaned_after_exit": true,
+        "rust_crosswalk_false_positives": 0,
+        "console_service_restored": true,
+        "console_neutral_samples": 6,
+        "final_control_all_locked_1500": true
+      }
+    }
   }
 }
