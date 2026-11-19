@@ -68,6 +68,7 @@ pub(crate) struct Options {
     max_wait_s: f64,
     status_s: f64,
     light_state: Option<PathBuf>,
+    frame_shm: Option<PathBuf>,
     surface_initial_load: f64,
     test_crosswalk_from_rear_wall_m: Option<f64>,
     test_light_fixed_wait: bool,
@@ -78,7 +79,7 @@ pub(crate) struct Options {
 
 const USAGE: &str = "usage: route-engine race --out NEW_DIR [--bridge PATH (legacy)] [--start enter|ready|never|ros] [--ready-hold-s 3] \
 [--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
-[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--surface-initial-load MPS2] [--transport legacy|ros2] \
+[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--frame-shm PATH] [--surface-initial-load MPS2] [--transport legacy|ros2] \
 [--test-crosswalk-from-rear-wall-m METRES] [--test-light-fixed-wait]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -101,6 +102,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         max_wait_s: 300.,
         status_s: 0.5,
         light_state: None,
+        frame_shm: None,
         surface_initial_load: 0.,
         test_crosswalk_from_rear_wall_m: None,
         test_light_fixed_wait: false,
@@ -131,6 +133,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
             #[cfg(feature = "ros2")]
             "--lidar-calibration" => o.lidar_calibration = Some(PathBuf::from(value(i)?)),
             "--light-state" => o.light_state = Some(PathBuf::from(value(i)?)),
+            "--frame-shm" => o.frame_shm = Some(PathBuf::from(value(i)?)),
             "--surface-initial-load" => o.surface_initial_load = number(i)?,
             "--test-crosswalk-from-rear-wall-m" => {
                 let metres = number(i)?;
@@ -189,6 +192,7 @@ pub(crate) fn split_ros_args(args: &[String]) -> (Vec<String>, Vec<String>) {
 pub(crate) enum Event {
     Line(&'static str, String, Instant),
     Light(String, Instant),
+    RustCrosswalk(crate::race_crosswalk_vision::RustCrosswalkObs, Instant),
     Coast(u64, String),
     Ended(&'static str, String),
     Enter,
@@ -476,7 +480,11 @@ struct Program {
     light: V,
     light_updates: i64,
     light_invalid: i64,
-    vision_waiting: Option<bool>,
+    vision_phase: Option<&'static str>,
+    rust_cw_hint: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::LaneLidarHint>>,
+    rust_cw_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    rust_cw_stats: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::RustCrosswalkStats>>,
+    prestart_rust_cw: Vec<(crate::race_crosswalk_vision::RustCrosswalkObs, f64)>,
     external_stop: bool,
 }
 
@@ -486,15 +494,36 @@ pub(crate) fn spawn_named<T: Send + 'static>(name: &str, f: impl FnOnce() -> T +
 }
 
 impl Program {
-    /// Resource hint only: the existing writer owns disk I/O. The vision
-    /// process keeps its normal profile until the race actually waits at the light.
+    /// Resource hint only: the existing writer owns disk I/O. Keeps raw frame export
+    /// active ONLY during `start_lane` before the crosswalk finishes; once past the
+    /// crosswalk, immediately stops the pure-Rust crosswalk thread (0 % CPU after crosswalk).
     fn publish_vision_phase(&mut self) {
-        if self.o.light_state.is_none() { return; }
-        let waiting = self.sup.session.as_ref().is_some_and(|s| s.motion.light_stop_state == Some("waiting"));
-        if self.vision_waiting != Some(waiting) {
-            self.vision_waiting = Some(waiting);
-            let _ = self.files.send(FileOp::Put("vision-phase.txt",
-                if waiting { "light_wait\n" } else { "drive\n" }.to_string()));
+        let phase = match self.sup.session.as_ref() {
+            None => {
+                if self.o.frame_shm.is_some() && !self.rust_cw_stop.load(std::sync::atomic::Ordering::Acquire) {
+                    "start_lane"
+                } else {
+                    "drive"
+                }
+            }
+            Some(s) if s.motion.light_stop_state == Some("waiting") => "light_wait",
+            Some(s)
+                if s.motion.route_stage == "start_lane"
+                    && !matches!(s.motion.crosswalk_state, Some("waiting" | "done" | "released" | "passed")) =>
+            {
+                "start_lane"
+            }
+            Some(_) => "drive",
+        };
+        if phase != "start_lane" && !self.rust_cw_stop.load(std::sync::atomic::Ordering::Acquire) {
+            self.rust_cw_stop.store(true, std::sync::atomic::Ordering::Release);
+        }
+        if self.o.light_state.is_none() {
+            return;
+        }
+        if self.vision_phase != Some(phase) {
+            self.vision_phase = Some(phase);
+            let _ = self.files.send(FileOp::Put("vision-phase.txt", format!("{phase}\n")));
         }
     }
 
@@ -531,6 +560,12 @@ impl Program {
                             self.imu.forward_integral.publish(at_ms, dv);
                         }
                         self.sup.accept_lidar(value, now);
+                        if !self.rust_cw_stop.load(std::sync::atomic::Ordering::Relaxed)
+                            && let Some(hint) = crate::race_crosswalk_vision::LaneLidarHint::from_scan(&self.sup.scan)
+                            && let Ok(mut slot) = self.rust_cw_hint.lock()
+                        {
+                            *slot = hint;
+                        }
                     }
                 });
                 match applied {
@@ -569,6 +604,40 @@ impl Program {
                         self.light = light;
                     }
                     None => self.light_invalid += 1,
+                }
+            }
+            Event::RustCrosswalk(obs, received) => {
+                let now = self.at(received);
+                let captured_program_s = self
+                    .base_monotonic_s
+                    .map(|bm| obs.captured_mono_s - bm)
+                    .filter(|t| t.is_finite() && (-10.0..=now + 1.0).contains(t))
+                    .unwrap_or_else(|| (now - obs.compute_ms / 1000.0).max(0.0));
+                let mut row = to_json(&dict! {
+                    "received_at" => now,
+                    "captured_at" => captured_program_s,
+                    "frame" => obs.frame,
+                    "front_to_edge_m" => obs.front_to_edge_m,
+                    "edge_y" => obs.edge_y,
+                    "pitch_deg" => obs.pitch_rad.to_degrees(),
+                    "pitch_source" => obs.pitch_source,
+                    "score" => obs.score,
+                    "stripes" => obs.stripes as i64,
+                    "gaps" => obs.gaps as i64,
+                    "left_gap_x_m" => obs.left_gap_x_m,
+                    "gap_to_crosswalk_m" => obs.gap_to_crosswalk_m,
+                    "compute_ms" => obs.compute_ms,
+                });
+                row.push('\n');
+                let _ = self.files.send(FileOp::Append("rust-crosswalk.jsonl", row));
+                if self.sup.session.is_some() {
+                    self.sup.observe_rust_crosswalk(&obs, captured_program_s);
+                } else {
+                    self.prestart_rust_cw.push((obs, captured_program_s));
+                    let n = self.prestart_rust_cw.len();
+                    if n > 6 {
+                        self.prestart_rust_cw.drain(..n - 6);
+                    }
                 }
             }
             Event::Enter => self.entered = true,
@@ -682,6 +751,22 @@ pub fn main(args: &[String]) -> i32 {
     if let Some(path) = &o.light_state {
         light_reader(path.clone(), tx.clone());
     }
+    let rust_cw_hint = std::sync::Arc::new(std::sync::Mutex::new(
+        crate::race_crosswalk_vision::LaneLidarHint::default(),
+    ));
+    let rust_cw_stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(o.frame_shm.is_none()));
+    let rust_cw_stats = std::sync::Arc::new(std::sync::Mutex::new(
+        crate::race_crosswalk_vision::RustCrosswalkStats::default(),
+    ));
+    let rust_cw_thread = o.frame_shm.as_ref().map(|path| {
+        crate::race_crosswalk_vision::spawn_worker(
+            path.clone(),
+            rust_cw_hint.clone(),
+            rust_cw_stop.clone(),
+            rust_cw_stats.clone(),
+            tx.clone(),
+        )
+    });
     if o.start == "enter" {
         let tx = tx.clone();
         spawn_named("read-stdin", move || {
@@ -744,7 +829,11 @@ pub fn main(args: &[String]) -> i32 {
         light: V::None,
         light_updates: 0,
         light_invalid: 0,
-        vision_waiting: None,
+        vision_phase: None,
+        rust_cw_hint,
+        rust_cw_stop: rust_cw_stop.clone(),
+        rust_cw_stats,
+        prestart_rust_cw: Vec::new(),
         external_stop: false,
     };
     p.publish_vision_phase();
@@ -764,6 +853,7 @@ pub fn main(args: &[String]) -> i32 {
             .inspect_err(|e| eprintln!("IMU recorder: {e}")).ok()
     };
     let code = run(&mut p);
+    rust_cw_stop.store(true, std::sync::atomic::Ordering::Release);
     imu_stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = p.files.send(FileOp::Stop);
     let _ = writer_thread.join();
@@ -771,6 +861,9 @@ pub fn main(args: &[String]) -> i32 {
     p.sup.writer = None;
     transport.close();
     if let Some(thread) = imu {
+        let _ = thread.join();
+    }
+    if let Some(thread) = rust_cw_thread {
         let _ = thread.join();
     }
     code
@@ -879,6 +972,10 @@ fn run(p: &mut Program) -> i32 {
         if p.o.test_crosswalk_from_rear_wall_m.is_some() || p.o.test_light_fixed_wait {
             session.motion.light_vision = true;
         }
+        // Replay standstill pure-Rust crosswalk fixes captured during ready-hold.
+        for (obs, cap_s) in std::mem::take(&mut p.prestart_rust_cw) {
+            session.motion.rust_crosswalk_observe(&obs, cap_s);
+        }
     }
     p.say(&format!("started run {run_id}"));
     let run_v = V::from(run_id.as_str());
@@ -980,6 +1077,23 @@ fn run(p: &mut Program) -> i32 {
         after.push_back(dict! {"state" => state, "lidar" => p.lidar()});
     }
     let _ = p.files.send(FileOp::Put("after.json", to_json(&V::list(after.into_iter().collect()))));
+    let rust_cw_summary = if let Ok(mut s) = p.rust_cw_stats.lock() {
+        let mut ms = s.compute_ms.clone();
+        ms.sort_by(|a, b| a.total_cmp(b));
+        let med = if ms.is_empty() { None } else { Some(ms[ms.len() / 2]) };
+        let mx = ms.last().copied();
+        s.compute_ms.shrink_to_fit();
+        dict! {
+            "enabled" => p.o.frame_shm.is_some(),
+            "frames_read" => s.frames_read,
+            "detections" => s.detections,
+            "compute_ms_median" => med,
+            "compute_ms_max" => mx,
+            "pinned_cpu" => s.pinned_cpu.map(|c| c as i64),
+        }
+    } else {
+        V::None
+    };
     let summary = dict! {
         "run_id" => run_v.clone(), "started" => started, "reason" => result.get("reason").clone(),
         "route_controller" => if p.o.ros2 { "ros2_rust" } else { "rust_program" },
@@ -988,6 +1102,7 @@ fn run(p: &mut Program) -> i32 {
         "max_tick_compute_s" => result.get("max_tick_compute_s").clone(),
         "max_actual_gap_s" => result.get("max_actual_gap_s").clone(), "max_gap_breakdown" => result.get("max_gap_breakdown").clone(),
         "cpu" => cpu, "scan_to_tick" => scan_to_tick, "result" => result,
+        "rust_crosswalk" => rust_cw_summary,
         "light" => dict! {"state_file" => p.o.light_state.as_ref().map(|path| path.display().to_string()),
                           "updates" => p.light_updates, "invalid" => p.light_invalid, "last" => p.light.clone()},
     };

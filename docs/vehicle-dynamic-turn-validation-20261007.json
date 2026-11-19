@@ -35552,5 +35552,35 @@
     "deployed": false,
     "motion_requested": false,
     "append_receipt": "work/codex-y107-handoff-20261118/append-receipt.json"
+  },
+  "y108_rust_crosswalk_left_gap_cpu_isolation_20261119": {
+    "date": "2026-11-19",
+    "author": "Gemini",
+    "author_model": "Gemini 4 Neon (XHigh)",
+    "baseline_engine": "claude-turn212",
+    "target_engine": "claude-turn213",
+    "label": "y108",
+    "summary": "Pure-Rust half-A4 periodic crosswalk detector fused (OR) with Python YOLO in start_lane, lidar left-gap & wall alignment with sky-blue floor guard, and SpacemiT K1 8-core CPU cluster isolation (YOLO on Cluster 0 CPUs 0-3 with ime, control+ROS2 on Cluster 1 CPUs 4-7, rust-cw-vision pinned to CPU 6 and stopped immediately after crosswalk).",
+    "changes": [
+      "route-engine/src/race_crosswalk_vision.rs: metric BEV 21cm periodic half-A4 (10.5x29.7cm, 10.5cm gap) crosswalk detector + lidar lane-aligned left exit-gap detection + left-gap/front-board pitch calibration with bright sky-blue court floor guard + CPU-6 pinned worker exiting right after crosswalk.",
+      "route-engine/src/race_crosswalk_stop.rs & maneuver_light.rs & supervisor.rs: OR fusion of YOLO and pure-Rust fixes for both rest planning and moving-approach crosswalk_fixed without adding startup gates or altering fixed-mode override.",
+      "route-engine/src/race.rs & race_launch.rs & scripts/vision-log.py: RAM /dev/shm XTF1 raw BGR handoff written right after cap.read() before YOLO inference only during start_lane, plus CPU affinity isolation (vision 0-3, race 4-7, rust-cw-vision 6)."
+    ],
+    "offline_validation": {
+      "venue_basketball_court_negative_fp": "0/19",
+      "venue_basketball_court_synthetic_positive_recall": "9/9 (median abs err 1.0 cm)",
+      "indoor_20261117_rest_recall": "49/49 (100%)",
+      "indoor_20261117_approach_recall": "37/37 (100%)",
+      "indoor_earlier_y90_y93_rest_recall": "28/28 (100%)",
+      "outdoor_grass_y98_3_y100_2_approach_recall": "13/13 (100%)",
+      "post_crosswalk_all_trials_fp": "0/193"
+    },
+    "checks": {
+      "rust_tests": 63,
+      "clippy_warnings": 32,
+      "console_python_tests": 971
+    },
+    "crates_changed": false,
+    "rebuild_bridge": false
   }
 }

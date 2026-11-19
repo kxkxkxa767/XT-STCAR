@@ -49,6 +49,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import struct
 import sys
 import time
 
@@ -254,7 +255,25 @@ def main():
     parser.add_argument('--jpeg-quality', type=int, choices=range(1, 101), default=80, metavar='1..100')
     parser.add_argument('--images', nargs='*', help='bench: these image files instead of the camera')
     parser.add_argument('--light-state', help='round y2: the light state file for route-engine race')
+    parser.add_argument('--frame-shm', help='optional RAM path for start-lane raw BGR frames shared with pure-Rust crosswalk vision')
+    parser.add_argument('--cpu-affinity', help='optional Linux CPU list (e.g. 0-3) to isolate ONNX Runtime from control cores')
     args = parser.parse_args()
+    pinned_cpus = None
+    if args.cpu_affinity and hasattr(os, 'sched_setaffinity'):
+        try:
+            cpus = set()
+            for part in args.cpu_affinity.split(','):
+                part = part.strip()
+                if '-' in part:
+                    lo, hi = part.split('-', 1)
+                    cpus.update(range(int(lo), int(hi) + 1))
+                elif part:
+                    cpus.add(int(part))
+            if cpus:
+                os.sched_setaffinity(0, cpus)
+                pinned_cpus = sorted(os.sched_getaffinity(0))
+        except (OSError, ValueError):
+            pinned_cpus = None
     onnx, spec, digest = check_model(Path(args.model_dir))
     out = Path(args.out)
     out.mkdir(mode=0o700)  # a new directory, never reused
@@ -292,7 +311,9 @@ def main():
             sessions = {args.threads: session}
             wait_profile_error = str(error)
     phase_path = Path(args.phase_state) if args.phase_state else None
-    phase = 'drive'
+    shm_path = Path(args.frame_shm) if args.frame_shm else None
+    shm_active = shm_path is not None
+    phase = 'start_lane' if shm_active else 'drive'
     profile_times = {threads: [] for threads in sessions}
     cap = None
     if args.images is None:
@@ -306,6 +327,7 @@ def main():
     started = time.monotonic()
     print(json.dumps({'kind': 'ready', 'model_sha256': digest, 'onnxruntime': ort.__version__,
                       'threads': args.threads, 'waiting_threads': args.wait_threads if args.wait_threads in sessions else args.threads,
+                      'cpu_affinity': pinned_cpus, 'frame_shm': str(shm_path) if shm_path else None,
                       'source': args.camera if cap is not None else 'images',
                       'started_monotonic_s': started}), flush=True)
     stats = {'frames': 0, 'saved': 0, 'infer_ms': [], 'counts': {c: 0 for c in CLASSES}, 'first_s': {}, 'last_s': {},
@@ -318,7 +340,7 @@ def main():
                     hint = phase_path.read_text().strip()
                 except OSError:
                     hint = None
-                if hint in ('drive', 'light_wait'):
+                if hint in ('start_lane', 'drive', 'light_wait'):
                     phase = hint
             threads = args.wait_threads if phase == 'light_wait' and args.wait_threads in sessions else args.threads
             session = sessions[threads]
@@ -336,6 +358,25 @@ def main():
                 captured = time.monotonic()
                 if frame is None:
                     continue
+            if shm_path is not None:
+                if phase == 'start_lane':
+                    try:
+                        fh, fw = frame.shape[:2]
+                        hdr = struct.pack('<4sQdIII', b'XTF1', stats['frames'] + 1, captured, fw, fh, 0)
+                        shm_tmp = shm_path.with_name(shm_path.name + '.tmp')
+                        with shm_tmp.open('wb') as sf:
+                            sf.write(hdr)
+                            sf.write(frame.tobytes())
+                        os.replace(shm_tmp, shm_path)
+                        shm_active = True
+                    except OSError:
+                        pass
+                elif shm_active:
+                    try:
+                        shm_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                    shm_active = False
             tensor, scale, left, top, w, h = letterbox(frame, cv2, np)
             t0 = time.monotonic()
             result = session.run(['output0'], {'images': tensor})[0]
@@ -394,6 +435,12 @@ def main():
             log.flush()
     if cap is not None:
         cap.release()
+    if shm_path is not None:
+        for p in (shm_path, shm_path.with_name(shm_path.name + '.tmp')):
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
     ms = sorted(stats.pop('infer_ms'))
     elapsed = time.monotonic()-started
     summary = {**stats, 'ended': stop[0] if stop else ('max_s' if cap is not None else 'images_done'),

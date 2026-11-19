@@ -23,13 +23,18 @@ pub(crate) const IMU_POWER_RESPONSE_S: f64 = 0.1;
 
 #[derive(Clone, Debug, Default)]
 pub struct CrosswalkStopPlan {
-    /// (capture time less the camera lag, stripes' edge height, board base height)
+    /// YOLO: (capture time less the camera lag, stripes' edge height, board base height)
     frames: Vec<(f64, f64, f64)>,
+    /// Pure-Rust: (capture time less lag, front-to-edge m, pitch rad, gap-to-edge m, pitch source)
+    direct_frames: Vec<(f64, f64, f64, Option<f64>, &'static str)>,
     /// the lidar's range to the board ahead on the still scans
     board_ahead: Vec<f64>,
     moved_at: Option<f64>,
     /// (front to the edge m, pitch rad, the edge on the crosswalk track)
     fixes: Vec<(f64, f64, f64)>,
+    gap_distances: Vec<f64>,
+    yolo_fixes: usize,
+    rust_fixes: usize,
     pub planned: Option<f64>,
     test_from_rear_wall_m: Option<f64>,
     imu_zero: Option<f64>,
@@ -91,6 +96,25 @@ impl CrosswalkStopPlan {
         }
     }
 
+    /// Direct stationary distance fix from pure-Rust crosswalk vision (using left-gap / board pitch).
+    pub fn push_direct_fix(
+        &mut self,
+        captured: f64,
+        front_to_edge_m: f64,
+        pitch_rad: f64,
+        gap_to_edge_m: Option<f64>,
+        source: &'static str,
+    ) {
+        if self.planned.is_none() && (CROSSWALK_RANGE_M.0..=CROSSWALK_RANGE_M.1).contains(&front_to_edge_m) {
+            // Pure-Rust runs right after capture (no ~230 ms YOLO delay); subtract a short capture lag.
+            self.direct_frames.push((captured - 0.05, front_to_edge_m, pitch_rad, gap_to_edge_m, source));
+            let n = self.direct_frames.len();
+            if n > FRAMES_KEPT {
+                self.direct_frames.drain(..n - FRAMES_KEPT);
+            }
+        }
+    }
+
     /// Once per start-lane scan with the crosswalk track and its rest; the plan's
     /// evidence on the scan that makes it.
     pub fn observe(&mut self, scan: &V, received: f64, track: Option<f64>, rest: Option<(f64, f64)>,
@@ -132,14 +156,26 @@ impl CrosswalkStopPlan {
                 "board_m" => -position, "rest_track_m" => rest_track,
             });
         }
-        if self.planned.is_some() || self.board_ahead.is_empty() {
+        if self.planned.is_some() {
             return None;
         }
-        let board_m = median(&self.board_ahead);
         let still_until = self.moved_at.unwrap_or(f64::INFINITY);
-        for (at, edge_y, base_y) in std::mem::take(&mut self.frames) {
-            if at < still_until && let Some((front, pitch)) = edge_from_board(edge_y, base_y, board_m) {
+        let board_m = (!self.board_ahead.is_empty()).then(|| median(&self.board_ahead));
+        if let Some(bm) = board_m {
+            for (at, edge_y, base_y) in std::mem::take(&mut self.frames) {
+                if at < still_until && let Some((front, pitch)) = edge_from_board(edge_y, base_y, bm) {
+                    self.fixes.push((front, pitch, rest_track - FRONT_BODY_EXTENT_M - front));
+                    self.yolo_fixes += 1;
+                }
+            }
+        }
+        for (at, front, pitch, gap_m, _src) in std::mem::take(&mut self.direct_frames) {
+            if at < still_until {
                 self.fixes.push((front, pitch, rest_track - FRONT_BODY_EXTENT_M - front));
+                if let Some(g) = gap_m {
+                    self.gap_distances.push(g);
+                }
+                self.rust_fixes += 1;
             }
         }
         if self.fixes.len() < CROSSWALK_FIX_FRAMES {
@@ -148,13 +184,27 @@ impl CrosswalkStopPlan {
         let edge = median(&self.fixes.iter().map(|f| f.2).collect::<Vec<_>>());
         self.planned = Some(edge);
         let front = median(&self.fixes.iter().map(|f| f.0).collect::<Vec<_>>());
-        Some(dict! {
+        let basis = match (self.yolo_fixes > 0, self.rust_fixes > 0) {
+            (true, true) => "yolo_and_rust_still_fusion",
+            (false, true) => "rust_stripes_with_left_gap",
+            _ => "still_frames_against_the_board_ahead",
+        };
+        let mut evidence = dict! {
             "source_seq" => scan.idx("seq").clone(), "received_at" => received,
-            "basis" => "still_frames_against_the_board_ahead", "board_ahead_m" => board_m,
-            "front_to_edge_m" => front, "edge_from_board_ahead_m" => board_m - FRONT_BODY_EXTENT_M - front,
+            "basis" => basis,
+            "front_to_edge_m" => front,
             "board_m" => edge, "rest_track_m" => rest_track,
+            "yolo_fixes" => self.yolo_fixes as i64, "rust_fixes" => self.rust_fixes as i64,
             "fixes" => V::list(self.fixes.iter().map(|f| V::from(vec![f.0, f.1.to_degrees(), f.2])).collect()),
-        })
+        };
+        if let Some(bm) = board_m {
+            evidence.set("board_ahead_m", bm);
+            evidence.set("edge_from_board_ahead_m", bm - FRONT_BODY_EXTENT_M - front);
+        }
+        if !self.gap_distances.is_empty() {
+            evidence.set("gap_to_crosswalk_m", median(&self.gap_distances));
+        }
+        Some(evidence)
     }
 
     /// The IMU's forward speed since the start's rest.
@@ -188,5 +238,21 @@ mod tests {
         wrong_reference.set_test_from_rear_wall(Some(2.8));
         assert!(wrong_reference.observe(&scan, 0., Some(7.), Some((0., 7.)), Some(0.), false).is_none());
         assert!(wrong_reference.planned.is_none(), "a front-wall track is not the start's rear wall");
+    }
+
+    #[test]
+    fn pure_rust_still_fixes_plan_crosswalk_without_yolo_or_far_board() {
+        let scan = dict! {"seq" => 1, "ranges" => vec![V::None; 360]};
+        let mut plan = CrosswalkStopPlan::default();
+        for (i, d) in [(0.1, 2.18), (0.3, 2.20), (0.5, 2.19)] {
+            plan.push_direct_fix(i, d, 8.0_f64.to_radians(), Some(0.22), "left_gap");
+        }
+        let ev = plan
+            .observe(&scan, 0.6, Some(-0.40), Some((0.0, -0.40)), Some(0.0), true)
+            .expect("planned from rust");
+        assert_eq!(ev.get("basis").os(), Some("rust_stripes_with_left_gap"));
+        assert!((ev.get("front_to_edge_m").f() - 2.19).abs() < 1e-6);
+        assert!((ev.get("gap_to_crosswalk_m").f() - 0.22).abs() < 1e-6);
+        assert!((plan.planned.unwrap() - (-0.40 - FRONT_BODY_EXTENT_M - 2.19)).abs() < 1e-6);
     }
 }

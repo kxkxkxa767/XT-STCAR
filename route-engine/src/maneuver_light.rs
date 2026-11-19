@@ -175,6 +175,43 @@ impl Maneuver {
         }
     }
 
+    /// Pure-Rust crosswalk detector observation (OR-fused with YOLO in `start_lane`).
+    /// Whichever detector sees the crosswalk first feeds both stationary planning and
+    /// moving-approach fallback without touching traffic-light frames.
+    pub fn rust_crosswalk_observe(&mut self, obs: &crate::race_crosswalk_vision::RustCrosswalkObs, captured_program_s: f64) {
+        if self.race_inputs.is_none() || self.route_stage != "start_lane" {
+            return;
+        }
+        if matches!(self.crosswalk_state, Some("waiting" | "done" | "released" | "passed")) {
+            return;
+        }
+        if self.last_rust_cw_frame == Some(obs.frame) {
+            return;
+        }
+        self.last_rust_cw_frame = Some(obs.frame);
+        self.light_vision = true;
+        self.race_crosswalk_stop.push_direct_fix(
+            captured_program_s,
+            obs.front_to_edge_m,
+            obs.pitch_rad,
+            obs.gap_to_crosswalk_m,
+            obs.pitch_source,
+        );
+        // Distinct negative frame id avoids colliding with YOLO's positive frame ids.
+        let synthetic_id = -(obs.frame + 1);
+        self._crosswalk_raw.push(V::list(vec![
+            V::Int(synthetic_id),
+            V::Float(captured_program_s),
+            V::Float(obs.score),
+            V::None,
+            V::Float(obs.front_to_edge_m),
+        ]));
+        let n = self._crosswalk_raw.len();
+        if n > 8 {
+            self._crosswalk_raw.drain(..n - 8);
+        }
+    }
+
     /// _light_observe(control): the newest frame of control['light'], once per frame.
     pub fn light_observe(&mut self, control: &V, now: f64) {
         let light = if control.is_dict() { control.get("light").clone() } else { V::None };

@@ -2034,6 +2034,13 @@ impl Supervisor {
         }
     }
 
+    /// Pure-Rust crosswalk observation forwarded directly to the active race session.
+    pub fn observe_rust_crosswalk(&mut self, obs: &crate::race_crosswalk_vision::RustCrosswalkObs, captured_program_s: f64) {
+        if let Some(session) = self.session.as_mut() {
+            session.motion.rust_crosswalk_observe(obs, captured_program_s);
+        }
+    }
+
     /// A bridge ended or sent an invalid line (read_bridge's exception path).
     pub fn bridge_failed(&mut self, kind: &str, error: &str) {
         self.errors.set(kind, error);

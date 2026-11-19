@@ -1,5 +1,11 @@
 # XT-STCAR 接手与开发约定
 
+## 当前交接入口（2026-11-19：Gemini 4 Neon，y108／213纯Rust斑马线+左缺口定位+双簇绑核已部署待测）
+
+- 新增纯Rust斑马线视觉模块 `route-engine/src/race_crosswalk_vision.rs`，与现有Python YOLO并行OR融合（任一路识别到即可规划停车点，不新增发车门）：通过 `/dev/shm` 在 `cap.read()` 后、234ms YOLO推理前零拷贝传递 `start_lane` 原始帧；利用雷达通道双墙+斑马线出口左侧挡板缺口定位并校俯仰（含抗蓝球场地面保护），在通道米制BEV上按半张A4规格（10.5×29.7cm、间距10.5cm、21cm周期）匹配，彻底排除红/蓝/红蓝+白色篮球场边线干扰。
+- 按SpacemiT K1 8核拓扑物理隔离CPU：`scripts/vision-log.py`（YOLO）绑Cluster 0（CPU 0–3，带`ime`加速），`route-engine race` 绑Cluster 1（CPU 4–7），纯Rust斑马线线程 `rust-cw-vision` 绑CPU 6且过斑马线立即退出（后续绕桶/灯/终点0% CPU）；`vision-log.py` 离开 `start_lane` 即停止写 `/dev/shm`。
+- 离线验证：比赛场地篮球场红/蓝/白线负样本FP 0/19、贴纸正样本9/9（1.0cm误差）；11-17室内5轮静止49/49、接近37/37，11-15室外草地接近13/13，全圈过线后FP 0/193。检查：63项Rust、clippy仍32警告、971项Python控制台测试全通过；未改 `crates/`，复用212桥。单一工程统一部署至 `start_dark`／`start_light`／`start_mix`（均指向 `y108`），保留现有 `field-test-*.json` 与N10P标定，锁定1500/1500未发车；详见机读键 `y108_rust_crosswalk_left_gap_cpu_isolation_20261119`。
+
 ## 当前交接入口（2026-11-18：交用户指定GPT-6.2 Astra，已同步共同记忆）
 
 - 用户已复核并批准完整交接稿，要求补充斑马线具体定位过程。请先读`memoryshare.md`文末“2026-11-18 · Codex（GPT-6）→ 用户指定 GPT-6.2 Astra · y107／212全阶段交接”：18部分覆盖启动、起步、斑马线、两桶、灯、终点、软恢复／硬停机、端板／时间校正及证据路径。

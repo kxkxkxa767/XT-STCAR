@@ -312,6 +312,12 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
     let mut vision_reader = None;
     let camera = profile["camera"].as_str().unwrap_or("/dev/video20");
     let devices = ["/dev/car", "/dev/laser", camera];
+    let frame_shm = if Path::new("/dev/shm").is_dir() {
+        PathBuf::from(format!("/dev/shm/xt-stcar-cw-{}.bgr", std::process::id()))
+    } else {
+        out.join("cw-frame.bgr")
+    };
+    let _ = crate::race_crosswalk_vision::remove_shm_best_effort(&frame_shm);
     let run_result = (|| -> Result<()> {
         let t = Instant::now();
         while !busy(&devices)?.is_empty()
@@ -338,7 +344,9 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
             .args(field_vision)
             .arg("--phase-state")
             .arg(out.join("run/vision-phase.txt"))
-            .args(["--wait-threads", "4"])
+            .args(["--wait-threads", "4", "--cpu-affinity", "0-3"])
+            .arg("--frame-shm")
+            .arg(&frame_shm)
             .arg("--light-state")
             .arg(out.join("light-state.json"))
             .stdin(Stdio::null())
@@ -376,7 +384,16 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         if stopped.load(Ordering::Acquire) {
             return Err("operator stopped during startup".into());
         }
-        let mut command = Command::new(std::env::current_exe()?);
+        let exe = std::env::current_exe()?;
+        let taskset = Path::new("/usr/bin/taskset");
+        let mut command = if cfg!(target_os = "linux") && taskset.is_file() {
+            let mut c = Command::new(taskset);
+            c.args(["-c", "4-7"]).arg(&exe);
+            result["cpu_affinity"] = json!({"vision": "0-3", "race": "4-7", "rust_crosswalk": "6"});
+            c
+        } else {
+            Command::new(&exe)
+        };
         command
             .arg("race")
             .arg("--bridge")
@@ -413,7 +430,9 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         if !ready.is_null() {
             command
                 .arg("--light-state")
-                .arg(out.join("light-state.json"));
+                .arg(out.join("light-state.json"))
+                .arg("--frame-shm")
+                .arg(&frame_shm);
         }
         ros_environment(&mut command, &out);
         let stdout = File::create(out.join("race-stdout.txt"))?;
@@ -449,6 +468,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
                 .and_then(|s| s.code())
         );
     }
+    let _ = crate::race_crosswalk_vision::remove_shm_best_effort(&frame_shm);
     if let Some(reader) = vision_reader {
         let _ = reader.join();
     }
