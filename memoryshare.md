@@ -1735,3 +1735,17 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
 5. **当前状态与待办**：
    - 车端 `field-test-{dark,light,mix}.json` 仍保留此前 `crosswalk_mode: "fixed"`（2.8m）与 `light_mode: "fixed10s"`；在 fixed 模式下纯 Rust 识别仍会在起步段静默记录到 `run/rust-crosswalk.jsonl` 供核对；待现场切视觉模式时，将 `crosswalk_mode` 改为 `"vision"` 或直接运行 `start_mix --normal` 即可由纯 Rust + YOLO OR 融合规划停车点。
    - 下一轮实跑需等用户确认摆放并亲自发车；下个版本从 `y109 / 214` 起编。旧条目全部保留。
+
+
+## 2026-11-19 晚 · Gemini 4 Neon（XHigh）· y109／214 正常比赛红绿灯 10s 保底放行已编译推送（暂未上车）
+
+1. **用户新要求与车端切换**：
+   - 用户先要求切回正常比赛模式（已对车端 `dark` / `light` / `mix` 执行 `--normal`，三份 `field-test-*.json` 均为 `enabled: false`，未发车、保持 `xt-stcar-console.service` 活跃锁定）。
+   - 随后用户明确比赛模式红绿灯保底规则：**识别到绿灯就走；识别到了红灯但后续一直未识别到绿灯则从第一次识别到红灯后 10 s 走；红绿灯前停车了还没识别到红灯则从停下那一刻起算 10 s 走**，并指示**改完编译完上传到仓库、先不上传到车**。
+2. **源码改动（`route-engine/src/maneuver_light.rs`）**：
+   - 比赛模式 `light_wait` 新增 `race_red_timeout = red_s >= 10.0`（`basis: "red_seen_10s_after_first_red"`，不受 `red_now` 残影阻断）与 `race_color_timeout = red_s.is_none() && waited >= 10.0`（`basis: "known_gantry_color_unconfirmed_10s_after_stop"`）；绿灯 `green` 仍优先立即放行；10 s 保底放行后直接置 `released` 不再重武装。普通参考模式不变。
+   - 更新并扩展单元测试覆盖“停前见红 10 s 走”、“停后见红从首次见红起 10 s 走”、“未见红停后 10 s 走”、“见绿立即走”。
+3. **验证与构建状态**：
+   - Mac release build、Rust **63/63**、`clippy` **32** 警告（无新增）、Python 控制台 **971/971** 全通过；`crates/` 未改动，复用 212 桥。
+   - 已交叉编译生成 `claude-turn214`（基线 `claude-turn213`）及统一天气包 `y109`，并推送至 `origin/main`；**按用户要求未上传到车**。
+   - 车上当前仍为 `y108 / 213`（`field-test-*.json` 已设 `enabled: false`、锁定 `1500/1500`）。后续若需部署 `y109 / 214`，直接执行 `python3 -B work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn214 214` 与 `python3 -B scripts/deploy-weather-models.py y109` 即可（不会覆盖 `enabled: false`）。下一版从 `y110 / 215` 起编；旧条目全部保留。

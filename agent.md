@@ -1,5 +1,11 @@
 # XT-STCAR 接手与开发约定
 
+## 当前交接入口（2026-11-19：Gemini 4 Neon，y109／214正常比赛红绿灯10s保底放行已编译打包推送，暂未上传至车）
+
+- 按用户明确规则修改比赛模式红绿灯放行逻辑（`route-engine/src/maneuver_light.rs`）：识别到绿灯立即放行；若识别到红灯但后续一直未识别到绿灯，则从**第一次识别到红灯起满 10.0 s 无条件放行**（`red_seen_10s_after_first_red`，不再因红灯闪烁或未见绿而卡死）；若在门架前停车后一直未识别到红灯，则从**停下那一刻起满 10.0 s 无条件放行**（`known_gantry_color_unconfirmed_10s_after_stop`）；10 s 放行后直接置 `released` 不再重武装。普通参考模式不变。
+- 本地验证通过：Mac release build、Rust 单测 **63/63**、`clippy` 维持 **32** 警告、Python 控制台回归 **971/971**；`crates/` 未改，复用 212 桥。已交叉编译打包 `claude-turn214`（基线 `claude-turn213`）及统一天气包 `y109`。
+- **车端状态**：按用户最新要求，本次 `y109／214` **仅推送至仓库，未上传到车**。车上目前为 `y108／213`（源 `dd58dcb`），且此前已按用户前一条指令将车端 `field-test-{dark,light,mix}.json` 全部切为正常比赛模式（`enabled: false`），车辆保持锁定 `1500/1500` 未发车。详见机读键 `y109_race_light_10s_guarantee_20261119` 与 `memoryshare.md` 文末。
+
 ## 当前交接入口（2026-11-19：Gemini 4 Neon，y108／213纯Rust斑马线+左缺口定位+双簇绑核已部署待测）
 
 - 新增纯Rust斑马线视觉模块 `route-engine/src/race_crosswalk_vision.rs`，与现有Python YOLO并行OR融合（任一路识别到即可规划停车点，不新增发车门）：通过 `/dev/shm` 在 `cap.read()` 后、234ms YOLO推理前零拷贝传递 `start_lane` 原始帧；利用雷达通道双墙+斑马线出口左侧挡板缺口定位并校俯仰（含抗蓝球场地面保护），在通道米制BEV上按半张A4规格（10.5×29.7cm、间距10.5cm、21cm周期）匹配，彻底排除红/蓝/红蓝+白色篮球场边线干扰。

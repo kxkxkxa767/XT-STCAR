@@ -35636,5 +35636,25 @@
         "final_control_all_locked_1500": true
       }
     }
+  },
+  "y109_race_light_10s_guarantee_20261119": {
+    "date": "2026-11-19",
+    "author": "Gemini",
+    "author_model": "Gemini 4 Neon (XHigh)",
+    "baseline_engine": "claude-turn213",
+    "target_engine": "claude-turn214",
+    "label": "y109",
+    "summary": "In normal race mode, release immediately on fresh green; if red was detected but green never arrives, unconditionally release 10.0 s after first red (red_seen_10s_after_first_red); if stopped at gantry without ever detecting red, unconditionally release 10.0 s after stop (known_gantry_color_unconfirmed_10s_after_stop). Reference Python mode unchanged.",
+    "changes": [
+      "route-engine/src/maneuver_light.rs: replace race_fallback/red_now-gated timeout with race_red_timeout (red_s >= 10.0s, unconditional) and race_color_timeout (red_s.is_none() && waited >= 10.0s, unconditional); prevent re-arm after 10s release; expand unit test covering red-before-stop, red-after-stop, unconfirmed-color, and early-green release."
+    ],
+    "checks": {
+      "rust_tests": 63,
+      "clippy_warnings": 32,
+      "console_python_tests": 971
+    },
+    "crates_changed": false,
+    "rebuild_bridge": false,
+    "vehicle_state_note": "Prior to user instruction to push without uploading to vehicle, dark/light/mix field-test-*.json on car were switched to normal mode (enabled=false) while running y108/213, locked 1500/1500. y109/214 built locally and pushed to origin/main only; NOT deployed to vehicle."
   }
 }

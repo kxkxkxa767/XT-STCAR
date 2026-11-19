@@ -26,7 +26,9 @@ const RACE_GREEN_AFTER_RED_MIN_SCORE: f64 = 0.25;
 // y34: the practice red follows the beam by 1.0-1.3 s, then a 3.6 Hz frame and
 // inference; y32 decided it 1.36 s after the crossing but had refilled at 1.0 s.
 const LIGHT_RED_DUE_S: f64 = 2.0;
-// User2026-11-13: at a known light stop, missing colour must not wait forever.
+// User2026-11-13 / 2026-11-19: in race mode, green releases immediately; otherwise
+// 10 s after first red (if red was seen) or 10 s after stop (if red was never seen)
+// is an unconditional release floor.
 const RACE_UNCONFIRMED_COLOR_WAIT_S: f64 = 10.0;
 
 /// _thin_posts(ranges): isolated thin posts (car frame, left +), nearest first.
@@ -1037,12 +1039,13 @@ impl Maneuver {
         let red_timed = red_s.is_some_and(|s| s >= LIGHT_RED_MAX_S || (s >= LIGHT_RED_GO_S && !red_now));
         let waited = now - wait_since;
         let no_light = !self._light_seen && waited >= LIGHT_NO_LIGHT_WAIT_S;
-        let race_fallback = red_s.is_some_and(|s| s >= LIGHT_RED_GO_S) && !red_now;
+        let race_red_timeout = self.race_inputs.is_some()
+            && red_s.is_some_and(|s| s >= RACE_UNCONFIRMED_COLOR_WAIT_S);
         let race_color_timeout = self.race_inputs.is_some() && red_s.is_none()
-            && waited >= RACE_UNCONFIRMED_COLOR_WAIT_S && !red_now;
+            && waited >= RACE_UNCONFIRMED_COLOR_WAIT_S;
         let test_fixed = self.race_inputs.is_some() && self.race_test_light_fixed_wait;
         let wait = if test_fixed { waited < RACE_UNCONFIRMED_COLOR_WAIT_S }
-            else if self.race_inputs.is_some() { !green && !race_fallback && !race_color_timeout }
+            else if self.race_inputs.is_some() { !green && !race_red_timeout && !race_color_timeout }
             else { !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S };
         if wait {
             // the board ahead's history for the restart
@@ -1057,8 +1060,8 @@ impl Maneuver {
             "green_in_fresh_frames_after_the_stop"
         } else if green {
             "green_without_red_since_the_gantry_looking_again"
-        } else if self.race_inputs.is_some() && race_fallback {
-            "red_seen_10_5s_no_fresh_red"
+        } else if race_red_timeout {
+            "red_seen_10s_after_first_red"
         } else if race_color_timeout {
             "known_gantry_color_unconfirmed_10s_after_stop"
         } else if red_ended {
@@ -1085,7 +1088,7 @@ impl Maneuver {
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"go" => go.clone()});
         self.route_event("light_go", scan, control, go.clone());
         let known_gantry = self.race_inputs.is_some() && self.light_stop_evidence.has("gantry");
-        if !test_fixed && !known_gantry && ((no_light && !green) || (green && self._light_red_frames == 0)) {
+        if !test_fixed && !race_red_timeout && !race_color_timeout && !known_gantry && ((no_light && !green) || (green && self._light_red_frames == 0)) {
             // not the light: a later gantry may start a new stop
             let rearmed = appended(&self.light_stop_evidence, "rearmed", go);
             self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"rearmed" => rearmed});
@@ -1195,14 +1198,34 @@ mod tests {
         assert!(m.light_wait(&scan(12.3), 12.3, &V::None));
         assert_eq!(m.light_stop_state, Some("released"));
         assert_eq!(m.light_stop_evidence.get("go").get("basis").s(), "known_gantry_color_unconfirmed_10s_after_stop");
+        // Red seen before stop (at 1.5s, stopped at 2.2s): releases 10s after first red (11.5s) even if red lingers.
         m.light_stop_state = Some("waiting");
-        m._light_red_at = Some(2.3);
+        m._light_wait_since = Some(2.2);
+        m._light_wait_tick = Some(2.2);
+        m._light_red_at = Some(1.5);
+        m._light_frames = vec![V::from(vec![98., 11.4, 0.9, 0.])];
+        assert!(!m.light_wait(&scan(11.4), 11.4, &V::None), "still waits before 10s since first red");
+        m._light_frames = vec![V::from(vec![99., 11.5, 0.9, 0.])];
+        assert!(m.light_wait(&scan(11.5), 11.5, &V::None), "releases 10s after first red even if red lingers");
+        assert_eq!(m.light_stop_state, Some("released"));
+        assert_eq!(m.light_stop_evidence.get("go").get("basis").s(), "red_seen_10s_after_first_red");
+        // Red seen after stop (at 2.6s, stopped at 2.2s): waits until 10s after first red (12.6s), not 12.2s.
+        m.light_stop_state = Some("waiting");
+        m._light_wait_since = Some(2.2);
+        m._light_wait_tick = Some(2.2);
+        m._light_red_at = Some(2.6);
         m._light_frames = vec![V::from(vec![100., 12.4, 0.9, 0.])];
-        assert!(!m.light_wait(&scan(12.4), 12.4, &V::None), "a fresh red is not an unconfirmed colour");
+        assert!(!m.light_wait(&scan(12.4), 12.4, &V::None), "waits for 10s since first red when red appeared after stop");
+        m._light_frames = vec![V::from(vec![101., 12.6, 0.9, 0.])];
+        assert!(m.light_wait(&scan(12.6), 12.6, &V::None), "releases at 10s after first red");
+        assert_eq!(m.light_stop_state, Some("released"));
+        assert_eq!(m.light_stop_evidence.get("go").get("basis").s(), "red_seen_10s_after_first_red");
+        // Green seen early releases immediately.
+        m.light_stop_state = Some("waiting");
         m._light_red_at = None;
         m._light_wait_since = Some(12.3);
         m._light_wait_tick = Some(12.3);
-        m._light_frames = vec![V::from(vec![101., 12.4, 0., 0.9]), V::from(vec![102., 12.5, 0., 0.9])];
+        m._light_frames = vec![V::from(vec![102., 12.4, 0., 0.9]), V::from(vec![103., 12.5, 0., 0.9])];
         assert!(m.light_wait(&scan(12.5), 12.5, &V::None));
         assert_eq!(m.light_stop_state, Some("released"), "known gantry remains known even without a red frame");
     }
