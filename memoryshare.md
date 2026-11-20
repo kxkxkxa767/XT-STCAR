@@ -1813,3 +1813,33 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
 
 - 按用户指令将已编译的主目录 `claude-turn217 / y112`（源提交 `160e542`，基线 `claude-turn216`，`route-engine` sha256 `89994ce8...`）部署到实车（备份 `/home/bianbu/xt-stcar-console/backup-claude-turn217-20261120-180031`，`deployed=true`，`verified_files=11`，`motion_requested=false`，保留车端 N10P `lidar-serial.json` 与 `lidar-calibration.json`）。
 - 只读核验：`route-engine start --profile dark/light/mix --show` 均报告 `y112`；`xt-stcar-console.service` 为 `active`；`/api/state` 实测 `healthy=true, mode="locked", armed=false, motor=1500, servo=1500, reason="locked"`（`ages: camera 0.076s, lidar 0.085s, control 0.013s`）。未解锁未发车，交由用户现场实测。
+
+
+## 2026-11-20 20:59 · Gemini 4 Neon（XHigh）→ GPT / Codex · 修复 y112 终点早刹与区外死锁（y113／218 已上车锁定，请审查）
+
+### 1. y112 实车回传分析（46 文件，`work/vehicle-dynamic-deploy-20261008/left-cone-trial-20261120-y112`）
+- **前半程与 y112 斑马线修复有效**：纯 Rust 在 `1.06 s` 锁满 3/3 帧 `left_gap` 测距并自停；斑马线停距收敛至 **`0.357 m`**（对比 `y111-2/3/4` 为 `0.520/0.618/0.778 m`），零补进；两桶与红绿灯（停距 `0.367 m`、后缘入区 `0.238 m`、`red_seen_10s_after_first_red` 10.069 s 放行）均零质量等待、零恢复 tick。
+- **终点问题（用户现场观察准确，且查出 `y111-4` 同病）**：
+  - `y112` 终点停在 `front_gap = 0.531–0.537 m`（雷达 `front_m = 0.762 m`，车尾距板 `0.911–0.942 m`，**超出 80 cm 停车区 11–14 cm**），随后在 `M=1500` 原地僵持 **23 s** 直至触发 `maneuver_cumulative_drive_timeout`（40 s）；同天 `y111-4` 亦因同样原因停在 `0.444 m` 后死锁超时。
+  - **三层根因**：
+    1. **端线参考切换污染测速与 `imu_bias`**：弯曲终板中心（`multi_return_end_board_plane`）与两端角弦（`side_end_corner_chord`）相差 `~15–25 cm`，两参考交替写入同一 `finish.ranges` 未重置，在 `y112` `seq 273→275` 造成 `2.035 m/s` 假速度尖峰，把 `imu_bias` 污染到 `+0.218 m/s`（真值约 `-0.10 m/s`），令 `fused_speed` 虚高 `~0.3 m/s` 于 `2.386 m` 提早急刹（`y111-4` 同样被污染至 `+0.122 m/s` 早刹；`y111-2` 则反向被污染至 `-0.244 m/s` 晚刹至 `0.064 m`）。
+    2. **终点 `1300` 刹车无早放机制**：`y112` 刹车中段 `t=27.51 s` 时已算出 `brake_stop_gap_m = 0.582 m`（明显停在 `body_gap = 0.40 m` 区外）且 `release_stop_gap_m = 0.266 m`（松刹滑行刚好落在目标 `0.25 m` 附近），但 `LightBrake::command` 完全未检查 `release_stop`，硬把 `1300` 刹到停（`y111-4` 同理）。
+    3. **比赛模式用完单次刹车后静止死锁**：`maneuver_finish.rs` 在 `race_brake.is_used()` 后一律返回 `NEUTRAL` 并清零 `pulse/creeping`，一旦停在 `body_gap = 0.40 m` 外，既不满足整车入区结束条件、也不执行补进，死等 23 s 直到 40 s 超时。
+
+### 2. 三层修复与三份工程同步（主目录 `6328408` + `eec7c2a`，同步至 `test/`、`提交/`）
+1. `route-engine/src/maneuver_finish.rs`：新增 `FinishControl.board_chord: Option<bool>`（放行/直通时清零），当 `side_end_corner_chord` 与 `multi_return_end_board_plane` 切换时清空 `finish.ranges`、`last_speed` 并调用 `race_brake.reset_gap_fusion()`，彻底杜绝跨参考求导与 `imu_bias` 跳变（端线拟合失败回退原测距机制完整保留）。
+2. `route-engine/src/race_light_brake.rs` + `maneuver_finish.rs`：新增仅用于终点的 `set_release_over_gap(Some(goal.body_gap))`（灯区保持 `None` 完全不动）；`1300` 生效满 `0.3 s` 后，若 `p.brake_stop > 0.40 m` 且 `p.release_stop >= 0.25 m`，单次释放回 `1500`（`end_reason = "coast_reaches_zone"`，仍严格遵守单轮绝不二次发 `1300`）。
+3. `route-engine/src/maneuver_finish.rs`：在 `race_brake.is_used()` 后若已停稳（`speed_known && stopped && now - brake_end >= 0.3 && rested`）且仍 `!body_in_zone`，在区内执行 2 帧 `1560` 轻补进（`LANE_CREEP_FRAMES=2`，最多 3 次；若在区外或补进用完且满足 `kick_room` 则执行 3 帧 `1560`），并回写 `feedback["creeps"]`，彻底消除区外死锁。
+
+### 3. 测试与实车部署核验
+- **三份工程全绿**：主目录 Mac release 编译通过、Rust **67/67**、`clippy` 保持 **32**（零新增）、Python 控制台 **970/970**；`test/` Rust **69/69**（无 `target/` 残留）；`提交/` Rust **67/67**（纯 N10、零 `target/`/`.DS_Store`/`__pycache__` 残留）。
+- **主目录已部署上车（`claude-turn218 / y113`，基线 `claude-turn217`）**：
+  - 源提交 `eec7c2a`，`route-engine` SHA-256 `f24d3149...`，车端备份 `/home/bianbu/xt-stcar-console/backup-claude-turn218-20261120-205742`，`deployed=true`、`verified_files=11`、`motion_requested=false`，保留车端 N10P 串口与标定配置。
+  - 只读核验：`start_dark/light/mix --show` 均为 `y113`；`xt-stcar-console.service` 为 `active`；`/api/state` 实测 `healthy=true, mode="locked", armed=false, motor=1500, servo=1500, reason="locked"`（camera `0.045s`、lidar `0.006s`、control `0.015s`），未解锁未动车。
+
+### 4. 请 GPT / Codex 审查交接（务必严格遵守用户红线）
+- **审查范围**：仅审 `y112`–`y113` 改动 diff 及直接调用链（`race_start_lane.rs`、`maneuver_open.rs`、`maneuver_crosswalk.rs`、`race_crosswalk_vision.rs`、`maneuver_finish.rs`、`race_light_brake.rs`），不翻查无关旧代码，不扩改既有 32 条 clippy 警告。
+- **用户特别强调（红线）**：
+  1. **严禁新增任何限制、防御性门槛、拒发门、停车门、速度上限或阶段硬超时**；只保留底层桥限幅、真实已观测 8 cm 车身门和驾驶预算。
+  2. **特别注意发车阶段**：现场发车区两侧挡板是**软板**，雷达很容易被识别成**更宽的距离或微弯**；**绝对禁止收紧** `wide_start_lane` 拟合容差（`MIN_POINTS=18 / INLIER_M=0.06 / MIN_INLIER_SHARE=0.60 / MAX_WALL_ANGLE_DIFF=15°`）、比赛起步偏航上限（`30°`）、起步车道宽度、雷达部分缺束放行或端线拟合失败回退原测距——绝不能在比赛起跑线把车卡住发不出去。
+  3. 仅对确定的编译/崩溃或确定实车控制错误动手修复并同步三份（`主目录`、`test/`、`提交/`）；若无真阻塞项请直接判通过并追加结论到本文件文末，不要以理论竞态或假想边界卡流程。
