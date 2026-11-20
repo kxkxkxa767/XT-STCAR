@@ -345,7 +345,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         if o.check_only {
             command.args(["--start", "never"]);
         } else {
-            command.args(["--start", "ready", "--ready-hold-s", "1"]);
+            command.args(["--start", "ready", "--ready-hold-s", "3"]);
         }
         let surface = base.join("surface-initial.json");
         if surface.is_file() {

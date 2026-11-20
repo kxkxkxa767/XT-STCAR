@@ -46,7 +46,7 @@ pub struct CrosswalkStopPlan {
 
 /// The front's distance to the stripes' edge and the frame's pitch, from the two image
 /// heights and the lidar's range to the board ahead (its base fixes the pitch).
-fn edge_from_board(edge_y: f64, base_y: f64, board_m: f64) -> Option<(f64, f64)> {
+pub(crate) fn edge_from_board(edge_y: f64, base_y: f64, board_m: f64) -> Option<(f64, f64)> {
     let to_board = board_m - CAMERA_AHEAD_OF_LIDAR_M;
     if to_board <= 0. {
         return None;
@@ -68,7 +68,7 @@ fn median(values: &[f64]) -> f64 {
 }
 
 /// The lidar's range straight ahead: the median of the centre rays (at least four).
-fn board_ahead(scan: &V) -> Option<f64> {
+pub(crate) fn board_ahead(scan: &V) -> Option<f64> {
     let list = scan.idx("ranges").l();
     if list.len() < 360 {
         return None;

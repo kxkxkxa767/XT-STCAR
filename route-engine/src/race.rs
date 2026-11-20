@@ -468,7 +468,29 @@ struct Program {
     rust_cw_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     rust_cw_stats: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::RustCrosswalkStats>>,
     prestart_rust_cw: Vec<(crate::race_crosswalk_vision::RustCrosswalkObs, f64)>,
+    prestart_yolo_cw: Vec<(i64, f64, f64, f64)>,
     external_stop: bool,
+}
+
+/// Pure decision for `--start ready` launch timing:
+/// launch immediately once sensors are ready and crosswalk distance is computed;
+/// otherwise launch after `ready_hold_s` (3 s) so missing distance never blocks launch.
+fn ready_launch_due(turn_ready: bool, crosswalk_ready: bool, elapsed_s: f64, ready_hold_s: f64) -> bool {
+    turn_ready && (crosswalk_ready || elapsed_s >= ready_hold_s)
+}
+
+/// Whether the pure-Rust crosswalk worker should remain active while driving:
+/// only while still in `start_lane` AND crosswalk distance has not yet been computed.
+fn rust_crosswalk_needed_in_motion(
+    route_stage: &str,
+    crosswalk_state: Option<&str>,
+    planned: Option<f64>,
+    board_m: Option<f64>,
+) -> bool {
+    route_stage == "start_lane"
+        && planned.is_none()
+        && board_m.is_none()
+        && !matches!(crosswalk_state, Some("waiting" | "done" | "released" | "passed"))
 }
 
 /// thread::spawn with a name (it shows in /proc and in the CPU account).
@@ -477,13 +499,42 @@ pub(crate) fn spawn_named<T: Send + 'static>(name: &str, f: impl FnOnce() -> T +
 }
 
 impl Program {
+    fn prestart_crosswalk_fixes(&self) -> (usize, usize) {
+        let range = crate::maneuver::CROSSWALK_RANGE_M;
+        let rust = self
+            .prestart_rust_cw
+            .iter()
+            .filter(|(obs, _)| (range.0..=range.1).contains(&obs.front_to_edge_m))
+            .count();
+        let yolo = crate::race_crosswalk_stop::board_ahead(&self.sup.scan).map_or(0, |bm| {
+            self.prestart_yolo_cw
+                .iter()
+                .filter(|(_, _, ey, by)| crate::race_crosswalk_stop::edge_from_board(*ey, *by, bm).is_some())
+                .count()
+        });
+        (rust, yolo)
+    }
+
+    fn prestart_crosswalk_ready(&self) -> bool {
+        let (rust, yolo) = self.prestart_crosswalk_fixes();
+        rust + yolo >= crate::maneuver::CROSSWALK_FIX_FRAMES
+    }
+
+    fn stop_rust_crosswalk(&mut self, reason: &str) {
+        if !self.rust_cw_stop.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            self.say(reason);
+        }
+        self.publish_vision_phase();
+    }
+
     /// Resource hint only: the existing writer owns disk I/O. Keeps raw frame export
-    /// active ONLY during `start_lane` before the crosswalk finishes; once past the
-    /// crosswalk, immediately stops the pure-Rust crosswalk thread (0 % CPU after crosswalk).
+    /// and pure-Rust crosswalk detection active ONLY until crosswalk distance is computed
+    /// (at rest or while driving in `start_lane`), then stops immediately (0 % CPU after).
     fn publish_vision_phase(&mut self) {
+        let rust_stopped = self.rust_cw_stop.load(std::sync::atomic::Ordering::Acquire);
         let phase = match self.sup.session.as_ref() {
             None => {
-                if self.o.frame_shm.is_some() && !self.rust_cw_stop.load(std::sync::atomic::Ordering::Acquire) {
+                if self.o.frame_shm.is_some() && !rust_stopped && !self.prestart_crosswalk_ready() {
                     "start_lane"
                 } else {
                     "drive"
@@ -491,15 +542,20 @@ impl Program {
             }
             Some(s) if s.motion.light_stop_state == Some("waiting") => "light_wait",
             Some(s)
-                if s.motion.route_stage == "start_lane"
-                    && !matches!(s.motion.crosswalk_state, Some("waiting" | "done" | "released" | "passed")) =>
+                if !rust_stopped
+                    && rust_crosswalk_needed_in_motion(
+                        s.motion.route_stage,
+                        s.motion.crosswalk_state,
+                        s.motion.race_crosswalk_stop.planned,
+                        s.motion._crosswalk_board_m,
+                    ) =>
             {
                 "start_lane"
             }
             Some(_) => "drive",
         };
-        if phase != "start_lane" && !self.rust_cw_stop.load(std::sync::atomic::Ordering::Acquire) {
-            self.rust_cw_stop.store(true, std::sync::atomic::Ordering::Release);
+        if phase != "start_lane" && !self.rust_cw_stop.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            self.say("crosswalk distance resolved or passed; stopping rust crosswalk detector");
         }
         if self.o.light_state.is_none() {
             return;
@@ -583,6 +639,23 @@ impl Program {
                         let mut row = to_json(&dict! {"received_at" => now, "light" => light.clone()});
                         row.push('\n');
                         let _ = self.files.send(FileOp::Append("light.jsonl", row));
+                        if self.sup.session.is_none()
+                            && let (Some(ey), Some(by)) =
+                                (light.get("crosswalk_edge_y").of(), light.get("board_base_y").of())
+                        {
+                            let frame = light.get("frame").i();
+                            let cap_s = light.get("captured_at").f();
+                            if !self.prestart_yolo_cw.iter().any(|(f, _, _, _)| *f == frame) {
+                                self.prestart_yolo_cw.push((frame, cap_s, ey, by));
+                                let n = self.prestart_yolo_cw.len();
+                                if n > 8 {
+                                    self.prestart_yolo_cw.drain(..n - 8);
+                                }
+                            }
+                            if self.prestart_crosswalk_ready() {
+                                self.stop_rust_crosswalk("crosswalk distance ready at rest; stopping rust crosswalk detector");
+                            }
+                        }
                         self.sup.set_light(&light);
                         self.light = light;
                     }
@@ -616,10 +689,15 @@ impl Program {
                 if self.sup.session.is_some() {
                     self.sup.observe_rust_crosswalk(&obs, captured_program_s);
                 } else {
-                    self.prestart_rust_cw.push((obs, captured_program_s));
-                    let n = self.prestart_rust_cw.len();
-                    if n > 6 {
-                        self.prestart_rust_cw.drain(..n - 6);
+                    if !self.prestart_rust_cw.iter().any(|(o, _)| o.frame == obs.frame) {
+                        self.prestart_rust_cw.push((obs, captured_program_s));
+                        let n = self.prestart_rust_cw.len();
+                        if n > 8 {
+                            self.prestart_rust_cw.drain(..n - 8);
+                        }
+                    }
+                    if self.prestart_crosswalk_ready() {
+                        self.stop_rust_crosswalk("crosswalk distance ready at rest; stopping rust crosswalk detector");
                     }
                 }
             }
@@ -817,6 +895,7 @@ pub fn main(args: &[String]) -> i32 {
         rust_cw_stop: rust_cw_stop.clone(),
         rust_cw_stats,
         prestart_rust_cw: Vec::new(),
+        prestart_yolo_cw: Vec::new(),
         external_stop: false,
     };
     p.publish_vision_phase();
@@ -866,8 +945,10 @@ fn run(p: &mut Program) -> i32 {
     }
     p.say(&format!("evidence {}", p.o.out.display()));
     // Start check, shown until it passes; then the trigger.
-    let wait_until = p.mono() + p.o.max_wait_s;
-    let mut ready_since: Option<f64> = None;
+    // Crosswalk detection runs immediately; once distance is ready, stop the Rust worker and
+    // launch right away; otherwise launch after ready_hold_s (3 s) and continue computing in motion.
+    let wait_t0 = p.mono();
+    let wait_until = wait_t0 + p.o.max_wait_s;
     let mut next_status = 0.;
     let mut prompted = false;
     let before = loop {
@@ -879,14 +960,20 @@ fn run(p: &mut Program) -> i32 {
         let state = p.state();
         let autonomy = state.idx("autonomy");
         let ready = autonomy.idx("turn_ready").is_true();
-        ready_since = if ready { ready_since.or(Some(now)) } else { None };
+        let cw_ready = p.prestart_crosswalk_ready();
+        if cw_ready {
+            p.stop_rust_crosswalk("crosswalk distance ready at rest; stopping rust crosswalk detector");
+        }
         if now >= next_status {
             let clearance = autonomy.get("turn_clearance");
             let front = clearance.get("front_m");
+            let (rcw, ycw) = p.prestart_crosswalk_fixes();
             p.say(&format!(
-                "start check: {} front={}",
+                "start check: {} front={} cw_fixes={}+{}",
                 if ready { "ready".to_string() } else { format!("not ready ({})", to_json(autonomy.get("turn_rejection"))) },
-                to_json(front)
+                to_json(front),
+                rcw,
+                ycw,
             ));
             next_status = now + p.o.status_s.max(0.1);
         }
@@ -907,7 +994,13 @@ fn run(p: &mut Program) -> i32 {
                 p.say("terminal input closed; use --start ready without a terminal");
                 return 64;
             }
-        } else if p.o.start == "ready" && ready_since.is_some_and(|since| now - since >= p.o.ready_hold_s) {
+        } else if p.o.start == "ready" && ready_launch_due(ready, cw_ready, now - wait_t0, p.o.ready_hold_s) {
+            if !cw_ready {
+                p.say(&format!(
+                    "crosswalk distance not yet computed after {:.1}s; starting and continuing detection in motion",
+                    now - wait_t0
+                ));
+            }
             break state;
         }
         if p.o.start == "never" && now >= wait_until {
@@ -950,9 +1043,18 @@ fn run(p: &mut Program) -> i32 {
     if let Some(session) = &mut p.sup.session {
         session.motion.race_inputs = Some(Default::default());
         session.motion.race_surface.set_initial_load(p.o.surface_initial_load);
-        // Replay standstill pure-Rust crosswalk fixes captured during ready-hold.
+        // Enable crosswalk odometry immediately when pure-Rust vision is attached so
+        // moving fallback always has lidar rear-wall history even before YOLO arrives.
+        if p.o.frame_shm.is_some() {
+            session.motion.light_vision = true;
+        }
+        // Replay standstill pure-Rust and YOLO crosswalk fixes captured before launch.
         for (obs, cap_s) in std::mem::take(&mut p.prestart_rust_cw) {
             session.motion.rust_crosswalk_observe(&obs, cap_s);
+        }
+        for (_frame, cap_s, edge_y, base_y) in std::mem::take(&mut p.prestart_yolo_cw) {
+            session.motion.light_vision = true;
+            session.motion.race_crosswalk_stop.push_frame(cap_s, edge_y, base_y);
         }
     }
     p.say(&format!("started run {run_id}"));
@@ -1122,5 +1224,22 @@ mod tests {
         // no crosswalk score: no crosswalk keys at all
         let text = r#"{"frame": 10, "captured_s": 10.0, "written_s": 10.2, "red": 0.1, "green": 0.0, "crosswalk_m": 2.0}"#;
         assert!(light_of(text, 100.).unwrap().get("crosswalk_m").is_none());
+    }
+
+    #[test]
+    fn prestart_launches_early_when_crosswalk_ready_else_after_3s_without_blocking() {
+        assert!(!ready_launch_due(true, false, 0.8, 3.0));
+        assert!(ready_launch_due(true, true, 0.8, 3.0));
+        assert!(ready_launch_due(true, false, 3.0, 3.0));
+        assert!(!ready_launch_due(false, true, 3.5, 3.0));
+    }
+
+    #[test]
+    fn rust_crosswalk_worker_runs_in_motion_only_until_distance_is_resolved() {
+        assert!(rust_crosswalk_needed_in_motion("start_lane", Some("search"), None, None));
+        assert!(!rust_crosswalk_needed_in_motion("start_lane", Some("approach"), Some(-2.4), None));
+        assert!(!rust_crosswalk_needed_in_motion("start_lane", Some("approach"), None, Some(-2.4)));
+        assert!(!rust_crosswalk_needed_in_motion("start_lane", Some("waiting"), None, None));
+        assert!(!rust_crosswalk_needed_in_motion("first_target", Some("released"), None, None));
     }
 }

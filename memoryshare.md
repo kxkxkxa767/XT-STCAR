@@ -1763,3 +1763,19 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
    - `test/`：Rust **62/62**、斑马线 Python 单测 **21/21** 通过（临时编译产物放在 `work/` 并已清理，目录干净）。
    - `提交/`：N10 底层 `device-io` + `robot-core` + `runner` 全套驱动单测 0 失败、`route-engine` **60/60**、脚本语法与斑马线 Python 单测 **20/20** 通过（目录零 `target/` 残留）。
 4. **车端状态**：本次未连接车辆、未上传部署、未发车；车上仍为先前锁定的 `y108 / 213`（`1500/1500`）。旧条目全部保留。
+
+
+## 2026-11-20 · Gemini 4 Neon（XHigh）· 新模板技术手册定稿 + 三份纯识别斑马线启动/关闭逻辑同步修正并编译推送（y110／215）
+
+1. **新模板技术手册定稿**：
+   - 在 `规则/线上赛提交资料模板/任务x_学校名称_队伍编号/技术手册2_按新模板修订.docx` 按 `3.RISC-V轻量无人车赛技术手册模板.docx` 生成修订稿（保留原 `技术手册1.docx` 不动），包含官方封面、授权页、可更新目录、**7 个递进实验**、**6 章技术报告正文**（方案概述、问题描述、技术方案、方案实现、测试分析、作品总结）、附录与 8 篇参考文献，共嵌入 11 张图、12 张表；
+   - 保留原文档作者（`yuhaojin的MacBook Air`）与修改者（`*`），彻底剥离模板作者元数据；经严格正则审计，全文 0 处 `N10P` / 波特率 / `2.8m` / `fixed10s` / `field-test`。
+2. **纯识别斑马线发车与退出逻辑同步修正（主目录、`test/`、`提交/` 三份完全同步）**：
+   - 改动文件：`route-engine/src/race.rs`、`route-engine/src/race_crosswalk_stop.rs`、`route-engine/src/race_launch.rs`、`scripts/race-trial.py`（及 `build-race.py` 默认 `--ready-hold-s 3`）。
+   - **发命令即检测、算出即关 Rust 并提前发车**：收到启动后立即并行跑纯 Rust 与 YOLO 斑马线检测（同时缓存 prestart YOLO 帧），静止期间一旦算出有效距离（`>= 3` 有效帧）立刻置 `rust_cw_stop = true`、切 `vision-phase.txt = "drive"` 关闭纯 Rust 线程与 `/dev/shm` 导出，并在 `turn_ready` 满足时提前发车不空等。
+   - **3 s 保底发车且不阻发车、未算出则行驶中继续算**：若发令后满 **3.0 s** 仍未算出距离，绝不阻塞发车，直接起步并在 `start_lane` 行驶过程中保持纯 Rust 线程继续计算（同时在 `--frame-shm` 开启时即启用 `light_vision = true` 确保里程追踪连续）；行驶中一旦算出距离（`planned.is_some() || _crosswalk_board_m.is_some()`）或进入 `waiting/done/released/passed` 立即单向关闭纯 Rust 检测归零。
+3. **验证与构建状态**：
+   - 主目录：Mac release 编译通过、Rust **62/62**、`clippy` **32**（零新增）、Python 控制台回归 **970/970** 通过；
+   - `test/`：Rust **64/64** 通过（无临时 `target/` 残留）；
+   - `提交/`：Rust **62/62** 通过（无临时 `target/` 残留）；
+   - 交叉编译 `claude-turn215 / y110` RISC-V ROS2 包并推送至 `origin/main`（本次未连接车辆、未上传车端，车上仍为锁定状态的 `y108 / 213`）。旧条目全部保留。

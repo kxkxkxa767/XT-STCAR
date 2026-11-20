@@ -77,7 +77,7 @@ def main():
     parser.add_argument('--bridge', required=True)
     parser.add_argument('--max-drive-s', default='40')
     parser.add_argument('--initial-presteer-pwm', default='1670')
-    parser.add_argument('--ready-hold-s', default='1')
+    parser.add_argument('--ready-hold-s', default='3')
     parser.add_argument('--program-sha256')
     parser.add_argument('--bridge-sha256')
     parser.add_argument('--check-only', action='store_true')
