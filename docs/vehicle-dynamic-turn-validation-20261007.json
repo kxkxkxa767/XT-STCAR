@@ -35718,5 +35718,17 @@
       "submit_workspace_and_route_tests": "all_passed"
     },
     "physical_output_executed": false
+  },
+  "y113_finish_ref_reset_release_creep_20261120": {
+    "date": "2026-11-20",
+    "summary": "Fix y112 & y111-4 early finish brake + standstill deadlock outside 80cm finish zone: (1) reset finish range history & gap fusion on bowed plane<->corner-chord switch so mixed references never poison lidar speed/imu_bias; (2) allow finish-only early release of 1300 brake when holding would stop past body_gap (0.40m) while coast release_stop >= target (0.25m); (3) allow bounded 2-frame 1560 creep (or 3-frame kick outside zone) after race brake is used when stopped with rear outside 80cm zone. Synced across main, test/, and 提交/.",
+    "checks": {
+      "main_rust_tests": 67,
+      "main_clippy_warnings": 32,
+      "main_python_console_tests": 970,
+      "test_rust_tests": 69,
+      "submit_rust_tests": 67
+    },
+    "physical_output_executed": false
   }
 }
