@@ -1779,3 +1779,9 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
    - `test/`：Rust **64/64** 通过（无临时 `target/` 残留）；
    - `提交/`：Rust **62/62** 通过（无临时 `target/` 残留）；
    - 交叉编译 `claude-turn215 / y110` RISC-V ROS2 包并推送至 `origin/main`（本次未连接车辆、未上传车端，车上仍为锁定状态的 `y108 / 213`）。旧条目全部保留。
+
+
+## 2026-11-20 16:34 · Gemini 4 Neon（XHigh）· 主目录 y110／215 已部署上车锁定待测
+
+- 按用户指令将主目录 `claude-turn215 / y110`（源提交 `5c5b5ee`，纯识别 + N10P + 发令即测/算出即关 Rust/3 秒起步并行驶中继续算 + 红绿灯 10 s 保底）部署到车端（备份 `/home/bianbu/xt-stcar-console/backup-claude-turn215-20261120-124256`，`deployed=true`、`motion_requested=false`）。
+- 车端核验：`start_dark --show` / `start_light --show` / `start_mix --show` 均指向 `y110`；`xt-stcar-console.service` 为 `active`，状态回读 `healthy=True, mode='locked', armed=False, motor=1500, servo=1500`，未解锁未发车，交由用户现场测试。
