@@ -469,7 +469,7 @@ struct Program {
     rust_cw_stats: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::RustCrosswalkStats>>,
     prestart_rust_cw: Vec<(crate::race_crosswalk_vision::RustCrosswalkObs, f64)>,
     prestart_yolo_cw: Vec<(i64, f64, f64, f64)>,
-    external_stop: bool,
+    external_stop: Option<&'static str>,
 }
 
 /// Pure decision for `--start ready` launch timing:
@@ -709,7 +709,7 @@ impl Program {
             Event::StdinClosed => self.stdin_closed = true,
             #[cfg(feature = "ros2")]
             Event::Halt(reason) => {
-                self.external_stop = true;
+                self.external_stop.get_or_insert(reason);
                 self.sup.halt(reason);
             }
         }
@@ -773,6 +773,14 @@ impl Program {
         println!("{:8.2} {text}", self.mono());
         let _ = std::io::stdout().flush();
     }
+
+    fn start_failure(&self, code: i32, reason: &str, mut details: V) -> i32 {
+        details.set("started", false);
+        details.set("reason", reason);
+        details.set("sensor_errors", self.sup.errors.clone());
+        let _ = self.files.send(FileOp::Put("cli-result.json", to_json(&details)));
+        code
+    }
 }
 
 fn summary_line(report: &V) -> String {
@@ -811,7 +819,12 @@ pub fn main(args: &[String]) -> i32 {
     let transport = Transport::legacy(&o, &tx);
     let mut transport = match transport {
         Ok(link) => link,
-        Err(error) => { eprintln!("{error}"); return 69; }
+        Err(error) => {
+            eprintln!("{error}");
+            let result = dict! {"started" => false, "reason" => error};
+            let _ = std::fs::write(o.out.join("cli-result.json"), to_json(&result));
+            return 69;
+        }
     };
     if let Some(path) = &o.light_state {
         light_reader(path.clone(), tx.clone());
@@ -900,7 +913,7 @@ pub fn main(args: &[String]) -> i32 {
         rust_cw_stats,
         prestart_rust_cw: Vec::new(),
         prestart_yolo_cw: Vec::new(),
-        external_stop: false,
+        external_stop: None,
     };
     p.publish_vision_phase();
     // ROS discovery/setup happens before this clock zero. The helper's spawn
@@ -941,11 +954,13 @@ fn run(p: &mut Program) -> i32 {
     while (p.sup.scan.is_none() || !p.sup.status.has("control")) && p.mono() < deadline {
         let until = p.mono() + 0.05;
         p.pump(until);
-        if p.external_stop { return 130; }
+        if let Some(reason) = p.external_stop { return p.start_failure(130, reason, V::dict()); }
     }
     if p.sup.scan.is_none() || !p.sup.status.has("control") {
         p.say("no lidar scan or control feedback within 5 s");
-        return 69;
+        return p.start_failure(69, "initial_feedback_timeout", dict! {
+            "lidar_received" => p.sup.scan.is_some(), "control_received" => p.sup.status.has("control"),
+        });
     }
     p.say(&format!("evidence {}", p.o.out.display()));
     // Start check, shown until it passes; then the trigger.
@@ -958,7 +973,7 @@ fn run(p: &mut Program) -> i32 {
     let before = loop {
         let until = p.mono() + 0.1;
         p.pump(until);
-        if p.external_stop { return 130; }
+        if let Some(reason) = p.external_stop { return p.start_failure(130, reason, V::dict()); }
         let now = p.mono();
         p.sup.health_watch(now);
         let state = p.state();
@@ -996,7 +1011,7 @@ fn run(p: &mut Program) -> i32 {
             }
             if p.o.start == "enter" && p.stdin_closed && !p.entered {
                 p.say("terminal input closed; use --start ready without a terminal");
-                return 64;
+                return p.start_failure(64, "terminal_input_closed", V::dict());
             }
         } else if p.o.start == "ready" && ready_launch_due(ready, cw_ready, now - wait_t0, p.o.ready_hold_s) {
             if !cw_ready {
@@ -1019,8 +1034,11 @@ fn run(p: &mut Program) -> i32 {
             return 0;
         }
         if now >= wait_until {
-            p.say("start check did not pass in time");
-            return 75;
+            let reason = autonomy.get("turn_rejection").os().unwrap_or("start_trigger_timeout");
+            p.say(&format!("start check did not pass in time: {reason}"));
+            let _ = p.files.send(FileOp::Put("before.json", to_json(&state)));
+            let _ = p.files.send(FileOp::Put("before-lidar.json", to_json(&p.lidar())));
+            return p.start_failure(75, reason, dict! {"turn_ready" => ready});
         }
     };
     assert!(p.o.start != "never", "check-only mode never reaches the start");
@@ -1039,9 +1057,7 @@ fn run(p: &mut Program) -> i32 {
         Ok(result) => result,
         Err((error, clearance)) => {
             p.say(&format!("start refused: {}", error.msg));
-            let result = dict! {"started" => false, "error" => error.msg, "clearance" => clearance};
-            let _ = p.files.send(FileOp::Put("cli-result.json", to_json(&result)));
-            return 2;
+            return p.start_failure(2, &error.msg, dict! {"error" => error.msg.as_str(), "clearance" => clearance});
         }
     };
     if let Some(session) = &mut p.sup.session {
@@ -1149,6 +1165,7 @@ fn run(p: &mut Program) -> i32 {
     let scan_to_tick = dict! {"scans" => waits, "mean_s" => if waits > 0 { wait_sum / waits as f64 } else { 0. },
                               "max_s" => wait_max, "basis" => "reader receive time -> start of the tick that decided on it"};
     let result = p.sup.auto_result.clone();
+    let sensor_errors = p.sup.errors.clone();
     p.say(&format!("ended: {}", to_json(result.get("reason"))));
     // After the run: six samples about .2 s apart (the helper's after.json).
     let mut after: VecDeque<V> = VecDeque::new();
@@ -1180,6 +1197,7 @@ fn run(p: &mut Program) -> i32 {
     };
     let summary = dict! {
         "run_id" => run_v.clone(), "started" => started, "reason" => result.get("reason").clone(),
+        "sensor_errors" => sensor_errors,
         "route_controller" => if p.o.ros2 { "ros2_rust" } else { "rust_program" },
         "transport" => if p.o.ros2 { "ros2_topics" } else { "legacy_pipes" },
         "program_base_monotonic_s" => p.base_monotonic_s,

@@ -900,7 +900,7 @@ impl Supervisor {
         } else {
             DRIVE_MOTORS.to_vec()
         };
-        if m.light_brake_ack_expected() { pending_motors.push(LANE_BRAKE_MOTOR); }
+        if m.pause_brake_ack_expected() { pending_motors.push(LANE_BRAKE_MOTOR); }
         let pending_neutral = in_motors(control.get("motor"), &pending_motors)
             && neutral_seq.is_none_or(|n| seq_of(&control) < n as f64);
         if !neutral_ack && !pending_neutral {
@@ -2180,6 +2180,45 @@ mod race_start_tests {
             "armed" => false, "motor" => 1500, "servo" => 1500, "seq" => 0, "tick" => 100,
         }};
         s
+    }
+
+    #[test]
+    fn finish_brake_feedback_survives_a_recoverable_scan_pause() {
+        let mut sup = supervisor(true, outdoor_scan());
+        let request = dict! {"op" => "turn_cone_start", "boot" => "test", "epoch" => 0, "tick" => 100,
+            "placement_confirmed" => true, "continue_route" => true};
+        sup.start_turn_cone(&request, &0.0.into(), "finish_pause").unwrap();
+        let mut session = sup.session.take().unwrap();
+        let m = &mut session.motion;
+        m.race_inputs = Some(Default::default());
+        m.phase = "drive";
+        m.route_stage = "light_lane";
+        m.drive_since = Some(0.);
+        m.first_pass_evidence = dict! {"source_seq" => 1};
+        m.light_stop_state = Some("passed");
+        m.servo = NEUTRAL;
+        let model = crate::race_light_brake::BrakeModel::finish(0.6);
+        m.finish.race_brake.observe(1., Some(1.), Some(1.5), Some(0.), 1., 0.6, model, 0.25);
+        m.lane_motor = m.finish.race_brake_motor(1., Some(0.)).unwrap();
+        assert_eq!(m.lane_motor, LANE_BRAKE_MOTOR);
+        let ack = dict! {"armed" => true, "motor" => LANE_BRAKE_MOTOR, "servo" => NEUTRAL,
+            "seq" => 10, "tick" => 1100, "command_acked" => true, "neutral_acked" => false};
+        sup.status.set("control", ack.clone());
+        sup.scan_at = 1.1.into();
+        let scan = sup.received_scan();
+        let issues = V::list(vec![V::from("scan_incomplete")]);
+        session.report.set("quality_issues", issues.clone());
+        session.report.set("clearance_current", dict! {"scan_seq" => scan.idx("seq").clone(), "quality_issues" => issues});
+        assert!(m.begin_post_pass_quality_pause(&1.1.into(), &ack, Some(&scan)));
+        Supervisor::enter_quality_wait(&mut session, "post_pass_pause", false);
+        assert!(sup.turn_quality_wait_eligible(&session), "finish brake is still the last acknowledged command");
+        let decision = session.motion.neutral_pause_update(&scan, &0.01.into(), 1.11, &ack, &true.into(),
+            &false.into(), &false.into(), &false.into());
+        assert_eq!(session.motion.phase, "quality_wait");
+        assert_eq!(decision.get("motor").i(), NEUTRAL);
+        assert!(session.motion.finish.race_brake.is_used());
+        session.quality_wait_neutral_sequence = Some(10);
+        assert!(!sup.turn_quality_wait_eligible(&session), "a neutral ACK must actually report neutral");
     }
 
     #[test]

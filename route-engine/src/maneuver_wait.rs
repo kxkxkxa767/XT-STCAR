@@ -555,6 +555,13 @@ impl Maneuver {
         true
     }
 
+    /// The chassis can still report the brake command while neutral is in flight.
+    pub(crate) fn pause_brake_ack_expected(&self) -> bool {
+        self.light_brake_ack_expected() || (self.race_inputs.is_some()
+            && self.light_motor_stage() && matches!(self.light_stop_state, Some("released" | "passed"))
+            && (self.finish.race_brake.is_active() || self.finish.race_brake.is_used()))
+    }
+
     /// begin_post_pass_quality_pause(now, control, scan=None).
     pub fn begin_post_pass_quality_pause(&mut self, now: &V, control: &V, scan: Option<&V>) -> bool {
         let scan = match scan {
@@ -874,7 +881,7 @@ impl Maneuver {
             && control.get("command_acked").is_false();
         let mut motors = vec![NEUTRAL];
         motors.extend_from_slice(&DRIVE_MOTORS);
-        if self.light_brake_ack_expected() { motors.push(LANE_BRAKE_MOTOR); }
+        if self.pause_brake_ack_expected() { motors.push(LANE_BRAKE_MOTOR); }
         if (!py_eq(&servo_feedback, &V::from(self.quality_wait_servo)) && !pending_step) || !motor_in(control.get("motor"), &motors) {
             self.lock(&format!("route_{kind}_pause_feedback_changed"));
             return self.result(now);

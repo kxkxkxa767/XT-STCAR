@@ -11,7 +11,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
-    os::unix::fs::DirBuilderExt,
+    os::unix::{fs::DirBuilderExt, process::ExitStatusExt},
     path::{Path, PathBuf},
     process::{Child, Command, ExitStatus, Stdio},
     sync::{
@@ -176,6 +176,24 @@ fn finish(child: &mut Child, sig: Signal, timeout: Duration) -> Result<ExitStatu
         thread::sleep(Duration::from_millis(20));
     }
 }
+
+fn record_program_exit(result: &mut Value, status: ExitStatus, stop_request: Option<&str>) -> Result<()> {
+    result["program_exit"] = json!(status.code());
+    if let Some(signal) = status.signal() {
+        result["program_signal"] = json!(signal);
+    }
+    if let Some(reason) = stop_request {
+        result["program_stop_request"] = json!(reason);
+    }
+    if stop_request == Some("launcher_timeout") {
+        return Err(format!("race program exceeded the 120 s launcher timeout ({status})").into());
+    }
+    if !status.success() {
+        return Err(format!("route-engine race: {status} (see race-stdout.txt)").into());
+    }
+    Ok(())
+}
+
 fn monotonic_s() -> f64 {
     let t = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
     t.tv_sec as f64 + t.tv_nsec as f64 * 1e-9
@@ -376,18 +394,19 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         timing["before_program_ms"] = json!(start.elapsed().as_secs_f64() * 1000.);
         race = Some(command.spawn()?);
         let child = race.as_mut().unwrap();
-        let status = loop {
+        let (status, stop_request) = loop {
             if let Some(status) = child.try_wait()? {
-                break status;
+                break (status, None);
             }
-            if stopped.load(Ordering::Acquire) || began.elapsed() >= Duration::from_secs(120) {
-                break finish(child, Signal::INT, Duration::from_secs(5))?;
+            let operator_stop = stopped.load(Ordering::Acquire);
+            if operator_stop || began.elapsed() >= Duration::from_secs(120) {
+                let reason = if operator_stop { "operator_stop" } else { "launcher_timeout" };
+                break (finish(child, Signal::INT, Duration::from_secs(5))?, Some(reason));
             }
             thread::sleep(Duration::from_millis(20));
         };
-        result["program_exit"] = json!(status.code());
         result["program_elapsed_s"] = json!(began.elapsed().as_secs_f64());
-        Ok(())
+        record_program_exit(&mut result, status, stop_request)
     })();
     if let Some(child) = race.as_mut() {
         let _ = finish(child, Signal::INT, Duration::from_secs(5));
@@ -427,9 +446,17 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         thread::sleep(Duration::from_millis(300));
     }
     write_json(&out.join("after-console.json"), &json!(final_rows))?;
-    let summary = read_json(&out.join("run/summary.json")).unwrap_or(json!({}));
+    // A refusal before the first motor command produces a CLI result only.
+    let summary = read_json(&out.join("run/summary.json"))
+        .or_else(|_| read_json(&out.join("run/cli-result.json")))
+        .unwrap_or(Value::Null);
     for key in ["reason", "max_actual_gap_s", "max_tick_compute_s"] {
         result[key] = summary[key].clone();
+    }
+    for key in ["sensor_errors", "lidar_received", "control_received"] {
+        if let Some(value) = summary.get(key) {
+            result[key] = value.clone();
+        }
     }
     result["console_neutral_samples"] = json!(final_rows.len());
     result["console_healthy"] = final_rows
@@ -438,6 +465,12 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
     result["launch_timing_ms"] = timing;
     if let Err(error) = &run_result {
         result["error"] = json!(error.to_string());
+        if summary["started"] != false || result["reason"].is_null() {
+            if let Some(reason) = summary["reason"].as_str() {
+                result["route_reason"] = json!(reason);
+            }
+            result["reason"] = result["error"].clone();
+        }
     }
     write_json(&out.join("helper-result.json"), &result)?;
     println!("{result}");
@@ -522,6 +555,18 @@ pub(crate) fn main(args: &[String], internal_run: bool) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn completed_cleanup_cannot_hide_a_child_failure() {
+        let mut result = json!({"console_neutral_samples": 6});
+        assert!(record_program_exit(&mut result, ExitStatus::from_raw(0), None).is_ok());
+        assert!(record_program_exit(&mut result, ExitStatus::from_raw(75 << 8), None).is_err());
+        assert_eq!(result["program_exit"], 75);
+        assert!(record_program_exit(&mut result, ExitStatus::from_raw(6), None).is_err());
+        assert!(result["program_exit"].is_null());
+        assert_eq!(result["program_signal"], 6);
+        assert!(record_program_exit(&mut result, ExitStatus::from_raw(0), Some("launcher_timeout")).is_err());
+    }
+
     #[test]
     fn launcher_parses_standard_actions_and_rejects_unknown_flags() {
         let args = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
