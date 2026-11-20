@@ -35683,5 +35683,17 @@
     "vehicle_contacted": false,
     "deployed": false,
     "motion_requested": false
+  },
+  "y110_crosswalk_3s_early_stop_20261120": {
+    "date": "2026-11-20",
+    "summary": "Start pure-Rust + YOLO crosswalk detection immediately on start command; close Rust crosswalk worker immediately once distance is computed (at rest or in motion); launch at 3.0s if distance not yet computed without blocking launch and continue computing in motion; synced across main, test/, and 提交/.",
+    "checks": {
+      "main_rust_tests": 62,
+      "main_clippy_warnings": 32,
+      "main_python_console_tests": 970,
+      "test_rust_tests": 64,
+      "submit_rust_tests": 62
+    },
+    "physical_output_executed": false
   }
 }
