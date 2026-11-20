@@ -35695,5 +35695,16 @@
       "submit_rust_tests": 62
     },
     "physical_output_executed": false
+  },
+  "y111_fix_board_ahead_none_panic_20261120": {
+    "date": "2026-11-20",
+    "summary": "Fix y110 startup SIGABRT: board_ahead(&self.sup.scan) called scan.idx(\"ranges\") before first lidar scan arrived (V::None panic during publish_vision_phase when --frame-shm enabled, unwinding rclrs while executor spinning). Replaced with scan.get(\"ranges\").ol()? and short-circuiting empty prestart_yolo_cw; synced across main, test/, and 提交/.",
+    "checks": {
+      "main_rust_tests": 62,
+      "main_clippy_warnings": 32,
+      "test_rust_tests": 64,
+      "submit_rust_tests": 62
+    },
+    "physical_output_executed": false
   }
 }

@@ -506,12 +506,16 @@ impl Program {
             .iter()
             .filter(|(obs, _)| (range.0..=range.1).contains(&obs.front_to_edge_m))
             .count();
-        let yolo = crate::race_crosswalk_stop::board_ahead(&self.sup.scan).map_or(0, |bm| {
-            self.prestart_yolo_cw
-                .iter()
-                .filter(|(_, _, ey, by)| crate::race_crosswalk_stop::edge_from_board(*ey, *by, bm).is_some())
-                .count()
-        });
+        let yolo = if self.prestart_yolo_cw.is_empty() {
+            0
+        } else {
+            crate::race_crosswalk_stop::board_ahead(&self.sup.scan).map_or(0, |bm| {
+                self.prestart_yolo_cw
+                    .iter()
+                    .filter(|(_, _, ey, by)| crate::race_crosswalk_stop::edge_from_board(*ey, *by, bm).is_some())
+                    .count()
+            })
+        };
         (rust, yolo)
     }
 

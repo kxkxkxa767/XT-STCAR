@@ -69,7 +69,7 @@ fn median(values: &[f64]) -> f64 {
 
 /// The lidar's range straight ahead: the median of the centre rays (at least four).
 pub(crate) fn board_ahead(scan: &V) -> Option<f64> {
-    let list = scan.idx("ranges").l();
+    let list = scan.get("ranges").ol()?;
     if list.len() < 360 {
         return None;
     }
@@ -200,6 +200,8 @@ mod tests {
 
     #[test]
     fn no_visual_fixes_never_invents_a_fixed_crosswalk() {
+        assert!(board_ahead(&V::None).is_none());
+        assert!(board_ahead(&V::dict()).is_none());
         let scan = dict! {"seq" => 1, "ranges" => vec![V::None; 360]};
         let mut plan = CrosswalkStopPlan::default();
         assert!(plan.observe(&scan, 0., Some(-0.3), Some((0., -0.3)), Some(0.)).is_none());
