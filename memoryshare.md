@@ -1785,3 +1785,10 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
 
 - 按用户指令将主目录 `claude-turn215 / y110`（源提交 `5c5b5ee`，纯识别 + N10P + 发令即测/算出即关 Rust/3 秒起步并行驶中继续算 + 红绿灯 10 s 保底）部署到车端（备份 `/home/bianbu/xt-stcar-console/backup-claude-turn215-20261120-124256`，`deployed=true`、`motion_requested=false`）。
 - 车端核验：`start_dark --show` / `start_light --show` / `start_mix --show` 均指向 `y110`；`xt-stcar-console.service` 为 `active`，状态回读 `healthy=True, mode='locked', armed=False, motor=1500, servo=1500`，未解锁未发车，交由用户现场测试。
+
+
+## 2026-11-20 16:58 · Gemini 4 Neon（XHigh）· 修复 y110 启动 panic 并部署 y111／216 实车锁车核验通过
+
+- **故障定位**：`y110` 两次启动在约 3.3 s 以 `SIGABRT`（`malloc_consolidate`）异常退出且 `run/` 为空；根因为首帧雷达未到时 `self.sup.scan` 为 `V::None`，`publish_vision_phase()` 调用的 `board_ahead(&self.sup.scan)` 中 `scan.idx("ranges")` 触发 panic，导致主线程在写 `clock.json` 前异常展开并破坏正在 spin 的 ROS2 Fast DDS 上下文。
+- **修复与三份同步**（`ced6e54`，主目录、`test/`、`提交/` 同步）：`board_ahead` 改用 `scan.get("ranges").ol()?`，空 `prestart_yolo_cw` 短路跳过；主目录 62/62（clippy 32）、`test/` 64/64、`提交/` 62/62 全通过。
+- **实车部署与锁车验证（`claude-turn216 / y111`）**：已部署上车，`start_dark/light/mix --show` 均为 `y111`；实车现场执行不解锁 `launch-round --profile mix --check-only`（`left-cone-trial-20261120-y111`），`program_exit=0`、`console_neutral_samples=6`；实测现场 YOLO 斑马线检出 `0/79`，纯 Rust 在 **0.71 s** 内检出 3 帧（4 条纹、2.245/2.245/2.322 m，含雷达左缺口 `2.724 m`），`0.72 s` 立即打印 `crosswalk distance ready at rest; stopping rust crosswalk detector` 并自动清理 `/dev/shm`，随后维持锁定中位 `1500/1500`，交由用户发车实测。
