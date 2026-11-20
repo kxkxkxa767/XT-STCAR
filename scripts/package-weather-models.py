@@ -58,8 +58,7 @@ def main():
     for profile in ['dark', 'light', 'mix']:
         _, model_spec, digest = vision.check_model(directory/'models'/profile)
         configs[profile] = {'model_dir':stage+'/models/'+profile, 'model_sha256':digest,
-            'classes':model_spec['class_names'], 'camera':'/dev/video20',
-            'field_config':BASE+'/field-test-'+profile+'.json'}
+            'classes':model_spec['class_names'], 'camera':'/dev/video20'}
     launch = {'label':args.label, 'base':BASE, 'source_commit':source,
         'evidence_prefix':f'left-cone-trial-{now:%Y%m%d}-{args.label}',
         'bridge':BASE+'/20260917/vehicle-bridge', 'vision_script':stage+'/vision-log.py', 'profiles':configs}

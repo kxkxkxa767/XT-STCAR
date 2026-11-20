@@ -37,9 +37,6 @@ active['profiles'].pop('default',None)
 temporary.write_text(json.dumps(active,indent=2)+'\\n');temporary.replace(config)
 lines=[]
 for profile, settings in active['profiles'].items():
- field=Path(settings['field_config'])
- if not field.exists():
-  field.write_text(json.dumps({{'enabled':True,'crosswalk_mode':'vision','light_mode':'fixed10s'}},indent=2)+'\\n')
  name='start_'+profile
  lines.append(name+'() {{ '+prefix+program+' start --profile '+profile+' "$@"; }}')
  lines.append('stop_'+profile+'() {{ '+prefix+program+' start --profile '+profile+' --stop; }}')
@@ -73,7 +70,7 @@ def main():
               'helper': f"{package['stage']}/trial{args.label}.py"}
     if profile:
         record.update(profile=profile, source_commit_vision=package.get('source_commit_vision'),
-                      model=package.get('vision_model'), field_config=package['field_config'])
+                      model=package.get('vision_model'))
     ssh = ['ssh', '-S', str(SOCKET), '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', HOST]
     subprocess.run(['scp', '-q', '-o', f'ControlPath={SOCKET}', '-o', 'BatchMode=yes',
                     str(ROOT / 'scripts/start-vehicle.py'), f'{HOST}:{BASE}/start-vehicle.py'],
@@ -86,10 +83,6 @@ record={record!r}
 profile={profile!r}
 assert Path(record['helper']).is_file(), 'vision helper must be staged first'
 marker=base/('current-race-'+profile+'.json' if profile else 'current-race.json')
-if profile:
- config=Path(record['field_config'])
- if not config.exists():
-  config.write_text(json.dumps({{'enabled':True,'crosswalk_mode':'vision','light_mode':'fixed10s'}},indent=2)+'\\n')
 tmp=marker.with_suffix('.tmp')
 tmp.write_text(json.dumps(record,indent=2)+'\\n')
 tmp.replace(marker)

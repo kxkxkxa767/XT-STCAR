@@ -2,7 +2,7 @@
 """Build a named visual profile on an already-built Rust engine package.
 
 Only normalizes deployment filenames; ONNX data and declared class IDs stay
-unchanged. The profile uses camera crosswalk positioning and its own field file.
+unchanged. The profile uses live camera crosswalk and traffic-light vision.
 """
 import argparse
 import hashlib
@@ -47,8 +47,7 @@ def main():
                     str(normalized), '--light-stop'], cwd=ROOT, check=True)
     path = WORK/f'claude-{args.label}-package.json'
     package = json.loads(path.read_text())
-    config = BASE+'/field-test-'+args.profile+'.json'
-    fixed = package['helper_fixed_args'] + ['--field-config', config]
+    fixed = package['helper_fixed_args']
     helper = Path(package['helper'])
     text, count = re.subn(r'^FIXED_ARGS = .*$', lambda _: 'FIXED_ARGS = '+repr(fixed)+'  # '+args.profile+' profile',
                          helper.read_text(), flags=re.M)
@@ -57,13 +56,13 @@ def main():
     compile(text, str(helper), 'exec')
     helper.write_text(text)
     helper_sha = hashlib.sha256(helper.read_bytes()).hexdigest()
-    package.update(start_profile=args.profile, field_config=config,
+    package.update(start_profile=args.profile,
                    helper_fixed_args=fixed, helper_sha256=helper_sha,
                    original_model_handoff=str(args.handoff.resolve()))
     package['vision_files'][f'trial{args.label}.py']['sha256'] = helper_sha
     path.write_text(json.dumps(package, indent=2)+'\n')
     print(json.dumps({'profile':args.profile,'package':str(path),'label':args.label,
-                      'model_sha256':digest,'field_config':config,'motion_requested':False}))
+                      'model_sha256':digest,'motion_requested':False}))
 
 
 if __name__ == '__main__':

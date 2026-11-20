@@ -1749,3 +1749,17 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
    - Mac release build、Rust **63/63**、`clippy` **32** 警告（无新增）、Python 控制台 **971/971** 全通过；`crates/` 未改动，复用 212 桥。
    - 已交叉编译生成 `claude-turn214`（基线 `claude-turn213`）及统一天气包 `y109`，并推送至 `origin/main`；**按用户要求未上传到车**。
    - 车上当前仍为 `y108 / 213`（`field-test-*.json` 已设 `enabled: false`、锁定 `1500/1500`）。后续若需部署 `y109 / 214`，直接执行 `python3 -B work/vehicle-dynamic-deploy-20261008/deploy-matched.py claude-turn214 214` 与 `python3 -B scripts/deploy-weather-models.py y109` 即可（不会覆盖 `enabled: false`）。下一版从 `y110 / 215` 起编；旧条目全部保留。
+
+
+## 2026-11-20 · Gemini 4 Neon（XHigh）· 保留 y109 并整理三套独立版本（主目录纯识别 N10P、`test/` 固定 2.8m N10P、`提交/` 纯识别 N10）
+
+1. **分拆前保留**：`d0f215d`（`y109 / 214`）已打标签 `y109-with-switch-20261120` 永久保留在 Git 历史与远端。
+2. **三套目录状态**：
+   - **主目录（`/Users/yuhaojin/Documents/XT-STCAR`）**：保留 N10P 雷达（460800 + 双回波解码）与 N10P 校准参数（`0.011 / -3`）、纯 Rust + YOLO 斑马线 OR 融合、8 核双簇绑核与红绿灯 10 s 保底放行；**完全删除**所有斑马线写死距离与识别/写死切换开关（`test_from_rear_wall_m`、`--test-crosswalk-from-rear-wall-m`、`--test-light-fixed-wait`、`race_test_light_fixed_wait`、`field-test`、`--test`/`--normal`/`--test-status`/`--test-lights`）。
+   - **`test/`（`/Users/yuhaojin/Documents/XT-STCAR/test`）**：独立可编译副本，默认**固定从发车区最底部后墙到斑马线近沿 2.8 m**（`route-engine race` 默认 `2.8 m`，`race_launch` / `race-trial.py` 始终传 2.8 m），使用 **N10P** 雷达与 N10P 校准（`test/config/lidar-calibration.json` = `0.011 / -3`，`lidar-serial.json` = `460800`），保留红绿灯 10 s 保底。
+   - **`提交/`（`/Users/yuhaojin/Documents/XT-STCAR/提交`）**：提交组委会的干净独立源码包；完全纯识别（零斑马线写死与切换开关，经全树 `grep` 确认零残留），雷达代码回退为纯 **N10**（仅 `230400` 波特率、58 字节单回波帧，无 `460800` 与 N10P 文件），校准参数为 N10（`提交/config/lidar-calibration.json` 与 `lidar-coarse-20260923.json`：`range_offset_m = -0.02, clockwise_yaw_bins = 5`）。
+3. **验证结果**：
+   - 主目录：Mac release 编译通过、Rust **60/60**、`clippy` **32** 警告（无新增）、Python 控制台回归 **970/970** 通过。
+   - `test/`：Rust **62/62**、斑马线 Python 单测 **21/21** 通过（临时编译产物放在 `work/` 并已清理，目录干净）。
+   - `提交/`：N10 底层 `device-io` + `robot-core` + `runner` 全套驱动单测 0 失败、`route-engine` **60/60**、脚本语法与斑马线 Python 单测 **20/20** 通过（目录零 `target/` 残留）。
+4. **车端状态**：本次未连接车辆、未上传部署、未发车；车上仍为先前锁定的 `y108 / 213`（`1500/1500`）。旧条目全部保留。

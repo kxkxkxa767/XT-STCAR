@@ -32,7 +32,6 @@ struct Options {
     config: PathBuf,
     profile: String,
     action: String,
-    light_mode: Option<String>,
     check_only: bool,
 }
 
@@ -41,7 +40,6 @@ fn parse(args: &[String]) -> Result<Options> {
         config: "/home/bianbu/xt-stcar-console/race-launch.json".into(),
         profile: "default".into(),
         action: "start".into(),
-        light_mode: None,
         check_only: false,
     };
     let mut it = args.iter();
@@ -49,10 +47,7 @@ fn parse(args: &[String]) -> Result<Options> {
         match arg.as_str() {
             "--config" => o.config = it.next().ok_or("missing config")?.into(),
             "--profile" => o.profile = it.next().ok_or("missing profile")?.clone(),
-            "--show" | "--status" | "--stop" | "--test-status" | "--normal" | "--test" => {
-                o.action = arg[2..].into()
-            }
-            "--test-lights" => o.light_mode = Some(it.next().ok_or("missing light mode")?.clone()),
+            "--show" | "--status" | "--stop" => o.action = arg[2..].into(),
             "--check-only" => o.check_only = true,
             _ => return Err(format!("unknown launch option {arg}").into()),
         }
@@ -81,59 +76,6 @@ fn checked(command: &mut Command) -> Result<()> {
         return Err(format!("command failed: {status}").into());
     }
     Ok(())
-}
-fn field_path(profile: &Value) -> Result<&Path> {
-    Ok(Path::new(text(profile, "field_config")?))
-}
-
-fn field_options(mut config: Value) -> Result<(Value, Vec<String>, Vec<String>)> {
-    let mut command = Vec::new();
-    if config["enabled"] != true {
-        return Ok((json!({}), command, Vec::new()));
-    }
-    match config["crosswalk_mode"].as_str().unwrap_or("fixed") {
-        "vision" => {}
-        "fixed" => {
-            for name in [
-                "start_zone_m",
-                "start_line_to_crosswalk_back_edge_m",
-                "crosswalk_length_m",
-                "start_straight_m",
-            ] {
-                if !config[name]
-                    .as_f64()
-                    .is_some_and(|v| v.is_finite() && v > 0.)
-                {
-                    return Err(format!("invalid field dimension {name}").into());
-                }
-            }
-            let edge = config["start_zone_m"].as_f64().unwrap()
-                + config["start_line_to_crosswalk_back_edge_m"]
-                    .as_f64()
-                    .unwrap();
-            config["crosswalk_back_edge_from_rear_wall_m"] = json!(edge);
-            config["crosswalk_far_edge_from_rear_wall_m"] =
-                json!(edge + config["crosswalk_length_m"].as_f64().unwrap());
-            command.extend(["--test-crosswalk-from-rear-wall-m".into(), edge.to_string()]);
-        }
-        _ => return Err("crosswalk_mode must be vision or fixed".into()),
-    }
-    match config["light_mode"].as_str().unwrap_or("fixed10s") {
-        "fixed10s" => command.push("--test-light-fixed-wait".into()),
-        "vision" => {}
-        _ => return Err("light_mode must be vision or fixed10s".into()),
-    }
-    let vision = [
-        "--save-every",
-        "1",
-        "--max-saved",
-        "1500",
-        "--jpeg-quality",
-        "95",
-    ]
-    .map(String::from)
-    .to_vec();
-    Ok((config, command, vision))
 }
 
 fn fresh_dir(base: &Path) -> Result<PathBuf> {
@@ -266,20 +208,11 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         .truncate(false)
         .open(base.join("race-trial.lock"))?;
     flock(&lock, FlockOperation::NonBlockingLockExclusive)?;
-    let input = if field_path(profile)?.is_file() {
-        read_json(field_path(profile)?)?
-    } else {
-        json!({})
-    };
-    let (field, field_command, field_vision) = field_options(input)?;
     let out = fresh_dir(&base.join(text(config, "evidence_prefix")?))?;
     write_json(
         &out.join("launch-profile.json"),
         &json!({"label":config["label"],"profile":o.profile,"selected":profile}),
     )?;
-    if field["enabled"] == true {
-        write_json(&out.join("field-test.json"), &field)?;
-    }
     println!("{}", json!({"evidence_dir":out,"profile":o.profile}));
     let start = Instant::now();
     let access = read_json(&base.join("access.json"))?;
@@ -298,7 +231,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         ctrlc::set_handler(move || flag.store(true, Ordering::Release))?;
     }
     let mut result = json!({"evidence_dir":out,"check_only":o.check_only,"profile":o.profile,"label":config["label"],
-        "launcher":"rust","field_test":field,"start_admission":"rust_race_live_sensors"});
+        "launcher":"rust","start_admission":"rust_race_live_sensors"});
     let mut timing = json!({"preflight_ms":start.elapsed().as_secs_f64()*1000.});
     let t = Instant::now();
     if let Err(error) = checked(Command::new("systemctl").args(["--user", "stop", CONSOLE])) {
@@ -341,7 +274,6 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
             .arg("--out")
             .arg(out.join("vision"))
             .args(["--camera", camera, "--max-s", "150"])
-            .args(field_vision)
             .arg("--phase-state")
             .arg(out.join("run/vision-phase.txt"))
             .args(["--wait-threads", "4", "--cpu-affinity", "0-3"])
@@ -415,7 +347,6 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         } else {
             command.args(["--start", "ready", "--ready-hold-s", "1"]);
         }
-        command.args(field_command);
         let surface = base.join("surface-initial.json");
         if surface.is_file() {
             let load = read_json(&surface)?;
@@ -544,42 +475,6 @@ fn entry(o: Options, internal_run: bool) -> Result<()> {
         }
         _ => {}
     }
-    if matches!(o.action.as_str(), "test" | "normal" | "test-status") || o.light_mode.is_some() {
-        let path = field_path(profile)?;
-        let mut field = if path.is_file() {
-            read_json(path)?
-        } else {
-            json!({"enabled":false})
-        };
-        if o.action == "test" {
-            field = if o.profile == "default" {
-                json!({"enabled":true,"start_zone_m":0.8,"start_line_to_crosswalk_back_edge_m":2.0,"crosswalk_length_m":0.297,"start_straight_m":3.2,"light_mode":"fixed10s"})
-            } else {
-                json!({"enabled":true,"crosswalk_mode":"vision","light_mode":"fixed10s"})
-            };
-        }
-        if o.action == "normal" {
-            field["enabled"] = json!(false);
-        }
-        if let Some(mode) = o.light_mode {
-            if field["enabled"] != true || !matches!(mode.as_str(), "fixed10s" | "vision") {
-                return Err(
-                    "--test-lights needs an enabled test profile and fixed10s or vision".into(),
-                );
-            }
-            field["light_mode"] = json!(mode);
-        }
-        if o.action != "test-status" {
-            let tmp = path.with_extension("tmp");
-            write_json(&tmp, &field)?;
-            fs::rename(tmp, path)?;
-        }
-        println!(
-            "{}\n仅配置/查看，没有发车。",
-            serde_json::to_string_pretty(&field)?
-        );
-        return Ok(());
-    }
     if internal_run {
         return run_round(&o, &config, profile);
     }
@@ -628,27 +523,10 @@ pub(crate) fn main(args: &[String], internal_run: bool) -> i32 {
 mod tests {
     use super::*;
     #[test]
-    fn visual_profiles_never_inherit_the_fixed_crosswalk_distance() {
-        let (_, args, _) = field_options(
-            json!({"enabled":true,"crosswalk_mode":"vision","light_mode":"fixed10s"}),
-        )
-        .unwrap();
-        assert_eq!(args, ["--test-light-fixed-wait"]);
-        let (_, args, _) =
-            field_options(json!({"enabled":true,"crosswalk_mode":"vision","light_mode":"vision"}))
-                .unwrap();
-        assert!(args.is_empty());
-    }
-    #[test]
-    fn existing_practice_dimensions_keep_the_same_arguments() {
-        let (_, args, _) = field_options(json!({"enabled":true,"start_zone_m":0.8,"start_line_to_crosswalk_back_edge_m":2.,"crosswalk_length_m":0.297,"start_straight_m":3.2})).unwrap();
-        assert_eq!(
-            args,
-            [
-                "--test-crosswalk-from-rear-wall-m",
-                "2.8",
-                "--test-light-fixed-wait"
-            ]
-        );
+    fn launcher_parses_standard_actions_and_rejects_unknown_flags() {
+        let args = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(parse(&args(&["--profile", "mix", "--show"])).unwrap().action, "show");
+        assert!(parse(&args(&["--profile", "mix", "--check-only"])).unwrap().check_only);
+        assert!(parse(&args(&["--profile", "mix", "--unknown-flag"])).is_err());
     }
 }

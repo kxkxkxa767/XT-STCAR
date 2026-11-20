@@ -36,7 +36,6 @@ pub struct CrosswalkStopPlan {
     yolo_fixes: usize,
     rust_fixes: usize,
     pub planned: Option<f64>,
-    test_from_rear_wall_m: Option<f64>,
     imu_zero: Option<f64>,
     last_scan_at: Option<f64>,
     pub scan_s: Option<f64>,
@@ -81,11 +80,6 @@ fn board_ahead(scan: &V) -> Option<f64> {
 }
 
 impl CrosswalkStopPlan {
-    /// Explicit field-test geometry, never inferred from a camera detection.
-    pub fn set_test_from_rear_wall(&mut self, metres: Option<f64>) {
-        self.test_from_rear_wall_m = metres;
-    }
-
     pub fn push_frame(&mut self, captured: f64, edge_y: f64, base_y: f64) {
         if self.planned.is_none() {
             self.frames.push((captured - CROSSWALK_CAMERA_LAG_S, edge_y, base_y));
@@ -118,7 +112,7 @@ impl CrosswalkStopPlan {
     /// Once per start-lane scan with the crosswalk track and its rest; the plan's
     /// evidence on the scan that makes it.
     pub fn observe(&mut self, scan: &V, received: f64, track: Option<f64>, rest: Option<(f64, f64)>,
-                   forward_integral: Option<f64>, rear_reference: bool) -> Option<V> {
+                   forward_integral: Option<f64>) -> Option<V> {
         self.imu_accel = None;
         if let Some(last) = self.last_scan_at {
             let dt = received - last;
@@ -142,19 +136,6 @@ impl CrosswalkStopPlan {
             }
             Some(_) => self.moved_at = Some(received),
             None => {} // no track this scan: neither still nor moved
-        }
-        if self.planned.is_none() && rear_reference && let Some(position) = self.test_from_rear_wall_m {
-            // The existing rear track is minus lidar-to-rear-wall distance.
-            // Keep the edge on that same track, so starting placement and
-            // every subsequent displacement remain measured by the lidar.
-            self.planned = Some(-position);
-            return Some(dict! {
-                "source_seq" => scan.idx("seq").clone(), "received_at" => received,
-                "basis" => "field_test_dimensions_from_start_rear_wall",
-                "crosswalk_back_edge_from_rear_wall_m" => position,
-                "front_to_edge_m" => position + rest_track - FRONT_BODY_EXTENT_M,
-                "board_m" => -position, "rest_track_m" => rest_track,
-            });
         }
         if self.planned.is_some() {
             return None;
@@ -218,26 +199,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_layout_uses_rear_wall_odometry_and_is_disabled_by_default() {
+    fn no_visual_fixes_never_invents_a_fixed_crosswalk() {
         let scan = dict! {"seq" => 1, "ranges" => vec![V::None; 360]};
-        let mut normal = CrosswalkStopPlan::default();
-        assert!(normal.observe(&scan, 0., Some(-0.3), Some((0., -0.3)), Some(0.), true).is_none());
-        assert!(normal.planned.is_none());
-        for rear in [0.25, 0.58] {
-            let mut plan = CrosswalkStopPlan::default();
-            plan.set_test_from_rear_wall(Some(0.8 + 2.));
-            let evidence = plan.observe(&scan, 0., Some(-rear), Some((0., -rear)), Some(0.), true).unwrap();
-            assert_eq!(evidence.get("basis").os(), Some("field_test_dimensions_from_start_rear_wall"));
-            assert!((evidence.get("front_to_edge_m").f() - (2.8 - rear - FRONT_BODY_EXTENT_M)).abs() < 1e-9);
-            plan.push_frame(0., 0.8, 0.1); // a conflicting camera fix must not move the test edge
-            assert!(plan.observe(&scan, 0.1, Some(-rear-0.7), Some((0., -rear)), Some(0.4), true).is_none());
-            let remaining = -rear - 0.7 - FRONT_BODY_EXTENT_M - plan.planned.unwrap();
-            assert!((remaining - (2.8 - rear - FRONT_BODY_EXTENT_M - 0.7)).abs() < 1e-9);
-        }
-        let mut wrong_reference = CrosswalkStopPlan::default();
-        wrong_reference.set_test_from_rear_wall(Some(2.8));
-        assert!(wrong_reference.observe(&scan, 0., Some(7.), Some((0., 7.)), Some(0.), false).is_none());
-        assert!(wrong_reference.planned.is_none(), "a front-wall track is not the start's rear wall");
+        let mut plan = CrosswalkStopPlan::default();
+        assert!(plan.observe(&scan, 0., Some(-0.3), Some((0., -0.3)), Some(0.)).is_none());
+        assert!(plan.planned.is_none());
     }
 
     #[test]
@@ -248,7 +214,7 @@ mod tests {
             plan.push_direct_fix(i, d, 8.0_f64.to_radians(), Some(0.22), "left_gap");
         }
         let ev = plan
-            .observe(&scan, 0.6, Some(-0.40), Some((0.0, -0.40)), Some(0.0), true)
+            .observe(&scan, 0.6, Some(-0.40), Some((0.0, -0.40)), Some(0.0))
             .expect("planned from rust");
         assert_eq!(ev.get("basis").os(), Some("rust_stripes_with_left_gap"));
         assert!((ev.get("front_to_edge_m").f() - 2.19).abs() < 1e-6);

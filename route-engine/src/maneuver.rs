@@ -754,7 +754,6 @@ pub struct Maneuver {
     pub _start_motor: i64,
     pub _transfer_motor: i64,
     pub(crate) race_inputs: Option<crate::motion_sensors::RaceInputs>,
-    pub(crate) race_test_light_fixed_wait: bool,
     /// Known from the first preview, before `race_inputs` exists.
     pub(crate) race_program: bool,
     pub(crate) wall_turn: crate::race_first_cone::WallTurn,
@@ -1083,7 +1082,6 @@ impl Maneuver {
             _start_motor: TRIAL_MOTOR,
             _transfer_motor: ROUTE_SLOW_MOTOR,
             race_inputs: None,
-            race_test_light_fixed_wait: false,
             race_program: false,
             wall_turn: Default::default(),
             light_entry_coast: false,

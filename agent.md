@@ -1,5 +1,13 @@
 # XT-STCAR 接手与开发约定
 
+## 当前交接入口（2026-11-20：Gemini 4 Neon，三版本分拆完成：主目录纯识别N10P、test/固定2.8m N10P、提交/纯识别N10）
+
+- 保留分拆前版本 `d0f215d`（已打 Git 标签 `y109-with-switch-20261120` 随仓库保留）。按用户要求整理为三份独立目录：
+  1. **主目录（本仓库）**：保留 N10P 雷达与 N10P 校准参数、纯 Rust+YOLO OR 融合与红绿灯 10 s 保底，完全删除斑马线写死距离（`test_from_rear_wall_m` / `--test-crosswalk-from-rear-wall-m`）及识别/写死切换开关（`field-test` / `--test` / `--normal` / `--test-status` / `--test-lights` / `--test-light-fixed-wait`）。
+  2. **`test/` 文件夹（本地独立副本）**：固定从发车区最底部后墙到斑马线近沿 **2.8 m**（默认生效），保留 N10P 雷达与 N10P 校准（`0.011 / -3`、`460800`）及红绿灯 10 s 保底。
+  3. **`提交/` 文件夹（组委会提交版）**：完全纯识别（零斑马线写死与切换开关），雷达回退为纯 **N10**（仅 `230400` 波特率、58 字节单回波帧，无 N10P 代码与配置），校准参数切回 N10（`config/lidar-calibration.json` 与 `config/lidar-coarse-20260923.json`：`range_offset_m = -0.02, clockwise_yaw_bins = 5`）。
+- 三套工程全部独立编译测试通过：主目录 Rust **60/60**、clippy **32** 警告、控制台 **970/970**；`test/` Rust **62/62** + 斑马线 Python **21/21**；`提交/` N10 底层 crates 全套（0 失败）+ Rust **60/60** + 斑马线 Python **20/20**。本次未连接车辆、未上传部署或发车；机读键 `y110_pure_vision_strip_fixed_and_three_variants_20261120`。
+
 ## 当前交接入口（2026-11-19：Gemini 4 Neon，y109／214正常比赛红绿灯10s保底放行已编译打包推送，暂未上传至车）
 
 - 按用户明确规则修改比赛模式红绿灯放行逻辑（`route-engine/src/maneuver_light.rs`）：识别到绿灯立即放行；若识别到红灯但后续一直未识别到绿灯，则从**第一次识别到红灯起满 10.0 s 无条件放行**（`red_seen_10s_after_first_red`，不再因红灯闪烁或未见绿而卡死）；若在门架前停车后一直未识别到红灯，则从**停下那一刻起满 10.0 s 无条件放行**（`known_gantry_color_unconfirmed_10s_after_stop`）；10 s 放行后直接置 `released` 不再重武装。普通参考模式不变。

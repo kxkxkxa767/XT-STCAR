@@ -35656,5 +35656,32 @@
     "crates_changed": false,
     "rebuild_bridge": false,
     "vehicle_state_note": "Prior to user instruction to push without uploading to vehicle, dark/light/mix field-test-*.json on car were switched to normal mode (enabled=false) while running y108/213, locked 1500/1500. y109/214 built locally and pushed to origin/main only; NOT deployed to vehicle."
+  },
+  "y110_pure_vision_strip_fixed_and_three_variants_20261120": {
+    "date": "2026-11-20",
+    "author": "Gemini",
+    "author_model": "Gemini 4 Neon (XHigh)",
+    "preserved_pre_split_commit": "d0f215d5ace906d98d50cadc1a1496086bf3169c",
+    "preserved_pre_split_tag": "y109-with-switch-20261120",
+    "summary": "Split into three standalone variants per user request: (1) main repo stripped of all fixed-crosswalk distance and fixed/vision toggle switches (pure vision + N10P radar/calibration + 10s light guarantee); (2) local folder test/ copied from d0f215d and fixed to 2.8m from start rear wall to crosswalk near edge with N10P radar/calibration; (3) local folder 提交/ for competition committee submission with pure vision (zero fixed crosswalk or switch) and reverted to pure N10 radar (230400, 58B packet) + N10 calibration (-0.02m, +5 yaw bins).",
+    "main_repo_changes": [
+      "route-engine/src/race_crosswalk_stop.rs & maneuver_crosswalk.rs: removed test_from_rear_wall_m, set_test_from_rear_wall, and field_test_dimensions_from_start_rear_wall.",
+      "route-engine/src/maneuver.rs & maneuver_light.rs: removed race_test_light_fixed_wait fixed-10s test bypass while keeping normal 10s guarantee floor.",
+      "route-engine/src/race.rs & race_launch.rs & scripts/: removed --test-crosswalk-from-rear-wall-m, --test-light-fixed-wait, field_options/field_config/field-test, and --test/--normal/--test-status/--test-lights switches.",
+      "web/vehicle-console/tests/test_route_y5_crosswalk.py: removed obsolete field_test_options test."
+    ],
+    "checks": {
+      "main_rust_tests": 60,
+      "main_clippy_warnings": 32,
+      "main_console_python_tests": 970,
+      "test_folder_rust_tests": 62,
+      "test_folder_crosswalk_python_tests": 21,
+      "submit_folder_n10_crates_tests_failed": 0,
+      "submit_folder_rust_tests": 60,
+      "submit_folder_crosswalk_python_tests": 20
+    },
+    "vehicle_contacted": false,
+    "deployed": false,
+    "motion_requested": false
   }
 }
