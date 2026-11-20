@@ -130,6 +130,39 @@ mod tests {
         assert!((brake.control_gap(17.156, Some(-0.05886)).unwrap() - 2.15).abs() < 1e-9);
         assert_eq!(brake.command(17.156, Some(-0.05886)), Some(LIGHT_BRAKE_MOTOR));
     }
+
+    #[test]
+    fn finish_brake_releases_early_when_holding_would_stop_outside_zone_and_coast_stays_safe() {
+        let mut brake = LightBrake::default();
+        brake.set_release_over_gap(Some(0.40));
+        let model = BrakeModel::finish(0.60);
+        // Trigger brake at 1.0s with overestimated speed (2.15 m/s at 2.38 m, like y112).
+        brake.observe(1.0, Some(2.38), Some(2.15), Some(0.), 1., 0.60, model, 0.25);
+        assert_eq!(brake.command(1.0, Some(0.)), Some(LIGHT_BRAKE_MOTOR));
+        // Before 0.3s settle, keep continuous brake.
+        brake.observe(1.2, Some(1.90), Some(1.65), Some(-0.5), 1., 0.60, model, 0.25);
+        assert_eq!(brake.command(1.2, Some(-0.5)), Some(LIGHT_BRAKE_MOTOR));
+        // At 1.65s (like y112 t=27.51): gap=1.312, speed=1.133 -> brake_stop~0.58 > 0.40, release_stop~0.27 >= 0.25.
+        brake.observe(1.65, Some(1.312), Some(1.133), Some(-1.02), 1., 0.60, model, 0.25);
+        assert_eq!(brake.command(1.65, Some(-1.02)), Some(NEUTRAL));
+        assert!(brake.is_used());
+        assert_eq!(brake.end_reason, Some("coast_reaches_zone"));
+        // Never brakes a second time after release.
+        assert_eq!(brake.command(1.70, Some(-1.05)), None);
+    }
+
+    #[test]
+    fn finish_brake_keeps_braking_when_releasing_would_overshoot_target() {
+        let mut brake = LightBrake::default();
+        brake.set_release_over_gap(Some(0.40));
+        let model = BrakeModel::finish(0.60);
+        brake.observe(1.0, Some(2.38), Some(2.15), Some(0.), 1., 0.60, model, 0.25);
+        assert_eq!(brake.command(1.0, Some(0.)), Some(LIGHT_BRAKE_MOTOR));
+        // At 1.5s: gap=1.57, speed=1.41 -> brake_stop~0.46 > 0.40, but release_stop < 0.25 (would overshoot target).
+        brake.observe(1.5, Some(1.57), Some(1.41), Some(-0.74), 1., 0.60, model, 0.25);
+        assert_eq!(brake.command(1.5, Some(-0.74)), Some(LIGHT_BRAKE_MOTOR));
+        assert!(brake.is_active());
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -177,6 +210,7 @@ pub struct LightBrake {
     end_reason: Option<&'static str>,
     gap_fusion: Option<GapFusion>,
     gap_reference_reset: bool,
+    release_over_gap: Option<f64>,
 }
 
 impl LightBrake {
@@ -184,6 +218,13 @@ impl LightBrake {
     /// so the physical leg plane is not blended with a stale preview offset.
     pub fn reset_gap_fusion(&mut self) {
         self.gap_reference_reset = true;
+    }
+
+    /// Finish-stage early-release safeguard: if holding 1300 would stop short of
+    /// `max_gap` (rear outside the 80 cm finish zone), allow releasing once coast
+    /// alone still stops at or before `target`. Left `None` for the light zone.
+    pub fn set_release_over_gap(&mut self, max_gap: Option<f64>) {
+        self.release_over_gap = max_gap.filter(|v| v.is_finite() && *v > 0.);
     }
 
     /// Observe once per new scan. All distances, speeds and decelerations are
@@ -282,12 +323,27 @@ impl LightBrake {
         match self.state {
             BrakeState::Used => None,
             BrakeState::Active { since } => {
-                let release = self.projection.filter(|p| now - since >= LIGHT_BRAKE_RESPONSE_S
-                    && p.speed < STOP_SPEED_MPS);
-                if release.is_some() {
+                let target = self.anchor.map_or(0., |a| a.target);
+                let release = self.projection.and_then(|p| {
+                    if now - since < LIGHT_BRAKE_RESPONSE_S {
+                        return None;
+                    }
+                    if p.speed < STOP_SPEED_MPS {
+                        return Some("stopped");
+                    }
+                    if now - since >= LIGHT_BRAKE_RESPONSE_S + 0.2
+                        && self.release_over_gap.is_some_and(|max_gap| {
+                            p.brake_stop > max_gap && p.release_stop >= target
+                        })
+                    {
+                        return Some("coast_reaches_zone");
+                    }
+                    None
+                });
+                if let Some(reason) = release {
                     self.state = BrakeState::Used;
                     self.ended_at = Some(now);
-                    self.end_reason = Some("stopped");
+                    self.end_reason = Some(reason);
                     Some(NEUTRAL)
                 } else {
                     // Missing speed does not insert a neutral pulse between

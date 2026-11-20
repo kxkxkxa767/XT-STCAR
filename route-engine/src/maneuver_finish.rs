@@ -10,6 +10,7 @@ use crate::py::*;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FinishControl {
     pub board: Option<crate::race_end_board::EndBoard>,
+    pub board_chord: Option<bool>,
     pub race_brake: crate::race_light_brake::LightBrake,
     pub ranges: crate::motion_sensors::RangeHistory,
     pub last_speed: Option<(f64, f64)>,
@@ -122,6 +123,121 @@ mod continuous_race_tests {
         step(&mut m, 24, 2.4, 1.54);
         assert_eq!(m.lane_motor, LANE_BRAKE_MOTOR, "rolling brake stays continuous");
     }
+
+    #[test]
+    fn switching_between_plane_and_chord_resets_finish_range_history_and_gap_fusion() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.phase = "drive";
+        m.route_stage = "light_lane";
+        m.light_stop_state = Some("released");
+        m.light_stop_evidence = dict! {"go" => true};
+        m.race_inputs = Some(crate::motion_sensors::RaceInputs { forward_integral: Some(0.), ..Default::default() });
+        m.finish.imu_zero = Some(0.);
+        let make_scan = |seq: i64, at: f64, ahead: f64, bowed: bool| {
+            let mut ranges = vec![V::Float(4.); 360];
+            if bowed {
+                // 1 m corridor with corners at `ahead` and bowed middle 0.25 m farther.
+                for i in 0..360_i64 {
+                    let ang = (i as f64).to_radians();
+                    let side = 0.5 / ang.sin().abs().max(1e-9);
+                    let end = if ang.cos() > 0. {
+                        (ahead + 0.25) / (ang.cos() + 0.45 * ang.sin().abs())
+                    } else {
+                        12.
+                    };
+                    ranges[i as usize] = V::Float(side.min(end));
+                }
+            } else {
+                // Only flat front plane (no side walls -> corner chord returns None, falls back to plane).
+                for i in -12_i64..=12 {
+                    ranges[i.rem_euclid(360) as usize] = V::Float((ahead + 0.25) / (i as f64).to_radians().cos());
+                }
+            }
+            dict! {"seq" => seq, "at_ms" => (at * 1000.) as i64, "received_at" => at, "ranges" => V::list(ranges)}
+        };
+        m.compass.heading = Some(0.);
+        for (idx, (seq, at, ahead, v)) in [(10, 1.0, 3.20, 1.4), (11, 1.1, 3.06, 1.5), (12, 1.2, 2.91, 1.6)].into_iter().enumerate() {
+            m.compass.at_s = Some(at);
+            m.compass.measured_at_s = Some(at);
+            m.race_inputs.as_mut().unwrap().forward_integral = Some(v);
+            let scan = make_scan(seq, at, ahead, false);
+            let (_, fb) = m.finish_control(&scan, None, at);
+            assert_eq!(fb.get("distance_reference").os(), Some("multi_return_end_board_plane"));
+            if idx == 2 {
+                assert!(m.finish.ranges.len() >= 3);
+            }
+        }
+        // Now switch to bowed corner-chord scan (~25 cm closer than plane): must reset range history
+        // instead of creating a fake speed spike and poisoning imu_bias.
+        m.compass.at_s = Some(1.3);
+        m.compass.measured_at_s = Some(1.3);
+        m.race_inputs.as_mut().unwrap().forward_integral = Some(1.7);
+        let chord_scan = make_scan(13, 1.3, 2.74, true);
+        let (_, fb) = m.finish_control(&chord_scan, None, 1.3);
+        assert_eq!(fb.get("distance_reference").os(), Some("side_end_corner_chord"));
+        assert_eq!(m.finish.ranges.len(), 1);
+        assert!(fb.get("speed_mps").is_none());
+        assert!(m.finish.imu_bias.unwrap_or(0.).abs() < 0.15);
+    }
+
+    #[test]
+    fn race_finish_creeps_into_zone_when_stopped_short_after_brake() {
+        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        m.phase = "drive";
+        m.route_stage = "light_lane";
+        m.light_stop_state = Some("released");
+        m.light_stop_evidence = dict! {"go" => true};
+        m.race_inputs = Some(crate::motion_sensors::RaceInputs { forward_integral: Some(0.1), ..Default::default() });
+        m.finish.imu_zero = Some(0.);
+        // Retire the single brake as already used at t=2.0s.
+        let model = crate::race_light_brake::BrakeModel::finish(0.60);
+        m.finish.race_brake.observe(1.0, Some(1.0), Some(1.5), Some(0.), 1., 0.60, model, 0.25);
+        assert_eq!(m.finish.race_brake.command(1.0, Some(0.)), Some(LANE_BRAKE_MOTOR));
+        m.finish.race_brake.observe(2.0, Some(0.53), Some(0.05), Some(-1.45), 1., 0.60, model, 0.25);
+        assert_eq!(m.finish.race_brake.command(2.0, Some(-1.45)), Some(NEUTRAL));
+        assert!(m.finish.race_brake.is_used());
+        m.finish.brake_end = Some(2.05);
+        // Car is standing at gap = 0.53 m (ahead = 0.73 m, rear outside 80 cm finish zone).
+        let make_flat = |seq: i64, at: f64, ahead: f64| {
+            let mut ranges = vec![V::Float(4.); 360];
+            for i in -12_i64..=12 {
+                ranges[i.rem_euclid(360) as usize] = V::Float(ahead / (i as f64).to_radians().cos());
+            }
+            dict! {"seq" => seq, "at_ms" => (at * 1000.) as i64, "received_at" => at, "ranges" => V::list(ranges)}
+        };
+        m.compass.heading = Some(0.);
+        // Build 10 Hz standstill speed history before brake_end + 0.3s settle, then trigger 2-frame creep at 2.4s.
+        for (seq, at) in [(20, 2.1), (21, 2.2), (22, 2.3)] {
+            m.compass.at_s = Some(at);
+            m.compass.measured_at_s = Some(at);
+            let scan = make_flat(seq, at, 0.73);
+            let (basis, _) = m.finish_control(&scan, Some(0.73), at);
+            assert!(basis.is_none());
+            assert_eq!(m.lane_motor, NEUTRAL);
+        }
+        // Frame 1 of 2-frame creep after brake_end + 0.3s.
+        m.compass.at_s = Some(2.4);
+        m.compass.measured_at_s = Some(2.4);
+        let (basis, fb1) = m.finish_control(&make_flat(23, 2.4, 0.73), Some(0.73), 2.4);
+        assert!(basis.is_none());
+        assert_eq!(m.lane_motor, TRIAL_MOTOR);
+        assert_eq!(fb1.get("creeps").i(), 1);
+        m._power_cmd_at = Some(2.4);
+        // Frame 2 of 2-frame creep.
+        m.compass.at_s = Some(2.5);
+        m.compass.measured_at_s = Some(2.5);
+        let (basis, _) = m.finish_control(&make_flat(24, 2.5, 0.71), Some(0.71), 2.5);
+        assert!(basis.is_none());
+        assert_eq!(m.lane_motor, TRIAL_MOTOR);
+        m._power_cmd_at = Some(2.5);
+        // Frame 3 ends the 2-frame creep back to neutral.
+        m.compass.at_s = Some(2.6);
+        m.compass.measured_at_s = Some(2.6);
+        let (basis, _) = m.finish_control(&make_flat(25, 2.6, 0.65), Some(0.65), 2.6);
+        assert!(basis.is_none());
+        assert_eq!(m.lane_motor, NEUTRAL);
+        assert_eq!(m.finish.pulse, 0);
+    }
 }
 
 // The single 1300 brake's deceleration: y25-y27 on the IMU .71-.82 m/s2 over the whole
@@ -192,6 +308,7 @@ impl Maneuver {
         self.finish.holding = false;
         self.finish.brake_decel = None;
         self.finish.race_brake = Default::default();
+        self.finish.board_chord = None;
         if self.race_inputs.is_some() {
             self.finish.ranges.clear();
             self.finish.last_speed = None;
@@ -226,6 +343,7 @@ impl Maneuver {
         self.finish.holding = false;
         self.finish.brake_decel = None;
         self.finish.race_brake = Default::default();
+        self.finish.board_chord = None;
     }
 
     /// Round y37 (user: 终点 IMU 和雷达复用): the IMU speed since the light release, less
@@ -433,6 +551,17 @@ impl Maneuver {
         let after_light = kind == "finish" && restarted;
         let measured_board = after_light && self.race_inputs.is_some();
         let ahead = if measured_board { self.finish_board_range(scan) } else { ahead };
+        if measured_board && ahead.is_some() {
+            // Bowed end boards differ by ~15-25 cm between corner-chord and center-plane
+            // measurements; never difference speeds or blend gap across a reference switch.
+            let is_chord = self.finish.board.is_some();
+            if self.finish.board_chord.is_some_and(|prev| prev != is_chord) {
+                self.finish.ranges.clear();
+                self.finish.last_speed = None;
+                self.finish.race_brake.reset_gap_fusion();
+            }
+            self.finish.board_chord = Some(is_chord);
+        }
         let speed = self.lane_speed(scan, ahead, 2);
         self.lane_coast_observe(scan, now, speed);
         self.lane_push_observe(now, speed);
@@ -599,21 +728,61 @@ impl Maneuver {
                 self.finish.launch_until = None;
                 self.finish.launch_from = None;
             }
+            self.finish.race_brake.set_release_over_gap(Some(goal.body_gap));
             self.finish.race_brake.observe(now, gap, Some(current), input.forward_integral,
                 1., decel, crate::race_light_brake::BrakeModel::finish(decel), goal.target_gap);
             let motor = self.finish.race_brake_motor(now, input.forward_integral).unwrap_or_else(|| {
-                if self.finish.race_brake.is_used() { NEUTRAL }
-                else if self.finish.launch_until.is_some() { LIGHT_LAUNCH_MOTOR }
-                else if gap.is_some_and(|g| g <= goal.target_gap + current * ESC_COAST_DELAY_S
-                    + crate::race_light_brake::BrakeModel::finish(decel).stop_travel(current, 0.)) { ROLLING_HOLD_MOTOR }
-                else { RACE_CRUISE_MOTOR }
+                if self.finish.race_brake.is_used() {
+                    let frames = if self.finish.creeping { LANE_CREEP_FRAMES } else { LANE_KICK_FRAMES };
+                    if self.finish.pulse > 0 {
+                        if self.finish.pulse < frames && !body_in_zone {
+                            self.finish.pulse += 1;
+                            TRIAL_MOTOR
+                        } else {
+                            self.finish.pulse = 0;
+                            self.finish.creeping = false;
+                            NEUTRAL
+                        }
+                    } else {
+                        let brake_settled = self.finish.brake_end.is_none_or(|e| now - e >= 0.3);
+                        let can_creep = in_zone && !body_in_zone
+                            && gap.is_some_and(|g| g >= goal.min_gap + goal.creep_travel)
+                            && self.finish.creeps < goal.creep_max;
+                        if speed_known && stopped && brake_settled && rested && !body_in_zone {
+                            if can_creep {
+                                self.finish.creeping = true;
+                                self.finish.creeps += 1;
+                                self.finish.pulse = 1;
+                                TRIAL_MOTOR
+                            } else if kick_room {
+                                self.finish.creeping = false;
+                                self.finish.pulse = 1;
+                                TRIAL_MOTOR
+                            } else {
+                                NEUTRAL
+                            }
+                        } else {
+                            NEUTRAL
+                        }
+                    }
+                } else if self.finish.launch_until.is_some() {
+                    LIGHT_LAUNCH_MOTOR
+                } else if gap.is_some_and(|g| g <= goal.target_gap + current * ESC_COAST_DELAY_S
+                    + crate::race_light_brake::BrakeModel::finish(decel).stop_travel(current, 0.)) {
+                    ROLLING_HOLD_MOTOR
+                } else {
+                    RACE_CRUISE_MOTOR
+                }
             });
             self.lane_motor = motor;
             self.finish.holding = matches!(motor, RACE_CRUISE_MOTOR | ROLLING_HOLD_MOTOR);
-            self.finish.pulse = 0;
-            self.finish.creeping = false;
+            if !self.finish.race_brake.is_used() {
+                self.finish.pulse = 0;
+                self.finish.creeping = false;
+            }
             self._lane_topup_motor = None;
             feedback.set("motor", motor);
+            feedback.set("creeps", self.finish.creeps);
             feedback.set("imu_speed_mps", imu);
             feedback.set("fused_speed_mps", current);
             feedback.set("imu_bias_mps", self.finish.imu_bias);
