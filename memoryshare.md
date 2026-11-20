@@ -1807,3 +1807,9 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
    - `test/`：Rust **65/65** 通过（无 `target/` 残留）；
    - `提交/`：全 workspace（`Cargo.toml` 全部 5 crate + `route-engine`）从零编译通过、全部单测（含 `route-engine` **63/63**）通过且已清零临时构建目录；已删除 `.DS_Store`、`__pycache__`、`config/vehicle-ssh.conf` 并清理 `web/vehicle-console/README.md` 旧日志；经审计确认纯 **N10**（`230400` / 58B / `-0.02 / +5`），0 处 `N10P` / `460800` / `2.8m` / `fixed10s` / `agent.md` / `memoryshare.md` 残留。
    - 用户已关车，本次仅交叉编译 `claude-turn217 / y112` 并推送至 `origin/main`，未连接车端。
+
+
+## 2026-11-20 20:31 · Gemini 4 Neon（XHigh）· y112／217 已部署上车并核验锁定中位
+
+- 按用户指令将已编译的主目录 `claude-turn217 / y112`（源提交 `160e542`，基线 `claude-turn216`，`route-engine` sha256 `89994ce8...`）部署到实车（备份 `/home/bianbu/xt-stcar-console/backup-claude-turn217-20261120-180031`，`deployed=true`，`verified_files=11`，`motion_requested=false`，保留车端 N10P `lidar-serial.json` 与 `lidar-calibration.json`）。
+- 只读核验：`route-engine start --profile dark/light/mix --show` 均报告 `y112`；`xt-stcar-console.service` 为 `active`；`/api/state` 实测 `healthy=true, mode="locked", armed=false, motor=1500, servo=1500, reason="locked"`（`ages: camera 0.076s, lidar 0.085s, control 0.013s`）。未解锁未发车，交由用户现场实测。
