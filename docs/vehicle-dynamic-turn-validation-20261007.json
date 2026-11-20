@@ -35785,6 +35785,39 @@
     },
     "report": "docs/y114-traffic-light-validation-20261120.md",
     "frame_labels": "docs/y114-traffic-light-frames-20261120.jsonl",
-    "physical_output_executed": false
+    "physical_output_executed": false,
+    "deployment_20261121": {
+      "date": "2026-11-21",
+      "previous": "y113 / claude-turn218",
+      "source_commit": "41337e111e8dc0bcb442d306b1aa5cec9b353f85",
+      "deployed": true,
+      "backup": "/home/bianbu/xt-stcar-console/backup-claude-turn219-20261120-232209",
+      "weather_files_verified": 11,
+      "profiles": {
+        "dark": "y114 / dark",
+        "light": "y114 / light",
+        "mix": "y114 / mix"
+      },
+      "console_service": "active",
+      "race_service": "inactive",
+      "healthy": true,
+      "mode": "locked",
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500,
+      "neutral_samples": 10,
+      "motion_requested": false,
+      "arm_or_drive_requests": 0,
+      "lidar": {
+        "baud_rate": 460800,
+        "range_offset_m": 0.011,
+        "clockwise_yaw_bins": -3
+      },
+      "receipts": [
+        "work/vehicle-dynamic-deploy-20261008/claude-turn219-deployment-result.json",
+        "work/vehicle-dynamic-deploy-20261008/y114-weather-deployment-20261121.jsonl",
+        "work/vehicle-dynamic-deploy-20261008/y114-vehicle-readback-20261121.json"
+      ]
+    }
   }
 }
