@@ -294,7 +294,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
             .args(["--camera", camera, "--max-s", "150"])
             .arg("--phase-state")
             .arg(out.join("run/vision-phase.txt"))
-            .args(["--wait-threads", "4", "--cpu-affinity", "0-3"])
+            .args(["--wait-threads", "2", "--cpu-affinity", "0-3"])
             .arg("--frame-shm")
             .arg(&frame_shm)
             .arg("--light-state")
@@ -339,7 +339,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         let mut command = if cfg!(target_os = "linux") && taskset.is_file() {
             let mut c = Command::new(taskset);
             c.args(["-c", "4-7"]).arg(&exe);
-            result["cpu_affinity"] = json!({"vision": "0-3", "race": "4-7", "rust_crosswalk": "6"});
+            result["cpu_affinity"] = json!({"vision": "0-3", "race": "4-7", "rust_crosswalk": "6", "rust_light_requested": "3"});
             c
         } else {
             Command::new(&exe)

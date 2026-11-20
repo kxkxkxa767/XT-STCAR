@@ -47,6 +47,8 @@ mod motion_sensors;
 mod race_crosswalk;
 mod race_crosswalk_stop;
 mod race_crosswalk_vision;
+mod race_traffic_light;
+mod traffic_lamp;
 mod race_surface;
 mod race_surface_speed;
 mod maneuver_finish;

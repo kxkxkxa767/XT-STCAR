@@ -1,8 +1,10 @@
 # XT-STCAR（纯视觉识别 N10P 正式版；已分拆 `test/` 固定2.8m测试版 与 `提交/` 组委会N10纯识别版）
 
+2026-11-20 的 y114／引擎 219 候选增加了纯 Rust 红绿灯识别，与三个天气模型并行。12 轮历史照片中，融合检出 198/199 张红灯、27/27 张绿灯，无亮灯照片误报 7/274。车上最近装载的是 y113／218。[红绿灯回放、时延与复算方法](docs/y114-traffic-light-validation-20261120.md)
+
 车端SSH终端使用 `start_dark`、`start_light` 或 `start_mix`（单一Rust工程统一调度），分别选择阴天、晴天及混合模型；裸 `start` 已停用。主仓库已完全取消斑马线写死距离与切换开关，全程采用纯视觉识别：斑马线由纯Rust（基于雷达左缺口与半张A4 21cm周期匹配，抗红/蓝/白线篮球场干扰）与YOLO并行OR融合；红绿灯见绿即走、见红未见绿从首次见红起10 s保底放行、停稳未见红从停下起10 s保底放行；8核隔离（YOLO绑CPU 0–3，控制绑CPU 4–7，Rust斑马线线程绑CPU 6且过线即停）；雷达与校准采用 **N10P**（`460800`、`range_offset_m=0.011`、`clockwise_yaw_bins=-3`）。本地另保留独立目录 `test/`（固定2.8 m 斑马线测试版，N10P）与 `提交/`（组委会提交版，纯视觉识别 + **N10** 雷达 `230400` 与 N10 校准 `-0.02 / +5`）；分拆前带切换版本保留在 Git 标签 `y109-with-switch-20261120`（提交 `d0f215d`）。每次摆放并复位后输入一次，后台单轮运行不受SSH退出影响。
 
-最近三轮结果与原图：[局部轨迹及终点停车](docs/figures/y107-three-trials-20261117.png)、[灯前视野](docs/figures/y107-light-stops-20261117.png)。三轮均登记终点停车；前两轮末尾通用停稳确认未通过，第三轮通过。用时未计罚时，斑马线识别模式按用户决定明天再处理。
+y107 的三轮历史试验均登记终点停车，末尾独立停稳观察在第三轮通过。用时未计罚时。[局部轨迹及终点停车](docs/figures/y107-three-trials-20261117.png)　[灯前视野](docs/figures/y107-light-stops-20261117.png)
 
 Muse Pi Pro / RISC-V 轻量无人车（赛项三）的自主路线工程。车上跑路线的是两个 Rust 程序：车上桥 `vehicle-bridge` 和独立控制程序 `route-engine race`。激光雷达提供路线几何和门架位置，相机识别斑马线与信号灯，IMU 补偿短时车速变化。Mac 负责开发、仿真、逐位对比、交叉编译和部署。
 源码仓库：[github.com/kxkxkxa767/XT-STCAR](https://github.com/kxkxkxa767/XT-STCAR)；本机目录 `/Users/yuhaojin/Documents/XT-STCAR`。每轮的改动、实车结果和证据位置记在机器记录 [`docs/vehicle-dynamic-turn-validation-20261007.json`](docs/vehicle-dynamic-turn-validation-20261007.json)；接手约定和最近几轮的详细说明见 [agent.md](agent.md)。

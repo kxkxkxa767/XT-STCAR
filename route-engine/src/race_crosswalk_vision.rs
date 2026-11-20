@@ -41,7 +41,7 @@ const CAM_BEHIND_FRONT: f64 = 0.041;
 const CAM_AHEAD_LIDAR: f64 = FRONT_BODY_EXTENT_M - CAM_BEHIND_FRONT; // 0.159 m
 const NOMINAL_PITCH_DEG: f64 = 8.05;
 const SHM_MAGIC: &[u8; 4] = b"XTF1";
-const SHM_HEADER_LEN: usize = 32;
+pub(crate) const SHM_HEADER_LEN: usize = 32;
 
 /// Compact lidar geometry snapshot of the start lane, updated by the control thread.
 #[derive(Clone, Copy, Debug)]
@@ -823,7 +823,7 @@ pub fn parse_shm_frame(bytes: &[u8]) -> Option<(i64, f64, usize, usize, &[u8])> 
 
 /// Best-effort pin current Linux thread to a dedicated CPU core without unsafe code.
 #[cfg(target_os = "linux")]
-fn pin_current_thread(cpu: usize) -> Option<usize> {
+pub(crate) fn pin_current_thread(cpu: usize) -> Option<usize> {
     let status = std::fs::read_to_string("/proc/thread-self/status").ok()?;
     let tid = status
         .lines()
@@ -843,7 +843,7 @@ fn pin_current_thread(cpu: usize) -> Option<usize> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn pin_current_thread(_cpu: usize) -> Option<usize> {
+pub(crate) fn pin_current_thread(_cpu: usize) -> Option<usize> {
     None
 }
 

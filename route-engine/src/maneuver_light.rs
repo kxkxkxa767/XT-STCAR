@@ -222,11 +222,21 @@ impl Maneuver {
         }
         self.light_vision = true;
         let (frame, captured) = (light.get("frame"), light.get("captured_at"));
-        if !frame.is_int() || !captured.is_num() || self._light_frames.last().is_some_and(|f| py_eq(f.at(0), frame)) {
+        if !frame.is_int() || !captured.is_num() {
             return;
         }
         let score = |v: &V| if v.is_num() { v.clone() } else { V::Float(0.) };
         let (red, green) = (score(light.get("red")), score(light.get("green")));
+        let mut previous_red = 0.;
+        if let Some(last) = self._light_frames.last().filter(|f| py_eq(f.at(0), frame)) {
+            if self.race_inputs.is_none() || !light.get("lamp_fusion").is_true()
+                || (last.at(2).f() == red.f() && last.at(3).f() == green.f()) {
+                return;
+            }
+            previous_red = last.at(2).f();
+            // The other detector updated the very same capture. Keep one history row.
+            self._light_frames.pop();
+        }
         let (crosswalk, row, metres) = (light.get("crosswalk"), light.get("crosswalk_row"), light.get("crosswalk_m"));
         if self.route_stage == "start_lane" && crosswalk.is_num() && crosswalk.f() >= CROSSWALK_SEEN_SCORE {
             // round y5: placed on the start lane's next scan (crosswalk_observe);
@@ -255,7 +265,8 @@ impl Maneuver {
         }
         let fresh_race_red = self.race_inputs.is_some() && matches!(self.route_stage, "light_entry" | "light_lane")
             && !matches!(self.light_stop_state, Some("waiting" | "released" | "passed"))
-            && red.f() >= LIGHT_RED_MIN_SCORE && (0.0..=LIGHT_FRAME_MAX_AGE_S).contains(&(now - captured.f()))
+            && previous_red < LIGHT_RED_MIN_SCORE && red.f() >= LIGHT_RED_MIN_SCORE
+            && (0.0..=LIGHT_FRAME_MAX_AGE_S).contains(&(now - captured.f()))
             && self.light_since.is_some_and(|entry| captured.f() >= entry);
         if fresh_race_red {
             if !self._light_red_hold {
@@ -273,7 +284,7 @@ impl Maneuver {
             self.lane_motor = if self.race_light_brake.is_active() { LIGHT_BRAKE_MOTOR } else { NEUTRAL };
         }
         if self.light_stop_active() && (fresh_race_red || captured.f() >= self._light_gantry_since.unwrap()) {
-            if red.f() >= LIGHT_RED_MIN_SCORE {
+            if previous_red < LIGHT_RED_MIN_SCORE && red.f() >= LIGHT_RED_MIN_SCORE {
                 self._light_red_frames += 1;
                 if self._light_red_at.is_none() {
                     self._light_red_at = Some(captured.f());
@@ -284,6 +295,7 @@ impl Maneuver {
             }
             if self.light_stop_state == Some("waiting")
                 && captured.f() >= self._light_wait_since.unwrap()
+                && previous_red < LIGHT_GREEN_MIN_SCORE
                 && red.f() >= LIGHT_GREEN_MIN_SCORE
             {
                 self._light_stop_red_frames += 1;

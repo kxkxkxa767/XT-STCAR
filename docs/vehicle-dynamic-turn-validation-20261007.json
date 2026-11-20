@@ -35730,5 +35730,61 @@
       "submit_rust_tests": 67
     },
     "physical_output_executed": false
+  },
+  "y114_rust_traffic_light_and_race_exit_20261120": {
+    "date": "2026-11-20",
+    "baseline": "y113 / claude-turn218",
+    "candidate": "y114 / claude-turn219",
+    "exit_fixes_source": "71c4d46",
+    "changes": [
+      "Keep the child exit status, signal and startup refusal in the Rust launcher result.",
+      "Accept an acknowledged finish brake while neutral is pending during recoverable scan loss.",
+      "Run black-housing and light-emission recognition in Rust only in the gantry stages, fuse per camera frame with YOLO, and run the waiting model with two threads."
+    ],
+    "variants": [
+      "main: vision + N10P",
+      "test: 2.8 m + N10P",
+      "submission: vision + N10"
+    ],
+    "photo_validation": {
+      "runs": 12,
+      "frames": 512,
+      "single_colour_or_negative": 500,
+      "both_lit": 2,
+      "uncertain": 10,
+      "red": 199,
+      "green": 27,
+      "negative": 274,
+      "rust": [
+        197,
+        27,
+        0
+      ],
+      "mix_yolo": [
+        146,
+        27,
+        7
+      ],
+      "fused": [
+        198,
+        27,
+        7
+      ],
+      "counts_order": [
+        "correct_red",
+        "correct_green",
+        "negative_false_positive"
+      ],
+      "venue_negative_false_positives": "0/7"
+    },
+    "host": "Apple M5",
+    "capture_to_result_median_ms": {
+      "rust": 0.42,
+      "concurrent_yolo_2": 5.03,
+      "baseline_yolo_4": 5.2
+    },
+    "report": "docs/y114-traffic-light-validation-20261120.md",
+    "frame_labels": "docs/y114-traffic-light-frames-20261120.jsonl",
+    "physical_output_executed": false
   }
 }

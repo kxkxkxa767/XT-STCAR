@@ -176,6 +176,7 @@ pub(crate) enum Event {
     Line(&'static str, String, Instant),
     Light(String, Instant),
     RustCrosswalk(crate::race_crosswalk_vision::RustCrosswalkObs, Instant),
+    RustLamp(crate::race_traffic_light::Observation, Instant),
     Coast(u64, String),
     Ended(&'static str, String),
     Enter,
@@ -464,6 +465,7 @@ struct Program {
     light_updates: i64,
     light_invalid: i64,
     vision_phase: Option<&'static str>,
+    lamp_worker: Option<Sender<bool>>,
     rust_cw_hint: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::LaneLidarHint>>,
     rust_cw_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     rust_cw_stats: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::RustCrosswalkStats>>,
@@ -531,9 +533,8 @@ impl Program {
         self.publish_vision_phase();
     }
 
-    /// Resource hint only: the existing writer owns disk I/O. Keeps raw frame export
-    /// and pure-Rust crosswalk detection active ONLY until crosswalk distance is computed
-    /// (at rest or while driving in `start_lane`), then stops immediately (0 % CPU after).
+    /// The camera exports raw frames for crosswalk ranging and again at the gantry.
+    /// The crosswalk worker stops once resolved. The lamp worker sleeps between phases.
     fn publish_vision_phase(&mut self) {
         let rust_stopped = self.rust_cw_stop.load(std::sync::atomic::Ordering::Acquire);
         let phase = match self.sup.session.as_ref() {
@@ -545,6 +546,9 @@ impl Program {
                 }
             }
             Some(s) if s.motion.light_stop_state == Some("waiting") => "light_wait",
+            Some(s) if self.lamp_worker.is_some() && matches!(s.motion.route_stage, "light_entry" | "light_lane")
+                && !matches!(s.motion.light_stop_state, Some("released" | "passed"))
+                && s.motion.phase != "coast" && s.motion.phase != "locked" => "light_approach",
             Some(s)
                 if !rust_stopped
                     && rust_crosswalk_needed_in_motion(
@@ -561,10 +565,15 @@ impl Program {
         if phase != "start_lane" && !self.rust_cw_stop.swap(true, std::sync::atomic::Ordering::AcqRel) {
             self.say("crosswalk distance resolved or passed; stopping rust crosswalk detector");
         }
-        if self.o.light_state.is_none() {
+        if self.o.light_state.is_none() && self.o.frame_shm.is_none() {
             return;
         }
         if self.vision_phase != Some(phase) {
+            let active = crate::race_traffic_light::lamp_phase(Some(phase));
+            if active != crate::race_traffic_light::lamp_phase(self.vision_phase)
+                && let Some(worker) = &self.lamp_worker {
+                let _ = worker.send(active);
+            }
             self.vision_phase = Some(phase);
             let _ = self.files.send(FileOp::Put("vision-phase.txt", format!("{phase}\n")));
         }
@@ -576,6 +585,18 @@ impl Program {
 
     fn at(&self, instant: Instant) -> f64 {
         instant.saturating_duration_since(self.base).as_secs_f64()
+    }
+
+    fn apply_light(&mut self, light: V) {
+        let fused = self.lamp_worker.is_some() && crate::race_traffic_light::lamp_phase(self.vision_phase);
+        let light = if fused {
+            let Some(merged) = crate::race_traffic_light::merge(&self.light, light) else { return };
+            merged
+        } else {
+            light
+        };
+        self.sup.set_light(&light);
+        self.light = light;
     }
 
     /// One bridge line or event, as read_bridge applies it under the console lock;
@@ -660,10 +681,26 @@ impl Program {
                                 self.stop_rust_crosswalk("crosswalk distance ready at rest; stopping rust crosswalk detector");
                             }
                         }
-                        self.sup.set_light(&light);
-                        self.light = light;
+                        self.apply_light(light);
                     }
                     None => self.light_invalid += 1,
+                }
+            }
+            Event::RustLamp(obs, received) => {
+                let now = self.at(received);
+                let captured = self.base_monotonic_s.map(|base| obs.captured_mono_s - base)
+                    .unwrap_or(now - obs.compute_ms / 1000.);
+                let row = dict! {"frame" => obs.frame, "captured_at" => captured, "received_at" => now,
+                    "red" => obs.lights.red, "green" => obs.lights.green, "compute_ms" => obs.compute_ms,
+                    "pinned_cpu" => obs.pinned_cpu.map(|n| n as i64),
+                    "capture_to_result_ms" => self.base_monotonic_s.map(|_| (now - captured) * 1000.)};
+                let _ = self.files.send(FileOp::Append("rust-light.jsonl", to_json(&row) + "\n"));
+                if crate::race_traffic_light::lamp_phase(self.vision_phase)
+                    && (0.0..=crate::maneuver::LIGHT_FRAME_MAX_AGE_S).contains(&(self.mono() - captured))
+                    && (obs.lights.red || obs.lights.green) {
+                    let light = dict! {"frame" => obs.frame, "captured_at" => captured,
+                        "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green)};
+                    self.apply_light(light);
                 }
             }
             Event::RustCrosswalk(obs, received) => {
@@ -870,6 +907,8 @@ pub fn main(args: &[String]) -> i32 {
             }
         });
     }
+    let (lamp_worker, lamp_thread) = o.frame_shm.as_ref().and_then(|path|
+        crate::race_traffic_light::spawn(path.clone(), tx.clone())).unzip();
     drop(tx);
     let (files, writer_thread) = writer(o.out.clone());
     let mut sup = Supervisor::new(o.demo, &token(), "rust_program");
@@ -908,6 +947,7 @@ pub fn main(args: &[String]) -> i32 {
         light_updates: 0,
         light_invalid: 0,
         vision_phase: None,
+        lamp_worker,
         rust_cw_hint,
         rust_cw_stop: rust_cw_stop.clone(),
         rust_cw_stats,
@@ -932,6 +972,7 @@ pub fn main(args: &[String]) -> i32 {
             .inspect_err(|e| eprintln!("IMU recorder: {e}")).ok()
     };
     let code = run(&mut p);
+    drop(p.lamp_worker.take());
     rust_cw_stop.store(true, std::sync::atomic::Ordering::Release);
     imu_stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = p.files.send(FileOp::Stop);
@@ -945,6 +986,7 @@ pub fn main(args: &[String]) -> i32 {
     if let Some(thread) = rust_cw_thread {
         let _ = thread.join();
     }
+    if let Some(thread) = lamp_thread { let _ = thread.join(); }
     code
 }
 

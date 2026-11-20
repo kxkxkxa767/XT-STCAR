@@ -49,6 +49,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import socket
 import struct
 import sys
 import time
@@ -246,8 +247,8 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--camera', default='/dev/video20')
     parser.add_argument('--threads', type=int, default=2)
-    parser.add_argument('--phase-state', help='Rust race resource hint: drive or light_wait')
-    parser.add_argument('--wait-threads', type=int, default=4, help='inference threads only while Rust reports light_wait')
+    parser.add_argument('--phase-state', help='Rust race camera phase: start_lane, drive, light_approach or light_wait')
+    parser.add_argument('--wait-threads', type=int, default=2, help='inference threads only while Rust reports light_wait')
     parser.add_argument('--max-s', type=float, default=150.)
     parser.add_argument('--conf', type=float, default=.25)
     parser.add_argument('--save-every', type=int, default=10)
@@ -255,7 +256,7 @@ def main():
     parser.add_argument('--jpeg-quality', type=int, choices=range(1, 101), default=80, metavar='1..100')
     parser.add_argument('--images', nargs='*', help='bench: these image files instead of the camera')
     parser.add_argument('--light-state', help='round y2: the light state file for route-engine race')
-    parser.add_argument('--frame-shm', help='optional RAM path for start-lane raw BGR frames shared with pure-Rust crosswalk vision')
+    parser.add_argument('--frame-shm', help='RAM path for raw BGR camera frames during Rust crosswalk and traffic-light recognition')
     parser.add_argument('--cpu-affinity', help='optional Linux CPU list (e.g. 0-3) to isolate ONNX Runtime from control cores')
     args = parser.parse_args()
     pinned_cpus = None
@@ -312,6 +313,15 @@ def main():
             wait_profile_error = str(error)
     phase_path = Path(args.phase_state) if args.phase_state else None
     shm_path = Path(args.frame_shm) if args.frame_shm else None
+    lamp_wake = None
+    if shm_path is not None:
+        try:
+            lamp_wake = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            lamp_wake.setblocking(False)
+        except OSError:
+            if lamp_wake is not None:
+                lamp_wake.close()
+            lamp_wake = None
     shm_active = shm_path is not None
     phase = 'start_lane' if shm_active else 'drive'
     profile_times = {threads: [] for threads in sessions}
@@ -340,7 +350,7 @@ def main():
                     hint = phase_path.read_text().strip()
                 except OSError:
                     hint = None
-                if hint in ('start_lane', 'drive', 'light_wait'):
+                if hint in ('start_lane', 'drive', 'light_approach', 'light_wait'):
                     phase = hint
             threads = args.wait_threads if phase == 'light_wait' and args.wait_threads in sessions else args.threads
             session = sessions[threads]
@@ -359,7 +369,7 @@ def main():
                 if frame is None:
                     continue
             if shm_path is not None:
-                if phase == 'start_lane':
+                if phase in ('start_lane', 'light_approach', 'light_wait'):
                     try:
                         fh, fw = frame.shape[:2]
                         hdr = struct.pack('<4sQdIII', b'XTF1', stats['frames'] + 1, captured, fw, fh, 0)
@@ -369,6 +379,8 @@ def main():
                             sf.write(frame.tobytes())
                         os.replace(shm_tmp, shm_path)
                         shm_active = True
+                        if phase != 'start_lane' and lamp_wake is not None:
+                            lamp_wake.sendto(b'1', str(shm_path) + '.lamp.sock')
                     except OSError:
                         pass
                 elif shm_active:
@@ -435,6 +447,8 @@ def main():
             log.flush()
     if cap is not None:
         cap.release()
+    if lamp_wake is not None:
+        lamp_wake.close()
     if shm_path is not None:
         for p in (shm_path, shm_path.with_name(shm_path.name + '.tmp')):
             try:
