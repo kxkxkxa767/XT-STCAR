@@ -35706,5 +35706,17 @@
       "submit_rust_tests": 62
     },
     "physical_output_executed": false
+  },
+  "y112_start_lane_and_crosswalk_stop_20261120": {
+    "date": "2026-11-20",
+    "summary": "Fix y111-5 crooked/bowed-board startup refusal (relax wide_start_lane soft-board fit & 30 deg race start heading) and y111-2/3/4 early crosswalk stop (race default decel 0.72 m/s^2, cap next_scan_gain rise <= 0.18 m/s, wait up to 0.8s for first lidar left-gap scan in rust-cw-vision); synced across main, test/, and cleaned N10-only 提交/.",
+    "checks": {
+      "main_rust_tests": 63,
+      "main_clippy_warnings": 32,
+      "main_python_console_tests": 970,
+      "test_rust_tests": 65,
+      "submit_workspace_and_route_tests": "all_passed"
+    },
+    "physical_output_executed": false
   }
 }

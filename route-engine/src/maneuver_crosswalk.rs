@@ -236,9 +236,12 @@ impl Maneuver {
         let settled = self._power_cmd_at.is_none_or(|at| now - at >= ESC_LAG_S + LANE_ESC_SKEW_S);
         let (mut aim, mut worst) = (None, None);
         // Round y15: a measured coast aims the stop; the guard takes its weak end
-        // where that is above the tile's.
+        // where that is above the tile's. In race mode before a coast is measured,
+        // use 0.72 m/s^2 (y111-2/3/4 measured ~0.70-0.75) instead of 0.60 to avoid
+        // stopping 50-75 cm short of the stripes.
         let measured = self._lane_coast_decel.is_some();
-        let decel = self._lane_coast_decel.unwrap_or(CROSSWALK_AIM_DECEL_MPS2);
+        let default_decel = if self.race_inputs.is_some() { 0.72 } else { CROSSWALK_AIM_DECEL_MPS2 };
+        let decel = self._lane_coast_decel.unwrap_or(default_decel);
         let guard_decel = if measured { pmax(CROSSWALK_GUARD_DECEL_MPS2, self.lane_decels().1) } else { CROSSWALK_GUARD_DECEL_MPS2 };
         // Round y35: a cut waits for the next scan unless made on this one, so the travel to
         // it counts (y34's first run cut ~.1 m past its aim at 1.03 m/s).
@@ -248,12 +251,11 @@ impl Maneuver {
             0.
         };
         // y68 (race): a cut left to the next scan also carries that scan's speed gain while the
-        // push still accelerates. All six cuts of y60-y67 came a scan late: the aim at the first
-        // coast frame was -.09 to .15 against the .15 target (y67: .37 -> .06 m between seq 28
-        // and 30 at 1.2-1.5 m/s2, stopped .07 m before the stripes).
+        // push still accelerates. Cap single-scan IMU spike to 0.18 m/s (y111-2 spiked to
+        // next_scan_gain_m=0.758 m and cut 52 cm early).
         let next_scan_gain_m = match (self.race_inputs, v, self.race_crosswalk_stop.scan_s, self.race_crosswalk_stop.imu_accel) {
             (Some(_), Some(v), Some(dt), Some(accel)) if self._start_motor != NEUTRAL => {
-                let rise = pmax(0., accel) * dt;
+                let rise = pmin(0.18, pmax(0., accel) * dt);
                 rise * CROSSWALK_AIM_LAG_S + ((v + rise) * (v + rise) - v * v) / (2. * decel)
             }
             _ => 0.,

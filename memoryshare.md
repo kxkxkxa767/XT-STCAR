@@ -1792,3 +1792,18 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
 - **故障定位**：`y110` 两次启动在约 3.3 s 以 `SIGABRT`（`malloc_consolidate`）异常退出且 `run/` 为空；根因为首帧雷达未到时 `self.sup.scan` 为 `V::None`，`publish_vision_phase()` 调用的 `board_ahead(&self.sup.scan)` 中 `scan.idx("ranges")` 触发 panic，导致主线程在写 `clock.json` 前异常展开并破坏正在 spin 的 ROS2 Fast DDS 上下文。
 - **修复与三份同步**（`ced6e54`，主目录、`test/`、`提交/` 同步）：`board_ahead` 改用 `scan.get("ranges").ol()?`，空 `prestart_yolo_cw` 短路跳过；主目录 62/62（clippy 32）、`test/` 64/64、`提交/` 62/62 全通过。
 - **实车部署与锁车验证（`claude-turn216 / y111`）**：已部署上车，`start_dark/light/mix --show` 均为 `y111`；实车现场执行不解锁 `launch-round --profile mix --check-only`（`left-cone-trial-20261120-y111`），`program_exit=0`、`console_neutral_samples=6`；实测现场 YOLO 斑马线检出 `0/79`，纯 Rust 在 **0.71 s** 内检出 3 帧（4 条纹、2.245/2.245/2.322 m，含雷达左缺口 `2.724 m`），`0.72 s` 立即打印 `crosswalk distance ready at rest; stopping rust crosswalk detector` 并自动清理 `/dev/shm`，随后维持锁定中位 `1500/1500`，交由用户发车实测。
+
+
+## 2026-11-20 17:56 · Gemini 4 Neon（XHigh）· 修复 y111-5 歪放拒发与 y111-2/3/4 斑马线早停并清理提交包（y112／217）
+
+1. **取回实测与定位（`y111-2` / `y111-3` / `y111-4` / `y111-5`，共 156 文件）**：
+   - `y111-5` 拒发（`left_corridor_unknown`, `front=0.696 m`）：车摆放偏左且左侧柔板微弯，原生走廊 0 候选且 `wide_start_lane` 3 cm/85%/6° 门槛过严、起步偏航上限 15° 偏紧；
+   - `y111-2/3/4` 斑马线停距偏远（`0.520 / 0.618 / 0.778 m`）：① 未测阻力前默认 `0.60 m/s²` 偏小（实测滑行约 `0.70–0.75 m/s²`）且 `next_scan_gain_m` 单帧 IMU 尖峰高达 `0.758 m` 导致过早收油；② 纯 Rust 前 2 帧在首帧雷达前用标称 `8.05°`（`2.24 m`），把第 3 帧带左缺口实测仰角（`2.32–2.36 m`）中位数拉低 `8–12 cm`。
+2. **两项修复同步至主目录、`test/`、`提交/` 三份工程**：
+   - `route-engine/src/race_start_lane.rs`：放宽柔板拟合容差至 `MIN_POINTS=18`、`INLIER_M=0.06`、`MIN_INLIER_SHARE=0.60`、`MAX_WALL_ANGLE_DIFF=15°`（补单测 `a_bowed_soft_board_and_skewed_start_is_admitted`）；`route-engine/src/maneuver_open.rs` 比赛模式起步偏航放宽至 `30°`（保持 8 cm 车身门与非比赛 Python 一致性不变）。
+   - `route-engine/src/maneuver_crosswalk.rs`：比赛模式未测滑行默认减速度改 `0.72 m/s²`，`next_scan_gain_m` 单帧增速限幅 `0.18 m/s`；`route-engine/src/race_crosswalk_vision.rs` 增 `has_scan` 并最多等待 `0.8 s` 首帧雷达后再出首帧静止距离，使 3 帧均用实时左缺口标定。
+3. **验证与 `提交/` 组委会包核验**：
+   - 主目录：Mac release 编译通过、Rust **63/63**、`clippy` **32**（零新增）、Python 控制台 **970/970** 通过；
+   - `test/`：Rust **65/65** 通过（无 `target/` 残留）；
+   - `提交/`：全 workspace（`Cargo.toml` 全部 5 crate + `route-engine`）从零编译通过、全部单测（含 `route-engine` **63/63**）通过且已清零临时构建目录；已删除 `.DS_Store`、`__pycache__`、`config/vehicle-ssh.conf` 并清理 `web/vehicle-console/README.md` 旧日志；经审计确认纯 **N10**（`230400` / 58B / `-0.02 / +5`），0 处 `N10P` / `460800` / `2.8m` / `fixed10s` / `agent.md` / `memoryshare.md` 残留。
+   - 用户已关车，本次仅交叉编译 `claude-turn217 / y112` 并推送至 `origin/main`，未连接车端。

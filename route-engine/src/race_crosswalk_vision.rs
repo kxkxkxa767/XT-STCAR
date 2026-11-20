@@ -46,6 +46,7 @@ const SHM_HEADER_LEN: usize = 32;
 /// Compact lidar geometry snapshot of the start lane, updated by the control thread.
 #[derive(Clone, Copy, Debug)]
 pub struct LaneLidarHint {
+    pub has_scan: bool,
     pub heading_left_rad: f64,
     pub y_left_m: f64,
     pub y_right_m: f64,
@@ -57,6 +58,7 @@ pub struct LaneLidarHint {
 impl Default for LaneLidarHint {
     fn default() -> Self {
         Self {
+            has_scan: false,
             heading_left_rad: 0.0,
             y_left_m: 0.45,
             y_right_m: -0.45,
@@ -214,6 +216,7 @@ impl LaneLidarHint {
         }
 
         Some(Self {
+            has_scan: true,
             heading_left_rad: heading_left,
             y_left_m: y_left,
             y_right_m: y_right,
@@ -857,14 +860,21 @@ pub fn spawn_worker(
         if let Ok(mut s) = stats.lock() {
             s.pinned_cpu = pinned;
         }
+        let started_at = Instant::now();
         let mut last_frame: i64 = -1;
         while !stop.load(Ordering::Acquire) {
+            let h_snap = hint.lock().map(|g| *g).unwrap_or_default();
+            // Wait up to 0.8 s for the first lidar scan so initial stationary frames use
+            // live left-gap pitch calibration instead of nominal 8.05 deg; never block past 0.8 s.
+            if !h_snap.has_scan && started_at.elapsed() < Duration::from_millis(800) {
+                thread::sleep(Duration::from_millis(15));
+                continue;
+            }
             if let Ok(bytes) = std::fs::read(&shm_path)
                 && let Some((frame, captured_s, w, h, payload)) = parse_shm_frame(&bytes)
                 && frame != last_frame
             {
                 last_frame = frame;
-                let h_snap = hint.lock().map(|g| *g).unwrap_or_default();
                 let obs = detect_crosswalk(payload, w, h, &h_snap, frame, captured_s);
                 if let Ok(mut s) = stats.lock() {
                     s.frames_read += 1;

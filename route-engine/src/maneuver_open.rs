@@ -127,7 +127,8 @@ impl Maneuver {
             e.set("reason", V::from(reason));
             e
         };
-        if lane.idx("heading_left_rad").f().abs() > lane_start_max_heading_rad() {
+        let max_heading = if self.race_program { radians(30.) } else { lane_start_max_heading_rad() };
+        if lane.idx("heading_left_rad").f().abs() > max_heading {
             return (false, with(Some("start_lane_heading_too_large")));
         }
         let width = lane.idx("width_m").f();

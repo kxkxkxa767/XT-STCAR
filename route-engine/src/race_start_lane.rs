@@ -13,11 +13,11 @@ use crate::py::*;
 /// Clockwise bins from 40 degrees ahead of abeam to 10 degrees behind it.
 const RIGHT_BINS: std::ops::RangeInclusive<usize> = 50..=100;
 const LEFT_BINS: std::ops::RangeInclusive<usize> = 260..=310;
-const MIN_POINTS: usize = 30;
-const INLIER_M: f64 = 0.03;
-const MIN_INLIER_SHARE: f64 = 0.85;
+const MIN_POINTS: usize = 18;
+const INLIER_M: f64 = 0.06;
+const MIN_INLIER_SHARE: f64 = 0.60;
 const MIN_SLOPE_PAIR_DX_M: f64 = 0.3;
-const MAX_WALL_ANGLE_DIFF_RAD: f64 = 6. * PI / 180.;
+const MAX_WALL_ANGLE_DIFF_RAD: f64 = 15. * PI / 180.;
 
 struct Wall {
     slope: f64,
@@ -113,5 +113,19 @@ mod tests {
             ranges[bin] = V::Float(4. + bin as f64 * 0.1);
         }
         assert!(wide_start_lane(&ranges).is_none());
+    }
+
+    #[test]
+    fn a_bowed_soft_board_and_skewed_start_is_admitted() {
+        // Flexible taped left board bowed 4.5 cm + skewed car placement (y111-5 pattern)
+        let mut ranges = scan(0.55, -0.10, 0.30);
+        for (k, bin) in LEFT_BINS.enumerate() {
+            if let Some(r) = ranges[bin].of() {
+                let bow = 0.045 * ((k as f64 / 50.0) * PI).sin();
+                ranges[bin] = V::Float((r - bow).max(0.25));
+            }
+        }
+        let lane = wide_start_lane(&ranges).expect("bowed soft board lane admitted");
+        assert!((0.85..=1.25).contains(&lane.idx("width_m").f()));
     }
 }
