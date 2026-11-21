@@ -29,7 +29,7 @@ const LIGHT_RED_DUE_S: f64 = 2.0;
 // User2026-11-13 / 2026-11-19: in race mode, green releases immediately; otherwise
 // 10 s after first red (if red was seen) or 10 s after stop (if red was never seen)
 // is an unconditional release floor.
-const RACE_UNCONFIRMED_COLOR_WAIT_S: f64 = 10.0;
+pub(crate) const DEFAULT_RACE_LIGHT_WAIT_S: f64 = 10.0;
 
 /// _thin_posts(ranges): isolated thin posts (car frame, left +), nearest first.
 pub fn thin_posts(ranges: &[V]) -> Vec<(f64, f64)> {
@@ -1041,10 +1041,11 @@ impl Maneuver {
         let red_timed = red_s.is_some_and(|s| s >= LIGHT_RED_MAX_S || (s >= LIGHT_RED_GO_S && !red_now));
         let waited = now - wait_since;
         let no_light = !self._light_seen && waited >= LIGHT_NO_LIGHT_WAIT_S;
+        let wait_limit = self.race_light_wait_s.unwrap_or(DEFAULT_RACE_LIGHT_WAIT_S);
         let race_red_timeout = self.race_inputs.is_some()
-            && red_s.is_some_and(|s| s >= RACE_UNCONFIRMED_COLOR_WAIT_S);
-        let race_color_timeout = self.race_inputs.is_some() && red_s.is_none()
-            && waited >= RACE_UNCONFIRMED_COLOR_WAIT_S;
+            && red_s.is_some_and(|s| s >= wait_limit);
+        let race_color_timeout = self.race_inputs.is_some() && (red_s.is_none() || self.race_light_wait_s.is_some())
+            && waited >= wait_limit;
         let wait = if self.race_inputs.is_some() { !green && !race_red_timeout && !race_color_timeout }
             else { !green && !red_ended && !red_timed && !no_light && waited < LIGHT_WAIT_MAX_S };
         if wait {
@@ -1058,8 +1059,12 @@ impl Maneuver {
             "green_in_fresh_frames_after_the_stop"
         } else if green {
             "green_without_red_since_the_gantry_looking_again"
+        } else if race_red_timeout && self.race_light_wait_s.is_some() {
+            "configured_limit_after_first_red"
         } else if race_red_timeout {
             "red_seen_10s_after_first_red"
+        } else if race_color_timeout && self.race_light_wait_s.is_some() {
+            "configured_limit_after_stop"
         } else if race_color_timeout {
             "known_gantry_color_unconfirmed_10s_after_stop"
         } else if red_ended {
@@ -1082,6 +1087,7 @@ impl Maneuver {
             "launch" => self.finish.launch_until.is_some(),
         };
         let mut go = go;
+        if let Some(limit) = self.race_light_wait_s { go.set("light_max_wait_s", limit); }
         if self.race_inputs.is_some() { go.set("green_min_score", green_min_score); }
         self.light_stop_evidence = self.light_stop_evidence.merged(&dict! {"go" => go.clone()});
         self.route_event("light_go", scan, control, go.clone());
@@ -1112,6 +1118,29 @@ mod tests {
     //! results in web/vehicle-console/tests/fixtures/light_gantry_run108_frames.json.
     use super::*;
     use crate::py::parse_json;
+
+
+    #[test]
+    fn per_run_wait_has_a_stop_deadline_and_green_can_release_earlier() {
+        let scan=|at:f64|dict!{"seq"=>(at*100.) as i64,"at_ms"=>(at*1000.) as i64,"received_at"=>at,
+            "ranges"=>vec![V::Float(3.);360]};
+        for (limit,red_at,green_at,release) in [
+            (7.,Some(3.),None,9.), (13.,None,None,15.),
+            (4.,Some(1.),None,5.), (0.,None,None,2.), (20.,Some(1.),Some(3.),3.)
+        ] {
+            let mut m=Maneuver::new(&0.0.into(),&40.0.into(),&1670.into(),&true.into());
+            m.race_inputs=Some(Default::default()); m.race_light_wait_s=Some(limit);
+            m.light_vision=true; m.route_stage="light_lane"; m.drive_since=Some(0.);
+            m.light_stop_state=Some("waiting"); m._light_wait_since=Some(2.); m._light_wait_tick=Some(2.);
+            m._light_red_at=red_at; m.light_stop_evidence=dict!{"gantry"=>dict!{"source_seq"=>1}};
+            if release>2. { assert!(!m.light_wait(&scan(release-0.02),release-0.02,&V::None)); }
+            if let Some(g)=green_at {
+                m._light_frames=vec![V::from(vec![1.,g-0.05,0.,0.95]),V::from(vec![2.,g,0.,0.95])];
+            }
+            assert!(m.light_wait(&scan(release),release,&V::None),"limit={limit} first_red={red_at:?}");
+            assert_eq!(m.light_stop_evidence.get("go").get("light_max_wait_s").of(),Some(limit));
+        }
+    }
 
     #[test]
     fn a_known_gantry_stop_starts_waiting_without_colour_and_releases_after_ten_seconds() {

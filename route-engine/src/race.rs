@@ -66,6 +66,7 @@ pub(crate) struct Options {
     #[cfg(feature = "ros2")]
     pub lidar_calibration: Option<PathBuf>,
     max_wait_s: f64,
+    light_max_wait_s: Option<f64>,
     status_s: f64,
     light_state: Option<PathBuf>,
     frame_shm: Option<PathBuf>,
@@ -76,7 +77,7 @@ pub(crate) struct Options {
 }
 
 const USAGE: &str = "usage: route-engine race --out NEW_DIR [--bridge PATH (legacy)] [--start enter|ready|never|ros] [--ready-hold-s 3] \
-[--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--status-s .5] [--demo] \
+[--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--light-max-wait-s SECONDS] [--status-s .5] [--demo] \
 [--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--frame-shm PATH] [--surface-initial-load MPS2] [--transport legacy|ros2]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -97,6 +98,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         #[cfg(feature = "ros2")]
         lidar_calibration: None,
         max_wait_s: 300.,
+        light_max_wait_s: None,
         status_s: 0.5,
         light_state: None,
         frame_shm: None,
@@ -122,6 +124,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--start" => o.start = value(i)?,
             "--ready-hold-s" => o.ready_hold_s = number(i)?,
             "--max-wait-s" => o.max_wait_s = number(i)?,
+            "--light-max-wait-s" => o.light_max_wait_s = Some(number(i)?),
             "--status-s" => o.status_s = number(i)?,
             "--control-device" => o.control_device = value(i)?,
             "--lidar-device" => o.lidar_device = value(i)?,
@@ -812,6 +815,7 @@ impl Program {
     }
 
     fn start_failure(&self, code: i32, reason: &str, mut details: V) -> i32 {
+        if let Some(limit) = self.o.light_max_wait_s { details.set("light_max_wait_s", limit); }
         details.set("started", false);
         details.set("reason", reason);
         details.set("sensor_errors", self.sup.errors.clone());
@@ -1069,6 +1073,7 @@ fn run(p: &mut Program) -> i32 {
             let _ = p.files.send(FileOp::Put("before.json", to_json(&state)));
             let _ = p.files.send(FileOp::Put("before-lidar.json", to_json(&p.lidar())));
             let result = dict! {"started" => false, "check_only" => true, "turn_ready" => ready,
+                                "light_max_wait_s" => p.o.light_max_wait_s,
                                 "turn_rejection" => state.idx("autonomy").get("turn_rejection").clone(),
                                 "control" => p.sup.control(), "errors" => p.sup.errors.clone()};
             let _ = p.files.send(FileOp::Put("cli-result.json", to_json(&result)));
@@ -1104,6 +1109,7 @@ fn run(p: &mut Program) -> i32 {
     };
     if let Some(session) = &mut p.sup.session {
         session.motion.race_inputs = Some(Default::default());
+        session.motion.race_light_wait_s = p.o.light_max_wait_s;
         session.motion.race_surface.set_initial_load(p.o.surface_initial_load);
         // Enable crosswalk odometry immediately when pure-Rust vision is attached so
         // moving fallback always has lidar rear-wall history even before YOLO arrives.
@@ -1239,7 +1245,7 @@ fn run(p: &mut Program) -> i32 {
     };
     let summary = dict! {
         "run_id" => run_v.clone(), "started" => started, "reason" => result.get("reason").clone(),
-        "sensor_errors" => sensor_errors,
+        "sensor_errors" => sensor_errors, "light_max_wait_s" => p.o.light_max_wait_s,
         "route_controller" => if p.o.ros2 { "ros2_rust" } else { "rust_program" },
         "transport" => if p.o.ros2 { "ros2_topics" } else { "legacy_pipes" },
         "program_base_monotonic_s" => p.base_monotonic_s,
