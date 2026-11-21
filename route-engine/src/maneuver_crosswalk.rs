@@ -51,17 +51,28 @@ impl Maneuver {
             self._crosswalk_rear = Some(rear.is_some_and(|r| r <= CROSSWALK_REAR_MAX_M));
         }
         let rear_track = rear.filter(|r| *r <= CROSSWALK_REAR_MAX_M).map(|r| -r);
-        if self._crosswalk_rear == Some(true) && rear_track.is_none() && self._crosswalk_board_m.is_none() {
-            // nothing placed on it yet: the start lane's own from here on, at
-            // its own speed (the fallback stop in the first turn stays)
+        let field_x = if self.race_program && self.route_stage == "start_lane" && self.race_inputs.is_some() {
+            self.field_map.longitudinal_position(scan)
+        } else { None };
+        let first_fix = self._crosswalk_rest.is_none();
+        if self._crosswalk_rear == Some(true) {
+            let rear = self.race_crosswalk_stop.aligned_track(rear_track, field_x, first_fix);
+            if rear.is_some() || self._crosswalk_board_m.is_some() {
+                let measured = pairwise_track_speed(&mut self._crosswalk_rear_history, scan, rear);
+                let v = measured.or_else(|| (rear_track.is_none() && rear.is_some())
+                    .then(|| self.field_map.axis_speed(scan)).flatten());
+                return (rear, v);
+            }
             self._crosswalk_rear = Some(false);
             self._crosswalk_track.clear();
             self._crosswalk_search_passed = true;
+            self.race_crosswalk_stop.change_unplanned_reference();
         }
-        if self._crosswalk_rear != Some(true) {
-            return (track, speed);
+        let aligned = self.race_crosswalk_stop.aligned_track(track, field_x, first_fix);
+        if aligned.is_some() && (track.is_none() || self.race_crosswalk_stop.map_origin()) {
+            return (aligned, self.field_map.axis_speed(scan).or(speed));
         }
-        (rear_track, pairwise_track_speed(&mut self._crosswalk_rear_history, scan, rear_track))
+        (aligned, speed)
     }
 
     /// _crosswalk_observe(scan, track).
