@@ -46,6 +46,10 @@ mod race_crosswalk_stop;
 mod race_speed_kalman;
 #[path = "../../../../route-engine/src/race_first_cone.rs"]
 mod race_first_cone;
+#[path = "../../../../route-engine/src/camera_projection.rs"]
+mod camera_projection;
+#[path = "../../../../route-engine/src/camera_ground.rs"]
+mod camera_ground;
 #[path = "../../../../route-engine/src/race_field_map.rs"]
 mod race_field_map;
 #[path = "../../../../route-engine/src/race_imu_fusion.rs"]

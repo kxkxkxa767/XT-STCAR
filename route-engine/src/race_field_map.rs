@@ -8,6 +8,8 @@ use crate::helpers::SCAN_AGE_S;
 use crate::motion_sensors::RaceInputs;
 use crate::py::V;
 use xt_stcar_robot_core::autonomy::{Point2, Pose2};
+#[path="race_camera_aid.rs"]
+mod race_camera_aid;
 
 type XY = (f64, f64);
 const BRIDGE_S: f64 = 0.65; // lifetime of a coordinate supported only by inertial motion
@@ -296,6 +298,8 @@ struct Fix {
 
 #[derive(Clone, Debug, Default)]
 pub struct Locator {
+    camera: race_camera_aid::CameraAid,
+    pub camera_role: Option<usize>,
     seq: Option<i64>,
     at: Option<f64>,
     pose: Option<Pose2>,
@@ -318,6 +322,13 @@ pub struct Locator {
 }
 
 impl Locator {
+    pub fn observe_camera(&mut self, observation:crate::camera_ground::GroundFrame) {
+        self.camera.receive(observation);
+    }
+
+    pub fn camera_points(&self, scan:&V) -> &[XY] {
+        if self.camera.seq.is_some() && self.camera.seq==scan.get("seq").oi() { &self.camera.points } else { &[] }
+    }
     pub fn prior(&self, scan: &V, old: &V, cone: usize) -> crate::compact_target::TrackingPrior {
         crate::compact_target::TrackingPrior {
             carried: self.carry(scan, old, cone),
@@ -509,9 +520,16 @@ impl Locator {
         {
             return;
         }
+        let camera_scan = race_camera_aid::CameraScan {seq, at, ranges: &ranges, rays: &beams,
+            speed, rate: w.unwrap_or(0.), role: self.camera_role};
+        let camera_axes = self.camera.update(field, &mut pose, anchored, camera_scan);
         self.speed = if dt > 0. && ((anchored[0] || c.abs() < 0.25) && (anchored[1] || s.abs() < 0.25)) {
             let along = ((pose.x_m - old.x_m) * c + (pose.y_m - old.y_m) * s) / dt;
             0.45 * speed + 0.55 * along
+        } else if dt>0. && self.last_axis.iter().all(|t| t.is_some_and(|v| at-v<=0.30))
+            && (anchored[0] || camera_axes[0] || c.abs()<0.25) && (anchored[1] || camera_axes[1] || s.abs()<0.25) {
+            let along=((pose.x_m-old.x_m)*c+(pose.y_m-old.y_m)*s)/dt;
+            speed + 0.25*(along-speed).clamp(-1.0,1.0)
         } else if interval > BRIDGE_S {
             0.
         } else {
@@ -543,6 +561,8 @@ impl Locator {
         for (axis, ok) in anchored.into_iter().enumerate() {
             if ok {
                 self.last_axis[axis] = Some(at);
+            } else if camera_axes[axis] {
+                self.last_axis[axis] = self.camera.captured;
             }
         }
         while self.fixes.front().is_some_and(|f| at - f.at > BRIDGE_S) {
@@ -590,12 +610,12 @@ impl Locator {
             .filter(|f| Some(f.seq) == scan.get("seq").oi() && Some(f.at) == scan.get("received_at").of())
     }
 
-    pub fn longitudinal_position(&self, scan: &V) -> Option<f64> {
-        Some(self.current(scan)?.pose.x_m)
-    }
-
     pub fn heading(&self, scan: &V) -> Option<f64> {
         Some(self.current(scan)?.pose.yaw_rad)
+    }
+
+    pub fn longitudinal_position(&self, scan:&V)->Option<f64> {
+        Some(self.current(scan)?.pose.x_m)
     }
 
     pub fn landmark(&self, scan: &V, cone: usize) -> Option<XY> {
@@ -608,6 +628,7 @@ impl Locator {
 
     pub fn planning_center(&self, scan: &V, cone: usize) -> Option<XY> {
         let p = self.landmark(scan, cone)?;
+        if self.camera.seq==scan.get("seq").oi() && let Some(q)=self.camera.cone[cone] {return Some(q);}
         let distance = p.0.hypot(p.1);
         if !(0.05..=crate::compact_target::EXTENDED_MAX_RANGE_M).contains(&distance) {
             return None;
@@ -708,6 +729,10 @@ impl Locator {
                 points.push((q.x_m, q.y_m));
             }
         }
+        for &(x_m,y_m) in self.camera_points(scan) {
+            let p=pose.world_to_body(fix.pose.body_to_world(Point2{x_m,y_m}));
+            points.push((p.x_m,p.y_m));
+        }
         let room = crate::maneuver::Maneuver::path_free_distance(&points, live);
         room < reach
             && crate::maneuver::Maneuver::path_free_distance(&points, mapped)
@@ -778,6 +803,7 @@ impl Locator {
         "pose_xy_yaw"=>fix.map(|f| vec![f.pose.x_m,f.pose.y_m,f.pose.yaw_rad]),
         "wall_points_xy"=>vec![self.support[0] as i64,self.support[1] as i64],
         "mean_wall_residual_m"=>self.mean_error,"speed_mps"=>self.speed,"measured_cone_fix"=>self.cone_fix,
+        "camera_ground"=>self.camera.diagnostics(),
         "preview_pwm"=>V::list(vec![V::from(preview(0)),V::from(preview(1))]),
         "axis_age_s"=>V::list(self.last_axis.iter().map(|t|V::from(self.at.zip(*t).map(|(a,b)|a-b))).collect())}
     }
@@ -807,6 +833,39 @@ impl crate::maneuver::Maneuver {
 mod tests {
     use super::*;
     use crate::helpers::WallCompass;
+
+    #[test]
+    fn camera_fills_only_missing_board_rays_and_expires_without_renewing_lidar_support() {
+        use crate::camera_ground::{Foot,GroundFrame,PITCH,bearing_bin};
+        use crate::camera_projection::{CAM_AHEAD_LIDAR,project_cam_ground,undistort_pt};
+        let range=2.8;
+        let mut frame=GroundFrame {frame:3,captured:1.0,..Default::default()};
+        let mut real=vec![None;360];
+        for i in -12..=12 {
+            let y=i as f64*0.08;
+            let (u,v)=project_cam_ground(range-CAM_AHEAD_LIDAR,y,PITCH).unwrap();
+            frame.boards.push(Foot{pixel:(u.round() as u16,v.round() as u16),normal:undistort_pt(u,v).unwrap()});
+            if i<0 {
+                let bin=bearing_bin((range,y));
+                for j in -1..=1 {
+                    let b=(bin as i32+j).rem_euclid(360) as usize;
+                    real[b]=Some(range/(b as f64).to_radians().cos());
+                }
+            }
+        }
+        frame.boards.sort_by_key(|v|v.pixel.0);
+        let snapshot=real.clone();
+        let mut aid=race_camera_aid::CameraAid::default();
+        let mut pose=Pose2{x_m:5.2,y_m:1.50,yaw_rad:0.};aid.receive(frame);
+        let f=FIELD.as_ref().unwrap();
+        let obs=|seq,at|race_camera_aid::CameraScan{seq,at,ranges:&real,rays:&[],speed:0.,rate:0.,role:None};
+        let axes=aid.update(f,&mut pose,[false,true],obs(22,1.02));
+        assert!(axes[0] && !axes[1]);assert!(aid.points.len()>=5);
+        assert!(aid.points.iter().all(|&p|real[bearing_bin(p)].is_none()));
+        assert_eq!(aid.update(f,&mut pose,[false,true],obs(23,1.10)),[false;2]);
+        assert_eq!(aid.update(f,&mut pose,[false,true],obs(24,1.25)),[false;2]);
+        assert!(aid.points.is_empty());assert_eq!(real,snapshot);
+    }
 
     #[test]
     fn surveyed_brake_coast_registers_a_measured_light_stop_without_colour() {
