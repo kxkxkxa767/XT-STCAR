@@ -1,0 +1,34 @@
+请在本机只读复核 XT-STCAR 车上实际安装的 1、2、3、4、5 号程序，逐个给出结论。先在 /Users/yuhaojin/Documents/XT-STCAR 按 AGENTS.md 读交接，再读 memoryshare.md 文末“2026-11-22 · 车上 1–5 号，交 Opus 只读复核”。请以每个编号的确切构建提交、车端 ELF 哈希和回执为准。报告后等我决定修改或操作车辆。每轮实车发车由我单独确认。
+
+所有 Git 对照都可以在主工程运行。看旧文件用 git show 提交:文件路径。五份完整构建提交、ELF SHA-256、发布目录和锁定回执在 docs/numbered-programs-1-5-readback-20261122.json。
+
+1 号   现场 y114／219 的可调等灯版本 72abaed，标签 race-program1-y114-wait-20261121
+git diff 41337e1 72abaed -- route-engine/src
+从当天备份源码和第 21 轮原始 launch-profile 对到 1 号。核对默认 mix 的真实 ONNX、N10P 460800、秒数、软板起步容差、起步到异常退出各阶段是否有意外差异。编号选择器由共用入口先运行 2 号，再执行选中的 1 号。分别判断赛场旧 start_mix、旧编号入口缺 ROS 库退出 127、非赛场已启动后返回 left_corridor_unknown 三类回执。
+
+2 号   正常迭代建图版 1466a72，保留原 YOLO 与 Rust
+git diff 00664bd e35ea80 -- route-engine/src config/race-field-map.json
+git diff e35ea80 3dd8680 -- route-engine/src scripts/install-numbered-programs.py
+git diff 3dd8680 1466a72 -- route-engine/src
+核对地图与实测锥桶规划在同一扫描上工作、IMU 与稀疏雷达的纠正，以及进入灯区和终点时的参考切换。验证中央束起初就缺失、已建斑马线停车计划后丢失、实测前／后板恢复时的坐标连续性。可用地图位移应只接续真实条纹计划。检查物理起步、斑马线停车和再起步，不能只以 READY 代替越过发车线。
+
+3 号   独立 1560 建图版 e75ea79，目录 /Users/yuhaojin/Documents/XT-STCAR-保守1560
+git diff 0492cdc 8d12c27 -- route-engine/src scripts/install-program3.py
+git diff 8d12c27 e75ea79 -- route-engine/src scripts
+另行验证与 2 号相同的斑马线问题、无红灯滑停登记和等待上限。检查 1560 上限作用于最终前进指令、补偿、速度预测和指令历史。原本较慢的阶段保留各自基础油门，1500 滑行／停车、1300 刹车按原逻辑输出。检查 3 号独立入口与正常 2 号并存。
+
+4 号   独立 Rust 相机建图版 4c0f419，目录 /Users/yuhaojin/Documents/XT-STCAR-视觉4号
+git diff 1466a72 4c0f419 -- route-engine tools/scan-geometry scripts/install-vision-programs.py
+顺着 Rust V4L2 采集、MJPEG 解码、单调曝光时钟、最新帧发布、视觉线程、位置纠正、规划候选到最后舵机输出核对。程序不读模型文件，不启动 YOLO，也不等待旧 ready 回执。检查无相机／无斑马线结果时原 3 秒放行、两帧新鲜绿灯提前放行、无灯色及迟到红灯时按命令秒数放行。注意重复帧、过期帧、摄像头重开和收车清理。
+审查蓝挡板金属下沿、首个红／橙桶、第二个蓝桶与蓝板上下边的区别。真实雷达定深与只有视觉方位时的地图深度必须可区分。确认视觉补点只填当前缺束，只参与定位及规划，实测 8 cm 门、Guard、原始点云、端线回退、停稳证据仍使用真实传感器。检查单束填补、板线跨坐标原点的一致性、同一帧是否重复修正位姿及错误桶色能否触发转段。
+
+5 号   独立 1560 Rust 视觉版 e86342c，目录 /Users/yuhaojin/Documents/XT-STCAR-视觉5号1560
+git diff e75ea79 e86342c -- route-engine tools/scan-geometry scripts/install-vision-programs.py
+git diff 4c0f419 e86342c -- route-engine/src
+把 5 号当作单独的实车程序检查。验证它继承 3 号限速与获准的较低油门，复用 4 号的视觉时钟、补点、起步和等灯处理。检查限速是否泄漏到 2 或 4 号。
+
+跨编号核对 start_程序号_秒数 的 0–60 整数快捷方式、小数及超过 60 秒的 Bash 分派、ROS 库加载时机、4/5 号独立 vision-current、原 1–3 号路径、安装重试和部分失败回滚。确认车桌面 440 个 N10 源码文件与五个 N10P 实跑程序隔离，主目录、test/、提交/ 的既定配置得到保留。软件代码、锁定车端回读、历史实际行驶、冻结记录回放和闭环模型请分别陈述。
+
+现有证据集中在 /Users/yuhaojin/Documents/Codex/2026-11-20/users-yuhaojin-documents-xt-stcar-model-3/outputs/20261122_五套程序与现场回波/。重点看 五套程序_车端哈希与锁定检查.json、2_3号缺束工况修前修后.json、版本与验证说明.md、真实轨迹融合逐帧.csv、视觉版分组汇总.csv、现场回波与压力仿真.md。逐条原始检查在 /Users/yuhaojin/Documents/Codex/2026-11-20/users-yuhaojin-documents-xt-stcar-model-3/work/vision-fusion-program23-20261121/audit/（crosswalk-before.json、crosswalk-after.json、fusion-actual.json、deploy-five/）。1 号备份溯源、122 个入口迁移和上一版灯区滑停回放在 /Users/yuhaojin/Documents/XT-STCAR/work/numbered-entry-light-20261121/。第 21 轮历史实跑使用旧天气入口和 41337e1。基线 164 轮是旧 2 号 3dd8680。新视觉版 86 轮是 4、5 各 43 轮。照片稀疏工况下，两版都越过发车线，但各 0/8 完整通过，分别有 1 次模型接触。请检查这一已知局限，避免把启动检查或局部补点误差写成赛场完赛保证。
+
+请先给 1–5 五行结果表，每行写通过、确定阻塞项或证据不足。发现问题列出构建提交、文件行号、触发输入、实际后果及已有回执。共性问题注明影响编号，缺少现场证据的结论注明待实测。
