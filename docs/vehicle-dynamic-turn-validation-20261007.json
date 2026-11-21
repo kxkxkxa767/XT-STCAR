@@ -35971,5 +35971,117 @@
     },
     "physical_output_executed_for_new_code": false,
     "active_vehicle_label": "y114"
+  },
+  "numbered_n10p_programs_and_light_wait_20261121": {
+    "date": "2026-11-21",
+    "scope": "车不在赛场，按用户指令只验证编号入口。",
+    "release": "/home/bianbu/xt-stcar-console/race-programs/p1-019f0faeb843-p2-a594f5eb04c1",
+    "programs": {
+      "1": {
+        "label": "y114",
+        "source": "72abaedcfbb5f0f7f842f7823cb7c9cc63582f6d",
+        "base": "41337e111e8dc0bcb442d306b1aa5cec9b353f85",
+        "sha256": "019f0faeb843470bc1879c6e640b3ad784c899cfb0dbe636e66f5cb1d0e98e22"
+      },
+      "2": {
+        "label": "y115",
+        "source": "eb754f8e0fa4c2b4e3e240a569c998bb45e085ae",
+        "base": "e35ea8026efb39fc1cd163bf6ce4b7828d81ce92",
+        "sha256": "a594f5eb04c184cc2430bbefe8183f3dd9dd8a445a98cb166ab29998d1c30ad8"
+      }
+    },
+    "default_weather": "mix",
+    "transport": "ROS 2 Humble / N10P 460800 baud",
+    "physical_drive_requested": false,
+    "physical_drive_executed": false,
+    "checks": [
+      {
+        "command": "start_1_7",
+        "program": 1,
+        "light_max_wait_s": 7.0,
+        "label": "y114",
+        "source_commit": "72abaedcfbb5f0f7f842f7823cb7c9cc63582f6d",
+        "check_only": true,
+        "race_start": "never",
+        "race_argument_wait_s": "7",
+        "hardware_lidar": true,
+        "hardware_control": true,
+        "vision_ready": true,
+        "valid_bins": 360,
+        "total_bins": 360,
+        "turn_ready": false,
+        "turn_rejection": "left_corridor_unknown",
+        "exit": 0,
+        "neutral_samples": 6,
+        "started": false,
+        "vehicle_log": "left-cone-trial-20261121-y114-program1"
+      },
+      {
+        "command": "start_2_15",
+        "program": 2,
+        "light_max_wait_s": 15.0,
+        "label": "y115",
+        "source_commit": "eb754f8e0fa4c2b4e3e240a569c998bb45e085ae",
+        "check_only": true,
+        "race_start": "never",
+        "race_argument_wait_s": "15",
+        "hardware_lidar": true,
+        "hardware_control": true,
+        "vision_ready": true,
+        "valid_bins": 360,
+        "total_bins": 360,
+        "turn_ready": true,
+        "turn_rejection": null,
+        "exit": 0,
+        "neutral_samples": 6,
+        "started": false,
+        "vehicle_log": "left-cone-trial-20261121-y115-program2"
+      },
+      {
+        "command": "start_2_8.5",
+        "program": 2,
+        "light_max_wait_s": 8.5,
+        "label": "y115",
+        "source_commit": "eb754f8e0fa4c2b4e3e240a569c998bb45e085ae",
+        "check_only": true,
+        "race_start": "never",
+        "race_argument_wait_s": "8.5",
+        "hardware_lidar": true,
+        "hardware_control": true,
+        "vision_ready": true,
+        "valid_bins": 360,
+        "total_bins": 360,
+        "turn_ready": true,
+        "turn_rejection": null,
+        "exit": 0,
+        "neutral_samples": 6,
+        "started": false,
+        "vehicle_log": "left-cone-trial-20261121-y115-program2-2"
+      }
+    ],
+    "after": {
+      "race_unit": "inactive",
+      "console_unit": "active",
+      "healthy": true,
+      "armed": false,
+      "motor": 1500,
+      "servo": 1500,
+      "mode": "locked",
+      "installed_members": [
+        "program-1",
+        "program-1.json",
+        "program-2",
+        "program-2.json"
+      ],
+      "desktop_files": 440,
+      "desktop_matches_original": true
+    },
+    "tests": {
+      "program1": 73,
+      "program2": 78,
+      "fixed_local": 80,
+      "console": 970,
+      "ros2_elf": "both passed"
+    }
   }
 }
