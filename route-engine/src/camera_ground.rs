@@ -645,10 +645,35 @@ impl PanelLine {
         }
         let q = (origin.0 + s * x, origin.1 + s * y);
         let along = ny * q.0 - nx * q.1;
-        if along < self.along_lo - 0.9 || along > self.along_hi + 0.9 || q.0 < 0.23 || q.0 > 4.8 {
+        let distance = (q.0 - origin.0).hypot(q.1 - origin.1);
+        if along < self.along_lo - 0.9
+            || along > self.along_hi + 0.9
+            || !(0.09..=5.5).contains(&distance)
+        {
             return None;
         }
         Some(q)
+    }
+}
+
+#[cfg(test)]
+mod projection_tests {
+    use super::PanelLine;
+    #[test]
+    fn board_intersection_is_independent_of_the_survey_origin() {
+        for x0 in [0., 5.2] {
+            let points = [
+                (x0 + 2.8, -0.5),
+                (x0 + 2.8, -0.2),
+                (x0 + 2.8, 0.1),
+                (x0 + 2.8, 0.4),
+            ];
+            let line = PanelLine::fit(&points).unwrap();
+            let (x, y) = line
+                .intersect((x0 + 0.159, 0.), (x0 + 3.0, 0.), (0., 0.16))
+                .unwrap();
+            assert!((x - x0 - 2.8).abs() < 1e-8 && y.abs() < 1e-8);
+        }
     }
 }
 

@@ -179,7 +179,7 @@ impl CameraAid {
         }
         let mut correction: [Option<(usize, f64)>; 2] = [None; 2];
         for (id, list) in by_wall.iter_mut().enumerate() {
-            if list.len() < 4 {
+            if list.is_empty() {
                 continue;
             }
             let (lo, hi) = list
@@ -187,9 +187,6 @@ impl CameraAid {
                 .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
                     (lo.min(v.0), hi.max(v.0))
                 });
-            if hi - lo < 0.18 {
-                continue;
-            }
             list.sort_unstable_by(|a, b| a.1.total_cmp(&b.1));
             if list[3 * list.len() / 4].1 - list[list.len() / 4].1 > 0.12 {
                 continue;
@@ -199,6 +196,11 @@ impl CameraAid {
             self.wall_hits[axis] += list.len();
             self.points.extend(list.iter().map(|v| v.2));
             self.depth_anchored += list.len();
+            // Each of these pixels already has an independently fitted lidar
+            // line. Filling one hole is valid; estimating an axis needs span.
+            if list.len() < 4 || hi - lo < 0.18 {
+                continue;
+            }
             if correction[axis].is_none_or(|(n, _)| list.len() > n) {
                 correction[axis] = Some((list.len(), mid));
             }
@@ -246,6 +248,15 @@ impl CameraAid {
                     if paired {
                         let depth = near[near.len() / 2] + 0.04;
                         let body = (q.0 * depth / r, q.1 * depth / r);
+                        let i = bearing_bin(body);
+                        if self
+                            .points
+                            .iter()
+                            .any(|&p| bearing_bin(p) == i && p.0.hypot(p.1) + 0.06 < depth)
+                        {
+                            continue;
+                        }
+                        self.points.retain(|&p| bearing_bin(p) != i);
                         self.cone[index] = Some(body);
                         self.points.push(body);
                         self.cone_depth = Some("adjacent_lidar");
