@@ -1,0 +1,24 @@
+请只读复核 XT-STCAR 车上实际使用的程序 1、2、3，逐个给结论。发现问题先报给我，修改等我另行确认。
+
+先在 /Users/yuhaojin/Documents/XT-STCAR 按 AGENTS.md 的顺序读交接，再看 memoryshare.md 文末“Gemini 只读复核范围更正为程序 1、2、3”。下面的 Git 命令都可在主工程执行。需要读完整文件时，用 git show <该程序的构建源>:<文件路径> 查看对应版本。
+
+程序 1　现场实跑版 y114／219，车端构建源 72abaed，标签 race-program1-y114-wait-20261121。
+git diff 41337e1 72abaed -- route-engine/src
+对照当日实跑备份 41337e1，核对改动是否限于编号入口所需的启动参数、灯区等待上限与 N10P 配置。沿调用链检查起步、绕桶、停车和退出，指出任何意外行为差异。非赛场摆放时 start_1_7 曾正常拉起进程并返回 left_corridor_unknown，请根据代码和回执判断它发生在启动链的哪一步。
+
+程序 2　正常迭代的建图版 y115／220，车端构建源 eb754f8。
+git diff 00664bd e35ea80 -- config/race-field-map.json route-engine/src
+git diff e35ea80 eb754f8 -- route-engine/src scripts/install-numbered-programs.py scripts/install-vehicle-start.py
+重点审查起点缺束时的摆车航向、稀疏雷达对 IMU 突变的校正，以及斑马线到首桶、两桶之间和灯区入口的舵量选择。核对地图预瞄和实时绕桶的结果是否属于当前扫描，旧的车道居中或缺帧保持能否覆盖已选舵量。检查灯区、终点的停车和放行逻辑，结合 docs/y115-survey-20261121/README.md 中的失败工况说明适用条件。
+
+程序 3　从程序 2 派生的保守建图版，目录 /Users/yuhaojin/Documents/XT-STCAR-保守1560，车端构建源 8d12c27。
+git diff 0492cdc 8d12c27 -- route-engine/src scripts/install-program3.py docs/numbered-race-start.md
+核对 3 号独有的前进 PWM 上限是否为 1560，覆盖起步、地面负载补偿、绕桶和绿灯后再起步。沿最终底盘输出和回执核对原本较低的 1530、1550 等指令、1500 中位与滑行、1300 制动，以及推进估计和指令历史。确认该上限只作用于 3 号。
+
+共同核对三个 start_程序号_秒数 入口。沿 Bash 快捷方式、Rust 选择器、systemd 单元和比赛子进程检查实际二进制、天气模型和等待秒数。检查早绿放行、迟到红灯、整数与小数秒、ROS 动态库环境和回滚。三套实跑程序都应使用 N10P、460800 baud，并保留 Guard、实测 8 cm 车身门、软挡板容差与端线测距回退。桌面 Rust 是独立的 N10 交付源码。
+
+现成的车端锁定检查回执可用下面的只读命令查看。
+git show 0492cdc:docs/numbered-race-start.md
+git show 8a9a4d0:docs/program3-1560-check.json
+
+输出按程序 1、程序 2、程序 3 分列。每个确定问题给出提交、文件行号、触发条件和影响。共性问题标明影响哪些程序。没有发现确定问题时写“通过”并说明覆盖范围。代码审查、锁定启动检查、仿真和待赛场实测的事项分别标清。本轮限本机只读，写文件、提交、推送、连车、部署、发车都等我另行授权。

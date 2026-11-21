@@ -1861,3 +1861,8 @@ y107前两轮末尾`motion_result_superseded`导致停稳确认未通过；第�
 - **入口**　`start_3_N` 选择保守版，`N` 是本轮最大等灯秒数，支持小数，默认 `mix`。车端 `race-programs/program3-current` 单独登记程序 3。原 1／2 号的二进制及原选择链接与上一份车端回执一致。桌面 `Rust` 的 N10 交付源码 440 个文件逐一核对一致。车端只安装程序 3 ELF 和启动配置。
 - **验证**　Rust release 80 项、控制台 970 项通过，clippy 32 条既有警告。RISC-V ROS 2 Humble ELF 检查通过，SHA-256 为 `f2691bffabaea62046547b07c1d7afa8f7ac42398280ce7604a0c8421f619fb8`。车上 `start_3_7 --check-only` 实际传入 7 秒，比赛子进程为 `--start never`，真实底盘、雷达和相机启动，雷达 360/360 个有效方向，READY，退出码 0，恢复 6 个锁定中位样本。最后独立回读为控制台健康、比赛单元 inactive、armed=false、电机／舵机 1500/1500。此轮只做锁定启动检查，赛道起步和实际车速尚待逐轮确认后实测。
 - **交接**　Gemini 先按 `git diff 0492cdc 8d12c27` 审核独立副本中的控制改动与直接调用链。复核任务为只读，给出结论、文件行号、触发条件和影响，修改另候用户决定。[程序 3 代码差异](https://github.com/kxkxkxa767/XT-STCAR/compare/0492cdc...8d12c27)
+
+
+## 2026-11-21 19:25 · 用户补充 · Gemini 只读复核范围更正为程序 1、2、3
+
+请 Gemini 对车上三个编号分别给出结论。程序 1 对照当天实跑备份 `41337e1 → 72abaed`。程序 2 分两段看建图和启动改动 `00664bd → e35ea80 → eb754f8`。程序 3 对照复制基线 `0492cdc → 8d12c27`，核对仅在该版实施的前进 PWM 1560 上限。跨版本检查 `start_程序号_秒数` 的实际分派、等灯上限及 N10P 配置。复核限本机只读，发现问题先附证据，修改和实车操作等用户另行授权。[三版复核指令](https://github.com/kxkxkxa767/XT-STCAR/blob/race/program3-1560/docs/gemini-review-programs-1-3.txt)
