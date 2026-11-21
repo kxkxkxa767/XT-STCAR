@@ -51,24 +51,40 @@ impl Maneuver {
             self._crosswalk_rear = Some(rear.is_some_and(|r| r <= CROSSWALK_REAR_MAX_M));
         }
         let rear_track = rear.filter(|r| *r <= CROSSWALK_REAR_MAX_M).map(|r| -r);
-        let field_x = if self.race_program && self.route_stage == "start_lane" && self.race_inputs.is_some() {
+        let race_start = self.race_program && self.route_stage == "start_lane" && self.race_inputs.is_some();
+        let field_x = if race_start {
             self.field_map.longitudinal_position(scan)
         } else { None };
         let first_fix = self._crosswalk_rest.is_none();
+        let moving_fix = self._crosswalk_board_m.is_some() || !self._crosswalk_fixes.is_empty();
         if self._crosswalk_rear == Some(true) {
-            let rear = self.race_crosswalk_stop.aligned_track(rear_track, field_x, first_fix);
+            let plan = &mut self.race_crosswalk_stop;
+            let mut rear = plan.aligned_track(rear_track, field_x, first_fix, moving_fix);
+            if race_start {
+                let paired_front = plan.front_on_rear_track(rear, track, self._track_history.len() >= 2);
+                if rear.is_none() && plan.has_optical_observation(moving_fix) {
+                    rear = paired_front;
+                }
+            }
             if rear.is_some() || self._crosswalk_board_m.is_some() {
                 let measured = pairwise_track_speed(&mut self._crosswalk_rear_history, scan, rear);
                 let v = measured.or_else(|| (rear_track.is_none() && rear.is_some())
                     .then(|| self.field_map.axis_speed(scan)).flatten());
                 return (rear, v);
             }
+            if race_start && self._crosswalk_rest.take().is_some() {
+                // Switching to the unpaired front reference. Neither a rear
+                // coordinate nor an older camera exposure can be placed on it.
+                plan.discard_unpaired_observations();
+                self._crosswalk_fixes.clear();
+                self._crosswalk_raw.clear();
+            }
             self._crosswalk_rear = Some(false);
             self._crosswalk_track.clear();
             self._crosswalk_search_passed = true;
             self.race_crosswalk_stop.change_unplanned_reference();
         }
-        let aligned = self.race_crosswalk_stop.aligned_track(track, field_x, first_fix);
+        let aligned = self.race_crosswalk_stop.aligned_track(track, field_x, first_fix, moving_fix);
         if aligned.is_some() && (track.is_none() || self.race_crosswalk_stop.map_origin()) {
             return (aligned, self.field_map.axis_speed(scan).or(speed));
         }

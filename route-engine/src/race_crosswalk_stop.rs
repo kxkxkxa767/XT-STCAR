@@ -42,6 +42,7 @@ pub struct CrosswalkStopPlan {
     last_integral: Option<f64>,
     map_pair: Option<(f64, f64)>,
     map_origin: bool,
+    front_to_rear_offset: Option<f64>,
     /// y68: the IMU forward acceleration over the last scan interval.
     pub imu_accel: Option<f64>,
 }
@@ -85,11 +86,15 @@ impl CrosswalkStopPlan {
     /// Keep one decreasing longitudinal coordinate throughout this optical stop.
     /// A paired real measurement fixes the offset; its occasional return never
     /// switches a map-origin plan into the unrelated front-board coordinate.
-    pub fn aligned_track(&mut self, raw: Option<f64>, field_x: Option<f64>, at_first_fix: bool) -> Option<f64> {
+    pub fn aligned_track(
+        &mut self, raw: Option<f64>, field_x: Option<f64>, at_first_fix: bool, moving_fix: bool,
+    ) -> Option<f64> {
         if let (Some(track), Some(x)) = (raw, field_x) {
             self.map_pair = Some((track, x));
         }
-        let optical = self.planned.is_some() || !self.direct_frames.is_empty() || !self.frames.is_empty();
+        // observe() consumes queued frames. Their accepted fixes still use
+        // this odometry reference between camera captures and during a dropout.
+        let optical = self.has_optical_observation(moving_fix);
         if at_first_fix && raw.is_none() && field_x.is_some() && optical {
             self.map_origin = true;
         }
@@ -108,8 +113,38 @@ impl CrosswalkStopPlan {
 
     pub fn map_origin(&self) -> bool { self.map_origin }
 
+    pub fn has_optical_observation(&self, moving_fix: bool) -> bool {
+        moving_fix || self.planned.is_some() || !self.fixes.is_empty()
+            || !self.direct_frames.is_empty() || !self.frames.is_empty()
+    }
+
+    /// Reuse an offset only within one front-board track. The lane speed
+    /// history already resets when samples are lost or their range jumps.
+    pub fn front_on_rear_track(&mut self, rear: Option<f64>, front: Option<f64>, continuous: bool) -> Option<f64> {
+        self.front_to_rear_offset = match (rear, front) {
+            (Some(rear), Some(front)) => Some(rear - front),
+            (None, Some(_)) if continuous => self.front_to_rear_offset,
+            _ => None,
+        };
+        front.zip(self.front_to_rear_offset).map(|(range, offset)| range + offset)
+    }
+
     pub fn change_unplanned_reference(&mut self) {
         self.map_pair = None;
+        self.map_origin = false;
+        self.front_to_rear_offset = None;
+    }
+
+    /// Only called before a plan exists, when the old and new tracks cannot
+    /// be related. Keep the IMU rest and the time movement actually began.
+    pub fn discard_unpaired_observations(&mut self) {
+        self.frames.clear();
+        self.direct_frames.clear();
+        self.board_ahead.clear();
+        self.fixes.clear();
+        self.gap_distances.clear();
+        self.yolo_fixes = 0;
+        self.rust_fixes = 0;
     }
     pub fn push_frame(&mut self, captured: f64, edge_y: f64, base_y: f64) {
         if self.planned.is_none() {
@@ -232,17 +267,43 @@ mod tests {
     #[test]
     fn missing_central_rays_preserve_the_coordinates_of_the_optical_fix() {
         let mut p = CrosswalkStopPlan::default();
-        assert_eq!(p.aligned_track(Some(-0.42), Some(0.38), true), Some(-0.42));
-        assert_eq!(p.aligned_track(None, Some(0.50), false), None);
+        assert_eq!(p.aligned_track(Some(-0.42), Some(0.38), true, false), Some(-0.42));
+        assert_eq!(p.aligned_track(None, Some(0.50), false, false), None);
         p.planned=Some(-2.6);
-        assert!((p.aligned_track(None, Some(0.58), false).unwrap()+0.62).abs()<1e-9);
-        assert_eq!(p.aligned_track(None,None,false),None);
-        assert_eq!(p.aligned_track(Some(-0.76), Some(0.70), false), Some(-0.76));
+        assert!((p.aligned_track(None, Some(0.58), false, false).unwrap()+0.62).abs()<1e-9);
+        assert_eq!(p.aligned_track(None,None,false, false),None);
+        assert_eq!(p.aligned_track(Some(-0.76), Some(0.70), false, false), Some(-0.76));
         let mut from_map = CrosswalkStopPlan::default();
         from_map.push_direct_fix(0.1,2.10,0.14,None,"rust");
-        assert_eq!(from_map.aligned_track(None,Some(0.40),true),Some(-0.40));
-        assert_eq!(from_map.aligned_track(Some(7.5),Some(0.50),false),Some(-0.50));
-        assert!((from_map.aligned_track(Some(7.40),None,false).unwrap()+0.60).abs()<1e-9);
+        assert_eq!(from_map.aligned_track(None,Some(0.40),true, false),Some(-0.40));
+        assert_eq!(from_map.aligned_track(Some(7.5),Some(0.50),false, false),Some(-0.50));
+        assert!((from_map.aligned_track(Some(7.40),None,false, false).unwrap()+0.60).abs()<1e-9);
+    }
+
+    #[test]
+    fn consumed_stripes_keep_their_reference_between_camera_frames() {
+        let mut plan = CrosswalkStopPlan::default();
+        let scan = dict! { "seq" => 1, "ranges" => vec![V::None; 360] };
+        plan.aligned_track(Some(-0.4), Some(0.4), true, false);
+        plan.push_direct_fix(0.1, 2.1, 0.14, None, "rust");
+        plan.observe(&scan, 0.2, Some(-0.4), Some((0., -0.4)), Some(0.));
+        assert!(plan.direct_frames.is_empty() && plan.planned.is_none());
+        assert_eq!(plan.aligned_track(None, Some(0.5), false, false), Some(-0.5));
+        plan.discard_unpaired_observations();
+        assert_eq!(plan.aligned_track(None, Some(0.5), false, false), None);
+        assert_eq!(plan.aligned_track(None, Some(0.5), false, true), Some(-0.5));
+    }
+
+    #[test]
+    fn front_board_only_continues_a_paired_unbroken_track() {
+        let mut plan = CrosswalkStopPlan::default();
+        assert_eq!(plan.front_on_rear_track(None, Some(7.0), false), None);
+        assert_eq!(plan.front_on_rear_track(Some(-0.5), Some(7.5), false), Some(-0.5));
+        assert_eq!(plan.front_on_rear_track(None, Some(7.0), true), Some(-1.0));
+        assert_eq!(plan.front_on_rear_track(None, Some(3.0), false), None);
+        assert_eq!(plan.front_on_rear_track(Some(-1.5), Some(6.5), true), Some(-1.5));
+        assert_eq!(plan.front_on_rear_track(None, None, false), None);
+        assert_eq!(plan.front_on_rear_track(None, Some(6.0), true), None);
     }
 
     #[test]
