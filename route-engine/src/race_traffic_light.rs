@@ -57,6 +57,7 @@ pub(crate) fn merge(latest: &V, mut incoming: V) -> Option<V> {
 pub(crate) fn spawn(
     path: PathBuf,
     events: Sender<Event>,
+    geometry: bool,
 ) -> Option<(Sender<bool>, JoinHandle<()>)> {
     let (phases, rx) = mpsc::channel();
     let thread = std::thread::Builder::new()
@@ -78,7 +79,7 @@ pub(crate) fn spawn(
             let mut bytes = Vec::new();
             let mut header = [0; SHM_HEADER_LEN];
             loop {
-                if !active {
+                if !active && !geometry {
                     let Ok(next) = rx.recv() else { break };
                     active = next;
                     continue;
@@ -121,17 +122,17 @@ pub(crate) fn spawn(
                     continue;
                 };
                 last = Some(frame);
-                let start = Instant::now();
-                let lights = detector.detect(pixels, w, h);
-                let obs = Observation {
-                    frame,
-                    captured_mono_s,
-                    lights,
-                    pinned_cpu,
-                    compute_ms: start.elapsed().as_secs_f64() * 1000.,
-                };
-                if events.send(Event::RustLamp(obs, Instant::now())).is_err() {
-                    break;
+                if active {
+                    let start = Instant::now();
+                    let lights = detector.detect(pixels, w, h);
+                    let obs = Observation {frame,captured_mono_s,lights,pinned_cpu,
+                        compute_ms:start.elapsed().as_secs_f64()*1000.};
+                    if events.send(Event::RustLamp(obs, Instant::now())).is_err() {break;}
+                }
+                if geometry {
+                    let start=Instant::now();
+                    let ground=crate::camera_ground::detect(pixels,w,h,frame,captured_mono_s);
+                    if events.send(Event::CameraGround(ground,start.elapsed(),Instant::now())).is_err(){break;}
                 }
             }
             if wake.is_some() {
@@ -147,6 +148,44 @@ pub(crate) fn spawn(
 mod tests {
     use super::*;
     use crate::{dict, maneuver::Maneuver};
+
+    #[test]
+    fn native_pixels_can_release_on_two_greens_without_a_model_state_file() {
+        use std::io::Write;
+        let tmp=std::env::temp_dir().join(format!("stcar-native-lamp-{}.bgr",std::process::id()));
+        let send_frame=|n:i64,t:f64,rim:[u8;3]| {
+            let mut pixels=vec![26;320*240*3];
+            for y in 40..71i32 {for x in 75..106i32 {
+                let d=(x-90).pow(2)+(y-55).pow(2);
+                let k=3*(320*y+x) as usize;
+                if d<196 {pixels[k..k+3].copy_from_slice(if d<81 {&[245,245,245]} else {&rim});}
+            }}
+            let staging=tmp.with_added_extension("write");
+            let mut f=File::create(&staging).unwrap();
+            f.write_all(b"XTF1").unwrap();f.write_all(&n.to_le_bytes()).unwrap();f.write_all(&t.to_le_bytes()).unwrap();
+            for v in [320u32,240,0] {f.write_all(&v.to_le_bytes()).unwrap();}
+            f.write_all(&pixels).unwrap();drop(f);std::fs::rename(staging,&tmp).unwrap();
+        };
+        let (tx,rx)=mpsc::channel();let (phases,handle)=spawn(tmp.clone(),tx,true).unwrap();
+        let mut m=Maneuver::new(&0.0.into(),&40.0.into(),&1670.into(),&true.into());
+        m.race_inputs=Some(Default::default());m.race_light_wait_s=Some(7.);m.light_vision=true;
+        m.route_stage="light_lane";m.drive_since=Some(0.);m.light_stop_state=Some("waiting");
+        m._light_gantry_since=Some(1.);m._light_wait_since=Some(2.);m._light_wait_tick=Some(2.);
+        m.light_stop_evidence=dict!{"gantry"=>dict!{"source_seq"=>1}};
+        phases.send(true).unwrap();
+        for (n,t,rim) in [(1,2.1,[20,30,250]),(2,2.3,[65,243,30]),(3,2.4,[65,243,30])] {
+            send_frame(n,t,rim);
+            let lamp=loop {
+                if let Event::RustLamp(v,_)=rx.recv_timeout(Duration::from_secs(2)).unwrap() && v.frame==n {break v;}
+            };
+            assert_eq!((lamp.lights.red,lamp.lights.green),(n==1,n>1));
+            let light=dict!{"frame"=>n,"captured_at"=>t,"red"=>i64::from(lamp.lights.red),"green"=>i64::from(lamp.lights.green)};
+            let scan=dict!{"seq"=>n,"at_ms"=>(t*1000.) as i64,"received_at"=>t,"ranges"=>vec![V::Float(3.);360]};
+            m.light_observe(&dict!{"light"=>light},t);
+            assert_eq!(m.light_wait(&scan,t,&V::None),n==3);
+        }
+        drop(phases);handle.join().unwrap();std::fs::remove_file(tmp).unwrap();
+    }
 
     #[test]
     fn the_two_sources_share_one_vote_per_capture() {
@@ -193,7 +232,7 @@ mod tests {
         bytes.resize(SHM_HEADER_LEN + 32 * 32 * 3, 0);
         std::fs::write(&path, bytes).unwrap();
         let (events, incoming) = mpsc::channel();
-        let (phases, worker) = spawn(path.clone(), events).unwrap();
+        let (phases, worker) = spawn(path.clone(), events, false).unwrap();
         assert!(incoming.recv_timeout(Duration::from_millis(24)).is_err());
         phases.send(true).unwrap();
         let Ok(Event::RustLamp(obs, _)) = incoming.recv_timeout(Duration::from_secs(2)) else {

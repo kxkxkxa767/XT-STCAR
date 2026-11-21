@@ -690,6 +690,7 @@ impl Maneuver {
                 scan.idx("received_at").f()), center, heading, &bins)
         } else { floats.to_vec() };
         let points = scan_points(&planning_ranges, hypot(center.0, center.1) + OPEN_PROBE_REACH_M);
+        let camera_points = self.field_map.camera_points(scan).to_vec();
         let directions = open_probe_directions_rad();
         let slot = self.slot_mut(side);
         let radius = pmax(radius0, slot.radius.unwrap_or(0.));
@@ -715,6 +716,14 @@ impl Maneuver {
         let approach = (-(center.0 * e1.0 + center.1 * e1.1), -(center.0 * e2.0 + center.1 * e2.1));
         let mut plan_update = V::None;
         let mut sorted_free = slot.free.clone();
+        // Optical estimates affect this scan's candidate only. Do not store
+        // them in the slot's cumulative measured-lidar clearance history.
+        if !camera_points.is_empty() {
+            for (theta, free) in &mut sorted_free {
+                let (s,c)=theta.sin_cos();
+                *free=free.min(probe_free(&camera_points,center,(c*e1.0+s*e2.0,c*e1.1+s*e2.1),skip));
+            }
+        }
         sorted_free.sort_by(|a, b| OrdF(a.0).cmp(&OrdF(b.0)).then(OrdF(a.1).cmp(&OrdF(b.1))));
         let plan_inputs = V::list(vec![
             V::list(vec![key.0.clone(), V::Float(key.1)]),

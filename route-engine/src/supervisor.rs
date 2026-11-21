@@ -1228,6 +1228,12 @@ impl Supervisor {
                 .raw_race_inputs
                 .map(|raw| s.motion.field_map.imu.sample(raw, t))
                 .unwrap_or(input);
+            s.motion.field_map.camera_role = match s.motion.route_stage {
+                "start_lane" if s.motion.crosswalk_state == Some("done") => Some(0),
+                "first_target" => Some(0),
+                "open_transfer" | "second_loop" => Some(1),
+                _ => None,
+            };
             s.motion.field_map.observe(&clearance_scan, t, live, at_start);
             if s.motion.raw_race_inputs.is_some() {
                 s.motion.race_inputs = Some(s.motion.field_map.imu.current());

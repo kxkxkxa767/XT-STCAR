@@ -40,6 +40,10 @@ mod race_light;
 mod race_light_brake;
 mod race_speed_kalman;
 mod race_first_cone;
+mod camera_projection;
+mod camera_ground;
+#[cfg(target_os = "linux")]
+mod race_camera;
 mod race_field_map;
 mod race_imu_fusion;
 mod race_field_path;
@@ -488,6 +492,10 @@ fn function(name: &str, args: &[V]) -> V {
 fn main() {
     install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(target_os = "linux")]
+    if args.get(1).map(String::as_str) == Some("capture-camera") {
+        std::process::exit(race_camera::main(&args[2..]));
+    }
     if let Some(name)=args.first().and_then(|p|std::path::Path::new(p).file_name()).and_then(|v|v.to_str())
         && name.starts_with("start_") {
         std::process::exit(race_selection::run(name,&args[1..]));

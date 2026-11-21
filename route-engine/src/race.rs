@@ -70,6 +70,7 @@ pub(crate) struct Options {
     status_s: f64,
     light_state: Option<PathBuf>,
     frame_shm: Option<PathBuf>,
+    camera_geometry: bool,
     surface_initial_load: f64,
     ros2: bool,
     #[cfg(feature = "ros2")]
@@ -102,6 +103,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         status_s: 0.5,
         light_state: None,
         frame_shm: None,
+        camera_geometry: false,
         surface_initial_load: 0.,
         ros2: cfg!(feature = "ros2"),
         #[cfg(feature = "ros2")]
@@ -132,6 +134,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--lidar-calibration" => o.lidar_calibration = Some(PathBuf::from(value(i)?)),
             "--light-state" => o.light_state = Some(PathBuf::from(value(i)?)),
             "--frame-shm" => o.frame_shm = Some(PathBuf::from(value(i)?)),
+            "--camera-geometry" => o.camera_geometry = true,
             "--surface-initial-load" => o.surface_initial_load = number(i)?,
             "--transport" => o.ros2 = match value(i)?.as_str() {
                 "legacy" => false,
@@ -156,6 +159,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
     if !(1. ..=ROUTE_MAX_DRIVE_S).contains(&o.max_drive_s) {
         return Err(format!("drive limit must be 1..{ROUTE_MAX_DRIVE_S} seconds"));
     }
+    if o.camera_geometry { o.light_state=None; }
     Ok(o)
 }
 
@@ -180,6 +184,7 @@ pub(crate) enum Event {
     Light(String, Instant),
     RustCrosswalk(crate::race_crosswalk_vision::RustCrosswalkObs, Instant),
     RustLamp(crate::race_traffic_light::Observation, Instant),
+    CameraGround(crate::camera_ground::GroundFrame, Duration, Instant),
     Coast(u64, String),
     Ended(&'static str, String),
     Enter,
@@ -468,6 +473,8 @@ struct Program {
     light_updates: i64,
     light_invalid: i64,
     vision_phase: Option<&'static str>,
+    prestart_geometry: Option<crate::camera_ground::GroundFrame>,
+    geometry_frames: u64,
     lamp_worker: Option<Sender<bool>>,
     rust_cw_hint: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::LaneLidarHint>>,
     rust_cw_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -511,7 +518,7 @@ impl Program {
             .iter()
             .filter(|(obs, _)| (range.0..=range.1).contains(&obs.front_to_edge_m))
             .count();
-        let yolo = if self.prestart_yolo_cw.is_empty() {
+        let yolo = if self.o.camera_geometry || self.prestart_yolo_cw.is_empty() {
             0
         } else {
             crate::race_crosswalk_stop::board_ahead(&self.sup.scan).map_or(0, |bm| {
@@ -689,6 +696,22 @@ impl Program {
                     None => self.light_invalid += 1,
                 }
             }
+            Event::CameraGround(mut obs, compute, received) => {
+                let now=self.at(received);
+                let captured=self.base_monotonic_s.map(|base|obs.captured-base).unwrap_or(now-compute.as_secs_f64());
+                let age=self.mono()-captured;
+                if !(0.0..=0.25).contains(&age) {return false;}
+                obs.captured=captured;
+                self.geometry_frames+=1;
+                let pixels=|v:&[crate::camera_ground::Foot]|v.iter()
+                    .map(|p|serde_json::json!([p.pixel.0,p.pixel.1])).collect::<Vec<_>>();
+                let row=serde_json::json!({"frame":obs.frame,"captured_at":captured,"received_at":now,
+                    "compute_ms":compute.as_secs_f64()*1000.,"wall_feet_px":pixels(&obs.boards),
+                    "red_cone_feet_px":pixels(&obs.cones[0]),"blue_cone_feet_px":pixels(&obs.cones[1])});
+                let _=self.files.send(FileOp::Append("camera-ground.jsonl",row.to_string()+"\n"));
+                if let Some(session)=self.sup.session.as_mut() {session.motion.field_map.observe_camera(obs);}
+                else {self.prestart_geometry=Some(obs);}
+            }
             Event::RustLamp(obs, received) => {
                 let now = self.at(received);
                 let captured = self.base_monotonic_s.map(|base| obs.captured_mono_s - base)
@@ -700,7 +723,7 @@ impl Program {
                 let _ = self.files.send(FileOp::Append("rust-light.jsonl", to_json(&row) + "\n"));
                 if crate::race_traffic_light::lamp_phase(self.vision_phase)
                     && (0.0..=crate::maneuver::LIGHT_FRAME_MAX_AGE_S).contains(&(self.mono() - captured))
-                    && (obs.lights.red || obs.lights.green) {
+                    && (self.o.camera_geometry || obs.lights.red || obs.lights.green) {
                     let light = dict! {"frame" => obs.frame, "captured_at" => captured,
                         "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green)};
                     self.apply_light(light);
@@ -867,7 +890,7 @@ pub fn main(args: &[String]) -> i32 {
             return 69;
         }
     };
-    if let Some(path) = &o.light_state {
+    if !o.camera_geometry && let Some(path) = &o.light_state {
         light_reader(path.clone(), tx.clone());
     }
     let rust_cw_hint = std::sync::Arc::new(std::sync::Mutex::new(
@@ -912,7 +935,7 @@ pub fn main(args: &[String]) -> i32 {
         });
     }
     let (lamp_worker, lamp_thread) = o.frame_shm.as_ref().and_then(|path|
-        crate::race_traffic_light::spawn(path.clone(), tx.clone())).unzip();
+        crate::race_traffic_light::spawn(path.clone(), tx.clone(), o.camera_geometry)).unzip();
     drop(tx);
     let (files, writer_thread) = writer(o.out.clone());
     let mut sup = Supervisor::new(o.demo, &token(), "rust_program");
@@ -951,6 +974,8 @@ pub fn main(args: &[String]) -> i32 {
         light_updates: 0,
         light_invalid: 0,
         vision_phase: None,
+        prestart_geometry: None,
+        geometry_frames: 0,
         lamp_worker,
         rust_cw_hint,
         rust_cw_stop: rust_cw_stop.clone(),
@@ -1073,6 +1098,8 @@ fn run(p: &mut Program) -> i32 {
             let _ = p.files.send(FileOp::Put("before.json", to_json(&state)));
             let _ = p.files.send(FileOp::Put("before-lidar.json", to_json(&p.lidar())));
             let result = dict! {"started" => false, "check_only" => true, "turn_ready" => ready,
+                                "rust_camera_geometry_frames"=>p.geometry_frames as i64,
+                                "legacy_model_reader_enabled"=>p.o.light_state.is_some() && !p.o.camera_geometry,
                                 "light_max_wait_s" => p.o.light_max_wait_s,
                                 "turn_rejection" => state.idx("autonomy").get("turn_rejection").clone(),
                                 "control" => p.sup.control(), "errors" => p.sup.errors.clone()};
@@ -1109,6 +1136,7 @@ fn run(p: &mut Program) -> i32 {
     };
     if let Some(session) = &mut p.sup.session {
         session.motion.race_inputs = Some(Default::default());
+        if let Some(obs)=p.prestart_geometry.take() {session.motion.field_map.observe_camera(obs);}
         session.motion.race_light_wait_s = p.o.light_max_wait_s;
         session.motion.field_map.planner.start();
         session.motion.race_surface.set_initial_load(p.o.surface_initial_load);
@@ -1257,7 +1285,7 @@ fn run(p: &mut Program) -> i32 {
         "max_tick_compute_s" => result.get("max_tick_compute_s").clone(),
         "max_actual_gap_s" => result.get("max_actual_gap_s").clone(), "max_gap_breakdown" => result.get("max_gap_breakdown").clone(),
         "cpu" => cpu, "scan_to_tick" => scan_to_tick, "result" => result,
-        "rust_crosswalk" => rust_cw_summary,
+        "rust_crosswalk" => rust_cw_summary, "camera_geometry_frames"=>p.geometry_frames as i64,
         "light" => dict! {"state_file" => p.o.light_state.as_ref().map(|path| path.display().to_string()),
                           "updates" => p.light_updates, "invalid" => p.light_invalid, "last" => p.light.clone()},
     };

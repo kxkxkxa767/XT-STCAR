@@ -27,18 +27,7 @@ use crate::py::V;
 use crate::race::{Event, spawn_named};
 
 // Camera calibration matching scripts/vision-log.py & config/camera-race4-20261031.json
-const FX: f64 = 426.55;
-const FY: f64 = 424.47;
-const CX: f64 = 349.59;
-const CY: f64 = 227.85;
-const K1: f64 = -0.371764;
-const K2: f64 = 0.172259;
-const P1: f64 = -0.000092;
-const P2: f64 = -0.000226;
-const K3: f64 = -0.042575;
-const CAM_H: f64 = 0.195;
-const CAM_BEHIND_FRONT: f64 = 0.041;
-const CAM_AHEAD_LIDAR: f64 = FRONT_BODY_EXTENT_M - CAM_BEHIND_FRONT; // 0.159 m
+use crate::camera_projection::*;
 const NOMINAL_PITCH_DEG: f64 = 8.05;
 const SHM_MAGIC: &[u8; 4] = b"XTF1";
 pub(crate) const SHM_HEADER_LEN: usize = 32;
@@ -217,49 +206,6 @@ fn lane_to_cam(xl: f64, yl: f64, heading_left: f64) -> (f64, f64) {
     let xb = xl * ch + yl * sh;
     let yb = -xl * sh + yl * ch;
     (xb - CAM_AHEAD_LIDAR, yb)
-}
-
-/// Forward project ground point (xc forward from camera, yc left of camera) to distorted pixel (u, v).
-/// Camera optical axis is tilted UP by +pitch_rad above horizontal (matching scripts/vision-log.py).
-fn project_cam_ground(xc: f64, yc: f64, pitch_rad: f64) -> Option<(f64, f64)> {
-    if xc <= 0.15 {
-        return None;
-    }
-    let (cp, sp) = (pitch_rad.cos(), pitch_rad.sin());
-    let z_rot = xc * cp - CAM_H * sp;
-    let y_rot = xc * sp + CAM_H * cp;
-    if z_rot <= 0.05 {
-        return None;
-    }
-    let xn = -yc / z_rot;
-    let yn = y_rot / z_rot;
-    let r2 = xn * xn + yn * yn;
-    if r2 > 2.2 {
-        return None;
-    }
-    let rad = 1.0 + r2 * (K1 + r2 * (K2 + r2 * K3));
-    let xd = xn * rad + 2.0 * P1 * xn * yn + P2 * (r2 + 2.0 * xn * xn);
-    let yd = yn * rad + P1 * (r2 + 2.0 * yn * yn) + 2.0 * P2 * xn * yn;
-    Some((FX * xd + CX, FY * yd + CY))
-}
-
-fn undistort_pt(u: f64, v: f64) -> Option<(f64, f64)> {
-    let (xd, yd) = ((u - CX) / FX, (v - CY) / FY);
-    let (mut x, mut y) = (xd, yd);
-    for _ in 0..25 {
-        let r2 = x * x + y * y;
-        let rad = 1.0 + r2 * (K1 + r2 * (K2 + r2 * K3));
-        if rad.abs() < 1e-6 {
-            return None;
-        }
-        x = (xd - 2.0 * P1 * x * y - P2 * (r2 + 2.0 * x * x)) / rad;
-        y = (yd - P1 * (r2 + 2.0 * y * y) - 2.0 * P2 * x * y) / rad;
-    }
-    let r2 = x * x + y * y;
-    let rad = 1.0 + r2 * (K1 + r2 * (K2 + r2 * K3));
-    let eu = (FX * (x * rad + 2.0 * P1 * x * y + P2 * (r2 + 2.0 * x * x)) + CX - u).abs();
-    let ev = (FY * (y * rad + P1 * (r2 + 2.0 * y * y) + 2.0 * P2 * x * y) + CY - v).abs();
-    (eu <= 1e-2 && ev <= 1e-2).then_some((x, y))
 }
 
 #[inline]
@@ -878,7 +824,7 @@ pub fn spawn_worker(
             }
             thread::sleep(Duration::from_millis(15));
         }
-        let _ = remove_shm_best_effort(&shm_path);
+        // The camera producer continues publishing for cone/board and lamp recognition.
     })
 }
 
