@@ -4,7 +4,7 @@ use crate::compact_target::CompactTargetTracker;
 use crate::helpers::{FRONT_BODY_EXTENT_M, OPEN_LANE_MIN_SPAN_M, OPEN_LINE_MIN_POINTS, SIDE_BODY_EXTENT_M, dcos, dsin};
 use crate::maneuver::{
     LIGHT_GANTRY_EDGE_M, LIGHT_GANTRY_SPAN_M, LIGHT_GANTRY_ALONG_DIFF_M, LIGHT_LEG_LATERAL_M,
-    LIGHT_LINE_JUMP_M, LIGHT_POST_JUMP_M, LIGHT_SENSOR_TO_GANTRY_M, OPEN_LANE_WIDTH_M,
+    LIGHT_LINE_JUMP_M, LIGHT_POST_JUMP_M, OPEN_LANE_WIDTH_M,
 };
 use crate::py::V;
 use crate::motion_sensors::{RangeHistory, lane_range_speed};
@@ -255,7 +255,7 @@ fn across_lane(a: Post, b: Post) -> bool {
 }
 
 pub(super) fn at_predicted_beam(along: f64, gantry: Option<f64>) -> bool {
-    gantry.is_some_and(|g| (g - along - LIGHT_SENSOR_TO_GANTRY_M).abs() <= LIGHT_LINE_JUMP_M)
+    gantry.is_some_and(|g| (g - along - crate::race_field_map::beam_spacing()).abs() <= LIGHT_LINE_JUMP_M)
 }
 
 /// A matching post one beam spacing upstream on each side identifies the
@@ -273,9 +273,9 @@ pub(super) fn station_pair(posts: &[Post], predicted: Option<f64>) -> Option<Sta
                 .copied()
                 .filter(|&(u, v)| (y - v).abs() <= LIGHT_LEG_LATERAL_M && at_predicted_beam(u, Some(x)))
                 .min_by(|a, b| {
-                    (x - a.0 - LIGHT_SENSOR_TO_GANTRY_M)
+                    (x - a.0 - crate::race_field_map::beam_spacing())
                         .abs()
-                        .total_cmp(&(x - b.0 - LIGHT_SENSOR_TO_GANTRY_M).abs())
+                        .total_cmp(&(x - b.0 - crate::race_field_map::beam_spacing()).abs())
                 })
         })
         .collect();
@@ -448,6 +448,8 @@ pub struct RaceLight {
     last_seq: Option<i64>,
     pub phase: LightRoll,
     pub prior_ahead: Option<f64>,
+    pub using_survey: bool,
+    pub completing_surveyed_stop: bool,
     pub passed_hint: bool,
     pub ranges: RangeHistory,
     pub speed_uses_gantry: bool,

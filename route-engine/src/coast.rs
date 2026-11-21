@@ -386,7 +386,9 @@ impl CoastMotion {
         }
         self.last_ranges = Some(ranges.clone());
         let floats: Vec<Option<f64>> = ranges.l().iter().map(|r| r.of()).collect();
-        if floats.iter().filter(|r| r.is_some()).count() < COAST_MIN_VALID_POINTS {
+        if floats.iter().filter(|r| r.is_some()).count() < COAST_MIN_VALID_POINTS
+            && !scan.get("surveyed_boards_observed").is_true()
+        {
             return self.unknown_result("scan_coverage_insufficient", true);
         }
         let current = planes(&floats);
@@ -527,6 +529,18 @@ impl CoastWorker {
 
     /// submit(generation, scan, age, received, now): an error reason or None.
     pub fn submit(&mut self, generation: i64, scan: &V, age: &V, received: &V, now: &V) -> Option<&'static str> {
+        self.submit_observed(generation, scan, age, received, now, false)
+    }
+
+    pub(super) fn submit_observed(
+        &mut self,
+        generation: i64,
+        scan: &V,
+        age: &V,
+        received: &V,
+        now: &V,
+        boards: bool,
+    ) -> Option<&'static str> {
         if let Some(error) = input_error(scan, age, received, now) {
             return Some(error);
         }
@@ -540,6 +554,9 @@ impl CoastWorker {
                 "frame_id" => scan.get("frame_id").clone(),
             };
             snapshot.set("ranges", V::list(scan.idx("ranges").l().to_vec()));
+            if boards {
+                snapshot.set("surveyed_boards_observed", true);
+            }
             self.pending = Some((generation, id.clone(), snapshot, age.clone(), received.clone(), now.f()));
             self.last_input = Some(id);
         }

@@ -746,6 +746,8 @@ pub struct Maneuver {
     pub avoid_evidence: Vec<V>,
     pub wait_steering_changes: i64,
     pub compass: WallCompass,
+    pub(crate) field_map: crate::race_field_map::Locator,
+    pub(crate) start_axis: crate::race_start_lane::StartAxis,
     pub entry_kind: Option<&'static str>,
     pub _lane_start_steering: LaneWallSteering,
     pub _lane_start_settle_since: Option<f64>,
@@ -754,6 +756,7 @@ pub struct Maneuver {
     pub _start_motor: i64,
     pub _transfer_motor: i64,
     pub(crate) race_inputs: Option<crate::motion_sensors::RaceInputs>,
+    pub(crate) raw_race_inputs: Option<crate::motion_sensors::RaceInputs>,
     /// Known from the first preview, before `race_inputs` exists.
     pub(crate) race_program: bool,
     pub(crate) wall_turn: crate::race_first_cone::WallTurn,
@@ -1074,6 +1077,8 @@ impl Maneuver {
             avoid_evidence: Vec::new(),
             wait_steering_changes: 0,
             compass: WallCompass::default(),
+            field_map: Default::default(),
+            start_axis: Default::default(),
             entry_kind: None,
             _lane_start_steering: LaneWallSteering::default(),
             _lane_start_settle_since: None,
@@ -1082,6 +1087,7 @@ impl Maneuver {
             _start_motor: TRIAL_MOTOR,
             _transfer_motor: ROUTE_SLOW_MOTOR,
             race_inputs: None,
+            raw_race_inputs: None,
             race_program: false,
             wall_turn: Default::default(),
             light_entry_coast: false,
@@ -1398,6 +1404,7 @@ impl Maneuver {
             result.set("surface_response", self.race_surface.diagnostics());
             result.set("wall_turn", self.wall_turn.diagnostics());
             result.set("surface_speed", self.race_surface_speed.diagnostics());
+            result.set("field_localization", self.field_map.diagnostics(&self._current_scan));
             result.set("light_brake_control", self.race_light_brake.diagnostics());
             if self.light_motor_stage() && matches!(self.light_stop_state, Some("released" | "passed")) {
                 result.set("finish_brake_control", self.finish.race_brake.diagnostics());
@@ -1771,6 +1778,27 @@ impl Maneuver {
             {
                 self.compass.observe_start_lane(scan, &lane);
             }
+            if self.race_program
+                && (self.phase == "presteer"
+                    || (self.route_stage == "start_lane" && self.crosswalk_state != Some("done")))
+            {
+                let measured = self.compass.evidence.get("measured").is_true()
+                    && self.compass.evidence.get("basis").os() != Some("placed_race_start_axis");
+                let h = measured.then(|| self.compass.current(scan)).flatten();
+                let width = self
+                    ._start_lane_width
+                    .of()
+                    .unwrap_or_else(crate::race_field_map::start_width);
+                self.start_axis
+                    .observe(scan, self.race_inputs.and_then(|i| i.yaw_rate), h, width);
+                if !measured {
+                    self.start_axis.carry_compass(&mut self.compass);
+                }
+            }
+            if self.use_field_guidance() {
+                self.field_map
+                    .aid_compass(scan, &mut self.compass, self.race_inputs.and_then(|i| i.yaw_rate));
+            }
         }
         if self.continue_route {
             self.light_observe(control, now);
@@ -1783,7 +1811,13 @@ impl Maneuver {
             self.compact_target = if self.continue_route {
                 let heading = self.tracking_heading(scan);
                 let acquire = self.first_pass_evidence.is_none();
-                self.target_tracker.update(scan, now, acquire, heading, None)
+                let prior = if acquire && self.use_field_guidance() {
+                    self.field_map.prior(scan, &self.target_tracker.target, 0)
+                } else {
+                    Default::default()
+                };
+                self.target_tracker
+                    .update_on_course(scan, now, acquire, heading, None, prior)
             } else {
                 self.target_tracker.update(scan, now, true, None, None)
             };
@@ -1824,7 +1858,19 @@ impl Maneuver {
                 return self.start_lane_update(scan, lidar_age_s, now, control, safe, presteer_wait);
             }
             self.route_stage = "first_target";
-            let evidence = self.first_approach.clone();
+            let mut evidence = self.first_approach.clone();
+            if !self.first_handover_measured(scan) && self.use_field_guidance() {
+                self.handover_observed = true;
+                self.orbit_track_id = V::Int(-1);
+                self.orbit_since = Some(now);
+                self.orbit_bias_pwm = control.get("servo").clone();
+                self.orbit_reference_range_m = evidence.get("range_m").clone();
+                self.handover_control = dict! {"basis"=>"localized_first_cone_and_adopted_steering",
+                "source_seq"=>scan.get("seq").clone(),"servo"=>control.get("servo").clone(),"motor"=>control.get("motor").clone(),
+                "command_acked"=>true,"physical_steering_confirmed"=>false};
+                self.target_tracker.widen_acquisition((radians(45.), PI));
+                evidence.set("handover_basis", "localized_first_cone_and_adopted_steering");
+            }
             self.route_event("first_approach_handover", scan, control, evidence);
         }
         if self.handover_observed

@@ -1092,7 +1092,14 @@ impl Supervisor {
             s.motion_ready_for_coast = Some(true);
             let (age, received) = (lidar_age.clone(), self.scan_at.clone());
             let generation = s.motion_generation.unwrap();
-            let error = self.coast_worker.submit(generation, &self.scan, &age, &received, now);
+            let finish_boards = s.coast_reason.as_deref() == Some("route_finish_zone_stop")
+                && self.race_program
+                && s.motion.field_map.two_measured_axes(&scan);
+            // Stillness must still be measured by the independent, multi-frame
+            // nonparallel-plane fitter. Only its full-scan coverage veto is relaxed.
+            let error = self
+                .coast_worker
+                .submit_observed(generation, &self.scan, &age, &received, now, finish_boards);
             let motion = match error {
                 Some(error) => CoastWorker::unknown(error),
                 None => self.coast_worker.result(generation, &self.scan, &age, &received, now),
@@ -1211,6 +1218,26 @@ impl Supervisor {
         if self.race_program && s.motion.route_stage == "start_lane" {
             race_start_coverage(&mut clearance);
         }
+        if let Some(input) = s.motion.race_inputs
+            && self.race_program
+            && route_contact
+        {
+            let at_start = s.motion.phase == "presteer" || s.motion.route_stage == "start_lane";
+            let live = s
+                .motion
+                .raw_race_inputs
+                .map(|raw| s.motion.field_map.imu.sample(raw, t))
+                .unwrap_or(input);
+            s.motion.field_map.observe(&clearance_scan, t, live, at_start);
+            if s.motion.raw_race_inputs.is_some() {
+                s.motion.race_inputs = Some(s.motion.field_map.imu.current());
+            }
+        }
+        // Reaching this point means the original raw-scan body probe passed.
+        // Only missing-beam issues can be tolerated by the map, during driving.
+        let map_coverage = s.motion.field_course_active()
+            && s.motion.field_map.heading(&clearance_scan).is_some()
+            && clearance.get("valid_returns").oi().is_some_and(|n| n > 0);
         if clearance.idx("body_proximity").idx("target_contact_tolerated").truthy() {
             incr_or_zero(&mut s.report, "target_contact_tolerated_count");
         }
@@ -1232,7 +1259,8 @@ impl Supervisor {
             .into_iter()
             .filter(|issue| {
                 issues.iter().any(|i| i == issue)
-                    && (clearance.get(&format!("{issue}_tolerable")).is_true()
+                    && (map_coverage
+                        || clearance.get(&format!("{issue}_tolerable")).is_true()
                         || (*issue == "scan_incomplete" && race_loop_scan))
             })
             .collect();
@@ -1251,7 +1279,7 @@ impl Supervisor {
         }
         if far_side_gap { tolerable.push("front_sparse"); }
         let scope = if !tolerable.is_empty() {
-            self.turn_route_quality_scope(s, t).or_else(|| {
+            map_coverage.then_some("race_localized_partial_scan").or_else(|| self.turn_route_quality_scope(s, t)).or_else(|| {
                 let fits = clearance.get("front_wall_projection").get("fits");
                 (far_side_gap && fits.get("left").is_dict() && fits.get("right").is_dict())
                     .then_some("start_lane_two_side_walls_far_flank")
@@ -2245,6 +2273,37 @@ mod race_start_tests {
         let mut race = supervisor(true, partial);
         assert!(race.turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true).is_ok(),
                 "a partial scan with measured side walls need not reach the old 342-point threshold");
+    }
+
+    #[test]
+    fn placed_race_start_survives_one_side_or_scattered_rays_without_a_lane_label() {
+        for side in [Some(90_usize), Some(270), None] {
+            let mut scan = outdoor_scan();
+            let ranges = scan
+                .get("ranges")
+                .l()
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    if side.map_or(i == 180, |a| i.abs_diff(a) <= 24) {
+                        r.clone()
+                    } else {
+                        V::None
+                    }
+                })
+                .collect();
+            scan.set("ranges", V::list(ranges));
+            scan.set("corridor_candidates", V::list(vec![]));
+            scan.set("wall_candidates", V::list(vec![]));
+            scan.set("left_turn_goal", V::None);
+            let mut sup = supervisor(true, scan);
+            let (motion, decision, _) = sup
+                .turn_preview(&0.0.into(), &40.0.into(), &1670.into(), true)
+                .unwrap_or_else(|(e, _)| panic!("placed start rejected: {}", e.msg));
+            assert_eq!(motion.route_stage, "start_lane");
+            assert!(decision.get("start_ready").is_true());
+            assert!(motion.start_lane_feedback.get("lane_fit_diagnostic").is_some());
+        }
     }
 
     #[test]

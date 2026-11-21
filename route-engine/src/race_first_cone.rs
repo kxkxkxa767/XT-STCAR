@@ -14,7 +14,7 @@ const FULL_LEFT_RADIUS_M: f64 = 0.75;
 /// Full right: 1.2 per metre nominal, about 0.7-0.83 m on the wheels.
 const FULL_RIGHT_RADIUS_M: f64 = 0.80;
 pub const WALL_TURN_PWM_STEP: i64 = 120;
-const STEER_RESPONSE_S: f64 = 0.30;
+pub(super) const STEER_RESPONSE_S: f64 = 0.30;
 const WALL_MARGIN_M: f64 = 0.10;
 /// A quarter of the full-left circle must be clear before committing to it.
 const ARC_CLEAR_M: f64 = 0.9;
@@ -127,7 +127,9 @@ impl Maneuver {
             .or(if side > 0 { self.race_crosswalk.imu_speed(input.forward_integral) } else { None });
         self.wall_turn.speed = speed;
         let cone_in_view = cone.is_dict();
-        if cone_in_view {
+        let map_plan = self.open_loop.get("support_source").os() == Some("surveyed_cone_and_localized_pose")
+            && self.open_loop.get("source_seq").oi() == scan.get("seq").oi();
+        if cone_in_view || map_plan {
             self.wall_turn.blind = false;
         }
         let center = round(degrees(wrap(heading - axis)));
@@ -140,7 +142,7 @@ impl Maneuver {
             let arc = Self::path_free_distance(&points, full);
             if arc >= ARC_CLEAR_M || arc >= Self::path_free_distance(&points, NEUTRAL) {
                 self.wall_turn.active = true;
-                self.wall_turn.blind = !cone_in_view;
+                self.wall_turn.blind = !cone_in_view && !map_plan;
                 return Some(full);
             }
             return None;

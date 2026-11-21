@@ -34,7 +34,7 @@ impl Maneuver {
         if !scan.is_dict() {
             return;
         }
-        if scan.get("left_turn_goal").is_some() {
+        if scan.get("left_turn_goal").is_some() && !self.race_program {
             self.entry_kind = Some("junction");
             return;
         }
@@ -91,6 +91,22 @@ impl Maneuver {
 
     /// _lane_start_geometry(scan): (ok, evidence).
     fn lane_start_geometry(&self, scan: &V) -> (bool, V) {
+        let measured = self.measured_start_geometry(scan);
+        if measured.0
+            || !self.race_program
+            || !self.continue_route
+            || self.start_axis.hint.is_none()
+            || !py_eq(self.start_axis.hint.get("source_seq"), scan.get("seq"))
+            || !py_eq(self.start_axis.hint.get("source_at_ms"), scan.get("at_ms"))
+        {
+            return measured;
+        }
+        let mut hint = self.start_axis.hint.clone();
+        hint.set("lane_fit_diagnostic", measured.1.get("reason").clone());
+        (true, hint)
+    }
+
+    fn measured_start_geometry(&self, scan: &V) -> (bool, V) {
         let values = if scan.is_dict() { scan.get("corridor_candidates").clone() } else { V::None };
         let ranges = if scan.is_dict() { scan.get("ranges").clone() } else { V::None };
         if !values.is_list() || values.len() > 24 || !ranges.is_list() || ranges.len() != 360 {
@@ -220,18 +236,34 @@ impl Maneuver {
     /// _start_lane_handover_ready(scan, control).
     pub fn start_lane_handover_ready(&self, scan: &V, control: &V) -> bool {
         let target = &self.compact_target;
+        let geometry = if self.first_handover_measured(scan) {
+            Some((target.idx("range_m").f(), target.idx("bearing_left_rad").f()))
+        } else if self.use_field_guidance() {
+            self.field_map
+                .planning_center(scan, 0)
+                .map(|(x, y)| (x.hypot(y), y.atan2(x)))
+        } else {
+            None
+        };
         scan.is_dict()
             && !py_eq(scan.get("seq"), &V::from(self.last_seq))
             && self.first_approach.is_some()
-            && self.usable_target(target, scan)
-            && py_eq(target.idx("track_id"), self.first_approach.get("track_id"))
-            && target.idx("range_m").f() <= OPEN_HANDOVER_MAX_RANGE_M
-            && target.idx("bearing_left_rad").f() >= first_handover_bearing_rad()
+            && geometry.is_some_and(|(range, bearing)| {
+                range <= OPEN_HANDOVER_MAX_RANGE_M && bearing >= first_handover_bearing_rad()
+            })
             && control.is_dict()
             && control.get("command_acked").is_true()
             && motor_in(control.get("motor"), &DRIVE_MOTORS)
             && eq_i(control.get("servo"), self.servo)
             && self.servo > NEUTRAL
+    }
+
+    pub(super) fn first_handover_measured(&self, scan: &V) -> bool {
+        self.usable_target(&self.compact_target, scan)
+            && (py_eq(self.compact_target.get("track_id"), self.first_approach.get("track_id"))
+                || (self.use_field_guidance()
+                    && self.first_approach.get("basis").os() == Some("surveyed_first_cone_approach")
+                    && self.field_map.matches_observation(scan, &self.compact_target, 0)))
     }
 
     /// _start_side_wall(scan, heading).
@@ -325,7 +357,10 @@ impl Maneuver {
             return self.result(now);
         }
         let heading = self.compass.current(scan);
-        let approach = self.open_first_approach(scan);
+        let mut approach = self.open_first_approach(scan);
+        if approach.is_none() && self.use_field_guidance() {
+            approach = self.field_first_approach(scan);
+        }
         let held = self.target_tracker.held.clone();
         let mut walls = V::None;
         let (natural, source): (i64, &str);
@@ -337,7 +372,9 @@ impl Maneuver {
             self.first_approach = approach.clone();
             self._lane_start_slow = true;
             natural = approach.idx("target_pwm").i();
-            source = "first_support_approach";
+            source = if approach.get("support_source").os() == Some("surveyed_cone_and_localized_pose") {
+                "first_map_approach"
+            } else {"first_support_approach"};
         } else if self.first_approach.is_some() && held.is_dict() && py_eq(held.get("track_id"), self.first_approach.idx("track_id")) {
             natural = self.servo;
             source = "first_support_missing_frame_hold";
@@ -366,7 +403,12 @@ impl Maneuver {
         if target < NEUTRAL && (self._route_center_ack.is_none() || self.servo > NEUTRAL) {
             target = NEUTRAL;
         }
-        let cone = if approach.is_some() { self.compact_target.clone() } else { V::None };
+        let cone =
+            if approach.is_some() && approach.get("support_source").os() != Some("surveyed_cone_and_localized_pose") {
+                self.compact_target.clone()
+            } else {
+                V::None
+            };
         let wall_turn = self.wall_turn_command(scan, now, 1, &cone);
         if let Some(pwm) = wall_turn {
             target = if self.wall_turn.active { target.max(pwm) } else { pwm };
@@ -585,9 +627,34 @@ impl Maneuver {
 
     /// _open_loop_geometry(scan, target, identity, side, axis, pose).
     pub fn open_loop_geometry(&mut self, scan: &V, target: &V, identity: &V, side: i64, axis: f64, pose: Option<(f64, f64, f64, f64)>) -> V {
-        let Some(heading) = self.compass.current(scan) else { return V::None };
-        if self.full_target_points(target, scan, identity).is_none() {
-            return V::None;
+        let Some(heading) = self.compass.current(scan).or_else(||self.field_map.heading(scan)) else { return V::None };
+        let measured = self.full_target_points(target, scan, identity).is_some();
+        let cone = usize::from(side < 0);
+        let map_aim = if self.use_field_guidance() {
+            self.field_map
+                .heading(scan)
+                .and_then(|_| self.field_map.planner.aim(scan.idx("seq").i(), cone))
+        } else {
+            None
+        };
+        if !measured {
+            let Some(aim) = map_aim else { return V::None };
+            let Some(center) = self.field_map.planning_center(scan, cone) else {
+                return V::None;
+            };
+            return dict! {"source_seq"=>scan.get("seq").clone(),"track_id"=>identity.clone(),
+            "basis"=>"surveyed_trajectory_speed_preview","support_source"=>"surveyed_cone_and_localized_pose",
+            "support_center_left_m"=>V::from(center),"support_radius_m"=>self.slot_mut(side).radius.unwrap_or(0.10),
+            "axis_rad"=>axis,"compass_heading_rad"=>heading,"progress_rad"=>side as f64*(heading-axis),
+            "carrot_left_m"=>V::from(aim.point),"pursuit_mode"=>if aim.before>0. {"approach_line"} else {"circle"},
+            "before_tangent_point_m"=>aim.before,"lookahead_m"=>aim.lookahead,"pursuit_curvature_per_m"=>aim.curvature,
+            "target_pwm"=>aim.pwm,"current_pose_pwm"=>aim.pwm,"map_target_pwm"=>aim.pwm};
+        }
+        let floats = Self::ranges_floats(scan);
+        let bins = bins_of(target.idx("support_bins"));
+        let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));
+        if map_aim.is_some() {
+            self.field_map.observe_cone(scan, cone, center);
         }
         let rate = self.compass.rate;
         let race = self.race_inputs.is_some();
@@ -596,7 +663,7 @@ impl Maneuver {
         // y52: at 1.7-1.8 m/s cone two's 1.1 m pursuit swung right, left, then right and the
         // turn began abeam of the cone. Race loops look ahead in proportion to the speed
         // (cone one: its entry; cone two: the rear-wall speed), held for the loop.
-        let measured = if !race {
+        let measured_speed = if !race {
             None
         } else if side > 0 {
             self.start_lane_feedback.get("first_approach_drive").get("speed_now_mps").of()
@@ -605,15 +672,12 @@ impl Maneuver {
         };
         let loop_speed = {
             let slot = self.slot_mut(side);
-            if measured.is_some() {
-                slot.speed = measured;
+            if measured_speed.is_some() {
+                slot.speed = measured_speed;
             }
             slot.speed
         };
         let lookahead = OPEN_LOOKAHEAD_M * loop_speed.map_or(1., |v| pmax(1., v / OPEN_PREDICT_SPEED_MPS));
-        let floats = Self::ranges_floats(scan);
-        let bins = bins_of(target.idx("support_bins"));
-        let (center, radius0) = support_center(&floats, &bins, target.get("diameter_m"));
         if side < 0
             && py_eq(target.get("source_seq"), scan.get("seq"))
             && let Some(input) = self.race_inputs {
@@ -853,6 +917,29 @@ impl Maneuver {
         }
         if race {
             out.set("planning_deferred_bins", V::from(slot.planning_returns.deferred_bins.clone()));
+            out.set("support_source","current_lidar");
+            if let Some(aim)=map_aim {
+                out.set("map_target_pwm",aim.pwm);
+                out.set("lidar_target_pwm",pwm);
+                let sparse=target.get("map_assisted_sparse_returns").is_true();
+                let missing=self.field_map.missing_fraction();
+                if sparse || missing>0.15 {
+                    let geometric=(1.-missing)*(bins.len() as f64/5.).min(1.);
+                    let weight=if sparse {geometric} else {geometric.max(0.65)};
+                    let k=weight*curvature+(1.-weight)*aim.curvature;
+                    out.set("pursuit_curvature_per_m",k);
+                    out.set("target_pwm",clampi(NEUTRAL+round(ROUTE_PWM_PER_CURVATURE*k),nominal_right_limit_pwm(),SERVO_MAX));
+                    out.set("support_source","sparse_lidar_and_map");
+                }
+                if self
+                    .field_map
+                    .map_arc_has_more_room(scan, out.get("target_pwm").i(), aim.pwm)
+                {
+                    out.set("target_pwm", aim.pwm);
+                    out.set("pursuit_curvature_per_m", aim.curvature);
+                    out.set("steering_basis", "surveyed_board_clearance");
+                }
+            }
         }
         out
     }
@@ -890,6 +977,38 @@ impl Maneuver {
     }
 
     /// _open_first_approach(scan).
+    fn field_first_approach(&mut self, scan: &V) -> V {
+        let Some((x, y)) = self.field_map.planning_center(scan, 0) else {
+            return V::None;
+        };
+        let bearing = y.atan2(x);
+        let distance = x.hypot(y);
+        if !(first_acquire_bearing_rad().0..=first_acquire_bearing_rad().1).contains(&bearing)
+            || distance > FIRST_APPROACH_MAX_RANGE_M
+        {
+            return V::None;
+        }
+        let mut plan = self.open_loop_geometry(scan, &V::None, &V::Int(-1), 1, 0., None);
+        if plan.is_none() {
+            return plan;
+        }
+        let c = plan.get("carrot_left_m").l();
+        let (cx, cy) = (c[0].f(), c[1].f());
+        let length = cx.hypot(cy).max(1e-6);
+        if !strip_clear(
+            &scan_points(&Self::ranges_floats(scan), OPEN_APPROACH_CHECK_M + 1.),
+            (OPEN_APPROACH_CHECK_M * cx / length, OPEN_APPROACH_CHECK_M * cy / length),
+            Some((x, y)),
+            plan.idx("support_radius_m").f() + OPEN_SUPPORT_SKIP_M,
+        ) {
+            return V::None;
+        }
+        plan.update(&dict! {"range_m"=>distance,"bearing_left_rad"=>bearing,
+        "basis"=>"surveyed_first_cone_approach","approach_strip_clear"=>true});
+        self.open_loop = plan.clone();
+        plan
+    }
+
     fn open_first_approach(&mut self, scan: &V) -> V {
         let target = self.compact_target.clone();
         if !target.is_dict()
@@ -916,10 +1035,25 @@ impl Maneuver {
                 return V::None;
             }
         }
-        if self.first_approach.is_some() && !py_eq(self.first_approach.get("track_id"), target.idx("track_id")) {
+        let previous_id = if self.first_approach.get("support_source").os() == Some("surveyed_cone_and_localized_pose")
+        {
+            self._open_slots
+                .iter()
+                .find(|(side, _)| *side == 1)
+                .and_then(|(_, slot)| slot.key.as_ref())
+                .map(|(id, _)| id)
+        } else {
+            self.first_approach
+                .is_some()
+                .then(|| self.first_approach.get("track_id"))
+        };
+        if previous_id.is_some_and(|id| !py_eq(id, target.idx("track_id"))) {
             self.open_reset_loop(Some(1));
         }
         let id = target.idx("track_id").clone();
+        if self.full_target_points(&target, scan, &id).is_none() {
+            return V::None;
+        }
         let lp = self.open_loop_geometry(scan, &target, &id, 1, 0., None);
         if lp.is_none() {
             return V::None;
@@ -1008,14 +1142,28 @@ impl Maneuver {
         }
         let target = self.compact_target.clone();
         let held = self.target_tracker.held.clone();
-        if target.is_none() && held.is_dict() && py_eq(held.get("track_id"), &self.orbit_track_id) && progress.is_some() {
+        if self.use_field_guidance()
+            && target.get("confirmed").is_true()
+            && !py_eq(target.get("track_id"), &self.orbit_track_id)
+            && self.field_map.matches_observation(scan, &target, 0)
+        {
+            self.orbit_track_id = target.get("track_id").clone();
+            self.target_tracker.enable_close_maintenance(&self.orbit_track_id);
+        }
+        let map_available = self.use_field_guidance() && self.field_map.planning_center(scan, 0).is_some();
+        if !map_available
+            && target.is_none()
+            && held.is_dict()
+            && py_eq(held.get("track_id"), &self.orbit_track_id)
+            && progress.is_some()
+        {
             self.steering_target = self.servo;
             self.natural_steering_target = Some(self.servo);
             self.reason = "open_first_loop_missing_frame_hold".into();
             self.slew(now);
             return self.result(now);
         }
-        if !Self::open_target_usable(&target, scan, &self.orbit_track_id, 1) {
+        if !Self::open_target_usable(&target, scan, &self.orbit_track_id, 1) && !map_available {
             if progress.is_some_and(|p| p >= PI - open_late_exit_rad()) {
                 return self.open_first_pass(scan, now, control, "support_lost_near_heading_reversal");
             }
@@ -1117,10 +1265,16 @@ impl Maneuver {
         if self.race_inputs.is_some() { self.race_transfer.support_handed_over(); }
         self.race_light.entry_motion = Default::default();
         let target = self.second_target.clone();
-        self.second_track_id = target.idx("track_id").clone();
-        let id = self.second_track_id.clone();
-        self.second_tracker_mut().enable_close_maintenance(&id);
-        self._second_role_anchor = self.second_prior(&target, scan);
+        if self.open_confirmed_second(scan).is_some() {
+            self.second_track_id = target.idx("track_id").clone();
+            let id = self.second_track_id.clone();
+            self.second_tracker_mut().enable_close_maintenance(&id);
+            self._second_role_anchor = self.second_prior(&target, scan);
+        } else {
+            self.second_track_id = V::Int(-2);
+            self.role_distinct_evidence =
+                dict! {"basis"=>"localized_second_cone_approach","source_seq"=>scan.get("seq").clone()};
+        }
         self._second_recovering = false;
         self.second_target_handover_observed = true;
         self.second_orbit_since = Some(now);
@@ -1289,7 +1443,15 @@ impl Maneuver {
             tracked.set("ranges", V::list(masked));
             self._open_lookout_seq = Some(scan.idx("seq").i());
         }
-        let target = self.second_tracker_mut().update(&tracked, now, true, Some(heading), None);
+        let prior = if self.use_field_guidance() {
+            self.field_map
+                .prior(scan, self.second_tracker.as_ref().map_or(&V::None, |t| &t.target), 1)
+        } else {
+            Default::default()
+        };
+        let target = self
+            .second_tracker_mut()
+            .update_on_course(&tracked, now, true, Some(heading), None, prior);
         self.second_target = target;
         self.role_distinct_evidence = proof;
         self.second_acquisition_reason = Some(self.second_tracker.as_ref().unwrap().reason.clone());
@@ -1391,6 +1553,23 @@ impl Maneuver {
             channel.set("response_yaw_radps", rate);
             channel.set("response_control", "mean_curvature_over_response");
         }
+        let inconsistent = channel
+            .get("divider_lateral_m")
+            .of()
+            .zip(self.field_map.lower_divider_distance(scan))
+            .is_some_and(|(seen, mapped)| (seen - mapped).abs() > CHANNEL_BOARD_DRIFT_M);
+        if self.use_field_guidance()
+            && self.field_map.heading(scan).is_some()
+            && let Some(aim) = self.field_map.planner.aim(scan.idx("seq").i(), 1)
+            && (channel.is_none()
+                || inconsistent
+                || self
+                    .field_map
+                    .map_arc_has_more_room(scan, channel.get("target_pwm").i(), aim.pwm))
+        {
+            channel = dict! {"basis"=>"surveyed_transfer_trajectory","target_pwm"=>aim.pwm,"pursuit_curvature_per_m"=>aim.curvature,
+            "pursuit_point_left_m"=>V::from(aim.point)};
+        }
         let natural = if channel.is_some() {
             channel.idx("target_pwm").i()
         } else {
@@ -1433,7 +1612,15 @@ impl Maneuver {
             return self.result(now);
         };
         self.open_second_observation(scan, now, heading);
-        if self.open_confirmed_second(scan).is_some() {
+        let mapped = self.use_field_guidance()
+            && self.field_map.planning_center(scan, 1).is_some_and(|(x, y)| {
+                let (axis, _) = axis_frame(PI, heading, 1.);
+                x > FRONT_BODY_EXTENT_M
+                    && (x * axis.0 + y * axis.1) > FRONT_BODY_EXTENT_M
+                    && (x * axis.1 - y * axis.0).abs() <= OPEN_SECOND_BAND_HALF_M
+                    && x.hypot(y) <= OPEN_HANDOVER_MAX_RANGE_M
+            });
+        if self.open_confirmed_second(scan).is_some() || mapped {
             self.open_begin_second_loop(scan, now, control);
             self._second_plan_pending = Some((scan.idx("seq").clone(), scan.idx("at_ms").clone()));
             self.reason = "open_second_loop_plan_next_tick".into();
@@ -1526,11 +1713,7 @@ impl Maneuver {
         let loop_motion = self.second_loop_response_motion(now);
         let loop_pose = loop_motion.map_or(pose, |(rate, speed)| self.response_pose_with_speed(rate, speed));
         let id = self.second_track_id.clone();
-        let mut lp = if self.full_target_points(&target, scan, &id).is_none() {
-            V::None
-        } else {
-            self.open_loop_geometry(scan, &target, &id, -1, PI, Some(loop_pose))
-        };
+        let mut lp = self.open_loop_geometry(scan, &target, &id, -1, PI, Some(loop_pose));
         if lp.is_none() {
             self.transfer_drive(scan, now, None, self.servo);
             if progress.is_some_and(|p| p >= PI - open_late_exit_rad()) {
@@ -1710,6 +1893,21 @@ impl Maneuver {
         lateral: Option<f64>,
     ) -> Option<(V, (f64, f64), f64, i64)> {
         let mut lane = self.open_lane_target(scan, heading);
+        if self.use_field_guidance() && matches!(self.route_stage, "light_entry" | "light_lane") {
+            let mapped = self.field_map.finish_lane(scan);
+            // A sightline across the open field can be mislabeled as the outer
+            // channel wall. Only replace an absent or spatially contradictory fit.
+            if mapped.is_some()
+                && (lane.is_none()
+                    || lane
+                        .get("center_lateral_m")
+                        .of()
+                        .zip(mapped.get("center_lateral_m").of())
+                        .is_some_and(|(a, b)| (a - b).abs() > 0.35))
+            {
+                lane = mapped;
+            }
+        }
         if lane.is_none() {
             return None;
         }

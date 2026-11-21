@@ -312,6 +312,14 @@ pub struct CandidateArgs {
     pub max_range_m: f64,
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct TrackingPrior {
+    /// Last measured surface point transported into this scan's body frame.
+    pub carried: Option<(f64, f64)>,
+    /// Surveyed (or subsequently observed) cone centre in this scan's frame.
+    pub center: Option<(f64, f64)>,
+}
+
 impl Default for CandidateArgs {
     fn default() -> Self {
         CandidateArgs {
@@ -696,6 +704,28 @@ impl CompactTargetTracker {
         only_support_bins: Option<&[i64]>,
         predicted: Option<(f64, f64)>,
     ) -> V {
+        self.update_on_course(
+            scan,
+            now,
+            acquire,
+            heading_rad,
+            only_support_bins,
+            TrackingPrior {
+                carried: predicted,
+                center: None,
+            },
+        )
+    }
+
+    pub fn update_on_course(
+        &mut self,
+        scan: &V,
+        now: f64,
+        acquire: bool,
+        heading_rad: Option<f64>,
+        only_support_bins: Option<&[i64]>,
+        prior: TrackingPrior,
+    ) -> V {
         if let Some(bins) = only_support_bins
             && (bins.is_empty() || bins.iter().any(|&i| !(0..360).contains(&i)))
         {
@@ -786,6 +816,16 @@ impl CompactTargetTracker {
         let close_bound = confirmed_old && py_eq(old.idx("track_id"), &opt_i(self.close_maintenance_track_id));
         let maintenance = self.tolerant && confirmed_old;
         let floats = floats(ranges);
+        let map_center = prior
+            .center
+            .filter(|(x, y)| x.hypot(*y) <= self.acquisition_max_range_m + MAX_DIAMETER_M);
+        let normal_min = if maintenance {
+            TOLERANT_MAINTENANCE_MIN_POINTS
+        } else {
+            self.acquisition_min_points
+                .unwrap_or(if self.tolerant { TOLERANT_MIN_POINTS } else { MIN_POINTS })
+        };
+        let near_map = |v: &V| map_center.is_some_and(|p| dist(point_of(v.idx("point_left_m")), p) <= 0.27);
         let mut found = candidates(
             ranges,
             CandidateArgs {
@@ -794,14 +834,21 @@ impl CompactTargetTracker {
                 tolerant: self.tolerant,
                 maintenance,
                 min_range_m: if close_bound { CLOSE_MAINTENANCE_MIN_RANGE_M } else { MIN_RANGE_M },
-                min_points: if maintenance { None } else { self.acquisition_min_points },
+                min_points: Some(if map_center.is_some() { 2 } else { normal_min }),
                 max_range_m: self.acquisition_max_range_m,
             },
         );
-        for candidate in found.iter_mut() {
+        found.retain_mut(|candidate| {
+            if (candidate.idx("support_bins").l().len() as i64) < normal_min {
+                if !near_map(candidate) {
+                    return false;
+                }
+                candidate.set("map_assisted_sparse_returns", true);
+            }
             let close = candidate.idx("support_bins").l().iter().any(|i| floats[i.i() as usize].unwrap() < MIN_RANGE_M);
             candidate.set("close_maintenance_observation", close);
-        }
+            true
+        });
         if let Some(only) = only_support_bins {
             let mut want: Vec<i64> = only.to_vec();
             want.sort();
@@ -825,14 +872,26 @@ impl CompactTargetTracker {
         {
             reference = rotated_observation(&old, Some(heading - old.get("compass_heading_rad").f()));
         }
-        if let Some(point) = predicted.filter(|p| p.0.is_finite() && p.1.is_finite())
+        if let Some(point) = prior.carried.filter(|p| p.0.is_finite() && p.1.is_finite())
             && old.is_some()
         {
-            reference.set("point_left_m", V::from(point));
-            reference.set("bearing_left_rad", point.1.atan2(point.0));
+            let mut transported = reference.clone();
+            transported.set("point_left_m", V::from(point));
+            transported.set("bearing_left_rad", point.1.atan2(point.0));
+            // Keep a unique real match from the original tracker if only the
+            // surveyed transport misses. The map cannot veto that observation.
+            if prior.center.is_none()
+                || found.iter().any(|c| associated(c, &transported, slack))
+                || found.iter().filter(|c| associated(c, &reference, slack)).count() != 1
+            {
+                reference = transported;
+            }
         }
         if self.select_associated && allow_boundary_gap {
             found.retain(|c| associated(c, &reference, slack));
+        }
+        if found.len() > 1 && map_center.is_some() && found.iter().filter(|c| near_map(c)).count() == 1 {
+            found.retain(near_map);
         }
         self.held = V::None;
         if found.len() != 1 {

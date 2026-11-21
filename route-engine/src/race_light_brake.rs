@@ -211,6 +211,7 @@ pub struct LightBrake {
     gap_fusion: Option<GapFusion>,
     gap_reference_reset: bool,
     release_over_gap: Option<f64>,
+    require_coast_in_zone: bool,
 }
 
 impl LightBrake {
@@ -220,11 +221,19 @@ impl LightBrake {
         self.gap_reference_reset = true;
     }
 
-    /// Finish-stage early-release safeguard: if holding 1300 would stop short of
-    /// `max_gap` (rear outside the 80 cm finish zone), allow releasing once coast
-    /// alone still stops at or before `target`. Left `None` for the light zone.
+    /// If holding 1300 would stop with the rear outside the zone, release once
+    /// coasting still stops before the target. The light uses its surveyed beam
+    /// only with corroborating field localization.
     pub fn set_release_over_gap(&mut self, max_gap: Option<f64>) {
         self.release_over_gap = max_gap.filter(|v| v.is_finite() && *v > 0.);
+        self.require_coast_in_zone = false;
+    }
+
+    /// A lamp stop has one brake application. Release it to coast only if
+    /// that coast itself is projected to put the entire car beyond the beam.
+    pub fn set_surveyed_release_zone(&mut self, max_gap: Option<f64>) {
+        self.set_release_over_gap(max_gap);
+        self.require_coast_in_zone = true;
     }
 
     /// Observe once per new scan. All distances, speeds and decelerations are
@@ -333,7 +342,9 @@ impl LightBrake {
                     }
                     if now - since >= LIGHT_BRAKE_RESPONSE_S + 0.2
                         && self.release_over_gap.is_some_and(|max_gap| {
-                            p.brake_stop > max_gap && p.release_stop >= target
+                            p.brake_stop > max_gap
+                                && p.release_stop >= target
+                                && (!self.require_coast_in_zone || p.release_stop <= max_gap)
                         })
                     {
                         return Some("coast_reaches_zone");

@@ -1104,6 +1104,7 @@ fn run(p: &mut Program) -> i32 {
     };
     if let Some(session) = &mut p.sup.session {
         session.motion.race_inputs = Some(Default::default());
+        session.motion.field_map.planner.start();
         session.motion.race_surface.set_initial_load(p.o.surface_initial_load);
         // Enable crosswalk odometry immediately when pure-Rust vision is attached so
         // moving fallback always has lidar rear-wall history even before YOLO arrives.
@@ -1164,9 +1165,13 @@ fn run(p: &mut Program) -> i32 {
             let waited = (tick_at - at).max(0.);
             (waits, wait_sum, wait_max) = (waits + 1, wait_sum + waited, wait_max.max(waited));
         }
-        if let Some(input) = p.sup.session.as_mut().and_then(|s| s.motion.race_inputs.as_mut()) {
-            input.yaw_rate = p.imu.yaw.at(tick_at);
-            input.forward_integral = p.imu.forward_integral.at(tick_at);
+        if let Some(s) = p.sup.session.as_mut()
+            && s.motion.race_inputs.is_some()
+        {
+            s.motion.set_live_imu(crate::motion_sensors::RaceInputs {
+                yaw_rate: p.imu.yaw.at(tick_at),
+                forward_integral: p.imu.forward_integral.at(tick_at),
+            });
         }
         if let Err(error) = py_try(|| p.sup.autonomy_tick(&V::Float(tick_at))) {
             p.sup.halt(&format!("tick_internal_error_{}: {}", error.kind.name(), error.msg));

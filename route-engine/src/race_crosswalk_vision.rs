@@ -69,22 +69,7 @@ impl Default for LaneLidarHint {
     }
 }
 
-/// One pure-Rust crosswalk observation sent to the control thread.
-#[derive(Clone, Debug)]
-pub struct RustCrosswalkObs {
-    pub frame: i64,
-    pub captured_mono_s: f64,
-    pub front_to_edge_m: f64,
-    pub edge_y: f64,
-    pub pitch_rad: f64,
-    pub pitch_source: &'static str,
-    pub score: f64,
-    pub stripes: usize,
-    pub gaps: usize,
-    pub left_gap_x_m: Option<f64>,
-    pub gap_to_crosswalk_m: Option<f64>,
-    pub compute_ms: f64,
-}
+pub use crate::motion_sensors::RustCrosswalkObs;
 
 /// Summary telemetry for summary.json.
 #[derive(Clone, Debug, Default)]

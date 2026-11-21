@@ -35819,5 +35819,157 @@
         "work/vehicle-dynamic-deploy-20261008/y114-vehicle-readback-20261121.json"
       ]
     }
+  },
+  "y115_surveyed_course_parallel_loops_20261121": {
+    "date": "2026-11-21",
+    "candidate": "y115 / engine 220",
+    "baseline": "y114 / engine 219 (41337e1)",
+    "report": "docs/y115-survey-20261121/README.md",
+    "course": {
+      "start": 57,
+      "controller_finish": 50,
+      "body_stopped_in_finish": 55,
+      "physical_contact": 1,
+      "task_pass": 50,
+      "light_stopped_in_zone": 56,
+      "crosswalk_ok": 57
+    },
+    "replayed_trial": {
+      "first_confirmed_old_seq": 98,
+      "first_confirmed_new_seq": 88,
+      "first_confirmed_earlier_s": 0.99,
+      "first_left_pwm_ge1520_old_seq": 98,
+      "first_left_pwm_ge1520_new_seq": 89,
+      "first_left_earlier_s": 0.901,
+      "scan_99": {
+        "old_id": null,
+        "new_id": 1,
+        "new_pwm": 1561
+      },
+      "first_id_98_106": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "school_y113_7_scan316_radar_xy_yaw": [
+        7.543872249822413,
+        3.5466644883798515,
+        0.009424881644572105
+      ],
+      "host_map_update_median_us": 19.0,
+      "host_map_update_p95_us": 27.18
+    },
+    "sunlight_control_audit": {
+      "started": 57,
+      "crossed_start_line": 57,
+      "correct_topology": 57,
+      "crossed_before_green": 0,
+      "steering": {
+        "control_ticks": 92175,
+        "paired_ack_ticks": 92061,
+        "ack_mismatches": 0,
+        "active_loop_frames": 3249,
+        "map_only": 1149,
+        "two_plans_available": 2100,
+        "candidate_sign_differs": 577,
+        "target_limited": 188,
+        "slew_in_progress": 365,
+        "fused": 1212,
+        "map_clearer_arc": 41,
+        "old_lane_retakes": 0,
+        "plan_to_natural_difference": 0
+      },
+      "ranges_at_y2": [
+        [
+          6.45,
+          7.01
+        ],
+        [
+          3.66,
+          4.56
+        ],
+        [
+          0.81,
+          1.54
+        ]
+      ],
+      "field_p95_range_m": [
+        0.194,
+        0.56
+      ],
+      "first_right_reentry": []
+    },
+    "imu_spike_study": {
+      "runs": 187,
+      "started": 187,
+      "controller_finish": 157,
+      "full_pass": 154,
+      "contacts": 5,
+      "red_violations": 0,
+      "recovery": {
+        "eligible": 2490,
+        "observed": 2490,
+        "p50_s": 0.14,
+        "p95_s": 0.18
+      }
+    },
+    "sparse_rays": {
+      "(1, False)": {
+        "runs": 6,
+        "started": 6,
+        "controller_finish": 6,
+        "full_pass": 5,
+        "contacts": 0,
+        "red_violations": 0
+      },
+      "(1, True)": {
+        "runs": 6,
+        "started": 6,
+        "controller_finish": 4,
+        "full_pass": 3,
+        "contacts": 2,
+        "red_violations": 0
+      },
+      "(2, False)": {
+        "runs": 6,
+        "started": 6,
+        "controller_finish": 6,
+        "full_pass": 6,
+        "contacts": 0,
+        "red_violations": 0
+      },
+      "(2, True)": {
+        "runs": 6,
+        "started": 6,
+        "controller_finish": 6,
+        "full_pass": 6,
+        "contacts": 0,
+        "red_violations": 0
+      }
+    },
+    "build_validation": {
+      "rust_tests_main_test_committee": [
+        76,
+        78,
+        76
+      ],
+      "existing_clippy_warnings": 32,
+      "python_console_tests": 970
+    },
+    "vehicle_desktop_source": {
+      "folder": "/home/bianbu/Desktop/Rust",
+      "variant": "N10",
+      "baud": 230400,
+      "packet_bytes": 58,
+      "files_verified": 440
+    },
+    "physical_output_executed_for_new_code": false,
+    "active_vehicle_label": "y114"
   }
 }

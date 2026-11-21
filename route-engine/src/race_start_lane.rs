@@ -25,6 +25,95 @@ struct Wall {
     points: usize,
 }
 
+/// A placed competition car starts along +x. A single real side board can
+/// refine that heading; successive calibrated gyro samples carry it when
+/// neither side makes a line. This is an alternate input, never a start veto.
+#[derive(Clone, Debug, Default)]
+pub struct StartAxis {
+    stamp: Option<(i64, i64)>,
+    yaw: f64,
+    rate: Option<f64>,
+    pub hint: V,
+}
+
+impl StartAxis {
+    pub fn observe(&mut self, scan: &V, rate: Option<f64>, measured: Option<f64>, width: f64) {
+        let (Some(seq), Some(ms)) = (scan.get("seq").oi(), scan.get("at_ms").oi()) else {
+            self.hint = V::None;
+            return;
+        };
+        if self.stamp == Some((seq, ms)) {
+            return;
+        }
+        let previous = self.stamp;
+        self.stamp = Some((seq, ms));
+        self.hint = V::None;
+        let Some((ranges, true)) = crate::compact_target::ranges_info(scan.get("ranges")) else {
+            return;
+        };
+        if !ranges.iter().any(Option::is_some) {
+            return;
+        }
+        let raw = scan.get("ranges").l();
+        let rate = rate.filter(|v| v.is_finite());
+        let dt = previous.map_or(0., |(_, old)| {
+            ((ms - old) as f64 / 1000.).clamp(0., crate::helpers::SCAN_AGE_S)
+        });
+        let predicted = self.yaw + dt * self.rate.zip(rate).map_or(rate.unwrap_or(0.), |(a, b)| 0.5 * (a + b));
+        self.rate = rate;
+        let right_count = RIGHT_BINS.filter(|&i| ranges[i].is_some()).count();
+        let left_count = LEFT_BINS.filter(|&i| ranges[i].is_some()).count();
+        let side = [(true, fit(raw, RIGHT_BINS)), (false, fit(raw, LEFT_BINS))]
+            .into_iter()
+            .filter_map(|(right, wall)| Some((right, wall?)))
+            .filter(|(right, w)| {
+                w.intercept * if *right { 1. } else { -1. } > 0.
+                    && w.intercept.abs() < width + 0.25
+                    && crate::py::wrap(w.slope.atan() - predicted).abs() < 35_f64.to_radians()
+            })
+            .max_by_key(|(_, w)| w.points);
+        self.yaw = measured
+            .or_else(|| side.as_ref().map(|(_, w)| w.slope.atan()))
+            .unwrap_or(predicted);
+        let offset = side.as_ref().map(|(right, w)| {
+            let dist = w.intercept.abs() / w.slope.hypot(1.);
+            if *right { width * 0.5 - dist } else { dist - width * 0.5 }
+        });
+        let basis = if measured.is_some() {
+            "current_compass"
+        } else if side.is_some() {
+            "single_observed_side"
+        } else if previous.is_some() && rate.is_some() {
+            "placement_axis_and_imu"
+        } else {
+            "confirmed_placement_axis"
+        };
+        self.hint = crate::dict! {"source_seq"=>seq,"source_at_ms"=>ms,"reason"=>V::None,"width_m"=>width,
+        "width_source"=>"surveyed_start_channel","heading_left_rad"=>-self.yaw,"compass_heading_rad"=>self.yaw,
+        "center_offset_left_m"=>offset.unwrap_or(0.),"body_gap_m"=>V::None,"front_m"=>ranges[0],
+        "start_axis_source"=>basis,"left_side_returns"=>left_count,"right_side_returns"=>right_count,
+        "observed_side"=>side.as_ref().map(|(right,_)|if *right {"right"} else {"left"})};
+    }
+
+    pub fn carry_compass(&self, compass: &mut crate::helpers::WallCompass) {
+        let Some((_, ms)) = self.stamp else { return };
+        if self.hint.is_none() {
+            return;
+        }
+        let at = ms as f64 / 1000.;
+        let side = self.hint.get("start_axis_source").os() == Some("single_observed_side");
+        compass.heading = Some(self.yaw);
+        compass.at_s = Some(at);
+        compass.rate = self.rate.unwrap_or(0.);
+        if side {
+            compass.measured_at_s = Some(at);
+            compass.last_measurement = Some((self.yaw, at));
+        }
+        compass.evidence = crate::dict! {"source_at_ms"=>ms,"heading_rad"=>self.yaw,"rate_rad_s"=>compass.rate,
+        "basis"=>"placed_race_start_axis","heading_source"=>self.hint.get("start_axis_source").clone(),"measured"=>side};
+    }
+}
+
 /// Median-of-slopes line through one sector, y to the right of the car axis.
 fn fit(ranges: &[V], bins: std::ops::RangeInclusive<usize>) -> Option<Wall> {
     let points: Vec<(f64, f64)> =

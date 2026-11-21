@@ -1039,7 +1039,14 @@ impl WallCompass {
     }
 
     pub fn current(&self, scan: &V) -> Option<f64> {
-        let (Some(heading), Some(measured)) = (self.heading, self.measured_at_s) else { return None };
+        let reference_at = if self.evidence.get("basis").os() == Some("placed_race_start_axis") {
+            self.at_s
+        } else {
+            self.measured_at_s
+        };
+        let (Some(heading), Some(measured)) = (self.heading, reference_at) else {
+            return None;
+        };
         if !scan.is_dict() || !scan.get("at_ms").is_int() {
             return None;
         }

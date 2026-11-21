@@ -339,7 +339,7 @@ impl Maneuver {
                 || inner.is_some_and(|v| on_side(left - v))
                 || known.iter().any(|leg| (leg.at(1).f() - left).abs() <= LIGHT_LEG_LATERAL_M);
             if edge >= LIGHT_POST_JUMP_M
-                || (along.abs() <= LIGHT_SENSOR_TO_GANTRY_M + FRONT_BODY_EXTENT_M && near_side)
+                || (along.abs() <= self.optical_spacing() + FRONT_BODY_EXTENT_M && near_side)
             {
                 posts.push((along, left));
             }
@@ -453,12 +453,33 @@ impl Maneuver {
         if dt > limit { None } else { Some(line.idx("along_m").f() - travel) }
     }
 
+    fn optical_spacing(&self) -> f64 {
+        if self.race_program {
+            self._light_line
+                .get("station_spacing_m")
+                .of()
+                .filter(|d| *d > 0.)
+                .unwrap_or_else(crate::race_field_map::beam_spacing)
+        } else {
+            LIGHT_SENSOR_TO_GANTRY_M
+        }
+    }
+
     /// _light_line_ahead(scan, heading, lane, now): lidar to the light line along the axis.
     pub(super) fn light_line_ahead(&mut self, scan: &V, heading: f64, lane: &V, now: f64) -> Option<f64> {
         let at = scan.idx("at_ms").i() as f64 / 1000.;
         let race = self.race_inputs.is_some();
-        let divider = self.race_inputs.and_then(|input| self.race_light.project(scan, heading, now, input));
-        let board = divider.zip(self.race_light.landmark()).map(|(d,(_,offset))| d+offset)
+        let measured_divider = self
+            .race_inputs
+            .and_then(|input| self.race_light.project(scan, heading, now, input));
+        let divider = measured_divider.or_else(|| {
+            self.use_field_guidance()
+                .then(|| self.field_map.gantry_ahead(scan))
+                .flatten()
+        });
+        let board = measured_divider
+            .zip(self.race_light.landmark())
+            .map(|(d, (_, offset))| d + offset)
             .or_else(|| self.lane_front_range(scan));
         let last_plane = self._light_line.get("along_m").of();
         let transported = last_plane.zip(board).zip(self._light_line.get("board_m").of())
@@ -666,9 +687,25 @@ impl Maneuver {
         if !self.light_vision || matches!(self.light_stop_state, Some("waiting" | "released" | "passed")) {
             return None;
         }
-        let ahead = self.light_line_ahead(scan, heading, lane, now);
+        let observed = self.light_line_ahead(scan, heading, lane, now);
+        let surveyed = self
+            .use_field_guidance()
+            .then(|| self.field_map.gantry_ahead(scan))
+            .flatten()
+            .filter(|d| *d > FRONT_BODY_EXTENT_M || self.light_stop_state == Some("approach"));
+        let use_survey = surveyed.is_some_and(|d| {
+            observed.is_none_or(|seen| {
+                (seen - d).abs() > LIGHT_LINE_JUMP_M && self._light_line.get("station_spacing_m").of().is_none()
+            })
+        });
+        let ahead = if use_survey { surveyed } else { observed };
+        if use_survey != self.race_light.using_survey {
+            self.race_light.ranges.clear();
+            self.race_light_brake.reset_gap_fusion();
+            self.race_light.using_survey = use_survey;
+        }
         if self.race_inputs.is_some() && !self.race_light.speed_uses_gantry
-            && ahead.is_some() && self._light_line.has("confirmed_seq")
+            && !use_survey && ahead.is_some() && self._light_line.has("confirmed_seq")
             && self._light_line.get("source").os() == Some("legs") {
             // y60: the end-wall/divider reference jumped13.7cm while the real
             // legs moved smoothly, producing a false speed rise before braking.
@@ -704,7 +741,7 @@ impl Maneuver {
                             "position_reference" => self.race_light.position_diagnostics(),
                             "end_wall_offset_m" => self.race_light.landmark().map(|v| v.1),
                             "observations" => self.race_light.landmark().map(|v| v.0 as i64),
-                            "beam_ahead_of_front_m" => d-FRONT_BODY_EXTENT_M-LIGHT_SENSOR_TO_GANTRY_M
+                            "beam_ahead_of_front_m" => d-FRONT_BODY_EXTENT_M-self.optical_spacing()
                         });
                     }
                     return prior;
@@ -774,12 +811,15 @@ impl Maneuver {
         if ahead.is_none() || (approach && (!red_latched || self.light_stop_evidence.has("gantry"))) {
             return ahead.or(prior);
         }
-        let evidence = dict! {
+        let mut evidence = dict! {
             "source_seq" => scan.idx("seq").clone(), "received_at" => scan.idx("received_at").clone(),
             "route_stage" => self.route_stage, "compass_heading_rad" => heading, "line" => self._light_line.clone(),
             "seen" => V::list(self._light_gantry_seen.clone()),
-            "basis" => "gantry_legs_confirmed_on_consecutive_scans",
+            "basis" => if use_survey {"surveyed_gantry_and_localized_pose"} else {"gantry_legs_confirmed_on_consecutive_scans"},
         };
+        if use_survey {
+            evidence.set("surveyed_along_m", surveyed);
+        }
         self.light_stop_state = Some("approach");
         if !red_latched {
             (self._light_gantry_since, self._light_red_frames, self._light_seen) = (Some(now), 0, false);
@@ -816,15 +856,18 @@ impl Maneuver {
         let rear_extent = lateral_extent
             + if axis_cos >= 0. { REAR_BODY_EXTENT_M * axis_cos } else { -FRONT_BODY_EXTENT_M * axis_cos };
         let gap = ahead.map(|a| a - front_extent);
-        let to_sensor = gap.map(|g| g - LIGHT_SENSOR_TO_GANTRY_M);
-        let reference = if self.race_light.speed_uses_gantry {
+        let zone_length = self.optical_spacing();
+        let to_sensor = gap.map(|g| g - zone_length);
+        let reference = if self.race_light.using_survey {ahead} else if self.race_light.speed_uses_gantry {
             (self._light_line.get("source").os() == Some("legs")).then_some(ahead).flatten()
         } else { self.race_light.prior_ahead.or(ahead).or_else(|| self.lane_front_range(scan)) };
         let (speed, current_speed) = self.race_light.measure_speed(scan, reference, input.forward_integral, axis_cos);
         // The same fresh physical cone that carries the gap also measures
         // entry motion before enough aligned gantry sightings are available.
         let current_speed = current_speed.or_else(|| self.race_light.entry_motion.speed(now, input.forward_integral)
-            .map(|v| (v * axis_cos).max(0.)));
+            .map(|v| (v * axis_cos).max(0.))).or_else(|| {
+                self.use_field_guidance().then(||self.field_map.axis_speed(scan)).flatten()
+            });
         if let Some(v) = current_speed.or(speed) { self.race_light.last_speed = Some((now, v)); }
         let held = self.race_light.last_speed.filter(|(at, _)| now-at <= LANE_SPEED_HOLD_S).map(|(_,v)| v);
         let v = current_speed.or(speed).or(held);
@@ -833,6 +876,19 @@ impl Maneuver {
         // component of drag over the coast from the present heading to straight.
         let axial_decel = decel * (1. + axis_cos.max(0.)) * 0.5;
         let brake_model = BrakeModel::light(axis_cos, axial_decel);
+        let surveyed_zone = self.use_field_guidance()
+            && self.field_map.two_measured_axes(scan)
+            && self
+                .field_map
+                .gantry_ahead(scan)
+                .zip(ahead)
+                .is_some_and(|(mapped, observed)| (mapped - observed).abs() <= LIGHT_LINE_JUMP_M);
+        // If the single brake would leave the rear short of the surveyed beam,
+        // the existing brake can release to neutral while coasting still stops
+        // before the target. Red/green release and the three stop sites are independent.
+        self.race_light_brake.set_surveyed_release_zone(
+            (surveyed_zone && to_sensor.is_some_and(|d| d <= 0.)).then_some(zone_length - front_extent - rear_extent),
+        );
         // Fuse observation corrections once, then let cruise and brake use
         // the same continuous position estimate. Zone checks below keep the
         // measured front/rear gaps, never a filtered declaration of success.
@@ -840,7 +896,7 @@ impl Maneuver {
             axial_decel, brake_model, VISIBLE_LIGHT_STOP_GAP_M);
         let control_gap = self.race_light_brake.control_gap(now, input.forward_integral).or(gap);
         let lag = crate::motion_sensors::ESC_COAST_DELAY_S;
-        let beam_speed = (2.*decel*(LIGHT_SENSOR_TO_GANTRY_M-VISIBLE_LIGHT_STOP_GAP_M)).sqrt();
+        let beam_speed = (2. * decel * (self.optical_spacing() - VISIBLE_LIGHT_STOP_GAP_M)).sqrt();
         let (_, tail) = self.lane_pipeline(now, lag, lag, 0.);
         let (step, acceleration) = self.race_light.approach_step(scan, input.forward_integral, axis_cos);
         // d(v_body*cos(heading))/dt includes the change of projection as the
@@ -925,7 +981,7 @@ impl Maneuver {
                 // the beam has started, and keep going only once that is overdue.
                 LightRoll::Coast | LightRoll::ZoneCoast
                     if running_out && (!crossed || red_due) => LightRoll::Through,
-                LightRoll::Through if crossed && !red_due && rear_gap.is_some_and(|g| g <= LIGHT_ZONE_M) => LightRoll::ZoneCoast,
+                LightRoll::Through if crossed && !red_due && rear_gap.is_some_and(|g| g <= zone_length) => LightRoll::ZoneCoast,
                 phase => phase,
             };
         }
@@ -952,14 +1008,47 @@ impl Maneuver {
         });
         let motor = self.race_light_brake.command(now, input.forward_integral)
             .unwrap_or(motor);
-        self.lane_motor = motor;
-        let rear_past_sensor = rear_gap.map(|g| LIGHT_ZONE_M-g);
+        let rear_past_sensor = rear_gap.map(|g| zone_length - g);
         let whole_in_zone = gap.is_some_and(|g| g >= 0.) && rear_past_sensor.is_some_and(|d| d > 0.);
+        // A used brake can already have stopped the car upstream of the
+        // optical beam. Starting the ten-second clock there would release it
+        // before the real lamp cycle even starts. Complete this same stop
+        // using the existing starting and rolling commands, then coast.
+        let surveyed_gap = self.field_map.gantry_ahead(scan).map(|d| d - front_extent);
+        let joint_gap = surveyed_gap.zip(gap).filter(|_| surveyed_zone).map(|(a, b)| a.min(b));
+        let short = joint_gap.is_some_and(|g| g > zone_length - front_extent - rear_extent);
+        let speed_now = current_speed.or(speed);
+        if (self.race_light_brake.is_used() || (red && !self.race_light_brake.is_active()))
+            && short
+            && speed_now.is_some_and(|s| s < LIGHT_RESTART_MPS)
+        {
+            self.race_light.completing_surveyed_stop = true;
+        }
+        let coast_gap = joint_gap
+            .zip(speed_now)
+            .map(|(g, s)| g - s * lag - s * s / (2. * axial_decel));
+        if coast_gap.is_none_or(|g| g <= VISIBLE_LIGHT_STOP_GAP_M) {
+            self.race_light.completing_surveyed_stop = false;
+        }
+        self.lane_motor = if self.race_light.completing_surveyed_stop {
+            if speed_now.is_some_and(|s| s < LIGHT_RESTART_MPS) {
+                TRIAL_MOTOR
+            } else {
+                ROLLING_HOLD_MOTOR
+            }
+        } else {
+            motor
+        };
         // Gantry location and detected colour are independent. y90-3/-4 had
         // completed the brake inside the zone, but no red meant wait_since
         // never started and the used brake kept neutral for another26s.
-        let confirmed_stop = self.race_light_brake.stopped() && self.light_stop_evidence.has("gantry");
-        let stopped = (red || confirmed_stop) && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
+        let confirmed_stop = (self.race_light_brake.stopped()
+            || (self.race_light_brake.is_used() && surveyed_zone && whole_in_zone))
+            && self.light_stop_evidence.has("gantry");
+        let stopped = (red || confirmed_stop)
+            && !self.race_light.completing_surveyed_stop
+            && !short
+            && current_speed.or(speed).is_some_and(|s| s < LIGHT_RESTART_MPS)
             && self._power_cmd_at.is_none_or(|at| now-at >= lag);
         let basis = stopped.then(|| match (red, whole_in_zone) {
             (true, true) => "stopped_after_camera_red",
@@ -968,11 +1057,12 @@ impl Maneuver {
             (false, false) => "stopped_at_confirmed_gantry_outside_zone_color_unconfirmed",
         }.to_string());
         let feedback = dict! {"goal" => "light", "front_range_m" => ahead, "front_gap_m" => gap,
+            "completing_surveyed_stop"=>self.race_light.completing_surveyed_stop,"surveyed_front_gap_m"=>surveyed_gap,
             "position_reference" => self.race_light.position_diagnostics(),
             "control_front_gap_m" => control_gap, "speed_fusion" => self.race_light.speed_fusion_diagnostics(),
             "speed_reference_source" => if self.race_light.speed_uses_gantry { "confirmed_gantry_legs" } else { "pre_gantry_preview" },
             "speed_reference_m" => reference,
-            "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => LIGHT_SENSOR_TO_GANTRY_M,
+            "sensor_ahead_of_front_m" => to_sensor, "sensor_to_gantry_m" => self.optical_spacing(),
             "speed_mps" => speed, "speed_now_mps" => current_speed, "beam_coast_speed_mps" => beam_speed,
             "stop_target_gap_m" => VISIBLE_LIGHT_STOP_GAP_M, "predicted_stop_gap_m" => predicted, "coast_decel_mps2" => decel,
             "body_coast_stop_if_renewed_m" => coast_if_renewed,

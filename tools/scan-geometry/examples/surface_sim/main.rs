@@ -46,6 +46,18 @@ mod race_crosswalk_stop;
 mod race_speed_kalman;
 #[path = "../../../../route-engine/src/race_first_cone.rs"]
 mod race_first_cone;
+#[path = "../../../../route-engine/src/race_field_map.rs"]
+mod race_field_map;
+#[path = "../../../../route-engine/src/race_imu_fusion.rs"]
+mod race_imu_fusion;
+#[path = "../../../../route-engine/src/race_field_path.rs"]
+mod race_field_path;
+#[path = "../../../../route-engine/src/race_scan.rs"]
+mod race_scan;
+#[path = "../../../../route-engine/src/race_end_board.rs"]
+mod race_end_board;
+// The simulator supplies camera observations without starting a hardware worker.
+use motion_sensors as race_crosswalk_vision;
 #[path = "../../../../route-engine/src/race_start_lane.rs"]
 mod race_start_lane;
 #[path = "../../../../route-engine/src/race_surface.rs"]
@@ -61,6 +73,7 @@ mod race_transfer;
 #[path = "../../../../route-engine/src/supervisor.rs"]
 mod supervisor;
 mod world;
+mod imu_fault;
 
 use plant::{Plant, Pose, number};
 use py::V;
@@ -127,18 +140,65 @@ fn scan(
     // The N10 collects increasing raw angles. Vehicle calibration rotates raw
     // bins by +5 into body coordinates; the age seam rotates with those bins.
     let yaw_bins = number(sensors, "lidar_clockwise_yaw_bins", 5.).round() as i64;
-    let ranges: Vec<Option<f64>> = (0..360)
+    let sun = &sensors["sunlight"];
+    let direction = number(sun,"world_direction_deg",0.).to_radians();
+    let half_angle = number(sun,"half_angle_deg",60.).to_radians();
+    let mode = sun["mode"].as_str();
+    let inside = |x:f64,y:f64| sun["bounds_xy"].as_array().is_none_or(|b|
+        b.len()==4 && x>=b[0].as_f64().unwrap_or(f64::NEG_INFINITY) && x<=b[1].as_f64().unwrap_or(f64::INFINITY)
+        && y>=b[2].as_f64().unwrap_or(f64::NEG_INFINITY) && y<=b[3].as_f64().unwrap_or(f64::INFINITY));
+    let sparse=&sensors["sparse_patch"];
+    let sparse_active=sparse["start_s"].as_f64().zip(sparse["end_s"].as_f64()).is_some_and(|(a,b)|a<=published && published<b);
+    let mut patches:Vec<Vec<(usize,f64)>>=sparse["centers"].as_array().map_or_else(Vec::new,|v|vec![Vec::new();v.len()]);
+    let mut ranges: Vec<Option<f64>> = (0..360)
         .map(|i| {
             let raw_bin = (i as i64 - yaw_bins).rem_euclid(360);
             let sampled = published - distortion * (359 - raw_bin) as f64 / 360. * 0.1;
             let pose = plant.pose_at(sampled);
-            let value = world.cast(pose, pose.yaw - (i as f64).to_radians())?;
+            let angle=pose.yaw-(i as f64).to_radians();
+            let value = world.cast(pose, angle)?;
             let r = value + noise * rng.normal();
+            if sparse_active {
+                let hit=(pose.x+value*angle.cos(),pose.y+value*angle.sin());
+                let mut visible=false;
+                for (j,patch) in sparse["centers"].as_array()?.iter().enumerate() {
+                    let x=patch["x"].as_f64()?;let y=patch["y"].as_f64()?;
+                    let (across,along)=if patch["vertical"].as_bool().unwrap_or(false) {(hit.0-x,hit.1-y)} else {(hit.1-y,hit.0-x)};
+                    if across.abs()<0.025 && along.abs()<=0.25 {
+                        patches[j].push((i,along));visible=true;
+                    }
+                }
+                if !visible {return None;}
+            }
+            if mode.is_some() && inside(pose.x,pose.y) && py::wrap(angle-direction).abs()<=half_angle {
+                let visible=match mode {
+                    Some("range")=>value<=number(sun,"visible_m",0.5),
+                    Some("board_patch")=>{
+                        let hit=(pose.x+value*angle.cos(),pose.y+value*angle.sin());
+                        let center=(number(sun,"patch_x_m",world.length),number(sun,"patch_y_m",world.width/2.));
+                        (hit.0-center.0).hypot(hit.1-center.1)<=0.5*number(sun,"visible_m",0.5)
+                    }
+                    _=>true
+                };
+                if !visible {return None;}
+            }
             (0.02..=12.)
                 .contains(&r)
                 .then_some((r * 1000.).round() / 1000.)
         })
         .collect();
+    if sparse_active {
+        let count=sparse["rays_per_patch"].as_u64().unwrap_or(4).max(1) as usize;
+        let mut keep=[false;360];
+        for patch in &mut patches {
+            patch.sort_by(|a,b|a.1.total_cmp(&b.1));
+            let n=patch.len().min(count);
+            for k in 0..n {
+                keep[patch[if n==1 {patch.len()/2} else {k*(patch.len()-1)/(n-1)}].0]=true;
+            }
+        }
+        for (i,r) in ranges.iter_mut().enumerate() {if !keep[i] {*r=None;}}
+    }
     let at = (published * 1000.).round() as u64;
     let frame = FrameId("lidar_origin_coarse_body_heading".into());
     let sample = LidarSample {
@@ -153,6 +213,7 @@ fn scan(
     let turn = detect_turn_geometry(&sample, &frame).unwrap_or_default();
     to_v(&json!({
         "seq":seq,"at_ms":at,"frame_id":frame.0,"ranges":ranges,
+        "point_age_ms":(0..360).map(|i| (distortion*(359-(i-yaw_bins).rem_euclid(360)) as f64/3.6).round() as u64).collect::<Vec<_>>(),
         "front_boundary_m":detect_front_boundary(&sample,&frame).ok().flatten(),
         "left_junction":detect_left_junction(&sample,&frame).ok().flatten(),
         "corridor_candidates":detect_corridor_candidates(&sample,&frame).unwrap_or_default(),
@@ -233,6 +294,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let mut trace = BufWriter::new(File::create(out.join("trace.jsonl"))?);
     let mut events_file = BufWriter::new(File::create(out.join("decisions.jsonl"))?);
+    let mut steering_file = BufWriter::new(File::create(out.join("steering.jsonl"))?);
+    let mut sent_steering = None;
     let mut sup = supervisor::Supervisor::new(true, "surface-sim", "rust_engine");
     sup.camera = false;
     sup.race_program = true;
@@ -265,6 +328,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut final_t = 0.;
     let wall_start = Instant::now();
     let max_t = number(&config, "max_seconds", 60.);
+    let mut imu_faults=imu_fault::Faults::new(&config["sensors"]["imu_spikes"],max_t);
     let mut forward_after_brake = false;
     let mut brake_seen = false;
     // Rule timing and the 10 s stationary rule, judged on the true pose.
@@ -340,7 +404,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let data = dict! {"op"=>"turn_cone_start","boot"=>"surface-sim","epoch"=>0,"tick"=>(t*1000.).round() as i64,
             "placement_confirmed"=>true,"continue_route"=>true,"max_drive_s"=>40.,"initial_presteer_pwm"=>1670};
             match sup.start_turn_cone(&data, &t.into(), "offline") {
-                Ok(_) => started = true,
+                Ok(_) => {
+                    started = true;
+                    if let Some(s)=sup.session.as_mut() {s.motion.field_map.planner.start();}
+                }
                 Err((error, clearance)) => {
                     start_error = Some(format!("{}: {}", error.kind.name(), error.msg));
                     fs::write(out.join("start-error.json"), py::to_json(&clearance))?;
@@ -348,17 +415,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        let imu_fault=imu_faults.sample(tick as usize);
         if let Some(session) = sup.session.as_mut() {
             // Offline ablation only: remove the estimator's memory so the same
             // controller and physical surface can be compared without adaptation.
             if config["surface_adaptation"].as_bool() == Some(false) {
                 session.motion.race_surface = Default::default();
             }
-            session.motion.race_inputs = Some(motion_sensors::RaceInputs {
-                yaw_rate: Some(car.yaw_rate),
+            session.motion.set_live_imu(motion_sensors::RaceInputs {
+                yaw_rate: Some(car.yaw_rate+imu_fault.gyro),
                 forward_integral: Some(
                     car.speed + number(&config["sensors"], "imu_drift_mps2", 0.) * t
-                        - imu_lever_loss,
+                        - imu_lever_loss+imu_faults.delta_velocity,
                 ),
             });
             sup.renew_owner(t);
@@ -368,6 +436,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             sup.coast_worker.run_pending();
         }
         for e in std::mem::take(&mut sup.emits) {
+            if e.op=="drive" {sent_steering=Some((e.seq,e.servo.i(),e.physical.i(),t));}
             writeln!(
                 events_file,
                 "{}",
@@ -383,6 +452,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or_else(|| sup.auto_result.clone());
         let turn = report.get("turn");
         let stage = turn.get("route_stage").os().unwrap_or("");
+        if sup.session.is_some() {
+            let lp=turn.get("open_loop");
+            let lane=turn.get("start_lane_feedback");
+            let maps=turn.get("field_localization");
+            writeln!(steering_file,"{}",json!({"t":t,"seq":seq,"stage":stage,"phase":turn.get("phase").os(),"reason":turn.get("reason").os(),
+                "map_seq":maps.get("source_seq").oi(),"localized":maps.get("localized").is_true(),"previews":json_v(maps.get("preview_pwm")),
+                "loop_seq":lp.get("source_seq").oi(),"support":lp.get("support_source").os(),"arbitration":lp.get("steering_basis").os(),
+                "lidar_pwm":lp.get("lidar_target_pwm").oi(),"selected_pwm":lp.get("target_pwm").oi(),"loop_map_pwm":lp.get("map_target_pwm").oi(),
+                "lane_seq":lane.get("source_seq").oi(),"lane_source":lane.get("steering_source").os(),
+                "natural_pwm":turn.get("natural_steering_target").oi(),"target_pwm":turn.get("steering_target").oi(),"slewed_pwm":turn.get("servo").oi(),
+                "sent":sent_steering,"acked_seq":command_seq,"acked_physical_pwm":servo,"wall_turn":turn.get("wall_turn").get("active").is_true(),
+                "imu_event":imu_fault.event,"imu_gyro_spike":imu_fault.gyro,"imu_accel_spike":imu_fault.accel}))?;
+        }
         let cross = turn.get("crosswalk_state").os().unwrap_or("");
         let lamp = turn.get("light_stop_state").os().unwrap_or("");
         let key = format!("{stage}/{cross}/{lamp}");
@@ -456,13 +538,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         if tick % 5 == 0 {
+            let scan_truth=car.pose_at(sup.scan.get("at_ms").of().unwrap_or(0.)/1000.);
             writeln!(
                 trace,
                 "{}",
                 json!({"t":t,"seq":seq,"pose":[car.pose.x,car.pose.y,car.pose.yaw],"speed":car.speed,
                 "motor":motor,"servo":servo,"wall_gap":wall,"cone_gap":cone,"stage":stage,"reason":turn.get("reason").os(),
+                "truth_at_scan":[scan_truth.x,scan_truth.y,scan_truth.yaw],"imu_event":imu_fault.event,"true_yaw_rate":car.yaw_rate,
+                "injected_gyro_rad_s":imu_fault.gyro,"injected_accel_m_s2":imu_fault.accel,"integrated_fault_m_s":imu_faults.delta_velocity,
                 "crosswalk":json_v(turn.get("start_lane_feedback").get("crosswalk")),
                 "surface_response":json_v(turn.get("surface_response")),
+                "field_localization":json_v(turn.get("field_localization")),
+                "first_steering_source":json_v(turn.get("start_lane_feedback").get("steering_source")),
+                "valid_rays":sup.scan.get("ranges").ol().map(|rs|rs.iter().filter(|v|v.is_num()).count()),
                 "lane":json_v(turn.get("lane_feedback")),"open":json_v(turn.get("open_feedback")),"light":json_v(turn.get("light_feedback")),"wall_turn":json_v(turn.get("wall_turn")),"light_line":json_v(turn.get("light_line")),
                 "loop":json_v(turn.get("open_loop")),"quality":json_v(report.get("quality_issues"))})
             )?;
@@ -473,6 +561,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     trace.flush()?;
     events_file.flush()?;
+    steering_file.flush()?;
     let report = sup
         .session
         .as_ref()
@@ -538,7 +627,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "limitations":["Ideal semantic detector with specified latency and field of view; no outdoor image model inference.",
             "Empirical steering and speed response; friction-circle clipping approximates tire slip, without lateral tire dynamics.",
             "No cone displacement or impact dynamics. First true contact ends the simulation."],
-        "result":json_v(&report)
+        "imu_spikes_applied":imu_faults.applied(),"result":json_v(&report)
     });
     fs::write(
         out.join("summary.json"),

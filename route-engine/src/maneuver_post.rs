@@ -550,6 +550,29 @@ impl Maneuver {
 
     /// _update_second_tracking(scan, now).
     pub fn update_second_tracking(&mut self, scan: &V, now: f64) {
+        let mut map_prior = if self.use_field_guidance() {
+            self.field_map
+                .prior(scan, self.second_tracker.as_ref().map_or(&V::None, |t| &t.target), 1)
+        } else {
+            Default::default()
+        };
+        let map_support = self.use_field_guidance() && self.field_map.planning_center(scan, 1).is_some();
+        if self.second_track_id.oi() == Some(-2)
+            || (map_support && self.second_tracker.as_ref().is_some_and(|t| t.target.is_none()))
+        {
+            let heading = self.tracking_heading(scan);
+            let target = self
+                .second_tracker_mut()
+                .update_on_course(scan, now, true, heading, None, map_prior);
+            if target.get("confirmed").is_true() && self.field_map.matches_observation(scan, &target, 1) {
+                let id = target.get("track_id").clone();
+                self.second_tracker_mut().enable_close_maintenance(&id);
+                self.second_track_id = id;
+                self._second_role_anchor = self.second_prior(&target, scan);
+            }
+            self.second_target = target;
+            return;
+        }
         if let Some(seq) = self._open_lookout_seq
             && eq_i(scan.get("seq"), seq)
         {
@@ -573,12 +596,16 @@ impl Maneuver {
         } else {
             None
         };
-        self.second_target = self.second_tracker_mut().update_with_reference(scan, now, false, heading, None, predicted);
+        map_prior.carried = match (predicted, map_prior.carried) {
+            (Some(a), Some(b)) if (a.0 - b.0).hypot(a.1 - b.1) > 0.30 => Some(b),
+            (a, b) => a.or(b),
+        };
+        self.second_target = self.second_tracker_mut().update_on_course(scan, now, false, heading, None, map_prior);
         if self.full_target_points(&self.second_target.clone(), scan, &self.second_track_id.clone()).is_some() {
             self._second_role_anchor = self.second_prior(&self.second_target.clone(), scan);
         } else if self.second_target.is_none() {
             let held = self.second_tracker.as_ref().unwrap().held.clone();
-            if !Self::target_gap_held(&held, &self.second_track_id, scan, now) {
+            if !map_support && !Self::target_gap_held(&held, &self.second_track_id, scan, now) {
                 self.start_second_identity_recovery();
             }
         }

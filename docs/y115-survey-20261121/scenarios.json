@@ -1,0 +1,1509 @@
+{
+  "base_config": "config/track-spec-sim-20261112.json",
+  "overrides": {
+    "seed": 9121,
+    "max_seconds": 65,
+    "layout": {
+      "length_m": 8.0,
+      "width_m": 4.0,
+      "lane_width_m": 0.9,
+      "light_width_m": 0.9,
+      "start_divider_m": 3.2,
+      "light_divider_m": 3.2,
+      "stripe_x_m": 2.8,
+      "start_x_m": 0.4,
+      "beam_gap_m": 1.1,
+      "gantry_x_m": 4.8,
+      "cone1_x_m": 5.8,
+      "cone1_y_m": 2.0,
+      "cone2_x_m": 2.2,
+      "cone2_y_m": 2.0,
+      "start_y_m": 0.46
+    },
+    "sensors": {
+      "range_noise_m": 0.008,
+      "scan_distortion": 1.0,
+      "imu_lever_arm_m": 0.19,
+      "lidar_clockwise_yaw_bins": -3
+    }
+  },
+  "sunlight": {
+    "clean": null,
+    "first-board_patch-000": {
+      "mode": "board_patch",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 1.05
+    },
+    "first-board_patch-090": {
+      "mode": "board_patch",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 5.8,
+      "patch_y_m": 4.0
+    },
+    "first-board_patch-180": {
+      "mode": "board_patch",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 1.05
+    },
+    "first-board_patch-270": {
+      "mode": "board_patch",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 5.8,
+      "patch_y_m": 0.0
+    },
+    "first-range-000": {
+      "mode": "range",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 1.05
+    },
+    "first-range-090": {
+      "mode": "range",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 5.8,
+      "patch_y_m": 4.0
+    },
+    "first-range-180": {
+      "mode": "range",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 1.05
+    },
+    "first-range-270": {
+      "mode": "range",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        3.2,
+        8.1,
+        -0.1,
+        2.95
+      ],
+      "patch_x_m": 5.8,
+      "patch_y_m": 0.0
+    },
+    "full-board_patch-000": {
+      "mode": "board_patch",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 2.0
+    },
+    "full-board_patch-045": {
+      "mode": "board_patch",
+      "world_direction_deg": 45,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 4.0
+    },
+    "full-board_patch-090": {
+      "mode": "board_patch",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 4.0
+    },
+    "full-board_patch-135": {
+      "mode": "board_patch",
+      "world_direction_deg": 135,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 4.0
+    },
+    "full-board_patch-180": {
+      "mode": "board_patch",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 2.0
+    },
+    "full-board_patch-225": {
+      "mode": "board_patch",
+      "world_direction_deg": 225,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 0.0
+    },
+    "full-board_patch-270": {
+      "mode": "board_patch",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 0.0
+    },
+    "full-board_patch-315": {
+      "mode": "board_patch",
+      "world_direction_deg": 315,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 0.0
+    },
+    "full-range-000": {
+      "mode": "range",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 2.0
+    },
+    "full-range-045": {
+      "mode": "range",
+      "world_direction_deg": 45,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 4.0
+    },
+    "full-range-090": {
+      "mode": "range",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 4.0
+    },
+    "full-range-135": {
+      "mode": "range",
+      "world_direction_deg": 135,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 4.0
+    },
+    "full-range-180": {
+      "mode": "range",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 2.0
+    },
+    "full-range-225": {
+      "mode": "range",
+      "world_direction_deg": 225,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 0.0
+    },
+    "full-range-270": {
+      "mode": "range",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 0.0
+    },
+    "full-range-315": {
+      "mode": "range",
+      "world_direction_deg": 315,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 0.0
+    },
+    "light-board_patch-000": {
+      "mode": "board_patch",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 3.55
+    },
+    "light-board_patch-090": {
+      "mode": "board_patch",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 4.3,
+      "patch_y_m": 4.0
+    },
+    "light-board_patch-180": {
+      "mode": "board_patch",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 3.55
+    },
+    "light-board_patch-270": {
+      "mode": "board_patch",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 4.3,
+      "patch_y_m": 0.0
+    },
+    "light-range-000": {
+      "mode": "range",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 3.55
+    },
+    "light-range-090": {
+      "mode": "range",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 4.3,
+      "patch_y_m": 4.0
+    },
+    "light-range-180": {
+      "mode": "range",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 3.55
+    },
+    "light-range-270": {
+      "mode": "range",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        1.0,
+        8.1,
+        3.0,
+        4.1
+      ],
+      "patch_x_m": 4.3,
+      "patch_y_m": 0.0
+    },
+    "narrow-board_patch-000": {
+      "mode": "board_patch",
+      "world_direction_deg": 0,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 2.0
+    },
+    "narrow-board_patch-045": {
+      "mode": "board_patch",
+      "world_direction_deg": 45,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 4.0
+    },
+    "narrow-board_patch-090": {
+      "mode": "board_patch",
+      "world_direction_deg": 90,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 4.0
+    },
+    "narrow-board_patch-135": {
+      "mode": "board_patch",
+      "world_direction_deg": 135,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 4.0
+    },
+    "narrow-board_patch-180": {
+      "mode": "board_patch",
+      "world_direction_deg": 180,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 2.0
+    },
+    "narrow-board_patch-225": {
+      "mode": "board_patch",
+      "world_direction_deg": 225,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 0.0
+    },
+    "narrow-board_patch-270": {
+      "mode": "board_patch",
+      "world_direction_deg": 270,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 0.0
+    },
+    "narrow-board_patch-315": {
+      "mode": "board_patch",
+      "world_direction_deg": 315,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 0.0
+    },
+    "narrow-range-000": {
+      "mode": "range",
+      "world_direction_deg": 0,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 2.0
+    },
+    "narrow-range-045": {
+      "mode": "range",
+      "world_direction_deg": 45,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 4.0
+    },
+    "narrow-range-090": {
+      "mode": "range",
+      "world_direction_deg": 90,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 4.0
+    },
+    "narrow-range-135": {
+      "mode": "range",
+      "world_direction_deg": 135,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 4.0
+    },
+    "narrow-range-180": {
+      "mode": "range",
+      "world_direction_deg": 180,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 2.0
+    },
+    "narrow-range-225": {
+      "mode": "range",
+      "world_direction_deg": 225,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 2.0,
+      "patch_y_m": 0.0
+    },
+    "narrow-range-270": {
+      "mode": "range",
+      "world_direction_deg": 270,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 4.0,
+      "patch_y_m": 0.0
+    },
+    "narrow-range-315": {
+      "mode": "range",
+      "world_direction_deg": 315,
+      "half_angle_deg": 30,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        8.1,
+        -0.1,
+        4.1
+      ],
+      "patch_x_m": 6.0,
+      "patch_y_m": 0.0
+    },
+    "second-board_patch-000": {
+      "mode": "board_patch",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 2.0
+    },
+    "second-board_patch-090": {
+      "mode": "board_patch",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 2.05,
+      "patch_y_m": 4.0
+    },
+    "second-board_patch-180": {
+      "mode": "board_patch",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 2.0
+    },
+    "second-board_patch-270": {
+      "mode": "board_patch",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 2.05,
+      "patch_y_m": 0.0
+    },
+    "second-range-000": {
+      "mode": "range",
+      "world_direction_deg": 0,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 8.0,
+      "patch_y_m": 2.0
+    },
+    "second-range-090": {
+      "mode": "range",
+      "world_direction_deg": 90,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 2.05,
+      "patch_y_m": 4.0
+    },
+    "second-range-180": {
+      "mode": "range",
+      "world_direction_deg": 180,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 0.0,
+      "patch_y_m": 2.0
+    },
+    "second-range-270": {
+      "mode": "range",
+      "world_direction_deg": 270,
+      "half_angle_deg": 65,
+      "visible_m": 0.5,
+      "bounds_xy": [
+        -0.1,
+        4.25,
+        1.0,
+        3.4
+      ],
+      "patch_x_m": 2.05,
+      "patch_y_m": 0.0
+    }
+  },
+  "imu_spike_profiles": {
+    "accel-41337": {
+      "sensors_imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 0,
+        "accel_peak_m_s2": 10
+      },
+      "geometries": [
+        "clean",
+        "first-board_patch-090",
+        "first-range-000",
+        "full-board_patch-225",
+        "full-range-180",
+        "light-board_patch-000",
+        "narrow-range-315",
+        "second-range-270"
+      ]
+    },
+    "both-27121": {
+      "sensors_imu_spikes": {
+        "seed": 27121,
+        "gyro_peak_rad_s": 4,
+        "accel_peak_m_s2": 6
+      },
+      "geometries": [
+        "clean",
+        "first-board_patch-000",
+        "first-board_patch-090",
+        "first-board_patch-180",
+        "first-board_patch-270",
+        "first-range-000",
+        "first-range-090",
+        "first-range-180",
+        "first-range-270",
+        "full-board_patch-000",
+        "full-board_patch-045",
+        "full-board_patch-090",
+        "full-board_patch-135",
+        "full-board_patch-180",
+        "full-board_patch-225",
+        "full-board_patch-270",
+        "full-board_patch-315",
+        "full-range-000",
+        "full-range-045",
+        "full-range-090",
+        "full-range-135",
+        "full-range-180",
+        "full-range-225",
+        "full-range-270",
+        "full-range-315",
+        "light-board_patch-000",
+        "light-board_patch-090",
+        "light-board_patch-180",
+        "light-board_patch-270",
+        "light-range-000",
+        "light-range-090",
+        "light-range-180",
+        "light-range-270",
+        "narrow-board_patch-000",
+        "narrow-board_patch-045",
+        "narrow-board_patch-090",
+        "narrow-board_patch-135",
+        "narrow-board_patch-180",
+        "narrow-board_patch-225",
+        "narrow-board_patch-270",
+        "narrow-board_patch-315",
+        "narrow-range-000",
+        "narrow-range-045",
+        "narrow-range-090",
+        "narrow-range-135",
+        "narrow-range-180",
+        "narrow-range-225",
+        "narrow-range-270",
+        "narrow-range-315",
+        "second-board_patch-000",
+        "second-board_patch-090",
+        "second-board_patch-180",
+        "second-board_patch-270",
+        "second-range-000",
+        "second-range-090",
+        "second-range-180",
+        "second-range-270"
+      ]
+    },
+    "both-41337": {
+      "sensors_imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 10
+      },
+      "geometries": [
+        "clean",
+        "first-board_patch-000",
+        "first-board_patch-090",
+        "first-board_patch-180",
+        "first-board_patch-270",
+        "first-range-000",
+        "first-range-090",
+        "first-range-180",
+        "first-range-270",
+        "full-board_patch-000",
+        "full-board_patch-045",
+        "full-board_patch-090",
+        "full-board_patch-135",
+        "full-board_patch-180",
+        "full-board_patch-225",
+        "full-board_patch-270",
+        "full-board_patch-315",
+        "full-range-000",
+        "full-range-045",
+        "full-range-090",
+        "full-range-135",
+        "full-range-180",
+        "full-range-225",
+        "full-range-270",
+        "full-range-315",
+        "light-board_patch-000",
+        "light-board_patch-090",
+        "light-board_patch-180",
+        "light-board_patch-270",
+        "light-range-000",
+        "light-range-090",
+        "light-range-180",
+        "light-range-270",
+        "narrow-board_patch-000",
+        "narrow-board_patch-045",
+        "narrow-board_patch-090",
+        "narrow-board_patch-135",
+        "narrow-board_patch-180",
+        "narrow-board_patch-225",
+        "narrow-board_patch-270",
+        "narrow-board_patch-315",
+        "narrow-range-000",
+        "narrow-range-045",
+        "narrow-range-090",
+        "narrow-range-135",
+        "narrow-range-180",
+        "narrow-range-225",
+        "narrow-range-270",
+        "narrow-range-315",
+        "second-board_patch-000",
+        "second-board_patch-090",
+        "second-board_patch-180",
+        "second-board_patch-270",
+        "second-range-000",
+        "second-range-090",
+        "second-range-180",
+        "second-range-270"
+      ]
+    },
+    "both-91251": {
+      "sensors_imu_spikes": {
+        "seed": 91251,
+        "gyro_peak_rad_s": 9,
+        "accel_peak_m_s2": 12
+      },
+      "geometries": [
+        "clean",
+        "first-board_patch-000",
+        "first-board_patch-090",
+        "first-board_patch-180",
+        "first-board_patch-270",
+        "first-range-000",
+        "first-range-090",
+        "first-range-180",
+        "first-range-270",
+        "full-board_patch-000",
+        "full-board_patch-045",
+        "full-board_patch-090",
+        "full-board_patch-135",
+        "full-board_patch-180",
+        "full-board_patch-225",
+        "full-board_patch-270",
+        "full-board_patch-315",
+        "full-range-000",
+        "full-range-045",
+        "full-range-090",
+        "full-range-135",
+        "full-range-180",
+        "full-range-225",
+        "full-range-270",
+        "full-range-315",
+        "light-board_patch-000",
+        "light-board_patch-090",
+        "light-board_patch-180",
+        "light-board_patch-270",
+        "light-range-000",
+        "light-range-090",
+        "light-range-180",
+        "light-range-270",
+        "narrow-board_patch-000",
+        "narrow-board_patch-045",
+        "narrow-board_patch-090",
+        "narrow-board_patch-135",
+        "narrow-board_patch-180",
+        "narrow-board_patch-225",
+        "narrow-board_patch-270",
+        "narrow-board_patch-315",
+        "narrow-range-000",
+        "narrow-range-045",
+        "narrow-range-090",
+        "narrow-range-135",
+        "narrow-range-180",
+        "narrow-range-225",
+        "narrow-range-270",
+        "narrow-range-315",
+        "second-board_patch-000",
+        "second-board_patch-090",
+        "second-board_patch-180",
+        "second-board_patch-270",
+        "second-range-000",
+        "second-range-090",
+        "second-range-180",
+        "second-range-270"
+      ]
+    },
+    "gyro-41337": {
+      "sensors_imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 0
+      },
+      "geometries": [
+        "clean",
+        "first-board_patch-090",
+        "first-range-000",
+        "full-board_patch-225",
+        "full-range-180",
+        "light-board_patch-000",
+        "narrow-range-315",
+        "second-range-270"
+      ]
+    }
+  },
+  "sparse": {
+    "first_1walls_41337_plain": {
+      "sparse_patch": {
+        "start_s": 9.92,
+        "end_s": 10.72,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 6.2413,
+            "y": 0.0,
+            "vertical": false
+          }
+        ]
+      }
+    },
+    "first_1walls_41337_spike": {
+      "sparse_patch": {
+        "start_s": 9.92,
+        "end_s": 10.72,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 6.2413,
+            "y": 0.0,
+            "vertical": false
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 10
+      }
+    },
+    "first_1walls_91251_plain": {
+      "sparse_patch": {
+        "start_s": 9.22,
+        "end_s": 10.02,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.1671,
+            "y": 0.0,
+            "vertical": false
+          }
+        ]
+      }
+    },
+    "first_1walls_91251_spike": {
+      "sparse_patch": {
+        "start_s": 9.22,
+        "end_s": 10.02,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.1671,
+            "y": 0.0,
+            "vertical": false
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 91251,
+        "gyro_peak_rad_s": 9,
+        "accel_peak_m_s2": 12
+      }
+    },
+    "first_2walls_41337_plain": {
+      "sparse_patch": {
+        "start_s": 9.92,
+        "end_s": 10.72,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 6.2413,
+            "y": 0.0,
+            "vertical": false
+          },
+          {
+            "x": 8,
+            "y": 1.0808,
+            "vertical": true
+          }
+        ]
+      }
+    },
+    "first_2walls_41337_spike": {
+      "sparse_patch": {
+        "start_s": 9.92,
+        "end_s": 10.72,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 6.2413,
+            "y": 0.0,
+            "vertical": false
+          },
+          {
+            "x": 8,
+            "y": 1.0808,
+            "vertical": true
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 10
+      }
+    },
+    "first_2walls_91251_plain": {
+      "sparse_patch": {
+        "start_s": 9.22,
+        "end_s": 10.02,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.1671,
+            "y": 0.0,
+            "vertical": false
+          },
+          {
+            "x": 8,
+            "y": 0.6913,
+            "vertical": true
+          }
+        ]
+      }
+    },
+    "first_2walls_91251_spike": {
+      "sparse_patch": {
+        "start_s": 9.22,
+        "end_s": 10.02,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.1671,
+            "y": 0.0,
+            "vertical": false
+          },
+          {
+            "x": 8,
+            "y": 0.6913,
+            "vertical": true
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 91251,
+        "gyro_peak_rad_s": 9,
+        "accel_peak_m_s2": 12
+      }
+    },
+    "light_1walls_41337_plain": {
+      "sparse_patch": {
+        "start_s": 17.0,
+        "end_s": 17.8,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.8567,
+            "y": 4.0,
+            "vertical": false
+          }
+        ]
+      }
+    },
+    "light_1walls_41337_spike": {
+      "sparse_patch": {
+        "start_s": 17.0,
+        "end_s": 17.8,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.8567,
+            "y": 4.0,
+            "vertical": false
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 10
+      }
+    },
+    "light_1walls_91251_plain": {
+      "sparse_patch": {
+        "start_s": 16.58,
+        "end_s": 17.38,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.6615,
+            "y": 4.0,
+            "vertical": false
+          }
+        ]
+      }
+    },
+    "light_1walls_91251_spike": {
+      "sparse_patch": {
+        "start_s": 16.58,
+        "end_s": 17.38,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.6615,
+            "y": 4.0,
+            "vertical": false
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 91251,
+        "gyro_peak_rad_s": 9,
+        "accel_peak_m_s2": 12
+      }
+    },
+    "light_2walls_41337_plain": {
+      "sparse_patch": {
+        "start_s": 17.0,
+        "end_s": 17.8,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.8567,
+            "y": 4.0,
+            "vertical": false
+          },
+          {
+            "x": 0,
+            "y": 3.5657,
+            "vertical": true
+          }
+        ]
+      }
+    },
+    "light_2walls_41337_spike": {
+      "sparse_patch": {
+        "start_s": 17.0,
+        "end_s": 17.8,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.8567,
+            "y": 4.0,
+            "vertical": false
+          },
+          {
+            "x": 0,
+            "y": 3.5657,
+            "vertical": true
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 10
+      }
+    },
+    "light_2walls_91251_plain": {
+      "sparse_patch": {
+        "start_s": 16.58,
+        "end_s": 17.38,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.6615,
+            "y": 4.0,
+            "vertical": false
+          },
+          {
+            "x": 0,
+            "y": 3.5671,
+            "vertical": true
+          }
+        ]
+      }
+    },
+    "light_2walls_91251_spike": {
+      "sparse_patch": {
+        "start_s": 16.58,
+        "end_s": 17.38,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 3.6615,
+            "y": 4.0,
+            "vertical": false
+          },
+          {
+            "x": 0,
+            "y": 3.5671,
+            "vertical": true
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 91251,
+        "gyro_peak_rad_s": 9,
+        "accel_peak_m_s2": 12
+      }
+    },
+    "second_1walls_41337_plain": {
+      "sparse_patch": {
+        "start_s": 12.68,
+        "end_s": 13.48,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 2.9176,
+            "y": 0.9,
+            "vertical": false
+          }
+        ]
+      }
+    },
+    "second_1walls_41337_spike": {
+      "sparse_patch": {
+        "start_s": 12.68,
+        "end_s": 13.48,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 2.9176,
+            "y": 0.9,
+            "vertical": false
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 10
+      }
+    },
+    "second_1walls_91251_plain": {
+      "sparse_patch": {
+        "start_s": 12.06,
+        "end_s": 12.86,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.05,
+            "y": 3.1,
+            "vertical": false
+          }
+        ]
+      }
+    },
+    "second_1walls_91251_spike": {
+      "sparse_patch": {
+        "start_s": 12.06,
+        "end_s": 12.86,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.05,
+            "y": 3.1,
+            "vertical": false
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 91251,
+        "gyro_peak_rad_s": 9,
+        "accel_peak_m_s2": 12
+      }
+    },
+    "second_2walls_41337_plain": {
+      "sparse_patch": {
+        "start_s": 12.68,
+        "end_s": 13.48,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 2.9176,
+            "y": 0.9,
+            "vertical": false
+          },
+          {
+            "x": 0,
+            "y": 1.4745,
+            "vertical": true
+          }
+        ]
+      }
+    },
+    "second_2walls_41337_spike": {
+      "sparse_patch": {
+        "start_s": 12.68,
+        "end_s": 13.48,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 2.9176,
+            "y": 0.9,
+            "vertical": false
+          },
+          {
+            "x": 0,
+            "y": 1.4745,
+            "vertical": true
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 41337,
+        "gyro_peak_rad_s": 7,
+        "accel_peak_m_s2": 10
+      }
+    },
+    "second_2walls_91251_plain": {
+      "sparse_patch": {
+        "start_s": 12.06,
+        "end_s": 12.86,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.05,
+            "y": 3.1,
+            "vertical": false
+          },
+          {
+            "x": 8,
+            "y": 2.1325,
+            "vertical": true
+          }
+        ]
+      }
+    },
+    "second_2walls_91251_spike": {
+      "sparse_patch": {
+        "start_s": 12.06,
+        "end_s": 12.86,
+        "rays_per_patch": 4,
+        "centers": [
+          {
+            "x": 5.05,
+            "y": 3.1,
+            "vertical": false
+          },
+          {
+            "x": 8,
+            "y": 2.1325,
+            "vertical": true
+          }
+        ]
+      },
+      "imu_spikes": {
+        "seed": 91251,
+        "gyro_peak_rad_s": 9,
+        "accel_peak_m_s2": 12
+      }
+    }
+  }
+}

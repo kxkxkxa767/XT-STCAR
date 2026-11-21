@@ -11,6 +11,7 @@ use crate::py::*;
 pub(crate) struct FinishControl {
     pub board: Option<crate::race_end_board::EndBoard>,
     pub board_chord: Option<bool>,
+    pub board_from_survey: bool,
     pub race_brake: crate::race_light_brake::LightBrake,
     pub ranges: crate::motion_sensors::RangeHistory,
     pub last_speed: Option<(f64, f64)>,
@@ -309,6 +310,7 @@ impl Maneuver {
         self.finish.brake_decel = None;
         self.finish.race_brake = Default::default();
         self.finish.board_chord = None;
+        self.finish.board_from_survey = false;
         if self.race_inputs.is_some() {
             self.finish.ranges.clear();
             self.finish.last_speed = None;
@@ -550,17 +552,39 @@ impl Maneuver {
         let restarted = self.light_stop_evidence.has("go") || self.light_stop_state == Some("passed");
         let after_light = kind == "finish" && restarted;
         let measured_board = after_light && self.race_inputs.is_some();
-        let ahead = if measured_board { self.finish_board_range(scan) } else { ahead };
+        let observed = if measured_board {
+            self.finish_board_range(scan)
+        } else {
+            ahead
+        };
+        let survey = if measured_board && self.use_field_guidance() {
+            self.field_map.finish_ahead(scan)
+        } else {
+            None
+        };
+        // In a shadowed channel a corner chord can put the end board beyond
+        // the surveyed perimeter. Keep closer real returns; a supported map
+        // range can advance the existing brake without certifying a stop.
+        let map_range = survey.filter(|mapped| {
+            observed.is_none_or(|r| {
+                let band = if self.finish.board_from_survey { 0.055 } else { 0.13 };
+                self.field_map.missing_fraction() > 0.15 && self.field_map.two_measured_axes(scan) && r - mapped > band
+            })
+        });
+        let ahead = map_range.or(observed);
         if measured_board && ahead.is_some() {
             // Bowed end boards differ by ~15-25 cm between corner-chord and center-plane
             // measurements; never difference speeds or blend gap across a reference switch.
             let is_chord = self.finish.board.is_some();
-            if self.finish.board_chord.is_some_and(|prev| prev != is_chord) {
+            if self.finish.board_chord.is_some_and(|prev| prev != is_chord)
+                || self.finish.board_from_survey != map_range.is_some()
+            {
                 self.finish.ranges.clear();
                 self.finish.last_speed = None;
                 self.finish.race_brake.reset_gap_fusion();
             }
             self.finish.board_chord = Some(is_chord);
+            self.finish.board_from_survey = map_range.is_some();
         }
         let speed = self.lane_speed(scan, ahead, 2);
         self.lane_coast_observe(scan, now, speed);
@@ -648,7 +672,7 @@ impl Maneuver {
         }
         let stopped = speed.is_some_and(|s| s < LANE_SPEED_RESTART_MPS);
         let in_zone = gap.is_some_and(|g| g <= goal.zone_gap);
-        let body_in_zone = gap.is_some_and(|g| g <= goal.body_gap);
+        let body_in_zone = observed.is_some_and(|r| r - FRONT_BODY_EXTENT_M <= goal.body_gap);
         let kick_room = gap.is_some_and(|g| g >= goal.min_gap + LANE_KICK_TRAVEL_M);
         let rested = self._power_cmd_at.is_none_or(|at| now - at >= LANE_KICK_REST_S);
         // Round 105: the finish creep.
@@ -711,6 +735,10 @@ impl Maneuver {
                 feedback.set("distance_reference", "side_end_corner_chord");
                 feedback.set("end_board", board.diagnostics());
             }
+            if map_range.is_some() {
+                feedback.set("distance_reference", "surveyed_end_board_and_localized_pose");
+                feedback.set("observed_end_board_range_m", observed);
+            }
         }
         if basis.is_some() {
             return (basis, feedback);
@@ -722,6 +750,13 @@ impl Maneuver {
             // Keep the existing launch cutoff, then use race cruise/1530 until the
             // finish's own continuous brake. Its boundary also runs at 20 ms.
             let current = fused.map_or(v_aim, |f| f.0);
+            let current = if self.field_course_active() && self.field_map.two_measured_axes(scan) {
+                // End-board references may swap during glare. A separately
+                // measured closing speed also feeds the same single brake.
+                self.field_map.axis_speed(scan).map_or(current, |v| current.max(v))
+            } else {
+                current
+            };
             if self.finish.launch_from.is_some()
                 && (!launching || stop_gap.is_some_and(|s| s <= goal.target_gap)
                     || worst_gap.is_some_and(|s| s <= goal.min_gap)) {
