@@ -1,0 +1,131 @@
+{
+  "vehicle_readback_local_date": "2026-11-22",
+  "programs": [
+    {
+      "program": 1,
+      "branch": "race-program1-y114-wait-20261121",
+      "commit": "72abaedcfbb5f0f7f842f7823cb7c9cc63582f6d",
+      "sha256": "019f0faeb843470bc1879c6e640b3ad784c899cfb0dbe636e66f5cb1d0e98e22",
+      "executable": "/home/bianbu/xt-stcar-console/race-programs/p1-019f0faeb843-p2-5f8f43a02b3a-entry-05c27159b56c/program-1",
+      "profile": "mix",
+      "forward_pwm_max": null,
+      "integer_links": 61
+    },
+    {
+      "program": 2,
+      "branch": "main",
+      "commit": "1466a7276fc4378f706f2c7175c8808a3f7dbfd0",
+      "sha256": "5f8f43a02b3acbba4fa5b7843ec0d02b93b034c763b4e86f1f06645b90dcc44a",
+      "executable": "/home/bianbu/xt-stcar-console/race-programs/p1-019f0faeb843-p2-5f8f43a02b3a-entry-05c27159b56c/program-2",
+      "profile": "mix",
+      "forward_pwm_max": null,
+      "integer_links": 61
+    },
+    {
+      "program": 3,
+      "branch": "race/program3-1560",
+      "commit": "e75ea79cbd920c35905ef92a24a8c8031c6711ec",
+      "sha256": "61d38b55cd0a5ae5b7fb2a6879797b2fb3d974543f33bd9e2a359c5d6928269a",
+      "executable": "/home/bianbu/xt-stcar-console/race-programs/p3-1560-61d38b55cd0a5ae5/program-3",
+      "profile": "mix",
+      "forward_pwm_max": 1560,
+      "integer_links": 61
+    },
+    {
+      "program": 4,
+      "branch": "race/program4-vision",
+      "commit": "4c0f419f814ec090c14978caca837fedb98557f6",
+      "sha256": "d44fec46a217271dcc331d837a028fad8ed57e82a4a6ad776efdb335a43fcd68",
+      "executable": "/home/bianbu/xt-stcar-console/race-programs/vision-d7ba13b1cffc1c831bbab4d5/program-4",
+      "profile": "rust",
+      "forward_pwm_max": null,
+      "integer_links": 61
+    },
+    {
+      "program": 5,
+      "branch": "race/program5-vision1560",
+      "commit": "e86342cb9842c076c86d7f68763ed68c67c924a5",
+      "sha256": "b04ec08601637b46aa0fe39597eb045f97fd8b74d015447e05f0282e52f1eb02",
+      "executable": "/home/bianbu/xt-stcar-console/race-programs/vision-d7ba13b1cffc1c831bbab4d5/program-5",
+      "profile": "rust",
+      "forward_pwm_max": 1560,
+      "integer_links": 61
+    }
+  ],
+  "start_mode_during_checks": "never",
+  "exit_code_samples": [
+    {
+      "command": "start_4_7 --check-only",
+      "turn_ready": true,
+      "started": false,
+      "program_exit": 0,
+      "lidar_bins": 360,
+      "neutral_samples": 6,
+      "running_rust_v4l2": true,
+      "running_yolo": false,
+      "geometry_frames": 205,
+      "capture_to_event_median_ms": 85.2529730000029,
+      "geometry_compute_median_ms": 5.72181
+    },
+    {
+      "command": "start_5_9 --check-only",
+      "turn_ready": true,
+      "started": false,
+      "program_exit": 0,
+      "lidar_bins": 360,
+      "neutral_samples": 6,
+      "running_rust_v4l2": true,
+      "running_yolo": false,
+      "geometry_frames": 203,
+      "capture_to_event_median_ms": 85.15270600003433,
+      "geometry_compute_median_ms": 5.70481
+    },
+    {
+      "command": "start_2_8 --check-only",
+      "turn_ready": true,
+      "started": false,
+      "program_exit": 0,
+      "lidar_bins": 360,
+      "neutral_samples": 6,
+      "running_rust_v4l2": false,
+      "running_yolo": true,
+      "geometry_frames": null,
+      "capture_to_event_median_ms": null,
+      "geometry_compute_median_ms": null
+    },
+    {
+      "command": "start_3_11 --check-only",
+      "turn_ready": true,
+      "started": false,
+      "program_exit": 0,
+      "lidar_bins": 360,
+      "neutral_samples": 6,
+      "running_rust_v4l2": false,
+      "running_yolo": true,
+      "geometry_frames": null,
+      "capture_to_event_median_ms": null,
+      "geometry_compute_median_ms": null
+    }
+  ],
+  "calibration": {
+    "schema_version": 1,
+    "status": "coarse",
+    "range_offset_m": 0.011,
+    "clockwise_yaw_bins": -3
+  },
+  "serial": {
+    "baud_rate": 460800
+  },
+  "desktop_N10_source_count": 440,
+  "desktop_N10_matches_prior": true,
+  "final": {
+    "healthy": true,
+    "armed": false,
+    "mode": "locked",
+    "motor": 1500,
+    "servo": 1500,
+    "race_unit": "inactive",
+    "console_unit": "active"
+  },
+  "physical_race_started": false
+}
