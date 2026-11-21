@@ -1,0 +1,19 @@
+请只读复核 XT-STCAR 的 1、2、3 号比赛程序，分别给结论。主工程在 /Users/yuhaojin/Documents/XT-STCAR，3 号独立副本在 /Users/yuhaojin/Documents/XT-STCAR-保守1560。按 AGENTS.md 读取交接。复核限本机已有源码、构建和回执，报告确定问题后等我决定是否改动或操作车辆。
+
+1 号是现场 y114／219 的可调等灯版本。请逐项对照当天备份和目前使用的源标签。
+git diff 41337e1 72abaed -- route-engine/src
+git show 41337e1:scripts/install-vehicle-start.py
+核对起步、斑马线、绕桶、终点、异常退出和模型调用链。核对默认 mix、第 21 轮实际 ONNX、编号秒数透传及 N10P 460800。请区分旧天气入口的现场日志、编号入口动态加载失败（退出 127），以及成功启动进程后返回 left_corridor_unknown 的非赛场检查。现场备份和运行中的 1 号二进制分别有自己的 SHA-256。
+
+1、2 号共用入口的修复位于主工程。
+git diff a8d246b 3dd8680 -- scripts/install-numbered-programs.py
+检查原 122 个整数秒链接的迁移、ROS 库路径设置时机、已有库路径和命令参数保留、同一组二进制再次安装、已有用户命令冲突及中途失败的回滚。对照 3 号的独立入口、Bash 小数秒分派和三套发布目录并存的行为。
+
+2 号是主工程建图版。3 号是单独的前进 PWM 1560 封顶版。
+git diff eb754f8 3dd8680 -- route-engine/src
+git diff 8d12c27 3618f30 -- route-engine/src scripts
+核对 1300 提前松到 1500 后，未见红灯且地图双轴缺失、只剩单轴、或车头刚过门架时，满足原有速度判据后能否登记等待并按输入秒数放行。仍在滑行、有可信位置显示车尾尚未过光电线、刹车被外部打断这三种情况分别核对。检查两帧绿灯提前放行、3 号 1560 上限与较低油门、软板容差、端线回退、Guard 和实测 8 cm 门。主工程 test/ 与 提交/ 只同步了共用的控制改动，各自沿用原配置。
+
+本机证据在 /Users/yuhaojin/Documents/XT-STCAR/work/numbered-entry-light-20261121/。program1-provenance.json 对照了备份内的 854 份文件和源标签。previous-loader-observation.json 是历史车端缺库回执的摘录。entry-check.json 是本机隔离安装与 --show 检查，含原生 Rust 选择器和加载环境探针。before-light-test.log、after-light-replay.log 及各份 final-test.log 可查修复前后行为。program-2-build.json、program-3-build.json 和 elf-2.json、elf-3.json 可核对目标架构、构建提交和校验值。新候选等待上车，本轮实车结果尚未验证。
+
+请给每个程序标明通过或具体阻塞项。问题附提交、文件行号、触发输入、实际输出和影响，并区分现场回执与本机验证。
