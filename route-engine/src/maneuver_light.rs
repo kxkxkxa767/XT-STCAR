@@ -1042,7 +1042,9 @@ impl Maneuver {
         // Gantry location and detected colour are independent. y90-3/-4 had
         // completed the brake inside the zone, but no red meant wait_since
         // never started and the used brake kept neutral for another26s.
-        let confirmed_stop = (self.race_light_brake.stopped()
+        // The map can lose an axis after a planned release. The speed and
+        // upstream checks below still decide when the approach is complete.
+        let confirmed_stop = (self.race_light_brake.finished_for_stop()
             || (self.race_light_brake.is_used() && surveyed_zone && whole_in_zone))
             && self.light_stop_evidence.has("gantry");
         let stopped = (red || confirmed_stop)
@@ -1330,6 +1332,7 @@ mod tests {
         assert_eq!(m.result(1.2).get("motor").i(), 1500);
         assert_eq!(m.lane_motor, NEUTRAL);
         assert!(m.race_light_brake.is_used());
+        assert!(!m.race_light_brake.finished_for_stop());
         m.phase = "drive";
         assert_eq!(m.route_motor(), NEUTRAL);
         assert_eq!(m.race_light_brake.command(1.3, Some(0.)), None);

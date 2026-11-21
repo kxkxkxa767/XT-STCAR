@@ -805,6 +805,75 @@ mod tests {
     use crate::helpers::WallCompass;
 
     #[test]
+    fn surveyed_brake_coast_registers_a_measured_light_stop_without_colour() {
+        use crate::helpers::FRONT_BODY_EXTENT_M;
+        use crate::maneuver::Maneuver;
+        use crate::race_light_brake::BrakeModel;
+
+        let mut approach = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+        approach.race_program = true;
+        approach.race_inputs = Some(RaceInputs { yaw_rate: Some(0.), forward_integral: Some(0.) });
+        approach.phase = "drive";
+        approach.entry_kind = Some("lane");
+        approach.route_stage = "light_lane";
+        approach.light_vision = true;
+        approach.light_stop_state = Some("approach");
+        approach.drive_since = Some(0.);
+        approach._light_gantry_since = Some(1.);
+        approach.light_stop_evidence = crate::dict! { "gantry" => crate::dict! { "source_seq" => 1 } };
+        approach._light_line = crate::dict! { "source" => "legs", "confirmed_seq" => 1, "station_spacing_m" => 1.10 };
+        approach.race_light.speed_uses_gantry = true;
+        const WAIT: f64 = 7.;
+        approach.race_light_wait_s = Some(WAIT);
+
+        // The brake remains applied until the projected coast ends inside the surveyed zone.
+        let brake = &mut approach.race_light_brake;
+        for i in 0..=4 {
+            let dt = i as f64 / 10.;
+            let speed = 1.30 - 1.875 * dt;
+            let gap = 1.43 - 1.30 * dt + 0.9375 * dt * dt;
+            let integral = Some(speed - 1.30);
+            brake.set_surveyed_release_zone((gap <= 1.10).then_some(0.72));
+            brake.observe(1. + dt, Some(gap), Some(speed), integral, 1., 0.35, BrakeModel::light(1., 0.35), 0.55);
+            assert_eq!(brake.command(1. + dt, integral), Some(if i == 4 { 1500 } else { 1300 }));
+        }
+        assert_eq!(brake.diagnostics().get("end_reason").os(), Some("coast_reaches_zone"));
+
+        let scan = |at: f64| crate::dict! { "seq" => (at * 10.).round() as i64, "at_ms" => (at * 1000.).round() as i64,
+            "received_at" => at, "ranges" => vec![V::Float(3.); 360] };
+        let at = 3.;
+        for (gap, speed, support, should_wait, should_advance) in [
+            (0.62, 0.45, None, false, false),         // still rolling after release
+            (0.62, 0.00, None, true, false),          // only the gantry legs remain visible
+            (0.62, 0.00, Some([0, 6]), true, false),  // one mapped board axis remains
+            (-0.02, 0.00, Some([6, 6]), true, false), // nose just beyond the gantry
+            (0.85, 0.00, Some([6, 6]), false, true),  // rear still upstream of the beam
+        ] {
+            let mut m = approach.clone();
+            let ahead = gap + FRONT_BODY_EXTENT_M;
+            if let Some(support) = support {
+                let divider = &FIELD.as_ref().unwrap().walls[5];
+                let pose = Pose2 { x_m: divider.lo - ahead, y_m: divider.fixed + 0.45, yaw_rad: 0. };
+                m.field_map.fixes.push_back(Fix { seq: 30, at, pose });
+                m.field_map.support = support;
+            }
+            m.race_light.ranges = vec![(2.8, 2.8, ahead + 0.2 * speed), (2.9, 2.9, ahead + 0.1 * speed)];
+            let (basis, feedback) = m.light_approach_control(&scan(at), Some(ahead), at);
+            assert_eq!(basis.is_some(), should_wait, "gap={gap}, speed={speed}, support={support:?}");
+            assert_eq!(m.race_light.completing_surveyed_stop, should_advance);
+            assert_eq!(m.lane_motor, if should_advance { 1560 } else { 1500 });
+            if let Some(basis) = basis {
+                m.lane_feedback = feedback;
+                m.light_stop_reached(&scan(at), at, &V::None, &basis);
+                assert_eq!(m.light_stop_state, Some("waiting"));
+                assert!(!m.light_wait(&scan(at + WAIT - 0.1), at + WAIT - 0.1, &V::None));
+                assert!(m.light_wait(&scan(at + WAIT), at + WAIT, &V::None));
+                assert_eq!(m.light_stop_state, Some("released"));
+            }
+        }
+    }
+
+    #[test]
     fn current_scan_compass_uses_the_same_clock_and_an_unobserved_pose_expires() {
         let field = FIELD.as_ref().unwrap();
         let ranges = TABLES.with(|table| {
