@@ -29,6 +29,7 @@ pub mod maneuver_wait;
 pub mod py;
 pub mod race;
 mod race_launch;
+mod race_selection;
 pub mod race_scan;
 #[cfg(feature = "ros2")]
 mod race_ros2;
@@ -487,6 +488,14 @@ fn function(name: &str, args: &[V]) -> V {
 fn main() {
     install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
+    if let Some(name)=args.first().and_then(|p|std::path::Path::new(p).file_name()).and_then(|v|v.to_str())
+        && name.starts_with("start_") {
+        std::process::exit(race_selection::run(name,&args[1..]));
+    }
+    if args.get(1).is_some_and(|s|s=="select-start") {
+        let Some(name)=args.get(2) else {eprintln!("用法为 start_程序号_秒数");std::process::exit(2);};
+        std::process::exit(race_selection::run(name,&args[3..]));
+    }
     if matches!(args.get(1).map(String::as_str), Some("start" | "launch-round")) {
         std::process::exit(race_launch::main(&args[2..], args[1] == "launch-round"));
     }

@@ -33,6 +33,7 @@ struct Options {
     profile: String,
     action: String,
     check_only: bool,
+    light_max_wait_s: Option<f64>,
 }
 
 fn parse(args: &[String]) -> Result<Options> {
@@ -41,6 +42,7 @@ fn parse(args: &[String]) -> Result<Options> {
         profile: "default".into(),
         action: "start".into(),
         check_only: false,
+        light_max_wait_s: None,
     };
     let mut it = args.iter();
     while let Some(arg) = it.next() {
@@ -49,6 +51,11 @@ fn parse(args: &[String]) -> Result<Options> {
             "--profile" => o.profile = it.next().ok_or("missing profile")?.clone(),
             "--show" | "--status" | "--stop" => o.action = arg[2..].into(),
             "--check-only" => o.check_only = true,
+            "--light-max-wait-s" => {
+                let v = it.next().ok_or("missing light wait seconds")?;
+                o.light_max_wait_s = Some(v.parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.)
+                    .ok_or("light wait must be finite nonnegative seconds")?);
+            }
             _ => return Err(format!("unknown launch option {arg}").into()),
         }
     }
@@ -56,6 +63,10 @@ fn parse(args: &[String]) -> Result<Options> {
         return Err("profile must be default, dark, light or mix".into());
     }
     Ok(o)
+}
+
+fn forward_wait(command: &mut Command, seconds: Option<f64>) {
+    if let Some(s) = seconds { command.arg("--light-max-wait-s").arg(s.to_string()); }
 }
 
 fn read_json(path: &Path) -> Result<Value> {
@@ -186,7 +197,7 @@ fn record_program_exit(result: &mut Value, status: ExitStatus, stop_request: Opt
         result["program_stop_request"] = json!(reason);
     }
     if stop_request == Some("launcher_timeout") {
-        return Err(format!("race program exceeded the 120 s launcher timeout ({status})").into());
+        return Err(format!("race program exceeded the launcher timeout ({status})").into());
     }
     if !status.success() {
         return Err(format!("route-engine race: {status} (see race-stdout.txt)").into());
@@ -229,7 +240,8 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
     let out = fresh_dir(&base.join(text(config, "evidence_prefix")?))?;
     write_json(
         &out.join("launch-profile.json"),
-        &json!({"label":config["label"],"profile":o.profile,"selected":profile}),
+        &json!({"label":config["label"],"profile":o.profile,"selected":profile,"program":config["program_number"],
+            "source_commit":config["source_commit"],"light_max_wait_s":o.light_max_wait_s}),
     )?;
     println!("{}", json!({"evidence_dir":out,"profile":o.profile}));
     let start = Instant::now();
@@ -249,7 +261,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         ctrlc::set_handler(move || flag.store(true, Ordering::Release))?;
     }
     let mut result = json!({"evidence_dir":out,"check_only":o.check_only,"profile":o.profile,"label":config["label"],
-        "launcher":"rust","start_admission":"rust_race_live_sensors"});
+        "launcher":"rust","start_admission":"rust_race_live_sensors","program":config["program_number"],"light_max_wait_s":o.light_max_wait_s});
     let mut timing = json!({"preflight_ms":start.elapsed().as_secs_f64()*1000.});
     let t = Instant::now();
     if let Err(error) = checked(Command::new("systemctl").args(["--user", "stop", CONSOLE])) {
@@ -360,6 +372,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
                 "--max-wait-s",
                 "20",
             ]);
+        forward_wait(&mut command, o.light_max_wait_s);
         if o.check_only {
             command.args(["--start", "never"]);
         } else {
@@ -394,12 +407,14 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         timing["before_program_ms"] = json!(start.elapsed().as_secs_f64() * 1000.);
         race = Some(command.spawn()?);
         let child = race.as_mut().unwrap();
+        let timeout_s = 120. + (o.light_max_wait_s.unwrap_or(10.) - 10.).max(0.);
+        result["launcher_timeout_s"] = json!(timeout_s);
         let (status, stop_request) = loop {
             if let Some(status) = child.try_wait()? {
                 break (status, None);
             }
             let operator_stop = stopped.load(Ordering::Acquire);
-            if operator_stop || began.elapsed() >= Duration::from_secs(120) {
+            if operator_stop || began.elapsed().as_secs_f64() >= timeout_s {
                 let reason = if operator_stop { "operator_stop" } else { "launcher_timeout" };
                 break (finish(child, Signal::INT, Duration::from_secs(5))?, Some(reason));
             }
@@ -490,7 +505,11 @@ fn entry(o: Options, internal_run: bool) -> Result<()> {
     }
     match o.action.as_str() {
         "show" => {
-            println!("{} / {}", text(&config, "label")?, o.profile);
+            if let Some(limit) = o.light_max_wait_s {
+                println!("{}",json!({"program":config["program_number"],"label":config["label"],
+                    "source_commit":config["source_commit"],"base_source":config["base_source"],
+                    "profile":o.profile,"light_max_wait_s":limit,"executable":std::env::current_exe()?}));
+            } else { println!("{} / {}", text(&config, "label")?, o.profile); }
             return Ok(());
         }
         "stop" => {
@@ -530,6 +549,7 @@ fn entry(o: Options, internal_run: bool) -> Result<()> {
         .arg("--config")
         .arg(&o.config)
         .args(["--profile", &o.profile]);
+    forward_wait(&mut command, o.light_max_wait_s);
     if o.check_only {
         command.arg("--check-only");
     }
@@ -573,5 +593,12 @@ mod tests {
         assert_eq!(parse(&args(&["--profile", "mix", "--show"])).unwrap().action, "show");
         assert!(parse(&args(&["--profile", "mix", "--check-only"])).unwrap().check_only);
         assert!(parse(&args(&["--profile", "mix", "--unknown-flag"])).is_err());
+        let selected = parse(&args(&["--profile","mix","--light-max-wait-s","7.5","--check-only"])).unwrap();
+        let mut child = Command::new("route-engine");
+        forward_wait(&mut child,selected.light_max_wait_s);
+        assert_eq!(child.get_args().collect::<Vec<_>>(), ["--light-max-wait-s","7.5"]);
+        assert!(selected.check_only);
+        assert!(parse(&args(&["--light-max-wait-s","NaN"])).is_err());
+        assert!(parse(&args(&["--light-max-wait-s","-1"])).is_err());
     }
 }

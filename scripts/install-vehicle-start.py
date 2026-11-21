@@ -36,9 +36,10 @@ active=json.loads((Path(package['stage'])/'race-launch.json').read_text())
 active['profiles'].pop('default',None)
 temporary.write_text(json.dumps(active,indent=2)+'\\n');temporary.replace(config)
 lines=[]
+numbered=(base/'race-programs/current/program-2').is_file()
 for profile, settings in active['profiles'].items():
  name='start_'+profile
- lines.append(name+'() {{ '+prefix+program+' start --profile '+profile+' "$@"; }}')
+ if not numbered: lines.append(name+'() {{ '+prefix+program+' start --profile '+profile+' "$@"; }}')
  lines.append('stop_'+profile+'() {{ '+prefix+program+' start --profile '+profile+' --stop; }}')
  marker=base/('current-race-'+profile+'.json')
  marker.write_text(json.dumps({{'label':package['label'],'source_commit':package['source_commit'],
