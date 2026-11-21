@@ -40,6 +40,7 @@ pub struct CrosswalkStopPlan {
     last_scan_at: Option<f64>,
     pub scan_s: Option<f64>,
     last_integral: Option<f64>,
+    front_to_rear_offset: Option<f64>,
     /// y68: the IMU forward acceleration over the last scan interval.
     pub imu_accel: Option<f64>,
 }
@@ -80,6 +81,34 @@ pub(crate) fn board_ahead(scan: &V) -> Option<f64> {
 }
 
 impl CrosswalkStopPlan {
+    pub fn has_optical_observation(&self, moving_fix: bool) -> bool {
+        moving_fix || self.planned.is_some() || !self.fixes.is_empty()
+            || !self.direct_frames.is_empty() || !self.frames.is_empty()
+    }
+
+    /// Reuse an offset only within one front-board track. The lane speed
+    /// history already resets when samples are lost or their range jumps.
+    pub fn front_on_rear_track(&mut self, rear: Option<f64>, front: Option<f64>, continuous: bool) -> Option<f64> {
+        self.front_to_rear_offset = match (rear, front) {
+            (Some(rear), Some(front)) => Some(rear - front),
+            (None, Some(_)) if continuous => self.front_to_rear_offset,
+            _ => None,
+        };
+        front.zip(self.front_to_rear_offset).map(|(range, offset)| range + offset)
+    }
+
+    /// Only called before a plan exists, when the old and new tracks cannot
+    /// be related. Keep the IMU rest and the time movement actually began.
+    pub fn discard_unpaired_observations(&mut self) {
+        self.frames.clear();
+        self.direct_frames.clear();
+        self.board_ahead.clear();
+        self.fixes.clear();
+        self.gap_distances.clear();
+        self.yolo_fixes = 0;
+        self.rust_fixes = 0;
+    }
+
     pub fn push_frame(&mut self, captured: f64, edge_y: f64, base_y: f64) {
         if self.planned.is_none() {
             self.frames.push((captured - CROSSWALK_CAMERA_LAG_S, edge_y, base_y));
@@ -197,6 +226,18 @@ impl CrosswalkStopPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn front_board_only_continues_a_paired_unbroken_track() {
+        let mut plan = CrosswalkStopPlan::default();
+        assert_eq!(plan.front_on_rear_track(None, Some(7.0), false), None);
+        assert_eq!(plan.front_on_rear_track(Some(-0.5), Some(7.5), false), Some(-0.5));
+        assert_eq!(plan.front_on_rear_track(None, Some(7.0), true), Some(-1.0));
+        assert_eq!(plan.front_on_rear_track(None, Some(3.0), false), None);
+        assert_eq!(plan.front_on_rear_track(Some(-1.5), Some(6.5), true), Some(-1.5));
+        assert_eq!(plan.front_on_rear_track(None, None, false), None);
+        assert_eq!(plan.front_on_rear_track(None, Some(6.0), true), None);
+    }
 
     #[test]
     fn no_visual_fixes_never_invents_a_fixed_crosswalk() {
