@@ -1397,12 +1397,14 @@ impl Maneuver {
             result.set("motor", TRIAL_MOTOR);
         }
         let motor = result.get("motor").i();
-        if self.race_inputs.is_some() {
-            let active = self.phase == "drive" && !self.quality_resume_pending
+        if self.race_program || self.race_inputs.is_some() {
+            let active = self.race_inputs.is_some() && self.phase == "drive" && !self.quality_resume_pending
                 && ((self.route_stage == "start_lane" && self.crosswalk_state == Some("done"))
                     || matches!(self.route_stage, "first_target" | "open_transfer" | "second_loop"));
             let speed = self.race_inputs.and_then(|i| self.race_surface_speed.speed(now, i.forward_integral));
             result.set("motor", self.race_surface.compensate(motor, speed, now, active));
+        }
+        if self.race_inputs.is_some() {
             result.set("surface_response", self.race_surface.diagnostics());
             result.set("wall_turn", self.wall_turn.diagnostics());
             result.set("surface_speed", self.race_surface_speed.diagnostics());

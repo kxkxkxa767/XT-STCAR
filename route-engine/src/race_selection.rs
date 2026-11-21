@@ -14,8 +14,8 @@ struct Choice<'a> {
 fn parse<'a>(name: &'a str, flags: &'a [String]) -> Result<Choice<'a>, String> {
     let entry = name.strip_prefix("start_").and_then(|v| v.split_once('_'));
     let (program, seconds) = entry.ok_or("用法为 start_程序号_最大等灯秒数，例如 start_1_7")?;
-    if !matches!(program, "1" | "2") {
-        return Err("程序 1 为现场实跑版，程序 2 为建图版".into());
+    if !matches!(program, "1" | "2" | "3") {
+        return Err("程序 1 为现场实跑版，程序 2 为建图版，程序 3 为前进油门上限 1560 的建图版".into());
     }
     let decimal = seconds.split_once('.');
     let digits = |v: &str| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit());
@@ -112,7 +112,11 @@ mod tests {
         );
         assert_eq!(parse("start_1_0", &[]).unwrap().profile, "mix");
         assert!(parse("start_1_240", &[]).is_ok());
-        for bad in ["start_3_7", "start_1_-1", "start_1_nan", "start_2_7_extra", "start_1_"] {
+        let third = parse("start_3_7", &[]).unwrap().command(Path::new("/race"));
+        assert_eq!(third.get_program(), Path::new("/race/program-3"));
+        assert_eq!(third.get_args().collect::<Vec<_>>(),
+            ["start", "--config", "/race/program-3.json", "--profile", "mix", "--light-max-wait-s", "7"]);
+        for bad in ["start_4_7", "start_1_-1", "start_1_nan", "start_2_7_extra", "start_1_"] {
             assert!(parse(bad, &[]).is_err());
         }
         assert!(parse("start_1_7", &["--light-max-wait-s".into(), "999".into()]).is_err());

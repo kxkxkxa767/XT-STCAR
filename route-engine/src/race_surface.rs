@@ -8,6 +8,9 @@ use crate::maneuver::{HOLD_PWM_MAX, HOLD_PWM_STEP, LANE_COAST_DECEL_SE_MAX_MPS2,
 use crate::motion_sensors::ESC_COAST_DELAY_S;
 use crate::py::V;
 
+/// Maximum forward ESC command for race program 3, including any load compensation.
+pub(crate) const FORWARD_PWM_MAX: i64 = 1560;
+
 // y65: the indoor coast decel of y57-y64 pooled, IMU pairs .588 (n 86) and the lidar coast
 // fits .615 (n 46); y57 had .574 from y53.
 const REFERENCE_COAST_MPS2: f64 = 0.60;
@@ -182,9 +185,10 @@ impl SurfaceResponse {
         }
     }
 
-    /// Return an existing forward-hold PWM. The base speed controller still owns
-    /// its normal changes; only this additive load correction is rate limited.
+    /// Apply the race output ceiling, including launches without a speed estimate.
+    /// A slower hold may use the remaining room for the existing load compensation.
     pub fn compensate(&mut self, base_pwm: i64, speed: Option<f64>, now: f64, active: bool) -> i64 {
+        let base_pwm = base_pwm.min(FORWARD_PWM_MAX);
         let dt = self.compensation_at.replace(now).map(|last| now - last);
         let current_speed = speed.filter(|v| v.is_finite() && *v >= 0.);
         let fresh = self.previous.is_some_and(|last| (0. ..=SCAN_AGE_S).contains(&(now - last.at)));
@@ -201,7 +205,7 @@ impl SurfaceResponse {
         // correction at the same slew rate while this forward hold continues.
         let desired = current_speed.filter(|_| fresh)
             .map_or(0, |speed| self.required_pwm(base_pwm, speed) - base_pwm);
-        self.compensation_pwm = self.compensation_pwm.min(HOLD_PWM_MAX - base_pwm);
+        self.compensation_pwm = self.compensation_pwm.min(FORWARD_PWM_MAX - base_pwm);
         if desired == self.compensation_pwm {
             self.compensation_credit = 0.;
         } else {
@@ -220,7 +224,7 @@ impl SurfaceResponse {
 
     fn required_pwm(&self, base_pwm: i64, speed: f64) -> i64 {
         let wanted_accel = reference_acceleration(base_pwm, speed) + (self.extra_load_mps2 - LOAD_DEADBAND_MPS2).max(0.);
-        (base_pwm..=HOLD_PWM_MAX).step_by(HOLD_PWM_STEP as usize)
+        (base_pwm..=FORWARD_PWM_MAX).step_by(HOLD_PWM_STEP as usize)
             .min_by(|a, b| {
                 let a_error = (reference_acceleration(*a, speed) - wanted_accel).abs();
                 let b_error = (reference_acceleration(*b, speed) - wanted_accel).abs();
@@ -232,14 +236,15 @@ impl SurfaceResponse {
     /// Budget the current correction, or its next possible five-PWM step. This
     /// is a read-only propulsion forecast for the existing coast calculation.
     pub fn predicted_hold_accel(&self, base_pwm: i64, speed: Option<f64>, now: f64) -> Option<f64> {
+        let base_pwm = base_pwm.min(FORWARD_PWM_MAX);
         let speed = speed.filter(|v| v.is_finite() && *v >= 0.)?;
         if !hold_motor(base_pwm) || !now.is_finite() {
             return None;
         }
-        let current_pwm = (base_pwm + self.compensation_pwm).min(HOLD_PWM_MAX);
+        let current_pwm = (base_pwm + self.compensation_pwm).min(FORWARD_PWM_MAX);
         let fresh = self.previous.is_some_and(|last| (0. ..=SCAN_AGE_S).contains(&(now - last.at)));
         let next_pwm = if fresh && self.required_pwm(base_pwm, speed) > current_pwm {
-            (current_pwm + HOLD_PWM_STEP).min(HOLD_PWM_MAX)
+            (current_pwm + HOLD_PWM_STEP).min(FORWARD_PWM_MAX)
         } else { current_pwm };
         if next_pwm == base_pwm { return None; }
         let measured = self.latest_actual_accel
@@ -249,10 +254,10 @@ impl SurfaceResponse {
     }
 
     /// Forward-throttle forecast including the base command, not just its load
-    /// compensation. In particular, uncompensated 1570 still accelerates the
-    /// car. The 1530 rolling hold has no fitted response and is not extrapolated
-    /// from the 1550 anchor; its consumers use the current IMU slope instead.
+    /// compensation and this program's ceiling. The 1530 rolling hold has no
+    /// fitted response; its consumers use the current IMU slope instead.
     pub fn predicted_drive_accel(&self, pwm: i64, speed: Option<f64>, now: f64) -> Option<f64> {
+        let pwm = pwm.min(FORWARD_PWM_MAX);
         let speed = speed.filter(|v| v.is_finite() && *v >= 0.)?;
         if !hold_motor(pwm) || !now.is_finite() { return None; }
         let measured = self.latest_actual_accel
@@ -273,6 +278,7 @@ impl SurfaceResponse {
 
     pub fn diagnostics(&self) -> V {
         dict! {
+            "forward_pwm_max" => FORWARD_PWM_MAX,
             "effective_extra_load_mps2" => self.extra_load_mps2,
             "last_load_sample_mps2" => self.last_load_sample_mps2,
             "learning_samples" => self.learned_samples as i64,
@@ -284,6 +290,60 @@ impl SurfaceResponse {
             "initial_load_mps2" => self.initial_load_mps2,
             "imu_rest_bias_mps2" => self.rest_bias_mps2,
             "basis" => "local_longitudinal_response_including_surface_battery_and_drivetrain",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::maneuver::Maneuver;
+
+    #[test]
+    fn race_decisions_and_motor_history_use_the_applied_pwm() {
+        for (stage, requested, expected) in [
+            ("start_lane", 1610, 1560), ("start_lane", 1600, 1560),
+            ("start_lane", 1500, 1500), ("open_transfer", 1590, 1560),
+            ("open_transfer", 1555, 1555), ("light_lane", 1600, 1560),
+            ("light_lane", 1565, 1560), ("light_lane", 1560, 1560),
+            ("light_lane", 1550, 1550), ("light_lane", 1530, 1530),
+            ("light_lane", 1500, 1500), ("light_lane", 1300, 1300),
+        ] {
+            let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
+            m.race_program = true;
+            m.race_inputs = Some(Default::default());
+            m.phase = "drive";
+            m.entry_kind = Some("lane");
+            m.route_stage = stage;
+            m.drive_since = Some(0.);
+            m._launch_until = Some(0.);
+            m._start_motor = requested;
+            m._transfer_motor = requested;
+            m.lane_motor = requested;
+            let actual = m.result(1.).idx("motor").i();
+            assert_eq!(actual, expected, "{stage} request {requested}");
+            assert_eq!(m._power_cmd_motor, (expected > NEUTRAL).then_some(expected));
+        }
+    }
+
+    #[test]
+    fn load_compensation_and_propulsion_forecasts_respect_the_same_ceiling() {
+        let mut response = SurfaceResponse::default();
+        response.set_initial_load(3.);
+        let mut applied = 1550;
+        for seq in 0..20 {
+            let at = seq as f64 * 0.1;
+            response.observe(seq, at, applied, Some(1.), None, None, None);
+            applied = response.compensate(1550, Some(1.), at, true);
+            assert!((1550..=1560).contains(&applied));
+        }
+        assert_eq!(applied, 1560);
+        assert_eq!(response.last_compensated_command.map(|c| c.0), Some(applied));
+        assert_eq!(response.predicted_drive_accel(1600, Some(1.), 1.9),
+                   response.predicted_drive_accel(1560, Some(1.), 1.9));
+        assert_eq!(response.predicted_hold_accel(1590, Some(1.), 1.9), None);
+        for pwm in [1300, 1500, 1530] {
+            assert_eq!(response.compensate(pwm, Some(1.), 2., true), pwm);
         }
     }
 }

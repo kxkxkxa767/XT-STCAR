@@ -2352,7 +2352,11 @@ mod race_start_tests {
             let session = s.session.as_ref().expect("offline session remained active");
             assert!(session.report.get("quality_issues").l().is_empty());
             assert!(!session.report.get("perception_recovering").truthy());
-            if s.emits.iter().any(|e| e.op == "drive" && e.motor.f() > 1500.) { return; }
+            if let Some(command) = s.emits.iter().find(|e| e.op == "drive" && e.motor.f() > 1500.) {
+                assert!(command.motor.i() <= crate::race_surface::FORWARD_PWM_MAX);
+                assert_eq!(command.motor.i(), session.report.get("current_pwm").i());
+                return;
+            }
         }
         panic!("no drive command in the offline start handshake");
     }

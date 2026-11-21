@@ -508,7 +508,8 @@ fn entry(o: Options, internal_run: bool) -> Result<()> {
             if let Some(limit) = o.light_max_wait_s {
                 println!("{}",json!({"program":config["program_number"],"label":config["label"],
                     "source_commit":config["source_commit"],"base_source":config["base_source"],
-                    "profile":o.profile,"light_max_wait_s":limit,"executable":std::env::current_exe()?}));
+                    "profile":o.profile,"light_max_wait_s":limit,"forward_pwm_max":crate::race_surface::FORWARD_PWM_MAX,
+                    "executable":std::env::current_exe()?}));
             } else { println!("{} / {}", text(&config, "label")?, o.profile); }
             return Ok(());
         }
