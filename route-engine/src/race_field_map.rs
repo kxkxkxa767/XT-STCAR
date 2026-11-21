@@ -590,6 +590,10 @@ impl Locator {
             .filter(|f| Some(f.seq) == scan.get("seq").oi() && Some(f.at) == scan.get("received_at").of())
     }
 
+    pub fn longitudinal_position(&self, scan: &V) -> Option<f64> {
+        Some(self.current(scan)?.pose.x_m)
+    }
+
     pub fn heading(&self, scan: &V) -> Option<f64> {
         Some(self.current(scan)?.pose.yaw_rad)
     }

@@ -40,6 +40,8 @@ pub struct CrosswalkStopPlan {
     last_scan_at: Option<f64>,
     pub scan_s: Option<f64>,
     last_integral: Option<f64>,
+    map_pair: Option<(f64, f64)>,
+    map_origin: bool,
     /// y68: the IMU forward acceleration over the last scan interval.
     pub imu_accel: Option<f64>,
 }
@@ -80,6 +82,35 @@ pub(crate) fn board_ahead(scan: &V) -> Option<f64> {
 }
 
 impl CrosswalkStopPlan {
+    /// Keep one decreasing longitudinal coordinate throughout this optical stop.
+    /// A paired real measurement fixes the offset; its occasional return never
+    /// switches a map-origin plan into the unrelated front-board coordinate.
+    pub fn aligned_track(&mut self, raw: Option<f64>, field_x: Option<f64>, at_first_fix: bool) -> Option<f64> {
+        if let (Some(track), Some(x)) = (raw, field_x) {
+            self.map_pair = Some((track, x));
+        }
+        let optical = self.planned.is_some() || !self.direct_frames.is_empty() || !self.frames.is_empty();
+        if at_first_fix && raw.is_none() && field_x.is_some() && optical {
+            self.map_origin = true;
+        }
+        if self.map_origin {
+            return field_x.map(|x| -x).or_else(|| {
+                let (paired, x) = self.map_pair?;
+                Some(-x + raw? - paired)
+            });
+        }
+        raw.or_else(|| {
+            if !optical { return None; }
+            let (paired, x) = self.map_pair?;
+            Some(paired - (field_x? - x))
+        })
+    }
+
+    pub fn map_origin(&self) -> bool { self.map_origin }
+
+    pub fn change_unplanned_reference(&mut self) {
+        self.map_pair = None;
+    }
     pub fn push_frame(&mut self, captured: f64, edge_y: f64, base_y: f64) {
         if self.planned.is_none() {
             self.frames.push((captured - CROSSWALK_CAMERA_LAG_S, edge_y, base_y));
@@ -197,6 +228,22 @@ impl CrosswalkStopPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_central_rays_preserve_the_coordinates_of_the_optical_fix() {
+        let mut p = CrosswalkStopPlan::default();
+        assert_eq!(p.aligned_track(Some(-0.42), Some(0.38), true), Some(-0.42));
+        assert_eq!(p.aligned_track(None, Some(0.50), false), None);
+        p.planned=Some(-2.6);
+        assert!((p.aligned_track(None, Some(0.58), false).unwrap()+0.62).abs()<1e-9);
+        assert_eq!(p.aligned_track(None,None,false),None);
+        assert_eq!(p.aligned_track(Some(-0.76), Some(0.70), false), Some(-0.76));
+        let mut from_map = CrosswalkStopPlan::default();
+        from_map.push_direct_fix(0.1,2.10,0.14,None,"rust");
+        assert_eq!(from_map.aligned_track(None,Some(0.40),true),Some(-0.40));
+        assert_eq!(from_map.aligned_track(Some(7.5),Some(0.50),false),Some(-0.50));
+        assert!((from_map.aligned_track(Some(7.40),None,false).unwrap()+0.60).abs()<1e-9);
+    }
 
     #[test]
     fn no_visual_fixes_never_invents_a_fixed_crosswalk() {
