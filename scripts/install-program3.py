@@ -29,12 +29,14 @@ fi
 '''
 
 REMOTE = r'''
-import hashlib, json, os, shutil, stat, subprocess, sys, tempfile
+import fcntl, hashlib, json, os, shutil, stat, subprocess, sys, tempfile
 from pathlib import Path
 
 digest, revision, base_revision, binding, path_entry = sys.argv[1:]
 home = Path.home()
 programs = home / "xt-stcar-console/race-programs"
+install_lock = os.open(programs, os.O_RDONLY)
+fcntl.flock(install_lock, fcntl.LOCK_EX)
 normal = programs / "current"
 active = programs / "program3-current"
 release = programs / ("p3-1560-" + digest[:16])

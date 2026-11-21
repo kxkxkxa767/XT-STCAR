@@ -14,6 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 HOST = "bianbu@192.168.0.156"
 SOCKET = ROOT / "work/vehicle-test-ssh.sock"
 
+PATH_ENTRY = r'''#!/bin/sh
+export LD_LIBRARY_PATH="/opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$HOME/xt-stcar-console/race-programs/current/program-2" select-start "${0##*/}" "$@"
+'''
+
 # Bash handles unbounded numeric command names. Common whole-second names
 # also work in a terminal opened before installation through normal PATH lookup.
 BINDING = r'''# BEGIN XT-STCAR NUMBERED RACE
@@ -48,14 +53,18 @@ fi
 
 REMOTE = r'''
 from pathlib import Path
-import copy, datetime, hashlib, json, os, shutil, stat, subprocess, sys, tarfile, tempfile
+import copy, datetime, fcntl, hashlib, json, os, shutil, stat, subprocess, sys, tarfile, tempfile
 home=Path.home()
 base=home/'xt-stcar-console'
 root=base/'race-programs'
 root.mkdir(exist_ok=True)
+# Both installers update the same Bash file and read the active release.
+install_lock=os.open(root,os.O_RDONLY)
+fcntl.flock(install_lock,fcntl.LOCK_EX)
 manifest=json.loads(sys.argv[1])
-binding=sys.argv[2]
-release=root/('p1-'+manifest['1']['sha256'][:12]+'-p2-'+manifest['2']['sha256'][:12])
+binding,path_entry=sys.argv[2:]
+entry_hash=hashlib.sha256(path_entry.encode()).hexdigest()[:12]
+release=root/('p1-'+manifest['1']['sha256'][:12]+'-p2-'+manifest['2']['sha256'][:12]+'-entry-'+entry_hash)
 active=root/'current'
 if active.exists() and not active.is_symlink(): raise RuntimeError('existing current is not a release link')
 launch=json.loads((base/'race-launch.json').read_bytes())
@@ -71,13 +80,13 @@ def sha(path):
     return h.hexdigest()
 rc=home/'.bashrc';original=rc.read_text()
 start='# BEGIN XT-STCAR NUMBERED RACE';end='# END XT-STCAR NUMBERED RACE'
-clean=original
+clean=''.join(line for line in original.splitlines(keepends=True)
+              if not (line.startswith(('start()','start_dark()','start_light()','start_mix()')) and '/xt-stcar-console/' in line))
 if start in clean:
     i=clean.index(start);j=clean.index(end,i)+len(end)
-    clean=clean[:i]+clean[j:].lstrip('\n')
-clean=''.join(line for line in clean.splitlines(keepends=True)
-              if not (line.startswith(('start()','start_dark()','start_light()','start_mix()')) and '/xt-stcar-console/' in line))
-updated=binding.rstrip()+'\n\n'+clean
+    updated=clean[:i]+binding.rstrip('\n')+clean[j:]
+else:
+    updated=binding.rstrip()+'\n\n'+clean
 old=Path(os.readlink(active)) if active.is_symlink() else None
 with tempfile.TemporaryDirectory(prefix='.install-',dir=root) as tmp:
     temp=Path(tmp);payload=temp/'programs';payload.mkdir(mode=0o755)
@@ -97,8 +106,13 @@ with tempfile.TemporaryDirectory(prefix='.install-',dir=root) as tmp:
         config.update(program_number=int(n),label=meta['label'],source_commit=meta['source'],base_source=meta['base'],
             evidence_prefix='left-cone-trial-'+datetime.date.today().strftime('%Y%m%d')+'-'+meta['label']+'-program'+n)
         (payload/('program-'+n+'.json')).write_text(json.dumps(config,indent=2)+'\n')
+    entry=payload/'path-entry'
+    entry.write_text(path_entry);entry.chmod(0o755)
+    subprocess.run(['/bin/sh','-n',str(entry)],check=True)
     if not release.exists(): os.rename(payload,release)
     else:
+        entry=release/'path-entry'
+        if entry.read_text()!=path_entry or not os.access(entry,os.X_OK): raise RuntimeError('release entry differs')
         for n,meta in manifest.items():
             if sha(release/('program-'+n))!=meta['sha256']: raise RuntimeError('release collision '+n)
             cfg=json.loads((release/('program-'+n+'.json')).read_bytes())
@@ -108,33 +122,52 @@ with tempfile.TemporaryDirectory(prefix='.install-',dir=root) as tmp:
     rc_tmp.write_text(updated);os.chmod(rc_tmp,stat.S_IMODE(rc.stat().st_mode))
     subprocess.run(['/bin/bash','-n',str(rc_tmp)],check=True)
     links=home/'.local/bin';links.mkdir(parents=True,exist_ok=True)
-    shortcuts=[f'start_{n}_{seconds}' for n in (1,2) for seconds in range(61)]
-    for key in shortcuts:
-        l=links/key
-        if (l.exists() or l.is_symlink()) and not (l.is_symlink() and Path(os.readlink(l))==active/'program-2'):
-            raise RuntimeError('existing user command '+str(l))
+    target=active/'path-entry'
+    previous={}
+    for n in (1,2):
+        for seconds in range(61):
+            shortcut=links/f'start_{n}_{seconds}'
+            if shortcut.is_symlink():
+                prior=Path(os.readlink(shortcut))
+                if prior not in (active/'program-2',target):
+                    raise RuntimeError('existing user command '+str(shortcut))
+            elif shortcut.exists():
+                raise RuntimeError('existing user command '+str(shortcut))
+            else:
+                prior=None
+            if prior!=target: previous[shortcut]=prior
     if original!=updated:
         saved=root/'shell-backups';saved.mkdir(mode=0o700,exist_ok=True)
         backup=saved/('bashrc-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
         shutil.copy2(rc,backup);backup.chmod(0o600)
+    if rc.read_text()!=original: raise RuntimeError('Bash configuration changed during installation')
     link=temp/'current';link.symlink_to(release.name)
-    os.replace(link,active)
-    created=[]
-    try:
-        if original!=updated:os.replace(rc_tmp,rc)
-        for key in shortcuts:
-            l=links/key
-            if not l.is_symlink():l.symlink_to(active/'program-2');created.append(l)
-    except BaseException:
-        for l in created:l.unlink(missing_ok=True)
-        if old is None:active.unlink(missing_ok=True)
-        else:
-            link.symlink_to(old);os.replace(link,active)
-        if original!=updated:
-            rc_tmp.write_text(original);os.chmod(rc_tmp,stat.S_IMODE(rc.stat().st_mode));os.replace(rc_tmp,rc)
-        raise
-    finally:
-        rc_tmp.unlink(missing_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.numbered-',dir=links) as link_tmp:
+        staged=Path(link_tmp)/'next'
+        changed=[]
+        os.replace(link,active)
+        try:
+            if original!=updated:os.replace(rc_tmp,rc)
+            for shortcut,prior in previous.items():
+                if prior is None:
+                    shortcut.symlink_to(target)
+                else:
+                    staged.symlink_to(target)
+                    os.replace(staged,shortcut)
+                changed.append(shortcut)
+        except BaseException:
+            staged.unlink(missing_ok=True)
+            for shortcut in reversed(changed):
+                prior=previous[shortcut]
+                if prior is None: shortcut.unlink()
+                else:
+                    staged.symlink_to(prior);os.replace(staged,shortcut)
+            if old is None:active.unlink(missing_ok=True)
+            else:
+                link.symlink_to(old);os.replace(link,active)
+            if original!=updated:
+                rc_tmp.write_text(original);os.chmod(rc_tmp,stat.S_IMODE(rc.stat().st_mode));os.replace(rc_tmp,rc)
+            raise
 print(json.dumps({'release':str(release),'programs':manifest,'source_uploaded':False,'race_started':False}))
 '''
 
@@ -158,7 +191,7 @@ def main():
                 member = tarfile.TarInfo(f"program-{n}"); member.mode = 0o755; member.size = len(binary)
                 archive.addfile(member,io.BytesIO(binary))
         stream.seek(0)
-        command = shlex.join(["python3","-B","-c",REMOTE,json.dumps(release),BINDING])
+        command = shlex.join(["python3","-B","-c",REMOTE,json.dumps(release),BINDING,PATH_ENTRY])
         subprocess.run(["ssh","-S",str(SOCKET),"-o","BatchMode=yes","-o","ConnectTimeout=5",HOST,command],
                        cwd=ROOT,stdin=stream,check=True,timeout=100)
 
