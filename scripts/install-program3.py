@@ -11,6 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 COPY_BASE = "0492cdc397ae6a4afd8d1cde56bd7a466416c8a1"
 HOST = "bianbu@192.168.0.156"
 
+PATH_ENTRY = r'''#!/bin/sh
+export LD_LIBRARY_PATH="/opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$HOME/xt-stcar-console/race-programs/program3-current/program-3" select-start "${0##*/}" "$@"
+'''
+
 BASH_BINDING = r'''# BEGIN XT-STCAR PROGRAM 3
 if [ -n "${BASH_VERSION:-}" ]; then
     __xt_stcar_numbered_entry() {
@@ -27,7 +32,7 @@ REMOTE = r'''
 import hashlib, json, os, shutil, stat, subprocess, sys, tempfile
 from pathlib import Path
 
-digest, revision, base_revision, binding = sys.argv[1:]
+digest, revision, base_revision, binding, path_entry = sys.argv[1:]
 home = Path.home()
 programs = home / "xt-stcar-console/race-programs"
 normal = programs / "current"
@@ -51,7 +56,7 @@ pos = clean.index(base_end) + len(base_end)
 updated = clean[:pos] + binding + clean[pos:]
 
 shortcuts = [home / ".local/bin" / ("start_3_" + str(s)) for s in range(61)]
-target = active / "program-3"
+target = active / "path-entry"
 for link in shortcuts:
     if (link.is_symlink() or link.exists()) and not (link.is_symlink() and os.readlink(link) == str(target)):
         raise RuntimeError("existing user command: " + str(link))
@@ -66,6 +71,10 @@ with tempfile.TemporaryDirectory(prefix=".install-program3-", dir=programs) as s
     if hashlib.sha256(binary.read_bytes()).hexdigest() != digest:
         raise RuntimeError("program 3 transfer incomplete")
     binary.chmod(0o755)
+    entry = payload / "path-entry"
+    entry.write_text(path_entry)
+    entry.chmod(0o755)
+    subprocess.run(["/bin/sh", "-n", str(entry)], check=True)
     settings = payload / "program-3.json"
     settings.write_text(json.dumps(config, indent=2) + "\n")
     # The selector can also delegate explicitly named 1/2 calls to their normal release.
@@ -73,13 +82,18 @@ with tempfile.TemporaryDirectory(prefix=".install-program3-", dir=programs) as s
         for suffix in ("", ".json"):
             name = f"program-{n}{suffix}"
             (payload / name).symlink_to(Path("..") / "current" / name)
+    env = os.environ.copy()
+    ros_libs = "/opt/ros/humble/lib/riscv64-linux-gnu:/opt/ros/humble/lib"
+    env["LD_LIBRARY_PATH"] = ros_libs + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     shown = json.loads(subprocess.check_output([str(binary), "start", "--config", str(settings),
-        "--profile", "mix", "--light-max-wait-s", "7", "--show"], text=True))
+        "--profile", "mix", "--light-max-wait-s", "7", "--show"], text=True, env=env))
     if (shown["program"], shown["forward_pwm_max"], shown["light_max_wait_s"]) != (3, 1560, 7):
         raise RuntimeError("wrong program 3 binary or settings")
     if not release.exists():
         os.rename(payload, release)
-    elif hashlib.sha256((release / "program-3").read_bytes()).hexdigest() != digest or json.loads((release / "program-3.json").read_bytes()) != config:
+    elif (hashlib.sha256((release / "program-3").read_bytes()).hexdigest() != digest
+          or json.loads((release / "program-3.json").read_bytes()) != config
+          or (release / "path-entry").read_text() != path_entry):
         raise RuntimeError("existing program 3 release differs")
 
     rc_new = tmp / "bashrc"
@@ -138,7 +152,7 @@ def main():
         ["git", "rev-parse", "--verify", args.source + "^{commit}"], cwd=ROOT, text=True
     ).strip()
     command = shlex.join(["python3", "-B", "-c", REMOTE, hashlib.sha256(binary).hexdigest(),
-                          revision, COPY_BASE, BASH_BINDING])
+                          revision, COPY_BASE, BASH_BINDING, PATH_ENTRY])
     subprocess.run(["ssh", "-S", str(args.socket.resolve()), "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
                     HOST, command], input=binary, check=True, timeout=100)
 
