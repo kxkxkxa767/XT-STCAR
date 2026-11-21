@@ -1,0 +1,117 @@
+{
+  "time_asia_taipei": "2026-11-21 19:16",
+  "scope": "程序 3 独立副本的前进 PWM 上限、入口与锁定检查",
+  "base": "0492cdc397ae6a4afd8d1cde56bd7a466416c8a1",
+  "branch": "race/program3-1560",
+  "binary": {
+    "source": "8d12c2761ce356ac2178f6f0867b858401109c5c",
+    "sha256": "f2691bffabaea62046547b07c1d7afa8f7ac42398280ce7604a0c8421f619fb8",
+    "bytes": 4082032,
+    "target": "riscv64gc-unknown-linux-gnu.2.38",
+    "profile": "ros2-humble"
+  },
+  "policy": {
+    "forward_max_pwm": 1560,
+    "preserved_examples": [
+      1530,
+      1550,
+      1500,
+      1300
+    ]
+  },
+  "host": {
+    "rust_tests": 80,
+    "console_tests": 970,
+    "clippy_warnings": 32,
+    "ros2_elf_passed": true
+  },
+  "installed": {
+    "program": 3,
+    "release": "/home/bianbu/xt-stcar-console/race-programs/p3-1560-f2691bffabaea620",
+    "source_commit": "8d12c2761ce356ac2178f6f0867b858401109c5c",
+    "sha256": "f2691bffabaea62046547b07c1d7afa8f7ac42398280ce7604a0c8421f619fb8",
+    "forward_pwm_max": 1560,
+    "normal_release": "p1-019f0faeb843-p2-a594f5eb04c1",
+    "started": false
+  },
+  "shows": {
+    "start_1_7": {
+      "program": 1,
+      "label": "y114",
+      "profile": "mix",
+      "light_max_wait_s": 7.0,
+      "source_commit": "72abaedcfbb5f0f7f842f7823cb7c9cc63582f6d"
+    },
+    "start_2_7": {
+      "program": 2,
+      "label": "y115",
+      "profile": "mix",
+      "light_max_wait_s": 7.0,
+      "source_commit": "eb754f8e0fa4c2b4e3e240a569c998bb45e085ae"
+    },
+    "start_3_7": {
+      "program": 3,
+      "label": "y115-1560",
+      "profile": "mix",
+      "light_max_wait_s": 7.0,
+      "source_commit": "8d12c2761ce356ac2178f6f0867b858401109c5c",
+      "forward_pwm_max": 1560
+    },
+    "start_3_8.5": {
+      "program": 3,
+      "label": "y115-1560",
+      "profile": "mix",
+      "light_max_wait_s": 8.5,
+      "source_commit": "8d12c2761ce356ac2178f6f0867b858401109c5c",
+      "forward_pwm_max": 1560
+    },
+    "start_3_72.5": {
+      "program": 3,
+      "label": "y115-1560",
+      "profile": "mix",
+      "light_max_wait_s": 72.5,
+      "source_commit": "8d12c2761ce356ac2178f6f0867b858401109c5c",
+      "forward_pwm_max": 1560
+    },
+    "start_3_7 --profile light": {
+      "program": 3,
+      "label": "y115-1560",
+      "profile": "light",
+      "light_max_wait_s": 7.0,
+      "source_commit": "8d12c2761ce356ac2178f6f0867b858401109c5c",
+      "forward_pwm_max": 1560
+    }
+  },
+  "clean_shell_integer_shortcut": {
+    "command": "env -u LD_LIBRARY_PATH ~/.local/bin/start_3_7 --show",
+    "program": 3,
+    "forward_pwm_max": 1560
+  },
+  "locked_check": {
+    "command": "start_3_7 --check-only",
+    "directory": "left-cone-trial-y115-1560-program3",
+    "processes": {
+      "unit_check_only": true,
+      "race_mode": "never",
+      "race_wait": "7",
+      "hardware_control": true,
+      "hardware_lidar": true
+    },
+    "turn_ready": true,
+    "started": false,
+    "program_exit": 0,
+    "vision_ready": true,
+    "scan_seq": 201,
+    "lidar_valid_bins": 360,
+    "lidar_total_bins": 360,
+    "neutral_samples": 6,
+    "race_service": "inactive",
+    "console_service": "active",
+    "motor": 1500,
+    "servo": 1500,
+    "armed": false
+  },
+  "program_1_2_binaries_unchanged": true,
+  "desktop_n10_files_verified": 440,
+  "physical_run": false
+}
