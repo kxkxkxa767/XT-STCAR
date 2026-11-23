@@ -74,18 +74,6 @@ mod continuous_race_tests {
     }
 
     #[test]
-    fn unlit_pass_carries_motion_instead_of_losing_the_finish_imu_anchor() {
-        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
-        m.race_inputs = Some(crate::motion_sensors::RaceInputs { forward_integral: Some(4.2), ..Default::default() });
-        m.race_light.last_speed = Some((1., 1.1));
-        m.prepare_finish_pass(1.1, 0.);
-        assert!((m.finish_imu_speed().unwrap() - 1.1).abs() < 1e-12);
-        m.race_inputs.as_mut().unwrap().forward_integral = Some(4.7);
-        assert!((m.finish_imu_speed().unwrap() - 1.6).abs() < 1e-12);
-        assert!(m.finish.launch_until.is_none());
-    }
-
-    #[test]
     fn race_finish_launches_then_uses_a_moving_hold_and_one_brake() {
         let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
         m.phase = "drive";
@@ -324,26 +312,6 @@ impl Maneuver {
             self.finish.board = crate::race_end_board::observe(scan, heading, speed, input.yaw_rate);
             self.finish.board.map(|b| b.range).or_else(|| crate::race_light::observed_end_wall(scan, heading))
         } else { self.lane_front_range(scan) }
-    }
-
-    /// Passing without a red/green stop has no rest-at-green initialization.
-    /// Carry the existing measured velocity, including a nonzero rolling pass.
-    pub(super) fn prepare_finish_pass(&mut self, now: f64, heading: f64) {
-        let Some(input) = self.race_inputs else { return };
-        let speed = self.race_light.entry_motion.speed(now, input.forward_integral).or_else(|| {
-            self.race_light_brake.control_speed(now, input.forward_integral)
-                .or_else(|| self.race_light.last_speed.filter(|(at, _)| (0. ..=LANE_SPEED_HOLD_S).contains(&(now-at))).map(|(_, speed)| speed))
-                .filter(|_| heading.cos() > 0.).map(|speed| speed / heading.cos())
-        });
-        self.finish.imu_zero = input.forward_integral.zip(speed).map(|(integral, speed)| integral-speed);
-        self.finish.imu_history.clear();
-        self.finish.imu_bias = None;
-        self.finish.launch_from = None;
-        self.finish.launch_until = None;
-        self.finish.holding = false;
-        self.finish.brake_decel = None;
-        self.finish.race_brake = Default::default();
-        self.finish.board_chord = None;
     }
 
     /// Round y37 (user: 终点 IMU 和雷达复用): the IMU speed since the light release, less

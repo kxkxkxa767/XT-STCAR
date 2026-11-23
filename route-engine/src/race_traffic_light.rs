@@ -158,6 +158,7 @@ mod tests {
         m.light_stop_state = Some("waiting");
         m.light_stop_evidence = dict! {"gantry" => dict! {"source_seq" => 1}};
         m._light_gantry_since = Some(1.);
+        m.race_light.beam_at = Some(1.);
         m._light_wait_since = Some(1.);
         m._light_wait_tick = Some(1.);
         let sample = |frame: i64, at: f64, red: f64, green: f64| dict! {"frame" => frame, "captured_at" => at, "red" => red, "green" => green};

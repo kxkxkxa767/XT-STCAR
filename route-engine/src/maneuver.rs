@@ -317,7 +317,6 @@ pub const LIGHT_CREEP_TRAVEL_M: f64 = 0.15;
 pub const LIGHT_CREEP_MAX: i64 = 6;
 pub const LIGHT_LINE_HOLD_S: f64 = 0.5;
 pub const LIGHT_PASSED_M: f64 = 0.05;
-pub const LIGHT_PRIOR_UNCONFIRMED_M: f64 = 1.5;
 pub fn light_gantry_max_heading_rad() -> f64 {
     radians(45.)
 }
