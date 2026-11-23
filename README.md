@@ -71,4 +71,6 @@ tools/scan-geometry/target/release/examples/surface_sim \
 
 项目另有两份本地交付副本，`test/` 使用 N10P 和固定 2.8 m 斑马线测试配置，`提交/` 为组委会交付副本，使用 N10（230400 波特率）及对应标定。
 
+历史 3–5 号源码已按 Git 标签归档。在仓库根目录运行 `git tag --list 'archive-program[345]-*-20261123'` 可查看对应版本。
+
 接手开发时从工程约定和交接记录进入。早期硬件参数表、Rust 移植过程、历轮数据和旧命令保存在原版首页，可按日期查阅。[工程约定](AGENTS.md) · [共同记忆](memoryshare.md) · [历轮实车验证](docs/vehicle-dynamic-turn-validation-20261007.json) · [2026-11-21 版完整 README](https://github.com/kxkxkxa767/XT-STCAR/blob/00664bd4890aa0c0910992a10f54558c21a43fd3/README.md)
