@@ -1590,7 +1590,7 @@ impl Maneuver {
             return self.result(now);
         }
         if self.light_approaching() {
-            let (basis, speed_feedback) = self.light_approach_control(scan, light_ahead, now);
+            let (basis, speed_feedback) = self.light_approach_control(scan, light_ahead, now, control);
             self.lane_feedback = steering.merged(&speed_feedback);
             if let Some(basis) = basis {
                 self.light_stop_reached(scan, now, control, &basis);

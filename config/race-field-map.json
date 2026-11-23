@@ -6,7 +6,7 @@
   "finish_divider_tip_m": [4.80, 3.10],
   "first_cone_m": [5.80, 2.00],
   "second_cone_m": [2.20, 2.00],
-  "beam_and_gantry_x_m": [3.70, 4.80],
+  "beam_and_gantry_x_m": [3.80, 4.80],
   "crosswalk_paper_x_m": [2.80, 3.097],
   "crosswalk_paper_width_and_gap_m": [0.105, 0.105]
 }

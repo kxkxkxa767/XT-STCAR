@@ -846,33 +846,27 @@ mod tests {
         let scan = |at: f64| crate::dict! { "seq" => (at * 10.).round() as i64, "at_ms" => (at * 1000.).round() as i64,
             "received_at" => at, "ranges" => vec![V::Float(3.); 360] };
         let at = 3.;
-        for (gap, speed, support, should_wait, should_advance) in [
-            (0.62, 0.45, None, false, false),         // still rolling after release
-            (0.62, 0.00, None, true, false),          // only the gantry legs remain visible
-            (0.62, 0.00, Some([0, 6]), true, false),  // one mapped board axis remains
-            (-0.02, 0.00, Some([6, 6]), true, false), // nose just beyond the gantry
-            (0.85, 0.00, Some([6, 6]), false, true),  // rear still upstream of the beam
+        for (gap, speed, should_wait, should_advance) in [
+            (0.55,0.45,false,false), (0.55,0.0,true,false),
+            (-0.02,0.0,false,false), (0.85,0.0,false,true),
         ] {
             let mut m = approach.clone();
-            let ahead = gap + FRONT_BODY_EXTENT_M;
-            if let Some(support) = support {
-                let divider = &FIELD.as_ref().unwrap().walls[5];
-                let pose = Pose2 { x_m: divider.lo - ahead, y_m: divider.fixed + 0.45, yaw_rad: 0. };
-                m.field_map.fixes.push_back(Fix { seq: 30, at, pose });
-                m.field_map.support = support;
+            m.race_light.beam_at=Some(at-1.);
+            m.race_light.opening_source=Some("surveyed_finish_opening");
+            let ahead=gap+FRONT_BODY_EXTENT_M;
+            let mut stop=None;
+            for i in 0..7 {
+                let t=at+0.1*f64::from(i);
+                m.compass.heading=Some(0.);m.compass.at_s=Some(t);m.compass.measured_at_s=Some(t);
+                m.race_light.ranges=vec![(t-0.2,t-0.2,ahead+0.2*speed),(t-0.1,t-0.1,ahead+0.1*speed)];
+                let (basis,fb)=m.light_approach_control(&scan(t),Some(ahead),t,&crate::dict!{"motor"=>1500});
+                if let Some(b)=basis { m.lane_feedback=fb;m.light_stop_reached(&scan(t),t,&V::None,&b);stop=Some(t);break; }
             }
-            m.race_light.ranges = vec![(2.8, 2.8, ahead + 0.2 * speed), (2.9, 2.9, ahead + 0.1 * speed)];
-            let (basis, feedback) = m.light_approach_control(&scan(at), Some(ahead), at);
-            assert_eq!(basis.is_some(), should_wait, "gap={gap}, speed={speed}, support={support:?}");
-            assert_eq!(m.race_light.completing_surveyed_stop, should_advance);
-            assert_eq!(m.lane_motor, if should_advance { 1560 } else { 1500 });
-            if let Some(basis) = basis {
-                m.lane_feedback = feedback;
-                m.light_stop_reached(&scan(at), at, &V::None, &basis);
-                assert_eq!(m.light_stop_state, Some("waiting"));
-                assert!(!m.light_wait(&scan(at + WAIT - 0.1), at + WAIT - 0.1, &V::None));
-                assert!(m.light_wait(&scan(at + WAIT), at + WAIT, &V::None));
-                assert_eq!(m.light_stop_state, Some("released"));
+            assert_eq!(stop.is_some(),should_wait,"gap={gap} speed={speed}");
+            assert_eq!(m.race_light.completing_zone_stop,should_advance);
+            if should_wait {
+                assert!(!m.light_wait(&scan(at-1.+WAIT-0.1),at-1.+WAIT-0.1,&V::None));
+                assert!(m.light_wait(&scan(at-1.+WAIT),at-1.+WAIT,&V::None));
             }
         }
     }

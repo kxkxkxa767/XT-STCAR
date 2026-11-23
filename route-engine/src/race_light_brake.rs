@@ -388,12 +388,6 @@ impl LightBrake {
         matches!(self.state, BrakeState::Used)
     }
 
-    pub fn stopped(&self) -> bool { self.is_used() && self.end_reason == Some("stopped") }
-
-    /// The brake ended on its own stop plan. A coast release still needs a measured low speed.
-    pub fn finished_for_stop(&self) -> bool {
-        self.stopped() || self.end_reason == Some("coast_reaches_zone")
-    }
 
     pub fn phase(&self) -> &'static str {
         match self.state {

@@ -1758,7 +1758,7 @@ impl Maneuver {
             // loop already pointing at the entry gate.
             if let Some((lane, _, _, pursuit_pwm_v)) = self.open_light_pursuit(scan, heading, Some(pose), None)
                 .filter(|(lane, ..)| p >= OPEN_LIGHT_HANDOFF_PROGRESS_RAD || lane.get("entry_gate").is_true()) {
-                if self.race_inputs.is_some() && self.light_vision {
+                if self.race_inputs.is_some() {
                     self.light_line_ahead(scan, heading, &lane, now);
                 }
                 let kappa = (NEUTRAL - self.servo) as f64 / ROUTE_PWM_PER_CURVATURE;
@@ -1953,8 +1953,9 @@ impl Maneuver {
             let (aim_along, aim_lateral, _) = aim(moved_along, moved_lateral);
             (aim_along * u.0 - aim_lateral * u.1, aim_along * u.1 + aim_lateral * u.0)
         };
-        if gate.is_some() {
+        if let Some((along, _)) = gate {
             lane.set("entry_gate", aim(0., 0.).2);
+            lane.set("divider_corner_along_m", along);
         }
         let point = lane_point(0., 0.);
         let (curvature, pwm) = if let Some(input) = self.race_inputs && self.route_stage == "light_entry" {
@@ -2217,7 +2218,7 @@ impl Maneuver {
         if self.light_approaching() {
             // Round y2: the light lane's stop control on the light line drives
             // the motor from the entry on (the coast must start ~2-3 m before).
-            let (basis, feedback) = self.light_approach_control(scan, light_ahead, now);
+            let (basis, feedback) = self.light_approach_control(scan, light_ahead, now, control);
             self.lane_feedback = feedback;
             if let Some(basis) = basis {
                 self.light_stop_reached(scan, now, control, &basis);

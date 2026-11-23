@@ -419,8 +419,6 @@ pub enum LightRoll {
     Cruise,
     Hold,
     Coast,
-    ZoneCoast,
-    Through,
 }
 
 impl LightRoll {
@@ -429,10 +427,17 @@ impl LightRoll {
             Self::Cruise => "cruise",
             Self::Hold => "approach_hold",
             Self::Coast => "rolling_low",
-            Self::ZoneCoast => "zone_rolling_low",
-            Self::Through => "unlit_continue",
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct LightRest {
+    first: f64,
+    last: f64,
+    reference: &'static str,
+    min_range: f64,
+    max_range: f64,
 }
 
 #[derive(Clone, Default, Debug)]
@@ -448,9 +453,13 @@ pub struct RaceLight {
     last_seq: Option<i64>,
     pub phase: LightRoll,
     pub prior_ahead: Option<f64>,
-    pub using_survey: bool,
-    pub completing_surveyed_stop: bool,
-    pub passed_hint: bool,
+    opening_spans: [(u32, f64); 2],
+    opening_seq: Option<i64>,
+    pub opening_source: Option<&'static str>,
+    pub completing_zone_stop: bool,
+    pub front_wheel_gap_m: Option<f64>,
+    previous_beam_gap: Option<(f64, f64)>,
+    rest: Option<LightRest>,
     pub ranges: RangeHistory,
     pub speed_uses_gantry: bool,
     pub last_speed: Option<(f64, f64)>,
@@ -464,6 +473,102 @@ pub struct RaceLight {
 }
 
 impl RaceLight {
+    /// The upstream end of the finish divider is the gantry plane. Pair a
+    /// visible tip with the end board so it can leave the laser's field of view.
+    pub fn opening_ahead(
+        &mut self,
+        scan: &V,
+        heading: f64,
+        lane: &V,
+        map: Option<f64>,
+        legs: Option<f64>,
+    ) -> Option<f64> {
+        // During the entry turn, central rays can hit the near face of the
+        // divider. Only subtract its length when looking down the actual lane.
+        let along_lane = heading.abs() <= crate::maneuver::open_lane_entry_heading_rad();
+        let in_lane = lane
+            .get("outer_lateral_m")
+            .of()
+            .zip(lane.get("width_m").of())
+            .is_some_and(|(outer, width)| (0.0..=width).contains(&outer));
+        let wall = (along_lane && in_lane).then(|| observed_end_wall(scan, heading)).flatten();
+        let tip = lane.get("divider_corner_along_m").of().or_else(|| {
+            lane.get("inner_start_along_m")
+                .of()
+                .filter(|d| *d > 0. && lane.get("inner_source").os() != Some("surveyed_divider"))
+        });
+        let seq = scan.get("seq").oi();
+        if seq != self.opening_seq {
+            self.opening_seq = seq;
+            if let Some(span) =
+                wall.zip(legs.or(tip)).map(|(w, opening)| w - opening).filter(|d| *d > OPEN_LANE_MIN_SPAN_M)
+            {
+                vote(&mut self.opening_spans, span);
+            }
+        }
+        let wall_opening =
+            wall.zip(self.landmark().or_else(|| voted(self.opening_spans))).map(|(w, (_, span))| w - span);
+        let measured = legs
+            .map(|v| (v, "confirmed_gantry_stations"))
+            .or_else(|| wall_opening.map(|v| (v, "end_board_to_measured_opening")));
+        let position = map
+            .filter(|v| measured.is_none_or(|(seen, _)| (seen - v).abs() <= LIGHT_LINE_JUMP_M))
+            .map(|v| (v, "surveyed_finish_opening"))
+            .or(measured)
+            .or_else(|| {
+                (along_lane && in_lane).then_some(self.prior_ahead).flatten().map(|v| (v, "tracked_divider_opening"))
+            })
+            .or_else(|| along_lane.then_some(tip).flatten().map(|v| (v, "visible_divider_opening")));
+        self.opening_source = position.map(|(_, source)| source);
+        position.map(|(ahead, _)| ahead)
+    }
+
+    /// One clock per run. Interpolate a bracketed crossing on the program's
+    /// monotonic clock. A later missing scan or upstream correction cannot rearm it.
+    pub fn observe_beam(&mut self, at: f64, wheel_gap: Option<f64>) {
+        self.front_wheel_gap_m = wheel_gap;
+        if self.beam_at.is_some() {
+            return;
+        }
+        if let Some(gap) = wheel_gap {
+            if gap <= 0. {
+                let crossed = self
+                    .previous_beam_gap
+                    .filter(|(t, g)| *g > 0. && at > *t && at - t <= crate::helpers::SCAN_AGE_S)
+                    .map_or(at, |(t, g)| t + (at - t) * g / (g - gap));
+                self.beam_at = Some(crossed);
+            }
+            self.previous_beam_gap = Some((at, gap));
+        } else {
+            self.previous_beam_gap = None;
+        }
+    }
+
+    /// A neutral acknowledgement and a stable measured longitudinal range
+    /// distinguish a stop from rolling slowly through the zone on an expired timer.
+    pub fn stationary_in_zone(&mut self, at: f64, sample: Option<(&'static str, f64)>) -> bool {
+        let Some((reference, range)) = sample else {
+            self.rest = None;
+            return false;
+        };
+        let w =
+            self.rest.get_or_insert(LightRest { first: at, last: at, reference, min_range: range, max_range: range });
+        let min_range = w.min_range.min(range);
+        let max_range = w.max_range.max(range);
+        if reference != w.reference
+            || at < w.last
+            || at - w.last > crate::helpers::SCAN_AGE_S
+            || max_range - min_range > crate::coast::MAX_STABLE_TOTAL_TRANSLATION_M
+        {
+            *w = LightRest { first: at, last: at, reference, min_range: range, max_range: range };
+        } else {
+            w.last = at;
+            w.min_range = min_range;
+            w.max_range = max_range;
+        }
+        at - w.first >= crate::coast::MIN_RECEIVE_STABLE_S
+    }
+
     /// Divide by sequence distance if a scan was skipped.
     pub fn approach_step(&mut self, scan: &V, integral: Option<f64>, axis_cos: f64) -> (f64, Option<f64>) {
         let seq = scan.idx("seq").i();
@@ -699,8 +804,8 @@ impl RaceLight {
                 Some(p.ahead)
             })
         } else {
-            self.landmark().and_then(|(_, span)| Some(ScanAxis::new(scan, heading)?.end_wall()? - span))
-        };
+            None
+        }.or_else(|| self.landmark().and_then(|(_, span)| Some(observed_end_wall(scan, heading)? - span)));
         self.prior_ahead
     }
 
