@@ -1783,7 +1783,14 @@ impl Maneuver {
             self.compact_target = if self.continue_route {
                 let heading = self.tracking_heading(scan);
                 let acquire = self.first_pass_evidence.is_none();
-                self.target_tracker.update(scan, now, acquire, heading, None)
+                if let Some(input) = self.race_inputs
+                    && matches!(self.route_stage, "start_lane" | "first_target") && self.phase == "drive"
+                {
+                    let adopted = if self.route_stage == "first_target" { &self.orbit_track_id } else { &V::None };
+                    self.target_tracker.update_first_cone(scan, now, acquire, heading, input.yaw_rate, adopted)
+                } else {
+                    self.target_tracker.update(scan, now, acquire, heading, None)
+                }
             } else {
                 self.target_tracker.update(scan, now, true, None, None)
             };

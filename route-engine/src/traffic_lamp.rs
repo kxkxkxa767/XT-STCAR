@@ -17,9 +17,19 @@ pub struct Lights {
     pub green: bool,
 }
 
+impl Lights {
+    fn mark(&mut self, kind: u8) {
+        if kind == 1 {
+            self.red = true;
+        } else {
+            self.green = true;
+        }
+    }
+}
+
 fn colour(b: u8, g: u8, r: u8) -> u8 {
     let (b, g, r) = (i32::from(b), i32::from(g), i32::from(r));
-    if r >= 211 && r - g >= 34 && r - b >= 22 && 2 * (g - b) < r - b + 16 {
+    if r >= 211 && r - g >= 34 && r - b >= 22 && 100 * (g - b) < 32 * (r - b) + 160 {
         1
     } else if g >= 154 && g - r >= 24 && g - b >= 6 {
         2
@@ -84,7 +94,7 @@ impl Frame<'_> {
                 seen = true;
                 let (blue, gr, re) = self.pixel(x as usize, y as usize);
                 let (b, v, u) = (i32::from(blue), i32::from(gr), i32::from(re));
-                r |= u >= 160 && u - v >= 38 && u - b >= 36 && 2 * (v - b) < u - b + 20;
+                r |= u >= 160 && u - v >= 38 && u - b >= 36 && 100 * (v - b) < 32 * (u - b) + 160;
                 g |= v >= 135 && v - u >= 22 && v - b >= 2;
             }
             red += i32::from(r);
@@ -214,6 +224,107 @@ impl Frame<'_> {
 mod tests {
     use super::*;
 
+    /// A tilted black housing with independently controllable left/red and right/green ends.
+    /// The centre can be covered or reflect a small white patch without changing the signal.
+    fn test_housing(angle: f64, left: u8, right: u8, middle: bool) -> Vec<u8> {
+        let mut image = vec![200; 320 * 240 * 3];
+        let (sin, cos) = angle.sin_cos();
+        for y in 0..240 {
+            for x in 0..320 {
+                let dx = x as f64 - 160.;
+                let dy = y as f64 - 118.;
+                let u = dx * cos + dy * sin;
+                let v = -dx * sin + dy * cos;
+                if u.abs() > 103. || v.abs() > 25. {
+                    continue;
+                }
+                let mut px = [32, 40, 46];
+                for (index, cx) in [-69., 0., 69.].into_iter().enumerate() {
+                    let a = u - cx;
+                    let q = a * a + v * v;
+                    if q > 17.5 * 17.5 {
+                        continue;
+                    }
+                    if index == 1 {
+                        if middle {
+                            px = if (a - 1.).powi(2) + (v - 1.).powi(2) < 26. {
+                                [252, 252, 250]
+                            } else {
+                                [20, 115, 207]
+                            };
+                        }
+                        continue;
+                    }
+                    let kind = if index == 0 { left } else { right };
+                    px = if index == 0 {
+                        [20, 48, 197]
+                    } else {
+                        [65, 136, 109]
+                    };
+                    if kind == 1 {
+                        // A single bright reflection with a few much smaller specks on the red cover.
+                        if (a - 3.).powi(2) + (v - 4.).powi(2) < 11.
+                            || [(-8., -6.), (-5., 6.), (6., -7.), (8., 3.)]
+                                .iter()
+                                .any(|(xx, yy)| (a - xx).powi(2) + (v - yy).powi(2) < 0.9)
+                        {
+                            px = [115, 168, 238];
+                        }
+                    } else if kind == 2 {
+                        // Individual emitters can be fainter than the opposite tinted red glass.
+                        if [-8., 0., 8.].iter().any(|xx| {
+                            [-8., 0., 8.]
+                                .iter()
+                                .any(|yy| (a - xx).powi(2) + (v - yy).powi(2) < 3.)
+                        }) {
+                            px = if index == 0 {
+                                [180, 220, 251]
+                            } else {
+                                [155, 209, 176]
+                            };
+                        }
+                    } else if kind == 3 {
+                        px = if q < 10.5 * 10.5 {
+                            [244, 248, 244]
+                        } else if index == 0 {
+                            [18, 38, 250]
+                        } else {
+                            [56, 234, 49]
+                        };
+                    }
+                }
+                let k = (y * 320 + x) * 3;
+                image[k..k + 3].copy_from_slice(&px);
+            }
+        }
+        image
+    }
+
+    #[test]
+    fn ends_win_over_centre_glare_and_fading_red_even_on_a_tilted_housing() {
+        let mut detector = Detector::default();
+        for angle in [0.0, 0.30, -0.32] {
+            for middle in [false, true] {
+                for (left, right, expected) in [
+                    (0, 0, (false, false)),
+                    (1, 0, (false, false)),
+                    (1, 3, (false, true)),
+                    (1, 2, (false, true)),
+                    (3, 0, (true, false)),
+                    (2, 3, (true, false)),
+                    (3, 3, (true, false)),
+                ] {
+                    let image = test_housing(angle, left, right, middle);
+                    let result = detector.detect(&image, 320, 240);
+                    assert_eq!(
+                        (result.red, result.green),
+                        expected,
+                        "angle {angle} middle {middle} ends {left}/{right}"
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn sunlight_on_coloured_glass_does_not_mask_the_active_beads() {
         let (width, height) = (320, 240);
@@ -291,22 +402,16 @@ mod tests {
 
 impl Detector {
     pub fn detect(&mut self, bgr: &[u8], width: usize, height: usize) -> Lights {
-        let mut lights = Lights::default();
         if width < 16
             || height < 16
             || width.checked_mul(height).and_then(|n| n.checked_mul(3)) != Some(bgr.len())
         {
-            return lights;
+            return Lights::default();
         }
         let frame = Frame { bgr, width, height };
         let beads = self.beads.detect(&frame);
-        if beads.red || beads.green {
-            return Lights {
-                red: beads.red,
-                green: beads.green && !beads.red,
-            };
-        }
         let step = (width / 320).max(1);
+        let (mut lights, white) = self.beads.saturated_ends(&frame, step);
         let cols = width.div_ceil(step);
         // The gantry is above the car. Include the horizon on approach and lamps cut by the top edge.
         let rows = (height * 3 / 4).div_ceil(step);
@@ -317,9 +422,20 @@ impl Detector {
             for x in 0..cols {
                 let (b, g, r) = frame.pixel(x * step, y * step);
                 self.mask[(y + 1) * stride + x + 1] = if b.min(g).min(r) >= 218 {
-                    3
+                    0
                 } else {
-                    colour(b, g, r)
+                    // Overexposed red LEDs retain an orange-red border around the white stripes.
+                    // Keep that rim connected here; the later hue and housing checks assign the end.
+                    let (red, green, blue) = (i32::from(r), i32::from(g), i32::from(b));
+                    if red >= 211
+                        && red - green >= 34
+                        && red - blue >= 22
+                        && 2 * (green - blue) < red - blue + 16
+                    {
+                        1
+                    } else {
+                        colour(b, g, r)
+                    }
                 };
             }
         }
@@ -355,28 +471,23 @@ impl Detector {
                         }
                     }
                 }
+                let bounds = [left, top, right, bottom];
                 if count >= 4
-                    && let Some(lens) = frame
-                        .lit_lens(kind, [left, top, right, bottom], step, count)
-                        .or_else(|| {
-                            if kind == 3 {
-                                frame.bloom_colour([left, top, right, bottom], step, count)
-                            } else {
-                                None
-                            }
-                        })
-                    && self
-                        .beads
-                        .core_housing(&frame, lens, [left, top, right, bottom], step)
+                    && let Some(lens) = frame.lit_lens(kind, bounds, step, count)
+                    && self.beads.core_housing(&frame, lens, bounds, step)
                 {
-                    if lens == 1 {
-                        lights.red = true;
-                    } else {
-                        lights.green = true;
-                    }
+                    lights.mark(lens);
                 }
             }
         }
-        lights
+        // Resolve the two endpoints only after checking their saturated cores as well
+        // as their bead arrays. A real red emitter still wins a simultaneous transition.
+        let red = white.red
+            || self.beads.bright_red_array
+            || (!white.green && (beads.red || (!beads.green && lights.red)));
+        Lights {
+            red,
+            green: !red && (white.green || beads.green || lights.green),
+        }
     }
 }

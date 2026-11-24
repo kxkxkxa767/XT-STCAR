@@ -68,7 +68,10 @@ fn race_first_loop_inner_coverage(m: &Maneuver, scan: &V, now: f64) -> bool {
         return false;
     }
     let mut tracker = m.target_tracker.clone();
-    let target = match except(VTK, || tracker.update(scan, now, false, m.tracking_heading(scan), None)) {
+    let target = match except(VTK, || {
+        let yaw = m.race_inputs.and_then(|input| input.yaw_rate);
+        tracker.update_first_cone(scan, now, false, m.tracking_heading(scan), yaw, &m.orbit_track_id)
+    }) {
         Ok(target) => target,
         Err(_) => return false,
     };

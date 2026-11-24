@@ -526,8 +526,13 @@ pub fn contact_supports(ranges: &V) -> Vec<V> {
     .collect()
 }
 
+#[path = "first_cone_motion.rs"]
+mod first_cone_motion;
+use first_cone_motion::{FirstConeMotion, MotionPrior};
+
 #[derive(Clone, Debug)]
 pub struct CompactTargetTracker {
+    first_motion: FirstConeMotion,
     pub acquisition_bearing_rad: (f64, f64),
     pub maintenance_bearing_rad: Option<(f64, f64)>,
     pub tolerant: bool,
@@ -594,6 +599,7 @@ impl CompactTargetTracker {
             value_error("acquisition_min_points must be a tolerant 3..5 return count")
         }
         CompactTargetTracker {
+            first_motion: FirstConeMotion::default(),
             acquisition_bearing_rad: acquisition,
             maintenance_bearing_rad: maintenance,
             tolerant: args.tolerant,
@@ -671,6 +677,7 @@ impl CompactTargetTracker {
     }
 
     fn forget(&mut self, reason: &str) -> V {
+        self.first_motion = FirstConeMotion::default();
         self.reason = reason.into();
         self.target = V::None;
         self.first_at = None;
@@ -695,6 +702,33 @@ impl CompactTargetTracker {
         heading_rad: Option<f64>,
         only_support_bins: Option<&[i64]>,
         predicted: Option<(f64, f64)>,
+    ) -> V {
+        self.update_scan(scan, now, acquire, heading_rad, only_support_bins, predicted, None)
+    }
+
+    /// Normal wall-heading association has first choice. Once this exact first
+    /// cone is adopted, an independent short-term motion prediction may recover
+    /// a unique current cluster when the wall heading alone rejects every one.
+    pub(crate) fn update_first_cone(
+        &mut self, scan: &V, now: f64, acquire: bool, heading: Option<f64>,
+        yaw_rate: Option<f64>, adopted: &V,
+    ) -> V {
+        let prior = if adopted.is_some() && py_eq(self.target.get("track_id"), adopted) {
+            self.first_motion.prior(scan, &self.target, yaw_rate)
+        } else {
+            None
+        };
+        let observation = self.update_scan(scan, now, acquire, heading, None, None, prior);
+        if observation.is_some() {
+            self.first_motion.observe(&observation, yaw_rate);
+        }
+        observation
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn update_scan(
+        &mut self, scan: &V, now: f64, acquire: bool, heading_rad: Option<f64>,
+        only_support_bins: Option<&[i64]>, predicted: Option<(f64, f64)>, motion: Option<MotionPrior>,
     ) -> V {
         if let Some(bins) = only_support_bins
             && (bins.is_empty() || bins.iter().any(|&i| !(0..360).contains(&i)))
@@ -831,7 +865,17 @@ impl CompactTargetTracker {
             reference.set("point_left_m", V::from(point));
             reference.set("bearing_left_rad", point.1.atan2(point.0));
         }
+        let mut recovered_motion = None;
         if self.select_associated && allow_boundary_gap {
+            if let Some(prior) = motion.filter(|_| confirmed_old)
+                && !found.iter().any(|c| associated(c, &reference, slack))
+                && let Some((current, carried)) = prior.unique_current(&found, &old, slack)
+            {
+                found.clear();
+                found.push(current);
+                reference = carried;
+                recovered_motion = Some(prior);
+            }
             found.retain(|c| associated(c, &reference, slack));
         }
         self.held = V::None;
@@ -902,6 +946,11 @@ impl CompactTargetTracker {
         });
         if let Some(heading) = heading_rad {
             target.set("compass_heading_rad", heading);
+        }
+        if let Some(prior) = recovered_motion {
+            target.set("association_source", "first_cone_imu_and_lidar_motion");
+            target.set("motion_prediction_left_m", V::from(prior.transported));
+            target.set("radar_trend_left_m", V::from(prior.radar_trend));
         }
         self.target = target;
         self.target.clone()
