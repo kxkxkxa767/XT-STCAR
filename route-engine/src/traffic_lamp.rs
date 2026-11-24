@@ -1,8 +1,12 @@
 //! Lit traffic signals in BGR camera frames. A coloured lens in daylight can be
 //! quite saturated. Look for emitted light inside a compact lens and a dark housing.
 
+#[path = "lamp_beads.rs"]
+mod lamp_beads;
+
 #[derive(Default)]
 pub struct Detector {
+    beads: lamp_beads::Beads,
     mask: Vec<u8>,
     pending: Vec<usize>,
 }
@@ -34,6 +38,66 @@ impl Frame<'_> {
     fn pixel(&self, x: usize, y: usize) -> (u8, u8, u8) {
         let at = (y * self.width + x) * 3;
         (self.bgr[at], self.bgr[at + 1], self.bgr[at + 2])
+    }
+
+    // Indoor signals may saturate the camera across the entire disc. Read the
+    // coloured halo outside a compact white core; the caller verifies the housing.
+    fn bloom_colour(&self, bounds: [usize; 4], step: usize, count: usize) -> Option<u8> {
+        let [left, top, right, bottom] = bounds;
+        let (w, h) = ((right - left + 1) * step, (bottom - top + 1) * step);
+        if w < 10
+            || h < 4
+            || w > self.width / 4
+            || h > self.height / 4
+            || 2 * w < h
+            || w > h * if top == 0 { 4 } else { 2 }
+            || count * step * step * 2 < w * h
+        {
+            return None;
+        }
+        let (cx, cy) = (
+            (left + right) as f64 * step as f64 * 0.5,
+            (top + bottom) as f64 * step as f64 * 0.5,
+        );
+        let (mut red, mut green, mut visible) = (0, 0, 0);
+        for (dx, dy) in [
+            (1., 0.),
+            (0.87, 0.5),
+            (0.5, 0.87),
+            (0., 1.),
+            (-0.5, 0.87),
+            (-0.87, 0.5),
+            (-1., 0.),
+            (-0.87, -0.5),
+            (-0.5, -0.87),
+            (0., -1.),
+            (0.5, -0.87),
+            (0.87, -0.5),
+        ] {
+            let (mut seen, mut r, mut g) = (false, false, false);
+            for factor in [0.51, 0.59, 0.7, 0.85] {
+                let x = (cx + dx * w as f64 * factor).round() as isize;
+                let y = (cy + dy * h as f64 * factor).round() as isize;
+                if x < 0 || y < 0 || x as usize >= self.width || y as usize >= self.height {
+                    continue;
+                }
+                seen = true;
+                let (blue, gr, re) = self.pixel(x as usize, y as usize);
+                let (b, v, u) = (i32::from(blue), i32::from(gr), i32::from(re));
+                r |= u >= 160 && u - v >= 38 && u - b >= 36 && 2 * (v - b) < u - b + 20;
+                g |= v >= 135 && v - u >= 22 && v - b >= 2;
+            }
+            red += i32::from(r);
+            green += i32::from(g);
+            visible += i32::from(seen);
+        }
+        if red >= 5 && red * 3 >= 2 * visible && green <= 2 {
+            Some(1)
+        } else if green >= 5 && green * 3 >= 2 * visible && red <= 2 {
+            Some(2)
+        } else {
+            None
+        }
     }
 
     fn lit_lens(&self, kind: u8, bounds: [usize; 4], step: usize, count: usize) -> Option<u8> {
@@ -142,15 +206,55 @@ impl Frame<'_> {
                 coloured_corners += usize::from(colour(b, g, r) == kind);
             }
         }
-        ((white * 18 >= area && bright_colour * 12 >= area)
-            || (bright_colour * 2 >= area && dark * 4 >= visible * 3 && coloured_corners <= 2))
-            .then_some(kind)
+        (white * 18 >= area && bright_colour * 12 >= area && coloured_corners <= 3).then_some(kind)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sunlight_on_coloured_glass_does_not_mask_the_active_beads() {
+        let (width, height) = (320, 240);
+        let mut detector = Detector::default();
+        for (lit, raised) in [(0, 0), (1, 0), (2, 0), (2, 12)] {
+            let mut image = vec![190u8; width * height * 3];
+            for y in 25..81usize {
+                for x in 28..293usize {
+                    let mut bgr = [34, 43, 54];
+                    for (i, cx) in [80i32, 160, 240].into_iter().enumerate() {
+                        let (dx, dy) = (x as i32 - cx, y as i32 - 53);
+                        if dx * dx + dy * dy > 20 * 20 {
+                            continue;
+                        }
+                        bgr = match i {
+                            0 => [17, 48, 224],
+                            1 => [24, 126, 241],
+                            _ => [75, 157, 129],
+                        };
+                        if (i == 0 && lit == 1 || i == 2 && lit == 2)
+                            && [-10, -2, 7].iter().any(|px| {
+                                [-10, -2, 7]
+                                    .iter()
+                                    .any(|py| (dx - px) * (dx - px) + (dy - py) * (dy - py) <= 2)
+                            })
+                        {
+                            bgr = if i == 0 {
+                                [165, 217, 253]
+                            } else {
+                                [194, 244, 212]
+                            };
+                        }
+                    }
+                    let at = (y * width + x) * 3;
+                    image[at..at + 3].copy_from_slice(&bgr.map(|v: u8| v.saturating_add(raised)));
+                }
+            }
+            let lights = detector.detect(&image, width, height);
+            assert_eq!((lights.red, lights.green), (lit == 1, lit == 2));
+        }
+    }
 
     #[test]
     fn lit_lenses_are_distinct_from_red_panels_and_dark_lenses() {
@@ -195,6 +299,13 @@ impl Detector {
             return lights;
         }
         let frame = Frame { bgr, width, height };
+        let beads = self.beads.detect(&frame);
+        if beads.red || beads.green {
+            return Lights {
+                red: beads.red,
+                green: beads.green && !beads.red,
+            };
+        }
         let step = (width / 320).max(1);
         let cols = width.div_ceil(step);
         // The gantry is above the car. Include the horizon on approach and lamps cut by the top edge.
@@ -245,8 +356,18 @@ impl Detector {
                     }
                 }
                 if count >= 4
-                    && let Some(lens) =
-                        frame.lit_lens(kind, [left, top, right, bottom], step, count)
+                    && let Some(lens) = frame
+                        .lit_lens(kind, [left, top, right, bottom], step, count)
+                        .or_else(|| {
+                            if kind == 3 {
+                                frame.bloom_colour([left, top, right, bottom], step, count)
+                            } else {
+                                None
+                            }
+                        })
+                    && self
+                        .beads
+                        .core_housing(&frame, lens, [left, top, right, bottom], step)
                 {
                     if lens == 1 {
                         lights.red = true;

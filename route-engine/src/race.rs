@@ -23,15 +23,9 @@
 //! never` only shows and records the check for `--max-wait-s` and never arms
 //! (static tests on the car).
 //!
-//! Round y2: with `--light-state PATH` a reader thread polls that file (the
-//! read-only vision process, scripts/vision-log.py --light-state, replaces
-//! it atomically per frame: {"frame", "captured_s", "written_s", "red",
-//! "green"} on its own monotonic clock; round y5 also "crosswalk",
-//! "crosswalk_row", round y11 "crosswalk_m"). Each new valid content becomes
-//! control['light'] = {"frame", "captured_at", "red", "green"} on every
-//! control line from then on, with captured_at on this program's clock: the
-//! receive time less the file's own written - captured. Every accepted one is
-//! appended to light.jsonl; an invalid content is counted and ignored.
+//! Rust camera observations carry the frame number and monotonic capture time.
+//! The lamp worker publishes one colour vote per new frame in the light zone.
+//! The crosswalk worker reads the same images during the start lane.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -68,7 +62,6 @@ pub(crate) struct Options {
     max_wait_s: f64,
     light_max_wait_s: Option<f64>,
     status_s: f64,
-    light_state: Option<PathBuf>,
     frame_shm: Option<PathBuf>,
     surface_initial_load: f64,
     ros2: bool,
@@ -78,7 +71,7 @@ pub(crate) struct Options {
 
 const USAGE: &str = "usage: route-engine race --out NEW_DIR [--bridge PATH (legacy)] [--start enter|ready|never|ros] [--ready-hold-s 3] \
 [--max-drive-s 40] [--initial-presteer-pwm 1670] [--max-wait-s 300] [--light-max-wait-s SECONDS] [--status-s .5] [--demo] \
-[--control-device /dev/car] [--lidar-device /dev/laser] [--light-state PATH] [--frame-shm PATH] [--surface-initial-load MPS2] [--transport legacy|ros2]";
+[--control-device /dev/car] [--lidar-device /dev/laser] [--frame-shm PATH] [--surface-initial-load MPS2] [--transport legacy|ros2]";
 
 fn parse(args: &[String]) -> Result<Options, String> {
     #[cfg(feature = "ros2")]
@@ -100,7 +93,6 @@ fn parse(args: &[String]) -> Result<Options, String> {
         max_wait_s: 300.,
         light_max_wait_s: None,
         status_s: 0.5,
-        light_state: None,
         frame_shm: None,
         surface_initial_load: 0.,
         ros2: cfg!(feature = "ros2"),
@@ -130,7 +122,6 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--lidar-device" => o.lidar_device = value(i)?,
             #[cfg(feature = "ros2")]
             "--lidar-calibration" => o.lidar_calibration = Some(PathBuf::from(value(i)?)),
-            "--light-state" => o.light_state = Some(PathBuf::from(value(i)?)),
             "--frame-shm" => o.frame_shm = Some(PathBuf::from(value(i)?)),
             "--surface-initial-load" => o.surface_initial_load = number(i)?,
             "--transport" => o.ros2 = match value(i)?.as_str() {
@@ -177,7 +168,6 @@ pub(crate) fn split_ros_args(args: &[String]) -> (Vec<String>, Vec<String>) {
 
 pub(crate) enum Event {
     Line(&'static str, String, Instant),
-    Light(String, Instant),
     RustCrosswalk(crate::race_crosswalk_vision::RustCrosswalkObs, Instant),
     RustLamp(crate::race_traffic_light::Observation, Instant),
     Coast(u64, String),
@@ -287,58 +277,6 @@ fn reader(kind: &'static str, stream: impl Read + Send + 'static, tx: Sender<Eve
         }
         let _ = tx.send(Event::Ended(kind, format!("{kind} bridge ended")));
     });
-}
-
-/// Round y2: poll the vision process's light state file; each changed content
-/// goes to the control thread with its receive time.
-fn light_reader(path: PathBuf, tx: Sender<Event>) {
-    spawn_named("read-light", move || {
-        let mut last: Option<String> = None;
-        loop {
-            thread::sleep(Duration::from_millis(20));
-            let Ok(text) = std::fs::read_to_string(&path) else { continue };
-            if last.as_deref() == Some(text.as_str()) {
-                continue;
-            }
-            if tx.send(Event::Light(text.clone(), Instant::now())).is_err() {
-                return;
-            }
-            last = Some(text);
-        }
-    });
-}
-
-/// The light state file's content as control['light'] received at `now`, or
-/// None when it is not a valid one.
-fn light_of(text: &str, now: f64) -> Option<V> {
-    let v = parse_json(text.trim()).ok().filter(|v| v.is_dict())?;
-    let num = |key: &str| if v.get(key).is_num() { Some(v.get(key).f()) } else { None };
-    let score = |key: &str| num(key).filter(|s| (0. ..=1.).contains(s));
-    let age = num("written_s")? - num("captured_s")?;
-    if !v.get("frame").is_int() || v.get("frame").i() < 0 || !(0. ..=5.).contains(&age) {
-        return None;
-    }
-    let mut light = dict! {"frame" => v.get("frame").clone(), "captured_at" => now - age,
-                           "red" => score("red")?, "green" => score("green")?};
-    // Round y5: the best crosswalk score and its box's bottom row, when present;
-    // round y11: the camera model's distance from the front to its near edge.
-    if let Some(crosswalk) = score("crosswalk") {
-        light.set("crosswalk", crosswalk);
-        if let Some(row) = num("crosswalk_row").filter(|r| (0. ..=4000.).contains(r)) {
-            light.set("crosswalk_row", row);
-        }
-        if let Some(metres) = num("crosswalk_m").filter(|m| (0. ..=20.).contains(m)) {
-            light.set("crosswalk_m", metres);
-        }
-    }
-    // round y35: the stripes' edge and the board ahead's base, undistorted image heights
-    // (y36: also from a crosswalk box below the seen score)
-    if let (Some(edge), Some(base)) = (num("crosswalk_edge_y").filter(|y| (-1. ..=1.).contains(y)),
-                                       num("board_base_y").filter(|y| (-1. ..=1.).contains(y))) {
-        light.set("crosswalk_edge_y", edge);
-        light.set("board_base_y", base);
-    }
-    Some(light)
 }
 
 pub(crate) enum FileOp {
@@ -466,14 +404,12 @@ struct Program {
     /// Round y2: the newest light frame (control['light']), and the counts.
     light: V,
     light_updates: i64,
-    light_invalid: i64,
     vision_phase: Option<&'static str>,
     lamp_worker: Option<Sender<bool>>,
     rust_cw_hint: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::LaneLidarHint>>,
     rust_cw_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     rust_cw_stats: std::sync::Arc<std::sync::Mutex<crate::race_crosswalk_vision::RustCrosswalkStats>>,
     prestart_rust_cw: Vec<(crate::race_crosswalk_vision::RustCrosswalkObs, f64)>,
-    prestart_yolo_cw: Vec<(i64, f64, f64, f64)>,
     external_stop: Option<&'static str>,
 }
 
@@ -504,29 +440,13 @@ pub(crate) fn spawn_named<T: Send + 'static>(name: &str, f: impl FnOnce() -> T +
 }
 
 impl Program {
-    fn prestart_crosswalk_fixes(&self) -> (usize, usize) {
-        let range = crate::maneuver::CROSSWALK_RANGE_M;
-        let rust = self
-            .prestart_rust_cw
-            .iter()
-            .filter(|(obs, _)| (range.0..=range.1).contains(&obs.front_to_edge_m))
-            .count();
-        let yolo = if self.prestart_yolo_cw.is_empty() {
-            0
-        } else {
-            crate::race_crosswalk_stop::board_ahead(&self.sup.scan).map_or(0, |bm| {
-                self.prestart_yolo_cw
-                    .iter()
-                    .filter(|(_, _, ey, by)| crate::race_crosswalk_stop::edge_from_board(*ey, *by, bm).is_some())
-                    .count()
-            })
-        };
-        (rust, yolo)
+    fn prestart_crosswalk_fixes(&self) -> usize {
+        let (min, max) = crate::maneuver::CROSSWALK_RANGE_M;
+        self.prestart_rust_cw.iter().filter(|(obs, _)| (min..=max).contains(&obs.front_to_edge_m)).count()
     }
 
     fn prestart_crosswalk_ready(&self) -> bool {
-        let (rust, yolo) = self.prestart_crosswalk_fixes();
-        rust + yolo >= crate::maneuver::CROSSWALK_FIX_FRAMES
+        self.prestart_crosswalk_fixes() >= crate::maneuver::CROSSWALK_FIX_FRAMES
     }
 
     fn stop_rust_crosswalk(&mut self, reason: &str) {
@@ -568,7 +488,7 @@ impl Program {
         if phase != "start_lane" && !self.rust_cw_stop.swap(true, std::sync::atomic::Ordering::AcqRel) {
             self.say("crosswalk distance resolved or passed; stopping rust crosswalk detector");
         }
-        if self.o.light_state.is_none() && self.o.frame_shm.is_none() {
+        if self.o.frame_shm.is_none() {
             return;
         }
         if self.vision_phase != Some(phase) {
@@ -591,14 +511,13 @@ impl Program {
     }
 
     fn apply_light(&mut self, light: V) {
-        let fused = self.lamp_worker.is_some() && crate::race_traffic_light::lamp_phase(self.vision_phase);
-        let light = if fused {
-            let Some(merged) = crate::race_traffic_light::merge(&self.light, light) else { return };
-            merged
-        } else {
-            light
-        };
-        self.sup.set_light(&light);
+        if self.light.get("frame").oi().zip(light.get("frame").oi()).is_some_and(|(old, new)| new <= old) {
+            return;
+        }
+        self.light_updates += 1;
+        let record = dict! {"received_at" => self.mono(), "light" => light.clone()};
+        let _ = self.files.send(FileOp::Append("light.jsonl", to_json(&record) + "\n"));
+        self.sup.set_camera_light(&light);
         self.light = light;
     }
 
@@ -659,36 +578,6 @@ impl Program {
                 self.sup.coast_worker.finish_job(number, &answer);
                 self.dispatch();
             }
-            Event::Light(text, received) => {
-                let now = self.at(received);
-                match light_of(&text, now) {
-                    Some(light) => {
-                        self.light_updates += 1;
-                        let mut row = to_json(&dict! {"received_at" => now, "light" => light.clone()});
-                        row.push('\n');
-                        let _ = self.files.send(FileOp::Append("light.jsonl", row));
-                        if self.sup.session.is_none()
-                            && let (Some(ey), Some(by)) =
-                                (light.get("crosswalk_edge_y").of(), light.get("board_base_y").of())
-                        {
-                            let frame = light.get("frame").i();
-                            let cap_s = light.get("captured_at").f();
-                            if !self.prestart_yolo_cw.iter().any(|(f, _, _, _)| *f == frame) {
-                                self.prestart_yolo_cw.push((frame, cap_s, ey, by));
-                                let n = self.prestart_yolo_cw.len();
-                                if n > 8 {
-                                    self.prestart_yolo_cw.drain(..n - 8);
-                                }
-                            }
-                            if self.prestart_crosswalk_ready() {
-                                self.stop_rust_crosswalk("crosswalk distance ready at rest; stopping rust crosswalk detector");
-                            }
-                        }
-                        self.apply_light(light);
-                    }
-                    None => self.light_invalid += 1,
-                }
-            }
             Event::RustLamp(obs, received) => {
                 let now = self.at(received);
                 let captured = self.base_monotonic_s.map(|base| obs.captured_mono_s - base)
@@ -700,7 +589,7 @@ impl Program {
                 let _ = self.files.send(FileOp::Append("rust-light.jsonl", to_json(&row) + "\n"));
                 if crate::race_traffic_light::lamp_phase(self.vision_phase)
                     && (0.0..=crate::maneuver::LIGHT_FRAME_MAX_AGE_S).contains(&(self.mono() - captured))
-                    && (obs.lights.red || obs.lights.green) {
+                {
                     let light = dict! {"frame" => obs.frame, "captured_at" => captured,
                         "red" => i64::from(obs.lights.red), "green" => i64::from(obs.lights.green)};
                     self.apply_light(light);
@@ -867,9 +756,6 @@ pub fn main(args: &[String]) -> i32 {
             return 69;
         }
     };
-    if let Some(path) = &o.light_state {
-        light_reader(path.clone(), tx.clone());
-    }
     let rust_cw_hint = std::sync::Arc::new(std::sync::Mutex::new(
         crate::race_crosswalk_vision::LaneLidarHint::default(),
     ));
@@ -949,14 +835,12 @@ pub fn main(args: &[String]) -> i32 {
         scan_at: None,
         light: V::None,
         light_updates: 0,
-        light_invalid: 0,
         vision_phase: None,
         lamp_worker,
         rust_cw_hint,
         rust_cw_stop: rust_cw_stop.clone(),
         rust_cw_stats,
         prestart_rust_cw: Vec::new(),
-        prestart_yolo_cw: Vec::new(),
         external_stop: None,
     };
     p.publish_vision_phase();
@@ -1032,13 +916,12 @@ fn run(p: &mut Program) -> i32 {
         if now >= next_status {
             let clearance = autonomy.get("turn_clearance");
             let front = clearance.get("front_m");
-            let (rcw, ycw) = p.prestart_crosswalk_fixes();
+            let fixes = p.prestart_crosswalk_fixes();
             p.say(&format!(
-                "start check: {} front={} cw_fixes={}+{}",
+                "start check: {} front={} cw_fixes={}",
                 if ready { "ready".to_string() } else { format!("not ready ({})", to_json(autonomy.get("turn_rejection"))) },
                 to_json(front),
-                rcw,
-                ycw,
+                fixes,
             ));
             next_status = now + p.o.status_s.max(0.1);
         }
@@ -1112,17 +995,13 @@ fn run(p: &mut Program) -> i32 {
         session.motion.race_light_wait_s = p.o.light_max_wait_s;
         session.motion.race_surface.set_initial_load(p.o.surface_initial_load);
         // Enable crosswalk odometry immediately when pure-Rust vision is attached so
-        // moving fallback always has lidar rear-wall history even before YOLO arrives.
+        // moving fallback always has lidar rear-wall history before the first optical fix.
         if p.o.frame_shm.is_some() {
             session.motion.light_vision = true;
         }
-        // Replay standstill pure-Rust and YOLO crosswalk fixes captured before launch.
+        // Replay standstill Rust crosswalk fixes captured before launch.
         for (obs, cap_s) in std::mem::take(&mut p.prestart_rust_cw) {
             session.motion.rust_crosswalk_observe(&obs, cap_s);
-        }
-        for (_frame, cap_s, edge_y, base_y) in std::mem::take(&mut p.prestart_yolo_cw) {
-            session.motion.light_vision = true;
-            session.motion.race_crosswalk_stop.push_frame(cap_s, edge_y, base_y);
         }
     }
     p.say(&format!("started run {run_id}"));
@@ -1253,8 +1132,8 @@ fn run(p: &mut Program) -> i32 {
         "max_actual_gap_s" => result.get("max_actual_gap_s").clone(), "max_gap_breakdown" => result.get("max_gap_breakdown").clone(),
         "cpu" => cpu, "scan_to_tick" => scan_to_tick, "result" => result,
         "rust_crosswalk" => rust_cw_summary,
-        "light" => dict! {"state_file" => p.o.light_state.as_ref().map(|path| path.display().to_string()),
-                          "updates" => p.light_updates, "invalid" => p.light_invalid, "last" => p.light.clone()},
+        "light" => dict! {"source" => "rust_camera",
+                          "updates" => p.light_updates, "last" => p.light.clone()},
     };
     let _ = p.files.send(FileOp::Put("summary.json", to_json(&summary)));
     let _ = p.files.send(FileOp::Put("cli-result.json", to_json(&summary)));
@@ -1271,29 +1150,6 @@ mod tests {
         let (plain, ros) = split_ros_args(&args);
         assert_eq!(plain, ["--demo", "--start", "never"]);
         assert_eq!(ros, ["--ros-args", "-r", "__node:=review_node", "--"]);
-    }
-
-    #[test]
-    fn light_states_carry_the_crosswalk_distance() {
-        // round y11: scripts/vision-log.py writes crosswalk_m beside the score and the row
-        let text = r#"{"frame": 7, "captured_s": 10.0, "written_s": 10.25, "red": 0.0, "green": 0.0,
-                       "crosswalk": 0.42, "crosswalk_row": 330.0, "crosswalk_m": 2.319}"#;
-        let light = light_of(text, 100.).unwrap();
-        assert_eq!(light.get("crosswalk_m").f(), 2.319);
-        assert_eq!(light.get("crosswalk_row").f(), 330.);
-        assert_eq!(light.get("captured_at").f(), 99.75);
-        // the edge out of view: no distance; an impossible one is dropped, the frame kept
-        let text = r#"{"frame": 8, "captured_s": 10.0, "written_s": 10.2, "red": 0.0, "green": 0.0,
-                       "crosswalk": 0.5, "crosswalk_row": 476.5}"#;
-        assert!(light_of(text, 100.).unwrap().get("crosswalk_m").is_none());
-        let text = r#"{"frame": 9, "captured_s": 10.0, "written_s": 10.2, "red": 0.0, "green": 0.0,
-                       "crosswalk": 0.5, "crosswalk_m": -1.0}"#;
-        let light = light_of(text, 100.).unwrap();
-        assert!(light.get("crosswalk_m").is_none());
-        assert_eq!(light.get("crosswalk").f(), 0.5);
-        // no crosswalk score: no crosswalk keys at all
-        let text = r#"{"frame": 10, "captured_s": 10.0, "written_s": 10.2, "red": 0.1, "green": 0.0, "crosswalk_m": 2.0}"#;
-        assert!(light_of(text, 100.).unwrap().get("crosswalk_m").is_none());
     }
 
     #[test]

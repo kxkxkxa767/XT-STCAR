@@ -6,7 +6,6 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::py::V;
 use crate::race::Event;
 use crate::race_crosswalk_vision::{SHM_HEADER_LEN, parse_shm_frame, pin_current_thread};
 use crate::traffic_lamp::{Detector, Lights};
@@ -21,35 +20,6 @@ pub(crate) struct Observation {
 
 pub(crate) fn lamp_phase(phase: Option<&str>) -> bool {
     matches!(phase, Some("light_approach" | "light_wait"))
-}
-
-/// Both sources refer to the same camera counter. A late YOLO result can add
-/// colour to this capture, but cannot replace a newer observation.
-pub(crate) fn merge(latest: &V, mut incoming: V) -> Option<V> {
-    let frame = incoming.get("frame").oi()?;
-    if let Some(previous) = latest.get("frame").oi() {
-        if previous > frame {
-            return None;
-        }
-        if previous == frame {
-            for key in ["red", "green"] {
-                let score = latest
-                    .get(key)
-                    .of()
-                    .unwrap_or_default()
-                    .max(incoming.get(key).of().unwrap_or_default());
-                incoming.set(key, score);
-            }
-            if let Some(captured) = latest.get("captured_at").of() {
-                incoming.set(
-                    "captured_at",
-                    incoming.get("captured_at").of()?.min(captured),
-                );
-            }
-        }
-    }
-    incoming.set("lamp_fusion", true);
-    Some(incoming)
 }
 
 /// Block on phase changes outside the gantry. While active, inspect just the
@@ -146,40 +116,6 @@ pub(crate) fn spawn(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dict, maneuver::Maneuver};
-
-    #[test]
-    fn the_two_sources_share_one_vote_per_capture() {
-        let mut m = Maneuver::new(&0.0.into(), &40.0.into(), &1670.into(), &true.into());
-        m.race_inputs = Some(Default::default());
-        m.route_stage = "light_lane";
-        m.drive_since = Some(0.);
-        m.light_since = Some(0.);
-        m.light_stop_state = Some("waiting");
-        m.light_stop_evidence = dict! {"gantry" => dict! {"source_seq" => 1}};
-        m._light_gantry_since = Some(1.);
-        m.race_light.beam_at = Some(1.);
-        m._light_wait_since = Some(1.);
-        m._light_wait_tick = Some(1.);
-        let sample = |frame: i64, at: f64, red: f64, green: f64| dict! {"frame" => frame, "captured_at" => at, "red" => red, "green" => green};
-        let green = merge(&V::None, sample(10, 1.2, 0., 1.)).unwrap();
-        m.light_observe(&dict! {"light" => green.clone()}, 1.21);
-        let same = merge(&green, sample(10, 1.23, 0., 0.8)).unwrap();
-        m.light_observe(&dict! {"light" => same.clone()}, 1.25);
-        assert_eq!(m._light_frames.len(), 1);
-        let amended = merge(&same, sample(10, 1.24, 0.9, 0.)).unwrap();
-        m.light_observe(&dict! {"light" => amended.clone()}, 1.26);
-        m.light_observe(&dict! {"light" => amended.clone()}, 1.27);
-        assert_eq!(m._light_frames.len(), 1);
-        assert_eq!(m._light_red_frames, 1);
-        assert_eq!(m._light_stop_red_frames, 1);
-        assert!(merge(&amended, sample(9, 1.0, 1., 0.)).is_none());
-        let scan = dict! {"seq" => 2, "at_ms" => 1500, "received_at" => 1.5, "ranges" => vec![V::Float(3.); 360]};
-        m.light_observe(&dict! {"light" => sample(11, 1.4, 0., 1.)}, 1.41);
-        assert!(!m.light_wait(&scan, 1.42, &V::None));
-        m.light_observe(&dict! {"light" => sample(12, 1.6, 0., 1.)}, 1.61);
-        assert!(m.light_wait(&scan, 1.62, &V::None));
-    }
 
     #[test]
     fn tagged_camera_frame_reaches_only_the_active_lamp_worker() {

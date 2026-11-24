@@ -5,15 +5,10 @@
 //! lidar track and the IMU speed from that rest. Never a start condition: without a
 //! plan the camera fixes in motion place the crosswalk as before.
 use crate::helpers::{FRONT_BODY_EXTENT_M, SCAN_AGE_S};
-use crate::maneuver::{CROSSWALK_CAMERA_LAG_S, CROSSWALK_FIX_FRAMES, CROSSWALK_RANGE_M};
+use crate::maneuver::{CROSSWALK_FIX_FRAMES, CROSSWALK_RANGE_M};
 use crate::py::*;
 use crate::dict;
 
-// The camera mount (scripts/vision-log.py): the lens .195 m above the floor and .041 m
-// behind the front, so .159 m ahead of the lidar.
-const CAMERA_HEIGHT_M: f64 = 0.195;
-const CAMERA_BEHIND_FRONT_M: f64 = 0.041;
-const CAMERA_AHEAD_OF_LIDAR_M: f64 = FRONT_BODY_EXTENT_M - CAMERA_BEHIND_FRONT_M;
 const BOARD_AHEAD_HALF_BINS: i64 = 3; // scripts/camera-pitch-check.py's rays
 const STILL_TRACK_M: f64 = 0.02; // lidar range noise: the car has not left its rest
 const FRAMES_KEPT: usize = 8;
@@ -23,8 +18,6 @@ pub(crate) const IMU_POWER_RESPONSE_S: f64 = 0.1;
 
 #[derive(Clone, Debug, Default)]
 pub struct CrosswalkStopPlan {
-    /// YOLO: (capture time less the camera lag, stripes' edge height, board base height)
-    frames: Vec<(f64, f64, f64)>,
     /// Pure-Rust: (capture time less lag, front-to-edge m, pitch rad, gap-to-edge m, pitch source)
     direct_frames: Vec<(f64, f64, f64, Option<f64>, &'static str)>,
     /// the lidar's range to the board ahead on the still scans
@@ -33,7 +26,6 @@ pub struct CrosswalkStopPlan {
     /// (front to the edge m, pitch rad, the edge on the crosswalk track)
     fixes: Vec<(f64, f64, f64)>,
     gap_distances: Vec<f64>,
-    yolo_fixes: usize,
     rust_fixes: usize,
     pub planned: Option<f64>,
     imu_zero: Option<f64>,
@@ -43,22 +35,6 @@ pub struct CrosswalkStopPlan {
     front_to_rear_offset: Option<f64>,
     /// y68: the IMU forward acceleration over the last scan interval.
     pub imu_accel: Option<f64>,
-}
-
-/// The front's distance to the stripes' edge and the frame's pitch, from the two image
-/// heights and the lidar's range to the board ahead (its base fixes the pitch).
-pub(crate) fn edge_from_board(edge_y: f64, base_y: f64, board_m: f64) -> Option<(f64, f64)> {
-    let to_board = board_m - CAMERA_AHEAD_OF_LIDAR_M;
-    if to_board <= 0. {
-        return None;
-    }
-    let pitch = base_y.atan() - (CAMERA_HEIGHT_M / to_board).atan();
-    let down = edge_y.atan() - pitch;
-    if down <= 0. {
-        return None;
-    }
-    let front = CAMERA_HEIGHT_M / down.tan() - CAMERA_BEHIND_FRONT_M;
-    (CROSSWALK_RANGE_M.0..=CROSSWALK_RANGE_M.1).contains(&front).then_some((front, pitch))
 }
 
 fn median(values: &[f64]) -> f64 {
@@ -83,7 +59,7 @@ pub(crate) fn board_ahead(scan: &V) -> Option<f64> {
 impl CrosswalkStopPlan {
     pub fn has_optical_observation(&self, moving_fix: bool) -> bool {
         moving_fix || self.planned.is_some() || !self.fixes.is_empty()
-            || !self.direct_frames.is_empty() || !self.frames.is_empty()
+            || !self.direct_frames.is_empty()
     }
 
     /// Reuse an offset only within one front-board track. The lane speed
@@ -100,23 +76,11 @@ impl CrosswalkStopPlan {
     /// Only called before a plan exists, when the old and new tracks cannot
     /// be related. Keep the IMU rest and the time movement actually began.
     pub fn discard_unpaired_observations(&mut self) {
-        self.frames.clear();
         self.direct_frames.clear();
         self.board_ahead.clear();
         self.fixes.clear();
         self.gap_distances.clear();
-        self.yolo_fixes = 0;
         self.rust_fixes = 0;
-    }
-
-    pub fn push_frame(&mut self, captured: f64, edge_y: f64, base_y: f64) {
-        if self.planned.is_none() {
-            self.frames.push((captured - CROSSWALK_CAMERA_LAG_S, edge_y, base_y));
-            let n = self.frames.len();
-            if n > FRAMES_KEPT {
-                self.frames.drain(..n - FRAMES_KEPT);
-            }
-        }
     }
 
     /// Direct stationary distance fix from pure-Rust crosswalk vision (using left-gap / board pitch).
@@ -129,7 +93,7 @@ impl CrosswalkStopPlan {
         source: &'static str,
     ) {
         if self.planned.is_none() && (CROSSWALK_RANGE_M.0..=CROSSWALK_RANGE_M.1).contains(&front_to_edge_m) {
-            // Pure-Rust runs right after capture (no ~230 ms YOLO delay); subtract a short capture lag.
+            // Discount the short capture latency of the Rust camera.
             self.direct_frames.push((captured - 0.05, front_to_edge_m, pitch_rad, gap_to_edge_m, source));
             let n = self.direct_frames.len();
             if n > FRAMES_KEPT {
@@ -171,14 +135,6 @@ impl CrosswalkStopPlan {
         }
         let still_until = self.moved_at.unwrap_or(f64::INFINITY);
         let board_m = (!self.board_ahead.is_empty()).then(|| median(&self.board_ahead));
-        if let Some(bm) = board_m {
-            for (at, edge_y, base_y) in std::mem::take(&mut self.frames) {
-                if at < still_until && let Some((front, pitch)) = edge_from_board(edge_y, base_y, bm) {
-                    self.fixes.push((front, pitch, rest_track - FRONT_BODY_EXTENT_M - front));
-                    self.yolo_fixes += 1;
-                }
-            }
-        }
         for (at, front, pitch, gap_m, _src) in std::mem::take(&mut self.direct_frames) {
             if at < still_until {
                 self.fixes.push((front, pitch, rest_track - FRONT_BODY_EXTENT_M - front));
@@ -194,17 +150,12 @@ impl CrosswalkStopPlan {
         let edge = median(&self.fixes.iter().map(|f| f.2).collect::<Vec<_>>());
         self.planned = Some(edge);
         let front = median(&self.fixes.iter().map(|f| f.0).collect::<Vec<_>>());
-        let basis = match (self.yolo_fixes > 0, self.rust_fixes > 0) {
-            (true, true) => "yolo_and_rust_still_fusion",
-            (false, true) => "rust_stripes_with_left_gap",
-            _ => "still_frames_against_the_board_ahead",
-        };
         let mut evidence = dict! {
             "source_seq" => scan.idx("seq").clone(), "received_at" => received,
-            "basis" => basis,
+            "basis" => "rust_stripes_with_left_gap",
             "front_to_edge_m" => front,
             "board_m" => edge, "rest_track_m" => rest_track,
-            "yolo_fixes" => self.yolo_fixes as i64, "rust_fixes" => self.rust_fixes as i64,
+            "rust_fixes" => self.rust_fixes as i64,
             "fixes" => V::list(self.fixes.iter().map(|f| V::from(vec![f.0, f.1.to_degrees(), f.2])).collect()),
         };
         if let Some(bm) = board_m {
@@ -250,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn pure_rust_still_fixes_plan_crosswalk_without_yolo_or_far_board() {
+    fn pure_rust_still_fixes_plan_crosswalk_without_far_board() {
         let scan = dict! {"seq" => 1, "ranges" => vec![V::None; 360]};
         let mut plan = CrosswalkStopPlan::default();
         for (i, d) in [(0.1, 2.18), (0.3, 2.20), (0.5, 2.19)] {

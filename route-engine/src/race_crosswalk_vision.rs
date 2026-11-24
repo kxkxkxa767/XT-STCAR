@@ -1,11 +1,8 @@
 //! Pure-Rust crosswalk detector with lidar left-gap & wall alignment.
 //!
-//! Designed to run in parallel with Python YOLO (`scripts/vision-log.py`) ONLY while
-//! the vehicle is in `start_lane` before passing the crosswalk:
-//! - Receives raw 640x480 BGR frames via RAM `/dev/shm` written right after camera capture
-//!   (before YOLO's ~230 ms ONNX inference), running on its own pinned CPU core (CPU 6 on
-//!   the 8-core RISC-V board) and exiting as soon as the crosswalk stage finishes (0 % CPU
-//!   for cones / light / finish).
+//! Reads the Rust V4L2 camera's atomic BGR snapshots while the car is at the start
+//! or approaching the stripes. The worker requests CPU 6 and stops once the
+//! crosswalk distance is resolved or the start-lane stage ends.
 //! - Uses the lidar's lane walls and left divider-wall end ("left gap") to align a compact
 //!   metric BEV grid inside the start lane and calibrate camera pitch (robust even on bright
 //!   sky-blue basketball courts where simple B-R far-board detection merges with the floor).
@@ -26,7 +23,7 @@ use crate::helpers::FRONT_BODY_EXTENT_M;
 use crate::py::V;
 use crate::race::{Event, spawn_named};
 
-// Camera calibration matching scripts/vision-log.py & config/camera-race4-20261031.json
+// Camera calibration matching config/camera-race4-20261031.json
 const FX: f64 = 426.55;
 const FY: f64 = 424.47;
 const CX: f64 = 349.59;
@@ -235,7 +232,7 @@ fn lane_to_cam(xl: f64, yl: f64, heading_left: f64) -> (f64, f64) {
 }
 
 /// Forward project ground point (xc forward from camera, yc left of camera) to distorted pixel (u, v).
-/// Camera optical axis is tilted UP by +pitch_rad above horizontal (matching scripts/vision-log.py).
+/// Camera optical axis is tilted UP by +pitch_rad above horizontal.
 fn project_cam_ground(xc: f64, yc: f64, pitch_rad: f64) -> Option<(f64, f64)> {
     if xc <= 0.15 {
         return None;
@@ -804,7 +801,7 @@ pub fn detect_crosswalk(
     })
 }
 
-/// Parse one raw frame written by scripts/vision-log.py --frame-shm.
+/// Parse one raw frame published by the Rust V4L2 camera.
 /// Header (32 bytes, little-endian): magic[4]="XTF1", frame:u64, captured_s:f64, w:u32, h:u32, flags:u32.
 pub fn parse_shm_frame(bytes: &[u8]) -> Option<(i64, f64, usize, usize, &[u8])> {
     if bytes.len() < SHM_HEADER_LEN || &bytes[0..4] != SHM_MAGIC {
@@ -893,7 +890,7 @@ pub fn spawn_worker(
             }
             thread::sleep(Duration::from_millis(15));
         }
-        let _ = remove_shm_best_effort(&shm_path);
+        // The launcher owns these files until camera and lamp acquisition have stopped.
     })
 }
 
@@ -960,6 +957,24 @@ mod tests {
             }
         }
         bgr
+    }
+
+
+    #[test]
+    fn retiring_crosswalk_worker_leaves_the_camera_frame_and_write_buffer() {
+        let directory = std::env::temp_dir().join(format!("xt-cw-owner-{}",std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let shared=directory.join("camera.bgr");
+        let pending=shared.with_added_extension("tmp");
+        std::fs::write(&shared,b"current capture").unwrap();
+        std::fs::write(&pending,b"next capture").unwrap();
+        let (tx,_rx)=std::sync::mpsc::channel();
+        let worker=spawn_worker(shared.clone(), Default::default(), Arc::new(AtomicBool::new(true)), Default::default(), tx);
+        worker.join().unwrap();
+        assert_eq!(std::fs::read(&shared).unwrap(),b"current capture");
+        assert_eq!(std::fs::read(&pending).unwrap(),b"next capture");
+        remove_shm_best_effort(&shared).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 
     #[test]

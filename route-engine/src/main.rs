@@ -28,6 +28,8 @@ pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
 pub mod race;
+#[cfg(target_os = "linux")]
+mod race_camera;
 mod race_launch;
 pub mod race_scan;
 #[cfg(feature = "ros2")]
@@ -484,6 +486,10 @@ fn function(name: &str, args: &[V]) -> V {
 fn main() {
     install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(target_os = "linux")]
+    if args.get(1).is_some_and(|s| s == "capture-camera") {
+        std::process::exit(race_camera::main(&args[2..]));
+    }
     if matches!(args.get(1).map(String::as_str), Some("start" | "launch-round")) {
         std::process::exit(race_launch::main(&args[2..], args[1] == "launch-round"));
     }

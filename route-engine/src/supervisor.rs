@@ -2026,7 +2026,29 @@ impl Supervisor {
 
     /// Round y2 (race program): the read-only vision process's newest light
     /// frame rides on the control status as control['light'].
+    /// The console and offline plant can supply an already ranged optical observation.
+    /// The live race camera delivers typed stripe fixes through its own worker.
     pub fn set_light(&mut self, light: &V) {
+        if let (Some(session), Some(frame), Some(captured), Some(distance), Some(score)) =
+            (self.session.as_mut(), light.get("frame").oi(), light.get("captured_at").of(),
+             light.get("crosswalk_m").of(), light.get("crosswalk").of())
+            && score >= crate::maneuver::CROSSWALK_SEEN_SCORE
+            && distance.is_finite() && distance > 0.
+        {
+            let pitch = light.get("crosswalk_edge_y").of().map_or(0., |edge|
+                edge.atan() - (0.195 / (distance + 0.041)).atan());
+            let stripe = crate::race_crosswalk_vision::RustCrosswalkObs {
+                frame, captured_mono_s: captured, front_to_edge_m: distance,
+                edge_y: light.get("crosswalk_edge_y").of().unwrap_or(0.), pitch_rad: pitch,
+                pitch_source: "semantic_replay", score, stripes: 0, gaps: 0,
+                left_gap_x_m: None, gap_to_crosswalk_m: None, compute_ms: 0.,
+            };
+            session.motion.rust_crosswalk_observe(&stripe, captured);
+        }
+        self.set_camera_light(light);
+    }
+
+    pub fn set_camera_light(&mut self, light: &V) {
         if self.status.get("control").is_dict() {
             let mut control = self.status.get("control").clone();
             control.set("light", light.clone());

@@ -4,7 +4,7 @@ calibrated pitch? Read only: one console /camera.jpg and one /api/lidar from
 the car over the SSH control socket (the access token is read on the car and
 never printed), on the Mac the base of the board straight ahead (the lowest
 blue run above row 340 in the centre columns) against the lidar's distance to
-it gives the camera's pitch with scripts/vision-log.py's lens model and mount.
+it gives the camera's pitch with the calibrated lens geometry and mount.
 10-31 on the track: 8.50 deg (start, board 7.70 m from the camera) and 8.60
 (light trigger, 3.92 m); vision-log ranges with 9.1 for race4's box bottoms.
 A change of more than PITCH_TOLERANCE_DEG moves the crosswalk distances
@@ -14,7 +14,6 @@ A change of more than PITCH_TOLERANCE_DEG moves the crosswalk distances
   .venv/bin/python scripts/camera-pitch-check.py --image JPG --lidar-m M   (offline: a saved frame)
 """
 import base64
-import importlib.util
 import json
 import math
 from pathlib import Path
@@ -41,10 +40,37 @@ print(json.dumps({'jpg': base64.b64encode(get('/camera.jpg')).decode(), 'lidar':
 '''
 
 
+def undistort(u, v, intrinsics, distortion):
+    """Normalized undistorted image point of pixel (u, v), or None where the
+    fixed-point iteration does not reproduce the pixel (the bottom corners)."""
+    fx, fy, cx, cy = intrinsics
+    k1, k2, p1, p2, k3 = distortion
+    xd, yd = (u-cx)/fx, (v-cy)/fy
+    x, y = xd, yd
+    for _ in range(40):
+        r2 = x*x+y*y
+        radial = 1+r2*(k1+r2*(k2+r2*k3))
+        x, y = (xd-2*p1*x*y-p2*(r2+2*x*x))/radial, (yd-p1*(r2+2*y*y)-2*p2*x*y)/radial
+    r2 = x*x+y*y
+    radial = 1+r2*(k1+r2*(k2+r2*k3))
+    if (abs(fx*(x*radial+2*p1*x*y+p2*(r2+2*x*x))+cx-u) > 1e-3
+            or abs(fy*(y*radial+p1*(r2+2*y*y)+2*p2*x*y)+cy-v) > 1e-3):
+        return None
+    return x, y
+
+
+def pitch_from_board(u, v, distance, calibration):
+    lens = calibration['intrinsics']
+    point = undistort(u, v, lens['fx_fy_cx_cy'], lens['distortion_k1_k2_p1_p2_k3'])
+    if point is None or distance <= 0:
+        return None
+    height = calibration['extrinsics']['lens_centre_height_m']
+    return math.degrees(math.atan(point[1]) - math.atan(height / distance))
+
+
 def main():
-    spec = importlib.util.spec_from_file_location('vision_log', ROOT/'scripts'/'vision-log.py')
-    vision = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(vision)
+    calibration = json.loads((ROOT/"config/camera-race4-20261031.json").read_text())
+    lens = calibration["intrinsics"]
     import cv2
     import numpy as np
     if sys.argv[1:2] == ['--image']:
@@ -80,9 +106,10 @@ def main():
     if len(rows) < 4:
         raise SystemExit(f'no board base found in the centre columns ({rows})')
     row = statistics.median(rows)
-    point = vision.undistort(vision.CAMERA_FX_FY_CX_CY[2], row)
     distance = lidar_m-CAMERA_AHEAD_OF_LIDAR_M
-    pitch = math.degrees(math.atan(point[1]))-math.degrees(math.atan(vision.CAMERA_HEIGHT_M/distance))
+    pitch = pitch_from_board(lens['fx_fy_cx_cy'][2], row, distance, calibration)
+    if pitch is None:
+        raise SystemExit('board base is outside the calibrated image or lidar range')
     result = {'board_base_row': row, 'rows': rows, 'lidar_ahead_m': round(lidar_m, 3),
               'pitch_deg': round(pitch, 2), 'calibrated_pitch_deg': PHYSICAL_PITCH_DEG,
               'ok': abs(pitch-PHYSICAL_PITCH_DEG) <= PITCH_TOLERANCE_DEG}
