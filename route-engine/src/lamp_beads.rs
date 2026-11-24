@@ -1,10 +1,12 @@
 //! Resolve LED arrays on a sunlit traffic signal. Compare bright islands with the
-//! glass of the same lens. The adjacent amber lens shares the signal's backplate.
+//! glass of the same lens. Identify the red left and green right endpoints of a housing.
 use super::{Frame, Lights};
 
 const RED: u8 = 1;
 const GREEN: u8 = 2;
-const AMBER: u8 = 4;
+const WHITE_CORE: u8 = 4;
+// Optional geometric witness only. A central cover never contributes a colour vote.
+const COVER_MARKER: u8 = 8;
 
 #[derive(Clone, Copy)]
 struct Lens {
@@ -29,20 +31,27 @@ pub(super) struct Beads {
     coarse: Vec<u8>,
     queue: Vec<usize>,
     lenses: Vec<Lens>,
+    white_ends: Vec<Lens>,
+    middle_covers: Vec<Lens>,
+    panels: Vec<(Lens, Lens, Lens)>,
     islands: Vec<u8>,
     spans: Vec<(usize, usize, usize)>,
+    pub(super) bright_red_array: bool,
 }
 
 fn lens_colours((b, g, r): (u8, u8, u8)) -> u8 {
     let (b, g, r) = (i32::from(b), i32::from(g), i32::from(r));
-    let red = r >= 72 && 5 * r >= 8 * g && r - b >= 28 && 2 * (g - b) <= r - b + 14;
-    let green = g >= 45 && g + 4 >= r && g - b >= 10 && 2 * g - r - b >= 18;
-    let amber = r >= 120
+    let red = r >= 72 && 5 * r >= 8 * g && r - b >= 28 && 100 * (g - b) < 33 * (r - b) + 160;
+    let green = g >= 26 && 100 * g >= 86 * r && g - b >= 7 && 2 * g - r - b >= 10;
+    let cover = r >= 120
         && r - b >= 88
         && g - b >= 23
         && 100 * (g - b) >= 28 * (r - b)
         && 100 * (g - b) <= 77 * (r - b);
-    u8::from(red) * RED | u8::from(green) * GREEN | u8::from(amber) * AMBER
+    u8::from(red) * RED
+        | u8::from(green) * GREEN
+        | u8::from(r.min(g).min(b) >= 218) * WHITE_CORE
+        | u8::from(cover) * COVER_MARKER
 }
 
 fn channels((b, g, r): (u8, u8, u8), kind: u8) -> (usize, usize) {
@@ -121,67 +130,246 @@ fn flood(
     c
 }
 
-fn opposite_lens(frame: &Frame<'_>, lens: Lens, ax: f64, ay: f64, span: f64) -> bool {
-    // A very small or elongated red patch can also be skin or clothing.
-    if lens.kind == RED && lens.w >= 18 && 4 * lens.w >= 3 * lens.h && 4 * lens.h >= 3 * lens.w {
-        return true;
+fn cover_pixel((b, g, r): (u8, u8, u8), kind: u8) -> bool {
+    let (b, g, r) = (i32::from(b), i32::from(g), i32::from(r));
+    if kind == RED {
+        r >= 53 && r - b >= 24 && r - g >= 20 && 100 * (g - b) < 32 * (r - b)
+    } else {
+        g >= 22 && g * 100 >= r * 85 && g - b >= 6 && 2 * g - r - b >= 8
     }
-    let (cx, cy) = lens.centre();
-    // The other lenses lie on the same line as the lit green one.
-    for spacing in [0.83, 1., 1.17] {
-        let rx = ax + (ax - cx) * spacing;
-        let ry = ay + (ay - cy) * spacing;
-        let mut hits = 0;
-        for (dx, dy) in [(0., 0.), (-0.19, 0.), (0.19, 0.), (0., 0.19), (0., -0.19)] {
-            let x = (rx + dx * span).round() as isize;
-            let y = (ry + dy * span).round() as isize;
-            if x < 0 || y < 0 || x as usize >= frame.width || y as usize >= frame.height {
-                continue;
-            }
-            let (b, g, r) = frame.pixel(x as usize, y as usize);
-            let (b, g, r) = (i32::from(b), i32::from(g), i32::from(r));
-            let opposite = if lens.kind == GREEN {
-                r >= 65 && r - b >= 30 && 100 * (g - b) < 30 * (r - b) && 2 * g < r + b
-            } else {
-                // Daylight makes an unlit green cover olive, with a modest green excess.
-                g >= 26 && g * 100 >= r * 87 && g - b >= 7 && 2 * g - r - b >= 10
-            };
-            if opposite {
-                hits += 1;
-            }
-        }
-        if hits >= 4 {
-            return true;
-        }
-    }
-    false
 }
-fn common_housing(frame: &Frame<'_>, lens: Lens, amber: Lens, mid: usize) -> bool {
-    let (cx, cy) = lens.centre();
-    let (ax, ay) = amber.centre();
-    let separation = if lens.kind == RED { ax - cx } else { cx - ax };
-    let diameter = (lens.w + amber.w) as f64 * 0.5;
-    if separation < 1.12 * diameter
-        || separation > 3.25 * diameter
-        || amber.w * 100 < lens.w * 52
-        || amber.w * 100 > lens.w * 192
-        || amber.h * 100 < lens.h * 48
-        || amber.h * 100 > lens.h * 210
-        || (ay - cy).abs() > 0.65 * amber.h.max(lens.h) as f64
+
+// Look across the outside outline, perpendicular to the line of lenses. Three
+// distinct locations on one long edge suffice when the other edge is clipped.
+fn frame_edges(frame: &Frame<'_>, left: Lens, right: Lens) -> usize {
+    let (lx, ly) = left.centre();
+    let (rx, ry) = right.centre();
+    let (dx, dy) = (rx - lx, ry - ly);
+    let length = dx.hypot(dy);
+    if length < 1. {
+        return 0;
+    }
+    let (nx, ny) = (-dy / length, dx / length);
+    let diameter = (left.w + right.w) as f64 * 0.5;
+    let sample = |x: f64, y: f64| {
+        let (x, y) = (x.round() as isize, y.round() as isize);
+        if x < 0 || y < 0 || x as usize >= frame.width || y as usize >= frame.height {
+            None
+        } else {
+            Some(channels(frame.pixel(x as usize, y as usize), RED).0)
+        }
+    };
+    let mut visible_edges = 0;
+    for side in [-1., 1.] {
+        let mut edge = 0;
+        for along in [0.02, 0.25, 0.75, 0.98] {
+            let (x, y) = (lx + along * dx, ly + along * dy);
+            let at = |radius: f64| {
+                sample(
+                    x + side * radius * diameter * nx,
+                    y + side * radius * diameter * ny,
+                )
+            };
+            let inner = [0.62, 0.76].into_iter().filter_map(at).min();
+            let outer = [1.1, 1.32].into_iter().filter_map(at).max();
+            if matches!((inner,outer),(Some(i),Some(o)) if i<135 && o>i+22) {
+                edge += 1;
+            }
+        }
+        if edge >= 3 {
+            visible_edges += 1;
+        }
+    }
+    visible_edges
+}
+
+fn panel_fraction(left: Lens, right: Lens, point: (f64, f64)) -> (f64, f64) {
+    let (lx, ly) = left.centre();
+    let (rx, ry) = right.centre();
+    let (dx, dy) = (rx - lx, ry - ly);
+    let span = dx.hypot(dy);
+    let (x, y) = (point.0 - lx, point.1 - ly);
+    (
+        (x * dx + y * dy) / (span * span),
+        (dx * y - dy * x).abs() / span,
+    )
+}
+
+// A pair is ordered in the image and shares dark backing just inside each outer lens.
+// The central lens is outside these samples, even when it reflects overhead lighting.
+fn paired_backing(
+    frame: &Frame<'_>,
+    first: Lens,
+    other: Lens,
+    mid: usize,
+    slanted_panel: bool,
+) -> bool {
+    if first.kind == other.kind {
+        return false;
+    }
+    let (cx, cy) = first.centre();
+    let (ox, oy) = other.centre();
+    let sign = if first.kind == RED { 1. } else { -1. };
+    let d = (first.w + other.w) as f64 * 0.5;
+    let sep = sign * (ox - cx);
+    let clipped = first.y < 2 || other.y < 2;
+    if !(2.65 * d..=6.1 * d).contains(&sep)
+        || other.w * 100 < first.w * 47
+        || other.w * 100 > first.w * 211
+        || (oy - cy).abs()
+            > if slanted_panel {
+                0.80 * sep
+            } else if clipped {
+                1.05 * d
+            } else {
+                0.20 * sep
+            }
+        || (!clipped && (other.h * 100 < first.h * 47 || other.h * 100 > first.h * 211))
     {
         return false;
     }
-    let x = ((ax + cx) * 0.5).round() as usize;
-    let y = (ay + cy) * 0.5;
-    let mut dark = 0;
-    for offset in [-0.18, 0., 0.18] {
-        let sy = (y + offset * lens.h as f64)
+    let px = (cx + sign * 0.76 * first.w as f64).round();
+    let qx = (ox - sign * 0.76 * other.w as f64).round();
+    if !(0.0..frame.width as f64).contains(&px) || !(0.0..frame.width as f64).contains(&qx) {
+        return false;
+    }
+    let slope = (oy - cy) / (ox - cx);
+    for x in [px, qx] {
+        let y = cy + (x - cx) * slope;
+        let mut dark = 0;
+        let mut seen = 0;
+        for offset in [-0.15, 0., 0.15] {
+            let sy = (y + offset * d).round() as isize;
+            if sy < 0 || sy as usize >= frame.height {
+                continue;
+            }
+            seen += 1;
+            dark += usize::from(
+                channels(frame.pixel(x as usize, sy as usize), first.kind).0
+                    < 88.max(mid.saturating_sub(17)),
+            );
+        }
+        if seen == 0 || dark * 2 < seen {
+            return false;
+        }
+    }
+    true
+}
+
+fn endpoint_colour(frame: &Frame<'_>, lens: Lens) -> bool {
+    let (cx, cy) = lens.centre();
+    let mut hits = 0;
+    for (dx, dy) in [(0., 0.), (-0.18, 0.), (0.18, 0.), (0., -0.20), (0., 0.20)] {
+        let x = (cx + dx * lens.w as f64)
+            .round()
+            .clamp(0., (frame.width - 1) as f64) as usize;
+        let y = (cy + dy * lens.h as f64)
             .round()
             .clamp(0., (frame.height - 1) as f64) as usize;
-        dark +=
-            usize::from(channels(frame.pixel(x, sy), lens.kind).0 < 82.max(mid.saturating_sub(13)));
+        hits += usize::from(cover_pixel(frame.pixel(x, y), lens.kind));
     }
-    dark >= 2 && opposite_lens(frame, lens, ax, ay, amber.w as f64)
+    if hits >= 3 {
+        return true;
+    }
+    // A saturated glass can still be located by its coloured edge around a white core.
+    let center = frame.pixel(cx as usize, cy as usize);
+    if center.0.min(center.1).min(center.2) < 184 {
+        return false;
+    }
+    let mut coloured = 0;
+    for (dx, dy) in [
+        (1., 0.),
+        (-1., 0.),
+        (0., 1.),
+        (0., -1.),
+        (0.7, 0.7),
+        (-0.7, 0.7),
+        (0.7, -0.7),
+        (-0.7, -0.7),
+    ] {
+        if [0.36, 0.44, 0.51].iter().any(|&radius| {
+            let x = (cx + dx * lens.w as f64 * radius).round() as isize;
+            let y = (cy + dy * lens.h as f64 * radius).round() as isize;
+            x >= 0
+                && y >= 0
+                && (x as usize) < frame.width
+                && (y as usize) < frame.height
+                && cover_pixel(frame.pixel(x as usize, y as usize), lens.kind)
+        }) {
+            coloured += 1;
+        }
+    }
+    coloured >= 4
+}
+
+// Search for the opposite *end* when its dark glass merges into the backplate
+// in the coarse mask. Only the cover and its immediate rim are sampled.
+fn sampled_opposite(frame: &Frame<'_>, lens: Lens, mid: usize) -> bool {
+    let (cx, cy) = lens.centre();
+    let direction = if lens.kind == RED { 1. } else { -1. };
+    let other = if lens.kind == RED { GREEN } else { RED };
+    let d = lens.w as f64;
+    for spacing in [2.75, 3.05, 3.35, 3.65, 3.95, 4.25, 4.55, 4.85, 5.2, 5.6] {
+        let ox = cx + direction * spacing * d;
+        if ox - 0.65 * d < 0. || ox + 0.65 * d >= frame.width as f64 {
+            continue;
+        }
+        for tilt in [0., -0.25, 0.25, -0.55, 0.55] {
+            let oy = cy + tilt * d;
+            if oy < 0. || oy >= frame.height as f64 {
+                continue;
+            }
+            let sample = |dx: f64, dy: f64| {
+                let x = (ox + dx * d).round() as isize;
+                let y = (oy + dy * d).round() as isize;
+                if x < 0 || y < 0 || x as usize >= frame.width || y as usize >= frame.height {
+                    None
+                } else {
+                    Some(frame.pixel(x as usize, y as usize))
+                }
+            };
+            let Some(center) = sample(0., 0.) else {
+                continue;
+            };
+            if !cover_pixel(center, other) && center.0.min(center.1).min(center.2) < 190 {
+                continue;
+            }
+            let mut colours = 0;
+            let mut whites = 0;
+            let mut interior = 0;
+            for (dx, dy) in [(0., 0.), (-0.16, 0.), (0.16, 0.), (0., -0.12), (0., 0.12)] {
+                if let Some(p) = sample(dx, dy) {
+                    if cover_pixel(p, other) {
+                        colours += 1;
+                        interior += channels(p, other).0;
+                    } else if p.0.min(p.1).min(p.2) >= 190 {
+                        whites += 1;
+                    }
+                }
+            }
+            if colours < 2 || colours + whites < 4 {
+                continue;
+            }
+            let mut dark_rim = 0;
+            for (dx, dy) in [(-0.60, 0.), (0.60, 0.), (0., -0.58), (0., 0.58)] {
+                if let Some(p) = sample(dx, dy) {
+                    let lum = channels(p, other).0;
+                    if (mid >= 190 && lum + 65 < interior / colours)
+                        || (!cover_pixel(p, other)
+                            && lum
+                                < 92.max((interior / colours).saturating_sub(12))
+                                    .max(mid.saturating_sub(18)))
+                    {
+                        dark_rim += 1;
+                    }
+                }
+            }
+            if dark_rim >= 3 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn rim_visible(frame: &Frame<'_>, lens: Lens, mid: usize) -> bool {
@@ -220,73 +408,6 @@ fn rim_visible(frame: &Frame<'_>, lens: Lens, mid: usize) -> bool {
     dark >= 5 && dark * 100 >= 65 * visible
 }
 
-fn amber_pixel(pixel: (u8, u8, u8)) -> bool {
-    let (b, g, r) = (i32::from(pixel.0), i32::from(pixel.1), i32::from(pixel.2));
-    r >= 85
-        && r - b >= 48
-        && g - b >= 13
-        && 100 * (g - b) >= 25 * (r - b)
-        && 100 * (g - b) <= 78 * (r - b)
-}
-
-// When direct sunshine joins the housing to the amber mask, sample the adjacent lens
-// at several spacings. A round amber interior sits between darker sections of housing.
-fn amber_in_panel(frame: &Frame<'_>, lens: Lens, mid: usize) -> bool {
-    let (cx, cy) = lens.centre();
-    let direction = if lens.kind == RED { 1. } else { -1. };
-    for spacing in [1.5, 1.85, 2.2, 2.55, 2.9] {
-        for tilt in [0., -0.23, 0.23] {
-            let ax = cx + direction * spacing * lens.w as f64;
-            let ay = cy + tilt * lens.h as f64;
-            let sample = |dx: f64, dy: f64| {
-                let x = (ax + dx * lens.w as f64).round() as isize;
-                let y = (ay + dy * lens.h as f64).round() as isize;
-                if x < 0 || y < 0 || x as usize >= frame.width || y as usize >= frame.height {
-                    None
-                } else {
-                    Some(frame.pixel(x as usize, y as usize))
-                }
-            };
-            let Some(center) = sample(0., 0.) else {
-                continue;
-            };
-            if !amber_pixel(center) {
-                continue;
-            }
-            let mut bright = 0;
-            let mut sum = 0;
-            for (x, y) in [(0., 0.), (0.18, 0.), (-0.18, 0.), (0., 0.18), (0., -0.18)] {
-                if let Some(p) = sample(x, y) {
-                    if amber_pixel(p) {
-                        bright += 1;
-                        sum += channels(p, AMBER).0;
-                    }
-                }
-            }
-            if bright < 4 {
-                continue;
-            }
-            let limit = (sum / bright).saturating_sub(23);
-            let mut dark = 0;
-            for (x, y) in [(-0.85, 0.), (0.85, 0.), (0., -0.68), (0., 0.68)] {
-                if sample(x, y).is_some_and(|p| channels(p, AMBER).0 < limit) {
-                    dark += 1;
-                }
-            }
-            if dark >= 3 && opposite_lens(frame, lens, ax, ay, lens.w as f64) {
-                let gx = ((ax + cx) * 0.5).round() as usize;
-                let gy = ((ay + cy) * 0.5).round().max(0.) as usize;
-                if gy < frame.height
-                    && channels(frame.pixel(gx, gy), AMBER).0 < 90.max(mid.saturating_sub(13))
-                {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
 impl Beads {
     fn collect(&mut self, frame: &Frame<'_>) {
         let step = (frame.width / 320).max(1);
@@ -296,6 +417,9 @@ impl Beads {
         self.coarse.resize(stride * (rows + 2), 0);
         self.coarse.fill(0);
         self.lenses.clear();
+        self.white_ends.clear();
+        self.middle_covers.clear();
+        self.panels.clear();
         for y in 0..rows {
             for x in 0..cols {
                 self.coarse[(y + 1) * stride + x + 1] =
@@ -309,12 +433,31 @@ impl Beads {
                 if bits == 0 {
                     continue;
                 }
-                for kind in [RED, GREEN, AMBER] {
+                for kind in [RED, GREEN, WHITE_CORE, COVER_MARKER] {
                     if bits & kind == 0 {
                         continue;
                     }
                     let c = flood(&mut self.coarse, stride, kind, at, &mut self.queue);
                     let (w, h) = (c.max_x - c.min_x + 1, c.max_y - c.min_y + 1);
+                    if kind == WHITE_CORE {
+                        if c.n >= 4 {
+                            let bounds = [c.min_x, c.min_y, c.max_x, c.max_y];
+                            if let Some(col) = frame
+                                .lit_lens(3, bounds, step, c.n)
+                                .or_else(|| frame.bloom_colour(bounds, step, c.n))
+                            {
+                                let (sx, sy) = (c.min_x * step, c.min_y * step);
+                                self.white_ends.push(Lens {
+                                    kind: col,
+                                    x: sx,
+                                    y: sy,
+                                    w: (w * step).min(frame.width - sx),
+                                    h: (h * step).min(frame.height - sy),
+                                });
+                            }
+                        }
+                        continue;
+                    }
                     if w.min(h) < 4
                         || w * 2 < h
                         || w * 10 > 23 * h
@@ -325,13 +468,54 @@ impl Beads {
                         continue;
                     }
                     let (sx, sy) = (c.min_x * step, c.min_y * step);
-                    self.lenses.push(Lens {
+                    let lens = Lens {
                         kind,
                         x: sx,
                         y: sy,
                         w: (w * step).min(frame.width - sx),
                         h: (h * step).min(frame.height - sy),
-                    });
+                    };
+                    if kind == COVER_MARKER {
+                        self.middle_covers.push(lens);
+                    } else {
+                        self.lenses.push(lens);
+                    }
+                }
+            }
+        }
+        for &marker in &self.middle_covers {
+            let (mx, my) = marker.centre();
+            for &left in self.lenses.iter().chain(self.white_ends.iter()) {
+                let (lx, ly) = left.centre();
+                let d = left.w as f64;
+                if left.kind != RED
+                    || mx - lx < 0.75 * d
+                    || mx - lx > 3.5 * d
+                    || (my - ly).abs() > 2.2 * d
+                {
+                    continue;
+                }
+                for &right in self.lenses.iter().chain(self.white_ends.iter()) {
+                    if right.kind != GREEN
+                        || right.centre().0 <= mx
+                        || marker.w * 2 < left.w.min(right.w)
+                        || marker.w > 2 * left.w.max(right.w)
+                    {
+                        continue;
+                    }
+                    let (fraction, perpendicular) = panel_fraction(left, right, (mx, my));
+                    if !(0.30..=0.70).contains(&fraction) || perpendicular > d * 0.36 {
+                        continue;
+                    }
+                    let mid = channels(frame.pixel(lx as usize, ly as usize), RED).0;
+                    if paired_backing(frame, left, right, mid, true)
+                        && frame_edges(frame, left, right) >= 1
+                        && endpoint_colour(frame, left)
+                        && endpoint_colour(frame, right)
+                    {
+                        self.panels.push((left, marker, right));
+                        break;
+                    }
                 }
             }
         }
@@ -378,13 +562,35 @@ impl Beads {
         let stride = lens.w + 2;
         self.islands.resize(stride * (lens.h + 2), 0);
         self.islands.fill(0);
+        let (mut hot, mut hot_quadrants) = (0usize, 0u8);
+        let (mut body, mut red_glass) = (0, 0);
         for &(y, a, b) in &self.spans {
             for x in a..=b {
-                let (v, s) = channels(frame.pixel(lens.x + x, lens.y + y), lens.kind);
+                let pixel = frame.pixel(lens.x + x, lens.y + y);
+                let (v, s) = channels(pixel, lens.kind);
+                if lens.kind == RED && v <= mid {
+                    let (b, g, r) = (i32::from(pixel.0), i32::from(pixel.1), i32::from(pixel.2));
+                    body += 1;
+                    red_glass +=
+                        usize::from(r - b >= 24 && r - g >= 20 && 100 * (g - b) < 26 * (r - b));
+                }
                 self.islands[(y + 1) * stride + x + 1] = u8::from(v >= min_v && s >= min_secondary);
+                if v >= min_v + 20 && s >= min_secondary + 20 {
+                    hot += 1;
+                    hot_quadrants |= 1
+                        << (usize::from(2 * x + 1 > lens.w) + 2 * usize::from(2 * y + 1 > lens.h));
+                }
             }
         }
+        // Specular warm highlights on another surface do not turn its underlying glass red.
+        if lens.kind == RED && (3 * red_glass < body) {
+            return false;
+        }
+        if self.between_ends(frame, lens) {
+            return false;
+        }
         let (mut n, mut area, mut quadrants) = (0, 0, 0u8);
+        let mut largest = 0;
         let (mut xmin, mut ymin, mut xmax, mut ymax) = (usize::MAX, usize::MAX, 0, 0);
         for &(y, a, b) in &self.spans {
             for x in a..=b {
@@ -398,6 +604,7 @@ impl Beads {
                 }
                 n += 1;
                 area += c.n;
+                largest = largest.max(c.n);
                 let cx = c.sum_x / c.n;
                 let cy = c.sum_y / c.n;
                 xmin = xmin.min(cx);
@@ -408,19 +615,92 @@ impl Beads {
                     1 << (usize::from(2 * cx + 1 > lens.w) + 2 * usize::from(2 * cy + 1 > lens.h));
             }
         }
-        n >= 5
+        let distributed = n >= 5
+            && largest * 2 <= area
             && quadrants.count_ones() >= 3
             && (xmax - xmin) * 10 >= 3 * lens.w
             && (ymax - ymin) * 10 >= 3 * lens.h
             && area * 1000 >= 18 * count
-            && area * 100 <= 38 * count
+            && area * 100 <= 38 * count;
+        if distributed
+            && lens.kind == RED
+            && hot_quadrants.count_ones() >= 3
+            && hot * 100 >= 2 * count
+        {
+            self.bright_red_array = true;
+        }
+        distributed
+    }
+
+    /// A reflection between a real red left cover and green right cover is not an endpoint.
+    fn between_ends(&self, frame: &Frame<'_>, candidate: Lens) -> bool {
+        let (cx, cy) = candidate.centre();
+        for &(left, middle, right) in &self.panels {
+            let (f, perp) = panel_fraction(left, right, (cx, cy));
+            if (0.28..=0.72).contains(&f)
+                && perp < 0.44 * middle.w as f64
+                && (cx - middle.centre().0).hypot(cy - middle.centre().1) < 0.53 * middle.w as f64
+            {
+                return true;
+            }
+        }
+        for &left in &self.lenses {
+            if left.kind != RED {
+                continue;
+            }
+            let (lx, ly) = left.centre();
+            let d = left.w as f64;
+            if cx - lx < 0.9 * d || cx - lx > 3.3 * d || (cy - ly).abs() > d {
+                continue;
+            }
+            for &right in &self.lenses {
+                if right.kind != GREEN {
+                    continue;
+                }
+                let (rx, ry) = right.centre();
+                if rx <= cx {
+                    continue;
+                }
+                let f = (cx - lx) / (rx - lx);
+                if !(0.28..=0.72).contains(&f) || (cy - (ly + f * (ry - ly))).abs() > 0.45 * d {
+                    continue;
+                }
+                let mid = channels(frame.pixel(lx as usize, ly as usize), RED).0;
+                if paired_backing(frame, left, right, mid, false)
+                    && endpoint_colour(frame, left)
+                    && endpoint_colour(frame, right)
+                {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn housing(&self, frame: &Frame<'_>, lens: Lens, mid: usize) -> bool {
-        self.lenses
-            .iter()
-            .any(|&a| a.kind == AMBER && common_housing(frame, lens, a, mid))
-            || amber_in_panel(frame, lens, mid)
+        let (cx, cy) = lens.centre();
+        if self.panels.iter().any(|&(left, _, right)| {
+            let end = if lens.kind == RED { left } else { right };
+            let (ex, ey) = end.centre();
+            (cx - ex).hypot(cy - ey) < 0.38 * end.w as f64
+                && lens.w <= 2 * end.w
+                && lens.h <= 2 * end.h
+        }) {
+            return true;
+        }
+        self.lenses.iter().any(|&other| {
+            (paired_backing(frame, lens, other, mid, false)
+                || (paired_backing(frame, lens, other, mid, true)
+                    && 10 * lens.w.min(lens.h) >= 7 * lens.w.max(lens.h)
+                    && 10 * other.w.min(other.h) >= 7 * other.w.max(other.h)
+                    && frame_edges(frame, lens, other) == 2))
+                && endpoint_colour(frame, other)
+        }) || self.white_ends.iter().any(|&other| {
+            other.w >= 10 && other.h >= 5 && paired_backing(frame, lens, other, mid, false)
+        }) || (lens.kind == RED
+            && lens.w >= 14
+            && lens.w * 4 >= lens.h * 3
+            && sampled_opposite(frame, lens, mid))
     }
 
     pub(super) fn core_housing(
@@ -439,32 +719,47 @@ impl Beads {
             w: ((right - left + 1) * step).min(frame.width - x),
             h: ((bottom - top + 1) * step).min(frame.height - y),
         };
+        self.core_in_housing(frame, lens, step)
+    }
+
+    fn core_in_housing(&self, frame: &Frame<'_>, lens: Lens, step: usize) -> bool {
+        let kind = lens.kind;
+        if self.between_ends(frame, lens) {
+            return false;
+        }
         let (cx, cy) = lens.centre();
         let mid = channels(frame.pixel(cx as usize, cy as usize), kind).0;
         if self.housing(frame, lens, mid) {
             return true;
         }
-        // Close to the gantry only the lower caps can remain in the top image row.
-        // Compare all three caps along a visible row instead of extrapolating their heights.
-        if lens.y <= step && kind == GREEN {
+        // At the image top the other endpoint can be only a thin coloured cap.
+        // Search the visible rows for the opposite cover and its local dark rim.
+        if lens.y <= step {
+            let sign = if kind == GREEN { -1. } else { 1. };
+            let opposite = if kind == GREEN { RED } else { GREEN };
             for row in [1, 2.max(lens.h / 8), 2.max(lens.h / 4)] {
-                for spacing in [1.7, 2., 2.3, 2.6, 2.9, 3.2] {
-                    let ax = cx - spacing * lens.w as f64;
-                    let rx = cx - 2. * spacing * lens.w as f64;
-                    if rx < lens.w as f64 * 0.2 || row >= frame.height {
+                if row >= frame.height {
+                    continue;
+                }
+                for spacing in [2.8, 3.1, 3.4, 3.7, 4.0, 4.3, 4.6, 4.9, 5.2, 5.6] {
+                    let ox = cx + sign * spacing * lens.w as f64;
+                    let d = lens.w as f64;
+                    if ox - 0.75 * d < 0. || ox + 0.75 * d >= frame.width as f64 {
                         continue;
                     }
-                    let y = row.min(frame.height - 1);
-                    let colours = [-0.16, 0., 0.16].map(|off| {
-                        let p = frame.pixel((rx + off * lens.w as f64) as usize, y);
-                        let (b, g, r) = (i32::from(p.0), i32::from(p.1), i32::from(p.2));
-                        amber_pixel(frame.pixel((ax + off * lens.w as f64) as usize, y))
-                            && r >= 60
-                            && r - b > 28
-                            && 100 * (g - b) < 30 * (r - b)
-                    });
-                    let gap = channels(frame.pixel(((ax + cx) * 0.5) as usize, y), kind).0;
-                    if colours.iter().all(|&c| c) && gap < 92 {
+                    let along = |off: f64| {
+                        frame.pixel(
+                            (ox + off * d).round().clamp(0., (frame.width - 1) as f64) as usize,
+                            row,
+                        )
+                    };
+                    let samples = [-0.15, 0., 0.15].map(|off| along(off));
+                    if samples.iter().all(|&p| cover_pixel(p, opposite))
+                        && [-0.70, 0.70].iter().all(|&off| {
+                            channels(along(off), opposite).0
+                                < 98.max(channels(samples[1], opposite).0.saturating_sub(12))
+                        })
+                    {
                         return true;
                     }
                 }
@@ -520,12 +815,26 @@ impl Beads {
         valid >= 5 && black * 8 >= valid * 7
     }
 
+    /// White components already classified during the coarse pass need only the housing check.
+    pub(super) fn saturated_ends(&self, frame: &Frame<'_>, step: usize) -> (Lights, Lights) {
+        let (mut visible, mut broad) = (Lights::default(), Lights::default());
+        for &lens in &self.white_ends {
+            if self.core_in_housing(frame, lens, step) {
+                visible.mark(lens.kind);
+                if lens.w >= 10 && lens.h >= 5 {
+                    broad.mark(lens.kind);
+                }
+            }
+        }
+        (visible, broad)
+    }
     pub(super) fn detect(&mut self, frame: &Frame<'_>) -> Lights {
+        self.bright_red_array = false;
         self.collect(frame);
         let mut out = Lights::default();
         for i in 0..self.lenses.len() {
             let lens = self.lenses[i];
-            if lens.kind == AMBER || !self.emitting(frame, lens) {
+            if !self.emitting(frame, lens) {
                 continue;
             }
             if lens.kind == RED {
