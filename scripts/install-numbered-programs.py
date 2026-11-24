@@ -68,11 +68,15 @@ release=root/('p1-'+manifest['1']['sha256'][:12]+'-p2-'+manifest['2']['sha256'][
 active=root/'current'
 if active.exists() and not active.is_symlink(): raise RuntimeError('existing current is not a release link')
 launch=json.loads((base/'race-launch.json').read_bytes())
-if 'mix' not in launch['profiles']: raise RuntimeError('installed mix vision profile missing')
-if not Path(launch['bridge']).is_file() or not Path(launch['vision_script']).is_file(): raise RuntimeError('installed runtime assets missing')
-for profile in launch['profiles'].values():
-    model=Path(profile['model_dir'])/'race4.onnx'
-    if not model.is_file(): raise RuntimeError('installed weather model missing')
+# Carry forward the physical camera and field calibration from older installations.
+legacy=launch.get('profiles',{}).get('mix',{})
+camera=launch.get('camera') or legacy.get('camera') or '/dev/video20'
+field=launch.get('field_config') or legacy.get('field_config')
+for key in ('profiles','vision_script','model_dir','vision_model','model_sha256'):
+    launch.pop(key,None)
+launch.update(camera=camera,vision_backend='rust_v4l2')
+if field: launch['field_config']=field
+if not Path(launch['bridge']).is_file(): raise RuntimeError('installed chassis bridge missing')
 def sha(path):
     h=hashlib.sha256()
     with path.open('rb') as stream:
@@ -116,7 +120,7 @@ with tempfile.TemporaryDirectory(prefix='.install-',dir=root) as tmp:
         for n,meta in manifest.items():
             if sha(release/('program-'+n))!=meta['sha256']: raise RuntimeError('release collision '+n)
             cfg=json.loads((release/('program-'+n+'.json')).read_bytes())
-            if cfg['source_commit']!=meta['source'] or cfg['profiles']!=launch['profiles']: raise RuntimeError('release metadata differs '+n)
+            if cfg['source_commit']!=meta['source'] or cfg.get('vision_backend')!='rust_v4l2' or cfg.get('camera')!=camera: raise RuntimeError('release metadata differs '+n)
     # Both target paths and the shell configuration are staged before activation.
     rc_tmp=temp/'bashrc.new'
     rc_tmp.write_text(updated);os.chmod(rc_tmp,stat.S_IMODE(rc.stat().st_mode))

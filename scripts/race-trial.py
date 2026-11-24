@@ -3,8 +3,7 @@
 
   python3 race-trial.py --evidence NEW_DIR --program PATH --bridge PATH [--max-drive-s 40]
       [--initial-presteer-pwm 1670] [--ready-hold-s 1] [--program-sha256 H] [--bridge-sha256 H]
-      [--check-only] [--vision-script PATH --vision-model DIR [--vision-script-sha256 H]
-      [--vision-model-sha256 H] [--vision-camera /dev/video20] [--light-stop]]
+      [--check-only] [--vision-camera /dev/video20]
 
 Runs on the car, as often as wanted (user, 10-24: “不限次数”), one run at a
 time (BASE/race-trial.lock). Each run gets a new evidence directory: NEW_DIR,
@@ -23,21 +22,8 @@ required (state in NEW_DIR/after-console.json). The result is
 NEW_DIR/helper-result.json. The console's access token is read here and
 never printed.
 
-Round y1 (user 10-25: the YOLO model race4): with --vision-script and
---vision-model (both hashes checked with the program's), once the console is
-stopped the camera must be free too and the read-only perception log
-(scripts/vision-log.py) starts beside the program into NEW_DIR/vision/; the
-program starts after its ready line (model and camera working, at most
-VISION_READY_S) or, without it, alone (recorded). The log never touches the
-car's devices or the program; it is stopped after the program ends (SIGTERM,
-then killed after VISION_STOP_S) and its summary goes into the result with
-the program's start time on the same monotonic clock.
-
-Round y2: with --light-stop as well, the log writes the traffic light's state
-to NEW_DIR/light-state.json (vision-log.py --light-state) and the program
-reads it (route-engine race --light-state): the route stops before the light
-and waits for green. Without the log's ready line the program runs without
-it (no light stop; recorded).
+The Rust capture-camera process publishes raw frames to the start-lane and
+traffic-light workers. Camera acquisition and race admission start concurrently.
 """
 import argparse
 import fcntl
@@ -46,8 +32,8 @@ import itertools
 import json
 import math
 from pathlib import Path
-import select
 import subprocess
+import os
 import sys
 import time
 import urllib.request
@@ -55,7 +41,6 @@ import urllib.request
 BASE = Path('/home/bianbu/xt-stcar-console')
 SERVICE = 'xt-stcar-console.service'
 FIXED_ARGS = None  # a round's packaged copy: its arguments, set by the builder
-VISION_READY_S = 25.
 VISION_STOP_S = 10.
 
 
@@ -81,24 +66,16 @@ def main():
     parser.add_argument('--program-sha256')
     parser.add_argument('--bridge-sha256')
     parser.add_argument('--check-only', action='store_true')
-    parser.add_argument('--vision-script')
-    parser.add_argument('--vision-script-sha256')
-    parser.add_argument('--vision-model')
-    parser.add_argument('--vision-model-sha256')
+    # Older packaged helpers may carry unused arguments for their former image source.
+    for option in ('--vision-script','--vision-script-sha256','--vision-model','--vision-model-sha256'):
+        parser.add_argument(option, help=argparse.SUPPRESS)
     parser.add_argument('--vision-camera', default='/dev/video20')
     parser.add_argument('--light-stop', action='store_true')
     parser.add_argument('--ros2-setup', help='source this ROS2 setup.bash before launching the Rust program')
     if FIXED_ARGS is not None and sys.argv[1:]:
         raise SystemExit("this round's helper takes no arguments")
     args = parser.parse_args(FIXED_ARGS)
-    if (args.vision_script is None) != (args.vision_model is None):
-        raise SystemExit('--vision-script and --vision-model go together; nothing started')
-    if args.light_stop and args.vision_script is None:
-        raise SystemExit('--light-stop needs --vision-script and --vision-model; nothing started')
     checks = [(args.program, args.program_sha256), (args.bridge, args.bridge_sha256)]
-    if args.vision_script is not None:
-        checks += [(args.vision_script, args.vision_script_sha256),
-                   (str(Path(args.vision_model)/'race4.onnx'), args.vision_model_sha256)]
     for path, expected in checks:
         if expected is not None and hashlib.sha256(Path(path).read_bytes()).hexdigest() != expected:
             raise SystemExit(f'{path} does not match its expected sha256; nothing started')
@@ -124,7 +101,7 @@ def main():
                 and s['autonomy']['mode'] == 'locked'
                 and c['armed'] is False and c['motor'] == c['servo'] == 1500 and 0 <= s['ages']['control'] < .2)
 
-    devices = ('/dev/car', '/dev/laser') + ((args.vision_camera,) if args.vision_script is not None else ())
+    devices = ('/dev/car', '/dev/laser')
 
     def busy():
         return [d for d in devices if subprocess.run(['fuser', d], capture_output=True).returncode != 1]
@@ -138,6 +115,7 @@ def main():
     result = {'evidence_dir': str(out), 'check_only': args.check_only,
               'start_admission': 'rust_race_live_sensors'}
     vision = None
+    frame_file = (Path('/dev/shm') / f'xt-stcar-race-{os.getpid()}.bgr') if Path('/dev/shm').is_dir() else out/'camera.bgr'
     subprocess.run(['systemctl', '--user', 'stop', SERVICE], check=True, timeout=30)
     try:
         deadline = time.monotonic()+15
@@ -155,26 +133,15 @@ def main():
         if surface_initial.is_file():
             result['surface_initial'] = json.loads(surface_initial.read_text())
             command += ['--surface-initial-load', str(float(result['surface_initial']['extra_load_mps2']))]
-        light_state = out/'light-state.json'
-        if args.vision_script is not None:
-            vision = subprocess.Popen([sys.executable, args.vision_script, '--model-dir', args.vision_model,
-                                       '--out', str(out/'vision'), '--camera', args.vision_camera, '--max-s', '150',
-                                       *(['--phase-state', str(out/'run/vision-phase.txt'), '--wait-threads', '2'] if args.light_stop else []),
-                                       *(['--light-state', str(light_state)] if args.light_stop else [])],
-                                      stdout=subprocess.PIPE, stderr=(out/'vision-stderr.txt').open('w'),
-                                      stdin=subprocess.DEVNULL, text=True)
-            ready, deadline = None, time.monotonic()+VISION_READY_S
-            while ready is None and vision.poll() is None and time.monotonic() < deadline:
-                if select.select([vision.stdout], [], [], max(0., deadline-time.monotonic()))[0]:
-                    line = vision.stdout.readline()
-                    if not line:
-                        break
-                    if line.startswith('{') and json.loads(line).get('kind') == 'ready':
-                        ready = json.loads(line)
-            result.update(vision_ready=ready, vision_exit_before_run=vision.poll())
-            if args.light_stop and ready is not None:
-                command += ['--light-state', str(light_state)]
-            result['light_stop'] = args.light_stop and ready is not None
+        command += ['--frame-shm', str(frame_file)]
+        camera_command = [args.program, 'capture-camera', args.vision_camera, str(frame_file), str(out/'vision')]
+        try:
+            with (out/'vision-stderr.txt').open('w') as stderr:
+                vision = subprocess.Popen(camera_command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                          stderr=stderr, text=True)
+        except OSError as error:
+            result['camera_spawn_error'] = str(error)
+        result.update(vision_backend='rust_v4l2', light_stop=True)
         started = time.monotonic()
         result['program_started_monotonic_s'] = started
         if args.ros2_setup:
@@ -202,8 +169,14 @@ def main():
                     vision.kill()
                     vision.wait(5)
             tail = [json.loads(line) for line in vision.stdout.read().splitlines() if line.startswith('{')]
+            result['vision_ready'] = next((row for row in tail if row.get('kind') == 'ready'), None)
             result.update(vision_exit=vision.returncode,
                           vision_summary=next((row for row in tail if row.get('kind') == 'summary'), None))
+        for path in (frame_file, frame_file.with_suffix('.bgr.tmp'), frame_file.with_suffix('.bgr.lamp.sock')):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as error:
+                result['camera_cleanup_error'] = str(error)
         subprocess.run(['systemctl', '--user', 'start', SERVICE], timeout=30)
         final, deadline = [], time.monotonic()+90
         while len(final) < 6 and time.monotonic() < deadline:

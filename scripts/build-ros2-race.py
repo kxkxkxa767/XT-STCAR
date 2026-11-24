@@ -64,13 +64,14 @@ manifest = {'source_commit': source, 'source_dirty': dirty, 'ros_distro': 'humbl
     'binary': str(executable.relative_to(out)), 'ros_prefix_for_link': str(prefix), 'rust_interface_overlay': str(interfaces)}
 if not dirty:
     source_archive = package/'competition-source.tar.gz'
-    subprocess.run(['git', 'archive', '--format=tar.gz', '--output', str(source_archive), 'HEAD',
+    source_paths = [
         'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'route-engine', 'crates', 'config',
-        'scripts/race-trial.py', 'scripts/vision-log.py', 'scripts/build-ros2-race.py',
+        'scripts/race-trial.py', 'scripts/build-ros2-race.py',
         'scripts/ros2-generate-rust.py', 'scripts/package-ros2-round.py', 'scripts/inspect_elf.py',
-        'scripts/package-weather-models.py', 'scripts/deploy-weather-models.py',
-        'scripts/install-vehicle-start.py', 'scripts/start-vehicle.py', 'ros2/xt_stcar_race'],
-        cwd=ROOT, check=True)
+        'ros2/xt_stcar_race']
+    if (ROOT/'scripts/install-numbered-programs.py').is_file():
+        source_paths.append('scripts/install-numbered-programs.py')
+    subprocess.run(['git','archive','--format=tar.gz','--output',str(source_archive),'HEAD',*source_paths], cwd=ROOT, check=True)
     manifest['source_archive'] = str(source_archive.relative_to(install))
 (out/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
 with tarfile.open(out/'xt-stcar-ros2-install.tar.gz', 'w:gz') as archive:

@@ -268,8 +268,7 @@ pub const LIGHT_ENTRY_CORNER_BAND_M: f64 = 0.15;
 pub const LIGHT_ENTRY_CORNER_MIN_POINTS: usize = 3;
 pub const OPEN_LINE_REACH_M: f64 = 6.;
 pub const OPEN_STAGES: [&str; 3] = ["open_transfer", "second_loop", "light_entry"];
-// Round y2: the traffic-light stop (maneuver_sequence.py has the derivations;
-// only with control['light'], the race program's read-only YOLO process).
+// Distance between the photoelectric line and the traffic-light gantry.
 pub const LIGHT_ZONE_M: f64 = 1.;
 // Rule 2.4.2(4), corrected by the operator on 2026-11-05.
 pub const LIGHT_SENSOR_TO_GANTRY_M: f64 = 1.0;

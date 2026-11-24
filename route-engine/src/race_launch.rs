@@ -1,6 +1,4 @@
-//! One installed Rust program, model selected before a detached single round.
-//! Ports start-vehicle.py/race-trial.py orchestration. Driving still uses `race`;
-//! the existing camera inference process and controller Guard are unchanged.
+//! Launch one numbered race with Rust camera acquisition.
 use rustix::{
     fs::{FlockOperation, flock},
     process::{Pid, Signal, kill_process},
@@ -39,7 +37,7 @@ struct Options {
 fn parse(args: &[String]) -> Result<Options> {
     let mut o = Options {
         config: "/home/bianbu/xt-stcar-console/race-launch.json".into(),
-        profile: "default".into(),
+        profile: "rust".into(),
         action: "start".into(),
         check_only: false,
         light_max_wait_s: None,
@@ -59,8 +57,8 @@ fn parse(args: &[String]) -> Result<Options> {
             _ => return Err(format!("unknown launch option {arg}").into()),
         }
     }
-    if !matches!(o.profile.as_str(), "default" | "dark" | "light" | "mix") {
-        return Err("profile must be default, dark, light or mix".into());
+    if !matches!(o.profile.as_str(), "rust" | "default" | "dark" | "light" | "mix") {
+        return Err("unknown camera profile".into());
     }
     Ok(o)
 }
@@ -229,7 +227,7 @@ fn ros_environment(command: &mut Command, out: &Path) {
         .env("ROS_LOG_DIR", out.join("ros-log"));
 }
 
-fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
+fn run_round(o: &Options, config: &Value) -> Result<()> {
     let base = Path::new(text(config, "base")?);
     let lock = OpenOptions::new()
         .write(true)
@@ -240,10 +238,10 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
     let out = fresh_dir(&base.join(text(config, "evidence_prefix")?))?;
     write_json(
         &out.join("launch-profile.json"),
-        &json!({"label":config["label"],"profile":o.profile,"selected":profile,"program":config["program_number"],
+        &json!({"label":config["label"],"profile":"rust","vision_backend":"rust_v4l2","program":config["program_number"],
             "source_commit":config["source_commit"],"light_max_wait_s":o.light_max_wait_s}),
     )?;
-    println!("{}", json!({"evidence_dir":out,"profile":o.profile}));
+    println!("{}", json!({"evidence_dir":out,"profile":"rust"}));
     let start = Instant::now();
     let access = read_json(&base.join("access.json"))?;
     let pre = state(
@@ -260,7 +258,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         let flag = stopped.clone();
         ctrlc::set_handler(move || flag.store(true, Ordering::Release))?;
     }
-    let mut result = json!({"evidence_dir":out,"check_only":o.check_only,"profile":o.profile,"label":config["label"],
+    let mut result = json!({"evidence_dir":out,"check_only":o.check_only,"profile":"rust","label":config["label"],
         "launcher":"rust","start_admission":"rust_race_live_sensors","program":config["program_number"],"light_max_wait_s":o.light_max_wait_s});
     let mut timing = json!({"preflight_ms":start.elapsed().as_secs_f64()*1000.});
     let t = Instant::now();
@@ -273,8 +271,9 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
     let mut race: Option<Child> = None;
     let mut vision_rows = None;
     let mut vision_reader = None;
-    let camera = profile["camera"].as_str().unwrap_or("/dev/video20");
-    let devices = ["/dev/car", "/dev/laser", camera];
+    let legacy_profile = if o.profile == "rust" { "mix" } else { &o.profile };
+    let camera = config["camera"].as_str().or_else(|| config["profiles"][legacy_profile]["camera"].as_str()).unwrap_or("/dev/video20");
+    let devices = ["/dev/car", "/dev/laser"];
     let frame_shm = if Path::new("/dev/shm").is_dir() {
         PathBuf::from(format!("/dev/shm/xt-stcar-cw-{}.bgr", std::process::id()))
     } else {
@@ -296,53 +295,30 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         }
         timing["devices_wait_ms"] = json!(t.elapsed().as_secs_f64() * 1000.);
         let t = Instant::now();
-        let mut child = Command::new("python3")
-            .arg("-B")
-            .arg(text(config, "vision_script")?)
-            .arg("--model-dir")
-            .arg(text(profile, "model_dir")?)
-            .arg("--out")
-            .arg(out.join("vision"))
-            .args(["--camera", camera, "--max-s", "150"])
-            .arg("--phase-state")
-            .arg(out.join("run/vision-phase.txt"))
-            .args(["--wait-threads", "2", "--cpu-affinity", "0-3"])
-            .arg("--frame-shm")
-            .arg(&frame_shm)
-            .arg("--light-state")
-            .arg(out.join("light-state.json"))
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(File::create(out.join("vision-stderr.txt"))?)
-            .spawn()?;
-        let stdout = child.stdout.take().ok_or("vision stdout missing")?;
-        let (send, recv) = mpsc::channel();
-        vision_reader = Some(thread::spawn(move || {
-            for line in BufReader::new(stdout)
-                .lines()
-                .map_while(std::result::Result::ok)
-            {
-                if let Ok(row) = serde_json::from_str::<Value>(&line) {
-                    let _ = send.send(row);
+        // Acquisition and ROS startup run concurrently. A late/missing image only
+        // removes camera evidence; it does not participate in race admission.
+        let camera_command = Command::new(std::env::current_exe()?)
+            .arg("capture-camera").arg(camera).arg(&frame_shm).arg(out.join("vision"))
+            .stdin(Stdio::null()).stdout(Stdio::piped())
+            .stderr(File::create(out.join("vision-stderr.txt"))?).spawn();
+        match camera_command {
+            Ok(mut child) => {
+                if let Some(stdout) = child.stdout.take() {
+                    let (send,recv) = mpsc::channel();
+                    vision_rows = Some(recv);
+                    vision_reader = Some(thread::spawn(move || {
+                        for line in BufReader::new(stdout).lines().map_while(std::result::Result::ok) {
+                            if let Ok(row) = serde_json::from_str::<Value>(&line) { let _ = send.send(row); }
+                        }
+                    }));
                 }
+                vision = Some(child);
             }
-        }));
-        vision = Some(child);
-        let mut ready = Value::Null;
-        while t.elapsed() < Duration::from_secs(25) && !stopped.load(Ordering::Acquire) {
-            match recv.recv_timeout(Duration::from_millis(100)) {
-                Ok(row) if row["kind"] == "ready" => {
-                    ready = row;
-                    break;
-                }
-                Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
-                Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            }
+            Err(e) => result["camera_spawn_error"] = json!(e.to_string()),
         }
-        vision_rows = Some(recv);
-        result["light_stop"] = json!(!ready.is_null());
-        result["vision_ready"] = ready.clone();
-        timing["vision_ready_ms"] = json!(t.elapsed().as_secs_f64() * 1000.);
+        timing["camera_spawn_ms"] = json!(t.elapsed().as_secs_f64() * 1000.);
+        result["vision_backend"] = json!("rust_v4l2");
+        result["light_stop"] = json!(true);
         if stopped.load(Ordering::Acquire) {
             return Err("operator stopped during startup".into());
         }
@@ -351,7 +327,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
         let mut command = if cfg!(target_os = "linux") && taskset.is_file() {
             let mut c = Command::new(taskset);
             c.args(["-c", "4-7"]).arg(&exe);
-            result["cpu_affinity"] = json!({"vision": "0-3", "race": "4-7", "rust_crosswalk": "6", "rust_light_requested": "3"});
+            result["cpu_affinity"] = json!({"race": "4-7", "rust_crosswalk": "6", "rust_light_requested": "3"});
             c
         } else {
             Command::new(&exe)
@@ -389,13 +365,7 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
             );
             result["surface_initial"] = load;
         }
-        if !ready.is_null() {
-            command
-                .arg("--light-state")
-                .arg(out.join("light-state.json"))
-                .arg("--frame-shm")
-                .arg(&frame_shm);
-        }
+        command.arg("--frame-shm").arg(&frame_shm);
         ros_environment(&mut command, &out);
         let stdout = File::create(out.join("race-stdout.txt"))?;
         command
@@ -439,7 +409,9 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
     }
     if let Some(rows) = vision_rows {
         for row in rows.try_iter() {
-            if row["kind"] == "summary" {
+            if row["kind"] == "ready" {
+                result["vision_ready"] = row;
+            } else if row["kind"] == "summary" {
                 result["vision_summary"] = row;
             }
         }
@@ -499,17 +471,13 @@ fn run_round(o: &Options, config: &Value, profile: &Value) -> Result<()> {
 
 fn entry(o: Options, internal_run: bool) -> Result<()> {
     let config = read_json(&o.config)?;
-    let profile = &config["profiles"][&o.profile];
-    if profile.is_null() {
-        return Err(format!("{} model is not installed", o.profile).into());
-    }
     match o.action.as_str() {
         "show" => {
             if let Some(limit) = o.light_max_wait_s {
                 println!("{}",json!({"program":config["program_number"],"label":config["label"],
                     "source_commit":config["source_commit"],"base_source":config["base_source"],
-                    "profile":o.profile,"light_max_wait_s":limit,"executable":std::env::current_exe()?}));
-            } else { println!("{} / {}", text(&config, "label")?, o.profile); }
+                    "profile":"rust","vision_backend":"rust_v4l2","light_max_wait_s":limit,"executable":std::env::current_exe()?}));
+            } else { println!("{} / {}", text(&config, "label")?, "rust"); }
             return Ok(());
         }
         "stop" => {
@@ -528,7 +496,7 @@ fn entry(o: Options, internal_run: bool) -> Result<()> {
         _ => {}
     }
     if internal_run {
-        return run_round(&o, &config, profile);
+        return run_round(&o, &config);
     }
     let mut command = Command::new("systemd-run");
     command.arg(format!("--setenv=LD_LIBRARY_PATH={ROS_LIBRARIES}"));
@@ -557,7 +525,7 @@ fn entry(o: Options, internal_run: bool) -> Result<()> {
     println!(
         "已提交 {} / {}；后台运行一轮，断网或退出SSH不影响运行。",
         text(&config, "label")?,
-        o.profile
+        "Rust"
     );
     Ok(())
 }

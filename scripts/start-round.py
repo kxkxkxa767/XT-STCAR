@@ -139,7 +139,9 @@ def main():
         say(f"起步到停车约 {(seq['finish_stop']-seq['start_lane'])/10:.1f} 秒；离终点板 {finish.get('front_gap_m', 0):.3f}m，"
             f"依据 {finish.get('basis')}，补进 {finish.get('creeps')} 次")
     vision = helper.get('vision_summary')
-    if vision or helper.get('vision_exit') is not None:
+    if vision and vision.get('backend') == 'rust_v4l2':
+        say(f"Rust 相机共采集 {vision.get('frames', 0)} 帧。")
+    elif vision or helper.get('vision_exit') is not None:
         say(f"识别记录（只读）：{vision.get('frames')} 帧，{vision.get('fps')} 帧/秒，推理中位 {vision.get('infer_ms_median')} ms，"
             f"各类检出 {vision.get('counts')}" if vision else f"识别记录没有小结（退出码 {helper.get('vision_exit')}），请让 Claude 检查")
     say(f"质量等待计数 {result.get('quality_counts') or {}}；把结果告诉 Claude 即可继续分析")

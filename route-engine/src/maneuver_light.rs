@@ -172,9 +172,8 @@ impl Maneuver {
         }
     }
 
-    /// Pure-Rust crosswalk detector observation (OR-fused with YOLO in `start_lane`).
-    /// Whichever detector sees the crosswalk first feeds both stationary planning and
-    /// moving-approach fallback without touching traffic-light frames.
+    /// Pure-Rust crosswalk detector observation in `start_lane`.
+    /// A stripe observation feeds the stationary plan and the moving distance estimate.
     pub fn rust_crosswalk_observe(&mut self, obs: &crate::race_crosswalk_vision::RustCrosswalkObs, captured_program_s: f64) {
         if self.race_inputs.is_none() || self.route_stage != "start_lane" {
             return;
@@ -194,7 +193,7 @@ impl Maneuver {
             obs.gap_to_crosswalk_m,
             obs.pitch_source,
         );
-        // Distinct negative frame id avoids colliding with YOLO's positive frame ids.
+        // Keep the signed frame convention used by existing crosswalk odometry logs.
         let synthetic_id = -(obs.frame + 1);
         self._crosswalk_raw.push(V::list(vec![
             V::Int(synthetic_id),
@@ -222,18 +221,11 @@ impl Maneuver {
         }
         let score = |v: &V| if v.is_num() { v.clone() } else { V::Float(0.) };
         let (red, green) = (score(light.get("red")), score(light.get("green")));
-        let mut previous_red = 0.;
-        if let Some(last) = self._light_frames.last().filter(|f| py_eq(f.at(0), frame)) {
-            if self.race_inputs.is_none() || !light.get("lamp_fusion").is_true()
-                || (last.at(2).f() == red.f() && last.at(3).f() == green.f()) {
-                return;
-            }
-            previous_red = last.at(2).f();
-            // The other detector updated the very same capture. Keep one history row.
-            self._light_frames.pop();
+        if self._light_frames.last().is_some_and(|f| py_eq(f.at(0), frame)) {
+            return;
         }
         let (crosswalk, row, metres) = (light.get("crosswalk"), light.get("crosswalk_row"), light.get("crosswalk_m"));
-        if self.route_stage == "start_lane" && crosswalk.is_num() && crosswalk.f() >= CROSSWALK_SEEN_SCORE {
+        if self.race_inputs.is_none() && self.route_stage == "start_lane" && crosswalk.is_num() && crosswalk.f() >= CROSSWALK_SEEN_SCORE {
             // round y5: placed on the start lane's next scan (crosswalk_observe);
             // round y11: with the camera model's distance
             let row = if row.is_num() { row.clone() } else { V::None };
@@ -243,14 +235,6 @@ impl Maneuver {
             if n > 8 {
                 self._crosswalk_raw.drain(..n - 8);
             }
-        }
-        // round y35: the frame's stripes' edge against the board ahead, for the plan at rest
-        // (y36: not only with a crosswalk at the seen score)
-        if self.route_stage == "start_lane"
-            && self.race_inputs.is_some()
-            && let (Some(edge), Some(base)) = (light.get("crosswalk_edge_y").of(), light.get("board_base_y").of())
-        {
-            self.race_crosswalk_stop.push_frame(captured.f(), edge, base);
         }
         self._light_frames.push(V::list(vec![frame.clone(), captured.clone(), red.clone(), green.clone()]));
         let n = self._light_frames.len();
@@ -263,7 +247,7 @@ impl Maneuver {
         let colour_since = if self.race_inputs.is_some() { self.race_light.beam_at } else { self._light_gantry_since };
         if self.light_stop_active() && colour_since.is_some_and(|at| captured.f() >= at)
             && (self.race_inputs.is_none() || (0.0..=LIGHT_FRAME_MAX_AGE_S).contains(&(now - captured.f()))) {
-            if previous_red < LIGHT_RED_MIN_SCORE && red.f() >= LIGHT_RED_MIN_SCORE {
+            if red.f() >= LIGHT_RED_MIN_SCORE {
                 self._light_red_frames += 1;
                 if self._light_red_at.is_none() {
                     self._light_red_at = Some(captured.f());
@@ -274,7 +258,6 @@ impl Maneuver {
             }
             if self.light_stop_state == Some("waiting")
                 && captured.f() >= self._light_wait_since.unwrap()
-                && previous_red < LIGHT_GREEN_MIN_SCORE
                 && red.f() >= LIGHT_GREEN_MIN_SCORE
             {
                 self._light_stop_red_frames += 1;

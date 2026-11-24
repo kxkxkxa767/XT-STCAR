@@ -28,6 +28,8 @@ pub mod maneuver_tm;
 pub mod maneuver_wait;
 pub mod py;
 pub mod race;
+#[cfg(target_os = "linux")]
+mod race_camera;
 mod race_launch;
 mod race_selection;
 pub mod race_scan;
@@ -488,6 +490,10 @@ fn function(name: &str, args: &[V]) -> V {
 fn main() {
     install_panic_hook();
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(target_os = "linux")]
+    if args.get(1).is_some_and(|s| s == "capture-camera") {
+        std::process::exit(race_camera::main(&args[2..]));
+    }
     if let Some(name)=args.first().and_then(|p|std::path::Path::new(p).file_name()).and_then(|v|v.to_str())
         && name.starts_with("start_") {
         std::process::exit(race_selection::run(name,&args[1..]));

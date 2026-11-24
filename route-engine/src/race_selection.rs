@@ -27,18 +27,18 @@ fn parse<'a>(name: &'a str, flags: &'a [String]) -> Result<Choice<'a>, String> {
     let mut choice = Choice {
         program,
         seconds,
-        profile: "mix",
+        profile: "rust",
         action: None,
     };
     let mut flags = flags.iter();
     while let Some(flag) = flags.next() {
         match flag.as_str() {
             "--profile" => {
-                choice.profile = flags
+                flags
                     .next()
                     .map(String::as_str)
-                    .filter(|p| matches!(*p, "mix" | "dark" | "light"))
-                    .ok_or("天气模型须为 mix、dark 或 light")?;
+                    .filter(|p| matches!(*p, "rust" | "mix" | "dark" | "light" | "default"))
+                    .ok_or("不支持的相机配置")?;
             }
             "--show" | "--status" | "--stop" | "--check-only" if choice.action.is_none() => {
                 choice.action = Some(flag);
@@ -104,13 +104,13 @@ mod tests {
                 "--config",
                 "/race/program-2.json",
                 "--profile",
-                "light",
+                "rust",
                 "--light-max-wait-s",
                 "7.5",
                 "--check-only"
             ]
         );
-        assert_eq!(parse("start_1_0", &[]).unwrap().profile, "mix");
+        assert_eq!(parse("start_1_0", &[]).unwrap().profile, "rust");
         assert!(parse("start_1_240", &[]).is_ok());
         for bad in ["start_3_7", "start_1_-1", "start_1_nan", "start_2_7_extra", "start_1_"] {
             assert!(parse(bad, &[]).is_err());

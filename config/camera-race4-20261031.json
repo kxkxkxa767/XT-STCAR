@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "camera": "car USB camera /dev/video20, V4L2 MJPG 640x480 (the console's and vision-log.py's mode)",
+  "camera": "car USB camera /dev/video20, V4L2 MJPG 640x480",
   "measurement_date": "2026-10-31",
   "mount": "fixed with hot glue by the user before the calibration, at the angle chosen at the traffic light",
-  "used_by": "scripts/vision-log.py CAMERA_* constants (round y11 crosswalk_m)",
+  "used_by": "Rust race camera projection and scripts/camera-pitch-check.py",
   "intrinsics": {
     "model": "opencv_pinhole_k1_k2_p1_p2_k3",
     "image_size": [

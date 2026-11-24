@@ -1,13 +1,11 @@
 """Round y5 (Claude): the crosswalk stop in the start lane and its fallback in
 the first turn. Round y10: fixed from frames at the standstill. Round y11: the
-distance comes from the race program's YOLO process by the calibrated camera
-model (scripts/vision-log.py crosswalk_front_m, checked on the track 10-31:
+distance uses the calibrated ground projection, measured on the track 10-31 (
 box bottoms 330/372 at 2.31-2.34/1.00-1.03 m); a sharper fix replaces the
 edge. Synthetic frames and states; no physical claim."""
 import importlib.util
 import json
 from pathlib import Path
-import tempfile
 import unittest
 
 import maneuver_sequence as ms
@@ -44,29 +42,26 @@ def board(place, metres):
 
 
 class CameraModel(unittest.TestCase):
-    def test_dark_model_class_ids_map_to_lights_without_a_blue_cone_class(self):
-        spec = importlib.util.spec_from_file_location('vision_log', ROOT/'scripts'/'vision-log.py')
-        vision = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(vision)
-        raw = [[[10., 20., 30., 40., .9, 1.], [40., 20., 60., 40., .8, 2.]]]
-        detections = vision.decode(raw, .25, 1., 0, 0, 320, 320,
-                                   ['crosswalk', 'red_light_dark', 'green_light_dark'])
-        self.assertEqual([d['cls'] for d in detections], ['red_light', 'green_light'])
-        self.assertEqual([d['model_class'] for d in detections], ['red_light_dark', 'green_light_dark'])
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('camera_pitch', ROOT/'scripts'/'camera-pitch-check.py')
+        cls.optics = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.optics)
+        cls.calibration = json.loads((ROOT/'config/camera-race4-20261031.json').read_text())
+
+    def test_optical_axis_and_outside_lens(self):
+        lens = self.calibration['intrinsics']
+        coeffs, distortion = lens['fx_fy_cx_cy'], lens['distortion_k1_k2_p1_p2_k3']
+        self.assertEqual(self.optics.undistort(coeffs[2], coeffs[3], coeffs, distortion), (0., 0.))
+        self.assertIsNone(self.optics.undistort(60., 465., coeffs, distortion))
 
     def test_the_track_checks_of_10_31(self):
-        spec = importlib.util.spec_from_file_location('vision_log', ROOT/'scripts'/'vision-log.py')
-        vision = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(vision)
-        # race4's boxes at the start (tape 2.34, board behind 2.31) and at 1.00 m (1.028)
-        self.assertAlmostEqual(vision.crosswalk_front_m([281., 314.5, 462., 330.]), 2.32, delta=.03)
-        self.assertAlmostEqual(vision.crosswalk_front_m([187., 341., 550., 372.]), 1.015, delta=.02)
-        # front .21 m: the stripes run out of the frame, the box ends at its bottom
-        self.assertIsNone(vision.crosswalk_front_m([30., 389., 640., 476.5]))
-        # the bottom corners lie outside the lens model's iteration
-        self.assertIsNone(vision.crosswalk_front_m([0., 400., 60., 465.]))
-        # an edge still in view near the bottom
-        self.assertAlmostEqual(vision.crosswalk_front_m([200., 380., 500., 470.]), .39, delta=.01)
+        cx = self.calibration['intrinsics']['fx_fy_cx_cy'][2]
+        extrinsics = self.calibration['extrinsics']
+        pitch = extrinsics['ranging_pitch_up_deg_for_race4_box_bottoms']
+        for row, front in [(330., 2.32), (372., 1.015), (470., .39)]:
+            distance = front + extrinsics['camera_behind_front_m']
+            self.assertAlmostEqual(self.optics.pitch_from_board(cx, row, distance, self.calibration), pitch, delta=.3)
 
 
 class CrosswalkFix(unittest.TestCase):

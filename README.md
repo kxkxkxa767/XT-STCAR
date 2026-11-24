@@ -9,7 +9,7 @@ Muse Pi Pro 上的 RISC-V 轻量无人车比赛工程。车载 Rust 程序 `rout
 | 1 | 赛场版。用现场雷达观测跟踪锥桶、挡板和终点直道开口 | `race/program1-y114-crosswalk` | `c5e8c05` | `7b9e076` |
 | 2 | 建图版。用实测赛道坐标、雷达和 IMU 辅助定位，与原有绕桶规划并行 | `main` | `494570a` | `40047fd` |
 
-两版实车均用 **N10P，460800 波特率**。本车安装标定为距离补偿 +0.011 m、顺时针索引偏移 −3 格。相机使用天气模型与 Rust 识别，默认配置为 `mix`。2 号的地图保存场地边界、隔板开口、桶和光电线坐标。[1 号源码](https://github.com/kxkxkxa767/XT-STCAR/tree/race/program1-y114-crosswalk) · [2 号赛道地图](config/race-field-map.json) · [车体尺量记录](docs/车辆尺寸与几何来源.md)
+两版实车均用 **N10P，460800 波特率**。本车安装标定为距离补偿 +0.011 m、顺时针索引偏移 −3 格。相机由 Rust 直接采集。斑马线按条纹几何识别，灯色使用同一灯罩内的成簇亮点，室内过曝时读取白芯周围的色晕。2 号的地图保存场地边界、隔板开口、桶和光电线坐标。[1 号源码](https://github.com/kxkxkxa767/XT-STCAR/tree/race/program1-y114-crosswalk) · [2 号赛道地图](config/race-field-map.json) · [车体尺量记录](docs/车辆尺寸与几何来源.md)
 
 ## 车端使用
 
@@ -17,12 +17,14 @@ Muse Pi Pro 上的 RISC-V 轻量无人车比赛工程。车载 Rust 程序 `rout
 
 | 命令 | 用途 |
 | --- | --- |
-| `start_1_7 --show` | 回读程序、源码提交、模型和等灯秒数 |
+| `start_1_7 --show` | 回读程序、源码提交、Rust 视觉和等灯秒数 |
 | `start_2_7 --check-only` | 保持车辆锁定，启动相机、雷达和控制进程，检查设备及起步条件 |
-| `start_2_7.5 --profile light --show` | 回读晴天模型与 7.5 秒参数，其他天气配置为 `dark`、`mix` |
+| `start_2_7.5 --show` | 回读 2 号和本轮 7.5 秒等灯参数 |
 | `start_1_7 --status`、`start_1_7 --stop` | 查看或停止共享的比赛服务 |
 
 每轮摆车、复位现场设备并取得本轮发车确认后，运行对应入口，例如 `start_2_7`。控制回路使用底盘 Guard、实测车身近障 8 cm 保护和终点端板测距回退。车载安装使用带 `ros2` 特性的 64 位 RISC-V ELF。[编号入口与安装说明](docs/numbered-race-start.md)
+
+11 月 24 日的视觉候选已用 7 轮赛场原图和 12 轮历史图像回放。识别结果与适用范围见[赛场灯珠验证](docs/rust-led-field-20261124.md)。
 
 ### 新候选的灯区行为
 
